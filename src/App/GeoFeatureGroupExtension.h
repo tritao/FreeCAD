@@ -132,8 +132,9 @@ private:
  
 };
 
+#ifdef BUILD_PYTHON
 typedef ExtensionPythonT<GroupExtensionPythonT<GeoFeatureGroupExtension>> GeoFeatureGroupExtensionPython;
-
+#endif
 
 } //namespace App
 

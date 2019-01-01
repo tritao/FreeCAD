@@ -32,7 +32,10 @@
 
 #include "Sequencer.h"
 #include "Console.h"
+
+#ifdef BUILD_PYTHON
 #include <CXX/Objects.hxx>
+#endif
 
 using namespace Base;
 
@@ -310,7 +313,7 @@ bool SequencerLauncher::wasCanceled() const
 }
 
 // ---------------------------------------------------------
-
+#ifdef BUILD_PYTHON
 void ProgressIndicatorPy::init_type()
 {
     behaviors().name("ProgressIndicator");
@@ -380,3 +383,4 @@ Py::Object ProgressIndicatorPy::stop(const Py::Tuple& args)
     _seq.reset();
     return Py::None();
 }
+#endif

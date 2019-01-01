@@ -62,8 +62,10 @@ public:
     /// get called when object is going to be removed from the document
     virtual void onExtendedUnsetupObject();
   
+#ifdef BUILD_PYTHON
     virtual PyObject* getExtensionPyObject(void) override;
-    
+#endif
+
     /// returns the type name of the ViewProviderExtension which is automatically attached 
     /// to the viewprovider object when it is initiated
     virtual const char* getViewProviderExtensionName(void) const {return "";}

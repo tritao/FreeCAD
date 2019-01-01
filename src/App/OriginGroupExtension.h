@@ -76,7 +76,9 @@ protected:
     virtual void onExtendedUnsetupObject () override;
 };
 
+#ifdef BUILD_PYTHON
 typedef ExtensionPythonT<GroupExtensionPythonT<OriginGroupExtension>> OriginGroupExtensionPython;
+#endif
 
 } /* App */
 

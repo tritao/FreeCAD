@@ -29,7 +29,11 @@
 #endif
 
 # include <QTime>
+
+#ifdef BUILD_PYTHON
 #include "PyExport.h"
+#endif
+
 #include "Interpreter.h"
 #include "Tools.h"
 
@@ -148,6 +152,7 @@ std::string Base::Tools::escapedUnicodeFromUtf8(const char *s)
     Base::PyGILStateLocker lock;
     std::string escapedstr;
 
+#ifdef BUILD_PYTHON
     PyObject* unicode = PyUnicode_FromString(s);
     if (!unicode)
         return escapedstr;
@@ -163,6 +168,9 @@ std::string Base::Tools::escapedUnicodeFromUtf8(const char *s)
     }
 
     Py_DECREF(unicode);
+#else
+    assert(0 && "Base::Tools::escapedUnicodeFromUtf8() not implemented!");
+#endif
     return escapedstr;
 }
 
@@ -171,6 +179,7 @@ std::string Base::Tools::escapedUnicodeToUtf8(const std::string& s)
     Base::PyGILStateLocker lock;
     std::string string;
 
+#ifdef BUILD_PYTHON
     PyObject* unicode = PyUnicode_DecodeUnicodeEscape(s.c_str(), s.size(), "strict");
     if (!unicode)
         return string;
@@ -189,6 +198,9 @@ std::string Base::Tools::escapedUnicodeToUtf8(const std::string& s)
     }
 #endif
     Py_DECREF(unicode);
+#else
+    assert(0 && "Base::Tools::escapedUnicodeToUtf8() not implemented!");
+#endif
     return string;
 }
 

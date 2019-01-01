@@ -29,7 +29,9 @@
 
 #include "Exception.h"
 #include "Console.h"
+#ifdef BUILD_PYTHON
 #include <CXX/Objects.hxx>
+#endif
 
 using namespace Base;
 
@@ -118,6 +120,7 @@ void Exception::ReportException (void) const
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject * Exception::getPyObject(void)
 {
     Py::Dict edict;
@@ -161,6 +164,7 @@ void Exception::setPyObject( PyObject * pydict)
             _isReported = static_cast<bool>(Py::Boolean(edict.getItem("breported")));
     }
 }
+#endif
 
 // ---------------------------------------------------------
 
@@ -345,6 +349,7 @@ void FileException::ReportException (void) const
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject * FileException::getPyObject(void)
 {
     Py::Dict edict(Exception::getPyObject(), true);
@@ -362,6 +367,7 @@ void FileException::setPyObject( PyObject * pydict)
             file.setFile(static_cast<std::string>(Py::String(edict.getItem("filename"))));
     }
 }
+#endif
 
 // ---------------------------------------------------------
 

@@ -36,9 +36,12 @@
 #include <Base/Rotation.h>
 #include <Base/Quantity.h>
 #include <Base/Tools.h>
+
+#ifdef BUILD_PYTHON
 #include <Base/VectorPy.h>
 #include <Base/MatrixPy.h>
 #include <Base/PlacementPy.h>
+#endif
 
 #include "Placement.h"
 #include "PropertyGeo.h"
@@ -96,6 +99,7 @@ const Base::Vector3d & PropertyVector::getValue(void)const
     return _cVec;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyVector::getPyObject(void)
 {
     return new Base::VectorPy(_cVec);
@@ -158,6 +162,7 @@ void PropertyVector::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyVector::Save (Base::Writer &writer) const
 {
@@ -352,6 +357,7 @@ void PropertyVectorList::setValues(const std::vector<Base::Vector3d>& values)
     hasSetValue();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyVectorList::getPyObject(void)
 {
     PyObject* list = PyList_New(	getSize() );
@@ -394,6 +400,7 @@ void PropertyVectorList::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyVectorList::Save (Base::Writer &writer) const
 {
@@ -512,6 +519,7 @@ const Base::Matrix4D & PropertyMatrix::getValue(void)const
     return _cMat;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyMatrix::getPyObject(void)
 {
     return new Base::MatrixPy(_cMat);
@@ -552,6 +560,7 @@ void PropertyMatrix::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyMatrix::Save (Base::Writer &writer) const
 {
@@ -714,6 +723,7 @@ const boost::any PropertyPlacement::getPathValue(const ObjectIdentifier &path) c
         return Property::getPathValue(path);
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyPlacement::getPyObject(void)
 {
     return new Base::PlacementPy(new Base::Placement(_cPos));
@@ -737,6 +747,7 @@ void PropertyPlacement::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyPlacement::Save (Base::Writer &writer) const
 {
@@ -851,6 +862,7 @@ void PropertyPlacementList::setValues(const std::vector<Base::Placement>& values
     hasSetValue();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyPlacementList::getPyObject(void)
 {
     PyObject* list = PyList_New( getSize() );
@@ -893,6 +905,7 @@ void PropertyPlacementList::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyPlacementList::Save (Base::Writer &writer) const
 {

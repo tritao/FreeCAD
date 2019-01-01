@@ -26,7 +26,10 @@
 
 #include <vector>
 #include <memory>
+
+#ifdef BUILD_PYTHON
 #include <CXX/Extensions.hxx>
+#endif
 
 #include "Exception.h"
 
@@ -379,6 +382,7 @@ inline SequencerBase& Sequencer ()
     return SequencerBase::Instance();
 }
 
+#ifdef BUILD_PYTHON
 class BaseExport ProgressIndicatorPy : public Py::PythonExtension<ProgressIndicatorPy>
 {
 public:
@@ -399,6 +403,7 @@ private:
 private:
     std::unique_ptr<SequencerLauncher> _seq;
 };
+#endif
 
 } // namespace Base
 

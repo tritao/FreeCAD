@@ -30,7 +30,9 @@
 #include <stdexcept>
 #include <string>
 #include <signal.h>
+#ifdef BUILD_PYTHON
 #include <Python.h>
+#endif
 #include "FileInfo.h"
 #include "BaseClass.h"
 
@@ -111,10 +113,13 @@ public:
   inline void setDebugInformation(const std::string & file, const int line, const std::string & function);
   
   inline void setTranslatable(bool translatable);
+
+#ifdef BUILD_PYTHON
   /// returns a Python dictionary containing the exception data
   virtual PyObject * getPyObject(void);
   /// returns sets the exception data from a Python dictionary
   virtual void setPyObject( PyObject * pydict);
+#endif
 
 protected:
  /* sMessage may be:
@@ -244,10 +249,12 @@ public:
   virtual void ReportException (void) const;
   /// Get file name for use with tranlatable message
   std::string getFileName() const;
+#ifdef BUILD_PYTHON
   /// returns a Python dictionary containing the exception data
   virtual PyObject * getPyObject(void);
   /// returns sets the exception data from a Python dictionary
   virtual void setPyObject( PyObject * pydict);
+#endif
 protected:
   FileInfo file;
   // necessary   for what() legacy behaviour as it returns a buffer that

@@ -23,6 +23,8 @@
 #ifndef BASE_PYOBJECTBASE_H
 #define BASE_PYOBJECTBASE_H
 
+#ifdef BUILD_PYTHON
+
 // Std. configurations
 
 // (re-)defined in pyconfig.h
@@ -112,7 +114,7 @@ union PyType_Object {
     PyObject *o;
 };
 
-
+#endif
 
 /*------------------------------
  * Basic defines
@@ -137,6 +139,8 @@ inline void Assert(int expr, char *msg)         // C++ assert
 }
 
 }
+
+#ifdef BUILD_PYTHON
 
 /*------------------------------
  * Python defines
@@ -526,6 +530,8 @@ inline PyObject * PyAsUnicodeObject(const std::string &str)
 
 
 } // namespace Base
+
+#endif
 
 
 #endif // BASE_PYOBJECTBASE_H

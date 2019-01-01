@@ -448,7 +448,7 @@ void GeoFeatureGroupExtension::getInvalidLinkObjects(const DocumentObject* obj, 
     }
 }
 
-
+#ifdef BUILD_PYTHON
 // Python feature ---------------------------------------------------------
 
 namespace App {
@@ -457,3 +457,4 @@ EXTENSION_PROPERTY_SOURCE_TEMPLATE(App::GeoFeatureGroupExtensionPython, App::Geo
 // explicit template instantiation
 template class AppExport ExtensionPythonT<GroupExtensionPythonT<GeoFeatureGroupExtension>>;
 }
+#endif

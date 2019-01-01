@@ -29,7 +29,10 @@
 #endif
 
 #include "DocumentObjectExtension.h"
+
+#ifdef BUILD_PYTHON
 #include "DocumentObjectExtensionPy.h"
+#endif
 
 using namespace App;
 
@@ -71,6 +74,7 @@ void DocumentObjectExtension::onExtendedUnsetupObject() {
     
 }
 
+#ifdef BUILD_PYTHON
 PyObject* DocumentObjectExtension::getExtensionPyObject(void) {
     
     if (ExtensionPythonObject.is(Py::_None())){
@@ -79,6 +83,7 @@ PyObject* DocumentObjectExtension::getExtensionPyObject(void) {
     }
     return Py::new_reference_to(ExtensionPythonObject);
 }
+#endif
 
 const DocumentObject* DocumentObjectExtension::getExtendedObject() const {
 

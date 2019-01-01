@@ -315,7 +315,7 @@ private:
     static ParameterManager *_pcUserParamMngr;
     //@}
 
-
+#ifdef BUILD_PYTHON
     //---------------------------------------------------------------------
     // python exports goes here +++++++++++++++++++++++++++++++++++++++++++
     //---------------------------------------------------------------------
@@ -354,6 +354,7 @@ private:
     static PyObject *sGetLogLevel       (PyObject *self,PyObject *args);
 
     static PyMethodDef    Methods[];
+#endif
 
     friend class ApplicationObserver;
 

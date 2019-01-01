@@ -27,10 +27,12 @@
 #endif
 
 #include "DocumentObjectGroup.h"
+#include "Document.h"
+#ifdef BUILD_PYTHON
 #include "DocumentObjectGroupPy.h"
 #include "GroupExtensionPy.h"
-#include "Document.h"
 #include "FeaturePythonPyImp.h"
+#endif
 #include "GeoFeatureGroupExtension.h"
 #include <Base/Console.h>
 
@@ -288,6 +290,7 @@ DocumentObject* GroupExtension::getGroupOfObject(const DocumentObject* obj)
     return nullptr;
 }
 
+#ifdef BUILD_PYTHON
 PyObject* GroupExtension::getExtensionPyObject(void) {
 
     if (ExtensionPythonObject.is(Py::_None())){
@@ -297,6 +300,7 @@ PyObject* GroupExtension::getExtensionPyObject(void) {
     }
     return Py::new_reference_to(ExtensionPythonObject);
 }
+#endif
 
 void GroupExtension::extensionOnChanged(const Property* p) {
 
@@ -334,10 +338,11 @@ void GroupExtension::extensionOnChanged(const Property* p) {
     App::Extension::extensionOnChanged(p);
 }
 
-
+#ifdef BUILD_PYTHON
 namespace App {
 EXTENSION_PROPERTY_SOURCE_TEMPLATE(App::GroupExtensionPython, App::GroupExtension)
 
 // explicit template instantiation
 template class AppExport ExtensionPythonT<GroupExtensionPythonT<GroupExtension>>;
 }
+#endif

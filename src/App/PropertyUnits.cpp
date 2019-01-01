@@ -38,9 +38,11 @@
 #include <Base/UnitsApi.h>
 
 #include "PropertyUnits.h"
+#ifdef BUILD_PYTHON
 #include <Base/PyObjectBase.h>
 #include <Base/QuantityPy.h>
 #include <Base/UnitPy.h>
+#endif
 
 using namespace App;
 using namespace Base;
@@ -67,6 +69,7 @@ const char* PropertyQuantity::getEditorName(void) const
     return "Gui::PropertyEditor::PropertyUnitItem";
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyQuantity::getPyObject(void)
 {
     return new QuantityPy (new Quantity(_dValue,_Unit));
@@ -137,6 +140,7 @@ void PropertyQuantity::setPyObject(PyObject *value)
         PropertyFloat::setValue(quant.getValue());
     }
 }
+#endif
 
 void PropertyQuantity::setPathValue(const ObjectIdentifier & /*path*/, const boost::any &value)
 {
@@ -178,6 +182,7 @@ const PropertyQuantityConstraint::Constraints*  PropertyQuantityConstraint::getC
     return _ConstStruct;
 }
 
+#ifdef BUILD_PYTHON
 void PropertyQuantityConstraint::setPyObject(PyObject *value)
 {
     Base::Quantity quant= createQuantityFromPy(value);
@@ -202,6 +207,7 @@ void PropertyQuantityConstraint::setPyObject(PyObject *value)
 
     PropertyFloat::setValue(quant.getValue());
 }
+#endif
 
 //**************************************************************************
 //**************************************************************************

@@ -129,9 +129,11 @@ public:
 
     void onDocumentRestored();
 
+#ifdef BUILD_PYTHON
     /* Python interface */
     PyObject *getPyObject(void);
     void setPyObject(PyObject *);
+#endif
 
 private:
 

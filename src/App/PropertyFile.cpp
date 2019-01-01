@@ -35,7 +35,9 @@
 #include <Base/Writer.h>
 #include <Base/Stream.h>
 #include <Base/Console.h>
+#ifdef BUILD_PYTHON
 #include <Base/PyObjectBase.h>
+#endif
 #include <Base/Uuid.h>
 
 #include "PropertyFile.h"
@@ -244,6 +246,7 @@ const char* PropertyFileIncluded::getValue(void) const
      return _cValue.c_str();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyFileIncluded::getPyObject(void)
 {
     PyObject *p = PyUnicode_DecodeUTF8(_cValue.c_str(),_cValue.size(),0);
@@ -393,6 +396,7 @@ void PropertyFileIncluded::setPyObject(PyObject *value)
     // assign the string
     setValue(string.c_str());
 }
+#endif
 
 void PropertyFileIncluded::Save (Base::Writer &writer) const
 {

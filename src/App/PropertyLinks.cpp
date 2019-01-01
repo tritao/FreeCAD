@@ -36,7 +36,9 @@
 #include <Base/Console.h>
 
 #include "DocumentObject.h"
+#ifdef BUILD_PYTHON
 #include "DocumentObjectPy.h"
+#endif
 #include "Document.h"
 
 #include "PropertyLinks.h"
@@ -118,6 +120,7 @@ App::DocumentObject * PropertyLink::getValue(Base::Type t) const
     return (_pcLink && _pcLink->getTypeId().isDerivedFrom(t)) ? _pcLink : 0;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyLink::getPyObject(void)
 {
     if (_pcLink)
@@ -141,6 +144,7 @@ void PropertyLink::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyLink::Save (Base::Writer &writer) const
 {
@@ -293,6 +297,7 @@ void PropertyLinkList::setValues(const std::vector<DocumentObject*>& lValue)
     hasSetValue();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyLinkList::getPyObject(void)
 {
     int count = getSize();
@@ -339,6 +344,7 @@ void PropertyLinkList::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyLinkList::Save(Base::Writer &writer) const
 {
@@ -497,6 +503,7 @@ App::DocumentObject * PropertyLinkSub::getValue(Base::Type t) const
     return (_pcLinkSub && _pcLinkSub->getTypeId().isDerivedFrom(t)) ? _pcLinkSub : 0;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyLinkSub::getPyObject(void)
 {
     Py::Tuple tup(2);
@@ -559,6 +566,7 @@ void PropertyLinkSub::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyLinkSub::Save (Base::Writer &writer) const
 {
@@ -906,6 +914,7 @@ std::vector<PropertyLinkSubList::SubSet> PropertyLinkSubList::getSubListValues()
     return values;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyLinkSubList::getPyObject(void)
 {
 #if 1
@@ -1014,6 +1023,7 @@ void PropertyLinkSubList::setPyObject(PyObject *value)
         }
     }
 }
+#endif
 
 void PropertyLinkSubList::Save (Base::Writer &writer) const
 {

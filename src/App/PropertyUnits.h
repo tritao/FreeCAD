@@ -59,8 +59,10 @@ public:
 
     virtual const char* getEditorName(void) const;
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
     virtual void setPyObject(PyObject *);
+#endif
 
     void setUnit(const Base::Unit &u) {_Unit = u;}
     const Base::Unit &getUnit(void) const {return _Unit;}
@@ -72,7 +74,9 @@ public:
     virtual const boost::any getPathValue(const App::ObjectIdentifier &path) const;
 
 protected:
+#ifdef BUILD_PYTHON
     Base::Quantity createQuantityFromPy(PyObject *value);
+#endif
     Base::Unit _Unit;
 };
 
@@ -107,8 +111,10 @@ public:
     //@}
 
     virtual const char* getEditorName(void) const;
-    virtual void setPyObject(PyObject *);
 
+#ifdef BUILD_PYTHON
+    virtual void setPyObject(PyObject *);
+#endif
 
 protected:
     const Constraints* _ConstStruct;

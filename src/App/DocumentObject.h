@@ -213,9 +213,12 @@ public:
      * additional or different behavior.
      */
     virtual void onLostLinkToObject(DocumentObject*);
+
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
     /// its used to get the python sub objects by name (e.g. by the selection)
     virtual std::vector<PyObject *> getPySubObjects(const std::vector<std::string>&) const;
+#endif
 
     friend class Document;
     friend class Transaction;
@@ -286,7 +289,9 @@ protected:
 
      /// python object of this class and all descendent
 protected: // attributes
+#ifdef BUILD_PYTHON
     Py::Object PythonObject;
+#endif
     /// pointer to the document this object belongs to
     App::Document* _pDoc;
 

@@ -29,7 +29,9 @@
 #include <App/Document.h>
 
 #include "Part.h"
+#ifdef BUILD_PYTHON
 #include "PartPy.h"
+#endif
 
 
 using namespace App;
@@ -80,7 +82,7 @@ App::Part *Part::getPartOfObject (const DocumentObject* obj) {
     return nullptr;
 }
 
-
+#ifdef BUILD_PYTHON
 PyObject *Part::getPyObject()
 {
     if (PythonObject.is(Py::_None())){
@@ -89,6 +91,7 @@ PyObject *Part::getPyObject()
     }
     return Py::new_reference_to(PythonObject);
 }
+#endif
 
 // Python feature ---------------------------------------------------------
 

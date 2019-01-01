@@ -190,6 +190,8 @@ QString UnitsApi::schemaTranslate(const Base::Quantity& quant, double &factor, Q
 //}
 //
 
+#ifdef BUILD_PYTHON
+
 double UnitsApi::toDbl(PyObject *ArgObj, const Base::Unit &u)
 {
 #if PY_MAJOR_VERSION >= 3
@@ -252,6 +254,8 @@ Quantity UnitsApi::toQuantity(PyObject *ArgObj, const Base::Unit &u)
 
     return Quantity(d,u);
 }
+
+#endif
 
 void UnitsApi::setDecimals(int prec)
 {

@@ -68,6 +68,12 @@
 #include <Base/BaseClass.h>
 #include <Base/Persistence.h>
 #include <Base/Reader.h>
+#include <Base/Sequencer.h>
+#include <Base/Tools.h>
+#include <Base/Translate.h>
+#include <Base/UnitsApi.h>
+
+#ifdef BUILD_PYTHON
 #include <Base/MatrixPy.h>
 #include <Base/VectorPy.h>
 #include <Base/AxisPy.h>
@@ -75,23 +81,24 @@
 #include <Base/BoundBoxPy.h>
 #include <Base/PlacementPy.h>
 #include <Base/RotationPy.h>
-#include <Base/Sequencer.h>
-#include <Base/Tools.h>
-#include <Base/Translate.h>
-#include <Base/UnitsApi.h>
 #include <Base/QuantityPy.h>
 #include <Base/UnitPy.h>
+#endif
 
 #include "GeoFeature.h"
 #include "FeatureTest.h"
+#ifdef BUILD_PYTHON
 #include "FeaturePython.h"
+#endif
 #include "ComplexGeoData.h"
 #include "Property.h"
 #include "PropertyContainer.h"
 #include "PropertyUnits.h"
 #include "PropertyFile.h"
 #include "PropertyLinks.h"
+#ifdef BUILD_PYTHON
 #include "PropertyPythonObject.h"
+#endif
 #include "PropertyExpressionEngine.h"
 #include "Document.h"
 #include "DocumentObjectGroup.h"
@@ -110,8 +117,10 @@
 #include "TextDocument.h"
 #include "Expression.h"
 #include "Transactions.h"
+#ifdef BUILD_PYTHON
 #include <App/MaterialPy.h>
 #include <Base/GeometryPyCXX.h>
+#endif
 
 // If you stumble here, run the target "BuildExtractRevision" on Windows systems
 // or the Python script "SubWCRev.py" on Linux based systems which builds
@@ -133,9 +142,11 @@ using namespace boost::program_options;
 
 
 // scriptings (scripts are build in but can be overridden by command line option)
+#ifdef BUILD_PYTHON
 #include <App/InitScript.h>
 #include <App/TestScript.h>
 #include <App/CMakeScript.h>
+#endif
 
 #ifdef _MSC_VER // New handler for Microsoft Visual C++ compiler
 # if !defined(_DEBUG) && defined(HAVE_SEH)
@@ -193,10 +204,15 @@ Base::ConsoleObserverStd  *Application::_pConsoleObserverStd =0;
 Base::ConsoleObserverFile *Application::_pConsoleObserverFile =0;
 
 AppExport std::map<std::string,std::string> Application::mConfig;
+
+#ifdef BUILD_PYTHON
 BaseExport extern PyObject* Base::BaseExceptionFreeCADError;
+#endif
 
 //**************************************************************************
 // Construction and destruction
+
+#ifdef BUILD_PYTHON
 
 PyDoc_STRVAR(FreeCAD_doc,
      "The functions in the FreeCAD module allow working with documents.\n"
@@ -246,6 +262,7 @@ init_freecad_module(void)
     return PyModule_Create(&FreeCADModuleDef);
 }
 #endif
+#endif
 
 Application::Application(std::map<std::string,std::string> &mConfig)
   : _mConfig(mConfig), _pActiveDoc(0)
@@ -255,6 +272,7 @@ Application::Application(std::map<std::string,std::string> &mConfig)
     mpcPramManager["User parameter"] = _pcUserParamMngr;
 
 
+#ifdef BUILD_PYTHON
     // setting up Python binding
     Base::PyGILStateLocker lock;
 #if PY_MAJOR_VERSION >= 3
@@ -365,6 +383,7 @@ Application::Application(std::map<std::string,std::string> &mConfig)
     Base::Vector2dPy::init_type();
     Base::Interpreter().addType(Base::Vector2dPy::type_object(),
         pBaseModule,"Vector2d");
+#endif
 }
 
 Application::~Application()
@@ -443,12 +462,14 @@ Document* Application::newDocument(const char * Name, const char * UserName)
     _pActiveDoc->signalStartSave.connect(boost::bind(&App::Application::slotStartSaveDocument, this, _1, _2));
     _pActiveDoc->signalFinishSave.connect(boost::bind(&App::Application::slotFinishSaveDocument, this, _1, _2));
 
+#ifdef BUILD_PYTHON
     // make sure that the active document is set in case no GUI is up
     {
         Base::PyGILStateLocker lock;
         Py::Object active(_pActiveDoc->getPyObject(), true);
         Py::Module("FreeCAD").setAttr(std::string("ActiveDocument"),active);
     }
+#endif
 
     signalNewDocument(*_pActiveDoc);
 
@@ -602,6 +623,7 @@ void Application::setActiveDocument(Document* pDoc)
 {
     _pActiveDoc = pDoc;
 
+#ifdef BUILD_PYTHON
     // make sure that the active document is set in case no GUI is up
     if (pDoc) {
         Base::PyGILStateLocker lock;
@@ -612,6 +634,7 @@ void Application::setActiveDocument(Document* pDoc)
         Base::PyGILStateLocker lock;
         Py::Module("FreeCAD").setAttr(std::string("ActiveDocument"),Py::None());
     }
+#endif
 
     if (pDoc)
         signalActiveDocument(*pDoc);
@@ -1386,7 +1409,9 @@ void Application::initTypes(void)
     App ::PropertyPath              ::init();
     App ::PropertyFile              ::init();
     App ::PropertyFileIncluded      ::init();
+#ifdef BUILD_PYTHON
     App ::PropertyPythonObject      ::init();
+#endif
     App ::PropertyExpressionEngine  ::init();
 
     // Extension classes
@@ -1394,11 +1419,17 @@ void Application::initTypes(void)
     App ::ExtensionContainer            ::init();
     App ::DocumentObjectExtension       ::init();
     App ::GroupExtension                ::init();
+#ifdef BUILD_PYTHON
     App ::GroupExtensionPython          ::init();
+#endif
     App ::GeoFeatureGroupExtension      ::init();
+#ifdef BUILD_PYTHON
     App ::GeoFeatureGroupExtensionPython::init();
+#endif
     App ::OriginGroupExtension          ::init();
+#ifdef BUILD_PYTHON
     App ::OriginGroupExtensionPython    ::init();
+#endif
 
     // Document classes
     App ::TransactionalObject       ::init();
@@ -1406,11 +1437,15 @@ void Application::initTypes(void)
     App ::GeoFeature                ::init();
     App ::FeatureTest               ::init();
     App ::FeatureTestException      ::init();
+#ifdef BUILD_PYTHON
     App ::FeaturePython             ::init();
     App ::GeometryPython            ::init();
+#endif
     App ::Document                  ::init();
     App ::DocumentObjectGroup       ::init();
+#ifdef BUILD_PYTHON
     App ::DocumentObjectGroupPython ::init();
+#endif
     App ::DocumentObjectFileIncluded::init();
     App ::InventorObject            ::init();
     App ::VRMLObject                ::init();
@@ -1418,7 +1453,9 @@ void Application::initTypes(void)
     App ::AnnotationLabel           ::init();
     App ::MeasureDistance           ::init();
     App ::MaterialObject            ::init();
+#ifdef BUILD_PYTHON
     App ::MaterialObjectPython      ::init();
+#endif
     App ::TextDocument              ::init();
     App ::Placement                 ::init();
     App ::OriginFeature             ::init();
@@ -1503,6 +1540,7 @@ void Application::initConfig(int argc, char ** argv)
     _argc = argc;
     _argv = argv;
 
+#ifdef BUILD_BRANDING
     // Now it's time to read-in the file branding.xml if it exists
     Branding brand;
     QString binDir = QString::fromUtf8((mConfig["AppHomePath"] + "bin").c_str());
@@ -1513,6 +1551,7 @@ void Application::initConfig(int argc, char ** argv)
             App::Application::Config()[it.key()] = it.value();
         }
     }
+#endif
 
     // extract home paths
     ExtractUserPath();
@@ -1523,18 +1562,22 @@ void Application::initConfig(int argc, char ** argv)
     mConfig["Debug"] = "0";
 #   endif
 
+#ifdef BUILD_PYTHON
     // init python
 #if PY_MAJOR_VERSION >= 3
     PyImport_AppendInittab ("FreeCAD", init_freecad_module);
     PyImport_AppendInittab ("__FreeCADBase__", init_freecad_base_module);
 #endif
     mConfig["PythonSearchPath"] = Interpreter().init(argc,argv);
+#endif
 
     // Parse the options that have impact on the init process
     ParseOptions(argc,argv);
 
     // Init console ===========================================================
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
+#endif
     _pConsoleObserverStd = new ConsoleObserverStd();
     Console().AttachObserver(_pConsoleObserverStd);
     if (mConfig["Verbose"] == "Strict")
@@ -1641,11 +1684,13 @@ void Application::SaveEnv(const char* s)
 
 void Application::initApplication(void)
 {
+#ifdef BUILD_PYTHON
     // interpreter and Init script ==========================================================
     // register scripts
     new ScriptProducer( "CMakeVariables", CMakeVariables );
     new ScriptProducer( "FreeCADInit",    FreeCADInit    );
     new ScriptProducer( "FreeCADTest",    FreeCADTest    );
+#endif
 
     // creating the application
     if (!(mConfig["Verbose"] == "Strict")) Console().Log("Create Application\n");
@@ -1666,6 +1711,7 @@ void Application::initApplication(void)
     Console().Log("Application is built with debug information\n");
 #endif
 
+#ifdef BUILD_PYTHON
     // starting the init script
     Console().Log("Run App init script\n");
     try {
@@ -1676,6 +1722,7 @@ void Application::initApplication(void)
     catch (const Base::Exception& e) {
         e.ReportException();
     }
+#endif
 }
 
 std::list<std::string> Application::getCmdLineFiles()
@@ -1859,13 +1906,17 @@ void Application::LoadParameters(void)
 
     try {
         if (_pcSysParamMngr->LoadOrCreateDocument() && !(mConfig["Verbose"] == "Strict")) {
+#ifdef BUILD_PYTHON
             // Configuration file optional when using as Python module
             if (!Py_IsInitialized()) {
+#endif
                 Console().Warning("   Parameter does not exist, writing initial one\n");
                 Console().Message("   This warning normally means that FreeCAD is running for the first time\n"
                                   "   or the configuration was deleted or moved. FreeCAD is generating the standard\n"
                                   "   configuration.\n");
+#ifdef BUILD_PYTHON
             }
+#endif
         }
     }
     catch (const Base::Exception& e) {
@@ -1893,13 +1944,17 @@ void Application::LoadParameters(void)
                 }
             }
 
+#ifdef BUILD_PYTHON
             // Configuration file optional when using as Python module
             if (!Py_IsInitialized()) {
+#endif
                 Console().Warning("   User settings do not exist, writing initial one\n");
                 Console().Message("   This warning normally means that FreeCAD is running for the first time\n"
                                   "   or your configuration was deleted or moved. The system defaults\n"
                                   "   will be automatically generated for you.\n");
+#ifdef BUILD_PYTHON
             }
+#endif
         }
     }
     catch (const Base::Exception& e) {
@@ -2179,11 +2234,13 @@ void Application::ParseOptions(int ac, char ** av)
         mConfig["AdditionalModulePaths"] = temp;
     }
 
+#ifdef BUILD_PYTHON
     if (vm.count("python-path")) {
         vector<string> Paths = vm["python-path"].as< vector<string> >();
         for (vector<string>::const_iterator It= Paths.begin();It != Paths.end();++It)
             Base::Interpreter().addPythonPath(It->c_str());
     }
+#endif
 
     if (vm.count("input-file")) {
         vector<string> files(vm["input-file"].as< vector<string> >());
@@ -2306,7 +2363,7 @@ void Application::ExtractUserPath()
     if (mConfig.find("AppDataSkipVendor") == mConfig.end()) {
         appData += mConfig["ExeVendor"];
         fi.setFile(appData.c_str());
-        if (!fi.exists() && !Py_IsInitialized()) {
+        if (!fi.exists() /*&& !Py_IsInitialized()*/) {
             if (!fi.createDirectory()) {
                 std::string error = "Cannot create directory ";
                 error += appData;
@@ -2320,7 +2377,7 @@ void Application::ExtractUserPath()
 
     appData += mConfig["ExeName"];
     fi.setFile(appData.c_str());
-    if (!fi.exists() && !Py_IsInitialized()) {
+    if (!fi.exists() /*&& !Py_IsInitialized()*/) {
         if (!fi.createDirectory()) {
             std::string error = "Cannot create directory ";
             error += appData;
@@ -2485,6 +2542,7 @@ std::string Application::FindHomePath(const char* sCall)
     // Python interpreter is already initialized.
     std::string absPath;
     std::string homePath;
+#ifdef BUILD_PYTHON
     if (Py_IsInitialized()) {
         // Note: realpath is known to cause a buffer overflow because it
         // expands the given path to an absolute path of unknown length.
@@ -2495,7 +2553,9 @@ std::string Application::FindHomePath(const char* sCall)
         if (path)
             absPath = path;
     }
-    else {
+    else
+#endif
+    {
         // Find the path of the executable. Theoretically, there could occur a
         // race condition when using readlink, but we only use this method to
         // get the absolute path of the executable to compute the actual home

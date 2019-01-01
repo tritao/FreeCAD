@@ -32,10 +32,10 @@
 #   undef _XOPEN_SOURCE
 #endif // (re-)defined in pyconfig.h
 
-
+#ifdef BUILD_PYTHON
 #include <Python.h>
 #include <CXX/Extensions.hxx>
-
+#endif
 
 #ifdef FC_OS_MACOSX
 #undef toupper
@@ -109,6 +109,7 @@ protected:
 class BaseExport PyGILStateLocker
 {
 public:
+#ifdef BUILD_PYTHON
     PyGILStateLocker()
     {
         gstate = PyGILState_Ensure();
@@ -120,6 +121,7 @@ public:
 
 private:
     PyGILState_STATE gstate;
+#endif
 };
 
 /**
@@ -134,6 +136,7 @@ private:
 class BaseExport PyGILStateRelease
 {
 public:
+#ifdef BUILD_PYTHON
     PyGILStateRelease()
     {
         // release the global interpreter lock
@@ -147,6 +150,7 @@ public:
 
 private:
     PyThreadState* state;
+#endif
 };
 
 
@@ -165,14 +169,17 @@ public:
     //@{
     /// Run a statement on the python interpreter and gives back a string with the representation of the result.
     std::string runString(const char *psCmd);
+#ifdef BUILD_PYTHON
     /// Run a statement on the python interpreter and return back the result object.
     Py::Object runStringObject(const char *sCmd);
+#endif
     /// Run a statement on the python interpreter and gives back a string with the representation of the result.
     void runInteractiveString(const char *psCmd);
     /// Run file (script) on the python interpreter
     void runFile(const char*pxFileName, bool local);
     /// Run a statement with arguments on the python interpreter
     void runStringArg(const char * psCom,...);
+#ifdef BUILD_PYTHON
     /// runs a python object method with no return value and no arguments
     void runMethodVoid(PyObject *pobject, const char *method);
     /// runs a python object method which returns a arbitrary object
@@ -181,6 +188,7 @@ public:
     void runMethod(PyObject *pobject, const char *method,
                    const char *resfmt=0,   void *cresult=0,   
                    const char *argfmt="()",   ...  );
+#endif
     //@}
 
     /** @name Module handling
@@ -190,8 +198,10 @@ public:
      */
     bool loadModule(const char* psModName);
     /// Add an additional python path
+#ifdef BUILD_PYTHON
     void addPythonPath(const char* Path);
     static void addType(PyTypeObject* Type,PyObject* Module, const char * Name);
+#endif
     //@}
 
     /** @name Cleanup
@@ -221,6 +231,7 @@ public:
     static void Destruct(void);
     //@}
 
+#ifdef BUILD_PYTHON
     /** @name external wrapper libs
      *  here we can access external dynamically loaded wrapper libs
      *  done e.g. by SWIG or SIP
@@ -231,6 +242,7 @@ public:
     bool convertSWIGPointerObj(const char* Module, const char* TypeName, PyObject* obj, void** ptr, int flags);
     void cleanupSWIG(const char* TypeName);
     //@}
+#endif
 
     /** @name methods for debugging facility
      */
@@ -254,7 +266,9 @@ public:
     static const std::string strToPython(const std::string &Str){return strToPython(Str.c_str());}
     //@}
 
+#ifdef BUILD_PYTHON
     PyObject *getValue(const char *key, const char *result_var);
+#endif
 
 protected:
     // singleton
@@ -262,7 +276,9 @@ protected:
 
 private:
     std::string _cDebugFileName;
+#ifdef BUILD_PYTHON
     PyThreadState* _global;
+#endif
 };
 
 

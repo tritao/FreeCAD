@@ -29,10 +29,12 @@
 #include <Base/Interpreter.h>
 #include <App/Application.h>
 #include <App/Document.h>
-#include <App/DocumentPy.h>
 #include <App/DocumentObject.h>
 #include <App/PropertyUnits.h>
+#ifdef BUILD_PYTHON
+#include <App/DocumentPy.h>
 #include <Base/QuantityPy.h>
+#endif
 #include <QStringList>
 #include <string>
 #include <sstream>

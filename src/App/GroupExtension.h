@@ -105,8 +105,10 @@ public:
      */
     static DocumentObject* getGroupOfObject(const DocumentObject* obj);
     //@}
-    
+
+#ifdef BUILD_PYTHON
     virtual PyObject* getExtensionPyObject(void) override;
+#endif
 
     virtual void extensionOnChanged(const Property* p) override;
     
@@ -120,6 +122,7 @@ private:
     bool recursiveHasObject(const DocumentObject* obj, const GroupExtension* group, std::vector<const GroupExtension*> history) const;
 };
 
+#ifdef BUILD_PYTHON
 
 template<typename ExtensionT>
 class GroupExtensionPythonT : public ExtensionT {
@@ -145,6 +148,8 @@ public:
 };
 
 typedef ExtensionPythonT<GroupExtensionPythonT<GroupExtension>> GroupExtensionPython;
+
+#endif
 
 } //namespace App
 

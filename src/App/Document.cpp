@@ -82,7 +82,10 @@ recompute path. Also enables more complicated dependencies beyond trees.
 #include "Application.h"
 #include "DocumentObject.h"
 #include "MergeDocuments.h"
+
+#ifdef BUILD_PYTHON
 #include <App/DocumentPy.h>
+#endif
 
 #include <Base/Console.h>
 #include <Base/Exception.h>
@@ -1188,7 +1191,9 @@ Document::Document(void)
     // So, we must increment only if the interpreter gets a reference.
     // Remark: We force the document Python object to own the DocumentPy instance, thus we don't
     // have to care about ref counting any more.
+#ifdef BUILD_PYTHON
     DocumentPythonObject = Py::Object(new DocumentPy(this), true);
+#endif
     d = new DocumentP;
 
 #ifdef FC_LOGUPDATECHAIN
@@ -1305,6 +1310,7 @@ Document::~Document()
         delete(it->second);
     }
 
+#ifdef BUILD_PYTHON
     // Remark: The API of Py::Object has been changed to set whether the wrapper owns the passed
     // Python object or not. In the constructor we forced the wrapper to own the object so we need
     // not to dec'ref the Python object any more.
@@ -1314,6 +1320,7 @@ Document::~Document()
     Base::PyObjectBase* doc = (Base::PyObjectBase*)DocumentPythonObject.ptr();
     // Call before decrementing the reference counter, otherwise a heap error can occur
     doc->setInvalid();
+#endif
 
     // remove Transient directory
     try {
@@ -3248,10 +3255,12 @@ int Document::countObjectsOfType(const Base::Type& typeId) const
     return ct;
 }
 
+#ifdef BUILD_PYTHON
 PyObject * Document::getPyObject(void)
 {
     return Py::new_reference_to(DocumentPythonObject);
 }
+#endif
 
 std::vector<App::DocumentObject*> Document::getRootObjects() const
 {

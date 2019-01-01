@@ -48,7 +48,10 @@ public:
         return DocumentObject::StdReturn;
     }
     virtual short mustExecute(void) const;
+
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     PropertyString Buffer;
     PropertyString FileName;

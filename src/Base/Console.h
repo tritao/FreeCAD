@@ -554,12 +554,15 @@ public:
     // retrieval of an observer by name
     ConsoleObserver *Get(const char *Name) const;
 
+#ifdef BUILD_PYTHON
     static PyMethodDef    Methods[];
+#endif
 
     void Refresh();
     void EnableRefresh(bool enable);
 
 protected:
+#ifdef BUILD_PYTHON
     // python exports goes here +++++++++++++++++++++++++++++++++++++++++++	
     // static python wrapper of the exported functions
     static PyObject *sPyLog      (PyObject *self,PyObject *args);
@@ -568,6 +571,7 @@ protected:
     static PyObject *sPyError    (PyObject *self,PyObject *args);
     static PyObject *sPySetStatus(PyObject *self,PyObject *args);
     static PyObject *sPyGetStatus(PyObject *self,PyObject *args);
+#endif
 
     bool _bVerbose;
     bool _bCanRefresh;

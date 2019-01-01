@@ -38,7 +38,9 @@
 #include "Expression.h"
 #include <Base/Tools.h>
 #include <Base/Interpreter.h>
+#ifdef BUILD_PYTHON
 #include <Base/QuantityPy.h>
+#endif
 
 using namespace App;
 using namespace Base;
@@ -1049,6 +1051,7 @@ std::string ObjectIdentifier::getPythonAccessor() const
 
 boost::any ObjectIdentifier::getValue() const
 {
+#ifdef BUILD_PYTHON
     std::string s = "_path_value_temp_ = " + getPythonAccessor();
     PyObject * pyvalue = Base::Interpreter().getValue(s.c_str(), "_path_value_temp_");
 
@@ -1096,6 +1099,10 @@ boost::any ObjectIdentifier::getValue() const
     else {
         throw Base::TypeError("Invalid property type.");
     }
+#else
+    assert(0 && "ObjectIdentifier::getValue() not implemented!");
+    return boost::any();
+#endif
 }
 
 /**

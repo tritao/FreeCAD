@@ -239,6 +239,7 @@ protected:
     char buffer[bufSize+pbSize];        // data buffer
 };
 
+#ifdef BUILD_PYTHON
 class BaseExport PyStreambuf : public std::streambuf
 {
     typedef std::streambuf::int_type int_type;
@@ -267,6 +268,7 @@ private:
     const std::size_t put_back;
     std::vector<char> buffer;
 };
+#endif
 
 class BaseExport Streambuf : public std::streambuf
 {

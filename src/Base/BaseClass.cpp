@@ -29,7 +29,9 @@
 
 /// Here the FreeCAD includes sorted by Base,App,Gui......
 #include "BaseClass.h"
+#ifdef BUILD_PYTHON
 #include "PyObjectBase.h"
+#endif
 
 using namespace Base;
 
@@ -100,6 +102,7 @@ void BaseClass::initSubclass(Base::Type &toInit,const char* ClassName, const cha
     toInit = Base::Type::createType(parentType, ClassName, method);
 }
 
+#ifdef BUILD_PYTHON
 /**
  * This method returns the Python wrapper for a C++ object. It's in the responsibility of 
  * the programmer to do the correct reference counting. Basically there are two ways how
@@ -120,3 +123,4 @@ void BaseClass::setPyObject(PyObject *)
 {
     assert(0);
 }
+#endif

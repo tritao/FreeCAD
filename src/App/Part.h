@@ -24,6 +24,7 @@
 #ifndef APP_Part_H
 #define APP_Part_H
 
+#include "GeoFeature.h"
 #include "OriginGroupExtension.h"
 #include "PropertyLinks.h"
 
@@ -91,7 +92,9 @@ public:
      */
     static App::Part* getPartOfObject (const DocumentObject* obj);
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 };
 
 //typedef App::FeaturePythonT<Part> PartPython;

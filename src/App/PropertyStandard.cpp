@@ -40,7 +40,9 @@
 #include <Base/Quantity.h>
 
 #include "PropertyStandard.h"
+#ifdef BUILD_PYTHON
 #include "MaterialPy.h"
+#endif
 #include "ObjectIdentifier.h"
 
 using namespace App;
@@ -88,6 +90,7 @@ long PropertyInteger::getValue(void) const
     return _lValue;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyInteger::getPyObject(void)
 {
     return Py_BuildValue("l", _lValue);
@@ -112,6 +115,7 @@ void PropertyInteger::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyInteger::Save (Base::Writer &writer) const
 {
@@ -210,6 +214,7 @@ boost::filesystem::path PropertyPath::getValue(void) const
     return _cValue;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyPath::getPyObject(void)
 {
 #if (BOOST_VERSION < 104600) || (BOOST_FILESYSTEM_VERSION == 2)
@@ -248,7 +253,7 @@ void PropertyPath::setPyObject(PyObject *value)
     // assign the path
     setValue(path.c_str());
 }
-
+#endif
 
 void PropertyPath::Save (Base::Writer &writer) const
 {
@@ -431,6 +436,7 @@ void PropertyEnumeration::Restore(Base::XMLReader &reader)
     setValue(val);
 }
 
+#ifdef BUILD_PYTHON
 PyObject * PropertyEnumeration::getPyObject(void)
 {
     if (!_enum.isValid()) {
@@ -552,6 +558,7 @@ void PropertyEnumeration::setPyObject(PyObject *value)
         throw Base::TypeError(error + value->ob_type->tp_name);
     }
 }
+#endif
 
 Property * PropertyEnumeration::Copy(void) const
 {
@@ -627,6 +634,7 @@ const PropertyIntegerConstraint::Constraints*  PropertyIntegerConstraint::getCon
     return _ConstStruct;
 }
 
+#ifdef BUILD_PYTHON
 void PropertyIntegerConstraint::setPyObject(PyObject *value)
 {
 #if PY_MAJOR_VERSION < 3
@@ -684,6 +692,7 @@ void PropertyIntegerConstraint::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 //**************************************************************************
 //**************************************************************************
@@ -756,6 +765,7 @@ void PropertyIntegerList::setValues(const std::vector<long>& values)
     hasSetValue();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyIntegerList::getPyObject(void)
 {
     PyObject* list = PyList_New(getSize());
@@ -810,6 +820,7 @@ void PropertyIntegerList::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyIntegerList::Save (Base::Writer &writer) const
 {
@@ -902,6 +913,7 @@ void PropertyIntegerSet::setValues(const std::set<long>& values)
     hasSetValue();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyIntegerSet::getPyObject(void)
 {
     PyObject* set = PySet_New(NULL);
@@ -956,6 +968,7 @@ void PropertyIntegerSet::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyIntegerSet::Save (Base::Writer &writer) const
 {
@@ -1043,6 +1056,7 @@ double PropertyFloat::getValue(void) const
     return _dValue;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyFloat::getPyObject(void)
 {
     return Py_BuildValue("d", _dValue);
@@ -1072,6 +1086,7 @@ void PropertyFloat::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyFloat::Save (Base::Writer &writer) const
 {
@@ -1155,6 +1170,7 @@ const PropertyFloatConstraint::Constraints*  PropertyFloatConstraint::getConstra
     return _ConstStruct;
 }
 
+#ifdef BUILD_PYTHON
 void PropertyFloatConstraint::setPyObject(PyObject *value)
 { 
     if (PyFloat_Check(value)) {
@@ -1232,6 +1248,7 @@ void PropertyFloatConstraint::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 //**************************************************************************
 // PropertyPrecision
@@ -1303,6 +1320,7 @@ void PropertyFloatList::setValues(const std::vector<double>& values)
     hasSetValue();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyFloatList::getPyObject(void)
 {
     PyObject* list = PyList_New(getSize());
@@ -1347,6 +1365,7 @@ void PropertyFloatList::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyFloatList::Save (Base::Writer &writer) const
 {
@@ -1471,6 +1490,7 @@ const char* PropertyString::getValue(void) const
     return _cValue.c_str();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyString::getPyObject(void)
 {
     PyObject *p = PyUnicode_DecodeUTF8(_cValue.c_str(),_cValue.size(),0);
@@ -1502,6 +1522,7 @@ void PropertyString::setPyObject(PyObject *value)
     // assign the string
     setValue(string);
 }
+#endif
 
 void PropertyString::Save (Base::Writer &writer) const
 {
@@ -1597,6 +1618,7 @@ const Base::Uuid& PropertyUUID::getValue(void) const
     return _uuid;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyUUID::getPyObject(void)
 {
 #if PY_MAJOR_VERSION >= 3
@@ -1638,6 +1660,7 @@ void PropertyUUID::setPyObject(PyObject *value)
         throw Base::RuntimeError(e.what());
     }
 }
+#endif
 
 void PropertyUUID::Save (Base::Writer &writer) const
 {
@@ -1739,6 +1762,7 @@ void PropertyStringList::setValues(const std::list<std::string>& lValue)
     hasSetValue();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyStringList::getPyObject(void)
 {
     PyObject* list = PyList_New(getSize());
@@ -1810,6 +1834,7 @@ void PropertyStringList::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 unsigned int PropertyStringList::getMemSize (void) const
 {
@@ -1916,7 +1941,7 @@ const std::string& PropertyMap::operator[] (const std::string& key) const
         return empty;
 } 
 
-
+#ifdef BUILD_PYTHON
 PyObject *PropertyMap::getPyObject(void)
 {
     PyObject* dict = PyDict_New();
@@ -1996,6 +2021,7 @@ void PropertyMap::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 unsigned int PropertyMap::getMemSize (void) const
 {
@@ -2089,6 +2115,7 @@ bool PropertyBool::getValue(void) const
     return _lValue;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyBool::getPyObject(void)
 {
     return PyBool_FromLong(_lValue ? 1 : 0);
@@ -2111,6 +2138,7 @@ void PropertyBool::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyBool::Save (Base::Writer &writer) const
 {
@@ -2225,6 +2253,7 @@ void PropertyBoolList::setValues(const boost::dynamic_bitset<>& values)
     hasSetValue();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyBoolList::getPyObject(void)
 {
     PyObject* tuple = PyTuple_New(getSize());
@@ -2303,6 +2332,7 @@ void PropertyBoolList::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyBoolList::Save (Base::Writer &writer) const
 {
@@ -2391,6 +2421,7 @@ const Color& PropertyColor::getValue(void) const
     return _cCol;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyColor::getPyObject(void)
 {
     PyObject* rgba = PyTuple_New(4);
@@ -2462,6 +2493,7 @@ void PropertyColor::setPyObject(PyObject *value)
 
     setValue( cCol );
 }
+#endif
 
 void PropertyColor::Save (Base::Writer &writer) const
 {
@@ -2539,6 +2571,7 @@ void PropertyColorList::setValues (const std::vector<Color>& values)
     hasSetValue();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyColorList::getPyObject(void)
 {
     PyObject* list = PyList_New(getSize());
@@ -2593,6 +2626,7 @@ void PropertyColorList::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyColorList::Save (Base::Writer &writer) const
 {
@@ -2728,6 +2762,7 @@ void PropertyMaterial::setTransparency(float val)
     hasSetValue();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyMaterial::getPyObject(void)
 {
     return new MaterialPy(new Material(_cMat));
@@ -2744,6 +2779,7 @@ void PropertyMaterial::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyMaterial::Save (Base::Writer &writer) const
 {
@@ -2837,6 +2873,7 @@ void PropertyMaterialList::setValues(const std::vector<Material>& values)
     hasSetValue();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyMaterialList::getPyObject(void)
 {
     Py::Tuple tuple(getSize());
@@ -2872,6 +2909,7 @@ void PropertyMaterialList::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyMaterialList::Save(Base::Writer &writer) const
 {

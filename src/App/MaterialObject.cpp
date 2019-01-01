@@ -27,7 +27,9 @@
 #endif
 
 #include "MaterialObject.h"
+#ifdef BUILD_PYTHON
 #include "DocumentObjectPy.h"
+#endif
 
 using namespace App;
 
@@ -44,6 +46,7 @@ MaterialObject::~MaterialObject()
 {
 }
 
+#ifdef BUILD_PYTHON
 // Python feature ---------------------------------------------------------
 
 namespace App {
@@ -57,3 +60,4 @@ template<> const char* App::MaterialObjectPython::getViewProviderName(void) cons
 // explicit template instantiation
 template class AppExport FeaturePythonT<App::MaterialObject>;
 }
+#endif

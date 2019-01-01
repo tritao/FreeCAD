@@ -35,7 +35,9 @@
 #endif
 
 // Include files
+#ifdef BUILD_PYTHON
 #include <Python.h>
+#endif
 
 #ifdef FC_OS_MACOSX
 #undef toupper

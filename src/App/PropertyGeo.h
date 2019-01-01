@@ -85,8 +85,10 @@ public:
         return "Gui::PropertyEditor::PropertyVectorItem";
     }
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
     virtual void setPyObject(PyObject *);
+#endif
 
     virtual void Save (Base::Writer &writer) const;
     virtual void Restore(Base::XMLReader &reader);
@@ -217,8 +219,10 @@ public:
         return _lValueList;
     }
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
     virtual void setPyObject(PyObject *);
+#endif
 
     virtual void Save (Base::Writer &writer) const;
     virtual void Restore(Base::XMLReader &reader);
@@ -267,8 +271,10 @@ public:
         return "Gui::PropertyEditor::PropertyMatrixItem";
     }
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
     virtual void setPyObject(PyObject *);
+#endif
 
     virtual void Save (Base::Writer &writer) const;
     virtual void Restore(Base::XMLReader &reader);
@@ -323,8 +329,10 @@ public:
         return "Gui::PropertyEditor::PropertyPlacementItem";
     }
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
     virtual void setPyObject(PyObject *);
+#endif
 
     virtual void Save (Base::Writer &writer) const;
     virtual void Restore(Base::XMLReader &reader);
@@ -407,8 +415,10 @@ public:
         return _lValueList;
     }
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
     virtual void setPyObject(PyObject *);
+#endif
 
     virtual void Save (Base::Writer &writer) const;
     virtual void Restore(Base::XMLReader &reader);

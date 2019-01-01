@@ -25,6 +25,8 @@
 
 #include "PreCompiled.h"
 
+#include <cstdarg>
+
 #ifndef _PreComp_
 #   include <sstream>
 #   include <boost/regex.hpp>
@@ -34,10 +36,13 @@
 #include "Interpreter.h"
 #include "FileInfo.h"
 #include "Stream.h"
-#include "PyTools.h"
 #include "Exception.h"
+
+#ifdef BUILD_PYTHON
+#include "PyTools.h"
 #include "PyObjectBase.h"
 #include <CXX/Extensions.hxx>
+#endif
 
 #include "ExceptionFactory.h"
 
@@ -47,13 +52,15 @@ unsigned int format2_len = 1024;
 
 using namespace Base;
 
+#ifdef BUILD_PYTHON
 #if PY_VERSION_HEX <= 0x02050000
 #error "Use Python2.5.x or higher"
 #endif
-
+#endif
 
 PyException::PyException(void)
 {
+#ifdef BUILD_PYTHON
     PP_Fetch_Error_Text();    /* fetch (and clear) exception */
     std::string prefix = PP_last_error_type; /* exception name text */
 //  prefix += ": ";
@@ -78,6 +85,7 @@ PyException::PyException(void)
     // and thus may clear a Python exception when it should not.
     PyGILStateLocker locker;
     PyErr_Clear(); // must be called to keep Python interpreter in a valid state (Werner)
+#endif
 }
 
 PyException::~PyException() throw()
@@ -86,6 +94,7 @@ PyException::~PyException() throw()
 
 void PyException::ThrowException(void)
 {
+#ifdef BUILD_PYTHON
     PyException myexcp = PyException();
 
     PyGILStateLocker locker;
@@ -105,6 +114,7 @@ void PyException::ThrowException(void)
     }
     else
         throw myexcp;
+#endif
 }
 
 void PyException::ReportException (void) const
@@ -117,6 +127,7 @@ void PyException::ReportException (void) const
 
 SystemExitException::SystemExitException()
 {
+#ifdef BUILD_PYTHON
     // Set exception message and code based upon the pthon sys.exit() code and/or message 
     // based upon the following sys.exit() call semantics.
     //
@@ -164,6 +175,7 @@ SystemExitException::SystemExitException()
 
     _sErrMsg  = errMsg;
     _exitCode = errCode;
+#endif
 }
 
 SystemExitException::SystemExitException(const SystemExitException &inst)
@@ -174,6 +186,7 @@ SystemExitException::SystemExitException(const SystemExitException &inst)
 
 // ---------------------------------------------------------
 
+#ifdef BUILD_PYTHON
 // Fixes #0000831: python print causes File descriptor error on windows
 class PythonStdOutput : public Py::PythonExtension<PythonStdOutput>
 {
@@ -202,12 +215,15 @@ public:
         return Py::None();
     }
 };
+#endif
 
 // ---------------------------------------------------------
 
 InterpreterSingleton::InterpreterSingleton()
 {
+#ifdef BUILD_PYTHON
     this->_global = 0;
+#endif
 }
 
 InterpreterSingleton::~InterpreterSingleton()
@@ -218,6 +234,7 @@ InterpreterSingleton::~InterpreterSingleton()
 
 std::string InterpreterSingleton::runString(const char *sCmd)
 {
+#ifdef BUILD_PYTHON
     PyObject *module, *dict, *presult;          /* "exec code in d, d" */
 
     PyGILStateLocker locker;
@@ -255,8 +272,13 @@ std::string InterpreterSingleton::runString(const char *sCmd)
         PyErr_Clear();
         return std::string();
     }
+#else
+    assert(0 && "InterpreterSingleton::runString() not implemented!");
+    return std::string();
+#endif
 }
 
+#ifdef BUILD_PYTHON
 Py::Object InterpreterSingleton::runStringObject(const char *sCmd)
 {
     PyObject *module, *dict, *presult;          /* "exec code in d, d" */
@@ -280,9 +302,11 @@ Py::Object InterpreterSingleton::runStringObject(const char *sCmd)
 
     return Py::asObject(presult);
 }
+#endif
 
 void InterpreterSingleton::systemExit(void)
 {
+#ifdef BUILD_PYTHON
     /* This code is taken from the original Python code */
     PyObject *exception, *value, *tb;
     int exitcode = 0;
@@ -329,10 +353,14 @@ done:
     PyErr_Clear();
     Py_Exit(exitcode);
     /* NOTREACHED */
+#else
+    assert(0 && "InterpreterSingleton::systemExit() not implemented!");
+#endif
 }
 
 void InterpreterSingleton::runInteractiveString(const char *sCmd)
 {
+#ifdef BUILD_PYTHON
     PyObject *module, *dict, *presult;          /* "exec code in d, d" */
 
     PyGILStateLocker locker;
@@ -368,10 +396,14 @@ void InterpreterSingleton::runInteractiveString(const char *sCmd)
     }
     else
         Py_DECREF(presult);
+#else
+    assert(0 && "InterpreterSingleton::runInteractiveString() not implemented!");
+#endif
 }
 
 void InterpreterSingleton::runFile(const char*pxFileName, bool local)
 {
+#ifdef BUILD_PYTHON
 #ifdef FC_OS_WIN32
     FileInfo fi(pxFileName);
     FILE *fp = _wfopen(fi.toStdWString().c_str(),L"r");
@@ -428,10 +460,14 @@ void InterpreterSingleton::runFile(const char*pxFileName, bool local)
     else {
         throw FileException("Unknown file", pxFileName);
     }
+#else
+    assert(0 && "InterpreterSingleton::runFile() not implemented!");
+#endif
 }
 
 bool InterpreterSingleton::loadModule(const char* psModName)
 {
+#ifdef BUILD_PYTHON
     // buffer acrobatics
     //PyBuf ModName(psModName);
     PyObject *module;
@@ -445,10 +481,14 @@ bool InterpreterSingleton::loadModule(const char* psModName)
         else
             throw PyException();
     }
+#else
+    assert(0 && "InterpreterSingleton::loadModule() not implemented!");
+#endif
 
     return true;
 }
 
+#ifdef BUILD_PYTHON
 void InterpreterSingleton::addType(PyTypeObject* Type,PyObject* Module, const char * Name)
 {
     // NOTE: To finish the initialization of our own type objects we must
@@ -472,9 +512,11 @@ void InterpreterSingleton::addPythonPath(const char* Path)
     Py_DECREF(path);
     PySys_SetObject("path", list);
 }
+#endif
 
 const char* InterpreterSingleton::init(int argc,char *argv[])
 {
+#ifdef BUILD_PYTHON
     if (!Py_IsInitialized()) {
 #if PY_MAJOR_VERSION >= 3
 #if PY_MINOR_VERSION >= 5
@@ -520,29 +562,40 @@ const char* InterpreterSingleton::init(int argc,char *argv[])
 #else
     return Py_GetPath();
 #endif
+#else
+    return 0;
+#endif
 }
 
 void InterpreterSingleton::replaceStdOutput()
 {
+#ifdef BUILD_PYTHON
     PyGILStateLocker locker;
     PythonStdOutput* out = new PythonStdOutput();
     PySys_SetObject("stdout", out);
     PySys_SetObject("stderr", out);
+#endif
 }
 
 int InterpreterSingleton::cleanup(void (*func)(void))
 {
+#ifdef BUILD_PYTHON
     return Py_AtExit( func );
+#else
+    return 0;
+#endif
 }
 
 void InterpreterSingleton::finalize()
 {
+#ifdef BUILD_PYTHON
     try {
         PyEval_RestoreThread(this->_global);
         Py_Finalize();
     }
     catch (...) {
     }
+#endif
 }
 
 void InterpreterSingleton::runStringArg(const char * psCom,...)
@@ -583,10 +636,17 @@ void InterpreterSingleton::Destruct(void)
 
 int InterpreterSingleton::runCommandLine(const char *prompt)
 {
+#ifdef BUILD_PYTHON
     PyGILStateLocker locker;
     return PP_Run_Command_Line(prompt);
+#else
+    //assert(0 && "InterpreterSingleton::runCommandLine() not implemented!");
+    printf("InterpreterSingleton::runCommandLine(): %s\n", prompt);
+    return 0;
+#endif
 }
 
+#ifdef BUILD_PYTHON
 /**
  *  Runs a member method of an object with no parameter and no return value
  *  void (void). There are other methods to run with returns
@@ -675,6 +735,7 @@ PyObject * InterpreterSingleton::getValue(const char * key, const char * result_
 
     return PyObject_GetAttrString(module, result_var);
 }
+#endif
 
 void InterpreterSingleton::dbgObserveFile(const char* sFileName)
 {
@@ -725,7 +786,7 @@ const std::string InterpreterSingleton::strToPython(const char* Str)
 }
 
 // --------------------------------------------------------------------
-
+#ifdef BUILD_PYTHON
 int getSWIGVersionFromModule(const std::string& module)
 {
     static std::map<std::string, int> moduleMap;
@@ -908,3 +969,5 @@ void InterpreterSingleton::cleanupSWIG(const char* TypeName)
     Swig_1_3_40::cleanupSWIG_T(TypeName);
 #endif
 }
+
+#endif

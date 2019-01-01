@@ -24,7 +24,10 @@
 #include "PreCompiled.h"
 #include "Writer.h"
 #include "Reader.h"
+#include "Exception.h"
+#ifdef BUILD_PYTHON
 #include "PyObjectBase.h"
+#endif
 
 #ifndef _PreComp_
 #endif

@@ -131,8 +131,10 @@ public:
         return _pcLink ? dynamic_cast<_type>(_pcLink) : 0;
     }
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
     virtual void setPyObject(PyObject *);
+#endif
 
     virtual void Save (Base::Writer &writer) const;
     virtual void Restore(Base::XMLReader &reader);
@@ -207,8 +209,10 @@ public:
         return _lValueList;
     }
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
     virtual void setPyObject(PyObject *);
+#endif
 
     virtual void Save(Base::Writer &writer) const;
     virtual void Restore(Base::XMLReader &reader);
@@ -290,8 +294,10 @@ public:
         return _pcLinkSub ? dynamic_cast<_type>(_pcLinkSub) : 0;
     }
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
     virtual void setPyObject(PyObject *);
+#endif
 
     virtual void Save (Base::Writer &writer) const;
     virtual void Restore(Base::XMLReader &reader);
@@ -387,8 +393,10 @@ public:
     void setSubListValues(const std::vector<SubSet>&);
     std::vector<SubSet> getSubListValues() const;
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
     virtual void setPyObject(PyObject *);
+#endif
 
     virtual void Save (Base::Writer &writer) const;
     virtual void Restore(Base::XMLReader &reader);

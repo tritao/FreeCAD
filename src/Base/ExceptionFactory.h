@@ -24,8 +24,9 @@
 #ifndef BASE_EXCEPTIONFACTORY_H
 #define BASE_EXCEPTIONFACTORY_H
 
-
+#ifdef BUILD_PYTHON
 #include <Python.h>
+#endif
 
 #include "Factory.h"
 
@@ -42,7 +43,9 @@ public:
     void* Produce () const {
         return nullptr;
     }
+#ifdef BUILD_PYTHON
     virtual void raiseException(PyObject * pydict) const = 0;
+#endif
 };
 
 // --------------------------------------------------------------------
@@ -53,8 +56,10 @@ class BaseExport ExceptionFactory : public Factory
 public:
     static ExceptionFactory& Instance(void);
     static void Destruct (void);
-    
+
+#ifdef BUILD_PYTHON
     void raiseException(PyObject * pydict) const;
+#endif
     
 private:
     static ExceptionFactory* _pcSingleton;
@@ -76,6 +81,7 @@ public:
     
     virtual ~ExceptionProducer (){}
     
+#ifdef BUILD_PYTHON
     void raiseException(PyObject * pydict) const
     {
         CLASS c;
@@ -83,6 +89,7 @@ public:
 
         throw c;
     }
+#endif
 };
 
 } //namespace Base

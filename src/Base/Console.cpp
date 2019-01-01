@@ -38,7 +38,9 @@
 
 #include "Console.h"
 #include "Exception.h"
+#ifdef BUILD_PYTHON
 #include "PyObjectBase.h"
+#endif
 #include <QCoreApplication>
 
 using namespace Base;
@@ -494,6 +496,7 @@ ConsoleSingleton & ConsoleSingleton::Instance(void)
     return *_pcSingleton;
 }
 
+#ifdef BUILD_PYTHON
 //**************************************************************************
 // Python stuff
 
@@ -759,6 +762,7 @@ PyObject *ConsoleSingleton::sPySetStatus(PyObject * /*self*/, PyObject *args)
 
     } PY_CATCH;
 }
+#endif
 
 //=========================================================================
 // some special observers

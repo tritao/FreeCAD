@@ -24,7 +24,9 @@
 #ifndef BASE_UNITSAPI_H
 #define BASE_UNITSAPI_H
 
+#ifdef BUILD_PYTHON
 #include <CXX/WrapPython.h>
+#endif
 #include <string>
 #include <QString>
 #include "UnitsSchema.h"
@@ -65,10 +67,12 @@ public:
         return UnitsApi::schemaTranslate(quant, dummy1, dummy2);
     }
 
+#ifdef BUILD_PYTHON
     /// generate a value for a quantity with default user preferred system
     static double toDbl(PyObject *ArgObj,const Base::Unit &u=Base::Unit());
     /// generate a value for a quantity with default user preferred system
     static Quantity toQuantity(PyObject *ArgObj,const Base::Unit &u=Base::Unit());
+#endif
 
     // set the number of decimals
     static void setDecimals(int);
@@ -80,8 +84,10 @@ public:
 
     //double Result;
 
+#ifdef BUILD_PYTHON
     // Python interface
     static PyMethodDef    Methods[];
+#endif
 
     static double defaultFactor;
 
@@ -99,6 +105,7 @@ protected:
     // do the real work
     //static double parse(const char*,bool &UsedUnit);
 
+#ifdef BUILD_PYTHON
 protected: // the python API wrapper methods
     //static PyObject *sTranslateUnit   (PyObject *self,PyObject *args);
     //static PyObject *sGetWithPrefs    (PyObject *self,PyObject *args);
@@ -107,6 +114,7 @@ protected: // the python API wrapper methods
     static PyObject *sGetSchema       (PyObject *self,PyObject *args);
     static PyObject *sSetSchema       (PyObject *self,PyObject *args);
     static PyObject *sSchemaTranslate (PyObject *self,PyObject *args);
+#endif
 };
 
 } // namespace Base

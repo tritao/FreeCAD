@@ -39,7 +39,11 @@
 
 #include "Stream.h"
 #include "Swap.h"
+#ifdef BUILD_PYTHON
 #include <CXX/Objects.hxx>
+#endif
+
+#include <cassert>
 
 using namespace Base;
 
@@ -523,6 +527,7 @@ IODeviceIStreambuf::seekpos(std::streambuf::pos_type pos,
 
 // ---------------------------------------------------------
 
+#ifdef BUILD_PYTHON
 #define PYSTREAM_BUFFERED
 
 // http://www.mr-edd.co.uk/blog/beginners_guide_streambuf
@@ -711,6 +716,7 @@ PyStreambuf::seekpos(PyStreambuf::pos_type offset, PyStreambuf::openmode mode)
 {
     return seekoff(offset, std::ios::beg, mode);
 }
+#endif
 
 // ---------------------------------------------------------
 

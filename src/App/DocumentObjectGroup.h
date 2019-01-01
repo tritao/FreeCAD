@@ -47,11 +47,15 @@ public:
     virtual const char* getViewProviderName(void) const {
         return "Gui::ViewProviderDocumentObjectGroup";
     }
-    
+
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 };
 
+#ifdef BUILD_PYTHON
 typedef App::FeaturePythonT<DocumentObjectGroup> DocumentObjectGroupPython;
+#endif
 
 
 } //namespace App

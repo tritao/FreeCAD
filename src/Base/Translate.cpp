@@ -23,6 +23,9 @@
 #include "PreCompiled.h"
 
 #include "Translate.h"
+
+#ifdef BUILD_PYTHON
+
 #include <QCoreApplication>
 
 using namespace Base;
@@ -114,3 +117,5 @@ Py::Object Translate::trNoop(const Py::Tuple& args)
         throw Py::Exception();
     return Py::Object(arg1);
 }
+
+#endif

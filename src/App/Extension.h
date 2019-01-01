@@ -25,10 +25,12 @@
 #define APP_EXTENSION_H
 
 #include "PropertyContainer.h"
-#include "PropertyPythonObject.h"
 #include "ExtensionContainer.h"
 #include "Base/Interpreter.h"
+#ifdef BUILD_PYTHON
+#include "PropertyPythonObject.h"
 #include <CXX/Objects.hxx>
+#endif
 
 namespace App {
     
@@ -244,8 +246,9 @@ public:
  
     bool isPythonExtension() {return m_isPythonExtension;}
   
+#ifdef BUILD_PYTHON
     virtual PyObject* getExtensionPyObject(void);
-  
+#endif
   
     /** @name Access properties */
     //@{
@@ -293,7 +296,9 @@ protected:
 protected:     
     void initExtensionType(Base::Type type);
     bool m_isPythonExtension = false;
+#ifdef BUILD_PYTHON
     Py::Object ExtensionPythonObject;
+#endif
   
 private:
     Base::Type                    m_extensionType;
@@ -313,7 +318,7 @@ private:
     propertyData.addProperty(static_cast<App::Extension*>(this), #_prop_, &this->_prop_, (_group_),(_type_),(_Docu_)); \
   } while (0)
   
-
+#ifdef BUILD_PYTHON
 /**
  * Generic Python extension class which allows every extension derived
  * class to behave as a Python extension -- simply by subclassing.
@@ -339,6 +344,7 @@ public:
 };
 
 typedef ExtensionPythonT<App::Extension> ExtensionPython;
+#endif
 
 // Helper macros to define python extensions
 #define EXTENSION_PROXY_FIRST(function) \

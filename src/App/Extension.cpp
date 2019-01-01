@@ -32,8 +32,10 @@
 #include "DocumentObject.h"
 #include "Base/Exception.h"
 #include <Base/Console.h>
+#ifdef BUILD_PYTHON
 #include <Base/PyObjectBase.h>
 #include <ExtensionPy.h>
+#endif
  
 /* We do not use a standard property macro for type initiation. The reason is that we have the first
  * PropertyData in the extension chain, there is no parent property data. 
@@ -59,6 +61,7 @@ Extension::Extension()
 
 Extension::~Extension()
 {
+#ifdef BUILD_PYTHON
     if (!ExtensionPythonObject.is(Py::_None())){
         // Remark: The API of Py::Object has been changed to set whether the wrapper owns the passed
         // Python object or not. In the constructor we forced the wrapper to own the object so we need
@@ -69,6 +72,7 @@ Extension::~Extension()
         // Call before decrementing the reference counter, otherwise a heap error can occur
         obj->setInvalid();
     }
+#endif
 }
 
 void Extension::initExtensionType(Base::Type type) {
@@ -94,7 +98,7 @@ void Extension::initExtension(ExtensionContainer* obj) {
     m_base->registerExtension( m_extensionType, this );
 }
 
-
+#ifdef BUILD_PYTHON
 PyObject* Extension::getExtensionPyObject(void) {
 
     if (ExtensionPythonObject.is(Py::_None())){
@@ -104,6 +108,7 @@ PyObject* Extension::getExtensionPyObject(void) {
     }
     return Py::new_reference_to(ExtensionPythonObject);
 }
+#endif
 
 std::string Extension::name() const {
     
@@ -186,10 +191,11 @@ void Extension::initExtensionSubclass(Base::Type& toInit, const char* ClassName,
     toInit = Base::Type::createType(parentType, ClassName, method);
 }
 
-
+#ifdef BUILD_PYTHON
 namespace App {
 EXTENSION_PROPERTY_SOURCE_TEMPLATE(App::ExtensionPython, App::ExtensionPython::Inherited)
 
 // explicit template instantiation
 template class AppExport ExtensionPythonT<Extension>;
 }
+#endif

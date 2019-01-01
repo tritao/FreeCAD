@@ -51,8 +51,9 @@ public:
 
 };
 
+#ifdef BUILD_PYTHON
 typedef App::FeaturePythonT<MaterialObject> MaterialObjectPython;
-
+#endif
 
 } //namespace App
 

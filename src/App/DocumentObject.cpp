@@ -37,7 +37,9 @@
 #include "PropertyExpressionEngine.h"
 #include "DocumentObjectExtension.h"
 #include "GeoFeatureGroupExtension.h"
+#ifdef BUILD_PYTHON
 #include <App/DocumentObjectPy.h>
+#endif
 #include <boost/bind.hpp>
 
 using namespace App;
@@ -61,6 +63,7 @@ DocumentObject::DocumentObject(void)
 
 DocumentObject::~DocumentObject(void)
 {
+#ifdef BUILD_PYTHON
     if (!PythonObject.is(Py::_None())){
         Base::PyGILStateLocker lock;
         // Remark: The API of Py::Object has been changed to set whether the wrapper owns the passed
@@ -72,6 +75,7 @@ DocumentObject::~DocumentObject(void)
         // Call before decrementing the reference counter, otherwise a heap error can occur
         obj->setInvalid();
     }
+#endif
 }
 
 App::DocumentObjectExecReturn *DocumentObject::recompute(void)
@@ -534,6 +538,7 @@ void DocumentObject::onChanged(const Property* prop)
     TransactionalObject::onChanged(prop);
 }
 
+#ifdef BUILD_PYTHON
 PyObject *DocumentObject::getPyObject(void)
 {
     if (PythonObject.is(Py::_None())) {
@@ -548,6 +553,7 @@ std::vector<PyObject *> DocumentObject::getPySubObjects(const std::vector<std::s
     // default implementation returns nothing
     return std::vector<PyObject *>();
 }
+#endif
 
 void DocumentObject::Save (Base::Writer &writer) const
 {

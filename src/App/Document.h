@@ -362,7 +362,9 @@ public:
     /// Function called to signal that an object identifier has been renamed
     void renameObjectIdentifiers(const std::map<App::ObjectIdentifier, App::ObjectIdentifier> & paths, const std::function<bool(const App::DocumentObject*)> &selector = [](const App::DocumentObject *) { return true; });
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     friend class Application;
     /// because of transaction handling
@@ -410,8 +412,10 @@ private:
     // recompute log
     std::vector<App::DocumentObjectExecReturn*> _RecomputeLog;
 
+#ifdef BUILD_PYTHON
     // pointer to the python class
     Py::Object DocumentPythonObject;
+#endif
     struct DocumentP* d;
 };
 

@@ -25,6 +25,7 @@
 #ifndef APP_FEATUREPYTHON_H
 #define APP_FEATUREPYTHON_H
 
+#ifdef BUILD_PYTHON
 
 #include <Base/Exception.h>
 #include <Base/Writer.h>
@@ -219,5 +220,7 @@ typedef FeaturePythonT<DocumentObject> FeaturePython;
 typedef FeaturePythonT<GeoFeature    > GeometryPython;
 
 } //namespace App
+
+#endif
 
 #endif // APP_FEATUREPYTHON_H

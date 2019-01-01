@@ -883,6 +883,7 @@ void PropertyExpressionEngine::renameObjectIdentifiers(const std::map<ObjectIden
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyExpressionEngine::getPyObject(void)
 {
     Py::List list;
@@ -899,3 +900,4 @@ void PropertyExpressionEngine::setPyObject(PyObject *)
 {
     throw Base::RuntimeError("Property is read-only");
 }
+#endif
