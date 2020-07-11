@@ -63,8 +63,10 @@
 
 
 #include "PrimitiveFeature.h"
+#ifdef BUILD_PYTHON
 #include <Mod/Part/App/PartFeaturePy.h>
 #include <App/FeaturePythonPyImp.h>
+#endif
 #include <Base/Console.h>
 #include <Base/Exception.h>
 #include <Base/Reader.h>
@@ -107,6 +109,7 @@ App::DocumentObjectExecReturn* Primitive::execute(void) {
     return Part::Feature::execute();
 }
 
+#ifdef BUILD_PYTHON
 namespace Part {
     PYTHON_TYPE_DEF(PrimitivePy, PartFeaturePy)
     PYTHON_TYPE_IMP(PrimitivePy, PartFeaturePy)
@@ -120,6 +123,7 @@ PyObject* Primitive::getPyObject()
     }
     return Py::new_reference_to(PythonObject);
 }
+#endif
 
 void Primitive::Restore(Base::XMLReader &reader)
 {

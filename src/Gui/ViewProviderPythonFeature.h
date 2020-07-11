@@ -24,6 +24,8 @@
 #ifndef GUI_VIEWPROVIDERPYTHONFEATURE_H
 #define GUI_VIEWPROVIDERPYTHONFEATURE_H
 
+#ifdef BUILD_PYTHON
+
 #include <Gui/ViewProviderGeometryObject.h>
 #include <App/PropertyPythonObject.h>
 #include <App/DynamicProperty.h>
@@ -451,6 +453,8 @@ typedef ViewProviderPythonFeatureT<ViewProviderDocumentObject> ViewProviderPytho
 typedef ViewProviderPythonFeatureT<ViewProviderGeometryObject> ViewProviderPythonGeometry;
 
 } // namespace Gui
+
+#endif
 
 #endif // GUI_VIEWPROVIDERPYTHONFEATURE_H
 

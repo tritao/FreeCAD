@@ -39,7 +39,9 @@
 #include "PartFeature.h"
 #include "Attacher.h"
 
+#ifdef BUILD_QT
 #include <QString>
+#endif
 
 #include <gp_Vec.hxx>
 
@@ -115,7 +117,9 @@ public:
 
     virtual short int extensionMustExecute(void);
     virtual App::DocumentObjectExecReturn *extensionExecute(void);
+#ifdef BUILD_PYTHON
     virtual PyObject* getExtensionPyObject(void);
+#endif
     virtual void onExtendedDocumentRestored();
 
 protected:

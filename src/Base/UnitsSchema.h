@@ -26,7 +26,9 @@
 
 
 #include <string>
+#ifdef BUILD_QT
 #include <QString>
+#endif
 #include <Base/Quantity.h>
 
 
@@ -63,9 +65,19 @@ public:
     virtual void resetSchemaUnits(void){}
 
     /// This method translates the quantity in a string as the user may expect it.
-    virtual QString schemaTranslate(const Base::Quantity& quant, double &factor, QString &unitString)=0;
+    virtual std::string schemaTranslate(const Base::Quantity& quant, double &factor, std::string &unitString)=0;
 
-    QString toLocale(const Base::Quantity& quant, double factor, const QString& unitString) const;
+#ifdef BUILD_QT
+    virtual QString schemaTranslate(const Base::Quantity& quant, double &factor, QString &unitString)
+    {
+        std::string str;
+        schemaTranslate(quant, factor, str);
+        unitString = QString::fromStdString(str.c_str());
+        return unitString;
+    }
+#endif
+
+    std::string toLocale(const Base::Quantity& quant, double factor, const std::string& unitString) const;
 };
 
 

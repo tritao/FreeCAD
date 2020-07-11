@@ -31,7 +31,9 @@
 #include <xercesc/util/PlatformUtils.hpp>
 #include <xercesc/util/XercesVersion.hpp>
 #include <xercesc/sax/InputSource.hpp>
+#ifdef BUILD_QT
 #include <QTextCodec>
+#endif
 
 
 XERCES_CPP_NAMESPACE_BEGIN
@@ -76,7 +78,9 @@ private :
   // -----------------------------------------------------------------------
   std::istream            &stream;
   XERCES_CPP_NAMESPACE_QUALIFIER MemoryManager* const    fMemoryManager;
+#ifdef BUILD_QT
   QTextCodec::ConverterState state;
+#endif
 };
 
 

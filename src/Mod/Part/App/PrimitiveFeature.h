@@ -44,7 +44,9 @@ public:
     /// recalculate the feature
     App::DocumentObjectExecReturn *execute(void);
     short mustExecute() const;
+#ifdef BUILD_PYTHON
     PyObject* getPyObject();
+#endif
     //@}
 
 protected:

@@ -865,7 +865,7 @@ PropertyUnitItem::PropertyUnitItem()
 QVariant PropertyUnitItem::toString(const QVariant& prop) const
 {
     const Base::Quantity& unit = prop.value<Base::Quantity>();
-    QString string = unit.getUserString();
+    QString string = QString::fromStdString(unit.getUserString());
     if (hasExpression())
         string += QString::fromLatin1("  ( %1 )").arg(QString::fromStdString(getExpressionString()));
 
@@ -888,7 +888,7 @@ void PropertyUnitItem::setValue(const QVariant& value)
             return;
         const Base::Quantity& val = value.value<Base::Quantity>();
 
-        QString unit = QString::fromLatin1("'%1 %2'").arg(val.getValue()).arg(val.getUnit().getString()); 
+        QString unit = QString::fromLatin1("'%1 %2'").arg(val.getValue()).arg(QString::fromStdString(val.getUnit().getString())); 
         setPropertyValue(unit);
     }
 }
@@ -1256,9 +1256,9 @@ QVariant PropertyVectorDistanceItem::toString(const QVariant& prop) const
 {
     const Base::Vector3d& value = prop.value<Base::Vector3d>();
     QString data = QString::fromLatin1("[") + 
-           Base::Quantity(value.x, Base::Unit::Length).getUserString() + QString::fromLatin1("  ") +
-           Base::Quantity(value.y, Base::Unit::Length).getUserString() + QString::fromLatin1("  ") +
-           Base::Quantity(value.z, Base::Unit::Length).getUserString() + QString::fromLatin1("]");
+           QString::fromStdString(Base::Quantity(value.x, Base::Unit::Length).getUserString()) + QString::fromLatin1("  ") +
+           QString::fromStdString(Base::Quantity(value.y, Base::Unit::Length).getUserString()) + QString::fromLatin1("  ") +
+           QString::fromStdString(Base::Quantity(value.z, Base::Unit::Length).getUserString()) + QString::fromLatin1("]");
     return QVariant(data);
 }
 
@@ -1951,10 +1951,10 @@ QVariant PropertyPlacementItem::toolTip(const App::Property* prop) const
                     .arg(QLocale::system().toString(dir.x,'f',decimals()))
                     .arg(QLocale::system().toString(dir.y,'f',decimals()))
                     .arg(QLocale::system().toString(dir.z,'f',decimals()))
-                    .arg(Base::Quantity(angle, Base::Unit::Angle).getUserString())
-                    .arg(Base::Quantity(pos.x, Base::Unit::Length).getUserString())
-                    .arg(Base::Quantity(pos.y, Base::Unit::Length).getUserString())
-                    .arg(Base::Quantity(pos.z, Base::Unit::Length).getUserString());
+                    .arg(QString::fromStdString(Base::Quantity(angle, Base::Unit::Angle).getUserString()))
+                    .arg(QString::fromStdString(Base::Quantity(pos.x, Base::Unit::Length).getUserString()))
+                    .arg(QString::fromStdString(Base::Quantity(pos.y, Base::Unit::Length).getUserString()))
+                    .arg(QString::fromStdString(Base::Quantity(pos.z, Base::Unit::Length).getUserString()));
     return QVariant(data);
 }
 
@@ -1970,10 +1970,10 @@ QVariant PropertyPlacementItem::toString(const QVariant& prop) const
                     .arg(QLocale::system().toString(dir.x,'f',2))
                     .arg(QLocale::system().toString(dir.y,'f',2))
                     .arg(QLocale::system().toString(dir.z,'f',2))
-                    .arg(Base::Quantity(angle, Base::Unit::Angle).getUserString())
-                    .arg(Base::Quantity(pos.x, Base::Unit::Length).getUserString())
-                    .arg(Base::Quantity(pos.y, Base::Unit::Length).getUserString())
-                    .arg(Base::Quantity(pos.z, Base::Unit::Length).getUserString());
+                    .arg(QString::fromStdString(Base::Quantity(angle, Base::Unit::Angle).getUserString()))
+                    .arg(QString::fromStdString(Base::Quantity(pos.x, Base::Unit::Length).getUserString()))
+                    .arg(QString::fromStdString(Base::Quantity(pos.y, Base::Unit::Length).getUserString()))
+                    .arg(QString::fromStdString(Base::Quantity(pos.z, Base::Unit::Length).getUserString()));
     return QVariant(data);
 }
 

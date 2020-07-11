@@ -33,6 +33,10 @@
 #include "PyObjectBase.h"
 #endif
 
+#ifdef FC_OS_EMSCRIPTEN
+#include <emscripten.h>
+#endif
+
 using namespace Base;
 
 Type BaseClass::classTypeId = Base::Type::badType();

@@ -64,7 +64,6 @@
 #include <boost/bind.hpp>
 
 #include <App/Document.h>
-#include <App/FeaturePythonPyImp.h>
 #include <App/Part.h>
 #include <Base/Writer.h>
 #include <Base/Reader.h>
@@ -80,8 +79,11 @@
 
 #include "SketchObject.h"
 #include "Sketch.h"
-#include <Mod/Sketcher/App/SketchObjectPy.h>
 
+#ifdef BUILD_PYTHON
+#include <App/FeaturePythonPyImp.h>
+#include <Mod/Sketcher/App/SketchObjectPy.h>
+#endif
 
 #undef DEBUG
 //#define DEBUG
@@ -6529,6 +6531,7 @@ double SketchObject::calculateConstraintError(int ConstrId)
     return result;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *SketchObject::getPyObject(void)
 {
     if (PythonObject.is(Py::_None())) {
@@ -6537,6 +6540,7 @@ PyObject *SketchObject::getPyObject(void)
     }
     return Py::new_reference_to(PythonObject);
 }
+#endif
 
 unsigned int SketchObject::getMemSize(void) const
 {
@@ -6963,6 +6967,7 @@ std::vector<Base::Vector3d> SketchObject::getOpenVertices(void) const
     return points;
 }
 
+#ifdef BUILD_PYTHON
 // Python Sketcher feature ---------------------------------------------------------
 
 namespace App {
@@ -6983,3 +6988,4 @@ template<> PyObject* Sketcher::SketchObjectPython::getPyObject(void) {
 // explicit template instantiation
 template class SketcherExport FeaturePythonT<Sketcher::SketchObject>;
 }
+#endif

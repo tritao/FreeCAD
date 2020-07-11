@@ -960,7 +960,9 @@ protected Q_SLOTS:
     void onLinkActivated(const QString&);
     void onEditClicked();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void linkChanged(const QStringList&);
 
 private:
@@ -1007,7 +1009,9 @@ protected:
 protected Q_SLOTS:
     void onEditClicked();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void linkChanged(const QVariantList&);
 
 private:

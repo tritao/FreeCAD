@@ -52,10 +52,13 @@
 #include <Base/Stream.h>
 #include <Base/Placement.h>
 #include <Base/Rotation.h>
-#include <App/FeaturePythonPyImp.h>
 
 #include "PartFeature.h"
+
+#ifdef BUILD_PYTHON
+#include <App/FeaturePythonPyImp.h>
 #include "PartFeaturePy.h"
+#endif
 
 using namespace Part;
 
@@ -96,6 +99,7 @@ App::DocumentObjectExecReturn *Feature::execute(void)
     return GeoFeature::execute();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Feature::getPyObject(void)
 {
     if (PythonObject.is(Py::_None())){
@@ -121,6 +125,7 @@ std::vector<PyObject *> Feature::getPySubObjects(const std::vector<std::string>&
         return std::vector<PyObject *>();
     }
 }
+#endif
 
 void Feature::onChanged(const App::Property* prop)
 {
@@ -273,6 +278,7 @@ PROPERTY_SOURCE(Part::FeatureExt, Part::Feature)
 
 
 
+#ifdef BUILD_PYTHON
 namespace App {
 /// @cond DOXERR
 PROPERTY_SOURCE_TEMPLATE(Part::FeaturePython, Part::Feature)
@@ -291,6 +297,7 @@ template<> PyObject* Part::FeaturePython::getPyObject(void) {
 // explicit template instantiation
 template class PartExport FeaturePythonT<Part::Feature>;
 }
+#endif
 
 // ----------------------------------------------------------------
 

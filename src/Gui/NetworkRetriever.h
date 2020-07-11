@@ -63,7 +63,9 @@ public:
 
     static bool testWget();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void wgetExited();
 
 private Q_SLOTS:

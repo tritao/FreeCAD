@@ -74,7 +74,7 @@ DlgUnitsCalculator::DlgUnitsCalculator( QWidget* parent, Qt::WindowFlags fl )
           << Base::Unit::ThermalConductivity << Base::Unit::ThermalExpansionCoefficient
           << Base::Unit::SpecificHeat << Base::Unit::ThermalTransferCoefficient <<Base::Unit::HeatFlux;
     for (QList<Base::Unit>::iterator it = units.begin(); it != units.end(); ++it) {
-        ui->unitsBox->addItem(it->getTypeString());
+        ui->unitsBox->addItem(QString::fromStdString(it->getTypeString()));
     }
 
     ui->quantitySpinBox->setUnit(units.front());
@@ -116,7 +116,7 @@ void DlgUnitsCalculator::valueChanged(const Base::Quantity& quant)
         }
     } else {
         //ui->ValueOutput->setValue(quant);
-        ui->ValueOutput->setText(quant.getUserString());
+        ui->ValueOutput->setText(QString::fromStdString(quant.getUserString()));
         ui->pushButton_Copy->setEnabled(true);
     }
 

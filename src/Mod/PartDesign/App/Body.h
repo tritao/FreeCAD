@@ -118,7 +118,9 @@ public:
      */
     static Body *findBodyOf(const App::DocumentObject* feature);
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject(void) override;
+#endif
 
 
 protected:

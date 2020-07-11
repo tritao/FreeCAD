@@ -318,7 +318,6 @@ private:
     propertyData.addProperty(static_cast<App::Extension*>(this), #_prop_, &this->_prop_, (_group_),(_type_),(_Docu_)); \
   } while (0)
   
-#ifdef BUILD_PYTHON
 /**
  * Generic Python extension class which allows every extension derived
  * class to behave as a Python extension -- simply by subclassing.
@@ -334,17 +333,20 @@ public:
     ExtensionPythonT() {
         ExtensionT::m_isPythonExtension = true;
         ExtensionT::initExtensionType(ExtensionPythonT::getExtensionClassTypeId());
-        
+
+#ifdef BUILD_PYTHON
         EXTENSION_ADD_PROPERTY(ExtensionProxy,(Py::Object()));
+#endif
     }
     virtual ~ExtensionPythonT() {
     }
 
+#ifdef BUILD_PYTHON
     PropertyPythonObject ExtensionProxy;
+#endif
 };
 
 typedef ExtensionPythonT<App::Extension> ExtensionPython;
-#endif
 
 // Helper macros to define python extensions
 #define EXTENSION_PROXY_FIRST(function) \

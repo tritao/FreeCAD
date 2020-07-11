@@ -24,7 +24,9 @@
 #ifndef PART_DATUMFEATURE_H
 #define PART_DATUMFEATURE_H
 
+#ifdef BUILD_QT
 #include <QString>
+#endif
 #include <App/PropertyLinks.h>
 
 #include "PartFeature.h"

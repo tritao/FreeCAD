@@ -23,13 +23,17 @@
 
 #include "PreCompiled.h"
 #ifndef _PreComp_
+#ifdef BUILD_QT
 # include <QDockWidget>
 # include <QStatusBar>
 #endif
+#endif
 
 #include "Workbench.h"
+#ifdef BUILD_PYTHON
 #include "WorkbenchPy.h"
 #include "PythonWorkbenchPy.h"
+#endif
 #include "MenuManager.h"
 #include "ToolBarManager.h"
 #include "DockWindowManager.h"

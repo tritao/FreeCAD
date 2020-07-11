@@ -31,6 +31,10 @@
 # define PartDesignExport __declspec(dllexport)
 # define PartExport  __declspec(dllimport)
 # define MeshExport     __declspec(dllimport)
+#elif defined(FC_OS_EMSCRIPTEN)
+# define PartDesignExport __attribute__((visibility("default")))
+# define PartExport __attribute__((visibility("default")))
+# define MeshExport __attribute__((visibility("default")))
 #else // for Linux
 # define PartDesignExport
 # define PartExport 

@@ -30,7 +30,9 @@
 #  include <stdint.h>
 #endif
 #include <string>
+#ifdef BUILD_QT
 #include <QString>
+#endif
 
 namespace Base {
 
@@ -63,7 +65,9 @@ public:
     Unit(int8_t Length,int8_t Mass=0,int8_t Time=0,int8_t ElectricCurrent=0,int8_t ThermodynamicTemperature=0,int8_t AmountOfSubstance=0,int8_t LuminousIntensity=0,int8_t Angle=0);
     Unit(void);
     Unit(const Unit&);
+#ifdef BUILD_QT
     Unit(const QString& expr);
+#endif
     /// Destruction
     ~Unit () {}
 
@@ -83,9 +87,9 @@ public:
     const UnitSignature & getSignature(void)const {return Sig;} 
     bool isEmpty(void)const;
     
-    QString getString(void) const;
+    std::string getString(void) const;
     /// get the type as an string such as "Area", "Length" or "Pressure". 
-    QString getTypeString(void) const;
+    std::string getTypeString(void) const;
 
     /** Predefined Unit types. */
     //@{

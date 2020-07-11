@@ -85,6 +85,7 @@
 #include <Base/UnitPy.h>
 #endif
 
+#include "AppServer.h"
 #include "GeoFeature.h"
 #include "FeatureTest.h"
 #ifdef BUILD_PYTHON
@@ -132,8 +133,11 @@
 #include <boost/token_functions.hpp>
 #include <boost/bind.hpp>
 #include <boost/version.hpp>
+
+#ifdef BUILD_QT
 #include <QDir>
 #include <QFileInfo>
+#endif
 
 using namespace App;
 using namespace std;
@@ -271,6 +275,7 @@ Application::Application(std::map<std::string,std::string> &mConfig)
     mpcPramManager["System parameter"] = _pcSysParamMngr;
     mpcPramManager["User parameter"] = _pcUserParamMngr;
 
+    //_pAppServer = new AppServer();
 
 #ifdef BUILD_PYTHON
     // setting up Python binding
@@ -1515,6 +1520,8 @@ void Application::initTypes(void)
 
 void Application::initConfig(int argc, char ** argv)
 {
+    //mConfig["StartHidden"] = true;
+
     // find the home path....
     mConfig["AppHomePath"] = FindHomePath(argv[0]);
 
@@ -1933,6 +1940,7 @@ void Application::LoadParameters(void)
             // this will be used.
             std::map<std::string, std::string>::iterator it = mConfig.find("UserParameterTemplate");
             if (it != mConfig.end()) {
+#ifdef BUILD_QT
                 QString path = QString::fromUtf8(it->second.c_str());
                 if (QDir(path).isRelative()) {
                     QString home = QString::fromUtf8(mConfig["AppHomePath"].c_str());
@@ -1942,6 +1950,7 @@ void Application::LoadParameters(void)
                 if (fi.exists()) {
                     _pcUserParamMngr->LoadDocument(path.toUtf8().constData());
                 }
+#endif
             }
 
 #ifdef BUILD_PYTHON
@@ -2338,6 +2347,7 @@ void Application::ExtractUserPath()
     mConfig["UserHomePath"] = pwd->pw_dir;
 
     char *path = pwd->pw_dir;
+#ifdef BUILD_QT
     char *fc_user_data;
     if ((fc_user_data = getenv("FREECAD_USER_DATA"))) {
         QString env = QString::fromUtf8(fc_user_data);
@@ -2345,6 +2355,7 @@ void Application::ExtractUserPath()
         if (!env.isEmpty() && dir.exists())
             path = fc_user_data;
     }
+#endif
 
     std::string appData(path);
     Base::FileInfo fi(appData.c_str());
@@ -2525,6 +2536,9 @@ void Application::ExtractUserPath()
             }
         }
     }
+#elif defined(FC_OS_EMSCRIPTEN)
+        mConfig["UserAppData"] = "/";
+        mConfig["UserHomePath"] = "/";
 #else
 # error "Implement ExtractUserPath() for your platform."
 #endif
@@ -2673,7 +2687,11 @@ std::string Application::FindHomePath(const char* sCall)
     // convert to utf-8
     return str.toUtf8().data();
 }
-
+#elif defined(FC_OS_EMSCRIPTEN)
+std::string Application::FindHomePath(const char* sCall)
+{
+    return "";
+}
 #else
 # error "std::string Application::FindHomePath(const char*) not implemented"
 #endif

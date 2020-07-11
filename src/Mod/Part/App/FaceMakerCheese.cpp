@@ -45,9 +45,13 @@
 # include <TopTools_HSequenceOfShape.hxx>
 #endif
 
-#include "FaceMakerCheese.h"
-
+#ifdef BUILD_QT
 #include <QtGlobal>
+#endif
+
+#include <algorithm>
+
+#include "FaceMakerCheese.h"
 
 using namespace Part;
 

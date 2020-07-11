@@ -32,7 +32,11 @@
 #include <map>
 #include <typeinfo>
 
+#ifdef BUILD_QT
 class QAtomicInt;
+#else
+#include <atomic>
+#endif
 
 namespace Base
 {
@@ -175,7 +179,11 @@ private:
     Handled(const Handled&);
 
 private:
+#ifdef BUILD_QT
     QAtomicInt* _lRefCount;
+#else
+    mutable std::atomic<int> _lRefCount;
+#endif
 };
 
 } // namespace Base

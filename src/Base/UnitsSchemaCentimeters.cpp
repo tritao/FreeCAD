@@ -26,8 +26,6 @@
 # include <unistd.h>
 #endif
 
-#include <QString>
-#include <QLocale>
 #include "Exception.h"
 #include "UnitsApi.h"
 #include "UnitsSchemaCentimeters.h"
@@ -36,38 +34,38 @@
 using namespace Base;
 
 
-QString UnitsSchemaCentimeters::schemaTranslate(const Base::Quantity& quant, double &factor, QString &unitString)
+std::string UnitsSchemaCentimeters::schemaTranslate(const Base::Quantity& quant, double &factor, std::string &unitString)
 {
     Unit unit = quant.getUnit();
     if (unit == Unit::Length) {
         // all length units in centimeters
-        unitString = QString::fromLatin1("cm");
+        unitString = std::string("cm");
         factor = 10.0;
     }
     else if (unit == Unit::Area) {
         // all area units in square meters
-        unitString = QString::fromLatin1("m^2");
+        unitString = std::string("m^2");
         factor = 1000000.0;
     }
     else if (unit == Unit::Volume) {
         // all area units in cubic meters
-        unitString = QString::fromLatin1("m^3");
+        unitString = std::string("m^3");
         factor = 1000000000.0;
     }
     else if (unit == Unit::Power) {
-        unitString = QString::fromLatin1("W");
+        unitString = std::string("W");
         factor = 1000000;
     }
     else if (unit == Unit::ElectricPotential) {
-        unitString = QString::fromLatin1("V");
+        unitString = std::string("V");
         factor = 1000000;
     }
     else if (unit == Unit::HeatFlux) {
-        unitString = QString::fromLatin1("W/m^2");
+        unitString = std::string("W/m^2");
         factor = 1.0;
     }
     else if (unit == Unit::Velocity) {
-        unitString = QString::fromLatin1("mm/min");
+        unitString = std::string("mm/min");
         factor = 1.0/60;
     }
     else {

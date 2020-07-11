@@ -100,7 +100,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_IS_CLANGXX)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
     endif()
 
-    set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-write-strings ${CMAKE_CXX_FLAGS}")
+    set(CMAKE_CXX_FLAGS "-Wall -Wno-deprecated-register -Wno-write-strings ${CMAKE_CXX_FLAGS}")
     INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 
     # get linker errors as soon as possible and not at runtime e.g. for modules
@@ -131,6 +131,17 @@ if(CMAKE_COMPILER_IS_CLANGXX)
     message(STATUS "Force BOOST_PP_VARIADICS=1 for clang")
 endif()
 
+option (FORCE_COLORED_OUTPUT "Always produce ANSI-colored output (GNU/Clang only)." FALSE)
+if (${FORCE_COLORED_OUTPUT})
+    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+       add_compile_options (-fdiagnostics-color=always)
+    elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+       add_compile_options (-fcolor-diagnostics)
+    endif ()
+endif ()
+
+add_definitions(-DBUILD_PYTHON=1)
+add_definitions(-DBUILD_QT=1)
 
 # ================================================================================
 # Output directories for install target
@@ -837,6 +848,7 @@ endif()
             QT4_EXTRACT_OPTIONS(moc_files moc_options moc_target ${ARGN})
             # fixes bug 0000585: bug with boost 1.48
             SET(moc_options ${moc_options} -DBOOST_TT_HAS_OPERATOR_HPP_INCLUDED)
+            SET(moc_options ${moc_options} -DBUILD_QT -DBUILD_PYTHON)
 
             foreach(it ${moc_files})
                 get_filename_component(it ${it} ABSOLUTE)
@@ -853,6 +865,7 @@ endif()
 
     elseif (BUILD_QT5)
         find_package(Qt5Network)
+        find_package(Qt5WebSockets)
         find_package(Qt5Xml)
         if(BUILD_GUI)
             find_package(Qt5Widgets)

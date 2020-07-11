@@ -113,6 +113,10 @@
 //# define FC_OS_AIX
 //#elif defined(__GNU__)
 //# define FC_OS_GNU
+#elif defined(__EMSCRIPTEN__)
+#   ifndef FC_OS_EMSCRIPTEN
+#   define FC_OS_EMSCRIPTEN
+#   endif
 #else
 #   error "FreeCAD is not ported to this OS yet. For help see www.freecadweb.org"
 #endif
@@ -311,6 +315,24 @@ typedef unsigned __int64    uint64_t;
 #   else
 #       define GuiExport   __declspec(dllimport)
 #   endif
+#elif defined (FC_OS_EMSCRIPTEN)
+#   ifdef FCApp
+#       define AppExport   __attribute__((visibility("default")))
+#       define DataExport  __attribute__((visibility("default")))
+#   else
+#       define AppExport   __attribute__((visibility("default")))
+#       define DataExport  __attribute__((visibility("default")))
+#   endif
+#   ifdef FCBase
+#       define BaseExport  __attribute__((visibility("default")))
+#   else
+#       define BaseExport  __attribute__((visibility("default")))
+#   endif
+#   ifdef FCGui
+#       define GuiExport   __attribute__((visibility("default")))
+#   else
+#       define GuiExport   __attribute__((visibility("default")))
+#   endif
 #else
 #   ifndef BaseExport
 #       define BaseExport
@@ -340,6 +362,10 @@ typedef unsigned __int64    uint64_t;
 #   pragma warning( disable : 4267 )
 #endif
 //#	define _PreComp_                  // use precompiled header
+#endif
+
+#ifndef BUILD_QT
+#include <FakeQt/Core.h>
 #endif
 
 #endif //FC_CONFIG_H

@@ -27,7 +27,9 @@
 #include <map>
 #include <string>
 #include <vector>
+#ifdef BUILD_QT
 #include <QObject>
+#endif
 
 #include <Gui/Selection.h>
 #include <Gui/SelectionFilter.h>
@@ -50,7 +52,9 @@ public:
     TaskWatcher(const char* Filter);
     virtual ~TaskWatcher();
 
+#ifdef BUILD_QT
     std::vector<QWidget*> &getWatcherContent(void);
+#endif
 
 public:
     /// is called wenn the document or the Selection changes. 
@@ -58,8 +62,9 @@ public:
 
 protected:
     /// List of TaskBoxes of that dialog
+#ifdef BUILD_QT
     std::vector<QWidget*> Content;
-
+#endif
 };
 
 // --------------------------------------------------------------------------

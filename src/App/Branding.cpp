@@ -25,6 +25,8 @@
 #ifndef _PreComp_
 #endif
 
+#ifdef BUILD_QT
+
 #include <QXmlSimpleReader>
 #include <QXmlInputSource>
 #include <QDir>
@@ -115,3 +117,5 @@ bool Branding::evaluateXML(QIODevice *device, QDomDocument& xmlDocument)
 
     return true;
 }
+
+#endif

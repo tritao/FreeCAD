@@ -49,7 +49,9 @@ public:
     DlgCustomActionsImp( QWidget* parent = 0 );
     ~DlgCustomActionsImp();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void addMacroAction( const QByteArray& );
     void removeMacroAction( const QByteArray& );
     void modifyMacroAction( const QByteArray& );

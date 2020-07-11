@@ -48,7 +48,9 @@
 
 #include "Body.h"
 #include "FeatureBase.h"
+#ifdef BUILD_PYTHON
 #include "BodyPy.h"
+#endif
 
 using namespace PartDesign;
 
@@ -489,6 +491,7 @@ void Body::unsetupObject () {
     Part::BodyBase::unsetupObject ();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Body::getPyObject(void)
 {
     if (PythonObject.is(Py::_None())){
@@ -497,3 +500,4 @@ PyObject *Body::getPyObject(void)
     }
     return Py::new_reference_to(PythonObject);
 }
+#endif

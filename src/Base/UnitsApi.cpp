@@ -26,7 +26,6 @@
 # include <unistd.h>
 #endif
 
-#include <QString>
 #include "Exception.h"
 #include "UnitsApi.h"
 #include "UnitsSchemaInternal.h"
@@ -51,12 +50,12 @@
 using namespace Base;
 
 
-//const QString  UnitsApi::getQuantityName(QuantityType t)
+//const std::string  UnitsApi::getQuantityName(QuantityType t)
 //{
 //    // check limits
 //    assert(t<9);
 //    // returns 
-//    return QString::fromLatin1(QuantityNames[t]);
+//    return std::string::fromLatin1(QuantityNames[t]);
 //}
 // === static attributes  ================================================
 double UnitsApi::defaultFactor = 1.0;
@@ -65,7 +64,7 @@ UnitsSchema  *UnitsApi::UserPrefSystem = new UnitsSchemaInternal();
 UnitSystem    UnitsApi::actSystem = SI1;
 
 //double   UnitsApi::UserPrefFactor [50];
-//QString  UnitsApi::UserPrefUnit   [50];
+//std::string  UnitsApi::UserPrefUnit   [50];
 int      UnitsApi::UserPrefDecimals = 2;
 
 UnitsApi::UnitsApi(const char* /*filter*/)
@@ -157,7 +156,7 @@ void UnitsApi::setSchema(UnitSystem s)
 //    return parse(str,temp );
 //}
 //
-//double UnitsApi::translateUnit(const QString & str)
+//double UnitsApi::translateUnit(const std::string & str)
 //{
 //    bool temp;
 //    return parse(str.toUtf8() ,temp);
@@ -166,7 +165,7 @@ void UnitsApi::setSchema(UnitSystem s)
 
 // === static translation methods ==========================================
 
-QString UnitsApi::schemaTranslate(const Base::Quantity& quant, double &factor, QString &unitString)
+std::string UnitsApi::schemaTranslate(const Base::Quantity& quant, double &factor, std::string &unitString)
 {
     return UserPrefSystem->schemaTranslate(quant,factor,unitString);
 }

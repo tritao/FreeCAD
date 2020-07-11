@@ -56,7 +56,9 @@ public:
     }
     Type         getPrimitiveType() {return primitiveType;}
     virtual void onChanged(const App::Property* prop);
+#ifdef BUILD_PYTHON
     virtual PyObject* getPyObject();
+#endif
     
     /// Do nothing, just to suppress warning, must be redefined in derived classes
     virtual App::DocumentObjectExecReturn* execute() {

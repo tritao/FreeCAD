@@ -24,6 +24,8 @@
 #ifndef GUI_PYTHONDEBUG_H
 #define GUI_PYTHONDEBUG_H
 
+#ifdef BUILD_PYTHON
+
 #include <CXX/Extensions.hxx>
 #include <frameobject.h>
 #include <string>
@@ -174,7 +176,9 @@ public:
     void showDebugMarker(const QString&, int line);
     void hideDebugMarker(const QString&);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void signalNextStep();
 
 private:
@@ -185,5 +189,7 @@ private:
 };
 
 } // namespace Gui
+
+#endif
 
 #endif // GUI_PYTHONDEBUG_H

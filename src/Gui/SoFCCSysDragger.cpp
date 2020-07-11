@@ -292,7 +292,7 @@ void TDragger::drag()
       static_cast<double>(translationIncrementCount.getValue()) * translationIncrement.getValue(), Base::Unit::Length);
     
     QString message(QObject::tr("Translation: "));
-    message += quantity.getUserString();
+    message += QString::fromStdString(quantity.getUserString());
     getMainWindow()->showMessage(message, 3000);
 }
 
@@ -577,7 +577,7 @@ void RDragger::drag()
       rotationIncrement.getValue(), Base::Unit::Angle);
     
     QString message(QObject::tr("Rotation: "));
-    message += quantity.getUserString();
+    message += QString::fromStdString(quantity.getUserString());
     getMainWindow()->showMessage(message, 3000);
 }
 

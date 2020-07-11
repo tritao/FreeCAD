@@ -37,7 +37,9 @@
 #include <App/DocumentObject.h>
 
 #include "PropertyConstraintList.h"
+#ifdef BUILD_PYTHON
 #include "ConstraintPy.h"
+#endif
 
 using namespace App;
 using namespace Base;
@@ -233,6 +235,7 @@ void PropertyConstraintList::applyValues(const std::vector<Constraint*>& lValue)
         delete oldVals[i];
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyConstraintList::getPyObject(void)
 {
     PyObject* list = PyList_New(getSize());
@@ -271,6 +274,7 @@ void PropertyConstraintList::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyConstraintList::Save(Writer &writer) const
 {

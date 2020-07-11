@@ -292,7 +292,9 @@ private Q_SLOTS:
      */
     void processMessages(const QList<QByteArray> &);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void timeEvent();
     void windowStateChanged(MDIView*);
     void workbenchActivated(const QString&);

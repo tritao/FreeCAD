@@ -79,7 +79,6 @@ class QUARTER_DLL_API QuarterWidget : public QGraphicsView {
   Q_ENUMS(RenderMode)
   Q_ENUMS(StereoMode)
 
-
 public:
   explicit QuarterWidget(QWidget * parent = 0, const QtGLWidget * sharewidget = 0, Qt::WindowFlags f = 0);
   explicit QuarterWidget(QtGLContext * context, QWidget * parent = 0, const QtGLWidget * sharewidget = 0, Qt::WindowFlags f = 0);
@@ -186,7 +185,9 @@ public Q_SLOTS:
   void setStereoMode(StereoMode mode);
   void setTransparencyType(TransparencyType type);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
   void devicePixelRatioChanged(qreal dev_pixel_ratio);
 
 private Q_SLOTS:

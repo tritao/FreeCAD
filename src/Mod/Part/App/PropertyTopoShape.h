@@ -69,11 +69,13 @@ public:
     Base::BoundBox3d getBoundingBox() const;
     //@}
 
+#ifdef BUILD_PYTHON
     /** @name Python interface */
     //@{
     PyObject* getPyObject(void);
     void setPyObject(PyObject *value);
     //@}
+#endif
 
     /** @name Save/restore */
     //@{
@@ -132,8 +134,10 @@ public:
         return _lValueList;
     }
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
     virtual void setPyObject(PyObject *);
+#endif
 
     virtual void Save (Base::Writer &writer) const;
     virtual void Restore(Base::XMLReader &reader);
@@ -185,8 +189,10 @@ public:
         return _lValueList;
     }
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
     virtual void setPyObject(PyObject *);
+#endif
 
     virtual void Save (Base::Writer &writer) const;
     virtual void Restore(Base::XMLReader &reader);

@@ -101,6 +101,7 @@
 # include <LProp_NotDefined.hxx>
 #endif
 
+#ifdef BUILD_PYTHON
 #include <Base/VectorPy.h>
 #include <Mod/Part/App/LinePy.h>
 #include <Mod/Part/App/LineSegmentPy.h>
@@ -129,6 +130,7 @@
 #include <Mod/Part/App/SurfaceOfExtrusionPy.h>
 #include <Mod/Part/App/SurfaceOfRevolutionPy.h>
 #include <Mod/Part/App/ToroidPy.h>
+#endif
 
 #include <Base/Exception.h>
 #include <Base/Writer.h>
@@ -343,10 +345,12 @@ void GeomPoint::Restore(Base::XMLReader &reader)
     setPoint(Base::Vector3d(X,Y,Z) );
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomPoint::getPyObject(void)
 {
     return new PointPy(new GeomPoint(getPoint()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -854,10 +858,12 @@ void GeomBezierCurve::Restore(Base::XMLReader& reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomBezierCurve::getPyObject(void)
 {
     return new BezierCurvePy((GeomBezierCurve*)this->clone());
 }
+#endif
 
 // -------------------------------------------------
 
@@ -1363,10 +1369,12 @@ void GeomBSplineCurve::Restore(Base::XMLReader& reader)
 }
 
 
+#ifdef BUILD_PYTHON
 PyObject *GeomBSplineCurve::getPyObject(void)
 {
     return new BSplineCurvePy((GeomBSplineCurve*)this->clone());
 }
+#endif
 
 // -------------------------------------------------
 
@@ -1525,10 +1533,12 @@ unsigned int GeomTrimmedCurve::getMemSize (void) const               {assert(0);
 void         GeomTrimmedCurve::Save       (Base::Writer &/*writer*/) const {assert(0);          /* not implemented yet */}
 void         GeomTrimmedCurve::Restore    (Base::XMLReader &/*reader*/)    {assert(0);          /* not implemented yet */}
 
+#ifdef BUILD_PYTHON
 PyObject *GeomTrimmedCurve::getPyObject(void)
 {
     return 0;
 }
+#endif
 
 bool GeomTrimmedCurve::intersectBasisCurves(  const GeomTrimmedCurve * c,
                                 std::vector<std::pair<Base::Vector3d, Base::Vector3d>>& points,
@@ -1929,10 +1939,12 @@ void GeomCircle::Restore(Base::XMLReader& reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomCircle::getPyObject(void)
 {
     return new CirclePy(static_cast<GeomCircle*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -2168,10 +2180,12 @@ void GeomArcOfCircle::Restore(Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomArcOfCircle::getPyObject(void)
 {
     return new ArcOfCirclePy(static_cast<GeomArcOfCircle*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -2415,10 +2429,12 @@ void GeomEllipse::Restore(Base::XMLReader& reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomEllipse::getPyObject(void)
 {
     return new EllipsePy((GeomEllipse*)this->clone());
 }
+#endif
 
 // -------------------------------------------------
 
@@ -2692,10 +2708,12 @@ void GeomArcOfEllipse::Restore(Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomArcOfEllipse::getPyObject(void)
 {
     return new ArcOfEllipsePy(static_cast<GeomArcOfEllipse*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -2853,10 +2871,12 @@ void GeomHyperbola::Restore(Base::XMLReader& reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomHyperbola::getPyObject(void)
 {
     return new HyperbolaPy(static_cast<GeomHyperbola*>(this->clone()));
 }
+#endif
 // -------------------------------------------------
 
 TYPESYSTEM_SOURCE(Part::GeomArcOfHyperbola,Part::GeomArcOfConic)
@@ -3122,10 +3142,12 @@ void GeomArcOfHyperbola::Restore(Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomArcOfHyperbola::getPyObject(void)
 {
     return new ArcOfHyperbolaPy(static_cast<GeomArcOfHyperbola*>(this->clone()));
 }
+#endif
 // -------------------------------------------------
 
 TYPESYSTEM_SOURCE(Part::GeomParabola,Part::GeomConic)
@@ -3262,10 +3284,12 @@ void GeomParabola::Restore(Base::XMLReader& reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomParabola::getPyObject(void)
 {
     return new ParabolaPy(static_cast<GeomParabola*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -3474,10 +3498,12 @@ void GeomArcOfParabola::Restore(Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomArcOfParabola::getPyObject(void)
 {
     return new ArcOfParabolaPy(static_cast<GeomArcOfParabola*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -3585,10 +3611,12 @@ void GeomLine::Restore(Base::XMLReader &reader)
     setLine(Base::Vector3d(PosX,PosY,PosZ),Base::Vector3d(DirX,DirY,DirZ) );
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomLine::getPyObject(void)
 {
     return 0;
 }
+#endif
 
 // -------------------------------------------------
 
@@ -3740,10 +3768,12 @@ void GeomLineSegment::Restore    (Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomLineSegment::getPyObject(void)
 {
     return new LineSegmentPy(static_cast<GeomLineSegment*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -3793,10 +3823,12 @@ unsigned int GeomOffsetCurve::getMemSize (void) const               {assert(0); 
 void         GeomOffsetCurve::Save       (Base::Writer &/*writer*/) const {assert(0);          /* not implemented yet */}
 void         GeomOffsetCurve::Restore    (Base::XMLReader &/*reader*/)    {assert(0);          /* not implemented yet */}
 
+#ifdef BUILD_PYTHON
 PyObject *GeomOffsetCurve::getPyObject(void)
 {
     return new OffsetCurvePy((GeomOffsetCurve*)this->clone());
 }
+#endif
 
 // -------------------------------------------------
 
@@ -3955,10 +3987,12 @@ unsigned int GeomBezierSurface::getMemSize (void) const               {assert(0)
 void         GeomBezierSurface::Save       (Base::Writer &/*writer*/) const {assert(0);          /* not implemented yet */}
 void         GeomBezierSurface::Restore    (Base::XMLReader &/*reader*/)    {assert(0);          /* not implemented yet */}
 
+#ifdef BUILD_PYTHON
 PyObject *GeomBezierSurface::getPyObject(void)
 {
     return new BezierSurfacePy((GeomBezierSurface*)this->clone());
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4014,10 +4048,12 @@ unsigned int GeomBSplineSurface::getMemSize (void) const               {assert(0
 void         GeomBSplineSurface::Save       (Base::Writer &/*writer*/) const {assert(0);          /* not implemented yet */}
 void         GeomBSplineSurface::Restore    (Base::XMLReader &/*reader*/)    {assert(0);          /* not implemented yet */}
 
+#ifdef BUILD_PYTHON
 PyObject *GeomBSplineSurface::getPyObject(void)
 {
     return new BSplineSurfacePy((GeomBSplineSurface*)this->clone());
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4061,10 +4097,12 @@ unsigned int GeomCylinder::getMemSize (void) const               {assert(0); ret
 void         GeomCylinder::Save       (Base::Writer &/*writer*/) const {assert(0);          /* not implemented yet */}
 void         GeomCylinder::Restore    (Base::XMLReader &/*reader*/)    {assert(0);          /* not implemented yet */}
 
+#ifdef BUILD_PYTHON
 PyObject *GeomCylinder::getPyObject(void)
 {
     return new CylinderPy((GeomCylinder*)this->clone());
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4108,10 +4146,12 @@ unsigned int GeomCone::getMemSize (void) const               {assert(0); return 
 void         GeomCone::Save       (Base::Writer &/*writer*/) const {assert(0);          /* not implemented yet */}
 void         GeomCone::Restore    (Base::XMLReader &/*reader*/)    {assert(0);          /* not implemented yet */}
 
+#ifdef BUILD_PYTHON
 PyObject *GeomCone::getPyObject(void)
 {
     return new ConePy((GeomCone*)this->clone());
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4155,10 +4195,12 @@ unsigned int GeomToroid::getMemSize (void) const               {assert(0); retur
 void         GeomToroid::Save       (Base::Writer &/*writer*/) const {assert(0);          /* not implemented yet */}
 void         GeomToroid::Restore    (Base::XMLReader &/*reader*/)    {assert(0);          /* not implemented yet */}
 
+#ifdef BUILD_PYTHON
 PyObject *GeomToroid::getPyObject(void)
 {
     return new ToroidPy((GeomToroid*)this->clone());
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4202,10 +4244,12 @@ unsigned int GeomSphere::getMemSize (void) const               {assert(0); retur
 void         GeomSphere::Save       (Base::Writer &/*writer*/) const {assert(0);          /* not implemented yet */}
 void         GeomSphere::Restore    (Base::XMLReader &/*reader*/)    {assert(0);          /* not implemented yet */}
 
+#ifdef BUILD_PYTHON
 PyObject *GeomSphere::getPyObject(void)
 {
     return new SpherePy((GeomSphere*)this->clone());
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4249,10 +4293,12 @@ unsigned int GeomPlane::getMemSize (void) const               {assert(0); return
 void         GeomPlane::Save       (Base::Writer &/*writer*/) const {assert(0);          /* not implemented yet */}
 void         GeomPlane::Restore    (Base::XMLReader &/*reader*/)    {assert(0);          /* not implemented yet */}
 
+#ifdef BUILD_PYTHON
 PyObject *GeomPlane::getPyObject(void)
 {
     return new PlanePy((GeomPlane*)this->clone());
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4298,10 +4344,12 @@ unsigned int GeomOffsetSurface::getMemSize (void) const               {assert(0)
 void         GeomOffsetSurface::Save       (Base::Writer &/*writer*/) const {assert(0);          /* not implemented yet */}
 void         GeomOffsetSurface::Restore    (Base::XMLReader &/*reader*/)    {assert(0);          /* not implemented yet */}
 
+#ifdef BUILD_PYTHON
 PyObject *GeomOffsetSurface::getPyObject(void)
 {
     return new OffsetSurfacePy((GeomOffsetSurface*)this->clone());
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4364,10 +4412,12 @@ void GeomPlateSurface::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("GeomPlateSurface::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomPlateSurface::getPyObject(void)
 {
     return new PlateSurfacePy(static_cast<GeomPlateSurface*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4408,10 +4458,12 @@ unsigned int GeomTrimmedSurface::getMemSize (void) const {assert(0); return 0;/*
 void         GeomTrimmedSurface::Save       (Base::Writer &/*writer*/) const {assert(0);          /* not implemented yet */}
 void         GeomTrimmedSurface::Restore    (Base::XMLReader &/*reader*/)    {assert(0);          /* not implemented yet */}
 
+#ifdef BUILD_PYTHON
 PyObject *GeomTrimmedSurface::getPyObject(void)
 {
     return 0;
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4457,10 +4509,12 @@ unsigned int GeomSurfaceOfRevolution::getMemSize (void) const               {ass
 void         GeomSurfaceOfRevolution::Save       (Base::Writer &/*writer*/) const {assert(0);          /* not implemented yet */}
 void         GeomSurfaceOfRevolution::Restore    (Base::XMLReader &/*reader*/)    {assert(0);          /* not implemented yet */}
 
+#ifdef BUILD_PYTHON
 PyObject *GeomSurfaceOfRevolution::getPyObject(void)
 {
     return new SurfaceOfRevolutionPy((GeomSurfaceOfRevolution*)this->clone());
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4506,10 +4560,12 @@ unsigned int GeomSurfaceOfExtrusion::getMemSize (void) const               {asse
 void         GeomSurfaceOfExtrusion::Save       (Base::Writer &/*writer*/) const {assert(0);          /* not implemented yet */}
 void         GeomSurfaceOfExtrusion::Restore    (Base::XMLReader &/*reader*/)    {assert(0);          /* not implemented yet */}
 
+#ifdef BUILD_PYTHON
 PyObject *GeomSurfaceOfExtrusion::getPyObject(void)
 {
     return new SurfaceOfExtrusionPy((GeomSurfaceOfExtrusion*)this->clone());
 }
+#endif
 
 
 // Helper functions for fillet tools

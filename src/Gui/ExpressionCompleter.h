@@ -51,7 +51,9 @@ public:
     void setDocumentObject(const App::DocumentObject *currentDocObj);
     bool completerActive() const;
     void hideCompleter();
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void textChanged2(QString text);
 public Q_SLOTS:
     void slotTextChanged(const QString & text);

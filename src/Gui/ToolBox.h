@@ -95,7 +95,9 @@ public Q_SLOTS:
 protected:
   void changeEvent(QEvent *e);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
   /** This signal is emitted when the current item changed. 
    * The new current item's index is passed in index, or -1 if there is no current item.
    */

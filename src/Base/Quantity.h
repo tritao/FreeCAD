@@ -25,7 +25,9 @@
 #define BASE_Quantity_H
 
 #include "Unit.h"
+#ifdef BUILD_QT
 #include <QString>
+#endif
 
 #ifndef  DOUBLE_MAX
 # define DOUBLE_MAX 1.7976931348623157E+308    /* max decimal value of a "double"*/
@@ -142,14 +144,21 @@ public:
         _Format = f;
     }
     /// transfer to user preferred unit/potence
-    QString getUserString(double &factor, QString &unitString)const;
-    QString getUserString(void) const { // to satisfy GCC
+    std::string getUserString(double &factor, std::string &unitString)const;
+    std::string getUserString(void) const { // to satisfy GCC
         double  dummy1;
-        QString dummy2;
+        std::string dummy2;
         return getUserString(dummy1,dummy2);
     }
 
-    static Quantity parse(const QString &string);
+    static Quantity parse(const std::string &string);
+
+#ifdef BUILD_QT
+    static Quantity parse(const QString &string)
+    {
+        return parse(std::string(string.toUtf8().constData()));
+    }
+#endif
 
     /// returns the unit of the quantity
     const Unit & getUnit(void) const{return _Unit;}

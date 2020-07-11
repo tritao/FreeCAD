@@ -624,7 +624,7 @@ PyObject* SketchObjectPy::setDatum(PyObject *args)
         else if (err == -3)
             str << "Cannot set the datum because the sketch contains conflicting constraints";
         else if (err == -2)
-            str << "Datum " << (const char*)Quantity.getUserString().toUtf8() << " for the constraint with index " << Index << " is invalid";
+            str << "Datum " << (const char*)Quantity.getUserString().c_str() << " for the constraint with index " << Index << " is invalid";
         else if (err == -4)
             str << "Negative datum values are not valid for the constraint with index " << Index;
         else if (err == -5)
@@ -632,7 +632,7 @@ PyObject* SketchObjectPy::setDatum(PyObject *args)
         else if (err == -6)
             str << "Cannot set the datum because of invalid geometry";
         else
-            str << "Unexpected problem at setting datum " << (const char*)Quantity.getUserString().toUtf8() << " for the constraint with index " << Index;
+            str << "Unexpected problem at setting datum " << (const char*)Quantity.getUserString().c_str() << " for the constraint with index " << Index;
         PyErr_SetString(PyExc_ValueError, str.str().c_str());
         return 0;
     }

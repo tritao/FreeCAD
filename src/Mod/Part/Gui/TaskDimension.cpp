@@ -182,7 +182,7 @@ void PartGui::dumpLinearResults(const BRepExtrema_DistShapeShape &measure)
   
   Base::Quantity quantity(measure.Value(), Base::Unit::Length);
   out << std::endl<< std::setprecision(std::numeric_limits<double>::digits10 + 1) << "distance = " <<
-    measure.Value() << "mm    unit distance = " << quantity.getUserString().toUtf8().constData() << std::endl <<
+    measure.Value() << "mm    unit distance = " << quantity.getUserString() << std::endl <<
     "solution count: " << measure.NbSolution() << std::endl;
     
   for (int index = 1; index < measure.NbSolution() + 1; ++index) //not zero based.
@@ -247,7 +247,7 @@ SoNode* PartGui::createLinearDimension(const gp_Pnt &point1, const gp_Pnt &point
   dimension->point2.setValue(vec2);
   
   Base::Quantity quantity(static_cast<double>((vec2-vec1).length()), Base::Unit::Length);
-  dimension->text.setValue(quantity.getUserString().toUtf8().constData());
+  dimension->text.setValue(quantity.getUserString().c_str());
   
   dimension->dColor.setValue(color);
   return dimension;
@@ -997,7 +997,7 @@ void PartGui::goDimensionAngularNoTask(const VectorAdapter &vector1Adapter, cons
   dimension->matrix.setValue(dimSys);
   dimension->radius.setValue(radius);
   dimension->angle.setValue(static_cast<float>(displayAngle));
-  dimension->text.setValue((Base::Quantity(180 * angle / M_PI, Base::Unit::Angle)).getUserString().toUtf8().constData());
+  dimension->text.setValue((Base::Quantity(180 * angle / M_PI, Base::Unit::Angle)).getUserString().c_str());
   dimension->dColor.setValue(SbColor(0.0, 0.0, 1.0));
   
   Gui::View3DInventorViewer *viewer = getViewer();

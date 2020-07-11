@@ -51,7 +51,9 @@ public:
   void trigger(void);
   void stopThread(void);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
 
   void triggerSignal(void);
 

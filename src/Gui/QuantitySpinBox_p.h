@@ -36,7 +36,9 @@ protected:
                 Q_EMIT clicked();
     }
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void clicked();
 };
 

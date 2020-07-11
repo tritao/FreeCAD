@@ -37,7 +37,7 @@ std::string QuantityPy::representation(void) const
 {
     std::stringstream ret;
     ret << getQuantityPtr()->getValue() << " "; 
-    ret << getQuantityPtr()->getUnit().getString().toUtf8().constData();
+    ret << getQuantityPtr()->getUnit().getString().c_str();
 
     return ret.str();
 }
@@ -113,15 +113,15 @@ int QuantityPy::PyInit(PyObject* args, PyObject* /*kwd*/)
 
 PyObject* QuantityPy::getUserPreferred(PyObject* /*args*/)
 {
-    QString uus;
+    std::string uus;
     double factor;
     Py::Tuple res(3);
 
-    QString uss = getQuantityPtr()->getUserString(factor,uus);
+    std::string uss = getQuantityPtr()->getUserString(factor,uus);
 
-    res[0] = Py::String(uss.toUtf8(),"utf-8");
+    res[0] = Py::String(uss.c_str(),"utf-8");
     res[1] = Py::Float(factor);
-    res[2] = Py::String(uus.toUtf8(),"utf-8");
+    res[2] = Py::String(uus.c_str(),"utf-8");
 
     return Py::new_reference_to(res);
 }
@@ -609,7 +609,7 @@ void QuantityPy::setUnit(Py::Object arg)
 
 Py::String QuantityPy::getUserString(void) const
 {
-    return Py::String(getQuantityPtr()->getUserString().toUtf8(),"utf-8");
+    return Py::String(getQuantityPtr()->getUserString().c_str(),"utf-8");
 }
 
 Py::Dict QuantityPy::getFormat(void) const

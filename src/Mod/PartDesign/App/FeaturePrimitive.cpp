@@ -29,12 +29,16 @@
 #include "FeaturePrimitive.h"
 #include "DatumPoint.h"
 #include "DatumCS.h"
+#ifdef BUILD_PYTHON
 #include "FeaturePy.h"
+#endif
 #include <Base/Exception.h>
 #include <Base/Tools.h>
 #include <App/Document.h>
 #include <App/Application.h>
+#ifdef BUILD_PYTHON
 #include <App/FeaturePythonPyImp.h>
+#endif
 
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepBuilderAPI_GTransform.hxx>
@@ -49,7 +53,9 @@
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeSolid.hxx>
+#ifdef BUILD_QT
 #include <QObject>
+#endif
 #include <math.h>
 
 using namespace PartDesign;
@@ -156,6 +162,7 @@ void FeaturePrimitive::handleChangedPropertyName(Base::XMLReader &reader, const 
     extHandleChangedPropertyName(reader, TypeName, PropName); // AttachExtension
 }
 
+#ifdef BUILD_PYTHON
 PYTHON_TYPE_DEF(PrimitivePy, PartDesign::FeaturePy)
 PYTHON_TYPE_IMP(PrimitivePy, PartDesign::FeaturePy)
 
@@ -167,6 +174,7 @@ PyObject* FeaturePrimitive::getPyObject()
     }
     return Py::new_reference_to(PythonObject);
 }
+#endif
 
 PROPERTY_SOURCE(PartDesign::Box, PartDesign::FeaturePrimitive)
 

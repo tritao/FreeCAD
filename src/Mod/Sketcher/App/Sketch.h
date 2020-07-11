@@ -88,8 +88,11 @@ public:
     /// returns the actual geometry
     std::vector<Part::Geometry *> extractGeometry(bool withConstructionElements=true,
                                                   bool withExternalElements=false) const;
+
+#ifdef BUILD_PYTHON
     /// get the geometry as python objects
     Py::Tuple getPyGeometry(void) const;
+#endif
 
     /// retrieves the index of a point
     int getPointId(int geoId, PointPos pos) const;

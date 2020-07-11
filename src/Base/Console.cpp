@@ -41,7 +41,11 @@
 #ifdef BUILD_PYTHON
 #include "PyObjectBase.h"
 #endif
+#ifdef BUILD_QT
 #include <QCoreApplication>
+#endif
+
+#include <cstdarg>
 
 using namespace Base;
 
@@ -52,13 +56,13 @@ using namespace Base;
 
 namespace Base {
     
-class ConsoleEvent : public QEvent {
+class ConsoleEvent {
 public:
     ConsoleSingleton::FreeCAD_ConsoleMsgType msgtype;
     std::string msg;
 
     ConsoleEvent(ConsoleSingleton::FreeCAD_ConsoleMsgType type, const std::string& msg)
-        : QEvent(QEvent::User), msgtype(type), msg(msg)
+        : msgtype(type), msg(msg)
     {
     }
     ~ConsoleEvent()
@@ -66,9 +70,11 @@ public:
     }
 };
 
-class ConsoleOutput : public QObject
+class ConsoleOutput
 {
 public:
+    static std::vector<ConsoleEvent*> events; 
+
     static ConsoleOutput* getInstance() {
         if (!instance)
             instance = new ConsoleOutput;
@@ -79,23 +85,36 @@ public:
         instance = 0;
     }
 
-    void customEvent(QEvent* ev) {
-        if (ev->type() == QEvent::User) {
-            ConsoleEvent* ce = static_cast<ConsoleEvent*>(ev);
-            switch (ce->msgtype) {
-            case ConsoleSingleton::MsgType_Txt:
-                Console().NotifyMessage(ce->msg.c_str());
-                break;
-            case ConsoleSingleton::MsgType_Log:
-                Console().NotifyLog(ce->msg.c_str());
-                break;
-            case ConsoleSingleton::MsgType_Wrn:
-                Console().NotifyWarning(ce->msg.c_str());
-                break;
-            case ConsoleSingleton::MsgType_Err:
-                Console().NotifyError(ce->msg.c_str());
-                break;
-            }
+    static void sendPostedEvents() {
+        // TODO: Dispatch console events
+        for(auto& event : events)
+        {
+            customEvent(event);
+            delete event;
+        }
+
+        events.clear();
+    }
+
+    void postEvent(ConsoleEvent* evt) {
+        // TODO: Store console event
+        events.push_back(evt);
+    }
+
+    static void customEvent(ConsoleEvent* ce) {
+        switch (ce->msgtype) {
+        case ConsoleSingleton::MsgType_Txt:
+            Console().NotifyMessage(ce->msg.c_str());
+            break;
+        case ConsoleSingleton::MsgType_Log:
+            Console().NotifyLog(ce->msg.c_str());
+            break;
+        case ConsoleSingleton::MsgType_Wrn:
+            Console().NotifyWarning(ce->msg.c_str());
+            break;
+        case ConsoleSingleton::MsgType_Err:
+            Console().NotifyError(ce->msg.c_str());
+            break;
         }
     }
 
@@ -111,6 +130,8 @@ private:
 };
 
 ConsoleOutput* ConsoleOutput::instance = 0;
+
+std::vector<ConsoleEvent*> ConsoleOutput::events;
 
 }
 
@@ -264,7 +285,7 @@ void ConsoleSingleton::Message( const char *pMsg, ... )
     if (connectionMode == Direct)
         NotifyMessage(format);
     else
-        QCoreApplication::postEvent(ConsoleOutput::getInstance(), new ConsoleEvent(MsgType_Txt, format));
+        ConsoleOutput::getInstance()->postEvent(new ConsoleEvent(MsgType_Txt, format));
 }
 
 /** Prints a Message
@@ -295,7 +316,7 @@ void ConsoleSingleton::Warning( const char *pMsg, ... )
     if (connectionMode == Direct)
         NotifyWarning(format);
     else
-        QCoreApplication::postEvent(ConsoleOutput::getInstance(), new ConsoleEvent(MsgType_Wrn, format));
+        ConsoleOutput::getInstance()->postEvent(new ConsoleEvent(MsgType_Wrn, format));
 }
 
 /** Prints a Message
@@ -326,7 +347,7 @@ void ConsoleSingleton::Error( const char *pMsg, ... )
     if (connectionMode == Direct)
         NotifyError(format);
     else
-        QCoreApplication::postEvent(ConsoleOutput::getInstance(), new ConsoleEvent(MsgType_Err, format));
+        ConsoleOutput::getInstance()->postEvent(new ConsoleEvent(MsgType_Err, format));
 }
 
 
@@ -361,7 +382,7 @@ void ConsoleSingleton::Log( const char *pMsg, ... )
         if (connectionMode == Direct)
             NotifyLog(format);
         else
-            QCoreApplication::postEvent(ConsoleOutput::getInstance(), new ConsoleEvent(MsgType_Log, format));
+            ConsoleOutput::getInstance()->postEvent(new ConsoleEvent(MsgType_Log, format));
     }
 }
 
@@ -466,7 +487,11 @@ int *ConsoleSingleton::GetLogLevel(const char *tag, bool create) {
 
 void ConsoleSingleton::Refresh() {
     if(_bCanRefresh)
+#if BUILD_QT
         QCoreApplication::sendPostedEvents();
+#else
+        ConsoleOutput::sendPostedEvents();
+#endif
 }
 
 void ConsoleSingleton::EnableRefresh(bool enable) {
@@ -817,6 +842,9 @@ ConsoleObserverStd::ConsoleObserverStd() :
 #   endif
 {
     bLog = false;
+#ifdef FC_OS_EMSCRIPTEN
+    bLog = true;
+#endif
 }
 
 ConsoleObserverStd::~ConsoleObserverStd()

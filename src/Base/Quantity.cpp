@@ -201,7 +201,7 @@ Quantity& Quantity::operator = (const Quantity &New)
     return *this;
 }
 
-QString Quantity::getUserString(double& factor, QString& unitString) const
+std::string Quantity::getUserString(double& factor, std::string& unitString) const
 {
     return Base::UnitsApi::schemaTranslate(*this, factor, unitString);
 }
@@ -386,10 +386,10 @@ int QuantityLexer(void);
 #endif // DOXYGEN_SHOULD_SKIP_THIS
 }
 
-Quantity Quantity::parse(const QString &string)
+Quantity Quantity::parse(const std::string &string)
 {
     // parse from buffer
-    QuantityParser::YY_BUFFER_STATE my_string_buffer = QuantityParser::yy_scan_string (string.toUtf8().data());
+    QuantityParser::YY_BUFFER_STATE my_string_buffer = QuantityParser::yy_scan_string (string.data());
     // set the global return variables
     QuantResult = Quantity(DOUBLE_MIN);
     // run the parser

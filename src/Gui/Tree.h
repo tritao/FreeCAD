@@ -32,6 +32,7 @@
 #include <Gui/DockWindow.h>
 #include <Gui/Selection.h>
 
+class QPixmap;
 class QLineEdit;
 
 namespace Gui {
@@ -118,7 +119,9 @@ private Q_SLOTS:
     void onItemExpanded(QTreeWidgetItem * item);
     void onTestStatus(void);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void emitSearchObjects();
 
 private:

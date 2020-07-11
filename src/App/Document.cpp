@@ -75,8 +75,12 @@ recompute path. Also enables more complicated dependencies beyond trees.
 #include <unordered_set>
 #include <unordered_map>
 
+#ifdef BUILD_QT
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#else
+#include <sha1.h>
+#endif
 
 #include "Document.h"
 #include "Application.h"
@@ -1337,12 +1341,28 @@ std::string Document::getTransientDirectoryName(const std::string& uuid, const s
 {
     // Create a directory name of the form: {ExeName}_Doc_{UUID}_{HASH}_{PID}
     std::stringstream s;
+
+#ifdef BUILD_QT
     QCryptographicHash hash(QCryptographicHash::Sha1);
     hash.addData(filename.c_str(), filename.size());
+    const char* hash_string = hash.result().toHex().left(6).constData();
+#else
+    SHA1_CTX ctx;
+    SHA1Init(&ctx);
+    SHA1Update(&ctx, (const unsigned char *)filename.c_str(), filename.size());
+
+    unsigned char sha1[SHA1_LENGTH];
+    SHA1Final(sha1, &ctx);
+
+    char hash_string[SHA1_HEX_LENGTH + 1] = { 0 };
+    sha1_to_hex(sha1, SHA1_LENGTH, hash_string);
+#endif
+
     s << App::Application::getTempPath() << GetApplication().getExecutableName()
       << "_Doc_" << uuid
-      << "_" << hash.result().toHex().left(6).constData()
-      << "_" << QCoreApplication::applicationPid();
+      << "_" << hash_string
+      << "_" << Base::Tools::applicationPid();
+    printf("%s\n", s.str().c_str());
     return s.str();
 }
 
@@ -1551,6 +1571,8 @@ Document::readObjects(Base::XMLReader& reader)
                     obj->setStatus(ObjectStatus::Touch, reader.getAttributeAsInteger("Touched") != 0);
                 if (reader.hasAttribute("Invalid"))
                     obj->setStatus(ObjectStatus::Error, reader.getAttributeAsInteger("Invalid") != 0);
+            } else {
+                Console().Warning("Could not process object %s of type %s\n", name.c_str(), type.c_str());
             }
         }
         catch (const Base::Exception& e) {
@@ -3060,6 +3082,7 @@ DocumentObject* Document::copyObject(DocumentObject* obj, bool recursive)
     for (std::vector<App::DocumentObject*>::iterator it = objs.begin(); it != objs.end(); ++it)
         memsize += (*it)->getMemSize();
 
+#if BUILD_QT
     QByteArray res;
     res.reserve(memsize);
     Base::ByteArrayOStreambuf obuf(res);
@@ -3074,6 +3097,10 @@ DocumentObject* Document::copyObject(DocumentObject* obj, bool recursive)
         return 0;
     else
         return newObj.back();
+#else
+    assert(0 && "Document::copyObject() not implemented!");
+    return nullptr;
+#endif
 }
 
 DocumentObject* Document::moveObject(DocumentObject* obj, bool recursive)

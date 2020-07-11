@@ -84,7 +84,9 @@ public:
     virtual void Save(Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     const Handle(Geom2d_Geometry)& handle() const;
 
@@ -126,7 +128,9 @@ public:
     virtual void Save (Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     void setHandle(const Handle(Geom2d_BezierCurve)&);
     const Handle(Geom2d_Geometry)& handle() const;
@@ -175,7 +179,9 @@ public:
     virtual void Save(Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     void setHandle(const Handle(Geom2d_BSplineCurve)&);
     const Handle(Geom2d_Geometry)& handle() const;
@@ -206,7 +212,9 @@ public:
     bool isReversed() const;
 
     virtual unsigned int getMemSize(void) const = 0;
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void) = 0;
+#endif
 
     const Handle(Geom2d_Geometry)& handle() const = 0;
 
@@ -236,7 +244,9 @@ public:
     void setRange(double u, double v);
 
     virtual unsigned int getMemSize(void) const = 0;
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void) = 0;
+#endif
 
     const Handle(Geom2d_Geometry)& handle() const = 0;
 
@@ -262,7 +272,9 @@ public:
     virtual void Save(Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     const Handle(Geom2d_Geometry)& handle() const;
 
@@ -287,7 +299,9 @@ public:
     virtual void Save(Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     void setHandle(const Handle(Geom2d_TrimmedCurve)&);
     const Handle(Geom2d_Geometry)& handle() const;
@@ -317,7 +331,9 @@ public:
     virtual void Save(Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     void setHandle(const Handle(Geom2d_Ellipse) &e);
     const Handle(Geom2d_Geometry)& handle() const;
@@ -347,7 +363,9 @@ public:
     virtual void Save(Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     void setHandle(const Handle(Geom2d_TrimmedCurve)&);
     const Handle(Geom2d_Geometry)& handle() const;
@@ -375,7 +393,9 @@ public:
     virtual void Save(Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     const Handle(Geom2d_Geometry)& handle() const;
 
@@ -402,7 +422,9 @@ public:
     virtual void Save(Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     void setHandle(const Handle(Geom2d_TrimmedCurve)&);
     const Handle(Geom2d_Geometry)& handle() const;
@@ -428,7 +450,9 @@ public:
     virtual void Save(Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     const Handle(Geom2d_Geometry)& handle() const;
 
@@ -453,7 +477,9 @@ public:
     virtual void Save(Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     void setHandle(const Handle(Geom2d_TrimmedCurve)&);
     const Handle(Geom2d_Geometry)& handle() const;
@@ -481,7 +507,9 @@ public:
     virtual void Save(Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     const Handle(Geom2d_Geometry)& handle() const;
 
@@ -508,7 +536,9 @@ public:
     virtual void Save(Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     void setHandle(const Handle(Geom2d_TrimmedCurve)&);
     const Handle(Geom2d_Geometry)& handle() const;
@@ -532,7 +562,9 @@ public:
     virtual void Save(Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     void setHandle(const Handle(Geom2d_OffsetCurve)& c);
     const Handle(Geom2d_Geometry)& handle() const;
@@ -555,7 +587,9 @@ public:
     virtual void Save(Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
 
     void setHandle(const Handle(Geom2d_TrimmedCurve)&);
     const Handle(Geom2d_Geometry)& handle() const;

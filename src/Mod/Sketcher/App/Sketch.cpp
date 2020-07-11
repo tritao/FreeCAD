@@ -35,9 +35,11 @@
 #include <Base/Exception.h>
 #include <Base/TimeInfo.h>
 #include <Base/Console.h>
-#include <Base/VectorPy.h>
 
 #include <Mod/Part/App/Geometry.h>
+
+#ifdef BUILD_PYTHON
+#include <Base/VectorPy.h>
 #include <Mod/Part/App/GeometryCurvePy.h>
 #include <Mod/Part/App/ArcOfCirclePy.h>
 #include <Mod/Part/App/ArcOfEllipsePy.h>
@@ -49,6 +51,7 @@
 #include <Mod/Part/App/ArcOfParabolaPy.h>
 #include <Mod/Part/App/LineSegmentPy.h>
 #include <Mod/Part/App/BSplineCurvePy.h>
+#endif
 
 #include <TopoDS.hxx>
 #include <TopoDS_Edge.hxx>
@@ -1054,6 +1057,7 @@ std::vector<Part::Geometry *> Sketch::extractGeometry(bool withConstructionEleme
     return temp;
 }
 
+#ifdef BUILD_PYTHON
 Py::Tuple Sketch::getPyGeometry(void) const
 {
     Py::Tuple tuple(Geoms.size());
@@ -1092,6 +1096,7 @@ Py::Tuple Sketch::getPyGeometry(void) const
     }
     return tuple;
 }
+#endif
 
 int Sketch::checkGeoId(int geoId) const
 {

@@ -151,7 +151,9 @@ private:
     void runSourceFromMimeData(const QString&);
     void appendOutput(const QString&, int);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void pendingSource( void );
 
 private:

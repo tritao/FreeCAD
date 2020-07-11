@@ -52,7 +52,9 @@ namespace Gui
     Q_OBJECT
     public:
       LineEdit(QWidget *parentIn = 0);
-    Q_SIGNALS:
+#ifdef BUILD_QT
+Q_SIGNALS:
+#endif
       void acceptedSignal();
       void rejectedSignal();
     protected:

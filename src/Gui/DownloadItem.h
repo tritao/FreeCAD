@@ -109,7 +109,9 @@ class DownloadItem : public QWidget, public Ui_DownloadItem
 {
     Q_OBJECT
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void statusChanged();
 
 public:

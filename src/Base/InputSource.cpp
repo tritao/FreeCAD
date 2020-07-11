@@ -57,8 +57,10 @@ using namespace std;
 StdInputStream::StdInputStream( std::istream& Stream, XERCES_CPP_NAMESPACE_QUALIFIER MemoryManager* const manager ) 
   : stream(Stream), fMemoryManager(manager)
 {
+#ifdef BUILD_QT
     state.flags |= QTextCodec::IgnoreHeader;
     state.flags |= QTextCodec::ConvertInvalidToNull;
+#endif
 }
 
 
@@ -120,6 +122,7 @@ XMLSize_t StdInputStream::readBytes( XMLByte* const  toFill, const XMLSize_t max
   stream.read((char *)toFill,maxToRead);
   XMLSize_t len = stream.gcount();
 
+#ifdef BUILD_QT
   QTextCodec *codec = QTextCodec::codecForName("UTF-8");
   const QString text = codec->toUnicode((char *)toFill, len, &state);
   if (state.invalidChars > 0) {
@@ -137,6 +140,9 @@ XMLSize_t StdInputStream::readBytes( XMLByte* const  toFill, const XMLSize_t max
   }
 
   return len;
+#else
+  return len;
+#endif
 }
 #endif
 

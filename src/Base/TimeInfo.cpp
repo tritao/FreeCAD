@@ -24,8 +24,13 @@
 #include "PreCompiled.h"
 
 #ifndef _PreComp_
+# include <cassert>
 # include <sstream>
+#ifdef BUILD_QT
 # include <QDateTime>
+#else
+# include <time.h>
+#endif
 #endif
 
 #include "TimeInfo.h"
@@ -76,6 +81,7 @@ void TimeInfo::setTime_t (uint64_t seconds)
 
 std::string TimeInfo::currentDateTimeString()
 {
+#ifdef BUILD_QT
 #if (QT_VERSION >= 0x050300)
     return QDateTime::currentDateTime().toTimeSpec(Qt::OffsetFromUTC)
         .toString(Qt::ISODate).toStdString();
@@ -87,6 +93,21 @@ std::string TimeInfo::currentDateTimeString()
     local.setUtcOffset(utcOffset);
     QString dm = local.toString(Qt::ISODate);
     return dm.toStdString();
+#endif
+#elif defined(FC_OS_LINUX) || defined(FC_OS_EMSCRIPTEN)
+    time_t     now = time(0);
+    struct tm  tstruct;
+    char       buf[80];
+    tstruct = *localtime(&now);
+
+    // Visit http://en.cppreference.com/w/cpp/chrono/c/strftime
+    // for more information about date/time format
+    strftime(buf, sizeof(buf), "%Y-%m-%d.%X", &tstruct);
+
+    return buf;
+#else
+    assert(0 && "TimeInfo::currentDateTimeString() not implemented for this platform!");
+    return "";
 #endif
 }
 

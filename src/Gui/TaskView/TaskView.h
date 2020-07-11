@@ -24,6 +24,8 @@
 #ifndef GUI_TASKVIEW_TASKVIEW_H
 #define GUI_TASKVIEW_TASKVIEW_H
 
+#ifdef BUILD_QT
+
 #define QSINT_ACTIONPANEL
 
 #include <map>
@@ -229,5 +231,7 @@ protected:
 
 } //namespace TaskView
 } //namespace Gui
+
+#endif
 
 #endif // GUI_TASKVIEW_TASKVIEW_H

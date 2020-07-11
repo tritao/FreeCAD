@@ -23,8 +23,10 @@
 
 #include "PreCompiled.h"
 #ifndef _PreComp_
+#ifdef BUILD_QT
 # include <QCoreApplication>
 # include <QEvent>
+#endif
 #endif
 
 #include "Debugger.h"
@@ -32,8 +34,13 @@
 
 using namespace Base;
 
+#ifdef BUILD_QT
 Debugger::Debugger(QObject* parent)
   : QObject(parent), isAttached(false)
+#else
+Debugger::Debugger(void* parent)
+    : isAttached(false)
+#endif
 {
 }
 
@@ -43,16 +50,21 @@ Debugger::~Debugger()
 
 void Debugger::attach()
 {
+#ifdef BUILD_QT
     QCoreApplication::instance()->installEventFilter(this);
+#endif
     isAttached = true;
 }
 
 void Debugger::detach()
 {
+#ifdef BUILD_QT
     QCoreApplication::instance()->removeEventFilter(this);
+#endif
     isAttached = false;
 }
 
+#ifdef BUILD_QT
 bool Debugger::eventFilter(QObject*, QEvent* event)
 {
     if (event->type() == QEvent::KeyPress) {
@@ -64,17 +76,32 @@ bool Debugger::eventFilter(QObject*, QEvent* event)
 
     return false;
 }
+#else
+bool Debugger::eventFilter(void*, void* event)
+{
+    return false;
+}
+#endif
 
 int Debugger::exec()
 {
     if (isAttached)
         Base::Console().Message("TO CONTINUE PRESS ANY KEY...\n");
+#ifdef BUILD_QT
     return loop.exec();
+#else
+    assert(0 && "Debugger::exec() not implemented for this platform!");
+    return 0;
+#endif
 }
 
 void Debugger::quit()
 {
+#ifdef BUILD_QT
     loop.quit();
+#endif
 }
 
+#ifdef BUILD_QT
 #include "moc_Debugger.cpp"
+#endif

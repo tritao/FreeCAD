@@ -26,7 +26,6 @@
 
 
 #include <string>
-#include <QString>
 #include "UnitsSchema.h"
 
 namespace Base {
@@ -37,7 +36,7 @@ namespace Base {
 class UnitsSchemaCentimeters: public UnitsSchema
 {
 public:
-    virtual QString schemaTranslate(const Base::Quantity& quant, double &factor, QString &unitString);
+    virtual std::string schemaTranslate(const Base::Quantity& quant, double &factor, std::string &unitString);
 };
 
 } // namespace Base

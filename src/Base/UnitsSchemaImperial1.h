@@ -26,7 +26,6 @@
 
 
 #include <string>
-#include <QString>
 #include "UnitsSchema.h"
 
 namespace Base {
@@ -41,7 +40,7 @@ class UnitsSchemaImperial1: public UnitsSchema
 public:
     //virtual void setSchemaUnits(void);
     //virtual void resetSchemaUnits(void);
-    virtual QString schemaTranslate(const Base::Quantity& quant, double &factor, QString &unitString);
+    virtual std::string schemaTranslate(const Base::Quantity& quant, double &factor, std::string &unitString);
 };
 
 /** The schema class for the imperial unit system
@@ -53,7 +52,7 @@ class UnitsSchemaImperialDecimal: public UnitsSchema
 public:
     //virtual void setSchemaUnits(void);
     //virtual void resetSchemaUnits(void);
-    virtual QString schemaTranslate(const Base::Quantity& quant, double &factor, QString &unitString);
+    virtual std::string schemaTranslate(const Base::Quantity& quant, double &factor, std::string &unitString);
 };
 
 /** The schema class for the imperial unit system
@@ -65,7 +64,7 @@ class UnitsSchemaImperialBuilding: public UnitsSchema
 public:
     //virtual void setSchemaUnits(void);
     //virtual void resetSchemaUnits(void);
-    virtual QString schemaTranslate(const Base::Quantity& quant, double &factor, QString &unitString);
+    virtual std::string schemaTranslate(const Base::Quantity& quant, double &factor, std::string &unitString);
 };
 
 /** The schema class for Civil Engineering in the imperial unit system
@@ -77,7 +76,7 @@ class UnitsSchemaImperialCivil: public UnitsSchema
 public:
     //virtual void setSchemaUnits(void);
     //virtual void resetSchemaUnits(void);
-    virtual QString schemaTranslate(const Base::Quantity& quant, double &factor, QString &unitString);
+    virtual std::string schemaTranslate(const Base::Quantity& quant, double &factor, std::string &unitString);
 };
 
 

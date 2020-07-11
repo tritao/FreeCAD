@@ -83,7 +83,9 @@ private Q_SLOTS:
     void on_Invert_clicked(bool);
     void on_Help_clicked(bool);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void emitSelectionFit(void);
     void emitSelectionMisfit(void);
 

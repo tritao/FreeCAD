@@ -75,7 +75,9 @@ public:
   virtual bool canClose(void){return true;}
   //@}
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
   /// sends a message to the document
   void sendCloseView(MDIView* theView);
 };

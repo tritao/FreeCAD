@@ -2840,7 +2840,7 @@ QString ViewProviderSketch::getPresentationString(const Constraint *constraint)
     Base::Reference<ParameterGrp>   hGrpSketcher; // param group that includes HideUnits option
     bool                            iHideUnits;
     QString                         userStr; // final return string
-    QString                         unitStr;  // the actual unit string
+    std::string                     unitStr;  // the actual unit string
     QString                         baseUnitStr; // the expected base unit string
     double                          factor; // unit scaling factor, currently not used
     Base::UnitSystem                unitSys; // current unit system
@@ -2850,7 +2850,7 @@ QString ViewProviderSketch::getPresentationString(const Constraint *constraint)
     iHideUnits = hGrpSketcher->GetBool("HideUnits", 0);
 
     // Get the current display string including units
-    userStr = constraint->getPresentationValue().getUserString(factor, unitStr);
+    userStr = QString::fromStdString(constraint->getPresentationValue().getUserString(factor, unitStr));
 
     // Hide units if user has requested it, is being displayed in the base
     // units, and the schema being used has a clear base unit in the first
@@ -2891,7 +2891,7 @@ QString ViewProviderSketch::getPresentationString(const Constraint *constraint)
         if( !baseUnitStr.isEmpty() )
         {
             // expected unit string matches actual unit string. remove.
-            if( QString::compare(baseUnitStr, unitStr)==0 )
+            if( QString::compare(baseUnitStr, QString::fromStdString(unitStr))==0 )
             {
                 // Example code from: Mod/TechDraw/App/DrawViewDimension.cpp:372
                 QRegExp rxUnits(QString::fromUtf8(" \\D*$"));  //space + any non digits at end of string
@@ -5081,7 +5081,7 @@ Restart:
                             break;
 
                         SoDatumLabel *asciiText = static_cast<SoDatumLabel *>(sep->getChild(CONSTRAINT_SEPARATOR_INDEX_MATERIAL_OR_DATUMLABEL));
-                        asciiText->string    = SbString(Constr->getPresentationValue().getUserString().toUtf8().constData());
+                        asciiText->string    = SbString(Constr->getPresentationValue().getUserString().c_str());
                         asciiText->datumtype = SoDatumLabel::ANGLE;
                         asciiText->param1    = Constr->LabelDistance;
                         asciiText->param2    = startangle;
@@ -5193,7 +5193,7 @@ Restart:
                         SbVec3f p2(pnt2.x,pnt2.y,zConstr);
 
                         SoDatumLabel *asciiText = static_cast<SoDatumLabel *>(sep->getChild(CONSTRAINT_SEPARATOR_INDEX_MATERIAL_OR_DATUMLABEL));
-                        asciiText->string = SbString(Constr->getPresentationValue().getUserString().toUtf8().constData());
+                        asciiText->string = SbString(Constr->getPresentationValue().getUserString().c_str());
 
                         asciiText->datumtype    = SoDatumLabel::RADIUS;
                         asciiText->param1       = Constr->LabelDistance;

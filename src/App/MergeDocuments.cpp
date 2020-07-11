@@ -26,7 +26,9 @@
 # include <boost/bind.hpp>
 #endif
 
+#ifdef BUILD_QT
 #include <QCoreApplication>
+#endif
 
 #include "MergeDocuments.h"
 #include <Base/Console.h>
@@ -122,10 +124,12 @@ MergeDocuments::MergeDocuments(App::Document* doc) : guiup(false), verbose(true)
     connectImport = doc->signalImportObjects.connect
         (boost::bind(&MergeDocuments::importObject, this, _1, _2));
 
+#if BUILD_QT
     QCoreApplication* app = QCoreApplication::instance();
     if (app && app->inherits("QApplication")) {
         guiup = true;
     }
+#endif
 }
 
 MergeDocuments::~MergeDocuments()

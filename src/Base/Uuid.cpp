@@ -24,18 +24,19 @@
 #include "PreCompiled.h"
 
 #ifndef _PreComp_
+#ifdef BUILD_QT
 # include <QUuid>
+#include <stdexcept>
+#endif
 #endif
 
-#include <stdexcept>
-
-/// Here the FreeCAD includes sorted by Base,App,Gui......
 #include "Uuid.h"
-#include "Exception.h"
-#include "Interpreter.h"
-#include <stdexcept>
-#include <CXX/Objects.hxx>
 
+#ifdef FC_OS_EMSCRIPTEN
+#include <uuid/uuid.h>
+#endif
+
+#include <cassert>
 
 using namespace Base;
 
@@ -67,15 +68,28 @@ Uuid::~Uuid()
 std::string Uuid::createUuid(void)
 {
     std::string Uuid;
+#if defined(BUILD_QT)
     QString uuid = QUuid::createUuid().toString();
     uuid = uuid.mid(1);
     uuid.chop(1);
     Uuid = (const char*)uuid.toLatin1();
+#elif defined(FC_OS_EMSCRIPTEN)
+    uuid_t uuid;
+    uuid_generate(uuid);
+
+    char str[64];
+    uuid_unparse(uuid, str);
+
+    return std::string(str);
+#else
+    assert(0 && "Uuid::createUuid() not implemented for this platform!");
+#endif
     return Uuid;
 }
 
 void Uuid::setValue(const char* sString) 
 { 
+#if BUILD_QT
     if (sString) { 
         QUuid uuid(QString::fromLatin1(sString)); 
         if (uuid.isNull()) 
@@ -85,7 +99,12 @@ void Uuid::setValue(const char* sString)
         id = id.mid(1); 
         id.chop(1); 
         _uuid = (const char*)id.toLatin1(); 
-    } 
+    }
+#else
+    if (sString) { 
+        _uuid = sString;
+    }
+#endif
 } 
 
 void Uuid::setValue(const std::string &sString)

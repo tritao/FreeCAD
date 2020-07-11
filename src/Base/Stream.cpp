@@ -24,10 +24,12 @@
 #include "PreCompiled.h"
 
 #ifndef _PreComp_
+#ifdef BUILD_QT
 # include <QBuffer>
 # include <QByteArray>
 # include <QDataStream>
 # include <QIODevice>
+#endif
 # include <cstdlib>
 # include <string>
 # include <cstdio>
@@ -231,6 +233,7 @@ InputStream& InputStream::operator >> (double& d)
 
 // ----------------------------------------------------------------------
 
+#ifdef BUILD_QT
 ByteArrayOStreambuf::ByteArrayOStreambuf(QByteArray& ba) : _buffer(new QBuffer(&ba))
 {
     _buffer->open(QIODevice::WriteOnly);
@@ -241,22 +244,39 @@ ByteArrayOStreambuf::~ByteArrayOStreambuf()
     _buffer->close();
     delete _buffer;
 }
+#else
+ByteArrayOStreambuf::ByteArrayOStreambuf(QByteArray& ba)
+{
+}
+
+ByteArrayOStreambuf::~ByteArrayOStreambuf()
+{
+}
+#endif
 
 std::streambuf::int_type
 ByteArrayOStreambuf::overflow(std::streambuf::int_type c)
 {
     if (c != EOF) {
         char z = c;
+#ifdef BUILD_QT
         if (_buffer->write (&z, 1) != 1) {
             return EOF;
         }
+#else
+        assert(0);
+#endif
     }
     return c;
 }
 
 std::streamsize ByteArrayOStreambuf::xsputn (const char* s, std::streamsize num)
 {
+#ifdef BUILD_QT
     return _buffer->write(s,num);
+#else
+    assert(0);
+#endif
 }
 
 std::streambuf::pos_type
@@ -265,7 +285,12 @@ ByteArrayOStreambuf::seekoff(std::streambuf::off_type off,
                              std::ios_base::openmode /*mode*/)
 {
     off_type endpos = 0;
+#ifdef BUILD_QT
     off_type curpos = _buffer->pos();
+#else
+    off_type curpos = 0;
+    assert(0);
+#endif    
     switch (way) {
         case std::ios_base::beg:
             endpos = off;
@@ -274,14 +299,22 @@ ByteArrayOStreambuf::seekoff(std::streambuf::off_type off,
             endpos = curpos + off;
             break;
         case std::ios_base::end:
+#ifdef BUILD_QT
             endpos = _buffer->size();
+#else
+            assert(0);
+#endif         
             break;
         default:
             return pos_type(off_type(-1));
     }
 
     if (endpos != curpos) {
+#ifdef BUILD_QT
         if (!_buffer->seek(endpos))
+#else
+            assert(0);
+#endif           
             endpos = -1;
     }
 
@@ -297,12 +330,14 @@ ByteArrayOStreambuf::seekpos(std::streambuf::pos_type pos,
 
 // ----------------------------------------------------------------------
 
+#ifdef BUILD_QT
 ByteArrayIStreambuf::ByteArrayIStreambuf(const QByteArray& data) : _buffer(data)
 {
     _beg = 0;
     _end = data.size();
     _cur = 0;
 }
+#endif
 
 ByteArrayIStreambuf::~ByteArrayIStreambuf()
 {
@@ -313,7 +348,8 @@ ByteArrayIStreambuf::int_type ByteArrayIStreambuf::underflow()
     if (_cur == _end)
         return traits_type::eof();
 
-    return static_cast<ByteArrayIStreambuf::int_type>(_buffer[_cur]) & 0x000000ff;
+    //return static_cast<ByteArrayIStreambuf::int_type>(_buffer[_cur]) & 0x000000ff;
+    return static_cast<ByteArrayIStreambuf::int_type>(0);
 }
 
 ByteArrayIStreambuf::int_type ByteArrayIStreambuf::uflow()
@@ -321,15 +357,17 @@ ByteArrayIStreambuf::int_type ByteArrayIStreambuf::uflow()
     if (_cur == _end)
         return traits_type::eof();
 
-    return static_cast<ByteArrayIStreambuf::int_type>(_buffer[_cur++]) & 0x000000ff;
+    //return static_cast<ByteArrayIStreambuf::int_type>(_buffer[_cur++]) & 0x000000ff;
+    return static_cast<ByteArrayIStreambuf::int_type>(0);
 }
 
 ByteArrayIStreambuf::int_type ByteArrayIStreambuf::pbackfail(int_type ch)
 {
-    if (_cur == _beg || (ch != traits_type::eof() && ch != _buffer[_cur-1]))
-        return traits_type::eof();
+    //if (_cur == _beg || (ch != traits_type::eof() && ch != _buffer[_cur-1]))
+        //return traits_type::eof();
 
-    return static_cast<ByteArrayIStreambuf::int_type>(_buffer[--_cur]) & 0x000000ff;
+    //return static_cast<ByteArrayIStreambuf::int_type>(_buffer[--_cur]) & 0x000000ff;
+    return static_cast<ByteArrayIStreambuf::int_type>(0);
 }
 
 std::streamsize ByteArrayIStreambuf::showmanyc()
@@ -370,6 +408,7 @@ ByteArrayIStreambuf::seekpos(std::streambuf::pos_type pos,
 
 // ----------------------------------------------------------------------
 
+#ifdef BUILD_QT
 IODeviceOStreambuf::IODeviceOStreambuf(QIODevice* dev) : device(dev)
 {
 }
@@ -524,6 +563,7 @@ IODeviceIStreambuf::seekpos(std::streambuf::pos_type pos,
 {
     return seekoff(pos, std::ios_base::beg);
 }
+#endif
 
 // ---------------------------------------------------------
 

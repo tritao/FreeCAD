@@ -482,7 +482,11 @@ bool InterpreterSingleton::loadModule(const char* psModName)
             throw PyException();
     }
 #else
-    assert(0 && "InterpreterSingleton::loadModule() not implemented!");
+    auto modName = std::string(psModName);
+    if (modName == "Part" || modName == "PartDesign" || modName == "Sketcher")
+        return true;
+    printf("Trying to load module %s\n", psModName);
+    //assert(0 && "InterpreterSingleton::loadModule() not implemented!");
 #endif
 
     return true;

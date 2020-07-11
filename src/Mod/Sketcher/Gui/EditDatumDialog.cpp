@@ -155,7 +155,7 @@ void EditDatumDialog::exec(bool atCursor)
                         else
                             Gui::Command::doCommand(Gui::Command::Doc,"App.ActiveDocument.%s.setDatum(%i,App.Units.Quantity('%f %s'))",
                                                     sketch->getNameInDocument(),
-                                                    ConstrNbr, newDatum, (const char*)newQuant.getUnit().getString().toUtf8());
+                                                    ConstrNbr, newDatum, (const char*)newQuant.getUnit().getString().c_str());
                     }
 
                     QString constraintName = ui_ins_datum.name->text().trimmed();

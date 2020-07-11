@@ -204,6 +204,7 @@ public:
     //@}
 
 public:
+#ifdef BUILD_PYTHON
     //---------------------------------------------------------------------
     // python exports goes here +++++++++++++++++++++++++++++++++++++++++++	
     //---------------------------------------------------------------------
@@ -263,11 +264,14 @@ public:
     static PyObject* sRemoveDocObserver        (PyObject *self,PyObject *args);
 
     static PyMethodDef    Methods[]; 
+#endif
 
 private:
     struct ApplicationP* d;
+#ifdef BUILD_PYTHON
     /// workbench python dictionary
     PyObject*             _pcWorkbenchDictionary;
+#endif
 };
 
 } //namespace Gui

@@ -54,7 +54,9 @@
 #include "MainWindow.h"
 #include "Tree.h"
 #include "Document.h"
+#ifdef BUILD_PYTHON
 #include "DocumentPy.h"
+#endif
 #include "Command.h"
 #include "Control.h"
 #include "FileDialog.h"
@@ -166,10 +168,13 @@ Document::Document(App::Document* pcDocument,Application * app)
         (boost::bind(&Gui::Document::slotTransactionAppend, this, _1, _2));
     d->connectTransactionRemove = pcDocument->signalTransactionRemove.connect
         (boost::bind(&Gui::Document::slotTransactionRemove, this, _1, _2));
+
+#ifdef BUILD_PYTHON
     // pointer to the python class
     // NOTE: As this Python object doesn't get returned to the interpreter we
     // mustn't increment it (Werner Jan-12-2006)
     _pcDocPy = new Gui::DocumentPy(this);
+#endif
 
     if (App::GetApplication().GetParameterGroupByPath
         ("User parameter:BaseApp/Preferences/Document")->GetBool("UsingUndo",true)){
@@ -213,10 +218,12 @@ Document::~Document()
     for (it2 = d->_ViewProviderMapAnnotation.begin();it2 != d->_ViewProviderMapAnnotation.end(); ++it2)
         delete it2->second;
 
+#ifdef BUILD_PYTHON
     // remove the reference from the object
     Base::PyGILStateLocker lock;
     _pcDocPy->setInvalid();
     _pcDocPy->DecRef();
+#endif
     delete d;
 }
 
@@ -660,6 +667,7 @@ App::Document* Document::getDocument(void) const
 /// Save the document
 bool Document::save(void)
 {
+#ifndef BUILD_WEB
     if (d->_pcDocument->isSaved()) {
         try {
             Gui::WaitCursor wc;
@@ -676,11 +684,15 @@ bool Document::save(void)
     else {
         return saveAs();
     }
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+#endif
 }
 
 /// Save the document under a new file name
 bool Document::saveAs(void)
 {
+#ifndef BUILD_WEB
     getMainWindow()->showMessage(QObject::tr("Save document under new filename..."));
 
     QString exe = qApp->applicationName();
@@ -711,11 +723,15 @@ bool Document::saveAs(void)
         getMainWindow()->showMessage(QObject::tr("Saving aborted"), 2000);
         return false;
     }
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+#endif
 }
 
 /// Save a copy of the document under a new file name
 bool Document::saveCopy(void)
 {
+#ifndef BUILD_WEB
     getMainWindow()->showMessage(QObject::tr("Save a copy of the document under new filename..."));
 
     QString exe = qApp->applicationName();
@@ -738,6 +754,9 @@ bool Document::saveCopy(void)
         getMainWindow()->showMessage(QObject::tr("Saving aborted"), 2000);
         return false;
     }
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+#endif
 }
 
 unsigned int Document::getMemSize (void) const
@@ -900,6 +919,7 @@ void Document::slotFinishRestoreDocument(const App::Document& doc)
  */
 void Document::SaveDocFile (Base::Writer &writer) const
 {
+#ifndef BUILD_WEB
     writer.Stream() << "<?xml version='1.0' encoding='utf-8'?>" << std::endl
                     << "<!--" << std::endl
                     << " FreeCAD Document, see http://www.freecadweb.org for more information..."
@@ -959,6 +979,9 @@ void Document::SaveDocFile (Base::Writer &writer) const
                     << (const char*)viewPos.toLatin1() <<"\"/>" << std::endl;
     writer.decInd(); // indentation for camera settings
     writer.Stream() << "</Document>" << std::endl;
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+#endif
 }
 
 void Document::exportObjects(const std::vector<App::DocumentObject*>& obj, Base::Writer& writer)
@@ -1083,11 +1106,14 @@ void Document::createView(const Base::Type& typeId)
     std::list<MDIView*> theViews = this->getMDIViewsOfType(typeId);
     if (typeId == View3DInventor::getClassTypeId()) {
         QtGLWidget* shareWidget = 0;
+
+#ifdef BUILD_QT
         // VBO rendering doesn't work correctly when we don't share the OpenGL widgets
         if (!theViews.empty()) {
             View3DInventor* firstView = static_cast<View3DInventor*>(theViews.front());
             shareWidget = qobject_cast<QtGLWidget*>(firstView->getViewer()->getGLWidget());
         }
+#endif
 
         View3DInventor* view3D = new View3DInventor(this, getMainWindow(), shareWidget);
         if (!theViews.empty()) {
@@ -1117,6 +1143,7 @@ void Document::createView(const Base::Type& typeId)
             view3D->getViewer()->removeViewProvider(getViewProvider(obj));
 
         const char* name = getDocument()->Label.getValue();
+#ifdef BUILD_QT
         QString title = QString::fromLatin1("%1 : %2[*]")
             .arg(QString::fromUtf8(name)).arg(d->_iWinCount++);
 
@@ -1125,6 +1152,7 @@ void Document::createView(const Base::Type& typeId)
         view3D->setWindowIcon(QApplication::windowIcon());
         view3D->resize(400, 300);
         getMainWindow()->addWindow(view3D);
+#endif
     }
 }
 
@@ -1144,11 +1172,13 @@ Gui::MDIView* Document::cloneView(Gui::MDIView* oldview)
         for (It2=d->_ViewProviderMapAnnotation.begin();It2!=d->_ViewProviderMapAnnotation.end();++It2)
             view3D->getViewer()->addViewProvider(It2->second);
 
+#ifdef BUILD_QT
         view3D->setWindowTitle(oldview->windowTitle());
         view3D->setWindowModified(oldview->isWindowModified());
         view3D->setWindowIcon(oldview->windowIcon());
         view3D->resize(oldview->size());
 
+#endif
         return view3D;
     }
 
@@ -1241,9 +1271,11 @@ bool Document::canClose ()
     if (d->_isClosing)
         return true;
     if (!getDocument()->isClosable()) {
+#ifdef BUILD_QT
         QMessageBox::warning(getActiveView(),
             QObject::tr("Document not closable"),
             QObject::tr("The document is not closable for the moment."));
+#endif
         return false;
     }
     //else if (!Gui::Control().isAllowedAlterDocument()) {
@@ -1260,6 +1292,7 @@ bool Document::canClose ()
     //}
 
     bool ok = true;
+#ifdef BUILD_QT
     if (isModified()) {
         QMessageBox box(getActiveView());
         box.setIcon(QMessageBox::Question);
@@ -1312,6 +1345,7 @@ bool Document::canClose ()
             }
         }
     }
+#endif
 
     return ok;
 }
@@ -1528,11 +1562,13 @@ void Document::redo(int iSteps)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject* Document::getPyObject(void)
 {
     _pcDocPy->IncRef();
     return _pcDocPy;
 }
+#endif
 
 void Document::handleChildren3D(ViewProvider* viewProvider)
 {

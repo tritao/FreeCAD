@@ -92,7 +92,9 @@ private:
     Base::Placement getPlacementData() const;
     void directionActivated(int);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void directionChanged();
 
 private:

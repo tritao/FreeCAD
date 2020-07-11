@@ -57,7 +57,9 @@
 # include <Standard_Version.hxx>
 #endif
 // TODO Cleanup headers (2015-09-04, Fat-Zer)
+#ifdef BUILD_QT
 #include <QObject>
+#endif
 #include "DatumPoint.h"
 #include "DatumLine.h"
 #include "DatumPlane.h"

@@ -26,18 +26,23 @@
 # include <unistd.h>
 #endif
 
+#ifdef BUILD_QT
 #include <QString>
 #include <QLocale>
+#endif
 
 #include "Exception.h"
 #include "UnitsApi.h"
 #include "UnitsSchema.h"
 
+#include <cassert>
+
 using namespace Base;
 
-QString UnitsSchema::toLocale(const Base::Quantity& quant, double factor, const QString& unitString) const
+std::string UnitsSchema::toLocale(const Base::Quantity& quant, double factor, const std::string& unitString) const
 {
-    //return QString::fromUtf8("%L1 %2").arg(quant.getValue() / factor).arg(unitString);
+#if BUILD_QT
+    //return std::string::fromUtf8("%L1 %2").arg(quant.getValue() / factor).arg(unitString);
     QLocale Lc = QLocale::system();
     const QuantityFormat& format = quant.getFormat();
     if (format.option != QuantityFormat::None) {
@@ -46,5 +51,13 @@ QString UnitsSchema::toLocale(const Base::Quantity& quant, double factor, const 
     }
 
     QString Ln = Lc.toString((quant.getValue() / factor), format.toFormat(), format.precision);
-    return QString::fromUtf8("%1 %2").arg(Ln).arg(unitString);
+    return QString::fromUtf8("%1 %2").arg(Ln).arg(QString::fromStdString(unitString)).toStdString();
+#else
+    // std::string Ln = Lc.toString((quant.getValue() / factor), format.toFormat(), format.precision);
+    // return std::string::fromUtf8("%1 %2").arg(Ln).arg(unitString);
+
+    assert(0 && "UnitsSchema::toLocale() not implemented for this platform");
+    return unitString;
+#endif
+
 }

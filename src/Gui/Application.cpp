@@ -61,7 +61,9 @@
 #include <Base/Tools.h>
 #include <Base/UnitsApi.h>
 #include <App/Document.h>
+#ifdef BUILD_PYTHON
 #include <App/DocumentObjectPy.h>
+#endif
 
 #include "Application.h"
 #include "AutoSaver.h"
@@ -69,7 +71,9 @@
 #include "MainWindow.h"
 #include "Document.h"
 #include "View.h"
+#ifdef BUILD_PYTHON
 #include "View3DPy.h"
+#endif
 #include "WidgetFactory.h"
 #include "Command.h"
 #include "Macro.h"
@@ -83,19 +87,26 @@
 #include "Selection.h"
 #include "BitmapFactory.h"
 #include "SoFCDB.h"
+#ifdef BUILD_PYTHON
 #include "PythonConsolePy.h"
 #include "PythonDebugger.h"
 #include "View3DPy.h"
+#endif
+#ifndef BUILD_WEB
 #include "DlgOnlineHelpImp.h"
 #include "SpaceballEvent.h"
+#endif
 #include "Control.h"
 #include "DocumentRecovery.h"
 #include "TransactionObject.h"
+#ifndef BUILD_WEB
 #include "FileDialog.h"
+#endif
 
 #include "SplitView3DInventor.h"
 #include "View3DInventor.h"
 #include "ViewProvider.h"
+#ifndef BUILD_WEB
 #include "ViewProviderDocumentObject.h"
 #include "ViewProviderExtension.h"
 #include "ViewProviderExtern.h"
@@ -119,14 +130,18 @@
 #include "ViewProviderMaterialObject.h"
 #include "ViewProviderTextDocument.h"
 #include "ViewProviderGroupExtension.h"
+#endif
 
 #include "Language/Translator.h"
 #include "TaskView/TaskView.h"
+#ifdef BUILD_PYTHON
 #include "TaskView/TaskDialogPython.h"
+#endif
 #include <Gui/Quarter/Quarter.h>
+#ifdef BUILD_PYTHON
 #include "View3DViewerPy.h"
 #include <Gui/GuiInitScript.h>
-
+#endif
 
 using namespace Gui;
 using namespace Gui::DockWnd;
@@ -145,28 +160,37 @@ struct ApplicationP
     isClosing(false),
     startingUp(true)
     {
+#ifndef BUILD_WEB
         // create the macro manager
         macroMngr = new MacroManager();
+#endif
     }
 
     ~ApplicationP()
     {
+#ifndef BUILD_WEB
         delete macroMngr;
+#endif
     }
 
     /// list of all handled documents
     std::map<const App::Document*, Gui::Document*> documents;
     /// Active document
     Gui::Document*   activeDocument;
+#ifndef BUILD_WEB
     MacroManager*  macroMngr;
+#endif
     /// List of all registered views
     std::list<Gui::BaseView*> passive;
     bool isClosing;
     bool startingUp;
+#ifndef BUILD_WEB    
     /// Handles all commands
     CommandManager commandManager;
+#endif
 };
 
+#ifdef BUILD_PYTHON
 static PyObject *
 FreeCADGui_subgraphFromObject(PyObject * /*self*/, PyObject *args)
 {
@@ -279,6 +303,7 @@ struct PyMethodDef FreeCADGui_methods[] = {
      "of the Coin library and version information"},
     {NULL, NULL, 0, NULL}  /* sentinel */
 };
+#endif // BUILD_PYTHON
 
 } // namespace Gui
 
@@ -286,19 +311,21 @@ Application::Application(bool GUIenabled)
 {
     //App::GetApplication().Attach(this);
     if (GUIenabled) {
-        App::GetApplication().signalNewDocument.connect(boost::bind(&Gui::Application::slotNewDocument, this, _1));
-        App::GetApplication().signalDeleteDocument.connect(boost::bind(&Gui::Application::slotDeleteDocument, this, _1));
-        App::GetApplication().signalRenameDocument.connect(boost::bind(&Gui::Application::slotRenameDocument, this, _1));
-        App::GetApplication().signalActiveDocument.connect(boost::bind(&Gui::Application::slotActiveDocument, this, _1));
-        App::GetApplication().signalRelabelDocument.connect(boost::bind(&Gui::Application::slotRelabelDocument, this, _1));
+        // App::GetApplication().signalNewDocument.connect(boost::bind(&Gui::Application::slotNewDocument, this, _1));
+        // App::GetApplication().signalDeleteDocument.connect(boost::bind(&Gui::Application::slotDeleteDocument, this, _1));
+        // App::GetApplication().signalRenameDocument.connect(boost::bind(&Gui::Application::slotRenameDocument, this, _1));
+        // App::GetApplication().signalActiveDocument.connect(boost::bind(&Gui::Application::slotActiveDocument, this, _1));
+        // App::GetApplication().signalRelabelDocument.connect(boost::bind(&Gui::Application::slotRelabelDocument, this, _1));
 
 
         // install the last active language
         ParameterGrp::handle hPGrp = App::GetApplication().GetUserParameter().GetGroup("BaseApp");
         hPGrp = hPGrp->GetGroup("Preferences")->GetGroup("General");
+#ifdef BUILD_QT
         QString lang = QLocale::languageToString(QLocale::system().language());
         Translator::instance()->activateLanguage(hPGrp->GetASCII("Language", (const char*)lang.toLatin1()).c_str());
         GetWidgetFactorySupplier();
+#endif
 
         // Coin3d disabled VBO support for all Intel drivers but in the meantime they have improved
         // so we can try to override the workaround by setting COIN_VBO
@@ -327,6 +354,7 @@ Application::Application(bool GUIenabled)
         QLocale::setDefault(loc);
 #endif
 
+#ifdef BUILD_PYTHON
         // setting up Python binding
         Base::PyGILStateLocker lock;
 
@@ -398,8 +426,10 @@ Application::Application(bool GUIenabled)
         Gui::TaskView::ControlPy::init_type();
         Py::Module(module).setAttr(std::string("Control"),
             Py::Object(Gui::TaskView::ControlPy::getInstance(), true));
+#endif
     }
 
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
     PyObject *module = PyImport_AddModule("FreeCADGui");
     PyMethodDef *meth = FreeCADGui_methods;
@@ -424,29 +454,36 @@ Application::Application(bool GUIenabled)
     View3DInventorPy            ::init_type();
     View3DInventorViewerPy      ::init_type();
     AbstractSplitViewPy         ::init_type();
+#endif
 
     d = new ApplicationP;
 
     // global access
     Instance = this;
 
+#ifdef BUILD_PYTHON
     // instantiate the workbench dictionary
     _pcWorkbenchDictionary = PyDict_New();
+#endif
 
     if (GUIenabled) {
         createStandardOperations();
+#ifndef BUILD_WEB
         MacroCommand::load();
+#endif
     }
 }
 
 Application::~Application()
 {
     Base::Console().Log("Destruct Gui::Application\n");
+#ifndef BUILD_WEB
     WorkbenchManager::destruct();
     SelectionSingleton::destruct();
     Translator::destruct();
     WidgetFactorySupplier::destruct();
     BitmapFactoryInst::destruct();
+#endif
 
 #if 0
     // we must run the garbage collector before shutting down the SoDB
@@ -463,11 +500,13 @@ Application::~Application()
     SoDB::cleanup();
 #endif
 #endif
+#ifdef BUILD_PYTHON
     {
     Base::PyGILStateLocker lock;
     Py_DECREF(_pcWorkbenchDictionary);
     }
-
+#endif
+#ifndef BUILD_WEB
     // save macros
     try {
         MacroCommand::save();
@@ -475,12 +514,12 @@ Application::~Application()
     catch (const Base::Exception& e) {
         std::cerr << "Saving macros failed: " << e.what() << std::endl;
     }
+#endif
     //App::GetApplication().Detach(this);
 
     delete d;
     Instance = 0;
 }
-
 
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 // creating std commands
@@ -488,6 +527,7 @@ Application::~Application()
 
 void Application::open(const char* FileName, const char* Module)
 {
+#ifndef BUILD_WEB
     WaitCursor wc;
     wc.setIgnoreEvents(WaitCursor::NoEvents);
     Base::FileInfo File(FileName);
@@ -532,10 +572,12 @@ void Application::open(const char* FileName, const char* Module)
         wc.setWaitCursor();
         return;
     }
+#endif
 }
 
 void Application::importFrom(const char* FileName, const char* DocName, const char* Module)
 {
+#ifndef BUILD_WEB
     WaitCursor wc;
     wc.setIgnoreEvents(WaitCursor::NoEvents);
     Base::FileInfo File(FileName);
@@ -589,10 +631,12 @@ void Application::importFrom(const char* FileName, const char* DocName, const ch
             QObject::tr("Cannot open unknown filetype: %1").arg(QLatin1String(te.c_str())));
         wc.setWaitCursor();
     }
+#endif
 }
 
 void Application::exportTo(const char* FileName, const char* DocName, const char* Module)
 {
+#ifndef BUILD_WEB
     WaitCursor wc;
     wc.setIgnoreEvents(WaitCursor::NoEvents);
     Base::FileInfo File(FileName);
@@ -649,10 +693,12 @@ void Application::exportTo(const char* FileName, const char* DocName, const char
             QObject::tr("Cannot save to unknown filetype: %1").arg(QLatin1String(te.c_str())));
         wc.setWaitCursor();
     }
+#endif
 }
 
 void Application::createStandardOperations()
 {
+#ifndef BUILD_WEB
     // register the application Standard commands from CommandStd.cpp
     Gui::CreateStdCommands();
     Gui::CreateDocCommands();
@@ -662,6 +708,7 @@ void Application::createStandardOperations()
     Gui::CreateWindowStdCommands();
     Gui::CreateStructureCommands();
     Gui::CreateTestCommands();
+#endif
 }
 
 void Application::slotNewDocument(const App::Document& Doc)
@@ -674,13 +721,13 @@ void Application::slotNewDocument(const App::Document& Doc)
     d->documents[&Doc] = pDoc;
 
     // connect the signals to the application for the new document
-    pDoc->signalNewObject.connect(boost::bind(&Gui::Application::slotNewObject, this, _1));
-    pDoc->signalDeletedObject.connect(boost::bind(&Gui::Application::slotDeletedObject, this, _1));
-    pDoc->signalChangedObject.connect(boost::bind(&Gui::Application::slotChangedObject, this, _1, _2));
-    pDoc->signalRelabelObject.connect(boost::bind(&Gui::Application::slotRelabelObject, this, _1));
-    pDoc->signalActivatedObject.connect(boost::bind(&Gui::Application::slotActivatedObject, this, _1));
-    pDoc->signalInEdit.connect(boost::bind(&Gui::Application::slotInEdit, this, _1));
-    pDoc->signalResetEdit.connect(boost::bind(&Gui::Application::slotResetEdit, this, _1));
+    // pDoc->signalNewObject.connect(boost::bind(&Gui::Application::slotNewObject, this, _1));
+    // pDoc->signalDeletedObject.connect(boost::bind(&Gui::Application::slotDeletedObject, this, _1));
+    // pDoc->signalChangedObject.connect(boost::bind(&Gui::Application::slotChangedObject, this, _1, _2));
+    // pDoc->signalRelabelObject.connect(boost::bind(&Gui::Application::slotRelabelObject, this, _1));
+    // pDoc->signalActivatedObject.connect(boost::bind(&Gui::Application::slotActivatedObject, this, _1));
+    // pDoc->signalInEdit.connect(boost::bind(&Gui::Application::slotInEdit, this, _1));
+    // pDoc->signalResetEdit.connect(boost::bind(&Gui::Application::slotResetEdit, this, _1));
  
     signalNewDocument(*pDoc);
     pDoc->createView(View3DInventor::getClassTypeId());
@@ -699,8 +746,10 @@ void Application::slotDeleteDocument(const App::Document& Doc)
         return;
     }
 
+#ifndef BUILD_WEB
     // We must clear the selection here to notify all observers
     Gui::Selection().clearSelection(doc->second->getDocument()->getName());
+#endif
     doc->second->signalDeleteDocument(*doc->second);
     signalDeleteDocument(*doc->second);
 
@@ -744,6 +793,7 @@ void Application::slotActiveDocument(const App::Document& Doc)
         // because no MDI view will be activated
         if (d->activeDocument != doc->second) {
             d->activeDocument = doc->second;
+#ifdef BUILD_PYTHON
             if (d->activeDocument) {
                 Base::PyGILStateLocker lock;
                 Py::Object active(d->activeDocument->getPyObject(), true);
@@ -753,6 +803,7 @@ void Application::slotActiveDocument(const App::Document& Doc)
                 Base::PyGILStateLocker lock;
                 Py::Module("FreeCADGui").setAttr(std::string("ActiveDocument"),Py::None());
             }
+#endif
         }
         signalActiveDocument(*doc->second);
     }
@@ -796,6 +847,7 @@ void Application::slotResetEdit(const Gui::ViewProviderDocumentObject& vp)
 void Application::onLastWindowClosed(Gui::Document* pcDoc)
 {
     if (!d->isClosing && pcDoc) {
+#ifdef BUILD_PYTHON
         try {
             // Call the closing mechanism from Python. This also checks whether pcDoc is the last open document.
             Command::doCommand(Command::Doc, "App.closeDocument(\"%s\")", pcDoc->getDocument()->getName());
@@ -807,6 +859,9 @@ void Application::onLastWindowClosed(Gui::Document* pcDoc)
             Base::PyException e;
             e.ReportException();
         }
+#else
+    assert(0 && "Application::onLastWindowClosed() not implemented.");
+#endif
     }
 }
 
@@ -875,6 +930,7 @@ void Application::setActiveDocument(Gui::Document* pcDocument)
     d->activeDocument = pcDocument;
     std::string nameApp, nameGui;
 
+#ifndef BUILD_WEB
     // This adds just a line to the macro file but does not set the active document
     // Macro recording of this is problematic, thus it's written out as comment.
     if (pcDocument){
@@ -897,6 +953,7 @@ void Application::setActiveDocument(Gui::Document* pcDocument)
         nameGui += "Gui.ActiveDocument=None";
         macroManager()->addLine(MacroManager::Cmt,nameGui.c_str());
     }
+#endif
 
     // Sets the currently active document
     try {
@@ -993,10 +1050,12 @@ void Application::onUpdate(void)
 /// Gets called if a view gets activated, this manages the whole activation scheme
 void Application::viewActivated(MDIView* pcView)
 {
+#ifdef BUILD_QT
 #ifdef FC_DEBUG
     // May be useful for error detection
     Base::Console().Log("Active view is %s (at %p)\n",
                  (const char*)pcView->windowTitle().toUtf8(),pcView);
+#endif
 #endif
 
     signalActivateView(pcView);
@@ -1016,6 +1075,7 @@ void Application::updateActive(void)
 
 void Application::tryClose(QCloseEvent * e)
 {
+#ifdef BUILD_QT
     if (d->documents.size() == 0) {
         e->accept();
     }
@@ -1064,6 +1124,9 @@ void Application::tryClose(QCloseEvent * e)
             --cnt; // avoid infinite loop
         }
     }
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+#endif
 }
 
 /**
@@ -1077,6 +1140,7 @@ void Application::tryClose(QCloseEvent * e)
  */
 bool Application::activateWorkbench(const char* name)
 {
+#ifdef BUILD_PYTHON
     bool ok = false;
     WaitCursor wc;
     Workbench* oldWb = WorkbenchManager::instance()->active();
@@ -1198,10 +1262,14 @@ bool Application::activateWorkbench(const char* name)
     }
 
     return ok;
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+#endif
 }
 
 QPixmap Application::workbenchIcon(const QString& wb) const
 {
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
     // get the python workbench object from the dictionary
     PyObject* pcWorkbench = PyDict_GetItemString(_pcWorkbenchDictionary, wb.toLatin1());
@@ -1272,10 +1340,15 @@ QPixmap Application::workbenchIcon(const QString& wb) const
             return icon.pixmap(s[0]);
     }
     return QPixmap();
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+    return QPixmap();
+#endif
 }
 
 QString Application::workbenchToolTip(const QString& wb) const
 {
+#ifdef BUILD_PYTHON
     // get the python workbench object from the dictionary
     Base::PyGILStateLocker lock;
     PyObject* pcWorkbench = PyDict_GetItemString(_pcWorkbenchDictionary, wb.toLatin1());
@@ -1296,10 +1369,15 @@ QString Application::workbenchToolTip(const QString& wb) const
     }
 
     return QString();
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+    return QString();
+#endif
 }
 
 QString Application::workbenchMenuText(const QString& wb) const
 {
+#ifdef BUILD_PYTHON
     // get the python workbench object from the dictionary
     Base::PyGILStateLocker lock;
     PyObject* pcWorkbench = PyDict_GetItemString(_pcWorkbenchDictionary, wb.toLatin1());
@@ -1321,10 +1399,15 @@ QString Application::workbenchMenuText(const QString& wb) const
     }
 
     return QString();
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+    return QString();
+#endif
 }
 
 QStringList Application::workbenches(void) const
 {
+#ifdef BUILD_PYTHON
     // If neither 'HiddenWorkbench' nor 'ExtraWorkbench' is set then all workbenches are returned.
     const std::map<std::string,std::string>& config = App::Application::Config();
     std::map<std::string, std::string>::const_iterator ht = config.find("HiddenWorkbench");
@@ -1374,10 +1457,15 @@ QStringList Application::workbenches(void) const
     }
 
     return wb;
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+    return QStringList();
+#endif
 }
 
 void Application::setupContextMenu(const char* recipient, MenuItem* items) const
 {
+#ifdef BUILD_PYTHON
     Workbench* actWb = WorkbenchManager::instance()->active();
     if (actWb) {
         // when populating the context-menu of a Python workbench invoke the method
@@ -1407,6 +1495,9 @@ void Application::setupContextMenu(const char* recipient, MenuItem* items) const
         }
         actWb->setupContextMenu(recipient, items);
     }
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+#endif
 }
 
 bool Application::isClosing(void)
@@ -1416,17 +1507,26 @@ bool Application::isClosing(void)
 
 MacroManager *Application::macroManager(void)
 {
+#ifndef BUILD_WEB
     return d->macroMngr;
+#else
+    return 0;
+#endif
 }
 
 CommandManager &Application::commandManager(void)
 {
+#ifndef BUILD_WEB
     return d->commandManager;
+#else
+    assert(0);
+#endif
 }
 
 //**************************************************************************
 // Init, Destruct and singleton
 
+#ifdef BUILD_QT
 #if QT_VERSION >= 0x050000
 typedef void (*_qt_msg_handler_old)(QtMsgType, const QMessageLogContext &, const QString &);
 #else
@@ -1497,6 +1597,7 @@ void messageHandler(QtMsgType type, const char *msg)
 #endif
 }
 #endif
+#endif
 
 #ifdef FC_DEBUG // redirect Coin messages to FreeCAD
 void messageHandlerCoin(const SoError * error, void * /*userdata*/)
@@ -1536,9 +1637,11 @@ void messageHandlerCoin(const SoError * error, void * /*userdata*/)
 // To fix bug #0000345 move Q_INIT_RESOURCE() outside initApplication()
 static void init_resources()
 {
+#ifdef BUILD_QT
     // init resources
     Q_INIT_RESOURCE(resource);
     Q_INIT_RESOURCE(translation);
+#endif
 }
 
 void Application::initApplication(void)
@@ -1551,12 +1654,16 @@ void Application::initApplication(void)
 
     try {
         initTypes();
+#ifdef BUILD_PYTHON
         new Base::ScriptProducer( "FreeCADGuiInit", FreeCADGuiInit );
+#endif
+#ifdef BUILD_QT
         init_resources();
 #if QT_VERSION >=0x050000
         old_qtmsg_handler = qInstallMessageHandler(messageHandler);
 #else
         old_qtmsg_handler = qInstallMsgHandler(messageHandler);
+#endif
 #endif
         init = true;
     }
@@ -1577,6 +1684,7 @@ void Application::initTypes(void)
     Gui::SplitView3DInventor                    ::init();
     // View Provider
     Gui::ViewProvider                           ::init();
+#ifndef BUILD_WEB
     Gui::ViewProviderExtension                  ::init();
     Gui::ViewProviderExtensionPython            ::init();
     Gui::ViewProviderGroupExtension             ::init();
@@ -1626,6 +1734,7 @@ void Application::initTypes(void)
     // register transaction type
     new App::TransactionProducer<TransactionViewProvider>
             (ViewProviderDocumentObject::getClassTypeId());
+#endif
 }
 
 void Application::initOpenInventor(void)
@@ -1651,8 +1760,10 @@ void Application::runApplication(void)
     // if application not yet created by the splasher
     int argc = App::Application::GetARGC();
     GUISingleApplication mainApp(argc, App::Application::GetARGV());
+#ifdef BUILD_QT
     // http://forum.freecadweb.org/viewtopic.php?f=3&t=15540
     mainApp.setAttribute(Qt::AA_DontShowIconsInMenus, false);
+#endif
 
 #ifdef Q_OS_UNIX
     // Make sure that we use '.' as decimal point. See also
@@ -1662,6 +1773,7 @@ void Application::runApplication(void)
     setlocale(LC_NUMERIC, "C");
 #endif
 
+#ifdef BUILD_QT
     // check if a single or multiple instances can run
     it = cfg.find("SingleInstance");
     if (it != cfg.end() && mainApp.isRunning()) {
@@ -1783,9 +1895,11 @@ void Application::runApplication(void)
 #else
     FileDialog::setWorkingDirectory(FileDialog::restoreLocation());
 #endif
+#endif // BUILD_QT
 
     Application app(true);
     MainWindow mw;
+#ifndef BUILD_WEB
     mw.setProperty("QuitOnClosed", true);
 
     // allow to disable version number
@@ -1818,6 +1932,7 @@ void Application::runApplication(void)
     int size = hGrp->GetInt("ToolbarIconSize", 0);
     if (size >= 16) // must not be lower than this
         mw.setIconSize(QSize(size,size));
+#endif
 
 #if defined(HAVE_QT5_OPENGL)
     {
@@ -1846,6 +1961,7 @@ void Application::runApplication(void)
     // init the Inventor subsystem
     initOpenInventor();
 
+#ifndef BUILD_WEB
     QString home = QString::fromUtf8(App::GetApplication().getHomePath());
 
     it = cfg.find("WindowTitle");
@@ -1918,7 +2034,9 @@ void Application::runApplication(void)
     // Call this before showing the main window because otherwise:
     // 1. it shows a white window for a few seconds which doesn't look nice
     // 2. the layout of the toolbars is completely broken
+    start = "PartWorkbench";
     app.activateWorkbench(start.c_str());
+    app.open("/home/joao/dev/FreeCAD/build/bin/SketchWithRectangle.fcstd", "FreeCAD");
 
     // show the main window
     if (!hidden) {
@@ -1983,7 +2101,7 @@ void Application::runApplication(void)
     try {
         std::stringstream s;
         s << App::Application::getTempPath() << App::GetApplication().getExecutableName()
-          << "_" << QCoreApplication::applicationPid() << ".lock";
+          << "_" << Base::Tools::applicationPid() << ".lock";
         // open a lock file with the PID
         Base::FileInfo fi(s.str());
         Base::ofstream lock(fi);
@@ -2020,10 +2138,12 @@ void Application::runApplication(void)
     }
 
     Base::Console().Log("Finish: Event loop left\n");
+#endif
 }
 
 void Application::checkForPreviousCrashes()
 {
+#ifdef BUILD_QT
     QDir tmp = QString::fromUtf8(App::Application::getTempPath().c_str());
     tmp.setNameFilters(QStringList() << QString::fromLatin1("*.lock"));
     tmp.setFilter(QDir::Files);
@@ -2098,4 +2218,5 @@ void Application::checkForPreviousCrashes()
         if (dlg.foundDocuments())
             dlg.exec();
     }
+#endif
 }

@@ -30,12 +30,14 @@
 # include <BRep_Tool.hxx>
 #endif
 
+#ifdef BUILD_QT
+#include <QtGlobal>
+#endif
+
 #include "FaceMaker.h"
 
 #include "TopoShape.h"
 #include <memory>
-
-#include <QtGlobal>
 
 TYPESYSTEM_SOURCE_ABSTRACT(Part::FaceMaker, Base::BaseClass)
 TYPESYSTEM_SOURCE_ABSTRACT(Part::FaceMakerPublic, Part::FaceMaker)

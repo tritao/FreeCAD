@@ -52,6 +52,7 @@
 #include "WaitCursor.h"
 
 #include <Base/Exception.h>
+#include <Base/Tools.h>
 
 #include <App/Application.h>
 #include <App/Document.h>
@@ -523,7 +524,7 @@ void DocumentRecovery::on_buttonCleanup_clicked()
     for (QList<QFileInfo>::iterator it = locks.begin(); it != locks.end(); ++it) {
         QString bn = it->baseName();
         // ignore the lock file for this instance
-        QString pid = QString::number(QCoreApplication::applicationPid());
+        QString pid = QString::number(Base::Tools::applicationPid());
         if (bn.startsWith(exeName) && bn.indexOf(pid) < 0) {
             QString fn = it->absoluteFilePath();
             boost::interprocess::file_lock flock((const char*)fn.toLocal8Bit());

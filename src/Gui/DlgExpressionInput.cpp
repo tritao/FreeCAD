@@ -143,7 +143,7 @@ void DlgExpressionInput::textChanged(const QString &text)
 
                 value.setUnit(impliedUnit);
 
-                ui->msg->setText(value.getUserString());
+                ui->msg->setText(QString::fromStdString(value.getUserString()));
             }
             else
                 ui->msg->setText(Base::Tools::fromStdString(result->toString()));

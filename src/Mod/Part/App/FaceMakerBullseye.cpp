@@ -47,12 +47,14 @@
 # include <TopTools_HSequenceOfShape.hxx>
 #endif
 
+#ifdef BUILD_QT
+#include <QtGlobal>
+#endif
+
 #include "FaceMakerBullseye.h"
 #include "FaceMakerCheese.h"
 
 #include "TopoShape.h"
-
-#include <QtGlobal>
 
 using namespace Part;
 

@@ -24,7 +24,9 @@
 #ifndef PARTDESIGN_DATUMSHAPE_H
 #define PARTDESIGN_DATUMSHAPE_H
 
+#ifdef BUILD_QT
 #include <QString>
+#endif
 #include <boost/signals2.hpp>
 #include <App/PropertyLinks.h>
 #include <Mod/Part/App/DatumFeature.h>

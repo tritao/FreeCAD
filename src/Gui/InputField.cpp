@@ -164,8 +164,8 @@ void InputField::updateText(const Base::Quantity& quant)
     }
 
     double dFactor;
-    QString unitStr;
-    QString txt = quant.getUserString(dFactor, unitStr);
+    std::string unitStr;
+    QString txt = QString::fromStdString(quant.getUserString(dFactor, unitStr));
     actUnitValue = quant.getValue()/dFactor;
     setText(txt);
 }
@@ -287,7 +287,7 @@ void InputField::newInput(const QString & text)
     }
 
     double dFactor;
-    QString unitStr;
+    std::string unitStr;
     res.getUserString(dFactor, unitStr);
     actUnitValue = res.getValue()/dFactor;
     // Preserve previous format
@@ -446,7 +446,7 @@ const Base::Unit& InputField::getUnit() const
 /// get stored, valid quantity as a string
 QString InputField::getQuantityString(void) const
 {
-    return actQuantity.getUserString();
+    return QString::fromStdString(actQuantity.getUserString());
 }
 
 /// set, validate and display quantity from a string. Must match existing units.
@@ -515,9 +515,9 @@ void InputField::setUnitText(const QString& str)
 QString InputField::getUnitText(void)
 {
     double dFactor;
-    QString unitStr;
+    std::string unitStr;
     actQuantity.getUserString(dFactor, unitStr);
-    return unitStr;
+    return QString::fromStdString(unitStr);
 }
 
 int InputField::getPrecision() const
@@ -616,7 +616,7 @@ void InputField::focusInEvent(QFocusEvent *event)
 
 void InputField::focusOutEvent(QFocusEvent *event)
 {
-    this->setText(actQuantity.getUserString());
+    this->setText(QString::fromStdString(actQuantity.getUserString()));
     QLineEdit::focusOutEvent(event);
 }
 
@@ -633,7 +633,7 @@ void InputField::keyPressEvent(QKeyEvent *event)
             double val = actUnitValue + StepSize;
             Base::Quantity quant = actQuantity;
             quant.setValue(val);
-            this->setText(quant.getUserString());
+            this->setText(QString::fromStdString(quant.getUserString()));
             event->accept();
         }
         break;
@@ -642,7 +642,7 @@ void InputField::keyPressEvent(QKeyEvent *event)
             double val = actUnitValue - StepSize;
             Base::Quantity quant = actQuantity;
             quant.setValue(val);
-            this->setText(quant.getUserString());
+            this->setText(QString::fromStdString(quant.getUserString()));
             event->accept();
         }
         break;
@@ -668,7 +668,7 @@ void InputField::wheelEvent (QWheelEvent * event)
 
     Base::Quantity quant = actQuantity;
     quant.setValue(val);
-    this->setText(quant.getUserString());
+    this->setText(QString::fromStdString(quant.getUserString()));
     selectNumber();
     event->accept();
 }
@@ -692,7 +692,7 @@ QValidator::State InputField::validate(QString& input, int& pos) const
         res = Quantity::parse(text);
 
         double factor;
-        QString unitStr;
+        std::string unitStr;
         res.getUserString(factor, unitStr);
         double value = res.getValue()/factor;
         // disallow to enter numbers out of range

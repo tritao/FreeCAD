@@ -373,7 +373,7 @@ void Gui::QuantitySpinBox::onChange()
             std::stringstream s;
             s << value->getValue();
 
-            lineEdit()->setText(value->getQuantity().getUserString());
+            lineEdit()->setText(QString::fromStdString(value->getQuantity().getUserString()));
             setReadOnly(true);
             QPixmap pixmap = getIcon(":/icons/bound-expression.svg", QSize(iconHeight, iconHeight));
             iconLabel->setPixmap(pixmap);
@@ -488,7 +488,9 @@ void QuantitySpinBox::updateText(const Quantity &quant)
     Q_D(QuantitySpinBox);
 
     double dFactor;
-    QString txt = quant.getUserString(dFactor,d->unitStr);
+    std::string unitStr;
+    QString txt = QString::fromStdString(quant.getUserString(dFactor,unitStr));
+    d->unitStr = QString::fromStdString(unitStr);
     d->unitValue = quant.getValue()/dFactor;
     lineEdit()->setText(txt);
 }
@@ -566,7 +568,9 @@ void QuantitySpinBox::userInput(const QString & text)
     }
 
     double factor;
-    res.getUserString(factor,d->unitStr);
+    std::string unitStr;
+    res.getUserString(factor,unitStr);
+    d->unitStr = QString::fromStdString(unitStr);
     d->unitValue = res.getValue()/factor;
     d->quantity = res;
 
@@ -813,8 +817,8 @@ void QuantitySpinBox::selectNumber()
 QString QuantitySpinBox::textFromValue(const Base::Quantity& value) const
 {
     double factor;
-    QString unitStr;
-    QString str = value.getUserString(factor, unitStr);
+    std::string unitStr;
+    QString str = QString::fromStdString(value.getUserString(factor, unitStr));
     if (qAbs(value.getValue()) >= 1000.0) {
         str.remove(locale().groupSeparator());
     }

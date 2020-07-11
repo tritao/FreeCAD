@@ -33,10 +33,12 @@
 # include <Inventor/nodes/SoTransform.h>
 # include <Inventor/nodes/SoCamera.h>
 # include <Inventor/events/SoMouseButtonEvent.h>
+# include <Inventor/events/SoKeyboardEvent.h>
 # include <Inventor/events/SoLocation2Event.h>
 # include <Inventor/actions/SoGetMatrixAction.h>
 # include <Inventor/actions/SoSearchAction.h>
 #endif
+
 
 /// Here the FreeCAD includes sorted by Base,App,Gui......
 #include <Base/Console.h>
@@ -48,7 +50,9 @@
 #include "Application.h"
 #include "ActionFunction.h"
 #include "Document.h"
+#ifdef BUILD_PYTHON
 #include "ViewProviderPy.h"
+#endif
 #include "BitmapFactory.h"
 #include "View3DInventor.h"
 #include "View3DInventorViewer.h"
@@ -72,7 +76,9 @@ PROPERTY_SOURCE_ABSTRACT(Gui::ViewProvider, App::TransactionalObject)
 
 ViewProvider::ViewProvider()
     : pcAnnotation(0)
+#ifdef BUILD_PYTHON
     , pyViewObject(0)
+#endif
     , overrideMode("As Is")
     , _iActualMode(-1)
     , _iEditMode(-1)
@@ -94,11 +100,13 @@ ViewProvider::ViewProvider()
 
 ViewProvider::~ViewProvider()
 {
+#ifdef BUILD_PYTHON
     if (pyViewObject) {
         Base::PyGILStateLocker lock;
         pyViewObject->setInvalid();
         pyViewObject->DecRef();
     }
+#endif
 
     pcRoot->unref();
     pcTransform->unref();
@@ -188,12 +196,13 @@ void ViewProvider::eventCallback(void * ud, SoEventCallback * node)
                     // holding the mouse button while using some SoDragger.
                     // Therefore, we shall ignore ESC while any mouse button is
                     // pressed, until this Coin bug is fixed.
-
+#ifndef BUILD_WEB
                     Gui::TimerFunction* func = new Gui::TimerFunction();
                     func->setAutoDelete(true);
                     Gui::Document* doc = Gui::Application::Instance->activeDocument();
                     func->setFunction(boost::bind(&Document::resetEdit, doc));
                     QTimer::singleShot(0, func, SLOT(timeout()));
+#endif
                 }
                 else if (press) {
                     FC_WARN("Please release all mouse buttons before exiting editing");
@@ -266,7 +275,12 @@ void ViewProvider::update(const App::Property* prop)
 
 QIcon ViewProvider::getIcon(void) const
 {
+#ifdef BUILD_QT
     return Gui::BitmapFactory().pixmap(sPixmap);
+#else
+    assert(0);
+    return QIcon();
+#endif
 }
 
 void ViewProvider::setTransformation(const Base::Matrix4D &rcMatrix)
@@ -446,6 +460,7 @@ std::string ViewProvider::toString() const
     return SoFCDB::writeNodesToString(pcRoot);
 }
 
+#ifdef BUILD_PYTHON
 PyObject* ViewProvider::getPyObject()
 {
     if (!pyViewObject)
@@ -453,6 +468,7 @@ PyObject* ViewProvider::getPyObject()
     pyViewObject->IncRef();
     return pyViewObject;
 }
+#endif
 
 #include <boost/graph/topological_sort.hpp>
 
@@ -518,6 +534,7 @@ bool ViewProvider::checkRecursion(SoNode* node)
 
 SoPickedPoint* ViewProvider::getPointOnRay(const SbVec2s& pos, const View3DInventorViewer* viewer) const
 {
+#ifndef BUILD_WEB
     //first get the path to this node and calculate the current transformation
     SoSearchAction sa;
     sa.setNode(pcRoot);
@@ -550,10 +567,15 @@ SoPickedPoint* ViewProvider::getPointOnRay(const SbVec2s& pos, const View3DInven
 
     SoPickedPoint* pick = rp.getPickedPoint();
     return (pick ? new SoPickedPoint(*pick) : 0);
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+    return 0;
+#endif
 }
 
 SoPickedPoint* ViewProvider::getPointOnRay(const SbVec3f& pos,const SbVec3f& dir, const View3DInventorViewer* viewer) const
 {
+#ifndef BUILD_WEB
     // Note: There seems to be a bug with setRay() which causes SoRayPickAction
     // to fail to get intersections between the ray and a line
     
@@ -589,6 +611,10 @@ SoPickedPoint* ViewProvider::getPointOnRay(const SbVec3f& pos,const SbVec3f& dir
     SoPickedPoint* pick = rp.getPickedPoint();
     //return (pick ? pick->copy() : 0); // needs the same instance of CRT under MS Windows
     return (pick ? new SoPickedPoint(*pick) : 0);
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+    return 0;
+#endif
 }
 
 std::vector<Base::Vector3d> ViewProvider::getModelPoints(const SoPickedPoint* pp) const

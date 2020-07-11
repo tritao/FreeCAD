@@ -30,8 +30,10 @@
 #include <Base/Console.h>
 #include <App/Application.h>
 
+#ifdef BUILD_PYTHON
 #include <App/FeaturePythonPyImp.h>
 #include "AttachExtensionPy.h"
+#endif
 
 
 using namespace Part;
@@ -268,6 +270,7 @@ App::PropertyPlacement& AttachExtension::getPlacement() {
     return static_cast<App::GeoFeature*>(getExtendedObject())->Placement;
 }
 
+#ifdef BUILD_PYTHON
 PyObject* AttachExtension::getExtensionPyObject(void) {
     
     if (ExtensionPythonObject.is(Py::_None())){
@@ -276,6 +279,7 @@ PyObject* AttachExtension::getExtensionPyObject(void) {
     }
     return Py::new_reference_to(ExtensionPythonObject);
 }
+#endif
 
 // ------------------------------------------------
 

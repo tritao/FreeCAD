@@ -65,10 +65,12 @@ public:
      * Set the name to the workbench object.
      */
     void setName(const std::string&);
+#ifdef BUILD_PYTHON
     /**
      * The default implementation returns an instance of @ref WorkbenchPy.
      */
     PyObject* getPyObject();
+#endif
     /** Sets up the contextmenu for this workbench. 
      * The default implementation does nothing.
      */

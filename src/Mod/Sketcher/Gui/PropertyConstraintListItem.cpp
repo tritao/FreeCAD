@@ -58,7 +58,7 @@ QVariant PropertyConstraintListItem::toString(const QVariant& prop) const
     for (QList<Base::Quantity>::const_iterator it = value.begin(); it != value.end(); ++it) {
         if (it != value.begin())
             out << ";";
-        out << it->getUserString();
+        out << QString::fromStdString(it->getUserString());
     }
     out << "]";
     return QVariant(str);

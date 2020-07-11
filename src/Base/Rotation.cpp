@@ -27,6 +27,8 @@
 # include <climits>
 #endif
 
+#include <cstring>
+
 #include "Rotation.h"
 #include "Matrix.h"
 #include "Base/Exception.h"

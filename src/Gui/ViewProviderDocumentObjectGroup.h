@@ -54,7 +54,9 @@ private:
     std::vector<ViewProvider*> nodes;
 };
 
+#ifdef BUILD_PYTHON
 typedef ViewProviderPythonFeatureT<ViewProviderDocumentObjectGroup> ViewProviderDocumentObjectGroupPython;
+#endif
 
 } // namespace Gui
 

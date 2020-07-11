@@ -35,7 +35,9 @@
 #include <App/DocumentPy.h>
 #include <Base/QuantityPy.h>
 #endif
+#ifdef BUILD_QT
 #include <QStringList>
+#endif
 #include <string>
 #include <sstream>
 #include <math.h>

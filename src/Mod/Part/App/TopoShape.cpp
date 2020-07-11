@@ -27,7 +27,6 @@
 # include <cmath>
 # include <cstdlib>
 # include <sstream>
-# include <QString>
 # include <BRepLib.hxx>
 # include <BSplCLib.hxx>
 # include <Bnd_Box.hxx>
@@ -188,9 +187,11 @@
 
 #include "TopoShape.h"
 #include "CrossSection.h"
+#ifdef BUILD_PYTHON
 #include "TopoShapeFacePy.h"
 #include "TopoShapeEdgePy.h"
 #include "TopoShapeVertexPy.h"
+#endif
 #include "ProgressIndicator.h"
 #include "modelRefine.h"
 #include "Tools.h"
@@ -382,6 +383,7 @@ unsigned long TopoShape::countSubShapes(const char* Type) const
     return 0;
 }
 
+#ifdef BUILD_PYTHON
 PyObject * TopoShape::getPySubShape(const char* Type) const
 {
     // get the shape
@@ -398,6 +400,7 @@ PyObject * TopoShape::getPySubShape(const char* Type) const
         return 0;
 
 }
+#endif
 
 void TopoShape::operator = (const TopoShape& sh)
 {

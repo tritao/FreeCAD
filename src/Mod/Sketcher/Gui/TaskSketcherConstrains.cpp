@@ -139,7 +139,7 @@ public:
             case Sketcher::Radius:
             case Sketcher::Diameter:
             case Sketcher::Angle:
-                name = QString::fromLatin1("%1 (%2)").arg(name).arg(constraint->getPresentationValue().getUserString());
+                name = QString::fromLatin1("%1 (%2)").arg(name).arg(QString::fromStdString(constraint->getPresentationValue().getUserString()));
                 break;
             case Sketcher::SnellsLaw: {
                 double v = constraint->getPresentationValue().getValue();

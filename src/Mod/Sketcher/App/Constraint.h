@@ -95,8 +95,10 @@ public:
     virtual void Save(Base::Writer &/*writer*/) const;
     virtual void Restore(Base::XMLReader &/*reader*/);
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
-    
+#endif
+
     Base::Quantity getPresentationValue() const;
     inline void setValue(double newValue) {
         Value = newValue;

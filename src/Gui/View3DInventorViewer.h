@@ -30,6 +30,7 @@
 #include <vector>
 
 #include <Base/Type.h>
+#include <Inventor/SbColor.h>
 #include <Inventor/nodes/SoEventCallback.h>
 #include <Inventor/nodes/SoSwitch.h>
 #include <Inventor/SbRotation.h>
@@ -55,6 +56,7 @@ class SoVectorizeAction;
 class QImage;
 class SoGroup;
 class NaviCube;
+class SoDirectionalLight;
 
 namespace Quarter = SIM::Coin3D::Quarter;
 
@@ -76,7 +78,7 @@ class ViewerEventFilter;
 class GuiExport View3DInventorViewer : public Quarter::SoQTQuarterAdaptor, public Gui::SelectionSingleton::ObserverType
 {
     typedef Quarter::SoQTQuarterAdaptor inherited;
-    
+
 public:
     /// Pick modes for picking points in the scene
     enum SelectionMode {
@@ -389,8 +391,10 @@ private:
     static void clearBufferCB(void * userdata, SoAction * action);
     static void setGLWidgetCB(void * userdata, SoAction * action);
     static void handleEventCB(void * userdata, SoEventCallback * n);
+#ifdef USE_QUARTER
     static void interactionStartCB(void * data, Quarter::SoQTQuarterAdaptor * viewer);
     static void interactionFinishCB(void * data, Quarter::SoQTQuarterAdaptor * viewer);
+#endif
     static void interactionLoggerCB(void * ud, SoAction* action);
 
 private:

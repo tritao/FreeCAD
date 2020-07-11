@@ -41,7 +41,9 @@ namespace Gui
         public:
             ButtonView(QWidget *parent = 0);
             void selectButton(int number);
-        Q_SIGNALS:
+#ifdef BUILD_QT
+Q_SIGNALS:
+#endif
             void changeCommandSelection(const QString& commandName);
         private Q_SLOTS:
             void goSelectionChanged(const QItemSelection &selected, const QItemSelection &deselected);
@@ -76,7 +78,9 @@ namespace Gui
             void goChangeCommandSelection(const QString& commandName);
         private Q_SLOTS:
             void goClicked(const QModelIndex &index);
-        Q_SIGNALS:
+#ifdef BUILD_QT
+Q_SIGNALS:
+#endif
             void changedCommand(const QString& commandName);
         };
 

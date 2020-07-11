@@ -25,7 +25,9 @@
 #define GUI_MENUMANAGER_H
 
 #include <string>
+#ifdef BUILD_QT
 #include <QStringList>
+#endif
 
 class QAction;
 class QMenu;

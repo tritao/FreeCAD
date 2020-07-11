@@ -228,7 +228,7 @@ void ViewProviderMeasureDistance::updateData(const App::Property* prop)
         SbVec3f pos = (pCoords->point[2]+pCoords->point[3])/2.0f;
         pTranslation->translation.setValue(pos);
 
-        pLabel->string.setValue((Base::Quantity(dif.length(), Base::Unit::Length)).getUserString().toUtf8().constData());
+        pLabel->string.setValue((Base::Quantity(dif.length(), Base::Unit::Length)).getUserString().c_str());
     }
 
     ViewProviderDocumentObject::updateData(prop);
@@ -274,7 +274,7 @@ void PointMarker::customEvent(QEvent*)
     md->P2.setValue(Base::Vector3d(pt2[0],pt2[1],pt2[2]));
 
     QString str = QString::fromLatin1("Distance: %1")
-        .arg(Base::Quantity(md->Distance.getValue(), Base::Unit::Length).getUserString());
+        .arg(QString::fromStdString(Base::Quantity(md->Distance.getValue(), Base::Unit::Length).getUserString()));
     md->Label.setValue(str.toUtf8().constData());
     doc->commitCommand();
 

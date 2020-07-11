@@ -163,7 +163,9 @@ public:
     bool apply(const std::string &propName);
     bool apply();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     /** gets emitted if the user has entered a VALID input
      *  Valid means the user inputted string obeys all restrictions
      *  like: minimum, maximum and/or the right Unit (if specified). 

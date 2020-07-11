@@ -80,8 +80,10 @@ public:
     virtual bool canDelete(App::DocumentObject* obj) const;
     /// Get the GUI document to this ViewProvider object
     Gui::Document* getDocument() const;
+#ifdef BUILD_PYTHON
     /// Get the python wrapper for that ViewProvider
     PyObject* getPyObject();
+#endif
 
     /** @name Restoring view provider from document load */
     //@{

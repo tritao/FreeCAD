@@ -29,10 +29,14 @@
 
 #include <Base/Parameter.h>
 #include <App/Application.h>
+#ifdef BUILD_PYTHON
 #include <App/FeaturePythonPyImp.h>
+#endif
 #include <Mod/Part/App/modelRefine.h>
 #include "FeatureAddSub.h"
+#ifdef BUILD_PYTHON
 #include "FeaturePy.h"
+#endif
 
 
 using namespace PartDesign;
@@ -83,6 +87,7 @@ TopoDS_Shape FeatureAddSub::refineShapeIfActive(const TopoDS_Shape& oldShape) co
 
 }
 
+#ifdef BUILD_PYTHON
 namespace App {
 /// @cond DOXERR
 PROPERTY_SOURCE_TEMPLATE(PartDesign::FeatureAddSubPython, PartDesign::FeatureAddSub)
@@ -101,7 +106,6 @@ template<> PyObject* PartDesign::FeatureAddSubPython::getPyObject(void) {
 // explicit template instantiation
 template class PartDesignExport FeaturePythonT<PartDesign::FeatureAddSub>;
 }
-
 
 namespace PartDesign {
 
@@ -129,3 +133,4 @@ FeatureSubtractivePython::~FeatureSubtractivePython()
 }
 
 }
+#endif

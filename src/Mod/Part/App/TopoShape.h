@@ -147,7 +147,9 @@ public:
     TopoDS_Shape getSubShape(const char* Type) const;
     unsigned long countSubShapes(const char* Type) const;
     /// get the Topo"sub"Shape with the given name
+#ifdef BUILD_PYTHON
     PyObject * getPySubShape(const char* Type) const;
+#endif
 
     /** @name Save/restore */
     //@{

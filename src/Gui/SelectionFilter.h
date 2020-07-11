@@ -115,6 +115,7 @@ protected:
     SelectionFilter *Filter;
 };
 
+#ifdef BUILD_PYTHON
 /**
  * A wrapper around a Python class that implements the SelectionGate interface
  * @author Werner Mayer
@@ -190,6 +191,7 @@ public:
 private:
     SelectionFilterPy* filter;
 };
+#endif
 
 // === Abstract syntax tree (AST) ===========================================
 

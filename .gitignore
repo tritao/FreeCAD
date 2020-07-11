@@ -27,6 +27,8 @@ install_manifest.txt
 /Mod/
 /ZERO_CHECK.dir/
 /build/
+/build_qt5/
+/obj/
 /src/Tools/offlinedoc/localwiki/
 /src/Tools/offlinedoc/*.txt
 OpenSCAD_rc.py
@@ -35,3 +37,5 @@ OpenSCAD_rc.py
 .tags
 tags
 /\.vscode/
+/src/3rdParty/boost
+/src/3rdParty/xerces-c

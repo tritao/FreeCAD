@@ -26,6 +26,7 @@
 
 #include <QFileDialog>
 #include <QFileIconProvider>
+#include <QFileInfo>
 #include <QFileSystemModel>
 #include <QCompleter>
 
@@ -175,7 +176,9 @@ public Q_SLOTS:
     virtual void setFilter ( const QString & );
     virtual void setButtonText ( const QString & );
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void fileNameChanged( const QString & );
     void fileNameSelected( const QString & );
 

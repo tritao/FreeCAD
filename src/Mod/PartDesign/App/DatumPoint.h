@@ -24,7 +24,9 @@
 #ifndef PARTDESIGN_DATUMPOINT_H
 #define PARTDESIGN_DATUMPOINT_H
 
+#ifdef BUILD_QT
 #include <QString>
+#endif
 #include <App/PropertyLinks.h>
 #include <App/GeoFeature.h>
 #include <Mod/Part/App/DatumFeature.h>

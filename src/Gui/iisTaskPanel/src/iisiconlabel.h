@@ -32,7 +32,9 @@ public:
 	virtual QSize sizeHint() const;
 	virtual QSize minimumSizeHint() const;
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
 	void pressed();
 	void released();
 	void clicked();

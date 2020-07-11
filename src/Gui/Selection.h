@@ -150,6 +150,7 @@ private:
     bool blockSelection;
 };
 
+#ifdef BUILD_PYTHON
 /**
  * The SelectionObserverPython class implements a mechanism to register
  * a Python class instance implementing the required interface in order
@@ -181,6 +182,7 @@ private:
     Py::Object inst;
     static std::vector<SelectionObserverPython*> _instances;
 };
+#endif
 
 /** SelectionGate
  * The selection gate allows or disallows selection of certain types.
@@ -331,10 +333,13 @@ public:
     static void destruct (void);
     friend class SelectionFilter;
 
+#ifdef BUILD_PYTHON
     // Python interface
     static PyMethodDef    Methods[];
+#endif
 
 protected:
+#ifdef BUILD_PYTHON
     static PyObject *sAddSelection        (PyObject *self,PyObject *args);
     static PyObject *sRemoveSelection     (PyObject *self,PyObject *args);
     static PyObject *sClearSelection      (PyObject *self,PyObject *args);
@@ -350,6 +355,7 @@ protected:
     static PyObject *sRemSelObserver      (PyObject *self,PyObject *args);
     static PyObject *sAddSelectionGate    (PyObject *self,PyObject *args);
     static PyObject *sRemoveSelectionGate (PyObject *self,PyObject *args);
+#endif
 
 protected:
     /// Construction

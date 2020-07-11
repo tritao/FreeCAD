@@ -91,7 +91,9 @@ public:
 
     void keyPressEvent(QKeyEvent *event);
     void resizeEvent(QResizeEvent *event);
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void valueChanged( uint value );
 
 public Q_SLOTS:

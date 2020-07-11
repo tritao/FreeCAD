@@ -154,7 +154,7 @@ void openEditDatumDialog(Sketcher::SketchObject* sketch, int ConstrNbr)
                     else
                         Gui::Command::doCommand(Gui::Command::Doc,"App.ActiveDocument.%s.setDatum(%i,App.Units.Quantity('%f %s'))",
                                                 sketch->getNameInDocument(),
-                                                ConstrNbr, newDatum, (const char*)newQuant.getUnit().getString().toUtf8());
+                                                ConstrNbr, newDatum, (const char*)newQuant.getUnit().getString().c_str());
 
                     QString constraintName = ui_ins_datum.name->text().trimmed();
                     if (Base::Tools::toStdString(constraintName) != sketch->Constraints[ConstrNbr]->Name) {
@@ -5224,7 +5224,7 @@ void CmdSketcherConstrainRadius::activated(int iMsg)
                     if (constrainEqual || geoIdRadiusMap.size() == 1) {
                         doCommand(Gui::Command::Doc,"App.ActiveDocument.%s.setDatum(%i,App.Units.Quantity('%f %s'))",
                                     Obj->getNameInDocument(),
-                                    indexConstr, newRadius, (const char*)newQuant.getUnit().getString().toUtf8());
+                                    indexConstr, newRadius, (const char*)newQuant.getUnit().getString().c_str());
 
                         QString constraintName = ui_Datum.name->text().trimmed();
                         if (Base::Tools::toStdString(constraintName) != Obj->Constraints[indexConstr]->Name) {
@@ -5238,7 +5238,7 @@ void CmdSketcherConstrainRadius::activated(int iMsg)
                         for (std::size_t i=0; i<geoIdRadiusMap.size();i++) {
                             doCommand(Gui::Command::Doc,"App.ActiveDocument.%s.setDatum(%i,App.Units.Quantity('%f %s'))",
                                         Obj->getNameInDocument(),
-                                        indexConstr+i, newRadius, (const char*)newQuant.getUnit().getString().toUtf8());
+                                        indexConstr+i, newRadius, (const char*)newQuant.getUnit().getString().c_str());
                         }
                     }
 
@@ -5365,7 +5365,7 @@ void CmdSketcherConstrainRadius::applyConstraint(std::vector<SelIdPair> &selSeq,
                 try {
                     doCommand(Gui::Command::Doc,"App.ActiveDocument.%s.setDatum(%i,App.Units.Quantity('%f %s'))",
                                 Obj->getNameInDocument(),
-                                indexConstr, newRadius, (const char*)newQuant.getUnit().getString().toUtf8());
+                                indexConstr, newRadius, (const char*)newQuant.getUnit().getString().c_str());
 
                     QString constraintName = ui_Datum.name->text().trimmed();
                     if (Base::Tools::toStdString(constraintName) != Obj->Constraints[indexConstr]->Name) {
@@ -5695,7 +5695,7 @@ void CmdSketcherConstrainDiameter::activated(int iMsg)
                     if (constrainEqual || geoIdDiameterMap.size() == 1) {
                         doCommand(Gui::Command::Doc,"App.ActiveDocument.%s.setDatum(%i,App.Units.Quantity('%f %s'))",
                                   Obj->getNameInDocument(),
-                                  indexConstr, newDiameter, (const char*)newQuant.getUnit().getString().toUtf8());
+                                  indexConstr, newDiameter, (const char*)newQuant.getUnit().getString().c_str());
                         
                         QString constraintName = ui_Datum.name->text().trimmed();
                         if (Base::Tools::toStdString(constraintName) != Obj->Constraints[indexConstr]->Name) {
@@ -5709,7 +5709,7 @@ void CmdSketcherConstrainDiameter::activated(int iMsg)
                         for (std::size_t i=0; i<geoIdDiameterMap.size();i++) {
                             doCommand(Gui::Command::Doc,"App.ActiveDocument.%s.setDatum(%i,App.Units.Quantity('%f %s'))",
                                       Obj->getNameInDocument(),
-                                      indexConstr+i, newDiameter, (const char*)newQuant.getUnit().getString().toUtf8());
+                                      indexConstr+i, newDiameter, (const char*)newQuant.getUnit().getString().c_str());
                         }
                     }
                     
@@ -5836,7 +5836,7 @@ void CmdSketcherConstrainDiameter::applyConstraint(std::vector<SelIdPair> &selSe
                     try {
                         doCommand(Gui::Command::Doc,"App.ActiveDocument.%s.setDatum(%i,App.Units.Quantity('%f %s'))",
                                   Obj->getNameInDocument(),
-                                  indexConstr, newDiameter, (const char*)newQuant.getUnit().getString().toUtf8());
+                                  indexConstr, newDiameter, (const char*)newQuant.getUnit().getString().c_str());
                         
                         QString constraintName = ui_Datum.name->text().trimmed();
                         if (Base::Tools::toStdString(constraintName) != Obj->Constraints[indexConstr]->Name) {

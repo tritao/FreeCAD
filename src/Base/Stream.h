@@ -150,7 +150,9 @@ protected:
             std::ios::in | std::ios::out);
 
 private:
+#ifdef BUILD_QT
     QBuffer* _buffer;
+#endif
 };
 
 /**
@@ -161,7 +163,9 @@ private:
 class BaseExport ByteArrayIStreambuf : public std::streambuf
 {
 public:
+#ifdef BUILD_QT
     explicit ByteArrayIStreambuf(const QByteArray& buf);
+#endif
     ~ByteArrayIStreambuf();
 
 protected:
@@ -178,10 +182,13 @@ protected:
             std::ios::in | std::ios::out);
 
 private:
+#ifdef BUILD_QT
     const QByteArray& _buffer;
+#endif
     int _beg, _end, _cur;
 };
 
+#ifdef BUILD_QT
 /**
  * Simple class to write data directly into Qt's QIODevice.
  * This class can only be used for writing but not reading purposes.
@@ -238,6 +245,7 @@ protected:
     static const int bufSize = 1024;    // size of the data buffer
     char buffer[bufSize+pbSize];        // data buffer
 };
+#endif
 
 #ifdef BUILD_PYTHON
 class BaseExport PyStreambuf : public std::streambuf

@@ -83,13 +83,17 @@ public:
     virtual void viewAll();
     virtual const char *getName(void) const;
 
+#ifdef BUILD_QT
     /// print function of the view
     virtual void print();
     virtual void printPdf();
     virtual void printPreview();
     virtual void print(QPrinter*);
+#endif
 
+#ifdef BUILD_PYTHON
     virtual PyObject *getPyObject(void);
+#endif
     /**
      * If \a b is set to \a FullScreen the MDI view is displayed in full screen mode, if \a b
      * is set to \a TopLevel then it is displayed as an own top-level window, otherwise (\a Normal)
@@ -135,12 +139,15 @@ protected:
 
 private:
     View3DInventorViewer * _viewer;
-    PyObject *_viewerPy;
     QTimer * stopSpinTimer;
     QStackedWidget* stack;
 
+#ifdef BUILD_PYTHON
+    PyObject *_viewerPy;
+
     // friends
     friend class View3DPy;
+#endif
 };
 
 } // namespace Gui

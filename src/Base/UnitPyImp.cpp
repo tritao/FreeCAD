@@ -16,7 +16,7 @@ std::string UnitPy::representation(void) const
     const UnitSignature &  Sig = getUnitPtr()->getSignature();
     std::stringstream ret;
     ret << "Unit: "; 
-    ret << getUnitPtr()->getString().toUtf8().constData() << " (";
+    ret << getUnitPtr()->getString().c_str() << " (";
     ret << Sig.Length << ",";
     ret << Sig.Mass  << ",";
     ret << Sig.Time  << ",";
@@ -25,7 +25,7 @@ std::string UnitPy::representation(void) const
     ret << Sig.AmountOfSubstance  << ",";
     ret << Sig.LuminousIntensity  << ",";
     ret << Sig.Angle  << ")"; 
-    std::string type = getUnitPtr()->getTypeString().toUtf8().constData();
+    std::string type = getUnitPtr()->getTypeString().c_str();
     if(! type.empty())
         ret << " [" << type << "]";
 
@@ -179,7 +179,7 @@ PyObject* UnitPy::richCompare(PyObject *v, PyObject *w, int op)
 
 Py::String UnitPy::getType(void) const
 {
-    return Py::String(getUnitPtr()->getTypeString().toUtf8(),"utf-8");
+    return Py::String(getUnitPtr()->getTypeString().c_str(),"utf-8");
 }
 
 

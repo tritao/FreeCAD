@@ -28,7 +28,10 @@
 # include <iostream>
 #endif
 
+#ifdef BUILD_QT
+# include <QCoreApplication>
 # include <QTime>
+#endif
 
 #ifdef BUILD_PYTHON
 #include "PyExport.h"
@@ -38,6 +41,7 @@
 #include "Tools.h"
 
 namespace Base {
+
 struct string_comp  : public std::binary_function<std::string, 
                                                   std::string, bool>
 {
@@ -73,6 +77,17 @@ struct string_comp  : public std::binary_function<std::string,
         return n;
     }
 };
+}
+
+int64_t Base::Tools::applicationPid()
+{
+#if defined(BUILD_QT)
+    return QCoreApplication::applicationPid();
+#elif defined(FC_OS_WIN32)
+    return GetCurrentProcessId();
+#else
+    return getpid();
+#endif
 }
 
 std::string Base::Tools::getUniqueName(const std::string& name, const std::vector<std::string>& names, int d)
@@ -210,7 +225,9 @@ using namespace Base;
 
 struct StopWatch::Private
 {
+#ifdef BUILD_QT
     QTime t;
+#endif
 };
 
 StopWatch::StopWatch() : d(new Private)
@@ -224,17 +241,29 @@ StopWatch::~StopWatch()
 
 void StopWatch::start()
 {
+#ifdef BUILD_QT
     d->t.start();
+#else
+    assert(0);
+#endif
 }
 
 int StopWatch::restart()
 {
+#ifdef BUILD_QT
     return d->t.restart();
+#else
+    assert(0);
+#endif
 }
 
 int StopWatch::elapsed()
 {
+#ifdef BUILD_QT
     return d->t.elapsed();
+#else
+    assert(0);
+#endif
 }
 
 std::string StopWatch::toString(int ms) const

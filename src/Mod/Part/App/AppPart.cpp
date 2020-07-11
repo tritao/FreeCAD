@@ -11,7 +11,9 @@
 
 #include "PreCompiled.h"
 #ifndef _PreComp_
+#ifdef BUILD_PYTHON
 # include <Python.h>
+#endif
 # include <Interface_Static.hxx>
 # include <IGESControl_Controller.hxx>
 # include <STEPControl_Controller.hxx>
@@ -58,6 +60,7 @@
 #include "CustomFeature.h"
 #include "Geometry.h"
 #include "Geometry2d.h"
+#ifdef BUILD_PYTHON
 #include "Mod/Part/App/TopoShapePy.h"
 #include "Mod/Part/App/TopoShapeVertexPy.h"
 #include "Mod/Part/App/TopoShapeFacePy.h"
@@ -116,6 +119,7 @@
 #include <Mod/Part/App/Geom2d/Line2dPy.h>
 #include <Mod/Part/App/Geom2d/OffsetCurve2dPy.h>
 #include <Mod/Part/App/Geom2d/Parabola2dPy.h>
+#endif
 #include "PropertyGeometryList.h"
 #include "DatumFeature.h"
 #include "Attacher.h"
@@ -125,278 +129,33 @@
 #include "FaceMakerBullseye.h"
 
 namespace Part {
+#ifdef BUILD_PYTHON
 extern PyObject* initModule();
+#endif
 }
 
 using namespace Part;
 
+#ifdef BUILD_PYTHON
 PyObject* Part::PartExceptionOCCError;
 PyObject* Part::PartExceptionOCCDomainError;
 PyObject* Part::PartExceptionOCCRangeError;
 PyObject* Part::PartExceptionOCCConstructionError;
 PyObject* Part::PartExceptionOCCDimensionError;
+#endif
 
 // <---
 namespace Part {
-
-// Compatibility class to keep old code working until removed
-class LinePyOld : public LineSegmentPy
-{
-public:
-    static PyTypeObject   Type;
-    virtual PyTypeObject *GetType(void) {return &Type;}
-
-public:
-    static PyObject *PyMake(struct _typeobject *, PyObject *, PyObject *)
-    {
-        PyErr_SetString(PyExc_DeprecationWarning, "For future usage 'Line' will be an infinite line, use 'LineSegment' instead");
-        PyErr_Print();
-        return new LinePyOld(new GeomLineSegment);
-    }
-    LinePyOld(GeomLineSegment *pcObject, PyTypeObject *T = &Type)
-      : LineSegmentPy(pcObject, T)
-    {
-    }
-    virtual ~LinePyOld()
-    {
-    }
-};
-
-/// Type structure of LinePyOld
-PyTypeObject LinePyOld::Type = {
-    // PyObject_HEAD_INIT(&PyType_Type)
-    // 0,                                                /*ob_size*/
-    PyVarObject_HEAD_INIT(&PyType_Type,0)
-    "Part.Line",     /*tp_name*/
-    sizeof(LinePyOld),                       /*tp_basicsize*/
-    0,                                                /*tp_itemsize*/
-    /* methods */
-    PyDestructor,                                     /*tp_dealloc*/
-    0,                                                /*tp_print*/
-    0,                                        /*tp_getattr*/
-    0,                                        /*tp_setattr*/
-    0,                                                /*tp_compare*/
-    0,                                           /*tp_repr*/
-    0,                                                /*tp_as_number*/
-    0,                                                /*tp_as_sequence*/
-    0,                                                /*tp_as_mapping*/
-    0,                                                /*tp_hash*/
-    0,                                                /*tp_call */
-    0,                                                /*tp_str  */
-    0,                                                /*tp_getattro*/
-    0,                                                /*tp_setattro*/
-    /* --- Functions to access object as input/output buffer ---------*/
-    0,                                                /* tp_as_buffer */
-    /* --- Flags to define presence of optional/expanded features */
-#if PY_MAJOR_VERSION >= 3
-    Py_TPFLAGS_DEFAULT,                               /*tp_flags */
-#else
-    Py_TPFLAGS_HAVE_CLASS,                            /*tp_flags */
-#endif
-    "",
-    0,                                                /*tp_traverse */
-    0,                                                /*tp_clear */
-    0,                                                /*tp_richcompare */
-    0,                                                /*tp_weaklistoffset */
-    0,                                                /*tp_iter */
-    0,                                                /*tp_iternext */
-    0,                     /*tp_methods */
-    0,                                                /*tp_members */
-    0,                     /*tp_getset */
-    &LineSegmentPy::Type,                        /*tp_base */
-    0,                                                /*tp_dict */
-    0,                                                /*tp_descr_get */
-    0,                                                /*tp_descr_set */
-    0,                                                /*tp_dictoffset */
-    __PyInit,                                         /*tp_init */
-    0,                                                /*tp_alloc */
-    Part::LinePyOld::PyMake,/*tp_new */
-    0,                                                /*tp_free   Low-level free-memory routine */
-    0,                                                /*tp_is_gc  For PyObject_IS_GC */
-    0,                                                /*tp_bases */
-    0,                                                /*tp_mro    method resolution order */
-    0,                                                /*tp_cache */
-    0,                                                /*tp_subclasses */
-    0,                                                /*tp_weaklist */
-    0,                                                /*tp_del */
-    0                                                 /*tp_version_tag */
-#if PY_MAJOR_VERSION >=3
-    ,0                                                /*tp_finalize */
-#endif
-};
-
-}
-// --->
-
-PyMOD_INIT_FUNC(Part)
-{
+void PartExport initModuleTypes() {
     Base::Console().Log("Module: Part\n");
-
-    // This is highly experimental and we should keep an eye on it
-    // if we have mysterious crashes
-    // The argument must be 'Standard_False' to avoid FPE caused by
-    // Python's cmath module.
-    // For Linux use segmentation_fault_handler in Application.cpp
-#if !defined(_DEBUG) && !defined(FC_OS_LINUX)
-    //OSD::SetSignal(Standard_False);
-#endif
-
-    PyObject* partModule = Part::initModule();
-    Base::Console().Log("Loading Part module... done\n");
-
-    Py::Object module(partModule);
-    module.setAttr("OCC_VERSION", Py::String(OCC_VERSION_STRING_EXT));
 
     // C++ exceptions
     new Base::ExceptionProducer<Part::NullShapeException>;
     new Base::ExceptionProducer<Part::AttachEngineException>;
     new Base::ExceptionProducer<Part::BooleanException>;
 
-    // Python exceptions
-    //
-    PyObject* OCCError = 0;
-    if (PyObject_IsSubclass(Base::BaseExceptionFreeCADError, PyExc_RuntimeError)) {
-        OCCError = PyErr_NewException("Part.OCCError", Base::BaseExceptionFreeCADError, NULL);
-    }
-    else {
-        Base::Console().Error("Can not inherit Part.OCCError form BaseFreeCADError.\n");
-        OCCError = PyErr_NewException("Part.OCCError", PyExc_RuntimeError, NULL);
-    }
-    Py_INCREF(OCCError);
-    PyModule_AddObject(partModule, "OCCError", OCCError);
-    PartExceptionOCCError = OCCError; //set global variable ;(
-
-    // domain error
-    PartExceptionOCCDomainError = PyErr_NewException("Part.OCCDomainError", PartExceptionOCCError, NULL);
-    Py_INCREF(PartExceptionOCCDomainError);
-    PyModule_AddObject(partModule, "OCCDomainError", PartExceptionOCCDomainError);
-
-    // range error
-    PartExceptionOCCRangeError = PyErr_NewException("Part.OCCRangeError", PartExceptionOCCDomainError, NULL);
-    Py_INCREF(PartExceptionOCCRangeError);
-    PyModule_AddObject(partModule, "OCCRangeError", PartExceptionOCCRangeError);
-
-    // construction error
-    PartExceptionOCCConstructionError = PyErr_NewException("Part.OCCConstructionError", PartExceptionOCCDomainError, NULL);
-    Py_INCREF(PartExceptionOCCConstructionError);
-    PyModule_AddObject(partModule, "OCCConstructionError", PartExceptionOCCConstructionError);
-
-    // dimension error
-    PartExceptionOCCDimensionError = PyErr_NewException("Part.OCCDimensionError", PartExceptionOCCDomainError, NULL);
-    Py_INCREF(PartExceptionOCCConstructionError);
-    PyModule_AddObject(partModule, "OCCDimensionError", PartExceptionOCCDimensionError);
-
-    //rename the types properly to pickle and unpickle them
-    Part::TopoShapePy         ::Type.tp_name = "Part.Shape";
-    Part::TopoShapeVertexPy   ::Type.tp_name = "Part.Vertex";
-    Part::TopoShapeWirePy     ::Type.tp_name = "Part.Wire";
-    Part::TopoShapeEdgePy     ::Type.tp_name = "Part.Edge";
-    Part::TopoShapeSolidPy    ::Type.tp_name = "Part.Solid";
-    Part::TopoShapeFacePy     ::Type.tp_name = "Part.Face";
-    Part::TopoShapeCompoundPy ::Type.tp_name = "Part.Compound";
-    Part::TopoShapeCompSolidPy::Type.tp_name = "Part.CompSolid";
-    Part::TopoShapeShellPy    ::Type.tp_name = "Part.Shell";
-    // Add Types to module
-    Base::Interpreter().addType(&Part::TopoShapePy          ::Type,partModule,"Shape");
-    Base::Interpreter().addType(&Part::TopoShapeVertexPy    ::Type,partModule,"Vertex");
-    Base::Interpreter().addType(&Part::TopoShapeWirePy      ::Type,partModule,"Wire");
-    Base::Interpreter().addType(&Part::TopoShapeEdgePy      ::Type,partModule,"Edge");
-    Base::Interpreter().addType(&Part::TopoShapeSolidPy     ::Type,partModule,"Solid");
-    Base::Interpreter().addType(&Part::TopoShapeFacePy      ::Type,partModule,"Face");
-    Base::Interpreter().addType(&Part::TopoShapeCompoundPy  ::Type,partModule,"Compound");
-    Base::Interpreter().addType(&Part::TopoShapeCompSolidPy ::Type,partModule,"CompSolid");
-    Base::Interpreter().addType(&Part::TopoShapeShellPy     ::Type,partModule,"Shell");
-
     Base::Reference<ParameterGrp> hPartGrp = App::GetApplication().GetUserParameter()
         .GetGroup("BaseApp")->GetGroup("Preferences")->GetGroup("Mod/Part");
-
-    // General
-    Base::Reference<ParameterGrp> hGenPGrp = hPartGrp->GetGroup("General");
-    if (hGenPGrp->GetBool("LineOld", false)) {
-        Base::Interpreter().addType(&Part::LinePy           ::Type,partModule,"_Line");
-        Base::Interpreter().addType(&Part::LinePyOld        ::Type,partModule,"Line");
-    }
-    else {
-        Base::Interpreter().addType(&Part::LinePy           ::Type,partModule,"Line");
-    }
-    Base::Interpreter().addType(&Part::LineSegmentPy        ::Type,partModule,"LineSegment");
-    Base::Interpreter().addType(&Part::PointPy              ::Type,partModule,"Point");
-    Base::Interpreter().addType(&Part::ConicPy              ::Type,partModule,"Conic");
-    Base::Interpreter().addType(&Part::ArcOfConicPy         ::Type,partModule,"ArcOfConic");
-    Base::Interpreter().addType(&Part::CirclePy             ::Type,partModule,"Circle");
-    Base::Interpreter().addType(&Part::EllipsePy            ::Type,partModule,"Ellipse");
-    Base::Interpreter().addType(&Part::HyperbolaPy          ::Type,partModule,"Hyperbola");
-    Base::Interpreter().addType(&Part::ParabolaPy           ::Type,partModule,"Parabola");
-    Base::Interpreter().addType(&Part::ArcPy                ::Type,partModule,"Arc");
-    Base::Interpreter().addType(&Part::ArcOfCirclePy        ::Type,partModule,"ArcOfCircle");
-    Base::Interpreter().addType(&Part::ArcOfEllipsePy       ::Type,partModule,"ArcOfEllipse");
-    Base::Interpreter().addType(&Part::ArcOfParabolaPy      ::Type,partModule,"ArcOfParabola");    
-    Base::Interpreter().addType(&Part::ArcOfHyperbolaPy     ::Type,partModule,"ArcOfHyperbola");    
-    Base::Interpreter().addType(&Part::BezierCurvePy        ::Type,partModule,"BezierCurve");
-    Base::Interpreter().addType(&Part::BSplineCurvePy       ::Type,partModule,"BSplineCurve");
-    Base::Interpreter().addType(&Part::OffsetCurvePy        ::Type,partModule,"OffsetCurve");
-
-    Base::Interpreter().addType(&Part::PlanePy              ::Type,partModule,"Plane");
-    Base::Interpreter().addType(&Part::CylinderPy           ::Type,partModule,"Cylinder");
-    Base::Interpreter().addType(&Part::ConePy               ::Type,partModule,"Cone");
-    Base::Interpreter().addType(&Part::SpherePy             ::Type,partModule,"Sphere");
-    Base::Interpreter().addType(&Part::ToroidPy             ::Type,partModule,"Toroid");
-    Base::Interpreter().addType(&Part::BezierSurfacePy      ::Type,partModule,"BezierSurface");
-    Base::Interpreter().addType(&Part::BSplineSurfacePy     ::Type,partModule,"BSplineSurface");
-    Base::Interpreter().addType(&Part::OffsetSurfacePy      ::Type,partModule,"OffsetSurface");
-    Base::Interpreter().addType(&Part::PlateSurfacePy       ::Type,partModule,"PlateSurface");
-    Base::Interpreter().addType(&Part::SurfaceOfExtrusionPy ::Type,partModule,"SurfaceOfExtrusion");
-    Base::Interpreter().addType(&Part::SurfaceOfRevolutionPy::Type,partModule,"SurfaceOfRevolution");
-    Base::Interpreter().addType(&Part::RectangularTrimmedSurfacePy
-                                                            ::Type,partModule,"RectangularTrimmedSurface");
-
-    Base::Interpreter().addType(&Part::PartFeaturePy        ::Type,partModule,"Feature");
-    Base::Interpreter().addType(&Attacher::AttachEnginePy   ::Type,partModule,"AttachEngine");
-
-#if PY_MAJOR_VERSION >= 3
-    static struct PyModuleDef BRepOffsetAPIDef = {
-        PyModuleDef_HEAD_INIT,
-        "BRepOffsetAPI", "BRepOffsetAPI", -1, 0,
-        NULL, NULL, NULL, NULL
-    };
-    PyObject* brepModule = PyModule_Create(&BRepOffsetAPIDef);
-#else
-    PyObject* brepModule = Py_InitModule3("BRepOffsetAPI", 0, "BrepOffsetAPI");
-#endif
-    Py_INCREF(brepModule);
-    PyModule_AddObject(partModule, "BRepOffsetAPI", brepModule);
-    Base::Interpreter().addType(&Part::BRepOffsetAPI_MakePipeShellPy::Type,brepModule,"MakePipeShell");
-
-    // Geom2d package
-#if PY_MAJOR_VERSION >= 3
-    static struct PyModuleDef geom2dDef = {
-        PyModuleDef_HEAD_INIT,
-        "Geom2dD", "Geom2d", -1, 0,
-        NULL, NULL, NULL, NULL
-    };
-    PyObject* geom2dModule = PyModule_Create(&geom2dDef);
-#else
-     PyObject* geom2dModule = Py_InitModule3("Geom2d", 0, "Geom2d");
-#endif
-    Py_INCREF(geom2dModule);
-    PyModule_AddObject(partModule, "Geom2d", geom2dModule);
-    Base::Interpreter().addType(&Part::Geometry2dPy::Type,geom2dModule,"Geometry2d");
-    Base::Interpreter().addType(&Part::Curve2dPy::Type,geom2dModule,"Curve2d");
-    Base::Interpreter().addType(&Part::Conic2dPy::Type,geom2dModule,"Conic2d");
-    Base::Interpreter().addType(&Part::Circle2dPy::Type,geom2dModule,"Circle2d");
-    Base::Interpreter().addType(&Part::Ellipse2dPy::Type,geom2dModule,"Ellipse2d");
-    Base::Interpreter().addType(&Part::Hyperbola2dPy::Type,geom2dModule,"Hyperbola2d");
-    Base::Interpreter().addType(&Part::Parabola2dPy::Type,geom2dModule,"Parabola2d");
-    Base::Interpreter().addType(&Part::ArcOfConic2dPy::Type,geom2dModule,"ArcOfConic2d");
-    Base::Interpreter().addType(&Part::ArcOfCircle2dPy::Type,geom2dModule,"ArcOfCircle2d");
-    Base::Interpreter().addType(&Part::ArcOfEllipse2dPy::Type,geom2dModule,"ArcOfEllipse2d");
-    Base::Interpreter().addType(&Part::ArcOfHyperbola2dPy::Type,geom2dModule,"ArcOfHyperbola2d");
-    Base::Interpreter().addType(&Part::ArcOfParabola2dPy::Type,geom2dModule,"ArcOfParabola2d");
-    Base::Interpreter().addType(&Part::BezierCurve2dPy::Type,geom2dModule,"BezierCurve2d");
-    Base::Interpreter().addType(&Part::BSplineCurve2dPy::Type,geom2dModule,"BSplineCurve2d");
-    Base::Interpreter().addType(&Part::Line2dSegmentPy::Type,geom2dModule,"Line2dSegment");
-    Base::Interpreter().addType(&Part::Line2dPy::Type,geom2dModule,"Line2d");
-    Base::Interpreter().addType(&Part::OffsetCurve2dPy::Type,geom2dModule,"OffsetCurve2d");
 
     Part::TopoShape             ::init();
     Part::PropertyPartShape     ::init();
@@ -423,10 +182,14 @@ PyMOD_INIT_FUNC(Part)
     Part::Feature               ::init();
     Part::FeatureExt            ::init();
     Part::BodyBase              ::init();
+#ifdef BUILD_PYTHON
     Part::FeaturePython         ::init();
+#endif
     Part::FeatureGeometrySet    ::init();
     Part::CustomFeature         ::init();
+#ifdef BUILD_PYTHON
     Part::CustomFeaturePython   ::init();
+#endif
     Part::Primitive             ::init();
     Part::Box                   ::init();
     Part::Spline                ::init();
@@ -466,7 +229,9 @@ PyMOD_INIT_FUNC(Part)
     Part::Wedge                 ::init();
 
     Part::Part2DObject          ::init();
+#ifdef BUILD_PYTHON
     Part::Part2DObjectPython    ::init();
+#endif
     Part::Face                  ::init();
     Part::RuledSurface          ::init();
     Part::Loft                  ::init();
@@ -606,6 +371,267 @@ PyMOD_INIT_FUNC(Part)
     Interface_Static::SetCVal("write.step.schema", ap.c_str());
     Interface_Static::SetCVal("write.step.product.name", hStepGrp->GetASCII("Product",
        Interface_Static::CVal("write.step.product.name")).c_str());
+    }
+}
+
+#if 0
+// Compatibility class to keep old code working until removed
+class LinePyOld : public LineSegmentPy
+{
+public:
+    static PyTypeObject   Type;
+    virtual PyTypeObject *GetType(void) {return &Type;}
+
+public:
+    static PyObject *PyMake(struct _typeobject *, PyObject *, PyObject *)
+    {
+        PyErr_SetString(PyExc_DeprecationWarning, "For future usage 'Line' will be an infinite line, use 'LineSegment' instead");
+        PyErr_Print();
+        return new LinePyOld(new GeomLineSegment);
+    }
+    LinePyOld(GeomLineSegment *pcObject, PyTypeObject *T = &Type)
+      : LineSegmentPy(pcObject, T)
+    {
+    }
+    virtual ~LinePyOld()
+    {
+    }
+};
+
+/// Type structure of LinePyOld
+PyTypeObject LinePyOld::Type = {
+    // PyObject_HEAD_INIT(&PyType_Type)
+    // 0,                                                /*ob_size*/
+    PyVarObject_HEAD_INIT(&PyType_Type,0)
+    "Part.Line",     /*tp_name*/
+    sizeof(LinePyOld),                       /*tp_basicsize*/
+    0,                                                /*tp_itemsize*/
+    /* methods */
+    PyDestructor,                                     /*tp_dealloc*/
+    0,                                                /*tp_print*/
+    0,                                        /*tp_getattr*/
+    0,                                        /*tp_setattr*/
+    0,                                                /*tp_compare*/
+    0,                                           /*tp_repr*/
+    0,                                                /*tp_as_number*/
+    0,                                                /*tp_as_sequence*/
+    0,                                                /*tp_as_mapping*/
+    0,                                                /*tp_hash*/
+    0,                                                /*tp_call */
+    0,                                                /*tp_str  */
+    0,                                                /*tp_getattro*/
+    0,                                                /*tp_setattro*/
+    /* --- Functions to access object as input/output buffer ---------*/
+    0,                                                /* tp_as_buffer */
+    /* --- Flags to define presence of optional/expanded features */
+#if PY_MAJOR_VERSION >= 3
+    Py_TPFLAGS_DEFAULT,                               /*tp_flags */
+#else
+    Py_TPFLAGS_HAVE_CLASS,                            /*tp_flags */
+#endif
+    "",
+    0,                                                /*tp_traverse */
+    0,                                                /*tp_clear */
+    0,                                                /*tp_richcompare */
+    0,                                                /*tp_weaklistoffset */
+    0,                                                /*tp_iter */
+    0,                                                /*tp_iternext */
+    0,                     /*tp_methods */
+    0,                                                /*tp_members */
+    0,                     /*tp_getset */
+    &LineSegmentPy::Type,                        /*tp_base */
+    0,                                                /*tp_dict */
+    0,                                                /*tp_descr_get */
+    0,                                                /*tp_descr_set */
+    0,                                                /*tp_dictoffset */
+    __PyInit,                                         /*tp_init */
+    0,                                                /*tp_alloc */
+    Part::LinePyOld::PyMake,/*tp_new */
+    0,                                                /*tp_free   Low-level free-memory routine */
+    0,                                                /*tp_is_gc  For PyObject_IS_GC */
+    0,                                                /*tp_bases */
+    0,                                                /*tp_mro    method resolution order */
+    0,                                                /*tp_cache */
+    0,                                                /*tp_subclasses */
+    0,                                                /*tp_weaklist */
+    0,                                                /*tp_del */
+    0                                                 /*tp_version_tag */
+#if PY_MAJOR_VERSION >=3
+    ,0                                                /*tp_finalize */
+#endif
+};
+
+#endif
+// --->
+
+#ifdef BUILD_PYTHON
+PyMOD_INIT_FUNC(Part)
+{
+    Part::initModuleTypes();
+
+    // This is highly experimental and we should keep an eye on it
+    // if we have mysterious crashes
+    // The argument must be 'Standard_False' to avoid FPE caused by
+    // Python's cmath module.
+    // For Linux use segmentation_fault_handler in Application.cpp
+#if !defined(_DEBUG) && !defined(FC_OS_LINUX)
+    //OSD::SetSignal(Standard_False);
+#endif
+
+    PyObject* partModule = Part::initModule();
+    Base::Console().Log("Loading Part module... done\n");
+
+    Py::Object module(partModule);
+    module.setAttr("OCC_VERSION", Py::String(OCC_VERSION_STRING_EXT));
+
+    // Python exceptions
+    //
+    PyObject* OCCError = 0;
+    if (PyObject_IsSubclass(Base::BaseExceptionFreeCADError, PyExc_RuntimeError)) {
+        OCCError = PyErr_NewException("Part.OCCError", Base::BaseExceptionFreeCADError, NULL);
+    }
+    else {
+        Base::Console().Error("Can not inherit Part.OCCError form BaseFreeCADError.\n");
+        OCCError = PyErr_NewException("Part.OCCError", PyExc_RuntimeError, NULL);
+    }
+    Py_INCREF(OCCError);
+    PyModule_AddObject(partModule, "OCCError", OCCError);
+    PartExceptionOCCError = OCCError; //set global variable ;(
+
+    // domain error
+    PartExceptionOCCDomainError = PyErr_NewException("Part.OCCDomainError", PartExceptionOCCError, NULL);
+    Py_INCREF(PartExceptionOCCDomainError);
+    PyModule_AddObject(partModule, "OCCDomainError", PartExceptionOCCDomainError);
+
+    // range error
+    PartExceptionOCCRangeError = PyErr_NewException("Part.OCCRangeError", PartExceptionOCCDomainError, NULL);
+    Py_INCREF(PartExceptionOCCRangeError);
+    PyModule_AddObject(partModule, "OCCRangeError", PartExceptionOCCRangeError);
+
+    // construction error
+    PartExceptionOCCConstructionError = PyErr_NewException("Part.OCCConstructionError", PartExceptionOCCDomainError, NULL);
+    Py_INCREF(PartExceptionOCCConstructionError);
+    PyModule_AddObject(partModule, "OCCConstructionError", PartExceptionOCCConstructionError);
+
+    // dimension error
+    PartExceptionOCCDimensionError = PyErr_NewException("Part.OCCDimensionError", PartExceptionOCCDomainError, NULL);
+    Py_INCREF(PartExceptionOCCConstructionError);
+    PyModule_AddObject(partModule, "OCCDimensionError", PartExceptionOCCDimensionError);
+
+    //rename the types properly to pickle and unpickle them
+    Part::TopoShapePy         ::Type.tp_name = "Part.Shape";
+    Part::TopoShapeVertexPy   ::Type.tp_name = "Part.Vertex";
+    Part::TopoShapeWirePy     ::Type.tp_name = "Part.Wire";
+    Part::TopoShapeEdgePy     ::Type.tp_name = "Part.Edge";
+    Part::TopoShapeSolidPy    ::Type.tp_name = "Part.Solid";
+    Part::TopoShapeFacePy     ::Type.tp_name = "Part.Face";
+    Part::TopoShapeCompoundPy ::Type.tp_name = "Part.Compound";
+    Part::TopoShapeCompSolidPy::Type.tp_name = "Part.CompSolid";
+    Part::TopoShapeShellPy    ::Type.tp_name = "Part.Shell";
+    // Add Types to module
+    Base::Interpreter().addType(&Part::TopoShapePy          ::Type,partModule,"Shape");
+    Base::Interpreter().addType(&Part::TopoShapeVertexPy    ::Type,partModule,"Vertex");
+    Base::Interpreter().addType(&Part::TopoShapeWirePy      ::Type,partModule,"Wire");
+    Base::Interpreter().addType(&Part::TopoShapeEdgePy      ::Type,partModule,"Edge");
+    Base::Interpreter().addType(&Part::TopoShapeSolidPy     ::Type,partModule,"Solid");
+    Base::Interpreter().addType(&Part::TopoShapeFacePy      ::Type,partModule,"Face");
+    Base::Interpreter().addType(&Part::TopoShapeCompoundPy  ::Type,partModule,"Compound");
+    Base::Interpreter().addType(&Part::TopoShapeCompSolidPy ::Type,partModule,"CompSolid");
+    Base::Interpreter().addType(&Part::TopoShapeShellPy     ::Type,partModule,"Shell");
+
+    Base::Reference<ParameterGrp> hPartGrp = App::GetApplication().GetUserParameter()
+        .GetGroup("BaseApp")->GetGroup("Preferences")->GetGroup("Mod/Part");
+
+    // General
+    Base::Reference<ParameterGrp> hGenPGrp = hPartGrp->GetGroup("General");
+    if (hGenPGrp->GetBool("LineOld", false)) {
+        Base::Interpreter().addType(&Part::LinePy           ::Type,partModule,"_Line");
+#if 0
+        Base::Interpreter().addType(&Part::LinePyOld        ::Type,partModule,"Line");
+#endif
+    }
+    else {
+        Base::Interpreter().addType(&Part::LinePy           ::Type,partModule,"Line");
+    }
+    Base::Interpreter().addType(&Part::LineSegmentPy        ::Type,partModule,"LineSegment");
+    Base::Interpreter().addType(&Part::PointPy              ::Type,partModule,"Point");
+    Base::Interpreter().addType(&Part::ConicPy              ::Type,partModule,"Conic");
+    Base::Interpreter().addType(&Part::ArcOfConicPy         ::Type,partModule,"ArcOfConic");
+    Base::Interpreter().addType(&Part::CirclePy             ::Type,partModule,"Circle");
+    Base::Interpreter().addType(&Part::EllipsePy            ::Type,partModule,"Ellipse");
+    Base::Interpreter().addType(&Part::HyperbolaPy          ::Type,partModule,"Hyperbola");
+    Base::Interpreter().addType(&Part::ParabolaPy           ::Type,partModule,"Parabola");
+    Base::Interpreter().addType(&Part::ArcPy                ::Type,partModule,"Arc");
+    Base::Interpreter().addType(&Part::ArcOfCirclePy        ::Type,partModule,"ArcOfCircle");
+    Base::Interpreter().addType(&Part::ArcOfEllipsePy       ::Type,partModule,"ArcOfEllipse");
+    Base::Interpreter().addType(&Part::ArcOfParabolaPy      ::Type,partModule,"ArcOfParabola");    
+    Base::Interpreter().addType(&Part::ArcOfHyperbolaPy     ::Type,partModule,"ArcOfHyperbola");    
+    Base::Interpreter().addType(&Part::BezierCurvePy        ::Type,partModule,"BezierCurve");
+    Base::Interpreter().addType(&Part::BSplineCurvePy       ::Type,partModule,"BSplineCurve");
+    Base::Interpreter().addType(&Part::OffsetCurvePy        ::Type,partModule,"OffsetCurve");
+
+    Base::Interpreter().addType(&Part::PlanePy              ::Type,partModule,"Plane");
+    Base::Interpreter().addType(&Part::CylinderPy           ::Type,partModule,"Cylinder");
+    Base::Interpreter().addType(&Part::ConePy               ::Type,partModule,"Cone");
+    Base::Interpreter().addType(&Part::SpherePy             ::Type,partModule,"Sphere");
+    Base::Interpreter().addType(&Part::ToroidPy             ::Type,partModule,"Toroid");
+    Base::Interpreter().addType(&Part::BezierSurfacePy      ::Type,partModule,"BezierSurface");
+    Base::Interpreter().addType(&Part::BSplineSurfacePy     ::Type,partModule,"BSplineSurface");
+    Base::Interpreter().addType(&Part::OffsetSurfacePy      ::Type,partModule,"OffsetSurface");
+    Base::Interpreter().addType(&Part::PlateSurfacePy       ::Type,partModule,"PlateSurface");
+    Base::Interpreter().addType(&Part::SurfaceOfExtrusionPy ::Type,partModule,"SurfaceOfExtrusion");
+    Base::Interpreter().addType(&Part::SurfaceOfRevolutionPy::Type,partModule,"SurfaceOfRevolution");
+    Base::Interpreter().addType(&Part::RectangularTrimmedSurfacePy
+                                                            ::Type,partModule,"RectangularTrimmedSurface");
+
+    Base::Interpreter().addType(&Part::PartFeaturePy        ::Type,partModule,"Feature");
+    Base::Interpreter().addType(&Attacher::AttachEnginePy   ::Type,partModule,"AttachEngine");
+
+#if PY_MAJOR_VERSION >= 3
+    static struct PyModuleDef BRepOffsetAPIDef = {
+        PyModuleDef_HEAD_INIT,
+        "BRepOffsetAPI", "BRepOffsetAPI", -1, 0,
+        NULL, NULL, NULL, NULL
+    };
+    PyObject* brepModule = PyModule_Create(&BRepOffsetAPIDef);
+#else
+    PyObject* brepModule = Py_InitModule3("BRepOffsetAPI", 0, "BrepOffsetAPI");
+#endif
+    Py_INCREF(brepModule);
+    PyModule_AddObject(partModule, "BRepOffsetAPI", brepModule);
+    Base::Interpreter().addType(&Part::BRepOffsetAPI_MakePipeShellPy::Type,brepModule,"MakePipeShell");
+
+    // Geom2d package
+#if PY_MAJOR_VERSION >= 3
+    static struct PyModuleDef geom2dDef = {
+        PyModuleDef_HEAD_INIT,
+        "Geom2dD", "Geom2d", -1, 0,
+        NULL, NULL, NULL, NULL
+    };
+    PyObject* geom2dModule = PyModule_Create(&geom2dDef);
+#else
+     PyObject* geom2dModule = Py_InitModule3("Geom2d", 0, "Geom2d");
+#endif
+    Py_INCREF(geom2dModule);
+    PyModule_AddObject(partModule, "Geom2d", geom2dModule);
+    Base::Interpreter().addType(&Part::Geometry2dPy::Type,geom2dModule,"Geometry2d");
+    Base::Interpreter().addType(&Part::Curve2dPy::Type,geom2dModule,"Curve2d");
+    Base::Interpreter().addType(&Part::Conic2dPy::Type,geom2dModule,"Conic2d");
+    Base::Interpreter().addType(&Part::Circle2dPy::Type,geom2dModule,"Circle2d");
+    Base::Interpreter().addType(&Part::Ellipse2dPy::Type,geom2dModule,"Ellipse2d");
+    Base::Interpreter().addType(&Part::Hyperbola2dPy::Type,geom2dModule,"Hyperbola2d");
+    Base::Interpreter().addType(&Part::Parabola2dPy::Type,geom2dModule,"Parabola2d");
+    Base::Interpreter().addType(&Part::ArcOfConic2dPy::Type,geom2dModule,"ArcOfConic2d");
+    Base::Interpreter().addType(&Part::ArcOfCircle2dPy::Type,geom2dModule,"ArcOfCircle2d");
+    Base::Interpreter().addType(&Part::ArcOfEllipse2dPy::Type,geom2dModule,"ArcOfEllipse2d");
+    Base::Interpreter().addType(&Part::ArcOfHyperbola2dPy::Type,geom2dModule,"ArcOfHyperbola2d");
+    Base::Interpreter().addType(&Part::ArcOfParabola2dPy::Type,geom2dModule,"ArcOfParabola2d");
+    Base::Interpreter().addType(&Part::BezierCurve2dPy::Type,geom2dModule,"BezierCurve2d");
+    Base::Interpreter().addType(&Part::BSplineCurve2dPy::Type,geom2dModule,"BSplineCurve2d");
+    Base::Interpreter().addType(&Part::Line2dSegmentPy::Type,geom2dModule,"Line2dSegment");
+    Base::Interpreter().addType(&Part::Line2dPy::Type,geom2dModule,"Line2d");
+    Base::Interpreter().addType(&Part::OffsetCurve2dPy::Type,geom2dModule,"OffsetCurve2d");
 
     PyMOD_Return(partModule);
 }
+#endif

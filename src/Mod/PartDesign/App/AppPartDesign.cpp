@@ -23,11 +23,15 @@
 
 #include "PreCompiled.h"
 #ifndef _PreComp_
+#ifdef BUILD_PYTHON
 # include <Python.h>
+#endif
 #endif
 
 #include <Base/Console.h>
+#ifdef BUILD_PYTHON
 #include <Base/PyObjectBase.h>
+#endif
 #include <Base/Interpreter.h>
 
 #include "FeaturePad.h"
@@ -61,38 +65,15 @@
 #include "FeatureBase.h"
 
 namespace PartDesign {
+#ifdef BUILD_PYTHON
 extern PyObject* initModule();
-}
+#endif
 
-/* Python entry */
-PyMOD_INIT_FUNC(_PartDesign)
-{
-    // load dependent module
-    try {
-        Base::Interpreter().runString("import Part");
-        Base::Interpreter().runString("import Sketcher");
-    }
-    catch(const Base::Exception& e) {
-        PyErr_SetString(PyExc_ImportError, e.what());
-        PyMOD_Return(0);
-    }
-
-    PyObject* mod = PartDesign::initModule();
-    Base::Console().Log("Loading PartDesign module... done\n");
-
-
-    // NOTE: To finish the initialization of our own type objects we must
-    // call PyType_Ready, otherwise we run into a segmentation fault, later on.
-    // This function is responsible for adding inherited slots from a type's base class.
-
+void PartDesignExport initModuleTypes() {
     PartDesign::Feature                     ::init();
-    PartDesign::FeaturePython               ::init();
     PartDesign::Solid                       ::init();
     PartDesign::DressUp                     ::init();
     PartDesign::FeatureAddSub               ::init();
-    PartDesign::FeatureAddSubPython         ::init();
-    PartDesign::FeatureAdditivePython       ::init();
-    PartDesign::FeatureSubtractivePython    ::init();
     PartDesign::ProfileBased                ::init();
     PartDesign::Transformed                 ::init();
     PartDesign::Mirrored                    ::init();
@@ -148,6 +129,37 @@ PyMOD_INIT_FUNC(_PartDesign)
     PartDesign::AdditiveWedge               ::init();
     PartDesign::SubtractiveWedge            ::init();
     PartDesign::FeatureBase                 ::init();
+}
+}
+
+#ifdef BUILD_PYTHON
+/* Python entry */
+PyMOD_INIT_FUNC(_PartDesign)
+{
+    // load dependent module
+    try {
+        Base::Interpreter().runString("import Part");
+        Base::Interpreter().runString("import Sketcher");
+    }
+    catch(const Base::Exception& e) {
+        PyErr_SetString(PyExc_ImportError, e.what());
+        PyMOD_Return(0);
+    }
+
+    PyObject* mod = PartDesign::initModule();
+    Base::Console().Log("Loading PartDesign module... done\n");
+
+    // NOTE: To finish the initialization of our own type objects we must
+    // call PyType_Ready, otherwise we run into a segmentation fault, later on.
+    // This function is responsible for adding inherited slots from a type's base class.
+
+    PartDesign::initModuleTypes();
+
+    PartDesign::FeaturePython               ::init();
+    PartDesign::FeatureAddSubPython         ::init();
+    PartDesign::FeatureAdditivePython       ::init();
+    PartDesign::FeatureSubtractivePython    ::init();
 
     PyMOD_Return(mod);
 }
+#endif

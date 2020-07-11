@@ -30,10 +30,16 @@
 #include <Base/Reader.h>
 #include <Base/Tools.h>
 #include <App/Property.h>
+
+#ifdef BUILD_QT
 #include <QDateTime>
+#endif
 
 #include "Constraint.h"
+
+#ifdef BUILD_PYTHON
 #include "ConstraintPy.h"
+#endif
 
 
 using namespace Sketcher;
@@ -66,7 +72,11 @@ Constraint::Constraint()
     static bool seeded = false;
 
     if (!seeded) {
+#ifdef BUILD_QT
         ran.seed(QDateTime::currentMSecsSinceEpoch() & 0xffffffff);
+#else
+        ran.seed((int)time(NULL) & 0xffffffff);
+#endif
         seeded = true;
     }
     static boost::uuids::basic_random_generator<boost::mt19937> gen(&ran);
@@ -125,10 +135,12 @@ Constraint *Constraint::copy(void) const
     return temp;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Constraint::getPyObject(void)
 {
     return new ConstraintPy(new Constraint(*this));
 }
+#endif
 
 Quantity Constraint::getPresentationValue() const
 {

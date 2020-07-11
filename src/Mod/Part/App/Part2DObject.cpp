@@ -53,8 +53,10 @@
 #include "Geometry.h"
 #include "DatumFeature.h"
 
+#ifdef BUILD_PYTHON
 #include <App/FeaturePythonPyImp.h>
 #include <Mod/Part/App/Part2DObjectPy.h>
+#endif
 
 using namespace Part;
 
@@ -269,6 +271,7 @@ void Part2DObject::handleChangedPropertyName(Base::XMLReader &reader,
 
 // Python Drawing feature ---------------------------------------------------------
 
+#ifdef BUILD_PYTHON
 namespace App {
 /// @cond DOXERR
   PROPERTY_SOURCE_TEMPLATE(Part::Part2DObjectPython, Part::Part2DObject)
@@ -287,3 +290,4 @@ namespace App {
 // explicit template instantiation
   template class PartExport FeaturePythonT<Part::Part2DObject>;
 }
+#endif

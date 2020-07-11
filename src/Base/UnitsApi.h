@@ -28,7 +28,9 @@
 #include <CXX/WrapPython.h>
 #endif
 #include <string>
+#ifdef BUILD_QT
 #include <QString>
+#endif
 #include "UnitsSchema.h"
 #include "Quantity.h"
 
@@ -60,10 +62,10 @@ public:
     /// Returns a brief description of a schema
     static const char* getDescription(UnitSystem);
 
-    static QString schemaTranslate(const Base::Quantity& quant, double &factor, QString &unitString);
-    static QString schemaTranslate(const Base::Quantity& quant) { // to satisfy GCC
+    static std::string schemaTranslate(const Base::Quantity& quant, double &factor, std::string &unitString);
+    static std::string schemaTranslate(const Base::Quantity& quant) { // to satisfy GCC
         double  dummy1;
-        QString dummy2;
+        std::string dummy2;
         return UnitsApi::schemaTranslate(quant, dummy1, dummy2);
     }
 

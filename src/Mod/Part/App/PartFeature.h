@@ -62,8 +62,10 @@ public:
     virtual const char* getViewProviderName(void) const;
     virtual const App::PropertyComplexGeoData* getPropertyOfGeometry() const;
 
+#ifdef BUILD_PYTHON
     virtual PyObject* getPyObject(void);
     virtual std::vector<PyObject *> getPySubObjects(const std::vector<std::string>&) const;
+#endif
 
     TopLoc_Location getLocation() const;
     
@@ -98,7 +100,9 @@ public:
     short mustExecute() const;
 };
 
+#ifdef BUILD_PYTHON
 typedef App::FeaturePythonT<Feature> FeaturePython;
+#endif
 
 
 /** Base class of all shape feature classes in FreeCAD

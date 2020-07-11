@@ -67,10 +67,12 @@ set(FreeCADApp_LIBS
 if (BUILD_QT5)
     include_directories(
         ${Qt5Core_INCLUDE_DIRS}
+        ${Qt5WebSockets_INCLUDE_DIRS}
         ${Qt5Xml_INCLUDE_DIRS}
     )
     list(APPEND FreeCADApp_LIBS
          ${Qt5Core_LIBRARIES}
+         ${Qt5WebSockets_LIBRARIES}
          ${Qt5Xml_LIBRARIES}
     )
 else()
@@ -249,6 +251,7 @@ SET(FreeCADApp_CPP_SRCS
     ${Properties_CPP_SRCS}
     Application.cpp
     ApplicationPy.cpp
+    AppServer.cpp
     Branding.cpp
     ColorModel.cpp
     ComplexGeoData.cpp
@@ -262,6 +265,7 @@ SET(FreeCADApp_HPP_SRCS
     ${Document_HPP_SRCS}
     ${Properties_HPP_SRCS}
     Application.h
+    AppServer.h
     Branding.h
     ColorModel.h
     ComplexGeoData.h

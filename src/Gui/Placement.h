@@ -82,7 +82,9 @@ private:
     void slotActiveDocument(const Gui::Document&);
     QWidget* getInvalidInput() const;
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void placementChanged(const QVariant &, bool, bool);
     void directionChanged();
 
@@ -143,7 +145,9 @@ public:
 public Q_SLOTS:
     void slotPlacementChanged(const QVariant &, bool, bool);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void placementChanged(const QVariant &, bool, bool);
 
 private:

@@ -33,7 +33,6 @@
 #include <Base/Parameter.h>
 #include <Base/Observer.h>
 
-
 namespace Base
 {
     class ConsoleObserverStd;
@@ -47,7 +46,7 @@ class Document;
 class DocumentObject;
 class ApplicationObserver;
 class Property;
-
+class AppServer;
 
 
 /** The Application
@@ -401,6 +400,8 @@ private:
     std::map<std::string,ParameterManager *> mpcPramManager;
     std::map<std::string,std::string> &_mConfig;
     App::Document* _pActiveDoc;
+
+    App::AppServer* _pAppServer;
 
     static Base::ConsoleObserverStd  *_pConsoleObserverStd;
     static Base::ConsoleObserverFile *_pConsoleObserverFile;

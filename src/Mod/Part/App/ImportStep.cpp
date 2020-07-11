@@ -159,6 +159,7 @@ int Part::ImportStepParts(App::Document *pcDoc, const char* Name)
                 // and cleared immediately
                 std::map<int, Quantity_Color>::iterator it = hash_col.find(aSolid.HashCode(INT_MAX));
                 if (it != hash_col.end()) {
+#ifdef BUILD_PYTHON
                     try {
                         Py::Object obj(pcFeature->getPyObject(), true);
                         Py::Object vp(obj.getAttr("ViewObject"));
@@ -172,6 +173,9 @@ int Part::ImportStepParts(App::Document *pcDoc, const char* Name)
                     catch (Py::Exception& e) {
                         e.clear();
                     }
+#else
+                    assert(0 && "Part::ImportStepParts() GUI update not implemented!");
+#endif
                 }
             }
             // load all non-solids now

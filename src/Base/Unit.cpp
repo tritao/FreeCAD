@@ -102,6 +102,7 @@ Unit::Unit(const Unit& that)
     this->Sig = that.Sig;
 }
 
+#ifdef BUILD_QT
 Unit::Unit(const QString& expr)
 {
     try {
@@ -118,6 +119,7 @@ Unit::Unit(const QString& expr)
         Sig.Angle                    = 0;
     }
 }
+#endif
 
 Unit Unit::pow(signed char exp) const
 {
@@ -233,12 +235,12 @@ Unit& Unit::operator = (const Unit &New)
     return *this;
 }
 
-QString Unit::getString(void) const
+std::string Unit::getString(void) const
 {
     std::stringstream ret;
 
     if (isEmpty())
-        return QString();
+        return std::string();
 
     if (Sig.Length                  > 0 ||
         Sig.Mass                    > 0 ||
@@ -421,39 +423,39 @@ QString Unit::getString(void) const
             ret << ')';
     }
 
-    return QString::fromUtf8(ret.str().c_str());
+    return std::string(ret.str().c_str());
 }
 
-QString Unit::getTypeString(void) const
+std::string Unit::getTypeString(void) const
 {
-    if(*this == Unit::Length                      )       return QString::fromLatin1("Length"); else
-    if(*this == Unit::Area                        )       return QString::fromLatin1("Area"); else
-    if(*this == Unit::Volume                      )       return QString::fromLatin1("Volume"); else
-    if(*this == Unit::Mass                        )       return QString::fromLatin1("Mass"); else
-    if(*this == Unit::Angle                       )       return QString::fromLatin1("Angle"); else
-    if(*this == Unit::Density                     )       return QString::fromLatin1("Density"); else
-    if(*this == Unit::TimeSpan                    )       return QString::fromLatin1("TimeSpan"); else
-    if(*this == Unit::Velocity                    )       return QString::fromLatin1("Velocity"); else
-    if(*this == Unit::Acceleration                )       return QString::fromLatin1("Acceleration"); else
-    if(*this == Unit::Temperature                 )       return QString::fromLatin1("Temperature"); else
-    if(*this == Unit::ElectricCurrent             )       return QString::fromLatin1("ElectricCurrent"); else
-    if(*this == Unit::ElectricPotential           )       return QString::fromLatin1("ElectricPotential"); else
-    if(*this == Unit::AmountOfSubstance           )       return QString::fromLatin1("AmountOfSubstance"); else
-    if(*this == Unit::LuminousIntensity           )       return QString::fromLatin1("LuminousIntensity"); else
-    if(*this == Unit::Pressure                    )       return QString::fromLatin1("Pressure"); else
-    if(*this == Unit::Force                       )       return QString::fromLatin1("Force"); else
-    if(*this == Unit::Work                        )       return QString::fromLatin1("Work"); else
-    if(*this == Unit::Power                       )       return QString::fromLatin1("Power"); else
-    if(*this == Unit::SpecificEnergy              )       return QString::fromLatin1("SpecificEnergy"); else
-    if(*this == Unit::ThermalConductivity         )       return QString::fromLatin1("ThermalConductivity"); else
-    if(*this == Unit::ThermalExpansionCoefficient )       return QString::fromLatin1("ThermalExpansionCoefficient"); else
-    if(*this == Unit::SpecificHeat                )       return QString::fromLatin1("SpecificHeat"); else
-    if(*this == Unit::ThermalTransferCoefficient  )       return QString::fromLatin1("ThermalTransferCoefficient"); else
-    if(*this == Unit::HeatFlux                    )       return QString::fromLatin1("HeatFlux"); else
-    if(*this == Unit::DynamicViscosity            )       return QString::fromLatin1("DynamicViscosity"); else
-    if(*this == Unit::KinematicViscosity          )       return QString::fromLatin1("KinematicViscosity"); else
+    if(*this == Unit::Length                      )       return std::string("Length"); else
+    if(*this == Unit::Area                        )       return std::string("Area"); else
+    if(*this == Unit::Volume                      )       return std::string("Volume"); else
+    if(*this == Unit::Mass                        )       return std::string("Mass"); else
+    if(*this == Unit::Angle                       )       return std::string("Angle"); else
+    if(*this == Unit::Density                     )       return std::string("Density"); else
+    if(*this == Unit::TimeSpan                    )       return std::string("TimeSpan"); else
+    if(*this == Unit::Velocity                    )       return std::string("Velocity"); else
+    if(*this == Unit::Acceleration                )       return std::string("Acceleration"); else
+    if(*this == Unit::Temperature                 )       return std::string("Temperature"); else
+    if(*this == Unit::ElectricCurrent             )       return std::string("ElectricCurrent"); else
+    if(*this == Unit::ElectricPotential           )       return std::string("ElectricPotential"); else
+    if(*this == Unit::AmountOfSubstance           )       return std::string("AmountOfSubstance"); else
+    if(*this == Unit::LuminousIntensity           )       return std::string("LuminousIntensity"); else
+    if(*this == Unit::Pressure                    )       return std::string("Pressure"); else
+    if(*this == Unit::Force                       )       return std::string("Force"); else
+    if(*this == Unit::Work                        )       return std::string("Work"); else
+    if(*this == Unit::Power                       )       return std::string("Power"); else
+    if(*this == Unit::SpecificEnergy              )       return std::string("SpecificEnergy"); else
+    if(*this == Unit::ThermalConductivity         )       return std::string("ThermalConductivity"); else
+    if(*this == Unit::ThermalExpansionCoefficient )       return std::string("ThermalExpansionCoefficient"); else
+    if(*this == Unit::SpecificHeat                )       return std::string("SpecificHeat"); else
+    if(*this == Unit::ThermalTransferCoefficient  )       return std::string("ThermalTransferCoefficient"); else
+    if(*this == Unit::HeatFlux                    )       return std::string("HeatFlux"); else
+    if(*this == Unit::DynamicViscosity            )       return std::string("DynamicViscosity"); else
+    if(*this == Unit::KinematicViscosity          )       return std::string("KinematicViscosity"); else
 
-    return QString();
+    return std::string();
 
 }
 

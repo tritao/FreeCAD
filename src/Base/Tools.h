@@ -31,9 +31,12 @@
 #include <vector>
 #include <string>
 #include <boost/signals2.hpp>
+#ifdef BUILD_QT
 #include <QString>
 #include <QObject>
+#endif
 
+#ifdef BUILD_QT
 #if (QT_VERSION < 0x050300)
 class QSignalBlocker
 {
@@ -67,6 +70,7 @@ private:
     bool blocked;
     bool inhibited;
 };
+#endif
 #endif
 
 // ----------------------------------------------------------------------------
@@ -233,6 +237,8 @@ public:
 
 struct BaseExport Tools
 {
+    static int64_t applicationPid();
+
     static std::string getUniqueName(const std::string&, const std::vector<std::string>&,int d=0);
     static std::string addNumber(const std::string&, unsigned int, int d=0);
     static std::string getIdentifier(const std::string&);
@@ -241,6 +247,7 @@ struct BaseExport Tools
     static std::string escapedUnicodeFromUtf8(const char *s);
     static std::string escapedUnicodeToUtf8(const std::string& s);
 
+#ifdef BUILD_QT
     /**
      * @brief toStdString Convert a QString into a UTF-8 encoded std::string.
      * @param s String to convert.
@@ -254,6 +261,7 @@ struct BaseExport Tools
      * @return String represented as a QString.
      */
     static inline QString fromStdString(const std::string & s) { return QString::fromUtf8(s.c_str(), s.size()); }
+#endif
 };
 
 

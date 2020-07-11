@@ -27,11 +27,16 @@
 #include <FCConfig.h>
 
 // Exporting of App classes
-#ifdef FC_OS_WIN32
+#if defined(FC_OS_WIN32)
 # define SketcherExport     __declspec(dllexport)
 # define PartExport         __declspec(dllimport)
 # define PartDesignExport   __declspec(dllimport)
 # define MeshExport         __declspec(dllimport)
+#elif defined (FC_OS_EMSCRIPTEN)
+# define SketcherExport     __attribute__((visibility("default")))
+# define PartExport         __attribute__((visibility("default")))
+# define PartDesignExport   __attribute__((visibility("default")))
+# define MeshExport         __attribute__((visibility("default")))
 #else // for Linux
 # define SketcherExport
 # define PartExport

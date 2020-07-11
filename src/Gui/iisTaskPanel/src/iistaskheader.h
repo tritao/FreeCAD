@@ -30,7 +30,9 @@ public:
 	void setScheme(iisTaskPanelScheme *scheme);
 	virtual ~iisTaskHeader();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
 	void activated();
 
 public Q_SLOTS:
