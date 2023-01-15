@@ -28,10 +28,14 @@
 #  include <windows.h>
 # endif
 # include <cstring>
+#ifdef BUILD_PYTHON
 # include <Python.h>
 #endif
+#endif
 
+#ifdef BUILD_PYTHON
 #include <frameobject.h>
+#endif
 
 #include "ConsoleObserver.h"
 #include "Interpreter.h"
@@ -261,6 +265,7 @@ std::stringstream &LogLevel::prefix(std::stringstream &str, const char *src, int
         str << d.count() << ' ';
     }
     if (print_tag) str << '<' << tag << "> ";
+#ifdef BUILD_PYTHON
     if (print_src==2) {
         Base::PyGILStateLocker lock;
         PyFrameObject* frame = PyEval_GetFrame();
@@ -275,6 +280,7 @@ std::stringstream &LogLevel::prefix(std::stringstream &str, const char *src, int
 #endif
         }
     }
+#endif
     if (print_src && src && src[0]) {
 #ifdef FC_OS_WIN32
         const char *_f = std::strrchr(src, '\\');

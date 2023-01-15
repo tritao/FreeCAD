@@ -23,6 +23,8 @@
 
 #include "PreCompiled.h"
 
+#ifdef BUILD_PYTHON
+
 #ifndef _PreComp_
 # include <sstream>
 #endif
@@ -567,3 +569,5 @@ void PyObjectBase::clearAttributes()
         PyDict_Clear(attrDict);
     }
 }
+
+#endif

@@ -23,7 +23,9 @@
 
 #include "PreCompiled.h"
 
+#ifdef BUILD_PYTHON
 #include <App/GeoFeaturePy.h>
+#endif
 
 #include "GeoFeature.h"
 #include "GeoFeatureGroupExtension.h"
@@ -69,6 +71,7 @@ const PropertyComplexGeoData* GeoFeature::getPropertyOfGeometry() const
     return nullptr;
 }
 
+#ifdef BUILD_PYTHON
 PyObject* GeoFeature::getPyObject()
 {
     if (PythonObject.is(Py::_None())) {
@@ -77,7 +80,7 @@ PyObject* GeoFeature::getPyObject()
     }
     return Py::new_reference_to(PythonObject);
 }
-
+#endif
 
 std::pair<std::string,std::string> GeoFeature::getElementName(
         const char *name, ElementNameType type) const

@@ -434,6 +434,7 @@ public:
     }
 
 protected:
+#ifdef BUILD_PYTHON
     virtual void setPyValues(const std::vector<PyObject*> &vals, const std::vector<int> &indices) {
         (void)vals;
         (void)indices;
@@ -441,6 +442,7 @@ protected:
     }
 
     void _setPyObject(PyObject *);
+#endif
 
 protected:
     std::set<int> _touchList;
@@ -456,9 +458,11 @@ class AppExport PropertyLists : public Property, public PropertyListsBase
 {
     TYPESYSTEM_HEADER_WITH_OVERRIDE();
 public:
+#ifdef BUILD_PYTHON
     void setPyObject(PyObject *obj) override {
         _setPyObject(obj);
     }
+#endif
 
     // if the order of the elements in the list relevant?
     // if yes, certain operations, like restoring must make sure that the
@@ -525,6 +529,7 @@ public:
             && this->getValue() == static_cast<decltype(this)>(&other)->getValue();
     }
 
+#ifdef BUILD_PYTHON
     void setPyObject(PyObject *value) override {
         try {
             setValue(getPyValue(value));
@@ -532,6 +537,7 @@ public:
         }catch(...){}
         parent_type::setPyObject(value);
     }
+#endif
 
     virtual void set1Value(int index, const_reference value) {
         int size = getSize();
@@ -550,6 +556,7 @@ public:
 
 protected:
 
+#ifdef BUILD_PYTHON
     void setPyValues(const std::vector<PyObject*> &vals, const std::vector<int> &indices) override 
     {
         if (indices.empty()) {
@@ -568,6 +575,7 @@ protected:
     }
 
     virtual T getPyValue(PyObject *item) const = 0;
+#endif
 
 protected:
     ListT _lValueList;

@@ -50,7 +50,9 @@ public:
     const char* getEditorName() const override
     { return "Gui::PropertyEditor::PropertyFileItem"; }
 
+#ifdef BUILD_PYTHON
     void setPyObject(PyObject *) override;
+#endif
     virtual void setFilter(const std::string filter);
     virtual std::string getFilter() const;
 
@@ -85,8 +87,11 @@ public:
 
     const char* getEditorName() const override
     { return "Gui::PropertyEditor::PropertyTransientFileItem"; }
+
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;

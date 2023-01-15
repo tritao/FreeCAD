@@ -25,8 +25,10 @@
 # include <cfloat>
 #endif
 
+#ifdef BUILD_PYTHON
 #include <Base/QuantityPy.h>
 #include <Base/UnitPy.h>
+#endif
 
 #include "PropertyUnits.h"
 #include "Expression.h"
@@ -57,6 +59,7 @@ const char* PropertyQuantity::getEditorName() const
     return "Gui::PropertyEditor::PropertyUnitItem";
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyQuantity::getPyObject()
 {
     return new QuantityPy (new Quantity(_dValue,_Unit));
@@ -113,6 +116,7 @@ void PropertyQuantity::setPyObject(PyObject *value)
         PropertyFloat::setValue(quant.getValue());
     }
 }
+#endif
 
 void PropertyQuantity::setPathValue(const ObjectIdentifier & /*path*/, const boost::any &value)
 {
@@ -173,6 +177,7 @@ double PropertyQuantityConstraint::getStepSize() const
     return 1.0;
 }
 
+#ifdef BUILD_PYTHON
 void PropertyQuantityConstraint::setPyObject(PyObject *value)
 {
     Base::Quantity quant= createQuantityFromPy(value);
@@ -197,6 +202,7 @@ void PropertyQuantityConstraint::setPyObject(PyObject *value)
 
     PropertyFloat::setValue(quant.getValue()); // clazy:exclude=skipped-base-method
 }
+#endif
 
 //**************************************************************************
 //**************************************************************************

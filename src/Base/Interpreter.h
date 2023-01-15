@@ -41,7 +41,9 @@
 #undef isalnum
 #endif
 
+#ifdef BUILD_PYTHON
 #include <CXX/Extensions.hxx>
+#endif
 #include <list>
 #include <string>
 #include "Exception.h"
@@ -86,7 +88,7 @@ namespace Base {
     using std::string;
     using std::vector;
 
-
+#ifdef BUILD_PYTHON
 class BaseExport PyException : public Exception
 {
 public:
@@ -129,6 +131,7 @@ inline Py::Object pyCallWithKeywords(PyObject *callable, PyObject *args, PyObjec
         throw Py::Exception();
     return Py::asObject(result);
 }
+#endif
 
 /**
  * The SystemExitException is thrown if the Python-internal PyExc_SystemExit exception
@@ -156,6 +159,7 @@ protected:
 class BaseExport PyGILStateLocker
 {
 public:
+#ifdef BUILD_PYTHON
     PyGILStateLocker()
     {
         gstate = PyGILState_Ensure();
@@ -167,6 +171,7 @@ public:
 
 private:
     PyGILState_STATE gstate;
+#endif
 };
 
 /**
@@ -181,6 +186,7 @@ private:
 class BaseExport PyGILStateRelease
 {
 public:
+#ifdef BUILD_PYTHON
     PyGILStateRelease()
     {
         // release the global interpreter lock
@@ -194,6 +200,7 @@ public:
 
 private:
     PyThreadState* state;
+#endif
 };
 
 
@@ -215,13 +222,17 @@ public:
     /// Run a statement on the python interpreter with a key for exchanging strings
     std::string runStringWithKey(const char *psCmd, const char *key, const char *key_initial_value="");
     /// Run a statement on the python interpreter and return back the result object.
+#ifdef BUILD_PYTHON
     Py::Object runStringObject(const char *sCmd);
+#endif
+
     /// Run a statement on the python interpreter and gives back a string with the representation of the result.
     void runInteractiveString(const char *psCmd);
     /// Run file (script) on the python interpreter
     void runFile(const char*pxFileName, bool local);
     /// Run a statement with arguments on the python interpreter
     void runStringArg(const char * psCom,...);
+#ifdef BUILD_PYTHON
     /// runs a python object method with no return value and no arguments
     void runMethodVoid(PyObject *pobject, const char *method);
     /// runs a python object method which returns a arbitrary object
@@ -230,6 +241,7 @@ public:
     void runMethod(PyObject *pobject, const char *method,
                    const char *resfmt=nullptr,   void *cresult=nullptr,
                    const char *argfmt="()",   ...  );
+#endif
     //@}
 
     /** @name Module handling
@@ -239,10 +251,12 @@ public:
      */
     bool loadModule(const char* psModName);
     /// Add an additional python path
+#ifdef BUILD_PYTHON
     void addPythonPath(const char* Path);
     static void addType(PyTypeObject* Type,PyObject* Module, const char * Name);
     /// Add a module and return a PyObject to it
     PyObject* addModule(Py::ExtensionModuleBase*);
+#endif
     /// Clean-up registered modules
     void cleanupModules();
     //@}
@@ -274,6 +288,7 @@ public:
     static void Destruct();
     //@}
 
+#ifdef BUILD_PYTHON
     /** @name external wrapper libs
      *  here we can access external dynamically loaded wrapper libs
      *  done e.g. by SWIG or SIP
@@ -285,6 +300,7 @@ public:
     void cleanupSWIG(const char* TypeName);
     PyTypeObject* getSWIGPointerTypeObj(const char* Module, const char* TypeName);
     //@}
+#endif
 
     /** @name methods for debugging facility
      */
@@ -308,7 +324,9 @@ public:
     static const std::string strToPython(const std::string &Str){return strToPython(Str.c_str());}
     //@}
 
+#ifdef BUILD_PYTHON
     PyObject *getValue(const char *key, const char *result_var);
+#endif
 
 protected:
     // singleton
@@ -316,8 +334,10 @@ protected:
 
 private:
     std::string _cDebugFileName;
+#ifdef BUILD_PYTHON
     PyThreadState* _global;
     std::list<Py::ExtensionModuleBase*> _modules;
+#endif
 };
 
 

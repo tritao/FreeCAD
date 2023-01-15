@@ -182,7 +182,9 @@ public:
 
     boost::any getValueAsAny() const;
 
+#ifdef BUILD_PYTHON
     Py::Object getPyValue() const;
+#endif
 
     bool isSame(const Expression &other, bool checkComment=true) const;
 
@@ -209,7 +211,9 @@ protected:
     }
     virtual void _moveCells(const CellAddress &, int, int, ExpressionVisitor &) {}
     virtual void _offsetCells(int, int, ExpressionVisitor &) {}
+#ifdef BUILD_PYTHON
     virtual Py::Object _getPyValue() const = 0;
+#endif
     virtual void _visit(ExpressionVisitor &) {}
 
 protected:

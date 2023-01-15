@@ -246,7 +246,7 @@ bool OriginGroupExtension::hasObject(const DocumentObject* obj, bool recursive) 
 }
 
 
-
+#ifdef BUILD_PYTHON
 // Python feature ---------------------------------------------------------
 
 namespace App {
@@ -255,3 +255,4 @@ EXTENSION_PROPERTY_SOURCE_TEMPLATE(App::OriginGroupExtensionPython, App::OriginG
 // explicit template instantiation
 template class AppExport ExtensionPythonT<GroupExtensionPythonT<OriginGroupExtension>>;
 }
+#endif

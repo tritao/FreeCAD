@@ -206,9 +206,11 @@ TransactionLocker::~TransactionLocker()
             return;
         } catch (Base::Exception &e) {
             e.ReportException();
+#ifdef BUILD_PYTHON
         } catch (Py::Exception &) {
             Base::PyException e;
             e.ReportException();
+#endif
         } catch (std::exception &e) {
             FC_ERR(e.what());
         } catch (...) {

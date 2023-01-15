@@ -24,7 +24,9 @@
 #include "PreCompiled.h"
 
 #include <Base/Console.h>
+#ifdef BUILD_PYTHON
 #include <Base/PyObjectBase.h>
+#endif
 #include <Base/Reader.h>
 #include <Base/Stream.h>
 #include <Base/Writer.h>
@@ -234,6 +236,7 @@ const char* PropertyFileIncluded::getValue() const
      return _cValue.c_str();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyFileIncluded::getPyObject()
 {
     PyObject *p = PyUnicode_DecodeUTF8(_cValue.c_str(),_cValue.size(),nullptr);
@@ -242,7 +245,9 @@ PyObject *PropertyFileIncluded::getPyObject()
     }
     return p;
 }
+#endif
 
+#ifdef BUILD_PYTHON
 namespace App {
 const char* getNameFromFile(PyObject* value)
 {
@@ -348,6 +353,7 @@ void PropertyFileIncluded::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyFileIncluded::Save (Base::Writer &writer) const
 {
@@ -610,6 +616,7 @@ std::string PropertyFile::getFilter() const
     return m_filter;
 }
 
+#ifdef BUILD_PYTHON
 void PropertyFile::setPyObject(PyObject *value)
 {
     if (PyDict_Check(value)) {
@@ -626,4 +633,4 @@ void PropertyFile::setPyObject(PyObject *value)
         PropertyString::setPyObject(value);
     }
 }
-
+#endif

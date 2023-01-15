@@ -24,7 +24,9 @@
 #include "PreCompiled.h"
 
 #include "InventorObject.h"
+#ifdef BUILD_PYTHON
 #include "DocumentObjectPy.h"
+#endif
 
 
 using namespace App;
@@ -45,6 +47,7 @@ short InventorObject::mustExecute() const
     return 0;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *InventorObject::getPyObject()
 {
     if (PythonObject.is(Py::_None())){
@@ -53,3 +56,4 @@ PyObject *InventorObject::getPyObject()
     }
     return Py::new_reference_to(PythonObject); 
 }
+#endif

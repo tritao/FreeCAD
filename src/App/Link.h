@@ -25,11 +25,15 @@
 
 #include <unordered_set>
 #include <Base/Parameter.h>
+#include <Base/Placement.h>
 #include <Base/Bitmask.h>
 #include "DocumentObject.h"
 #include "DocumentObjectExtension.h"
+#ifdef BUILD_PYTHON
 #include "FeaturePython.h"
+#endif
 #include "GroupExtension.h"
+#include "PropertyGeo.h"
 #include "PropertyLinks.h"
 
 
@@ -296,7 +300,9 @@ public:
     int extensionIsElementVisible(const char *) override;
     bool extensionHasChildElement() const override;
 
+#ifdef BUILD_PYTHON
     PyObject* getExtensionPyObject() override;
+#endif
 
     Property *extensionGetPropertyByName(const char* name) const override;
 
@@ -398,7 +404,9 @@ protected:
 
 ///////////////////////////////////////////////////////////////////////////
 
+#ifdef BUILD_PYTHON
 using LinkBaseExtensionPython = ExtensionPythonT<LinkBaseExtension>;
+#endif
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -509,7 +517,9 @@ public:
 
 ///////////////////////////////////////////////////////////////////////////
 
+#ifdef BUILD_PYTHON
 using LinkExtensionPython = ExtensionPythonT<LinkExtension>;
+#endif
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -556,7 +566,9 @@ public:
     bool canLinkProperties() const override;
 };
 
+#ifdef BUILD_PYTHON
 using LinkPython = App::FeaturePythonT<Link>;
+#endif
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -599,7 +611,9 @@ public:
     }
 };
 
+#ifdef BUILD_PYTHON
 using LinkElementPython = App::FeaturePythonT<LinkElement>;
+#endif
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -630,7 +644,9 @@ public:
     }
 };
 
+#ifdef BUILD_PYTHON
 using LinkGroupPython = App::FeaturePythonT<LinkGroup>;
+#endif
 
 } //namespace App
 

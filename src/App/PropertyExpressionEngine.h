@@ -167,9 +167,11 @@ public:
     void afterRestore() override;
     void onContainerRestored() override;
 
+#ifdef BUILD_PYTHON
     /* Python interface */
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
 protected:
     void hasSetValue() override;

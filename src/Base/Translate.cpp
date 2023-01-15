@@ -23,6 +23,9 @@
 #include "PreCompiled.h"
 
 #include "Translate.h"
+
+#ifdef BUILD_PYTHON
+
 #include <QCoreApplication>
 #include <QFileInfo>
 
@@ -147,3 +150,5 @@ Py::Object Translate::removeTranslators(const Py::Tuple& args)
     translators.clear();
     return Py::Boolean(ok);
 }
+
+#endif

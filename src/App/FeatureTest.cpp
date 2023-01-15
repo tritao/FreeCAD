@@ -283,12 +283,15 @@ PROPERTY_SOURCE(App::FeatureTestAttribute, App::DocumentObject)
 
 FeatureTestAttribute::FeatureTestAttribute()
 {
+#ifdef BUILD_PYTHON
     ADD_PROPERTY(Object, (Py::Object()));
+#endif
     ADD_PROPERTY(Attribute, ("Name"));
 }
 
 FeatureTestAttribute::~FeatureTestAttribute()
 {
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
     try {
         Object.getValue().getAttr("Name");
@@ -306,10 +309,12 @@ FeatureTestAttribute::~FeatureTestAttribute()
         e.clear();
         Base::Console().Error("Unexpected exception in ~FeatureTestRemoval()\n");
     }
+#endif
 }
 
 DocumentObjectExecReturn *FeatureTestAttribute::execute()
 {
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
     try {
         Object.getValue().getAttr(Attribute.getValue());
@@ -326,5 +331,6 @@ DocumentObjectExecReturn *FeatureTestAttribute::execute()
         str << "No such attribute '" << Attribute.getValue() << "'";
         throw Base::AttributeError(str.str());
     }
+#endif
     return StdReturn;
 }

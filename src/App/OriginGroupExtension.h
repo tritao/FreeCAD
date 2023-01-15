@@ -80,7 +80,9 @@ protected:
     void onExtendedUnsetupObject () override;
 };
 
+#ifdef BUILD_PYTHON
 using OriginGroupExtensionPython = ExtensionPythonT<GroupExtensionPythonT<OriginGroupExtension>>;
+#endif
 
 } /* App */
 

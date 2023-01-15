@@ -30,8 +30,9 @@
 #include "BaseClass.h"
 #include "FileInfo.h"
 
-
+#ifdef BUILD_PYTHON
 using PyObject = struct _object;
+#endif
 
 /* MACROS FOR THROWING EXCEPTIONS */
 
@@ -120,6 +121,7 @@ public:
 
   inline void setReported(bool reported) { _isReported = reported; }
 
+#ifdef BUILD_PYTHON
   /// returns a Python dictionary containing the exception data
   PyObject * getPyObject() override;
   /// returns sets the exception data from a Python dictionary
@@ -129,6 +131,7 @@ public:
   virtual PyObject * getPyExceptionType() const;
   /// Sets the Python error indicator and an error message
   virtual void setPyException() const;
+#endif
 
 protected:
  /* sMessage may be:
@@ -168,8 +171,10 @@ public:
   ~AbortException() throw() override = default;
   /// Description of the exception
   const char* what() const throw() override;
+#ifdef BUILD_PYTHON
   /// returns the corresponding python exception type
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -186,7 +191,9 @@ public:
 
   /// Destruction
   ~XMLBaseException() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -207,7 +214,9 @@ public:
   ~XMLParseException() throw() override = default;
   /// Description of the exception
   const char* what() const throw() override;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -228,7 +237,9 @@ public:
   ~XMLAttributeError() throw() override = default;
   /// Description of the exception
   const char* what() const throw() override;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /** File exception handling class
@@ -256,12 +267,14 @@ public:
   void ReportException () const override;
   /// Get file name for use with translatable message
   std::string getFileName() const;
+#ifdef BUILD_PYTHON
   /// returns a Python dictionary containing the exception data
   PyObject * getPyObject() override;
   /// returns sets the exception data from a Python dictionary
   void setPyObject( PyObject * pydict) override;
 
   PyObject * getPyExceptionType() const override;
+#endif
 protected:
   FileInfo file;
   // necessary   for what() legacy behaviour as it returns a buffer that
@@ -284,7 +297,9 @@ public:
   FileSystemError(const std::string& sMessage);
   /// Destruction
   ~FileSystemError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -300,7 +315,9 @@ public:
   BadFormatError(const std::string& sMessage);
   /// Destruction
   ~BadFormatError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -327,7 +344,9 @@ public:
   /// Description of the exception
   const char* what() const throw() override;
 #endif
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -343,7 +362,9 @@ public:
   AccessViolation(const std::string& sMessage);
   /// Destruction
   ~AccessViolation() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -360,7 +381,9 @@ public:
   AbnormalProgramTermination(const std::string& sMessage);
   /// Destruction
   ~AbnormalProgramTermination() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -376,7 +399,9 @@ public:
   UnknownProgramOption(const std::string& sMessage);
   /// Destruction
   ~UnknownProgramOption() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -408,7 +433,9 @@ public:
   TypeError(const std::string& sMessage);
   /// Destruction
   ~TypeError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -424,7 +451,9 @@ public:
   ValueError(const std::string& sMessage);
   /// Destruction
   ~ValueError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -440,7 +469,9 @@ public:
   IndexError(const std::string& sMessage);
   /// Destruction
   ~IndexError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 class BaseExport NameError : public Exception
@@ -452,7 +483,9 @@ public:
   NameError(const std::string& sMessage);
   /// Destruction
   ~NameError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 class BaseExport ImportError : public Exception
@@ -464,7 +497,9 @@ public:
   ImportError(const std::string& sMessage);
   /// Destruction
   ~ImportError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -480,7 +515,9 @@ public:
   AttributeError(const std::string& sMessage);
   /// Destruction
   ~AttributeError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -496,7 +533,9 @@ public:
   RuntimeError(const std::string& sMessage);
   /// Destruction
   ~RuntimeError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -512,7 +551,9 @@ public:
   BadGraphError(const std::string& sMessage);
   /// Destruction
   ~BadGraphError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -528,7 +569,9 @@ public:
   NotImplementedError(const std::string& sMessage);
   /// Destruction
   ~NotImplementedError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -544,7 +587,9 @@ public:
   ZeroDivisionError(const std::string& sMessage);
   /// Destruction
   ~ZeroDivisionError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -560,7 +605,9 @@ public:
   ReferenceError(const std::string& sMessage);
   /// Destruction
   ~ReferenceError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -577,7 +624,9 @@ public:
   ExpressionError(const std::string& sMessage);
   /// Destruction
   ~ExpressionError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -593,7 +642,9 @@ public:
   ParserError(const std::string& sMessage);
   /// Destruction
   ~ParserError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -609,7 +660,9 @@ public:
   UnicodeError(const std::string& sMessage);
   /// Destruction
   ~UnicodeError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -625,7 +678,9 @@ public:
   OverflowError(const std::string& sMessage);
   /// Destruction
   ~OverflowError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -641,7 +696,9 @@ public:
   UnderflowError(const std::string& sMessage);
   /// Destruction
   ~UnderflowError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /**
@@ -657,7 +714,9 @@ public:
   UnitsMismatchError(const std::string& sMessage);
   /// Destruction
   ~UnitsMismatchError() throw() override = default;
+#ifdef BUILD_PYTHON
   PyObject * getPyExceptionType() const override;
+#endif
 };
 
  /* The CADKernelError can be used to indicate an exception originating in the CAD Kernel
@@ -674,7 +733,9 @@ public:
     CADKernelError(const std::string& sMessage);
     /// Destruction
     ~CADKernelError() throw() override = default;
+#ifdef BUILD_PYTHON
     PyObject * getPyExceptionType() const override;
+#endif
 };
 
 /* The RestoreError can be used to try to do a best recovery effort when an error during restoring
@@ -693,7 +754,9 @@ public:
     RestoreError(const std::string& sMessage);
     /// Destruction
     ~RestoreError() throw() override = default;
+#ifdef BUILD_PYTHON
     PyObject * getPyExceptionType() const override;
+#endif
 };
 
 

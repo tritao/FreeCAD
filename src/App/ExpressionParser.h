@@ -94,10 +94,14 @@ public:
 protected:
     Expression * _copy() const override;
     void _toString(std::ostream &ss, bool persistent, int indent) const override;
+#ifdef BUILD_PYTHON
     Py::Object _getPyValue() const override;
+#endif
 
 protected:
+#ifdef BUILD_PYTHON
     mutable PyObject *cache = nullptr;
+#endif
 
 private:
     Base::Quantity quantity;
@@ -136,7 +140,9 @@ public:
     bool isNumber() const;
 
 protected:
+#ifdef BUILD_PYTHON
     Py::Object _getPyValue() const override;
+#endif
     void _toString(std::ostream &ss, bool persistent, int indent) const override;
     Expression* _copy() const override;
 
@@ -189,7 +195,9 @@ public:
 protected:
     Expression * _copy() const override;
 
+#ifdef BUILD_PYTHON
     Py::Object _getPyValue() const override;
+#endif
 
     void _toString(std::ostream &ss, bool persistent, int indent) const override;
 
@@ -223,7 +231,9 @@ protected:
     Expression * _copy() const override;
     void _visit(ExpressionVisitor & v) override;
     void _toString(std::ostream &ss, bool persistent, int indent) const override;
+#ifdef BUILD_PYTHON
     Py::Object _getPyValue() const override;
+#endif
 
 protected:
 
@@ -306,7 +316,9 @@ public:
 
 protected:
     static Py::Object evalAggregate(const Expression *owner, int type, const std::vector<Expression*> &args);
+#ifdef BUILD_PYTHON
     Py::Object _getPyValue() const override;
+#endif    
     Expression * _copy() const override;
     void _visit(ExpressionVisitor & v) override;
     void _toString(std::ostream &ss, bool persistent, int indent) const override;
@@ -347,7 +359,9 @@ public:
 
 protected:
     Expression * _copy() const override;
+#ifdef BUILD_PYTHON
     Py::Object _getPyValue() const override;
+#endif
     void _toString(std::ostream &ss, bool persistent, int indent) const override;
     bool _isIndexable() const override;
     void _getIdentifiers(std::map<App::ObjectIdentifier,bool> &) const override;
@@ -371,6 +385,7 @@ protected:
 
 //////////////////////////////////////////////////////////////////////
 
+#ifdef BUILD_PYTHON
 class AppExport PyObjectExpression : public Expression {
     TYPESYSTEM_HEADER_WITH_OVERRIDE();
 
@@ -390,11 +405,14 @@ public:
 protected:
     Expression* _copy() const override;
     void _toString(std::ostream &ss, bool persistent, int indent) const override;
+#ifdef BUILD_PYTHON
     Py::Object _getPyValue() const override;
+#endif
 
 protected:
     PyObject *pyObj = nullptr;
 };
+#endif
 
 /**
   * Class implementing a string. Used to signal either a genuine string or
@@ -413,12 +431,16 @@ public:
 protected:
     Expression * _copy() const override;
     void _toString(std::ostream &ss, bool persistent, int indent) const override;
+#ifdef BUILD_PYTHON
     Py::Object _getPyValue() const override;
+#endif
     bool _isIndexable() const override { return true; }
 
 private:
     std::string text; /**< Text string */
+#ifdef BUILD_PYTHON
     mutable PyObject *cache = nullptr;
+#endif
 };
 
 class AppExport RangeExpression : public App::Expression {
@@ -437,7 +459,9 @@ public:
 protected:
     Expression * _copy() const override;
     void _toString(std::ostream &ss, bool persistent, int indent) const override;
+#ifdef BUILD_PYTHON
     Py::Object _getPyValue() const override;
+#endif
     void _getIdentifiers(std::map<App::ObjectIdentifier,bool> &) const override;
     bool _renameObjectIdentifier(const std::map<ObjectIdentifier,ObjectIdentifier> &,
                                          const ObjectIdentifier &, ExpressionVisitor &) override;
@@ -465,7 +489,9 @@ public:
     static Base::XMLReader *reader();
 };
 
+#ifdef BUILD_PYTHON
 AppExport bool isModuleImported(PyObject *);
+#endif
 
 /**
  * @brief The semantic_type class encapsulates the value in the parse tree during parsing.

@@ -25,8 +25,9 @@
 #define APP_MaterialObject_H
 
 #include "DocumentObject.h"
+#ifdef BUILD_PYTHON
 #include "FeaturePython.h"
-
+#endif
 
 namespace App
 {
@@ -50,8 +51,9 @@ public:
 
 };
 
+#ifdef BUILD_PYTHON
 using MaterialObjectPython = App::FeaturePythonT<MaterialObject>;
-
+#endif
 
 } //namespace App
 

@@ -28,11 +28,15 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 
+#ifdef BUILD_PYTHON
 #include <App/DocumentObjectPy.h>
 #include <Base/GeometryPyCXX.h>
+#endif
 #include <Base/Tools.h>
 #include <Base/Interpreter.h>
+#ifdef BUILD_PYTHON
 #include <Base/QuantityPy.h>
+#endif
 #include <Base/Console.h>
 #include <Base/Reader.h>
 #include <CXX/Objects.hxx>
@@ -618,6 +622,7 @@ size_t ObjectIdentifier::Component::getIndex(size_t count) const {
     FC_THROWM(Base::IndexError, "Array out of bound: " << begin << ", " << count);
 }
 
+#ifdef BUILD_PYTHON
 Py::Object ObjectIdentifier::Component::get(const Py::Object &pyobj) const {
     Py::Object res;
     if(isSimple()) {
@@ -688,6 +693,7 @@ void ObjectIdentifier::Component::del(Py::Object &pyobj) const {
             Base::PyException::ThrowException();
     }
 }
+#endif
 
 /**
  * @brief Create a simple component part with the given name
@@ -1139,6 +1145,7 @@ void ObjectIdentifier::getDep(Dependencies &deps, bool needProps, std::vector<st
         return;
     }
 
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
     try {
         access(result, nullptr, &deps);
@@ -1148,6 +1155,7 @@ void ObjectIdentifier::getDep(Dependencies &deps, bool needProps, std::vector<st
     }
     catch (Base::Exception &) {
     }
+#endif
 }
 
 /**
@@ -1524,6 +1532,7 @@ void ObjectIdentifier::String::checkImport(const App::DocumentObject *owner,
     }
 }
 
+#ifdef BUILD_PYTHON
 Py::Object ObjectIdentifier::access(const ResolveResults &result,
         Py::Object *value, Dependencies *deps) const
 {
@@ -1738,6 +1747,7 @@ Py::Object ObjectIdentifier::access(const ResolveResults &result,
     }
     return pyobj;
 }
+#endif
 
 /**
  * @brief Get the value of the property or field pointed to by this object identifier.
@@ -1770,15 +1780,18 @@ App::any ObjectIdentifier::getValue(bool pathValue, bool *isPseudoProperty) cons
     if(rs.resolvedProperty && rs.propertyType==PseudoNone && pathValue)
         return rs.resolvedProperty->getPathValue(*this);
 
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
     try {
         return pyObjectToAny(access(rs));
     }catch(Py::Exception &) {
         Base::PyException::ThrowException();
     }
+#endif
     return App::any();
 }
 
+#ifdef BUILD_PYTHON
 Py::Object ObjectIdentifier::getPyValue(bool pathValue, bool *isPseudoProperty) const
 {
     ResolveResults rs(*this);
@@ -1807,6 +1820,7 @@ Py::Object ObjectIdentifier::getPyValue(bool pathValue, bool *isPseudoProperty) 
     }
     return Py::Object();
 }
+#endif
 
 /**
  * @brief Set value of a property or field pointed to by this object identifier.
@@ -1825,6 +1839,7 @@ void ObjectIdentifier::setValue(const App::any &value) const
     if(rs.propertyType)
         FC_THROWM(Base::RuntimeError,"Cannot set pseudo property");
 
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
     try {
         Py::Object pyvalue = pyObjectFromAny(value);
@@ -1832,6 +1847,7 @@ void ObjectIdentifier::setValue(const App::any &value) const
     }catch(Py::Exception &) {
         Base::PyException::ThrowException();
     }
+#endif
 }
 
 const std::string &ObjectIdentifier::getSubObjectName(bool newStyle) const {

@@ -32,9 +32,11 @@
 #include <Base/Observer.h>
 #include <Base/Parameter.h>
 
+#ifdef BUILD_PYTHON
 // forward declarations
 using PyObject = struct _object;
 using PyMethodDef = struct PyMethodDef;
+#endif
 
 namespace Base
 {
@@ -507,6 +509,7 @@ private:
     static Base::Reference<ParameterManager> _pcUserParamMngr;
     //@}
 
+#ifdef BUILD_PYTHON
     //---------------------------------------------------------------------
     // python exports goes here +++++++++++++++++++++++++++++++++++++++++++
     //---------------------------------------------------------------------
@@ -563,6 +566,7 @@ private:
     static PyObject *sCloseActiveTransaction(PyObject *self,PyObject *args);
     static PyObject *sCheckAbort(PyObject *self,PyObject *args);
     static PyMethodDef    Methods[];
+#endif
 
     friend class ApplicationObserver;
 

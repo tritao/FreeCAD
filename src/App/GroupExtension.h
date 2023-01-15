@@ -26,7 +26,9 @@
 
 #include <App/DocumentObject.h>
 #include <App/DocumentObjectExtension.h>
+#ifdef BUILD_PYTHON
 #include <App/ExtensionPython.h>
+#endif
 #include <vector>
 
 
@@ -106,8 +108,10 @@ public:
      */
     static DocumentObject* getGroupOfObject(const DocumentObject* obj);
     //@}
-    
+
+#ifdef BUILD_PYTHON
     PyObject* getExtensionPyObject() override;
+#endif
 
     void extensionOnChanged(const Property* p) override;
 
@@ -136,6 +140,7 @@ private:
     std::unordered_map<const App::DocumentObject*, boost::signals2::scoped_connection> _Conns;
 };
 
+#ifdef BUILD_PYTHON
 
 template<typename ExtensionT>
 class GroupExtensionPythonT : public ExtensionT {
@@ -161,6 +166,8 @@ public:
 };
 
 using GroupExtensionPython = ExtensionPythonT<GroupExtensionPythonT<GroupExtension>>;
+
+#endif
 
 } //namespace App
 

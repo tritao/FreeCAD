@@ -29,10 +29,17 @@
 #include <App/PropertyExpressionEngine.h>
 #include <App/PropertyLinks.h>
 #include <App/PropertyStandard.h>
+#ifdef BUILD_PYTHON
 #include <Base/SmartPtrPy.h>
+#endif
 
 #include <bitset>
 #include <unordered_map>
+
+#ifndef BUILD_PYTHON
+struct PyObject;
+typedef struct PyObject PyObject;
+#endif
 
 namespace Base
 {
@@ -317,7 +324,9 @@ public:
      * additional or different behavior.
      */
     virtual void onLostLinkToObject(DocumentObject*);
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     /** Get the sub element/object by name
      *
@@ -619,7 +628,9 @@ private:
 
      /// python object of this class and all descendent
 protected: // attributes
+#ifdef BUILD_PYTHON
     Py::SmartPtr PythonObject;
+#endif
     /// pointer to the document this object belongs to
     App::Document* _pDoc;
 

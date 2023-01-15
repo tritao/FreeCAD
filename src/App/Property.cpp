@@ -304,6 +304,7 @@ bool Property::isSame(const Property &other) const {
 // PropertyListsBase
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+#ifdef BUILD_PYTHON
 void PropertyListsBase::_setPyObject(PyObject *value) {
     std::vector<int> indices;
     std::vector<PyObject *> vals;
@@ -352,7 +353,7 @@ void PropertyListsBase::_setPyObject(PyObject *value) {
     }
     setPyValues(vals,indices);
 }
-
+#endif
 
 //**************************************************************************
 //**************************************************************************

@@ -24,6 +24,8 @@
 
 #include "PreCompiled.h"
 
+#include <cstdarg>
+
 #ifndef _PreComp_
 #   include <sstream>
 #   include <boost/regex.hpp>
@@ -33,8 +35,10 @@
 #include "Console.h"
 #include "ExceptionFactory.h"
 #include "FileInfo.h"
+#ifdef BUILD_PYTHON
 #include "PyObjectBase.h"
 #include "PyTools.h"
+#endif
 #include "Stream.h"
 
 
@@ -43,6 +47,7 @@ unsigned int format2_len = 1024;
 
 using namespace Base;
 
+#ifdef BUILD_PYTHON
 PyException::PyException(const Py::Object &obj) {
     _sErrMsg = obj.as_string();
     // WARNING: we are assuming that python type object will never be
@@ -144,6 +149,7 @@ void PyException::setPyException() const
         << ": " << what();
     PyErr_SetString(getPyExceptionType(), str.str().c_str());
 }
+#endif
 
 // ---------------------------------------------------------
 
@@ -158,6 +164,7 @@ SystemExitException::SystemExitException()
     // sys.exit(string) |   1         |   string
     // sys.exit()       |   1         |   "System Exit"
 
+#ifdef BUILD_PYTHON
     long int errCode = 1;
     std::string errMsg  = "System exit";
     PyObject  *type, *value, *traceback, *code;
@@ -185,10 +192,12 @@ SystemExitException::SystemExitException()
 
     _sErrMsg  = errMsg;
     _exitCode = errCode;
+#endif
 }
 
 // ---------------------------------------------------------
 
+#ifdef BUILD_PYTHON
 // Fixes #0000831: python print causes File descriptor error on windows
 class PythonStdOutput : public Py::PythonExtension<PythonStdOutput>
 {
@@ -213,12 +222,15 @@ public:
         return Py::None();
     }
 };
+#endif
 
 // ---------------------------------------------------------
 
 InterpreterSingleton::InterpreterSingleton()
 {
+#ifdef BUILD_PYTHON
     this->_global = nullptr;
+#endif
 }
 
 InterpreterSingleton::~InterpreterSingleton() = default;
@@ -226,6 +238,7 @@ InterpreterSingleton::~InterpreterSingleton() = default;
 
 std::string InterpreterSingleton::runString(const char *sCmd)
 {
+#ifdef BUILD_PYTHON
     PyObject *module, *dict, *presult;          /* "exec code in d, d" */
 
     PyGILStateLocker locker;
@@ -259,6 +272,10 @@ std::string InterpreterSingleton::runString(const char *sCmd)
         PyErr_Clear();
         return std::string();
     }
+#else
+    assert(0 && "InterpreterSingleton::runString() not implemented!");
+    return std::string();
+#endif
 }
 
 /** runStringWithKey(psCmd, key, key_initial_value)
@@ -273,6 +290,7 @@ std::string InterpreterSingleton::runString(const char *sCmd)
 
 std::string InterpreterSingleton::runStringWithKey(const char *psCmd, const char *key, const char *key_initial_value)
 {
+#ifdef BUILD_PYTHON
     PyGILStateLocker locker;
     Py::Module module("__main__");
     Py::Dict globalDictionary = module.getDict();
@@ -299,8 +317,13 @@ std::string InterpreterSingleton::runStringWithKey(const char *psCmd, const char
     Py::Bytes str = Py::String(key_return_value).encode("utf-8", "~E~");
     std::string result = static_cast<std::string>(str);
     return result;
+#else
+    assert(0 && "InterpreterSingleton::runStringWithKey() not implemented!");
+    return std::string();
+#endif
 }
 
+#ifdef BUILD_PYTHON
 Py::Object InterpreterSingleton::runStringObject(const char *sCmd)
 {
     PyObject *module, *dict, *presult;          /* "exec code in d, d" */
@@ -324,9 +347,11 @@ Py::Object InterpreterSingleton::runStringObject(const char *sCmd)
 
     return Py::asObject(presult);
 }
+#endif
 
 void InterpreterSingleton::systemExit()
 {
+#ifdef BUILD_PYTHON
     /* This code is taken from the original Python code */
     PyObject *exception, *value, *tb;
     int exitcode = 0;
@@ -365,10 +390,14 @@ done:
     PyErr_Clear();
     Py_Exit(exitcode);
     /* NOTREACHED */
+#else
+    assert(0 && "InterpreterSingleton::systemExit() not implemented!");
+#endif
 }
 
 void InterpreterSingleton::runInteractiveString(const char *sCmd)
 {
+#ifdef BUILD_PYTHON
     PyObject *module, *dict, *presult;          /* "exec code in d, d" */
 
     PyGILStateLocker locker;
@@ -401,10 +430,14 @@ void InterpreterSingleton::runInteractiveString(const char *sCmd)
     }
     else
         Py_DECREF(presult);
+#else
+    assert(0 && "InterpreterSingleton::runInteractiveString() not implemented!");
+#endif
 }
 
 void InterpreterSingleton::runFile(const char*pxFileName, bool local)
 {
+#ifdef BUILD_PYTHON
 #ifdef FC_OS_WIN32
     FileInfo fi(pxFileName);
     FILE *fp = _wfopen(fi.toStdWString().c_str(),L"r");
@@ -457,10 +490,14 @@ void InterpreterSingleton::runFile(const char*pxFileName, bool local)
     else {
         throw FileException("Unknown file", pxFileName);
     }
+#else
+    assert(0 && "InterpreterSingleton::runFile() not implemented!");
+#endif
 }
 
 bool InterpreterSingleton::loadModule(const char* psModName)
 {
+#ifdef BUILD_PYTHON
     // buffer acrobatics
     //PyBuf ModName(psModName);
     PyObject *module;
@@ -474,15 +511,20 @@ bool InterpreterSingleton::loadModule(const char* psModName)
         else
             throw PyException();
     }
+#else
+    assert(0 && "InterpreterSingleton::loadModule() not implemented!");
+#endif
 
     return true;
 }
 
+#ifdef BUILD_PYTHON
 PyObject* InterpreterSingleton::addModule(Py::ExtensionModuleBase* mod)
 {
     _modules.push_back(mod);
     return mod->module().ptr();
 }
+#endif
 
 void InterpreterSingleton::cleanupModules()
 {
@@ -497,6 +539,7 @@ void InterpreterSingleton::cleanupModules()
 #endif
 }
 
+#ifdef BUILD_PYTHON
 void InterpreterSingleton::addType(PyTypeObject* Type,PyObject* Module, const char * Name)
 {
     // NOTE: To finish the initialization of our own type objects we must
@@ -513,7 +556,9 @@ void InterpreterSingleton::addPythonPath(const char* Path)
     Py::List list(PySys_GetObject("path"));
     list.append(Py::String(Path));
 }
+#endif
 
+#ifdef BUILD_PYTHON
 #if PY_VERSION_HEX < 0x030b0000
 const char* InterpreterSingleton::init(int argc,char *argv[])
 {
@@ -612,22 +657,36 @@ const char* InterpreterSingleton::init(int argc,char *argv[])
     }
 }
 #endif
+#else
+const char* InterpreterSingleton::init(int argc,char *argv[])
+{
+    assert(0 && "InterpreterSingleton::init() not implemented");
+    return nullptr;
+}
+#endif
 
 void InterpreterSingleton::replaceStdOutput()
 {
+#ifdef BUILD_PYTHON
     PyGILStateLocker locker;
     PythonStdOutput* out = new PythonStdOutput();
     PySys_SetObject("stdout", out);
     PySys_SetObject("stderr", out);
+#endif
 }
 
 int InterpreterSingleton::cleanup(void (*func)())
 {
+#ifdef BUILD_PYTHON
     return Py_AtExit( func );
+#else
+    return 0;
+#endif
 }
 
 void InterpreterSingleton::finalize()
 {
+#ifdef BUILD_PYTHON
     try {
         PyEval_RestoreThread(this->_global);
         cleanupModules();
@@ -635,6 +694,7 @@ void InterpreterSingleton::finalize()
     }
     catch (...) {
     }
+#endif
 }
 
 void InterpreterSingleton::runStringArg(const char * psCom,...)
@@ -675,10 +735,17 @@ void InterpreterSingleton::Destruct()
 
 int InterpreterSingleton::runCommandLine(const char *prompt)
 {
+#ifdef BUILD_PYTHON
     PyGILStateLocker locker;
     return PP_Run_Command_Line(prompt);
+#else
+    //assert(0 && "InterpreterSingleton::runCommandLine() not implemented!");
+    printf("InterpreterSingleton::runCommandLine(): %s\n", prompt);
+    return 0;
+#endif
 }
 
+#ifdef BUILD_PYTHON
 /**
  *  Runs a member method of an object with no parameter and no return value
  *  void (void). There are other methods to run with returns
@@ -771,6 +838,7 @@ PyObject * InterpreterSingleton::getValue(const char * key, const char * result_
 
     return PyObject_GetAttrString(module, result_var);
 }
+#endif
 
 void InterpreterSingleton::dbgObserveFile(const char* sFileName)
 {
@@ -821,7 +889,7 @@ const std::string InterpreterSingleton::strToPython(const char* Str)
 }
 
 // --------------------------------------------------------------------
-
+#ifdef BUILD_PYTHON
 int getSWIGVersionFromModule(const std::string& module)
 {
     static std::map<std::string, int> moduleMap;
@@ -952,3 +1020,5 @@ PyTypeObject* InterpreterSingleton::getSWIGPointerTypeObj(const char* Module, co
     // none of the SWIG's succeeded
     throw Base::RuntimeError("No SWIG wrapped library loaded");
 }
+
+#endif

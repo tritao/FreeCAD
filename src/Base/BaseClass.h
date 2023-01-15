@@ -26,9 +26,10 @@
 
 #include "Type.h"
 
+#ifdef BUILD_PYTHON
 // Python stuff
 using PyObject = struct _object;
-
+#endif
 
 /// define for subclassing Base::BaseClass
 #define TYPESYSTEM_HEADER() \
@@ -110,8 +111,10 @@ public:
 
   static void init();
 
+#ifdef BUILD_PYTHON
   virtual PyObject *getPyObject();
   virtual void setPyObject(PyObject *);
+#endif
 
   static void *create(){return nullptr;}
 private:

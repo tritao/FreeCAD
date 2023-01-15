@@ -23,7 +23,9 @@
 #include "PreCompiled.h"
 
 #include "ExceptionFactory.h"
+#ifdef BUILD_PYTHON
 #include <CXX/Objects.hxx>
+#endif
 
 
 using namespace Base;
@@ -44,6 +46,7 @@ void ExceptionFactory::Destruct ()
     _pcSingleton = nullptr;
 }
 
+#ifdef BUILD_PYTHON
 void ExceptionFactory::raiseException (PyObject * pydict) const
 {
     std::string classname;
@@ -59,5 +62,6 @@ void ExceptionFactory::raiseException (PyObject * pydict) const
             static_cast<AbstractExceptionProducer *>(pProd->second)->raiseException(pydict);
     }
 }
+#endif
 
 

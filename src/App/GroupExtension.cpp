@@ -27,8 +27,9 @@
 
 #include "Document.h"
 #include "GeoFeatureGroupExtension.h"
+#ifdef BUILD_PYTHON
 #include "GroupExtensionPy.h"
-
+#endif
 
 using namespace App;
 namespace bp = boost::placeholders;
@@ -36,10 +37,12 @@ namespace bp = boost::placeholders;
 EXTENSION_PROPERTY_SOURCE(App::GroupExtension, App::DocumentObjectExtension)
 
 namespace App {
+#ifdef BUILD_PYTHON
 EXTENSION_PROPERTY_SOURCE_TEMPLATE(App::GroupExtensionPython, App::GroupExtension)
 
 // explicit template instantiation
 template class AppExport ExtensionPythonT<GroupExtensionPythonT<GroupExtension>>;
+#endif
 }
 
 GroupExtension::GroupExtension()
@@ -296,13 +299,16 @@ DocumentObject* GroupExtension::getGroupOfObject(const DocumentObject* obj)
     for (auto o : obj->getInList()) {
         if (o->hasExtension(App::GroupExtension::getExtensionClassTypeId(), false))
             return o;
+#ifdef BUILD_PYTHON
         if (o->hasExtension(App::GroupExtensionPython::getExtensionClassTypeId(), false))
             return o;
+#endif
     }
 
     return nullptr;
 }
 
+#ifdef BUILD_PYTHON
 PyObject* GroupExtension::getExtensionPyObject() {
 
     if (ExtensionPythonObject.is(Py::_None())){
@@ -312,6 +318,7 @@ PyObject* GroupExtension::getExtensionPyObject() {
     }
     return Py::new_reference_to(ExtensionPythonObject);
 }
+#endif
 
 void GroupExtension::extensionOnChanged(const Property* p) {
 

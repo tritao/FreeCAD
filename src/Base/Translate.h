@@ -24,6 +24,8 @@
 #ifndef BASE_TRANSLATE_H
 #define BASE_TRANSLATE_H
 
+#ifdef BUILD_PYTHON
+
 #include <CXX/Extensions.hxx>
 #include <CXX/Objects.hxx>
 #include <QTranslator>
@@ -55,5 +57,7 @@ private:
 };
 
 } // namespace Base
+
+#endif
 
 #endif // BASE_TRANSLATE_H

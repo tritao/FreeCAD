@@ -38,7 +38,9 @@
 class QByteArray;
 class QIODevice;
 class QBuffer;
+#ifdef BUILD_PYTHON
 using PyObject = struct _object;
+#endif
 
 namespace Base {
 
@@ -253,6 +255,7 @@ protected:
     char buffer[bufSize+pbSize];        // data buffer
 };
 
+#ifdef BUILD_PYTHON
 class BaseExport PyStreambuf : public std::streambuf
 {
     using int_type = std::streambuf::int_type;
@@ -296,6 +299,7 @@ private:
     const std::size_t put_back;
     std::vector<char> buffer;
 };
+#endif
 
 class BaseExport Streambuf : public std::streambuf
 {

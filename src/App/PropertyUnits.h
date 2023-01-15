@@ -52,8 +52,10 @@ public:
 
     const char* getEditorName() const override;
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void setUnit(const Base::Unit &u) {_Unit = u;}
     const Base::Unit &getUnit() const {return _Unit;}
@@ -73,7 +75,9 @@ public:
     }
 
 protected:
+#ifdef BUILD_PYTHON
     Base::Quantity createQuantityFromPy(PyObject *value);
+#endif
     Base::Unit _Unit;
 };
 
@@ -112,8 +116,9 @@ public:
     double getStepSize() const;
 
     const char* getEditorName() const override;
+#ifdef BUILD_PYTHON
     void setPyObject(PyObject *) override;
-
+#endif
 
 protected:
     const Constraints* _ConstStruct;

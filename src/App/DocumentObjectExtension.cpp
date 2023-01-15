@@ -24,7 +24,10 @@
 #include "PreCompiled.h"
 
 #include "DocumentObjectExtension.h"
+
+#ifdef BUILD_PYTHON
 #include "DocumentObjectExtensionPy.h"
+#endif
 #include "DocumentObject.h"
 #include "ExtensionContainer.h"
 
@@ -65,6 +68,7 @@ void DocumentObjectExtension::onExtendedUnsetupObject() {
 
 }
 
+#ifdef BUILD_PYTHON
 PyObject* DocumentObjectExtension::getExtensionPyObject() {
 
     if (ExtensionPythonObject.is(Py::_None())){
@@ -73,6 +77,7 @@ PyObject* DocumentObjectExtension::getExtensionPyObject() {
     }
     return Py::new_reference_to(ExtensionPythonObject);
 }
+#endif
 
 const DocumentObject* DocumentObjectExtension::getExtendedObject() const {
 

@@ -26,7 +26,9 @@
 #include <App/DocumentObject.h>
 
 #include "Part.h"
+#ifdef BUILD_PYTHON
 #include "PartPy.h"
+#endif
 
 
 using namespace App;
@@ -94,7 +96,7 @@ App::Part *Part::getPartOfObject (const DocumentObject* obj, bool recursive) {
     return _getPartOfObject(obj, &objset);
 }
 
-
+#ifdef BUILD_PYTHON
 PyObject *Part::getPyObject()
 {
     if (PythonObject.is(Py::_None())){
@@ -103,6 +105,7 @@ PyObject *Part::getPyObject()
     }
     return Py::new_reference_to(PythonObject);
 }
+#endif
 
 void Part::handleChangedPropertyType(Base::XMLReader &reader, const char *TypeName, App::Property *prop)
 {

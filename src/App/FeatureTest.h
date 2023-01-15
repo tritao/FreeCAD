@@ -211,7 +211,9 @@ public:
     ~FeatureTestAttribute() override;
     DocumentObjectExecReturn *execute() override;
 
+#ifdef BUILD_PYTHON
     App::PropertyPythonObject Object;
+#endif
     App::PropertyString Attribute;
 };
 

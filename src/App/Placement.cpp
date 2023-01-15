@@ -42,7 +42,7 @@ Placement::Placement() = default;
 Placement::~Placement() = default;
 
 
-
+#ifdef BUILD_PYTHON
 // Python feature ---------------------------------------------------------
 namespace App {
 PROPERTY_SOURCE_TEMPLATE(App::PlacementPython, App::Placement)
@@ -51,6 +51,7 @@ template<> const char* App::PlacementPython::getViewProviderName() const {
 }
 template class AppExport FeaturePythonT<App::Placement>;
 }
+#endif
 
 
 

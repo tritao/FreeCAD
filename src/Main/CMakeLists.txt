@@ -37,6 +37,7 @@ if(BUILD_GUI)
         FreeCADGui
     )
 
+    if(BUILD_PYTHON)
     if(NOT BUILD_DYNAMIC_LINK_PYTHON)
         # executables have to be linked against python libraries,
         # because extension modules are not.
@@ -44,6 +45,7 @@ if(BUILD_GUI)
             ${PYTHON_LIBRARIES}
         )
     endif(NOT BUILD_DYNAMIC_LINK_PYTHON)
+    endif()
 
     add_executable(FreeCADMain WIN32 ${FreeCAD_SRCS})
     target_link_libraries(FreeCADMain ${FreeCAD_LIBS})
@@ -114,27 +116,31 @@ endif()
 
 ######################## FreeCADMainPy ########################
 
-SET(FreeCADMainPy_SRCS
-    MainPy.cpp
-)
 
-add_library(FreeCADMainPy SHARED ${FreeCADMainPy_SRCS})
 
-target_link_libraries(FreeCADMainPy FreeCADApp)
-
-SET_BIN_DIR(FreeCADMainPy FreeCAD)
-SET_PYTHON_PREFIX_SUFFIX(FreeCADMainPy)
-
-if(WIN32)
-    INSTALL(TARGETS FreeCADMainPy
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+IF (BUILD_PYTHON)
+    SET(FreeCADMainPy_SRCS
+        MainPy.cpp
     )
-else(WIN32)
-    INSTALL(TARGETS FreeCADMainPy
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    )
-endif(WIN32)
+
+    add_library(FreeCADMainPy SHARED ${FreeCADMainPy_SRCS})
+
+    target_link_libraries(FreeCADMainPy FreeCADApp)
+
+    SET_BIN_DIR(FreeCADMainPy FreeCAD)
+    SET_PYTHON_PREFIX_SUFFIX(FreeCADMainPy)
+
+    if(WIN32)
+        INSTALL(TARGETS FreeCADMainPy
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        )
+    else(WIN32)
+        INSTALL(TARGETS FreeCADMainPy
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        )
+    endif(WIN32)
+ENDIF()
 
 ######################## FreeCADGuiPy ########################
 if(BUILD_GUI)

@@ -32,8 +32,10 @@
 #ifndef BASE__PARAMETER_H
 #define BASE__PARAMETER_H
 
+#ifdef BUILD_PYTHON
  // Python stuff
 using PyObject = struct _object;
+#endif
 
 #ifdef FC_OS_MACOSX
 #undef toupper
@@ -436,9 +438,10 @@ private:
     ~ParameterManager() override;
 };
 
+#ifdef BUILD_PYTHON
 /** python wrapper function
 */
 BaseExport PyObject* GetPyObject( const Base::Reference<ParameterGrp> &hcParamGrp);
-
+#endif
 
 #endif // BASE__PARAMETER_H

@@ -36,7 +36,9 @@
 #include "Application.h"
 #include "Document.h"
 #include "DocumentObject.h"
+#ifdef BUILD_PYTHON
 #include "DocumentObjectPy.h"
+#endif
 #include "ObjectIdentifier.h"
 
 
@@ -450,6 +452,7 @@ App::DocumentObject * PropertyLink::getValue(Base::Type t) const
     return (_pcLink && _pcLink->getTypeId().isDerivedFrom(t)) ? _pcLink : nullptr;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyLink::getPyObject()
 {
     if (_pcLink)
@@ -469,6 +472,7 @@ void PropertyLink::setPyObject(PyObject *value)
         setValue(nullptr);
     }
 }
+#endif
 
 void PropertyLink::Save (Base::Writer &writer) const
 {
@@ -683,6 +687,7 @@ void PropertyLinkList::setValues(const std::vector<DocumentObject*>& lValue) {
     inherited::setValues(lValue);
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyLinkList::getPyObject()
 {
     int count = getSize();
@@ -708,6 +713,7 @@ DocumentObject *PropertyLinkList::getPyValue(PyObject *item) const
 
     return item ? static_cast<DocumentObjectPy*>(item)->getDocumentObjectPtr() : nullptr;
 }
+#endif
 
 void PropertyLinkList::Save(Base::Writer &writer) const
 {
@@ -994,6 +1000,7 @@ App::DocumentObject * PropertyLinkSub::getValue(Base::Type t) const
     return (_pcLinkSub && _pcLinkSub->getTypeId().isDerivedFrom(t)) ? _pcLinkSub : nullptr;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyLinkSub::getPyObject()
 {
     Py::Tuple tup(2);
@@ -1063,6 +1070,7 @@ void PropertyLinkSub::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 static bool updateLinkReference(App::PropertyLinkBase *prop,
         App::DocumentObject *feature, bool reverse, bool notify,
@@ -1958,6 +1966,7 @@ std::vector<PropertyLinkSubList::SubSet> PropertyLinkSubList::getSubListValues(b
     return values;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyLinkSubList::getPyObject()
 {
     std::vector<SubSet> subLists = getSubListValues();
@@ -2049,6 +2058,7 @@ void PropertyLinkSubList::setPyObject(PyObject *value)
     }
     setValues(values,SubNames);
 }
+#endif
 
 void PropertyLinkSubList::afterRestore() {
     assert(_lSubList.size() == _ShadowSubList.size());
@@ -3595,6 +3605,7 @@ PropertyXLink::getDocumentInList(App::Document *doc) {
     return ret;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyXLink::getPyObject()
 {
     if(!_pcLink)
@@ -3659,6 +3670,7 @@ void PropertyXLink::setPyObject(PyObject *value) {
                 "'DocumentObject, [SubName..])");
     }
 }
+#endif
 
 const char *PropertyXLink::getSubName(bool newStyle) const {
     if(_SubList.empty() || _ShadowSubList.empty())
@@ -3756,6 +3768,7 @@ bool PropertyXLinkSub::upgrade(Base::XMLReader &reader, const char *typeName) {
     return PropertyXLink::upgrade(reader,typeName);
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyXLinkSub::getPyObject()
 {
     if(!_pcLink)
@@ -3773,6 +3786,7 @@ PyObject *PropertyXLinkSub::getPyObject()
     ret.setItem(1, list);
     return Py::new_reference_to(ret);
 }
+#endif
 
 //**************************************************************************
 // PropertyXLinkSubList
@@ -4010,6 +4024,7 @@ int PropertyXLinkSubList::removeValue(App::DocumentObject *lValue)
     return ret;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyXLinkSubList::getPyObject()
 {
     Py::List list;
@@ -4063,6 +4078,7 @@ void PropertyXLinkSubList::setPyObject(PyObject *value)
     }
     setValues(std::move(values));
 }
+#endif
 
 void PropertyXLinkSubList::afterRestore() {
     for(auto &l : _Links)
@@ -4456,6 +4472,7 @@ PropertyXLinkList::PropertyXLinkList() = default;
 
 PropertyXLinkList::~PropertyXLinkList() = default;
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyXLinkList::getPyObject()
 {
     for(auto &link : _Links) {
@@ -4489,6 +4506,7 @@ void PropertyXLinkList::setPyObject(PyObject *value)
 
     PropertyXLinkSubList::setPyObject(value);
 }
+#endif
 
 //**************************************************************************
 // PropertyXLinkContainer

@@ -65,8 +65,10 @@ public:
     long getValue() const;
     const char* getEditorName() const override { return "Gui::PropertyEditor::PropertyIntegerItem"; }
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -116,8 +118,10 @@ public:
 
     const char* getEditorName() const override { return "Gui::PropertyEditor::PropertyPathItem"; }
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -215,8 +219,10 @@ public:
     const char* getEditorName() const override { return _editorTypeName.c_str(); }
     void setEditorName(const char* name) { _editorTypeName = name; }
 
+#ifdef BUILD_PYTHON
     PyObject * getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save(Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -225,9 +231,13 @@ public:
     void Paste(const Property &from) override;
 
     void setPathValue(const App::ObjectIdentifier & path, const boost::any & value) override;
+#ifdef BUILD_PYTHON
     virtual bool setPyPathValue(const App::ObjectIdentifier & path, const Py::Object &value);
+#endif
     const boost::any getPathValue(const App::ObjectIdentifier & /*path*/) const override;
+#ifdef BUILD_PYTHON
     bool getPyPathValue(const ObjectIdentifier &path, Py::Object &r) const override;
+#endif
 
     bool isSame(const Property &other) const override {
         if (&other == this)
@@ -307,7 +317,9 @@ public:
     long getStepSize() const;
 
     const char* getEditorName() const override { return "Gui::PropertyEditor::PropertyIntegerConstraintItem"; }
+#ifdef BUILD_PYTHON
     void setPyObject(PyObject *) override;
+#endif
 
 protected:
     const Constraints* _ConstStruct;
@@ -354,7 +366,9 @@ public:
     const char* getEditorName() const override
     { return "Gui::PropertyEditor::PropertyIntegerListItem"; }
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -364,7 +378,9 @@ public:
     unsigned int getMemSize () const override;
 
 protected:
+#ifdef BUILD_PYTHON
     long getPyValue(PyObject *item) const override;
+#endif
 };
 
 /** Integer list properties
@@ -398,8 +414,10 @@ public:
 
     const std::set<long> &getValues() const{return _lValueSet;}
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -457,8 +475,10 @@ public:
 
     //virtual const char* getEditorName(void) const { return "Gui::PropertyEditor::PropertyStringListItem"; }
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -510,8 +530,10 @@ public:
 
     const char* getEditorName() const override { return "Gui::PropertyEditor::PropertyFloatItem"; }
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -610,7 +632,9 @@ public:
     const char* getEditorName() const override
     { return "Gui::PropertyEditor::PropertyFloatConstraintItem"; }
 
+#ifdef BUILD_PYTHON
     void setPyObject(PyObject *) override;
+#endif
 
 protected:
     const Constraints* _ConstStruct;
@@ -654,7 +678,9 @@ public:
     const char* getEditorName() const override
     { return "Gui::PropertyEditor::PropertyFloatListItem"; }
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -667,7 +693,9 @@ public:
     unsigned int getMemSize () const override;
 
 protected:
+#ifdef BUILD_PYTHON
     double getPyValue(PyObject *item) const override;
+#endif
 };
 
 
@@ -700,9 +728,10 @@ public:
     bool isEmpty(){return _cValue.empty();}
 
     const char* getEditorName() const override { return "Gui::PropertyEditor::PropertyStringItem"; }
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
-
+#endif
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
 
@@ -753,8 +782,10 @@ public:
     const Base::Uuid& getValue() const;
 
     //virtual const char* getEditorName(void) const { return "Gui::PropertyEditor::PropertyStringItem"; }
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -820,7 +851,9 @@ public:
     const char* getEditorName() const override
     { return "Gui::PropertyEditor::PropertyStringListItem"; }
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -831,7 +864,9 @@ public:
     unsigned int getMemSize () const override;
 
 protected:
+#ifdef BUILD_PYTHON
     std::string getPyValue(PyObject *item) const override;
+#endif
 };
 
 /** Bool properties
@@ -860,8 +895,10 @@ public:
 
     const char* getEditorName() const override { return "Gui::PropertyEditor::PropertyBoolItem"; }
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -897,8 +934,10 @@ public:
     PropertyBoolList();
     ~PropertyBoolList() override;
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -908,7 +947,9 @@ public:
     unsigned int getMemSize () const override;
 
 protected:
+#ifdef BUILD_PYTHON
     bool getPyValue(PyObject *) const override;
+#endif
 };
 
 
@@ -944,8 +985,10 @@ public:
 
     const char* getEditorName() const override { return "Gui::PropertyEditor::PropertyColorItem"; }
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -984,7 +1027,9 @@ public:
      */
     ~PropertyColorList() override;
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -997,7 +1042,9 @@ public:
     unsigned int getMemSize () const override;
 
 protected:
+#ifdef BUILD_PYTHON
     Color getPyValue(PyObject *) const override;
+#endif
 };
 
 /** Material properties
@@ -1035,8 +1082,10 @@ public:
      */
     const Material &getValue() const;
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -1079,7 +1128,9 @@ public:
     */
     ~PropertyMaterialList() override;
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void Save(Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -1094,7 +1145,9 @@ public:
     unsigned int getMemSize() const override;
 
 protected:
+#ifdef BUILD_PYTHON
     Material getPyValue(PyObject *) const override;
+#endif
 };
 
 
@@ -1107,7 +1160,9 @@ class AppExport PropertyPersistentObject: public PropertyString {
     TYPESYSTEM_HEADER_WITH_OVERRIDE();
     using inherited = PropertyString;
 public:
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
     void setValue(const char* type) override;
 
     void Save (Base::Writer &writer) const override;

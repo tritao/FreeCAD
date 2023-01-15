@@ -29,7 +29,10 @@
 # include <QElapsedTimer>
 #endif
 
+#ifdef BUILD_PYTHON
 #include "PyExport.h"
+#endif
+
 #include "Interpreter.h"
 #include "Tools.h"
 
@@ -189,6 +192,7 @@ std::string Base::Tools::narrow(const std::wstring& str)
 
 std::string Base::Tools::escapedUnicodeFromUtf8(const char *s)
 {
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
     std::string escapedstr;
 
@@ -204,10 +208,15 @@ std::string Base::Tools::escapedUnicodeFromUtf8(const char *s)
 
     Py_DECREF(unicode);
     return escapedstr;
+#else
+    assert(0 && "Base::Tools::escapedUnicodeFromUtf8() not implemented!");
+    return std::string();
+#endif
 }
 
 std::string Base::Tools::escapedUnicodeToUtf8(const std::string& s)
 {
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
     std::string string;
 
@@ -219,6 +228,10 @@ std::string Base::Tools::escapedUnicodeToUtf8(const std::string& s)
     }
     Py_DECREF(unicode);
     return string;
+#else
+    assert(0 && "Base::Tools::escapedUnicodeToUtf8() not implemented!");
+    return std::string();
+#endif
 }
 
 QString Base::Tools::escapeEncodeString(const QString& s)

@@ -28,8 +28,10 @@
 #include "Factory.h"
 #include <typeinfo>
 
+#ifdef BUILD_PYTHON
 // Python stuff
 using PyObject = struct _object;
+#endif
 
 namespace Base
 {
@@ -43,7 +45,9 @@ public:
     void* Produce () const override {
         return nullptr;
     }
+#ifdef BUILD_PYTHON
     virtual void raiseException(PyObject * pydict) const = 0;
+#endif
 };
 
 // --------------------------------------------------------------------
@@ -55,7 +59,9 @@ public:
     static ExceptionFactory& Instance();
     static void Destruct ();
 
+#ifdef BUILD_PYTHON
     void raiseException(PyObject * pydict) const;
+#endif
 
 private:
     static ExceptionFactory* _pcSingleton;
@@ -76,6 +82,7 @@ public:
 
     ~ExceptionProducer () override = default;
 
+#ifdef BUILD_PYTHON
     void raiseException(PyObject * pydict) const override
     {
         CLASS c;
@@ -83,6 +90,7 @@ public:
 
         throw c;
     }
+#endif
 };
 
 } //namespace Base

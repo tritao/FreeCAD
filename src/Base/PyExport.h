@@ -31,6 +31,8 @@
 #ifndef BASE_PYEXPORT_H
 #define BASE_PYEXPORT_H
 
+#ifdef BUILD_PYTHON
+
 // (re-)defined in pyconfig.h
 #if defined (_POSIX_C_SOURCE)
 #   undef    _POSIX_C_SOURCE
@@ -231,5 +233,7 @@ private:
 
 
 } // namespace Base
+
+#endif
 
 #endif // BASE_PYEXPORT_H

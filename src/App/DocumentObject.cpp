@@ -27,7 +27,9 @@
 #include <stack>
 #endif
 
+#ifdef BUILD_PYTHON
 #include <App/DocumentObjectPy.h>
+#endif
 #include <Base/Console.h>
 #include <Base/Matrix.h>
 #include <Base/Tools.h>
@@ -83,6 +85,7 @@ DocumentObject::DocumentObject()
 
 DocumentObject::~DocumentObject()
 {
+#ifdef BUILD_PYTHON
     if (!PythonObject.is(Py::_None())){
         Base::PyGILStateLocker lock;
         // Remark: The API of Py::Object has been changed to set whether the wrapper owns the passed
@@ -94,6 +97,7 @@ DocumentObject::~DocumentObject()
         // Call before decrementing the reference counter, otherwise a heap error can occur
         obj->setInvalid();
     }
+#endif
 }
 
 void DocumentObject::printInvalidLinks() const
@@ -761,6 +765,7 @@ void DocumentObject::clearOutListCache() const {
     _outListCached = false;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *DocumentObject::getPyObject()
 {
     if (PythonObject.is(Py::_None())) {
@@ -769,6 +774,7 @@ PyObject *DocumentObject::getPyObject()
     }
     return Py::new_reference_to(PythonObject);
 }
+#endif
 
 DocumentObject *DocumentObject::getSubObject(const char *subname,
         PyObject **pyObj, Base::Matrix4D *mat, bool transform, int depth) const

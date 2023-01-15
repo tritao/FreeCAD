@@ -23,17 +23,26 @@
 
 #include "PreCompiled.h"
 
+#ifdef BUILD_PYTHON
 #include <Base/MatrixPy.h>
 #include <Base/PlacementPy.h>
+#endif
 #include <Base/Reader.h>
 
 #include <Base/Quantity.h>
+#ifdef BUILD_PYTHON
 #include <Base/QuantityPy.h>
+#endif
 #include <Base/Rotation.h>
+#ifdef BUILD_PYTHON
 #include <Base/RotationPy.h>
+#endif
 #include <Base/Stream.h>
 #include <Base/Tools.h>
+
+#ifdef BUILD_PYTHON
 #include <Base/VectorPy.h>
+#endif
 #include <Base/Writer.h>
 
 #include "PropertyGeo.h"
@@ -87,6 +96,7 @@ const Base::Vector3d & PropertyVector::getValue()const
     return _cVec;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyVector::getPyObject()
 {
     return new Base::VectorPy(_cVec);
@@ -134,6 +144,7 @@ void PropertyVector::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyVector::Save (Base::Writer &writer) const
 {
@@ -190,6 +201,7 @@ const boost::any PropertyVector::getPathValue(const ObjectIdentifier &path) cons
     return Property::getPathValue(path);
 }
 
+#ifdef BUILD_PYTHON
 bool PropertyVector::getPyPathValue(const ObjectIdentifier &path, Py::Object &res) const
 {
     Base::Unit unit = getUnit();
@@ -207,7 +219,7 @@ bool PropertyVector::getPyPathValue(const ObjectIdentifier &path, Py::Object &re
         return false;
     return true;
 }
-
+#endif
 
 //**************************************************************************
 // PropertyVectorDistance
@@ -272,6 +284,7 @@ void PropertyVectorList::setValue(double x, double y, double z)
     setValue(Base::Vector3d(x,y,z));
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyVectorList::getPyObject()
 {
     PyObject* list = PyList_New(getSize());
@@ -287,6 +300,7 @@ Base::Vector3d PropertyVectorList::getPyValue(PyObject *item) const {
     val.setPyObject( item );
     return val.getValue();
 }
+#endif
 
 void PropertyVectorList::Save (Base::Writer &writer) const
 {
@@ -397,6 +411,7 @@ const Base::Matrix4D & PropertyMatrix::getValue()const
     return _cMat;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyMatrix::getPyObject()
 {
     return new Base::MatrixPy(_cMat);
@@ -432,6 +447,7 @@ void PropertyMatrix::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyMatrix::Save (Base::Writer &writer) const
 {
@@ -702,6 +718,7 @@ const boost::any PropertyPlacement::getPathValue(const ObjectIdentifier &path) c
     }
 }
 
+#ifdef BUILD_PYTHON
 bool PropertyPlacement::getPyPathValue(const ObjectIdentifier &path, Py::Object &res) const
 {
     auto getAxis = [](const Base::Placement& plm) {
@@ -789,6 +806,7 @@ void PropertyPlacement::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyPlacement::Save (Base::Writer &writer) const
 {
@@ -872,6 +890,7 @@ PropertyPlacementList::~PropertyPlacementList() = default;
 //**************************************************************************
 // Base class implementer
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyPlacementList::getPyObject()
 {
     PyObject* list = PyList_New( getSize() );
@@ -887,6 +906,7 @@ Base::Placement PropertyPlacementList::getPyValue(PyObject *item) const {
     val.setPyObject( item );
     return val.getValue();
 }
+#endif
 
 void PropertyPlacementList::Save (Base::Writer &writer) const
 {
@@ -1130,6 +1150,7 @@ const boost::any PropertyRotation::getPathValue(const ObjectIdentifier &path) co
     }
 }
 
+#ifdef BUILD_PYTHON
 bool PropertyRotation::getPyPathValue(const ObjectIdentifier &path, Py::Object &res) const
 {
     auto getAxis = [](const Base::Rotation& rot) {
@@ -1185,6 +1206,7 @@ void PropertyRotation::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyRotation::Save (Base::Writer &writer) const
 {

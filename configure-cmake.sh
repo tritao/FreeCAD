@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -eux
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+mkdir -p build && cd build
+
+cmake -G "Ninja" \
+    -DBUILD_SMESH:BOOL="0" \
+    -DBUILD_FEM:BOOL="0" \
+    -DBUILD_GUI:BOOL="0" \
+    -DBUILD_IDF:BOOL="0" \
+    -DBUILD_IMAGE:BOOL="0" \
+    -DBUILD_IMPORT:BOOL="0" \
+    -DBUILD_INSPECTION:BOOL="0" \
+    -DBUILD_MATERIAL:BOOL="0" \
+    -DBUILD_MESH_PART:BOOL="0" \
+    -DBUILD_MESH:BOOL="0" \
+    -DBUILD_OPENSCAD:BOOL="0" \
+    -DBUILD_PART_DESIGN:BOOL="0" \
+    -DBUILD_PART:BOOL="0" \
+    -DBUILD_PATH:BOOL="0" \
+    -DBUILD_PLOT:BOOL="0" \
+    -DBUILD_POINTS:BOOL="0" \
+    -DBUILD_PYTHON:BOOL="0" \
+    -DBUILD_QT5:BOOL="1" \
+    -DBUILD_RAYTRACING:BOOL="0" \
+    -DBUILD_REVERSEENGINEERING:BOOL="0" \
+    -DBUILD_ROBOT:BOOL="0" \
+    -DBUILD_SHOW:BOOL="0" \
+    -DBUILD_SKETCHER:BOOL="0" \
+    -DBUILD_SPREADSHEET:BOOL="0" \
+    -DBUILD_START:BOOL="0" \
+    -DBUILD_SURFACE:BOOL="0" \
+    -DBUILD_TECHDRAW:BOOL="0" \
+    -DBUILD_TEST:BOOL="0" \
+    -DBUILD_TUX:BOOL="0" \
+    -DBUILD_WEB:BOOL="0" \
+    $SCRIPT_DIR

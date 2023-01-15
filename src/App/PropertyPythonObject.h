@@ -24,6 +24,8 @@
 #ifndef APP_PROPERTYPYTHONOBJECT_H
 #define APP_PROPERTYPYTHONOBJECT_H
 
+#ifdef BUILD_PYTHON
+
 #include <string>
 #include <CXX/Objects.hxx>
 
@@ -81,5 +83,7 @@ private:
 
 
 } // namespace App
+
+#endif
 
 #endif // APP_PROPERTYPYTHONOBJECT_H

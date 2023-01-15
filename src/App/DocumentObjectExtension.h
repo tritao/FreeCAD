@@ -26,6 +26,11 @@
 
 #include "Extension.h"
 
+#ifndef BUILD_PYTHON
+struct PyObject;
+typedef struct PyObject PyObject;
+#endif
+
 namespace Base {
 class Matrix4D;
 }
@@ -66,7 +71,9 @@ public:
     /// get called when object is going to be removed from the document
     virtual void onExtendedUnsetupObject();
 
+#ifdef BUILD_PYTHON
     PyObject* getExtensionPyObject() override;
+#endif
 
     /// returns the type name of the ViewProviderExtension which is automatically attached
     /// to the viewprovider object when it is initiated

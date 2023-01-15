@@ -25,7 +25,9 @@
 #define APP_EXTENSION_H
 
 #include "PropertyContainer.h"
+#ifdef BUILD_PYTHON
 #include <Base/SmartPtrPy.h>
+#endif
 
 namespace App {
 
@@ -241,8 +243,9 @@ public:
 
     bool isPythonExtension() {return m_isPythonExtension;}
 
+#ifdef BUILD_PYTHON
     virtual PyObject* getExtensionPyObject();
-
+#endif
 
     /** @name Access properties */
     //@{
@@ -290,7 +293,9 @@ protected:
 protected:
     void initExtensionType(Base::Type type);
     bool m_isPythonExtension = false;
+  #ifdef BUILD_PYTHON
     Py::SmartPtr ExtensionPythonObject;
+#endif
 
 private:
     Base::Type                    m_extensionType;

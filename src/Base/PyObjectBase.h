@@ -23,6 +23,8 @@
 #ifndef BASE_PYOBJECTBASE_H
 #define BASE_PYOBJECTBASE_H
 
+#ifdef BUILD_PYTHON
+
 // Std. configurations
 
 // (re-)defined in pyconfig.h
@@ -91,6 +93,7 @@
 #define PyMOD_INIT_FUNC(name) PyMODINIT_FUNC PyInit_##name(void)
 #define PyMOD_Return(name) return name
 
+#endif
 
 /*------------------------------
  * Basic defines
@@ -114,6 +117,7 @@ inline void Assert(int expr, char *msg)         // C++ assert
     };
 }
 
+#ifdef BUILD_PYTHON
 inline PyObject* getTypeAsObject(PyTypeObject* type) {
     // See https://en.cppreference.com/w/cpp/string/byte/memcpy
     // and https://en.cppreference.com/w/cpp/language/reinterpret_cast
@@ -121,12 +125,15 @@ inline PyObject* getTypeAsObject(PyTypeObject* type) {
     std::memcpy(&obj, &type, sizeof type);
     return obj;
 }
+#endif
 
 inline bool asBoolean(PyObject *obj) {
     return PyObject_IsTrue(obj) != 0;
 }
 
 }
+
+#ifdef BUILD_PYTHON
 
 /*------------------------------
  * Python defines
@@ -552,6 +559,8 @@ inline void PyTypeCheck(PyObject** ptr, int (*method)(PyObject*), const char* ms
 
 
 } // namespace Base
+
+#endif
 
 
 #endif // BASE_PYOBJECTBASE_H

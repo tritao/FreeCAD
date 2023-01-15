@@ -26,8 +26,9 @@
 #define APP_FEATUREPYTHON_H
 
 #include <App/GeoFeature.h>
+#ifdef BUILD_PYTHON
 #include <App/PropertyPythonObject.h>
-
+#endif
 
 namespace App
 {
@@ -54,7 +55,9 @@ public:
     void onChanged(const Property* prop);
     void onDocumentRestored();
     std::string getViewProviderName();
+#ifdef BUILD_PYTHON
     PyObject *getPyObject();
+#endif
 
     bool getSubObject(App::DocumentObject *&ret, const char *subname, PyObject **pyObj,
             Base::Matrix4D *mat, bool transform, int depth) const;
@@ -349,15 +352,18 @@ public:
     FeaturePythonT& operator= (FeaturePythonT&&) = delete;
 
 private:
+#ifdef BUILD_PYTHON
     FeaturePythonImp* imp;
     PropertyPythonObject Proxy;
+#endif
     mutable std::string viewProviderName;
 };
 
+#ifdef BUILD_PYTHON
 // Special Feature-Python classes
 using FeaturePython  = FeaturePythonT<DocumentObject>;
 using GeometryPython = FeaturePythonT<GeoFeature    >;
-
+#endif
 } //namespace App
 
 #endif // APP_FEATUREPYTHON_H

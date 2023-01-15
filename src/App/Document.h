@@ -501,7 +501,9 @@ public:
     /// Function called to signal that an object identifier has been renamed
     void renameObjectIdentifiers(const std::map<App::ObjectIdentifier, App::ObjectIdentifier> & paths, const std::function<bool(const App::DocumentObject*)> &selector = [](const App::DocumentObject *) { return true; });
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     std::string getFullName() const override;
 

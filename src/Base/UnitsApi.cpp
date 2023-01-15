@@ -26,7 +26,9 @@
 # include <unistd.h>
 #endif
 
+#ifdef BUILD_PYTHON
 #include <CXX/WrapPython.h>
+#endif
 #include <memory>
 #include <QString>
 #include "Exception.h"
@@ -175,6 +177,8 @@ QString UnitsApi::schemaTranslate(const Base::Quantity& quant, double &factor, Q
     return UserPrefSystem->schemaTranslate(quant,factor,unitString);
 }
 
+#ifdef BUILD_PYTHON
+
 double UnitsApi::toDouble(PyObject *ArgObj, const Base::Unit &u)
 {
     if (PyUnicode_Check(ArgObj)) {
@@ -217,6 +221,8 @@ Quantity UnitsApi::toQuantity(PyObject *ArgObj, const Base::Unit &u)
 
     return Quantity(d,u);
 }
+
+#endif
 
 void UnitsApi::setDecimals(int prec)
 {

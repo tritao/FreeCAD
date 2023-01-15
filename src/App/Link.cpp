@@ -30,12 +30,16 @@
 
 #include "Application.h"
 #include "ComplexGeoData.h"
+#ifdef BUILD_PYTHON
 #include "ComplexGeoDataPy.h"
+#endif
 #include "Document.h"
 #include "DocumentObserver.h"
 #include "GeoFeatureGroupExtension.h"
 #include "Link.h"
+#ifdef BUILD_PYTHON
 #include "LinkBaseExtensionPy.h"
+#endif
 
 //FIXME: ISO C++11 requires at least one argument for the "..." in a variadic macro
 #if defined(__clang__)
@@ -166,6 +170,7 @@ LinkBaseExtension::~LinkBaseExtension()
 {
 }
 
+#ifdef BUILD_PYTHON
 PyObject* LinkBaseExtension::getExtensionPyObject() {
     if (ExtensionPythonObject.is(Py::_None())){
         // ref counter is set to 1
@@ -173,6 +178,7 @@ PyObject* LinkBaseExtension::getExtensionPyObject() {
     }
     return Py::new_reference_to(ExtensionPythonObject);
 }
+#endif
 
 const std::vector<LinkBaseExtension::PropInfo> &LinkBaseExtension::getPropertyInfo() const {
     static std::vector<LinkBaseExtension::PropInfo> PropsInfo;
@@ -325,6 +331,7 @@ App::DocumentObjectExecReturn *LinkBaseExtension::extensionExecute() {
             syncCopyOnChange();
         }
 
+#ifdef BUILD_PYTHON
         PropertyPythonObject *proxy = nullptr;
         if(getLinkExecuteProperty()
                 && !boost::iequals(getLinkExecuteValue(), "none")
@@ -394,6 +401,7 @@ App::DocumentObjectExecReturn *LinkBaseExtension::extensionExecute() {
                 }
             }
         }
+#endif
     }
     return inherited::extensionExecute();
 }
@@ -1408,9 +1416,11 @@ bool LinkBaseExtension::extensionGetSubObject(DocumentObject *&ret, const char *
 void LinkBaseExtension::checkGeoElementMap(const App::DocumentObject *obj,
         const App::DocumentObject *linked, PyObject **pyObj, const char *postfix) const
 {
+#ifdef BUILD_PYTHON
     if(!pyObj || !*pyObj || (!postfix && obj->getDocument()==linked->getDocument()) ||
        !PyObject_TypeCheck(*pyObj, &Data::ComplexGeoDataPy::Type))
         return;
+#endif
 
     // auto geoData = static_cast<Data::ComplexGeoDataPy*>(*pyObj)->getComplexGeoDataPtr();
     // geoData->reTagElementMap(obj->getID(),obj->getDocument()->Hasher,postfix);
@@ -2212,6 +2222,7 @@ bool LinkBaseExtension::isLinkMutated() const
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 
+#ifdef BUILD_PYTHON
 namespace App {
 EXTENSION_PROPERTY_SOURCE_TEMPLATE(App::LinkBaseExtensionPython, App::LinkBaseExtension)
 
@@ -2219,6 +2230,7 @@ EXTENSION_PROPERTY_SOURCE_TEMPLATE(App::LinkBaseExtensionPython, App::LinkBaseEx
 template class AppExport ExtensionPythonT<LinkBaseExtension>;
 
 }
+#endif
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -2237,6 +2249,7 @@ LinkExtension::~LinkExtension()
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 
+#ifdef BUILD_PYTHON
 namespace App {
 EXTENSION_PROPERTY_SOURCE_TEMPLATE(App::LinkExtensionPython, App::LinkExtension)
 
@@ -2244,6 +2257,7 @@ EXTENSION_PROPERTY_SOURCE_TEMPLATE(App::LinkExtensionPython, App::LinkExtension)
 template class AppExport ExtensionPythonT<App::LinkExtension>;
 
 }
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -2262,6 +2276,7 @@ bool Link::canLinkProperties() const {
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
+#ifdef BUILD_PYTHON
 namespace App {
 PROPERTY_SOURCE_TEMPLATE(App::LinkPython, App::Link)
 template<> const char* App::LinkPython::getViewProviderName() const {
@@ -2269,6 +2284,7 @@ template<> const char* App::LinkPython::getViewProviderName() const {
 }
 template class AppExport FeaturePythonT<App::Link>;
 }
+#endif
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -2289,6 +2305,7 @@ bool LinkElement::canDelete() const {
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
+#ifdef BUILD_PYTHON
 namespace App {
 PROPERTY_SOURCE_TEMPLATE(App::LinkElementPython, App::LinkElement)
 template<> const char* App::LinkElementPython::getViewProviderName() const {
@@ -2296,6 +2313,7 @@ template<> const char* App::LinkElementPython::getViewProviderName() const {
 }
 template class AppExport FeaturePythonT<App::LinkElement>;
 }
+#endif
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -2308,6 +2326,7 @@ LinkGroup::LinkGroup() {
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
+#ifdef BUILD_PYTHON
 namespace App {
 PROPERTY_SOURCE_TEMPLATE(App::LinkGroupPython, App::LinkGroup)
 template<> const char* App::LinkGroupPython::getViewProviderName() const {
@@ -2315,6 +2334,7 @@ template<> const char* App::LinkGroupPython::getViewProviderName() const {
 }
 template class AppExport FeaturePythonT<App::LinkGroup>;
 }
+#endif
 
 #if defined(__clang__)
 # pragma clang diagnostic pop

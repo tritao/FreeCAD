@@ -43,11 +43,13 @@
 #include <App/ObjectIdentifier.h>
 #include <App/PropertyUnits.h>
 #include <Base/Interpreter.h>
+#ifdef BUILD_PYTHON
 #include <Base/MatrixPy.h>
 #include <Base/PlacementPy.h>
 #include <Base/QuantityPy.h>
 #include <Base/RotationPy.h>
 #include <Base/VectorPy.h>
+#endif
 
 #include "ExpressionParser.h"
 
@@ -330,6 +332,7 @@ static inline bool definitelyLessThan(T a, T b)
     return (b - a) > ( (std::fabs(a) < std::fabs(b) ? std::fabs(b) : std::fabs(a)) * _epsilon);
 }
 
+#ifdef BUILD_PYTHON
 static inline int essentiallyInteger(double a, long &l, int &i) {
     double intpart;
     if (std::modf(a,&intpart) == 0.0) {
@@ -356,6 +359,7 @@ static inline int essentiallyInteger(double a, long &l, int &i) {
     }
     return 0;
 }
+#endif
 
 static inline bool essentiallyInteger(double a, long &l) {
     double intpart;
@@ -374,6 +378,7 @@ static inline bool essentiallyInteger(double a, long &l) {
     return false;
 }
 
+#ifdef BUILD_PYTHON
 // This class is intended to be contained inside App::any (via a shared_ptr)
 // without holding Python global lock
 struct PyObjectWrapper {
@@ -438,8 +443,10 @@ static Py::Object _pyObjectFromAny(const App::any &value, const Expression *e) {
 
     _EXPR_THROW("Unknown type", e);
 }
+#endif
 
 namespace App {
+#ifdef BUILD_PYTHON
 Py::Object pyObjectFromAny(const App::any &value) {
     return _pyObjectFromAny(value,nullptr);
 }
@@ -514,6 +521,7 @@ Py::Object pyFromQuantity(const Quantity &quantity) {
         return Py::Float(v);
     }
 }
+#endif
 
 Quantity anyToQuantity(const App::any &value, const char *msg) {
     if (is_type(value,typeid(Quantity))) {
@@ -621,7 +629,7 @@ bool isAnyEqual(const App::any &v1, const App::any &v2) {
 
     if (is_type(v1,typeid(Quantity)))
         return cast<Quantity>(v1) == cast<Quantity>(v2);
-
+#ifdef BUILD_PYTHON
     if (!isAnyPyObject(v1))
         throw Base::TypeError("Unknown type");
 
@@ -634,8 +642,12 @@ bool isAnyEqual(const App::any &v1, const App::any &v2) {
     if(res<0)
         PyException::ThrowException();
     return !!res;
+#else
+    throw Base::TypeError("Unknown type");
+#endif
 }
 
+#ifdef BUILD_PYTHON
 Expression* expressionFromPy(const DocumentObject *owner, const Py::Object &value) {
     if (value.isNone())
         return new PyObjectExpression(owner);
@@ -656,6 +668,7 @@ Expression* expressionFromPy(const DocumentObject *owner, const Py::Object &valu
     }
     return new PyObjectExpression(owner,value.ptr());
 }
+#endif
 
 } // namespace App
 
@@ -705,6 +718,7 @@ Expression::Component* Expression::Component::eval() const {
     return res;
 }
 
+#ifdef BUILD_PYTHON
 Py::Object Expression::Component::get(const Expression *owner, const Py::Object &pyobj) const {
     try {
         if(!e1 && !e2 && !e3)
@@ -813,6 +827,7 @@ void Expression::Component::del(const Expression *owner, Py::Object &pyobj) cons
         EXPR_PY_THROW(owner);
     }
 }
+#endif
 
 void Expression::Component::visit(ExpressionVisitor &v) {
     if(e1) e1->visit(v);
@@ -1105,10 +1120,15 @@ ExpressionPtr Expression::replaceObject(const DocumentObject *parent,
 }
 
 App::any Expression::getValueAsAny() const {
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
     return pyObjectToAny(getPyValue());
+#else
+    assert(0 && "Expression::getValueAsAny() not implemented");
+#endif
 }
 
+#ifdef BUILD_PYTHON
 Py::Object Expression::getPyValue() const {
     try {
         Py::Object pyobj = _getPyValue();
@@ -1122,6 +1142,7 @@ Py::Object Expression::getPyValue() const {
     }
     return Py::Object();
 }
+#endif
 
 void Expression::addComponent(Component *component) {
     assert(component);
@@ -1136,8 +1157,13 @@ void Expression::visit(ExpressionVisitor &v) {
 }
 
 Expression* Expression::eval() const {
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
     return expressionFromPy(owner,getPyValue());
+#else
+    assert(0 && "Expression::eval() not implemented");
+    return nullptr;
+#endif
 }
 
 bool Expression::isSame(const Expression &other, bool checkComment) const {
@@ -1197,20 +1223,24 @@ UnitExpression::UnitExpression(const DocumentObject *_owner, const Base::Quantit
 }
 
 UnitExpression::~UnitExpression() {
+#ifdef BUILD_PYTHON
     if(cache) {
         Base::PyGILStateLocker lock;
         Py::_XDECREF(cache);
     }
+#endif
 }
 
 void UnitExpression::setQuantity(const Quantity &_quantity)
 {
     quantity = _quantity;
+#ifdef BUILD_PYTHON
     if(cache) {
         Base::PyGILStateLocker lock;
         Py::_XDECREF(cache);
         cache = nullptr;
     }
+#endif
 }
 
 /**
@@ -1224,11 +1254,13 @@ void UnitExpression::setQuantity(const Quantity &_quantity)
 void UnitExpression::setUnit(const Quantity &_quantity)
 {
     quantity = _quantity;
+#ifdef BUILD_PYTHON
     if(cache) {
         Base::PyGILStateLocker lock;
         Py::_XDECREF(cache);
         cache = nullptr;
     }
+#endif
 }
 
 /**
@@ -1263,11 +1295,13 @@ Expression *UnitExpression::_copy() const
     return new UnitExpression(owner, quantity, unitStr);
 }
 
+#ifdef BUILD_PYTHON
 Py::Object UnitExpression::_getPyValue() const {
     if(!cache)
         cache = Py::new_reference_to(pyFromQuantity(quantity));
     return Py::Object(cache);
 }
+#endif
 
 //
 // NumberExpression class
@@ -1362,6 +1396,7 @@ bool OperatorExpression::isTouched() const
     return left->isTouched() || right->isTouched();
 }
 
+#ifdef BUILD_PYTHON
 static Py::Object calc(const Expression *expr, int op,
                  const Expression *left, const Expression *right, bool inplace)
 {
@@ -1477,6 +1512,7 @@ static Py::Object calc(const Expression *expr, int op,
 Py::Object OperatorExpression::_getPyValue() const {
     return calc(this,op,left,right,false);
 }
+#endif
 
 /**
   * Simplify the expression. For OperatorExpressions, we return a NumberExpression if
@@ -1935,6 +1971,7 @@ public:
     }
 };
 
+#ifdef BUILD_PYTHON
 Py::Object FunctionExpression::evalAggregate(
         const Expression *owner, int f, const std::vector<Expression*> &args)
 {
@@ -2324,6 +2361,7 @@ Py::Object FunctionExpression::evaluate(const Expression *expr, int f, const std
 Py::Object FunctionExpression::_getPyValue() const {
     return evaluate(this,f,args);
 }
+#endif
 
 /**
   * Try to simplify the expression, i.e calculate all constant expressions.
@@ -2579,9 +2617,11 @@ bool VariableExpression::_isIndexable() const {
     return true;
 }
 
+#ifdef BUILD_PYTHON
 Py::Object VariableExpression::_getPyValue() const {
     return var.getPyValue(true);
 }
+#endif
 
 void VariableExpression::_toString(std::ostream &ss, bool persistent,int) const {
     if(persistent)
@@ -2727,6 +2767,7 @@ void VariableExpression::setPath(const ObjectIdentifier &path)
      var = path;
 }
 
+#ifdef BUILD_PYTHON
 //
 // PyObjectExpression class
 //
@@ -2775,6 +2816,7 @@ Expression* PyObjectExpression::_copy() const
 {
     return new PyObjectExpression(owner,pyObj,false);
 }
+#endif
 
 //
 // StringExpression class
@@ -2789,10 +2831,12 @@ StringExpression::StringExpression(const DocumentObject *_owner, const std::stri
 }
 
 StringExpression::~StringExpression() {
+#ifdef BUILD_PYTHON
     if(cache) {
         Base::PyGILStateLocker lock;
         Py::_XDECREF(cache);
     }
+#endif
 }
 
 /**
@@ -2818,9 +2862,11 @@ Expression *StringExpression::_copy() const
     return new StringExpression(owner, text);
 }
 
+#ifdef BUILD_PYTHON
 Py::Object StringExpression::_getPyValue() const {
     return Py::String(text);
 }
+#endif
 
 TYPESYSTEM_SOURCE(App::ConditionalExpression, App::Expression)
 
@@ -2844,12 +2890,14 @@ bool ConditionalExpression::isTouched() const
     return condition->isTouched() || trueExpr->isTouched() || falseExpr->isTouched();
 }
 
+#ifdef BUILD_PYTHON
 Py::Object ConditionalExpression::_getPyValue() const {
     if(condition->getPyValue().isTrue())
         return trueExpr->getPyValue();
     else
         return falseExpr->getPyValue();
 }
+#endif
 
 Expression *ConditionalExpression::simplify() const
 {
@@ -2923,6 +2971,7 @@ void ConstantExpression::_toString(std::ostream &ss, bool,int) const
     ss << name;
 }
 
+#ifdef BUILD_PYTHON
 Py::Object ConstantExpression::_getPyValue() const {
     if(!cache) {
         if(strcmp(name,"None")==0)
@@ -2936,6 +2985,7 @@ Py::Object ConstantExpression::_getPyValue() const {
     }
     return Py::Object(cache);
 }
+#endif
 
 bool ConstantExpression::isNumber() const {
     return strcmp(name,"None")
@@ -2964,6 +3014,7 @@ bool RangeExpression::isTouched() const
     return false;
 }
 
+#ifdef BUILD_PYTHON
 Py::Object RangeExpression::_getPyValue() const {
     Py::List list;
     Range range(getRange());
@@ -2974,6 +3025,7 @@ Py::Object RangeExpression::_getPyValue() const {
     } while (range.next());
     return list;
 }
+#endif
 
 void RangeExpression::_toString(std::ostream &ss, bool,int) const
 {
@@ -3013,6 +3065,7 @@ Range RangeExpression::getRange() const
     if(c1.isValid() && c2.isValid())
         return Range(c1,c2);
 
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
     static const std::string attr("getCellFromAlias");
     Py::Object pyobj(owner->getPyObject(),true);
@@ -3041,6 +3094,7 @@ Range RangeExpression::getRange() const
             _EXPR_RETHROW(e,"Invalid cell address '" << end << "': ", this);
         }
     }
+#endif
     return Range(c1,c2);
 }
 

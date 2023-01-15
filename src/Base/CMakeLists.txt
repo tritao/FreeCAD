@@ -62,28 +62,33 @@ include_directories(
 list(APPEND FreeCADBase_LIBS ${QtCore_LIBRARIES})
 
 
-if (BUILD_DYNAMIC_LINK_PYTHON)
-    list(APPEND FreeCADBase_LIBS ${PYTHON_LIBRARIES})
-endif (BUILD_DYNAMIC_LINK_PYTHON)
+if (BUILD_PYTHON)
+    if (BUILD_DYNAMIC_LINK_PYTHON)
+        list(APPEND FreeCADBase_LIBS ${PYTHON_LIBRARIES})
+    endif (BUILD_DYNAMIC_LINK_PYTHON)
+endif()
 
 # needed for OpenSUSE
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     list(APPEND FreeCADBase_LIBS -lutil -ldl)
 endif()
 
-generate_from_xml(TypePy)
-generate_from_xml(BaseClassPy)
-generate_from_xml(BoundBoxPy)
-generate_from_xml(CoordinateSystemPy)
-generate_from_xml(PersistencePy)
-generate_from_xml(VectorPy)
-generate_from_xml(MatrixPy)
-generate_from_xml(RotationPy)
-generate_from_xml(PlacementPy)
-generate_from_xml(AxisPy)
-generate_from_xml(UnitPy)
-generate_from_xml(QuantityPy)
-generate_from_xml(PrecisionPy)
+if (BUILD_PYTHON)
+    generate_from_xml(TypePy)
+    generate_from_xml(BaseClassPy)
+    generate_from_xml(BoundBoxPy)
+    generate_from_xml(CoordinateSystemPy)
+    generate_from_xml(PersistencePy)
+    generate_from_xml(VectorPy)
+    generate_from_xml(MatrixPy)
+    generate_from_xml(RotationPy)
+    generate_from_xml(PlacementPy)
+    generate_from_xml(AxisPy)
+    generate_from_xml(UnitPy)
+    generate_from_xml(QuantityPy)
+    generate_from_xml(PrecisionPy)
+endif()
+
 generate_from_any(Parameter.xsd Parameter.inl xmlSchemeString)
 
 if(SWIG_FOUND)
@@ -149,8 +154,6 @@ SET(zipios_SRCS
 SOURCE_GROUP("zipios" FILES ${zipios_SRCS})
 endif ()
 
-SOURCE_GROUP("pycxx" FILES ${PYCXX_SOURCES})
-
 SET(FreeCADBase_XML_SRCS
     AxisPy.xml
     BaseClassPy.xml
@@ -167,6 +170,10 @@ SET(FreeCADBase_XML_SRCS
     PrecisionPy.xml
 )
 SOURCE_GROUP("XML" FILES ${FreeCADBase_XML_SRCS})
+
+IF (NOT BUILD_PYTHON)
+    LIST(FILTER FreeCADBase_XML_SRCS EXCLUDE REGEX ".*Py\\.xml$")
+ENDIF()
 
 SET(FreeCADBase_UNITAPI_SRCS
     UnitsApi.cpp
@@ -197,9 +204,18 @@ SET(FreeCADBase_UNITAPI_SRCS
 )
 SOURCE_GROUP("Units" FILES ${FreeCADBase_UNITAPI_SRCS})
 
+IF (NOT BUILD_PYTHON)
+    LIST(FILTER FreeCADBase_UNITAPI_SRCS EXCLUDE REGEX ".*Py\\.cpp$")
+    LIST(FILTER FreeCADBase_UNITAPI_SRCS EXCLUDE REGEX ".*PyImp\\.cpp$")
+ENDIF()
+
 SET(SWIG_SRCS
     swigpyrun.cpp
 )
+
+IF (NOT BUILD_PYTHON)
+    SET(SWIG_SRCS )
+ENDIF()
 
 SET(FreeCADBase_CPP_SRCS
     Axis.cpp
@@ -267,6 +283,13 @@ SET(FreeCADBase_CPP_SRCS
     XMLTools.cpp
     ZipHeader.cpp
 )
+
+IF (NOT BUILD_PYTHON)
+    LIST(FILTER FreeCADBase_CPP_SRCS EXCLUDE REGEX ".*Py\\.cpp$")
+    LIST(FILTER FreeCADBase_CPP_SRCS EXCLUDE REGEX ".*PyCXX\\.cpp$")
+    LIST(FILTER FreeCADBase_CPP_SRCS EXCLUDE REGEX ".*PyImp\\.cpp$")
+    LIST(FILTER FreeCADBase_CPP_SRCS EXCLUDE REGEX ".*PyExport\\.cpp$")
+ENDIF()
 
 SET(SWIG_HEADERS
     swigpyrun.inl
@@ -343,6 +366,10 @@ SET(FreeCADBase_SRCS
     PreCompiled.cpp
     PreCompiled.h
 )
+
+IF (NOT BUILD_PYTHON)
+    LIST(FILTER FreeCADBase_SRCS EXCLUDE REGEX ".*PyTools\\..*$")
+ENDIF()
 
 IF (MSVC)
     SET(FreeCADBase_SRCS

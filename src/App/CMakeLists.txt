@@ -76,26 +76,28 @@ list(APPEND FreeCADApp_LIBS
         ${QtXml_LIBRARIES}
 )
 
-generate_from_xml(DocumentPy)
-generate_from_xml(DocumentObjectPy)
-generate_from_xml(ExtensionPy)
-generate_from_xml(ExtensionContainerPy)
-generate_from_xml(DocumentObjectExtensionPy)
-generate_from_xml(GroupExtensionPy)
-generate_from_xml(LinkBaseExtensionPy)
-generate_from_xml(DocumentObjectGroupPy)
-generate_from_xml(GeoFeaturePy)
-generate_from_xml(GeoFeatureGroupExtensionPy)
-generate_from_xml(MetadataPy)
-generate_from_xml(OriginGroupExtensionPy)
-generate_from_xml(PartPy)
+if (BUILD_PYTHON)
+    generate_from_xml(DocumentPy)
+    generate_from_xml(DocumentObjectPy)
+    generate_from_xml(ExtensionPy)
+    generate_from_xml(ExtensionContainerPy)
+    generate_from_xml(DocumentObjectExtensionPy)
+    generate_from_xml(GroupExtensionPy)
+    generate_from_xml(LinkBaseExtensionPy)
+    generate_from_xml(DocumentObjectGroupPy)
+    generate_from_xml(GeoFeaturePy)
+    generate_from_xml(GeoFeatureGroupExtensionPy)
+    generate_from_xml(MetadataPy)
+    generate_from_xml(OriginGroupExtensionPy)
+    generate_from_xml(PartPy)
 
-generate_from_xml(ComplexGeoDataPy)
-generate_from_xml(PropertyContainerPy)
-generate_from_xml(MaterialPy)
+    generate_from_xml(ComplexGeoDataPy)
+    generate_from_xml(PropertyContainerPy)
+    generate_from_xml(MaterialPy)
 
-generate_from_py(FreeCADInit InitScript.h)
-generate_from_py(FreeCADTest TestScript.h)
+    generate_from_py(FreeCADInit InitScript.h)
+    generate_from_py(FreeCADTest TestScript.h)
+endif()
 
 SET(FreeCADApp_XML_SRCS
     ExtensionPy.xml
@@ -165,6 +167,11 @@ SET(Document_CPP_SRCS
     LinkBaseExtensionPyImp.cpp
 )
 
+IF (NOT BUILD_PYTHON)
+    LIST(FILTER Document_CPP_SRCS EXCLUDE REGEX ".*Python\\.cpp$")
+    LIST(FILTER Document_CPP_SRCS EXCLUDE REGEX ".*PyImp\\.cpp$")
+ENDIF()
+
 SET(Document_HPP_SRCS
     Annotation.h
     Document.h
@@ -225,6 +232,12 @@ SET(Properties_CPP_SRCS
     PropertyUnits.cpp
     PropertyExpressionEngine.cpp
 )
+IF (NOT BUILD_PYTHON)
+    LIST(FILTER Properties_CPP_SRCS EXCLUDE REGEX ".*Py\\.cpp$")
+    LIST(FILTER Properties_CPP_SRCS EXCLUDE REGEX ".*PyImp\\.cpp$")
+    LIST(FILTER Properties_CPP_SRCS EXCLUDE REGEX ".*Python\\.cpp$")
+    LIST(FILTER Properties_CPP_SRCS EXCLUDE REGEX "PropertyPythonObject\\.cpp$")
+ENDIF()
 SET(Properties_HPP_SRCS
     DynamicProperty.h
     ObjectIdentifier.h
@@ -244,6 +257,8 @@ SET(Properties_SRCS
 )
 SOURCE_GROUP("Properties" FILES ${Properties_SRCS})
 
+
+
 SET(FreeCADApp_CPP_SRCS
     ${Document_CPP_SRCS}
     ${Properties_CPP_SRCS}
@@ -260,6 +275,11 @@ SET(FreeCADApp_CPP_SRCS
     Metadata.cpp
     MetadataPyImp.cpp
 )
+
+IF (NOT BUILD_PYTHON)
+    LIST(FILTER FreeCADApp_CPP_SRCS EXCLUDE REGEX ".*Py\\.cpp$")
+    LIST(FILTER FreeCADApp_CPP_SRCS EXCLUDE REGEX ".*PyImp\\.cpp$")
+ENDIF()
 
 SET(FreeCADApp_HPP_SRCS
     ${Document_HPP_SRCS}

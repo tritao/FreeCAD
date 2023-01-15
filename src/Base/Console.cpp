@@ -35,7 +35,9 @@
 
 #include "Console.h"
 #include "Exception.h"
+#ifdef BUILD_PYTHON
 #include "PyObjectBase.h"
+#endif
 #include <QCoreApplication>
 
 
@@ -443,6 +445,7 @@ ConsoleSingleton & ConsoleSingleton::Instance()
     return *_pcSingleton;
 }
 
+#ifdef BUILD_PYTHON
 //**************************************************************************
 // Python stuff
 
@@ -612,5 +615,6 @@ PyObject *ConsoleSingleton::sPyGetObservers(PyObject * /*self*/, PyObject *args)
     }
     PY_CATCH
 }
+#endif
 
 Base::ILogger::~ILogger() = default;

@@ -24,8 +24,10 @@
 #include "PreCompiled.h"
 
 #include "DocumentObjectGroup.h"
+#ifdef BUILD_PYTHON
 #include "DocumentObjectGroupPy.h"
 #include "FeaturePythonPyImp.h"
+#endif
 
 using namespace App;
 
@@ -39,6 +41,7 @@ DocumentObjectGroup::DocumentObjectGroup(): DocumentObject(), GroupExtension() {
 
 DocumentObjectGroup::~DocumentObjectGroup() = default;
 
+#ifdef BUILD_PYTHON
 PyObject *DocumentObjectGroup::getPyObject()
 {
     if (PythonObject.is(Py::_None())){
@@ -47,7 +50,9 @@ PyObject *DocumentObjectGroup::getPyObject()
     }
     return Py::new_reference_to(PythonObject);
 }
+#endif
 
+#ifdef BUILD_PYTHON
 
 // Python feature ---------------------------------------------------------
 
@@ -70,3 +75,5 @@ template<> PyObject* App::DocumentObjectGroupPython::getPyObject() {
 // explicit template instantiation
 template class AppExport FeaturePythonT<App::DocumentObjectGroup>;
 }
+
+#endif

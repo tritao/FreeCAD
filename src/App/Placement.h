@@ -24,7 +24,12 @@
 #ifndef _AppPlacement_h_
 #define _AppPlacement_h_
 
+#include "GeoFeature.h"
+#include <FCGlobal.h>
+
+#ifdef BUILD_PYTHON
 #include "FeaturePython.h"
+#endif
 
 namespace App
 {
@@ -48,8 +53,10 @@ public:
 
 
 };
-using PlacementPython = App::FeaturePythonT<App::Placement>;
 
+#ifdef BUILD_PYTHON
+using PlacementPython = App::FeaturePythonT<App::Placement>;
+#endif
 
 } //namespace App
 

@@ -48,7 +48,9 @@ public:
         return DocumentObject::StdReturn;
     }
     short mustExecute() const override;
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
     void SaveDocFile (Base::Writer &writer) const override;

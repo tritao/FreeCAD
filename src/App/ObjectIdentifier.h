@@ -419,7 +419,9 @@ public:
 
     App::any getValue(bool pathValue=false, bool *isPseudoProperty=nullptr) const;
 
+#ifdef BUILD_PYTHON
     Py::Object getPyValue(bool pathValue=false, bool *isPseudoProperty=nullptr) const;
+#endif
 
     // Setter: is const because it does not alter the object state,
     // but does have an aiding effect.

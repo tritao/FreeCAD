@@ -854,6 +854,7 @@ void PropertyExpressionEngine::renameObjectIdentifiers(const std::map<ObjectIden
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyExpressionEngine::getPyObject()
 {
     Py::List list;
@@ -871,6 +872,7 @@ void PropertyExpressionEngine::setPyObject(PyObject *)
 {
     throw Base::RuntimeError("Property is read-only");
 }
+#endif
 
 /* The policy implemented in the following function is to auto erase binding in
  * case linked object is gone. I think it is better to cause error and get

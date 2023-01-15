@@ -82,7 +82,9 @@ recompute path. Also, it enables more complicated dependencies beyond trees.
 #include <QCryptographicHash>
 #include <QCoreApplication>
 
+#ifdef BUILD_PYTHON
 #include <App/DocumentPy.h>
+#endif
 #include <Base/Console.h>
 #include <Base/Exception.h>
 #include <Base/FileInfo.h>
@@ -120,7 +122,9 @@ recompute path. Also, it enables more complicated dependencies beyond trees.
 FC_LOG_LEVEL_INIT("App", true, true, true)
 
 using Base::Console;
+#ifdef BUILD_PYTHON
 using Base::streq;
+#endif
 using Base::Writer;
 using namespace App;
 using namespace std;
@@ -166,8 +170,10 @@ struct DocumentP
     long lastObjectId;
     DocumentObject* activeObject;
     Transaction *activeUndoTransaction;
+#ifdef BUILD_PYTHON
     // pointer to the python class
     Py::Object DocumentPythonObject;
+#endif
     int iTransactionMode;
     bool rollback;
     bool undoing; ///< document in the middle of undo or redo
@@ -1526,7 +1532,9 @@ Document::Document(const char *name)
     // Remark: We force the document Python object to own the DocumentPy instance, thus we don't
     // have to care about ref counting any more.
     d = new DocumentP;
+#ifdef BUILD_PYTHON
     d->DocumentPythonObject = Py::Object(new DocumentPy(this), true);
+#endif
 
 #ifdef FC_LOGUPDATECHAIN
     Console().Log("+App::Document: %p\n", this);
@@ -1634,6 +1642,7 @@ Document::~Document()
 
     d->clearDocument();
 
+#ifdef BUILD_PYTHON
     // Remark: The API of Py::Object has been changed to set whether the wrapper owns the passed
     // Python object or not. In the constructor we forced the wrapper to own the object so we need
     // not to dec'ref the Python object any more.
@@ -1643,6 +1652,7 @@ Document::~Document()
     Base::PyObjectBase* doc = static_cast<Base::PyObjectBase*>(d->DocumentPythonObject.ptr());
     // Call before decrementing the reference counter, otherwise a heap error can occur
     doc->setInvalid();
+#endif
 
     // remove Transient directory
     try {
@@ -4643,10 +4653,12 @@ int Document::countObjectsOfType(const Base::Type& typeId) const
     return ct;
 }
 
+#ifdef BUILD_PYTHON
 PyObject * Document::getPyObject()
 {
     return Py::new_reference_to(d->DocumentPythonObject);
 }
+#endif
 
 std::vector<App::DocumentObject*> Document::getRootObjects() const
 {
