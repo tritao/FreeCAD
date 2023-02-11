@@ -34,6 +34,12 @@
 # include <Inventor/nodes/SoSeparator.h>
 # include <Inventor/nodes/SoSwitch.h>
 # include <Inventor/nodes/SoTransform.h>
+# include <Inventor/nodes/SoCamera.h>
+# include <Inventor/events/SoMouseButtonEvent.h>
+# include <Inventor/events/SoKeyboardEvent.h>
+# include <Inventor/events/SoLocation2Event.h>
+# include <Inventor/actions/SoGetMatrixAction.h>
+# include <Inventor/actions/SoSearchAction.h>
 #endif
 
 #include <Base/BoundBox.h>

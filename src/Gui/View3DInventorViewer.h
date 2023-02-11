@@ -30,6 +30,12 @@
 #include <set>
 #include <vector>
 
+#include <Base/Type.h>
+#include <Inventor/SbColor.h>
+#include <Inventor/nodes/SoEventCallback.h>
+#include <Inventor/nodes/SoSwitch.h>
+#include <Inventor/SbRotation.h>
+#include <Gui/Quarter/SoQTQuarterAdaptor.h>
 #include <QCursor>
 #include <QImage>
 
@@ -64,6 +70,7 @@ class SoGroup;
 class SoPickStyle;
 class NaviCube;
 class SoClipPlane;
+class SoDirectionalLight;
 
 #ifdef BUILD_QUARTER
 namespace Quarter = SIM::Coin3D::Quarter;
