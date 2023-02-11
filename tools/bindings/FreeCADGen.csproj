@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net6.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <LangVersion>10</LangVersion>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+      <PlatformTarget>x64</PlatformTarget>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+      <PlatformTarget>x64</PlatformTarget>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\..\CppSharp\src\AST\CppSharp.AST.csproj" />
+      <ProjectReference Include="..\..\..\CppSharp\src\Core\CppSharp.csproj" />
+      <ProjectReference Include="..\..\..\CppSharp\src\CppParser\Bindings\CSharp\CppSharp.Parser.CSharp.csproj" />
+      <ProjectReference Include="..\..\..\CppSharp\src\Generator\CppSharp.Generator.csproj" />
+      <ProjectReference Include="..\..\..\CppSharp\src\Parser\CppSharp.Parser.csproj" />
+      <ProjectReference Include="..\..\..\CppSharp\src\Runtime\CppSharp.Runtime.csproj" />
+    </ItemGroup>
+
+</Project>

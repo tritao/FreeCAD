@@ -295,6 +295,12 @@ SET(SWIG_HEADERS
     swigpyrun.inl
 )
 
+if (BUILD_JS)
+    LIST(APPEND FreeCADBase_CPP_SRCS
+        VectorJS.cpp
+    )
+endif()
+
 SET(FreeCADBase_HPP_SRCS
     Axis.h
     Base64.h

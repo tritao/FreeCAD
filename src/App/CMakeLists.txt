@@ -276,6 +276,13 @@ SET(FreeCADApp_CPP_SRCS
     MetadataPyImp.cpp
 )
 
+if (BUILD_JS)
+    LIST(APPEND FreeCADApp_CPP_SRCS
+        ApplicationJS.cpp
+        DocumentJS.cpp
+    )
+endif()
+
 IF (NOT BUILD_PYTHON)
     LIST(FILTER FreeCADApp_CPP_SRCS EXCLUDE REGEX ".*Py\\.cpp$")
     LIST(FILTER FreeCADApp_CPP_SRCS EXCLUDE REGEX ".*PyImp\\.cpp$")
