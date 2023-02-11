@@ -273,6 +273,7 @@ typedef unsigned __int64    uint64_t;
 
 //**************************************************************************
 // Quarter
+#ifdef BUILD_QUARTER
 #if defined (FC_OS_WIN32) || defined(FC_OS_CYGWIN)
 # ifndef QUARTER_INTERNAL
 #  ifndef QUARTER_DLL
@@ -280,6 +281,8 @@ typedef unsigned __int64    uint64_t;
 #  endif
 # endif
 #endif
+#endif
+
 
 // stops inclusion of the QT 3 header through the SoQT header...
 //#define __Qt3All__

@@ -42,8 +42,10 @@
 #include "Namespace.h"
 #include "Selection.h"
 #include "View3DInventorSelection.h"
-#include "Quarter/SoQTQuarterAdaptor.h"
 
+#ifdef BUILD_QUARTER
+#include "Quarter/SoQTQuarterAdaptor.h"
+#endif
 
 class SoTranslation;
 class SoTransform;
@@ -63,7 +65,9 @@ class SoPickStyle;
 class NaviCube;
 class SoClipPlane;
 
+#ifdef BUILD_QUARTER
 namespace Quarter = SIM::Coin3D::Quarter;
+#endif
 
 namespace Gui {
 
@@ -79,9 +83,16 @@ class ViewerEventFilter;
 /** GUI view into a 3D scene provided by View3DInventor
  *
  */
-class GuiExport View3DInventorViewer : public Quarter::SoQTQuarterAdaptor, public SelectionObserver
+class GuiExport View3DInventorViewer :
+#ifdef BUILD_QUARTER
+    public Quarter::SoQTQuarterAdaptor,
+#endif
+    public SelectionObserver
 {
+#ifdef BUILD_QUARTER
     using inherited = Quarter::SoQTQuarterAdaptor;
+#endif
+
     Q_OBJECT
 
 public:
@@ -422,8 +433,10 @@ private:
     static void clearBufferCB(void * userdata, SoAction * action);
     static void setGLWidgetCB(void * userdata, SoAction * action);
     static void handleEventCB(void * userdata, SoEventCallback * n);
+#ifdef BUILD_QUARTER
     static void interactionStartCB(void * data, Quarter::SoQTQuarterAdaptor * viewer);
     static void interactionFinishCB(void * data, Quarter::SoQTQuarterAdaptor * viewer);
+#endif
     static void interactionLoggerCB(void * ud, SoAction* action);
 
 private:

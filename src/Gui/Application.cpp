@@ -52,7 +52,10 @@
 #include <Base/Tools.h>
 
 #include <Language/Translator.h>
+
+#ifdef BUILD_QUARTER
 #include <Quarter/Quarter.h>
+#endif
 
 #include "Application.h"
 #include "AutoSaver.h"

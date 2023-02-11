@@ -840,6 +840,7 @@ SET(View3D_SRCS
 SOURCE_GROUP("View3D" FILES ${View3D_SRCS})
 
 #quarter sources
+if(BUILD_QUARTER)
 FILE(GLOB_RECURSE Quarter_CPP_SRC RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} Quarter/*.cpp)
 FILE(GLOB_RECURSE Quarter_H_SRC RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} Quarter/*.h)
 
@@ -862,6 +863,7 @@ SET(Quarter_SRCS
     ${Quarter_MOC_SRCS}
 )
 SOURCE_GROUP("Quarter" FILES ${Quarter_SRCS})
+endif()
 
 # The view provider sources
 SET(Viewprovider_CPP_SRCS
