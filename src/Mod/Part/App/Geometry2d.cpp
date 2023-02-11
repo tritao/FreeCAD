@@ -63,6 +63,7 @@
 
 #include "Geometry2d.h"
 
+#ifdef BUILD_PYTHON
 #include <Geom2d/ArcOfCircle2dPy.h>
 #include <Geom2d/ArcOfEllipse2dPy.h>
 #include <Geom2d/ArcOfHyperbola2dPy.h>
@@ -76,7 +77,7 @@
 #include <Geom2d/Line2dPy.h>
 #include <Geom2d/OffsetCurve2dPy.h>
 #include <Geom2d/Parabola2dPy.h>
-
+#endif
 
 using namespace Part;
 using namespace std;
@@ -199,6 +200,7 @@ void Geom2dPoint::Restore(Base::XMLReader &reader)
     setPoint(Base::Vector2d(X,Y));
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Geom2dPoint::getPyObject()
 {
     Handle(Geom2d_CartesianPoint) c = Handle(Geom2d_CartesianPoint)::DownCast(handle());
@@ -209,7 +211,7 @@ PyObject *Geom2dPoint::getPyObject()
     tuple.setItem(1, Py::Float(xy.Y()));
     return Py::new_reference_to(tuple);
 }
-
+#endif
 // -------------------------------------------------
 
 TYPESYSTEM_SOURCE_ABSTRACT(Part::Geom2dCurve, Part::Geometry2d)
@@ -382,10 +384,12 @@ void Geom2dBezierCurve::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("Geom2dBezierCurve::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Geom2dBezierCurve::getPyObject()
 {
     return new BezierCurve2dPy(static_cast<Geom2dBezierCurve*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -586,10 +590,12 @@ void Geom2dBSplineCurve::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("Geom2dBSplineCurve::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Geom2dBSplineCurve::getPyObject()
 {
     return new BSplineCurve2dPy(static_cast<Geom2dBSplineCurve*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -900,10 +906,12 @@ void Geom2dCircle::Restore(Base::XMLReader& reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Geom2dCircle::getPyObject()
 {
     return new Circle2dPy(static_cast<Geom2dCircle*>(this->clone()));
 }
+#endif
 
 /*
 Find the centerpoint of a circle drawn through any 3 points:
@@ -1069,10 +1077,12 @@ void Geom2dArcOfCircle::Restore(Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Geom2dArcOfCircle::getPyObject()
 {
     return new ArcOfCircle2dPy(static_cast<Geom2dArcOfCircle*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -1224,10 +1234,12 @@ void Geom2dEllipse::Restore(Base::XMLReader& reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Geom2dEllipse::getPyObject()
 {
     return new Ellipse2dPy(static_cast<Geom2dEllipse*>(this->clone()));
 }
+#endif
 
 void Geom2dEllipse::setHandle(const Handle(Geom2d_Ellipse) &e)
 {
@@ -1410,10 +1422,12 @@ void Geom2dArcOfEllipse::Restore(Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Geom2dArcOfEllipse::getPyObject()
 {
     return new ArcOfEllipse2dPy(static_cast<Geom2dArcOfEllipse*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -1530,10 +1544,12 @@ void Geom2dHyperbola::Restore(Base::XMLReader& reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Geom2dHyperbola::getPyObject()
 {
     return new Hyperbola2dPy(static_cast<Geom2dHyperbola*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -1672,10 +1688,12 @@ void Geom2dArcOfHyperbola::Restore(Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Geom2dArcOfHyperbola::getPyObject()
 {
     return new ArcOfHyperbola2dPy(static_cast<Geom2dArcOfHyperbola*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -1773,10 +1791,12 @@ void Geom2dParabola::Restore(Base::XMLReader& reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Geom2dParabola::getPyObject()
 {
     return new Parabola2dPy(static_cast<Geom2dParabola*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -1895,10 +1915,12 @@ void Geom2dArcOfParabola::Restore(Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Geom2dArcOfParabola::getPyObject()
 {
     return new ArcOfParabola2dPy(static_cast<Geom2dArcOfParabola*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -2004,10 +2026,12 @@ void Geom2dLine::Restore(Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Geom2dLine::getPyObject()
 {
     return new Line2dPy(static_cast<Geom2dLine*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -2139,10 +2163,12 @@ void Geom2dLineSegment::Restore(Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Geom2dLineSegment::getPyObject()
 {
     return new Line2dSegmentPy(static_cast<Geom2dLineSegment*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -2197,10 +2223,12 @@ void Geom2dOffsetCurve::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("Geom2dOffsetCurve::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Geom2dOffsetCurve::getPyObject()
 {
     return new OffsetCurve2dPy(static_cast<Geom2dOffsetCurve*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -2250,6 +2278,7 @@ void Geom2dTrimmedCurve::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("Geom2dTrimmedCurve::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Geom2dTrimmedCurve::getPyObject()
 {
     Handle(Geom2d_Curve) basis = this->myCurve->BasisCurve();
@@ -2294,6 +2323,7 @@ PyObject *Geom2dTrimmedCurve::getPyObject()
     PyErr_SetString(PyExc_RuntimeError, "Unknown curve type");
     return nullptr;
 }
+#endif
 
 // ------------------------------------------------------------------
 

@@ -36,18 +36,23 @@
 #include <Base/Parameter.h>
 #include <Base/PrecisionPy.h>
 
+#ifdef BUILD_PYTHON
 #include "ArcOfCirclePy.h"
 #include "ArcOfConicPy.h"
 #include "ArcOfEllipsePy.h"
 #include "ArcOfHyperbolaPy.h"
 #include "ArcOfParabolaPy.h"
 #include "ArcPy.h"
+#endif
 #include "Attacher.h"
 #include "AttachExtension.h"
+#ifdef BUILD_PYTHON
 #include "AttachEnginePy.h"
 #include "BezierCurvePy.h"
 #include "BezierSurfacePy.h"
+#endif
 #include "BodyBase.h"
+#ifdef BUILD_PYTHON
 #include "BodyBasePy.h"
 #include "BRepOffsetAPI_MakeFillingPy.h"
 #include "BRepOffsetAPI_MakePipeShellPy.h"
@@ -56,10 +61,15 @@
 #include "CirclePy.h"
 #include "ConePy.h"
 #include "ConicPy.h"
+#endif
 #include "CustomFeature.h"
+#ifdef BUILD_PYTHON
 #include "CylinderPy.h"
+#endif
 #include "DatumFeature.h"
+#ifdef BUILD_PYTHON
 #include "EllipsePy.h"
+#endif
 #include "FaceMaker.h"
 #include "FaceMakerBullseye.h"
 #include "FaceMakerCheese.h"
@@ -87,28 +97,41 @@
 #include "FeatureRevolution.h"
 #include "Geometry.h"
 #include "Geometry2d.h"
+#ifdef BUILD_PYTHON
 #include "GeometryBoolExtensionPy.h"
 #include "GeometryDefaultExtension.h"
 #include "GeometryDoubleExtensionPy.h"
+#endif
 #include "GeometryExtension.h"
+#ifdef BUILD_PYTHON
 #include "GeometryIntExtensionPy.h"
+#endif
 #include "GeometryMigrationExtension.h"
+#ifdef BUILD_PYTHON
 #include "GeometryStringExtensionPy.h"
 #include "HyperbolaPy.h"
+#endif
 #include "ImportStep.h"
+#ifdef BUILD_PYTHON
 #include "LinePy.h"
 #include "LineSegmentPy.h"
 #include "OffsetCurvePy.h"
 #include "OffsetSurfacePy.h"
 #include "ParabolaPy.h"
+#endif
 #include "Part2DObject.h"
+#ifdef BUILD_PYTHON
 #include "Part2DObjectPy.h"
 #include "PartFeaturePy.h"
+#endif
 #include "PartFeatures.h"
+#ifdef BUILD_PYTHON
 #include "PlanePy.h"
 #include "PlateSurfacePy.h"
 #include "PointPy.h"
+#endif
 #include "PrimitiveFeature.h"
+#ifdef BUILD_PYTHON
 #include "RectangularTrimmedSurfacePy.h"
 #include "SpherePy.h"
 #include "SurfaceOfExtrusionPy.h"
@@ -123,10 +146,12 @@
 #include "TopoShapeVertexPy.h"
 #include "TopoShapeWirePy.h"
 #include "ToroidPy.h"
+#endif
 #include "OCCError.h"
 #include "PrismExtension.h"
 #include "PropertyGeometryList.h"
 
+#ifdef BUILD_PYTHON
 #include <BRepFeat/MakePrismPy.h>
 
 #include <ChFi2d/ChFi2d_AnaFilletAlgoPy.h>
@@ -180,15 +205,19 @@
 #include <ShapeFix/ShapeFix_WireVertexPy.h>
 
 #include <ShapeUpgrade/UnifySameDomainPy.h>
+#endif
 
 #include <OCAF/ImportExportSettings.h>
 
 namespace Part {
+#ifdef BUILD_PYTHON
 extern PyObject* initModule();
+#endif
 }
 
 using namespace Part;
 
+#ifdef BUILD_PYTHON
 PyObject* Part::PartExceptionOCCError;
 PyObject* Part::PartExceptionOCCDomainError;
 PyObject* Part::PartExceptionOCCRangeError;
@@ -544,3 +573,4 @@ PyMOD_INIT_FUNC(Part)
 
     PyMOD_Return(partModule);
 }
+#endif

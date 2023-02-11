@@ -33,12 +33,16 @@
 #endif
 
 #include "App/DocumentObject.h"
+#ifdef BUILD_PYTHON
 #include <App/FeaturePythonPyImp.h>
+#endif
 #include "App/OriginFeature.h"
 #include <Base/Console.h>
 
 #include "Feature.h"
+#ifdef BUILD_PYTHON
 #include "FeaturePy.h"
+#endif
 #include "Body.h"
 #include "ShapeBinder.h"
 
@@ -179,6 +183,7 @@ Part::TopoShape Feature::getBaseTopoShape(bool silent) const {
     return result;
 }
 
+#ifdef BUILD_PYTHON
 PyObject* Feature::getPyObject()
 {
     if (PythonObject.is(Py::_None())){
@@ -187,6 +192,7 @@ PyObject* Feature::getPyObject()
     }
     return Py::new_reference_to(PythonObject);
 }
+#endif
 
 bool Feature::isDatum(const App::DocumentObject* feature)
 {
@@ -236,6 +242,7 @@ Body* Feature::getFeatureBody() const {
 
 }//namespace PartDesign
 
+#ifdef BUILD_PYTHON
 namespace App {
 /// @cond DOXERR
 PROPERTY_SOURCE_TEMPLATE(PartDesign::FeaturePython, PartDesign::Feature)
@@ -254,4 +261,5 @@ template<> PyObject* PartDesign::FeaturePython::getPyObject() {
 // explicit template instantiation
 template class PartDesignExport FeaturePythonT<PartDesign::Feature>;
 }
+#endif
 

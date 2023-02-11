@@ -25,7 +25,9 @@
 #include <Base/Console.h>
 
 #include "AttachExtension.h"
+#ifdef BUILD_PYTHON
 #include "AttachExtensionPy.h"
+#endif
 
 
 using namespace Part;
@@ -274,6 +276,7 @@ App::PropertyPlacement& AttachExtension::getPlacement() const {
     return *pla;
 }
 
+#ifdef BUILD_PYTHON
 PyObject* AttachExtension::getExtensionPyObject() {
 
     if (ExtensionPythonObject.is(Py::_None())){
@@ -282,6 +285,7 @@ PyObject* AttachExtension::getExtensionPyObject() {
     }
     return Py::new_reference_to(ExtensionPythonObject);
 }
+#endif
 
 // ------------------------------------------------
 

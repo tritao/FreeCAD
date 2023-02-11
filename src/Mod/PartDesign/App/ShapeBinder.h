@@ -151,7 +151,9 @@ protected:
     std::vector<App::DocumentObjectT> _CopiedObjs;
 };
 
+#ifdef BUILD_PYTHON
 using SubShapeBinderPython = App::FeaturePythonT<SubShapeBinder>;
+#endif
 
 } //namespace PartDesign
 

@@ -108,20 +108,25 @@
 #include <Base/Writer.h>
 
 #include "Geometry.h"
+#ifdef BUILD_PYTHON
 #include "ArcOfCirclePy.h"
 #include "ArcOfEllipsePy.h"
 #include "ArcOfHyperbolaPy.h"
 #include "ArcOfParabolaPy.h"
 #include "BezierCurvePy.h"
 #include "BezierSurfacePy.h"
+#endif
 #include "BSplineCurveBiArcs.h"
+#ifdef BUILD_PYTHON
 #include "BSplineCurvePy.h"
 #include "BSplineSurfacePy.h"
 #include "CirclePy.h"
 #include "ConePy.h"
 #include "CylinderPy.h"
 #include "EllipsePy.h"
+#endif
 #include "GeometryMigrationExtension.h"
+#ifdef BUILD_PYTHON
 #include "HyperbolaPy.h"
 #include "LinePy.h"
 #include "LineSegmentPy.h"
@@ -135,9 +140,11 @@
 #include "SpherePy.h"
 #include "SurfaceOfExtrusionPy.h"
 #include "SurfaceOfRevolutionPy.h"
+#endif
 #include "Tools.h"
+#ifdef BUILD_PYTHON
 #include "ToroidPy.h"
-
+#endif
 
 #if OCC_VERSION_HEX >= 0x070600
 using GeomAdaptor_HCurve = GeomAdaptor_Curve;
@@ -559,10 +566,12 @@ void GeomPoint::Restore(Base::XMLReader &reader)
     setPoint(Base::Vector3d(X,Y,Z) );
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomPoint::getPyObject()
 {
     return new PointPy(new GeomPoint(getPoint()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -1086,10 +1095,12 @@ void GeomBezierCurve::Restore(Base::XMLReader& reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomBezierCurve::getPyObject()
 {
     return new BezierCurvePy(static_cast<GeomBezierCurve*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -1746,11 +1757,12 @@ void GeomBSplineCurve::Restore(Base::XMLReader& reader)
     }
 }
 
-
+#ifdef BUILD_PYTHON
 PyObject *GeomBSplineCurve::getPyObject()
 {
     return new BSplineCurvePy(static_cast<GeomBSplineCurve*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -1928,10 +1940,12 @@ void GeomTrimmedCurve::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("GeomTrimmedCurve::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomTrimmedCurve::getPyObject()
 {
     return new TrimmedCurvePy(static_cast<GeomTrimmedCurve*>(this->clone()));
 }
+#endif
 
 bool GeomTrimmedCurve::intersectBasisCurves(  const GeomTrimmedCurve * c,
                                 std::vector<std::pair<Base::Vector3d, Base::Vector3d>>& points,
@@ -2357,10 +2371,12 @@ void GeomCircle::Restore(Base::XMLReader& reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomCircle::getPyObject()
 {
     return new CirclePy(static_cast<GeomCircle*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -2596,10 +2612,12 @@ void GeomArcOfCircle::Restore(Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomArcOfCircle::getPyObject()
 {
     return new ArcOfCirclePy(static_cast<GeomArcOfCircle*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -2850,10 +2868,12 @@ void GeomEllipse::Restore(Base::XMLReader& reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomEllipse::getPyObject()
 {
     return new EllipsePy(static_cast<GeomEllipse*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -3123,10 +3143,12 @@ void GeomArcOfEllipse::Restore(Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomArcOfEllipse::getPyObject()
 {
     return new ArcOfEllipsePy(static_cast<GeomArcOfEllipse*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -3284,10 +3306,12 @@ void GeomHyperbola::Restore(Base::XMLReader& reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomHyperbola::getPyObject()
 {
     return new HyperbolaPy(static_cast<GeomHyperbola*>(this->clone()));
 }
+#endif
 // -------------------------------------------------
 
 TYPESYSTEM_SOURCE(Part::GeomArcOfHyperbola,Part::GeomArcOfConic)
@@ -3549,10 +3573,12 @@ void GeomArcOfHyperbola::Restore(Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomArcOfHyperbola::getPyObject()
 {
     return new ArcOfHyperbolaPy(static_cast<GeomArcOfHyperbola*>(this->clone()));
 }
+#endif
 // -------------------------------------------------
 
 TYPESYSTEM_SOURCE(Part::GeomParabola,Part::GeomConic)
@@ -3689,10 +3715,12 @@ void GeomParabola::Restore(Base::XMLReader& reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomParabola::getPyObject()
 {
     return new ParabolaPy(static_cast<GeomParabola*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -3901,10 +3929,12 @@ void GeomArcOfParabola::Restore(Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomArcOfParabola::getPyObject()
 {
     return new ArcOfParabolaPy(static_cast<GeomArcOfParabola*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4012,10 +4042,12 @@ void GeomLine::Restore(Base::XMLReader &reader)
     setLine(Base::Vector3d(PosX,PosY,PosZ),Base::Vector3d(DirX,DirY,DirZ) );
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomLine::getPyObject()
 {
     return new LinePy(static_cast<GeomLine*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4173,10 +4205,12 @@ void GeomLineSegment::Restore    (Base::XMLReader &reader)
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomLineSegment::getPyObject()
 {
     return new LineSegmentPy(static_cast<GeomLineSegment*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4237,10 +4271,12 @@ void GeomOffsetCurve::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("GeomOffsetCurve::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomOffsetCurve::getPyObject()
 {
     return new OffsetCurvePy(static_cast<GeomOffsetCurve*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4419,10 +4455,12 @@ void GeomBezierSurface::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("GeomBezierSurface::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomBezierSurface::getPyObject()
 {
     return new BezierSurfacePy(static_cast<GeomBezierSurface*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4527,10 +4565,12 @@ void GeomBSplineSurface::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("GeomBSplineSurface::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomBSplineSurface::getPyObject()
 {
     return new BSplineSurfacePy(static_cast<GeomBSplineSurface*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4585,10 +4625,12 @@ void GeomCylinder::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("GeomCylinder::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomCylinder::getPyObject()
 {
     return new CylinderPy(static_cast<GeomCylinder*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4643,6 +4685,7 @@ void GeomCone::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("GeomCone::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomCone::getPyObject()
 {
     return new ConePy(static_cast<GeomCone*>(this->clone()));
@@ -4695,6 +4738,7 @@ gp_Vec GeomCone::getDN(double u, double v, int Nu, int Nv) const
     }
 #endif
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4749,10 +4793,12 @@ void GeomToroid::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("GeomToroid::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomToroid::getPyObject()
 {
     return new ToroidPy(static_cast<GeomToroid*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4807,10 +4853,12 @@ void GeomSphere::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("GeomSphere::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomSphere::getPyObject()
 {
     return new SpherePy(static_cast<GeomSphere*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4865,10 +4913,12 @@ void GeomPlane::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("GeomPlane::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomPlane::getPyObject()
 {
     return new PlanePy(static_cast<GeomPlane*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4925,10 +4975,12 @@ void GeomOffsetSurface::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("GeomOffsetSurface::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomOffsetSurface::getPyObject()
 {
     return new OffsetSurfacePy(static_cast<GeomOffsetSurface*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -4991,10 +5043,12 @@ void GeomPlateSurface::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("GeomPlateSurface::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomPlateSurface::getPyObject()
 {
     return new PlateSurfacePy(static_cast<GeomPlateSurface*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -5046,10 +5100,12 @@ void GeomTrimmedSurface::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("GeomTrimmedSurface::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomTrimmedSurface::getPyObject()
 {
     return new RectangularTrimmedSurfacePy(static_cast<GeomTrimmedSurface*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -5106,10 +5162,12 @@ void GeomSurfaceOfRevolution::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("GeomSurfaceOfRevolution::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomSurfaceOfRevolution::getPyObject()
 {
     return new SurfaceOfRevolutionPy(static_cast<GeomSurfaceOfRevolution*>(this->clone()));
 }
+#endif
 
 // -------------------------------------------------
 
@@ -5166,10 +5224,12 @@ void GeomSurfaceOfExtrusion::Restore(Base::XMLReader &/*reader*/)
     throw Base::NotImplementedError("GeomSurfaceOfExtrusion::Restore");
 }
 
+#ifdef BUILD_PYTHON
 PyObject *GeomSurfaceOfExtrusion::getPyObject()
 {
     return new SurfaceOfExtrusionPy(static_cast<GeomSurfaceOfExtrusion*>(this->clone()));
 }
+#endif
 
 
 // Helper functions for fillet tools

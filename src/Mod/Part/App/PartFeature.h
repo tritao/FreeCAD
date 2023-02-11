@@ -62,7 +62,9 @@ public:
     const char* getViewProviderName() const override;
     const App::PropertyComplexGeoData* getPropertyOfGeometry() const override;
 
+#ifdef BUILD_PYTHON
     PyObject* getPyObject() override;
+#endif
 
     TopLoc_Location getLocation() const;
 
@@ -138,8 +140,9 @@ public:
     short mustExecute() const override;
 };
 
+#ifdef BUILD_PYTHON
 using FeaturePython = App::FeaturePythonT<Feature>;
-
+#endif
 
 /** Base class of all shape feature classes in FreeCAD
  */

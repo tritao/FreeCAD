@@ -23,6 +23,8 @@
 #ifndef GUI_VIEWPROVIDERPYTHONFEATURE_H
 #define GUI_VIEWPROVIDERPYTHONFEATURE_H
 
+#ifdef BUILD_PYTHON
+
 #include <App/AutoTransaction.h>
 #include <App/PropertyPythonObject.h>
 #include <App/FeaturePython.h>
@@ -627,6 +629,8 @@ using ViewProviderPythonFeature  = ViewProviderPythonFeatureT<ViewProviderDocume
 using ViewProviderPythonGeometry = ViewProviderPythonFeatureT<ViewProviderGeometryObject>;
 
 } // namespace Gui
+
+#endif
 
 #endif // GUI_VIEWPROVIDERPYTHONFEATURE_H
 

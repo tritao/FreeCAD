@@ -93,8 +93,10 @@ public:
     GeoListFacade extractGeoListFacade() const;
 
     void updateExtension(int geoId, std::unique_ptr<Part::GeometryExtension> && ext);
+#ifdef BUILD_PYTHON
     /// get the geometry as python objects
     Py::Tuple getPyGeometry() const;
+#endif
 
     /// retrieves the index of a point
     int getPointId(int geoId, PointPos pos) const;

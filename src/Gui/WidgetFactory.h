@@ -162,6 +162,7 @@ private:
     QString fn;
 };
 
+#ifdef BUILD_PYTHON
 /**
  * The PrefPagePyProducer class provides the ability to create preference pages
  * dynamically from a Python class.
@@ -183,6 +184,7 @@ public:
 private:
     Py::Object type;
 };
+#endif
 
 // --------------------------------------------------------------------
 
@@ -273,6 +275,7 @@ private:
 
 // ----------------------------------------------------
 
+#ifdef BUILD_PYTHON
 /**
  * The PyResource class provides an interface to create widgets or to load .ui files from Python.
  * With
@@ -370,10 +373,12 @@ private:
     PyObject* myResource;
     PyObject* myCallback;
 };
+#endif
 
 // ----------------------------------------------------
 namespace Dialog {
 
+#ifdef BUILD_PYTHON
 /** Subclass that embeds a form from a Python class.
  * \author Werner Mayer
  */
@@ -394,6 +399,7 @@ protected:
 private:
     Py::Object page;
 };
+#endif
 
 } // namespace Dialog
 

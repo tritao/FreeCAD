@@ -57,6 +57,7 @@ protected:
     TopoDS_Shape refineShapeIfActive(const TopoDS_Shape&) const;
 };
 
+#ifdef BUILD_PYTHON
 using FeatureAddSubPython = App::FeaturePythonT<FeatureAddSub>;
 
 class FeatureAdditivePython : public FeatureAddSubPython
@@ -76,8 +77,8 @@ public:
     FeatureSubtractivePython();
     ~FeatureSubtractivePython() override;
 };
+#endif
 
 } //namespace PartDesign
-
 
 #endif // PARTDESIGN_FeatureAdditive_H

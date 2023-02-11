@@ -61,7 +61,9 @@
 #include <App/Document.h>
 #include <App/Expression.h>
 #include <App/ExpressionParser.h>
+#ifdef BUILD_PYTHON
 #include <App/FeaturePythonPyImp.h>
+#endif
 #include <App/ObjectIdentifier.h>
 #include <App/OriginFeature.h>
 #include <App/Part.h>
@@ -75,9 +77,15 @@
 #include <Mod/Part/App/GeometryMigrationExtension.h>
 
 #include "SketchObject.h"
+#ifdef BUILD_PYTHON
 #include "SketchObjectPy.h"
+#endif
 #include "SolverGeometryExtension.h"
 
+#ifdef BUILD_PYTHON
+#include <App/FeaturePythonPyImp.h>
+#include <Mod/Sketcher/App/SketchObjectPy.h>
+#endif
 
 #undef DEBUG
 //#define DEBUG
@@ -7894,6 +7902,7 @@ double SketchObject::calculateConstraintError(int ConstrId)
     return result;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *SketchObject::getPyObject()
 {
     if (PythonObject.is(Py::_None())) {
@@ -7902,6 +7911,7 @@ PyObject *SketchObject::getPyObject()
     }
     return Py::new_reference_to(PythonObject);
 }
+#endif
 
 unsigned int SketchObject::getMemSize() const
 {
@@ -8755,6 +8765,7 @@ int SketchObject::getGeometryId(int GeoId, long &id) const
    return 0;
 }
 
+#ifdef BUILD_PYTHON
 // Python Sketcher feature ---------------------------------------------------------
 
 namespace App {
@@ -8775,3 +8786,4 @@ template<> PyObject* Sketcher::SketchObjectPython::getPyObject() {
 // explicit template instantiation
 template class SketcherExport FeaturePythonT<Sketcher::SketchObject>;
 }
+#endif

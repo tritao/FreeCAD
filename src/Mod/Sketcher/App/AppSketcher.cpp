@@ -26,26 +26,45 @@
 #include <Base/Interpreter.h>
 
 #include "Constraint.h"
+#ifdef BUILD_PYTHON
 #include "ConstraintPy.h"
+#endif
 #include "ExternalGeometryExtension.h"
+#ifdef BUILD_PYTHON
 #include "ExternalGeometryExtensionPy.h"
+#endif
 #include "ExternalGeometryFacade.h"
+#ifdef BUILD_PYTHON
 #include "ExternalGeometryFacadePy.h"
+#endif
 #include "GeometryFacade.h"
+#ifdef BUILD_PYTHON
 #include "GeometryFacadePy.h"
+#endif
 #include "PropertyConstraintList.h"
 #include "Sketch.h"
 #include "SketchGeometryExtension.h"
+#ifdef BUILD_PYTHON
 #include "SketchGeometryExtensionPy.h"
+#endif
 #include "SketchObject.h"
 #include "SketchObjectSF.h"
+#ifdef BUILD_PYTHON
 #include "SketchPy.h"
+#endif
 #include "SolverGeometryExtension.h"
 
-
 namespace Sketcher {
-extern PyObject* initModule();
+void SketcherExport initModuleTypes() {
+    Sketcher::SketchObjectSF        ::init();
+    Sketcher::SketchObject          ::init();
+    Sketcher::Sketch                ::init();
+    Sketcher::Constraint            ::init();
+    Sketcher::PropertyConstraintList::init();
 }
+
+#ifdef BUILD_PYTHON
+extern PyObject* initModule();
 
 /* Python entry */
 PyMOD_INIT_FUNC(Sketcher)
@@ -81,7 +100,9 @@ PyMOD_INIT_FUNC(Sketcher)
     Sketcher::ExternalGeometryFacade	::init();
     Sketcher::SketchObjectSF        	::init();
     Sketcher::SketchObject          	::init();
+#ifdef BUILD_PYTHON
     Sketcher::SketchObjectPython    	::init();
+#endif
     Sketcher::Sketch                	::init();
     Sketcher::Constraint            	::init();
     Sketcher::PropertyConstraintList	::init();
@@ -89,4 +110,6 @@ PyMOD_INIT_FUNC(Sketcher)
     Base::Console().Log("Loading Sketcher module... done\n");
 
     PyMOD_Return(sketcherModule);
+}
+#endif
 }

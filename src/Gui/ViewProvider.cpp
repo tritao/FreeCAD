@@ -53,8 +53,9 @@
 #include "ViewParams.h"
 #include "ViewProviderExtension.h"
 #include "ViewProviderLink.h"
+#ifdef BUILD_PYTHON
 #include "ViewProviderPy.h"
-
+#endif
 
 FC_LOG_LEVEL_INIT("ViewProvider", true, true)
 
@@ -89,7 +90,9 @@ PROPERTY_SOURCE_ABSTRACT(Gui::ViewProvider, App::TransactionalObject)
 
 ViewProvider::ViewProvider()
     : pcAnnotation(nullptr)
+#ifdef BUILD_PYTHON
     , pyViewObject(nullptr)
+#endif
     , overrideMode("As Is")
     , _iActualMode(-1)
     , _iEditMode(-1)
@@ -121,11 +124,13 @@ ViewProvider::ViewProvider()
 
 ViewProvider::~ViewProvider()
 {
+#ifdef BUILD_PYTHON
     if (pyViewObject) {
         Base::PyGILStateLocker lock;
         pyViewObject->setInvalid();
         pyViewObject->DecRef();
     }
+#endif
 
     pcRoot->unref();
     pcTransform->unref();
@@ -561,6 +566,7 @@ std::string ViewProvider::toString() const
     return SoFCDB::writeNodesToString(pcRoot);
 }
 
+#ifdef BUILD_PYTHON
 PyObject* ViewProvider::getPyObject()
 {
     if (!pyViewObject)
@@ -568,6 +574,7 @@ PyObject* ViewProvider::getPyObject()
     pyViewObject->IncRef();
     return pyViewObject;
 }
+#endif
 
 #include <boost/graph/topological_sort.hpp>
 

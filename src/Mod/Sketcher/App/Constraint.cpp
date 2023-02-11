@@ -31,7 +31,10 @@
 #include <Base/Tools.h>
 
 #include "Constraint.h"
+
+#ifdef BUILD_PYTHON
 #include "ConstraintPy.h"
+#endif
 
 
 using namespace Sketcher;
@@ -98,10 +101,12 @@ Constraint *Constraint::copy() const
     return temp;
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Constraint::getPyObject()
 {
     return new ConstraintPy(new Constraint(*this));
 }
+#endif
 
 Quantity Constraint::getPresentationValue() const
 {

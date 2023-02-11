@@ -51,6 +51,7 @@ App::DocumentObjectExecReturn *CustomFeature::execute()
 
 // ---------------------------------------------------------
 
+#ifdef BUILD_PYTHON
 namespace App {
 /// @cond DOXERR
 PROPERTY_SOURCE_TEMPLATE(Part::CustomFeaturePython, Part::CustomFeature)
@@ -62,4 +63,4 @@ template<> const char* Part::CustomFeaturePython::getViewProviderName() const {
 // explicit template instantiation
 template class PartExport FeaturePythonT<Part::CustomFeature>;
 }
-
+#endif

@@ -78,7 +78,10 @@ public:
      * TODO introduce a findBodiesOf() if needed (2015-08-04, Fat-Zer)
      */
     static BodyBase* findBodyOf(const App::DocumentObject* f);
+#ifdef BUILD_PYTHON
     PyObject* getPyObject() override;
+#endif
+
 
 protected:
     /// If BaseFeature is getting changed and Tip points to it reset the Tip

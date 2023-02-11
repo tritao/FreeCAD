@@ -26,10 +26,14 @@
 # include <Standard_Failure.hxx>
 #endif
 
+#ifdef BUILD_PYTHON
 #include <App/FeaturePythonPyImp.h>
+#endif
 #include "Body.h"
 #include "FeatureBase.h"
+#ifdef BUILD_PYTHON
 #include "FeaturePy.h"
+#endif
 
 namespace PartDesign {
 

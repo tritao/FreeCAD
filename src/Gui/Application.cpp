@@ -59,24 +59,36 @@
 #include "AxisOriginPy.h"
 #include "BitmapFactory.h"
 #include "Command.h"
+#ifdef BUILD_PYTHON
 #include "CommandPy.h"
+#endif
 #include "Control.h"
 #include "DlgSettingsCacheDirectory.h"
+#ifdef BUILD_PYTHON
 #include "DocumentPy.h"
+#endif
 #include "DocumentRecovery.h"
 #include "EditorView.h"
+#ifdef BUILD_PYTHON
 #include "ExpressionBindingPy.h"
+#endif
 #include "FileDialog.h"
 #include "GuiApplication.h"
 #include "GuiInitScript.h"
+#ifdef BUILD_PYTHON
 #include "LinkViewPy.h"
+#endif
 #include "MainWindow.h"
 #include "Macro.h"
 #include "PreferencePackManager.h"
+#ifdef BUILD_PYTHON
 #include "PythonConsolePy.h"
+#endif
 #include "PythonDebugger.h"
+#ifdef BUILD_PYTHON
 #include "MainWindowPy.h"
 #include "MDIViewPy.h"
+#endif
 #include "SoFCDB.h"
 #include "Selection.h"
 #include "SoFCOffscreenRenderer.h"
@@ -86,8 +98,10 @@
 #include "TransactionObject.h"
 #include "TextDocumentEditorView.h"
 #include "UiLoader.h"
+#ifdef BUILD_PYTHON
 #include "View3DPy.h"
 #include "View3DViewerPy.h"
+#endif
 #include "View3DInventor.h"
 #include "ViewProviderAnnotation.h"
 #include "ViewProviderDocumentObject.h"
@@ -102,7 +116,9 @@
 #include "ViewProviderInventorObject.h"
 #include "ViewProviderLine.h"
 #include "ViewProviderLink.h"
+#ifdef BUILD_PYTHON
 #include "ViewProviderLinkPy.h"
+#endif
 #include "ViewProviderMaterialObject.h"
 #include "ViewProviderMeasureDistance.h"
 #include "ViewProviderOrigin.h"
@@ -201,6 +217,7 @@ struct ApplicationP
     std::bitset<32> StatusBits;
 };
 
+#ifdef BUILD_PYTHON
 static PyObject *
 FreeCADGui_subgraphFromObject(PyObject * /*self*/, PyObject *args)
 {
@@ -323,6 +340,7 @@ struct PyMethodDef FreeCADGui_methods[] = {
      "of the Coin library and version information"},
     {nullptr, nullptr, 0, nullptr}  /* sentinel */
 };
+#endif
 
 } // namespace Gui
 
@@ -364,6 +382,7 @@ Application::Application(bool GUIenabled)
         }
 #endif
 
+#ifdef BUILD_PYTHON
         // setting up Python binding
         Base::PyGILStateLocker lock;
 
@@ -438,8 +457,10 @@ Application::Application(bool GUIenabled)
         Base::Interpreter().addType(&ViewProviderPy::Type, module, "ViewProvider");
         Base::Interpreter().addType(&ViewProviderDocumentObjectPy::Type, module, "ViewProviderDocumentObject");
         Base::Interpreter().addType(&ViewProviderLinkPy::Type, module, "ViewProviderLink");
+#endif
     }
 
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
     PyObject *module = PyImport_AddModule("FreeCADGui");
     PyMethodDef *meth = FreeCADGui_methods;
@@ -472,14 +493,17 @@ Application::Application(bool GUIenabled)
     View3DInventorPy            ::init_type();
     View3DInventorViewerPy      ::init_type();
     AbstractSplitViewPy         ::init_type();
+#endif
 
     d = new ApplicationP(GUIenabled);
 
     // global access
     Instance = this;
 
+#ifdef BUILD_PYTHON
     // instantiate the workbench dictionary
     _pcWorkbenchDictionary = PyDict_New();
+#endif
 
     if (GUIenabled) {
         createStandardOperations();
@@ -496,8 +520,10 @@ Application::~Application()
     WidgetFactorySupplier::destruct();
     BitmapFactoryInst::destruct();
 
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
     Py_DECREF(_pcWorkbenchDictionary);
+#endif
 
     // save macros
     try {
@@ -856,6 +882,7 @@ void Application::slotActiveDocument(const App::Document& Doc)
         // because no MDI view will be activated
         if (d->activeDocument != doc->second) {
             d->activeDocument = doc->second;
+#ifdef BUILD_PYTHON
             if (d->activeDocument) {
                 Base::PyGILStateLocker lock;
                 Py::Object active(d->activeDocument->getPyObject(), true);
@@ -871,6 +898,7 @@ void Application::slotActiveDocument(const App::Document& Doc)
                 Base::PyGILStateLocker lock;
                 Py::Module("FreeCADGui").setAttr(std::string("ActiveDocument"),Py::None());
             }
+#endif
         }
         signalActiveDocument(*doc->second);
         updateActions();
@@ -948,10 +976,12 @@ void Application::onLastWindowClosed(Gui::Document* pcDoc)
     catch (const Base::Exception& e) {
         e.ReportException();
     }
+#ifdef BUILD_PYTHON
     catch (const Py::Exception&) {
         Base::PyException e;
         e.ReportException();
     }
+#endif
     catch (const std::exception& e) {
         Base::Console().Error("Unhandled std::exception caught in Application::onLastWindowClosed.\n"
                               "The error message is: %s\n", e.what());
@@ -1300,6 +1330,7 @@ bool Application::setUserEditMode(const std::string &mode)
  */
 bool Application::activateWorkbench(const char* name)
 {
+#ifdef BUILD_PYTHON
     bool ok = false;
     WaitCursor wc;
     Workbench* oldWb = WorkbenchManager::instance()->active();
@@ -1431,10 +1462,14 @@ bool Application::activateWorkbench(const char* name)
     }
 
     return ok;
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+#endif
 }
 
 QPixmap Application::workbenchIcon(const QString& wb) const
 {
+#ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
     // get the python workbench object from the dictionary
     PyObject* pcWorkbench = PyDict_GetItemString(_pcWorkbenchDictionary, wb.toLatin1());
@@ -1505,10 +1540,15 @@ QPixmap Application::workbenchIcon(const QString& wb) const
             return icon.pixmap(s[0]);
     }
     return QPixmap();
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+    return QPixmap();
+#endif
 }
 
 QString Application::workbenchToolTip(const QString& wb) const
 {
+#ifdef BUILD_PYTHON
     // get the python workbench object from the dictionary
     Base::PyGILStateLocker lock;
     PyObject* pcWorkbench = PyDict_GetItemString(_pcWorkbenchDictionary, wb.toLatin1());
@@ -1529,10 +1569,15 @@ QString Application::workbenchToolTip(const QString& wb) const
     }
 
     return QString();
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+    return QString();
+#endif
 }
 
 QString Application::workbenchMenuText(const QString& wb) const
 {
+#ifdef BUILD_PYTHON
     // get the python workbench object from the dictionary
     Base::PyGILStateLocker lock;
     PyObject* pcWorkbench = PyDict_GetItemString(_pcWorkbenchDictionary, wb.toLatin1());
@@ -1554,10 +1599,15 @@ QString Application::workbenchMenuText(const QString& wb) const
     }
 
     return QString();
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+    return QString();
+#endif
 }
 
 QStringList Application::workbenches() const
 {
+#ifdef BUILD_PYTHON
     // If neither 'HiddenWorkbench' nor 'ExtraWorkbench' is set then all workbenches are returned.
     const std::map<std::string,std::string>& config = App::Application::Config();
     auto ht = config.find("HiddenWorkbench");
@@ -1611,10 +1661,15 @@ QStringList Application::workbenches() const
     }
 
     return wb;
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+    return QStringList();
+#endif
 }
 
 void Application::setupContextMenu(const char* recipient, MenuItem* items) const
 {
+#ifdef BUILD_PYTHON
     Workbench* actWb = WorkbenchManager::instance()->active();
     if (actWb) {
         // when populating the context-menu of a Python workbench invoke the method
@@ -1644,6 +1699,9 @@ void Application::setupContextMenu(const char* recipient, MenuItem* items) const
         }
         actWb->setupContextMenu(recipient, items);
     }
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+#endif
 }
 
 bool Application::isClosing()
@@ -1753,7 +1811,9 @@ void Application::initApplication()
 
     try {
         initTypes();
+#ifdef BUILD_PYTHON
         new Base::ScriptProducer( "FreeCADGuiInit", FreeCADGuiInit );
+#endif
         init_resources();
         old_qtmsg_handler = qInstallMessageHandler(messageHandler);
         init = true;

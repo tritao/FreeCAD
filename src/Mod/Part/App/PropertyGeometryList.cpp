@@ -27,7 +27,9 @@
 #include <Base/Writer.h>
 
 #include "PropertyGeometryList.h"
+#ifdef BUILD_PYTHON
 #include "GeometryPy.h"
+#endif
 #include "Part2DObject.h"
 
 
@@ -118,6 +120,7 @@ void PropertyGeometryList::set1Value(int idx, std::unique_ptr<Geometry> &&lValue
     hasSetValue();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyGeometryList::getPyObject()
 {
     PyObject* list = PyList_New(getSize());
@@ -163,6 +166,7 @@ void PropertyGeometryList::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void PropertyGeometryList::Save(Writer &writer) const
 {

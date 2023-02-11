@@ -61,10 +61,13 @@
 #include <Base/Stream.h>
 
 #include "PartFeature.h"
+
+#ifdef BUILD_PYTHON
+#include <App/FeaturePythonPyImp.h>
 #include "PartFeaturePy.h"
 #include "PartPyCXX.h"
 #include "TopoShapePy.h"
-
+#endif
 
 using namespace Part;
 namespace bp = boost::placeholders;
@@ -107,6 +110,7 @@ App::DocumentObjectExecReturn *Feature::execute()
     return GeoFeature::execute();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Feature::getPyObject()
 {
     if (PythonObject.is(Py::_None())){
@@ -195,6 +199,7 @@ App::DocumentObject *Feature::getSubObject(const char *subname,
         return nullptr;
     }
 }
+#endif
 
 TopoDS_Shape Feature::getShape(const App::DocumentObject *obj, const char *subname,
         bool needSubElement, Base::Matrix4D *pmat, App::DocumentObject **powner,
@@ -678,6 +683,7 @@ PROPERTY_SOURCE(Part::FeatureExt, Part::Feature)
 
 
 
+#ifdef BUILD_PYTHON
 namespace App {
 /// @cond DOXERR
 PROPERTY_SOURCE_TEMPLATE(Part::FeaturePython, Part::Feature)
@@ -696,6 +702,7 @@ template<> PyObject* Part::FeaturePython::getPyObject() {
 // explicit template instantiation
 template class PartExport FeaturePythonT<Part::Feature>;
 }
+#endif
 
 // ----------------------------------------------------------------
 /*

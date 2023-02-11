@@ -408,7 +408,9 @@ public:
     int port_reversedExternalArcs(bool justAnalyze);
 
     // from base class
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
     unsigned int getMemSize() const override;
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
@@ -736,7 +738,9 @@ const GeometryT * SketchObject::getGeometry(int GeoId) const
     return nullptr;
 }
 
+#ifdef BUILD_PYTHON
 using SketchObjectPython = App::FeaturePythonT<SketchObject>;
+#endif
 
 } //namespace Sketcher
 

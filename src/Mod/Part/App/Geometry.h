@@ -152,7 +152,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     const Handle(Geom_Geometry)& handle() const override;
     void setHandle(const Handle(Geom_CartesianPoint)&);
@@ -242,7 +244,9 @@ public:
     void Save (Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_BezierCurve)&);
     const Handle(Geom_Geometry)& handle() const override;
@@ -325,7 +329,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_BSplineCurve)&);
     const Handle(Geom_Geometry)& handle() const override;
@@ -374,7 +380,9 @@ public:
     Base::Vector3d getAxisDirection() const;
 
     unsigned int getMemSize() const override = 0;
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override = 0;
+#endif
 
     const Handle(Geom_Geometry)& handle() const override = 0;
 };
@@ -393,7 +401,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_TrimmedCurve)&);
     const Handle(Geom_Geometry)& handle() const override;
@@ -456,7 +466,9 @@ public:
     void setXAxisDir(const Base::Vector3d& newdir);
 
     unsigned int getMemSize() const override = 0;
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override = 0;
+#endif
 
     const Handle(Geom_Geometry)& handle() const override = 0;
 };
@@ -478,7 +490,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
     GeomBSplineCurve* toNurbs(double first, double last) const override;
 
     const Handle(Geom_Geometry)& handle() const override;
@@ -509,7 +523,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
     GeomBSplineCurve* toNurbs(double first, double last) const override;
 
     void setHandle(const Handle(Geom_TrimmedCurve)&);
@@ -540,7 +556,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
     GeomBSplineCurve* toNurbs(double first, double last) const override;
 
     void setHandle(const Handle(Geom_Ellipse) &e);
@@ -574,7 +592,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
     GeomBSplineCurve* toNurbs(double first, double last) const override;
 
     void setHandle(const Handle(Geom_TrimmedCurve)&);
@@ -602,7 +622,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
     GeomBSplineCurve* toNurbs(double first, double last) const override;
 
     const Handle(Geom_Geometry)& handle() const override;
@@ -636,7 +658,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
     GeomBSplineCurve* toNurbs(double first, double last) const override;
 
     void setHandle(const Handle(Geom_TrimmedCurve)&);
@@ -661,7 +685,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
     GeomBSplineCurve* toNurbs(double first, double last) const override;
 
     const Handle(Geom_Geometry)& handle() const override;
@@ -693,7 +719,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
     GeomBSplineCurve* toNurbs(double first, double last) const override;
 
     void setHandle(const Handle(Geom_TrimmedCurve)&);
@@ -720,7 +748,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     const Handle(Geom_Geometry)& handle() const override;
     void setHandle(const Handle(Geom_Line)&);
@@ -749,7 +779,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_TrimmedCurve)&);
     void setHandle(const Handle(Geom_Line)&);
@@ -773,7 +805,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_OffsetCurve)& c);
     const Handle(Geom_Geometry)& handle() const override;
@@ -828,7 +862,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_BezierSurface)& b);
     const Handle(Geom_Geometry)& handle() const override;
@@ -852,7 +888,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_BSplineSurface)&);
     const Handle(Geom_Geometry)& handle() const override;
@@ -875,7 +913,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_CylindricalSurface)&);
     const Handle(Geom_Geometry)& handle() const override;
@@ -898,7 +938,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_ConicalSurface)&);
     const Handle(Geom_Geometry)& handle() const override;
@@ -924,7 +966,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_SphericalSurface)&);
     const Handle(Geom_Geometry)& handle() const override;
@@ -947,7 +991,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_ToroidalSurface)&);
     const Handle(Geom_Geometry)& handle() const override;
@@ -970,7 +1016,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_Plane)&);
     const Handle(Geom_Geometry)& handle() const override;
@@ -994,7 +1042,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_OffsetSurface)& s);
     const Handle(Geom_Geometry)& handle() const override;
@@ -1019,7 +1069,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(GeomPlate_Surface)& s);
     const Handle(Geom_Geometry)& handle() const override;
@@ -1042,7 +1094,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_RectangularTrimmedSurface)& s);
     const Handle(Geom_Geometry)& handle() const override;
@@ -1066,7 +1120,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_SurfaceOfRevolution)& c);
     const Handle(Geom_Geometry)& handle() const override;
@@ -1090,7 +1146,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
     // Base implementer ----------------------------
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     void setHandle(const Handle(Geom_SurfaceOfLinearExtrusion)& c);
     const Handle(Geom_Geometry)& handle() const override;

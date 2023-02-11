@@ -41,10 +41,14 @@
 #include <App/DocumentObject.h>
 #include <Base/Exception.h>
 #include <Base/Tools.h>
+#ifdef BUILD_PYTHON
 #include <App/FeaturePythonPyImp.h>
+#endif
 
 #include "FeaturePrimitive.h"
+#ifdef BUILD_PYTHON
 #include "FeaturePy.h"
+#endif
 
 using namespace PartDesign;
 
@@ -153,6 +157,7 @@ void FeaturePrimitive::handleChangedPropertyName(Base::XMLReader &reader, const 
     extHandleChangedPropertyName(reader, TypeName, PropName); // AttachExtension
 }
 
+#ifdef BUILD_PYTHON
 // suppress warning about tp_print for Py3.8
 #if defined(__clang__)
 # pragma clang diagnostic push
@@ -174,6 +179,7 @@ PyObject* FeaturePrimitive::getPyObject()
     }
     return Py::new_reference_to(PythonObject);
 }
+#endif
 
 PROPERTY_SOURCE(PartDesign::Box, PartDesign::FeaturePrimitive)
 

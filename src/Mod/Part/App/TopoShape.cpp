@@ -179,9 +179,12 @@
 #include "FaceMakerBullseye.h"
 #include "Interface.h"
 #include "modelRefine.h"
+#ifdef BUILD_PYTHON
 #include "PartPyCXX.h"
+#endif
 #include "ProgressIndicator.h"
 #include "Tools.h"
+#ifdef BUILD_PYTHON
 #include "TopoShapeCompoundPy.h"
 #include "TopoShapeCompSolidPy.h"
 #include "TopoShapeEdgePy.h"
@@ -190,7 +193,7 @@
 #include "TopoShapeSolidPy.h"
 #include "TopoShapeVertexPy.h"
 #include "TopoShapeWirePy.h"
-
+#endif
 
 FC_LOG_LEVEL_INIT("TopoShape",true,true)
 
@@ -520,6 +523,7 @@ const std::string &TopoShape::shapeName(bool silent) const {
     return shapeName(shapeType(silent),silent);
 }
 
+#ifdef BUILD_PYTHON
 PyObject * TopoShape::getPySubShape(const char* Type, bool silent) const
 {
     return Py::new_reference_to(shape2pyshape(getSubShape(Type,silent)));
@@ -581,6 +585,7 @@ void TopoShape::setPyObject(PyObject* obj)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 void TopoShape::operator = (const TopoShape& sh)
 {

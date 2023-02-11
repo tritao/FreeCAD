@@ -75,8 +75,10 @@ public:
 
     void set1Value(int idx, std::unique_ptr<Geometry> &&);
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save(Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;

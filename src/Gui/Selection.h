@@ -599,10 +599,13 @@ public:
     static void destruct ();
     friend class SelectionFilter;
 
+#ifdef BUILD_PYTHON
     // Python interface
     static PyMethodDef    Methods[];
+#endif
 
 protected:
+#ifdef BUILD_PYTHON
     static PyObject *sAddSelection        (PyObject *self,PyObject *args);
     static PyObject *sUpdateSelection     (PyObject *self,PyObject *args);
     static PyObject *sRemoveSelection     (PyObject *self,PyObject *args);
@@ -628,6 +631,7 @@ protected:
     static PyObject *sHasSelection        (PyObject *self,PyObject *args);
     static PyObject *sHasSubSelection     (PyObject *self,PyObject *args);
     static PyObject *sGetSelectionFromStack(PyObject *self,PyObject *args);
+#endif
 
 protected:
     /// Construction

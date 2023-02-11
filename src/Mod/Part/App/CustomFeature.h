@@ -54,7 +54,9 @@ public:
     }
 };
 
+#ifdef BUILD_PYTHON
 using CustomFeaturePython = App::FeaturePythonT<CustomFeature>;
+#endif
 
 } //namespace Part
 

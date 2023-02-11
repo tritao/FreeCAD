@@ -56,7 +56,9 @@ private:
     std::vector<ViewProvider*> nodes;
 };
 
+#ifdef BUILD_PYTHON
 using ViewProviderGroupExtensionPython = ViewProviderExtensionPythonT<Gui::ViewProviderGroupExtension>;
+#endif
 
 } //namespace Gui
 

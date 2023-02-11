@@ -48,7 +48,9 @@
 #include <Base/Tools.h>
 
 #include "Document.h"
+#ifdef BUILD_PYTHON
 #include "DocumentPy.h"
+#endif
 #include "Application.h"
 #include "Command.h"
 #include "Control.h"
@@ -385,10 +387,13 @@ Document::Document(App::Document* pcDocument,Application * app)
         (boost::bind(&Gui::Document::slotTransactionRemove, this, bp::_1, bp::_2));
 
     d->messageManager.setDocument(this);
+
+#ifdef BUILD_PYTHON
     // pointer to the python class
     // NOTE: As this Python object doesn't get returned to the interpreter we
     // mustn't increment it (Werner Jan-12-2006)
     _pcDocPy = new Gui::DocumentPy(this);
+#endif
 
     ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/Document");
     if (hGrp->GetBool("UsingUndo",true)) {
@@ -442,10 +447,12 @@ Document::~Document()
     for (it2 = d->_ViewProviderMapAnnotation.begin();it2 != d->_ViewProviderMapAnnotation.end(); ++it2)
         delete it2->second;
 
+#ifdef BUILD_PYTHON
     // remove the reference from the object
     Base::PyGILStateLocker lock;
     _pcDocPy->setInvalid();
     _pcDocPy->DecRef();
+#endif
     delete d;
 }
 
@@ -2558,11 +2565,13 @@ void Document::redo(int iSteps)
     d->_redoViewProviders.clear();
 }
 
+#ifdef BUILD_PYTHON
 PyObject* Document::getPyObject()
 {
     _pcDocPy->IncRef();
     return _pcDocPy;
 }
+#endif
 
 void Document::handleChildren3D(ViewProvider* viewProvider, bool deleting)
 {

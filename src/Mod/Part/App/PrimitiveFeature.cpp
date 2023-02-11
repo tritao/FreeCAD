@@ -44,12 +44,16 @@
 # include <TopoDS_Vertex.hxx>
 #endif
 
+#ifdef BUILD_PYTHON
 #include <App/FeaturePythonPyImp.h>
+#endif
 #include <Base/Reader.h>
 #include <Base/Tools.h>
 
 #include "PrimitiveFeature.h"
+#ifdef BUILD_PYTHON
 #include "PartFeaturePy.h"
+#endif
 
 #ifndef M_PI
 #define M_PI       3.14159265358979323846
@@ -88,6 +92,7 @@ App::DocumentObjectExecReturn* Primitive::execute() {
     return Part::Feature::execute();
 }
 
+#ifdef BUILD_PYTHON
 // suppress warning about tp_print for Py3.8
 #if defined(__clang__)
 # pragma clang diagnostic push
@@ -111,6 +116,7 @@ PyObject* Primitive::getPyObject()
     }
     return Py::new_reference_to(PythonObject);
 }
+#endif
 
 void Primitive::Restore(Base::XMLReader &reader)
 {

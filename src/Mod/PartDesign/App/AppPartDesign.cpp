@@ -59,6 +59,7 @@
 
 
 namespace PartDesign {
+#ifdef BUILD_PYTHON
 extern PyObject* initModule();
 }
 
@@ -83,13 +84,15 @@ PyMOD_INIT_FUNC(_PartDesign)
     // call PyType_Ready, otherwise we run into a segmentation fault, later on.
     // This function is responsible for adding inherited slots from a type's base class.
 
+void PartDesignExport initModuleTypes() {
     PartDesign::Feature                     ::init();
-    PartDesign::FeaturePython               ::init();
     PartDesign::Solid                       ::init();
     PartDesign::FeatureAddSub               ::init();
+#ifdef BUILD_PYTHON
     PartDesign::FeatureAddSubPython         ::init();
     PartDesign::FeatureAdditivePython       ::init();
     PartDesign::FeatureSubtractivePython    ::init();
+#endif
     PartDesign::DressUp                     ::init();
     PartDesign::ProfileBased                ::init();
     PartDesign::Transformed                 ::init();
@@ -152,6 +155,38 @@ PyMOD_INIT_FUNC(_PartDesign)
     PartDesign::AdditiveWedge               ::init();
     PartDesign::SubtractiveWedge            ::init();
     PartDesign::FeatureBase                 ::init();
+}
+#endif
+}
+
+#ifdef BUILD_PYTHON
+/* Python entry */
+PyMOD_INIT_FUNC(_PartDesign)
+{
+    // load dependent module
+    try {
+        Base::Interpreter().runString("import Part");
+        Base::Interpreter().runString("import Sketcher");
+    }
+    catch(const Base::Exception& e) {
+        PyErr_SetString(PyExc_ImportError, e.what());
+        PyMOD_Return(0);
+    }
+
+    PyObject* mod = PartDesign::initModule();
+    Base::Console().Log("Loading PartDesign module... done\n");
+
+    // NOTE: To finish the initialization of our own type objects we must
+    // call PyType_Ready, otherwise we run into a segmentation fault, later on.
+    // This function is responsible for adding inherited slots from a type's base class.
+
+    PartDesign::initModuleTypes();
+
+    PartDesign::FeaturePython               ::init();
+    PartDesign::FeatureAddSubPython         ::init();
+    PartDesign::FeatureAdditivePython       ::init();
+    PartDesign::FeatureSubtractivePython    ::init();
 
     PyMOD_Return(mod);
 }
+#endif

@@ -28,7 +28,9 @@
 #endif
 
 #include "Workbench.h"
+#ifdef BUILD_PYTHON
 #include "WorkbenchPy.h"
+#endif
 #include "Action.h"
 #include "Application.h"
 #include "Command.h"

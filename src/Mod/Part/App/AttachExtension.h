@@ -112,7 +112,9 @@ public:
 
     short int extensionMustExecute() override;
     App::DocumentObjectExecReturn *extensionExecute() override;
+#ifdef BUILD_PYTHON
     PyObject* getExtensionPyObject() override;
+#endif
     void onExtendedDocumentRestored() override;
 
 protected:

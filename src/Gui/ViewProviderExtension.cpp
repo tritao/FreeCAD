@@ -63,6 +63,7 @@ void ViewProviderExtension::extensionUpdateData(const App::Property*) {
 
 }
 
+#ifdef BUILD_PYTHON
 PyObject* ViewProviderExtension::getExtensionPyObject() {
 
     if (ExtensionPythonObject.is(Py::_None())){
@@ -79,3 +80,5 @@ EXTENSION_PROPERTY_SOURCE_TEMPLATE(Gui::ViewProviderExtensionPython, Gui::ViewPr
 // explicit template instantiation
 template class GuiExport ViewProviderExtensionPythonT<ViewProviderExtension>;
 }
+
+#endif

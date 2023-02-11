@@ -61,8 +61,11 @@ public:
     void setOverrideCursor(const QCursor&) override;
     bool containsViewProvider(const ViewProvider*) const override;
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
+
     int getSize();
 
 protected:
@@ -73,9 +76,12 @@ protected:
     /// handle to the viewer parameter group
     ParameterGrp::handle hGrp;
     std::vector<View3DInventorViewer*> _viewer;
+#ifdef BUILD_PYTHON
     PyObject *_viewerPy;
+#endif
 };
 
+#ifdef BUILD_PYTHON
 class AbstractSplitViewPy : public Py::PythonExtension<AbstractSplitViewPy>
 {
 public:
@@ -106,6 +112,7 @@ public:
 private:
     Gui::MDIViewPy base;
 };
+#endif
 
 /** The SplitView3DInventor class allows to create a window with two or more Inventor views.
  *  \author Werner Mayer

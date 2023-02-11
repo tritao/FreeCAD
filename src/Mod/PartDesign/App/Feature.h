@@ -75,7 +75,9 @@ public:
     /// Returns the BaseFeature property's TopoShape (if any)
     Part::TopoShape getBaseTopoShape(bool silent=false) const;
 
+#ifdef BUILD_PYTHON
     PyObject* getPyObject() override;
+#endif
 
     const char* getViewProviderName() const override {
         return "PartDesignGui::ViewProvider";
@@ -96,7 +98,9 @@ protected:
     static TopoDS_Shape makeShapeFromPlane(const App::DocumentObject* obj);
 };
 
+#ifdef BUILD_PYTHON
 using FeaturePython = App::FeaturePythonT<Feature>;
+#endif
 
 } //namespace PartDesign
 

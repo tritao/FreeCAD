@@ -23,6 +23,8 @@
 #ifndef GUI_PYTHONDEBUG_H
 #define GUI_PYTHONDEBUG_H
 
+#ifdef BUILD_PYTHON
+
 #include <CXX/Extensions.hxx>
 #include <frameobject.h>
 #include <set>
@@ -184,5 +186,7 @@ private:
 };
 
 } // namespace Gui
+
+#endif
 
 #endif // GUI_PYTHONDEBUG_H

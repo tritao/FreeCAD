@@ -106,7 +106,9 @@ public:
     void Save(Base::Writer &/*writer*/) const override;
     void Restore(Base::XMLReader &/*reader*/) override;
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     Base::Quantity getPresentationValue() const;
     inline void setValue(double newValue) {

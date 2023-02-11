@@ -43,12 +43,16 @@
 #define M_PI       3.14159265358979323846
 #endif
 
+#ifdef BUILD_PYTHON
 #include <App/FeaturePythonPyImp.h>
+#endif
 #include <App/PropertyLinks.h>
 #include <Base/Reader.h>
 
 #include "Part2DObject.h"
+#ifdef BUILD_PYTHON
 #include "Part2DObjectPy.h"
+#endif
 #include "Geometry.h"
 
 
@@ -283,6 +287,7 @@ void Part2DObject::handleChangedPropertyName(Base::XMLReader &reader,
 
 // Python Drawing feature ---------------------------------------------------------
 
+#ifdef BUILD_PYTHON
 namespace App {
 /// @cond DOXERR
   PROPERTY_SOURCE_TEMPLATE(Part::Part2DObjectPython, Part::Part2DObject)
@@ -301,3 +306,4 @@ namespace App {
 // explicit template instantiation
   template class PartExport FeaturePythonT<Part::Part2DObject>;
 }
+#endif

@@ -115,7 +115,9 @@ public:
      */
     static Body *findBodyOf(const App::DocumentObject* feature);
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
+#endif
 
     std::vector<std::string> getSubObjects(int reason=0) const override;
     App::DocumentObject *getSubObject(const char *subname,

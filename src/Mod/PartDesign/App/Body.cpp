@@ -28,7 +28,9 @@
 #include <Base/Placement.h>
 
 #include "Body.h"
+#ifdef BUILD_PYTHON
 #include "BodyPy.h"
+#endif
 #include "FeatureBase.h"
 #include "FeatureSketchBased.h"
 #include "FeatureTransformed.h"
@@ -476,6 +478,7 @@ void Body::unsetupObject () {
     Part::BodyBase::unsetupObject ();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *Body::getPyObject()
 {
     if (PythonObject.is(Py::_None())){
@@ -484,6 +487,7 @@ PyObject *Body::getPyObject()
     }
     return Py::new_reference_to(PythonObject);
 }
+#endif
 
 std::vector<std::string> Body::getSubObjects(int reason) const {
     if(reason==GS_SELECT && !showTip)

@@ -40,6 +40,7 @@
 #include <Base/Reader.h>
 #include <Base/TimeInfo.h>
 #include <Base/Writer.h>
+#ifdef BUILD_PYTHON
 #include <Base/VectorPy.h>
 #include <Mod/Part/App/ArcOfCirclePy.h>
 #include <Mod/Part/App/ArcOfEllipsePy.h>
@@ -51,7 +52,7 @@
 #include <Mod/Part/App/HyperbolaPy.h>
 #include <Mod/Part/App/LineSegmentPy.h>
 #include <Mod/Part/App/ParabolaPy.h>
-
+#endif
 #include "Sketch.h"
 #include "Constraint.h"
 #include "GeometryFacade.h"
@@ -1486,6 +1487,7 @@ void Sketch::updateExtension(int geoId, std::unique_ptr<Part::GeometryExtension>
 
 }
 
+#ifdef BUILD_PYTHON
 Py::Tuple Sketch::getPyGeometry() const
 {
     Py::Tuple tuple(Geoms.size());
@@ -1533,6 +1535,7 @@ Py::Tuple Sketch::getPyGeometry() const
     }
     return tuple;
 }
+#endif
 
 int Sketch::checkGeoId(int geoId) const
 {

@@ -43,7 +43,9 @@ public:
     /// recalculate the feature
     App::DocumentObjectExecReturn *execute() override;
     short mustExecute() const override;
+#ifdef BUILD_PYTHON
     PyObject* getPyObject() override;
+#endif
     //@}
 
 protected:

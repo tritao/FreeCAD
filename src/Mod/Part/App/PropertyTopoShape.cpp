@@ -46,8 +46,9 @@
 #include <Base/Writer.h>
 
 #include "PropertyTopoShape.h"
+#ifdef BUILD_PYTHON
 #include "TopoShapePy.h"
-
+#endif
 
 using namespace Part;
 
@@ -133,6 +134,7 @@ void PropertyPartShape::transformGeometry(const Base::Matrix4D &rclTrf)
     hasSetValue();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyPartShape::getPyObject(void)
 {
     Base::PyObjectBase* prop = static_cast<Base::PyObjectBase*>(_Shape.getPyObject());
@@ -153,6 +155,7 @@ void PropertyPartShape::setPyObject(PyObject *value)
         throw Base::TypeError(error);
     }
 }
+#endif
 
 App::Property *PropertyPartShape::Copy(void) const
 {
@@ -435,6 +438,7 @@ void PropertyShapeHistory::setValues(const std::vector<ShapeHistory>& values)
     hasSetValue();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyShapeHistory::getPyObject(void)
 {
     return Py::new_reference_to(Py::None());
@@ -443,6 +447,7 @@ PyObject *PropertyShapeHistory::getPyObject(void)
 void PropertyShapeHistory::setPyObject(PyObject *)
 {
 }
+#endif
 
 void PropertyShapeHistory::Save (Base::Writer &) const
 {
@@ -503,6 +508,7 @@ void PropertyFilletEdges::setValues(const std::vector<FilletElement>& values)
     hasSetValue();
 }
 
+#ifdef BUILD_PYTHON
 PyObject *PropertyFilletEdges::getPyObject(void)
 {
     Py::List list(getSize());
@@ -535,6 +541,7 @@ void PropertyFilletEdges::setPyObject(PyObject *value)
 
     setValues(values);
 }
+#endif
 
 void PropertyFilletEdges::Save (Base::Writer &writer) const
 {

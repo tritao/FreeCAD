@@ -105,7 +105,9 @@ public:
 
     // update data of extended object
     virtual void extensionUpdateData(const App::Property*);
+#ifdef BUILD_PYTHON
     PyObject* getExtensionPyObject() override;
+#endif
 
     void setIgnoreOverlayIcon(bool on) {
         m_ignoreOverlayIcon = on;

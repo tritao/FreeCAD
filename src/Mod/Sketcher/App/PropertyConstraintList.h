@@ -109,8 +109,10 @@ public:
         return  _lValueList;
     }
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save(Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;

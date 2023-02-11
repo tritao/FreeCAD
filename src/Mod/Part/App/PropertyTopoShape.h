@@ -74,11 +74,13 @@ public:
     Base::BoundBox3d getBoundingBox() const override;
     //@}
 
+#ifdef BUILD_PYTHON
     /** @name Python interface */
     //@{
     PyObject* getPyObject() override;
     void setPyObject(PyObject *value) override;
     //@}
+#endif
 
     /** @name Save/restore */
     //@{
@@ -142,8 +144,10 @@ public:
         return _lValueList;
     }
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;
@@ -195,8 +199,10 @@ public:
         return _lValueList;
     }
 
+#ifdef BUILD_PYTHON
     PyObject *getPyObject() override;
     void setPyObject(PyObject *) override;
+#endif
 
     void Save (Base::Writer &writer) const override;
     void Restore(Base::XMLReader &reader) override;

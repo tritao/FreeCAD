@@ -25,8 +25,9 @@
 #include <App/Document.h>
 
 #include "BodyBase.h"
+#ifdef BUILD_PYTHON
 #include "BodyBasePy.h"
-
+#endif
 
 namespace Part {
 
@@ -112,6 +113,7 @@ void BodyBase::handleChangedPropertyName(Base::XMLReader &reader,
     }
 }
 
+#ifdef BUILD_PYTHON
 PyObject* BodyBase::getPyObject()
 {
     if (PythonObject.is(Py::_None())){
@@ -120,5 +122,6 @@ PyObject* BodyBase::getPyObject()
     }
     return Py::new_reference_to(PythonObject);
 }
+#endif
 
 } /* Part */

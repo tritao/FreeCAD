@@ -96,8 +96,10 @@ public:
     bool canDelete(App::DocumentObject* obj) const override;
     /// Get the GUI document to this ViewProvider object
     Gui::Document* getDocument() const;
+#ifdef BUILD_PYTHON
     /// Get the python wrapper for that ViewProvider
     PyObject* getPyObject() override;
+#endif
 
     /// return a hit element given the picked point which contains the full node path
     bool getElementPicked(const SoPickedPoint *, std::string &subname) const override;

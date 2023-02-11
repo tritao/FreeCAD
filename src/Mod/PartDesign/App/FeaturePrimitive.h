@@ -54,7 +54,9 @@ public:
     }
     Type         getPrimitiveType() {return primitiveType;}
     void onChanged(const App::Property* prop) override;
+#ifdef BUILD_PYTHON
     PyObject* getPyObject() override;
+#endif
 
     /// Do nothing, just to suppress warning, must be redefined in derived classes
     App::DocumentObjectExecReturn* execute() override {

@@ -374,7 +374,9 @@ public:
     void setStatus(ViewStatus pos, bool on) {StatusBits.set((size_t)pos, on);}
 
     std::string toString() const;
+#ifdef BUILD_PYTHON
     PyObject* getPyObject() override;
+#endif
 
     /** @name Display mode methods
      */
@@ -563,7 +565,9 @@ protected:
     SoSwitch    *pcModeSwitch;
     /// The root separator for annotations
     SoSeparator *pcAnnotation;
+#ifdef BUILD_PYTHON
     ViewProviderPy* pyViewObject;
+#endif
     std::string overrideMode;
     std::bitset<32> StatusBits;
 
