@@ -834,7 +834,11 @@ void PropertyExpressionEngine::renameExpressions(const std::map<ObjectIdentifier
     }
 
     aboutToSetValue();
+    #ifndef FC_OS_EMSCRIPTEN
     expressions = newExpressions;
+    #else
+    assert(0 && "TODO: not implemented");
+    #endif
     for (ExpressionMap::const_iterator i = expressions.begin(); i != expressions.end(); ++i)
         expressionChanged(i->first);
 

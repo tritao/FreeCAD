@@ -47,6 +47,9 @@
 // FreeCAD doc header
 #include <App/Application.h>
 
+#ifdef FC_OS_EMSCRIPTEN
+#include <emscripten.h>
+#endif
 
 using Base::Console;
 using App::Application;

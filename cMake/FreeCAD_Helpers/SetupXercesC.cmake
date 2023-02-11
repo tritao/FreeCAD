@@ -8,4 +8,8 @@ macro(SetupXercesC)
                             "==================\n")
     endif(NOT XercesC_FOUND)
 
+    if (EMSCRIPTEN)
+        string(REPLACE .so .a XercesC_LIBRARIES ${XercesC_LIBRARIES})
+    endif()
+
 endmacro(SetupXercesC)

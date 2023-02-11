@@ -113,6 +113,10 @@
 //# define FC_OS_AIX
 //#elif defined(__GNU__)
 //# define FC_OS_GNU
+#elif defined(__EMSCRIPTEN__)
+#   ifndef FC_OS_EMSCRIPTEN
+#   define FC_OS_EMSCRIPTEN
+#   endif
 #else
 #   error "FreeCAD is not ported to this OS yet. For help see www.freecadweb.org"
 #endif
@@ -284,6 +288,25 @@ typedef unsigned __int64    uint64_t;
 // Boost
 #ifndef BOOST_SIGNALS_NO_DEPRECATION_WARNING
 #define BOOST_SIGNALS_NO_DEPRECATION_WARNING
+#endif
+
+//**************************************************************************
+// Xerces
+#define XERCES_HAS_CPP_NAMESPACE
+#ifndef XERCES_CPP_NAMESPACE
+#define XERCES_CPP_NAMESPACE xercesc::
+#endif
+
+#if defined(XERCES_HAS_CPP_NAMESPACE)
+    #define XERCES_CPP_NAMESPACE_BEGIN namespace XERCES_CPP_NAMESPACE {
+    #define XERCES_CPP_NAMESPACE_END  }
+    #define XERCES_CPP_NAMESPACE_USE using namespace XERCES_CPP_NAMESPACE;
+    #define XERCES_CPP_NAMESPACE_QUALIFIER XERCES_CPP_NAMESPACE::
+#else
+    #define XERCES_CPP_NAMESPACE_BEGIN
+    #define XERCES_CPP_NAMESPACE_END
+    #define XERCES_CPP_NAMESPACE_USE
+    #define XERCES_CPP_NAMESPACE_QUALIFIER
 #endif
 
 //**************************************************************************

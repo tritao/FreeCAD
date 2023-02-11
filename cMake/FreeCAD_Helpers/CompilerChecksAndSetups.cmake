@@ -94,6 +94,12 @@ macro(CompilerChecksAndSetups)
             endif()
         endif()
 
+        if (EMSCRIPTEN)
+            set(CMAKE_EXECUTABLE_SUFFIX ".mjs")
+            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --bind -sENVIRONMENT=node -sMODULARIZE=1 -sEXPORT_ALL")
+            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -sEXPORT_ES6=1 -sUSE_ES6_IMPORT_META=1")
+        endif()
+
         # older boost.preprocessor turn off variadics for clang
         add_definitions(-DBOOST_PP_VARIADICS=1)
         message(STATUS "Force BOOST_PP_VARIADICS=1 for clang")

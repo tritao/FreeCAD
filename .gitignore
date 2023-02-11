@@ -36,6 +36,7 @@ install_manifest.txt
 /Mod/
 /ZERO_CHECK.dir/
 /build/
+/build_em/
 /src/Tools/offlinedoc/localwiki/
 /src/Tools/offlinedoc/*.txt
 OpenSCAD_rc.py

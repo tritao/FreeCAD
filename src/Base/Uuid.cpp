@@ -31,6 +31,9 @@
 
 #include "Uuid.h"
 
+#ifdef FC_OS_EMSCRIPTEN
+#include <uuid/uuid.h>
+#endif
 
 using namespace Base;
 

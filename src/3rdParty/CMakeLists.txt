@@ -4,4 +4,7 @@ if (BUILD_SMESH AND NOT FREECAD_USE_EXTERNAL_SMESH)
 endif()
 
 add_subdirectory(lazy_loader)
+
+if (NOT EMSCRIPTEN)
 add_subdirectory(libE57Format)
+endif()

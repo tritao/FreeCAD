@@ -31,6 +31,7 @@
 #ifndef FC_GLOBAL_H
 #include <FCGlobal.h>
 #endif
+#include <FCConfig.h>
 
 
 XERCES_CPP_NAMESPACE_BEGIN

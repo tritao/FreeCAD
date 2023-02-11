@@ -3501,7 +3501,11 @@ std::string Application::FindHomePath(const char* sCall)
     // convert to utf-8
     return str.toUtf8().data();
 }
-
+#elif defined(FC_OS_EMSCRIPTEN)
+std::string Application::FindHomePath(const char* sCall)
+{
+    return "";
+}
 #else
 # error "std::string Application::FindHomePath(const char*) not implemented"
 #endif

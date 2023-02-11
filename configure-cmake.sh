@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
 set -eux
 
+# install python-is-python3
+
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-mkdir -p build && cd build
+BUILD_DIR=$SCRIPT_DIR/build_em
+mkdir -p $BUILD_DIR && cd $BUILD_DIR
 
-cmake -G "Ninja" \
+CMAKE="emcmake cmake"
+BOOST_VERSION="1.81.0"
+
+$CMAKE -G "Ninja" \
+    -DBoost_ADDITIONAL_VERSIONS=$BOOST_VERSION \
+    -DBoost_NO_BOOST_CMAKE="1" \
+    -DBoost_NO_WARN_NEW_VERSIONS="1" \
+    -DBoost_USE_STATIC_LIBS="1" \
+    -DBOOST_ROOT="$SCRIPT_DIR/third_party/boost" \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS="1" \
     -DBUILD_SMESH:BOOL="0" \
     -DBUILD_FEM:BOOL="0" \
     -DBUILD_GUI:BOOL="0" \

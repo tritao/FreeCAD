@@ -26,6 +26,8 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include "Base/Exception.h"
 
+#include <cstring>
+
 #include "Rotation.h"
 #include "Matrix.h"
 #include "Precision.h"

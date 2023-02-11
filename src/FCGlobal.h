@@ -31,6 +31,9 @@
 #if defined(WIN64) || defined(_WIN64) || defined(__WIN64__) || defined(__CYGWIN__)
 #  define FREECAD_DECL_EXPORT __declspec(dllexport)
 #  define FREECAD_DECL_IMPORT __declspec(dllimport)
+#elif defined(__EMSCRIPTEN__)
+#define FREECAD_DECL_EXPORT __attribute__((visibility("default")))
+#define FREECAD_DECL_IMPORT __attribute__((visibility("default")))
 #else
 #  define FREECAD_DECL_EXPORT
 #  define FREECAD_DECL_IMPORT

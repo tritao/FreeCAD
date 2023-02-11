@@ -50,6 +50,7 @@
 #include <App/Application.h>
 #include <App/Document.h>
 #include <Base/Exception.h>
+#include <Base/Tools.h>
 #include <Gui/Application.h>
 #include <Gui/Command.h>
 #include <Gui/DlgCheckableMessageBox.h>

@@ -50,6 +50,8 @@ struct timeb
 };
 #endif
 
+#include <FCConfig.h>
+
 namespace Base
 {
 /// BaseClass class and root of the type system

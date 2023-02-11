@@ -28,6 +28,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <FCConfig.h>
 
 #include <xercesc/framework/XMLPScanToken.hpp>
 #include <xercesc/sax2/Attributes.hpp>

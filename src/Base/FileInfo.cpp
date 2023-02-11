@@ -36,6 +36,8 @@
 # elif defined (FC_OS_WIN32)
 # include <io.h>
 # include <Windows.h>
+# elif defined (FC_OS_EMSCRIPTEN)
+# include <emscripten.h>
 # endif
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -193,7 +195,9 @@ std::string FileInfo::getTempFileName(const char* FileName, const char* Path)
         vec.pop_back(); // remove '\0'
         std::string str(vec.begin(), vec.end());
         buf.swap(str);
+#ifndef FC_OS_EMSCRIPTEN
         unlink(buf.c_str());
+#endif
     }
     return buf;
 #endif
@@ -260,8 +264,12 @@ std::string FileInfo::dirPath () const
         GetCurrentDirectoryW(MAX_PATH, buf);
         retval = std::string(ConvertFromWideString(std::wstring(buf)));
 #else
+#ifndef FC_OS_EMSCRIPTEN
         char buf[PATH_MAX+1];
         const char* cwd = getcwd(buf, PATH_MAX);
+#else
+        const char* cwd = 0;
+#endif
         retval = std::string(cwd ? cwd : ".");
 #endif
     }
@@ -311,7 +319,7 @@ bool FileInfo::hasExtension (const char* Ext) const
 {
 #if defined (FC_OS_WIN32)
     return _stricmp(Ext,extension().c_str()) == 0;
-#elif defined (FC_OS_LINUX) || defined(FC_OS_CYGWIN) || defined(FC_OS_MACOSX) || defined(FC_OS_BSD)
+#elif defined (FC_OS_LINUX) || defined(FC_OS_CYGWIN) || defined(FC_OS_MACOSX) || defined(FC_OS_BSD) || defined(FC_OS_EMSCRIPTEN)
     return strcasecmp(Ext,extension().c_str()) == 0;
 #endif
 }
@@ -323,6 +331,15 @@ bool FileInfo::exists () const
     return _waccess(wstr.c_str(),F_OK) == 0;
 #elif defined (FC_OS_LINUX) || defined(FC_OS_CYGWIN) || defined(FC_OS_MACOSX) || defined(FC_OS_BSD)
     return access(FileName.c_str(),F_OK) == 0;
+#elif defined(FC_OS_EMSCRIPTEN)
+    //printf("Fillename: %s\n", FileName.c_str());
+    FILE *file = fopen(FileName.c_str(), "rb");
+    bool exists = file != nullptr;
+    if (exists) {
+        fclose(file);
+        return true;
+    }
+    return false;
 #endif
 }
 
@@ -333,6 +350,9 @@ bool FileInfo::isReadable () const
     return _waccess(wstr.c_str(),R_OK) == 0;
 #elif defined (FC_OS_LINUX) || defined(FC_OS_CYGWIN) || defined(FC_OS_MACOSX) || defined(FC_OS_BSD)
     return access(FileName.c_str(),R_OK) == 0;
+#elif defined(FC_OS_EMSCRIPTEN)
+    assert(0 && "FileInfo::isReadable() not implemented for this platform!");
+    return false;
 #endif
 }
 
@@ -343,6 +363,9 @@ bool FileInfo::isWritable () const
     return _waccess(wstr.c_str(),W_OK) == 0;
 #elif defined (FC_OS_LINUX) || defined(FC_OS_CYGWIN) || defined(FC_OS_MACOSX) || defined(FC_OS_BSD)
     return access(FileName.c_str(),W_OK) == 0;
+#elif defined(FC_OS_EMSCRIPTEN)
+    assert(0 && "FileInfo::isWritable() not implemented for this platform!");
+    return false;
 #endif
 }
 
@@ -362,6 +385,8 @@ bool FileInfo::setPermissions (Permissions perms)
     return _wchmod(wstr.c_str(),mode) == 0;
 #elif defined (FC_OS_LINUX) || defined(FC_OS_CYGWIN) || defined(FC_OS_MACOSX) || defined(FC_OS_BSD)
     return chmod(FileName.c_str(),mode) == 0;
+#else
+    assert(0 && "FileInfo::setPermissions() not implemented!");
 #endif
 }
 
@@ -481,6 +506,9 @@ bool FileInfo::deleteFile() const
     return ::_wremove(wstr.c_str()) == 0;
 #elif defined (FC_OS_LINUX) || defined(FC_OS_CYGWIN) || defined(FC_OS_MACOSX) || defined(FC_OS_BSD)
     return (::remove(FileName.c_str())==0);
+#elif defined(FC_OS_EMSCRIPTEN)
+    assert(0 && "FileInfo::deleteFile() not implemented for this platform!");
+    return false;
 #else
 #   error "FileInfo::deleteFile() not implemented for this platform!"
 #endif
@@ -495,6 +523,9 @@ bool FileInfo::renameFile(const char* NewName)
     res = ::_wrename(oldname.c_str(),newname.c_str()) == 0;
 #elif defined (FC_OS_LINUX) || defined(FC_OS_CYGWIN) || defined(FC_OS_MACOSX) || defined(FC_OS_BSD)
     res = ::rename(FileName.c_str(),NewName) == 0;
+#elif defined(FC_OS_EMSCRIPTEN)
+    assert(0 && "FileInfo::renameFile() not implemented for this platform!");
+    return false;
 #else
 #   error "FileInfo::renameFile() not implemented for this platform!"
 #endif
@@ -523,6 +554,9 @@ bool FileInfo::copyTo(const char* NewName) const
     Base::ofstream copy(fi2, std::ios::out | std::ios::binary);
     file >> copy.rdbuf();
     return file.is_open() && copy.is_open();
+#elif defined(FC_OS_EMSCRIPTEN)
+    assert(0 && "FileInfo::copyTo() not implemented for this platform!");
+    return false;
 #else
 #   error "FileInfo::copyTo() not implemented for this platform!"
 #endif
@@ -535,6 +569,16 @@ bool FileInfo::createDirectory() const
     return _wmkdir(wstr.c_str()) == 0;
 #elif defined (FC_OS_LINUX) || defined(FC_OS_CYGWIN) || defined(FC_OS_MACOSX) || defined(FC_OS_BSD)
     return mkdir(FileName.c_str(), 0777) == 0;
+#elif defined(FC_OS_EMSCRIPTEN)
+        int success = EM_ASM_INT({
+            try {
+                FS.mkdir($0);
+                return 1;
+            } catch (e) {
+                return 0;
+            }
+        }, FileName.c_str());
+        return success != 0;
 #else
 #   error "FileInfo::createDirectory() not implemented for this platform!"
 #endif
@@ -563,6 +607,9 @@ bool FileInfo::deleteDirectory() const
     return _wrmdir(wstr.c_str()) == 0;
 #elif defined (FC_OS_LINUX) || defined(FC_OS_CYGWIN) || defined(FC_OS_MACOSX) || defined(FC_OS_BSD)
     return rmdir(FileName.c_str()) == 0;
+#elif defined(FC_OS_EMSCRIPTEN)
+    assert(0 && "FileInfo::rmdir() not implemented for this platform!");
+    return false;
 #else
 #   error "FileInfo::rmdir() not implemented for this platform!"
 #endif
@@ -631,6 +678,9 @@ std::vector<Base::FileInfo> FileInfo::getDirectoryContent() const
             List.emplace_back(FileName + "/" + dir);
     }
     closedir(dp);
+#elif defined(FC_OS_EMSCRIPTEN)
+    assert(0 && "FileInfo::getDirectoryContent() not implemented for this platform!");
+    return std::vector<Base::FileInfo>();
 #else
 #   error "FileInfo::getDirectoryContent() not implemented for this platform!"
 #endif

@@ -1,7 +1,9 @@
 macro(SetupPython)
 # -------------------------------- Python --------------------------------
 
+    if (NOT EMSCRIPTEN)
     find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+    endif()
 
     # For backwards compatibility with old CMake scripts
     set(PYTHON_EXECUTABLE ${Python3_EXECUTABLE})
@@ -14,8 +16,10 @@ macro(SetupPython)
     set(PYTHON_VERSION_PATCH ${Python3_VERSION_PATCH})
     set(PYTHONINTERP_FOUND ${Python3_Interpreter_FOUND})
 
+    if (NOT EMSCRIPTEN)
     if (${PYTHON_VERSION_STRING} VERSION_LESS "3.8")
          message(FATAL_ERROR "To build FreeCAD you need at least Python 3.8\n")
+    endif()
     endif()
 
 endmacro(SetupPython)
