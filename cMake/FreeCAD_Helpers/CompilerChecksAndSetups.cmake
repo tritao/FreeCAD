@@ -90,7 +90,7 @@ macro(CompilerChecksAndSetups)
             add_definitions(-DGL_SILENCE_DEPRECATION)
         elseif (UNIX)
             if (NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 3.9)
-                set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-undefined-var-template")
+                set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-undefined-var-template -Wno-deprecated-builtins -Wno-deprecated-copy-with-user-provided-copy -Wno-unknown-warning-option")
             endif()
         endif()
 
