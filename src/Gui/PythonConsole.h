@@ -152,7 +152,9 @@ private:
     void loadHistory() const;
     void saveHistory() const;
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void pendingSource( );
 
 private:

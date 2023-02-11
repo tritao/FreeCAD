@@ -1219,10 +1219,12 @@ void Application::onUpdate()
 /// Gets called if a view gets activated, this manages the whole activation scheme
 void Application::viewActivated(MDIView* pcView)
 {
+#ifdef BUILD_QT
 #ifdef FC_DEBUG
     // May be useful for error detection
     Base::Console().Log("Active view is %s (at %p)\n",
                  (const char*)pcView->windowTitle().toUtf8(),pcView);
+#endif
 #endif
 
     signalActivateView(pcView);
@@ -1796,9 +1798,11 @@ void messageHandlerCoin(const SoError * error, void * /*userdata*/)
 // To fix bug #0000345 move Q_INIT_RESOURCE() outside initApplication()
 static void init_resources()
 {
+#ifdef BUILD_QT
     // init resources
     Q_INIT_RESOURCE(resource);
     Q_INIT_RESOURCE(translation);
+#endif
 }
 
 void Application::initApplication()
@@ -1972,8 +1976,10 @@ void Application::runApplication()
     // if application not yet created by the splasher
     int argc = App::Application::GetARGC();
     GUISingleApplication mainApp(argc, App::Application::GetARGV());
+#ifdef BUILD_QT
     // http://forum.freecadweb.org/viewtopic.php?f=3&t=15540
     mainApp.setAttribute(Qt::AA_DontShowIconsInMenus, false);
+#endif
 
     // Make sure that we use '.' as decimal point. See also
     // http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=559846
@@ -1981,6 +1987,7 @@ void Application::runApplication()
     // http://doc.qt.io/qt-5/qcoreapplication.html#locale-settings
     setlocale(LC_NUMERIC, "C");
 
+#ifdef BUILD_QT
     // check if a single or multiple instances can run
     it = cfg.find("SingleInstance");
     if (it != cfg.end() && mainApp.isRunning()) {
@@ -2077,6 +2084,7 @@ void Application::runApplication()
 #else
     FileDialog::setWorkingDirectory(FileDialog::restoreLocation());
 #endif
+#endif // BUILD_QT
 
     Application app(true);
     MainWindow mw;

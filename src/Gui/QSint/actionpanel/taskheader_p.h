@@ -34,7 +34,9 @@ public:
 
   void setScheme(ActionPanelScheme *scheme);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
   void activated();
 
 public:

@@ -24,7 +24,11 @@
 #include "PreCompiled.h"
 
 #ifndef _PreComp_
+#ifdef BUILD_QT
 # include <QMutexLocker>
+#else
+# include <mutex>
+#endif
 #endif
 
 #include "Sequencer.h"
@@ -162,7 +166,11 @@ bool SequencerBase::isBlocking() const
 
 bool SequencerBase::setLocked(bool bLocked)
 {
+#ifdef BUILD_QT
     QMutexLocker locker(&SequencerP::mutex);
+#else
+    std::lock_guard<std::mutex> locker(SequencerP::mutex);
+#endif
     bool old = this->_bLocked;
     this->_bLocked = bLocked;
     return old;
@@ -170,19 +178,31 @@ bool SequencerBase::setLocked(bool bLocked)
 
 bool SequencerBase::isLocked() const
 {
+#ifdef BUILD_QT
     QMutexLocker locker(&SequencerP::mutex);
+#else
+    std::lock_guard<std::mutex> locker(SequencerP::mutex);
+#endif
     return this->_bLocked;
 }
 
 bool SequencerBase::isRunning() const
 {
+#ifdef BUILD_QT
     QMutexLocker locker(&SequencerP::mutex);
+#else
+    std::lock_guard<std::mutex> locker(SequencerP::mutex);
+#endif
     return (SequencerP::_topLauncher != nullptr);
 }
 
 bool SequencerBase::wasCanceled() const
 {
+#ifdef BUILD_QT
     QMutexLocker locker(&SequencerP::mutex);
+#else
+    std::lock_guard<std::mutex> locker(SequencerP::mutex);
+#endif
     return this->_bCanceled;
 }
 
@@ -239,7 +259,11 @@ void ConsoleSequencer::resetData()
 
 SequencerLauncher::SequencerLauncher(const char* pszStr, size_t steps)
 {
+#ifdef BUILD_QT
     QMutexLocker locker(&SequencerP::mutex);
+#else
+    std::lock_guard<std::mutex> locker(SequencerP::mutex);
+#endif
     // Have we already an instance of SequencerLauncher created?
     if (!SequencerP::_topLauncher) {
         SequencerBase::Instance().start(pszStr, steps);
@@ -249,7 +273,11 @@ SequencerLauncher::SequencerLauncher(const char* pszStr, size_t steps)
 
 SequencerLauncher::~SequencerLauncher()
 {
+#ifdef BUILD_QT
     QMutexLocker locker(&SequencerP::mutex);
+#else
+    std::lock_guard<std::mutex> locker(SequencerP::mutex);
+#endif
     if (SequencerP::_topLauncher == this)
         SequencerBase::Instance().stop();
     if (SequencerP::_topLauncher == this) {
@@ -259,13 +287,21 @@ SequencerLauncher::~SequencerLauncher()
 
 void SequencerLauncher::setText (const char* pszTxt)
 {
+#ifdef BUILD_QT
     QMutexLocker locker(&SequencerP::mutex);
+#else
+    std::lock_guard<std::mutex> locker(SequencerP::mutex);
+#endif
     SequencerBase::Instance().setText(pszTxt);
 }
 
 bool SequencerLauncher::next(bool canAbort)
 {
+#ifdef BUILD_QT
     QMutexLocker locker(&SequencerP::mutex);
+#else
+    std::lock_guard<std::mutex> locker(SequencerP::mutex);
+#endif
     if (SequencerP::_topLauncher != this)
         return true; // ignore
     return SequencerBase::Instance().next(canAbort);
@@ -273,13 +309,21 @@ bool SequencerLauncher::next(bool canAbort)
 
 void SequencerLauncher::setProgress(size_t pos)
 {
+#ifdef BUILD_QT
     QMutexLocker locker(&SequencerP::mutex);
+#else
+    std::lock_guard<std::mutex> locker(SequencerP::mutex);
+#endif
     SequencerBase::Instance().setProgress(pos);
 }
 
 size_t SequencerLauncher::numberOfSteps() const
 {
+#ifdef BUILD_QT
     QMutexLocker locker(&SequencerP::mutex);
+#else
+    std::lock_guard<std::mutex> locker(SequencerP::mutex);
+#endif
     return SequencerBase::Instance().numberOfSteps();
 }
 

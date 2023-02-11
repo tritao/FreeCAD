@@ -23,8 +23,10 @@
 
 #include "PreCompiled.h"
 #ifndef _PreComp_
+#ifdef BUILD_QT
 # include <QDockWidget>
 # include <QStatusBar>
+#endif
 #endif
 
 #include "Workbench.h"

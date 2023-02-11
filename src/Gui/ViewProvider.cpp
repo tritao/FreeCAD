@@ -319,7 +319,12 @@ void ViewProvider::update(const App::Property* prop)
 
 QIcon ViewProvider::getIcon() const
 {
+#ifdef BUILD_QT
     return mergeGreyableOverlayIcons (Gui::BitmapFactory().pixmap(sPixmap));
+#else
+    assert(0);
+    return QIcon();
+#endif
 }
 
 QIcon ViewProvider::mergeGreyableOverlayIcons (const QIcon & orig) const

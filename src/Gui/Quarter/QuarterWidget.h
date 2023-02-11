@@ -188,7 +188,9 @@ public Q_SLOTS:
   void setStereoMode(SIM::Coin3D::Quarter::QuarterWidget::StereoMode mode);
   void setTransparencyType(SIM::Coin3D::Quarter::QuarterWidget::TransparencyType type);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
   void devicePixelRatioChanged(qreal dev_pixel_ratio);
 
 private Q_SLOTS:

@@ -335,7 +335,9 @@ private Q_SLOTS:
      */
     void clearStatus();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void timeEvent();
     void windowStateChanged(Gui::MDIView*);
     void workbenchActivated(const QString&);

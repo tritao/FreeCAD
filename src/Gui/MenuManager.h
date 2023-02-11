@@ -28,6 +28,9 @@
 #include <QString>
 #include <FCGlobal.h>
 
+#ifdef BUILD_QT
+#include <QStringList>
+#endif
 
 class QAction;
 class QMenu;

@@ -25,7 +25,9 @@
 #define GUI_TASKVIEW_TASKWATCHER_H
 
 #include <vector>
+#ifdef BUILD_QT
 #include <QObject>
+#endif
 
 #include <Gui/SelectionFilter.h>
 
@@ -44,7 +46,9 @@ public:
     explicit TaskWatcher(const char* Filter);
     ~TaskWatcher() override;
 
+#ifdef BUILD_QT
     std::vector<QWidget*> &getWatcherContent();
+#endif
 
 public:
     /// is called wenn the document or the Selection changes. 
@@ -52,8 +56,9 @@ public:
 
 protected:
     /// List of TaskBoxes of that dialog
+#ifdef BUILD_QT
     std::vector<QWidget*> Content;
-
+#endif
 };
 
 // --------------------------------------------------------------------------

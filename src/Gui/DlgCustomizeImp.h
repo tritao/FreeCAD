@@ -24,6 +24,8 @@
 #ifndef GUI_DIALOG_DLGCUSTOMIZE_IMP_H
 #define GUI_DIALOG_DLGCUSTOMIZE_IMP_H
 
+#ifdef BUILD_QT
+
 #include <QDialog>
 
 class QTabWidget;
@@ -57,7 +59,9 @@ public:
     static void addPage(const char* className);
     void addPage (QWidget* w);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void addMacroAction(const QByteArray&);
     void removeMacroAction(const QByteArray&);
     void modifyMacroAction(const QByteArray&);
@@ -79,5 +83,7 @@ private:
 
 } // namespace Dialog
 } // namespace Gui
+
+#endif
 
 #endif // GUI_DIALOG_DLGCUSTOMIZE_IMP_H

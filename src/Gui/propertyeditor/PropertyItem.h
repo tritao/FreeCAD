@@ -1152,7 +1152,9 @@ protected Q_SLOTS:
     void onEditClicked();
     void onLinkChanged();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void linkChanged(const QVariant&);
 
 private:

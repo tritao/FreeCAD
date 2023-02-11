@@ -65,7 +65,11 @@ Constraint::Constraint()
     static bool seeded = false;
 
     if (!seeded) {
+#ifdef BUILD_QT
         ran.seed(QDateTime::currentMSecsSinceEpoch() & 0xffffffff);
+#else
+        ran.seed((int)time(NULL) & 0xffffffff);
+#endif
         seeded = true;
     }
     static boost::uuids::basic_random_generator<boost::mt19937> gen(&ran);

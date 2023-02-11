@@ -52,7 +52,9 @@ public:
   void trigger();
   void stopThread();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
 
   void triggerSignal();
 

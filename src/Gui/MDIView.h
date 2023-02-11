@@ -31,6 +31,7 @@
 
 QT_BEGIN_NAMESPACE
 class QPrinter;
+class QCloseEvent;
 QT_END_NAMESPACE
 
 namespace Gui
@@ -158,7 +159,9 @@ public Q_SLOTS:
     virtual void setOverrideCursor(const QCursor&);
     virtual void restoreOverrideCursor();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void message(const QString&, int);
 
 protected Q_SLOTS:

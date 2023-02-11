@@ -87,6 +87,7 @@
 #include <Base/ProgressIndicatorPy.h>
 #include <Base/RotationPy.h>
 #endif
+#include <Base/Sequencer.h>
 #include <Base/Tools.h>
 #include <Base/Translate.h>
 #include <Base/Type.h>
@@ -3004,6 +3005,7 @@ void Application::LoadParameters()
             // this will be used.
             std::map<std::string, std::string>::iterator it = mConfig.find("UserParameterTemplate");
             if (it != mConfig.end()) {
+#ifdef BUILD_QT
                 QString path = QString::fromUtf8(it->second.c_str());
                 if (QDir(path).isRelative()) {
                     QString home = QString::fromUtf8(mConfig["AppHomePath"].c_str());
@@ -3013,6 +3015,7 @@ void Application::LoadParameters()
                 if (fi.exists()) {
                     _pcUserParamMngr->LoadDocument(path.toUtf8().constData());
                 }
+#endif
             }
 
 #ifdef BUILD_PYTHON

@@ -74,7 +74,9 @@ public:
   bool canClose() override{return true;}
   //@}
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
   /// sends a message to the document
   void sendCloseView(Gui::MDIView* theView);
 };

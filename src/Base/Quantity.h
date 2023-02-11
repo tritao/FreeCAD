@@ -25,7 +25,9 @@
 #define BASE_Quantity_H
 
 #include "Unit.h"
+#ifdef BUILD_QT
 #include <QString>
+#endif
 
 #ifndef  DOUBLE_MAX
 # define DOUBLE_MAX 1.7976931348623157E+308    /* max decimal value of a "double"*/

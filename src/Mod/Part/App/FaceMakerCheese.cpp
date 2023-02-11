@@ -42,7 +42,9 @@
 # include <TopExp_Explorer.hxx>
 # include <TopTools_IndexedMapOfShape.hxx>
 # include <TopTools_HSequenceOfShape.hxx>
-# include <QtGlobal>
+#ifdef BUILD_QT
+#include <QtGlobal>
+#endif
 #endif
 
 #include "FaceMakerCheese.h"

@@ -133,7 +133,9 @@ public:
         Q_EMIT aboutToBeDestroyed();
     }
     
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void aboutToBeDestroyed();
     
 protected:

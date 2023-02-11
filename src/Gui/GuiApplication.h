@@ -75,7 +75,9 @@ private Q_SLOTS:
     void receiveConnection();
     void processMessages();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void messageReceived(const QList<QByteArray> &);
 
 private:

@@ -239,7 +239,9 @@ protected Q_SLOTS:
     void onClear();
     void onCancel();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void emitCanceled();
     void emitFinished();
 

@@ -72,7 +72,9 @@ protected:
 protected Q_SLOTS:
   void onSelectionChanged( QListWidgetItem * item, QListWidgetItem * );
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
   /** Emits this signal if selection has changed. */
   void emitSelectionChanged( const QString& );
 };
@@ -263,7 +265,9 @@ private Q_SLOTS:
     void onColorChosen(const QColor&);
     void onRejected();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     /** Emits this signal when color has changed */
     void changed();
 
@@ -426,7 +430,9 @@ protected:
 protected Q_SLOTS:
     virtual void browse();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void valueChanged(const QVariant &);
     void buttonClicked();
 
@@ -552,7 +558,9 @@ public Q_SLOTS:
     virtual void setButtonText (const QString &);
     virtual void validateText (const QString &);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void textChanged(const QString &);
 
 private Q_SLOTS:

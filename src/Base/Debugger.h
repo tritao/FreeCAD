@@ -53,6 +53,7 @@ namespace Base {
   \endcode
  \author Werner Mayer
  */
+#ifdef BUILD_QT
 class BaseExport Debugger : public QObject
 {
     Q_OBJECT
@@ -78,6 +79,25 @@ private:
     bool isAttached;
     QEventLoop loop;
 };
+#else
+class BaseExport Debugger
+{
+public:
+    Debugger(void* parent=0);
+    ~Debugger();
+
+    void attach();
+    void detach();
+    bool eventFilter(void*, void*);
+    int exec();
+
+public:
+    void quit();
+
+private:
+    bool isAttached;
+};
+#endif
 
 }
 

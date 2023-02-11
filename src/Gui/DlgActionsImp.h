@@ -56,7 +56,9 @@ public:
     explicit DlgCustomActionsImp( QWidget* parent = nullptr );
     ~DlgCustomActionsImp() override;
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void addMacroAction( const QByteArray& );
     void removeMacroAction( const QByteArray& );
     void modifyMacroAction( const QByteArray& );

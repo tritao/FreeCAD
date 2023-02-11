@@ -24,7 +24,9 @@
 #include "PreCompiled.h"
 
 #ifndef _PreComp_
+#ifdef BUILD_QT
 # include <QUuid>
+#endif
 #endif
 
 #include <stdexcept>
@@ -63,7 +65,11 @@ Uuid::~Uuid() = default;
 std::string Uuid::createUuid()
 {
     std::string Uuid;
+#if defined(BUILD_QT)
     QString uuid = QUuid::createUuid().toString();
+#else
+    #error Not implemented
+#endif
     uuid = uuid.mid(1);
     uuid.chop(1);
     Uuid = uuid.toLatin1().constData();

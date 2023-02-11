@@ -35,13 +35,14 @@
 # include <Standard_Failure.hxx>
 # include <TopoDS.hxx>
 # include <TopExp_Explorer.hxx>
-# include <QtGlobal>
+#ifdef BUILD_QT
+#include <QtGlobal>
+#endif
 #endif
 
 #include "FaceMakerBullseye.h"
 #include "FaceMakerCheese.h"
 #include "TopoShape.h"
-
 
 using namespace Part;
 

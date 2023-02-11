@@ -83,11 +83,13 @@ public:
     void viewAll() override;
     const char *getName() const override;
 
+#ifdef BUILD_QT
     /// print function of the view
     void print() override;
     void printPdf() override;
     void printPreview() override;
     void print(QPrinter*) override;
+#endif
 
 #ifdef BUILD_PYTHON
     PyObject *getPyObject() override;

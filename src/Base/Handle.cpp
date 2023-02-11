@@ -29,7 +29,9 @@
 # include <iostream>
 #endif
 
+#ifdef BUILD_QT
 #include <QAtomicInt>
+#endif
 
 #include "Handle.h"
 
@@ -40,28 +42,49 @@ using namespace Base;
 // Construction/Destruction
 
 Handled::Handled()
+#ifdef BUILD_QT
   : _lRefCount(new QAtomicInt(0))
+#else
+  : _lRefCount(0)
+#endif
 {
 }
 
 Handled::~Handled()
 {
+#ifdef BUILD_QT
     if (static_cast<int>(*_lRefCount) != 0)
         std::cerr << "Reference counter of deleted object is not zero!!!!!" << std::endl;
     delete _lRefCount;
+#else
+    if (_lRefCount.load() != 0)
+        std::cerr << "Reference counter of deleted object is not zero!!!!!" << std::endl;
+#endif
 }
 
 void Handled::ref() const
 {
+#ifdef BUILD_QT
     _lRefCount->ref();
+#else
+    _lRefCount++;
+#endif
 }
 
 void Handled::unref() const
 {
+#ifdef BUILD_QT
     assert(*_lRefCount > 0);
     if (!_lRefCount->deref()) {
         delete this;
     }
+#else
+    assert(_lRefCount.load() > 0);
+    _lRefCount--;
+    if (!_lRefCount.load()) {
+        delete this;
+    }
+#endif
 }
 
 int Handled::unrefNoDelete() const

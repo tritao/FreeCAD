@@ -1907,6 +1907,8 @@ MDIView *Document::createView(const Base::Type& typeId)
     if (typeId == View3DInventor::getClassTypeId()) {
 
         QtGLWidget* shareWidget = nullptr;
+
+#ifdef BUILD_QT
         // VBO rendering doesn't work correctly when we don't share the OpenGL widgets
         if (!theViews.empty()) {
             auto firstView = static_cast<View3DInventor*>(theViews.front());
@@ -1916,6 +1918,7 @@ MDIView *Document::createView(const Base::Type& typeId)
             firstView->onMsg("GetCamera",&ppReturn);
             saveCameraSettings(ppReturn);
         }
+#endif
 
         auto view3D = new View3DInventor(this, getMainWindow(), shareWidget);
         if (!theViews.empty()) {
@@ -1945,6 +1948,7 @@ MDIView *Document::createView(const Base::Type& typeId)
             view3D->getViewer()->removeViewProvider(getViewProvider(obj));
 
         const char* name = getDocument()->Label.getValue();
+#ifdef BUILD_QT
         QString title = QString::fromLatin1("%1 : %2[*]")
             .arg(QString::fromUtf8(name)).arg(d->_iWinCount++);
 
@@ -1961,6 +1965,7 @@ MDIView *Document::createView(const Base::Type& typeId)
 
         getMainWindow()->addWindow(view3D);
         return view3D;
+#endif
     }
     return nullptr;
 }
@@ -1999,6 +2004,7 @@ Gui::MDIView* Document::cloneView(Gui::MDIView* oldview)
         for (App::DocumentObject* obj : child_vps)
             view3D->getViewer()->removeViewProvider(getViewProvider(obj));
 
+#ifdef BUILD_QT
         view3D->setWindowTitle(oldview->windowTitle());
         view3D->setWindowModified(oldview->isWindowModified());
         view3D->setWindowIcon(oldview->windowIcon());
@@ -2011,6 +2017,7 @@ Gui::MDIView* Document::cloneView(Gui::MDIView* oldview)
             view3D->getViewer()->setEditingViewProvider(d->_editViewProvider, d->_editMode);
         }
 
+#endif
         return view3D;
     }
 
@@ -2136,9 +2143,11 @@ bool Document::canClose (bool checkModify, bool checkLink)
     if (d->_isClosing)
         return true;
     if (!getDocument()->isClosable()) {
+#ifdef BUILD_QT
         QMessageBox::warning(getActiveView(),
             QObject::tr("Document not closable"),
             QObject::tr("The document is not closable for the moment."));
+#endif
         return false;
     }
     //else if (!Gui::Control().isAllowedAlterDocument()) {
@@ -2160,6 +2169,7 @@ bool Document::canClose (bool checkModify, bool checkLink)
     if (getDocument()->testStatus(App::Document::TempDoc))
         return true;
 
+#ifdef BUILD_QT
     bool ok = true;
     if (checkModify && isModified() && !getDocument()->testStatus(App::Document::PartialDoc)) {
         const char *docName = getDocument()->Label.getValue();
@@ -2207,6 +2217,7 @@ bool Document::canClose (bool checkModify, bool checkLink)
             }
         }
     }
+#endif
 
     return ok;
 }

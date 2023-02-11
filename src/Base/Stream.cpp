@@ -24,9 +24,11 @@
 #include "PreCompiled.h"
 
 #ifndef _PreComp_
+#ifdef BUILD_QT
 # include <QBuffer>
 # include <QByteArray>
 # include <QIODevice>
+#endif
 # include <cstring>
 #ifdef __GNUC__
 # include <cstdint>

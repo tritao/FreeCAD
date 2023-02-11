@@ -135,7 +135,9 @@ public:
     void resizeEvent(QResizeEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void unsignedChanged( uint value );
 
 public Q_SLOTS:

@@ -167,7 +167,9 @@ private:
     QString getUserString(const Base::Quantity& val, double& factor, QString& unitString) const;
     QString getUserString(const Base::Quantity& val) const;
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     /** Gets emitted if the user has entered a VALID input
      *  Valid means the user inputted string obeys all restrictions
      *  like: minimum, maximum and/or the right Unit (if specified).

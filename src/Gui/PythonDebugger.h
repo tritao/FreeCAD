@@ -175,7 +175,9 @@ public:
     void showDebugMarker(const QString&, int line);
     void hideDebugMarker(const QString&);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void signalNextStep();
 
 private:

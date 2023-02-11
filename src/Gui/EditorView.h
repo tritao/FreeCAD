@@ -106,7 +106,9 @@ private Q_SLOTS:
     void undoAvailable(bool);
     void redoAvailable(bool);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void changeFileName(const QString&);
 
 private:

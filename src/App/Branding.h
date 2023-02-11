@@ -24,6 +24,8 @@
 #ifndef APP_BRANDING_H
 #define APP_BRANDING_H
 
+#ifdef BUILD_QT
+
 #include <string>
 #include <QDomDocument>
 #include <QMap>
@@ -51,5 +53,7 @@ private:
 };
 
 }
+
+#endif
 
 #endif // APP_BRANDING_H

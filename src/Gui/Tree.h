@@ -37,6 +37,7 @@
 #include <Gui/Selection.h>
 #include <Gui/TreeItemMode.h>
 
+class QPixmap;
 class QLineEdit;
 
 namespace Gui {
@@ -168,7 +169,9 @@ private Q_SLOTS:
     void onItemExpanded(QTreeWidgetItem * item);
     void onUpdateStatus();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void emitSearchObjects();
 
 private:

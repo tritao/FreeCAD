@@ -137,7 +137,9 @@ private:
     QWidget* getInvalidInput() const;
     void showErrorMessage();
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void placementChanged(const QVariant &, bool, bool);
 
 private:
@@ -196,7 +198,9 @@ public:
 public Q_SLOTS:
     void slotPlacementChanged(const QVariant &, bool, bool);
 
+#ifdef BUILD_QT
 Q_SIGNALS:
+#endif
     void placementChanged(const QVariant &, bool, bool);
 
 private:

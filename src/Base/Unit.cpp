@@ -102,6 +102,7 @@ Unit::Unit(const Unit& that)
     this->Sig = that.Sig;
 }
 
+#ifdef BUILD_QT
 Unit::Unit(const QString& expr)
 {
     try {
@@ -118,6 +119,7 @@ Unit::Unit(const QString& expr)
         Sig.Angle                    = 0;
     }
 }
+#endif
 
 Unit Unit::pow(signed char exp) const
 {

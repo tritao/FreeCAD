@@ -24,6 +24,8 @@
 #ifndef GUI_TASKVIEW_TASKVIEW_H
 #define GUI_TASKVIEW_TASKVIEW_H
 
+#ifdef BUILD_QT
+
 #include <vector>
 #include <QScrollArea>
 
@@ -196,5 +198,7 @@ protected:
 
 } //namespace TaskView
 } //namespace Gui
+
+#endif
 
 #endif // GUI_TASKVIEW_TASKVIEW_H
