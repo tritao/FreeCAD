@@ -223,6 +223,7 @@ void ViewProvider::eventCallback(void * ud, SoEventCallback * node)
                     node->setHandled();
                 }
                 else if(QApplication::mouseButtons()==Qt::NoButton) {
+#ifndef BUILD_WEB
                     // Because of a Coin bug (https://bitbucket.org/Coin3D/coin/pull-requests/119),
                     // FC may crash if user hits ESC to cancel while still
                     // holding the mouse button while using some SoDragger.
@@ -247,6 +248,7 @@ void ViewProvider::eventCallback(void * ud, SoEventCallback * node)
                         func->setFunction(std::bind(&Document::resetEdit, doc));
                         func->singleShot(0);
                     }
+#endif
                 }
                 else if (press) {
                     FC_WARN("Please release all mouse buttons before exiting editing");
@@ -651,12 +653,22 @@ bool ViewProvider::checkRecursion(SoNode* node)
 
 SoPickedPoint* ViewProvider::getPointOnRay(const SbVec2s& pos, const View3DInventorViewer* viewer) const
 {
+#ifndef BUILD_WEB
     return viewer->getPointOnRay(pos, this);
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+    return 0;
+#endif
 }
 
 SoPickedPoint* ViewProvider::getPointOnRay(const SbVec3f& pos,const SbVec3f& dir, const View3DInventorViewer* viewer) const
 {
+#ifndef BUILD_WEB
     return viewer->getPointOnRay(pos, dir, this);
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+    return 0;
+#endif
 }
 
 std::vector<Base::Vector3d> ViewProvider::getModelPoints(const SoPickedPoint* pp) const

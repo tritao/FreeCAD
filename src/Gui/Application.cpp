@@ -187,6 +187,7 @@ struct ApplicationP
     isClosing(false),
     startingUp(true)
     {
+#ifndef BUILD_WEB
         // create the macro manager
         if (GUIenabled)
             macroMngr = new MacroManager();
@@ -195,12 +196,15 @@ struct ApplicationP
 
         // Create the Theme Manager
         prefPackManager = new PreferencePackManager();
+#endif
     }
 
     ~ApplicationP()
     {
+#ifndef BUILD_WEB
         delete macroMngr;
         delete prefPackManager;
+#endif
     }
 
     /// list of all handled documents
@@ -214,9 +218,11 @@ struct ApplicationP
     std::list<Gui::BaseView*> passive;
     bool isClosing;
     bool startingUp;
+#ifndef BUILD_WEB
     /// Handles all commands
     CommandManager commandManager;
     ViewProviderMap viewproviderMap;
+#endif
     std::bitset<32> StatusBits;
 };
 
@@ -510,18 +516,22 @@ Application::Application(bool GUIenabled)
 
     if (GUIenabled) {
         createStandardOperations();
+#ifndef BUILD_WEB
         MacroCommand::load();
+#endif
     }
 }
 
 Application::~Application()
 {
     Base::Console().Log("Destruct Gui::Application\n");
+#ifndef BUILD_WEB
     WorkbenchManager::destruct();
     SelectionSingleton::destruct();
     Translator::destruct();
     WidgetFactorySupplier::destruct();
     BitmapFactoryInst::destruct();
+#endif
 
 #ifdef BUILD_PYTHON
     Base::PyGILStateLocker lock;
@@ -540,13 +550,13 @@ Application::~Application()
     Instance = nullptr;
 }
 
-
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 // creating std commands
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 void Application::open(const char* FileName, const char* Module)
 {
+#ifndef BUILD_WEB
     WaitCursor wc;
     wc.setIgnoreEvents(WaitCursor::NoEvents);
     Base::FileInfo File(FileName);
@@ -614,10 +624,12 @@ void Application::open(const char* FileName, const char* Module)
         wc.setWaitCursor();
         return;
     }
+#endif
 }
 
 void Application::importFrom(const char* FileName, const char* DocName, const char* Module)
 {
+#ifndef BUILD_WEB
     WaitCursor wc;
     wc.setIgnoreEvents(WaitCursor::NoEvents);
     Base::FileInfo File(FileName);
@@ -705,10 +717,12 @@ void Application::importFrom(const char* FileName, const char* DocName, const ch
             QObject::tr("Cannot open unknown filetype: %1").arg(QLatin1String(te.c_str())));
         wc.setWaitCursor();
     }
+#endif
 }
 
 void Application::exportTo(const char* FileName, const char* DocName, const char* Module)
 {
+#ifndef BUILD_WEB
     WaitCursor wc;
     wc.setIgnoreEvents(WaitCursor::NoEvents);
     Base::FileInfo File(FileName);
@@ -775,10 +789,12 @@ void Application::exportTo(const char* FileName, const char* DocName, const char
             QObject::tr("Cannot save to unknown filetype: %1").arg(QLatin1String(te.c_str())));
         wc.setWaitCursor();
     }
+#endif
 }
 
 void Application::createStandardOperations()
 {
+#ifndef BUILD_WEB
     // register the application Standard commands from CommandStd.cpp
     Gui::CreateStdCommands();
     Gui::CreateDocCommands();
@@ -789,6 +805,7 @@ void Application::createStandardOperations()
     Gui::CreateStructureCommands();
     Gui::CreateTestCommands();
     Gui::CreateLinkCommands();
+#endif
 }
 
 void Application::slotNewDocument(const App::Document& Doc, bool isMainDoc)
@@ -1113,6 +1130,7 @@ void Application::setActiveDocument(Gui::Document* pcDocument)
     d->activeDocument = pcDocument;
     std::string nameApp, nameGui;
 
+#ifndef BUILD_WEB
     // This adds just a line to the macro file but does not set the active document
     // Macro recording of this is problematic, thus it's written out as comment.
     if (pcDocument){
@@ -1135,6 +1153,7 @@ void Application::setActiveDocument(Gui::Document* pcDocument)
         nameGui += "Gui.ActiveDocument=None";
         macroManager()->addLine(MacroManager::Cmt,nameGui.c_str());
     }
+#endif
 
     // Sets the currently active document
     try {
@@ -1716,12 +1735,20 @@ bool Application::isClosing()
 
 MacroManager *Application::macroManager()
 {
+#ifndef BUILD_WEB
     return d->macroMngr;
+#else
+    return 0;
+#endif
 }
 
 CommandManager &Application::commandManager()
 {
+#ifndef BUILD_WEB
     return d->commandManager;
+#else
+    assert(0);
+#endif
 }
 
 Gui::PreferencePackManager* Application::prefPackManager()
@@ -1845,6 +1872,7 @@ void Application::initTypes()
     Gui::PythonEditorView                       ::init();
     // View Provider
     Gui::ViewProvider                           ::init();
+#ifndef BUILD_WEB
     Gui::ViewProviderExtension                  ::init();
     Gui::ViewProviderExtensionPython            ::init();
     Gui::ViewProviderGroupExtension             ::init();
@@ -1900,6 +1928,7 @@ void Application::initTypes()
     // register transaction type
     new App::TransactionProducer<TransactionViewProvider>
             (ViewProviderDocumentObject::getClassTypeId());
+#endif
 }
 
 void Application::initOpenInventor()
@@ -2091,6 +2120,7 @@ void Application::runApplication()
 
     Application app(true);
     MainWindow mw;
+#ifndef BUILD_WEB
     mw.setProperty("QuitOnClosed", true);
 
     // allow to disable version number
@@ -2124,6 +2154,7 @@ void Application::runApplication()
     int size = hGrp->GetInt("ToolbarIconSize", 0);
     if (size >= 16) // must not be lower than this
         mw.setIconSize(QSize(size,size));
+#endif
 
     // filter wheel events for combo boxes
     if (hGrp->GetBool("ComboBoxWheelEventFilter", false)) {
@@ -2252,7 +2283,9 @@ void Application::runApplication()
     // Call this before showing the main window because otherwise:
     // 1. it shows a white window for a few seconds which doesn't look nice
     // 2. the layout of the toolbars is completely broken
+    start = "PartWorkbench";
     app.activateWorkbench(start.c_str());
+    app.open("/home/joao/dev/FreeCAD/build/bin/SketchWithRectangle.fcstd", "FreeCAD");
 
     // show the main window
     if (!hidden) {

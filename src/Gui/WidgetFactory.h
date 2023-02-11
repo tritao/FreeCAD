@@ -24,6 +24,8 @@
 #ifndef GUI_WIDGETFACTORY_H
 #define GUI_WIDGETFACTORY_H
 
+#ifndef BUILD_WEB
+
 #include <vector>
 
 #include <Base/Factory.h>
@@ -404,5 +406,7 @@ private:
 } // namespace Dialog
 
 } // namespace Gui
+
+#endif
 
 #endif // GUI_WIDGETFACTORY_H

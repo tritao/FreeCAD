@@ -1299,6 +1299,7 @@ bool Document::askIfSavingFailed(const QString& error)
 /// Save the document
 bool Document::save()
 {
+#ifndef BUILD_WEB
     if (d->_pcDocument->isSaved()) {
         try {
             std::vector<App::Document*> docs;
@@ -1377,11 +1378,15 @@ bool Document::save()
     else {
         return saveAs();
     }
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+#endif
 }
 
 /// Save the document under a new file name
 bool Document::saveAs()
 {
+#ifndef BUILD_WEB
     getMainWindow()->showMessage(QObject::tr("Save document under new filename..."));
 
     QString exe = qApp->applicationName();
@@ -1421,6 +1426,9 @@ bool Document::saveAs()
         getMainWindow()->showMessage(QObject::tr("Saving aborted"), 2000);
         return false;
     }
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+#endif
 }
 
 void Document::saveAll()
@@ -1483,6 +1491,7 @@ void Document::saveAll()
 /// Save a copy of the document under a new file name
 bool Document::saveCopy()
 {
+#ifndef BUILD_WEB
     getMainWindow()->showMessage(QObject::tr("Save a copy of the document under new filename..."));
 
     QString exe = qApp->applicationName();
@@ -1504,6 +1513,9 @@ bool Document::saveCopy()
         getMainWindow()->showMessage(QObject::tr("Saving aborted"), 2000);
         return false;
     }
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+#endif
 }
 
 unsigned int Document::getMemSize () const
@@ -1687,6 +1699,7 @@ void Document::slotShowHidden(const App::Document& doc)
  */
 void Document::SaveDocFile (Base::Writer &writer) const
 {
+#ifndef BUILD_WEB
     writer.Stream() << "<?xml version='1.0' encoding='utf-8'?>" << std::endl
                     << "<!--" << std::endl
                     << " FreeCAD Document, see http://www.freecadweb.org for more information..."
@@ -1753,6 +1766,9 @@ void Document::SaveDocFile (Base::Writer &writer) const
         << encodeAttribute(getCameraSettings()) << "\"/>\n";
     writer.decInd(); // indentation for camera settings
     writer.Stream() << "</Document>" << std::endl;
+#else
+    assert(0 && __PRETTY_FUNCTION__);
+#endif
 }
 
 void Document::exportObjects(const std::vector<App::DocumentObject*>& obj, Base::Writer& writer)
