@@ -22,6 +22,7 @@
 #***************************************************************************/
 
 # FreeCAD init script of the part module
+import FreeCAD
 
 #FreeCAD.addImportType("CAD formats (*.igs *.iges *.step *.stp *.brep *.brp)","Part")
 #FreeCAD.addExportType("CAD formats (*.igs *.iges *.step *.stp *.brep *.brp)","Part")

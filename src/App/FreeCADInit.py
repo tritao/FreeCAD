@@ -29,6 +29,7 @@
 
 # imports the one and only
 import FreeCAD
+from typing import List
 
 def removeFromPath(module_name):
     """removes the module from the sys.path. The entry point for imports
@@ -305,6 +306,7 @@ Wrn = FreeCAD.Console.PrintWarning
 test_ascii = lambda s: all(ord(c) < 128 for c in s)
 
 #store the cmake variales
+cmake: List[str]
 App.__cmake__ = cmake;
 
 #store unit test names
