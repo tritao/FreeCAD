@@ -1,0 +1,40 @@
+
+toolset := "emscripten"
+libs := "system filesystem program_options regex system thread date_time"
+link := "static"
+runtime-link := "static"
+variant := "release"
+emscripten-sysroot := "../emsdk/upstream/emscripten/cache/sysroot/"
+
+default: configure-b2 build install
+
+configure-b2:
+    #!/usr/bin/env sh
+    if [ ! -d tools/b2 ]; then
+        git clone https://github.com/bfgroup/b2.git tools/b2
+        cd tools/b2
+        ./bootstrap.sh
+    fi
+
+build:
+    ./tools/b2/b2 toolset={{toolset}} link={{link}} variant={{variant}} threading=single runtime-link={{runtime-link}} {{libs}}
+    ./tools/b2/b2 toolset={{toolset}} headers
+
+install:
+    #!/usr/bin/env sh
+    if [ {{toolset}} = "emscripten" ]; then
+        EMSCRIPTEN_VERSION=`emcc --version | grep -oP '\d+\.\d+\.\d+'`
+        cp -R boost {{emscripten-sysroot}}/include
+
+        cp bin.v2/libs/filesystem/build/{{toolset}}-$EMSCRIPTEN_VERSION/{{variant}}/exception-handling-on-js/link-{{link}}/target-os-unknown/visibility-hidden/libboost_filesystem.a {{emscripten-sysroot}}/lib
+
+        cp bin.v2/libs/program_options/build/{{toolset}}-$EMSCRIPTEN_VERSION/{{variant}}/exception-handling-on-js/link-{{link}}/target-os-unknown/visibility-hidden/libboost_program_options.a {{emscripten-sysroot}}/lib
+
+        cp bin.v2/libs/regex/build/{{toolset}}-$EMSCRIPTEN_VERSION/{{variant}}/exception-handling-on-js/link-{{link}}/runtime-link-{{runtime-link}}/target-os-unknown/visibility-hidden/libboost_regex.a {{emscripten-sysroot}}/lib
+
+        cp bin.v2/libs/system/build/{{toolset}}-$EMSCRIPTEN_VERSION/{{variant}}/exception-handling-on-js/link-{{link}}/target-os-unknown/visibility-hidden/libboost_system.a {{emscripten-sysroot}}/lib
+
+        cp bin.v2/libs/thread/build/{{toolset}}-$EMSCRIPTEN_VERSION/{{variant}}/exception-handling-on-js/link-{{link}}/target-os-unknown/threading-multi/visibility-hidden/libboost_thread.a {{emscripten-sysroot}}/lib
+
+        cp bin.v2/libs/date_time/build/{{toolset}}-$EMSCRIPTEN_VERSION/{{variant}}/exception-handling-on-js/link-{{link}}/target-os-unknown/visibility-hidden/libboost_date_time.a {{emscripten-sysroot}}/lib
+    fi

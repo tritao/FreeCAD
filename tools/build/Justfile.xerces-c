@@ -1,0 +1,26 @@
+
+toolset := "emscripten"
+variant := "release"
+emscripten-sysroot := "../emsdk/upstream/emscripten/cache/sysroot/"
+
+build-dir := if toolset == "emscripten" { "build_web" } else { "build" }
+build-type := if variant == "release" { "RelWithDebInfo" } else { "Debug" }
+cmake := if toolset == "emscripten" { "emcmake cmake" } else { "cmake" }
+
+default: configure build install
+
+configure:
+    #!/usr/bin/env sh
+    mkdir -p {{build-dir}} && cd {{build-dir}}
+    {{cmake}} -G "Ninja" \
+        -DCMAKE_BUILD_TYPE={{build-type}} \
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
+        -DXERCES_STATIC_LIBRARY=1 \
+        ..
+
+build:
+    cd {{build-dir}} && ninja
+
+install:
+    cd {{build-dir}} && ninja install
+    cp {{emscripten-sysroot}}/lib/libxerces-c-4.0.a {{emscripten-sysroot}}/lib/libxerces-c.a

@@ -36,11 +36,12 @@ install_manifest.txt
 /Mod/
 /ZERO_CHECK.dir/
 /build/
-/build_em/
+/build_web/
 /src/Tools/offlinedoc/localwiki/
 /src/Tools/offlinedoc/*.txt
 OpenSCAD_rc.py
 tags
+third_party/
 
 # crowdin file
 src/Tools/freecad.zip

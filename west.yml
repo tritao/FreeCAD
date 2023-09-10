@@ -1,0 +1,78 @@
+manifest:
+  projects:
+    - name: boost
+      url: https://github.com/boostorg/boost.git
+      path: third_party/boost
+      submodules:
+        - path: libs/algorithm
+        - path: libs/any
+        - path: libs/assert
+        - path: libs/atomic
+        - path: libs/bind
+        - path: libs/chrono
+        - path: libs/config
+        - path: libs/concept_check
+        - path: libs/container
+        - path: libs/container_hash
+        - path: libs/core
+        - path: libs/date_time
+        - path: libs/describe
+        - path: libs/detail
+        - path: libs/exception
+        - path: libs/filesystem
+        - path: libs/function
+        - path: libs/functional
+        - path: libs/headers
+        - path: libs/integer
+        - path: libs/io
+        - path: libs/iterator
+        - path: libs/lexical_cast
+        - path: libs/predef
+        - path: libs/preprocessor
+        - path: libs/program_options
+        - path: libs/move
+        - path: libs/mp11
+        - path: libs/mpl
+        - path: libs/numeric/conversion
+        - path: libs/optional
+        - path: libs/range
+        - path: libs/regex
+        - path: libs/smart_ptr
+        - path: libs/static_assert
+        - path: libs/system
+        - path: libs/thread
+        - path: libs/throw_exception
+        - path: libs/tokenizer
+        - path: libs/tuple
+        - path: libs/type_index
+        - path: libs/type_traits
+        - path: libs/utility
+        - path: tools/boost_install
+        - path: tools/build
+    - name: cpython
+      url: https://github.com/python/cpython.git
+      path: third_party/cpython
+      revision: main
+    - name: eigen
+      url: https://gitlab.com/libeigen/eigen.git
+      path: third_party/eigen
+    - name: emsdk
+      url: https://github.com/emscripten-core/emsdk.git
+      path: third_party/emsdk
+      revision: main
+    - name: OCCT
+      url: https://github.com/Open-Cascade-SAS/OCCT.git
+      path: third_party/OCCT
+    - name: qtbase
+      url: https://github.com/qt/qtbase.git
+      path: third_party/qtbase
+      revision: "v5.15.2"
+    - name: xerces-c
+      url: https://github.com/apache/xerces-c.git
+      path: third_party/xerces-c
+    - name: zlib
+      url: https://github.com/madler/zlib.git
+      path: third_party/zlib
+  version: "1.0"
+  self:
+    west-commands: tools/west/west-commands.yml

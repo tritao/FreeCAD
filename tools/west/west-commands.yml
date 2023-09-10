@@ -1,0 +1,6 @@
+west-commands:
+  - file: tools/west/configure.py
+    commands:
+      - name: configure
+        class: ConfigureCommand
+        help: configures third-party projects

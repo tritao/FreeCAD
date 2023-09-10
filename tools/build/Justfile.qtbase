@@ -1,0 +1,53 @@
+
+toolset := "emscripten"
+variant := "release"
+emscripten-sysroot := "../emsdk/upstream/emscripten/cache/sysroot/"
+
+build-dir := if toolset == "emscripten" { "build_web" } else { "build" }
+build-type := if variant == "release" { "RelWithDebInfo" } else { "Debug" }
+configure := if toolset == "emscripten" { "emconfigure" } else { "" }
+
+os := if os() == "windows" { "win32" } else if os() == "macos" { "macx" } else { os() }
+platform := if toolset == "emscripten" { "wasm-emscripten" } else {
+ "" } 
+
+default: configure build install
+
+configure:
+    #!/usr/bin/env sh
+    mkdir -p {{build-dir}} && cd {{build-dir}}
+    {{configure}} ../configure \
+        -opensource -confirm-license \
+        -xplatform {{platform}} \
+        -prefix {{emscripten-sysroot}} \
+        -static \
+        -nomake examples \
+        -no-feature-testlib \
+        -no-feature-sql \
+        -no-feature-gui \
+        -no-feature-widgets \
+
+build:
+    cd {{build-dir}} && make -j8 
+    # use num_cpus() when its released
+
+install:
+    cd {{build-dir}} && make install
+
+# Qt6
+
+# CMAKE="emcmake cmake"
+# $CMAKE -G "Ninja" \
+#     -DQT_NO_PACKAGE_VERSION_CHECK="1" \
+#     -DQT_NO_PACKAGE_VERSION_INCOMPATIBLE_WARNING="1" \
+#     -DQT_HOST_PATH="$HOME/Qt6/6.3.2/gcc_64" \
+#     -DFEATURE_testlib="0" \
+#     -DFEATURE_xml="0" \
+#     -DFEATURE_sql="0" \
+#     -DFEATURE_network="0" \
+#     -DFEATURE_gui="0" \
+#     -DFEATURE_widgets="0" \
+#     -DFEATURE_printsupport="0" \
+#     -DBUILD_SHARED_LIBS="0" \
+#     -DCMAKE_EXPORT_COMPILE_COMMANDS="1" \
+#     $SCRIPT_DIR
