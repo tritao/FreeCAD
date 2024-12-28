@@ -44,6 +44,7 @@ install_manifest.txt
 /lib/
 /Mod/
 /ZERO_CHECK.dir/
+/bld/
 /build/
 /build-*/
 /cmake-build*/
