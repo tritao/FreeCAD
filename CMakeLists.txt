@@ -122,6 +122,7 @@ endif(BUILD_VR)
 
 SetLibraryVersions()
 SetGlobalCompilerAndLinkerSettings()
+GenerateConfig()
 
 add_subdirectory(src)
 add_subdirectory(data)
