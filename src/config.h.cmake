@@ -117,6 +117,12 @@
 /* Define to 1 if you have a C runtime with backtrace symbols. */
 #cmakedefine HAVE_BACKTRACE_SYMBOLS
 
+/* Define to 1 if we have a custom Python home root directory. */
+#cmakedefine HAVE_PYTHON_HOME_DIR
+
+/* Path to the custom Python home root directory (PYTHONHOME) */
+#define PYTHON_HOME_DIR "${PYTHON_HOME_DIR}"
+
 /* Name of package */
 #define PACKAGE "FreeCAD"
 
