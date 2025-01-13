@@ -20,6 +20,7 @@
  *                                                                         *
  ***************************************************************************/
 
+#include "DocumentPy.h"
 #include "PreCompiled.h"
 
 #ifndef _PreComp_
@@ -1563,9 +1564,15 @@ PyObject* ApplicationPy::sCreateViewer(PyObject * /*self*/, PyObject *args)
 {
     int num_of_views = 1;
     char* title = nullptr;
+    PyObject* document_pyobj = nullptr;
     // if one argument (int) is given
-    if (!PyArg_ParseTuple(args, "|is", &num_of_views, &title)) {
+    if (!PyArg_ParseTuple(args, "|isO!", &num_of_views, &title, &DocumentPy::Type, &document_pyobj)) {
         return nullptr;
+    }
+
+    Gui::Document* pcDocument = nullptr;
+    if (document_pyobj) {
+        pcDocument = static_cast<DocumentPy*>(document_pyobj)->getDocumentPtr();
     }
 
     if (num_of_views <= 0) {
@@ -1573,7 +1580,7 @@ PyObject* ApplicationPy::sCreateViewer(PyObject * /*self*/, PyObject *args)
         return nullptr;
     }
     if (num_of_views == 1) {
-        auto viewer = new View3DInventor(nullptr, nullptr);
+        auto viewer = new View3DInventor(pcDocument, nullptr);
         if (title) {
             viewer->setWindowTitle(QString::fromUtf8(title));
         }
@@ -1581,7 +1588,7 @@ PyObject* ApplicationPy::sCreateViewer(PyObject * /*self*/, PyObject *args)
         return viewer->getPyObject();
     }
     else {
-        auto viewer = new SplitView3DInventor(num_of_views, nullptr, nullptr);
+        auto viewer = new SplitView3DInventor(num_of_views, pcDocument, nullptr);
         if (title) {
             viewer->setWindowTitle(QString::fromUtf8(title));
         }
