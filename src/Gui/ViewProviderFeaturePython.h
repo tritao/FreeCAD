@@ -619,6 +619,8 @@ protected:
     }
     void setOverrideMode(const std::string &mode) override
     {
+        // TODO: May want to use notification system instead
+        imp->setDisplayMode(mode.c_str());
         ViewProviderT::setOverrideMode(mode);
         viewerMode = mode;
     }

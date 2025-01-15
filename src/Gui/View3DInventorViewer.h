@@ -471,6 +471,7 @@ public:
 
 protected:
     static GLenum getInternalTextureFormat();
+    void preRenderUpdate();
     void renderScene();
     void renderFramebuffer();
     void renderGLImage();

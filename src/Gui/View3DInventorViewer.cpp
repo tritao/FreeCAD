@@ -1172,10 +1172,6 @@ ViewProvider* View3DInventorViewer::getEditingViewProvider() const
 /// display override mode
 void View3DInventorViewer::setOverrideMode(const std::string& mode)
 {
-    if (mode == overrideMode) {
-        return;
-    }
-
     overrideMode = mode;
 
     auto document = getDocument();
@@ -1212,10 +1208,6 @@ void View3DInventorViewer::setOverrideMode(const std::string& mode)
 /// update override mode. doesn't affect providers
 void View3DInventorViewer::updateOverrideMode(const std::string& mode)
 {
-    if (mode == overrideMode) {
-        return;
-    }
-
     overrideMode = mode;
 
     if (mode == "No Shading") {
@@ -2315,8 +2307,15 @@ void View3DInventorViewer::renderToFramebuffer(QOpenGLFramebufferObject* fbo)
     fbo->release();
 }
 
+void View3DInventorViewer::preRenderUpdate()
+{
+    this->setOverrideMode(getOverrideMode());
+}
+
 void View3DInventorViewer::actualRedraw()
 {
+    this->preRenderUpdate();
+
     switch (renderType) {
     case Native:
         renderScene();
