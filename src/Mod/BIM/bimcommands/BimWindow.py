@@ -150,27 +150,29 @@ class Arch_Window:
         self.tracker.width(self.W1)
         self.tracker.height(self.Height)
         self.tracker.on()
+
         FreeCAD.Console.PrintMessage(translate("Arch","Choose a face on an existing object or select a preset")+"\n")
-        FreeCADGui.Snapper.getPoint(callback=self.getPoint,movecallback=self.update,extradlg=self.taskbox())
+        FreeCADGui.Snapper.getPoint(callback=self.onSnapperPoint,movecallback=self.onSnapperMove,extradlg=self.taskbox())
         #FreeCADGui.Snapper.setSelectMode(True)
 
-    def has_width_and_height_constraint(self, sketch):
+    def sketch_has_width_and_height_constraint(self, sketch):
         width_found = False
         height_found = False
 
         for constr in sketch.Constraints:
+            if width_found and height_found:
+                break
+
             if constr.Name == "Width":
                 width_found = True
             elif constr.Name == "Height":
                 height_found = True
-            elif width_found and height_found:
-                break
 
         return (width_found and height_found)
 
-    def getPoint(self,point=None,obj=None):
+    def onSnapperPoint(self,point=None,obj=None):
 
-        "this function is called by the snapper when it has a 3D point"
+        "this function is called by the snapper when it has a snap point"
 
         import Draft
         from draftutils import gui_utils
@@ -248,7 +250,7 @@ class Arch_Window:
         self.tracker.finalize()
         return
 
-    def update(self,point,info):
+    def onSnapperMove(self,point,info):
 
         "this function is called by the Snapper when the mouse is moved"
 
