@@ -28,6 +28,22 @@ from draftutils.translate import translate
 WindowPresets =  ["Fixed", "Open 1-pane", "Open 2-pane", "Sash 2-pane", "Sliding 2-pane",
                   "Simple door", "Glass door", "Sliding 4-pane", "Awning", "Opening only"]
 
+def getWindowPresetIcon(i):
+    if i == 0:
+        return ":/ui/ParametersWindowFixed.svg"
+    elif i in [1,8]:
+        return ":/ui/ParametersWindowSimple.svg"
+    elif i in [2,4,7]:
+        return ":/ui/ParametersWindowDouble.svg"
+    elif i == 3:
+        return ":/ui/ParametersWindowStash.svg"
+    elif i == 5:
+        return ":/ui/ParametersDoorSimple.svg"
+    elif i == 6:
+        return ":/ui/ParametersDoorGlass.svg"
+    elif i == 9:
+        return ":/ui/ParametersOpening.svg"
+
 def makeWindowPreset(windowtype,width,height,h1,h2,h3,w1,w2,o1,o2,placement=None):
 
     """makeWindowPreset(windowtype,width,height,h1,h2,h3,w1,w2,o1,o2,[placement]): makes a
