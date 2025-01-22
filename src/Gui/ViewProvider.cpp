@@ -107,6 +107,7 @@ ViewProvider::ViewProvider()
     pcRoot = new SoFCSelectionRoot(true);
     pcRoot->ref();
     pcModeSwitch = new SoSwitch();
+    pcModeSwitch->whichChild.enableNotify(false);
     pcModeSwitch->ref();
     pcModeSwitch->setName("ModeSwitch");
     pcTransform  = new SoFCTransform();

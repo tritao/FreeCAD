@@ -389,6 +389,7 @@ public:
                 << "(" << type << ')';
             pcSnapshot->setName(ss.str().c_str());
             pcModeSwitch = new SoSwitch;
+            pcModeSwitch->whichChild.enableNotify(false);
         }
 
         pcLinkedSwitch.reset();
