@@ -21,6 +21,7 @@
  ***************************************************************************/
 
 #include "PreCompiled.h"
+#include <Inventor/SbName.h>
 
 #ifndef _PreComp_
 # include <QAction>
@@ -330,6 +331,8 @@ void ViewProviderDocumentObject::attach(App::DocumentObject *pcObj)
 {
     // save Object pointer
     pcObject = pcObj;
+
+    getRoot()->setName(SbName(pcObject->Label.getValue()));
 
     if(pcObj && pcObj->isAttachedToDocument() &&
        Visibility.getValue()!=pcObj->Visibility.getValue())
