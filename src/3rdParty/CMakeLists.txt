@@ -13,3 +13,8 @@ if (BUILD_ASSEMBLY AND NOT FREECAD_USE_EXTERNAL_ONDSELSOLVER)
     endif()
     add_subdirectory(OndselSolver)
 endif()
+
+if (BUILD_TRACY_FRAME_PROFILER)
+    set(TRACY_STATIC 0)
+    add_subdirectory(tracy)
+endif()

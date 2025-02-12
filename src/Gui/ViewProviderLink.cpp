@@ -62,6 +62,7 @@
 #include <Base/BoundBoxPy.h>
 #include <Base/MatrixPy.h>
 #include <Base/PlacementPy.h>
+#include <Base/Profiler.h>
 #include <Base/Tools.h>
 
 #include "Action.h"
@@ -181,6 +182,7 @@ public:
     }
 
     static void sensorCB(void *data, SoSensor *) {
+        ZoneScopedN("LinkInfo::sensorCB");
         static_cast<LinkInfo*>(data)->update();
     }
 
@@ -455,6 +457,7 @@ public:
     }
 
     void update() {
+        ZoneScopedN("LinkInfo::update");
         if(!isLinked() || pcLinked->isRestoring())
             return;
 

@@ -33,6 +33,8 @@
 #include <Inventor/nodes/SoTransform.h>
 #endif
 
+#include <Base/Profiler.h>
+
 #include "SoFCBoundingBox.h"
 
 
@@ -219,6 +221,7 @@ void SoFCBoundingBox::generatePrimitives (SoAction * /*action*/)
 
 void SoFCBoundingBox::computeBBox (SoAction * /*action*/, SbBox3f &box, SbVec3f &center)
 {
+    ZoneScopedN("SoFCBoundingBox::computeBBox");
     center = (minBounds.getValue() + maxBounds.getValue()) / 2.0f;
     box.setBounds(minBounds.getValue(), maxBounds.getValue());
 }

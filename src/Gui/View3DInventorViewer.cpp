@@ -45,6 +45,8 @@
 # include <Inventor/actions/SoHandleEventAction.h>
 # include <Inventor/actions/SoRayPickAction.h>
 # include <Inventor/annex/HardCopy/SoVectorizePSAction.h>
+# include <Inventor/annex/Profiler/SoProfiler.h>
+# include <Inventor/annex/Profiler/elements/SoProfilerElement.h>
 # include <Inventor/details/SoDetail.h>
 # include <Inventor/elements/SoLightModelElement.h>
 # include <Inventor/elements/SoOverrideElement.h>
@@ -91,6 +93,7 @@
 #include <Base/Console.h>
 #include <Base/FileInfo.h>
 #include <Base/Sequencer.h>
+#include <Base/Profiler.h>
 #include <Base/Tools.h>
 #include <Base/UnitsApi.h>
 #include <Base/Tools2D.h>
@@ -427,6 +430,9 @@ void View3DInventorViewer::init()
     // setting up the defaults for the spin rotation
     initialize();
 
+    SoProfiler::init();
+    SoProfiler::enable(TRUE);
+
     // NOLINTBEGIN
     auto cam = new SoOrthographicCamera;
     cam->position = SbVec3f(0, 0, 1);
@@ -568,8 +574,13 @@ void View3DInventorViewer::init()
     // the fix and some details what happens behind the scene have a look at this
     // https://forum.freecad.org/viewtopic.php?f=10&t=7486&p=74777#p74736
     uint32_t id = this->getSoRenderManager()->getGLRenderAction()->getCacheContext();
-    this->getSoRenderManager()->setGLRenderAction(new SoBoxSelectionRenderAction);
+
+    auto action = new SoBoxSelectionRenderAction();
+    this->getSoRenderManager()->setGLRenderAction(action);
     this->getSoRenderManager()->getGLRenderAction()->setCacheContext(id);
+
+    action->enableElement(SoProfilerElement::getClassTypeId(), SoProfilerElement::getClassStackIndex());
+
 
     // set the transparency and antialiasing settings
     getSoRenderManager()->getGLRenderAction()->setTransparencyType(SoGLRenderAction::SORTED_OBJECT_SORTED_TRIANGLE_BLEND);
@@ -2150,6 +2161,8 @@ View3DInventorViewer::RenderType View3DInventorViewer::getRenderType() const
 
 QImage View3DInventorViewer::grabFramebuffer()
 {
+    ZoneScoped;
+
     auto gl = static_cast<QtGLWidget*>(this->viewport());  // NOLINT
     gl->makeCurrent();
 
@@ -2192,6 +2205,8 @@ QImage View3DInventorViewer::grabFramebuffer()
 void View3DInventorViewer::imageFromFramebuffer(int width, int height, int samples,
                                                 const QColor& bgcolor, QImage& img)
 {
+    ZoneScoped;
+
     auto gl = static_cast<QtGLWidget*>(this->viewport());  // NOLINT
     gl->makeCurrent();
 
@@ -2262,6 +2277,8 @@ void View3DInventorViewer::imageFromFramebuffer(int width, int height, int sampl
 
 void View3DInventorViewer::renderToFramebuffer(QtGLFramebufferObject* fbo)
 {
+    ZoneScoped;
+
     static_cast<QtGLWidget*>(this->viewport())->makeCurrent();  // NOLINT
     fbo->bind();
     int width = fbo->size().width();
@@ -2328,6 +2345,8 @@ void View3DInventorViewer::actualRedraw()
 
 void View3DInventorViewer::renderFramebuffer()
 {
+    ZoneScoped;
+
     const SbViewportRegion vp = this->getSoRenderManager()->getViewportRegion();
     SbVec2s size = vp.getViewportSizePixels();
 
@@ -2371,6 +2390,8 @@ void View3DInventorViewer::renderFramebuffer()
 
 void View3DInventorViewer::renderGLImage()
 {
+    ZoneScoped;
+
     const SbViewportRegion vp = this->getSoRenderManager()->getViewportRegion();
     SbVec2s size = vp.getViewportSizePixels();
 
@@ -2411,6 +2432,8 @@ void View3DInventorViewer::renderGLImage()
 // upon spin.
 void View3DInventorViewer::renderScene()
 {
+    ZoneScoped;
+
     // Must set up the OpenGL viewport manually, as upon resize
     // operations, Coin won't set it up until the SoGLRenderAction is
     // applied again. And since we need to do glClear() before applying
@@ -2430,15 +2453,19 @@ void View3DInventorViewer::renderScene()
     glDepthRange(0.1,1.0);
 #endif
 
-    // Render our scenegraph with the image.
     SoGLRenderAction* glra = this->getSoRenderManager()->getGLRenderAction();
     SoState* state = glra->getState();
-    SoDevicePixelRatioElement::set(state, devicePixelRatio());
-    SoGLWidgetElement::set(state, qobject_cast<QtGLWidget*>(this->getGLWidget()));
-    SoGLRenderActionElement::set(state, glra);
-    SoGLVBOActivatedElement::set(state, this->vboEnabled);
-    drawSingleBackground(col);
-    glra->apply(this->backgroundroot);
+
+    // Render our scenegraph with the image.
+    {
+        ZoneScopedN("Background");
+        SoDevicePixelRatioElement::set(state, devicePixelRatio());
+        SoGLWidgetElement::set(state, qobject_cast<QtGLWidget*>(this->getGLWidget()));
+        SoGLRenderActionElement::set(state, glra);
+        SoGLVBOActivatedElement::set(state, this->vboEnabled);
+        drawSingleBackground(col);
+        glra->apply(this->backgroundroot);
+    }
 
     if (!this->shading) {
         state->push();
@@ -2476,7 +2503,10 @@ void View3DInventorViewer::renderScene()
 #endif
 
     // Render overlay front scenegraph.
-    glra->apply(this->foregroundroot);
+    {
+        ZoneScopedN("Foreground");
+        glra->apply(this->foregroundroot);
+    }
 
     if (this->axiscrossEnabled) {
         this->drawAxisCross();
@@ -2494,8 +2524,11 @@ void View3DInventorViewer::renderScene()
 
     printDimension();
 
-    for (auto it : this->graphicsItems) {
-        it->paintGL();
+    {
+        ZoneScopedN("Graphics items");
+        for (auto it : this->graphicsItems) {
+            it->paintGL();
+        }
     }
 
     //fps rendering
@@ -2637,6 +2670,8 @@ void View3DInventorViewer::printDimension() const
 
 void View3DInventorViewer::selectAll()
 {
+    ZoneScoped;
+
     std::vector<App::DocumentObject*> objs;
 
     for (auto it : _ViewProviderSet) {
@@ -2657,6 +2692,8 @@ void View3DInventorViewer::selectAll()
 
 bool View3DInventorViewer::processSoEvent(const SoEvent* ev)
 {
+    ZoneScoped;
+
     if (naviCubeEnabled && naviCube->processSoEvent(ev)) {
         return true;
     }
@@ -2838,6 +2875,8 @@ Base::BoundBox2d View3DInventorViewer::getViewportOnXYPlaneOfPlacement(Base::Pla
 
 SbVec3f View3DInventorViewer::getPointOnXYPlaneOfPlacement(const SbVec2s& pnt, const Base::Placement& plc) const
 {
+    ZoneScoped;
+
     SbVec2f pnt2d = getNormalizedPosition(pnt);
     SoCamera* pCam = this->getSoRenderManager()->getCamera();
 
@@ -2893,6 +2932,8 @@ SbVec3f intersection(const SbVec3f& p11, const SbVec3f& p12, const SbVec3f& p21,
 
 SbVec3f View3DInventorViewer::getPointOnLine(const SbVec2s& pnt, const SbVec3f& axisCenter, const SbVec3f& axis) const
 {
+    ZoneScoped;
+
     SbVec2f pnt2d = getNormalizedPosition(pnt);
     SoCamera* pCam = this->getSoRenderManager()->getCamera();
 
@@ -3183,6 +3224,8 @@ bool View3DInventorViewer::pickPoint(const SbVec2s& pos, SbVec3f& point, SbVec3f
  */
 SoPickedPoint* View3DInventorViewer::pickPoint(const SbVec2s& pos) const
 {
+    ZoneScoped;
+
     SoRayPickAction rp(getSoRenderManager()->getViewportRegion());
     rp.setPoint(pos);
     rp.apply(getSoRenderManager()->getSceneGraph());
@@ -3825,6 +3868,8 @@ void View3DInventorViewer::updateColors()
 
 void View3DInventorViewer::drawAxisCross()
 {
+    ZoneScoped;
+
     // NOLINTBEGIN
     // FIXME: convert this to a superimposition scenegraph instead of
     // OpenGL calls. 20020603 mortene.
