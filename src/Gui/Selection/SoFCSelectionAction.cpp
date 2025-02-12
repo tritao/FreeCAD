@@ -62,6 +62,8 @@
 # include <Inventor/nodes/SoTransformation.h>
 #endif
 
+#include <Base/Profiler.h>
+
 #include "SoFCSelectionAction.h"
 #include "SoFCSelection.h"
 
@@ -1117,6 +1119,7 @@ SoBoxSelectionRenderAction::~SoBoxSelectionRenderAction()
 void
 SoBoxSelectionRenderAction::apply(SoNode * node)
 {
+    ZoneScopedN("SoBoxSelectionRenderAction::apply");
     SoGLRenderAction::apply(node);
     if (this->hlVisible) {
         if (!PRIVATE(this)->searchaction) {
@@ -1182,6 +1185,7 @@ SoBoxSelectionRenderAction::apply(SoNode * node)
 void
 SoBoxSelectionRenderAction::apply(SoPath * path)
 {
+    ZoneScopedN("SoBoxSelectionRenderAction::apply");
     SoGLRenderAction::apply(path);
     SoNode* node = path->getTail();
     if (node && node->getTypeId() == SoFCSelection::getClassTypeId()) {
@@ -1228,6 +1232,7 @@ void
 SoBoxSelectionRenderAction::apply(const SoPathList & pathlist,
                                   SbBool obeysrules)
 {
+    ZoneScopedN("SoBoxSelectionRenderAction::apply");
     SoGLRenderAction::apply(pathlist, obeysrules);
 }
 
@@ -1270,6 +1275,7 @@ SoBoxSelectionRenderAction::getLineWidth() const
 void
 SoBoxSelectionRenderAction::drawBoxes(SoPath * pathtothis, const SoPathList * pathlist)
 {
+    ZoneScopedN("SoBoxSelectionRenderAction::drawBoxes");
     int i;
     int thispos = static_cast<SoFullPath *>(pathtothis)->getLength()-1;
     assert(thispos >= 0);

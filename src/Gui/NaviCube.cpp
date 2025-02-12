@@ -46,6 +46,7 @@
 #endif
 
 #include <App/Color.h>
+#include <Base/Profiler.h>
 #include <Base/Tools.h>
 #include <Eigen/Dense>
 
@@ -225,6 +226,7 @@ NaviCube::~NaviCube() {
 }
 
 void NaviCube::drawNaviCube() {
+    ZoneScoped;
     m_NaviCubeImplementation->drawNaviCube();
 }
 

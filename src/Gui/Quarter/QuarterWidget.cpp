@@ -92,6 +92,8 @@
 #include <Inventor/scxml/ScXML.h>
 #include <Inventor/scxml/SoScXMLStateMachine.h>
 
+#include <Base/Profiler.h>
+
 #include "QuarterWidget.h"
 #include "InteractionMode.h"
 #include "QuarterP.h"
@@ -838,6 +840,8 @@ void QuarterWidget::resizeEvent(QResizeEvent* event)
 */
 void QuarterWidget::paintEvent(QPaintEvent* event)
 {
+    ZoneScoped;
+
     if (updateDevicePixelRatio()) {
         qreal dev_pix_ratio = devicePixelRatio();
         int width = static_cast<int>(dev_pix_ratio * this->width());
@@ -989,6 +993,7 @@ QuarterWidget::redraw()
 void
 QuarterWidget::actualRedraw()
 {
+  ZoneScoped;
   PRIVATE(this)->sorendermanager->render(PRIVATE(this)->clearwindow,
                                          PRIVATE(this)->clearzbuffer);
 }

@@ -73,6 +73,7 @@
 #include <App/Document.h>
 #include <App/GeoFeature.h>
 #include <App/ElementNamingUtils.h>
+#include <Base/Profiler.h>
 #include <Base/Tools.h>
 #include <Base/UnitsApi.h>
 
@@ -238,6 +239,8 @@ int SoFCUnifiedSelection::getPriority(const SoPickedPoint* p)
 std::vector<SoFCUnifiedSelection::PickedInfo>
 SoFCUnifiedSelection::getPickedList(SoHandleEventAction* action, bool singlePick) const
 {
+    ZoneScoped;
+
     ViewProvider *last_vp = nullptr;
     std::vector<PickedInfo> ret;
     const SoPickedPointList & points = action->getPickedPointList();
@@ -743,6 +746,10 @@ SoFCUnifiedSelection::handleEvent(SoHandleEventAction * action)
     //
     bool isMouseMotionEvent = event->isOfType(SoLocation2Event::getClassTypeId());
     if (isMouseMotionEvent) {
+        if (event->isOfType(SoLocation2Event::getClassTypeId())) {
+            ZoneScopedN("SoFCUnifiedSelection::handleEvent / SoLocation2Event");
+        }
+
         // NOTE: If preselection is off then we do not check for a picked point because otherwise this search may slow
         // down extremely the system on really big data sets. In this case we just check for a picked point if the data
         // set has been selected.
@@ -765,6 +772,8 @@ SoFCUnifiedSelection::handleEvent(SoHandleEventAction * action)
     // mouse press events for (de)selection
     else if (event->isOfType(SoMouseButtonEvent::getClassTypeId()) &&
              selectionMode.getValue() == SoFCUnifiedSelection::ON) {
+        ZoneScopedN("SoFCUnifiedSelection::handleEvent / SoMouseButtonEvent");
+
         const auto e = static_cast<const SoMouseButtonEvent *>(event);
         if (SoMouseButtonEvent::isButtonReleaseEvent(e,SoMouseButtonEvent::BUTTON1)) {
             // check to see if the mouse is over a geometry...
@@ -1407,10 +1416,12 @@ bool SoFCSelectionRoot::_renderPrivate(SoGLRenderAction * action, bool inPath) {
 }
 
 void SoFCSelectionRoot::GLRenderBelowPath(SoGLRenderAction * action) {
+    ZoneScopedN("SoFCSelectionRoot::GLRenderBelowPath");
     renderPrivate(action,false);
 }
 
 void SoFCSelectionRoot::GLRenderInPath(SoGLRenderAction * action) {
+    ZoneScopedN("SoFCSelectionRoot::GLRenderInPath");
     if(action->getCurPathCode() == SoAction::BELOW_PATH)
         return GLRenderBelowPath(action);
     renderPrivate(action,true);
@@ -1489,6 +1500,7 @@ void SoFCSelectionRoot::moveActionStack(SoAction *from, SoAction *to, bool erase
     }
 
 void SoFCSelectionRoot::pick(SoPickAction * action) {
+    ZoneScoped;
     BEGIN_ACTION;
     if(doActionPrivate(stack,action))
         inherited::pick(action);
@@ -1496,6 +1508,7 @@ void SoFCSelectionRoot::pick(SoPickAction * action) {
 }
 
 void SoFCSelectionRoot::rayPick(SoRayPickAction * action) {
+    ZoneScoped;
     BEGIN_ACTION;
     if(doActionPrivate(stack,action))
         inherited::rayPick(action);
@@ -1503,6 +1516,7 @@ void SoFCSelectionRoot::rayPick(SoRayPickAction * action) {
 }
 
 void SoFCSelectionRoot::handleEvent(SoHandleEventAction * action) {
+    ZoneScoped;
     BEGIN_ACTION;
     inherited::handleEvent(action);
     END_ACTION;
@@ -1522,6 +1536,7 @@ void SoFCSelectionRoot::getPrimitiveCount(SoGetPrimitiveCountAction * action) {
 
 void SoFCSelectionRoot::getBoundingBox(SoGetBoundingBoxAction * action)
 {
+    ZoneScopedN("SoFCSelectionRoot::getBoundingBox");
     BEGIN_ACTION;
     if(doActionPrivate(stack,action))
         inherited::getBoundingBox(action);

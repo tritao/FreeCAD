@@ -40,6 +40,7 @@
 # include <Inventor/misc/SoState.h>
 #endif
 
+#include <Base/Profiler.h>
 #include <Base/UnitsApi.h>
 
 #include "SoFCSelection.h"
@@ -154,6 +155,7 @@ SoFCSelection::turnOffCurrentHighlight(SoGLRenderAction * action)
 
 void SoFCSelection::doAction(SoAction *action)
 {
+    ZoneScopedN("SoFCSelection::doAction");
     if(useNewSelection.getValue() && action->getCurPathCode()!=SoAction::OFF_PATH) {
         if (action->getTypeId() == Gui::SoHighlightElementAction::getClassTypeId()) {
             auto hlaction = static_cast<Gui::SoHighlightElementAction*>(action);
