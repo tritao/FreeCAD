@@ -30,7 +30,7 @@
 # imports the one and only
 import FreeCAD
 
-def removeFromPath(module_name):
+def removeModuleDirFromSysPath(module_name: str):
     """removes the module from the sys.path. The entry point for imports
         will therefore always be FreeCAD.
         eg.: from FreeCAD.Module.submodule import function"""
@@ -70,49 +70,55 @@ def setupSearchPaths(PathExtension):
     except KeyError:
         os.environ["PATH"] = PathEnvironment
 
-FreeCAD._importFromFreeCAD = removeFromPath
+FreeCAD._importFromFreeCAD = removeModuleDirFromSysPath
 
 
 def InitApplications():
     # Checking on FreeCAD module path ++++++++++++++++++++++++++++++++++++++++++
     ModDir = FreeCAD.getHomePath()+'Mod'
     ModDir = os.path.realpath(ModDir)
+
     ExtDir = FreeCAD.getHomePath()+'Ext'
     ExtDir = os.path.realpath(ExtDir)
+
     BinDir = FreeCAD.getHomePath()+'bin'
     BinDir = os.path.realpath(BinDir)
+
     libpaths = []
     LibDir = FreeCAD.getHomePath()+'lib'
     LibDir = os.path.realpath(LibDir)
     if os.path.exists(LibDir):
         libpaths.append(LibDir)
+
     Lib64Dir = FreeCAD.getHomePath()+'lib64'
     Lib64Dir = os.path.realpath(Lib64Dir)
     if os.path.exists(Lib64Dir):
         libpaths.append(Lib64Dir)
+
     LibPyDir = FreeCAD.getHomePath()+'lib-py3'
     LibPyDir = os.path.realpath(LibPyDir)
     if (os.path.exists(LibPyDir)):
         libpaths.append(LibPyDir)
+
     LibFcDir = FreeCAD.getLibraryDir()
     LibFcDir = os.path.realpath(LibFcDir)
     if (os.path.exists(LibFcDir) and not LibFcDir in libpaths):
         libpaths.append(LibFcDir)
-    AddPath = FreeCAD.ConfigGet("AdditionalModulePaths").split(";") + \
-            FreeCAD.ConfigGet("AdditionalMacroPaths").split(";")
+
     HomeMod = FreeCAD.getUserAppDataDir()+"Mod"
     HomeMod = os.path.realpath(HomeMod)
-    MacroStd = App.getUserMacroDir(False)
-    MacroDir = App.getUserMacroDir(True)
-    MacroMod = os.path.realpath(MacroDir+"/Mod")
+
+    UserMacroStd = App.getUserMacroDir(False)
+    UserMacroDir = App.getUserMacroDir(True)
+    UserMacroModDir = os.path.realpath(UserMacroDir+"/Mod")
+
     SystemWideMacroDir = FreeCAD.getHomePath()+'Macro'
     SystemWideMacroDir = os.path.realpath(SystemWideMacroDir)
+
     DisabledAddons = FreeCAD.ConfigGet("DisabledAddons").split(";")
 
-    #print FreeCAD.getHomePath()
     if os.path.isdir(FreeCAD.getHomePath()+'src\\Tools'):
         sys.path.append(FreeCAD.getHomePath()+'src\\Tools')
-
 
 
     # Searching for module dirs +++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -123,6 +129,7 @@ def InitApplications():
         for i in ModDirs: ModDict[i.lower()] = os.path.join(ModDir,i)
     else:
         Wrn ("No modules found in " + ModDir + "\n")
+
     # Search for additional modules in the home directory
     if os.path.isdir(HomeMod):
         HomeMods = os.listdir(HomeMod)
@@ -130,13 +137,17 @@ def InitApplications():
     elif os.path.isdir(os.path.join(os.path.expanduser("~"),".FreeCAD","Mod")):
         # Check if old location exists
         Wrn ("User path has changed to " + FreeCAD.getUserAppDataDir() + ". Please move user modules and macros\n")
+
     # Search for additional modules in the macro directory
-    if os.path.isdir(MacroMod):
-        MacroMods = os.listdir(MacroMod)
+    if os.path.isdir(UserMacroModDir):
+        MacroMods = os.listdir(UserMacroModDir)
         for i in MacroMods:
             key = i.lower()
-            if key not in ModDict: ModDict[key] = os.path.join(MacroMod,i)
+            if key not in ModDict: ModDict[key] = os.path.join(UserMacroModDir,i)
+
     # Search for additional modules in command line
+    AddPath = FreeCAD.ConfigGet("AdditionalModulePaths").split(";") + \
+              FreeCAD.ConfigGet("AdditionalMacroPaths").split(";")
     for i in AddPath:
         if os.path.isdir(i): ModDict[i] = i
     #AddModPaths = App.ParamGet("System parameter:AdditionalModulePaths")
@@ -304,11 +315,12 @@ def InitApplications():
     Log("System path after init:\n")
     for i in path:
         Log("   " + i + "\n")
-    # add MacroDir to path (RFE #0000504)
-    sys.path.append(MacroStd)
-    sys.path.append(MacroDir)
+    # add UserMacroDir to path (RFE #0000504)
+    sys.path.append(UserMacroStd)
+    sys.path.append(UserMacroDir)
     # add SystemWideMacroDir to path
     sys.path.append(SystemWideMacroDir)
+
     # add special path for MacOSX (bug #0000307)
     import platform
     if len(platform.mac_ver()[0]) > 0:
