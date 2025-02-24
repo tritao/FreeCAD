@@ -375,3 +375,7 @@ else(WIN32)
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     )
 endif(WIN32)
+
+fc_copy_sources(lazy_loader "${CMAKE_BINARY_DIR}/Ext/freecad" ${lazy_loader})
+install (FILES ${lazy_loader} DESTINATION "Ext/lazy_loader")
+
