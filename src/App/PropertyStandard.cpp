@@ -374,6 +374,7 @@ void PropertyEnumeration::setEnumVector(const std::vector<std::string>& values)
     // For backward compatibility, if the property container is not attached to
     // any document (i.e. its full name starts with '?'), do not notify, or
     // else existing code may crash.
+    // TODO: Replace with C++20 starts_with
     bool notify = !boost::starts_with(getFullName(), "?");
     if (notify) {
         aboutToSetValue();

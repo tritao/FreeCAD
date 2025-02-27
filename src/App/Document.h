@@ -513,8 +513,6 @@ public:
     static std::vector<App::Document*> getDependentDocuments(std::vector<App::Document*> docs,
                                                              bool sort);
 
-    // set Changed
-    // void setChanged(DocumentObject* change);
     /// get a list of topological sorted objects (https://en.wikipedia.org/wiki/Topological_sorting)
     std::vector<App::DocumentObject*> topologicalSort() const;
     /// get all root objects (objects no other one reference too)

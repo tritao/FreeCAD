@@ -933,13 +933,13 @@ Document::Document(const char* documentName)
     // license stuff
     auto paramGrp {App::GetApplication().GetParameterGroupByPath(
         "User parameter:BaseApp/Preferences/Document")};
-    auto index = static_cast<int>(paramGrp->GetInt("prefLicenseType", 0));
     const char* name = "";
     const char* url = "";
     std::string licenseUrl = "";
-    if (index >= 0 && index < App::countOfLicenses) {
-        name = App::licenseItems.at(index).at(App::posnOfFullName);
-        url = App::licenseItems.at(index).at(App::posnOfUrl);
+    auto licenseTypeIndex = static_cast<int>(paramGrp->GetInt("prefLicenseType", 0));
+    if (licenseTypeIndex >= 0 && licenseTypeIndex < App::countOfLicenses) {
+        name = App::licenseItems.at(licenseTypeIndex).at(App::posnOfFullName);
+        url = App::licenseItems.at(licenseTypeIndex).at(App::posnOfUrl);
         licenseUrl = (paramGrp->GetASCII("prefLicenseUrl", url));
     }
     ADD_PROPERTY_TYPE(License, (name), 0, Prop_None, "License string of the Item");
@@ -959,7 +959,6 @@ Document::Document(const char* documentName)
                       PropertyType(Prop_Hidden),
                       "Whether to use hasher on topological naming");
 
-    // this creates and sets 'TransientDir' in onChanged()
     ADD_PROPERTY_TYPE(TransientDir,
                       (""),
                       0,
@@ -975,6 +974,8 @@ Document::Document(const char* documentName)
                       0,
                       PropertyType(Prop_Hidden | Prop_ReadOnly),
                       "Link of the tip object of the document");
+
+    // this creates and sets 'TransientDir' in onChanged()
     Uid.touch();
 }
 
