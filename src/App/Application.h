@@ -33,6 +33,12 @@
 #include <map>
 #include <string>
 
+#include <functional>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+
 #include <Base/Observer.h>
 #include <Base/Parameter.h>
 
@@ -76,6 +82,13 @@ enum class MessageOption {
 struct DocumentCreateFlags {
     bool createView {true};
     bool temporary {false};
+};
+
+struct DocumentRecomputeRequest {
+    Document* document {nullptr};
+    // Callback to be invoked when recompute is complete.
+    // The parameter indicates success (true) or failure (false)
+    std::function<void(bool)> callback;
 };
 
 /** The Application
@@ -177,6 +190,9 @@ public:
     bool isRestoring() const;
     /// Indicate the application is closing all document
     bool isClosingAll() const;
+
+    /// add a recompute request to the processing queue
+    void queueDocumentRecomputeRequest(Document* doc, std::function<void(bool)> callback);
     //@}
 
     /** @name Application-wide trandaction setting */
@@ -633,6 +649,22 @@ private:
     // To prevent infinite recursion of reloading a partial document due a truly
     // missing object
     std::map<std::string,std::set<std::string> > _docReloadAttempts;
+
+    // --- Begin: Worker thread for processing DocumentRecomputeRequest ---
+    // This thread will process pending recompute requests from _documentRecomputeRequests.
+    std::thread _recomputeThread;
+    std::mutex _recomputeMutex;
+    std::condition_variable _recomputeCV;
+    std::atomic<bool> _stopRecomputeThread{false};
+
+    // Worker thread function that processes _documentRecomputeRequests.
+    void recomputeWorker();
+
+    // Helper to notify the worker thread when new requests are available.
+    void notifyRecomputeWorker();
+    // --- End: Worker thread additions ---
+
+    std::vector<DocumentRecomputeRequest> _documentRecomputeRequests;
 
     bool _isRestoring{false};
     bool _allowPartial{false};

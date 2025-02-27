@@ -1514,19 +1514,30 @@ void StdCmdRefresh::activated([[maybe_unused]] int iMsg)
     }
 
     App::AutoTransaction trans((eType & NoTransaction) ? nullptr : "Recompute");
-    try {
-        doCommand(Doc,"App.activeDocument().recompute(None,True,True)");
-    }
-    catch (Base::Exception& /*e*/) {
-        auto ret = QMessageBox::warning(getMainWindow(), QObject::tr("Dependency error"),
-            qApp->translate("Std_Refresh", "The document contains dependency cycles.\n"
-                        "Please check the Report View for more details.\n\n"
-                        "Do you still want to proceed?"),
-                QMessageBox::Yes, QMessageBox::No);
-        if(ret == QMessageBox::No)
-            return;
-        doCommand(Doc,"App.activeDocument().recompute(None,True)");
-    }
+    auto doc = getActiveGuiDocument()->getDocument();
+
+    // Enqueue a recompute request. The callback provided here runs in the worker thread,
+    // so we post any Qt UI work back to the main thread.
+    App::GetApplication().queueDocumentRecomputeRequest(doc, [this, doc](bool success) {
+         // Post the lambda to the UI thread.
+         QMetaObject::invokeMethod(qApp, [this, success, doc]() {
+             if (!success) {
+                 auto ret = QMessageBox::warning(getMainWindow(), QObject::tr("Dependency error"),
+                    qApp->translate("Std_Refresh", "The document contains dependency cycles.\n"
+                            "Please check the Report View for more details.\n\n"
+                            "Do you still want to proceed?"),
+                    QMessageBox::Yes, QMessageBox::No);
+                 if(ret == QMessageBox::No)
+                     return;
+                 // If the user wants to proceed, optionally enqueue another recompute request.
+                 App::GetApplication().queueDocumentRecomputeRequest(doc, [this, doc](bool success2) {
+                     // Further UI update if necessary.
+                 });
+             } else {
+                 // On success, update the UI accordingly.
+             }
+         }, Qt::QueuedConnection);
+    });
 }
 
 bool StdCmdRefresh::isActive()

@@ -264,10 +264,20 @@ Application::Application(std::map<std::string,std::string> &mConfig)
     mpcPramManager["System parameter"] = _pcSysParamMngr;
     mpcPramManager["User parameter"] = _pcUserParamMngr;
 
+    _stopRecomputeThread = false;
+    _recomputeThread = std::thread(&Application::recomputeWorker, this);
+
     setupPythonTypes();
 }
 
-Application::~Application() = default;
+Application::~Application() {
+    // Signal the recompute worker thread to stop and join it.
+    _stopRecomputeThread = true;
+    _recomputeCV.notify_all();
+
+    if (_recomputeThread.joinable())
+        _recomputeThread.join();
+}
 
 void Application::setupPythonTypes()
 {
@@ -667,6 +677,21 @@ bool Application::isRestoring() const {
 
 bool Application::isClosingAll() const {
     return _isClosingAll;
+}
+
+void Application::queueDocumentRecomputeRequest(Document* doc, std::function<void(bool)> callback) {
+    if (!doc)
+         return;
+
+    DocumentRecomputeRequest req;
+    req.document = doc;
+    req.callback = std::move(callback);
+
+    {
+        std::lock_guard<std::mutex> lock(_recomputeMutex);
+        _documentRecomputeRequests.push_back(req);
+    }
+    _recomputeCV.notify_one();
 }
 
 struct DocTiming {
@@ -3588,3 +3613,45 @@ std::string Application::FindHomePath(const char* sCall)
 #else
 # error "std::string Application::FindHomePath(const char*) not implemented"
 #endif
+
+void Application::notifyRecomputeWorker() {
+    _recomputeCV.notify_one();
+}
+
+void Application::recomputeWorker() {
+    while (!_stopRecomputeThread) {
+        std::unique_lock<std::mutex> lock(_recomputeMutex);
+        // Wait until either stop is signaled or there is at least one pending request.
+        _recomputeCV.wait(lock, [this] {
+            return _stopRecomputeThread || !_documentRecomputeRequests.empty();
+        });
+        if (_stopRecomputeThread)
+            break;
+
+        // Process all pending recompute requests.
+        while (!_documentRecomputeRequests.empty()) {
+            // Retrieve the first request and remove it from the container.
+            DocumentRecomputeRequest request = _documentRecomputeRequests.front();
+            _documentRecomputeRequests.erase(_documentRecomputeRequests.begin());
+ 
+            // Unlock while processing to allow other threads to add new requests.
+            lock.unlock();
+
+            bool success = true;
+            try {
+                if (request.document) {
+                    request.document->recompute();
+                }
+            } catch (Base::Exception&) {
+                success = false;
+            }
+ 
+            // Call the callback directly (no Qt dependency here)
+            if (request.callback) {
+                request.callback(success);
+            }
+
+            lock.lock();
+        }
+    }
+}
