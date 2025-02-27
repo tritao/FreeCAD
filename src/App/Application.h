@@ -272,7 +272,6 @@ public:
     boost::signals2::signal<void (const App::Document&, const App::Property&)> signalChangedDocument;
     /// signal on new Object
     boost::signals2::signal<void (const App::DocumentObject&)> signalNewObject;
-    //boost::signals2::signal<void (const App::DocumentObject&)>     m_sig;
     /// signal on deleted Object
     boost::signals2::signal<void (const App::DocumentObject&)> signalDeletedObject;
     /// signal on changed Object
