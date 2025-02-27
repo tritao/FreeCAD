@@ -18,3 +18,7 @@ if (BUILD_TRACY_FRAME_PROFILER)
     set(TRACY_STATIC 0)
     add_subdirectory(tracy)
 endif()
+
+set(ENKITS_BUILD_SHARED OFF)
+set(ENKITS_BUILD_C_INTERFACE OFF)
+add_subdirectory(enkiTS)
