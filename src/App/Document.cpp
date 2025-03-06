@@ -3712,41 +3712,43 @@ void Document::removeObject(const char* sName)
         return;
     }
 
-    if (pos->second->testStatus(ObjectStatus::PendingRecompute)) {
+    auto object = pos->second;
+    if (object->testStatus(ObjectStatus::PendingRecompute)) {
         // TODO: shall we allow removal if there is active undo transaction?
         FC_MSG("pending remove of " << sName << " after recomputing document " << getName());
-        d->pendingRemove.emplace_back(pos->second);
+        d->pendingRemove.emplace_back(object);
         return;
     }
 
+
     TransactionLocker tlock;
 
-    _checkTransaction(pos->second, nullptr, __LINE__);
+    _checkTransaction(object, nullptr, __LINE__);
 
-    if (d->activeObject == pos->second) {
+    if (d->activeObject == object) {
         d->activeObject = nullptr;
     }
 
     // Mark the object as about to be deleted
-    pos->second->setStatus(ObjectStatus::Remove, true);
+    object->setStatus(ObjectStatus::Remove, true);
     if (!d->undoing && !d->rollback) {
-        pos->second->unsetupObject();
+        object->unsetupObject();
     }
 
-    signalDeletedObject(*(pos->second));
+    signalDeletedObject(*(object));
 
     // do no transactions if we do a rollback!
     if (!d->rollback && d->activeUndoTransaction) {
         // in this case transaction delete or save the object
-        signalTransactionRemove(*pos->second, d->activeUndoTransaction);
+        signalTransactionRemove(*object, d->activeUndoTransaction);
     }
     else {
         // if not saved in undo -> delete object
-        signalTransactionRemove(*pos->second, 0);
+        signalTransactionRemove(*object, 0);
     }
 
     // Before deleting we must nullify all dependent objects
-    breakDependency(pos->second, true);
+    breakDependency(object, true);
 
     // and remove the tip if needed
     if (Tip.getValue() && strcmp(Tip.getValue()->getNameInDocument(), sName) == 0) {
@@ -3755,9 +3757,9 @@ void Document::removeObject(const char* sName)
     }
 
     // remove the ID before possibly deleting the object
-    d->objectIdMap.erase(pos->second->_Id);
+    d->objectIdMap.erase(object->_Id);
     // Unset the bit to be on the safe side
-    pos->second->setStatus(ObjectStatus::Remove, false);
+    object->setStatus(ObjectStatus::Remove, false);
     unregisterLabel(pos->second->Label.getStrValue());
 
     // do no transactions if we do a rollback!
@@ -3766,11 +3768,11 @@ void Document::removeObject(const char* sName)
         // Undo stuff
         if (d->activeUndoTransaction) {
             // in this case transaction delete or save the object
-            d->activeUndoTransaction->addObjectNew(pos->second);
+            d->activeUndoTransaction->addObjectNew(object);
         }
         else {
             // if not saved in undo -> delete object later
-            std::unique_ptr<DocumentObject> delobj(pos->second);
+            std::unique_ptr<DocumentObject> delobj(object);
             tobedestroyed.swap(delobj);
             tobedestroyed->setStatus(ObjectStatus::Destroy, true);
         }
@@ -3779,7 +3781,7 @@ void Document::removeObject(const char* sName)
     for (std::vector<DocumentObject*>::iterator obj = d->objectArray.begin();
          obj != d->objectArray.end();
          ++obj) {
-        if (*obj == pos->second) {
+        if (*obj == object) {
             d->objectArray.erase(obj);
             break;
         }
