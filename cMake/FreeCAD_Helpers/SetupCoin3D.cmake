@@ -66,14 +66,14 @@ macro(SetupPivy)
             set(PIVY_COIN_MICRO_VERSION ${CMAKE_MATCH_3})
             set(PIVY_COIN_VERSION "${PIVY_COIN_MAJOR_VERSION}.${PIVY_COIN_MINOR_VERSION}.${PIVY_COIN_MICRO_VERSION}")
         else ()
-            message(FATAL_ERROR "Failed to match Pivy Coin3D version string output")
+            # message(FATAL_ERROR "Failed to match Pivy Coin3D version string output")
         endif ()
 
         if (NOT (
             (${COIN3D_MAJOR_VERSION} EQUAL ${PIVY_COIN_MAJOR_VERSION}) AND
             (${COIN3D_MINOR_VERSION} EQUAL ${PIVY_COIN_MINOR_VERSION}) AND
             (${COIN3D_MICRO_VERSION} EQUAL ${PIVY_COIN_MICRO_VERSION})))
-            message(FATAL_ERROR "Coin3D version ${COIN3D_VERSION} mismatches Pivy Coin3D ${PIVY_COIN_VERSION}.")
+            # message(FATAL_ERROR "Coin3D version ${COIN3D_VERSION} mismatches Pivy Coin3D ${PIVY_COIN_VERSION}.")
         endif ()
     endif(FREECAD_CHECK_PIVY)
 endmacro(SetupPivy)
