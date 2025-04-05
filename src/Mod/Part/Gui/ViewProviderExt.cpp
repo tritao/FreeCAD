@@ -80,6 +80,7 @@
 #include <Gui/BitmapFactory.h>
 #include <Gui/Control.h>
 #include <Gui/Selection/SoFCSelectionAction.h>
+#include <Gui/Inventor/SoFCUpdateVBOAction.h>
 #include <Gui/Selection/SoFCUnifiedSelection.h>
 #include <Gui/ViewParams.h>
 #include <Mod/Part/App/ShapeMapHasher.h>

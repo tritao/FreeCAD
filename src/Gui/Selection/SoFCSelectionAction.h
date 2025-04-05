@@ -344,28 +344,6 @@ private:
     SoBoxSelectionRenderActionP * pimpl;
 };
 
-/**
- * Helper class no notify nodes to update VBO.
- * @author Werner Mayer
- */
-class GuiExport SoUpdateVBOAction : public SoAction
-{
-    SO_ACTION_HEADER(SoUpdateVBOAction);
-
-public:
-    SoUpdateVBOAction ();
-    ~SoUpdateVBOAction() override;
-
-    static void initClass();
-    static void finish();
-
-protected:
-    void beginTraversal(SoNode *node) override;
-
-private:
-    static void callDoAction(SoAction *action,SoNode *node);
-};
-
 } // namespace Gui
 
 

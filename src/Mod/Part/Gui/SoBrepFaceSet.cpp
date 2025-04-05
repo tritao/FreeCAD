@@ -71,6 +71,7 @@
 #include <Base/Profiler.h>
 
 #include <Gui/SoFCInteractiveElement.h>
+#include <Gui/Inventor/SoFCUpdateVBOAction.h">
 #include <Gui/Selection/SoFCSelectionAction.h>
 #include <Gui/Selection/SoFCUnifiedSelection.h>
 

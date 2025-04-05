@@ -1071,6 +1071,7 @@ SET(Inventor_CPP_SRCS
     Inventor/SoFCBoundingBox.cpp
     Inventor/SoMouseWheelEvent.cpp
     Inventor/SoFCTransform.cpp
+    Inventor/SoFCUpdateVBOAction.cpp
     SoFCColorBar.cpp
     SoFCColorBarNotifier.cpp
     SoFCColorGradient.cpp

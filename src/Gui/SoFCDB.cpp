@@ -76,6 +76,7 @@
 #include "Inventor/SoFCBoundingBox.h"
 #include "Inventor/SoMouseWheelEvent.h"
 #include "Inventor/SoFCTransform.h"
+#include "Inventor/SoFCUpdateVBOAction.h"
 #include "propertyeditor/PropertyItem.h"
 #include "ArcEngine.h"
 
