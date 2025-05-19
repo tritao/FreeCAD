@@ -28,6 +28,7 @@
 #include <Base/Persistence.h>
 #include <Base/Type.h>
 #include <Base/Handle.h>
+#include <Base/SharedRecursiveMutex.h>
 
 #include "PropertyContainer.h"
 #include "PropertyLinks.h"
@@ -38,6 +39,7 @@
 #include <utility>
 #include <list>
 #include <string>
+#include <shared_mutex>
 
 namespace Base
 {
@@ -672,6 +674,8 @@ protected:
     void _abortTransaction();
 
 private:
+    Base::SharedRecursiveMutex<Document>& mSharedMutex;
+
     // # Data Member of the document
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     std::list<Transaction*> mUndoTransactions;
