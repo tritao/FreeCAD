@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: LGPL-2.1-or-later
-
 /***************************************************************************
  *   Copyright (c) 2005 Werner Mayer <wmayer[at]users.sourceforge.net>     *
  *                                                                         *
@@ -25,6 +23,8 @@
 #ifndef GUI_SOFCBACKGROUNDGRADIENT_H
 #define GUI_SOFCBACKGROUNDGRADIENT_H
 
+#include <cstdint>
+
 #include <Inventor/SbColor.h>
 #include <Inventor/nodes/SoNode.h>
 #include <Inventor/nodes/SoSubNode.h>
@@ -33,19 +33,20 @@
 
 class SbColor;
 class SoGLRenderAction;
+class SoSeparator;
+class SoSwitch;
+class SoFaceSet;
+class SoVertexProperty;
 
-namespace Gui
-{
+namespace Gui {
 
-class GuiExport SoFCBackgroundGradient: public SoNode
-{
+class GuiExport SoFCBackgroundGradient : public SoNode {
     using inherited = SoNode;
 
     SO_NODE_HEADER(Gui::SoFCBackgroundGradient);
 
 public:
-    enum Gradient
-    {
+    enum Gradient {
         LINEAR = 0,
         RADIAL = 1
     };
@@ -53,14 +54,35 @@ public:
     static void finish();
     SoFCBackgroundGradient();
 
-    void GLRender(SoGLRenderAction* action) override;
+    void GLRender (SoGLRenderAction *action) override;
     void setGradient(Gradient grad);
     Gradient getGradient() const;
-    void setColorGradient(const SbColor& fromColor, const SbColor& toColor);
-    void setColorGradient(const SbColor& fromColor, const SbColor& toColor, const SbColor& midColor);
+    void setColorGradient(const SbColor& fromColor,
+                          const SbColor& toColor);
+    void setColorGradient(const SbColor& fromColor,
+                          const SbColor& toColor,
+                          const SbColor& midColor);
 
 private:
+    void ensureGeometry();
+    void updateLinearGeometry();
+    void updateRadialGeometry();
+
+    static constexpr int CircleSegments = 32;
+
     Gradient gradient;
+    bool geometryDirty {true};
+
+    SoSwitch* gradientSwitch {nullptr};
+    SoSeparator* linearSeparator {nullptr};
+    SoFaceSet* linearFaces {nullptr};
+    SoVertexProperty* linearVertexProperty {nullptr};
+
+    SoSeparator* radialSeparator {nullptr};
+    SoFaceSet* radialFan {nullptr};
+    SoVertexProperty* radialFanVertexProperty {nullptr};
+    SoFaceSet* radialRing {nullptr};
+    SoVertexProperty* radialRingVertexProperty {nullptr};
 
 protected:
     ~SoFCBackgroundGradient() override;
@@ -68,7 +90,7 @@ protected:
     SbColor fCol, tCol, mCol;
 };
 
-}  // namespace Gui
+} // namespace Gui
 
 
-#endif  // GUI_SOFCBACKGROUNDGRADIENT_H
+#endif // GUI_SOFCBACKGROUNDGRADIENT_H
