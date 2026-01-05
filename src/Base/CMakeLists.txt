@@ -187,6 +187,7 @@ SET(FreeCADBase_CPP_SRCS
     FileLock.cpp
     GeometryPyCXX.cpp
     Handle.cpp
+    PathUtils.cpp
     PlatformPaths.cpp
     InputSource.cpp
     Interpreter.cpp
@@ -259,6 +260,7 @@ SET(FreeCADBase_HPP_SRCS
     FileLock.h
     GeometryPyCXX.h
     Handle.h
+    PathUtils.h
     PlatformPaths.h
     InputSource.h
     Interpreter.h
