@@ -170,12 +170,13 @@ void FileHandler::openInternal(const char* type, const char* prop)
     QFileInfo fi;
     fi.setFile(filename);
 
-    QString encBase = Base::Tools::escapeEncodeString(fi.baseName());
-    QString encPath = Base::Tools::escapeEncodeString(fi.absoluteFilePath());
+    const std::string encBase = Base::Tools::escapeEncodeString(fi.baseName().toUtf8().constData());
+    const std::string encPath
+        = Base::Tools::escapeEncodeString(fi.absoluteFilePath().toUtf8().constData());
 
-    Gui::cmdAppDocumentArgs(doc, "addObject('%s', '%s')", type, encBase.toStdString());
-    Gui::cmdAppDocumentArgs(doc, "ActiveObject.%s = '%s'", prop, encPath.toStdString());
-    Gui::cmdAppDocumentArgs(doc, "ActiveObject.Label = '%s'", encBase.toStdString());
+    Gui::cmdAppDocumentArgs(doc, "addObject('%s', '%s')", type, encBase.c_str());
+    Gui::cmdAppDocumentArgs(doc, "ActiveObject.%s = '%s'", prop, encPath.c_str());
+    Gui::cmdAppDocumentArgs(doc, "ActiveObject.Label = '%s'", encBase.c_str());
     Gui::cmdAppDocument(doc, "recompute()");
 }
 
