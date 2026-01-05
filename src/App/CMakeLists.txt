@@ -69,8 +69,18 @@ target_include_directories(
     FreeCADApp
     SYSTEM
     PUBLIC
-    ${QtCore_INCLUDE_DIRS}
 )
+
+if(BUILD_QT)
+    target_include_directories(
+        FreeCADApp
+        SYSTEM
+        PUBLIC
+        ${QtCore_INCLUDE_DIRS}
+    )
+endif()
+
+target_compile_definitions(FreeCADApp PRIVATE FREECAD_BUILD_QT=$<BOOL:${BUILD_QT}>)
 
 set(FreeCADApp_LIBS
     FreeCADBase
@@ -83,8 +93,13 @@ if(BUILD_TRACY_FRAME_PROFILER)
 endif()
 
 list(APPEND FreeCADApp_LIBS
-        ${QtCore_LIBRARIES}
 )
+
+if(BUILD_QT)
+    list(APPEND FreeCADApp_LIBS
+        ${QtCore_LIBRARIES}
+    )
+endif()
 
 generate_from_py(ApplicationDirectories)
 generate_from_py(Document)
@@ -291,8 +306,6 @@ SET(FreeCADApp_CPP_SRCS
     ColorModel.cpp
     ComplexGeoData.cpp
     ComplexGeoDataPyImp.cpp
-    ConsoleQtBridge.cpp
-    TranslationQtBridge.cpp
     ElementMap.cpp
     Enumeration.cpp
     IndexedName.cpp
@@ -311,6 +324,13 @@ SET(FreeCADApp_CPP_SRCS
     StringHasherPyImp.cpp
     StringIDPyImp.cpp
 )
+
+if(BUILD_QT)
+    list(APPEND FreeCADApp_CPP_SRCS
+        ConsoleQtBridge.cpp
+        TranslationQtBridge.cpp
+    )
+endif()
 
 SET(FreeCADApp_HPP_SRCS
     ${Document_HPP_SRCS}
@@ -335,14 +355,18 @@ SET(FreeCADApp_HPP_SRCS
     StringHasher.h
 )
 
-# auto-generate resource file with all available translations
-set (FreeCADApp_TR_QRC ${CMAKE_CURRENT_BINARY_DIR}/Resources/App_translation.qrc)
-qt_find_and_add_translation(QM_SRCS "Resources/translations/*_*.ts"
-    ${CMAKE_CURRENT_BINARY_DIR}/Resources/translations)
-qt_find_and_add_translation(QM_SRCS "${CMAKE_SOURCE_DIR}/src/Base/Resources/translations/*_*.ts"
-    ${CMAKE_CURRENT_BINARY_DIR}/Resources/translations)
-qt_create_resource_file(${FreeCADApp_TR_QRC} ${QM_SRCS})
-qt_add_resources(FreeCADApp_QRC_SRCS ${FreeCADApp_TR_QRC})
+if(BUILD_QT)
+    # auto-generate resource file with all available translations
+    set (FreeCADApp_TR_QRC ${CMAKE_CURRENT_BINARY_DIR}/Resources/App_translation.qrc)
+    qt_find_and_add_translation(QM_SRCS "Resources/translations/*_*.ts"
+        ${CMAKE_CURRENT_BINARY_DIR}/Resources/translations)
+    qt_find_and_add_translation(QM_SRCS "${CMAKE_SOURCE_DIR}/src/Base/Resources/translations/*_*.ts"
+        ${CMAKE_CURRENT_BINARY_DIR}/Resources/translations)
+    qt_create_resource_file(${FreeCADApp_TR_QRC} ${QM_SRCS})
+    qt_add_resources(FreeCADApp_QRC_SRCS ${FreeCADApp_TR_QRC})
+else()
+    set(FreeCADApp_QRC_SRCS)
+endif()
 
 SET(FreeCADApp_SRCS
     ${FreeCADApp_QRC_SRCS}

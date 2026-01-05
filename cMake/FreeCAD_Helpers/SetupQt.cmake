@@ -1,5 +1,13 @@
 # -------------------------------- Qt --------------------------------
 
+if(NOT BUILD_QT)
+    # FCGlobal.h includes <QtCore.h> unconditionally. This is a generated FreeCAD header (not a Qt header).
+    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/src)
+    set(HAVE_Q_DISABLE_COPY_MOVE 0)
+    configure_file(${CMAKE_SOURCE_DIR}/src/QtCore.h.cmake ${CMAKE_BINARY_DIR}/src/QtCore.h)
+    return()
+endif()
+
 set(FREECAD_QT_COMPONENTS Core Concurrent Network Xml)
 if (FREECAD_QT_MAJOR_VERSION EQUAL 6)
     set (Qt6Core_MOC_EXECUTABLE Qt6::moc)
