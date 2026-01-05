@@ -22,11 +22,14 @@
  ************************************************************************/
 
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <string>
 
-#include <QLocale>
-#include <QString>
+#include <unicode/decimfmt.h>
+#include <unicode/locid.h>
+#include <unicode/numfmt.h>
+#include <unicode/unistr.h>
 
 #include "Quantity.h"
 #include "UnitsSchema.h"
@@ -37,6 +40,62 @@
 
 using Base::UnitsSchema;
 using Base::UnitsSchemaSpec;
+
+namespace
+{
+std::string toUtf8(const icu::UnicodeString& s)
+{
+    std::string out;
+    s.toUTF8String(out);
+    return out;
+}
+
+std::string formatNumberIcu(const double value, const Base::QuantityFormat& format)
+{
+    UErrorCode status = U_ZERO_ERROR;
+    icu::Locale locale = icu::Locale::getDefault();
+
+    std::unique_ptr<icu::NumberFormat> nf(icu::NumberFormat::createInstance(locale, status));
+    if (!U_SUCCESS(status) || !nf) {
+        // Fallback: locale-independent formatting.
+        std::ostringstream out;
+        out << std::setprecision(format.getPrecision()) << std::fixed << value;
+        return out.str();
+    }
+
+    if (format.option & Base::QuantityFormat::OmitGroupSeparator) {
+        nf->setGroupingUsed(false);
+    }
+
+    const int precision = format.getPrecision();
+    switch (format.format) {
+        case Base::QuantityFormat::Fixed:
+            nf->setMinimumFractionDigits(precision);
+            nf->setMaximumFractionDigits(precision);
+            break;
+        case Base::QuantityFormat::Scientific: {
+            auto* df = dynamic_cast<icu::DecimalFormat*>(nf.get());
+            if (df) {
+                df->setScientificNotation(true);
+                df->setMinimumFractionDigits(precision);
+                df->setMaximumFractionDigits(precision);
+            }
+            else {
+                nf->setMaximumFractionDigits(precision);
+            }
+            break;
+        }
+        case Base::QuantityFormat::Default:
+        default:
+            nf->setMaximumFractionDigits(precision);
+            break;
+    }
+
+    icu::UnicodeString s;
+    nf->format(value, s);
+    return toUtf8(s);
+}
+}  // namespace
 
 
 UnitsSchema::UnitsSchema(UnitsSchemaSpec spec)
@@ -98,14 +157,16 @@ std::string UnitsSchema::translate(const Quantity& quant, double& factor, std::s
 
 std::string UnitsSchema::toLocale(const Quantity& quant, const double factor, const std::string& unitString)
 {
-    QLocale Lc;
     const QuantityFormat& format = quant.getFormat();
-    if (format.option != QuantityFormat::None) {
-        Lc.setNumberOptions(static_cast<QLocale::NumberOptions>(format.option));
-    }
+    const double v = quant.getValue() / factor;
 
-    auto valueString = Lc.toString(quant.getValue() / factor, format.toFormat(), format.getPrecision())
-                           .toStdString();
+    std::string valueString;
+    if (std::isfinite(v)) {
+        valueString = formatNumberIcu(v, format);
+    }
+    else {
+        valueString = std::to_string(v);
+    }
 
     auto notUnit = [](auto s) {
         return s.empty() || s == "°" || s == "″" || s == "′" || s == "\"" || s == "'";
