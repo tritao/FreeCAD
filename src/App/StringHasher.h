@@ -27,9 +27,10 @@
 
 #include <bitset>
 #include <memory>
+#include <vector>
 
-#include <QByteArray>
-#include <QVector>
+#include <Base/ByteBuffer.h>
+#include <Base/BytesView.h>
 
 #include <Base/Bitmask.h>
 #include <Base/Handle.h>
@@ -65,7 +66,7 @@ using StringHasherRef = Base::Reference<StringHasher>;
  * created by adding some common postfix to an existing name, so data sharing
  * can be improved using the following techniques:
  *
- *      a) reference count (through QByteArray) the main data part,
+ *      a) reference count (through shared backing storage) the main data part,
  *
  *      b) (recursively) encode prefix and/or postfix as an integer (in the
  *         format of #<hex>, e.g. #1b) that references another StringID,
@@ -118,7 +119,7 @@ public:
      *
      * User code is not supposed to create StringID directly, but through StringHasher::getID()
      */
-    StringID(long id, QByteArray data, const Flags& flags = Flag::None)
+    StringID(long id, Base::ByteBuffer data, const Flags& flags = Flag::None)
         : _id(id)
         , _data(std::move(data))
         , _flags(flags)
@@ -144,7 +145,7 @@ public:
     }
 
     /// Returns all related StringIDs that used to encode this StringID
-    const QVector<StringIDRef>& relatedIDs() const
+    const std::vector<StringIDRef>& relatedIDs() const
     {
         return _sids;
     }
@@ -175,19 +176,19 @@ public:
     }
 
     /// Returns the data (prefix)
-    const QByteArray& data() const
+    const Base::ByteBuffer& data() const
     {
         return _data;
     }
 
     /// Returns the postfix
-    QByteArray postfix() const
+    Base::ByteBuffer postfix() const
     {
         return _postfix;
     }
 
     /// Sets the postfix
-    void setPostfix(QByteArray postfix)
+    void setPostfix(Base::ByteBuffer postfix)
     {
         _postfix = std::move(postfix);
     }
@@ -238,18 +239,9 @@ public:
      */
     static IndexID fromString(const char* name, bool eof = true, int size = -1);
 
-    /** Parse string to get ID and index
-     * @param bytes: input data
-     * @param eof: Whether to check the end of string. If true, then the input
-     *             string must contain only the string representation of this
-     *             StringID
-     *
-     * The input string is expected to be in the format of #<id> or with index
-     * #<id>:<index>, where both id and index are in hex digits.
-     */
-    static IndexID fromString(const QByteArray& bytes, bool eof = true)
+    static IndexID fromString(Base::BytesView bytes, bool eof = true)
     {
-        return fromString(bytes.constData(), eof, bytes.size());
+        return fromString(bytes.data(), eof, static_cast<int>(bytes.size()));
     }
 
     /** Get the text content of this StringID
@@ -259,17 +251,17 @@ public:
      */
     std::string dataToText(int index = 0) const;
 
-    /** Get the content of this StringID as QByteArray
+    /** Get the content of this StringID as a byte buffer
      * @param index: optional index.
      */
-    QByteArray dataToBytes(int index = 0) const
+    Base::ByteBuffer dataToBytes(int index = 0) const
     {
-        QByteArray res(_data);
+        Base::ByteBuffer res = _data;
         if (index != 0) {
-            res += QByteArray::number(index);
+            res.append(std::to_string(index));
         }
-        if (_postfix.size() != 0) {
-            res += _postfix;
+        if (!_postfix.empty()) {
+            res.append(_postfix.view());
         }
         return res;
     }
@@ -310,11 +302,11 @@ public:
 
 private:
     long _id;
-    QByteArray _data;
-    QByteArray _postfix;
+    Base::ByteBuffer _data;
+    Base::ByteBuffer _postfix;
     StringHasher* _hasher = nullptr;
     mutable Flags _flags;
-    mutable QVector<StringIDRef> _sids;
+    mutable std::vector<StringIDRef> _sids;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -513,8 +505,8 @@ public:
     {
         if (_sid) {
             assert(_index == 0);
-            assert(_sid->postfix().isEmpty());
-            return _sid->data().constData();
+            assert(_sid->postfix().empty());
+            return _sid->data().data();
         }
         return "";
     }
@@ -532,7 +524,7 @@ public:
         return 0;
     }
 
-    QVector<StringIDRef> relatedIDs() const
+    std::vector<StringIDRef> relatedIDs() const
     {
         if (_sid) {
             return _sid->relatedIDs();
@@ -556,9 +548,9 @@ public:
         return false;
     }
 
-    void toBytes(QByteArray& bytes) const
+    void toBytes(Base::ByteBuffer& bytes) const
     {
-        // TODO: return the QByteArray instead of passing in by reference
+        // TODO: return the buffer instead of passing in by reference
         if (_sid) {
             bytes = _sid->dataToBytes(_index);
         }
@@ -701,10 +693,10 @@ public:
      *
      * \sa getID (const char*, int, bool);
      */
-    StringIDRef getID(const QByteArray& data, Options options = Option::Hashable);
+    StringIDRef getID(Base::BytesView data, Options options = Option::Hashable);
 
     /** Map geometry element name to an integer */
-    StringIDRef getID(const Data::MappedName& name, const QVector<StringIDRef>& sids);
+    StringIDRef getID(const Data::MappedName& name, const std::vector<StringIDRef>& sids);
 
     /** Obtain the reference counted StringID object from numerical id
      *

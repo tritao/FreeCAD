@@ -20,11 +20,13 @@
  *                                                                                                 *
  **************************************************************************************************/
 
-
-#include <QCryptographicHash>
-#include <QHash>
+#include <array>
+#include <cstdint>
+#include <cstring>
 #include <deque>
 
+#include <Base/Base64.h>
+#include <Base/ByteBuffer.h>
 #include <Base/BytesView.h>
 #include <Base/Console.h>
 #include <Base/Reader.h>
@@ -38,6 +40,7 @@
 #include <boost/bimap/unordered_set_of.hpp>
 #include <boost/io/ios_state.hpp>
 #include <boost/iostreams/stream.hpp>
+#include <boost/uuid/detail/sha1.hpp>
 
 #include "MappedElement.h"
 #include "StringHasher.h"
@@ -52,6 +55,50 @@ using namespace App;
 
 ///////////////////////////////////////////////////////////
 
+namespace
+{
+
+std::size_t fnv1a64(Base::BytesView bytes)
+{
+    constexpr std::uint64_t offsetBasis = 14695981039346656037ULL;
+    constexpr std::uint64_t prime = 1099511628211ULL;
+
+    std::uint64_t hash = offsetBasis;
+    for (unsigned char c : bytes) {
+        hash ^= c;
+        hash *= prime;
+    }
+    return static_cast<std::size_t>(hash);
+}
+
+std::size_t hashCombine(std::size_t a, std::size_t b)
+{
+    // boost::hash_combine equivalent (no dependency)
+    return a ^ (b + 0x9e3779b97f4a7c15ULL + (a << 6) + (a >> 2));
+}
+
+Base::ByteBuffer sha1Digest(Base::BytesView bytes)
+{
+    boost::uuids::detail::sha1 sha1;
+    sha1.process_bytes(bytes.data(), bytes.size());
+
+    unsigned int digestWords[5] {};
+    sha1.get_digest(digestWords);
+
+    std::array<char, 20> out {};
+    for (int i = 0; i < 5; ++i) {
+        const std::uint32_t w = digestWords[i];
+        out[i * 4 + 0] = static_cast<char>((w >> 24) & 0xFFU);
+        out[i * 4 + 1] = static_cast<char>((w >> 16) & 0xFFU);
+        out[i * 4 + 2] = static_cast<char>((w >> 8) & 0xFFU);
+        out[i * 4 + 3] = static_cast<char>((w >> 0) & 0xFFU);
+    }
+
+    return Base::ByteBuffer::copy(Base::BytesView(out.data(), out.size()));
+}
+
+}  // namespace
+
 struct StringIDHasher
 {
     std::size_t operator()(const StringID* sid) const
@@ -59,7 +106,7 @@ struct StringIDHasher
         if (!sid) {
             return 0;
         }
-        return qHash(sid->data(), qHash(sid->postfix()));
+        return hashCombine(fnv1a64(sid->data().view()), fnv1a64(sid->postfix().view()));
     }
 
     bool operator()(const StringID* IDa, const StringID* IDb) const
@@ -144,15 +191,15 @@ StringID::IndexID StringID::fromString(const char* name, bool eof, int size)
 std::string StringID::dataToText(int index) const
 {
     if (isHashed() || isBinary()) {
-        return _data.toBase64().constData();
+        return Base::base64_encode(_data.data(), _data.size());
     }
 
-    std::string res(_data.constData());
+    std::string res(_data.data(), _data.size());
     if (index != 0) {
         res += std::to_string(index);
     }
-    if (_postfix.size() != 0) {
-        res += _postfix.constData();
+    if (!_postfix.empty()) {
+        res.append(_postfix.data(), _postfix.size());
     }
     return res;
 }
@@ -257,25 +304,25 @@ StringIDRef StringHasher::getID(const char* text, int len, bool hashable)
     if (len < 0) {
         len = static_cast<int>(strlen(text));
     }
-    return getID(QByteArray::fromRawData(text, len), hashable ? Option::Hashable : Option::None);
+    return getID(Base::BytesView(text, static_cast<std::size_t>(len)),
+                 hashable ? Option::Hashable : Option::None);
 }
 
-StringIDRef StringHasher::getID(const QByteArray& data, Options options)
+StringIDRef StringHasher::getID(Base::BytesView data, Options options)
 {
     bool binary = options.testFlag(Option::Binary);
     bool hashable = options.testFlag(Option::Hashable);
     bool nocopy = options.testFlag(Option::NoCopy);
 
-    bool hashed = hashable && _hashes->Threshold > 0 && (int)data.size() > _hashes->Threshold;
+    bool hashed = hashable && _hashes->Threshold > 0
+        && static_cast<int>(data.size()) > _hashes->Threshold;
 
     StringID dataID;
     if (hashed) {
-        QCryptographicHash hasher(QCryptographicHash::Sha1);
-        hasher.addData(data);
-        dataID._data = hasher.result();
+        dataID._data = sha1Digest(data);
     }
     else {
-        dataID._data = data;
+        dataID._data = Base::ByteBuffer::borrow(data);
     }
 
     auto it = _hashes->left.find(&dataID);
@@ -285,7 +332,7 @@ StringIDRef StringHasher::getID(const QByteArray& data, Options options)
 
     if (!hashed && !nocopy) {
         // if not hashed, make a deep copy of the data
-        dataID._data = QByteArray(data.constData(), data.size());
+        dataID._data = Base::ByteBuffer::copy(data);
     }
 
     StringID::Flags flags(StringID::Flag::None);
@@ -299,26 +346,33 @@ StringIDRef StringHasher::getID(const QByteArray& data, Options options)
     return {insert(sid)};
 }
 
-StringIDRef StringHasher::getID(const Data::MappedName& name, const QVector<StringIDRef>& sids)
+StringIDRef StringHasher::getID(const Data::MappedName& name, const std::vector<StringIDRef>& sids)
 {
     StringID tempID;
-    tempID._postfix = name.postfixBytes();
+    tempID._postfix = Base::ByteBuffer::borrow(
+        Base::BytesView(name.postfixBytes().constData(), name.postfixBytes().size())
+    );
 
     Data::IndexedName indexed;
-    if (tempID._postfix.size() != 0) {
+    if (!tempID._postfix.empty()) {
         // Only check for IndexedName if there is postfix, because of the way
         // we restore the StringID. See StringHasher::saveStream/restoreStreamNew()
-        indexed = Data::IndexedName(Base::BytesView(name.dataBytes().constData(), name.dataBytes().size()));
+        indexed = Data::IndexedName(
+            Base::BytesView(name.dataBytes().constData(), name.dataBytes().size())
+        );
     }
     if (indexed) {
         // If this is an IndexedName, then _data only stores the base part of the name, without the
         // integer index
-        tempID._data =
-            QByteArray::fromRawData(indexed.getType(), static_cast<int>(strlen(indexed.getType())));
+        tempID._data = Base::ByteBuffer::borrow(
+            Base::BytesView(indexed.getType(), std::strlen(indexed.getType()))
+        );
     }
     else {
         // Store the entire name in _data, but temporarily reuse the existing memory
-        tempID._data = name.dataBytes();
+        tempID._data = Base::ByteBuffer::borrow(
+            Base::BytesView(name.dataBytes().constData(), name.dataBytes().size())
+        );
     }
 
     // Check to see if there is already an entry in the hash table for this StringID
@@ -333,26 +387,28 @@ StringIDRef StringHasher::getID(const Data::MappedName& name, const QVector<Stri
 
     if (!indexed && name.isRaw()) {
         // Make a copy of the memory if we didn't do so earlier
-        tempID._data = QByteArray(name.dataBytes().constData(), name.dataBytes().size());
+        tempID._data = Base::ByteBuffer::copy(
+            Base::BytesView(name.dataBytes().constData(), name.dataBytes().size())
+        );
     }
 
     // If the postfix is not already encoded, use getID to encode it:
     StringIDRef postfixRef;
-    if ((tempID._postfix.size() != 0) && tempID._postfix.indexOf("#") < 0) {
-        postfixRef = getID(tempID._postfix);
+    if (!tempID._postfix.empty() && tempID._postfix.view().find('#') == Base::BytesView::npos) {
+        postfixRef = getID(tempID._postfix.view());
         postfixRef.toBytes(tempID._postfix);
     }
 
     // If _data is an IndexedName, use getID to encode it:
     StringIDRef indexRef;
     if (indexed) {
-        indexRef = getID(tempID._data);
+        indexRef = getID(tempID._data.view());
     }
 
     // The real StringID object that we are going to insert
     StringIDRef newStringIDRef(new StringID(lastID() + 1, tempID._data));
     StringID& newStringID = *newStringIDRef._sid;
-    if (tempID._postfix.size() != 0) {
+    if (!tempID._postfix.empty()) {
         newStringID._flags.setFlag(StringID::Flag::Postfixed);
         newStringID._postfix = tempID._postfix;
     }
@@ -366,7 +422,7 @@ StringIDRef StringHasher::getID(const Data::MappedName& name, const QVector<Stri
     }
 
     int numAddedSIDs = (postfixRef ? 1 : 0) + (indexRef ? 1 : 0);
-    if (numSIDs == sids.size() && !postfixRef && !indexRef) {
+    if (numSIDs == static_cast<int>(sids.size()) && !postfixRef && !indexRef) {
         // The simplest case: just copy the whole list
         newStringID._sids = sids;
     }
@@ -401,17 +457,21 @@ StringIDRef StringHasher::getID(const Data::MappedName& name, const QVector<Stri
 
     // If the new StringID has a postfix, but is not indexed, see if the data string itself
     // contains an index.
-    if ((newStringID._postfix.size() != 0) && !indexed) {
+    if (!newStringID._postfix.empty() && !indexed) {
         // Use the fromString function to parse the new StringID's data field for a possible index
-        StringID::IndexID res = StringID::fromString(newStringID._data);
+        StringID::IndexID res = StringID::fromString(newStringID._data.view());
         if (res.id > 0) {  // If the data had an index
             if (res.index != 0) {
                 indexed.setIndex(res.index);
-                newStringID._data.resize(newStringID._data.lastIndexOf(':') + 1);
+                const auto v = newStringID._data.view();
+                const auto pos = v.find_last_of(':');
+                if (pos != Base::BytesView::npos) {
+                    newStringID._data.resize(pos + 1);
+                }
             }
             int offset = newStringID.isPostfixEncoded() ? 1 : 0;
             // Search for the SID with that index
-            for (int i = offset; i < newStringID._sids.size(); ++i) {
+            for (int i = offset; i < static_cast<int>(newStringID._sids.size()); ++i) {
                 if (newStringID._sids[i].value() == res.id) {
                     if (i != offset) {
                         // If this SID is not already the first element in sids, move it there by
@@ -536,7 +596,7 @@ void StringHasher::saveStream(std::ostream& stream) const
             prefixID.id = d._sids[offset].value();
         }
         else if (d.isPrefixIDIndex()) {
-            prefixID = StringID::fromString(d._data);
+            prefixID = StringID::fromString(d._data.view());
             assert(d._sids.size() > offset && d._sids[offset].value() == prefixID.id);
         }
 
@@ -575,11 +635,13 @@ void StringHasher::saveStream(std::ostream& stream) const
         // store in raw stream.
         if (d.isPostfixed()) {
             if (!d.isPrefixIDIndex() && !d.isIndexed() && !d.isPrefixID()) {
-                stream << ' ' << d._data.constData();
+                stream << ' ';
+                stream.write(d._data.data(), static_cast<std::streamsize>(d._data.size()));
             }
 
             if (!d.isPostfixEncoded()) {
-                stream << ' ' << d._postfix.constData();
+                stream << ' ';
+                stream.write(d._postfix.data(), static_cast<std::streamsize>(d._postfix.size()));
             }
             stream << '\n';
         }
@@ -587,7 +649,7 @@ void StringHasher::saveStream(std::ostream& stream) const
             // Reaching here means the string may contain space and newlines
             // We rely on OutputStream (i.e. textStreamWrapper) to save the string.
             stream << ' ';
-            textStreamWrapper << d._data.constData();
+            textStreamWrapper << std::string(d._data.data(), d._data.size());
         }
     }
 }
@@ -648,7 +710,7 @@ void StringHasher::restoreStreamNew(std::istream& stream, std::size_t count)
         lastid = id;
 
         unsigned long flag = strtol(tokens[1].c_str(), nullptr, 16);
-        StringIDRef sid(new StringID(id, QByteArray(), static_cast<StringID::Flag>(flag)));
+        StringIDRef sid(new StringID(id, Base::ByteBuffer{}, static_cast<StringID::Flag>(flag)));
 
         StringID& d = *sid._sid;
         d._sids.reserve(tokens.size() - 2);
@@ -683,10 +745,12 @@ void StringHasher::restoreStreamNew(std::istream& stream, std::size_t count)
         if (!d.isPostfixed()) {
             asciiStream >> content;
             if (d.isHashed() || d.isBinary()) {
-                d._data = QByteArray::fromBase64(content.c_str());
+                std::string decoded;
+                Base::base64_decode(decoded, content);
+                d._data = Base::ByteBuffer::copy(decoded);
             }
             else {
-                d._data = content.c_str();
+                d._data = Base::ByteBuffer::copy(content);
             }
         }
         else {
@@ -708,18 +772,18 @@ void StringHasher::restoreStreamNew(std::istream& stream, std::size_t count)
                 if (d._sids.size() <= offset) {
                     FC_THROWM(Base::RuntimeError, "Missing string prefix id");
                 }
-                d._data = d._sids[offset]._sid->toString(0).c_str();
+                d._data = Base::ByteBuffer::copy(d._sids[offset]._sid->toString(0));
                 if (d.isPrefixIDIndex()) {
-                    d._data += ":";
+                    d._data.append(":");
                 }
             }
             else {
                 stream >> content;
-                d._data = content.c_str();
+                d._data = Base::ByteBuffer::copy(content);
             }
             if (!d.isPostfixEncoded()) {
                 stream >> content;
-                d._postfix = content.c_str();
+                d._postfix = Base::ByteBuffer::copy(content);
             }
         }
 
@@ -750,12 +814,14 @@ void StringHasher::restoreStream(std::istream& stream, std::size_t count)
         int32_t id = 0;
         uint8_t type = 0;
         stream >> id >> type >> content;
-        StringIDRef sid = new StringID(id, QByteArray(), static_cast<StringID::Flag>(type));
+        StringIDRef sid = new StringID(id, Base::ByteBuffer{}, static_cast<StringID::Flag>(type));
         if (sid.isHashed() || sid.isBinary()) {
-            sid._sid->_data = QByteArray::fromBase64(content.c_str());
+            std::string decoded;
+            Base::base64_decode(decoded, content);
+            sid._sid->_data = Base::ByteBuffer::copy(decoded);
         }
         else {
-            sid._sid->_data = QByteArray(content.c_str());
+            sid._sid->_data = Base::ByteBuffer::copy(content);
         }
         insert(sid);
     }
@@ -831,10 +897,13 @@ void StringHasher::Restore(Base::XMLReader& reader)
             if (hashed || reader.hasAttribute("data")) {
                 const char* value =
                     hashed ? reader.getAttribute<const char*>("hash") : reader.getAttribute<const char*>("data");
-                sid = new StringID(id, QByteArray::fromBase64(value), StringID::Flag::Hashed);
+                std::string decoded;
+                Base::base64_decode(decoded, value, std::strlen(value));
+                sid = new StringID(id, Base::ByteBuffer::copy(decoded), StringID::Flag::Hashed);
             }
             else {
-                sid = new StringID(id, QByteArray(reader.getAttribute<const char*>("text")));
+                const char* text = reader.getAttribute<const char*>("text");
+                sid = new StringID(id, Base::ByteBuffer::copy(text), StringID::Flag::None);
             }
             insert(sid);
         }
