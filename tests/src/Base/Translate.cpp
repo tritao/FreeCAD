@@ -10,6 +10,21 @@
 namespace
 {
 
+PyObject* getTranslateModule()
+{
+    PyObject* module = PyImport_ImportModule("__Translate__");
+    if (module) {
+        return module;
+    }
+
+    PyErr_Clear();
+    static Base::Translate* translateModule = new Base::Translate();  // NOLINT
+    (void)translateModule;
+
+    module = PyImport_ImportModule("__Translate__");
+    return module;
+}
+
 PyObject* callTranslate(PyObject* module, const char* context, const char* source)
 {
     PyObject* func = PyObject_GetAttrString(module, "translate");
@@ -30,9 +45,8 @@ TEST(TranslateModule, TranslateUsesHandlerOrFallback)
     Py_Initialize();
 
     Base::Translation::setTranslateHandler({});
-    Base::Translate mod;
 
-    PyObject* module = PyImport_ImportModule("__Translate__");
+    PyObject* module = getTranslateModule();
     ASSERT_NE(nullptr, module);
 
     PyObject* retA = callTranslate(module, "Ctx", "Hello");
@@ -71,8 +85,7 @@ TEST(TranslateModule, InstallAndRemoveUseHandlers)
         return true;
     });
 
-    Base::Translate mod;
-    PyObject* module = PyImport_ImportModule("__Translate__");
+    PyObject* module = getTranslateModule();
     ASSERT_NE(nullptr, module);
 
     PyObject* funcInstall = PyObject_GetAttrString(module, "installTranslator");
@@ -103,4 +116,3 @@ TEST(TranslateModule, InstallAndRemoveUseHandlers)
     Base::Translation::setInstallTranslatorHandler({});
     Base::Translation::setRemoveTranslatorsHandler({});
 }
-
