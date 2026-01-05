@@ -24,6 +24,7 @@
 #include "Base/Tools.h"
 #include "Base/Unit.h"
 #include "Base/Quantity.h"
+#include "Base/Translation.h"
 #include "Base/UnitsApi.h"
 #include "Base/UnitsSchemasData.h"
 #include "Base/UnitsSchemas.h"
@@ -216,6 +217,22 @@ TEST_F(SchemaTest, internal_1_mm_precision_0)
     const auto expect {"1 mm"};
 
     EXPECT_EQ(result, expect);
+}
+
+TEST_F(SchemaTest, schema_descriptions_use_translation_handler)
+{
+    Base::Translation::setTranslateHandler(
+        [](std::string_view, std::string_view source, std::string_view, int) {
+            return std::string("T(") + std::string(source) + ")";
+        }
+    );
+
+    UnitsSchemas schemas(Base::UnitsSchemasData::unitSchemasDataPack);
+    const auto descriptions = schemas.descriptions();
+    ASSERT_FALSE(descriptions.empty());
+    EXPECT_TRUE(descriptions.front().starts_with("T("));
+
+    Base::Translation::setTranslateHandler({});
 }
 
 TEST_F(SchemaTest, internal_100_mm_precision_0)

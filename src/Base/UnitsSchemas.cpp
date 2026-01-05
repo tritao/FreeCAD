@@ -26,11 +26,10 @@
 #include <string>
 #include <vector>
 
-#include <QCoreApplication>
-
 #include "UnitsSchemas.h"
 #include "Exception.h"
 #include "Quantity.h"
+#include "Translation.h"
 #include "UnitsApi.h"
 #include "UnitsSchema.h"
 #include "UnitsSchemasSpecs.h"
@@ -72,7 +71,7 @@ std::vector<std::string> UnitsSchemas::names()
 std::vector<std::string> UnitsSchemas::descriptions()
 {
     return getVec([](const UnitsSchemaSpec& spec) {
-        return QCoreApplication::translate("UnitsApi", spec.description).toStdString();
+        return Base::Translation::translate("UnitsApi", spec.description);
     });
 }
 
