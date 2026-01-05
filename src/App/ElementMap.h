@@ -32,11 +32,18 @@
 #include "MappedElement.h"
 #include "StringHasher.h"
 
+#include <Base/ByteBuffer.h>
+#include <Base/BytesView.h>
+
 #include <cstring>
 #include <deque>
 #include <functional>
 #include <map>
 #include <memory>
+#include <unordered_map>
+#include <vector>
+
+#include <boost/functional/hash.hpp>
 
 
 namespace Data
@@ -138,7 +145,7 @@ public:
                            std::ostringstream& ss,
                            ElementIDRefs* sids,
                            long masterTag,
-                           const char* postfix = nullptr,
+                           Base::BytesView postfix = {},
                            long tag = 0,
                            bool forceTag = false) const;
 
@@ -183,7 +190,7 @@ public:
         int offset;
         long tag;
         ElementMapPtr elementMap;
-        QByteArray postfix;
+        Base::ByteBuffer postfix;
         ElementIDRefs sids;
 
         // prefix() has been moved to ElementNamingUtils.h
@@ -220,7 +227,7 @@ private:
     void save(std::ostream& stream,
               int index,
               const std::map<const ElementMap*, int>& childMapSet,
-              const std::map<QByteArray, int>& postfixMap) const;
+              const std::map<std::string, int>& postfixMap) const;
 
     /** Deserialize and restore this map.
      * @param hasherRef: where all the StringIDs are stored
@@ -251,9 +258,9 @@ private:
     /** Utility function that adds \c postfix to \c postfixMap, and to \c postfixes
      * if it was not present in the map.
      */
-    static void addPostfix(const QByteArray& postfix,
-                           std::map<QByteArray, int>& postfixMap,
-                           std::vector<QByteArray>& postfixes);
+    static void addPostfix(Base::BytesView postfix,
+                           std::map<std::string, int>& postfixMap,
+                           std::vector<std::string>& postfixes);
 
     /* Note: the original proc passed `ComplexGeoData& master` for getting the `Tag`,
      *   now it just passes `long masterTag`.*/
@@ -283,8 +290,8 @@ private:
 
     void collectChildMaps(std::map<const ElementMap*, int>& childMapSet,
                           std::vector<const ElementMap*>& childMaps,
-                          std::map<QByteArray, int>& postfixMap,
-                          std::vector<QByteArray>& postfixes) const;
+                          std::map<std::string, int>& postfixMap,
+                          std::vector<std::string>& postfixes) const;
 
     struct CStringComp
     {
@@ -312,7 +319,19 @@ private:
         std::map<ElementMap*, int> mapIndices;
     };
 
-    QHash<QByteArray, ChildMapInfo> childElements;
+    struct ByteBufferHash
+    {
+        std::size_t operator()(const Base::ByteBuffer& bytes) const noexcept
+        {
+            return boost::hash_range(
+                std::size_t {0},
+                bytes.data(),
+                bytes.data() + bytes.size()
+            );
+        }
+    };
+
+    std::unordered_map<Base::ByteBuffer, ChildMapInfo, ByteBufferHash> childElements;
     std::size_t childElementSize = 0;
 
     mutable unsigned _id = 0;
