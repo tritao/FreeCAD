@@ -87,6 +87,8 @@
 #include <fmt/format.h>
 
 // Qt -- only QtCore
+#if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
 #include <QString>
+#endif
 
 #endif  // APP_PRECOMPILED_H

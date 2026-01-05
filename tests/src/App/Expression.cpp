@@ -48,22 +48,22 @@ protected:
 // clang-format off
 TEST_F(Expression, tokenize)
 {
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QStringLiteral(""), 10), QString());
+    EXPECT_TRUE(App::ExpressionTokenizer().perform("", 10).empty());
     // 0.0000 deg-
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QString::fromUtf8("0.00000 \xC2\xB0-"), 10), QString());
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QString::fromUtf8("0.00000 \xC2\xB0-s"), 11), QStringLiteral("s"));
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QString::fromUtf8("0.00000 \xC2\xB0-ss"), 12), QStringLiteral("ss"));
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QStringLiteral("0.00000 deg"), 5), QString());
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QStringLiteral("0.00000 deg"), 11), QStringLiteral("deg"));
+    EXPECT_TRUE(App::ExpressionTokenizer().perform("0.00000 \xC2\xB0-", 10).empty());
+    EXPECT_EQ(App::ExpressionTokenizer().perform("0.00000 \xC2\xB0-s", 11), "s");
+    EXPECT_EQ(App::ExpressionTokenizer().perform("0.00000 \xC2\xB0-ss", 12), "ss");
+    EXPECT_TRUE(App::ExpressionTokenizer().perform("0.00000 deg", 5).empty());
+    EXPECT_EQ(App::ExpressionTokenizer().perform("0.00000 deg", 11), "deg");
 }
 
 TEST_F(Expression, tokenizeCompletion)
 {
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QStringLiteral("My Cube"), 7), QStringLiteral("MyCube"));
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QStringLiteral("My Cube0"), 8), QStringLiteral("MyCube0"));
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QStringLiteral("My Cube 0"), 9), QStringLiteral("MyCube0"));
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QStringLiteral("My Cube1"), 8), QStringLiteral("MyCube1"));
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QStringLiteral("My Cube 1"), 9), QStringLiteral("MyCube1"));
+    EXPECT_EQ(App::ExpressionTokenizer().perform("My Cube", 7), "MyCube");
+    EXPECT_EQ(App::ExpressionTokenizer().perform("My Cube0", 8), "MyCube0");
+    EXPECT_EQ(App::ExpressionTokenizer().perform("My Cube 0", 9), "MyCube0");
+    EXPECT_EQ(App::ExpressionTokenizer().perform("My Cube1", 8), "MyCube1");
+    EXPECT_EQ(App::ExpressionTokenizer().perform("My Cube 1", 9), "MyCube1");
 }
 
 TEST_F(Expression, tokenizeQuantity)
@@ -298,13 +298,13 @@ TEST_F(Expression, tokenizeNeg)
 
 TEST_F(Expression, tokenizePi_rad)
 {
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QStringLiteral("p"), 1), QStringLiteral("p"));
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QStringLiteral("pi"), 2), QString());
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QStringLiteral("pi "), 3), QString());
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QStringLiteral("pi r"), 4), QStringLiteral("r"));
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QStringLiteral("pi ra"), 5), QStringLiteral("ra"));
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QStringLiteral("pi rad"), 6), QStringLiteral("rad"));
-    EXPECT_EQ(App::ExpressionTokenizer().perform(QStringLiteral("pi rad"), 2), QString());
+    EXPECT_EQ(App::ExpressionTokenizer().perform("p", 1), "p");
+    EXPECT_TRUE(App::ExpressionTokenizer().perform("pi", 2).empty());
+    EXPECT_TRUE(App::ExpressionTokenizer().perform("pi ", 3).empty());
+    EXPECT_EQ(App::ExpressionTokenizer().perform("pi r", 4), "r");
+    EXPECT_EQ(App::ExpressionTokenizer().perform("pi ra", 5), "ra");
+    EXPECT_EQ(App::ExpressionTokenizer().perform("pi rad", 6), "rad");
+    EXPECT_TRUE(App::ExpressionTokenizer().perform("pi rad", 2).empty());
 }
 
 TEST_F(Expression, toString)
