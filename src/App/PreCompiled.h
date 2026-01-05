@@ -87,9 +87,6 @@
 #include <fmt/format.h>
 
 // Qt -- only QtCore
-#include <QDir>
-#include <QProcessEnvironment>
-#include <QStandardPaths>
 #include <QString>
 
 #endif  // APP_PRECOMPILED_H
