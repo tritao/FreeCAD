@@ -2638,8 +2638,10 @@ void Application::initConfig(int argc, char ** argv)
     else
         _pConsoleObserverFile = nullptr;
 
+#if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
     App::installConsoleQtBridge();
     App::installTranslationQtBridge();
+#endif
 
     // Banner ===========================================================
     if (mConfig["RunMode"] != "Cmd" && !(vm.contains("verbose") && vm.contains("version"))) {
