@@ -26,14 +26,10 @@
 #ifndef APP_BRANDING_H
 #define APP_BRANDING_H
 
+#include <filesystem>
+#include <map>
 #include <string>
-#include <QDomDocument>
-#include <QMap>
-#include <QString>
-#include <QVector>
-
-
-class QIODevice;
+#include <unordered_set>
 
 namespace App
 {
@@ -41,16 +37,15 @@ namespace App
 class Branding
 {
 public:
-    using XmlConfig = QMap<std::string, std::string>;
+    using XmlConfig = std::map<std::string, std::string>;
     Branding();
 
-    bool readFile(const QString& fn);
-    XmlConfig getUserDefines() const;
+    bool readFile(const std::filesystem::path& filePath);
+    const XmlConfig& getUserDefines() const;
 
 private:
-    QVector<std::string> filter;
-    bool evaluateXML(QIODevice* device, QDomDocument& xmlDocument);
-    QDomDocument domDocument;
+    std::unordered_set<std::string> filter;
+    XmlConfig userDefines;
 };
 
 }  // namespace App
