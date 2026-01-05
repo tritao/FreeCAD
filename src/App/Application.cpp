@@ -72,6 +72,7 @@
 #include <Base/PlatformPaths.h>
 #include <Base/ServiceProvider.h>
 #include <Base/CoordinateSystemPy.h>
+#include <Base/Translation.h>
 #include <Base/Exception.h>
 #include <Base/ExceptionFactory.h>
 #include <Base/FileInfo.h>
@@ -453,7 +454,7 @@ Document* Application::newDocument(const char * proposedName, const char * propo
         label = proposedLabel;
     }
     else {
-        label = isUsingDefaultName ? QObject::tr("Unnamed").toStdString() : proposedName;
+        label = isUsingDefaultName ? Base::Translation::translate("QObject", "Unnamed") : proposedName;
 
         if (!DocMap.empty()) {
             // The assumption here is that there are not many documents and

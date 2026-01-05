@@ -28,7 +28,7 @@
 
 #include "GeoFeature.h"
 #include "GeoFeatureGroupExtension.h"
-#include "QCoreApplication"
+#include "TranslationHelpers.h"
 
 namespace Base
 {
@@ -107,9 +107,10 @@ public:
 class AppExport LocalCoordinateSystem: public App::GeoFeature, public App::GeoFeatureGroupExtension
 {
     PROPERTY_HEADER_WITH_EXTENSIONS(App::LocalCoordinateSystem);
-    Q_DECLARE_TR_FUNCTIONS(App::LocalCoordinateSystem)
 
 public:
+    FC_APP_DECLARE_TR_FUNCTIONS("App::LocalCoordinateSystem")
+
     /// Constructor
     LocalCoordinateSystem();
     ~LocalCoordinateSystem() override;
@@ -242,7 +243,7 @@ private:
     {
         Base::Type type;
         const char* role = nullptr;
-        QString label;
+        std::string label;
         Base::Rotation rot;
     };
     static const std::vector<SetupData>& getSetupData();

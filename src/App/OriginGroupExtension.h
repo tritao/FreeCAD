@@ -26,7 +26,7 @@
 #define ORIGINGROUP_H_QHTU73IF
 
 #include "GeoFeatureGroupExtension.h"
-#include "QCoreApplication"
+#include "TranslationHelpers.h"
 
 namespace App
 {
@@ -38,9 +38,10 @@ class Origin;
 class AppExport OriginGroupExtension: public App::GeoFeatureGroupExtension
 {
     EXTENSION_PROPERTY_HEADER_WITH_OVERRIDE(App::OriginGroupExtension);
-    Q_DECLARE_TR_FUNCTIONS(App::OriginGroupExtension)
 
 public:
+    FC_APP_DECLARE_TR_FUNCTIONS("App::OriginGroupExtension")
+
     OriginGroupExtension();
     ~OriginGroupExtension() override;
 
