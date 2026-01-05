@@ -30,6 +30,7 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 
+#include <Base/BytesView.h>
 #include <QByteArray>
 #include <QHash>
 #include <QVector>
@@ -610,7 +611,7 @@ public:
     IndexedName toIndexedName() const
     {
         if (this->postfix.isEmpty()) {
-            return IndexedName(this->data);
+            return IndexedName(Base::BytesView(this->data.constData(), this->data.size()));
         }
         return IndexedName();
     }
