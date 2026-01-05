@@ -54,6 +54,8 @@
 #include <Gui/Application.h>
 #include <Gui/ProgramInformation.h>
 
+#include <Gui/VerboseInfoQt.h>
+
 
 void PrintInitHelp();
 

@@ -46,6 +46,7 @@
 #include <Base/Interpreter.h>
 #include <CXX/WrapPython.h>
 #include <Gui/Application.h>
+#include <Gui/VerboseInfoQt.h>
 
 #include <filesystem>
 #include <LibraryVersions.h>
