@@ -46,6 +46,7 @@
 #include <Base/Interpreter.h>
 #include <CXX/WrapPython.h>
 #include <Gui/Application.h>
+#include <Gui/VerboseInfoQt.h>
 
 #include <filesystem>
 #include <LibraryVersions.h>
@@ -62,7 +63,6 @@ using namespace Gui::Dialog;
 namespace fs = std::filesystem;
 
 // ------------------------------------------------------------------------------
-
 AboutDialogFactory* AboutDialogFactory::factory = nullptr;
 
 AboutDialogFactory::~AboutDialogFactory() = default;
