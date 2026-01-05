@@ -23,31 +23,50 @@
  *                                                                         *
  ***************************************************************************/
 
-
-#include <QTemporaryDir>
+#include <cstdint>
+#include <filesystem>
+#include <string>
+#include <system_error>
 
 #include "Application.h"
 #include "FCConfig.h"
 
 #include "SafeMode.h"
 
-static QTemporaryDir* tempDir = nullptr;
+namespace fs = std::filesystem;
+
+static fs::path tempDir;
 
 static bool _createTemporaryBaseDir()
 {
-    tempDir = new QTemporaryDir();
-    if (!tempDir->isValid()) {
-        delete tempDir;
-        tempDir = nullptr;
+    std::error_code error;
+    const fs::path base = fs::temp_directory_path(error);
+    if (error) {
+        return false;
     }
-    return tempDir;
+
+    auto suffix = static_cast<std::uint64_t>(App::Application::uniqueInstanceId());
+
+    for (int attempt = 0; attempt < 64; ++attempt) {
+        fs::path candidate = base / ("FreeCADSafeMode-" + std::to_string(suffix));
+        if (fs::create_directory(candidate, error) && !error) {
+            tempDir = std::move(candidate);
+            return true;
+        }
+        error.clear();
+        suffix ^= suffix << 7U;
+        suffix ^= suffix >> 9U;
+        suffix += static_cast<std::uint64_t>(attempt) + 1U;
+    }
+
+    return false;
 }
 
 static void _replaceDirs()
 {
     auto& config = App::GetApplication().Config();
 
-    auto const temp_base = tempDir->path().toStdString();
+    auto const temp_base = tempDir.string();
     auto const dirs = {
         "UserAppData",
         "UserConfigPath",
@@ -58,10 +77,10 @@ static void _replaceDirs()
     };
 
     for (auto const d : dirs) {
-        auto const path = temp_base + "/" + d + "/";
-        auto const qpath = QDir::cleanPath(QString::fromStdString(path));
-        QDir().mkpath(qpath);
-        config[d] = QDir::toNativeSeparators(qpath).toStdString();
+        auto const path = temp_base + PATHSEP + d + PATHSEP;
+        std::error_code error;
+        fs::create_directories(fs::path(temp_base) / d, error);
+        config[d] = path;
     }
 }
 
@@ -74,10 +93,15 @@ void SafeMode::StartSafeMode()
 
 bool SafeMode::SafeModeEnabled()
 {
-    return tempDir;
+    return !tempDir.empty();
 }
 
 void SafeMode::Destruct()
 {
-    delete tempDir;
+    if (tempDir.empty()) {
+        return;
+    }
+    std::error_code error;
+    fs::remove_all(tempDir, error);
+    tempDir.clear();
 }
