@@ -153,9 +153,9 @@ using PyMethodDef = struct PyMethodDef;
  * FC_LOG_INSTANCE.refresh = true; // refresh GUI after each log
  * \endcode
  *
- * Be careful with 'refresh' option. Its current implementation calls
- * QCoreApplication::sendPostedEvent() which may cause some unexpected
- * behavior, especially when called inside a destructor.
+ * Be careful with 'refresh' option. Its behavior depends on the installed refresh handler
+ * (if any). In GUI builds, this may pump an event loop to keep the UI responsive; avoid using it
+ * from destructors or background threads unless you control the handler semantics.
  *
  * The actual logging macros are
  *
