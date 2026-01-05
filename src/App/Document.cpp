@@ -46,8 +46,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <QCryptographicHash>
-#include <QCoreApplication>
+#include <array>
+#include <boost/uuid/detail/sha1.hpp>
 
 #include <FCConfig.h>
 
@@ -968,14 +968,31 @@ std::string Document::getTransientDirectoryName(const std::string& uuid,
 {
     // Create a directory name of the form: {ExeName}_Doc_{UUID}_{HASH}_{PID}
     std::stringstream out;
-    QCryptographicHash hash(QCryptographicHash::Sha1);
-#if QT_VERSION < QT_VERSION_CHECK(6, 3, 0)
-    hash.addData(filename.c_str(), filename.size());
-#else
-    hash.addData(QByteArrayView(filename.c_str(), filename.size()));
-#endif
+    boost::uuids::detail::sha1 sha1;
+    sha1.process_bytes(filename.data(), filename.size());
+
+    unsigned int digestWords[5] {};
+    sha1.get_digest(digestWords);
+
+    std::array<unsigned char, 20> digestBytes {};
+    for (int i = 0; i < 5; ++i) {
+        digestBytes[i * 4 + 0] = static_cast<unsigned char>((digestWords[i] >> 24) & 0xFF);
+        digestBytes[i * 4 + 1] = static_cast<unsigned char>((digestWords[i] >> 16) & 0xFF);
+        digestBytes[i * 4 + 2] = static_cast<unsigned char>((digestWords[i] >> 8) & 0xFF);
+        digestBytes[i * 4 + 3] = static_cast<unsigned char>((digestWords[i] >> 0) & 0xFF);
+    }
+
+    auto hexChar = [](unsigned char nibble) -> char {
+        return nibble < 10 ? static_cast<char>('0' + nibble) : static_cast<char>('a' + (nibble - 10));
+    };
+
+    std::array<char, 6> hashPrefix {};
+    for (int i = 0; i < 3; ++i) {
+        hashPrefix[i * 2 + 0] = hexChar(static_cast<unsigned char>((digestBytes[i] >> 4) & 0x0F));
+        hashPrefix[i * 2 + 1] = hexChar(static_cast<unsigned char>((digestBytes[i] >> 0) & 0x0F));
+    }
     out << Application::getUserCachePath() << Application::getExecutableName() << "_Doc_"
-        << uuid << "_" << hash.result().toHex().left(6).constData() << "_"
+        << uuid << "_" << std::string(hashPrefix.data(), hashPrefix.size()) << "_"
         << Application::applicationPid();
     return out.str();
 }
