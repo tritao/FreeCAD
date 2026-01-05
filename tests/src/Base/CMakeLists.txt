@@ -9,6 +9,7 @@ add_executable(Base_tests_run
         DualNumber.cpp
         DualQuaternion.cpp
         FileInfo.cpp
+        InputSource.cpp
         Handle.cpp
         Matrix.cpp
         Parameter.cpp
