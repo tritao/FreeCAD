@@ -24,15 +24,18 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cstring>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/functional/hash.hpp>
 
+#include <Base/ByteBuffer.h>
 #include <Base/BytesView.h>
-#include <QByteArray>
-#include <QHash>
-#include <QVector>
 #include <utility>
 
 #include "ElementNamingUtils.h"
@@ -59,43 +62,53 @@ namespace Data
 class AppExport MappedName
 {
 public:
-    /**
-     * @brief Create a MappedName from a C string.
-     *
-     * Create a MappedName from a C string, optionally prefixed by an element
-     * map prefix, which will be omitted from the stored MappedName.
-     *
-     * @param[in] name The new name. A deep copy is made.
-     * @param[in] size Optional, the length of the name string. If not
-     * provided, the string must be null-terminated.
-     */
-    explicit MappedName(const char* name, int size = -1);
+    /// Create a MappedName from a C string, optionally prefixed by an element map prefix, which
+    /// will be omitted from the stored MappedName.
+    ///
+    /// \param name The new name. A deep copy is made.
+    /// \param size Optional, the length of the name string. If not provided, the string must be
+    /// null-terminated.
+    explicit MappedName(const char* name, int size = -1)
+    {
+        if (!name) {
+            return;
+        }
+        if (boost::starts_with(name, ELEMENT_MAP_PREFIX)) {
+            name += ELEMENT_MAP_PREFIX_SIZE;
+        }
 
-    /**
-     * @brief Create a MappedName from a C++ std::string.
-     *
-     * Create a MappedName from a C++ std::string, optionally prefixed by an
-     * element map prefix, which will be omitted from the stored MappedName.
-     *
-     * @param nameString The new name. A deep copy is made.
-     */
-    explicit MappedName(const std::string& nameString);
+        if (size < 0) {
+            size = static_cast<int>(std::strlen(name));
+        }
+        data = Base::ByteBuffer::copy(Base::BytesView(name, static_cast<std::size_t>(size)));
+    }
 
-    /**
-     * @brief Create a MappedName from an IndexedName.
-     *
-     * Create a MappedName from an IndexedName. If non-zero, the numerical part
-     * of the IndexedName is appended as text to the MappedName. In that case
-     * the memory is *not* shared between the original IndexedName and the
-     * MappedName.
-     */
+    /// Create a MappedName from a C++ std::string, optionally prefixed by an element map prefix,
+    /// which will be omitted from the stored MappedName.
+    ///
+    /// \param name The new name. A deep copy is made.
+    explicit MappedName(const std::string& nameString)
+    {
+        auto size = nameString.size();
+        const char* name = nameString.c_str();
+        if (boost::starts_with(nameString, ELEMENT_MAP_PREFIX)) {
+            name += ELEMENT_MAP_PREFIX_SIZE;
+            size -= ELEMENT_MAP_PREFIX_SIZE;
+        }
+        data = Base::ByteBuffer::copy(Base::BytesView(name, size));
+    }
+
+    /// Create a MappedName from an IndexedName. If non-zero, the numerical part of the IndexedName
+    /// is appended as text to the MappedName. In that case the memory is *not* shared between the
+    /// original IndexedName and the MappedName.
     explicit MappedName(const IndexedName& element)
-        : data(QByteArray::fromRawData(element.getType(),
-                                       static_cast<int>(qstrlen(element.getType()))))
+        : data(Base::ByteBuffer::borrow(
+              Base::BytesView(element.getType(), std::strlen(element.getType()))
+          ))
         , raw(true)
     {
         if (element.getIndex() > 0) {
-            this->data += QByteArray::number(element.getIndex());
+            this->data.append(std::to_string(element.getIndex()));
             this->raw = false;
         }
     }
@@ -103,11 +116,10 @@ public:
 
     /// Create a MappedName from a StringIdRef.
     explicit MappedName(const App::StringIDRef& sid)
-        : raw(false)
     {
         Base::ByteBuffer bytes;
         sid.toBytes(bytes);
-        this->data = QByteArray(bytes.data(), static_cast<int>(bytes.size()));
+        this->data = std::move(bytes);
     }
 
     MappedName()
@@ -130,7 +142,6 @@ public:
      * and start positions
      */
     MappedName(const MappedName& other, int startPosition, int size = -1)
-        : raw(false)
     {
         append(other, startPosition, size);
     }
@@ -144,10 +155,13 @@ public:
      * @param postfix The postfix for the new MappedName.
      */
     MappedName(const MappedName& other, const char* postfix)
-        : data(other.data + other.postfix)
-        , postfix(postfix)
-        , raw(false)
-    {}
+        : data(other.toBytes())
+    {
+        if (postfix) {
+            this->postfix = Base::ByteBuffer::copy(postfix);
+        }
+        this->raw = false;
+    }
 
     MappedName(MappedName&& other) noexcept
         : data(std::move(other.data))
@@ -172,26 +186,22 @@ public:
     {
         MappedName res;
         if (name) {
-            res.data =
-                QByteArray::fromRawData(name, size >= 0 ? size : static_cast<int>(qstrlen(name)));
+            if (size < 0) {
+                size = static_cast<int>(std::strlen(name));
+            }
+            res.data = Base::ByteBuffer::borrow(
+                Base::BytesView(name, static_cast<std::size_t>(size))
+            );
             res.raw = true;
         }
         return res;
     }
 
-    /**
-     * @brief Construct a MappedName from QByteArray data.
-     *
-     * Construct a MappedName from QByteArray data (including any embedded null characters).
-     *
-     * @param[in] data The original data. No copy is made, the data is shared
-     * with the other instance.
-     *
-     * @return a new MappedName with data as its data.
-     */
-    static MappedName fromRawData(const QByteArray& data)
+    /// Construct a MappedName from a byte view (including any embedded null characters).
+    /// No copy is made: the returned object borrows the provided memory.
+    static MappedName fromRawData(Base::BytesView bytes)
     {
-        return fromRawData(data.constData(), data.size());
+        return fromRawData(bytes.data(), static_cast<int>(bytes.size()));
     }
 
     /**
@@ -219,7 +229,7 @@ public:
             return {};
         }
 
-        if (startPosition >= other.data.size()) {
+        if (startPosition >= static_cast<int>(other.data.size())) {
             return {other, startPosition, size};
         }
 
@@ -229,18 +239,26 @@ public:
             size = other.size() - startPosition;
         }
 
-        if (size < other.data.size() - startPosition) {
-            res.data = QByteArray::fromRawData(other.data.constData() + startPosition, size);
+        const int dataSize = static_cast<int>(other.data.size());
+        if (size < dataSize - startPosition) {
+            res.data = Base::ByteBuffer::borrow(
+                Base::BytesView(other.data.data() + startPosition, static_cast<std::size_t>(size))
+            );
         }
         else {
-            res.data = QByteArray::fromRawData(other.data.constData() + startPosition,
-                                               other.data.size() - startPosition);
-            size -= other.data.size() - startPosition;
-            if (size == other.postfix.size()) {
+            res.data = Base::ByteBuffer::borrow(
+                Base::BytesView(other.data.data() + startPosition,
+                                static_cast<std::size_t>(dataSize - startPosition))
+            );
+            size -= dataSize - startPosition;
+            const int postfixSize = static_cast<int>(other.postfix.size());
+            if (size == postfixSize) {
                 res.postfix = other.postfix;
             }
             else if (size != 0) {
-                res.postfix.append(other.postfix.constData(), size);
+                res.postfix = Base::ByteBuffer::borrow(
+                    Base::BytesView(other.postfix.data(), static_cast<std::size_t>(size))
+                );
             }
         }
         return res;
@@ -280,8 +298,9 @@ public:
      */
     friend std::ostream& operator<<(std::ostream& stream, const MappedName& mappedName)
     {
-        stream.write(mappedName.data.constData(), mappedName.data.size());
-        stream.write(mappedName.postfix.constData(), mappedName.postfix.size());
+        stream.write(mappedName.data.data(), static_cast<std::streamsize>(mappedName.data.size()));
+        stream.write(mappedName.postfix.data(),
+                     static_cast<std::streamsize>(mappedName.postfix.size()));
         return stream;
     }
 
@@ -303,21 +322,25 @@ public:
         const auto& smaller = this->data.size() < other.data.size() ? *this : other;
         const auto& larger = this->data.size() < other.data.size() ? other : *this;
 
-        if (!larger.data.startsWith(smaller.data)) {
+        if (!bytesStartsWith(larger.data.view(), smaller.data.view())) {
             return false;
         }
 
-        QByteArray tmp = QByteArray::fromRawData(larger.data.constData() + smaller.data.size(),
-                                                 larger.data.size() - smaller.data.size());
+        Base::BytesView tmp = Base::BytesView(
+            larger.data.data() + smaller.data.size(),
+            larger.data.size() - smaller.data.size()
+        );
 
-        if (!smaller.postfix.startsWith(tmp)) {
+        if (!bytesStartsWith(smaller.postfix.view(), tmp)) {
             return false;
         }
 
-        tmp = QByteArray::fromRawData(smaller.postfix.constData() + tmp.size(),
-                                      smaller.postfix.size() - tmp.size());
+        Base::BytesView remaining = Base::BytesView(
+            smaller.postfix.data() + tmp.size(),
+            smaller.postfix.size() - tmp.size()
+        );
 
-        return tmp == larger.postfix;
+        return remaining == larger.postfix.view();
     }
 
     /// Check if two mapped names are inequal.
@@ -366,36 +389,25 @@ public:
         return res;
     }
 
-    /**
-     * @brief Concatenate two mapped names.
-     *
-     * @param[in] other The mapped name as a QByteArray.
-     *
-     * @return A new MappedName whose data is the LHS argument's data and whose
-     * postfix is the LHS argument's postfix with the RHS argument appended to
-     * it.
-     */
-    MappedName operator+(const QByteArray& other) const
+    /// Returns a new MappedName whose postfix is appended with the RHS bytes.
+    MappedName operator+(Base::BytesView other) const
     {
         MappedName res(*this);
         res += other;
         return res;
     }
 
-    /**
-     * @brief Appends other to this instance's postfix.
-     *
-     * @p other must be a null-terminated C string. The character data from the
-     * string is copied.
-     *
-     * @param[in] other The mapped name as a string.
-     *
-     * @return This with the other's postfix appended.
-     */
+    MappedName operator+(const Base::ByteBuffer& other) const
+    {
+        return (*this) + other.view();
+    }
+
+    /// Appends other to this instance's postfix. other must be a null-terminated C string. The
+    /// character data from the string is copied.
     MappedName& operator+=(const char* other)
     {
         if (other && (other[0] != 0)) {
-            this->postfix.append(other, static_cast<int>(qstrlen(other)));
+            this->postfix.append(other);
         }
         return *this;
     }
@@ -404,39 +416,26 @@ public:
     MappedName& operator+=(const std::string& other)
     {
         if (!other.empty()) {
-            this->postfix.reserve(this->postfix.size() + static_cast<int>(other.size()));
-            this->postfix.append(other.c_str(), static_cast<int>(other.size()));
+            this->postfix.reserve(this->postfix.size() + other.size());
+            this->postfix.append(other);
         }
         return *this;
     }
 
-    /**
-     * @brief Appends other to this instance's postfix.
-     *
-     * The data may be either copied or shared, depending on whether
-     * this->postfix is empty (in which case the data is shared) or non-empty
-     * (in which case it is copied).
-     *
-     * @param[in] other The mapped name as a QByteArray.
-     * @return This with the other's data appended.
-     */
-    MappedName& operator+=(const QByteArray& other)
+    MappedName& operator+=(Base::BytesView other)
     {
-        this->postfix += other;
+        this->postfix.append(other);
         return *this;
     }
 
-    /**
-     * @brief Appends other to this instance's postfix.
-     *
-     * Appends other to this instance's postfix, unless this is empty, in which
-     * case this acts like operator=, and makes this instance's data equal to
-     * other's data, and this instance's postfix equal to the other instance's
-     * postfix.
-     *
-     * @param[in] other The mapped name to append.
-     * @return This with the other's data appended.
-     */
+    MappedName& operator+=(const Base::ByteBuffer& other)
+    {
+        return (*this) += other.view();
+    }
+
+    /// Appends other to this instance's postfix, unless this is empty, in which case this acts
+    /// like operator=, and makes this instance's data equal to other's data, and this instance's
+    /// postfix equal to the other instance's postfix.
     MappedName& operator+=(const MappedName& other)
     {
         append(other);
@@ -458,13 +457,16 @@ public:
     {
         if (dataToAppend && (size != 0)) {
             if (size < 0) {
-                size = static_cast<int>(qstrlen(dataToAppend));
+                size = static_cast<int>(std::strlen(dataToAppend));
             }
             if (empty()) {
-                this->data.append(dataToAppend, size);
+                this->data = Base::ByteBuffer::copy(
+                    Base::BytesView(dataToAppend, static_cast<std::size_t>(size))
+                );
+                this->raw = false;
             }
             else {
-                this->postfix.append(dataToAppend, size);
+                this->postfix.append(Base::BytesView(dataToAppend, static_cast<std::size_t>(size)));
             }
         }
     }
@@ -509,21 +511,24 @@ public:
         }
 
 
-        if (startPosition < other.data.size())  // if starting inside data
+        const int otherDataSize = static_cast<int>(other.data.size());
+        const int otherPostfixSize = static_cast<int>(other.postfix.size());
+
+        if (startPosition < otherDataSize)  // if starting inside data
         {
             int count = size;
             // make sure count doesn't exceed data size and end up in postfix
-            if (count > other.data.size() - startPosition) {
-                count = other.data.size() - startPosition;
+            if (count > otherDataSize - startPosition) {
+                count = otherDataSize - startPosition;
             }
 
             // if this is empty append in data else append in postfix
-            if (startPosition == 0 && count == other.data.size() && this->empty()) {
+            if (startPosition == 0 && count == otherDataSize && this->empty()) {
                 this->data = other.data;
                 this->raw = other.raw;
             }
             else {
-                append(other.data.constData() + startPosition, count);
+                append(other.data.data() + startPosition, count);
             }
 
             // setup startPosition and count to continue appending the remainder to postfix
@@ -532,24 +537,25 @@ public:
         }
         else  // else starting inside postfix
         {
-            startPosition -= other.data.size();
+            startPosition -= otherDataSize;
         }
 
         // if there is still data to be added to postfix
         if (size != 0) {
-            if (startPosition == 0 && size == other.postfix.size()) {
+            if (startPosition == 0 && size == otherPostfixSize) {
                 if (this->empty()) {
                     this->data = other.postfix;
+                    this->raw = other.raw;
                 }
-                else if (this->postfix.isEmpty()) {
+                else if (this->postfix.empty()) {
                     this->postfix = other.postfix;
                 }
                 else {
-                    this->postfix += other.postfix;
+                    this->postfix.append(other.postfix.view());
                 }
             }
             else {
-                append(other.postfix.constData() + startPosition, size);
+                append(other.postfix.data() + startPosition, size);
             }
         }
     }
@@ -611,15 +617,16 @@ public:
             len = count - startPosition;
         }
         buffer.reserve(buffer.size() + len);
-        if (startPosition < this->data.size()) {
-            count = this->data.size() - startPosition;
+        const int dataSize = static_cast<int>(this->data.size());
+        if (startPosition < dataSize) {
+            count = dataSize - startPosition;
             if (len < count) {
                 count = len;
             }
-            buffer.append(this->data.constData() + startPosition, count);
+            buffer.append(this->data.data() + startPosition, count);
             len -= count;
         }
-        buffer.append(this->postfix.constData(), len);
+        buffer.append(this->postfix.data(), len);
         return buffer.c_str() + offset;
     }
 
@@ -630,38 +637,32 @@ public:
         if (offset < 0) {
             offset = 0;
         }
-        if (offset > this->data.size()) {
-            offset -= this->data.size();
-            if (offset > this->postfix.size()) {
+        const int dataSize = static_cast<int>(this->data.size());
+        const int postfixSize = static_cast<int>(this->postfix.size());
+        if (offset > dataSize) {
+            offset -= dataSize;
+            if (offset > postfixSize) {
                 size = 0;
                 return "";
             }
-            size = this->postfix.size() - offset;
-            return this->postfix.constData() + offset;
+            size = postfixSize - offset;
+            return this->postfix.data() + offset;
         }
-        size = this->data.size() - offset;
-        return this->data.constData() + offset;
+        size = dataSize - offset;
+        return this->data.data() + offset;
     }
 
-    /**
-     * @brief Convert this mapped name to raw bytes.
-     *
-     * Get access to raw byte data. When possible, data is shared between this
-     * instance and the returned QByteArray. If the combination of offset and
-     * size results in data that crosses the boundary between this->data and
-     * this->postfix, the data must be copied in order to provide access as a
-     * continuous array of bytes.
-     *
-     * @param[in] offset The start position of the raw data access.
-     *
-     * @param[in] size The number of bytes to access. If omitted, the resulting
-     * QByteArray includes everything starting from offset to the end,
-     * including any postfix data.
-     *
-     * @return A new QByteArray that shares data with this instance if
-     * possible, or is a new copy if required by offset and size.
-     */
-    QByteArray toRawBytes(int offset = 0, int size = -1) const
+    /// Get access to raw byte data. When possible, data is borrowed from this instance.
+    /// If the combination of offset and size results in data that crosses the
+    /// boundary between this->data and this->postfix, the data must be copied in order to provide
+    /// access as a continuous array of bytes.
+    ///
+    /// \param offset The start position of the raw data access.
+    /// \param size The number of bytes to access. If omitted, the resulting QByteArray includes
+    /// everything starting from offset to the end, including any postfix data.
+    /// \return A new buffer that borrows from this instance if possible, or is a new copy if
+    /// required by offset and size.
+    Base::ByteBuffer toRawBytes(int offset = 0, int size = -1) const
     {
         if (offset < 0) {
             offset = 0;
@@ -672,58 +673,61 @@ public:
         if (size < 0 || size > this->size() - offset) {
             size = this->size() - offset;
         }
-        if (offset >= this->data.size()) {
-            offset -= this->data.size();
-            return QByteArray::fromRawData(this->postfix.constData() + offset, size);
+        const int dataSize = static_cast<int>(this->data.size());
+        if (offset >= dataSize) {
+            offset -= dataSize;
+            return Base::ByteBuffer::borrow(
+                Base::BytesView(this->postfix.data() + offset, static_cast<std::size_t>(size))
+            );
         }
-        if (size <= this->data.size() - offset) {
-            return QByteArray::fromRawData(this->data.constData() + offset, size);
+        if (size <= dataSize - offset) {
+            return Base::ByteBuffer::borrow(
+                Base::BytesView(this->data.data() + offset, static_cast<std::size_t>(size))
+            );
         }
 
-        QByteArray res(this->data.constData() + offset, this->data.size() - offset);
-        res.append(this->postfix.constData(), size - this->data.size() + offset);
+        Base::ByteBuffer res = Base::ByteBuffer::copy(
+            Base::BytesView(this->data.data() + offset,
+                            static_cast<std::size_t>(dataSize - offset))
+        );
+        const int remaining = size - (dataSize - offset);
+        res.append(Base::BytesView(this->postfix.data(), static_cast<std::size_t>(remaining)));
         return res;
     }
 
-    /// Direct access to the stored QByteArray of data. A copy is never made.
-    const QByteArray& dataBytes() const
+    /// Direct access to the stored data bytes (no copy).
+    Base::BytesView dataBytes() const
     {
-        return this->data;
+        return this->data.view();
     }
 
-    /// Direct access to the stored QByteArray of postfix. A copy is never made.
-    const QByteArray& postfixBytes() const
+    /// Direct access to the stored postfix bytes (no copy).
+    Base::BytesView postfixBytes() const
     {
-        return this->postfix;
+        return this->postfix.view();
     }
 
     /// Convenience function providing access to the pointer to the beginning of the postfix data.
     const char* constPostfix() const
     {
-        return this->postfix.constData();
+        return this->postfix.data();
     }
 
     // No constData() because 'data' is allowed to contain raw data, which may not end with 0.
 
-    /**
-     * @brief Provide access to the content of this instance.
-     *
-     * If either postfix or data is empty, no copy is made and the original
-     * QByteArray is returned, sharing data with this instance. If this
-     * instance contains both data and postfix, a new QByteArray is created and
-     * stores a copy of the data and postfix concatenated together.
-     *
-     * @return Either a new or the current QByteArray.
-     */
-    QByteArray toBytes() const
+    /// Provide access to the content of this instance as a single buffer.
+    /// If either postfix or data is empty, no copy is made and the original buffer is returned.
+    Base::ByteBuffer toBytes() const
     {
-        if (this->postfix.isEmpty()) {
+        if (this->postfix.empty()) {
             return this->data;
         }
-        if (this->data.isEmpty()) {
+        if (this->data.empty()) {
             return this->postfix;
         }
-        return this->data + this->postfix;
+        Base::ByteBuffer res = Base::ByteBuffer::copy(this->data.view());
+        res.append(this->postfix.view());
+        return res;
     }
 
     /**
@@ -741,8 +745,8 @@ public:
      */
     IndexedName toIndexedName() const
     {
-        if (this->postfix.isEmpty()) {
-            return IndexedName(Base::BytesView(this->data.constData(), this->data.size()));
+        if (this->postfix.empty()) {
+            return IndexedName(Base::BytesView(this->data.data(), this->data.size()));
         }
         return IndexedName();
     }
@@ -838,16 +842,26 @@ public:
      */
     char operator[](int index) const
     {
+        if (this->empty()) {
+            return '\0';
+        }
         if (index < 0) {
             index = 0;
         }
-        if (index >= this->data.size()) {
-            if (index - this->data.size() > this->postfix.size() - 1) {
-                index = this->postfix.size() - 1;
+        const std::size_t dataSize = this->data.size();
+        const std::size_t postfixSize = this->postfix.size();
+        std::size_t idx = static_cast<std::size_t>(index);
+        if (idx >= dataSize) {
+            if (postfixSize == 0U) {
+                return this->data.data()[dataSize - 1U];
             }
-            return this->postfix[index - this->data.size()];
+            idx -= dataSize;
+            if (idx >= postfixSize) {
+                idx = postfixSize - 1U;
+            }
+            return this->postfix.data()[idx];
         }
-        return this->data[index];
+        return this->data.data()[idx];
     }
 
     /**
@@ -860,7 +874,7 @@ public:
      */
     int size() const
     {
-        return this->data.size() + this->postfix.size();
+        return static_cast<int>(this->data.size() + this->postfix.size());
     }
 
     /**
@@ -873,7 +887,7 @@ public:
      */
     bool empty() const
     {
-        return this->data.isEmpty() && this->postfix.isEmpty();
+        return this->data.empty() && this->postfix.empty();
     }
 
     /**
@@ -902,8 +916,9 @@ public:
             return *this;
         }
         MappedName res;
-        res.data.append(this->data.constData(), this->data.size());
+        res.data = Base::ByteBuffer::copy(this->data.view());
         res.postfix = this->postfix;
+        res.raw = false;
         return res;
     }
 
@@ -951,24 +966,26 @@ public:
         if (!searchTarget) {
             return -1;
         }
+        const Base::BytesView needle(searchTarget);
         if (startPosition < 0) {
             startPosition = 0;
         }
-        if (startPosition < this->data.size()) {
-            int res = this->data.indexOf(searchTarget, startPosition);
-            if (res >= 0) {
-                return res;
+        const std::size_t dataSize = this->data.size();
+        if (static_cast<std::size_t>(startPosition) < dataSize) {
+            const std::size_t found = this->data.view().find(needle, static_cast<std::size_t>(startPosition));
+            if (found != Base::BytesView::npos) {
+                return static_cast<int>(found);
             }
             startPosition = 0;
         }
         else {
-            startPosition -= this->data.size();
+            startPosition -= static_cast<int>(dataSize);
         }
-        int res = this->postfix.indexOf(searchTarget, startPosition);
-        if (res < 0) {
-            return res;
+        const std::size_t found = this->postfix.view().find(needle, static_cast<std::size_t>(startPosition));
+        if (found == Base::BytesView::npos) {
+            return -1;
         }
-        return res + this->data.size();
+        return static_cast<int>(found + dataSize);
     }
 
     /// @copydoc find(const char*,int) const
@@ -999,17 +1016,49 @@ public:
         if (!searchTarget) {
             return -1;
         }
-        if (startPosition < 0 || startPosition >= this->data.size()) {
-            if (startPosition >= data.size()) {
-                startPosition -= data.size();
+        const Base::BytesView needle(searchTarget);
+        const int totalSize = this->size();
+        if (needle.empty()) {
+            if (startPosition < 0) {
+                return totalSize;
             }
-            int res = this->postfix.lastIndexOf(searchTarget, startPosition);
-            if (res >= 0) {
-                return res + this->data.size();
-            }
-            startPosition = -1;
+            return std::min(startPosition, totalSize);
         }
-        return this->data.lastIndexOf(searchTarget, startPosition);
+
+        if (totalSize == 0) {
+            return -1;
+        }
+
+        if (startPosition < 0) {
+            startPosition = totalSize + startPosition;
+        }
+        if (startPosition >= totalSize) {
+            startPosition = totalSize - 1;
+        }
+        if (startPosition < 0) {
+            return -1;
+        }
+
+        const std::size_t dataSize = this->data.size();
+        if (static_cast<std::size_t>(startPosition) >= dataSize) {
+            const std::size_t from = static_cast<std::size_t>(startPosition) - dataSize;
+            const std::size_t found =
+                this->postfix.view().rfind(needle, std::min(from, this->postfix.size() - 1U));
+            if (found != Base::BytesView::npos) {
+                return static_cast<int>(found + dataSize);
+            }
+            if (dataSize == 0U) {
+                return -1;
+            }
+            startPosition = static_cast<int>(dataSize) - 1;
+        }
+
+        const std::size_t from = std::min<std::size_t>(static_cast<std::size_t>(startPosition), dataSize - 1U);
+        const std::size_t found = this->data.view().rfind(needle, from);
+        if (found == Base::BytesView::npos) {
+            return -1;
+        }
+        return static_cast<int>(found);
     }
 
     /// @copydoc rfind(const char*,int) const
@@ -1034,10 +1083,11 @@ public:
         if (!searchTarget) {
             return false;
         }
-        if (this->postfix.size() != 0) {
-            return this->postfix.endsWith(searchTarget);
+        const Base::BytesView needle(searchTarget);
+        if (!this->postfix.empty()) {
+            return bytesEndsWith(this->postfix.view(), needle);
         }
-        return this->data.endsWith(searchTarget);
+        return bytesEndsWith(this->data.view(), needle);
     }
 
     /// @copydoc endsWith(const char*) const
@@ -1046,31 +1096,28 @@ public:
         return endsWith(searchTarget.c_str());
     }
 
-    /**
-     * @brief Check if this mapped name starts with the search target.
-     *
-     * If there is a postfix, only the postfix is considered. If not, then only
-     * the data is considered. A search string that overlaps the two will not
-     * be found.
-     *
-     * @param[in] searchTarget The search target to match.
-     * @param[in] offset An offset to perform the match at.
-     *
-     * @return True if this MappedName begins with the target bytes.
-     */
-    bool startsWith(const QByteArray& searchTarget, int offset = 0) const
+    /// Returns true if this MappedName starts with the search target. If there is a postfix, only
+    /// the postfix is considered. If not, then only the data is considered. A search string that
+    /// overlaps the two will not be found.
+    ///
+    /// \param searchTarget An array of bytes to match
+    /// \param offset An offset to perform the match at
+    /// \return True if this MappedName begins with the target bytes
+    bool startsWith(Base::BytesView searchTarget, int offset = 0) const
     {
-        if (searchTarget.size() > size() - offset) {
+        if (offset < 0) {
+            offset = 0;
+        }
+        if (searchTarget.size() > static_cast<std::size_t>(size() - offset)) {
             return false;
         }
-        if ((offset != 0)
-            || ((this->data.size() != 0) && this->data.size() < searchTarget.size())) {
-            return toRawBytes(offset, searchTarget.size()) == searchTarget;
+        if ((offset != 0) || (!this->data.empty() && this->data.size() < searchTarget.size())) {
+            return toRawBytes(offset, static_cast<int>(searchTarget.size())).view() == searchTarget;
         }
-        if (this->data.size() != 0) {
-            return this->data.startsWith(searchTarget);
+        if (!this->data.empty()) {
+            return bytesStartsWith(this->data.view(), searchTarget);
         }
-        return this->postfix.startsWith(searchTarget);
+        return bytesStartsWith(this->postfix.view(), searchTarget);
     }
 
     /// @copydoc startsWith(const QByteArray&,int) const
@@ -1079,17 +1126,13 @@ public:
         if (!searchTarget) {
             return false;
         }
-        return startsWith(
-            QByteArray::fromRawData(searchTarget, static_cast<int>(qstrlen(searchTarget))),
-            offset);
+        return startsWith(Base::BytesView(searchTarget), offset);
     }
 
     /// @copydoc startsWith(const QByteArray&,int) const
     bool startsWith(const std::string& searchTarget, int offset = 0) const
     {
-        return startsWith(
-            QByteArray::fromRawData(searchTarget.c_str(), static_cast<int>(searchTarget.size())),
-            offset);
+        return startsWith(Base::BytesView(searchTarget.data(), searchTarget.size()), offset);
     }
 
     /**
@@ -1122,17 +1165,38 @@ public:
     /// Get a hash for this MappedName
     std::size_t hash() const
     {
-        return qHash(data, qHash(postfix));
+        std::size_t seed = 0U;
+        boost::hash_range(seed, this->data.data(), this->data.data() + this->data.size());
+        boost::hash_range(seed, this->postfix.data(), this->postfix.data() + this->postfix.size());
+        return seed;
     }
 
 private:
-    QByteArray data;
-    QByteArray postfix;
-    bool raw;
+    static bool bytesStartsWith(Base::BytesView value, Base::BytesView prefix)
+    {
+        if (prefix.size() > value.size()) {
+            return false;
+        }
+        return std::memcmp(value.data(), prefix.data(), prefix.size()) == 0;
+    }
+
+    static bool bytesEndsWith(Base::BytesView value, Base::BytesView suffix)
+    {
+        if (suffix.size() > value.size()) {
+            return false;
+        }
+        const std::size_t offset = value.size() - suffix.size();
+        return std::memcmp(value.data() + offset, suffix.data(), suffix.size()) == 0;
+    }
+
+private:
+    Base::ByteBuffer data;
+    Base::ByteBuffer postfix;
+    bool raw {false};
 };
 
 
-using ElementIDRefs = QVector<::App::StringIDRef>;
+using ElementIDRefs = std::vector<::App::StringIDRef>;
 
 struct MappedNameRef
 {
@@ -1205,7 +1269,7 @@ struct MappedNameRef
 
     void compact()
     {
-        if (sids.size() > 1) {
+        if (sids.size() > 1U) {
             std::sort(sids.begin(), sids.end());
             sids.erase(std::unique(sids.begin(), sids.end()), sids.end());
         }
