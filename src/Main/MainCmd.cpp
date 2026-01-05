@@ -32,8 +32,6 @@
 
 #include <cstdio>
 #include <ostream>
-#include <QString>
-#include <QTextStream>
 
 // FreeCAD Base header
 #include <Base/Console.h>

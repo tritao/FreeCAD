@@ -59,6 +59,11 @@
 # include <Shlobj.h>
 #endif
 
+#if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
+# include <QCoreApplication>
+# include <QMetaObject>
+#endif
+
 #if defined(FC_OS_BSD)
 #include <sys/param.h>
 #include <sys/sysctl.h>
@@ -234,6 +239,7 @@ bool documentCanRecomputeOnWorker(const Document& document)
 
 void reportRecomputeException(const Base::Exception& exception)
 {
+#if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
     if (App::MainThreadSignalConfig::hasHooks()) {
         if (auto* app = QCoreApplication::instance()) {
             QMetaObject::invokeMethod(
@@ -244,6 +250,7 @@ void reportRecomputeException(const Base::Exception& exception)
             return;
         }
     }
+#endif
 
     exception.reportException();
 }
@@ -1752,7 +1759,7 @@ void Application::addTranslatableExportType(const std::string &description,
     };
 
     translatableExportTypeCache.addCacheEntry({description, extensions, moduleName});
-    auto translatedDescription = QCoreApplication::translate("FileFormat", description.c_str()).toStdString();
+    auto translatedDescription = Base::Translation::translate("FileFormat", description);
     bool containsAppName = replaceFreeCAD(translatedDescription);  // Run *AFTER* translation
     appendTypeString(translatedDescription, extensions);
 
@@ -2844,8 +2851,10 @@ void Application::initConfig(int argc, char ** argv)
     else
         _pConsoleObserverFile = nullptr;
 
+#if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
     App::installConsoleQtBridge();
     App::installTranslationQtBridge();
+#endif
 
     // Banner ===========================================================
     if (mConfig["RunMode"] != "Cmd" && !(vm.contains("verbose") && vm.contains("version"))) {
@@ -2949,7 +2958,9 @@ void Application::initConfig(int argc, char ** argv)
 #endif
     mConfig["BOOST_VERSION"] = BOOST_LIB_VERSION;
     mConfig["PYTHON_VERSION"] = PY_VERSION;
+#if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
     mConfig["QT_VERSION"] = QT_VERSION_STR;
+#endif
     mConfig["EIGEN_VERSION"] = fcEigen3Version;
     mConfig["PYSIDE_VERSION"] = fcPysideVersion;
 #ifdef SMESH_VERSION_STR

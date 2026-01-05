@@ -26,7 +26,6 @@
 #pragma once
 
 #include <fastsignals/signal.h>
-#include <QtCore/qtextstream.h>
 
 #include <deque>
 #include <list>

@@ -107,6 +107,16 @@ SetupClipper2()
 find_package(fmt REQUIRED)
 find_package(ICU REQUIRED COMPONENTS uc i18n)
 if(NOT FREECAD_LIBPACK_USE OR FREECAD_LIBPACK_CHECKFILE_CLBUNDLER OR FREECAD_LIBPACK_CHECKFILE_VERSION)
+    if(BUILD_GUI AND NOT FREECAD_HAS_QT)
+        message(FATAL_ERROR "BUILD_GUI=ON requires a valid Qt installation")
+    endif()
+
+    # FCGlobal.h includes <QtCore.h> unconditionally. This is a generated FreeCAD header (not a Qt header).
+    # Ensure it exists even for Qt-free configurations.
+    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/src)
+    set(HAVE_Q_DISABLE_COPY_MOVE 0)
+    configure_file(${CMAKE_SOURCE_DIR}/src/QtCore.h.cmake ${CMAKE_BINARY_DIR}/src/QtCore.h)
+
     SetupPython()
     SetupPCL()
     SetupPybind11()
@@ -133,7 +143,9 @@ if(NOT FREECAD_LIBPACK_USE OR FREECAD_LIBPACK_CHECKFILE_CLBUNDLER OR FREECAD_LIB
     SetupEigen()
     # This file is included directly due to some cMake macros that are defined within.
     # If these macro definitions are embedded within another macro, it causes problems.
-    include(cMake/FreeCAD_Helpers/SetupQt.cmake)
+    if(FREECAD_HAS_QT)
+        include(cMake/FreeCAD_Helpers/SetupQt.cmake)
+    endif()
     SetupFreetype()
 
     if(BUILD_GUI)

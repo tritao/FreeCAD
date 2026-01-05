@@ -47,6 +47,7 @@
 
 macro(ChooseQtVersion)
   set(freecad_supported_qt_versions "Auto" 5 6)
+  set(FREECAD_HAS_QT OFF CACHE INTERNAL "Whether Qt support is available for this build." FORCE)
 
   # The following `if` check can be removed once CMake 3.21 is required and
   # the policy CMP0126 is set to NEW.
@@ -55,6 +56,12 @@ macro(ChooseQtVersion)
       STRING "Expected Qt major version. Valid values are Auto, 5, 6.")
     set_property(CACHE FREECAD_QT_VERSION PROPERTY STRINGS "${freecad_supported_qt_versions}")
   endif()
+
+  set(_FREECAD_QT_REQUIRED ${BUILD_GUI})
+  if(NOT FREECAD_QT_VERSION STREQUAL "Auto")
+    set(_FREECAD_QT_REQUIRED TRUE)
+  endif()
+  set(_FREECAD_QT_FOUND TRUE)
 
   if(FREECAD_LIBPACK_USE)
     find_file(FREECAD_LIBPACK_CHECKFILE_VERSION NAMES FREECAD_LIBPACK_VERSION PATHS ${FREECAD_LIBPACK_DIR} NO_DEFAULT_PATH)
@@ -89,13 +96,22 @@ macro(ChooseQtVersion)
     if (NOT Qt6_FOUND)
       find_package(Qt5 QUIET COMPONENTS Core)
       if (NOT Qt5_FOUND)
-        message(FATAL_ERROR
-          "Could not find a valid Qt installation. Consider setting Qt5_DIR or Qt6_DIR (as needed).")
+        if(_FREECAD_QT_REQUIRED)
+          message(FATAL_ERROR
+            "Could not find a valid Qt installation. Consider setting Qt5_DIR or Qt6_DIR (as needed).")
+        endif()
+        unset(FREECAD_QT_MAJOR_VERSION CACHE)
+        message(STATUS "Qt not found; Qt-dependent support is disabled")
+        set(_FREECAD_QT_FOUND FALSE)
+      else ()
+        set(_FREECAD_QT_VERSION 5)
       endif ()
-      set(_FREECAD_QT_VERSION 5)
     endif ()
   endif ()
-  set(FREECAD_QT_MAJOR_VERSION "${_FREECAD_QT_VERSION}" CACHE INTERNAL
-    "Major version number for the Qt installation used.")
-  message(STATUS  "Compiling with Qt ${FREECAD_QT_MAJOR_VERSION}")
+  if(_FREECAD_QT_FOUND)
+    set(FREECAD_HAS_QT ON CACHE INTERNAL "Whether Qt support is available for this build." FORCE)
+    set(FREECAD_QT_MAJOR_VERSION "${_FREECAD_QT_VERSION}" CACHE INTERNAL
+      "Major version number for the Qt installation used.")
+    message(STATUS  "Compiling with Qt ${FREECAD_QT_MAJOR_VERSION}")
+  endif()
 endmacro()

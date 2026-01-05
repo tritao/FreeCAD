@@ -21,18 +21,33 @@
  *                                                                         *
  **************************************************************************/
 
-#include <filesystem>
 #include <algorithm>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
+
 #include <boost/version.hpp>
 #include <boost/tokenizer.hpp>
-#include <QDir>
-#include <QFileInfo>
-#include <QLocale>
-#include <QProcessEnvironment>
-#include <QRegularExpression>
-#include <QRegularExpressionMatch>
-#include <QSettings>
+
+#if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
+# include <QFile>
+# include <QFileInfo>
+# include <QLocale>
+# include <QProcessEnvironment>
+# include <QRegularExpression>
+# include <QRegularExpressionMatch>
+# include <QSettings>
+# include <QStringList>
+# include <QSysInfo>
+#endif
+
+#if !(defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT) && !defined(FC_OS_WIN32)
+# include <sys/utsname.h>
+#endif
 
 #include <LibraryVersions.h>
 
@@ -49,16 +64,102 @@ namespace fs = std::filesystem;
 
 namespace {
 
+#if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
 std::ostream& operator<<(std::ostream& os, const QString& str)
 {
     os << str.toStdString();
     return os;
 }
+#endif
+
+std::string getenvString(const char* name)
+{
+    if (const char* value = std::getenv(name); value && *value) {
+        return value;
+    }
+
+    return {};
+}
+
+#if !(defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT)
+void appendIfNotEmpty(std::vector<std::string>& values, std::string value)
+{
+    if (!value.empty()) {
+        values.push_back(std::move(value));
+    }
+}
+
+std::string joinStrings(const std::vector<std::string>& values, std::string_view separator)
+{
+    std::string result;
+    for (const auto& value : values) {
+        if (!result.empty()) {
+            result += separator;
+        }
+        result += value;
+    }
+    return result;
+}
+#endif
+
+std::string trim(std::string text)
+{
+    const auto first = text.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) {
+        return {};
+    }
+
+    const auto last = text.find_last_not_of(" \t\r\n");
+    return text.substr(first, last - first + 1);
+}
+
+std::string cleanLine(std::string text)
+{
+    std::ranges::replace(text, '\n', ' ');
+    std::ranges::replace(text, '\r', ' ');
+    return trim(std::move(text));
+}
+
+#if !(defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT)
+std::string readLinuxPrettyName()
+{
+    std::ifstream osRelease("/etc/os-release");
+    std::string line;
+    while (std::getline(osRelease, line)) {
+        constexpr std::string_view key = "PRETTY_NAME=";
+        if (!line.starts_with(key)) {
+            continue;
+        }
+
+        auto value = line.substr(key.size());
+        if (value.size() >= 2 && value.front() == '"' && value.back() == '"') {
+            value = value.substr(1, value.size() - 2);
+        }
+        return value;
+    }
+
+    return {};
+}
+
+std::string currentArchitecture()
+{
+# if defined(FC_OS_WIN32)
+    return "Windows";
+# else
+    struct utsname info {};
+    if (uname(&info) == 0) {
+        return info.machine;
+    }
+    return {};
+# endif
+}
+#endif
 
 }
 
 std::string ProgramInformation::prettyProductInfoWrapper()
 {
+#if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
     auto productName = QSysInfo::prettyProductName();
 #ifdef FC_OS_MACOSX
     auto macosVersionFile = QStringLiteral(
@@ -108,23 +209,41 @@ std::string ProgramInformation::prettyProductInfoWrapper()
     }
 #endif
     return productName.toStdString();
+#else
+# if defined(FC_OS_LINUX)
+    if (auto prettyName = readLinuxPrettyName(); !prettyName.empty()) {
+        return prettyName;
+    }
+# endif
+# if defined(FC_OS_WIN32)
+    return "Windows";
+# elif defined(FC_OS_MACOSX)
+    return "macOS";
+# elif defined(FC_OS_BSD)
+    return "BSD";
+# else
+    struct utsname info {};
+    if (uname(&info) == 0) {
+        return std::string(info.sysname) + " " + info.release;
+    }
+    return "Unknown";
+# endif
+#endif
 }
 
 static std::string getModuleInfoString(const std::string& path)
 {
-    QString modPath = QString::fromStdString(path);
-    QFileInfo mod(modPath);
-    if (mod.isHidden()) {  // Ignore hidden directories
+    const fs::path modPath(path);
+    const auto fileName = modPath.filename().string();
+    if (fileName.starts_with(".")) {  // Ignore hidden directories
         return {};
     }
 
-    std::string addonName = mod.isDir() ? QDir(modPath).dirName().toStdString()
-                                        : mod.fileName().toStdString();
+    std::string addonName = fileName;
     std::string versionString;
     std::stringstream str;
     try {
-        auto metadataFile = std::filesystem::path(mod.absoluteFilePath().toStdString())
-            / "package.xml";
+        auto metadataFile = modPath / "package.xml";
         if (std::filesystem::exists(metadataFile)) {
             App::Metadata metadata(metadataFile);
             if (!metadata.name().empty()) {
@@ -136,15 +255,10 @@ static std::string getModuleInfoString(const std::string& path)
         }
     }
     catch (const Base::Exception& e) {
-        auto what = QString::fromUtf8(e.what()).trimmed().replace(
-            QChar::fromLatin1('\n'),
-            QChar::fromLatin1(' ')
-        );
-        str << " (Malformed metadata: " << what << ")";
+        str << " (Malformed metadata: " << cleanLine(e.what()) << ")";
     }
     str << "  * " << addonName << versionString;
-    QFileInfo disablingFile(mod.absoluteFilePath(), QStringLiteral("ADDON_DISABLED"));
-    if (disablingFile.exists()) {
+    if (fs::exists(modPath / "ADDON_DISABLED")) {
         str << " (Disabled)";
     }
 
@@ -174,6 +288,7 @@ void ProgramInformation::getVerboseCommonInfo(
 
 void ProgramInformation::getSystemInformation(std::stringstream& str)
 {
+#if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
     auto sysenv = QProcessEnvironment::systemEnvironment();
     const QString deskEnv = sysenv.value(QStringLiteral("XDG_CURRENT_DESKTOP"));
     const QString deskSess = sysenv.value(QStringLiteral("DESKTOP_SESSION"));
@@ -208,6 +323,25 @@ void ProgramInformation::getSystemInformation(std::stringstream& str)
         str << "Architecture: " << QSysInfo::buildCpuArchitecture()
             << "(running on: " << QSysInfo::currentCpuArchitecture() << ")\n";
     }
+#else
+    std::vector<std::string> deskInfoList;
+    appendIfNotEmpty(deskInfoList, getenvString("XDG_CURRENT_DESKTOP"));
+    appendIfNotEmpty(deskInfoList, getenvString("DESKTOP_SESSION"));
+
+    auto sessionType = getenvString("XDG_SESSION_TYPE");
+    if (sessionType == "x11") {
+        sessionType = "xcb";
+    }
+    appendIfNotEmpty(deskInfoList, std::move(sessionType));
+
+    const auto deskInfo = deskInfoList.empty()
+        ? std::string()
+        : " (" + joinStrings(deskInfoList, "/") + ")";
+
+    str << "OS: " << prettyProductInfoWrapper() << deskInfo << '\n';
+    const auto architecture = currentArchitecture();
+    str << "Architecture: " << (architecture.empty() ? "Unknown" : architecture) << "\n";
+#endif
 }
 
 void ProgramInformation::getPackageInformation(std::stringstream& str)
@@ -218,13 +352,12 @@ void ProgramInformation::getPackageInformation(std::stringstream& str)
 #ifdef FC_FLATPAK
     str << " Flatpak";
 #endif
-    auto sysenv = QProcessEnvironment::systemEnvironment();
-    const QString appimage = sysenv.value(QStringLiteral("APPIMAGE"));
-    if (!appimage.isEmpty()) {
+    const auto appimage = getenvString("APPIMAGE");
+    if (!appimage.empty()) {
         str << " AppImage";
     }
-    const QString snap = sysenv.value(QStringLiteral("SNAP_REVISION"));
-    if (!snap.isEmpty()) {
+    const auto snap = getenvString("SNAP_REVISION");
+    if (!snap.empty()) {
         str << " Snap " << snap;
     }
     str << '\n';
@@ -272,13 +405,20 @@ void ProgramInformation::getLibraryVersions(std::stringstream& str)
 {
     // report also the version numbers of the most important libraries in FreeCAD
     str << "Python " << PY_VERSION << ", ";
+#if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
     str << "Qt " << QT_VERSION_STR << ", ";
+#endif
     str << "Coin " << fcCoin3dVersion << ", ";
     str << "Vtk " << fcVtkVersion << ", ";
     str << "boost " << BOOST_LIB_VERSION << ", ";
-    str << "Eigen3 " << fcEigen3Version << ", ";
+    str << "Eigen3 " << fcEigen3Version;
+#if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
+    str << ", ";
     str << "PySide " << fcPysideVersion << '\n';
     str << "shiboken " << fcShibokenVersion << ", ";
+#else
+    str << '\n';
+#endif
 #ifdef SMESH_VERSION_STR
     str << "SMESH " << SMESH_VERSION_STR << ", ";
 #endif
@@ -314,6 +454,7 @@ void ProgramInformation::getIfcInfo(std::stringstream& str)
 
 void ProgramInformation::getLocale(std::stringstream& str)
 {
+#if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
     QLocale loc;
     str << "Locale: " << QLocale::languageToString(loc.language()) << "/"
 #if QT_VERSION < QT_VERSION_CHECK(6, 6, 0)
@@ -333,6 +474,19 @@ void ProgramInformation::getLocale(std::stringstream& str)
             << " (" << loc.name() << ") ]";
     }
     str << "\n";
+#else
+    auto locale = getenvString("LC_ALL");
+    if (locale.empty()) {
+        locale = getenvString("LC_MESSAGES");
+    }
+    if (locale.empty()) {
+        locale = getenvString("LANG");
+    }
+    if (locale.empty()) {
+        locale = "C";
+    }
+    str << "Locale: " << locale << "\n";
+#endif
 }
 
 void ProgramInformation::getVerboseAddOnsInfo(
