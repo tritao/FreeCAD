@@ -621,8 +621,6 @@ private:
     static std::string FindHomePath(const char* sCall);
     /// Print the help message
     static void PrintInitHelp();
-    /// figure out some things
-    static void ExtractUserPath();
     /// load the user and system parameter set
     static void LoadParameters();
     /// puts the given env variable in the config
