@@ -61,8 +61,6 @@
 #endif
 
 #include <QCoreApplication>
-#include <QRegularExpression>
-#include <QSettings>
 #include <LibraryVersions.h>
 
 #include <App/MaterialPy.h>
