@@ -31,6 +31,7 @@
 #include <QTranslator>
 #include <QWidget>
 
+#include <Base/Tools.h>
 
 #include <App/Application.h>
 #include <Gui/TextEdit.h>
@@ -318,8 +319,16 @@ std::string Translator::locale(const std::string& lang) const
 
 void Translator::setLocale(const std::string& language) const
 {
+    const bool isCLocale = language == "C"
+        || language == "c"
+        || language == "C.UTF-8"
+        || language == "C.utf8"
+        || language == "c.utf8"
+        || language == "POSIX"
+        || language == "posix";
+
     auto loc = QLocale::system();  // Defaulting to OS locale
-    if (language == "C" || language == "c") {
+    if (isCLocale) {
         loc = QLocale::c();
     }
     else {
@@ -329,6 +338,12 @@ void Translator::setLocale(const std::string& language) const
         }
     }
     QLocale::setDefault(loc);
+    if (isCLocale) {
+        Base::Tools::setIcuDefaultLocale("C");
+    }
+    else {
+        Base::Tools::setIcuDefaultLocale(loc.name().toStdString());
+    }
     updateLocaleChange();
 
 #ifdef FC_DEBUG

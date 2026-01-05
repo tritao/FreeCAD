@@ -24,6 +24,7 @@
 
 #include <unicode/unistr.h>
 #include <unicode/uchar.h>
+#include <unicode/locid.h>
 #include <chrono>
 #include <ctime>
 #include <iomanip>
@@ -266,6 +267,27 @@ std::string Base::Tools::currentDateTimeString()
     std::ostringstream out;
     out << std::put_time(&tmUtc, "%Y-%m-%dT%H:%M:%SZ");
     return out.str();
+}
+
+void Base::Tools::setIcuDefaultLocale(std::string_view icuLocaleId)
+{
+    UErrorCode status = U_ZERO_ERROR;
+
+    if (icuLocaleId.empty()
+        || icuLocaleId == "C"
+        || icuLocaleId == "c"
+        || icuLocaleId == "C.UTF-8"
+        || icuLocaleId == "C.utf8"
+        || icuLocaleId == "c.utf8"
+        || icuLocaleId == "POSIX"
+        || icuLocaleId == "posix") {
+        icu::Locale::setDefault(icu::Locale("en_US_POSIX"), status);
+        return;
+    }
+
+    const std::string localeId(icuLocaleId);
+    const icu::Locale locale = icu::Locale::createFromName(localeId.c_str());
+    icu::Locale::setDefault(locale, status);
 }
 
 std::vector<std::string> Base::Tools::splitSubName(const std::string& subname)
