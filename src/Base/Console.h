@@ -30,7 +30,9 @@
 #include <array>
 #include <cassert>
 #include <chrono>
+#include <functional>
 #include <map>
+#include <mutex>
 #include <set>
 #include <string>
 #include <sstream>
@@ -809,6 +811,15 @@ public:
         MsgType_Notification = 32,  // Special message to for notifications to the user
     };
 
+    using PostEventHandler = std::function<void(
+        FreeCAD_ConsoleMsgType,
+        IntendedRecipient,
+        ContentType,
+        const std::string&,
+        const std::string&
+    )>;
+    using RefreshHandler = std::function<void()>;
+
     /// Enables or disables message types of a certain console observer
     ConsoleMsgFlags setEnabledMsgType(const char* sObs, ConsoleMsgFlags type, bool on) const;
     /// Checks if message types of a certain console observer are enabled
@@ -837,6 +848,8 @@ public:
 
     void refresh() const;
     void enableRefresh(bool enable);
+    void setPostEventHandler(PostEventHandler handler);
+    void setRefreshHandler(RefreshHandler handler);
 
     constexpr FreeCAD_ConsoleMsgType getConsoleMsg(LogStyle style);
 
@@ -862,6 +875,10 @@ private:
 
     bool _bCanRefresh {true};
     ConnectionMode connectionMode {Direct};
+
+    mutable std::mutex _handlerMutex;
+    PostEventHandler _postEventHandler;
+    RefreshHandler _refreshHandler;
 
     // Singleton!
     ConsoleSingleton();
@@ -899,7 +916,6 @@ private:
     std::map<std::string, int> _logLevels;
     int _defaultLogLevel;
 
-    friend class ConsoleOutput;
 };
 
 /** Access to the Console
