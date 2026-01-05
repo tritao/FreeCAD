@@ -21,11 +21,11 @@
  **************************************************************************************************/
 
 #include <fmt/format.h>
+#include <algorithm>
+#include <cctype>
+#include <string_view>
+#include <system_error>
 #include <utility>
-#include <QDir>
-#include <QProcessEnvironment>
-#include <QStandardPaths>
-#include <QCoreApplication>
 
 #include "ApplicationDirectories.h"
 
@@ -37,25 +37,16 @@
 
 #include <Base/FileInfo.h>
 #include <Base/Exception.h>
+#include <Base/PlatformPaths.h>
 #include "SafeMode.h"
 
 #include <Python.h>
-#include <QString>
 
 #include "Base/Console.h"
 
 
 using namespace App;
 namespace fs = std::filesystem;
-
-fs::path qstringToPath(const QString& path)
-{
-#if defined(FC_OS_WIN32)
-    return {path.toStdWString()};
-#else
-    return {path.toStdString()};
-#endif
-}
 
 ApplicationDirectories::ApplicationDirectories(std::map<std::string,std::string> &config)
 {
@@ -346,7 +337,10 @@ fs::path ApplicationDirectories::getUserHome()
     std::string sanitizedPath = sanitizePath(pwd.pw_dir);
     path = Base::FileInfo::stringToPath(sanitizedPath);
 #else
-    path = Base::FileInfo::stringToPath(QStandardPaths::writableLocation(QStandardPaths::HomeLocation).toStdString());
+    path = Base::standardPaths().home;
+    if (path.empty()) {
+        throw Base::RuntimeError("Getting HOME path from system failed!");
+    }
 #endif
     return path;
 }
@@ -355,20 +349,6 @@ bool ApplicationDirectories::usingCustomDirectories() const
 {
     return _usingCustomDirectories;
 }
-
-#if defined(FC_OS_WIN32)  // This is ONLY used on Windows now, so don't even compile it elsewhere
-#include <codecvt>
-#include "ShlObj.h"
-QString ApplicationDirectories::getOldGenericDataLocation()
-{
-    WCHAR szPath[MAX_PATH];
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-    if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, szPath))) {
-        return QString::fromStdString(converter.to_bytes(szPath));
-    }
-    return {};
-}
-#endif
 
 void ApplicationDirectories::getSubDirectories(const std::map<std::string,std::string>& mConfig,
                                                std::vector<std::string>& appData)
@@ -408,71 +388,60 @@ fs::path ApplicationDirectories::findUserHomePath(const fs::path& userHome)
 
 std::tuple<fs::path, fs::path, fs::path> ApplicationDirectories::getCustomPaths()
 {
-    const QProcessEnvironment env(QProcessEnvironment::systemEnvironment());
-    QString userHome = env.value(QStringLiteral("FREECAD_USER_HOME"));
-    QString userData = env.value(QStringLiteral("FREECAD_USER_DATA"));
-    QString userTemp = env.value(QStringLiteral("FREECAD_USER_TEMP"));
-
-    auto toNativePath = [](QString& path) {
-        if (!path.isEmpty()) {
-            if (const QDir dir(path); dir.exists()) {
-                path = QDir::toNativeSeparators(dir.canonicalPath());
-            }
-            else {
-                path.clear();
-            }
+    const auto normalizeDir = [](const std::optional<std::string>& value) -> fs::path {
+        if (!value || value->empty()) {
+            return {};
         }
+        fs::path candidate(*value);
+        std::error_code error;
+        if (!fs::is_directory(candidate, error) || error) {
+            return {};
+        }
+        return Base::canonicalIfExists(candidate);
     };
 
-    // verify env. variables
-    toNativePath(userHome);
-    toNativePath(userData);
-    toNativePath(userTemp);
+    fs::path userHome = normalizeDir(Base::getenvString("FREECAD_USER_HOME"));
+    fs::path userData = normalizeDir(Base::getenvString("FREECAD_USER_DATA"));
+    fs::path userTemp = normalizeDir(Base::getenvString("FREECAD_USER_TEMP"));
 
-    // if FREECAD_USER_HOME is set but not FREECAD_USER_DATA
-    if (!userHome.isEmpty() && userData.isEmpty()) {
+    if (!userHome.empty() && userData.empty()) {
         userData = userHome;
     }
 
-    // if FREECAD_USER_HOME is set but not FREECAD_USER_TEMP
-    if (!userHome.isEmpty() && userTemp.isEmpty()) {
-        const QDir dir(userHome);
-        dir.mkdir(QStringLiteral("temp"));
-        const QFileInfo fi(dir, QStringLiteral("temp"));
-        userTemp = fi.absoluteFilePath();
+    if (!userHome.empty() && userTemp.empty()) {
+        userTemp = userHome / "temp";
+        if (!Py_IsInitialized()) {
+            try {
+                fs::create_directories(userTemp);
+            } catch (...) {
+            }
+        }
     }
 
-    return {qstringToPath(userHome),
-            qstringToPath(userData),
-            qstringToPath(userTemp)};
+    return {userHome, userData, userTemp};
 }
 
 std::tuple<fs::path, fs::path, fs::path, fs::path> ApplicationDirectories::getStandardPaths()
 {
-    QString configHome = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
-    QString dataHome = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
-    QString cacheHome = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation);
-    QString tempPath = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    const auto paths = Base::standardPaths();
+    fs::path configHome = paths.config;
+    fs::path dataHome = paths.data;
+    fs::path cacheHome = paths.cache;
+    fs::path tempPath = paths.temp;
 
     // Keep the old behaviour
 #if defined(FC_OS_WIN32)
-    configHome = getOldGenericDataLocation();
-    dataHome = configHome;
-
     // On systems with non-7-bit-ASCII application data directories,
     // GetTempPathW will return a path in DOS format. This path will be
     // accepted by boost's file_lock class.
     // Since boost 1.76, there is now a version that accepts a wide string.
 #if (BOOST_VERSION < 107600)
-    tempPath = QString::fromStdString(Base::FileInfo::getTempPath());
+    tempPath = Base::FileInfo::stringToPath(Base::FileInfo::getTempPath());
     cacheHome = tempPath;
 #endif
 #endif
 
-    return {qstringToPath(configHome),
-            qstringToPath(dataHome),
-            qstringToPath(cacheHome),
-            qstringToPath(tempPath)};
+    return {configHome, dataHome, cacheHome, tempPath};
 }
 
 
@@ -593,7 +562,6 @@ void ApplicationDirectories::migrateAllPaths(const std::vector<fs::path> &paths)
 #include <cstdio>
 #include <cstdlib>
 #include <sys/param.h>
-#include <QCoreApplication>
 
 fs::path ApplicationDirectories::findHomePath(const char* sCall)
 {
@@ -613,9 +581,8 @@ fs::path ApplicationDirectories::findHomePath(const char* sCall)
             absPath = path;
     }
     else {
-        int argc = 1;
-        QCoreApplication app(argc, (char**)(&sCall));
-        absPath = QCoreApplication::applicationFilePath().toStdString();
+        fs::path exe = Base::resolveExecutablePath(sCall);
+        absPath = exe.empty() ? std::string(sCall) : exe.string();
     }
 
     // should be an absolute path now
@@ -736,8 +703,25 @@ fs::path ApplicationDirectories::findHomePath(const char* sCall)
     //   In this case the calling name should be set to FreeCADBase.dll or FreeCADApp.dll in order
     //   to locate the correct home directory
     wchar_t szFileName [MAX_PATH];
-    QString dll(QString::fromUtf8(sCall));
-    if (Py_IsInitialized() || dll.endsWith(QLatin1String(".dll"))) {
+
+    const auto endsWithDll = [](const char* s) {
+        if (!s) {
+            return false;
+        }
+        std::string_view view(s);
+        constexpr std::string_view suffix = ".dll";
+        if (view.size() < suffix.size()) {
+            return false;
+        }
+        view = view.substr(view.size() - suffix.size());
+        return std::equal(view.begin(), view.end(), suffix.begin(), suffix.end(),
+                          [](char a, char b) {
+                              return static_cast<unsigned char>(std::tolower(static_cast<unsigned char>(a)))
+                                  == static_cast<unsigned char>(std::tolower(static_cast<unsigned char>(b)));
+                          });
+    };
+
+    if (Py_IsInitialized() || endsWithDll(sCall)) {
         GetModuleFileNameW(GetModuleHandleA(sCall),szFileName, MAX_PATH-1);
     }
     else {
@@ -755,13 +739,7 @@ fs::path ApplicationDirectories::findHomePath(const char* sCall)
     binPath += L"bin";
     SetDllDirectoryW(binPath.c_str());
 
-    // https://stackoverflow.com/questions/5625884/conversion-of-stdwstring-to-qstring-throws-linker-error
-#ifdef _MSC_VER
-    QString str = QString::fromUtf16(reinterpret_cast<const ushort *>(homePath.c_str()));
-#else
-    QString str = QString::fromStdWString(homePath);
-#endif
-    return qstringToPath(str);
+    return fs::path(homePath);
 }
 
 #else

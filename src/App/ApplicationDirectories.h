@@ -31,10 +31,6 @@
 #include <string>
 #include <vector>
 
-#ifdef FC_OS_WIN32
-#include <QString>
-#endif
-
 namespace App {
 
     /// A helper class to handle application-wide directory management on behalf of the main
@@ -167,10 +163,6 @@ namespace App {
         /// otherwise-recursive copy).
         static void migrateConfig(const std::filesystem::path &oldPath, const std::filesystem::path &newPath);
 
-#ifdef FC_OS_WIN32
-        /// On Windows, gets the location of the user's "AppData" directory. Invalid on other OSes.
-        QString getOldGenericDataLocation();
-#endif
         /// Adds subdirectory information to the appData vector for use in constructing full paths to config files, etc.
         static void getSubDirectories(const std::map<std::string,std::string>& mConfig,
                                       std::vector<std::string>& appData);
