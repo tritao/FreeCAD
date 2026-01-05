@@ -43,7 +43,12 @@ void MappedName::compact() const
         this);  // FIXME this is a workaround for a single call in ElementMap::addName()
 
     if (this->raw) {
-        self->data = QByteArray(self->data.constData(), self->data.size());
+        if (!self->data.empty()) {
+            self->data.makeOwning();
+        }
+        if (!self->postfix.empty()) {
+            self->postfix.makeOwning();
+        }
         self->raw = false;
     }
 }
