@@ -24,7 +24,10 @@
 
 // NOLINTNEXTLINE
 
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
+#include <cstring>
 #include <unordered_set>
 
 #include "IndexedName.h"
@@ -71,7 +74,7 @@ void IndexedName::set(const char* name,
                       bool allowOthers)
 {
     // Storage for names that we weren't given external storage for
-    static std::unordered_set<ByteArray, ByteArrayHasher> NameSet;
+    static std::unordered_set<std::string> NameSet;
 
     if (length < 0) {
         length = static_cast<int>(std::strlen(name));
@@ -103,12 +106,8 @@ void IndexedName::set(const char* name,
     // If the type was NOT in the list of allowedNames, but the caller has set the allowOthers flag
     // to true, then add the new type to the static NameSet (if it is not already there).
     if (allowOthers) {
-        auto res = NameSet.insert(ByteArray(QByteArray::fromRawData(name, suffixPosition)));
-        if (res.second /*The insert succeeded (the type was new)*/) {
-            // Make sure that the data in the set is a unique (unshared) copy of the text
-            res.first->ensureUnshared();
-        }
-        this->type = res.first->bytes.constData();
+        auto res = NameSet.insert(std::string(name, suffixPosition));
+        this->type = res.first->c_str();
     }
     else {
         // The passed-in type is not in the allowed list, and allowOthers was not true, so don't
