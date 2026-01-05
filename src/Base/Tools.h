@@ -45,9 +45,6 @@ class connection;
 }
 }  // namespace boost
 
-
-class QString;
-
 namespace Base
 {
 
@@ -361,10 +358,7 @@ struct BaseExport Tools
     static std::string escapedUnicodeFromUtf8(const char* s);
     static std::string escapedUnicodeToUtf8(const std::string& s);
     static std::string escapeQuotesFromString(const std::string& s);
-
-    static QString escapeEncodeString(const QString& s);
     static std::string escapeEncodeString(const std::string& s);
-    static QString escapeEncodeFilename(const QString& s);
     static std::string escapeEncodeFilename(const std::string& s);
 
     /**
