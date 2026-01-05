@@ -11,6 +11,7 @@ add_executable(App_tests_run
         DocumentObserver.cpp
         Expression.cpp
         ExpressionParser.cpp
+        ExpressionTokenizer.cpp
         ElementMap.cpp
         ElementNamingUtils.cpp
         IndexedName.cpp
