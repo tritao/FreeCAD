@@ -49,6 +49,8 @@
 #include <Base/Exception.h>
 #include <Gui/Application.h>
 
+#include <Gui/VerboseInfoQt.h>
+
 
 void PrintInitHelp();
 
@@ -262,9 +264,9 @@ int main(int argc, char** argv)
             QTextStream str(&data);
             const std::map<std::string, std::string> config = App::Application::Config();
 
-            App::Application::getVerboseCommonInfo(str, config);
+            Gui::VerboseInfoQt::getVerboseCommonInfo(str, config);
             Gui::Application::getVerboseDPIStyleInfo(str);
-            App::Application::getVerboseAddOnsInfo(str, config);
+            Gui::VerboseInfoQt::getVerboseAddOnsInfo(str, config);
 
             msg = data;
         }

@@ -31,6 +31,7 @@
 #include <cstdio>
 #include <ostream>
 #include <QString>
+#include <QTextStream>
 
 // FreeCAD Base header
 #include <Base/Console.h>
@@ -39,6 +40,8 @@
 
 // FreeCAD doc header
 #include <App/Application.h>
+
+#include <Gui/VerboseInfoQt.h>
 
 
 using App::Application;
@@ -90,8 +93,8 @@ int main(int argc, char** argv)
             QTextStream str(&data);
             const std::map<std::string, std::string> config = App::Application::Config();
 
-            App::Application::getVerboseCommonInfo(str, config);
-            App::Application::getVerboseAddOnsInfo(str, config);
+            Gui::VerboseInfoQt::getVerboseCommonInfo(str, config);
+            Gui::VerboseInfoQt::getVerboseAddOnsInfo(str, config);
 
             std::cout << data.toStdString();
             exit(0);

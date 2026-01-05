@@ -27,7 +27,6 @@
 #define SRC_APP_APPLICATION_H_
 
 #include <boost/signals2.hpp>
-#include <QtCore/qtextstream.h>
 
 #include <deque>
 #include <vector>
@@ -449,11 +448,6 @@ public:
 
     /** @name Verbose Information */
     //@{
-    static void getVerboseCommonInfo(QTextStream& str, const std::map<std::string,std::string>& mConfig);
-    static void getVerboseAddOnsInfo(QTextStream& str, const std::map<std::string,std::string>& mConfig);
-    static void addModuleInfo(QTextStream& str, const QString& modPath, bool& firstMod);
-    static QString prettyProductInfoWrapper();
-    static QString getValueOrEmpty(const std::map<std::string, std::string>& map, const std::string& key);
     static constexpr const char* verboseVersionEmitMessage{"verbose_version"};
     //@}
 

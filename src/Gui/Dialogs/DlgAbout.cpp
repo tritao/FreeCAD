@@ -46,6 +46,7 @@
 #include <Base/Interpreter.h>
 #include <CXX/WrapPython.h>
 #include <Gui/Application.h>
+#include <Gui/VerboseInfoQt.h>
 
 #include <filesystem>
 #include <LibraryVersions.h>
@@ -62,7 +63,6 @@ using namespace Gui::Dialog;
 namespace fs = std::filesystem;
 
 // ------------------------------------------------------------------------------
-
 AboutDialogFactory* AboutDialogFactory::factory = nullptr;
 
 AboutDialogFactory::~AboutDialogFactory() = default;
@@ -246,7 +246,7 @@ void AboutDialog::setupLabels()
     ui->labelBuildDate->setText(date);
 
     QString os = ui->labelBuildOS->text();
-    os.replace(QStringLiteral("Unknown"), App::Application::prettyProductInfoWrapper());
+    os.replace(QStringLiteral("Unknown"), VerboseInfoQt::prettyProductInfoWrapper());
     ui->labelBuildOS->setText(os);
 
     QString architecture = ui->labelBuildRunArchitecture->text();
@@ -480,9 +480,9 @@ void AboutDialog::copyToClipboard()
     QString data;
     QTextStream str(&data);
     std::map<std::string, std::string>& config = App::Application::Config();
-    App::Application::getVerboseCommonInfo(str, config);
+    VerboseInfoQt::getVerboseCommonInfo(str, config);
     Gui::Application::getVerboseDPIStyleInfo(str);
-    App::Application::getVerboseAddOnsInfo(str, config);
+    VerboseInfoQt::getVerboseAddOnsInfo(str, config);
 
     QClipboard* cb = QApplication::clipboard();
     cb->setText(data);
