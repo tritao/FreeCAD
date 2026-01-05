@@ -40,10 +40,6 @@
 #include <string>
 #include <utility>
 
-#include <QFileInfo>
-#include <QLockFile>
-#include <QDir>
-
 #include <FCConfig.h>
 
 #ifdef FC_OS_LINUX
@@ -57,6 +53,8 @@
 #include "Parameter.inl"
 #include "Console.h"
 #include "Exception.h"
+#include "FileInfo.h"
+#include "FileLock.h"
 #include "Tools.h"
 
 FC_LOG_LEVEL_INIT("Parameter", true, true)
@@ -1822,10 +1820,9 @@ bool ParameterManager::IgnoreSave() const
 
 namespace
 {
-QString getLockFile(const Base::FileInfo& file)
+std::string getLockFile(const Base::FileInfo& file)
 {
-    QFileInfo fi(QDir::tempPath(), QString::fromStdString(file.fileName() + ".lock"));
-    return fi.absoluteFilePath();
+    return Base::FileInfo::getTempPath() + file.fileName() + ".lock";
 }
 
 int getTimeout()
@@ -1854,7 +1851,7 @@ int ParameterManager::LoadDocument(const char* sFileName)
 {
     try {
         Base::FileInfo file(sFileName);
-        QLockFile lock(getLockFile(file));
+        Base::FileLock lock(getLockFile(file));
         if (!lock.tryLock(getTimeout())) {
             // Continue with empty config
             CreateDocument();
@@ -1961,7 +1958,7 @@ void ParameterManager::SaveDocument(const char* sFileName) const
 {
     try {
         Base::FileInfo file(sFileName);
-        QLockFile lock(getLockFile(file));
+        Base::FileLock lock(getLockFile(file));
         if (!lock.tryLock(getTimeout())) {
             std::cerr << "Failed to access file for writing: " << sFileName << std::endl;
             return;

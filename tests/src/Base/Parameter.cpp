@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <boost/core/ignore_unused.hpp>
-#include <QLockFile>
 #include <Base/FileInfo.h>
+#include <Base/FileLock.h>
 #include <Base/Parameter.h>
 
 class FakeObserver: public ParameterGrp::ObserverType
@@ -445,14 +445,18 @@ TEST_F(ParameterTest, TestObserverNoRef)
 
 TEST_F(ParameterTest, TestLockFile)
 {
+#if defined(__EMSCRIPTEN__)
+    GTEST_SKIP() << "File locking is a no-op in Emscripten/WASM (single-process).";
+#endif
+
     std::string fn = getFileName();
     fn.append(".lock");
 
-    QLockFile lockFile1(QString::fromStdString(fn));
+    Base::FileLock lockFile1(fn);
     EXPECT_TRUE(lockFile1.tryLock(100));
     EXPECT_TRUE(lockFile1.isLocked());
 
-    QLockFile lockFile2(QString::fromStdString(fn));
+    Base::FileLock lockFile2(fn);
     EXPECT_FALSE(lockFile2.tryLock(100));
     EXPECT_FALSE(lockFile2.isLocked());
 

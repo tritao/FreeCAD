@@ -192,11 +192,12 @@ SET(FreeCADBase_CPP_SRCS
     Debugger.cpp
     DualQuaternion.cpp
     Exception.cpp
-    ExceptionFactory.cpp
-    Factory.cpp
-    FileInfo.cpp
-    FutureWatcherProgress.cpp
-    GeometryPyCXX.cpp
+	    ExceptionFactory.cpp
+	    Factory.cpp
+	    FileInfo.cpp
+	    FileLock.cpp
+	    FutureWatcherProgress.cpp
+	    GeometryPyCXX.cpp
     Handle.cpp
     InputSource.cpp
     Interpreter.cpp
@@ -263,11 +264,12 @@ SET(FreeCADBase_HPP_SRCS
     DualNumber.h
     DualQuaternion.h
     Exception.h
-    ExceptionFactory.h
-    Factory.h
-    FileInfo.h
-    FutureWatcherProgress.h
-    GeometryPyCXX.h
+	    ExceptionFactory.h
+	    Factory.h
+	    FileInfo.h
+	    FileLock.h
+	    FutureWatcherProgress.h
+	    GeometryPyCXX.h
     Handle.h
     InputSource.h
     Interpreter.h
