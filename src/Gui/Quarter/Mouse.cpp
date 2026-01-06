@@ -46,10 +46,10 @@
 #include <QWheelEvent>
 
 #include <Inventor/SbVec2s.h>
-#include <Inventor/SoMouseWheelEvent.h>
 #include <Inventor/errors/SoDebugError.h>
 #include <Inventor/events/SoEvents.h>
 
+#include "View/Inventor/SoMouseWheelEvent.h"
 #include "QuarterWidget.h"
 #include "devices/Mouse.h"
 
