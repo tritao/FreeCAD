@@ -209,7 +209,7 @@ std::filesystem::path resolveExecutablePath(const char* argv0)
         const std::size_t pos = view.find(separator);
         const std::string_view part = view.substr(0, pos);
         if (!part.empty()) {
-            fs::path dir(std::string(part));
+            fs::path dir{std::string(part)};
             std::vector<fs::path> candidates;
             candidates.emplace_back(dir / argv0String);
 #if defined(FC_OS_WIN32)
