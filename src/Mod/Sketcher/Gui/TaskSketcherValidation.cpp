@@ -38,7 +38,7 @@
 #include <App/Document.h>
 #include <Gui/Application.h>
 #include <Gui/CommandT.h>
-#include <Gui/Inventor/MarkerBitmaps.h>
+#include <View/Inventor/MarkerBitmaps.h>
 #include <Gui/Notifications.h>
 #include <Gui/TaskView/TaskView.h>
 #include <Gui/ViewProvider.h>

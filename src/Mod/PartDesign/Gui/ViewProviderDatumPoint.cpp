@@ -29,7 +29,7 @@
 
 
 #include <App/Application.h>
-#include <Gui/Inventor/MarkerBitmaps.h>
+#include <View/Inventor/MarkerBitmaps.h>
 #include <Gui/ViewProviderBuilder.h>
 #include <Gui/Selection/SoFCSelection.h>
 #include <Mod/PartDesign/App/DatumPoint.h>

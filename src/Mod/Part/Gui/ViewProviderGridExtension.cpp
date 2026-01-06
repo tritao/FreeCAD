@@ -48,7 +48,7 @@
 #include <Gui/ViewProvider.h>
 #include <Gui/ViewProviderDocumentObject.h>
 
-#include <Gui/Inventor/SoFCBoundingBox.h>
+#include <View/Inventor/SoFCBoundingBox.h>
 
 #include "ViewProviderGridExtension.h"
 

@@ -35,7 +35,7 @@
 
 #include <App/Application.h>
 #include <App/Document.h>
-#include <Gui/Inventor/MarkerBitmaps.h>
+#include <View/Inventor/MarkerBitmaps.h>
 #include <Mod/Robot/App/TrajectoryObject.h>
 
 #include "ViewProviderTrajectory.h"

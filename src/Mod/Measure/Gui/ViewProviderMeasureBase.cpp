@@ -45,7 +45,7 @@
 #include <Gui/BitmapFactory.h>
 #include <Gui/Document.h>
 #include <Gui/ViewParams.h>
-#include <Gui/Inventor/MarkerBitmaps.h>
+#include <View/Inventor/MarkerBitmaps.h>
 #include <Gui/View3DInventor.h>
 #include <Gui/View3DInventorViewer.h>
 

@@ -32,7 +32,7 @@
 #include <Inventor/nodes/SoDrawStyle.h>
 #include <Inventor/SoFullPath.h>
 
-#include "Inventor/SoAutoZoomTranslation.h"
+#include "View/Inventor/SoAutoZoomTranslation.h"
 #include "SoFCSelection.h"
 #include "SoFCUnifiedSelection.h"
 #include "AxisOrigin.h"

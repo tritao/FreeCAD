@@ -26,7 +26,7 @@
 #include <QApplication>
 
 
-#include "Inventor/SoMouseWheelEvent.h"
+#include "View/Inventor/SoMouseWheelEvent.h"
 #include "Navigation/NavigationStyle.h"
 #include "View3DInventorViewer.h"
 

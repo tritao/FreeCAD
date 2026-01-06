@@ -51,7 +51,7 @@
 #include "Application.h"
 #include "Command.h"
 #include "Action.h"
-#include "Inventor/SoMouseWheelEvent.h"
+#include "View/Inventor/SoMouseWheelEvent.h"
 #include "MenuManager.h"
 #include "MouseSelection.h"
 #include "Navigation/NavigationAnimator.h"

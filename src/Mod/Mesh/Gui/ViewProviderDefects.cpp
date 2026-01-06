@@ -34,7 +34,7 @@
 
 #include <App/Application.h>
 #include <Base/Parameter.h>
-#include <Gui/Inventor/MarkerBitmaps.h>
+#include <View/Inventor/MarkerBitmaps.h>
 #include <Mod/Mesh/App/MeshFeature.h>
 #include <Mod/Mesh/App/Core/Degeneration.h>
 #include <Mod/Mesh/App/Core/Iterator.h>

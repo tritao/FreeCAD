@@ -66,7 +66,7 @@
 #include "Workbench.h"
 #include "WorkbenchManager.h"
 #include "WorkbenchManipulatorPython.h"
-#include "Inventor/MarkerBitmaps.h"
+#include "View/Inventor/MarkerBitmaps.h"
 #include "Language/Translator.h"
 
 

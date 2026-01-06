@@ -60,7 +60,7 @@
 #include <Gui/ViewParams.h>
 
 #include "SoAxisCrossKit.h"
-#include "SoDevicePixelRatioElement.h"
+#include <View/SoDevicePixelRatioElement.h>
 
 using namespace Gui;
 

@@ -33,7 +33,7 @@
 #include <Inventor/nodes/SoTranslation.h>
 
 #include <App/Application.h>
-#include <Gui/Inventor/SoAutoZoomTranslation.h>
+#include <View/Inventor/SoAutoZoomTranslation.h>
 #include <Mod/Part/Gui/SoBrepEdgeSet.h>
 
 #include "ViewProviderDatumCS.h"

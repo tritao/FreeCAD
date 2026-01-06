@@ -1125,17 +1125,9 @@ SOURCE_GROUP("View3D\\Viewprovider" FILES ${Viewprovider_SRCS})
 
 # The Inventor sources
 SET(Inventor_CPP_SRCS
-    Inventor/MarkerBitmaps.cpp
-    Inventor/SmSwitchboard.cpp
     Inventor/So3DAnnotation.cpp
-    Inventor/SoAutoZoomTranslation.cpp
     Inventor/SoAxisCrossKit.cpp
     Inventor/SoFCPlacementIndicatorKit.cpp
-    Inventor/SoDrawingGrid.cpp
-    Inventor/SoFCBackgroundGradient.cpp
-    Inventor/SoFCBoundingBox.cpp
-    Inventor/SoMouseWheelEvent.cpp
-    Inventor/SoFCTransform.cpp
     Inventor/SoToggleSwitch.cpp
     Inventor/Draggers/SoTransformDragger.cpp
     Inventor/Draggers/SoLinearDragger.cpp
@@ -1158,7 +1150,6 @@ SET(Inventor_CPP_SRCS
     Selection/SoFCSelectionAction.cpp
     SoFCVectorizeSVGAction.cpp
     SoFCVectorizeU3DAction.cpp
-    SoDevicePixelRatioElement.cpp
     SoTextLabel.cpp
     SoDatumLabel.cpp
     SoTouchEvents.cpp
@@ -1166,16 +1157,8 @@ SET(Inventor_CPP_SRCS
 )
 SET(Inventor_SRCS
     ${Inventor_CPP_SRCS}
-    Inventor/MarkerBitmaps.h
-    Inventor/SmSwitchboard.h
-    Inventor/SoAutoZoomTranslation.h
     Inventor/SoAxisCrossKit.h
     Inventor/SoFCPlacementIndicatorKit.h
-    Inventor/SoDrawingGrid.h
-    Inventor/SoFCBackgroundGradient.h
-    Inventor/SoFCBoundingBox.h
-    Inventor/SoMouseWheelEvent.h
-    Inventor/SoFCTransform.h
     Inventor/SoToggleSwitch.h
     Inventor/Draggers/SoTransformDragger.h
     Inventor/Draggers/SoLinearDragger.h
@@ -1199,7 +1182,6 @@ SET(Inventor_SRCS
     Selection/SoFCSelectionAction.h
     SoFCVectorizeSVGAction.h
     SoFCVectorizeU3DAction.h
-    SoDevicePixelRatioElement.h
     SoTextLabel.h
     SoDatumLabel.h
     SoTouchEvents.h
@@ -1530,7 +1512,6 @@ endif()
 if (EIGEN3_NO_DEPRECATED_COPY)
     set_source_files_properties(
         NaviCube.cpp
-        Inventor/SoAutoZoomTranslation.cpp
         Inventor/Draggers/SoTransformDragger.cpp
         Inventor/Draggers/SoLinearDragger.cpp
         Inventor/Draggers/SoLinearDraggerGeometry.cpp
@@ -1546,7 +1527,7 @@ if (EIGEN3_NO_DEPRECATED_COPY)
 endif ()
 
 target_sources(FreeCADGui PRIVATE ${FreeCADGui_SRCS})
-target_link_libraries(FreeCADGui PUBLIC ${FreeCADGui_LIBS})
+target_link_libraries(FreeCADGui PUBLIC ${FreeCADGui_LIBS} FreeCADView)
 
 if (MSVC)
     target_compile_definitions(FreeCADGui PRIVATE WIN32_LEAN_AND_MEAN)

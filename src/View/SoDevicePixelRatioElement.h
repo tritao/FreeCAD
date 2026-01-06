@@ -21,37 +21,33 @@
  *                                                                          *
  ***************************************************************************/
 
+#ifndef SO_DEVICE_PIXEL_RATIO_ELEMENT_H
+#define SO_DEVICE_PIXEL_RATIO_ELEMENT_H
 
-#include <Inventor/actions/SoGLRenderAction.h>
-#include <Inventor/misc/SoState.h>
+#include <Inventor/elements/SoFloatElement.h>
 
+class SoState;
 
-#include "SoDevicePixelRatioElement.h"
-
-SO_ELEMENT_SOURCE(SoDevicePixelRatioElement);
-
-void SoDevicePixelRatioElement::initClass()
+class SoDevicePixelRatioElement: public SoFloatElement
 {
-    SO_ELEMENT_INIT_CLASS(SoDevicePixelRatioElement, SoFloatElement);
-    // Ensure the element is enabled for GLRenderAction
-    SO_ENABLE(SoGLRenderAction, SoDevicePixelRatioElement);
-}
+    SO_ELEMENT_HEADER(SoDevicePixelRatioElement);
 
-void SoDevicePixelRatioElement::init(SoState* state)
-{
-    SoFloatElement::init(state);
-    data = 1.0f;  // Default to a device pixel ratio of 1.0
-}
+public:
+    // Initializes the class
+    static void initClass();
 
-void SoDevicePixelRatioElement::set(SoState* state, float dpr)
-{
-    SoFloatElement::set(classStackIndex, state, dpr);
-}
+    // Initializes the element
+    virtual void init(SoState* state) override;
 
-float SoDevicePixelRatioElement::get(SoState* state)
-{
-    return SoFloatElement::get(classStackIndex, state);
-}
+    // Sets the device pixel ratio
+    static void set(SoState* state, float dpr);
 
-SoDevicePixelRatioElement::~SoDevicePixelRatioElement()
-{}
+    // Retrieves the device pixel ratio
+    static float get(SoState* state);
+
+protected:
+    virtual ~SoDevicePixelRatioElement();
+};
+
+#endif  // SO_DEVICE_PIXEL_RATIO_ELEMENT_H
+

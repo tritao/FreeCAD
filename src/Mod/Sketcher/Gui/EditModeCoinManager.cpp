@@ -42,8 +42,8 @@
 #include <Inventor/nodes/SoTranslation.h>
 
 #include <Base/Exception.h>
-#include <Gui/Inventor/MarkerBitmaps.h>
-#include <Gui/Inventor/SoFCBoundingBox.h>
+#include <View/Inventor/MarkerBitmaps.h>
+#include <View/Inventor/SoFCBoundingBox.h>
 #include <Mod/Sketcher/App/Constraint.h>
 #include <Mod/Sketcher/App/GeoList.h>
 

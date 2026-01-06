@@ -34,8 +34,8 @@
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoSeparator.h>
 
-#include <Gui/Inventor/MarkerBitmaps.h>
-#include <Gui/Inventor/SmSwitchboard.h>
+#include <View/Inventor/MarkerBitmaps.h>
+#include <View/Inventor/SmSwitchboard.h>
 #include <Mod/Sketcher/App/Constraint.h>
 #include <Mod/Sketcher/App/GeoEnum.h>
 #include <Mod/Sketcher/App/GeoList.h>

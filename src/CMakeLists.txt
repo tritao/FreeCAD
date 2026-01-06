@@ -10,6 +10,7 @@ add_subdirectory(Ext)
 add_subdirectory(Doc)
 
 if(BUILD_GUI)
+    add_subdirectory(View)
     add_subdirectory(Gui)
     if(UNIX AND NOT APPLE)
         add_subdirectory(XDGData)
@@ -22,4 +23,3 @@ endif(BUILD_TEMPLATE)
 
 # "if" clause moved into local CMakeLists.txt file to support Conda and Homebrew builds
 add_subdirectory(MacAppBundle)
-

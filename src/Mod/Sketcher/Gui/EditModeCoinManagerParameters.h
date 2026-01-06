@@ -44,7 +44,7 @@
 
 #include <Base/Color.h>
 #include <Gui/ViewParams.h>
-#include <Gui/Inventor/SmSwitchboard.h>
+#include <View/Inventor/SmSwitchboard.h>
 #include <Mod/Sketcher/App/GeoList.h>
 
 #include "ViewProviderSketchGeometryExtension.h"

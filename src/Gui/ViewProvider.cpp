@@ -41,8 +41,8 @@
 #include <Base/Matrix.h>
 #include <Base/Tools.h>
 
-#include "Inventor/SoMouseWheelEvent.h"
-#include "Inventor/SoFCTransform.h"
+#include "View/Inventor/SoMouseWheelEvent.h"
+#include "View/Inventor/SoFCTransform.h"
 #include "ViewProvider.h"
 #include "ActionFunction.h"
 #include "Application.h"

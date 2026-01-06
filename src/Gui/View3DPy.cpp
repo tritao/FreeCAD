@@ -51,7 +51,7 @@
 
 #include "Camera.h"
 #include "Document.h"
-#include "Inventor/SoMouseWheelEvent.h"
+#include "View/Inventor/SoMouseWheelEvent.h"
 #include "Navigation/NavigationStyle.h"
 #include "PythonWrapper.h"
 #include "SoFCDB.h"

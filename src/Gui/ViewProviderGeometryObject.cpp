@@ -41,7 +41,7 @@
 
 #include "Application.h"
 #include "Document.h"
-#include "Inventor/SoFCBoundingBox.h"
+#include "View/Inventor/SoFCBoundingBox.h"
 #include "SoFCSelection.h"
 #include "View3DInventorViewer.h"
 #include "ViewProviderGeometryObject.h"

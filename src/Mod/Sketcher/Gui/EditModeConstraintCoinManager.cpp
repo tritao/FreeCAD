@@ -52,7 +52,7 @@
 #include <Base/UnitsApi.h>
 #include <Base/Vector3D.h>
 #include <Gui/BitmapFactory.h>
-#include <Gui/Inventor/SmSwitchboard.h>
+#include <View/Inventor/SmSwitchboard.h>
 #include <Gui/SoDatumLabel.h>
 #include <Gui/Tools.h>
 #include <Gui/Utilities.h>
