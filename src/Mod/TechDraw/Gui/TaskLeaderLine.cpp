@@ -528,7 +528,7 @@ void TaskLeaderLine::onTrackerClicked(bool clicked)
         startTracker();
 
         QString msg = tr("Pick a starting point for leader line");
-        getMainWindow()->statusBar()->show();
+        Gui::Application::Instance->showStatusBar();
         Gui::Application::Instance->showMessage(msg, MessageDisplayTime);
         ui->pbTracker->setText(tr("Save points"));
         ui->pbTracker->setEnabled(true);
@@ -563,7 +563,7 @@ void TaskLeaderLine::onTrackerClicked(bool clicked)
                         this, &TaskLeaderLine::onPointEditComplete);
                 qgLead->startPathEdit();
                 QString msg = tr("Click and drag markers to adjust leader line");
-                getMainWindow()->statusBar()->show();
+                Gui::Application::Instance->showStatusBar();
                 Gui::Application::Instance->showMessage(msg, MessageDisplayTime);
                 ui->pbTracker->setText(tr("Save changes"));
                 ui->pbTracker->setEnabled(true);
@@ -580,7 +580,7 @@ void TaskLeaderLine::onTrackerClicked(bool clicked)
             startTracker();
 
             QString msg = tr("Pick a starting point for leader line");
-            getMainWindow()->statusBar()->show();
+            Gui::Application::Instance->showStatusBar();
             Gui::Application::Instance->showMessage(msg, MessageDisplayTime);
             ui->pbTracker->setText(tr("Save changes"));
             ui->pbTracker->setEnabled(true);
@@ -614,7 +614,7 @@ void TaskLeaderLine::startTracker()
     }
     setEditCursor(Qt::CrossCursor);
     QString msg = tr("Left click to set a point");
-    Gui::getMainWindow()->statusBar()->show();
+    Gui::Application::Instance->showStatusBar();
     Gui::Application::Instance->showMessage(msg, MessageDisplayTime);
 }
 
@@ -640,7 +640,7 @@ void TaskLeaderLine::onTrackerFinished(std::vector<QPointF> trackerScenePoints, 
     }
 
     QString msg = tr("Press OK or Cancel to continue");
-    getMainWindow()->statusBar()->show();
+    Gui::Application::Instance->showStatusBar();
     Gui::Application::Instance->showMessage(msg, MessageDisplayTime);
     enableTaskButtons(true);
 
@@ -772,7 +772,7 @@ void TaskLeaderLine::abandonEditSession()
         m_qgLeader->abandonEdit();
     }
     QString msg = tr("In progress edit abandoned. Start over.");
-    getMainWindow()->statusBar()->show();
+    Gui::Application::Instance->showStatusBar();
     Gui::Application::Instance->showMessage(msg, MessageDuration);
 
     m_pbTrackerState = TrackerAction::EDIT;
