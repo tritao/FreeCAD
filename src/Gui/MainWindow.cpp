@@ -110,6 +110,7 @@
 #include "WaitCursor.h"
 #include "WorkbenchManager.h"
 #include "Workbench.h"
+#include "DockWidgetRegistry.h"
 
 #include "MergeDocuments.h"
 #include "ViewProviderExtern.h"
@@ -535,7 +536,9 @@ static inline void _updateDockWidget(
     if (!widget) {
         return;
     }
-    DockWindowManager::instance()->registerDockWindow(name, widget);
+    if (!pDockMgr->findRegisteredDockWindow(name)) {
+        DockWindowManager::instance()->registerDockWindow(name, widget);
+    }
     if (show) {
         auto dock = pDockMgr->addDockWindow(widget->objectName().toUtf8().constData(), widget, pos);
         if (dock) {
@@ -578,23 +581,9 @@ bool MainWindow::setupTaskView()
 {
     // Task view
     if (d->hiddenDockWindows.find("Std_TaskView") == std::string::npos) {
-        // clang-format off
-        auto group = App::GetApplication().GetUserParameter()
-                      .GetGroup("BaseApp")
-                     ->GetGroup("Preferences")
-                     ->GetGroup("DockWindows")
-                     ->GetGroup("TaskView");
-        // clang-format on
-        auto taskView = new Gui::TaskView::TaskView(this);
-        bool restore = group->GetBool("RestoreWidth", taskView->shouldRestoreWidth());
-        taskView->setRestoreWidth(restore);
-        taskView->setObjectName(QStringLiteral("Tasks"));
-        taskView->setWindowTitle(QDockWidget::tr("Tasks"));
-        taskView->setMinimumWidth(210);
-
         DockWindowManager* pDockMgr = DockWindowManager::instance();
-        pDockMgr->registerDockWindow("Std_TaskView", taskView);
-        return true;
+        return DockWidgetRegistry::instance()
+            .ensureRegistered(pDockMgr, this, QStringLiteral("Std_TaskView"));
     }
 
     return false;
@@ -604,14 +593,9 @@ bool MainWindow::setupSelectionView()
 {
     // Selection view
     if (d->hiddenDockWindows.find("Std_SelectionView") == std::string::npos) {
-        auto pcSelectionView = new SelectionView(nullptr, this);
-        pcSelectionView->setObjectName(QStringLiteral("Selection view"));
-        pcSelectionView->setWindowTitle(QDockWidget::tr("Selection View"));
-        pcSelectionView->setMinimumWidth(210);
-
         DockWindowManager* pDockMgr = DockWindowManager::instance();
-        pDockMgr->registerDockWindow("Std_SelectionView", pcSelectionView);
-        return true;
+        return DockWidgetRegistry::instance()
+            .ensureRegistered(pDockMgr, this, QStringLiteral("Std_SelectionView"));
     }
 
     return false;
@@ -621,17 +605,9 @@ bool MainWindow::setupReportView()
 {
     // Report view
     if (d->hiddenDockWindows.find("Std_ReportView") == std::string::npos) {
-        auto pcReport = new ReportOutput(this);
-        pcReport->setWindowIcon(BitmapFactory().pixmap("MacroEditor"));
-        pcReport->setObjectName(QStringLiteral("Report view"));
-        pcReport->setWindowTitle(QDockWidget::tr("Report View"));
-
         DockWindowManager* pDockMgr = DockWindowManager::instance();
-        pDockMgr->registerDockWindow("Std_ReportView", pcReport);
-
-        auto rvObserver = new ReportOutputObserver(pcReport);
-        qApp->installEventFilter(rvObserver);
-        return true;
+        return DockWidgetRegistry::instance()
+            .ensureRegistered(pDockMgr, this, QStringLiteral("Std_ReportView"));
     }
 
     return false;
@@ -641,14 +617,9 @@ bool MainWindow::setupPythonConsole()
 {
     // Python console
     if (d->hiddenDockWindows.find("Std_PythonView") == std::string::npos) {
-        auto pcPython = new PythonConsole(this);
-        pcPython->setWindowIcon(Gui::BitmapFactory().iconFromTheme("applications-python"));
-        pcPython->setObjectName(QStringLiteral("Python console"));
-        pcPython->setWindowTitle(QDockWidget::tr("Python Console"));
-
         DockWindowManager* pDockMgr = DockWindowManager::instance();
-        pDockMgr->registerDockWindow("Std_PythonView", pcPython);
-        return true;
+        return DockWidgetRegistry::instance()
+            .ensureRegistered(pDockMgr, this, QStringLiteral("Std_PythonView"));
     }
 
     return false;
@@ -694,17 +665,11 @@ bool MainWindow::updateTreeView(bool show)
                                          ->GetGroup("DockWindows")
                                          ->GetGroup("TreeView");
         bool enabled = group->GetBool("Enabled", false);
-        _updateDockWidget("Std_TreeView", enabled, show, Qt::RightDockWidgetArea, [](QWidget* widget) {
+        _updateDockWidget("Std_TreeView", enabled, show, Qt::RightDockWidgetArea, [this](QWidget* widget) {
             if (widget) {
                 return widget;
             }
-
-            auto tree = new TreeDockWidget(0, getMainWindow());
-            tree->setObjectName(QStringLiteral("Tree view"));
-            tree->setWindowTitle(QDockWidget::tr("Tree View"));
-            tree->setMinimumWidth(210);
-            widget = tree;
-            return widget;
+            return DockWidgetRegistry::instance().create(QStringLiteral("Std_TreeView"), this);
         });
 
         return enabled;
@@ -724,18 +689,17 @@ bool MainWindow::updatePropertyView(bool show)
                                          ->GetGroup("DockWindows")
                                          ->GetGroup("PropertyView");
         bool enabled = group->GetBool("Enabled", false);
-        _updateDockWidget("Std_PropertyView", enabled, show, Qt::RightDockWidgetArea, [](QWidget* widget) {
+        _updateDockWidget(
+            "Std_PropertyView",
+            enabled,
+            show,
+            Qt::RightDockWidgetArea,
+            [this](QWidget* widget) {
             if (widget) {
                 return widget;
             }
-
-            auto pcPropView = new PropertyDockView(0, getMainWindow());
-            pcPropView->setObjectName(QStringLiteral("Property view"));
-            pcPropView->setWindowTitle(QDockWidget::tr("Property View"));
-            pcPropView->setMinimumWidth(210);
-            widget = pcPropView;
-            return widget;
-        });
+            return DockWidgetRegistry::instance().create(QStringLiteral("Std_PropertyView"), this);
+            });
 
         return enabled;
     }
@@ -781,18 +745,11 @@ bool MainWindow::updateComboView(bool show)
                                          ->GetGroup("DockWindows")
                                          ->GetGroup("ComboView");
         bool enable = group->GetBool("Enabled", true);
-        _updateDockWidget("Std_ComboView", enable, show, Qt::LeftDockWidgetArea, [](QWidget* widget) {
-            auto pcComboView = qobject_cast<ComboView*>(widget);
+        _updateDockWidget("Std_ComboView", enable, show, Qt::LeftDockWidgetArea, [this](QWidget* widget) {
             if (widget) {
                 return widget;
             }
-
-            pcComboView = new ComboView(nullptr, getMainWindow());
-            pcComboView->setObjectName(QStringLiteral("Model"));
-            pcComboView->setWindowTitle(QDockWidget::tr("Model"));
-            pcComboView->setMinimumWidth(150);
-            widget = pcComboView;
-            return widget;
+            return DockWidgetRegistry::instance().create(QStringLiteral("Std_ComboView"), this);
         });
 
         return enable;
@@ -812,16 +769,11 @@ bool MainWindow::updateDAGView(bool show)
                                          ->GetGroup("DockWindows")
                                          ->GetGroup("DAGView");
         bool enabled = group->GetBool("Enabled", false);
-        _updateDockWidget("Std_DAGView", enabled, show, Qt::RightDockWidgetArea, [](QWidget* widget) {
+        _updateDockWidget("Std_DAGView", enabled, show, Qt::RightDockWidgetArea, [this](QWidget* widget) {
             if (widget) {
                 return widget;
             }
-
-            auto dagDockWindow = new DAG::DockWindow(nullptr, getMainWindow());
-            dagDockWindow->setObjectName(QStringLiteral("DAG View"));
-            dagDockWindow->setWindowTitle(QDockWidget::tr("DAG View"));
-            widget = dagDockWindow;
-            return widget;
+            return DockWidgetRegistry::instance().create(QStringLiteral("Std_DAGView"), this);
         });
 
         return enabled;

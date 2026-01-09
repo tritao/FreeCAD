@@ -22,6 +22,7 @@
 
 
 #include <QDockWidget>
+#include <QMainWindow>
 #include <QStatusBar>
 
 
@@ -33,6 +34,7 @@
 #include "Command.h"
 #include "Control.h"
 #include "DockWindowManager.h"
+#include "DockWidgetRegistry.h"
 #include "MainWindow.h"
 #include "MenuManager.h"
 #include "PythonWorkbenchPy.h"
@@ -449,10 +451,23 @@ void Workbench::deactivated()
 
 bool Workbench::activate()
 {
+    const bool ok = applyChromeTo(getMainWindow(), "BaseApp/MainWindow");
+    setupCustomShortcuts();
+    return ok;
+}
+
+bool Workbench::applyChromeTo(QMainWindow* hostWindow, const std::string& statePrefix)
+{
+    if (!hostWindow) {
+        return false;
+    }
+
     ToolBarItem* tb = setupToolBars();
     setupCustomToolbars(tb, "Toolbar");
     WorkbenchManipulator::changeToolBars(tb);
-    ToolBarManager::getInstance()->setup(tb);
+    if (auto* toolbarMgr = ToolBarManager::getInstance(hostWindow, statePrefix)) {
+        toolbarMgr->setup(tb);
+    }
     delete tb;
 
     // ToolBarItem* cb = setupCommandBars();
@@ -462,16 +477,17 @@ bool Workbench::activate()
 
     DockWindowItems* dw = setupDockWindows();
     WorkbenchManipulator::changeDockWindows(dw);
-    DockWindowManager::instance()->setup(dw);
+    if (auto* dockMgr = DockWindowManager::instance(hostWindow, statePrefix)) {
+        DockWidgetRegistry::instance().ensureRegisteredForItems(dockMgr, hostWindow, *dw);
+        dockMgr->setup(dw);
+    }
     delete dw;
 
     MenuItem* mb = setupMenuBar();
     addPermanentMenuItems(mb);
     WorkbenchManipulator::changeMenuBar(mb);
-    MenuManager::getInstance()->setup(mb);
+    MenuManager::getInstance()->setup(mb, hostWindow->menuBar());
     delete mb;
-
-    setupCustomShortcuts();
 
     return true;
 }

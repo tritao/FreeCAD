@@ -82,6 +82,8 @@
 #include "InputHintPy.h"
 #include "LinkViewPy.h"
 #include "MainWindow.h"
+#include "DockWidgetRegistry.h"
+#include "StandardDockWidgetRegistration.h"
 #include "Macro.h"
 #include "PreferencePackManager.h"
 #include "PythonConsolePy.h"
@@ -2574,6 +2576,11 @@ void Application::runApplication()
     process.execute();
 
     Application app(true);
+
+    // Register standard dock widget creators before constructing MainWindow, because MainWindow
+    // may request "Std_*" dock widgets during initialization.
+    Gui::registerStandardDockWidgets(Gui::DockWidgetRegistry::instance());
+
     MainWindow mw;
     mw.setProperty("QuitOnClosed", true);
 

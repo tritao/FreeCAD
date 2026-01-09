@@ -1317,11 +1317,13 @@ SOURCE_GROUP("View" FILES ${View_SRCS})
 
 # The workbench sources
 SET(Workbench_CPP_SRCS
+    DockWidgetRegistry.cpp
     DockWindowManager.cpp
     OverlayManager.cpp
     OverlayWidgets.cpp
     MenuManager.cpp
     PythonWorkbenchPyImp.cpp
+    StandardDockWidgetRegistration.cpp
     ToolBarAreaWidget.cpp
     ToolBarManager.cpp
     ToolBoxManager.cpp
@@ -1334,10 +1336,12 @@ SET(Workbench_CPP_SRCS
 )
 SET(Workbench_SRCS
     ${Workbench_CPP_SRCS}
+    DockWidgetRegistry.h
     DockWindowManager.h
     OverlayManager.h
     OverlayWidgets.h
     MenuManager.h
+    StandardDockWidgetRegistration.h
     ToolBarAreaWidget.h
     ToolBarManager.h
     ToolBoxManager.h

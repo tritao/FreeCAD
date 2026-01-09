@@ -526,13 +526,9 @@ void DockWindowManager::retranslate()
  * sure that the name is unique. If a widget with this name is already registered nothing is done
  * but false is returned, otherwise it is appended and true is returned.
  *
- * As default the following widgets are already registered:
- * \li Std_TreeView
- * \li Std_PropertyView
- * \li Std_ReportView
- * \li Std_ToolBox
- * \li Std_ComboView
- * \li Std_SelectionView
+ * Note: This manager does not create widgets. Classic FreeCAD registers the standard
+ * "Std_*" dock widgets during main window initialization. Alternative shells should register
+ * their dock widgets explicitly (e.g. via DockWidgetRegistry).
  *
  * To avoid name clashes the caller should use names of the form \a module_widgettype, i. e. if a
  * analyse dialog for the mesh module is added the name must then be Mesh_AnalyzeDialog.
