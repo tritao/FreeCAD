@@ -43,6 +43,8 @@ class Document;
 namespace Gui
 {
 
+GuiExport QWidget* uiParentWidget();
+
 class BaseView;
 class CommandManager;
 class Document;

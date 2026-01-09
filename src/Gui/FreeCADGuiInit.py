@@ -237,13 +237,17 @@ class HintManager:
 
         :param hints: List of hints to show.
         """
-        Gui.getMainWindow().showHint(*hints)
+        mw = Gui.getMainWindow()
+        if mw and hasattr(mw, "showHint"):
+            mw.showHint(*hints)
 
     def hide(self):
         """
         Hides all currently displayed input hints.
         """
-        Gui.getMainWindow().hideHint()
+        mw = Gui.getMainWindow()
+        if mw and hasattr(mw, "hideHint"):
+            mw.hideHint()
 
 
 Gui.InputHint = InputHint

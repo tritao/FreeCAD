@@ -58,6 +58,7 @@ public:
     static PyObject* sSendFocusView            (PyObject *self,PyObject *args);
 
     static PyObject* sGetMainWindow            (PyObject *self,PyObject *args);
+    static PyObject* sUiParentWidget           (PyObject *self,PyObject *args);
     static PyObject* sUpdateGui                (PyObject *self,PyObject *args);
     static PyObject* sUpdateLocale             (PyObject *self,PyObject *args);
     static PyObject* sGetLocale                (PyObject *self,PyObject *args);

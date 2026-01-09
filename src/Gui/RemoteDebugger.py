@@ -83,5 +83,5 @@ class RemoteDebugger:
 
 
 def attachToRemoteDebugger():
-    dlg = RemoteDebugger(Gui.getMainWindow())
+    dlg = RemoteDebugger(Gui.uiParentWidget())
     dlg.exec_()

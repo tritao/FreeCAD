@@ -178,7 +178,13 @@ PyMethodDef ApplicationPy::Methods[] = {
      METH_VARARGS,
      "getMainWindow() -> QMainWindow\n"
      "\n"
-     "Return the main window instance."},
+     "Return the active shell main window instance."},
+    {"uiParentWidget",
+     (PyCFunction)ApplicationPy::sUiParentWidget,
+     METH_VARARGS,
+     "uiParentWidget() -> QWidget\n"
+     "\n"
+     "Return the active UI parent widget (main window if available, otherwise the active window)."},
     {"updateGui",
      (PyCFunction)ApplicationPy::sUpdateGui,
      METH_VARARGS,
@@ -975,7 +981,45 @@ PyObject* ApplicationPy::sGetMainWindow(PyObject* /*self*/, PyObject* args)
     }
 
     try {
-        return Py::new_reference_to(MainWindowPy::createWrapper(Gui::getMainWindow()));
+        auto* mw = Gui::activeMainWindow();
+        if (!mw) {
+            Py_RETURN_NONE;
+        }
+
+        if (auto* classic = qobject_cast<Gui::MainWindow*>(mw)) {
+            return Py::new_reference_to(MainWindowPy::createWrapper(classic));
+        }
+
+        PythonWrapper wrap;
+        if (!wrap.loadCoreModule() || !wrap.loadGuiModule() || !wrap.loadWidgetsModule()) {
+            throw Py::RuntimeError("Failed to load Python wrapper for Qt");
+        }
+
+        return Py::new_reference_to(wrap.fromQWidget(mw, "QMainWindow"));
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sUiParentWidget(PyObject* /*self*/, PyObject* args)
+{
+    if (!PyArg_ParseTuple(args, "")) {
+        return nullptr;
+    }
+
+    try {
+        auto* parent = Gui::uiParentWidget();
+        if (!parent) {
+            Py_RETURN_NONE;
+        }
+
+        PythonWrapper wrap;
+        if (!wrap.loadCoreModule() || !wrap.loadGuiModule() || !wrap.loadWidgetsModule()) {
+            throw Py::RuntimeError("Failed to load Python wrapper for Qt");
+        }
+
+        return Py::new_reference_to(wrap.fromQWidget(parent, "QWidget"));
     }
     catch (const Py::Exception&) {
         return nullptr;
