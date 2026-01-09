@@ -31,6 +31,7 @@
 
 class QAction;
 class QMenu;
+class QMenuBar;
 
 namespace Gui
 {
@@ -80,9 +81,11 @@ class GuiExport MenuManager
 public:
     /** Sets up the menus of a given workbench. */
     void setup(MenuItem*) const;
+    void setup(MenuItem*, QMenuBar* menuBar) const;
     /// sets up a context menu out of item
     void setupContextMenu(MenuItem* item, QMenu& menu) const;
     void retranslate() const;
+    void retranslate(QMenuBar* menuBar) const;
 
     /// The one and only instance.
     static MenuManager* getInstance();
