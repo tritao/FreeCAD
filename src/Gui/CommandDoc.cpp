@@ -640,7 +640,7 @@ void StdCmdDependencyGraph::activated(int iMsg)
     App::Document* doc = App::GetApplication().getActiveDocument();
     auto view = new Gui::GraphvizView(*doc);
     view->setWindowTitle(qApp->translate("Std_DependencyGraph", "Dependency Graph"));
-    getMainWindow()->addWindow(view);
+    Application::Instance->addWindow(view);
 }
 
 bool StdCmdDependencyGraph::isActive()
@@ -966,9 +966,9 @@ StdCmdPrint::StdCmdPrint()
 void StdCmdPrint::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    if (getMainWindow()->activeWindow()) {
+    if (auto* view = Application::Instance->activeWindow()) {
         Application::Instance->showMessage(QObject::tr("Printing…"));
-        getMainWindow()->activeWindow()->print();
+        view->print();
     }
 }
 
@@ -998,8 +998,8 @@ StdCmdPrintPreview::StdCmdPrintPreview()
 void StdCmdPrintPreview::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    if (getMainWindow()->activeWindow()) {
-        getMainWindow()->activeWindow()->printPreview();
+    if (auto* view = Application::Instance->activeWindow()) {
+        view->printPreview();
     }
 }
 
@@ -1029,9 +1029,9 @@ StdCmdPrintPdf::StdCmdPrintPdf()
 void StdCmdPrintPdf::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    if (getMainWindow()->activeWindow()) {
+    if (auto* view = Application::Instance->activeWindow()) {
         Application::Instance->showMessage(QObject::tr("Exporting PDF…"));
-        getMainWindow()->activeWindow()->printPdf();
+        view->printPdf();
     }
 }
 
@@ -1881,7 +1881,7 @@ StdCmdEdit::StdCmdEdit()
 void StdCmdEdit::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::MDIView* view = Gui::getMainWindow()->activeWindow();
+    Gui::MDIView* view = Gui::Application::Instance->activeWindow();
     if (view && view->isDerivedFrom<Gui::View3DInventor>()) {
         Gui::View3DInventorViewer* viewer = static_cast<Gui::View3DInventor*>(view)->getViewer();
         if (viewer->isEditingViewProvider()) {

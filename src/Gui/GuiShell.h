@@ -25,9 +25,12 @@
 
 #include <FCGlobal.h>
 
+#include <QList>
+
 #include <memory>
 #include <string>
 
+class QMdiArea;
 class QMainWindow;
 class QString;
 class QWidget;
@@ -35,6 +38,7 @@ class QWidget;
 namespace Gui
 {
 
+class MDIView;
 class GuiShellServices;
 
 class GuiExport IGuiShell
@@ -50,6 +54,14 @@ public:
     virtual void setStatusPaneText(int pane, const QString& text) = 0;
     virtual void addStatusPermanentWidget(QWidget* widget, int stretch = 0) = 0;
     virtual void removeStatusWidget(QWidget* widget) = 0;
+
+    virtual void addWindow(MDIView* view) = 0;
+    virtual void removeWindow(MDIView* view, bool close = true) = 0;
+    virtual QList<QWidget*> windows() const = 0;
+    virtual QMdiArea* mdiArea() const = 0;
+    virtual MDIView* activeWindow() const = 0;
+    virtual void setActiveWindow(MDIView* view) = 0;
+    virtual void tabChanged(MDIView* view) = 0;
 };
 
 GuiExport IGuiShell* activeShell();

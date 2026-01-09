@@ -24,6 +24,7 @@
 
 #include "GuiShellServices.h"
 #include "MainWindow.h"
+#include "MDIView.h"
 
 #include <QLabel>
 #include <QStatusBar>
@@ -135,6 +136,58 @@ public:
             if (auto* sb = w->statusBar()) {
                 sb->removeWidget(widget);
             }
+        }
+    }
+
+    void addWindow(MDIView* view) override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->addWindow(view);
+        }
+    }
+
+    void removeWindow(MDIView* view, bool close) override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->removeWindow(view, close);
+        }
+    }
+
+    QList<QWidget*> windows() const override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            return mw->windows();
+        }
+        return {};
+    }
+
+    QMdiArea* mdiArea() const override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            return mw->getMdiArea();
+        }
+        return nullptr;
+    }
+
+    MDIView* activeWindow() const override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            return mw->activeWindow();
+        }
+        return nullptr;
+    }
+
+    void setActiveWindow(MDIView* view) override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->setActiveWindow(view);
+        }
+    }
+
+    void tabChanged(MDIView* view) override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->tabChanged(view);
         }
     }
 

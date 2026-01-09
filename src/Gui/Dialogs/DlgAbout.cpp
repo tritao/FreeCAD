@@ -471,7 +471,7 @@ void AboutDialog::linkActivated(const QUrl& link)
         title = QStringLiteral("%1 %2").arg(prefix, title);
     }
     licenseView->setWindowTitle(title);
-    getMainWindow()->addWindow(licenseView);
+    Application::Instance->addWindow(licenseView);
     licenseView->setSource(link);
 }
 

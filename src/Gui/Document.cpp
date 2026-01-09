@@ -628,7 +628,7 @@ View3DInventor* Document::openEditingView3D(const ViewProviderDocumentObject* vp
     auto view3d = dynamic_cast<View3DInventor*>(getActiveView());
     // if the currently active view is not the 3d view search for it and activate it
     if (view3d) {
-        getMainWindow()->setActiveWindow(view3d);
+        Application::Instance->setActiveWindow(view3d);
     }
     else {
         view3d = dynamic_cast<View3DInventor*>(setActiveView(vp));
@@ -2273,7 +2273,7 @@ MDIView* Document::createView(const Base::Type& typeId, CreateViewMode mode)
         // workaround using cloned views is that the view can be shown in undocked/fullscreen mode
         // without having been docked before.
         if (mode != CreateViewMode::Clone) {
-            getMainWindow()->addWindow(view3D);
+            Application::Instance->addWindow(view3D);
         }
 
         view3D->getViewer()->redraw();
@@ -2573,7 +2573,7 @@ bool Document::sendMsgToFirstView(const Base::Type& typeId, const char* pMsg, co
 MDIView* Document::getActiveView() const
 {
     // get the main window's active view
-    MDIView* active = getMainWindow()->activeWindow();
+    MDIView* active = Application::Instance->activeWindow();
 
     // get all MDI views of the document
     std::list<MDIView*> mdis = getMDIViews();
@@ -2592,7 +2592,7 @@ MDIView* Document::getActiveView() const
     }
 
     // the active view is not part of this document, just use the last view
-    const auto& windows = Gui::getMainWindow()->windows();
+    const auto windows = Application::Instance->windows();
     for (auto rit = mdis.rbegin(); rit != mdis.rend(); ++rit) {
         // Some view is removed from window list for some reason, e.g. TechDraw
         // hidden page has view but not in the list. By right, the view will
@@ -2657,7 +2657,7 @@ MDIView* Document::setActiveView(const ViewProviderDocumentObject* vp, Base::Typ
     }
 
     if (view) {
-        getMainWindow()->setActiveWindow(view);
+        Application::Instance->setActiveWindow(view);
     }
 
     return view;
@@ -2673,7 +2673,7 @@ MDIView* Document::setActiveView(const ViewProviderDocumentObject* vp, Base::Typ
 void Document::setActiveWindow(Gui::MDIView* view)
 {
     // get the main window's active view
-    MDIView* active = getMainWindow()->activeWindow();
+    MDIView* active = Application::Instance->activeWindow();
 
     // view is already active
     if (active == view) {
@@ -2693,7 +2693,7 @@ void Document::setActiveWindow(Gui::MDIView* view)
         return;
     }
 
-    getMainWindow()->setActiveWindow(view);
+    Application::Instance->setActiveWindow(view);
 }
 
 Gui::MDIView* Document::getViewOfNode(SoNode* node) const

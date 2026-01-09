@@ -242,7 +242,7 @@ void SceneModel::setNode(QModelIndex index, SoNode* node)
         QVariant(QString::fromStdString(fmt::format("{}", (void*)node)))
     );
 
-    auto view = qobject_cast<View3DInventor*>(getMainWindow()->activeWindow());
+    auto view = qobject_cast<View3DInventor*>(Application::Instance->activeWindow());
     auto vp = view->getViewer()->getSoRenderManager()->getViewportRegion();
 
     QString data;

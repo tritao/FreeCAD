@@ -38,6 +38,8 @@
 #include <QTimer>
 
 #include <Base/Console.h>
+
+#include "Application.h"
 #include <Base/TimeInfo.h>
 #include <App/Document.h>
 #include <Gui/Application.h>
@@ -1007,7 +1009,7 @@ void Model::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event)
         Gui::Document* doc = Gui::Application::Instance->getDocument(record.DObject->getDocument());
         MDIView* view = doc->getActiveView();
         if (view) {
-            getMainWindow()->setActiveWindow(view);
+            Application::Instance->setActiveWindow(view);
         }
         const_cast<ViewProviderDocumentObject*>(record.VPDObject)->doubleClicked();
     }
@@ -1141,7 +1143,7 @@ void Model::editingStartSlot()
         Gui::Document* doc = Gui::Application::Instance->getDocument(record.DObject->getDocument());
         MDIView* view = doc->getActiveView();
         if (view) {
-            getMainWindow()->setActiveWindow(view);
+            Application::Instance->setActiveWindow(view);
         }
         doc->setEdit(const_cast<ViewProviderDocumentObject*>(record.VPDObject), edit);
     }

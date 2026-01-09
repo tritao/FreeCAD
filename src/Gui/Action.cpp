@@ -45,6 +45,7 @@
 #include "PreferencePages/DlgSettingsWorkbenchesImp.h"
 #include "Document.h"
 #include "EditorView.h"
+#include "GuiShell.h"
 #include "Macro.h"
 #include "ModuleIO.h"
 #include "MainWindow.h"
@@ -1201,11 +1202,11 @@ void RecentMacrosAction::activateFile(int id)
             == Qt::ShiftModifier) {  // open for editing on Shift+click
             auto editor = new PythonEditor();
             editor->setWindowIcon(Gui::BitmapFactory().iconFromTheme("applications-python"));
-            auto edit = new PythonEditorView(editor, getMainWindow());
+            auto edit = new PythonEditorView(editor, Gui::activeMainWindow());
             edit->setDisplayName(PythonEditorView::FileName);
             edit->open(filename);
             edit->resize(400, 300);
-            getMainWindow()->addWindow(edit);
+            Application::Instance->addWindow(edit);
             getMainWindow()->appendRecentMacro(filename);
             edit->setWindowTitle(fi.fileName());
         }

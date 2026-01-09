@@ -44,7 +44,7 @@
 #include "Application.h"
 #include "Document.h"
 #include "FileDialog.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "ViewProviderDocumentObject.h"
 
 
@@ -81,13 +81,13 @@ MDIView::~MDIView()
     // the application crashes when accessing this deleted view.
     // This effect only occurs if this widget is not in Child mode, because otherwise
     // the focus stuff is done correctly.
-    if (getMainWindow()) {
-        QWidget* foc = getMainWindow()->focusWidget();
+    if (auto* mw = Gui::activeMainWindow()) {
+        QWidget* foc = mw->focusWidget();
         if (foc) {
             QWidget* par = foc;
             while (par) {
                 if (par == this) {
-                    getMainWindow()->setFocus();
+                    mw->setFocus();
                     break;
                 }
                 par = par->parentWidget();
@@ -390,13 +390,13 @@ void MDIView::changeEvent(QEvent* e)
         case QEvent::ActivationChange: {
             // Forces this top-level window to be the active view of the main window
             if (isActiveWindow()) {
-                getMainWindow()->setActiveWindow(this);
+                Application::Instance->setActiveWindow(this);
             }
         } break;
         case QEvent::WindowTitleChange:
         case QEvent::ModifiedChange: {
             // sets the appropriate tab of the tabbar
-            getMainWindow()->tabChanged(this);
+            Application::Instance->tabChanged(this);
         } break;
         default: {
             QMainWindow::changeEvent(e);
@@ -442,7 +442,7 @@ void MDIView::setCurrentViewMode(ViewMode mode)
     if (oldmode == Child) {
         // remove window from MDIArea
         if (qobject_cast<QMdiSubWindow*>(parentWidget())) {
-            getMainWindow()->removeWindow(this, false);
+            Application::Instance->removeWindow(this, false);
             setParent(nullptr);
         }
     }
@@ -454,7 +454,7 @@ void MDIView::setCurrentViewMode(ViewMode mode)
     switch (mode) {
         // go to normal mode
         case Child:
-            getMainWindow()->addWindow(this);
+            Application::Instance->addWindow(this);
             break;
 
         // go to top-level mode
@@ -493,8 +493,10 @@ void MDIView::setCurrentViewMode(ViewMode mode)
         // To make a global shortcut working from this window we need to add
         // all existing actions from the mainwindow and its sub-widgets
 
-        QList<QAction*> acts = getMainWindow()->findChildren<QAction*>();
-        addActions(acts);
+        if (auto* mw = Gui::activeMainWindow()) {
+            QList<QAction*> acts = mw->findChildren<QAction*>();
+            addActions(acts);
+        }
 
         // To be notfified for new actions
         qApp->installEventFilter(this);

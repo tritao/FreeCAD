@@ -58,7 +58,7 @@ void UndoDialog::onFetchInfo()
 {
     clear();  // Remove first all items
 
-    MDIView* mdi = getMainWindow()->activeWindow();
+    MDIView* mdi = Application::Instance->activeWindow();
     if (mdi) {
         QStringList vecUndos = mdi->undoActions();
         for (QStringList::Iterator i = vecUndos.begin(); i != vecUndos.end(); ++i) {
@@ -105,7 +105,7 @@ void RedoDialog::onFetchInfo()
 {
     clear();  // Remove first all items
 
-    MDIView* mdi = getMainWindow()->activeWindow();
+    MDIView* mdi = Application::Instance->activeWindow();
     if (mdi) {
         QStringList vecRedos = mdi->redoActions();
         for (QStringList::Iterator i = vecRedos.begin(); i != vecRedos.end(); ++i) {

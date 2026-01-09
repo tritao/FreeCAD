@@ -55,6 +55,7 @@
 
 #include "Tree.h"
 #include "BitmapFactory.h"
+#include "Application.h"
 #include "Command.h"
 #include "Document.h"
 #include "ExpressionCompleter.h"
@@ -1400,7 +1401,7 @@ void TreeWidget::onStartEditing()
             auto doc = const_cast<Document*>(objitem->getOwnerDocument()->document());
             MDIView* view = doc->getActiveView();
             if (view) {
-                getMainWindow()->setActiveWindow(view);
+                Application::Instance->setActiveWindow(view);
             }
 
             editingItem = objitem;

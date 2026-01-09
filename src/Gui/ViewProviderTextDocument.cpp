@@ -30,8 +30,9 @@
 
 #include "ViewProviderTextDocument.h"
 #include "ActionFunction.h"
+#include "Application.h"
 #include "Document.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "PythonEditor.h"
 #include "TextDocumentEditorView.h"
 #include "ViewProviderDocumentObject.h"
@@ -116,9 +117,9 @@ bool ViewProviderTextDocument::doubleClicked()
         FontName.touch();
         SyntaxHighlighter.touch();
 
-        getMainWindow()->addWindow(
-            new TextDocumentEditorView {getObject<App::TextDocument>(), editorWidget, getMainWindow()}
-        );
+        auto* host = Gui::activeMainWindow();
+        auto* view = new TextDocumentEditorView {getObject<App::TextDocument>(), editorWidget, host};
+        Application::Instance->addWindow(view);
     }
     return true;
 }
@@ -168,7 +169,7 @@ bool ViewProviderTextDocument::activateView() const
     for (auto v : views) {
         auto textView = static_cast<TextDocumentEditorView*>(v);
         if (textView->getTextObject() == getObject()) {
-            getMainWindow()->setActiveWindow(textView);
+            Application::Instance->setActiveWindow(textView);
             return true;
         }
     }

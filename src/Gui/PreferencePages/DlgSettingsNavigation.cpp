@@ -30,6 +30,7 @@
 #include <App/Application.h>
 #include <Base/Parameter.h>
 #include <Base/Tools.h>
+#include <Gui/Application.h>
 #include <Gui/MainWindow.h>
 #include <Gui/View3DSettings.h>
 #include <Gui/Navigation/NavigationStyle.h>
@@ -466,7 +467,7 @@ void CameraDialog::getValues(double& q0, double& q1, double& q2, double& q3) con
 
 void CameraDialog::onCurrentViewClicked()
 {
-    auto mdi = qobject_cast<View3DInventor*>(getMainWindow()->activeWindow());
+    auto mdi = qobject_cast<View3DInventor*>(Application::Instance->activeWindow());
     if (mdi) {
         SbRotation rot = mdi->getViewer()->getCameraOrientation();
         const float* q = rot.getValue();

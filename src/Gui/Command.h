@@ -1277,7 +1277,7 @@ private:
         virtual void activated(int iMsg); \
         virtual bool isActive(void) \
         { \
-            Gui::MDIView* view = Gui::getMainWindow()->activeWindow(); \
+            Gui::MDIView* view = Gui::Application::Instance->activeWindow(); \
             return view && view->isDerivedFrom<Gui::View3DInventor>(); \
         } \
 \

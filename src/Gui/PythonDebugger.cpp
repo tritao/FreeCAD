@@ -32,7 +32,8 @@
 #include "PythonDebugger.h"
 #include "BitmapFactory.h"
 #include "EditorView.h"
-#include "MainWindow.h"
+#include "Application.h"
+#include "GuiShell.h"
 #include "PythonEditor.h"
 
 
@@ -505,7 +506,7 @@ void PythonDebugger::stepRun()
 void PythonDebugger::showDebugMarker(const QString& fn, int line)
 {
     PythonEditorView* edit = nullptr;
-    QList<QWidget*> mdis = getMainWindow()->windows();
+    QList<QWidget*> mdis = Application::Instance->windows();
     for (const auto& mdi : mdis) {
         edit = qobject_cast<PythonEditorView*>(mdi);
         if (edit && edit->fileName() == fn) {
@@ -516,20 +517,20 @@ void PythonDebugger::showDebugMarker(const QString& fn, int line)
     if (!edit) {
         auto editor = new PythonEditor();
         editor->setWindowIcon(Gui::BitmapFactory().iconFromTheme("applications-python"));
-        edit = new PythonEditorView(editor, getMainWindow());
+        edit = new PythonEditorView(editor, Gui::activeMainWindow());
         edit->open(fn);
         edit->resize(400, 300);
-        getMainWindow()->addWindow(edit);
+        Application::Instance->addWindow(edit);
     }
 
-    getMainWindow()->setActiveWindow(edit);
+    Application::Instance->setActiveWindow(edit);
     edit->showDebugMarker(line);
 }
 
 void PythonDebugger::hideDebugMarker(const QString& fn)
 {
     PythonEditorView* edit = nullptr;
-    QList<QWidget*> mdis = getMainWindow()->windows();
+    QList<QWidget*> mdis = Application::Instance->windows();
     for (const auto& mdi : mdis) {
         edit = qobject_cast<PythonEditorView*>(mdi);
         if (edit && edit->fileName() == fn) {

@@ -1342,15 +1342,15 @@ NaviCubeDraggableCmd::NaviCubeDraggableCmd()
 }
 void NaviCubeDraggableCmd::activated(int iMsg)
 {
-    auto view = qobject_cast<View3DInventor*>(getMainWindow()->activeWindow());
+    auto view = qobject_cast<View3DInventor*>(Application::Instance->activeWindow());
     view->getViewer()->getNaviCube()->setDraggable(iMsg == 1 ? true : false);
 }
 bool NaviCubeDraggableCmd::isActive()
 {
-    Gui::MDIView* view = Gui::getMainWindow()->activeWindow();
+    Gui::MDIView* view = Gui::Application::Instance->activeWindow();
     if (view && view->isDerivedFrom<Gui::View3DInventor>()) {
         bool check = _pcAction->isChecked();
-        auto view = qobject_cast<View3DInventor*>(getMainWindow()->activeWindow());
+        auto view = qobject_cast<View3DInventor*>(Application::Instance->activeWindow());
         bool mode = view->getViewer()->getNaviCube()->isDraggable();
         if (mode != check) {
             _pcAction->setChecked(mode);

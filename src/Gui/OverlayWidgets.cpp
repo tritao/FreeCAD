@@ -180,7 +180,7 @@ OverlayProxyWidget::HitTest OverlayProxyWidget::hitTest(const QPoint& globalPt, 
             update();
         }
 
-        auto view = getMainWindow()->activeWindow();
+        auto view = Application::Instance->activeWindow();
         auto overlayOnHoverAllowed = view && view->onHasMsg("AllowsOverlayOnHover");
 
         if (owner->getState() != OverlayTabWidget::State::Hidden && hit == HitTest::HitOuter
@@ -1229,7 +1229,7 @@ bool OverlayTabWidget::checkAutoHide() const
     }
 
     if (OverlayParams::getDockOverlayAutoView()) {
-        auto view = getMainWindow()->activeWindow();
+        auto view = Application::Instance->activeWindow();
 
         if (!view) {
             return true;
@@ -1407,7 +1407,7 @@ bool OverlayTabWidget::isTransparent() const
         return false;
     }
     if (OverlayParams::getDockOverlayAutoView()) {
-        auto view = getMainWindow()->activeWindow();
+        auto view = Application::Instance->activeWindow();
         if (!view) {
             return false;
         }
@@ -1608,8 +1608,10 @@ bool OverlayTabWidget::getAutoHideRect(QRect& rect) const
             else {
                 rect.setTop(rect.top() + std::max(rect.height() - hintWidth, 0));
                 if (_RightOverlay->isVisible() && _RightOverlay->_state <= State::Normal) {
-                    QPoint offset = getMainWindow()->getMdiArea()->pos();
-                    rect.setRight(std::min(rect.right(), _RightOverlay->x() - offset.x()));
+                    if (auto* mdi = Application::Instance->mdiArea()) {
+                        QPoint offset = mdi->pos();
+                        rect.setRight(std::min(rect.right(), _RightOverlay->x() - offset.x()));
+                    }
                 }
             }
             break;
@@ -1644,7 +1646,8 @@ void OverlayTabWidget::setSizeDelta(int delta)
 
 void OverlayTabWidget::setRect(QRect rect)
 {
-    if (busy || !parentWidget() || !getMainWindow() || !getMainWindow()->getMdiArea()) {
+    auto* mdi = Application::Instance->mdiArea();
+    if (busy || !parentWidget() || !mdi) {
         return;
     }
 
@@ -1689,7 +1692,7 @@ void OverlayTabWidget::setRect(QRect rect)
     }
     rectOverlay = rect;
 
-    QPoint offset = getMainWindow()->getMdiArea()->pos();
+    QPoint offset = mdi->pos();
 
     if (getAutoHideRect(rect) || _state == State::Hint || _state == State::Hidden) {
         QRect rectHint = rect;
@@ -1753,7 +1756,7 @@ void OverlayTabWidget::setRect(QRect rect)
 
 void OverlayTabWidget::addWidget(QDockWidget* dock, const QString& title)
 {
-    if (!getMainWindow() || !getMainWindow()->getMdiArea()) {
+    if (!getMainWindow() || !Application::Instance->mdiArea()) {
         return;
     }
 
@@ -1782,7 +1785,7 @@ void OverlayTabWidget::addWidget(QDockWidget* dock, const QString& title)
     dock->setFeatures(dock->features() & ~QDockWidget::DockWidgetFloatable);
     if (count() == 1) {
         QRect rect = dock->geometry();
-        QSize sizeMain = getMainWindow()->getMdiArea()->size();
+        QSize sizeMain = Application::Instance->mdiArea()->size();
         switch (dockArea) {
             case Qt::LeftDockWidgetArea:
             case Qt::RightDockWidgetArea:
@@ -2002,12 +2005,13 @@ void OverlayTabWidget::onCurrentChanged(int index)
 
 void OverlayTabWidget::onSizeGripMove(const QPoint& p)
 {
-    if (!getMainWindow() || !getMainWindow()->getMdiArea()) {
+    auto* mdi = Application::Instance->mdiArea();
+    if (!getMainWindow() || !mdi) {
         return;
     }
 
     QPoint pos = mapFromGlobal(p) + this->pos();
-    QPoint offset = getMainWindow()->getMdiArea()->pos();
+    QPoint offset = mdi->pos();
     QRect rect = this->rectOverlay.translated(offset);
 
     switch (dockArea) {

@@ -1125,7 +1125,7 @@ void NotificationArea::showConfirmationDialog(const QString& notifiername, const
                       "while loading the file?");
 
     auto button = QMessageBox::critical(
-        getMainWindow()->activeWindow(),
+        Application::Instance->activeWindow(),
         QObject::tr("Critical message"),
         confirmMsg,
         QMessageBox::Yes | QMessageBox::No,

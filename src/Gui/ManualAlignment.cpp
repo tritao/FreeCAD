@@ -47,6 +47,7 @@
 #include <App/Document.h>
 #include <App/GeoFeature.h>
 #include <Gui/Application.h>
+#include <Gui/GuiShell.h>
 #include <Gui/BitmapFactory.h>
 #include <Gui/Document.h>
 #include <Gui/Inventor/SoAxisCrossKit.h>
@@ -856,11 +857,11 @@ void ManualAlignment::startAlignment(Base::Type mousemodel)
 #endif
 
     // create a split window for picking the points
-    myViewer = new AlignmentView(myDocument, Gui::getMainWindow());
+    myViewer = new AlignmentView(myDocument, Gui::activeMainWindow());
     myViewer->setWindowTitle(tr("Alignment[*]"));
     myViewer->setWindowIcon(QApplication::windowIcon());
     myViewer->resize(400, 300);
-    Gui::getMainWindow()->addWindow(myViewer);
+    Gui::Application::Instance->addWindow(myViewer);
     myViewer->showMaximized();
     int n = this->myPickPoints;
     QString msg = n == 1 ? tr("Select at least 1 point in the left and the right view")
@@ -959,7 +960,7 @@ void ManualAlignment::closeViewer()
             return;
         }
 
-        Gui::getMainWindow()->setActiveWindow(activeView);
+        Gui::Application::Instance->setActiveWindow(activeView);
         if (auto* subWindow = qobject_cast<QMdiSubWindow*>(activeView->parentWidget())) {
             // restore the previous window state
             if (previousWindowState & Qt::WindowMaximized) {

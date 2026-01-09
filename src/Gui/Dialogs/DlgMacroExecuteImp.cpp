@@ -37,6 +37,7 @@
 #include "Dialogs/DlgMacroExecuteImp.h"
 #include "ui_DlgMacroExecute.h"
 #include "Application.h"
+#include "GuiShell.h"
 #include "BitmapFactory.h"
 #include "Command.h"
 #include "Dialogs/DlgCustomizeImp.h"
@@ -441,11 +442,11 @@ void DlgMacroExecuteImp::onEditButtonClicked()
     QString file = QStringLiteral("%1/%2").arg(dir.absolutePath(), item->text(0));
     auto editor = new PythonEditor();
     editor->setWindowIcon(Gui::BitmapFactory().iconFromTheme("applications-python"));
-    auto edit = new PythonEditorView(editor, getMainWindow());
+    auto edit = new PythonEditorView(editor, Gui::activeMainWindow());
     edit->setDisplayName(PythonEditorView::FileName);
     edit->open(file);
     edit->resize(400, 300);
-    getMainWindow()->addWindow(edit);
+    Application::Instance->addWindow(edit);
     getMainWindow()->appendRecentMacro(file);
 
     if (mitem->systemWide) {
@@ -513,12 +514,12 @@ void DlgMacroExecuteImp::onCreateButtonClicked()
             file.close();
             auto editor = new PythonEditor();
             editor->setWindowIcon(Gui::BitmapFactory().iconFromTheme("applications-python"));
-            auto edit = new PythonEditorView(editor, getMainWindow());
+            auto edit = new PythonEditorView(editor, Gui::activeMainWindow());
             edit->open(fi.absoluteFilePath());
             getMainWindow()->appendRecentMacro(fi.absoluteFilePath());
             edit->setWindowTitle(QStringLiteral("%1[*]").arg(fn));
             edit->resize(400, 300);
-            getMainWindow()->addWindow(edit);
+            Application::Instance->addWindow(edit);
             close();
         }
     }

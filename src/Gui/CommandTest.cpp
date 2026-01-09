@@ -630,13 +630,13 @@ CmdTestMDI1::CmdTestMDI1()
 void CmdTestMDI1::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    MDIView* mdi = getMainWindow()->activeWindow();
-    getMainWindow()->removeWindow(mdi);
+    MDIView* mdi = Application::Instance->activeWindow();
+    Application::Instance->removeWindow(mdi);
 }
 
 bool CmdTestMDI1::isActive()
 {
-    return getMainWindow()->activeWindow();
+    return Application::Instance->activeWindow();
 }
 
 DEF_STD_CMD_A(CmdTestMDI2)
@@ -654,9 +654,9 @@ CmdTestMDI2::CmdTestMDI2()
 void CmdTestMDI2::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    QMdiArea* area = getMainWindow()->findChild<QMdiArea*>();
+    QMdiArea* area = Application::Instance->mdiArea();
     if (area) {
-        MDIView* mdi = getMainWindow()->activeWindow();
+        MDIView* mdi = Application::Instance->activeWindow();
         area->removeSubWindow(mdi->parentWidget());
         mdi->parentWidget()->showNormal();
     }
@@ -664,7 +664,7 @@ void CmdTestMDI2::activated(int iMsg)
 
 bool CmdTestMDI2::isActive()
 {
-    return getMainWindow()->activeWindow();
+    return Application::Instance->activeWindow();
 }
 
 DEF_STD_CMD_A(CmdTestMDI3)
@@ -682,8 +682,8 @@ CmdTestMDI3::CmdTestMDI3()
 void CmdTestMDI3::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    MDIView* mdi = getMainWindow()->activeWindow();
-    getMainWindow()->removeWindow(mdi);
+    MDIView* mdi = Application::Instance->activeWindow();
+    Application::Instance->removeWindow(mdi);
     mdi->setParent(
         nullptr,
         Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint
@@ -693,7 +693,7 @@ void CmdTestMDI3::activated(int iMsg)
 
 bool CmdTestMDI3::isActive()
 {
-    return getMainWindow()->activeWindow();
+    return Application::Instance->activeWindow();
 }
 
 DEF_STD_CMD(CmdTestConsoleOutput)

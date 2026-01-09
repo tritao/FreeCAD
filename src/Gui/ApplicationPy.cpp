@@ -673,7 +673,7 @@ PyObject* Gui::ApplicationPy::sSetActiveDocument(PyObject* /*self*/, PyObject* a
 
     if (Application::Instance->activeDocument() != pcDoc) {
         Gui::MDIView* view = pcDoc->getActiveView();
-        getMainWindow()->setActiveWindow(view);
+        Application::Instance->setActiveWindow(view);
     }
 
     Py_Return;
@@ -1716,7 +1716,7 @@ PyObject* ApplicationPy::sCreateViewer(PyObject* /*self*/, PyObject* args)
         if (title) {
             viewer->setWindowTitle(QString::fromUtf8(title));
         }
-        Gui::getMainWindow()->addWindow(viewer);
+        Application::Instance->addWindow(viewer);
         return viewer->getPyObject();
     }
     else {
@@ -1724,7 +1724,7 @@ PyObject* ApplicationPy::sCreateViewer(PyObject* /*self*/, PyObject* args)
         if (title) {
             viewer->setWindowTitle(QString::fromUtf8(title));
         }
-        Gui::getMainWindow()->addWindow(viewer);
+        Application::Instance->addWindow(viewer);
         return viewer->getPyObject();
     }
 }

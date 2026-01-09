@@ -27,7 +27,7 @@
 
 #include "Dialogs/DlgActivateWindowImp.h"
 #include "ui_DlgActivateWindow.h"
-#include "MainWindow.h"
+#include "Application.h"
 #include "MDIView.h"
 
 
@@ -56,13 +56,13 @@ DlgActivateWindowImp::DlgActivateWindowImp(QWidget* parent, Qt::WindowFlags fl)
     ui->treeWidget->setHeaderLabels(labels);
     ui->treeWidget->header()->hide();
 
-    QList<QWidget*> windows = getMainWindow()->windows();
+    QList<QWidget*> windows = Application::Instance->windows();
     if (windows.isEmpty()) {
         buttonOk->setDisabled(true);
         return;
     }
 
-    QWidget* activeWnd = getMainWindow()->activeWindow();
+    QWidget* activeWnd = Application::Instance->activeWindow();
 
     for (QWidget* it : windows) {
         auto item = new QTreeWidgetItem(ui->treeWidget);
@@ -95,11 +95,11 @@ DlgActivateWindowImp::~DlgActivateWindowImp()
 void DlgActivateWindowImp::accept()
 {
     QTreeWidgetItem* item = ui->treeWidget->currentItem();
-    QList<QWidget*> windows = getMainWindow()->windows();
+    QList<QWidget*> windows = Application::Instance->windows();
 
     if (item) {
         int index = ui->treeWidget->indexOfTopLevelItem(item);
-        getMainWindow()->setActiveWindow(static_cast<MDIView*>(windows.at(index)));
+        Application::Instance->setActiveWindow(static_cast<MDIView*>(windows.at(index)));
     }
 
     QDialog::accept();

@@ -65,7 +65,7 @@ void StdCmdTileWindows::activated(int iMsg)
 
 bool StdCmdTileWindows::isActive()
 {
-    return !(getMainWindow()->windows().isEmpty());
+    return !(Application::Instance->windows().isEmpty());
 }
 
 //===========================================================================
@@ -93,7 +93,7 @@ void StdCmdCascadeWindows::activated(int iMsg)
 
 bool StdCmdCascadeWindows::isActive()
 {
-    return !(getMainWindow()->windows().isEmpty());
+    return !(Application::Instance->windows().isEmpty());
 }
 
 //===========================================================================
@@ -125,7 +125,7 @@ void StdCmdCloseActiveWindow::activated(int iMsg)
 
 bool StdCmdCloseActiveWindow::isActive()
 {
-    return !(getMainWindow()->windows().isEmpty());
+    return !(Application::Instance->windows().isEmpty());
 }
 
 //===========================================================================
@@ -153,7 +153,7 @@ void StdCmdCloseAllWindows::activated(int iMsg)
 
 bool StdCmdCloseAllWindows::isActive()
 {
-    return !(getMainWindow()->windows().isEmpty()) || !App::GetApplication().getDocuments().empty();
+    return !(Application::Instance->windows().isEmpty()) || !App::GetApplication().getDocuments().empty();
 }
 
 //===========================================================================
@@ -182,7 +182,7 @@ void StdCmdActivateNextWindow::activated(int iMsg)
 
 bool StdCmdActivateNextWindow::isActive()
 {
-    return !(getMainWindow()->windows().isEmpty());
+    return !(Application::Instance->windows().isEmpty());
 }
 
 //===========================================================================
@@ -217,7 +217,7 @@ void StdCmdActivatePrevWindow::activated(int iMsg)
 
 bool StdCmdActivatePrevWindow::isActive()
 {
-    return !(getMainWindow()->windows().isEmpty());
+    return !(Application::Instance->windows().isEmpty());
 }
 
 //===========================================================================

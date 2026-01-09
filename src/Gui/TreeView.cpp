@@ -65,7 +65,7 @@ void TreeView::mouseDoubleClickEvent(QMouseEvent* event)
         if (!view) {
             return;
         }
-        getMainWindow()->setActiveWindow(view);
+        Application::Instance->setActiveWindow(view);
     }
     else if (item->isDerivedFrom<ViewProvider>()) {
         if (!static_cast<ViewProvider*>(item)->doubleClicked()) {

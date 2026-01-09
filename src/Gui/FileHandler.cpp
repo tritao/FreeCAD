@@ -33,6 +33,7 @@
 #include "BitmapFactory.h"
 #include "CommandT.h"
 #include "EditorView.h"
+#include "GuiShell.h"
 #include "PythonEditor.h"
 #include "MainWindow.h"
 #include <App/Application.h>
@@ -207,8 +208,8 @@ void FileHandler::openPython()
 {
     auto editor = new PythonEditor();
     editor->setWindowIcon(Gui::BitmapFactory().iconFromTheme("applications-python"));
-    auto edit = new PythonEditorView(editor, getMainWindow());
+    auto edit = new PythonEditorView(editor, Gui::activeMainWindow());
     edit->open(filename);
     edit->resize(400, 300);
-    getMainWindow()->addWindow(edit);
+    Application::Instance->addWindow(edit);
 }

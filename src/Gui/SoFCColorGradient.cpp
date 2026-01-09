@@ -35,6 +35,7 @@
 
 
 #include <Base/Parameter.h>
+#include "Application.h"
 #include "SoFCColorGradient.h"
 #include "SoTextLabel.h"
 #include "Dialogs/DlgSettingsColorGradientImp.h"
@@ -416,7 +417,7 @@ bool SoFCColorGradient::isVisible(float fVal) const
 
 void SoFCColorGradient::customize(SoFCColorBarBase* parentNode)
 {
-    QWidget* parent = Gui::getMainWindow()->activeWindow();
+    QWidget* parent = Gui::Application::Instance->activeWindow();
     Gui::Dialog::DlgSettingsColorGradientImp dlg(_cColGrad, parent);
     App::ColorGradientProfile profile = _cColGrad.getProfile();
     dlg.setNumberOfDecimals(_precision, profile.fMin, profile.fMax);

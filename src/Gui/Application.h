@@ -24,6 +24,7 @@
 #ifndef APPLICATION_H
 #define APPLICATION_H
 
+#include <QList>
 #include <QPixmap>
 #include <map>
 #include <string>
@@ -33,6 +34,7 @@
 #include "StyleParameters/ParameterManager.h"
 
 class QCloseEvent;
+class QMdiArea;
 class QWidget;
 class SoNode;
 class NavlibInterface;
@@ -224,6 +226,13 @@ public:
     void setStatusPaneText(int pane, const QString& text);
     void addStatusPermanentWidget(QWidget* widget, int stretch = 0);
     void removeStatusWidget(QWidget* widget);
+    void addWindow(Gui::MDIView* view);
+    void removeWindow(Gui::MDIView* view, bool close = true);
+    QList<QWidget*> windows() const;
+    QMdiArea* mdiArea() const;
+    Gui::MDIView* activeWindow() const;
+    void setActiveWindow(Gui::MDIView* view);
+    void tabChanged(Gui::MDIView* view);
 
     /** @name workbench handling */
     //@{

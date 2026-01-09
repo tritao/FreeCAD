@@ -565,7 +565,7 @@ public:
 
     void onTimer()
     {
-        auto mdi = getMainWindow() ? getMainWindow()->getMdiArea() : nullptr;
+        auto mdi = Application::Instance->mdiArea();
         if (!mdi) {
             return;
         }
@@ -1097,7 +1097,7 @@ public:
         if (!getMainWindow()) {
             return;
         }
-        auto mdi = getMainWindow()->getMdiArea();
+        auto mdi = Application::Instance->mdiArea();
         if (!mdi) {
             return;
         }
@@ -1759,7 +1759,7 @@ bool OverlayManager::eventFilter(QObject* o, QEvent* ev)
     if (d->intercepting || !getMainWindow() || !o->isWidgetType()) {
         return false;
     }
-    auto mdi = getMainWindow()->getMdiArea();
+    auto mdi = Application::Instance->mdiArea();
     if (!mdi) {
         return false;
     }
@@ -2235,7 +2235,7 @@ bool OverlayManager::getHideTab() const
 
 void OverlayManager::setFocusView()
 {
-    auto view = getMainWindow()->activeWindow();
+    auto view = Application::Instance->activeWindow();
     if (!view) {
         view = Application::Instance->activeView();
     }

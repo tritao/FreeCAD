@@ -1279,10 +1279,11 @@ void Application::slotActiveDocument(const App::Document& Doc)
                 Py::Object active(d->activeDocument->getPyObject(), true);
                 Py::Module("FreeCADGui").setAttr(std::string("ActiveDocument"), active);
 
-                auto view = getMainWindow()->activeWindow();
-                if (!view || view->getAppDocument() != &Doc) {
-                    Gui::MDIView* view = d->activeDocument->getActiveView();
-                    getMainWindow()->setActiveWindow(view);
+                auto* current = activeWindow();
+                if (!current || current->getAppDocument() != &Doc) {
+                    if (auto* view = d->activeDocument->getActiveView()) {
+                        setActiveWindow(view);
+                    }
                 }
             }
             else {
@@ -1373,7 +1374,7 @@ void Application::onLastWindowClosed(Gui::Document* pcDoc)
                     Gui::MDIView* view = v.second->getActiveView();
                     if (view) {
                         setActiveDocument(v.second);
-                        getMainWindow()->setActiveWindow(view);
+                        setActiveWindow(view);
                         return;
                     }
                 }
@@ -1409,7 +1410,7 @@ void Application::onLastWindowClosed(Gui::Document* pcDoc)
 /// send Messages to the active view
 bool Application::sendMsgToActiveView(const char* pMsg, const char** ppReturn)
 {
-    MDIView* pView = getMainWindow()->activeWindow();
+    MDIView* pView = activeWindow();
     bool res = pView ? pView->onMsg(pMsg, ppReturn) : false;
     updateActions(true);
     return res;
@@ -1417,14 +1418,14 @@ bool Application::sendMsgToActiveView(const char* pMsg, const char** ppReturn)
 
 bool Application::sendHasMsgToActiveView(const char* pMsg)
 {
-    MDIView* pView = getMainWindow()->activeWindow();
+    MDIView* pView = activeWindow();
     return pView ? pView->onHasMsg(pMsg) : false;
 }
 
 /// send Messages to the active view
 bool Application::sendMsgToFocusView(const char* pMsg, const char** ppReturn)
 {
-    MDIView* pView = getMainWindow()->activeWindow();
+    MDIView* pView = activeWindow();
     if (!pView) {
         return false;
     }
@@ -1440,7 +1441,7 @@ bool Application::sendMsgToFocusView(const char* pMsg, const char** ppReturn)
 
 bool Application::sendHasMsgToFocusView(const char* pMsg)
 {
-    MDIView* pView = getMainWindow()->activeWindow();
+    MDIView* pView = activeWindow();
     if (!pView) {
         return false;
     }
@@ -1750,6 +1751,83 @@ void Application::removeStatusWidget(QWidget* widget)
         if (auto* sb = mw->statusBar()) {
             sb->removeWidget(widget);
         }
+    }
+}
+
+void Application::addWindow(Gui::MDIView* view)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->addWindow(view);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->addWindow(view);
+    }
+}
+
+void Application::removeWindow(Gui::MDIView* view, bool close)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->removeWindow(view, close);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->removeWindow(view, close);
+    }
+}
+
+QList<QWidget*> Application::windows() const
+{
+    if (auto* shell = Gui::activeShell()) {
+        return shell->windows();
+    }
+    if (auto* mw = getMainWindow()) {
+        return mw->windows();
+    }
+    return {};
+}
+
+QMdiArea* Application::mdiArea() const
+{
+    if (auto* shell = Gui::activeShell()) {
+        return shell->mdiArea();
+    }
+    if (auto* mw = getMainWindow()) {
+        return mw->getMdiArea();
+    }
+    return nullptr;
+}
+
+Gui::MDIView* Application::activeWindow() const
+{
+    if (auto* shell = Gui::activeShell()) {
+        return shell->activeWindow();
+    }
+    if (auto* mw = getMainWindow()) {
+        return mw->activeWindow();
+    }
+    return nullptr;
+}
+
+void Application::setActiveWindow(Gui::MDIView* view)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->setActiveWindow(view);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->setActiveWindow(view);
+    }
+}
+
+void Application::tabChanged(Gui::MDIView* view)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->tabChanged(view);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->tabChanged(view);
     }
 }
 
