@@ -23,11 +23,15 @@
 #ifndef GUI_DOCKWINDOWMANAGER_H
 #define GUI_DOCKWINDOWMANAGER_H
 
+#include <string>
+
 #include <QObject>
+#include <QPointer>
 #include <Base/Bitmask.h>
 #include <FCGlobal.h>
 
 class QDockWidget;
+class QMainWindow;
 class QWidget;
 
 namespace Gui
@@ -80,6 +84,7 @@ class GuiExport DockWindowManager: public QObject
 public:
     /** Creates the only instance of the DockWindowManager. */
     static DockWindowManager* instance();
+    static DockWindowManager* instance(QMainWindow* hostWindow, const std::string& statePrefix);
     static void destruct();
 
     bool registerDockWindow(const char* name, QWidget* widget);
@@ -116,6 +121,8 @@ public:
     void retranslate();
 
     bool isOverlayActivated() const;
+    QMainWindow* hostWindow() const;
+    const std::string& statePrefix() const;
 
 private Q_SLOTS:
     /**
@@ -128,14 +135,17 @@ private Q_SLOTS:
     void onWidgetDestroyed(QObject*);
 
 private:
+    static void deleteInstanceForHostWindow(QMainWindow* hostWindow);
+
     QDockWidget* findDockWidget(const QList<QDockWidget*>&, const QString&) const;
     void tabifyDockWidgets(DockWindowItems*);
     void setupOverlayManagement();
 
-    DockWindowManager();
+    explicit DockWindowManager(QMainWindow* hostWindow, std::string statePrefix);
     ~DockWindowManager() override;
-    static DockWindowManager* _instance;
     struct DockWindowManagerP* d;
+    QPointer<QMainWindow> hostWindow_;
+    std::string statePrefix_;
 };
 
 }  // namespace Gui

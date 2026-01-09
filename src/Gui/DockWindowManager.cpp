@@ -24,6 +24,8 @@
 #include <QAction>
 #include <QApplication>
 #include <QDockWidget>
+#include <QHash>
+#include <QMainWindow>
 #include <QMap>
 #include <QMouseEvent>
 #include <QPointer>
@@ -152,43 +154,81 @@ public:
     int cursorMargin = 5;
 };
 
-struct DockWindowManagerP
-{
-    QList<QDockWidget*> _dockedWindows;
-    QMap<QString, QPointer<QWidget>> _dockWindows;
-    DockWindowItems _dockWindowItems;
-    ParameterGrp::handle _hPref;
-    fastsignals::advanced_scoped_connection _connParam;
-    QTimer _timer;
-    DockWidgetEventFilter _dockWidgetEventFilter;
-    QPointer<OverlayManager> overlayManager;
-};
-}  // namespace Gui
-
-DockWindowManager* DockWindowManager::_instance = nullptr;
+	struct DockWindowManagerP
+	{
+	    QList<QDockWidget*> _dockedWindows;
+	    QMap<QString, QPointer<QWidget>> _dockWindows;
+	    DockWindowItems _dockWindowItems;
+	    ParameterGrp::handle _hPref;
+	    fastsignals::advanced_scoped_connection _connParam;
+	    QTimer _timer;
+	    DockWidgetEventFilter _dockWidgetEventFilter;
+	    QPointer<OverlayManager> overlayManager;
+	    bool tabifyDone = false;
+	};
+	}  // namespace Gui
 
 DockWindowManager* DockWindowManager::instance()
 {
-    if (!_instance) {
-        _instance = new DockWindowManager;
+    return instance(getMainWindow(), "BaseApp/MainWindow");
+}
+
+namespace {
+QHash<QMainWindow*, DockWindowManager*> g_instances;
+}
+
+DockWindowManager* DockWindowManager::instance(QMainWindow* hostWindow, const std::string& statePrefix)
+{
+    if (!hostWindow) {
+        return nullptr;
     }
-    return _instance;
+
+    auto it = g_instances.find(hostWindow);
+    if (it != g_instances.end()) {
+        return it.value();
+    }
+
+    auto* mgr = new DockWindowManager(hostWindow, statePrefix);
+    QObject::connect(hostWindow, &QObject::destroyed, mgr, [hostWindow]() {
+        DockWindowManager::deleteInstanceForHostWindow(hostWindow);
+    });
+    g_instances.insert(hostWindow, mgr);
+    return mgr;
+}
+
+void DockWindowManager::deleteInstanceForHostWindow(QMainWindow* hostWindow)
+{
+    if (!hostWindow) {
+        return;
+    }
+    auto it = g_instances.find(hostWindow);
+    if (it != g_instances.end()) {
+        delete it.value();
+        g_instances.erase(it);
+    }
 }
 
 void DockWindowManager::destruct()
 {
-    delete _instance;
-    _instance = nullptr;
+    const auto keys = g_instances.keys();
+    for (auto* host : keys) {
+        deleteInstanceForHostWindow(host);
+    }
 }
 
-DockWindowManager::DockWindowManager()
+DockWindowManager::DockWindowManager(QMainWindow* hostWindow, std::string statePrefix)
+    : hostWindow_(hostWindow), statePrefix_(std::move(statePrefix))
 {
     d = new DockWindowManagerP;
-    d->_hPref = App::GetApplication().GetUserParameter().GetGroup("BaseApp/MainWindow/DockWindows");
+    d->_hPref = App::GetApplication().GetUserParameter().GetGroup(
+        (statePrefix_ + "/DockWindows").c_str()
+    );
 
-    auto grp = App::GetApplication().GetUserParameter().GetGroup("BaseApp/Preferences/DockWindows");
-    if (grp->GetBool("ActivateOverlay", true)) {
-        setupOverlayManagement();
+    if (qobject_cast<MainWindow*>(hostWindow_.data())) {
+        auto grp = App::GetApplication().GetUserParameter().GetGroup("BaseApp/Preferences/DockWindows");
+        if (grp->GetBool("ActivateOverlay", true)) {
+            setupOverlayManagement();
+        }
     }
 }
 
@@ -201,6 +241,16 @@ DockWindowManager::~DockWindowManager()
 bool DockWindowManager::isOverlayActivated() const
 {
     return (d->overlayManager != nullptr);
+}
+
+QMainWindow* DockWindowManager::hostWindow() const
+{
+    return hostWindow_.data();
+}
+
+const std::string& DockWindowManager::statePrefix() const
+{
+    return statePrefix_;
 }
 
 void DockWindowManager::setupOverlayManagement()
@@ -259,7 +309,10 @@ QDockWidget* DockWindowManager::addDockWindow(const char* name, QWidget* widget,
     }
 
     // creates the dock widget as container to embed this widget
-    MainWindow* mw = getMainWindow();
+    QMainWindow* mw = hostWindow_.data();
+    if (!mw) {
+        return nullptr;
+    }
     dw = new QDockWidget(mw);
 
     if (d->overlayManager) {
@@ -306,8 +359,10 @@ QDockWidget* DockWindowManager::addDockWindow(const char* name, QWidget* widget,
         d->_hPref->SetBool(dockName.constData(), dw->isVisible());
     });
 
-    auto cb = []() {
-        getMainWindow()->saveWindowSettings(true);
+    auto cb = [this]() {
+        if (auto* mw = qobject_cast<MainWindow*>(hostWindow_.data())) {
+            mw->saveWindowSettings(true);
+        }
     };
     connect(dw, &QDockWidget::topLevelChanged, cb);
     connect(dw, &QDockWidget::dockLocationChanged, cb);
@@ -375,7 +430,9 @@ QWidget* DockWindowManager::removeDockWindow(const char* name)
                 d->overlayManager->unsetupDockWidget(dw);
             }
 
-            getMainWindow()->removeDockWidget(dw);
+            if (auto* mw = hostWindow_.data()) {
+                mw->removeDockWidget(dw);
+            }
             // avoid to destruct the embedded widget
             widget = dw->widget();
             widget->setParent(nullptr);
@@ -407,7 +464,9 @@ void DockWindowManager::removeDockWindow(QWidget* widget)
             if (d->overlayManager) {
                 d->overlayManager->unsetupDockWidget(dw);
             }
-            getMainWindow()->removeDockWidget(dw);
+            if (auto* mw = hostWindow_.data()) {
+                mw->removeDockWidget(dw);
+            }
             // avoid to destruct the embedded widget
             widget->setParent(nullptr);
             dw->setWidget(nullptr);
@@ -555,8 +614,7 @@ void DockWindowManager::tabifyDockWidgets(DockWindowItems* items)
     // Tabify dock widgets only once to avoid to override the current layout
     // in case it was modified by the user. The user shouldn't be forced to
     // restore a possibly changed layout after switching to another workbench.
-    static bool tabify = false;
-    if (tabify) {
+    if (d->tabifyDone) {
         return;
     }
 
@@ -566,7 +624,10 @@ void DockWindowManager::tabifyDockWidgets(DockWindowItems* items)
     for (const auto& it : dws) {
         QDockWidget* dw = findDockWidget(docked, it.name);
         if (it.tabbed && dw) {
-            Qt::DockWidgetArea pos = getMainWindow()->dockWidgetArea(dw);
+            Qt::DockWidgetArea pos = Qt::NoDockWidgetArea;
+            if (auto* mw = hostWindow_.data()) {
+                pos = mw->dockWidgetArea(dw);
+            }
             switch (pos) {
                 case Qt::LeftDockWidgetArea:
                     areas[0] << dw;
@@ -590,8 +651,10 @@ void DockWindowManager::tabifyDockWidgets(DockWindowItems* items)
     for (auto& area : areas) {
         for (auto it : area) {
             if (it != area.front()) {
-                getMainWindow()->tabifyDockWidget(area.front(), it);
-                tabify = true;
+                if (auto* mw = hostWindow_.data()) {
+                    mw->tabifyDockWidget(area.front(), it);
+                }
+                d->tabifyDone = true;
             }
         }
 
@@ -616,11 +679,7 @@ void DockWindowManager::saveState()
 
 void DockWindowManager::loadState()
 {
-    ParameterGrp::handle hPref = App::GetApplication()
-                                     .GetUserParameter()
-                                     .GetGroup("BaseApp")
-                                     ->GetGroup("MainWindow")
-                                     ->GetGroup("DockWindows");
+    ParameterGrp::handle hPref = d->_hPref;
     const QList<DockWindowItem>& dockItems = d->_dockWindowItems.dockWidgets();
     for (QList<DockWindowItem>::ConstIterator it = dockItems.begin(); it != dockItems.end(); ++it) {
         QDockWidget* dw = findDockWidget(d->_dockedWindows, it->name);

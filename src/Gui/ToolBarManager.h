@@ -31,12 +31,12 @@
 #include <QPointer>
 #include <QTimer>
 #include <QToolBar>
-#include <QPointer>
 
 #include <FCGlobal.h>
 #include <Base/Parameter.h>
 
 class QAction;
+class QMainWindow;
 class QLayout;
 class QMenu;
 class QMouseEvent;
@@ -44,6 +44,7 @@ class QMouseEvent;
 namespace Gui
 {
 
+class OverlayDragFrame;
 class ToolBarAreaWidget;
 enum class ToolBarArea;
 
@@ -162,6 +163,7 @@ public:
 
     /// The one and only instance.
     static ToolBarManager* getInstance();
+    static ToolBarManager* getInstance(QMainWindow* hostWindow, const std::string& statePrefix);
     static void destruct();
     /** Sets up the toolbars of a given workbench. */
     void setup(ToolBarItem*);
@@ -180,6 +182,9 @@ public:
 
     ToolBarArea toolBarArea(QWidget* toolBar) const;
     ToolBarAreaWidget* toolBarAreaWidget(QWidget* toolBar) const;
+
+    QMainWindow* hostWindow() const;
+    const std::string& statePrefix() const;
 
 protected:
     void setup(ToolBarItem*, QToolBar*) const;
@@ -200,10 +205,12 @@ protected:
     QList<ToolBar*> toolBars() const;
     ToolBar* findToolBar(const QList<ToolBar*>&, const QString&) const;
     QAction* findAction(const QList<QAction*>&, const QString&) const;
-    ToolBarManager();
+    explicit ToolBarManager(QMainWindow* hostWindow, std::string statePrefix);
     ~ToolBarManager() override;
 
 private:
+    static void deleteInstanceForHostWindow(QMainWindow* hostWindow);
+
     void setupParameters();
     void setupStatusBar();
     void setupMenuBar();
@@ -217,10 +224,16 @@ private:
     void addToMenu(QLayout* layout, QWidget* area, QMenu* menu);
     QLayout* findLayoutOfObject(QObject* source, QWidget* area) const;
     ToolBarAreaWidget* findToolBarAreaWidget() const;
+    QWidget* ensureActionWidget();
 
 private:
     QStringList toolbarNames;
-    static ToolBarManager* _instance;
+    QPointer<QMainWindow> hostWindow_;
+    std::string statePrefix_;
+    QPointer<QWidget> actionWidget_;
+    QPointer<OverlayDragFrame> tbPlaceholder_;
+    QPointer<ToolBarAreaWidget> lastArea_;
+    int tbIndex_ = -1;
 
     QTimer timer;
     QTimer menuBarTimer;
