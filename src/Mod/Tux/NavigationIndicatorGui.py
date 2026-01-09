@@ -27,7 +27,7 @@ from PySide import QtGui
 from PySide import QtCore
 
 mw = Gui.getMainWindow()
-statusBar = mw.statusBar()
+statusBar = mw.statusBar() if mw else None
 p = App.ParamGet("User parameter:Tux/NavigationIndicator")
 pView = App.ParamGet("User parameter:BaseApp/Preferences/View")
 pMWin = App.ParamGet("User parameter:BaseApp/Preferences/MainWindow")
@@ -931,11 +931,9 @@ retranslateUi()
 onCompact()
 onTooltip()
 
-label = statusBar.children()[2]
-statusBar.removeWidget(label)
-statusBar.addPermanentWidget(indicator)
-statusBar.addPermanentWidget(label)
-label.show()
+if statusBar:
+    Gui.showStatusBar()
+    Gui.addStatusPermanentWidget(indicator)
 
 setCurrent()
 
