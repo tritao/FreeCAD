@@ -10,6 +10,8 @@ class QMainWindow;
 namespace Gui
 {
 
+class GuiShellServices;
+
 class GuiExport IGuiShell
 {
 public:
@@ -17,6 +19,7 @@ public:
 
     virtual QMainWindow* mainWindow() const = 0;
     virtual std::string chromeStatePrefix() const = 0;
+    virtual GuiShellServices& services() = 0;
 };
 
 GuiExport IGuiShell* activeShell();
@@ -26,4 +29,3 @@ GuiExport void setActiveShell(std::unique_ptr<IGuiShell> shell);
 GuiExport std::unique_ptr<IGuiShell> createClassicShell(QMainWindow* mainWindow);
 
 } // namespace Gui
-

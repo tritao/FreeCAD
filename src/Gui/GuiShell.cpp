@@ -1,5 +1,6 @@
 #include "GuiShell.h"
 
+#include "GuiShellServices.h"
 #include "MainWindow.h"
 
 #include <QMainWindow>
@@ -15,6 +16,7 @@ class ClassicShell final : public IGuiShell
 public:
     explicit ClassicShell(QMainWindow* mainWindow)
         : mainWindow_(mainWindow)
+        , services_(mainWindow, chromeStatePrefix())
     {}
 
     QMainWindow* mainWindow() const override
@@ -27,8 +29,14 @@ public:
         return "BaseApp/MainWindow";
     }
 
+    GuiShellServices& services() override
+    {
+        return services_;
+    }
+
 private:
     QPointer<QMainWindow> mainWindow_;
+    GuiShellServices services_;
 };
 
 std::unique_ptr<IGuiShell> g_activeShell;
@@ -59,4 +67,3 @@ std::unique_ptr<IGuiShell> createClassicShell(QMainWindow* mainWindow)
 }
 
 } // namespace Gui
-
