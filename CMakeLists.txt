@@ -6,6 +6,10 @@ cmake_minimum_required(VERSION 3.22.0 FATAL_ERROR)
 # of the package. This seems to affect FLANN as included by Pixi
 if(POLICY CMP0144)
     cmake_policy(SET CMP0144 NEW)
+    # Some third-party CMake package config files temporarily push/pop policy
+    # scopes and can leave CMP0144 unset internally, causing noisy dev warnings
+    # (e.g. PCL -> FindFLANN). Setting the default makes the behavior consistent.
+    set(CMAKE_POLICY_DEFAULT_CMP0144 NEW)
 endif()
 
 # FindPythonInterp and FindPythonLibs modules are deprecated, but are still in use by
