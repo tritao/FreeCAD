@@ -2214,6 +2214,8 @@ void parseProgramOptions(int ac, char ** av, const std::string& exe, boost::prog
     ("verbose", "Prints verbose version string")
     ("help,h", "Prints help message")
     ("console,c", "Starts in console mode")
+    ("fcui", boost::program_options::value<std::string>()->implicit_value(""), "Start experimental FCUI shell (optional module file)")
+    ("gui-shell", boost::program_options::value<std::string>(), "Select GUI shell: classic|fcui (default: classic)")
     ("response-file", boost::program_options::value<std::string>(),"Can be specified with '@name', too")
     ("dump-config", "Dumps configuration")
     ("get-config", boost::program_options::value<std::string>(), "Prints the value of the requested configuration key")
@@ -2281,12 +2283,21 @@ void parseProgramOptions(int ac, char ** av, const std::string& exe, boost::prog
 
     //0000723: improper handling of qt specific command line arguments
     std::vector<std::string> args;
-    bool merge=false;
+    bool merge = false;
+    bool mergeIfNextNotOption = false;
     for (int i=1; i<ac; i++) {
         if (merge) {
-            merge = false;
-            args.back() += "=";
-            args.back() += av[i];
+            if (mergeIfNextNotOption && av[i][0] == '-') {
+                merge = false;
+                mergeIfNextNotOption = false;
+                args.emplace_back(av[i]);
+            }
+            else {
+                merge = false;
+                mergeIfNextNotOption = false;
+                args.back() += "=";
+                args.back() += av[i];
+            }
         }
         else {
             args.emplace_back(av[i]);
@@ -2302,6 +2313,10 @@ void parseProgramOptions(int ac, char ** av, const std::string& exe, boost::prog
         }
         else if (strcmp(av[i],"-graphicssystem") == 0) {
             merge = true;
+        }
+        else if (strcmp(av[i],"-fcui") == 0) {
+            merge = true;
+            mergeIfNextNotOption = true;
         }
     }
 
@@ -2436,6 +2451,16 @@ void processProgramOptions(const boost::program_options::variables_map& vm, std:
 
     if (vm.contains("hidden")) {
         mConfig["StartHidden"] = "1";
+    }
+
+    if (vm.contains("gui-shell")) {
+        mConfig["GuiShell"] = vm["gui-shell"].as<std::string>();
+    }
+
+    if (vm.contains("fcui")) {
+        // Alias for --gui-shell=fcui, with an optional module argument.
+        mConfig["GuiShell"] = "fcui";
+        mConfig["FCUIModule"] = vm["fcui"].as<std::string>();
     }
 
     if (vm.contains("write-log")) {

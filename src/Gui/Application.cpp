@@ -134,6 +134,7 @@
 #include "ViewProviderVRMLObject.h"
 #include "ViewProviderVarSet.h"
 #include "WaitCursor.h"
+#include "FCUI/FCUIShellWindow.h"
 #include "Workbench.h"
 #include "WorkbenchManager.h"
 #include "WorkbenchManipulator.h"
@@ -1844,7 +1845,9 @@ bool Application::activateWorkbench(const char* name)
         }
         // now try to create and activate the matching workbench object
         else if (WorkbenchManager::instance()->activate(name, type)) {
-            getMainWindow()->activateWorkbench(QString::fromLatin1(name));
+            if (!Application::useFCUIShell()) {
+                getMainWindow()->activateWorkbench(QString::fromLatin1(name));
+            }
             this->signalActivateWorkbench(name);
             ok = true;
         }
@@ -2273,7 +2276,7 @@ static void init_resources()
     Q_INIT_RESOURCE(resource);
     Q_INIT_RESOURCE(translation);
     Q_INIT_RESOURCE(FreeCAD_translation);
-    Q_INIT_RESOURCE(fcui_sample);
+    Q_INIT_RESOURCE(fcui_shell);
 }
 
 void Application::initApplication()
@@ -2595,6 +2598,25 @@ void Application::runApplication()
     // gets called once we start the event loop
     QTimer::singleShot(0, &mw, SLOT(delayedStartup()));
 
+    // Optional: launch the FCUI shell as the primary GUI shell (`-fcui [module]` or `--gui-shell=fcui`).
+    {
+        const std::map<std::string, std::string>& cfg = App::Application::Config();
+        const bool startFCUI = Application::useFCUIShell();
+        if (startFCUI) {
+            QString modulePath = QStringLiteral(":/fcui/shell/main.fcuim.json");
+            auto it = cfg.find("FCUIModule");
+            if (it != cfg.end() && !it->second.empty()) {
+                modulePath = QString::fromUtf8(it->second.c_str());
+            }
+
+            QTimer::singleShot(0, &mw, [modulePath]() {
+                auto* w = new Gui::FCUI::FCUIShellWindow(modulePath);
+                QObject::connect(w, &QObject::destroyed, qApp, []() { QCoreApplication::quit(); });
+                w->show();
+            });
+        }
+    }
+
     // run the Application event loop
     Base::Console().log("Init: Entering event loop\n");
 
@@ -2619,6 +2641,22 @@ bool Application::hiddenMainWindow()
     auto it = cfg.find("StartHidden");
 
     return it != cfg.end();
+}
+
+bool Application::useFCUIShell()
+{
+    const std::map<std::string, std::string>& cfg = App::Application::Config();
+    auto it = cfg.find("GuiShell");
+    if (it != cfg.end()) {
+        QString v = QString::fromUtf8(it->second.c_str()).trimmed().toLower();
+        if (v == QStringLiteral("fcui")) {
+            return true;
+        }
+        if (v == QStringLiteral("classic")) {
+            return false;
+        }
+    }
+    return false;
 }
 
 bool Application::testStatus(Status pos) const

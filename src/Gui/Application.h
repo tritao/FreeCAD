@@ -271,6 +271,8 @@ public:
 
     /// whenever GUI is about to start with the main window hidden
     static bool hiddenMainWindow();
+    /// whether FreeCAD is running with FCUI as primary shell
+    static bool useFCUIShell();
     /// return the status bits
     bool testStatus(Status pos) const;
     /// set the status bits

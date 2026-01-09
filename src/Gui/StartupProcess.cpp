@@ -455,7 +455,7 @@ void StartupPostProcess::setImportImageFormats()
 void StartupPostProcess::showMainWindow()
 {
     // show splasher while initializing the GUI
-    if (!Application::hiddenMainWindow() && !loadFromPythonModule) {
+    if (!Application::hiddenMainWindow() && !Application::useFCUIShell() && !loadFromPythonModule) {
         mainWindow->startSplasher();
     }
 
@@ -474,7 +474,9 @@ void StartupPostProcess::showMainWindow()
     // stop splash screen and set immediately the active window that may be of interest
     // for scripts using Python binding for Qt
     mainWindow->stopSplasher();
-    mainWindow->activateWindow();
+    if (!Application::useFCUIShell()) {
+        mainWindow->activateWindow();
+    }
 }
 
 void StartupPostProcess::activateWorkbench()
@@ -516,7 +518,7 @@ void StartupPostProcess::activateWorkbench()
     guiApp.activateWorkbench(start.c_str());
 
     // show the main window
-    if (!Application::hiddenMainWindow()) {
+    if (!Application::hiddenMainWindow() && !Application::useFCUIShell()) {
         Base::Console().log("Init: Showing main window\n");
         mainWindow->loadWindowSettings();
     }

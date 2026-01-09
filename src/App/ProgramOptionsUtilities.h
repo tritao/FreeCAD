@@ -68,6 +68,13 @@ std::pair<std::string, std::string> customSyntax(std::string_view strIn)
         return {rest, ""};
     }
 
+    if (rest == "fcui") {
+        return {rest, ""};
+    }
+    if (rest.rfind("fcui=", 0) == 0) {
+        return {"fcui", rest.substr(5)};
+    }
+
     constexpr std::array knowns {"display",
                                  "style",
                                  "graphicssystem",
