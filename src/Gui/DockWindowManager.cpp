@@ -27,6 +27,7 @@
 #include <QHash>
 #include <QMainWindow>
 #include <QMap>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPointer>
 #include <QTimer>
@@ -519,6 +520,48 @@ void DockWindowManager::retranslate()
             (*it)->setWindowTitle(title);
         }
     }
+}
+
+void DockWindowManager::attachDockWindowMenu(QMenu* menu)
+{
+    if (!menu) {
+        return;
+    }
+    connect(menu, &QMenu::aboutToShow, this, &DockWindowManager::onDockWindowMenuAboutToShow, Qt::UniqueConnection);
+}
+
+void DockWindowManager::populateDockWindowMenu(QMenu* menu) const
+{
+    if (!menu) {
+        return;
+    }
+
+    auto* window = hostWindow_.data();
+    if (!window) {
+        return;
+    }
+
+    const QList<QDockWidget*> docks = window->findChildren<QDockWidget*>();
+    for (auto* dock : docks) {
+        if (!dock) {
+            continue;
+        }
+        QAction* action = dock->toggleViewAction();
+        action->setToolTip(tr("Toggles this dockable window"));
+        action->setStatusTip(tr("Toggles this dockable window"));
+        action->setWhatsThis(tr("Toggles this dockable window"));
+        menu->addAction(action);
+    }
+}
+
+void DockWindowManager::onDockWindowMenuAboutToShow()
+{
+    auto* menu = qobject_cast<QMenu*>(sender());
+    if (!menu) {
+        return;
+    }
+    menu->clear();
+    populateDockWindowMenu(menu);
 }
 
 /**

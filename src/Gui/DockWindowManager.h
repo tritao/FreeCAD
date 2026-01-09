@@ -32,6 +32,7 @@
 
 class QDockWidget;
 class QMainWindow;
+class QMenu;
 class QWidget;
 
 namespace Gui
@@ -120,6 +121,9 @@ public:
     void loadState();
     void retranslate();
 
+    void attachDockWindowMenu(QMenu* menu);
+    void populateDockWindowMenu(QMenu* menu) const;
+
     bool isOverlayActivated() const;
     QMainWindow* hostWindow() const;
     const std::string& statePrefix() const;
@@ -133,6 +137,7 @@ private Q_SLOTS:
      * \internal
      */
     void onWidgetDestroyed(QObject*);
+    void onDockWindowMenuAboutToShow();
 
 private:
     static void deleteInstanceForHostWindow(QMainWindow* hostWindow);

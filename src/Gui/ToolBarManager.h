@@ -180,6 +180,9 @@ public:
     int toolBarIconSize(QWidget* widget = nullptr) const;
     void setupToolBarIconSize();
 
+    void attachToolBarMenu(QMenu* menu);
+    void populateToolBarMenu(QMenu* menu) const;
+
     ToolBarArea toolBarArea(QWidget* toolBar) const;
     ToolBarAreaWidget* toolBarAreaWidget(QWidget* toolBar) const;
 
@@ -225,6 +228,9 @@ private:
     QLayout* findLayoutOfObject(QObject* source, QWidget* area) const;
     ToolBarAreaWidget* findToolBarAreaWidget() const;
     QWidget* ensureActionWidget();
+
+private Q_SLOTS:
+    void onToolBarMenuAboutToShow();
 
 private:
     QStringList toolbarNames;

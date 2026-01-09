@@ -26,6 +26,7 @@
 #include <QHBoxLayout>
 #include <QHash>
 #include <QMainWindow>
+#include <QMenu>
 #include <QMenuBar>
 #include <QMouseEvent>
 #include <QPainter>
@@ -1347,6 +1348,70 @@ void ToolBarManager::retranslate() const
     for (ToolBar* it : toolbars) {
         QByteArray toolbarName = it->objectName().toUtf8();
         it->setWindowTitle(QApplication::translate("Workbench", (const char*)toolbarName));
+    }
+}
+
+void ToolBarManager::attachToolBarMenu(QMenu* menu)
+{
+    if (!menu) {
+        return;
+    }
+
+    connect(menu, &QMenu::aboutToShow, this, &ToolBarManager::onToolBarMenuAboutToShow, Qt::UniqueConnection);
+}
+
+void ToolBarManager::populateToolBarMenu(QMenu* menu) const
+{
+    if (!menu) {
+        return;
+    }
+
+    auto* window = hostWindow_.data();
+    if (!window) {
+        return;
+    }
+
+    auto* statusBar = window->statusBar();
+    auto* menuBar = window->menuBar();
+
+    const QList<QToolBar*> toolbars = window->findChildren<QToolBar*>();
+    for (auto* toolbar : toolbars) {
+        if (!toolbar) {
+            continue;
+        }
+        auto* parent = toolbar->parentWidget();
+        if (!parent) {
+            continue;
+        }
+        if (parent == window || (statusBar && (parent == statusBar || parent->parentWidget() == statusBar))
+            || (menuBar && parent->parentWidget() == menuBar)) {
+            QAction* action = toolbar->toggleViewAction();
+            action->setToolTip(tr("Toggles this toolbar"));
+            action->setStatusTip(tr("Toggles this toolbar"));
+            action->setWhatsThis(tr("Toggles this toolbar"));
+            menu->addAction(action);
+        }
+    }
+}
+
+void ToolBarManager::onToolBarMenuAboutToShow()
+{
+    auto* menu = qobject_cast<QMenu*>(sender());
+    if (!menu) {
+        return;
+    }
+
+    menu->clear();
+    populateToolBarMenu(menu);
+    menu->addSeparator();
+
+    if (!Application::Instance) {
+        return;
+    }
+
+    Command* cmd = Application::Instance->commandManager().getCommandByName("Std_ToggleToolBarLock");
+    if (cmd) {
+        cmd->addTo(menu);
     }
 }
 
