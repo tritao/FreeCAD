@@ -38,6 +38,7 @@
 #include <Base/Tools.h>
 
 #include "DockWindowManager.h"
+#include "GuiShell.h"
 #include "MainWindow.h"
 #include "OverlayManager.h"
 
@@ -171,6 +172,9 @@ public:
 
 DockWindowManager* DockWindowManager::instance()
 {
+    if (auto* shell = Gui::activeShell()) {
+        return instance(shell->mainWindow(), shell->chromeStatePrefix());
+    }
     return instance(getMainWindow(), "BaseApp/MainWindow");
 }
 

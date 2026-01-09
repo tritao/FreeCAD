@@ -35,6 +35,7 @@
 #include "Control.h"
 #include "DockWindowManager.h"
 #include "DockWidgetRegistry.h"
+#include "GuiShell.h"
 #include "MainWindow.h"
 #include "MenuManager.h"
 #include "PythonWorkbenchPy.h"
@@ -451,7 +452,18 @@ void Workbench::deactivated()
 
 bool Workbench::activate()
 {
-    const bool ok = applyChromeTo(getMainWindow(), "BaseApp/MainWindow");
+    QMainWindow* hostWindow = nullptr;
+    std::string statePrefix;
+    if (auto* shell = Gui::activeShell()) {
+        hostWindow = shell->mainWindow();
+        statePrefix = shell->chromeStatePrefix();
+    }
+    else {
+        hostWindow = getMainWindow();
+        statePrefix = "BaseApp/MainWindow";
+    }
+
+    const bool ok = applyChromeTo(hostWindow, statePrefix);
     setupCustomShortcuts();
     return ok;
 }
@@ -494,10 +506,25 @@ bool Workbench::applyChromeTo(QMainWindow* hostWindow, const std::string& stateP
 
 void Workbench::retranslate() const
 {
-    ToolBarManager::getInstance()->retranslate();
+    QMainWindow* hostWindow = nullptr;
+    std::string statePrefix;
+    if (auto* shell = Gui::activeShell()) {
+        hostWindow = shell->mainWindow();
+        statePrefix = shell->chromeStatePrefix();
+    }
+    else {
+        hostWindow = getMainWindow();
+        statePrefix = "BaseApp/MainWindow";
+    }
+
+    if (auto* mgr = ToolBarManager::getInstance(hostWindow, statePrefix)) {
+        mgr->retranslate();
+    }
     // ToolBoxManager::getInstance()->retranslate();
-    DockWindowManager::instance()->retranslate();
-    MenuManager::getInstance()->retranslate();
+    if (auto* mgr = DockWindowManager::instance(hostWindow, statePrefix)) {
+        mgr->retranslate();
+    }
+    MenuManager::getInstance()->retranslate(hostWindow ? hostWindow->menuBar() : nullptr);
 }
 
 PyObject* Workbench::getPyObject()

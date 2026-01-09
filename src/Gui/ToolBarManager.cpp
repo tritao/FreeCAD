@@ -45,6 +45,7 @@
 #include "ToolBarAreaWidget.h"
 #include "Application.h"
 #include "Command.h"
+#include "GuiShell.h"
 #include "MainWindow.h"
 #include "OverlayWidgets.h"
 #include "WidgetFactory.h"
@@ -444,6 +445,9 @@ void ToolBarGrip::updateSize()
 
 ToolBarManager* ToolBarManager::getInstance()
 {
+    if (auto* shell = Gui::activeShell()) {
+        return getInstance(shell->mainWindow(), shell->chromeStatePrefix());
+    }
     return getInstance(getMainWindow(), "BaseApp/MainWindow");
 }
 

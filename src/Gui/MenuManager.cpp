@@ -22,6 +22,7 @@
 
 
 #include <QApplication>
+#include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
 
@@ -29,6 +30,7 @@
 #include "MenuManager.h"
 #include "Application.h"
 #include "Command.h"
+#include "GuiShell.h"
 #include "MainWindow.h"
 
 
@@ -197,7 +199,8 @@ MenuManager::~MenuManager() = default;
 
 void MenuManager::setup(MenuItem* menuItems) const
 {
-    setup(menuItems, getMainWindow() ? getMainWindow()->menuBar() : nullptr);
+    auto* mw = Gui::activeMainWindow();
+    setup(menuItems, mw ? mw->menuBar() : nullptr);
 }
 
 void MenuManager::setup(MenuItem* menuItems, QMenuBar* menuBar) const
@@ -342,7 +345,8 @@ void MenuManager::setup(MenuItem* item, QMenu* menu) const
 
 void MenuManager::retranslate() const
 {
-    retranslate(getMainWindow() ? getMainWindow()->menuBar() : nullptr);
+    auto* mw = Gui::activeMainWindow();
+    retranslate(mw ? mw->menuBar() : nullptr);
 }
 
 void MenuManager::retranslate(QMenuBar* menuBar) const
