@@ -32,6 +32,8 @@
 #include <QLocale>
 #include <QMessageBox>
 #include <QMessageLogContext>
+#include <QMdiSubWindow>
+#include <QMenu>
 #include <QRegularExpression>
 #include <QRegularExpressionMatch>
 #include <QScreen>
@@ -66,6 +68,7 @@
 
 #include "Application.h"
 #include "ApplicationPy.h"
+#include "Action.h"
 #include "AxisOriginPy.h"
 #include "BitmapFactory.h"
 #include "Command.h"
@@ -85,8 +88,11 @@
 #include "LinkViewPy.h"
 #include "MainWindow.h"
 #include "GuiShell.h"
+#include "GuiShellServices.h"
 #include "DockWidgetRegistry.h"
 #include "StandardDockWidgetRegistration.h"
+#include "DockWindowManager.h"
+#include "ToolBarManager.h"
 #include "Macro.h"
 #include "PreferencePackManager.h"
 #include "PythonConsolePy.h"
@@ -2017,6 +2023,141 @@ void Application::unsetCursor()
     }
     if (auto* mw = getMainWindow()) {
         mw->unsetCursor();
+    }
+}
+
+void Application::attachDockWindowMenu(QMenu* menu)
+{
+    if (!menu) {
+        return;
+    }
+
+    if (auto* shell = Gui::activeShell()) {
+        if (auto* docking = shell->services().docking()) {
+            docking->attachDockWindowMenu(menu);
+        }
+        return;
+    }
+
+    if (auto* mw = getMainWindow()) {
+        DockWindowManager::instance(mw, "BaseApp/MainWindow")->attachDockWindowMenu(menu);
+    }
+}
+
+void Application::attachToolBarMenu(QMenu* menu)
+{
+    if (!menu) {
+        return;
+    }
+
+    if (auto* shell = Gui::activeShell()) {
+        if (auto* toolBars = shell->services().toolBars()) {
+            toolBars->attachToolBarMenu(menu);
+        }
+        return;
+    }
+
+    if (auto* mw = getMainWindow()) {
+        ToolBarManager::getInstance(mw, "BaseApp/MainWindow")->attachToolBarMenu(menu);
+    }
+}
+
+void Application::attachWindowsMenu(QMenu* menu)
+{
+    if (!menu) {
+        return;
+    }
+
+    if (menu->property("__GuiShell_WindowsMenuAttached").toBool()) {
+        return;
+    }
+    menu->setProperty("__GuiShell_WindowsMenuAttached", true);
+
+    QObject::connect(menu, &QMenu::aboutToShow, menu, []() {
+        if (Application::Instance) {
+            Application::Instance->updateWindowsMenu();
+        }
+    });
+}
+
+void Application::updateWindowsMenu()
+{
+    QMdiArea* area = mdiArea();
+    if (!area) {
+        return;
+    }
+
+    const QList<QMdiSubWindow*> windows = area->subWindowList(QMdiArea::CreationOrder);
+    QWidget* active = area->activeSubWindow();
+
+    Command* cmd = commandManager().getCommandByName("Std_WindowsMenu");
+    if (!cmd) {
+        return;
+    }
+
+    auto* group = qobject_cast<ActionGroup*>(cmd->getAction());
+    if (!group) {
+        return;
+    }
+
+    const QList<QAction*> actions = group->actions();
+    if (actions.isEmpty()) {
+        return;
+    }
+
+    const int numWindows = std::min<int>(actions.count() - 1, windows.count());
+    for (int index = 0; index < numWindows; index++) {
+        QMdiSubWindow* child = windows.at(index);
+        QAction* action = actions.at(index);
+        action->setProperty("__GuiShell_WindowsMenuTarget", QVariant::fromValue(static_cast<QObject*>(child)));
+
+        if (!action->property("__GuiShell_WindowsMenuConnected").toBool()) {
+            action->setProperty("__GuiShell_WindowsMenuConnected", true);
+            QObject::connect(action, &QAction::triggered, action, [action](bool) {
+                if (!Application::Instance) {
+                    return;
+                }
+                QObject* target = action->property("__GuiShell_WindowsMenuTarget").value<QObject*>();
+                if (!target) {
+                    return;
+                }
+                QMdiArea* mdi = Application::Instance->mdiArea();
+                if (!mdi) {
+                    return;
+                }
+                if (auto* window = qobject_cast<QMdiSubWindow*>(target)) {
+                    mdi->setActiveSubWindow(window);
+                }
+            });
+        }
+
+        QString text;
+        QString title = child->windowTitle();
+        const int lastIndex = title.lastIndexOf(QStringLiteral("[*]"));
+        if (lastIndex > 0) {
+            title = title.left(lastIndex);
+            if (child->isWindowModified()) {
+                title = QStringLiteral("%1*").arg(title);
+            }
+        }
+        if (index < 9) {
+            text = QStringLiteral("&%1 %2").arg(index + 1).arg(title);
+        }
+        else {
+            text = QStringLiteral("%1 %2").arg(index + 1).arg(title);
+        }
+
+        action->setText(text);
+        action->setVisible(true);
+        action->setChecked(child == active);
+    }
+
+    for (int index = numWindows; index < actions.count(); index++) {
+        actions[index]->setVisible(false);
+    }
+
+    if (numWindows > 0) {
+        actions.last()->setVisible(true);
     }
 }
 

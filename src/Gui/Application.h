@@ -36,6 +36,7 @@
 
 class QCloseEvent;
 class QMdiArea;
+class QMenu;
 class QWidget;
 class SoNode;
 class NavlibInterface;
@@ -252,6 +253,10 @@ public:
     void setMainWindowModified(bool modified);
     void setWaitCursor();
     void unsetCursor();
+    void attachDockWindowMenu(QMenu* menu);
+    void attachToolBarMenu(QMenu* menu);
+    void attachWindowsMenu(QMenu* menu);
+    void updateWindowsMenu();
 
     /** @name workbench handling */
     //@{

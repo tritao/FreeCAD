@@ -351,18 +351,6 @@ private Q_SLOTS:
      */
     void tabCloseRequested(int index);
     /**
-     * Fills up the menu with the current windows in the workspace.
-     */
-    void onWindowsMenuAboutToShow();
-    /**
-     * Fills up the menu with the current toolbars.
-     */
-    void onToolBarMenuAboutToShow();
-    /**
-     * Fills up the menu with the current dock windows.
-     */
-    void onDockWindowMenuAboutToShow();
-    /**
      * This method gets frequently activated and test the commands if they are still active.
      */
     void _updateActions();

@@ -44,7 +44,6 @@
 #include <QRegularExpressionMatch>
 #include <QScreen>
 #include <QSettings>
-#include <QSignalMapper>
 #include <QStatusBar>
 #include <QThread>
 #include <QTimer>
@@ -312,7 +311,6 @@ struct MainWindowP
     QTimer restoreStateTimer;
     QMdiArea* mdiArea;
     QPointer<MDIView> activeView;
-    QSignalMapper* windowMapper;
     SplashScreen* splashscreen;
     StatusBarObserver* status;
     bool whatsthis;
@@ -477,16 +475,6 @@ MainWindow::MainWindow(QWidget* parent, Qt::WindowFlags f)
     QClipboard* clipbd = QApplication::clipboard();
     connect(clipbd, &QClipboard::dataChanged, this, &MainWindow::updateEditorActions);
 
-    d->windowMapper = new QSignalMapper(this);
-
-    // connection between workspace, window menu and tab bar
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    connect(d->windowMapper, &QSignalMapper::mappedWidget, this, &MainWindow::setActiveSubWindow);
-#else
-    connect(d->windowMapper, &QSignalMapper::mappedObject, this, [=, this](QObject* object) {
-        setActiveSubWindow(qobject_cast<QWidget*>(object));
-    });
-#endif
     connect(d->mdiArea, &QMdiArea::subWindowActivated, this, &MainWindow::onWindowActivated);
 
     setupDockWindows();
@@ -1438,124 +1426,31 @@ void MainWindow::onWindowActivated(QMdiSubWindow* mdi)
     setActiveWindow(view);
 }
 
-void MainWindow::onWindowsMenuAboutToShow()
-{
-    QList<QMdiSubWindow*> windows = d->mdiArea->subWindowList(QMdiArea::CreationOrder);
-    QWidget* active = d->mdiArea->activeSubWindow();
-
-    // We search for the 'Std_WindowsMenu' command that provides the list of actions
-    CommandManager& cMgr = Application::Instance->commandManager();
-    Command* cmd = cMgr.getCommandByName("Std_WindowsMenu");
-    QList<QAction*> actions = qobject_cast<ActionGroup*>(cmd->getAction())->actions();
-
-    // do the connection only once
-    static bool firstShow = true;
-    if (firstShow) {
-        firstShow = false;
-        QAction* last = actions.isEmpty() ? 0 : actions.last();
-        for (const auto& action : actions) {
-            if (action == last) {
-                break;  // this is a separator
-            }
-            connect(action, &QAction::triggered, d->windowMapper, qOverload<>(&QSignalMapper::map));
-        }
-    }
-
-    int numWindows = std::min<int>(actions.count() - 1, windows.count());
-    for (int index = 0; index < numWindows; index++) {
-        QWidget* child = windows.at(index);
-        QAction* action = actions.at(index);
-        QString text;
-        QString title = child->windowTitle();
-        int lastIndex = title.lastIndexOf(QStringLiteral("[*]"));
-        if (lastIndex > 0) {
-            title = title.left(lastIndex);
-            if (child->isWindowModified()) {
-                title = QStringLiteral("%1*").arg(title);
-            }
-        }
-        if (index < 9) {
-            text = QStringLiteral("&%1 %2").arg(index + 1).arg(title);
-        }
-        else {
-            text = QStringLiteral("%1 %2").arg(index + 1).arg(title);
-        }
-        action->setText(text);
-        action->setVisible(true);
-        action->setChecked(child == active);
-        d->windowMapper->setMapping(action, child);
-    }
-
-    // if less windows than actions
-    for (int index = numWindows; index < actions.count(); index++) {
-        actions[index]->setVisible(false);
-    }
-    // show the separator
-    if (numWindows > 0) {
-        actions.last()->setVisible(true);
-    }
-}
-
-void MainWindow::onToolBarMenuAboutToShow()
-{
-    auto menu = static_cast<QMenu*>(sender());
-    menu->clear();
-    populateToolBarMenu(menu);
-
-    menu->addSeparator();
-
-    Application::Instance->commandManager().getCommandByName("Std_ToggleToolBarLock")->addTo(menu);
-}
-
 void MainWindow::populateToolBarMenu(QMenu* menu)
 {
-    QList<QToolBar*> toolbars = this->findChildren<QToolBar*>();
-    for (const auto& toolbar : toolbars) {
-        if (auto parent = toolbar->parentWidget()) {
-            if (parent == this || parent == statusBar() || parent->parentWidget() == statusBar()
-                || parent->parentWidget() == menuBar()) {
-                QAction* action = toolbar->toggleViewAction();
-                action->setToolTip(tr("Toggles this toolbar"));
-                action->setStatusTip(tr("Toggles this toolbar"));
-                action->setWhatsThis(tr("Toggles this toolbar"));
-                menu->addAction(action);
-            }
-        }
-    }
-}
-
-void MainWindow::onDockWindowMenuAboutToShow()
-{
-    auto menu = static_cast<QMenu*>(sender());
-    menu->clear();
-    populateDockWindowMenu(menu);
+    ToolBarManager::getInstance(this, "BaseApp/MainWindow")->populateToolBarMenu(menu);
 }
 
 void MainWindow::populateDockWindowMenu(QMenu* menu)
 {
-    QList<QDockWidget*> dock = this->findChildren<QDockWidget*>();
-    for (auto& it : dock) {
-        QAction* action = it->toggleViewAction();
-        action->setToolTip(tr("Toggles this dockable window"));
-        action->setStatusTip(tr("Toggles this dockable window"));
-        action->setWhatsThis(tr("Toggles this dockable window"));
-        menu->addAction(action);
-    }
+    DockWindowManager::instance(this, "BaseApp/MainWindow")->populateDockWindowMenu(menu);
 }
 
 void MainWindow::setDockWindowMenu(QMenu* menu)
 {
-    connect(menu, &QMenu::aboutToShow, this, &MainWindow::onDockWindowMenuAboutToShow);
+    DockWindowManager::instance(this, "BaseApp/MainWindow")->attachDockWindowMenu(menu);
 }
 
 void MainWindow::setToolBarMenu(QMenu* menu)
 {
-    connect(menu, &QMenu::aboutToShow, this, &MainWindow::onToolBarMenuAboutToShow);
+    ToolBarManager::getInstance(this, "BaseApp/MainWindow")->attachToolBarMenu(menu);
 }
 
 void MainWindow::setWindowsMenu(QMenu* menu)
 {
-    connect(menu, &QMenu::aboutToShow, this, &MainWindow::onWindowsMenuAboutToShow);
+    if (Application::Instance) {
+        Application::Instance->attachWindowsMenu(menu);
+    }
 }
 
 QList<QWidget*> MainWindow::windows(QMdiArea::WindowOrder order) const

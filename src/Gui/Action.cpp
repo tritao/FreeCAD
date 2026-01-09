@@ -1416,7 +1416,7 @@ void DockWidgetAction::addTo(QWidget* widget)
     if (!_menu) {
         _menu = new QMenu();
         action()->setMenu(_menu);
-        getMainWindow()->setDockWindowMenu(_menu);
+        Application::Instance->attachDockWindowMenu(_menu);
     }
 
     widget->addAction(action());
@@ -1439,7 +1439,7 @@ void ToolBarAction::addTo(QWidget* widget)
     if (!_menu) {
         _menu = new QMenu();
         action()->setMenu(_menu);
-        getMainWindow()->setToolBarMenu(_menu);
+        Application::Instance->attachToolBarMenu(_menu);
     }
 
     widget->addAction(action());
@@ -1460,14 +1460,14 @@ void WindowAction::addTo(QWidget* widget)
             _menu = new QMenu();
             action()->setMenu(_menu);
             _menu->addActions(groupAction()->actions());
-            getMainWindow()->setWindowsMenu(_menu);
+            Application::Instance->attachWindowsMenu(_menu);
         }
 
         widget->addAction(action());
     }
     else {
         menu->addActions(groupAction()->actions());
-        getMainWindow()->setWindowsMenu(menu);
+        Application::Instance->attachWindowsMenu(menu);
     }
 }
 
