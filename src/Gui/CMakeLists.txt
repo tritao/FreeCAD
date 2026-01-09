@@ -1413,6 +1413,7 @@ SET(FreeCADGui_CPP_SRCS
     ExpressionBindingPy.cpp
     GraphicsViewZoom.cpp
     ExpressionCompleter.cpp
+    GuiShell.cpp
     FileHandler.cpp
     FileHandler.h
     FreeCADStyle.cpp
@@ -1452,6 +1453,7 @@ SET(FreeCADGui_SRCS
     ExpressionBinding.h
     ExpressionBindingPy.h
     ExpressionCompleter.h
+    GuiShell.h
     FreeCADGuiInit.py
     FreeCADStyle.h
     GraphicsViewZoom.h

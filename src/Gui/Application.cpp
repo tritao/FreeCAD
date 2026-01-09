@@ -82,6 +82,7 @@
 #include "InputHintPy.h"
 #include "LinkViewPy.h"
 #include "MainWindow.h"
+#include "GuiShell.h"
 #include "Macro.h"
 #include "PreferencePackManager.h"
 #include "PythonConsolePy.h"
@@ -2580,6 +2581,7 @@ void Application::runApplication()
 
     Application app(true);
     MainWindow mw;
+    Gui::setActiveShell(Gui::createClassicShell(&mw));
     mw.setProperty("QuitOnClosed", true);
 
     // https://forum.freecad.org/viewtopic.php?f=3&t=15540
