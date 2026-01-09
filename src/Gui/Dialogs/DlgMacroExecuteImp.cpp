@@ -388,23 +388,23 @@ void DlgMacroExecuteImp::accept()
     QDir dir(mitem->dirPath);
     QFileInfo fi(dir, item->text(0));
     try {
-        getMainWindow()->setCursor(Qt::WaitCursor);
+        Application::Instance->setWaitCursor();
         PythonTracingLocker tracelock(watcher->getTrace());
 
-        getMainWindow()->appendRecentMacro(fi.filePath());
+        Application::Instance->appendRecentMacro(fi.filePath());
         Application::Instance->macroManager()->run(Gui::MacroManager::File, fi.filePath().toUtf8());
         // after macro run recalculate the document
         if (Application::Instance->activeDocument()) {
             Application::Instance->activeDocument()->getDocument()->recompute();
         }
-        getMainWindow()->unsetCursor();
+        Application::Instance->unsetCursor();
     }
     catch (const Base::SystemExitException&) {
         // handle SystemExit exceptions
         Base::PyGILStateLocker locker;
         Base::PyException e;
         e.reportException();
-        getMainWindow()->unsetCursor();
+        Application::Instance->unsetCursor();
     }
 }
 
@@ -447,7 +447,7 @@ void DlgMacroExecuteImp::onEditButtonClicked()
     edit->open(file);
     edit->resize(400, 300);
     Application::Instance->addWindow(edit);
-    getMainWindow()->appendRecentMacro(file);
+    Application::Instance->appendRecentMacro(file);
 
     if (mitem->systemWide) {
         editor->setReadOnly(true);
@@ -516,7 +516,7 @@ void DlgMacroExecuteImp::onCreateButtonClicked()
             editor->setWindowIcon(Gui::BitmapFactory().iconFromTheme("applications-python"));
             auto edit = new PythonEditorView(editor, Gui::activeMainWindow());
             edit->open(fi.absoluteFilePath());
-            getMainWindow()->appendRecentMacro(fi.absoluteFilePath());
+            Application::Instance->appendRecentMacro(fi.absoluteFilePath());
             edit->setWindowTitle(QStringLiteral("%1[*]").arg(fn));
             edit->resize(400, 300);
             Application::Instance->addWindow(edit);

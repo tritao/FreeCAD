@@ -42,6 +42,7 @@
 #include <QTimer>
 #include <QWindow>
 #include <QStyleFactory>
+#include <Qt>
 
 #include <QLoggingCategory>
 #include <fmt/format.h>
@@ -794,7 +795,7 @@ void Application::open(const char* FileName, const char* Module)
 
             // the original file name is required
             QString filename = QString::fromUtf8(File.filePath().c_str());
-            getMainWindow()->appendRecentFile(filename);
+            appendRecentFile(filename);
             FileDialog::setWorkingDirectory(filename);
         }
         catch (const Base::PyException& e) {
@@ -902,7 +903,7 @@ void Application::importFrom(const char* FileName, const char* DocName, const ch
                 addToRecent
             );  // Make sure it gets added to the parameter list
             if (addToRecent) {
-                getMainWindow()->appendRecentFile(filename);
+                appendRecentFile(filename);
             }
             FileDialog::setWorkingDirectory(filename);
         }
@@ -980,7 +981,7 @@ void Application::exportTo(const char* FileName, const char* DocName, const char
                 std::map<std::string, std::string> importMap
                     = App::GetApplication().getImportFilters(te.c_str());
                 if (!importMap.empty()) {
-                    getMainWindow()->appendRecentFile(QString::fromUtf8(File.filePath().c_str()));
+                    appendRecentFile(QString::fromUtf8(File.filePath().c_str()));
                 }
             }
             // allow exporters to pass _objs__ to submodules before deleting it
@@ -1672,9 +1673,9 @@ void Application::viewActivated(MDIView* pcView)
 #endif
 
     signalActivateView(pcView);
-    getMainWindow()->setWindowTitle(pcView->buildWindowTitle());
+    setMainWindowTitle(pcView->buildWindowTitle());
     if (auto document = pcView->getGuiDocument()) {
-        getMainWindow()->setWindowModified(document->isModified());
+        setMainWindowModified(document->isModified());
     }
 
     // Set the new active document which is taken of the activated view. If, however,
@@ -1953,6 +1954,72 @@ void Application::initDockWindows(bool show)
     }
 }
 
+void Application::appendRecentFile(const QString& filename)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->appendRecentFile(filename);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->appendRecentFile(filename);
+    }
+}
+
+void Application::appendRecentMacro(const QString& filename)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->appendRecentMacro(filename);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->appendRecentMacro(filename);
+    }
+}
+
+void Application::setMainWindowTitle(const QString& title)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->setMainWindowTitle(title);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->setWindowTitle(title);
+    }
+}
+
+void Application::setMainWindowModified(bool modified)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->setMainWindowModified(modified);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->setWindowModified(modified);
+    }
+}
+
+void Application::setWaitCursor()
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->setWaitCursor();
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->setCursor(Qt::WaitCursor);
+    }
+}
+
+void Application::unsetCursor()
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->unsetCursor();
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->unsetCursor();
+    }
+}
+
 void Application::tryClose(QCloseEvent* e)
 {
     e->setAccepted(closeAllDocuments(false));
@@ -2100,7 +2167,12 @@ bool Application::activateWorkbench(const char* name)
         }
         // now try to create and activate the matching workbench object
         else if (WorkbenchManager::instance()->activate(name, type)) {
-            getMainWindow()->activateWorkbench(QString::fromLatin1(name));
+            if (auto* shell = Gui::activeShell()) {
+                shell->activateWorkbench(QString::fromLatin1(name));
+            }
+            else if (auto* mw = getMainWindow()) {
+                mw->activateWorkbench(QString::fromLatin1(name));
+            }
             this->signalActivateWorkbench(name);
             ok = true;
         }

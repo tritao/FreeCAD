@@ -1207,12 +1207,12 @@ void RecentMacrosAction::activateFile(int id)
             edit->open(filename);
             edit->resize(400, 300);
             Application::Instance->addWindow(edit);
-            getMainWindow()->appendRecentMacro(filename);
+            Application::Instance->appendRecentMacro(filename);
             edit->setWindowTitle(fi.fileName());
         }
         else {  // execute macro on normal (non-shifted) click
             try {
-                getMainWindow()->appendRecentMacro(fi.filePath());
+                Application::Instance->appendRecentMacro(fi.filePath());
                 Application::Instance->macroManager()->run(
                     Gui::MacroManager::File,
                     fi.filePath().toUtf8()

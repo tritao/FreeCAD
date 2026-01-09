@@ -31,6 +31,7 @@
 #include <QStatusBar>
 #include <QMainWindow>
 #include <QPointer>
+#include <Qt>
 
 namespace Gui
 {
@@ -269,6 +270,55 @@ public:
     {
         if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
             mw->initDockWindows(show);
+        }
+    }
+
+    void appendRecentFile(const QString& filename) override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->appendRecentFile(filename);
+        }
+    }
+
+    void appendRecentMacro(const QString& filename) override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->appendRecentMacro(filename);
+        }
+    }
+
+    void setMainWindowTitle(const QString& title) override
+    {
+        if (auto* w = mainWindow_.data()) {
+            w->setWindowTitle(title);
+        }
+    }
+
+    void setMainWindowModified(bool modified) override
+    {
+        if (auto* w = mainWindow_.data()) {
+            w->setWindowModified(modified);
+        }
+    }
+
+    void setWaitCursor() override
+    {
+        if (auto* w = mainWindow_.data()) {
+            w->setCursor(Qt::WaitCursor);
+        }
+    }
+
+    void unsetCursor() override
+    {
+        if (auto* w = mainWindow_.data()) {
+            w->unsetCursor();
+        }
+    }
+
+    void activateWorkbench(const QString& name) override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->activateWorkbench(name);
         }
     }
 

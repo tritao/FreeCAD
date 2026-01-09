@@ -1639,7 +1639,7 @@ bool Document::saveAs()
             // App::Document::saveAs() may modify the passed file name
             fi.setFile(QString::fromUtf8(d->_pcDocument->FileName.getValue()));
             setModified(false);
-            getMainWindow()->appendRecentFile(fi.filePath());
+            Application::Instance->appendRecentFile(fi.filePath());
         }
         catch (const Base::FileException& e) {
             e.reportException();

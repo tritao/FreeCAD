@@ -246,6 +246,12 @@ public:
     void hideHints();
     void setUserSchema(int userSchema);
     void initDockWindows(bool show);
+    void appendRecentFile(const QString& filename);
+    void appendRecentMacro(const QString& filename);
+    void setMainWindowTitle(const QString& title);
+    void setMainWindowModified(bool modified);
+    void setWaitCursor();
+    void unsetCursor();
 
     /** @name workbench handling */
     //@{

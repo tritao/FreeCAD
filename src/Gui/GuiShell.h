@@ -77,6 +77,14 @@ public:
     virtual void hideHints() = 0;
     virtual void setUserSchema(int userSchema) = 0;
     virtual void initDockWindows(bool show) = 0;
+
+    virtual void appendRecentFile(const QString& filename) = 0;
+    virtual void appendRecentMacro(const QString& filename) = 0;
+    virtual void setMainWindowTitle(const QString& title) = 0;
+    virtual void setMainWindowModified(bool modified) = 0;
+    virtual void setWaitCursor() = 0;
+    virtual void unsetCursor() = 0;
+    virtual void activateWorkbench(const QString& name) = 0;
 };
 
 GuiExport IGuiShell* activeShell();
