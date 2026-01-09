@@ -197,11 +197,14 @@ MenuManager::~MenuManager() = default;
 
 void MenuManager::setup(MenuItem* menuItems) const
 {
-    if (!menuItems) {
+    setup(menuItems, getMainWindow() ? getMainWindow()->menuBar() : nullptr);
+}
+
+void MenuManager::setup(MenuItem* menuItems, QMenuBar* menuBar) const
+{
+    if (!menuItems || !menuBar) {
         return;  // empty menu bar
     }
-
-    QMenuBar* menuBar = getMainWindow()->menuBar();
 
     // By right, it should be fine for more than one command action having the
     // same shortcut but in different workbench. It should not require manual
@@ -339,7 +342,14 @@ void MenuManager::setup(MenuItem* item, QMenu* menu) const
 
 void MenuManager::retranslate() const
 {
-    QMenuBar* menuBar = getMainWindow()->menuBar();
+    retranslate(getMainWindow() ? getMainWindow()->menuBar() : nullptr);
+}
+
+void MenuManager::retranslate(QMenuBar* menuBar) const
+{
+    if (!menuBar) {
+        return;
+    }
     for (auto& action : menuBar->actions()) {
         if (action->menu()) {
             retranslate(action->menu());
