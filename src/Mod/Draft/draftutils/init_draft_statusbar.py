@@ -251,7 +251,7 @@ def init_draft_statusbar_scale():
     scale_widget.scaleLabel = scaleLabel
 
     # add scale widget to the statusbar
-    sb.insertPermanentWidget(3, scale_widget)
+    Gui.addStatusPermanentWidget(scale_widget)
     scale_widget.show()
 
 
@@ -289,7 +289,7 @@ def init_draft_statusbar_snap():
     snap_widget.setWindowTitle(text)
     snap_widget.setOrientation(QtCore.Qt.Orientation.Horizontal)
     snap_widget.setIconSize(QtCore.QSize(16, 16))
-    sb.insertPermanentWidget(2, snap_widget)
+    Gui.addStatusPermanentWidget(snap_widget)
 
     # grid button:
     snap_widget.addAction(Gui.Command.get("Draft_ToggleGrid").getAction()[0])
@@ -342,7 +342,7 @@ def show_draft_statusbar_scale():
     else:
         scale_widget = mw.findChild(QtWidgets.QToolBar, "draft_scale_widget")
         if scale_widget:
-            sb.insertPermanentWidget(3, scale_widget)
+            Gui.addStatusPermanentWidget(scale_widget)
             scale_widget.show()
         else:
             init_draft_statusbar_scale()
@@ -362,7 +362,7 @@ def show_draft_statusbar_snap():
     else:
         snap_widget = mw.findChild(QtWidgets.QToolBar, "draft_snap_widget")
         if snap_widget:
-            sb.insertPermanentWidget(2, snap_widget)
+            Gui.addStatusPermanentWidget(snap_widget)
             snap_widget.setOrientation(QtCore.Qt.Orientation.Horizontal)
             snap_widget.show()
         else:

@@ -131,7 +131,7 @@ def setStatusIcons(show=True):
                     "ToolbarIconSize", 24
                 )
                 statuswidget.setIconSize(QtCore.QSize(s, s))
-                st.insertPermanentWidget(2, statuswidget)
+                FreeCADGui.addStatusPermanentWidget(statuswidget)
 
                 # report panels toggle button
                 togglebutton = QtGui.QAction()
