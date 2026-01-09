@@ -1318,6 +1318,7 @@ SET(Workbench_CPP_SRCS
     OverlayWidgets.cpp
     MenuManager.cpp
     PythonWorkbenchPyImp.cpp
+    StandardDockWidgetFactory.cpp
     ToolBarAreaWidget.cpp
     ToolBarManager.cpp
     ToolBoxManager.cpp
@@ -1334,6 +1335,7 @@ SET(Workbench_SRCS
     OverlayManager.h
     OverlayWidgets.h
     MenuManager.h
+    StandardDockWidgetFactory.h
     ToolBarAreaWidget.h
     ToolBarManager.h
     ToolBoxManager.h
