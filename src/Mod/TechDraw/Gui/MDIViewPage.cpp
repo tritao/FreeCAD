@@ -49,6 +49,7 @@
 #include <Gui/Document.h>
 #include <Gui/FileDialog.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionObject.h>
 #include <Gui/ViewProvider.h>
@@ -316,7 +317,7 @@ void MDIViewPage::printPdf()
     filter << QObject::tr("PDF (*.pdf)");
     filter << QObject::tr("All Files (*.*)");
     QString fn =
-        Gui::FileDialog::getSaveFileName(Gui::getMainWindow(), QObject::tr("Export Page as PDF"),
+        Gui::FileDialog::getSaveFileName(Gui::uiParentWidget(), QObject::tr("Export Page as PDF"),
 
                                          QString(), filter.join(QLatin1String(";;")));
     if (fn.isEmpty()) {
@@ -499,7 +500,7 @@ void MDIViewPage::saveSVG()
     filter << QStringLiteral("SVG (*.svg)");
     filter << QObject::tr("All files (*.*)");
     QString fn =
-        Gui::FileDialog::getSaveFileName(Gui::getMainWindow(), QObject::tr("Export page as SVG"),
+        Gui::FileDialog::getSaveFileName(Gui::uiParentWidget(), QObject::tr("Export page as SVG"),
 
                                          defaultFileName(), filter.join(QLatin1String(";;")));
     if (fn.isEmpty()) {
@@ -521,7 +522,7 @@ void MDIViewPage::saveDXF()
     filter << QStringLiteral("DXF (*.dxf)");
     filter << QObject::tr("All files (*.*)");
     QString fn =
-        Gui::FileDialog::getSaveFileName(Gui::getMainWindow(), QObject::tr("Export page as DXF"),
+        Gui::FileDialog::getSaveFileName(Gui::uiParentWidget(), QObject::tr("Export page as DXF"),
 
                                          defaultFileName(), filter.join(QLatin1String(";;")));
     if (fn.isEmpty()) {
@@ -546,7 +547,7 @@ void MDIViewPage::savePDF()
     filter << QStringLiteral("PDF (*.pdf)");
     filter << QObject::tr("All Files (*.*)");
     QString fn =
-        Gui::FileDialog::getSaveFileName(Gui::getMainWindow(), QObject::tr("Export page as PDF"),
+        Gui::FileDialog::getSaveFileName(Gui::uiParentWidget(), QObject::tr("Export page as PDF"),
 
                                          defaultFileName(), filter.join(QLatin1String(";;")));
     if (fn.isEmpty()) {
@@ -569,7 +570,7 @@ void MDIViewPage::printAllPages()
     QPrinter printer(QPrinter::HighResolution);
     printer.setFullPage(true);
 
-    QPrintDialog dlg(&printer, Gui::getMainWindow());
+    QPrintDialog dlg(&printer, Gui::uiParentWidget());
     if (dlg.exec() == QDialog::Accepted) {
         App::Document* doc = App::GetApplication().getActiveDocument();
         if (!doc) {
@@ -1091,9 +1092,7 @@ void MDIViewPage::showStatusMsg(const char* string1, const char* string2, const 
     QString msg = QStringLiteral("%1 %2.%3.%4 ")
                       .arg(tr("Selected:"), QString::fromUtf8(string1), QString::fromUtf8(string2),
                            QString::fromUtf8(string3));
-    if (Gui::getMainWindow()) {
-        Gui::getMainWindow()->showMessage(msg, 6000);
-    }
+    Gui::Application::Instance->showMessage(msg, 6000);
 }
 
 void MDIViewPage::setDimensionsSelectability(bool val)

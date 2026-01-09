@@ -45,6 +45,7 @@
 #include <Gui/Control.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionObject.h>
 #include <Gui/View3DInventor.h>
@@ -1466,7 +1467,7 @@ void CmdTechDrawRadiusDimension::activated(int iMsg)
     Q_UNUSED(iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Task in progress"),
                              QObject::tr("Close the active task dialog and try again"));
         return;
@@ -1514,7 +1515,7 @@ void CmdTechDrawDiameterDimension::activated(int iMsg)
     Q_UNUSED(iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Task in progress"),
                              QObject::tr("Close the active task dialog and try again"));
         return;
@@ -1562,7 +1563,7 @@ void CmdTechDrawLengthDimension::activated(int iMsg)
     Q_UNUSED(iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Task in progress"),
                              QObject::tr("Close the active task dialog and try again"));
         return;
@@ -1610,7 +1611,7 @@ void CmdTechDrawHorizontalDimension::activated(int iMsg)
     Q_UNUSED(iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Task in progress"),
                              QObject::tr("Close the active task dialog and try again"));
         return;
@@ -1658,7 +1659,7 @@ void CmdTechDrawVerticalDimension::activated(int iMsg)
     Q_UNUSED(iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Task in progress"),
                              QObject::tr("Close the active task dialog and try again"));
         return;
@@ -1705,7 +1706,7 @@ void CmdTechDrawAngleDimension::activated(int iMsg)
     Q_UNUSED(iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Task in progress"),
                              QObject::tr("Close the active task dialog and try again"));
         return;
@@ -1752,7 +1753,7 @@ void CmdTechDraw3PtAngleDimension::activated(int iMsg)
     Q_UNUSED(iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Task in progress"),
                              QObject::tr("Close the active task dialog and try again"));
         return;
@@ -1799,7 +1800,7 @@ void CmdTechDrawAreaDimension::activated(int iMsg)
     Q_UNUSED(iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Task in progress"),
                              QObject::tr("Close the active task dialog and try again"));
         return;
@@ -1846,7 +1847,7 @@ void CmdTechDrawExtentGroup::activated(int iMsg)
 {
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Task in progress"),
                              QObject::tr("Close the active task dialog and try again"));
         return;
@@ -1868,7 +1869,7 @@ void CmdTechDrawExtentGroup::activated(int iMsg)
 
 Gui::Action* CmdTechDrawExtentGroup::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -1942,7 +1943,7 @@ void CmdTechDrawHorizontalExtentDimension::activated(int iMsg)
 
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Task in progress"),
                              QObject::tr("Close the active task dialog and try again"));
         return;
@@ -1968,7 +1969,7 @@ void execExtent(Gui::Command* cmd, const std::string& dimType)
 
     bool result = _checkDrawViewPart(cmd);
     if (!result) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Incorrect selection"),
                              QObject::tr("No view of a part in selection."));
         Gui::Command::abortCommand();
@@ -1984,7 +1985,7 @@ void execExtent(Gui::Command* cmd, const std::string& dimType)
     if (!references3d.empty())  {
         for (auto& ref : references2d) {
             if (!ref.getSubName().empty()) {
-                QMessageBox::warning(Gui::getMainWindow(),
+                QMessageBox::warning(Gui::uiParentWidget(),
                     QObject::tr("Incorrect selection"),
                     QObject::tr("Selection contains both 2D and 3D geometry"));
                 Gui::Command::abortCommand();
@@ -2010,7 +2011,7 @@ void execExtent(Gui::Command* cmd, const std::string& dimType)
     DimensionGeometry geometryRefs2d = validateDimSelection(
         references2d, acceptableGeometry, minimumCounts, acceptableDimensionGeometrys);
     if (geometryRefs2d == DimensionGeometry::isInvalid) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Incorrect Selection"),
                              QObject::tr("Cannot make 2D extent dimension from selection"));
         Gui::Command::abortCommand();
@@ -2026,7 +2027,7 @@ void execExtent(Gui::Command* cmd, const std::string& dimType)
                                                 minimumCounts,
                                                 acceptableDimensionGeometrys);
         if (geometryRefs3d == DimensionGeometry::isInvalid) {
-            QMessageBox::warning(Gui::getMainWindow(),
+            QMessageBox::warning(Gui::uiParentWidget(),
                                  QObject::tr("Incorrect Selection"),
                                  QObject::tr("Cannot make 3D extent dimension from selection"));
             Gui::Command::abortCommand();
@@ -2067,7 +2068,7 @@ void CmdTechDrawVerticalExtentDimension::activated(int iMsg)
 
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Task in progress"),
                              QObject::tr("Close the active task dialog and try again"));
         return;
@@ -2106,7 +2107,7 @@ void CmdTechDrawDimensionRepair::activated(int iMsg)
         getSelection().getObjectsOfType(TechDraw::DrawViewDimension::getClassTypeId());
     TechDraw::DrawViewDimension* dim = nullptr;
     if (dimObjs.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Incorrect selection"),
                              QObject::tr("There is no dimension in your selection"));
         return;
@@ -2158,7 +2159,7 @@ void execDim(Gui::Command* cmd, std::string type, StringVector acceptableGeometr
 {
     bool result = _checkDrawViewPart(cmd);
     if (!result) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
             QObject::tr("Incorrect selection"),
             QObject::tr("No view of a part in selection."));
         return;
@@ -2173,7 +2174,7 @@ void execDim(Gui::Command* cmd, std::string type, StringVector acceptableGeometr
     DimensionGeometry geometryRefs2d = validateDimSelection(
         references2d, acceptableGeometry, minimumCounts, acceptableDimensionGeometrys);
     if (geometryRefs2d == DimensionGeometry::isInvalid) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
             QObject::tr("Incorrect selection"),
             QObject::tr("Cannot make 2D dimension from selection"));
         return;
@@ -2189,7 +2190,7 @@ void execDim(Gui::Command* cmd, std::string type, StringVector acceptableGeometr
             acceptableDimensionGeometrys);
 
         if (geometryRefs3d == DimensionGeometry::isInvalid) {
-            QMessageBox::warning(Gui::getMainWindow(),
+            QMessageBox::warning(Gui::uiParentWidget(),
                 QObject::tr("Incorrect Selection"),
                 QObject::tr("Cannot make 3D dimension from selection"));
             return;
@@ -2203,7 +2204,7 @@ void execDim(Gui::Command* cmd, std::string type, StringVector acceptableGeometr
     if (type == "Radius" || type == "Diameter") {
         if (geometryRefs2d == DimensionGeometry::isEllipse || geometryRefs3d == DimensionGeometry::isEllipse) {
             QMessageBox::StandardButton result = QMessageBox::warning(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("Ellipse curve warning"),
                 QObject::tr("Selected edge is an Ellipse. Value will be approximate. Continue?"),
                 QMessageBox::Ok | QMessageBox::Cancel,
@@ -2214,7 +2215,7 @@ void execDim(Gui::Command* cmd, std::string type, StringVector acceptableGeometr
         }
         if (geometryRefs2d == DimensionGeometry::isBSplineCircle || geometryRefs3d == DimensionGeometry::isBSplineCircle) {
             QMessageBox::StandardButton result = QMessageBox::warning(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("B-spline curve warning"),
                 QObject::tr("Selected edge is a B-spline. Value will be approximate. Continue?"),
                 QMessageBox::Ok | QMessageBox::Cancel,
@@ -2225,7 +2226,7 @@ void execDim(Gui::Command* cmd, std::string type, StringVector acceptableGeometr
         }
         if (geometryRefs2d == DimensionGeometry::isBSpline || geometryRefs3d == DimensionGeometry::isBSpline) {
             QMessageBox::critical(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("B-spline curve error"),
                 QObject::tr("Selected edge is a B-spline and a radius/diameter cannot be calculated."));
             return;
@@ -2325,7 +2326,7 @@ bool _checkSelection(Gui::Command* cmd, unsigned maxObjs)
 {
     std::vector<Gui::SelectionObject> selection = cmd->getSelection().getSelectionEx();
     if (selection.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Incorrect selection"),
                              QObject::tr("Select an object first"));
         return false;
@@ -2333,7 +2334,7 @@ bool _checkSelection(Gui::Command* cmd, unsigned maxObjs)
 
     const std::vector<std::string> SubNames = selection[0].getSubNames();
     if (SubNames.size() > maxObjs) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Incorrect selection"),
                              QObject::tr("Too many objects selected"));
         return false;
@@ -2342,7 +2343,7 @@ bool _checkSelection(Gui::Command* cmd, unsigned maxObjs)
     std::vector<App::DocumentObject*> pages =
         cmd->getDocument()->getObjectsOfType(TechDraw::DrawPage::getClassTypeId());
     if (pages.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Incorrect selection"),
                              QObject::tr("Create a page first."));
         return false;

@@ -96,7 +96,7 @@ bool TaskDlgMeshShapeNetgen::accept()
             if (!ret) {
                 wc.restoreCursor();
                 QMessageBox::critical(
-                    Gui::getMainWindow(),
+                    Gui::uiParentWidget(),
                     tr("Meshing failure"),
                     QString::fromStdString(FemMeshShapeNetgenObject->getStatusString())
                 );

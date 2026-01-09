@@ -94,7 +94,7 @@ void CmdPrimtiveCompAdditive::activated(int iMsg)
             shouldMakeBody = true;
         }
         else {
-            PartDesignGui::DlgActiveBody dia(Gui::getMainWindow(), doc);
+            PartDesignGui::DlgActiveBody dia(Gui::uiParentWidget(), doc);
             if (dia.exec() == QDialog::DialogCode::Accepted) {
                 pcActiveBody = dia.getActiveBody();
             }
@@ -152,7 +152,7 @@ void CmdPrimtiveCompAdditive::activated(int iMsg)
 
 Gui::Action* CmdPrimtiveCompAdditive::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -303,7 +303,7 @@ void CmdPrimtiveCompSubtractive::activated(int iMsg)
     App::DocumentObject* prevSolid = pcActiveBody->Tip.getValue();
     if (!prevSolid) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("No previous feature found"),
             QObject::tr("It is not possible to create a subtractive feature without a base feature available")
         );
@@ -337,7 +337,7 @@ void CmdPrimtiveCompSubtractive::activated(int iMsg)
 
 Gui::Action* CmdPrimtiveCompSubtractive::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 

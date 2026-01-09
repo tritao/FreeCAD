@@ -26,6 +26,7 @@
 
 
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 
 #include "SketchRectangularArrayDialog.h"
 #include "ui_SketchRectangularArrayDialog.h"
@@ -34,7 +35,7 @@
 using namespace SketcherGui;
 
 SketchRectangularArrayDialog::SketchRectangularArrayDialog()
-    : QDialog(Gui::getMainWindow())
+    : QDialog(Gui::uiParentWidget())
     , ui(new Ui_SketchRectangularArrayDialog)
 {
     ui->setupUi(this);

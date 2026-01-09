@@ -38,6 +38,7 @@
 #include <Gui/Document.h>
 #include <Gui/Application.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/MDIView.h>
 #include <Mod/Sketcher/App/SketchObject.h>
 #include <Mod/PartDesign/App/Body.h>
@@ -121,7 +122,7 @@ void CmdPartDesignBody::activated(int iMsg)
                 && PartDesign::Body::findBodyOf(baseFeature)) {
                 // Prevent creating bodies based on features already belonging to other bodies
                 QMessageBox::warning(
-                    Gui::getMainWindow(),
+                    Gui::uiParentWidget(),
                     QObject::tr("Bad base feature"),
                     QObject::tr("A body cannot be based on a Part Design feature.")
                 );
@@ -129,7 +130,7 @@ void CmdPartDesignBody::activated(int iMsg)
             }
             else if (PartDesign::Body::findBodyOf(baseFeature)) {
                 QMessageBox::warning(
-                    Gui::getMainWindow(),
+                    Gui::uiParentWidget(),
                     QObject::tr("Bad base feature"),
                     QObject::tr("%1 already belongs to a body and cannot be used as a base feature for another body.")
                         .arg(QString::fromUtf8(baseFeature->Label.getValue()))
@@ -145,7 +146,7 @@ void CmdPartDesignBody::activated(int iMsg)
                 if (partOfBaseFeature && partOfBaseFeature != actPart) {
                     // prevent cross-part mess
                     QMessageBox::warning(
-                        Gui::getMainWindow(),
+                        Gui::uiParentWidget(),
                         QObject::tr("Bad base feature"),
                         QObject::tr("Base feature (%1) belongs to other part.")
                             .arg(QString::fromUtf8(baseFeature->Label.getValue()))
@@ -200,7 +201,7 @@ void CmdPartDesignBody::activated(int iMsg)
 
                         if (!warning.isEmpty()) {
                             QMessageBox::warning(
-                                Gui::getMainWindow(),
+                                Gui::uiParentWidget(),
                                 QObject::tr("Base feature"),
                                 warning
                             );
@@ -211,7 +212,7 @@ void CmdPartDesignBody::activated(int iMsg)
         }
         else {
             QMessageBox::warning(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("Bad base feature"),
                 QObject::tr("Body may be based on no more than one feature.")
             );
@@ -612,7 +613,7 @@ void CmdPartDesignMigrate::activated(int iMsg)
                         }
                         catch (Base::Exception&) {
                             QMessageBox::critical(
-                                Gui::getMainWindow(),
+                                Gui::uiParentWidget(),
                                 QObject::tr("Sketch plane cannot be migrated"),
                                 QObject::tr(
                                     "Please edit '%1' and redefine it to use a Base or "
@@ -842,7 +843,7 @@ void CmdPartDesignMoveFeature::activated(int iMsg)
         })) {
         // show messagebox and cancel
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Features cannot be moved"),
             QObject::tr("Some of the selected features have dependencies in the source body")
         );
@@ -872,7 +873,7 @@ void CmdPartDesignMoveFeature::activated(int iMsg)
     if (source_bodies.size() != 1) {
         // show messagebox and cancel
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Features cannot be moved"),
             QObject::tr("Only features of a single source body can be moved")
         );
@@ -890,7 +891,7 @@ void CmdPartDesignMoveFeature::activated(int iMsg)
 
     if (target_bodies.empty()) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Features cannot be moved"),
             QObject::tr("There are no other bodies to move to")
         );
@@ -904,7 +905,7 @@ void CmdPartDesignMoveFeature::activated(int iMsg)
         items.push_back(QString::fromUtf8(body->Label.getValue()));
     }
     QString text = QInputDialog::getItem(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         qApp->translate("PartDesign_MoveFeature", "Select Body"),
         qApp->translate("PartDesign_MoveFeature", "Select a body from the list"),
         items,
@@ -989,7 +990,7 @@ void CmdPartDesignMoveFeature::activated(int iMsg)
             try {
                 PartDesignGui::fixSketchSupport(sketch);
             } catch (Base::Exception &) {
-                QMessageBox::warning( Gui::getMainWindow(), QObject::tr("Sketch plane cannot be
+                QMessageBox::warning( Gui::uiParentWidget(), QObject::tr("Sketch plane cannot be
     migrated"), QObject::tr("Please edit '%1' and redefine it to use a Base or Datum plane as the
     sketch plane."). arg( QString::fromLatin1( sketch->Label.getValue () ) ) );
             }
@@ -1086,7 +1087,7 @@ void CmdPartDesignMoveFeatureInTree::activated(int iMsg)
     }
 
     QString text = QInputDialog::getItem(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         qApp->translate("PartDesign_MoveFeatureInTree", "Move Feature After…"),
         qApp->translate("PartDesign_MoveFeatureInTree", "Select a feature from the list"),
         items,
@@ -1173,7 +1174,7 @@ void CmdPartDesignMoveFeatureInTree::activated(int iMsg)
     // Only do this for features that can hold a tip (not for e.g. datums)
     if (lastObject != target && body->Tip.getValue() == target
         && lastObject->isDerivedFrom<PartDesign::Feature>()) {
-        QMessageBox msgBox(Gui::getMainWindow());
+        QMessageBox msgBox(Gui::uiParentWidget());
         msgBox.setIcon(QMessageBox::Question);
         msgBox.setWindowTitle(qApp->translate("PartDesign_MoveFeatureInTree", "Move Tip"));
         msgBox.setText(qApp->translate(

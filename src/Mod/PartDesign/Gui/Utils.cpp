@@ -143,7 +143,7 @@ PartDesign::Body* getBody(
             }
             if (!activeBody && messageIfNot) {
                 DlgActiveBody dia(
-                    Gui::getMainWindow(),
+                    Gui::uiParentWidget(),
                     doc,
                     QObject::tr(
                         "To use Part Design, an active body is required in the document. "
@@ -202,7 +202,7 @@ PartDesign::Body* makeBodyActive(
 void needActiveBodyError()
 {
     QMessageBox::warning(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Active Body Required"),
         QObject::tr(
             "To create a new Part Design object, an active body is required in the document. "
@@ -269,7 +269,7 @@ PartDesign::Body* getBodyFor(
 
     if (messageIfNot) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Feature is not in a body"),
             QObject::tr(
                 "In order to use this feature it needs to belong to a body object in the document."
@@ -312,7 +312,7 @@ App::Part* getPartFor(const App::DocumentObject* obj, bool messageIfNot)
 
     if (messageIfNot) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Feature is not in a part"),
             QObject::tr(
                 "In order to use this feature it needs to belong to a part object in the document."

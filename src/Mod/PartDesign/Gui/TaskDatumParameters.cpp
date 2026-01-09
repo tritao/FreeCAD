@@ -30,6 +30,7 @@
 #include <App/Origin.h>
 #include <App/Part.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/ViewProvider.h>
 #include <Gui/Selection/Selection.h>
 #include <Mod/Part/App/DatumFeature.h>
@@ -101,7 +102,7 @@ bool TaskDlgDatumParameters::accept()
 
     // see if we are able to assign a mode
     if (parameter->getActiveMapMode() == mmDeactivated) {
-        QMessageBox msg(Gui::getMainWindow());
+        QMessageBox msg(Gui::uiParentWidget());
         msg.setWindowTitle(tr("Incompatible Reference Set"));
         msg.setText(
             tr("There is no attachment mode that fits the current set"
@@ -132,7 +133,7 @@ bool TaskDlgDatumParameters::accept()
 
     if (extReference) {
         // TODO: rewrite this to be shared with CmdPartDesignNewSketch::activated() (2015-10-20, Fat-Zer)
-        QDialog dia(Gui::getMainWindow());
+        QDialog dia(Gui::uiParentWidget());
         PartDesignGui::Ui_DlgReference dlg;
         dlg.setupUi(&dia);
         dia.setModal(true);

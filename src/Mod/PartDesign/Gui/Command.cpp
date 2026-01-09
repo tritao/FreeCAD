@@ -40,6 +40,7 @@
 #include <Gui/Control.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionObject.h>
 #include <Mod/Sketcher/App/SketchObject.h>
@@ -142,7 +143,7 @@ void UnifiedDatumCommand(Gui::Command& cmd, Base::Type type, std::string name)
                 }
                 else {
                     QMessageBox::information(
-                        Gui::getMainWindow(),
+                        Gui::uiParentWidget(),
                         QObject::tr("Invalid selection"),
                         QObject::tr("There are no attachment modes that fit selected objects. Select something else.")
                     );
@@ -156,7 +157,7 @@ void UnifiedDatumCommand(Gui::Command& cmd, Base::Type type, std::string name)
         }
         else {
             QMessageBox::warning(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("Error"),
                 QObject::tr("There is no active body. Please activate a body before inserting a datum entity.")
             );
@@ -164,14 +165,14 @@ void UnifiedDatumCommand(Gui::Command& cmd, Base::Type type, std::string name)
     }
     catch (Base::Exception& e) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Error"),
             QApplication::translate("Exception", e.what())
         );
     }
     catch (Standard_Failure& e) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Error"),
             QString::fromLatin1(e.GetMessageString())
         );
@@ -463,7 +464,7 @@ void CmdPartDesignSubShapeBinder::activated(int iMsg)
     catch (Base::Exception& e) {
         e.reportException();
         QMessageBox::critical(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Sub-shape binder"),
             QApplication::translate("Exception", e.what())
         );
@@ -987,7 +988,7 @@ void prepareProfileBased(
         || (which.compare("Pocket") == 0)) {
 
         if (!pcActiveBody->isSolid()) {
-            QMessageBox msgBox(Gui::getMainWindow());
+            QMessageBox msgBox(Gui::uiParentWidget());
             msgBox.setText(
                 QObject::tr("Cannot use this command as there is no solid to subtract from.")
             );
@@ -1014,7 +1015,7 @@ void prepareProfileBased(
             }
         }
         if (!onlyAllowed) {
-            QMessageBox msgBox(Gui::getMainWindow());
+            QMessageBox msgBox(Gui::uiParentWidget());
             msgBox.setText(
                 QObject::tr("Cannot use selected object. Selected object must belong to the active body")
             );
@@ -1047,7 +1048,7 @@ void prepareProfileBased(
 
     if (sketches.empty()) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("No sketch to work on"),
             QObject::tr("No sketch is available in the document")
         );
@@ -1097,7 +1098,7 @@ void prepareProfileBased(
         // and it now directly invokes the 'makeCopy' dialog.
         auto* pcActivePart = PartDesignGui::getPartFor(pcActiveBody, false);
 
-        QDialog dia(Gui::getMainWindow());
+        QDialog dia(Gui::uiParentWidget());
         PartDesignGui::Ui_DlgReference dlg;
         dlg.setupUi(&dia);
         dia.setModal(true);
@@ -1134,7 +1135,7 @@ void prepareProfileBased(
         PartDesignGui::TaskDlgFeaturePick* pickDlg
             = qobject_cast<PartDesignGui::TaskDlgFeaturePick*>(dlg);
         if (dlg && !pickDlg) {
-            QMessageBox msgBox(Gui::getMainWindow());
+            QMessageBox msgBox(Gui::uiParentWidget());
             msgBox.setText(QObject::tr("A dialog is already open in the task panel"));
             msgBox.setInformativeText(QObject::tr("Close this dialog?"));
             msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
@@ -1817,7 +1818,7 @@ bool dressupGetSelected(
     }
     else if (selection.size() != 1) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select an edge, face, or body from a single body.")
         );
@@ -1825,7 +1826,7 @@ bool dressupGetSelected(
     }
     else if (pcActiveBody != PartDesignGui::getBodyFor(selection[0].getObject(), false)) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Selection is not in the active body"),
             QObject::tr("Select an edge, face, or body from an active body.")
         );
@@ -1839,7 +1840,7 @@ bool dressupGetSelected(
 
     if (!selected.isObjectTypeOf(Part::Feature::getClassTypeId())) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong object type"),
             QObject::tr("%1 works only on parts.").arg(QString::fromStdString(which))
         );
@@ -1852,7 +1853,7 @@ bool dressupGetSelected(
 
     if (TopShape.getShape().IsNull()) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Shape of the selected part is empty")
         );
@@ -2187,7 +2188,7 @@ void prepareTransformed(
     for (auto feature : features) {
         if (activeBody != PartDesignGui::getBodyFor(feature, false)) {
             QMessageBox::warning(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("Selection is not in the active body"),
                 QObject::tr("Please select only one feature in an active body.")
             );

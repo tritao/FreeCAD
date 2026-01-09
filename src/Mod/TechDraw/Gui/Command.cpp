@@ -42,6 +42,7 @@
 #include <Gui/Document.h>
 #include <Gui/FileDialog.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionObject.h>
 #include <Gui/ViewProvider.h>
@@ -148,7 +149,7 @@ void CmdTechDrawPageDefault::activated(int iMsg)
         }
     }
     else {
-        QMessageBox::critical(Gui::getMainWindow(), QLatin1String("No template"),
+        QMessageBox::critical(Gui::uiParentWidget(), QLatin1String("No template"),
                               QLatin1String("No default template found"));
     }
 }
@@ -178,7 +179,7 @@ void CmdTechDrawPageTemplate::activated(int iMsg)
     QString work_dir = Gui::FileDialog::getWorkingDirectory();
     QString templateDir = Preferences::defaultTemplateDir();
     QString templateFileName = Gui::FileDialog::getOpenFileName(
-        Gui::getMainWindow(), QString::fromUtf8(QT_TR_NOOP("Select a template file")), templateDir,
+        Gui::uiParentWidget(), QString::fromUtf8(QT_TR_NOOP("Select a template file")), templateDir,
         QString::fromUtf8(QT_TR_NOOP("Template (*.svg)")));
     Gui::FileDialog::setWorkingDirectory(work_dir);// Don't overwrite WD with templateDir
 
@@ -217,7 +218,7 @@ void CmdTechDrawPageTemplate::activated(int iMsg)
         }
     }
     else {
-        QMessageBox::critical(Gui::getMainWindow(), QLatin1String("No template"),
+        QMessageBox::critical(Gui::uiParentWidget(), QLatin1String("No template"),
                               QLatin1String("Template file is invalid"));
     }
 }
@@ -425,7 +426,7 @@ void CmdTechDrawView::activated(int iMsg)
                 auto msgText = QObject::tr("To insert a view from existing objects, "
                         "select them before invoking this tool. Without a selection, a "
                         "file browser will open to insert an SVG or image file.");
-                QMessageBox msgBox(Gui::getMainWindow());
+                QMessageBox msgBox(Gui::uiParentWidget());
                 msgBox.setText(msgText);
                 auto dontShowMsg = QObject::tr("Do not show this message again");
                 QCheckBox dontShowCheckBox(dontShowMsg, &msgBox);
@@ -440,7 +441,7 @@ void CmdTechDrawView::activated(int iMsg)
                 }
             }
 
-            QString filename = Gui::FileDialog::getOpenFileName(Gui::getMainWindow(),
+            QString filename = Gui::FileDialog::getOpenFileName(Gui::uiParentWidget(),
                 QObject::tr("Select a SVG or Image file to open"),
                 Preferences::defaultSymbolDir(),
                 QStringLiteral("%1 (*.svg *.svgz *.jpg *.jpeg *.png *.bmp);;%2 (*.*)")
@@ -587,7 +588,7 @@ void CmdTechDrawBrokenView::activated(int iMsg)
 
     // we need either a base view (dvp) or some shape objects in the selection
     if (!dvp && (shapes.empty() && xShapes.empty())) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Empty selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Empty selection"),
             QObject::tr("Select objects to break or a base view and break definition objects"));
         return;
     }
@@ -626,7 +627,7 @@ void CmdTechDrawBrokenView::activated(int iMsg)
         }
     }
     if (breakObjects.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
             QObject::tr("No break objects found in this selection"));
         return;
     }
@@ -636,7 +637,7 @@ void CmdTechDrawBrokenView::activated(int iMsg)
     xShapes = DrawBrokenView::removeBreakObjects(breakObjects, xShapes);
     if (shapes.empty() &&
         xShapes.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
             QObject::tr("No shapes, groups, or links in this selection"));
         return;
     }
@@ -736,7 +737,7 @@ void CmdTechDrawSectionGroup::activated(int iMsg)
     //    Base::Console().message("CMD::SectionGrp - activated(%d)\n", iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again"));
         return;
     }
@@ -757,7 +758,7 @@ void CmdTechDrawSectionGroup::activated(int iMsg)
 
 Gui::Action* CmdTechDrawSectionGroup::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -829,7 +830,7 @@ void CmdTechDrawSectionView::activated(int iMsg)
     Q_UNUSED(iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again"));
         return;
     }
@@ -853,7 +854,7 @@ void execSimpleSection(Gui::Command* cmd)
     std::vector<App::DocumentObject*> baseObj =
         cmd->getSelection().getObjectsOfType(TechDraw::DrawViewPart::getClassTypeId());
     if (baseObj.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("Select at least 1 DrawViewPart object as base"));
         return;
     }
@@ -892,7 +893,7 @@ void CmdTechDrawComplexSection::activated(int iMsg)
     Q_UNUSED(iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again"));
         return;
     }
@@ -970,19 +971,19 @@ void execComplexSection(Gui::Command* cmd)
     }
 
     if (!baseView) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("No base view selected"));
         return;
     }
 
     if (shapes.empty() && xShapes.empty() && !baseView) {
         QMessageBox::warning(
-            Gui::getMainWindow(), QObject::tr("Wrong selection"),
+            Gui::uiParentWidget(), QObject::tr("Wrong selection"),
             QObject::tr("No base view, shapes, groups, or links in this selection"));
         return;
     }
     if (!profileObject) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("No profile object found in selection"));
         return;
     }
@@ -1020,7 +1021,7 @@ void CmdTechDrawDetailView::activated(int iMsg)
     std::vector<App::DocumentObject*> baseObj =
         getSelection().getObjectsOfType(TechDraw::DrawViewPart::getClassTypeId());
     if (baseObj.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("Select at least 1 DrawViewPart object as base"));
         return;
     }
@@ -1119,7 +1120,7 @@ void CmdTechDrawProjectionGroup::activated(int iMsg)
         }
     }
     if (shapes.empty() && xShapes.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("No shapes, groups, or links in this selection"));
         return;
     }
@@ -1187,14 +1188,14 @@ bool _checkSelectionBalloon(Gui::Command* cmd, unsigned maxObjs)
 {
     std::vector<Gui::SelectionObject> selection = cmd->getSelection().getSelectionEx();
     if (selection.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Incorrect selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Incorrect selection"),
                              QObject::tr("Select an object first"));
         return false;
     }
 
     const std::vector<std::string> SubNames = selection[0].getSubNames();
     if (SubNames.size() > maxObjs) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Incorrect selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Incorrect selection"),
                              QObject::tr("Too many objects selected"));
         return false;
     }
@@ -1202,7 +1203,7 @@ bool _checkSelectionBalloon(Gui::Command* cmd, unsigned maxObjs)
     std::vector<App::DocumentObject*> pages =
         cmd->getDocument()->getObjectsOfType(TechDraw::DrawPage::getClassTypeId());
     if (pages.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Incorrect selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Incorrect selection"),
                              QObject::tr("Create a page first"));
         return false;
     }
@@ -1214,7 +1215,7 @@ bool _checkDrawViewPartBalloon(Gui::Command* cmd)
     std::vector<Gui::SelectionObject> selection = cmd->getSelection().getSelectionEx();
     auto objFeat(dynamic_cast<TechDraw::DrawViewPart*>(selection[0].getObject()));
     if (!objFeat) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Incorrect selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Incorrect selection"),
                              QObject::tr("No view of a part in selection"));
         return false;
     }
@@ -1385,7 +1386,7 @@ void CmdTechDrawClipGroupAdd::activated(int iMsg)
     Q_UNUSED(iMsg);
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
     if (selection.size() != 2) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("Select one clip group and one view"));
         return;
     }
@@ -1402,12 +1403,12 @@ void CmdTechDrawClipGroupAdd::activated(int iMsg)
         }
     }
     if (!view) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("Select exactly one view to add to clip group"));
         return;
     }
     if (!clip) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("Select exactly one clip group"));
         return;
     }
@@ -1416,7 +1417,7 @@ void CmdTechDrawClipGroupAdd::activated(int iMsg)
     TechDraw::DrawPage* pageView = view->findParentPage();
 
     if (pageClip != pageView) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("Clip and view must be from same page"));
         return;
     }
@@ -1469,7 +1470,7 @@ void CmdTechDrawClipGroupRemove::activated(int iMsg)
     Q_UNUSED(iMsg);
     auto dObj(getSelection().getObjectsOfType(TechDraw::DrawView::getClassTypeId()));
     if (dObj.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("Select exactly one view to remove from clip group"));
         return;
     }
@@ -1488,7 +1489,7 @@ void CmdTechDrawClipGroupRemove::activated(int iMsg)
     }
 
     if (!clip) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("View does not belong to a clip"));
         return;
     }
@@ -1548,7 +1549,7 @@ void CmdTechDrawSymbol::activated(int iMsg)
 
     // Reading an image
     QString filename = Gui::FileDialog::getOpenFileName(
-        Gui::getMainWindow(), QObject::tr("Choose an SVG file to open"),
+        Gui::uiParentWidget(), QObject::tr("Choose an SVG file to open"),
         Preferences::defaultSymbolDir(),
         QStringLiteral("%1 (*.svg *.svgz);;%2 (*.*)")
             .arg(QObject::tr("Scalable vector graphic"), QObject::tr("All files")));
@@ -1611,7 +1612,7 @@ void CmdTechDrawDraftView::activated(int iMsg)
         getSelection().getObjectsOfType(App::DocumentObject::getClassTypeId());
 
     if (objects.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("Select at least one object"));
         return;
     }
@@ -1686,13 +1687,13 @@ void CmdTechDrawArchView::activated(int iMsg)
         }
     }
     if (archCount > 1) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("Select only 1 BIM section plane"));
         return;
     }
 
     if (!archObject) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("No BIM section plane in selection"));
         return;
     }
@@ -1751,7 +1752,7 @@ void CmdTechDrawSpreadsheetView::activated(int iMsg)
     const std::vector<App::DocumentObject*> spreads =
         getSelection().getObjectsOfType(Spreadsheet::Sheet::getClassTypeId());
     if (spreads.size() != 1) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("Select exactly one spreadsheet object"));
         return;
     }
@@ -1830,7 +1831,7 @@ void CmdTechDrawExportPageSVG::activated(int iMsg)
         vpPage->getMDIViewPage()->saveSVG();
     }
     else {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("No drawing page"),
                              QObject::tr("FreeCAD could not find a page to export"));
         return;
@@ -1867,7 +1868,7 @@ void CmdTechDrawExportPageDXF::activated(int iMsg)
     for (auto& v : views) {
         if (v->isDerivedFrom<TechDraw::DrawViewArch>()) {
             QMessageBox::StandardButton rc = QMessageBox::question(
-                Gui::getMainWindow(), QObject::tr("Cannot export selection"),
+                Gui::uiParentWidget(), QObject::tr("Cannot export selection"),
                 QObject::tr("Page contains a BIM view which will not be exported. Continue?"),
                 QMessageBox::StandardButtons(QMessageBox::Yes | QMessageBox::No));
             if (rc == QMessageBox::No) {
@@ -1882,7 +1883,7 @@ void CmdTechDrawExportPageDXF::activated(int iMsg)
     //WF? allow more than one TD Page per Dxf file??  1 TD page = 1 DXF file = 1 drawing?
     QString defaultDir;
     QString fileName = Gui::FileDialog::getSaveFileName(
-        Gui::getMainWindow(), QString::fromUtf8(QT_TR_NOOP("Save DXF file")), defaultDir,
+        Gui::uiParentWidget(), QString::fromUtf8(QT_TR_NOOP("Save DXF file")), defaultDir,
         QStringLiteral("DXF (*.dxf)"));
 
     if (fileName.isEmpty()) {

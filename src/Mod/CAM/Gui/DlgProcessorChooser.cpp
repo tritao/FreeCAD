@@ -26,6 +26,7 @@
 
 
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 
 #include "DlgProcessorChooser.h"
 #include "ui_DlgProcessorChooser.h"
@@ -36,7 +37,7 @@ using namespace PathGui;
 /* TRANSLATOR PathGui::DlgProcessorChooser */
 
 DlgProcessorChooser::DlgProcessorChooser(std::vector<std::string>& scriptnames, bool withArguments)
-    : QDialog(Gui::getMainWindow())
+    : QDialog(Gui::uiParentWidget())
     , ui(new Ui_DlgProcessorChooser)
 {
     ui->setupUi(this);

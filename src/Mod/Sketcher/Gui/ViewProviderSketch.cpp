@@ -54,6 +54,7 @@
 #include <Gui/Control.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/MenuManager.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionObject.h>
@@ -3403,7 +3404,7 @@ bool ViewProviderSketch::setEdit(int ModNum)
     if (sketchDlg && sketchDlg->getSketchView() != this)
         sketchDlg = nullptr;// another sketch left open its task panel
     if (dlg && !sketchDlg) {
-        QMessageBox msgBox(Gui::getMainWindow());
+        QMessageBox msgBox(Gui::uiParentWidget());
         msgBox.setText(tr("A dialog is already open in the task panel"));
         msgBox.setInformativeText(tr("Close this dialog?"));
         msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
@@ -3422,7 +3423,7 @@ bool ViewProviderSketch::setEdit(int ModNum)
     }
 
     if (!sketch->evaluateConstraints()) {
-        QMessageBox box(Gui::getMainWindow());
+        QMessageBox box(Gui::uiParentWidget());
         box.setIcon(QMessageBox::Critical);
         box.setWindowTitle(tr("Invalid Sketch"));
         box.setText(tr("Open the sketch validation tool?"));

@@ -105,7 +105,7 @@ void CmdRobotInsertWaypoint::activated(int)
 
     if (n1 != 1 || n2 != 1) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select one Robot and one Trajectory object.")
         );
@@ -176,7 +176,7 @@ void CmdRobotInsertWaypointPreselect::activated(int)
 
     if (getSelection().size() != 1) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select one Trajectory object.")
         );
@@ -197,7 +197,7 @@ void CmdRobotInsertWaypointPreselect::activated(int)
     }
     else {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select one Trajectory object.")
         );
@@ -207,7 +207,7 @@ void CmdRobotInsertWaypointPreselect::activated(int)
 
     if (!PreSel.pDocName) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("No preselection"),
             QObject::tr(
                 "You have to hover above a geometry (Preselection) with the mouse to use "
@@ -482,7 +482,7 @@ void CmdRobotTrajectoryDressUp::activated(int)
     }
     else {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select the Trajectory which you want to dress up.")
         );

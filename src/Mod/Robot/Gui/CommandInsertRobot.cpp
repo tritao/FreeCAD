@@ -66,7 +66,7 @@ void CmdRobotAddToolShape::activated(int)
 
     if (robots.size() != 1 || (shapes.size() != 1 && VRMLs.size() != 1)) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select one robot and one shape or VRML object.")
         );

@@ -159,7 +159,7 @@ private:
         Py::Dict options;
         Base::FileInfo file(name8bit.c_str());
         if (file.hasExtension({"stp", "step"})) {
-            PartGui::TaskImportStep dlg(Gui::getMainWindow());
+            PartGui::TaskImportStep dlg(Gui::uiParentWidget());
             if (dlg.showDialog()) {
                 if (!dlg.exec()) {
                     throw Py::Exception(Base::PyExc_FC_AbortIOException, "User cancelled import");
@@ -471,7 +471,7 @@ private:
         Base::FileInfo file(name8bit.c_str());
 
         if (file.hasExtension({"stp", "step"})) {
-            PartGui::TaskExportStep dlg(Gui::getMainWindow());
+            PartGui::TaskExportStep dlg(Gui::uiParentWidget());
             if (!dlg.showDialog() || dlg.exec()) {
                 auto stepSettings = dlg.getSettings();
                 options.setItem("exportHidden", Py::Boolean(stepSettings.exportHidden));

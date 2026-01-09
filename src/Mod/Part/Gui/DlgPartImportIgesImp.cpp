@@ -64,7 +64,7 @@ void DlgPartImportIgesImp::OnApply()
 void DlgPartImportIgesImp::onChooseFileName()
 {
     QString fn = Gui::FileDialog::getOpenFileName(
-                     Gui::getMainWindow(),
+                     Gui::uiParentWidget(),
                      QString(),
                      QString(),
                      QStringLiteral("%1 (*.igs *.iges);;%2 (*.*)")

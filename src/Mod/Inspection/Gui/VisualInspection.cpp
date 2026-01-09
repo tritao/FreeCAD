@@ -87,7 +87,7 @@ VisualInspection::VisualInspection(QWidget* parent, Qt::WindowFlags fl)
     connect(
         ui->buttonBox,
         &QDialogButtonBox::helpRequested,
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         &Gui::MainWindow::whatsThis
     );
 

@@ -356,7 +356,7 @@ void ViewProviderDrawingView::showProgressMessage(const std::string featureName,
     QString msg = QStringLiteral("%1 %2")
             .arg(QString::fromStdString(featureName),
                  QString::fromStdString(text));
-    if (Gui::getMainWindow()) {
+    if (Gui::uiParentWidget()) {
         //neither of these work! Base::Console().message() output preempts these messages??
 //        Gui::getMainWindow()->showMessage(msg, 3000);
 //        Gui::getMainWindow()->showStatus(Gui::MainWindow::Msg, msg);

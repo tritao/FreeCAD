@@ -39,6 +39,7 @@
 #include <Gui/Dialogs/DlgCheckableMessageBox.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Notifications.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionFilter.h>
@@ -8922,7 +8923,7 @@ void CmdSketcherCompConstrainRadDia::activated(int iMsg)
 
 Gui::Action* CmdSketcherCompConstrainRadDia::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -10204,7 +10205,7 @@ void CmdSketcherConstrainSnellsLaw::activated(int iMsg)
 
     // the essence.
     // Unlike other constraints, we'll ask for a value immediately.
-    QDialog dlg(Gui::getMainWindow());
+    QDialog dlg(Gui::uiParentWidget());
     Ui::InsertDatum ui_Datum;
     ui_Datum.setupUi(&dlg);
     dlg.setWindowTitle(EditDatumDialog::tr("Refractive Index Ratio"));

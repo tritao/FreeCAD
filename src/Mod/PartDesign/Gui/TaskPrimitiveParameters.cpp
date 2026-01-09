@@ -928,7 +928,7 @@ bool TaskBoxPrimitives::setPrimitive(App::DocumentObject* obj)
                 // Xmin/max, Ymin/max and Zmin/max must each not be equal
                 if (ui->wedgeXmin->value().getValue() == ui->wedgeXmax->value().getValue()) {
                     QMessageBox::warning(
-                        Gui::getMainWindow(),
+                        Gui::uiParentWidget(),
                         tr("Invalid wedge parameters"),
                         tr("X min must not be equal to X max!")
                     );
@@ -936,7 +936,7 @@ bool TaskBoxPrimitives::setPrimitive(App::DocumentObject* obj)
                 }
                 else if (ui->wedgeYmin->value().getValue() == ui->wedgeYmax->value().getValue()) {
                     QMessageBox::warning(
-                        Gui::getMainWindow(),
+                        Gui::uiParentWidget(),
                         tr("Invalid wedge parameters"),
                         tr("Y min must not be equal to Y max!")
                     );
@@ -944,7 +944,7 @@ bool TaskBoxPrimitives::setPrimitive(App::DocumentObject* obj)
                 }
                 else if (ui->wedgeZmin->value().getValue() == ui->wedgeZmax->value().getValue()) {
                     QMessageBox::warning(
-                        Gui::getMainWindow(),
+                        Gui::uiParentWidget(),
                         tr("Invalid wedge parameters"),
                         tr("Z min must not be equal to Z max!")
                     );

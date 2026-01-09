@@ -33,6 +33,7 @@
 #include <Gui/Command.h>
 #include <Gui/Control.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/ViewProvider.h>
 #include <Gui/WaitCursor.h>
@@ -635,7 +636,7 @@ void TaskSectionView::failNoObject(void)
     QString qsectionName = QString::fromStdString(m_sectionName);
     QString qbaseName = QString::fromStdString(m_baseName);
     QString msg = tr("Can not continue. Object * %1 or %2 not found.").arg(qsectionName, qbaseName);
-    QMessageBox::critical(Gui::getMainWindow(), QObject::tr("Operation Failed"), msg);
+    QMessageBox::critical(Gui::uiParentWidget(), QObject::tr("Operation Failed"), msg);
     Gui::Control().closeDialog();
 }
 

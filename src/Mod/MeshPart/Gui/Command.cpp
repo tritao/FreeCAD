@@ -35,6 +35,7 @@
 #include <Gui/Control.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/View3DInventor.h>
 #include <Gui/View3DInventorViewer.h>
 #include <Mod/Mesh/App/MeshFeature.h>
@@ -93,14 +94,14 @@ void CmdMeshPartTrimByPlane::activated(int)
     std::vector<App::DocumentObject*> plane = getSelection().getObjectsOfType(partType);
     if (plane.empty()) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("MeshPart_TrimByPlane", "Select plane"),
             qApp->translate("MeshPart_TrimByPlane", "Select a plane to trim the mesh with.")
         );
         return;
     }
 
-    QMessageBox msgBox(Gui::getMainWindow());
+    QMessageBox msgBox(Gui::uiParentWidget());
     msgBox.setIcon(QMessageBox::Question);
     msgBox.setWindowTitle(qApp->translate("MeshPart_TrimByPlane", "Trim With Plane"));
     msgBox.setText(qApp->translate("MeshPart_TrimByPlane", "Select the side to keep"));
@@ -200,7 +201,7 @@ void CmdMeshPartSection::activated(int)
     std::vector<App::DocumentObject*> plane = getSelection().getObjectsOfType(partType);
     if (plane.empty()) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("MeshPart_Section", "Select plane"),
             qApp->translate("MeshPart_Section", "Select a plane to section the mesh with.")
         );

@@ -329,7 +329,7 @@ void CmdPartCut::activated(int iMsg)
     );
     if (Sel.size() != 2) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select 2 shapes")
         );
@@ -346,7 +346,7 @@ void CmdPartCut::activated(int iMsg)
         );
         if (!PartGui::checkForSolids(shape) && !askUser) {
             int ret = QMessageBox::warning(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("Non-solids selected"),
                 QObject::tr(
                     "The use of non-solids for boolean operations may lead to unexpected results.\n"
@@ -406,7 +406,7 @@ void CmdPartCommon::activated(int iMsg)
 
     if (Sel.empty()) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select at least 2 shapes. Alternatively, select 1 compound containing 2 or more shapes to compute the intersection between.")
         );
@@ -423,7 +423,7 @@ void CmdPartCommon::activated(int iMsg)
         );
         if (!PartGui::checkForSolids(shape) && !askUser) {
             int ret = QMessageBox::warning(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("Non-solids selected"),
                 QObject::tr(
                     "The use of non-solids for boolean operations may lead to unexpected results.\n"
@@ -506,7 +506,7 @@ void CmdPartFuse::activated(int iMsg)
     }
     if (numShapes < 2) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select at least 2 shapes. Alternatively, select 1 compound containing 2 or more shapes to be fused.")
         );
@@ -523,7 +523,7 @@ void CmdPartFuse::activated(int iMsg)
         );
         if (!PartGui::checkForSolids(shape) && !askUser) {
             int ret = QMessageBox::warning(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("Non-solids selected"),
                 QObject::tr(
                     "The use of non-solids for boolean operations may lead to unexpected results.\n"
@@ -600,7 +600,7 @@ void CmdPartCompJoinFeatures::activated(int iMsg)
 
 Gui::Action* CmdPartCompJoinFeatures::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -717,7 +717,7 @@ void CmdPartCompSplitFeatures::activated(int iMsg)
 
 Gui::Action* CmdPartCompSplitFeatures::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -848,7 +848,7 @@ void CmdPartCompCompoundTools::activated(int iMsg)
 
 Gui::Action* CmdPartCompCompoundTools::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -948,7 +948,7 @@ void CmdPartCompound::activated(int iMsg)
     );
     if (n < 1) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select at least one shape")
         );
@@ -1011,7 +1011,7 @@ void CmdPartSection::activated(int iMsg)
     );
     if (Sel.size() != 2) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select 2 shapes")
         );
@@ -1084,7 +1084,7 @@ void CmdPartImport::activated(int iMsg)
 
     QString select;
     QString fn = Gui::FileDialog::getOpenFileName(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QString(),
         QString(),
         filter.join(QLatin1String(";;")),
@@ -1158,7 +1158,7 @@ void CmdPartExport::activated(int iMsg)
 
     QString select;
     QString fn = Gui::FileDialog::getSaveFileName(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QString(),
         QString(),
         filter.join(QLatin1String(";;")),
@@ -1214,7 +1214,7 @@ void CmdPartImportCurveNet::activated(int iMsg)
     filter << QStringLiteral("%1 (*.*)").arg(QObject::tr("All Files"));
 
     QString fn = Gui::FileDialog::getOpenFileName(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QString(),
         QString(),
         filter.join(QLatin1String(";;"))
@@ -1964,7 +1964,7 @@ void CmdPartCompOffset::activated(int iMsg)
 
 Gui::Action* CmdPartCompOffset::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -2095,7 +2095,7 @@ void CmdPartThickness::activated(int iMsg)
     }
     if (countSolids != 1 || !ok) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QApplication::translate("CmdPartThickness", "Wrong selection"),
             QApplication::translate("CmdPartThickness", "Selected shape is not a solid")
         );
@@ -2286,7 +2286,7 @@ void CmdPartRuledSurface::activated(int iMsg)
 
     if (!ok) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select either 2 edges or 2 wires.")
         );
@@ -2492,7 +2492,7 @@ void CmdPartSectionCut::activated(int iMsg)
     Q_UNUSED(iMsg);
     static QPointer<PartGui::SectionCut> sectionCut = nullptr;
     if (!sectionCut) {
-        sectionCut = PartGui::SectionCut::makeDockWidget(Gui::getMainWindow());
+        sectionCut = PartGui::SectionCut::makeDockWidget(Gui::uiParentWidget());
     }
 }
 

@@ -454,7 +454,7 @@ void TaskCheckGeometryResults::goCheck()
     std::string scopeName {tr("Boolean operation check…").toStdString()};
 
     Handle(Message_ProgressIndicator) theProgress
-        = new BOPProgressIndicator(tr("Check geometry"), Gui::getMainWindow());
+        = new BOPProgressIndicator(tr("Check geometry"), Gui::uiParentWidget());
     Message_ProgressRange theRange(theProgress->Start());
     Message_ProgressScope theScope(
         theRange,

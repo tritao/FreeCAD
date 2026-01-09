@@ -55,6 +55,7 @@
 #include <XCAFDoc_ShapeTool.hxx>
 #include <XCAFDoc_ShapeMapTool.hxx>
 
+#include <Gui/GuiShell.h>
 
 #include "OCAFBrowser.h"
 #include <Gui/MainWindow.h>
@@ -311,7 +312,7 @@ QString OCAFBrowser::toText(const Handle(TDataStd_TreeNode) & treeNode)
 void OCAFBrowser::showDialog(const QString& title, const Handle(TDocStd_Document) & hDoc)
 {
     // NOLINTBEGIN
-    QDialog* dlg = new QDialog(Gui::getMainWindow());
+    QDialog* dlg = new QDialog(Gui::uiParentWidget());
 
     QTreeWidget* tree = new QTreeWidget();
     tree->setHeaderLabel(QStringLiteral("OCAF Browser"));

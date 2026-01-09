@@ -506,7 +506,7 @@ public:
             QList<Gui::Flag*> flags = widget->findChildren<Gui::Flag*>();
             if (!flags.isEmpty()) {
                 int ret = QMessageBox::question(
-                    Gui::getMainWindow(),
+                    Gui::uiParentWidget(),
                     QObject::tr("Remove annotations"),
                     QObject::tr("Do you want to remove all annotations?"),
                     QMessageBox::Yes,

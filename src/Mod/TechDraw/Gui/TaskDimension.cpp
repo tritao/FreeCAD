@@ -31,6 +31,7 @@
 #include <Gui/Command.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionObject.h>
 #include <Mod/TechDraw/App/DrawUtil.h>
@@ -194,7 +195,7 @@ TaskDimension::~TaskDimension()
 bool TaskDimension::accept()
 {
     if (m_dimensionVP.expired()) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Missing Dimension"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Missing Dimension"),
                                                QObject::tr("Dimension not found. Was it deleted? Cannot continue."));
         return true;
     }
@@ -209,7 +210,7 @@ bool TaskDimension::accept()
 bool TaskDimension::reject()
 {
     if (m_dimensionVP.expired()) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Missing Dimension"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Missing Dimension"),
                                                QObject::tr("Dimension not found. Was it deleted? Cannot continue."));
         return true;
     }
@@ -548,7 +549,7 @@ std::pair<double, bool> TaskDimension::getAngleFromSelection()
         }
     }
 
-    QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Incorrect Selection"),
+    QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Incorrect Selection"),
                                                QObject::tr("Select 2 vertices or 1 edge"));
     result.second = false;
     return result;

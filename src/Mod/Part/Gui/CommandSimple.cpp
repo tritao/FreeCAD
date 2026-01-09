@@ -63,7 +63,7 @@ CmdPartSimpleCylinder::CmdPartSimpleCylinder()
 void CmdPartSimpleCylinder::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    PartGui::DlgPartCylinderImp dlg(Gui::getMainWindow());
+    PartGui::DlgPartCylinderImp dlg(Gui::uiParentWidget());
     if (dlg.exec() == QDialog::Accepted) {
         Base::Vector3d dir = dlg.getDirection();
         Base::Vector3d pos = dlg.getPosition();
@@ -122,7 +122,7 @@ CmdPartShapeFromMesh::CmdPartShapeFromMesh()
 void CmdPartShapeFromMesh::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    PartGui::ShapeFromMesh dlg(Gui::getMainWindow());
+    PartGui::ShapeFromMesh dlg(Gui::uiParentWidget());
     dlg.exec();
 }
 
@@ -181,7 +181,7 @@ void CmdPartPointsFromMesh::activated(int iMsg)
 
         bool ok;
         distance = QInputDialog::getDouble(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Distance in Parameter Space"),
             QObject::tr("Enter distance:"),
             defaultDistance,

@@ -77,7 +77,7 @@ void CmdApproxCurve::activated(int)
     auto obj = Gui::Selection().getObjectsOfType(App::GeoFeature::getClassTypeId());
     if (obj.size() != 1 || !(obj.at(0)->isDerivedFrom<Points::Feature>())) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("Reen_ApproxSurface", "Wrong selection"),
             qApp->translate("Reen_ApproxSurface", "Select a point cloud.")
         );
@@ -116,7 +116,7 @@ void CmdApproxSurface::activated(int)
     if (obj.size() != 1
         || !(obj.at(0)->isDerivedFrom<Points::Feature>() || obj.at(0)->isDerivedFrom<Mesh::Feature>())) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("Reen_ApproxSurface", "Wrong selection"),
             qApp->translate("Reen_ApproxSurface", "Select a point cloud or mesh.")
         );
@@ -608,7 +608,7 @@ void CmdPoissonReconstruction::activated(int)
     );
     if (obj.size() != 1) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("Reen_ApproxSurface", "Wrong selection"),
             qApp->translate("Reen_ApproxSurface", "Select a single point cloud.")
         );
@@ -667,7 +667,7 @@ void CmdViewTriangulation::activated(int)
     catch (const Base::Exception& e) {
         abortCommand();
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("Reen_ViewTriangulation", "View triangulation failed"),
             QString::fromLatin1(e.what())
         );

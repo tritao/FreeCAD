@@ -58,6 +58,7 @@
 #include <Gui/Inventor/Draggers/SoTransformDragger.h>
 #include <Gui/MDIView.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/View3DInventor.h>
 #include <Gui/View3DInventorViewer.h>
 #include <Gui/ViewProviderLink.h>
@@ -202,7 +203,7 @@ bool ViewProviderAssembly::canDragObjectToTarget(App::DocumentObject* obj, App::
         if (obj == obj1 || obj == obj2 || obj == part1 || obj == part2 || obj == obj3) {
             if (!prompted) {
                 prompted = true;
-                QMessageBox msgBox(Gui::getMainWindow());
+                QMessageBox msgBox(Gui::uiParentWidget());
                 msgBox.setText(tr("The object is associated to one or more joints."));
                 msgBox.setInformativeText(
                     tr("Do you want to move the object and delete associated joints?")

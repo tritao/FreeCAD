@@ -67,7 +67,7 @@ bool handleBooleanDeletion(
     }
 
     QMessageBox::StandardButton choice = QMessageBox::question(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Delete %1 content?").arg(operationName),
         QObject::tr("The %1 '%2' has %3. Do you want to delete them as well?")
             .arg(operationName.toLower())

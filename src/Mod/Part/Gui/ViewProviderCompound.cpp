@@ -72,7 +72,7 @@ bool ViewProviderCompound::onDelete(const std::vector<std::string>& subNames)
             return true;
         }
         QMessageBox::StandardButton choice = QMessageBox::question(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Delete compound content?"),
             QObject::tr("The compound '%1' has %2 child objects. Do you want to delete them as well?")
                 .arg(QString::fromUtf8(pComp->Label.getValue()))

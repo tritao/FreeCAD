@@ -28,6 +28,7 @@
 #include <Gui/Application.h>
 #include <Gui/CommandT.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/BitmapFactory.h>
 #include <Mod/PartDesign/App/Feature.h>
 #include <Mod/PartDesign/App/Body.h>
@@ -232,7 +233,7 @@ bool TaskDlgFeatureParameters::accept()
                 );
             }
         }
-        QMessageBox::warning(Gui::getMainWindow(), tr("Input error"), errorText);
+        QMessageBox::warning(Gui::uiParentWidget(), tr("Input error"), errorText);
         return false;
     }
     return true;

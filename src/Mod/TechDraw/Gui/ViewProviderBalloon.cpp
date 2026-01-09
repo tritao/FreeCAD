@@ -34,6 +34,7 @@
 #include <Gui/ActionFunction.h>
 #include <Gui/Control.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/ViewProviderDocumentObject.h>
 
@@ -186,7 +187,7 @@ bool ViewProviderBalloon::onDelete(const std::vector<std::string> & parms)
         QTextStream bodyMessageStream(&bodyMessage);
         bodyMessageStream << qApp->translate("TaskBalloon",
             "You cannot delete this balloon now because\nthere is an open task dialog.");
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
             qApp->translate("TaskBalloon", "Can Not Delete"), bodyMessage,
             QMessageBox::Ok);
         return false;

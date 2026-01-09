@@ -217,7 +217,7 @@ bool ViewProviderPage::onDelete(const std::vector<std::string>& parms)
         bodyMessageStream << "\n\n" << QObject::tr("Are you sure you want to continue?");
         // show and evaluate the dialog
         int DialogResult = QMessageBox::warning(
-            Gui::getMainWindow(), qApp->translate("Std_Delete", "Object dependencies"), bodyMessage,
+            Gui::uiParentWidget(), qApp->translate("Std_Delete", "Object dependencies"), bodyMessage,
             QMessageBox::Yes, QMessageBox::No);
         if (DialogResult == QMessageBox::Yes) {
             removeMDIView();
@@ -323,7 +323,7 @@ bool ViewProviderPage::showMDIViewPage()
 void ViewProviderPage::createMDIViewPage()
 {
     Gui::Document* doc = Gui::Application::Instance->getDocument(pcObject->getDocument());
-    m_mdiView = new MDIViewPage(this, doc, Gui::getMainWindow());
+    m_mdiView = new MDIViewPage(this, doc, Gui::uiParentWidget());
     if (!m_graphicsView) {
         m_graphicsView = new QGVPage(this, m_graphicsScene, m_mdiView);
         std::string objName = m_pageName + "View";

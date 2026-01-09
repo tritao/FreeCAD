@@ -27,6 +27,7 @@
 #include <App/DocumentObject.h>
 #include <Gui/Control.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 
 #include <Mod/TechDraw/App/DrawProjGroup.h>
 #include <Mod/TechDraw/App/DrawProjGroupItem.h>
@@ -150,7 +151,7 @@ bool ViewProviderProjGroupItem::onDelete(const std::vector<std::string> &)
        // generate dialog
         bodyMessageStream << qApp->translate("Std_Delete",
             "You cannot delete the anchor view of a projection group.");
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
             qApp->translate("Std_Delete", "Object dependencies"), bodyMessage,
             QMessageBox::Ok);
         // don't allow one to delete
@@ -159,7 +160,7 @@ bool ViewProviderProjGroupItem::onDelete(const std::vector<std::string> &)
    else if (!viewSection.empty()) {
        bodyMessageStream << qApp->translate("Std_Delete",
            "You cannot delete this view because it has a section view that would become broken.");
-       QMessageBox::warning(Gui::getMainWindow(),
+       QMessageBox::warning(Gui::uiParentWidget(),
            qApp->translate("Std_Delete", "Object dependencies"), bodyMessage,
            QMessageBox::Ok);
        return false;
@@ -167,7 +168,7 @@ bool ViewProviderProjGroupItem::onDelete(const std::vector<std::string> &)
    else if (!viewDetail.empty()) {
        bodyMessageStream << qApp->translate("Std_Delete",
            "You cannot delete this view because it has a detail view that would become broken.");
-       QMessageBox::warning(Gui::getMainWindow(),
+       QMessageBox::warning(Gui::uiParentWidget(),
            qApp->translate("Std_Delete", "Object dependencies"), bodyMessage,
            QMessageBox::Ok);
        return false;
@@ -175,7 +176,7 @@ bool ViewProviderProjGroupItem::onDelete(const std::vector<std::string> &)
    else if (!viewLeader.empty()) {
        bodyMessageStream << qApp->translate("Std_Delete",
            "You cannot delete this view because it has a leader line that would become broken.");
-       QMessageBox::warning(Gui::getMainWindow(),
+       QMessageBox::warning(Gui::uiParentWidget(),
            qApp->translate("Std_Delete", "Object dependencies"), bodyMessage,
            QMessageBox::Ok);
        return false;

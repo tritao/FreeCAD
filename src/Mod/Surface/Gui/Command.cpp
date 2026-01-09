@@ -38,6 +38,7 @@
 #include <Gui/Command.h>
 #include <Gui/Control.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/SelectionFilter.h>
 #include <Gui/Selection/SelectionObject.h>
 
@@ -65,7 +66,7 @@ void CmdSurfaceCut::activated(int iMsg)
     Q_UNUSED(iMsg);
     /*    std::vector<Gui::SelectionObject> Sel = getSelection().getSelectionEx(0,
        Part::Feature::getClassTypeId()); if (Sel.size() != 2) {
-            QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Invalid selection"),
+            QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Invalid selection"),
                 QObject::tr("Select two shapes please."));
             return;
         }
@@ -76,7 +77,7 @@ void CmdSurfaceCut::activated(int iMsg)
             if (obj->isDerivedFrom<Part::Feature>()) {
                 const TopoDS_Shape& shape = static_cast<Part::Feature*>(obj)->Shape.getValue();
                 if (!PartGui::checkForSolids(shape) && !askUser) {
-                    int ret = QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Non-solids
+                    int ret = QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Non-solids
        selected"), QObject::tr("The use of non-solids for boolean operations may lead to unexpected
        results.\n" "Do you want to continue?"), QMessageBox::Yes, QMessageBox::No); if (ret ==
        QMessageBox::No) return; askUser = true;
@@ -311,7 +312,7 @@ void CmdSurfaceExtendFace::activated(int)
     }
     else {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("Surface_ExtendFace", "Wrong selection"),
             qApp->translate("Surface_ExtendFace", "Select a single face")
         );

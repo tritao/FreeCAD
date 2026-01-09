@@ -151,7 +151,7 @@ private:
             || (ext == QLatin1String("txt"))) {
             Gui::TextEditor* editor = new Gui::TextEditor();
             editor->setWindowIcon(Gui::BitmapFactory().pixmap(":/icons/fem-solver-inp-editor.svg"));
-            Gui::EditorView* edit = new Gui::EditorView(editor, Gui::getMainWindow());
+            Gui::EditorView* edit = new Gui::EditorView(editor, Gui::uiParentWidget());
             if (ext == QLatin1String("inp")) {
                 editor->setSyntaxHighlighter(new FemGui::AbaqusHighlighter(editor));
             }

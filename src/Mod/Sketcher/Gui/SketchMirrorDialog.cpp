@@ -26,6 +26,7 @@
 
 
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 
 #include "SketchMirrorDialog.h"
 #include "ui_SketchMirrorDialog.h"
@@ -34,7 +35,7 @@
 using namespace SketcherGui;
 
 SketchMirrorDialog::SketchMirrorDialog()
-    : QDialog(Gui::getMainWindow())
+    : QDialog(Gui::uiParentWidget())
     , RefGeoid(-1)
     , RefPosid(Sketcher::PointPos::none)
     , ui(new Ui_SketchMirrorDialog)

@@ -31,6 +31,7 @@
 #include <Gui/Command.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Mod/TechDraw/App/DrawUtil.h>
 #include <Mod/TechDraw/App/DrawViewPart.h>
@@ -199,7 +200,7 @@ void TaskCosmeticCircle::radiusChanged()
 {
     if (ui->qsbRadius->value().getValue() <= 0.0) {
         QString msg = tr("Radius must be non-zero positive number");
-        QMessageBox::critical(Gui::getMainWindow(), QObject::tr("Parameter Error"), msg);
+        QMessageBox::critical(Gui::uiParentWidget(), QObject::tr("Parameter Error"), msg);
     }
 }
 

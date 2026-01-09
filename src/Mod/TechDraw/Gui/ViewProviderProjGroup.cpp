@@ -32,6 +32,7 @@
 #include <App/DocumentObject.h>
 #include <Gui/Control.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 
 #include <Mod/TechDraw/App/DrawViewBalloon.h>
@@ -141,7 +142,7 @@ bool ViewProviderProjGroup::onDelete(const std::vector<std::string> & parms)
         for (const auto& ListIterator : ViewList) {
             bodyMessageStream << '\n' << QString::fromUtf8(ListIterator.c_str());
         }
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
             qApp->translate("Std_Delete", "Object dependencies"), bodyMessage,
             QMessageBox::Ok);
         return false;
@@ -158,7 +159,7 @@ bool ViewProviderProjGroup::onDelete(const std::vector<std::string> & parms)
         }
         bodyMessageStream << "\n\n" << QObject::tr("Are you sure you want to continue?");
         // show and evaluate dialog
-        int DialogResult = QMessageBox::warning(Gui::getMainWindow(),
+        int DialogResult = QMessageBox::warning(Gui::uiParentWidget(),
             qApp->translate("Std_Delete", "Object dependencies"), bodyMessage,
             QMessageBox::Yes, QMessageBox::No);
         return (DialogResult == QMessageBox::Yes);

@@ -39,6 +39,7 @@
 #include <Gui/Document.h>
 #include <Gui/FileDialog.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/View3DInventor.h>
 #include <Gui/View3DInventorViewer.h>
@@ -78,7 +79,7 @@ void CmdPointsImport::activated(int iMsg)
     Q_UNUSED(iMsg);
 
     QString fn = Gui::FileDialog::getOpenFileName(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QString(),
         QString(),
         QStringLiteral("%1 (*.asc *.pcd *.ply *.e57);;%2 (*.*)")
@@ -109,7 +110,7 @@ void CmdPointsImport::activated(int iMsg)
             auto center = bbox.GetCenter();
 
             if (!bbox.IsInBox(Base::Vector3d(0, 0, 0))) {
-                QMessageBox msgBox(Gui::getMainWindow());
+                QMessageBox msgBox(Gui::uiParentWidget());
                 msgBox.setIcon(QMessageBox::Question);
                 msgBox.setWindowTitle(QObject::tr("Points not at Origin"));
                 msgBox.setText(
@@ -166,7 +167,7 @@ void CmdPointsExport::activated(int iMsg)
     );
     for (auto point : points) {
         QString fn = Gui::FileDialog::getSaveFileName(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QString(),
             QString(),
             QStringLiteral("%1 (*.asc *.pcd *.ply);;%2 (*.*)")
@@ -220,7 +221,7 @@ void CmdPointsConvert::activated(int iMsg)
 
     bool ok;
     double tol = QInputDialog::getDouble(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Distance"),
         QObject::tr("Enter maximum distance:"),
         0.1,

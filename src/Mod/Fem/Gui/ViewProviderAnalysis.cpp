@@ -316,7 +316,7 @@ bool ViewProviderFemAnalysis::checkSelectedChildren(
         bodyMessageStream << "\n\n" << QObject::tr("Are you sure you want to continue?");
         // show and evaluate the dialog
         int DialogResult = QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("Std_Delete", "Object dependencies"),
             bodyMessage,
             QMessageBox::Yes,

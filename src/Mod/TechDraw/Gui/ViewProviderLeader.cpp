@@ -31,6 +31,7 @@
 #include <Gui/Application.h>
 #include <Gui/Control.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 
 #include <Mod/TechDraw/App/LineGroup.h>
@@ -208,7 +209,7 @@ bool ViewProviderLeader::onDelete(const std::vector<std::string> & parameters)
     QTextStream bodyMessageStream(&bodyMessage);
     bodyMessageStream << qApp->translate("Std_Delete",
         "You cannot delete this leader line because\nit has a weld symbol that would become broken.");
-    QMessageBox::warning(Gui::getMainWindow(),
+    QMessageBox::warning(Gui::uiParentWidget(),
         qApp->translate("Std_Delete", "Object dependencies"), bodyMessage,
         QMessageBox::Ok);
     return false;

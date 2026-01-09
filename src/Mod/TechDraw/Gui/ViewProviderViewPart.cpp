@@ -35,6 +35,7 @@
 #include <Base/Parameter.h>
 #include <Gui/Control.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 
 #include <Mod/TechDraw/App/DrawGeomHatch.h>
@@ -378,7 +379,7 @@ bool ViewProviderViewPart::onDelete(const std::vector<std::string> & subNames)
             bodyMessageStream << qApp->translate("Std_Delete",
             "Close open dialog before deleting detail object");
             bodyMessage = bodyMessageStream.readLine();
-            QMessageBox::warning(Gui::getMainWindow(),
+            QMessageBox::warning(Gui::uiParentWidget(),
             qApp->translate("Std_Delete", "Object dependencies"), bodyMessage,
             QMessageBox::Ok);
             return false;
@@ -393,7 +394,7 @@ bool ViewProviderViewPart::onDelete(const std::vector<std::string> & subNames)
         bodyMessageStream << qApp->translate("Std_Delete",
             "You cannot delete this view because it has one or more dependent views that would become broken.");
         bodyMessage = bodyMessageStream.readLine();
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
             qApp->translate("Std_Delete", "Object dependencies"), bodyMessage,
             QMessageBox::Ok);
         return false;

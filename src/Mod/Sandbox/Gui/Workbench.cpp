@@ -51,7 +51,7 @@ TYPESYSTEM_SOURCE(SandboxGui::Workbench, Gui::StdWorkbench)
 Workbench::Workbench()
 {
     // Tree view
-    Gui::DockWindow* tree = new Gui::DockWindow(0, Gui::getMainWindow());
+    Gui::DockWindow* tree = new Gui::DockWindow(0, Gui::uiParentWidget());
     tree->setWindowTitle(QStringLiteral("Tree view"));
     Gui::TreeView* treeWidget = new Gui::TreeView(tree);
     treeWidget->setRootIsDecorated(false);

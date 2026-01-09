@@ -39,6 +39,7 @@
 #include <Gui/Control.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionObject.h>
 #include <Gui/ViewProvider.h>
@@ -119,7 +120,7 @@ void execHoleCircle(Gui::Command* cmd)
         }
     }
     if (Circles.size() <= 2) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("TechDraw hole circle"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("TechDraw hole circle"),
                              QObject::tr("Fewer than three circles selected"));
         return;
     }
@@ -282,7 +283,7 @@ void CmdTechDrawExtensionCircleCenterLinesGroup::activated(int iMsg)
 {
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again."));
         return;
     }
@@ -303,7 +304,7 @@ void CmdTechDrawExtensionCircleCenterLinesGroup::activated(int iMsg)
 
 Gui::Action* CmdTechDrawExtensionCircleCenterLinesGroup::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -585,7 +586,7 @@ void CmdTechDrawExtensionThreadsGroup::activated(int iMsg)
     //    Base::Console().message("CMD::TechDrawExtensionThreadsGroup - activated(%d)\n", iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again."));
         return;
     }
@@ -612,7 +613,7 @@ void CmdTechDrawExtensionThreadsGroup::activated(int iMsg)
 
 Gui::Action* CmdTechDrawExtensionThreadsGroup::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -880,7 +881,7 @@ void execCosmeticCircleCenter(Gui::Command* cmd)
     std::vector<std::string> subNames2D;
     std::vector< std::pair<Part::Feature*, std::string> > objs3D;
     if (selection.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong Selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong Selection"),
                              QObject::tr("Selection is empty."));
         return;
     }
@@ -903,7 +904,7 @@ void execCosmeticCircleCenter(Gui::Command* cmd)
     }
 
     if (!baseFeat) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong Selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong Selection"),
                              QObject::tr("You must select a base View for the circle."));
         return;
     }
@@ -925,7 +926,7 @@ void execCosmeticCircleCenter(Gui::Command* cmd)
         if (!ce
             || !(ce->m_geometry->getGeomType() == GeomType::CIRCLE
                 || ce->m_geometry->getGeomType() == GeomType::ARCOFCIRCLE)) {
-            QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong Selection"),
+            QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong Selection"),
                              QObject::tr("Selection is not a Cosmetic Circle or a Cosmetic Arc of Circle."));
             return;
         }
@@ -961,7 +962,7 @@ void execCosmeticCircleCenter(Gui::Command* cmd)
     }
 
     if (points.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong Selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong Selection"),
                              QObject::tr("Please select a center for the circle."));
         return;
     }
@@ -981,7 +982,7 @@ void CmdTechDrawCosmeticCircle::activated(int iMsg)
 
     Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task In Progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task In Progress"),
             QObject::tr("Close active task dialog and try again."));
         return;
     }
@@ -1206,7 +1207,7 @@ void CmdTechDrawExtensionDrawCirclesGroup::activated(int iMsg)
     //    Base::Console().message("CMD::ExtensionDrawCirclesGroup - activated(%d)\n", iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again."));
         return;
     }
@@ -1233,7 +1234,7 @@ void CmdTechDrawExtensionDrawCirclesGroup::activated(int iMsg)
 
 Gui::Action* CmdTechDrawExtensionDrawCirclesGroup::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -1451,7 +1452,7 @@ void CmdTechDrawExtensionLinePPGroup::activated(int iMsg)
     //    Base::Console().message("CMD::ExtensionLinePPGroup - activated(%d)\n", iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again."));
         return;
     }
@@ -1472,7 +1473,7 @@ void CmdTechDrawExtensionLinePPGroup::activated(int iMsg)
 
 Gui::Action* CmdTechDrawExtensionLinePPGroup::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -1744,7 +1745,7 @@ void CmdTechDrawExtendShortenLineGroup::activated(int iMsg)
     // Base::Console().message("CMD::ExtendShortenLineGroup - activated(%d)\n", iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again."));
         return;
     }
@@ -1765,7 +1766,7 @@ void CmdTechDrawExtendShortenLineGroup::activated(int iMsg)
 
 Gui::Action* CmdTechDrawExtendShortenLineGroup::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -1856,7 +1857,7 @@ void CmdTechDrawExtensionAreaAnnotation::activated(int iMsg)
     }
 
     if (subNames.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Incorrect selection"),
                              QObject::tr("No faces in selection"));
         return;
@@ -1985,7 +1986,7 @@ void CmdTechDrawExtensionArcLengthAnnotation::activated(int iMsg)
     }
 
     if (subNames.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Incorrect selection"),
                              QObject::tr("No edges in selection"));
         return;
@@ -2126,14 +2127,14 @@ bool _checkSel(Gui::Command* cmd, std::vector<Gui::SelectionObject>& selection,
     selection = cmd->getSelection().getSelectionEx();
     if (selection.empty()) {
         // message is translated in caller
-        QMessageBox::warning(Gui::getMainWindow(), QString::fromUtf8(message.c_str()),
+        QMessageBox::warning(Gui::uiParentWidget(), QString::fromUtf8(message.c_str()),
                              QObject::tr("Selection is empty"));
         return false;
     }
 
     objFeat = dynamic_cast<TechDraw::DrawViewPart*>(selection[0].getObject());
     if (!objFeat) {
-        QMessageBox::warning(Gui::getMainWindow(), QString::fromUtf8(message.c_str()),
+        QMessageBox::warning(Gui::uiParentWidget(), QString::fromUtf8(message.c_str()),
                              QObject::tr("No object selected"));
         return false;
     }
@@ -2212,7 +2213,7 @@ void _createThreadLines(const std::vector<std::string>& SubNames, TechDraw::Draw
         TechDraw::BaseGeomPtr geom0 = objFeat->getGeomByIndex(GeoId0);
         TechDraw::BaseGeomPtr geom1 = objFeat->getGeomByIndex(GeoId1);
         if (geom0->getGeomType() != GeomType::GENERIC || geom1->getGeomType() != GeomType::GENERIC) {
-            QMessageBox::warning(Gui::getMainWindow(), QObject::tr("TechDraw thread hole side"),
+            QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("TechDraw thread hole side"),
                                  QObject::tr("Select 2 straight lines"));
             return;
         }

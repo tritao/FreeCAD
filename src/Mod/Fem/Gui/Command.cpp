@@ -40,6 +40,7 @@
 #include <Gui/Document.h>
 #include <Gui/FileDialog.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/SelectionFilter.h>
 #include <Gui/Selection/SelectionObject.h>
 #include <Gui/Utilities.h>
@@ -72,7 +73,7 @@ static bool getConstraintPrerequisits(Fem::FemAnalysis** Analysis)
 {
     if (!FemGui::ActiveAnalysisObserver::instance()->hasActiveObject()) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("No active Analysis"),
             QObject::tr("You need to create or activate a Analysis")
         );
@@ -182,7 +183,7 @@ CmdFemAddPart::CmdFemAddPart()
 void CmdFemAddPart::activated(int)
 {
 #ifndef FCWithNetgen
-    QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+    QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
             QObject::tr("Your FreeCAD is built without NETGEN support. Meshing will not work...."));
     return;
 #endif
@@ -190,13 +191,13 @@ void CmdFemAddPart::activated(int)
     std::vector<Gui::SelectionObject> selection = getSelection().getSelectionEx();
 
     if (selection.size() != 1) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
             QObject::tr("Select an edge, face, or body. Only one body is allowed."));
         return;
     }
 
     if (!selection[0].isObjectTypeOf(Part::Feature::getClassTypeId())){
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong object type"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong object type"),
             QObject::tr("Fillet works only on parts"));
         return;
     }
@@ -1315,7 +1316,7 @@ void CmdFemCreateNodesSet::activated(int)
     }
     else {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("CmdFemCreateNodesSet", "Wrong selection"),
             qApp->translate("CmdFemCreateNodesSet", "Select a single FEM mesh or nodes set.")
         );
@@ -1475,7 +1476,7 @@ void CmdFemCreateElementsSet::activated(int)
     }
     else {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("CmdFemCreateElementsSet", "Wrong selection"),
             qApp->translate("CmdFemCreateNodesSet", "Select a single FEM Mesh.")
         );
@@ -1537,7 +1538,7 @@ void CmdFemCompEmConstraints::activated(int iMsg)
 
 Gui::Action* CmdFemCompEmConstraints::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -1724,7 +1725,7 @@ void CmdFemCompEmEquations::activated(int iMsg)
 
 Gui::Action* CmdFemCompEmEquations::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -1911,7 +1912,7 @@ void CmdFemCompMechEquations::activated(int iMsg)
 
 Gui::Action* CmdFemCompMechEquations::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -2015,7 +2016,7 @@ void setupFilter(Gui::Command* cmd, std::string Name)
 
     if (Gui::Selection().getSelection().size() > 1) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("setupFilter", "Error: A filter can only be applied to a single object."),
             qApp->translate("setupFilter", "The filter could not be set up.")
         );
@@ -2027,7 +2028,7 @@ void setupFilter(Gui::Command* cmd, std::string Name)
     // issue error if no filter object
     if (!(selObject->isDerivedFrom<Fem::FemPostObject>())) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("setupFilter", "Error: no post processing object selected."),
             qApp->translate("setupFilter", "The filter could not be set up.")
         );
@@ -2046,7 +2047,7 @@ void setupFilter(Gui::Command* cmd, std::string Name)
         pipeline = Fem::FemPostGroupExtension::getGroupOfObject(selObject);
         if (!pipeline || !pipeline->isDerivedFrom<Fem::FemPostObject>()) {
             QMessageBox::warning(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 qApp->translate("setupFilter", "Error: Object not in a post processing group"),
                 qApp->translate(
                     "setupFilter",
@@ -2422,7 +2423,7 @@ void CmdFemPostLinearizedStressesFilter::activated(int)
         }
         else {
             QMessageBox::warning(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 qApp->translate("CmdFemPostLinearizedStressesFilter", "Wrong selection"),
                 qApp->translate(
                     "CmdFemPostLinearizedStressesFilter",
@@ -2433,7 +2434,7 @@ void CmdFemPostLinearizedStressesFilter::activated(int)
     }
     else {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("CmdFemPostLinearizedStressesFilter", "Wrong selection"),
             qApp->translate(
                 "CmdFemPostLinearizedStressesFilter",
@@ -2756,7 +2757,7 @@ void CmdFemPostFunctions::activated(int iMsg)
     }
     else {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("CmdFemPostClipFilter", "Wrong selection"),
             qApp->translate("CmdFemPostClipFilter", "Select a pipeline.")
         );
@@ -2773,7 +2774,7 @@ void CmdFemPostFunctions::activated(int iMsg)
 
 Gui::Action* CmdFemPostFunctions::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -2994,7 +2995,7 @@ void CmdFemPostPipelineFromResult::activated(int)
     }
     else {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("CmdFemPostPipelineFromResult", "Wrong selection type"),
             qApp->translate("CmdFemPostPipelineFromResult", "Select a result object.")
         );

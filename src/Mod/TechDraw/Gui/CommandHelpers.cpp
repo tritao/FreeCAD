@@ -31,6 +31,7 @@
 
 #include <Gui/Command.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionObject.h>
 
@@ -84,7 +85,7 @@ std::vector<std::string> CommandHelpers::getSelectedSubElements(Gui::Command* cm
         }
     }
     if (!dvp) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
                              QObject::tr("No part view in selection"));
         return selectedSubs;
     }
@@ -96,7 +97,7 @@ std::vector<std::string> CommandHelpers::getSelectedSubElements(Gui::Command* cm
     }
 
     if (selectedSubs.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Wrong selection"),
                              QObject::tr("No %1 in selection")
                                  .arg(QString::fromStdString(subType)));

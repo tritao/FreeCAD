@@ -27,6 +27,7 @@
 
 #include <Gui/BitmapFactory.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 
 #include "SketchOrientationDialog.h"
 #include "ui_SketchOrientationDialog.h"
@@ -35,7 +36,7 @@
 using namespace SketcherGui;
 
 SketchOrientationDialog::SketchOrientationDialog()
-    : QDialog(Gui::getMainWindow())
+    : QDialog(Gui::uiParentWidget())
     , ui(new Ui_SketchOrientationDialog)
 {
     DirType = 0;

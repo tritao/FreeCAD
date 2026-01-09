@@ -44,7 +44,7 @@ UnitTestDialog* UnitTestDialog::instance()
 {
     // not initialized?
     if (!_instance) {
-        _instance = new UnitTestDialog(Gui::getMainWindow());
+        _instance = new UnitTestDialog(Gui::uiParentWidget());
     }
     return _instance;
 }

@@ -49,7 +49,7 @@ namespace {
 void incorrectSelection()
 {
     QMessageBox::warning(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Incorrect Selection"),
         QObject::tr("You must select 2 vertices or 1 edge\n")
     );

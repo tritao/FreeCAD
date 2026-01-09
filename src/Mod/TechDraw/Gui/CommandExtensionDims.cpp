@@ -56,6 +56,7 @@
 #include "TaskCustomizeFormat.h"
 #include "TaskSelectLineAttributes.h"
 #include "CommandExtensionDims.h"
+#include <Gui/GuiShell.h>
 
 
 using namespace TechDrawGui;
@@ -112,7 +113,7 @@ void execInsertPrefixChar(Gui::Command* cmd, const std::string& prefixFormat) {
 
     std::string prefixText(prefixFormat);
     if (prefixFormat.find("%s") != std::string::npos) {
-        DlgTemplateField ui(Gui::getMainWindow());
+        DlgTemplateField ui(Gui::uiParentWidget());
         ui.setFieldName(QObject::tr("Repeat count").toStdString());
         ui.setFieldContent("1");
         if (ui.exec() != QDialog::Accepted) {
@@ -307,7 +308,7 @@ void CmdTechDrawExtensionInsertPrefixGroup::activated(int iMsg)
     //    Base::Console().message("CMD::ExtensionLinePPGroup - activated(%d)\n", iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
         return;
     }
@@ -334,7 +335,7 @@ void CmdTechDrawExtensionInsertPrefixGroup::activated(int iMsg)
 
 Gui::Action* CmdTechDrawExtensionInsertPrefixGroup::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -516,7 +517,7 @@ void CmdTechDrawExtensionIncreaseDecreaseGroup::activated(int iMsg)
     //    Base::Console().message("CMD::ExtensionIncreaseDecreaseGroup - activated(%d)\n", iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
         return;
     }
@@ -537,7 +538,7 @@ void CmdTechDrawExtensionIncreaseDecreaseGroup::activated(int iMsg)
 
 Gui::Action* CmdTechDrawExtensionIncreaseDecreaseGroup::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -603,7 +604,7 @@ void execPosHorizChainDimension(Gui::Command* cmd) {
     std::vector<TechDraw::DrawViewDimension*> validDimension;
     validDimension = _getDimensions(selection, "DistanceX");
     if (validDimension.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
             QObject::tr("TechDraw PosHorizChainDimension"),
             QObject::tr("No horizontal dimensions selected"));
         return;
@@ -664,7 +665,7 @@ void execPosVertChainDimension(Gui::Command* cmd) {
     std::vector<TechDraw::DrawViewDimension*> validDimension;
     validDimension = _getDimensions(selection, "DistanceY");
     if (validDimension.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
             QObject::tr("TechDraw PosVertChainDimension"),
             QObject::tr("No vertical dimensions selected"));
         return;
@@ -726,7 +727,7 @@ void execPosObliqueChainDimension(Gui::Command* cmd) {
     std::vector<TechDraw::DrawViewDimension*> validDimension;
     validDimension = _getDimensions(selection, "Distance");
     if (validDimension.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
             QObject::tr("TechDraw PosObliqueChainDimension"),
             QObject::tr("No oblique dimensions selected"));
         return;
@@ -804,7 +805,7 @@ void CmdTechDrawExtensionPosChainDimensionGroup::activated(int iMsg)
     //    Base::Console().message("CMD::ExtensionPosChainDimensionGroup - activated(%d)\n", iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
         return;
     }
@@ -828,7 +829,7 @@ void CmdTechDrawExtensionPosChainDimensionGroup::activated(int iMsg)
 
 Gui::Action* CmdTechDrawExtensionPosChainDimensionGroup::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -912,7 +913,7 @@ void execCascadeHorizDimension(Gui::Command* cmd) {
     std::vector<TechDraw::DrawViewDimension*> validDimension;
     validDimension = _getDimensions(selection, "DistanceX");
     if (validDimension.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
             QObject::tr("TechDraw CascadeHorizDimension"),
             QObject::tr("No horizontal dimensions selected"));
         return;
@@ -978,7 +979,7 @@ void execCascadeVertDimension(Gui::Command* cmd) {
     std::vector<TechDraw::DrawViewDimension*> validDimension;
     validDimension = _getDimensions(selection, "DistanceY");
     if (validDimension.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
             QObject::tr("TechDraw CascadeVertDimension"),
             QObject::tr("No vertical dimensions selected"));
         return;
@@ -1045,7 +1046,7 @@ void execCascadeObliqueDimension(Gui::Command* cmd) {
     std::vector<TechDraw::DrawViewDimension*> validDimension;
     validDimension = _getDimensions(selection, "Distance");
     if (validDimension.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
             QObject::tr("TechDraw CascadeObliqueDimension"),
             QObject::tr("No oblique dimensions selected"));
         return;
@@ -1132,7 +1133,7 @@ void CmdTechDrawExtensionCascadeDimensionGroup::activated(int iMsg)
     //    Base::Console().message("CMD::ExtensionCascadeDimansionGroup - activated(%d)\n", iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
         return;
     }
@@ -1156,7 +1157,7 @@ void CmdTechDrawExtensionCascadeDimensionGroup::activated(int iMsg)
 
 Gui::Action* CmdTechDrawExtensionCascadeDimensionGroup::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -1503,7 +1504,7 @@ void CmdTechDrawExtensionCreateChainDimensionGroup::activated(int iMsg)
     //    Base::Console().message("CMD::ExtensionCascadeDimansionGroup - activated(%d)\n", iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
         return;
     }
@@ -1527,7 +1528,7 @@ void CmdTechDrawExtensionCreateChainDimensionGroup::activated(int iMsg)
 
 Gui::Action* CmdTechDrawExtensionCreateChainDimensionGroup::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -1872,7 +1873,7 @@ void CmdTechDrawExtensionCreateCoordDimensionGroup::activated(int iMsg)
     //    Base::Console().message("CMD::ExtensionCascadeDimansionGroup - activated(%d)\n", iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
         return;
     }
@@ -1896,7 +1897,7 @@ void CmdTechDrawExtensionCreateCoordDimensionGroup::activated(int iMsg)
 
 Gui::Action* CmdTechDrawExtensionCreateCoordDimensionGroup::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -2110,7 +2111,7 @@ void CmdTechDrawExtensionChamferDimensionGroup::activated(int iMsg)
     //    Base::Console().message("CMD::ExtensionIncreaseDecreaseGroup - activated(%d)\n", iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
         return;
     }
@@ -2131,7 +2132,7 @@ void CmdTechDrawExtensionChamferDimensionGroup::activated(int iMsg)
 
 Gui::Action* CmdTechDrawExtensionChamferDimensionGroup::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -2324,7 +2325,7 @@ namespace TechDrawGui {
         // check selection of getSelectionEx()
         selection = cmd->getSelection().getSelectionEx();
         if (selection.empty()) {
-            QMessageBox::warning(Gui::getMainWindow(),
+            QMessageBox::warning(Gui::uiParentWidget(),
                 QObject::tr(message.c_str()),
                 QObject::tr("Selection is empty"));
             return false;
@@ -2340,7 +2341,7 @@ namespace TechDrawGui {
         if (_checkSelection(cmd, selection, message)) {
             objFeat = dynamic_cast<TechDraw::DrawViewPart*>(selection[0].getObject());
             if (!objFeat) {
-                QMessageBox::warning(Gui::getMainWindow(),
+                QMessageBox::warning(Gui::uiParentWidget(),
                     QObject::tr(message.c_str()),
                     QObject::tr("No object selected"));
                 return false;
@@ -2360,7 +2361,7 @@ namespace TechDrawGui {
         if (_checkSelAndObj(cmd, selection, objFeat, message)) {
             auto subs = selection[0].getSubNames();
             if (subs.empty()) {
-                QMessageBox::warning(Gui::getMainWindow(),
+                QMessageBox::warning(Gui::uiParentWidget(),
                     QObject::tr(message.c_str()),
                     QObject::tr("No sub-elements selected"));
                 return false;

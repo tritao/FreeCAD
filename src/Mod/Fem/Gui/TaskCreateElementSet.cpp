@@ -236,7 +236,7 @@ void myCopyResultsMesh(std::string oldName, std::string newName)
             newName.c_str()
         );
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             //        QMessageBox::warning(Gui::MainWindow(),
             qApp->translate("CmdFemCreateElementsSet", "Wrong selection"),
             qApp->translate("CmdFemCreateElementsSet", "Cannot copy ResultMesh to ResultMesh")
@@ -247,7 +247,7 @@ void myCopyResultsMesh(std::string oldName, std::string newName)
         error = 1;
         Base::Console().warning("Mesh must be results: %s\n", oldName.c_str());
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             //        QMessageBox::warning(Gui::MainWindow(),
             qApp->translate("CmdFemCreateElementsSet", "Wrong selection"),
             qApp->translate("CmdFemCreateElementsSet", "Mesh must be a ResultMesh")
@@ -510,7 +510,7 @@ TaskCreateElementSet::TaskCreateElementSet(Fem::FemSetElementNodesObject* pcObje
     newProject = doc->Label.getValue();
     if (strcmp(currentProject.c_str(), newProject.c_str()) != 0 && (passResult + passFemMesh != 0)) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             //        QMessageBox::warning(Gui::MainWindow(),
             qApp->translate("CmdFemCreateElementsSet", "Wrong selection"),
             qApp->translate("CmdFemCreateElementsSet", info.c_str())
@@ -607,7 +607,7 @@ void TaskCreateElementSet::Restore(void)
     }
     else if (number == 0) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             //        QMessageBox::warning(Gui::MainWindow(),
             qApp->translate("CmdFemCreateElementsSet", "Wrong selection"),
             qApp->translate("CmdFemCreateElementsSet", "No Data To Restore\n")
@@ -807,7 +807,7 @@ void TaskCreateElementSet::DefineNodes(
     }
     else {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             //        QMessageBox::warning(Gui::MainWindow(),
             qApp->translate("CmdFemCreateElementsSet", "Erased Elements"),
             qApp->translate("CmdFemCreateElementsSet", "All Elements Erased - no mesh generated.")

@@ -337,7 +337,7 @@ bool CrossSections::apply()
     catch (Base::Exception& e) {
         e.reportException();
         QMessageBox::critical(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             tr("Cannot compute cross-sections"),
             QString::fromStdString(e.getMessage())
         );

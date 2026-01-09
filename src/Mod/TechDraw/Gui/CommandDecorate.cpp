@@ -34,6 +34,7 @@
 #include <Gui/Document.h>
 #include <Gui/FileDialog.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionObject.h>
 #include <Gui/ViewProvider.h>
@@ -100,7 +101,7 @@ void CmdTechDrawToggleFrame::activated(int iMsg)
 
     auto mvp = dynamic_cast<MDIViewPage *>(Gui::getMainWindow()->activeWindow());
     if (!mvp) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("No TechDraw Page"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("No TechDraw Page"),
             QObject::tr("Need a TechDraw Page for this command"));
         return;
     }
@@ -173,7 +174,7 @@ void CmdTechDrawHatch::activated(int iMsg)
         int face = TechDraw::DrawUtil::getIndexFromName(s);
         if (TechDraw::DrawHatch::faceIsHatched(face, hatchObjs)) {
             QMessageBox::StandardButton rc =
-                    QMessageBox::question(Gui::getMainWindow(), QObject::tr("Replace hatch?"),
+                    QMessageBox::question(Gui::uiParentWidget(), QObject::tr("Replace hatch?"),
                             QObject::tr("Some faces in the selection are already hatched. Replace?"));
             if (rc == QMessageBox::StandardButton::NoButton) {
                 return;
@@ -322,7 +323,7 @@ void CmdTechDrawImage::activated(int iMsg)
     std::string PageName = page->getNameInDocument();
 
     // Reading an image
-    QString fileName = Gui::FileDialog::getOpenFileName(Gui::getMainWindow(),
+    QString fileName = Gui::FileDialog::getOpenFileName(Gui::uiParentWidget(),
         QString::fromUtf8(QT_TR_NOOP("Select an image file")),
         Preferences::defaultSymbolDir(),
         QString::fromUtf8(QT_TR_NOOP("Image files (*.jpg *.jpeg *.png *.bmp);;All files (*)")));
@@ -377,34 +378,34 @@ void CreateTechDrawCommandsDecorate()
 bool _checkSelectionHatch(Gui::Command* cmd) {
     std::vector<Gui::SelectionObject> selection = cmd->getSelection().getSelectionEx();
     if (selection.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Incorrect selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Incorrect selection"),
                              QObject::tr("Select a face first"));
         return false;
     }
 
     TechDraw::DrawViewPart * objFeat = dynamic_cast<TechDraw::DrawViewPart *>(selection[0].getObject());
     if(!objFeat) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Incorrect selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Incorrect selection"),
                              QObject::tr("No TechDraw object in selection"));
         return false;
     }
 
     std::vector<App::DocumentObject*> pages = cmd->getDocument()->getObjectsOfType(TechDraw::DrawPage::getClassTypeId());
     if (pages.empty()){
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Incorrect selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Incorrect selection"),
             QObject::tr("Create a page to insert"));
         return false;
     }
 
     const std::vector<std::string> &SubNames = selection[0].getSubNames();
     if (SubNames.empty()) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Incorrect Selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Incorrect Selection"),
         QObject::tr("No faces to hatch in this selection"));
         return false;
     }
     std::string gType = TechDraw::DrawUtil::getGeomTypeFromName(SubNames.at(0));
     if (!(gType == "Face")) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Incorrect Selection"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Incorrect Selection"),
         QObject::tr("No faces to hatch in this selection"));
         return false;
     }

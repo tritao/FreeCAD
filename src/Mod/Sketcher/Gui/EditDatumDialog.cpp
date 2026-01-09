@@ -34,6 +34,7 @@
 #include <Gui/CommandT.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Notifications.h>
 #include <Gui/View3DInventor.h>
 #include <Gui/View3DInventorViewer.h>
@@ -114,7 +115,7 @@ int EditDatumDialog::exec(bool atCursor)
 
         Base::Quantity init_val;
 
-        QDialog dlg(Gui::getMainWindow());
+        QDialog dlg(Gui::uiParentWidget());
         if (!ui_ins_datum) {
             ui_ins_datum.reset(new Ui_InsertDatum);
             ui_ins_datum->setupUi(&dlg);

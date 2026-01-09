@@ -37,7 +37,7 @@ void Grabber3d::quickView(View3DInventor* view3d,
                           QImage &image)
 {
 //    Base::Console().message("G3d::quickView());
-    if (!Gui::getMainWindow()) {
+    if (!Gui::uiParentWidget()) {
         //this should already be checked in the caller
         Base::Console().warning("G3d::quickView - no Main Window - returning\n");
         return;

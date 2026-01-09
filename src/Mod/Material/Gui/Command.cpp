@@ -64,7 +64,7 @@ void CmdMaterialEdit::activated(int iMsg)
 
     static QPointer<QDialog> dlg = nullptr;
     if (!dlg) {
-        dlg = new MatGui::MaterialsEditor(Gui::getMainWindow());
+        dlg = new MatGui::MaterialsEditor(Gui::uiParentWidget());
     }
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     dlg->show();

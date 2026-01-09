@@ -26,6 +26,7 @@
 
 
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 
 #include "SketcherRegularPolygonDialog.h"
 #include "ui_SketcherRegularPolygonDialog.h"
@@ -34,7 +35,7 @@
 using namespace SketcherGui;
 
 SketcherRegularPolygonDialog::SketcherRegularPolygonDialog()
-    : QDialog(Gui::getMainWindow())
+    : QDialog(Gui::uiParentWidget())
     , ui(new Ui_SketcherRegularPolygonDialog)
 {
     ui->setupUi(this);

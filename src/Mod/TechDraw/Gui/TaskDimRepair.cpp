@@ -30,6 +30,7 @@
 #include <Gui/BitmapFactory.h>
 #include <Gui/Command.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Mod/TechDraw/App/DrawView.h>
 #include <Mod/TechDraw/App/DrawViewPart.h>
@@ -118,7 +119,7 @@ void TaskDimRepair::slotUseSelection()
     ReferenceVector references3d;
     TechDraw::DrawViewPart* dvp = TechDraw::getReferencesFromSelection(references2d, references3d);
      if (dvp != m_saveDvp) {
-        int ret = QMessageBox::warning(Gui::getMainWindow(),
+        int ret = QMessageBox::warning(Gui::uiParentWidget(),
                                        QObject::tr("Incorrect Selection?"),
                                        QObject::tr("This will change the dimension's owner view. Continue?"),
                                        QMessageBox::Cancel | QMessageBox::Ok);
@@ -133,7 +134,7 @@ void TaskDimRepair::slotUseSelection()
     DimensionGeometry geometryRefs2d = validateDimSelection(
         references2d, acceptableGeometry, minimumCounts, acceptableDimensionGeometrys);
     if (geometryRefs2d == DimensionGeometry::isInvalid) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("Incorrect selection"),
                              QObject::tr("Cannot make dimension from selection"));
         return;
@@ -144,7 +145,7 @@ void TaskDimRepair::slotUseSelection()
         geometryRefs3d = validateDimSelection3d(
             dvp, references3d, acceptableGeometry, minimumCounts, acceptableDimensionGeometrys);
         if (geometryRefs3d == DimensionGeometry::isInvalid) {
-            QMessageBox::warning(Gui::getMainWindow(),
+            QMessageBox::warning(Gui::uiParentWidget(),
                                  QObject::tr("Incorrect selection"),
                                  QObject::tr("Cannot make dimension from selection"));
             return;

@@ -50,7 +50,7 @@ namespace
 std::string getWrl(const QString& hint_directory)
 {
     QString fileName = QFileDialog::getOpenFileName(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Select VRML file for Robot"),
         hint_directory,
         QObject::tr("VRML Files (*.wrl *.vrml)")
@@ -64,7 +64,7 @@ std::string getCsv(const std::string& wrl_path)
     QFileInfo wrlInfo(QString::fromStdString(wrl_path));
     QString hintDir = wrlInfo.absolutePath();
     QString fileName = QFileDialog::getOpenFileName(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Select Kinematic CSV file for Robot"),
         hintDir,
         QObject::tr("CSV Files (*.csv)")
@@ -100,7 +100,7 @@ void CmdRobotSetHomePos::activated(int)
     }
     else {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select one Robot to set home position")
         );
@@ -163,7 +163,7 @@ void CmdRobotRestoreHomePos::activated(int)
     }
     else {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select one Robot")
         );
@@ -265,7 +265,7 @@ void CmdRobotSimulate::activated(int)
     }
     else {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select one Robot and one Trajectory object.")
         );
@@ -274,7 +274,7 @@ void CmdRobotSimulate::activated(int)
 
     if (pcTrajectoryObject->Trajectory.getValue().getSize() < 2) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Trajectory not valid"),
             QObject::tr("You need at least two waypoints in a trajectory to simulate.")
         );

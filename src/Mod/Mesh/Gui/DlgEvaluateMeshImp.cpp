@@ -244,7 +244,7 @@ void DlgEvaluateMeshImp::setupConnections()
     connect(d->ui.buttonBox, &QDialogButtonBox::clicked,
             this, &DlgEvaluateMeshImp::onButtonBoxClicked);
     connect(d->ui.buttonBox, &QDialogButtonBox::helpRequested,
-            Gui::getMainWindow(), &Gui::MainWindow::whatsThis);
+            Gui::uiParentWidget(), &Gui::MainWindow::whatsThis);
     // clang-format on
 }
 
@@ -1351,7 +1351,7 @@ DockEvaluateMeshImp* DockEvaluateMeshImp::instance()
 {
     // not initialized?
     if (!_instance) {
-        _instance = new DockEvaluateMeshImp(Gui::getMainWindow());
+        _instance = new DockEvaluateMeshImp(Gui::uiParentWidget());
         _instance->setSizeGripEnabled(false);
     }
 

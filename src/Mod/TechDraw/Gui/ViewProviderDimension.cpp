@@ -36,6 +36,7 @@
 #include <Gui/ActionFunction.h>
 #include <Gui/Control.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 
 #include <Mod/TechDraw/App/LineGroup.h>
 #include <Mod/TechDraw/App/LandmarkDimension.h>
@@ -320,7 +321,7 @@ bool ViewProviderDimension::onDelete(const std::vector<std::string> & parms)
         QTextStream bodyMessageStream(&bodyMessage);
         bodyMessageStream << qApp->translate("TaskDimension",
             "You cannot delete this dimension now because\nthere is an open task dialog.");
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
             qApp->translate("TaskDimension", "Can Not Delete"), bodyMessage,
             QMessageBox::Ok);
         return false;

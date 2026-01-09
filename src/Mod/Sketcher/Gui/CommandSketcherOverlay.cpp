@@ -255,7 +255,7 @@ void CmdSketcherCompBSplineShowHideGeometryInformation::activated(int iMsg)
 
 Gui::Action* CmdSketcherCompBSplineShowHideGeometryInformation::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 

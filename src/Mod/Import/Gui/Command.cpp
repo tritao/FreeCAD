@@ -55,7 +55,7 @@ void FCCmdImportReadBREP::activated(int iMsg)
     Q_UNUSED(iMsg);
     openCommand(QT_TRANSLATE_NOOP("Command", "Read BREP"));
     QString fn = Gui::FileDialog::getOpenFileName(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QString(),
         QString(),
         QLatin1String("BREP (*.brep *.rle)")
@@ -97,7 +97,7 @@ void ImportStep::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
     QString fn = Gui::FileDialog::getOpenFileName(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QString(),
         QString(),
         QLatin1String("STEP (*.stp *.step)")
@@ -144,7 +144,7 @@ void ImportIges::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
     QString fn = Gui::FileDialog::getOpenFileName(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QString(),
         QString(),
         QLatin1String("IGES (*.igs *.iges)")

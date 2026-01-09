@@ -32,6 +32,7 @@
 #include <Gui/Command.h>
 #include <Gui/Control.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/WaitCursor.h>
 
@@ -521,7 +522,7 @@ bool TaskComplexSection::apply(bool forceUpdate)
         m_baseView->requestPaint();
     }
     if (!m_section->checkSectionCS()) {
-            QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Possible coordinate system error"),
+            QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Possible coordinate system error"),
                                                QObject::tr("Check SectionNormal, Direction and/or XDirection."));
     }
 
@@ -711,7 +712,7 @@ void TaskComplexSection::failNoObject()
     QString qsectionName = QString::fromStdString(m_sectionName);
     QString qbaseName = QString::fromStdString(m_saveBaseName);
     QString msg = tr("Can not continue. Object * %1 or %2 not found.").arg(qsectionName, qbaseName);
-    QMessageBox::critical(Gui::getMainWindow(), QObject::tr("Operation Failed"), msg);
+    QMessageBox::critical(Gui::uiParentWidget(), QObject::tr("Operation Failed"), msg);
     Gui::Control().closeDialog();
 }
 

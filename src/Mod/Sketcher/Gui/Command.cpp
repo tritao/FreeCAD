@@ -210,7 +210,7 @@ void CmdSketcherNewSketch::activated(int iMsg)
                     iSugg = items.size() - 1;
             }
             QString text = QInputDialog::getItem(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 qApp->translate("Sketcher_NewSketch", "Sketch Attachment"),
                 qApp->translate("Sketcher_NewSketch",
                                 "Select the method to attach this sketch to selected object"),
@@ -453,7 +453,7 @@ void CmdSketcherReorientSketch::activated(int iMsg)
         Gui::Selection().getObjectsOfType<Sketcher::SketchObject>().front();
     if (sketch->AttachmentSupport.getValue()) {
         int ret = QMessageBox::question(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("Sketcher_ReorientSketch", "Sketch Has Support"),
             qApp->translate("Sketcher_ReorientSketch",
                             "Sketch with a support face cannot be reoriented.\n"
@@ -639,7 +639,7 @@ void CmdSketcherMapSketch::activated(int iMsg)
              ++it)
             items.push_back(QString::fromUtf8((*it)->Label.getValue()));
         QString text = QInputDialog::getItem(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("Sketcher_MapSketch", "Select Sketch"),
             sketchInSelection
             ? qApp->translate("Sketcher_MapSketch",
@@ -724,7 +724,7 @@ void CmdSketcherMapSketch::activated(int iMsg)
         }
         // * execute the dialog
         text = QInputDialog::getItem(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("Sketcher_MapSketch", "Sketch Attachment"),
             bCurIncompatible
                 ? qApp->translate(
@@ -1333,7 +1333,7 @@ void CmdSketcherGrid::activated(int iMsg)
 
 Gui::Action* CmdSketcherGrid::createAction()
 {
-    auto* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    auto* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     pcAction->setExclusive(false);
     applyCommandData(this->className(), pcAction);
@@ -1556,7 +1556,7 @@ void CmdSketcherSnap::activated(int iMsg)
 
 Gui::Action* CmdSketcherSnap::createAction()
 {
-    auto* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    auto* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     pcAction->setExclusive(false);
     applyCommandData(this->className(), pcAction);
@@ -1787,7 +1787,7 @@ void CmdRenderingOrder::activated(int iMsg)
 
 Gui::Action* CmdRenderingOrder::createAction()
 {
-    auto* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    auto* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     pcAction->setExclusive(false);
     applyCommandData(this->className(), pcAction);

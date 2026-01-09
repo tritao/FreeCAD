@@ -30,6 +30,7 @@
 #include <App/DocumentObject.h>
 #include <Gui/Control.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 
 #include "PreferencesGui.h"
@@ -139,7 +140,7 @@ bool ViewProviderWeld::onDelete(const std::vector<std::string> &)
         QTextStream bodyMessageStream(&bodyMessage);
         bodyMessageStream << qApp->translate("Std_Delete",
             "You cannot delete this weld symbol because\nit has a tile weld that would become broken.");
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
             qApp->translate("Std_Delete", "Object dependencies"), bodyMessage,
             QMessageBox::Ok);
         return false;

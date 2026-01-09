@@ -59,7 +59,7 @@ void CmdRobotExportKukaCompact::activated(int)
 
     if (n1 != 1 || n2 != 1) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select one Robot and one Trajectory object.")
         );
@@ -91,7 +91,7 @@ void CmdRobotExportKukaCompact::activated(int)
     filter << QStringLiteral("%1 (*.src)").arg(QObject::tr("KRL file"));
     filter << QStringLiteral("%1 (*.*)").arg(QObject::tr("All Files"));
     QString fn = Gui::FileDialog::getSaveFileName(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Export program"),
         QString(),
         filter.join(QLatin1String(";;"))
@@ -140,7 +140,7 @@ void CmdRobotExportKukaFull::activated(int)
 
     if (n1 != 1 || n2 != 1) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Wrong selection"),
             QObject::tr("Select one Robot and one Trajectory object.")
         );
@@ -172,7 +172,7 @@ void CmdRobotExportKukaFull::activated(int)
     filter << QStringLiteral("%1 (*.src)").arg(QObject::tr("KRL file"));
     filter << QStringLiteral("%1 (*.*)").arg(QObject::tr("All Files"));
     QString fn = Gui::FileDialog::getSaveFileName(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Export program"),
         QString(),
         filter.join(QLatin1String(";;"))

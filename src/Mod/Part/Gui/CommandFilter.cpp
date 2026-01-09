@@ -81,7 +81,7 @@ void PartCmdSelectFilter::activated(int iMsg)
 
 Gui::Action* PartCmdSelectFilter::createAction()
 {
-    auto pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    auto pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 

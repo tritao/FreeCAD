@@ -35,6 +35,7 @@
 #include <Gui/Application.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 
 #include <Mod/TechDraw/App/DrawPage.h>
 #include <Mod/TechDraw/App/DrawSVGTemplate.h>
@@ -201,7 +202,7 @@ bool ViewProviderTemplate::onDelete(const std::vector<std::string>&)
     bodyMessageStream << "\n\n" << QObject::tr("Are you sure you want to continue?");
 
     // show and evaluate dialog
-    int DialogResult = QMessageBox::warning(Gui::getMainWindow(),
+    int DialogResult = QMessageBox::warning(Gui::uiParentWidget(),
                                             qApp->translate("Std_Delete", "Object dependencies"),
                                             bodyMessage, QMessageBox::Yes, QMessageBox::No);
     if (DialogResult == QMessageBox::Yes)

@@ -29,6 +29,7 @@
 #include <Gui/Application.h>
 #include <Gui/Command.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Tools.h>
 
 #include <Mod/Material/App/MaterialLibrary.h>
@@ -376,7 +377,7 @@ void MaterialSave::showSelectedTree()
         addMaterials(*lib, modelTree, folderIcon, icon);
     }
     else {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
                              QObject::tr("No writeable library"),
                              QObject::tr("No writeable library"));
     }

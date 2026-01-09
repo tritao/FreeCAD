@@ -464,7 +464,7 @@ void StartView::changeEvent(QEvent* event)
 
 void StartView::showEvent(QShowEvent* event)
 {
-    if (auto mainWindow = Gui::getMainWindow()) {
+    if (auto mainWindow = Gui::uiParentWidget()) {
         if (auto mdiArea = mainWindow->findChild<QMdiArea*>()) {
             connect(
                 mdiArea,

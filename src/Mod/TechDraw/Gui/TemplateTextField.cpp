@@ -78,7 +78,7 @@ void TemplateTextField::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
     if ( tmplte && m_rect->rect().contains(event->pos()) ) {
         event->accept();
 
-        DlgTemplateField ui(Gui::getMainWindow());
+        DlgTemplateField ui(Gui::uiParentWidget());
 
         ui.setFieldName(fieldNameStr);
         ui.setFieldContent(tmplte->EditableTexts[fieldNameStr]);

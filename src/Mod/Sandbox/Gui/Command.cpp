@@ -65,6 +65,7 @@
 #include <Gui/BitmapFactory.h>
 #include <Gui/Command.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/FileDialog.h>
 #include <Gui/Tools.h>
 #include <Gui/View3DInventor.h>
@@ -466,7 +467,7 @@ void CmdSandboxDocThreadWithDialog::activated(int)
     QObject::connect(dt, SIGNAL(finished()), dt, SLOT(deleteLater()));
     dt->start();
     //QFileDialog::getOpenFileName();
-    QColorDialog::getColor(Qt::white,Gui::getMainWindow());
+    QColorDialog::getColor(Qt::white,Gui::uiParentWidget());
 }
 
 // -------------------------------------------------------------------------------
@@ -580,7 +581,7 @@ void CmdSandboxMeshLoader::activated(int)
     filter << QObject::tr("All Files (*.*)");
 
     // Allow multi selection
-    QString fn = Gui::FileDialog::getOpenFileName(Gui::getMainWindow(),
+    QString fn = Gui::FileDialog::getOpenFileName(Gui::uiParentWidget(),
         QObject::tr("Import mesh"), QString(), filter.join(QLatin1String(";;")));
 
     Sandbox::MeshLoaderThread thread(fn);
@@ -638,7 +639,7 @@ void CmdSandboxMeshLoaderBoost::activated(int)
     filter << QObject::tr("All Files (*.*)");
 
     // Allow multi selection
-    QString fn = Gui::FileDialog::getOpenFileName(Gui::getMainWindow(),
+    QString fn = Gui::FileDialog::getOpenFileName(Gui::uiParentWidget(),
         QObject::tr("Import mesh"), QString(), filter.join(QLatin1String(";;")));
 
     boost::packaged_task< Base::Reference<Mesh::MeshObject> > pt
@@ -686,7 +687,7 @@ void CmdSandboxMeshLoaderFuture::activated(int)
     filter << QObject::tr("All Files (*.*)");
 
     // Allow multi selection
-    QStringList fn = Gui::FileDialog::getOpenFileNames(Gui::getMainWindow(),
+    QStringList fn = Gui::FileDialog::getOpenFileNames(Gui::uiParentWidget(),
         QObject::tr("Import mesh"), QString(), filter.join(QLatin1String(";;")));
 
     QFuture< Base::Reference<Mesh::MeshObject> > future = QtConcurrent::mapped
@@ -1116,7 +1117,7 @@ CmdTestGDIWidget::CmdTestGDIWidget()
 void CmdTestGDIWidget::activated(int)
 {
 #ifdef Q_OS_WIN32
-    GDIWidget* gdi = new GDIWidget(Gui::getMainWindow());
+    GDIWidget* gdi = new GDIWidget(Gui::uiParentWidget());
     gdi->show();
     gdi->resize(200,200);
     gdi->move(400,400);
@@ -1331,13 +1332,13 @@ MeshObjectRef makeParallelMengerSponge(int level, float x0, float y0, float z0)
 void CmdMengerSponge::activated(int)
 {
     bool ok;
-    int level = QInputDialog::getInt(Gui::getMainWindow(),
+    int level = QInputDialog::getInt(Gui::uiParentWidget(),
         QStringLiteral("Menger sponge"),
         QStringLiteral("Recursion depth:"),
         3, 1, 5, 1, &ok);
     if (!ok)
         return;
-    int ret = QMessageBox::question(Gui::getMainWindow(),
+    int ret = QMessageBox::question(Gui::uiParentWidget(),
         QStringLiteral("Parallel"),
         QStringLiteral("Run this in a thread pool?"),
         QMessageBox::Yes|QMessageBox::No);
@@ -1384,7 +1385,7 @@ CmdTestGraphicsView::CmdTestGraphicsView()
 
 void CmdTestGraphicsView::activated(int)
 {
-    Gui::GraphicsView3D* view3D = new Gui::GraphicsView3D(getActiveGuiDocument(), Gui::getMainWindow());
+    Gui::GraphicsView3D* view3D = new Gui::GraphicsView3D(getActiveGuiDocument(), Gui::uiParentWidget());
     view3D->setWindowTitle(QStringLiteral("Graphics scene"));
     view3D->setWindowIcon(QApplication::windowIcon());
     view3D->resize(400, 300);

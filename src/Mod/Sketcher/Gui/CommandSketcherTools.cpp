@@ -42,6 +42,7 @@
 #include <Gui/CommandT.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Notifications.h>
 #include <Gui/View3DInventor.h>
 #include <Gui/Selection/Selection.h>
@@ -84,7 +85,7 @@ std::vector<int> getListOfSelectedGeoIds(bool forceInternalSelection)
 
     // only one sketch with its subelements are allowed to be selected
     if (selection.size() != 1) {
-        QMessageBox::warning(Gui::getMainWindow(),
+        QMessageBox::warning(Gui::uiParentWidget(),
             QObject::tr("Wrong Selection"),
             QObject::tr("Select elements from a single sketch."));
         return {};
@@ -1440,7 +1441,7 @@ void SketcherCopy::activate(SketcherCopy::Op op)
 
     // Ask the user if they want to clone or to simple copy
     /*
-    int ret = QMessageBox::question(Gui::getMainWindow(), QObject::tr("Dimensional/Geometric
+    int ret = QMessageBox::question(Gui::uiParentWidget(), QObject::tr("Dimensional/Geometric
     Constraints"), QObject::tr("Do you want to clone the object, i.e. substitute dimensional
     constraints by geometric constraints?"), QMessageBox::Yes, QMessageBox::No,
     QMessageBox::Cancel);
@@ -1655,7 +1656,7 @@ void CmdSketcherCompCopy::activated(int iMsg)
 
 Gui::Action* CmdSketcherCompCopy::createAction()
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -2090,7 +2091,7 @@ void CmdSketcherDeleteAllGeometry::activated(int iMsg)
     Q_UNUSED(iMsg);
 
     int ret = QMessageBox::question(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Delete All Geometry"),
         QObject::tr("Delete all geometry and constraints?"),
         QMessageBox::Yes,
@@ -2154,7 +2155,7 @@ void CmdSketcherDeleteAllConstraints::activated(int iMsg)
     Q_UNUSED(iMsg);
 
     int ret = QMessageBox::question(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Delete All Constraints"),
         QObject::tr("Delete all the constraints in the sketch?"),
         QMessageBox::Yes,

@@ -50,6 +50,7 @@
 #include <Gui/Document.h>
 #include <Gui/FileDialog.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/MouseSelection.h>
 #include <Gui/Navigation/NavigationStyle.h>
 #include <Gui/Selection/Selection.h>
@@ -137,14 +138,14 @@ void CmdMeshUnion::activated(int)
 
         if (found) {
             QMessageBox::critical(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 qApp->translate("Mesh_Union", "OpenSCAD"),
                 qApp->translate("Mesh_Union", "Unknown error occurred while running OpenSCAD.")
             );
         }
         else {
             QMessageBox::warning(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 qApp->translate("Mesh_Union", "OpenSCAD"),
                 qApp->translate(
                     "Mesh_Union",
@@ -223,14 +224,14 @@ void CmdMeshDifference::activated(int)
 
         if (found) {
             QMessageBox::critical(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 qApp->translate("Mesh_Union", "OpenSCAD"),
                 qApp->translate("Mesh_Union", "Unknown error occurred while running OpenSCAD.")
             );
         }
         else {
             QMessageBox::warning(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 qApp->translate("Mesh_Union", "OpenSCAD"),
                 qApp->translate(
                     "Mesh_Union",
@@ -309,14 +310,14 @@ void CmdMeshIntersection::activated(int)
 
         if (found) {
             QMessageBox::critical(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 qApp->translate("Mesh_Union", "OpenSCAD"),
                 qApp->translate("Mesh_Union", "Unknown error occurred while running OpenSCAD.")
             );
         }
         else {
             QMessageBox::warning(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 qApp->translate("Mesh_Union", "OpenSCAD"),
                 qApp->translate(
                     "Mesh_Union",
@@ -367,7 +368,7 @@ void CmdMeshImport::activated(int)
 
     // Allow multi selection
     QStringList fn = Gui::FileDialog::getOpenFileNames(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Import Mesh"),
         QString(),
         filter.join(QLatin1String(";;"))
@@ -445,7 +446,7 @@ void CmdMeshExport::activated(int)
 
     QString format;
     QString fn = Gui::FileDialog::getSaveFileName(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Export Mesh"),
         dir,
         filter.join(QLatin1String(";;")),
@@ -494,7 +495,7 @@ void CmdMeshFromGeometry::activated(int)
 {
     bool ok {};
     double tol = QInputDialog::getDouble(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Meshing Tolerance"),
         QObject::tr("Enter tolerance for meshing geometry:"),
         0.1,
@@ -1333,7 +1334,7 @@ void CmdMeshEvaluateSolid::activated(int)
             msg = QObject::tr("The mesh '%1' is a solid.")
                       .arg(QString::fromLatin1(mesh->Label.getValue()));
         }
-        QMessageBox::information(Gui::getMainWindow(), QObject::tr("Solid Mesh"), msg);
+        QMessageBox::information(Gui::uiParentWidget(), QObject::tr("Solid Mesh"), msg);
     }
 }
 
@@ -1526,7 +1527,7 @@ void CmdMeshBoundingBox::activated(int)
                      .arg(box.MaxX)
                      .arg(box.MaxY)
                      .arg(box.MaxZ);
-        QMessageBox::information(Gui::getMainWindow(), QObject::tr("Boundings"), bound);
+        QMessageBox::information(Gui::uiParentWidget(), QObject::tr("Boundings"), bound);
         break;
     }
 }
@@ -1557,7 +1558,7 @@ void CmdMeshBuildRegularSolid::activated(int)
 {
     static QPointer<QDialog> dlg = nullptr;
     if (!dlg) {
-        dlg = new MeshGui::DlgRegularSolidImp(Gui::getMainWindow());
+        dlg = new MeshGui::DlgRegularSolidImp(Gui::uiParentWidget());
     }
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     dlg->show();
@@ -1592,7 +1593,7 @@ void CmdMeshFillupHoles::activated(int)
     );
     bool ok {};
     int FillupHolesOfLength = QInputDialog::getInt(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Fill Holes"),
         QObject::tr("Fill holes with maximum number of edges"),
         3,
@@ -1866,7 +1867,7 @@ void CmdMeshScale::activated(int)
 
     bool ok {};
     double factor = QInputDialog::getDouble(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Scaling"),
         QObject::tr("Enter scaling factor:"),
         1,

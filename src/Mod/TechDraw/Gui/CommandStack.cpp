@@ -32,6 +32,7 @@
 #include <Gui/Control.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/ViewProvider.h>
 #include <Mod/TechDraw/App/DrawPage.h>
@@ -70,7 +71,7 @@ void CmdTechDrawStackGroup::activated(int iMsg)
 {
     Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
             QObject::tr("Close the active task dialog and try again."));
         return;
     }
@@ -97,7 +98,7 @@ void CmdTechDrawStackGroup::activated(int iMsg)
 
 Gui::Action * CmdTechDrawStackGroup::createAction(void)
 {
-    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    Gui::ActionGroup* pcAction = new Gui::ActionGroup(this, Gui::uiParentWidget());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -186,7 +187,7 @@ void CmdTechDrawStackTop::activated(int iMsg)
 
     Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
             QObject::tr("Close the active task dialog and try again."));
         return;
     }
@@ -246,7 +247,7 @@ void CmdTechDrawStackBottom::activated(int iMsg)
 
     Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
             QObject::tr("Close the active task dialog and try again."));
         return;
     }
@@ -306,7 +307,7 @@ void CmdTechDrawStackUp::activated(int iMsg)
 
     Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task in progress"),
             QObject::tr("Close the active task dialog and try again."));
         return;
     }
@@ -366,7 +367,7 @@ void CmdTechDrawStackDown::activated(int iMsg)
 
     Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
     if (dlg) {
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task In Progress"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Task In Progress"),
             QObject::tr("Close active task dialog and try again."));
         return;
     }

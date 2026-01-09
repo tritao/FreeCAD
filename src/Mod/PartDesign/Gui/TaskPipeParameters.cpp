@@ -32,6 +32,7 @@
 #include <Gui/CommandT.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Tools.h>
 #include <Gui/ViewProvider.h>
@@ -483,7 +484,7 @@ bool TaskPipeParameters::accept()
     }
 
     if (extReference) {
-        QDialog dia(Gui::getMainWindow());
+        QDialog dia(Gui::uiParentWidget());
         Ui_DlgReference dlg;
         dlg.setupUi(&dia);
         dia.setModal(true);

@@ -54,7 +54,7 @@ CmdVisualInspection::CmdVisualInspection()
 
 void CmdVisualInspection::activated(int)
 {
-    InspectionGui::VisualInspection dlg(Gui::getMainWindow());
+    InspectionGui::VisualInspection dlg(Gui::uiParentWidget());
     dlg.exec();
 }
 

@@ -65,7 +65,7 @@ bool ViewProviderFemMeshShapeNetgen::setEdit(int ModNum)
         return true;
 #else
         QMessageBox::critical(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QCoreApplication::translate("FemGui::ViewProviderFemMeshShapeNetgen", "Meshing failure"),
             QCoreApplication::translate(
                 "FemGui::ViewProviderFemMeshShapeNetgen",

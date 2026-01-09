@@ -53,6 +53,7 @@
 #include <Gui/Control.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/ViewParams.h>
 #include <Gui/ViewProviderPlane.h>
 #include <Gui/Selection/SelectionFilter.h>
@@ -301,7 +302,7 @@ private:
                 // check the prerequisites for the selected objects
                 // the user has to decide which option we should take if external references are used
                 //  TODO share this with UnifiedDatumCommand() (2015-10-20, Fat-Zer)
-                QDialog dia(Gui::getMainWindow());
+                QDialog dia(Gui::uiParentWidget());
                 PartDesignGui::Ui_DlgReference dlg;
                 dlg.setupUi(&dia);
                 dia.setModal(true);
@@ -724,7 +725,7 @@ private:
         PartDesignGui::TaskDlgFeaturePick* pickDlg
             = qobject_cast<PartDesignGui::TaskDlgFeaturePick*>(dlg);
         if (dlg && !pickDlg) {
-            QMessageBox msgBox(Gui::getMainWindow());
+            QMessageBox msgBox(Gui::uiParentWidget());
             msgBox.setText(QObject::tr("A dialog is already open in the task panel"));
             msgBox.setInformativeText(QObject::tr("Close this dialog?"));
             msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
@@ -805,28 +806,28 @@ void SketchWorkflow::createSketch()
     }
     catch (const WrongSelectionException&) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Several sub-elements selected"),
             QObject::tr("Select a single face as support for a sketch!")
         );
     }
     catch (const WrongSupportException&) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("No support face selected"),
             QObject::tr("Select a face as support for a sketch!")
         );
     }
     catch (const SupportNotPlanarException&) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("No planar support"),
             QObject::tr("Need a planar face as support for a sketch!")
         );
     }
     catch (const MissingPlanesException&) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("No valid planes in this document"),
             QObject::tr("Create a plane first or select a face to sketch on")
         );
@@ -875,7 +876,7 @@ std::tuple<bool, PartDesign::Body*> SketchWorkflow::shouldCreateBody()
             shouldMakeBody = true;
         }
         else {
-            PartDesignGui::DlgActiveBody dia(Gui::getMainWindow(), appdocument);
+            PartDesignGui::DlgActiveBody dia(Gui::uiParentWidget(), appdocument);
             if (dia.exec() == QDialog::Accepted) {
                 pdBody = dia.getActiveBody();
             }

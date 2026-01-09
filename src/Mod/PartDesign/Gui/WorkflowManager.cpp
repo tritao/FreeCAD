@@ -30,6 +30,7 @@
 #include <Gui/Application.h>
 #include <Gui/Command.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Mod/PartDesign/App/Body.h>
 #include <Mod/PartDesign/App/Feature.h>
 #include "WorkflowManager.h"
@@ -147,7 +148,7 @@ Workflow WorkflowManager::determineWorkflow(App::Document* doc)
     // Guess the workflow again
     rv = guessWorkflow(doc);
     if (rv != Workflow::Modern) {
-        QMessageBox msgBox(Gui::getMainWindow());
+        QMessageBox msgBox(Gui::uiParentWidget());
 
         if (rv == Workflow::Legacy) {  // legacy messages
             msgBox.setText(

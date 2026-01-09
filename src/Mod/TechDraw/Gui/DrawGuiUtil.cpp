@@ -52,6 +52,7 @@
 #include <Gui/Command.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/MDIView.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/View3DInventor.h>
@@ -303,7 +304,7 @@ TechDraw::DrawPage* DrawGuiUtil::findPage(Gui::Command* cmd, bool findAny)
             foundPageObjects.insert(foundPageObjects.end(), docPages.begin(), docPages.end());
         }
         if (foundPageObjects.empty()) {
-            QMessageBox::warning(Gui::getMainWindow(),
+            QMessageBox::warning(Gui::uiParentWidget(),
                                  QObject::tr("No page found"),
                                  QObject::tr("No Drawing Pages available."));
             return nullptr;
@@ -317,7 +318,7 @@ TechDraw::DrawPage* DrawGuiUtil::findPage(Gui::Command* cmd, bool findAny)
                 std::string label = obj->Label.getValue();
                 labels.push_back(label);
             }
-            DlgPageChooser dlg(labels, names, Gui::getMainWindow());
+            DlgPageChooser dlg(labels, names, Gui::uiParentWidget());
             if (dlg.exec() == QDialog::Accepted) {
                 std::string selName = dlg.getSelection();
                 if (selName.empty()) {
@@ -363,7 +364,7 @@ TechDraw::DrawPage* DrawGuiUtil::findPage(Gui::Command* cmd, bool findAny)
                 std::string label = obj->Label.getValue();
                 labels.push_back(label);
             }
-            DlgPageChooser dlg(labels, names, Gui::getMainWindow());
+            DlgPageChooser dlg(labels, names, Gui::uiParentWidget());
             if (dlg.exec() == QDialog::Accepted) {
                 std::string selName = dlg.getSelection();
                 if (selName.empty()) {
@@ -388,7 +389,7 @@ TechDraw::DrawPage* DrawGuiUtil::findPage(Gui::Command* cmd, bool findAny)
             std::string label = obj->Label.getValue();
             labels.push_back(label);
         }
-        DlgPageChooser dlg(labels, names, Gui::getMainWindow());
+        DlgPageChooser dlg(labels, names, Gui::uiParentWidget());
         if (dlg.exec() == QDialog::Accepted) {
             std::string selName = dlg.getSelection();
             if (selName.empty()) {
@@ -409,7 +410,7 @@ TechDraw::DrawPage* DrawGuiUtil::findPage(Gui::Command* cmd, bool findAny)
 
 void DrawGuiUtil::showNoPageMessage()
 {
-    QMessageBox::warning(Gui::getMainWindow(),
+    QMessageBox::warning(Gui::uiParentWidget(),
                     QObject::tr("No page selected"),
                     QObject::tr("This function needs a page."));
 }

@@ -37,6 +37,7 @@
 #include <Gui/Command.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Mod/Part/App/Part2DObject.h>
 #include <Mod/Part/App/PartFeature.h>
 #include <Mod/Part/App/TopoShape.h>
@@ -327,7 +328,7 @@ bool getReferencedSelection(
     if (!originfeature && body) {
         PartDesign::Body* selBody = PartDesignGui::getBodyFor(selObj, false);
         if (!selBody || body != selBody) {
-            QDialog dia(Gui::getMainWindow());
+            QDialog dia(Gui::uiParentWidget());
             Ui_DlgReference dlg;
             dlg.setupUi(&dia);
             dia.setModal(true);

@@ -33,6 +33,7 @@
 #include <Gui/Command.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/View3DInventor.h>
 #include <Gui/ViewProvider.h>
 #include <Mod/TechDraw/App/DrawPage.h>
@@ -242,7 +243,7 @@ TechDraw::DrawViewImage* TaskActiveView::createActiveView()
     }
     if (!view3d) {
         // This check is simplified as the more complex fallback is in updatePreview
-        QMessageBox::warning(Gui::getMainWindow(), QObject::tr("No 3D Viewer"),
+        QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("No 3D Viewer"),
                              QObject::tr("Can not find a 3D viewer"));
         return nullptr;
     }
