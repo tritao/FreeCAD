@@ -82,6 +82,7 @@
 #include "InputHintPy.h"
 #include "LinkViewPy.h"
 #include "MainWindow.h"
+#include "GuiShell.h"
 #include "DockWidgetRegistry.h"
 #include "StandardDockWidgetRegistration.h"
 #include "Macro.h"
@@ -2582,6 +2583,7 @@ void Application::runApplication()
     Gui::registerStandardDockWidgets(Gui::DockWidgetRegistry::instance());
 
     MainWindow mw;
+    Gui::setActiveShell(Gui::createClassicShell(&mw));
     mw.setProperty("QuitOnClosed", true);
 
     // https://forum.freecad.org/viewtopic.php?f=3&t=15540
