@@ -1831,9 +1831,75 @@ void Application::tabChanged(Gui::MDIView* view)
     }
 }
 
+void Application::tile()
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->tile();
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->tile();
+    }
+}
+
+void Application::cascade()
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->cascade();
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->cascade();
+    }
+}
+
+void Application::closeActiveWindow()
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->closeActiveWindow();
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->closeActiveWindow();
+    }
+}
+
+bool Application::closeAllDocuments(bool close)
+{
+    if (auto* shell = Gui::activeShell()) {
+        return shell->closeAllDocuments(close);
+    }
+    if (auto* mw = getMainWindow()) {
+        return mw->closeAllDocuments(close);
+    }
+    return true;
+}
+
+void Application::activateNextWindow()
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->activateNextWindow();
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->activateNextWindow();
+    }
+}
+
+void Application::activatePreviousWindow()
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->activatePreviousWindow();
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->activatePreviousWindow();
+    }
+}
+
 void Application::tryClose(QCloseEvent* e)
 {
-    e->setAccepted(getMainWindow()->closeAllDocuments(false));
+    e->setAccepted(closeAllDocuments(false));
     if (!e->isAccepted()) {
         return;
     }

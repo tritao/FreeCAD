@@ -60,7 +60,7 @@ StdCmdTileWindows::StdCmdTileWindows()
 void StdCmdTileWindows::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    getMainWindow()->tile();
+    Application::Instance->tile();
 }
 
 bool StdCmdTileWindows::isActive()
@@ -88,7 +88,7 @@ StdCmdCascadeWindows::StdCmdCascadeWindows()
 void StdCmdCascadeWindows::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    getMainWindow()->cascade();
+    Application::Instance->cascade();
 }
 
 bool StdCmdCascadeWindows::isActive()
@@ -120,7 +120,7 @@ StdCmdCloseActiveWindow::StdCmdCloseActiveWindow()
 void StdCmdCloseActiveWindow::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    getMainWindow()->closeActiveWindow();
+    Application::Instance->closeActiveWindow();
 }
 
 bool StdCmdCloseActiveWindow::isActive()
@@ -148,7 +148,7 @@ StdCmdCloseAllWindows::StdCmdCloseAllWindows()
 void StdCmdCloseAllWindows::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    getMainWindow()->closeAllDocuments();
+    Application::Instance->closeAllDocuments();
 }
 
 bool StdCmdCloseAllWindows::isActive()
@@ -177,7 +177,7 @@ StdCmdActivateNextWindow::StdCmdActivateNextWindow()
 void StdCmdActivateNextWindow::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    getMainWindow()->activateNextWindow();
+    Application::Instance->activateNextWindow();
 }
 
 bool StdCmdActivateNextWindow::isActive()
@@ -212,7 +212,7 @@ StdCmdActivatePrevWindow::StdCmdActivatePrevWindow()
 void StdCmdActivatePrevWindow::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    getMainWindow()->activatePreviousWindow();
+    Application::Instance->activatePreviousWindow();
 }
 
 bool StdCmdActivatePrevWindow::isActive()

@@ -233,6 +233,12 @@ public:
     Gui::MDIView* activeWindow() const;
     void setActiveWindow(Gui::MDIView* view);
     void tabChanged(Gui::MDIView* view);
+    void tile();
+    void cascade();
+    void closeActiveWindow();
+    bool closeAllDocuments(bool close = true);
+    void activateNextWindow();
+    void activatePreviousWindow();
 
     /** @name workbench handling */
     //@{

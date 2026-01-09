@@ -191,6 +191,49 @@ public:
         }
     }
 
+    void tile() override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->tile();
+        }
+    }
+
+    void cascade() override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->cascade();
+        }
+    }
+
+    void closeActiveWindow() override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->closeActiveWindow();
+        }
+    }
+
+    bool closeAllDocuments(bool close) override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            return mw->closeAllDocuments(close);
+        }
+        return true;
+    }
+
+    void activateNextWindow() override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->activateNextWindow();
+        }
+    }
+
+    void activatePreviousWindow() override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->activatePreviousWindow();
+        }
+    }
+
 private:
     QPointer<QMainWindow> mainWindow_;
     GuiShellServices services_;

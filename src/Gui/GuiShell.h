@@ -62,6 +62,13 @@ public:
     virtual MDIView* activeWindow() const = 0;
     virtual void setActiveWindow(MDIView* view) = 0;
     virtual void tabChanged(MDIView* view) = 0;
+
+    virtual void tile() = 0;
+    virtual void cascade() = 0;
+    virtual void closeActiveWindow() = 0;
+    virtual bool closeAllDocuments(bool close = true) = 0;
+    virtual void activateNextWindow() = 0;
+    virtual void activatePreviousWindow() = 0;
 };
 
 GuiExport IGuiShell* activeShell();
