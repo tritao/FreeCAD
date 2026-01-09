@@ -1716,6 +1716,43 @@ void Application::showMessage(const QString& message, int timeout)
     }
 }
 
+void Application::setStatusPaneText(int pane, const QString& text)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->setStatusPaneText(pane, text);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->setPaneText(pane, text);
+    }
+}
+
+void Application::addStatusPermanentWidget(QWidget* widget, int stretch)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->addStatusPermanentWidget(widget, stretch);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        if (auto* sb = mw->statusBar()) {
+            sb->addPermanentWidget(widget, stretch);
+        }
+    }
+}
+
+void Application::removeStatusWidget(QWidget* widget)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->removeStatusWidget(widget);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        if (auto* sb = mw->statusBar()) {
+            sb->removeWidget(widget);
+        }
+    }
+}
+
 void Application::tryClose(QCloseEvent* e)
 {
     e->setAccepted(getMainWindow()->closeAllDocuments(false));

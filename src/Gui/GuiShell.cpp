@@ -25,6 +25,7 @@
 #include "GuiShellServices.h"
 #include "MainWindow.h"
 
+#include <QLabel>
 #include <QStatusBar>
 #include <QMainWindow>
 #include <QPointer>
@@ -73,6 +74,66 @@ public:
         if (auto* w = mainWindow_.data()) {
             if (auto* sb = w->statusBar()) {
                 sb->showMessage(message, timeout);
+            }
+        }
+    }
+
+    void setStatusPaneText(int pane, const QString& text) override
+    {
+        if (pane < 0) {
+            return;
+        }
+
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->setPaneText(pane, text);
+            return;
+        }
+
+        auto* w = mainWindow_.data();
+        if (!w) {
+            return;
+        }
+        auto* sb = w->statusBar();
+        if (!sb) {
+            return;
+        }
+
+        for (int i = 0; i <= pane; ++i) {
+            const auto objectName = QStringLiteral("__GuiShell_StatusPane_%1").arg(i);
+            if (auto* existing = sb->findChild<QLabel*>(objectName)) {
+                if (i == pane) {
+                    existing->setText(text);
+                }
+                continue;
+            }
+
+            auto* label = new QLabel(sb);
+            label->setObjectName(objectName);
+            label->setText(i == pane ? text : QString());
+            sb->addWidget(label, 0);
+        }
+    }
+
+    void addStatusPermanentWidget(QWidget* widget, int stretch) override
+    {
+        if (!widget) {
+            return;
+        }
+        if (auto* w = mainWindow_.data()) {
+            if (auto* sb = w->statusBar()) {
+                sb->addPermanentWidget(widget, stretch);
+            }
+        }
+    }
+
+    void removeStatusWidget(QWidget* widget) override
+    {
+        if (!widget) {
+            return;
+        }
+        if (auto* w = mainWindow_.data()) {
+            if (auto* sb = w->statusBar()) {
+                sb->removeWidget(widget);
             }
         }
     }

@@ -751,7 +751,7 @@ View3DInventorViewer::~View3DInventorViewer()
 
     // Note: When closing the application the main window doesn't exist any more.
     if (getMainWindow()) {
-        getMainWindow()->setPaneText(2, QLatin1String(""));
+        Application::Instance->setStatusPaneText(2, QLatin1String(""));
     }
 
     detachSelection();
@@ -2743,7 +2743,7 @@ void View3DInventorViewer::printDimension() const
         dim = fmt::format("{} x {}", wStr, hStr);
     }
 
-    getMainWindow()->setPaneText(2, QString::fromStdString(dim));
+    Application::Instance->setStatusPaneText(2, QString::fromStdString(dim));
 }
 
 void View3DInventorViewer::selectAll()

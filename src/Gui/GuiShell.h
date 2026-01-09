@@ -30,6 +30,7 @@
 
 class QMainWindow;
 class QString;
+class QWidget;
 
 namespace Gui
 {
@@ -46,6 +47,9 @@ public:
     virtual GuiShellServices& services() = 0;
     virtual void updateActions(bool delay = false) = 0;
     virtual void showMessage(const QString& message, int timeout = 0) = 0;
+    virtual void setStatusPaneText(int pane, const QString& text) = 0;
+    virtual void addStatusPermanentWidget(QWidget* widget, int stretch = 0) = 0;
+    virtual void removeStatusWidget(QWidget* widget) = 0;
 };
 
 GuiExport IGuiShell* activeShell();

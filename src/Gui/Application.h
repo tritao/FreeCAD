@@ -33,6 +33,7 @@
 #include "StyleParameters/ParameterManager.h"
 
 class QCloseEvent;
+class QWidget;
 class SoNode;
 class NavlibInterface;
 
@@ -220,6 +221,9 @@ public:
     void checkForPreviousCrashes();
 
     void showMessage(const QString& message, int timeout = 0);
+    void setStatusPaneText(int pane, const QString& text);
+    void addStatusPermanentWidget(QWidget* widget, int stretch = 0);
+    void removeStatusWidget(QWidget* widget);
 
     /** @name workbench handling */
     //@{

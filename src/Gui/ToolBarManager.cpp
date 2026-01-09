@@ -546,11 +546,21 @@ void ToolBarManager::setupStatusBar()
         statusBarAreaWidget
             = new ToolBarAreaWidget(sb, ToolBarArea::StatusBarToolBarArea, hStatusBar, connParam);
         statusBarAreaWidget->setObjectName(QStringLiteral("StatusBarArea"));
-        // MainWindow has permanent widgets (progress/size/etc.) and expects the toolbar area to be
-        // inserted after them. Other QMainWindow hosts may have an empty statusbar, and using index
-        // 2 produces a noisy Qt warning.
-        if (sb->findChild<QWidget*>(QStringLiteral("rightSideLabel"))) {
-            sb->insertPermanentWidget(2, statusBarAreaWidget);
+        // Classic MainWindow expects statusbar toolbars before its "rightSideLabel" spacer (and
+        // optional notification area). Other QMainWindow hosts can just append.
+        if (auto* rightSideLabel = sb->findChild<QWidget*>(QStringLiteral("rightSideLabel"))) {
+            auto* notificationArea = sb->findChild<QWidget*>(QStringLiteral("notificationArea"));
+
+            sb->removeWidget(rightSideLabel);
+            if (notificationArea) {
+                sb->removeWidget(notificationArea);
+            }
+
+            sb->addPermanentWidget(statusBarAreaWidget);
+            sb->addPermanentWidget(rightSideLabel);
+            if (notificationArea) {
+                sb->addPermanentWidget(notificationArea);
+            }
         }
         else {
             sb->addPermanentWidget(statusBarAreaWidget);

@@ -342,18 +342,11 @@ void SequencerBar::resetData()
     if (thr != currentThread) {
         QMetaObject::invokeMethod(d->bar, "resetEx", Qt::QueuedConnection);
         QMetaObject::invokeMethod(d->bar, "aboutToHide", Qt::QueuedConnection);
+        QMetaObject::invokeMethod(qApp, []() { Application::Instance->showMessage(QString()); }, Qt::QueuedConnection);
         QMetaObject::invokeMethod(
-            getMainWindow(),
-            "showMessage",
-            Qt::/*Blocking*/ QueuedConnection,
-            Q_ARG(QString, QString())
-        );
-        QMetaObject::invokeMethod(
-            getMainWindow(),
-            "setPaneText",
-            Qt::/*Blocking*/ QueuedConnection,
-            Q_ARG(int, 1),
-            Q_ARG(QString, QString())
+            qApp,
+            []() { Application::Instance->setStatusPaneText(1, QString()); },
+            Qt::QueuedConnection
         );
         d->bar->leaveControlEvents(d->guiThread);
     }
@@ -366,7 +359,7 @@ void SequencerBar::resetData()
         delete d->waitCursor;
         d->waitCursor = nullptr;
         d->bar->leaveControlEvents(d->guiThread);
-        getMainWindow()->setPaneText(1, QString());
+        Application::Instance->setStatusPaneText(1, QString());
         Application::Instance->showMessage(QString());
     }
 
@@ -389,12 +382,8 @@ void SequencerBar::setText(const char* pszTxt)
     // print message to the statusbar
     d->text = pszTxt ? QString::fromUtf8(pszTxt) : QLatin1String("");
     if (thr != currentThread) {
-        QMetaObject::invokeMethod(
-            getMainWindow(),
-            "showMessage",
-            Qt::/*Blocking*/ QueuedConnection,
-            Q_ARG(QString, d->text)
-        );
+        const QString text = d->text;
+        QMetaObject::invokeMethod(qApp, [text]() { Application::Instance->showMessage(text); }, Qt::QueuedConnection);
     }
     else {
         Application::Instance->showMessage(d->text);
