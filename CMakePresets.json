@@ -59,6 +59,57 @@
         }
       },
       {
+        "name": "gui-minimal",
+        "displayName": "GUI Minimal",
+        "description": "GUI build with a reduced set of modules (no Sketcher/Mesh/MeshPart/TechDraw/BIM/PartDesign/Draft/Import/Spreadsheet)",
+        "binaryDir": "${sourceDir}/build/gui-minimal",
+        "inherits": [
+          "debug"
+        ],
+        "cacheVariables": {
+          "BUILD_GUI": {
+            "type": "BOOL",
+            "value": "ON"
+          },
+          "BUILD_BIM": {
+            "type": "BOOL",
+            "value": "OFF"
+          },
+          "BUILD_DRAFT": {
+            "type": "BOOL",
+            "value": "OFF"
+          },
+          "BUILD_IMPORT": {
+            "type": "BOOL",
+            "value": "OFF"
+          },
+          "BUILD_MESH": {
+            "type": "BOOL",
+            "value": "OFF"
+          },
+          "BUILD_MESH_PART": {
+            "type": "BOOL",
+            "value": "OFF"
+          },
+          "BUILD_PART_DESIGN": {
+            "type": "BOOL",
+            "value": "OFF"
+          },
+          "BUILD_SKETCHER": {
+            "type": "BOOL",
+            "value": "OFF"
+          },
+          "BUILD_SPREADSHEET": {
+            "type": "BOOL",
+            "value": "OFF"
+          },
+          "BUILD_TECHDRAW": {
+            "type": "BOOL",
+            "value": "OFF"
+          }
+        }
+      },
+      {
         "name": "conda",
         "hidden": true,
         "generator": "Ninja",
@@ -442,5 +493,43 @@
                 "LDFLAGS": "-Wl,--as-needed -Wl,--no-undefined"
             }
         }
+    ],
+    "buildPresets": [
+      {
+        "name": "debug-gui",
+        "displayName": "Debug: FreeCADGui",
+        "description": "Build only the FreeCAD GUI library",
+        "configurePreset": "debug",
+        "targets": [
+          "FreeCADGui"
+        ]
+      },
+      {
+        "name": "debug-app",
+        "displayName": "Debug: FreeCAD",
+        "description": "Build the FreeCAD GUI application",
+        "configurePreset": "debug",
+        "targets": [
+          "FreeCAD"
+        ]
+      },
+      {
+        "name": "release-gui",
+        "displayName": "Release: FreeCADGui",
+        "description": "Build only the FreeCAD GUI library",
+        "configurePreset": "release",
+        "targets": [
+          "FreeCADGui"
+        ]
+      },
+      {
+        "name": "release-app",
+        "displayName": "Release: FreeCAD",
+        "description": "Build the FreeCAD GUI application",
+        "configurePreset": "release",
+        "targets": [
+          "FreeCAD"
+        ]
+      }
     ]
 }
