@@ -29,7 +29,7 @@
 #include <Base/Console.h>
 #include <App/Application.h>
 #include <App/DocumentObject.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 
 namespace Gui
 {
@@ -65,7 +65,7 @@ class ViewProviderDocumentObject;
  *
  * Example 1:
  *
- * QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
+ * QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("Wrong selection"),
  *                      QObject::tr("Cannot add a constraint between two external geometries."));
  *
  * Can be rewritten as:
@@ -232,21 +232,21 @@ inline void Gui::Notify(TNotifier&& notifier, TCaption&& caption, TMessage&& mes
         if constexpr (content == Base::ContentType::Untranslated) {
             if constexpr (type == Base::LogStyle::Warning) {
                 QMessageBox::warning(
-                    Gui::getMainWindow(),
+                    Gui::uiParentWidget(),
                     QCoreApplication::translate("Notifications", caption),
                     QCoreApplication::translate("Notifications", message)
                 );
             }
             else if constexpr (type == Base::LogStyle::Error) {
                 QMessageBox::critical(
-                    Gui::getMainWindow(),
+                    Gui::uiParentWidget(),
                     QCoreApplication::translate("Notifications", caption),
                     QCoreApplication::translate("Notifications", message)
                 );
             }
             else {
                 QMessageBox::information(
-                    Gui::getMainWindow(),
+                    Gui::uiParentWidget(),
                     QCoreApplication::translate("Notifications", caption),
                     QCoreApplication::translate("Notifications", message)
                 );
@@ -254,13 +254,13 @@ inline void Gui::Notify(TNotifier&& notifier, TCaption&& caption, TMessage&& mes
         }
         else {
             if constexpr (type == Base::LogStyle::Warning) {
-                QMessageBox::warning(Gui::getMainWindow(), caption, message);
+                QMessageBox::warning(Gui::uiParentWidget(), caption, message);
             }
             else if constexpr (type == Base::LogStyle::Error) {
-                QMessageBox::critical(Gui::getMainWindow(), caption, message);
+                QMessageBox::critical(Gui::uiParentWidget(), caption, message);
             }
             else {
-                QMessageBox::information(Gui::getMainWindow(), caption, message);
+                QMessageBox::information(Gui::uiParentWidget(), caption, message);
             }
         }
     }

@@ -459,7 +459,7 @@ bool Workbench::activate()
         statePrefix = shell->chromeStatePrefix();
     }
     else {
-        hostWindow = getMainWindow();
+        hostWindow = Gui::activeMainWindow();
         statePrefix = "BaseApp/MainWindow";
     }
 
@@ -513,7 +513,7 @@ void Workbench::retranslate() const
         statePrefix = shell->chromeStatePrefix();
     }
     else {
-        hostWindow = getMainWindow();
+        hostWindow = Gui::activeMainWindow();
         statePrefix = "BaseApp/MainWindow";
     }
 
@@ -996,16 +996,28 @@ BlankWorkbench::~BlankWorkbench() = default;
 
 void BlankWorkbench::activated()
 {
-    QList<QDockWidget*> dw = getMainWindow()->findChildren<QDockWidget*>();
+    auto* hostWindow = Gui::activeMainWindow();
+    if (!hostWindow) {
+        return;
+    }
+
+    QList<QDockWidget*> dw = hostWindow->findChildren<QDockWidget*>();
     for (auto& it : dw) {
         it->toggleViewAction()->setVisible(false);
     }
-    getMainWindow()->statusBar()->hide();
+
+    if (auto* sb = hostWindow->statusBar()) {
+        sb->hide();
+    }
 }
 
 void BlankWorkbench::deactivated()
 {
-    getMainWindow()->statusBar()->show();
+    if (auto* hostWindow = Gui::activeMainWindow()) {
+        if (auto* sb = hostWindow->statusBar()) {
+            sb->show();
+        }
+    }
 }
 
 void BlankWorkbench::setupContextMenu(const char* recipient, MenuItem* item) const

@@ -32,7 +32,7 @@
 #include <Base/Exception.h>
 
 #include "OnlineDocumentation.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 
 
 using namespace Gui;
@@ -355,7 +355,7 @@ void StdCmdPythonHelp::activated(int iMsg)
     }
     else {
         QMessageBox::critical(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("No Server"),
             QObject::tr("Unable to start the server to port %1: %2.").arg(port).arg(server->errorString())
         );
@@ -379,7 +379,7 @@ bool Gui::OpenURLInBrowser(const char* URL)
     catch (Py::Exception& e) {
         e.clear();
         QMessageBox::critical(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("No Browser"),
             QObject::tr("Unable to open your system browser.")
         );

@@ -211,11 +211,13 @@ public:
             int userSchema = action->data().toInt();
             setUserSchema(userSchema);
             // Force PropertyEditor refresh until we find a better way.  Q_EMIT something?
-            const auto views = getMainWindow()->findChildren<PropertyView*>();
-            for (auto view : views) {
-                bool show = view->showAll();
-                view->setShowAll(!show);
-                view->setShowAll(show);
+            if (auto* w = window()) {
+                const auto views = w->findChildren<PropertyView*>();
+                for (auto view : views) {
+                    bool show = view->showAll();
+                    view->setShowAll(!show);
+                    view->setShowAll(show);
+                }
             }
         });
         setMenu(menu);
@@ -323,6 +325,7 @@ struct MainWindowP
     fastsignals::advanced_scoped_connection connParam;
     ParameterGrp::handle hGrp;
     bool _restoring = false;
+    QPointer<MainWindow> hostWindow;
     QTime _showNormal;
     void restoreWindowState(const QByteArray&);
 };
@@ -351,6 +354,7 @@ MainWindow::MainWindow(QWidget* parent, Qt::WindowFlags f)
 
     // global access
     instance = this;
+    d->hostWindow = this;
 
     d->connParam = App::GetApplication().GetUserParameter().signalParamChanged.connect(
         [this](ParameterGrp* Param, ParameterGrp::ParamType, const char* Name, const char*) {
@@ -358,7 +362,7 @@ MainWindow::MainWindow(QWidget* parent, Qt::WindowFlags f)
                 return;
             }
             if (boost::equals(Name, "StatusBar")) {
-                if (auto sb = getMainWindow()->statusBar()) {
+                if (auto sb = statusBar()) {
                     sb->setVisible(d->hGrp->GetBool("StatusBar", sb->isVisible()));
                 }
             }
@@ -705,12 +709,12 @@ bool MainWindow::updateTaskView(bool show)
         );
         bool enabled = group->GetBool("Enabled", false);
         group->SetBool("Enabled", enabled);  // ensure entry exists.
-        _updateDockWidget("Std_TaskWatcher", enabled, show, Qt::RightDockWidgetArea, [](QWidget* widget) {
+        _updateDockWidget("Std_TaskWatcher", enabled, show, Qt::RightDockWidgetArea, [this](QWidget* widget) {
             if (widget) {
                 return widget;
             }
 
-            widget = new TaskView::TaskView(getMainWindow());
+            widget = new TaskView::TaskView(this);
             widget->setObjectName(QStringLiteral("Task List"));
             widget->setWindowTitle(QDockWidget::tr("Task List"));
             return widget;
@@ -958,7 +962,7 @@ bool MainWindow::closeAllDocuments(bool close)
 
     if (failedSaves > 0) {
         int ret = QMessageBox::question(
-            getMainWindow(),
+            this,
             QObject::tr("%1 Document(s) not saved").arg(QString::number(failedSaves)),
             QObject::tr("Some documents could not be saved. Cancel closing?"),
             QMessageBox::Discard | QMessageBox::Cancel,
@@ -1742,7 +1746,7 @@ void MainWindow::switchToTopLevelMode()
         it->setParent(nullptr, Qt::Window);
         it->show();
     }
-    QList<QWidget*> mdi = getMainWindow()->windows();
+    QList<QWidget*> mdi = this->windows();
     for (auto& it : mdi) {
         it->setParent(nullptr, Qt::Window);
         it->show();
@@ -1868,11 +1872,15 @@ void MainWindowP::restoreWindowState(const QByteArray& windowState)
     // tmp. disable the report window to suppress some bothering warnings
     if (Base::Console().isMsgTypeEnabled("ReportOutput", Base::ConsoleSingleton::MsgType_Wrn)) {
         Base::Console().setEnabledMsgType("ReportOutput", Base::ConsoleSingleton::MsgType_Wrn, false);
-        getMainWindow()->restoreState(windowState);
+        if (hostWindow) {
+            hostWindow->restoreState(windowState);
+        }
         Base::Console().setEnabledMsgType("ReportOutput", Base::ConsoleSingleton::MsgType_Wrn, true);
     }
     else {
-        getMainWindow()->restoreState(windowState);
+        if (hostWindow) {
+            hostWindow->restoreState(windowState);
+        }
     }
 
     Base::ConnectionBlocker block(connParam);
@@ -1996,7 +2004,8 @@ QMimeData* MainWindow::createMimeDataFromSelection() const
 
     auto all = App::Document::getDependencyList(sel);
     if (all.size() > sel.size()) {
-        DlgObjectSelection dlg(sel, getMainWindow());
+        auto* parent = const_cast<MainWindow*>(this);
+        DlgObjectSelection dlg(sel, parent);
         if (dlg.exec() != QDialog::Accepted) {
             return nullptr;
         }
@@ -2010,7 +2019,7 @@ QMimeData* MainWindow::createMimeDataFromSelection() const
     bool hasXLink = App::PropertyXLink::hasXLink(sel, &unsaved);
     if (!unsaved.empty()) {
         QMessageBox::critical(
-            getMainWindow(),
+            const_cast<MainWindow*>(this),
             tr("Unsaved document"),
             tr("The exported object contains external link. Save the document"
                "at least once before exporting.")
@@ -2162,7 +2171,7 @@ void MainWindow::insertFromMimeData(const QMimeData* mimeData)
 
     if (hasXLink && !doc->isSaved()) {
         int ret = QMessageBox::question(
-            getMainWindow(),
+            this,
             tr("Unsaved document"),
             tr("To link to external objects, the document must be saved at least once.\n"
                "Save the document now?"),
@@ -2586,7 +2595,12 @@ void StatusBarObserver::sendLog(
 
     // Send the event to the main window to allow thread-safety. Qt will delete it when done.
     auto ev = new CustomMessageEvent(messageType, QString::fromUtf8(msg.c_str()));
-    QApplication::postEvent(getMainWindow(), ev);
+    if (auto* mw = MainWindow::getInstance()) {
+        QApplication::postEvent(mw, ev);
+    }
+    else {
+        delete ev;
+    }
 }
 
 // -------------------------------------------------------------

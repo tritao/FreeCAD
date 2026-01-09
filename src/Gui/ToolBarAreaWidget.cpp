@@ -21,10 +21,10 @@
 
 
 #include <QHBoxLayout>
+#include <QMainWindow>
 #include <QTimer>
 
 
-#include "MainWindow.h"
 #include "ToolBarAreaWidget.h"
 #include "ToolBarManager.h"
 #include <Base/Tools.h>
@@ -133,9 +133,13 @@ void ToolBarAreaWidget::saveState()
 
 void ToolBarAreaWidget::restoreState(const std::map<int, QToolBar*>& toolbars)
 {
+    auto* mainWindow = qobject_cast<QMainWindow*>(window());
+
     for (const auto& [index, toolbar] : toolbars) {
         bool visible = toolbar->isVisible();
-        getMainWindow()->removeToolBar(toolbar);
+        if (mainWindow) {
+            mainWindow->removeToolBar(toolbar);
+        }
         toolbar->setOrientation(Qt::Horizontal);
         insertWidget(index, toolbar);
         toolbar->setVisible(visible);

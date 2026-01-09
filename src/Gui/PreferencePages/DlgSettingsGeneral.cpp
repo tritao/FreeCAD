@@ -45,7 +45,7 @@
 #include <Gui/Dialogs/DlgPreferencesImp.h>
 #include <Gui/Dialogs/DlgPreferencePackManagementImp.h>
 #include <Gui/Dialogs/DlgRevertToBackupConfigImp.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/OverlayManager.h>
 #include <Gui/ParamHandler.h>
 #include <Gui/PreferencePackManager.h>
@@ -163,10 +163,12 @@ DlgSettingsGeneral::~DlgSettingsGeneral() = default;
  */
 void DlgSettingsGeneral::setRecentFileSize()
 {
-    auto recent = getMainWindow()->findChild<RecentFilesAction*>(QLatin1String("recentFiles"));
-    if (recent) {
-        ParameterGrp::handle hGrp = WindowParameter::getDefaultParameter()->GetGroup("RecentFiles");
-        recent->resizeList(hGrp->GetInt("RecentFiles", 4));
+    if (auto* mw = Gui::activeMainWindow()) {
+        auto recent = mw->findChild<RecentFilesAction*>(QLatin1String("recentFiles"));
+        if (recent) {
+            ParameterGrp::handle hGrp = WindowParameter::getDefaultParameter()->GetGroup("RecentFiles");
+            recent->resizeList(hGrp->GetInt("RecentFiles", 4));
+        }
     }
 }
 
@@ -262,7 +264,9 @@ void DlgSettingsGeneral::saveSettings()
     QVariant size = ui->toolbarIconSize->itemData(ui->toolbarIconSize->currentIndex());
     int pixel = size.toInt();
     hGrp->SetInt("ToolbarIconSize", pixel);
-    getMainWindow()->setIconSize(QSize(pixel, pixel));
+    if (auto* mw = Gui::activeMainWindow()) {
+        mw->setIconSize(QSize(pixel, pixel));
+    }
 
     int blinkTime {hGrp->GetBool("EnableCursorBlinking", true) ? -1 : 0};
     qApp->setCursorFlashTime(blinkTime);
@@ -492,7 +496,10 @@ void DlgSettingsGeneral::loadThemes()
 int DlgSettingsGeneral::getCurrentIconSize() const
 {
     ParameterGrp::handle hGrp = WindowParameter::getDefaultParameter()->GetGroup("General");
-    int current = getMainWindow()->iconSize().width();
+    int current = 0;
+    if (auto* mw = Gui::activeMainWindow()) {
+        current = mw->iconSize().width();
+    }
     return hGrp->GetInt("ToolbarIconSize", current);
 }
 

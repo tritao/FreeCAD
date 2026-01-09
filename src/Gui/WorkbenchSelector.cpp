@@ -36,7 +36,7 @@
 #include "BitmapFactory.h"
 #include "Command.h"
 #include "Dialogs/DlgPreferencesImp.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "WorkbenchSelector.h"
 #include "ToolBarAreaWidget.h"
 
@@ -427,7 +427,7 @@ void WorkbenchTabWidget::buildPrefMenu()
 
     QAction* preferencesAction = menu->addAction(tr("Preferences"));
     connect(preferencesAction, &QAction::triggered, this, []() {
-        Gui::Dialog::DlgPreferencesImp cDlg(getMainWindow());
+        Gui::Dialog::DlgPreferencesImp cDlg(Gui::uiParentWidget());
         cDlg.activateGroupPage(QStringLiteral("Workbenches"), 0);
         cDlg.exec();
     });

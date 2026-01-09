@@ -210,7 +210,7 @@ void FileHandler::openPython()
 {
     auto editor = new PythonEditor();
     editor->setWindowIcon(Gui::BitmapFactory().iconFromTheme("applications-python"));
-    auto edit = new PythonEditorView(editor, Gui::activeMainWindow());
+    auto edit = new PythonEditorView(editor, Gui::uiParentWidget());
     edit->open(filename);
     edit->resize(400, 300);
     Application::Instance->addWindow(edit);

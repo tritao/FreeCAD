@@ -1470,7 +1470,7 @@ static bool checkCanonicalPath(const std::map<App::Document*, bool>& docs)
         }
     }
     int ret = QMessageBox::warning(
-        Gui::activeMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Identical physical path"),
         msg,
         QMessageBox::Yes,
@@ -1482,7 +1482,7 @@ static bool checkCanonicalPath(const std::map<App::Document*, bool>& docs)
 bool Document::askIfSavingFailed(const QString& error)
 {
     int ret = QMessageBox::question(
-        Gui::activeMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Could not save document"),
         QObject::tr(
             "There was an issue trying to save the file. "
@@ -1543,7 +1543,7 @@ bool Document::save()
 
             if (docs.size() > 1) {
                 int ret = QMessageBox::question(
-                    Gui::activeMainWindow(),
+                    Gui::uiParentWidget(),
                     QObject::tr("Save dependent files"),
                     QObject::tr(
                         "The file contains external dependencies. "
@@ -1590,7 +1590,7 @@ bool Document::save()
         }
         catch (const Base::Exception& e) {
             QMessageBox::critical(
-                Gui::activeMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("Saving document failed"),
                 QString::fromLatin1(e.what())
             );
@@ -1614,7 +1614,7 @@ bool Document::saveAs()
         name = QString::fromUtf8(getDocument()->Label.getValue());
     }
     QString fn = FileDialog::getSaveFileName(
-        Gui::activeMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Save %1 Document").arg(exe),
         name,
         QStringLiteral("%1 %2 (*.FCStd)").arg(exe, QObject::tr("Document"))
@@ -1648,7 +1648,7 @@ bool Document::saveAs()
         }
         catch (const Base::Exception& e) {
             QMessageBox::critical(
-                Gui::activeMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("Saving document failed"),
                 QString::fromLatin1(e.what())
             );
@@ -1670,7 +1670,7 @@ void Document::saveAll()
     catch (Base::Exception& e) {
         e.reportException();
         int ret = QMessageBox::critical(
-            Gui::activeMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Failed to save document"),
             QObject::tr("Documents contains cyclic dependencies. Do you still want to save them?"),
             QMessageBox::Yes,
@@ -1720,7 +1720,7 @@ void Document::saveAll()
         }
         catch (const Base::Exception& e) {
             QMessageBox::critical(
-                Gui::activeMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("Failed to save document")
                     + QStringLiteral(": %1").arg(QString::fromUtf8(doc->getName())),
                 QString::fromLatin1(e.what())
@@ -1737,7 +1737,7 @@ bool Document::saveCopy()
 
     QString exe = qApp->applicationName();
     QString fn = FileDialog::getSaveFileName(
-        Gui::activeMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Save %1 Document").arg(exe),
         QString::fromUtf8(getDocument()->FileName.getValue()),
         QObject::tr("%1 document (*.FCStd)").arg(exe)
@@ -2818,7 +2818,7 @@ bool Document::checkTransactionID(bool undo, int iSteps)
             str << "    " << doc->getName() << "\n";
         }
         int ret = QMessageBox::warning(
-            Gui::activeMainWindow(),
+            Gui::uiParentWidget(),
             undo ? QObject::tr("Undo") : QObject::tr("Redo"),
             QStringLiteral("%1,\n%2%3")
                 .arg(

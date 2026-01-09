@@ -23,7 +23,7 @@
 
 #include <Gui/Action.h>
 #include <Gui/Application.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 
 #include "DlgSettingsMacroImp.h"
 #include "ui_DlgSettingsMacro.h"
@@ -63,10 +63,12 @@ DlgSettingsMacroImp::~DlgSettingsMacroImp() = default;
  */
 void DlgSettingsMacroImp::setRecentMacroSize()
 {
-    auto recent = getMainWindow()->findChild<RecentMacrosAction*>(QLatin1String("recentMacros"));
-    if (recent) {
-        ParameterGrp::handle hGrp = WindowParameter::getDefaultParameter()->GetGroup("RecentMacros");
-        recent->resizeList(hGrp->GetInt("RecentMacros", 4));
+    if (auto* mw = Gui::activeMainWindow()) {
+        auto recent = mw->findChild<RecentMacrosAction*>(QLatin1String("recentMacros"));
+        if (recent) {
+            ParameterGrp::handle hGrp = WindowParameter::getDefaultParameter()->GetGroup("RecentMacros");
+            recent->resizeList(hGrp->GetInt("RecentMacros", 4));
+        }
     }
 }
 

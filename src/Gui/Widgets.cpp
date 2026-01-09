@@ -54,6 +54,7 @@
 #include "Tools.h"
 #include "Dialogs/ui_DlgTreeWidget.h"
 #include "MainWindow.h"
+#include "GuiShell.h"
 
 using namespace Gui;
 using namespace App;
@@ -1777,7 +1778,7 @@ void adjustDialogPosition(QDialog* dialog)
     if (!dialog) {
         return;
     }
-    const MainWindow* mw = getMainWindow();
+    const auto* mw = Gui::activeMainWindow();
     if (!mw) {
         return;
     }

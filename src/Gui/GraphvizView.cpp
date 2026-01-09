@@ -44,7 +44,7 @@
 #include "GraphvizView.h"
 #include "GraphicsViewZoom.h"
 #include "FileDialog.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 
 
 using namespace Gui;
@@ -318,7 +318,7 @@ void GraphvizView::updateSvgItem(const App::Document& doc)
         dotProc->start(dot, args);
         if (!dotProc->waitForStarted()) {
             int ret = QMessageBox::warning(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 tr("Graphviz not found"),
                 QStringLiteral(
                     "<html><head/><body>%1 "
@@ -338,7 +338,7 @@ void GraphvizView::updateSvgItem(const App::Document& doc)
                 return;
             }
             path = QFileDialog::getExistingDirectory(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 tr("Graphviz installation path")
             );
             if (path.isEmpty()) {
@@ -378,7 +378,7 @@ void GraphvizView::svgFileRead(const QByteArray& data)
     }
     else {
         QMessageBox::warning(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             tr("Graphviz failed"),
             tr("Graphviz failed to create an image file")
         );

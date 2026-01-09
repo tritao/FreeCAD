@@ -38,7 +38,8 @@
 #include <Gui/ActionFunction.h>
 #include <Gui/Application.h>
 #include <Gui/Document.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
+#include <Gui/Window.h>
 #include <Gui/ViewProviderDocumentObject.h>
 
 #include "TaskView.h"
@@ -860,7 +861,9 @@ void TaskView::tryRestoreWidth()
 {
     if (shouldRestoreWidth()) {
         if (auto parent = qobject_cast<QDockWidget*>(parentWidget())) {
-            Gui::getMainWindow()->resizeDocks({parent}, {currentWidth}, Qt::Horizontal);
+            if (auto* mw = Gui::activeMainWindow()) {
+                mw->resizeDocks({parent}, {currentWidth}, Qt::Horizontal);
+            }
         }
     }
 }

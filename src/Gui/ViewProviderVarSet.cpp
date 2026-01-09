@@ -26,7 +26,7 @@
 
 #include <App/VarSet.h>
 
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "ViewProviderVarSet.h"
 
 using namespace Gui;
@@ -43,7 +43,7 @@ ViewProviderVarSet::ViewProviderVarSet()
 bool ViewProviderVarSet::doubleClicked()
 {
     if (!dialog) {
-        dialog = std::make_unique<DlgAddProperty>(getMainWindow(), this);
+        dialog = std::make_unique<DlgAddProperty>(Gui::uiParentWidget(), this);
     }
 
     // Do not use exec() here because it blocks and prevents command Std_VarSet

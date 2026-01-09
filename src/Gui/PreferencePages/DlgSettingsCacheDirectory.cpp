@@ -35,7 +35,8 @@
 #include <App/Application.h>
 #include <App/Document.h>
 #include <Gui/DocumentRecovery.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
+#include <Gui/Window.h>
 
 #include "DlgSettingsCacheDirectory.h"
 #include "ui_DlgSettingsCacheDirectory.h"
@@ -235,7 +236,7 @@ bool ApplicationCache::performAction(qint64 total)
     bool performed = false;
     if (total > limit) {
         QString path = QString::fromStdString(App::Application::getUserCachePath());
-        QMessageBox msgBox(Gui::getMainWindow());
+        QMessageBox msgBox(Gui::uiParentWidget());
         msgBox.setIcon(QMessageBox::Warning);
         msgBox.setWindowTitle(tr("Cache Directory"));
 

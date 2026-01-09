@@ -32,6 +32,7 @@
 #include <Base/Tools.h>
 
 #include "ViewProviderGroupExtension.h"
+#include "GuiShell.h"
 #include "ViewProviderDocumentObject.h"
 #include "Application.h"
 #include "Command.h"
@@ -272,7 +273,7 @@ bool ViewProviderGroupExtension::extensionOnDelete(const std::vector<std::string
     }
 
     QMessageBox::StandardButton choice = QMessageBox::question(
-        getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Delete group contents recursively?"),
         message,
         QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel,

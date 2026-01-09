@@ -27,6 +27,7 @@
 #include "MainWindow.h"
 #include "MDIView.h"
 
+#include <QApplication>
 #include <QLabel>
 #include <QStatusBar>
 #include <QMainWindow>
@@ -342,6 +343,14 @@ QMainWindow* activeMainWindow()
         return shell->mainWindow();
     }
     return getMainWindow();
+}
+
+QWidget* uiParentWidget()
+{
+    if (auto* mw = activeMainWindow()) {
+        return mw;
+    }
+    return QApplication::activeWindow();
 }
 
 void setActiveShell(std::unique_ptr<IGuiShell> shell)

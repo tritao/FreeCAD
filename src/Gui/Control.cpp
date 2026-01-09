@@ -24,12 +24,13 @@
 #include <QApplication>
 #include <QDebug>
 #include <QDockWidget>
+#include <QMainWindow>
 #include <QPointer>
 
 #include <App/AutoTransaction.h>
 #include <Gui/ComboView.h>
 #include <Gui/DockWindowManager.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 
 #include "Control.h"
 #include "BitmapFactory.h"
@@ -70,9 +71,14 @@ void ControlSingleton::showDockWidget(QWidget* widget)
 
 QTabBar* ControlSingleton::findTabBar(QDockWidget* widget) const
 {
-    int count = getMainWindow()->tabifiedDockWidgets(widget).size() + 1;
+    auto* mw = Gui::activeMainWindow();
+    if (!mw) {
+        return nullptr;
+    }
+
+    int count = mw->tabifiedDockWidgets(widget).size() + 1;
     if (count > 1) {
-        QList<QTabBar*> bars = getMainWindow()->findChildren<QTabBar*>();
+        QList<QTabBar*> bars = mw->findChildren<QTabBar*>();
         for (auto it : bars) {
             if (it->count() <= count) {
                 for (int i = 0; i < count; i++) {

@@ -54,7 +54,7 @@
 #include <Gui/Control.h>
 #include <Gui/Dialogs/DlgPropertyLink.h>
 #include <Gui/FileDialog.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Placement.h>
 #include <Gui/QuantitySpinBox.h>
 #include <Gui/Selection/Selection.h>
@@ -4643,7 +4643,7 @@ void LinkSelection::select()
 {
     auto sobj = link.getSubObject();
     if (!sobj) {
-        QMessageBox::critical(getMainWindow(), tr("Error"), tr("Object not found"));
+        QMessageBox::critical(Gui::uiParentWidget(), tr("Error"), tr("Object not found"));
         return;
     }
     Gui::Selection().selStackPush();

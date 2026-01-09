@@ -36,7 +36,7 @@
 #include "Action.h"
 #include "BitmapFactory.h"
 #include "FileDialog.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "Dialogs/ui_DlgAuthorization.h"
 
 
@@ -422,7 +422,7 @@ Action* StdCmdDownloadOnlineHelp::createAction()
     Action* pcAction;
 
     QString exe = QString::fromStdString(App::Application::getExecutableName());
-    pcAction = new Action(this, getMainWindow());
+    pcAction = new Action(this, Gui::activeMainWindow());
     pcAction->setText(QCoreApplication::translate(this->className(), getMenuText()));
     pcAction->setToolTip(QCoreApplication::translate(this->className(), getToolTipText()).arg(exe));
     pcAction->setStatusTip(QCoreApplication::translate(this->className(), getStatusTip()).arg(exe));
@@ -466,7 +466,7 @@ void StdCmdDownloadOnlineHelp::activated(int iMsg)
             QString password;
 
             if (bAuthor) {
-                QDialog dlg(getMainWindow());
+                QDialog dlg(Gui::uiParentWidget());
                 dlg.setModal(true);
                 Ui_DlgAuthorization ui;
                 ui.setupUi(&dlg);
@@ -491,16 +491,16 @@ void StdCmdDownloadOnlineHelp::activated(int iMsg)
         );
         path = QString::fromUtf8(hURLGrp->GetASCII("DownloadLocation", path.toLatin1()).c_str());
 
-        while (loop > 0) {
-            loop--;
-            QFileInfo fi(path);
-            if (!fi.exists()) {
-                if (QMessageBox::critical(
-                        getMainWindow(),
-                        tr("Non-existing directory"),
-                        tr("The directory '%1' does not exist.\n\n"
-                           "Specify an existing directory?")
-                            .arg(fi.filePath()),
+            while (loop > 0) {
+                loop--;
+                QFileInfo fi(path);
+                if (!fi.exists()) {
+                    if (QMessageBox::critical(
+                            Gui::uiParentWidget(),
+                            tr("Non-existing directory"),
+                            tr("The directory '%1' does not exist.\n\n"
+                               "Specify an existing directory?")
+                                .arg(fi.filePath()),
                         QMessageBox::Yes | QMessageBox::No
                     )
                     != QMessageBox::Yes) {
@@ -513,15 +513,15 @@ void StdCmdDownloadOnlineHelp::activated(int iMsg)
                         return;
                     }
                 }
-            }
+                }
 
-            if (!fi.permission(QFile::WriteUser)) {
-                if (QMessageBox::critical(
-                        getMainWindow(),
-                        tr("Missing permission"),
-                        tr("You don't have write permission to '%1'\n\n"
-                           "Specify another directory?")
-                            .arg(fi.filePath()),
+                if (!fi.permission(QFile::WriteUser)) {
+                    if (QMessageBox::critical(
+                            Gui::uiParentWidget(),
+                            tr("Missing permission"),
+                            tr("You don't have write permission to '%1'\n\n"
+                               "Specify another directory?")
+                                .arg(fi.filePath()),
                         QMessageBox::Yes | QMessageBox::No
                     )
                     != QMessageBox::Yes) {

@@ -22,6 +22,7 @@
 
 #include <QApplication>
 #include <QDesktopServices>
+#include <QMainWindow>
 #include <QUrl>
 
 #include "Command.h"
@@ -31,7 +32,7 @@
 #include "Dialogs/DlgMacroExecuteImp.h"
 #include "Dialogs/DlgMacroRecordImp.h"
 #include "Macro.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "PythonDebugger.h"
 
 
@@ -60,7 +61,7 @@ void StdCmdDlgMacroRecord::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
     if (!getGuiApplication()->macroManager()->isOpen()) {
-        Gui::Dialog::DlgMacroRecordImp cDlg(getMainWindow());
+        Gui::Dialog::DlgMacroRecordImp cDlg(Gui::uiParentWidget());
         if (cDlg.exec() && getAction()) {
             getAction()->setIcon(Gui::BitmapFactory().iconFromTheme("media-playback-stop"));
             getAction()->setText(
@@ -107,7 +108,7 @@ StdCmdDlgMacroExecute::StdCmdDlgMacroExecute()
 void StdCmdDlgMacroExecute::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Dialog::DlgMacroExecuteImp cDlg(getMainWindow());
+    Gui::Dialog::DlgMacroExecuteImp cDlg(Gui::uiParentWidget());
     cDlg.exec();
 }
 

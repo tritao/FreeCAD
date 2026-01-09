@@ -28,7 +28,7 @@
 #include <App/Document.h>
 #include <Gui/Application.h>
 #include <Gui/Document.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/View3DInventor.h>
 #include <Gui/ViewProviderDocumentObject.h>
 
@@ -91,7 +91,7 @@ const std::vector<QWidget*>& TaskDialog::getDialogContent() const
 
 bool TaskDialog::canClose() const
 {
-    QMessageBox msgBox(Gui::getMainWindow());
+    QMessageBox msgBox(Gui::uiParentWidget());
     msgBox.setText(tr("A dialog is already open in the task panel"));
     msgBox.setInformativeText(QObject::tr("Close this dialog?"));
     msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);

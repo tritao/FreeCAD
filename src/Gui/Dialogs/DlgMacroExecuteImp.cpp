@@ -442,7 +442,7 @@ void DlgMacroExecuteImp::onEditButtonClicked()
     QString file = QStringLiteral("%1/%2").arg(dir.absolutePath(), item->text(0));
     auto editor = new PythonEditor();
     editor->setWindowIcon(Gui::BitmapFactory().iconFromTheme("applications-python"));
-    auto edit = new PythonEditorView(editor, Gui::activeMainWindow());
+    auto edit = new PythonEditorView(editor, Gui::uiParentWidget());
     edit->setDisplayName(PythonEditorView::FileName);
     edit->open(file);
     edit->resize(400, 300);
@@ -514,7 +514,7 @@ void DlgMacroExecuteImp::onCreateButtonClicked()
             file.close();
             auto editor = new PythonEditor();
             editor->setWindowIcon(Gui::BitmapFactory().iconFromTheme("applications-python"));
-            auto edit = new PythonEditorView(editor, Gui::activeMainWindow());
+            auto edit = new PythonEditorView(editor, Gui::uiParentWidget());
             edit->open(fi.absoluteFilePath());
             Application::Instance->appendRecentMacro(fi.absoluteFilePath());
             edit->setWindowTitle(QStringLiteral("%1[*]").arg(fn));
@@ -538,7 +538,7 @@ void DlgMacroExecuteImp::onDeleteButtonClicked()
 
     if (item->systemWide) {
         QMessageBox::critical(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Delete macro"),
             QObject::tr("Not allowed to delete system-wide macros")
         );

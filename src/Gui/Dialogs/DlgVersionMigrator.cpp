@@ -44,6 +44,7 @@
 
 #include "ui_DlgVersionMigrator.h"
 
+#include "../GuiShell.h"
 #include "../MainWindow.h"
 #include <App/Application.h>
 #include <App/ApplicationDirectories.h>
@@ -392,14 +393,16 @@ void DlgVersionMigrator::restart(const QString& message)
     restarting->exec();
 
     connect(qApp, &QCoreApplication::aboutToQuit, [=] {
-        if (getMainWindow()->close()) {
-            auto args = QApplication::arguments();
-            args.removeFirst();
-            QProcess::startDetached(
-                QApplication::applicationFilePath(),
-                args,
-                QApplication::applicationDirPath()
-            );
+        if (auto* mw = Gui::activeMainWindow()) {
+            if (mw->close()) {
+                auto args = QApplication::arguments();
+                args.removeFirst();
+                QProcess::startDetached(
+                    QApplication::applicationFilePath(),
+                    args,
+                    QApplication::applicationDirPath()
+                );
+            }
         }
     });
     QCoreApplication::exit(0);

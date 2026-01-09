@@ -41,7 +41,7 @@
 #include "Tree.h"
 #include "PropertyEditor.h"
 #include "Dialogs/DlgAddProperty.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "PropertyItemDelegate.h"
 #include "PropertyModel.h"
 #include "PropertyView.h"
@@ -323,10 +323,12 @@ void PropertyEditor::closeEditor()
         // Brute-force workaround for https://github.com/FreeCAD/FreeCAD/issues/14350
         int currentIndex = 0;
         QTabBar* tabBar = nullptr;
-        if (auto mdiArea = Gui::MainWindow::getInstance()->findChild<QMdiArea*>()) {
+        if (auto* mw = Gui::activeMainWindow()) {
+            if (auto* mdiArea = mw->findChild<QMdiArea*>()) {
             tabBar = mdiArea->findChild<QTabBar*>();
             if (tabBar) {
                 currentIndex = tabBar->currentIndex();
+            }
             }
         }
 #endif
@@ -1149,7 +1151,7 @@ void PropertyEditor::contextMenuEvent(QContextMenuEvent*)
                 return;
             }
             App::AutoTransaction committer("Add property");
-            Gui::Dialog::DlgAddProperty dlg(Gui::getMainWindow(), container);
+            Gui::Dialog::DlgAddProperty dlg(Gui::uiParentWidget(), container);
             dlg.exec();
             return;
         }
@@ -1167,7 +1169,7 @@ void PropertyEditor::contextMenuEvent(QContextMenuEvent*)
             bool ok = false;
             const QString currentTooltip = QString::fromUtf8(prop->getDocumentation());
             QString newTooltip = QInputDialog::getMultiLineText(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 tr("Edit Property Tooltip"),
                 tr("Tooltip"),
                 currentTooltip,
@@ -1195,7 +1197,7 @@ void PropertyEditor::contextMenuEvent(QContextMenuEvent*)
             App::AutoTransaction committer("Rename property");
             const char* oldName = prop->getName();
             QString res = QInputDialog::getText(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 tr("Rename property"),
                 tr("Property name"),
                 QLineEdit::Normal,
@@ -1222,7 +1224,7 @@ void PropertyEditor::contextMenuEvent(QContextMenuEvent*)
                 groupName = "Base";
             }
             QString res = QInputDialog::getText(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 tr("Rename property group"),
                 tr("Group name:"),
                 QLineEdit::Normal,

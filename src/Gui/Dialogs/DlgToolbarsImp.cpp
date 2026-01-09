@@ -37,7 +37,7 @@
 #include "Command.h"
 #include "Action.h"
 #include "ToolBarManager.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "ToolBarManager.h"
 #include "Widgets.h"
 #include "Workbench.h"
@@ -613,7 +613,11 @@ void DlgCustomToolbarsImp::addCustomToolbar(const QString& name)
     QVariant data = ui->workbenchBox->itemData(ui->workbenchBox->currentIndex(), Qt::UserRole);
     Workbench* w = WorkbenchManager::instance()->active();
     if (w && w->name() == std::string((const char*)data.toByteArray())) {
-        QToolBar* bar = getMainWindow()->addToolBar(name);
+        auto* mw = Gui::activeMainWindow();
+        if (!mw) {
+            return;
+        }
+        QToolBar* bar = mw->addToolBar(name);
         bar->setObjectName(name);
     }
 }
@@ -623,13 +627,17 @@ void DlgCustomToolbarsImp::removeCustomToolbar(const QString& name)
     QVariant data = ui->workbenchBox->itemData(ui->workbenchBox->currentIndex(), Qt::UserRole);
     Workbench* w = WorkbenchManager::instance()->active();
     if (w && w->name() == std::string((const char*)data.toByteArray())) {
-        QList<QToolBar*> bars = getMainWindow()->findChildren<QToolBar*>(name);
+        auto* mw = Gui::activeMainWindow();
+        if (!mw) {
+            return;
+        }
+        QList<QToolBar*> bars = mw->findChildren<QToolBar*>(name);
         if (bars.size() != 1) {
             return;
         }
 
         QToolBar* tb = bars.front();
-        getMainWindow()->removeToolBar(tb);
+        mw->removeToolBar(tb);
         delete tb;
     }
 }
@@ -639,7 +647,11 @@ void DlgCustomToolbarsImp::renameCustomToolbar(const QString& old_name, const QS
     QVariant data = ui->workbenchBox->itemData(ui->workbenchBox->currentIndex(), Qt::UserRole);
     Workbench* w = WorkbenchManager::instance()->active();
     if (w && w->name() == std::string((const char*)data.toByteArray())) {
-        QList<QToolBar*> bars = getMainWindow()->findChildren<QToolBar*>(old_name);
+        auto* mw = Gui::activeMainWindow();
+        if (!mw) {
+            return;
+        }
+        QList<QToolBar*> bars = mw->findChildren<QToolBar*>(old_name);
         if (bars.size() != 1) {
             return;
         }
@@ -699,7 +711,11 @@ void DlgCustomToolbarsImp::addCustomCommand(const QString& name, const QByteArra
     QVariant data = ui->workbenchBox->itemData(ui->workbenchBox->currentIndex(), Qt::UserRole);
     Workbench* w = WorkbenchManager::instance()->active();
     if (w && w->name() == std::string((const char*)data.toByteArray())) {
-        QList<QToolBar*> bars = getMainWindow()->findChildren<QToolBar*>(name);
+        auto* mw = Gui::activeMainWindow();
+        if (!mw) {
+            return;
+        }
+        QList<QToolBar*> bars = mw->findChildren<QToolBar*>(name);
         if (bars.size() != 1) {
             return;
         }
@@ -728,7 +744,11 @@ void DlgCustomToolbarsImp::removeCustomCommand(const QString& name, const QByteA
     QVariant data = ui->workbenchBox->itemData(ui->workbenchBox->currentIndex(), Qt::UserRole);
     Workbench* w = WorkbenchManager::instance()->active();
     if (w && w->name() == std::string((const char*)data.toByteArray())) {
-        QList<QToolBar*> bars = getMainWindow()->findChildren<QToolBar*>(name);
+        auto* mw = Gui::activeMainWindow();
+        if (!mw) {
+            return;
+        }
+        QList<QToolBar*> bars = mw->findChildren<QToolBar*>(name);
         if (bars.size() != 1) {
             return;
         }
@@ -760,7 +780,11 @@ void DlgCustomToolbarsImp::moveUpCustomCommand(const QString& name, const QByteA
     QVariant data = ui->workbenchBox->itemData(ui->workbenchBox->currentIndex(), Qt::UserRole);
     Workbench* w = WorkbenchManager::instance()->active();
     if (w && w->name() == std::string((const char*)data.toByteArray())) {
-        QList<QToolBar*> bars = getMainWindow()->findChildren<QToolBar*>(name);
+        auto* mw = Gui::activeMainWindow();
+        if (!mw) {
+            return;
+        }
+        QList<QToolBar*> bars = mw->findChildren<QToolBar*>(name);
         if (bars.size() != 1) {
             return;
         }
@@ -803,7 +827,11 @@ void DlgCustomToolbarsImp::moveDownCustomCommand(const QString& name, const QByt
     QVariant data = ui->workbenchBox->itemData(ui->workbenchBox->currentIndex(), Qt::UserRole);
     Workbench* w = WorkbenchManager::instance()->active();
     if (w && w->name() == std::string((const char*)data.toByteArray())) {
-        QList<QToolBar*> bars = getMainWindow()->findChildren<QToolBar*>(name);
+        auto* mw = Gui::activeMainWindow();
+        if (!mw) {
+            return;
+        }
+        QList<QToolBar*> bars = mw->findChildren<QToolBar*>(name);
         if (bars.size() != 1) {
             return;
         }

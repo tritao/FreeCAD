@@ -59,7 +59,7 @@
 #include "ComboView.h"
 #include "Command.h"
 #include "Control.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "MDIView.h"
 #include "NaviCube.h"
 #include "OverlayManager.h"
@@ -815,7 +815,8 @@ void OverlayTabWidget::restore(ParameterGrp::handle handle)
             continue;
         }
         OverlayManager::instance()->registerDockWidget(name, this);
-        auto dock = getMainWindow()->findChild<QDockWidget*>(name);
+        auto* mw = Gui::activeMainWindow();
+        auto dock = mw ? mw->findChild<QDockWidget*>(name) : nullptr;
         if (dock) {
             addWidget(dock, dock->windowTitle());
         }
@@ -1756,14 +1757,15 @@ void OverlayTabWidget::setRect(QRect rect)
 
 void OverlayTabWidget::addWidget(QDockWidget* dock, const QString& title)
 {
-    if (!getMainWindow() || !Application::Instance->mdiArea()) {
+    auto* mw = Gui::activeMainWindow();
+    if (!mw || !Application::Instance->mdiArea()) {
         return;
     }
 
     OverlayManager::instance()->registerDockWidget(dock->objectName(), this);
 
     OverlayManager::setFocusView();
-    getMainWindow()->removeDockWidget(dock);
+    mw->removeDockWidget(dock);
 
     auto titleWidget = dock->titleBarWidget();
     if (titleWidget && titleWidget->objectName() == QStringLiteral("OverlayTitle")) {
@@ -1825,10 +1827,14 @@ void OverlayTabWidget::removeWidget(QDockWidget* dock, QDockWidget* lastDock)
     OverlayManager::setFocusView();
     dock->show();
     if (lastDock) {
-        getMainWindow()->tabifyDockWidget(lastDock, dock);
+        if (auto* mw = Gui::activeMainWindow()) {
+            mw->tabifyDockWidget(lastDock, dock);
+        }
     }
     else {
-        getMainWindow()->addDockWidget(dockArea, dock);
+        if (auto* mw = Gui::activeMainWindow()) {
+            mw->addDockWidget(dockArea, dock);
+        }
     }
 
     auto w = this->widget(index);
@@ -2006,7 +2012,7 @@ void OverlayTabWidget::onCurrentChanged(int index)
 void OverlayTabWidget::onSizeGripMove(const QPoint& p)
 {
     auto* mdi = Application::Instance->mdiArea();
-    if (!getMainWindow() || !mdi) {
+    if (!Gui::activeMainWindow() || !mdi) {
         return;
     }
 
@@ -2279,7 +2285,7 @@ void OverlayTitleBar::mousePressEvent(QMouseEvent* me)
 {
     mouseMovePending = false;
     QWidget* parent = parentWidget();
-    if (OverlayTabWidget::_Dragging || !parent || !getMainWindow() || me->button() != Qt::LeftButton) {
+    if (OverlayTabWidget::_Dragging || !parent || !Gui::activeMainWindow() || me->button() != Qt::LeftButton) {
         return;
     }
 
@@ -2309,7 +2315,10 @@ void OverlayTitleBar::mousePressEvent(QMouseEvent* me)
         }
     }
     ignoreMouse = false;
-    QSize mwSize = getMainWindow()->size();
+    QSize mwSize;
+    if (auto* mw = Gui::activeMainWindow()) {
+        mwSize = mw->size();
+    }
     dragSize.setWidth(
         std::max(
             OverlayParams::getDockOverlayMinimumSize(),
@@ -2719,7 +2728,7 @@ void OverlaySplitterHandle::mouseMoveEvent(QMouseEvent* me)
 
 void OverlaySplitterHandle::mousePressEvent(QMouseEvent* me)
 {
-    if (OverlayTabWidget::_Dragging || !getMainWindow() || me->button() != Qt::LeftButton) {
+    if (OverlayTabWidget::_Dragging || !Gui::activeMainWindow() || me->button() != Qt::LeftButton) {
         return;
     }
 
@@ -2735,7 +2744,10 @@ void OverlaySplitterHandle::mousePressEvent(QMouseEvent* me)
         dragSize = QSize();
     }
 
-    QSize mwSize = getMainWindow()->size();
+    QSize mwSize;
+    if (auto* mw = Gui::activeMainWindow()) {
+        mwSize = mw->size();
+    }
     dragSize.setWidth(
         std::max(
             OverlayParams::getDockOverlayMinimumSize(),

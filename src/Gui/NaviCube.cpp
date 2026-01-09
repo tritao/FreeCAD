@@ -54,7 +54,7 @@
 #include "Application.h"
 #include "Command.h"
 #include "Action.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "Navigation/NavigationAnimation.h"
 #include "View3DInventorViewer.h"
 #include "View3DInventor.h"
@@ -1369,7 +1369,7 @@ Gui::Action* NaviCubeDraggableCmd::createAction()
 
 QMenu* NaviCubeImplementation::createNaviCubeMenu()
 {
-    auto menu = new QMenu(getMainWindow());
+    auto menu = new QMenu(Gui::uiParentWidget());
     menu->setObjectName(str("NaviCube_Menu"));
 
     CommandManager& rcCmdMgr = Application::Instance->commandManager();

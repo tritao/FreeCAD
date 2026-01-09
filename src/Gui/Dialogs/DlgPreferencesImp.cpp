@@ -50,6 +50,7 @@
 #include <QToolTip>
 #include <QProcess>
 #include <QPushButton>
+#include <QWhatsThis>
 #include <QWindow>
 #include <QKeyEvent>
 #include <QFocusEvent>
@@ -67,6 +68,7 @@
 #include "Dialogs/DlgPreferencesImp.h"
 #include "ui_DlgPreferences.h"
 #include "BitmapFactory.h"
+#include "GuiShell.h"
 #include "MainWindow.h"
 #include "Tools.h"
 #include "WidgetFactory.h"
@@ -359,7 +361,14 @@ DlgPreferencesImp::~DlgPreferencesImp()
 void DlgPreferencesImp::setupConnections()
 {
     connect(ui->buttonBox, &QDialogButtonBox::clicked, this, &DlgPreferencesImp::onButtonBoxClicked);
-    connect(ui->buttonBox, &QDialogButtonBox::helpRequested, getMainWindow(), &MainWindow::whatsThis);
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+        connect(ui->buttonBox, &QDialogButtonBox::helpRequested, mw, &MainWindow::whatsThis);
+    }
+    else {
+        connect(ui->buttonBox, &QDialogButtonBox::helpRequested, this, []() {
+            QWhatsThis::enterWhatsThisMode();
+        });
+    }
     connect(ui->groupsTreeView, &QTreeView::clicked, this, &DlgPreferencesImp::onPageSelected);
     connect(ui->groupsTreeView, &QTreeView::expanded, this, &DlgPreferencesImp::onGroupExpanded);
     connect(ui->groupsTreeView, &QTreeView::collapsed, this, &DlgPreferencesImp::onGroupCollapsed);
@@ -978,8 +987,10 @@ void DlgPreferencesImp::restartIfRequired()
             QTimer::singleShot(ms, []() {
                 QStringList args = QApplication::arguments();
                 args.pop_front();
-                if (getMainWindow()->close()) {
-                    QProcess::startDetached(QApplication::applicationFilePath(), args);
+                if (auto* mw = Gui::activeMainWindow()) {
+                    if (mw->close()) {
+                        QProcess::startDetached(QApplication::applicationFilePath(), args);
+                    }
                 }
             });
         }

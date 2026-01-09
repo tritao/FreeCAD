@@ -27,7 +27,7 @@
 
 #include "WhatsThis.h"
 #include "Action.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 
 
 using namespace Gui;
@@ -76,8 +76,12 @@ bool StdCmdDescription::inDescriptionMode()
 void StdCmdDescription::setSource(const QString& src)
 {
     if (!src.isEmpty()) {
+        auto* mw = Gui::activeMainWindow();
+        if (!mw) {
+            return;
+        }
         QWhatsThisClickedEvent e(src);
-        QApplication::sendEvent(getMainWindow(), &e);
+        QApplication::sendEvent(mw, &e);
     }
 }
 

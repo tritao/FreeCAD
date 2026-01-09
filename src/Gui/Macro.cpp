@@ -23,6 +23,7 @@
 
 #include <cassert>
 #include <QFile>
+#include <QMainWindow>
 #include <QTextStream>
 
 
@@ -32,7 +33,7 @@
 #include <Base/Interpreter.h>
 
 #include "Macro.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "PythonConsole.h"
 #include "PythonConsolePy.h"
 #include "PythonDebugger.h"
@@ -346,7 +347,9 @@ PythonConsole* MacroManager::getPythonConsole() const
 {
     // search for the Python console
     if (!this->pyConsole) {
-        this->pyConsole = Gui::getMainWindow()->findChild<Gui::PythonConsole*>();
+        if (auto* mw = Gui::activeMainWindow()) {
+            this->pyConsole = mw->findChild<Gui::PythonConsole*>();
+        }
     }
 
     return this->pyConsole;

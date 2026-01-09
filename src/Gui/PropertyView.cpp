@@ -25,6 +25,7 @@
 #include <QGridLayout>
 #include <QTimer>
 
+#include "GuiShell.h"
 
 #include <App/Document.h>
 #include <App/DocumentObject.h>
@@ -174,12 +175,14 @@ void PropertyView::setShowAll(bool enable)
 {
     if (_ShowAll != enable) {
         _ShowAll = enable;
-        const auto views = getMainWindow()->findChildren<PropertyView*>();
-        for (auto view : views) {
-            if (view->isVisible()) {
-                view->propertyEditorData->buildUp();
-                view->propertyEditorView->buildUp();
-                view->onTimer();
+        if (auto* mw = Gui::activeMainWindow()) {
+            const auto views = mw->findChildren<PropertyView*>();
+            for (auto view : views) {
+                if (view->isVisible()) {
+                    view->propertyEditorData->buildUp();
+                    view->propertyEditorView->buildUp();
+                    view->onTimer();
+                }
             }
         }
     }

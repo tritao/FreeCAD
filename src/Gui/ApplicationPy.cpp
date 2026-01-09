@@ -1665,7 +1665,7 @@ PyObject* ApplicationPy::sShowPreferences(PyObject* /*self*/, PyObject* args)
         return nullptr;
     }
 
-    Gui::Dialog::DlgPreferencesImp cDlg(Gui::activeMainWindow());
+    Gui::Dialog::DlgPreferencesImp cDlg(Gui::uiParentWidget());
     if (pstr) {
         cDlg.activateGroupPage(QString::fromUtf8(pstr), idx);
     }
@@ -1686,7 +1686,7 @@ PyObject* ApplicationPy::sShowPreferencesByName(PyObject* /*self*/, PyObject* ar
         return nullptr;
     }
 
-    Gui::Dialog::DlgPreferencesImp cDlg(Gui::activeMainWindow());
+    Gui::Dialog::DlgPreferencesImp cDlg(Gui::uiParentWidget());
     if (pstr && prefType) {
         cDlg.activateGroupPageByPageName(QString::fromUtf8(pstr), QString::fromUtf8(prefType));
     }

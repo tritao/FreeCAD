@@ -40,6 +40,7 @@
 #include "CommandT.h"
 #include "Application.h"
 #include "Command.h"
+#include "GuiShell.h"
 #include "MainWindow.h"
 #include "MDIView.h"
 #include "Language/Translator.h"
@@ -67,7 +68,7 @@ void Std_TestQM::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
     QStringList files = QFileDialog::getOpenFileNames(
-        getMainWindow(),
+        Gui::uiParentWidget(),
         QStringLiteral("Test translation"),
         QString(),
         QStringLiteral("Translation (*.qm)")

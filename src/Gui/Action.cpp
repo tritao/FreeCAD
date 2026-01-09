@@ -641,7 +641,9 @@ WorkbenchGroup::WorkbenchGroup(Command* pcCmd, QObject* parent)
     );
     // NOLINTEND
 
-    connect(getMainWindow(), &MainWindow::workbenchActivated, this, &WorkbenchGroup::onWorkbenchActivated);
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+        connect(mw, &MainWindow::workbenchActivated, this, &WorkbenchGroup::onWorkbenchActivated);
+    }
 }
 
 QAction* WorkbenchGroup::getOrCreateAction(const QString& wbName)

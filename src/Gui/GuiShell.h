@@ -89,6 +89,7 @@ public:
 
 GuiExport IGuiShell* activeShell();
 GuiExport QMainWindow* activeMainWindow();
+GuiExport QWidget* uiParentWidget();
 GuiExport void setActiveShell(std::unique_ptr<IGuiShell> shell);
 
 GuiExport std::unique_ptr<IGuiShell> createClassicShell(QMainWindow* mainWindow);

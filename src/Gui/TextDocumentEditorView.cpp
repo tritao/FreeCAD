@@ -32,6 +32,7 @@
 #include "Application.h"
 #include "BitmapFactory.h"
 #include "Document.h"
+#include "GuiShell.h"
 #include "MainWindow.h"
 
 
@@ -51,10 +52,11 @@ TextDocumentEditorView::TextDocumentEditorView(App::TextDocument* txtDoc, QPlain
 
     // clang-format off
     // update editor actions on request
-    Gui::MainWindow* mw = Gui::getMainWindow();
-    connect(editor, &QPlainTextEdit::undoAvailable, mw, &MainWindow::updateEditorActions);
-    connect(editor, &QPlainTextEdit::redoAvailable, mw, &MainWindow::updateEditorActions);
-    connect(editor, &QPlainTextEdit::copyAvailable, mw, &MainWindow::updateEditorActions);
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+        connect(editor, &QPlainTextEdit::undoAvailable, mw, &MainWindow::updateEditorActions);
+        connect(editor, &QPlainTextEdit::redoAvailable, mw, &MainWindow::updateEditorActions);
+        connect(editor, &QPlainTextEdit::copyAvailable, mw, &MainWindow::updateEditorActions);
+    }
     connect(editor, &QPlainTextEdit::textChanged, this, &TextDocumentEditorView::textChanged);
     // clang-format on
 }
@@ -67,8 +69,9 @@ TextDocumentEditorView::~TextDocumentEditorView()
 
 void TextDocumentEditorView::showEvent(QShowEvent* event)
 {
-    Gui::MainWindow* mw = Gui::getMainWindow();
-    mw->updateEditorActions();
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+        mw->updateEditorActions();
+    }
     MDIView::showEvent(event);
 }
 
@@ -77,8 +80,9 @@ void TextDocumentEditorView::closeEvent(QCloseEvent* event)
     MDIView::closeEvent(event);
     if (event->isAccepted()) {
         aboutToClose = true;
-        Gui::MainWindow* mw = Gui::getMainWindow();
-        mw->updateEditorActions();
+        if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+            mw->updateEditorActions();
+        }
     }
 }
 

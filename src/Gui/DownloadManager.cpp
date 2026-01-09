@@ -37,7 +37,7 @@
 #include "ui_DownloadManager.h"
 #include "DockWindowManager.h"
 #include "DownloadItem.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 
 
 using namespace Gui::Dialog;
@@ -49,7 +49,7 @@ DownloadManager* DownloadManager::self = nullptr;
 DownloadManager* DownloadManager::getInstance()
 {
     if (!self) {
-        self = new DownloadManager(Gui::getMainWindow());
+        self = new DownloadManager(Gui::uiParentWidget());
     }
     return self;
 }

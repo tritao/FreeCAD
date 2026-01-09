@@ -51,6 +51,7 @@
 #include "Dialogs/DlgUndoRedo.h"
 #include "Document.h"
 #include "frameobject.h"
+#include "GuiShell.h"
 #include "Macro.h"
 #include "MainWindow.h"
 #include "Python.h"
@@ -182,7 +183,7 @@ CommandBase::~CommandBase()
 
     // Command can be destroyed before the MainWindow, for example, dynamic
     // command created (and later deleted) by user for a pie menu.
-    if (getMainWindow()) {
+    if (Gui::activeMainWindow()) {
         delete _pcAction;
     }
 }
@@ -521,7 +522,7 @@ void Command::_invoke(int id, bool disablelog)
     catch (Base::Exception& e) {
         e.reportException();
         // Pop-up a dialog for FreeCAD-specific exceptions
-        QMessageBox::critical(Gui::getMainWindow(), QObject::tr("Exception"), QLatin1String(e.what()));
+        QMessageBox::critical(Gui::uiParentWidget(), QObject::tr("Exception"), QLatin1String(e.what()));
     }
     catch (std::exception& e) {
         Base::Console().error("C++ exception thrown (%s)\n", e.what());
@@ -1042,7 +1043,7 @@ void Command::printConflictingAccelerators() const
 Action* Command::createAction()
 {
     Action* pcAction;
-    pcAction = new Action(this, getMainWindow());
+    pcAction = new Action(this, Gui::activeMainWindow());
     applyCommandData(this->className(), pcAction);
     if (sPixmap) {
         pcAction->setIcon(Gui::BitmapFactory().iconFromTheme(sPixmap));
@@ -1136,7 +1137,7 @@ Command* GroupCommand::getCommand(int idx) const
 
 Action* GroupCommand::createAction()
 {
-    auto* pcAction = new ActionGroup(this, getMainWindow());
+    auto* pcAction = new ActionGroup(this, Gui::activeMainWindow());
     pcAction->setMenuRole(QAction::NoRole);
     pcAction->setDropDownMenu(hasDropDownMenu());
     pcAction->setExclusive(isExclusive());
@@ -1267,7 +1268,7 @@ void MacroCommand::activated(int iMsg)
     QFileInfo fi(d, QString::fromUtf8(sScriptName));
     if (!fi.exists()) {
         QMessageBox::critical(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("Gui::MacroCommand", "Macro file doesn't exist"),
             qApp->translate("Gui::MacroCommand", "No such macro file: '%1'").arg(fi.absoluteFilePath())
         );
@@ -1284,7 +1285,7 @@ void MacroCommand::activated(int iMsg)
 Action* MacroCommand::createAction()
 {
     Action* pcAction;
-    pcAction = new Action(this, getMainWindow());
+    pcAction = new Action(this, Gui::activeMainWindow());
     pcAction->setText(QString::fromUtf8(sMenuText));
     pcAction->setToolTip(QString::fromUtf8(sToolTipText));
     pcAction->setStatusTip(QString::fromUtf8(sStatusTip));
@@ -1509,7 +1510,7 @@ Action* PythonCommand::createAction()
     auto qtAction = new QAction(nullptr);
     Action* pcAction;
 
-    pcAction = new Action(this, qtAction, getMainWindow());
+    pcAction = new Action(this, qtAction, Gui::activeMainWindow());
     applyCommandData(this->getName(), pcAction);
     if (strcmp(getResource("Pixmap"), "") != 0) {
         pcAction->setIcon(Gui::BitmapFactory().iconFromTheme(getResource("Pixmap")));
@@ -1733,7 +1734,7 @@ bool PythonGroupCommand::isActive()
 
 Action* PythonGroupCommand::createAction()
 {
-    auto pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    auto pcAction = new Gui::ActionGroup(this, Gui::activeMainWindow());
     pcAction->setDropDownMenu(hasDropDownMenu());
     pcAction->setExclusive(isExclusive());
 

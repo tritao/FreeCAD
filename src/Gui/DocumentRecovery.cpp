@@ -55,7 +55,7 @@
 #include <Gui/Command.h>
 #include <Gui/Dialogs/DlgCheckableMessageBox.h>
 #include <Gui/Document.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 
 #include "DocumentRecovery.h"
 #include "ui_DocumentRecovery.h"
@@ -781,7 +781,7 @@ bool DocumentRecoveryFinder::showRecoveryDialogIfNeeded()
 {
     bool foundRecoveryFiles = false;
     if (!restoreDocFiles.isEmpty()) {
-        Gui::Dialog::DocumentRecovery dlg(restoreDocFiles, Gui::getMainWindow());
+        Gui::Dialog::DocumentRecovery dlg(restoreDocFiles, Gui::uiParentWidget());
         if (dlg.foundDocuments()) {
             foundRecoveryFiles = true;
             dlg.exec();

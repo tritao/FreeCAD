@@ -46,7 +46,7 @@
 #include "Application.h"
 #include "Document.h"
 #include "Macro.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "MDIView.h"
 #include "SelectionFilter.h"
 #include "SelectionFilterPy.h"
@@ -882,10 +882,13 @@ int SelectionSingleton::setPreselect(
                                QString::fromLatin1(pSubName)
                            ));
 
-            if (getMainWindow()) {
+            if (Gui::activeMainWindow()) {
                 Application::Instance->showMessage(msg);
-                Gui::MDIView* mdi = Gui::Application::Instance->activeDocument()->getActiveView();
-                mdi->setOverrideCursor(QCursor(Qt::ForbiddenCursor));
+                if (auto* doc = Gui::Application::Instance->activeDocument()) {
+                    if (Gui::MDIView* mdi = doc->getActiveView()) {
+                        mdi->setOverrideCursor(QCursor(Qt::ForbiddenCursor));
+                    }
+                }
             }
             return 0;
         }
@@ -1004,7 +1007,7 @@ void printPreselectionInfo(
     double precision
 )
 {
-    if (getMainWindow()) {
+    if (Gui::activeMainWindow()) {
         QString message
             = getPreselectionInfo(documentName, objectName, subElementName, x, y, z, precision);
         Application::Instance->showMessage(message);
@@ -1058,9 +1061,12 @@ void SelectionSingleton::rmvPreselect(bool signal)
     hy = 0;
     hz = 0;
 
-    if (ActiveGate && getMainWindow()) {
-        Gui::MDIView* mdi = Gui::Application::Instance->activeDocument()->getActiveView();
-        mdi->restoreOverrideCursor();
+    if (ActiveGate) {
+        if (auto* doc = Gui::Application::Instance->activeDocument()) {
+            if (Gui::MDIView* mdi = doc->getActiveView()) {
+                mdi->restoreOverrideCursor();
+            }
+        }
     }
 
     FC_TRACE("rmv preselect");
@@ -1217,7 +1223,7 @@ bool SelectionSingleton::addSelection(
         auto pObject
             = getObjectOfType(temp, App::DocumentObject::getClassTypeId(), gateResolve, &subelement);
         if (!ActiveGate->allow(pObject ? pObject->getDocument() : temp.pDoc, pObject, subelement)) {
-            if (getMainWindow()) {
+            if (Gui::activeMainWindow()) {
                 QString msg;
                 if (ActiveGate->notAllowedReason.length() > 0) {
                     msg = QObject::tr(ActiveGate->notAllowedReason.c_str());
@@ -1229,8 +1235,11 @@ bool SelectionSingleton::addSelection(
                     );
                 }
                 Application::Instance->showMessage(msg);
-                Gui::MDIView* mdi = Gui::Application::Instance->activeDocument()->getActiveView();
-                mdi->setOverrideCursor(Qt::ForbiddenCursor);
+                if (auto* doc = Gui::Application::Instance->activeDocument()) {
+                    if (Gui::MDIView* mdi = doc->getActiveView()) {
+                        mdi->setOverrideCursor(Qt::ForbiddenCursor);
+                    }
+                }
             }
             ActiveGate->notAllowedReason.clear();
             QApplication::beep();

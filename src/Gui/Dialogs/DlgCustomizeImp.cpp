@@ -26,9 +26,10 @@
 #include <QGridLayout>
 #include <QPushButton>
 #include <QSizePolicy>
+#include <QWhatsThis>
 
 #include "Dialogs/DlgCustomizeImp.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "WidgetFactory.h"
 
 
@@ -95,7 +96,7 @@ DlgCustomizeImp::DlgCustomizeImp(QWidget* parent, Qt::WindowFlags fl)
 
     // connections
     //
-    connect(buttonHelp, &QPushButton::clicked, getMainWindow(), &MainWindow::whatsThis);
+    connect(buttonHelp, &QPushButton::clicked, this, []() { QWhatsThis::enterWhatsThisMode(); });
     connect(buttonClose, &QPushButton::clicked, this, &QDialog::close);
 }
 

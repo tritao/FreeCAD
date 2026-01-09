@@ -43,6 +43,7 @@
 #include "EditorView.h"
 #include "Application.h"
 #include "FileDialog.h"
+#include "GuiShell.h"
 #include "Macro.h"
 #include "MainWindow.h"
 #include "PythonEditor.h"
@@ -103,10 +104,11 @@ EditorView::EditorView(TextEdit* editor, QWidget* parent)
 
     // clang-format off
     // update editor actions on request
-    Gui::MainWindow* mw = Gui::getMainWindow();
-    connect(editor, &QPlainTextEdit::undoAvailable, mw, &MainWindow::updateEditorActions);
-    connect(editor, &QPlainTextEdit::redoAvailable, mw, &MainWindow::updateEditorActions);
-    connect(editor, &QPlainTextEdit::copyAvailable, mw, &MainWindow::updateEditorActions);
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+        connect(editor, &QPlainTextEdit::undoAvailable, mw, &MainWindow::updateEditorActions);
+        connect(editor, &QPlainTextEdit::redoAvailable, mw, &MainWindow::updateEditorActions);
+        connect(editor, &QPlainTextEdit::copyAvailable, mw, &MainWindow::updateEditorActions);
+    }
 
     connect(editor, &TextEdit::showSearchBar, d->searchBar, &SearchBar::activate);
     connect(editor, &TextEdit::findNext, d->searchBar, &SearchBar::findNext);
@@ -171,8 +173,9 @@ QPlainTextEdit* EditorView::getEditor() const
 
 void EditorView::showEvent(QShowEvent* event)
 {
-    Gui::MainWindow* mw = Gui::getMainWindow();
-    mw->updateEditorActions();
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+        mw->updateEditorActions();
+    }
     MDIView::showEvent(event);
 }
 
@@ -186,8 +189,9 @@ void EditorView::closeEvent(QCloseEvent* event)
     MDIView::closeEvent(event);
     if (event->isAccepted()) {
         d->aboutToClose = true;
-        Gui::MainWindow* mw = Gui::getMainWindow();
-        mw->updateEditorActions();
+        if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+            mw->updateEditorActions();
+        }
     }
 }
 

@@ -43,6 +43,7 @@
 #include "PythonTracing.h"
 #include "Application.h"
 #include "FileDialog.h"
+#include "GuiShell.h"
 #include "MainWindow.h"
 #include "Tools.h"
 
@@ -1424,7 +1425,7 @@ void PythonConsole::onSaveHistoryAs()
 void PythonConsole::onInsertFileName()
 {
     QString fn = Gui::FileDialog::getOpenFileName(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         tr("Insert file name"),
         QString(),
         QStringLiteral("%1 (*.*)").arg(tr("All Files"))

@@ -45,6 +45,7 @@
 #include "Dialogs/DlgPreferencesImp.h"
 #include "Dialogs/DlgUnitsCalculatorImp.h"
 #include "GuiConsole.h"
+#include "GuiShell.h"
 #include "MainWindow.h"
 #include "OnlineDocumentation.h"
 #include "Selection.h"
@@ -102,11 +103,11 @@ void StdCmdWorkbench::activated(int i)
         if (match.hasMatch()) {
             msg = msg.mid(match.capturedLength());
         }
-        QMessageBox::critical(getMainWindow(), QObject::tr("Cannot load workbench"), msg);
+        QMessageBox::critical(Gui::uiParentWidget(), QObject::tr("Cannot load workbench"), msg);
     }
     catch (...) {
         QMessageBox::critical(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Cannot load workbench"),
             QObject::tr("A general error occurred while loading the workbench")
         );
@@ -122,7 +123,7 @@ Action* StdCmdWorkbench::createAction()
 {
     Action* pcAction;
 
-    pcAction = new WorkbenchGroup(this, getMainWindow());
+    pcAction = new WorkbenchGroup(this, Gui::activeMainWindow());
     pcAction->setShortcut(QString::fromLatin1(getAccel()));
     applyCommandData(this->className(), pcAction);
     if (getPixmap()) {
@@ -168,7 +169,7 @@ void StdCmdRecentFiles::activated(int iMsg)
  */
 Action* StdCmdRecentFiles::createAction()
 {
-    auto pcAction = new RecentFilesAction(this, getMainWindow());
+    auto pcAction = new RecentFilesAction(this, Gui::activeMainWindow());
     pcAction->setObjectName(QLatin1String("recentFiles"));
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
@@ -211,7 +212,7 @@ void StdCmdRecentMacros::activated(int iMsg)
  */
 Action* StdCmdRecentMacros::createAction()
 {
-    auto pcAction = new RecentMacrosAction(this, getMainWindow());
+    auto pcAction = new RecentMacrosAction(this, Gui::activeMainWindow());
     pcAction->setObjectName(QLatin1String("recentMacros"));
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
@@ -240,7 +241,7 @@ Action* StdCmdAbout::createAction()
     Action* pcAction;
 
     QString exe = qApp->applicationName();
-    pcAction = new Action(this, getMainWindow());
+    pcAction = new Action(this, Gui::activeMainWindow());
     pcAction->setText(QCoreApplication::translate(this->className(), getMenuText()).arg(exe));
     pcAction->setToolTip(QCoreApplication::translate(this->className(), getToolTipText()).arg(exe));
     pcAction->setStatusTip(QCoreApplication::translate(this->className(), getStatusTip()).arg(exe));
@@ -264,7 +265,7 @@ void StdCmdAbout::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
     const Gui::Dialog::AboutDialogFactory* f = Gui::Dialog::AboutDialogFactory::defaultFactory();
-    boost::scoped_ptr<QDialog> dlg(f->create(getMainWindow()));
+    boost::scoped_ptr<QDialog> dlg(f->create(Gui::uiParentWidget()));
     dlg->exec();
 }
 
@@ -350,7 +351,7 @@ void StdCmdRestartInSafeMode::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    QMessageBox restartBox(Gui::getMainWindow());
+    QMessageBox restartBox(Gui::uiParentWidget());
     restartBox.setIcon(QMessageBox::Warning);
     restartBox.setWindowTitle(QObject::tr("Restart in Safe Mode"));
     restartBox.setText(QObject::tr("Restart FreeCAD and enter safe mode?"));
@@ -370,8 +371,10 @@ void StdCmdRestartInSafeMode::activated(int iMsg)
             if (!args.contains(safeModeArgument)) {
                 args.append(safeModeArgument);
             }
-            if (getMainWindow()->close()) {
-                QProcess::startDetached(QApplication::applicationFilePath(), args);
+            if (auto* mw = Gui::activeMainWindow()) {
+                if (mw->close()) {
+                    QProcess::startDetached(QApplication::applicationFilePath(), args);
+                }
             }
         });
     }
@@ -398,7 +401,7 @@ StdCmdDlgParameter::StdCmdDlgParameter()
 void StdCmdDlgParameter::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Dialog::DlgParameterImp cDlg(getMainWindow());
+    Gui::Dialog::DlgParameterImp cDlg(Gui::uiParentWidget());
     cDlg.resize(QSize(800, 600));
     cDlg.exec();
 }
@@ -437,7 +440,7 @@ void StdCmdDlgPreferences::activated(int iMsg)
     static QString groupName {};
     static int index {};
 
-    Gui::Dialog::DlgPreferencesImp cDlg(getMainWindow());
+    Gui::Dialog::DlgPreferencesImp cDlg(Gui::uiParentWidget());
     ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath(
         "User parameter:BaseApp/Preferences"
     );
@@ -472,7 +475,7 @@ void StdCmdDlgCustomize::activated(int iMsg)
     Q_UNUSED(iMsg);
     static QPointer<QDialog> dlg = nullptr;
     if (!dlg) {
-        dlg = new Gui::Dialog::DlgCustomizeImp(getMainWindow());
+        dlg = new Gui::Dialog::DlgCustomizeImp(Gui::uiParentWidget());
     }
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     dlg->show();
@@ -499,12 +502,16 @@ StdCmdCommandLine::StdCmdCommandLine()
 void StdCmdCommandLine::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    bool show = getMainWindow()->isMaximized();
+    auto* mw = Gui::activeMainWindow();
+    if (!mw) {
+        return;
+    }
+    bool show = mw->isMaximized();
 
     // pop up the Gui command window
     GUIConsole Wnd;
 
-    getMainWindow()->showMinimized();
+    mw->showMinimized();
     qApp->processEvents();
 
     // create temporary console sequencer
@@ -517,12 +524,12 @@ void StdCmdCommandLine::activated(int iMsg)
     // On X11 this may not work. For further information see QWidget::showMaximized
     //
     // workaround for X11
-    getMainWindow()->hide();
-    getMainWindow()->show();
+    mw->hide();
+    mw->show();
 #endif
 
     // pop up the main window
-    show ? getMainWindow()->showMaximized() : getMainWindow()->showNormal();
+    show ? mw->showMaximized() : mw->showNormal();
     qApp->processEvents();
 }
 
@@ -548,7 +555,9 @@ StdCmdOnlineHelp::StdCmdOnlineHelp()
 void StdCmdOnlineHelp::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::getMainWindow()->showDocumentation(QStringLiteral("Online_Help_Startpage"));
+    if (auto* w = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+        w->showDocumentation(QStringLiteral("Online_Help_Startpage"));
+    }
 }
 
 //===========================================================================
@@ -829,7 +838,7 @@ StdCmdUnitsCalculator::StdCmdUnitsCalculator()
 void StdCmdUnitsCalculator::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    auto dlg = new Gui::Dialog::DlgUnitsCalculator(getMainWindow());
+    auto dlg = new Gui::Dialog::DlgUnitsCalculator(Gui::uiParentWidget());
     dlg->show();
 }
 
@@ -872,7 +881,7 @@ StdCmdUserEditMode::StdCmdUserEditMode()
 
 Gui::Action* StdCmdUserEditMode::createAction()
 {
-    auto pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    auto pcAction = new Gui::ActionGroup(this, Gui::activeMainWindow());
     pcAction->setDropDownMenu(true);
     pcAction->setIsMode(true);
     applyCommandData(this->className(), pcAction);

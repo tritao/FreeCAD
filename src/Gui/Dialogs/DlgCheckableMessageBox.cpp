@@ -36,7 +36,7 @@
 
 #include "Dialogs/DlgCheckableMessageBox.h"
 #include "ui_DlgCheckableMessageBox.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 
 
 namespace Gui
@@ -77,7 +77,7 @@ void DlgCheckableMessageBox::showMessage(
                        ->GetBool(toParamEntry(header));
 
     if (!checked) {
-        auto mb = new DlgCheckableMessageBox(Gui::getMainWindow());
+        auto mb = new DlgCheckableMessageBox(Gui::uiParentWidget());
 
         mb->setWindowTitle(header);
         mb->setIconPixmap(getStandardIcon(mb, QStyle::SP_MessageBoxWarning));
@@ -106,7 +106,7 @@ void DlgCheckableMessageBox::showMessage(
                        ->GetBool(paramEntry.toLatin1(), entryDefault);
 
     if (checked == entryDefault) {
-        auto mb = new Gui::Dialog::DlgCheckableMessageBox(Gui::getMainWindow());
+        auto mb = new Gui::Dialog::DlgCheckableMessageBox(Gui::uiParentWidget());
 
         mb->setWindowTitle(header);
         mb->setIconPixmap(getStandardIcon(mb, QStyle::SP_MessageBoxWarning));

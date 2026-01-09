@@ -27,6 +27,7 @@
 #include "Command.h"
 #include "Action.h"
 #include "Application.h"
+#include "GuiShell.h"
 #include "MainWindow.h"
 #include "View.h"
 #include "Document.h"
@@ -241,7 +242,7 @@ StdCmdWindows::StdCmdWindows()
 void StdCmdWindows::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Dialog::DlgActivateWindowImp dlg(getMainWindow());
+    Gui::Dialog::DlgActivateWindowImp dlg(Gui::uiParentWidget());
     dlg.exec();
 }
 
@@ -263,7 +264,9 @@ StdCmdUserInterface::StdCmdUserInterface()
 
 void StdCmdUserInterface::activated(int)
 {
-    getMainWindow()->switchToDockedMode();
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+        mw->switchToDockedMode();
+    }
 }
 
 //===========================================================================
@@ -297,7 +300,7 @@ bool StdCmdDockViewMenu::isActive()
 Action* StdCmdDockViewMenu::createAction()
 {
     Action* pcAction;
-    pcAction = new DockWidgetAction(this, getMainWindow());
+    pcAction = new DockWidgetAction(this, Gui::activeMainWindow());
     applyCommandData(this->className(), pcAction);
     return pcAction;
 }
@@ -333,7 +336,7 @@ bool StdCmdToolBarMenu::isActive()
 Action* StdCmdToolBarMenu::createAction()
 {
     Action* pcAction;
-    pcAction = new ToolBarAction(this, getMainWindow());
+    pcAction = new ToolBarAction(this, Gui::activeMainWindow());
     applyCommandData(this->className(), pcAction);
     return pcAction;
 }
@@ -397,10 +400,9 @@ protected:
     Action* action;
     bool eventFilter(QObject* obj, QEvent* event) override
     {
-        if (getMainWindow() && getMainWindow()->findChild<QStatusBar*>()
-            && obj == getMainWindow()->statusBar()
+        if (auto* mw = Gui::activeMainWindow(); mw && obj == mw->statusBar()
             && ((event->type() == QEvent::Hide) || (event->type() == QEvent::Show))) {
-            this->action->setChecked(getMainWindow()->statusBar()->isVisible());
+            this->action->setChecked(mw->statusBar()->isVisible());
         }
         return false;
     }
@@ -425,14 +427,22 @@ Action* StdCmdStatusBar::createAction()
     pcAction->setCheckable(true);
     pcAction->setBlockedChecked(false);
     auto fsb = new FilterStatusBar(pcAction);
-    getMainWindow()->statusBar()->installEventFilter(fsb);
+    if (auto* mw = Gui::activeMainWindow()) {
+        if (auto* sb = mw->statusBar()) {
+            sb->installEventFilter(fsb);
+        }
+    }
 
     return pcAction;
 }
 
 void StdCmdStatusBar::activated(int iMsg)
 {
-    getMainWindow()->statusBar()->setVisible(iMsg != 0);
+    if (auto* mw = Gui::activeMainWindow()) {
+        if (auto* sb = mw->statusBar()) {
+            sb->setVisible(iMsg != 0);
+        }
+    }
 }
 
 bool StdCmdStatusBar::isActive()
@@ -441,7 +451,11 @@ bool StdCmdStatusBar::isActive()
     if (!checked) {
         Action* act = this->getAction();
         if (act) {
-            act->setChecked(getMainWindow()->statusBar()->isVisible());
+            if (auto* mw = Gui::activeMainWindow()) {
+                if (auto* sb = mw->statusBar()) {
+                    act->setChecked(sb->isVisible());
+                }
+            }
             checked = true;
         }
     }
@@ -481,7 +495,7 @@ Action* StdCmdWindowsMenu::createAction()
     // Allow one to show 10 menu items in the 'Window' menu and one separator.
     // If we have more windows then the user can use the 'Windows...' item.
     WindowAction* pcAction;
-    pcAction = new WindowAction(this, getMainWindow());
+    pcAction = new WindowAction(this, Gui::activeMainWindow());
     for (int i = 0; i < 10; i++) {
         QAction* window = pcAction->addAction(QObject::tr(getToolTipText()));
         window->setCheckable(true);

@@ -59,6 +59,7 @@
 #include "Command.h"
 #include "Document.h"
 #include "ExpressionCompleter.h"
+#include "GuiShell.h"
 #include "Macro.h"
 #include "MainWindow.h"
 #include "MenuManager.h"
@@ -2635,7 +2636,7 @@ bool TreeWidget::dropInDocument(
     if (!errMsg.empty()) {
         committer.close(true);
         QMessageBox::critical(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Drag & drop failed"),
             QString::fromUtf8(errMsg.c_str())
         );
@@ -3031,7 +3032,7 @@ bool TreeWidget::dropInObject(
     if (!errMsg.empty()) {
         committer.close(true);
         QMessageBox::critical(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Drag & drop failed"),
             QString::fromUtf8(errMsg.c_str())
         );

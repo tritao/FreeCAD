@@ -28,9 +28,11 @@
 #include <QThread>
 #include <QTime>
 
+#include <Base/Exception.h>
+
 
 #include "ProgressDialog.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 
 
 using namespace Gui;
@@ -62,7 +64,7 @@ SequencerDialog* SequencerDialog::instance()
 SequencerDialog::SequencerDialog()
 {
     d = new SequencerDialogPrivate;
-    d->dlg = new ProgressDialog(this, getMainWindow());
+    d->dlg = new ProgressDialog(this, Gui::uiParentWidget());
     d->dlg->reset();  // stops the timer to force showing the dialog
     d->dlg->hide();
     d->guiThread = true;
@@ -322,7 +324,7 @@ ProgressDialog::ProgressDialog(SequencerDialog* s, QWidget* parent)
 {
 #ifdef QT_WINEXTRAS_LIB
     m_taskbarButton = nullptr;
-    m_taskbarButton = nullptr;
+    m_taskbarProgress = nullptr;
 #endif
     connect(this, &QProgressDialog::canceled, this, &ProgressDialog::onCancel);
 }
@@ -337,7 +339,7 @@ void ProgressDialog::onCancel()
 bool ProgressDialog::canAbort() const
 {
     auto ret = QMessageBox::question(
-        getMainWindow(),
+        Gui::uiParentWidget(),
         tr("Aborting"),
         tr("Abort the operation?"),
         QMessageBox::Yes | QMessageBox::No,
@@ -410,7 +412,9 @@ void ProgressDialog::setupTaskBarProgress()
 {
     if (!m_taskbarButton || !m_taskbarProgress) {
         m_taskbarButton = new QWinTaskbarButton(this);
-        m_taskbarButton->setWindow(MainWindow::getInstance()->windowHandle());
+        if (auto* mw = Gui::activeMainWindow()) {
+            m_taskbarButton->setWindow(mw->windowHandle());
+        }
         // m_myButton->setOverlayIcon(QIcon(""));
 
         m_taskbarProgress = m_taskbarButton->progress();

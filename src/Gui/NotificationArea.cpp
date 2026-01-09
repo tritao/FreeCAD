@@ -45,7 +45,7 @@
 #include "Application.h"
 #include "BitmapFactory.h"
 #include "MDIView.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "NotificationBox.h"
 
 #include "NotificationArea.h"
@@ -1291,15 +1291,15 @@ void NotificationArea::showInNotificationArea()
             options = options | NotificationBox::Options::HideIfReferenceWidgetDeactivated;
         }
 
-        bool isshown = NotificationBox::showText(
-            this->mapToGlobal(QPoint()),
-            msgw,
-            getMainWindow(),
-            static_cast<int>(pImp->notificationExpirationTime),
-            pImp->minimumOnScreenTime,
-            options,
-            pImp->notificationWidth
-        );
+	        bool isshown = NotificationBox::showText(
+	            this->mapToGlobal(QPoint()),
+	            msgw,
+	            Gui::uiParentWidget(),
+	            static_cast<int>(pImp->notificationExpirationTime),
+	            pImp->minimumOnScreenTime,
+	            options,
+	            pImp->notificationWidth
+	        );
 
         if (!isshown && !pImp->missedNotifications) {
             pImp->missedNotifications = true;

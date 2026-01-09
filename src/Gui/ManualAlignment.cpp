@@ -857,7 +857,7 @@ void ManualAlignment::startAlignment(Base::Type mousemodel)
 #endif
 
     // create a split window for picking the points
-    myViewer = new AlignmentView(myDocument, Gui::activeMainWindow());
+    myViewer = new AlignmentView(myDocument, Gui::uiParentWidget());
     myViewer->setWindowTitle(tr("Alignment[*]"));
     myViewer->setWindowIcon(QApplication::windowIcon());
     myViewer->resize(400, 300);

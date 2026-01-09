@@ -63,7 +63,7 @@
 #include <Base/Tools.h>
 
 #include "Action.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "ViewProviderLink.h"
 #include "ViewProviderLinkPy.h"
 #include "Application.h"
@@ -2992,7 +2992,7 @@ void ViewProviderLink::setupContextMenu(QMenu* menu, QObject* receiver, const ch
                     if (objs.empty()) {
                         return;
                     }
-                    DlgObjectSelection dlg({src}, excludes, getMainWindow());
+                    DlgObjectSelection dlg({src}, excludes, Gui::uiParentWidget());
                     dlg.setMessage(
                         QObject::tr("Select which objects to copy when the configuration is changed")
                     );

@@ -35,7 +35,7 @@
 #include "Application.h"
 #include "Command.h"
 #include "Document.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "Selection.h"
 #include "Tree.h"
 #include "ViewProviderDocumentObject.h"
@@ -96,7 +96,7 @@ bool StdCmdLinkMakeGroup::isActive()
 
 Action* StdCmdLinkMakeGroup::createAction()
 {
-    auto pcAction = new ActionGroup(this, getMainWindow());
+    auto pcAction = new ActionGroup(this, Gui::activeMainWindow());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -238,7 +238,7 @@ void StdCmdLinkMakeGroup::activated(int option)
     }
     catch (const Base::Exception& e) {
         QMessageBox::critical(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Create link group failed"),
             QString::fromLatin1(e.what())
         );
@@ -324,7 +324,7 @@ void StdCmdLinkMake::activated(int)
     catch (const Base::Exception& e) {
         Command::abortCommand();
         QMessageBox::critical(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Create link failed"),
             QString::fromLatin1(e.what())
         );
@@ -411,7 +411,7 @@ void StdCmdLinkMakeRelative::activated(int)
     catch (const Base::Exception& e) {
         Command::abortCommand();
         QMessageBox::critical(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Failed to create relative link"),
             QString::fromLatin1(e.what())
         );
@@ -557,7 +557,7 @@ static void linkConvert(bool unlink)
     catch (const Base::Exception& e) {
         Command::abortCommand();
         auto title = unlink ? QObject::tr("Unlink failed") : QObject::tr("Replace link failed");
-        QMessageBox::critical(getMainWindow(), title, QString::fromLatin1(e.what()));
+        QMessageBox::critical(Gui::uiParentWidget(), title, QString::fromLatin1(e.what()));
         e.reportException();
         return;
     }
@@ -701,7 +701,7 @@ void StdCmdLinkImport::activated(int)
     catch (const Base::Exception& e) {
         Command::abortCommand();
         QMessageBox::critical(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Failed to import links"),
             QString::fromLatin1(e.what())
         );
@@ -747,7 +747,7 @@ void StdCmdLinkImportAll::activated(int)
     }
     catch (const Base::Exception& e) {
         QMessageBox::critical(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Failed to import all links"),
             QString::fromLatin1(e.what())
         );
@@ -897,9 +897,11 @@ void StdCmdLinkSelectLinked::activated(int)
         }
     }
     else {
-        const auto trees = getMainWindow()->findChildren<TreeWidget*>();
-        for (auto tree : trees) {
-            tree->selectLinkedObject(linked);
+        if (auto* mw = Gui::activeMainWindow()) {
+            const auto trees = mw->findChildren<TreeWidget*>();
+            for (auto tree : trees) {
+                tree->selectLinkedObject(linked);
+            }
         }
     }
     Selection().selStackPush();
@@ -938,9 +940,11 @@ void StdCmdLinkSelectLinkedFinal::activated(int)
     }
     Selection().selStackPush();
     Selection().clearCompleteSelection();
-    const auto trees = getMainWindow()->findChildren<TreeWidget*>();
-    for (auto tree : trees) {
-        tree->selectLinkedObject(linked);
+    if (auto* mw = Gui::activeMainWindow()) {
+        const auto trees = mw->findChildren<TreeWidget*>();
+        for (auto tree : trees) {
+            tree->selectLinkedObject(linked);
+        }
     }
     Selection().selStackPush();
 }
@@ -978,9 +982,11 @@ void StdCmdLinkSelectAllLinks::activated(int)
     }
     Selection().selStackPush();
     Selection().clearCompleteSelection();
-    const auto trees = getMainWindow()->findChildren<TreeWidget*>();
-    for (auto tree : trees) {
-        tree->selectAllLinks(sels[0].pObject);
+    if (auto* mw = Gui::activeMainWindow()) {
+        const auto trees = mw->findChildren<TreeWidget*>();
+        for (auto tree : trees) {
+            tree->selectAllLinks(sels[0].pObject);
+        }
     }
     Selection().selStackPush();
 }

@@ -517,7 +517,7 @@ void PythonDebugger::showDebugMarker(const QString& fn, int line)
     if (!edit) {
         auto editor = new PythonEditor();
         editor->setWindowIcon(Gui::BitmapFactory().iconFromTheme("applications-python"));
-        edit = new PythonEditorView(editor, Gui::activeMainWindow());
+        edit = new PythonEditorView(editor, Gui::uiParentWidget());
         edit->open(fn);
         edit->resize(400, 300);
         Application::Instance->addWindow(edit);

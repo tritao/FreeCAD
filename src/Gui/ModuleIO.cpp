@@ -23,13 +23,14 @@
 
 
 #include <QFileInfo>
+#include <QMainWindow>
 #include <QMessageBox>
 
 
 #include "ModuleIO.h"
 #include "Application.h"
 #include "FileDialog.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 
 
 using namespace Gui;
@@ -41,7 +42,7 @@ bool ModuleIO::verifyFile(const QString& filename)
     QFileInfo fi(filename);
     if (!fi.exists() || !fi.isFile()) {
         QMessageBox::critical(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             tr("File not found"),
             tr("The file '%1' cannot be opened.").arg(filename)
         );

@@ -34,7 +34,7 @@
 
 #include "ProgressBar.h"
 #include "Application.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "ProgressDialog.h"
 #include "WaitCursor.h"
 
@@ -321,11 +321,11 @@ void SequencerBar::showRemainingTime()
             QString status = QStringLiteral("%1\t[%2]").arg(txt, remain);
 
             if (thr != currentThread) {
+                const QString statusCopy = status;
                 QMetaObject::invokeMethod(
-                    getMainWindow(),
-                    "showMessage",
-                    Qt::/*Blocking*/ QueuedConnection,
-                    Q_ARG(QString, status)
+                    qApp,
+                    [statusCopy]() { Application::Instance->showMessage(statusCopy); },
+                    Qt::QueuedConnection
                 );
             }
             else {
@@ -507,7 +507,7 @@ void ProgressBar::aboutToHide()
 bool ProgressBar::canAbort() const
 {
     auto ret = QMessageBox::question(
-        getMainWindow(),
+        Gui::uiParentWidget(),
         tr("Aborting"),
         tr("Abort the operation?"),
         QMessageBox::Yes | QMessageBox::No,
@@ -568,7 +568,9 @@ void ProgressBar::setupTaskBarProgress()
 {
     if (!m_taskbarButton || !m_taskbarProgress) {
         m_taskbarButton = new QWinTaskbarButton(this);
-        m_taskbarButton->setWindow(MainWindow::getInstance()->windowHandle());
+        if (auto* mw = Gui::activeMainWindow()) {
+            m_taskbarButton->setWindow(mw->windowHandle());
+        }
         // m_myButton->setOverlayIcon(QIcon(""));
 
         m_taskbarProgress = m_taskbarButton->progress();
@@ -635,7 +637,7 @@ bool ProgressBar::eventFilter(QObject* o, QEvent* e)
             case QEvent::Close: {
                 // avoid to exit while app is working
                 // note: all other widget types are allowed to be closed anyway
-                if (o == getMainWindow()) {
+                if (auto* mw = Gui::activeMainWindow(); mw && o == mw) {
                     e->ignore();
                     return true;
                 }

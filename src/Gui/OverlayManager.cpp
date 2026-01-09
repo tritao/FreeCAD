@@ -53,7 +53,7 @@
 #include "Application.h"
 #include "BitmapFactory.h"
 #include "Control.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "MDIView.h"
 #include "NaviCube.h"
 #include "OverlayParams.h"
@@ -260,15 +260,16 @@ struct OverlayInfo
         }
 
         if (forced) {
-            auto mw = getMainWindow();
-            for (auto d : mw->findChildren<QDockWidget*>()) {
-                if (mw->dockWidgetArea(d) == dockArea && d->toggleViewAction()->isChecked()) {
-                    addWidget(d, false);
+            if (auto* mw = Gui::activeMainWindow()) {
+                for (auto d : mw->findChildren<QDockWidget*>()) {
+                    if (mw->dockWidgetArea(d) == dockArea && d->toggleViewAction()->isChecked()) {
+                        addWidget(d, false);
+                    }
                 }
-            }
-            if (visible) {
-                dock->show();
-                tabWidget->setCurrent(dock);
+                if (visible) {
+                    dock->show();
+                    tabWidget->setCurrent(dock);
+                }
             }
         }
         else {
@@ -494,7 +495,11 @@ public:
         }
 
         if (dockPos == Qt::NoDockWidgetArea) {
-            dockPos = getMainWindow()->dockWidgetArea(dock);
+            auto* mw = Gui::activeMainWindow();
+            if (!mw) {
+                return false;
+            }
+            dockPos = mw->dockWidgetArea(dock);
         }
         OverlayInfo* o;
         switch (dockPos) {
@@ -750,7 +755,11 @@ public:
         switch (mode) {
             case OverlayManager::OverlayMode::DisableAll:
             case OverlayManager::OverlayMode::EnableAll: {
-                auto docks = getMainWindow()->findChildren<QDockWidget*>();
+                auto* mw = Gui::activeMainWindow();
+                if (!mw) {
+                    return;
+                }
+                auto docks = mw->findChildren<QDockWidget*>();
                 // put visible dock widget first
                 std::sort(docks.begin(), docks.end(), [](const QDockWidget* a, const QDockWidget* b) {
                     return !a->visibleRegion().isEmpty() && b->visibleRegion().isEmpty();
@@ -1049,8 +1058,12 @@ public:
                 else {
                     auto it = _overlayMap.find(dock);
                     if (it != _overlayMap.end()) {
+                        auto* mw = Gui::activeMainWindow();
+                        if (!mw) {
+                            return;
+                        }
                         it->second->tabWidget->removeWidget(dock);
-                        getMainWindow()->addDockWidget(it->second->dockArea, dock);
+                        mw->addDockWidget(it->second->dockArea, dock);
                         _overlayMap.erase(it);
                         dock->show();
                         dock->setFloating(true);
@@ -1094,7 +1107,8 @@ public:
     // parameter using reference, pass by value instead.
     void dragDockWidget(QPoint pos, QWidget* srcWidget, QPoint dragOffset, QSize dragSize, bool drop)
     {
-        if (!getMainWindow()) {
+        auto* mw = Gui::activeMainWindow();
+        if (!mw) {
             return;
         }
         auto mdi = Application::Instance->mdiArea();
@@ -1137,7 +1151,7 @@ public:
         int resizeOffset = 0;
         int index = -1;
         QRect rect;
-        QRect rectMain(getMainWindow()->mapToGlobal(QPoint()), getMainWindow()->size());
+        QRect rectMain(mw->mapToGlobal(QPoint()), mw->size());
         QRect rectMdi(mdi->mapToGlobal(QPoint()), mdi->size());
 
         for (OverlayTabWidget* overlay : _Overlays) {
@@ -1289,14 +1303,14 @@ public:
                 rect.setHeight(50);
             }
 
-            for (auto dockWidget : getMainWindow()->findChildren<QDockWidget*>()) {
+            for (auto dockWidget : mw->findChildren<QDockWidget*>()) {
                 if (dockWidget == dock || !dockWidget->isVisible() || dockWidget->isFloating()
                     || _overlayMap.contains(dockWidget)) {
                     continue;
                 }
                 if (dockWidget->rect().contains(dockWidget->mapFromGlobal(pos))) {
                     dstDock = dockWidget;
-                    dstDockArea = getMainWindow()->dockWidgetArea(dstDock);
+                    dstDockArea = mw->dockWidgetArea(dstDock);
                     rect = QRect(dockWidget->mapToGlobal(QPoint()), dockWidget->size());
                     break;
                 }
@@ -1333,7 +1347,7 @@ public:
             }
             else if (!dock->isFloating()) {
                 if (!OverlayTabWidget::_DragFloating) {
-                    OverlayTabWidget::_DragFloating = new QDockWidget(getMainWindow());
+                    OverlayTabWidget::_DragFloating = new QDockWidget(mw);
                     OverlayTabWidget::_DragFloating->setFloating(true);
                 }
                 OverlayTabWidget::_DragFloating->resize(dock->size());
@@ -1387,10 +1401,10 @@ public:
 
         if (!drop) {
             if (!OverlayTabWidget::_DragFrame) {
-                OverlayTabWidget::_DragFrame = new OverlayDragFrame(getMainWindow());
+                OverlayTabWidget::_DragFrame = new OverlayDragFrame(mw);
             }
 
-            rect = QRect(getMainWindow()->mapFromGlobal(rect.topLeft()), rect.size());
+            rect = QRect(mw->mapFromGlobal(rect.topLeft()), rect.size());
             OverlayTabWidget::_DragFrame->setGeometry(rect);
             if (!outside && !OverlayTabWidget::_DragFrame->isVisible()) {
                 OverlayTabWidget::_DragFrame->raise();
@@ -1426,13 +1440,13 @@ public:
             if (dstDock) {
                 dock->setFloating(false);
                 if (insertDock == 0) {
-                    getMainWindow()->tabifyDockWidget(dstDock, dock);
+                    mw->tabifyDockWidget(dstDock, dock);
                 }
                 else {
                     std::map<int, QDockWidget*> docks;
-                    for (auto dockWidget : getMainWindow()->findChildren<QDockWidget*>()) {
+                    for (auto dockWidget : mw->findChildren<QDockWidget*>()) {
                         if (dockWidget == dock || !dockWidget->isVisible()
-                            || getMainWindow()->dockWidgetArea(dockWidget) != dstDockArea) {
+                            || mw->dockWidgetArea(dockWidget) != dstDockArea) {
                             continue;
                         }
                         auto pos = dockWidget->mapToGlobal(QPoint(0, 0));
@@ -1454,12 +1468,12 @@ public:
                         ++it;
                     }
                     for (auto iter = it; iter != docks.end(); ++iter) {
-                        getMainWindow()->removeDockWidget(iter->second);
+                        mw->removeDockWidget(iter->second);
                     }
-                    getMainWindow()->addDockWidget(dstDockArea, dock);
+                    mw->addDockWidget(dstDockArea, dock);
                     dock->show();
                     for (auto iter = it; iter != docks.end(); ++iter) {
-                        getMainWindow()->addDockWidget(dstDockArea, iter->second);
+                        mw->addDockWidget(dstDockArea, iter->second);
                         iter->second->show();
                     }
                 }
@@ -1476,7 +1490,7 @@ public:
             dock->show();
         }
         else if (dstIndex == -2) {
-            getMainWindow()->addDockWidget(dst->getDockArea(), dock);
+            mw->addDockWidget(dst->getDockArea(), dock);
             dock->setFloating(false);
         }
         else {
@@ -1585,7 +1599,7 @@ void OverlayManager::destruct()
 
 OverlayManager::OverlayManager()
 {
-    d = new Private(this, getMainWindow());
+    d = new Private(this, Gui::activeMainWindow());
     qApp->installEventFilter(this);
 }
 
@@ -1756,7 +1770,8 @@ static inline bool isNear(const QPoint& a, const QPoint& b, int tol = 16)
 
 bool OverlayManager::eventFilter(QObject* o, QEvent* ev)
 {
-    if (d->intercepting || !getMainWindow() || !o->isWidgetType()) {
+    auto* mw = Gui::activeMainWindow();
+    if (d->intercepting || !mw || !o->isWidgetType()) {
         return false;
     }
     auto mdi = Application::Instance->mdiArea();
@@ -1772,11 +1787,11 @@ bool OverlayManager::eventFilter(QObject* o, QEvent* ev)
             }
             break;
         case QEvent::ZOrderChange: {
-            if (!d->raising && getMainWindow() && o == mdi) {
+            if (!d->raising && o == mdi) {
                 // On Windows, for some reason, it will raise mdi window on tab
                 // change in any docked widget, which will then obscure any overlay
                 // docked widget here.
-                for (auto child : getMainWindow()->children()) {
+                for (auto child : mw->children()) {
                     if (child == mdi || qobject_cast<QDockWidget*>(child)) {
                         QMetaObject::invokeMethod(this, "raiseAll", Qt::QueuedConnection);
                         break;
@@ -1789,7 +1804,7 @@ bool OverlayManager::eventFilter(QObject* o, QEvent* ev)
             break;
         }
         case QEvent::Resize: {
-            if (getMainWindow() && o == mdi) {
+            if (o == mdi) {
                 refresh();
             }
             return false;

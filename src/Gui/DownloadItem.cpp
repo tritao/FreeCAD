@@ -43,7 +43,7 @@
 #include "Document.h"
 #include "DownloadManager.h"
 #include "FileDialog.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "Dialogs/ui_DlgAuthorization.h"
 #include "Tools.h"
 #include <App/Document.h>
@@ -188,7 +188,7 @@ NetworkAccessManager::NetworkAccessManager(QObject* parent)
 
 void NetworkAccessManager::authenticationRequired(QNetworkReply* reply, QAuthenticator* auth)
 {
-    QWidget* mainWindow = Gui::getMainWindow();
+    QWidget* mainWindow = Gui::uiParentWidget();
 
     QDialog dialog(mainWindow);
     dialog.setWindowFlags(Qt::Sheet);
@@ -213,7 +213,7 @@ void NetworkAccessManager::authenticationRequired(QNetworkReply* reply, QAuthent
 
 void NetworkAccessManager::proxyAuthenticationRequired(const QNetworkProxy& proxy, QAuthenticator* auth)
 {
-    QWidget* mainWindow = Gui::getMainWindow();
+    QWidget* mainWindow = Gui::uiParentWidget();
 
     QDialog dialog(mainWindow);
     dialog.setWindowFlags(Qt::Sheet);

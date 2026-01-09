@@ -45,7 +45,7 @@
 #include <App/Application.h>
 
 #include "FileDialog.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "Tools.h"
 
 
@@ -57,7 +57,7 @@ struct ActionDisabler
 {
     ActionDisabler()
     {
-        auto mainWin = Gui::getMainWindow();
+        auto mainWin = Gui::activeMainWindow();
         if (!mainWin) {
             return;
         }
@@ -1121,7 +1121,7 @@ SelectModule::Dict SelectModule::exportHandler(const QStringList& fileNames, con
          it != filetypeHandler.cend();
          ++it) {
         if (it.value().size() > 1) {
-            SelectModule dlg(it.key(), it.value(), getMainWindow());
+            SelectModule dlg(it.key(), it.value(), Gui::uiParentWidget());
             QApplication::beep();
             if (dlg.exec()) {
                 QString mod = dlg.getModule();
@@ -1191,7 +1191,7 @@ SelectModule::Dict SelectModule::importHandler(const QStringList& fileNames, con
          it != filetypeHandler.cend();
          ++it) {
         if (it.value().size() > 1) {
-            SelectModule dlg(it.key(), it.value(), getMainWindow());
+            SelectModule dlg(it.key(), it.value(), Gui::uiParentWidget());
             QApplication::beep();
             if (dlg.exec()) {
                 QString mod = dlg.getModule();

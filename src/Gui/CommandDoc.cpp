@@ -25,6 +25,7 @@
 #include <QCheckBox>
 #include <QClipboard>
 #include <QDateTime>
+#include <QMimeData>
 #include <QMessageBox>
 #include <QTextStream>
 #include <QTreeWidgetItem>
@@ -49,6 +50,7 @@
 #include "Control.h"
 #include "DockWindowManager.h"
 #include "FileDialog.h"
+#include "GuiShell.h"
 #include "MainWindow.h"
 #include "Selection.h"
 #include "Dialogs/DlgObjectSelection.h"
@@ -135,7 +137,7 @@ void StdCmdOpen::activated(int iMsg)
 
     QString selectedFilter;
     QStringList fileList = FileDialog::getOpenFileNames(
-        getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Open Document"),
         QString(),
         formatList,
@@ -149,7 +151,7 @@ void StdCmdOpen::activated(int iMsg)
     SelectModule::Dict dict = SelectModule::importHandler(fileList, selectedFilter);
     if (dict.isEmpty()) {
         QMessageBox::critical(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             qApp->translate("StdCmdOpen", "Cannot Open File"),
             qApp->translate("StdCmdOpen", "Loading the file %1 is not supported").arg(fileList.front())
         );
@@ -232,7 +234,7 @@ void StdCmdImport::activated(int iMsg)
                                               ->GetGroup("General");
     QString selectedFilter = QString::fromStdString(hPath->GetASCII("FileImportFilter"));
     QStringList fileList = FileDialog::getOpenFileNames(
-        getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Import File"),
         QString(),
         formatList,
@@ -430,7 +432,7 @@ void StdCmdExport::activated(int iMsg)
     auto selection = Gui::Selection().getObjectsOfType(App::DocumentObject::getClassTypeId());
     if (selection.empty()) {
         QMessageBox::warning(
-            Gui::getMainWindow(),
+            Gui::uiParentWidget(),
             QCoreApplication::translate("StdCmdExport", "No Selection"),
             QCoreApplication::translate(
                 "StdCmdExport",
@@ -514,7 +516,7 @@ void StdCmdExport::activated(int iMsg)
     }
     // Launch the file selection modal dialog
     QString filename = FileDialog::getSaveFileName(
-        getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Export File"),
         defaultFilename,
         formatList,
@@ -580,7 +582,7 @@ void StdCmdMergeProjects::activated(int iMsg)
 
     QString exe = qApp->applicationName();
     QString project = FileDialog::getOpenFileName(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         QString::fromUtf8(QT_TR_NOOP("Merge Document")),
         FileDialog::getWorkingDirectory(),
         QString::fromUtf8(QT_TR_NOOP("%1 document (*.FCStd)")).arg(exe)
@@ -592,7 +594,7 @@ void StdCmdMergeProjects::activated(int iMsg)
         QFileInfo proj(project);
         if (proj == info) {
             QMessageBox::critical(
-                Gui::getMainWindow(),
+                Gui::uiParentWidget(),
                 QString::fromUtf8(QT_TR_NOOP("Merge Document")),
                 QString::fromUtf8(QT_TR_NOOP("Cannot merge document with itself."))
             );
@@ -672,7 +674,7 @@ void StdCmdExportDependencyGraph::activated(int iMsg)
     App::Document* doc = App::GetApplication().getActiveDocument();
     QString format = QStringLiteral("%1 (*.gv)").arg(Gui::GraphvizView::tr("Graphviz format"));
     QString fn = Gui::FileDialog::getSaveFileName(
-        Gui::getMainWindow(),
+        Gui::uiParentWidget(),
         Gui::GraphvizView::tr("Export Graph"),
         QString(),
         format
@@ -862,7 +864,7 @@ StdCmdRevert::StdCmdRevert()
 void StdCmdRevert::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    QMessageBox msgBox(Gui::getMainWindow());
+    QMessageBox msgBox(Gui::uiParentWidget());
     msgBox.setIcon(QMessageBox::Question);
     msgBox.setWindowTitle(qApp->translate("Std_Revert", "Revert Document"));
     msgBox.setText(
@@ -904,7 +906,7 @@ StdCmdProjectInfo::StdCmdProjectInfo()
 void StdCmdProjectInfo::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Dialog::DlgProjectInformationImp dlg(getActiveGuiDocument()->getDocument(), getMainWindow());
+    Gui::Dialog::DlgProjectInformationImp dlg(getActiveGuiDocument()->getDocument(), Gui::uiParentWidget());
     dlg.exec();
 }
 
@@ -935,7 +937,7 @@ StdCmdProjectUtil::StdCmdProjectUtil()
 void StdCmdProjectUtil::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Dialog::DlgProjectUtility dlg(getMainWindow());
+    Gui::Dialog::DlgProjectUtility dlg(Gui::uiParentWidget());
     dlg.exec();
 }
 
@@ -1071,7 +1073,9 @@ void StdCmdQuit::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
     // close the main window and exit the event loop
-    getMainWindow()->close();
+    if (auto* mw = Gui::activeMainWindow()) {
+        mw->close();
+    }
 }
 
 //===========================================================================
@@ -1109,7 +1113,7 @@ Action* StdCmdUndo::createAction()
 {
     Action* pcAction;
 
-    pcAction = new UndoAction(this, getMainWindow());
+    pcAction = new UndoAction(this, Gui::activeMainWindow());
     pcAction->setShortcut(QString::fromLatin1(getAccel()));
     applyCommandData(this->className(), pcAction);
     if (getPixmap()) {
@@ -1154,7 +1158,7 @@ Action* StdCmdRedo::createAction()
 {
     Action* pcAction;
 
-    pcAction = new RedoAction(this, getMainWindow());
+    pcAction = new RedoAction(this, Gui::activeMainWindow());
     pcAction->setShortcut(QString::fromLatin1(getAccel()));
     applyCommandData(this->className(), pcAction);
     if (getPixmap()) {
@@ -1214,9 +1218,11 @@ void StdCmdCopy::activated(int iMsg)
     Q_UNUSED(iMsg);
     bool done = getGuiApplication()->sendMsgToFocusView("Copy");
     if (!done) {
-        QMimeData* mimeData = getMainWindow()->createMimeDataFromSelection();
-        QClipboard* cb = QApplication::clipboard();
-        cb->setMimeData(mimeData);
+        if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+            QMimeData* mimeData = mw->createMimeDataFromSelection();
+            QClipboard* cb = QApplication::clipboard();
+            cb->setMimeData(mimeData);
+        }
     }
 }
 
@@ -1254,7 +1260,9 @@ void StdCmdPaste::activated(int iMsg)
         const QMimeData* mimeData = cb->mimeData();
         if (mimeData) {
             WaitCursor wc;
-            getMainWindow()->insertFromMimeData(mimeData);
+            if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+                mw->insertFromMimeData(mimeData);
+            }
         }
     }
 }
@@ -1269,7 +1277,10 @@ bool StdCmdPaste::isActive()
     if (!mime) {
         return false;
     }
-    return getMainWindow()->canInsertFromMimeData(mime);
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+        return mw->canInsertFromMimeData(mime);
+    }
+    return mime->hasUrls() || mime->hasImage();
 }
 
 DEF_STD_CMD_A(StdCmdDuplicateSelection)
@@ -1305,7 +1316,7 @@ void StdCmdDuplicateSelection::activated(int iMsg)
     {
         auto all = App::Document::getDependencyList(sel);
         if (all.size() > sel.size()) {
-            DlgObjectSelection dlg(sel, getMainWindow());
+            DlgObjectSelection dlg(sel, Gui::uiParentWidget());
             if (dlg.exec() != QDialog::Accepted) {
                 return;
             }
@@ -1318,7 +1329,7 @@ void StdCmdDuplicateSelection::activated(int iMsg)
         hasXLink = App::PropertyXLink::hasXLink(sel, &unsaved);
         if (!unsaved.empty()) {
             QMessageBox::critical(
-                getMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("Unsaved Document"),
                 QObject::tr(
                     "The exported object contains an external link. Save the document."
@@ -1340,7 +1351,7 @@ void StdCmdDuplicateSelection::activated(int iMsg)
         bool proceed = true;
         if (hasXLink && !doc->isSaved()) {
             auto ret = QMessageBox::question(
-                getMainWindow(),
+                Gui::uiParentWidget(),
                 qApp->translate("Std_DuplicateSelection", "Object Dependencies"),
                 qApp->translate(
                     "Std_DuplicateSelection",
@@ -1453,7 +1464,9 @@ void StdCmdDelete::activated(int iMsg)
 
         App::TransactionLocker tlock;
 
-        Gui::getMainWindow()->setUpdatesEnabled(false);
+        if (auto* mw = Gui::activeMainWindow()) {
+            mw->setUpdatesEnabled(false);
+        }
         auto editDoc = Application::Instance->editDocument();
         ViewProviderDocumentObject* vpedit = nullptr;
         if (editDoc) {
@@ -1530,7 +1543,7 @@ void StdCmdDelete::activated(int iMsg)
                 }
 
                 auto ret = QMessageBox::warning(
-                    Gui::getMainWindow(),
+                    Gui::uiParentWidget(),
                     qApp->translate("Std_Delete", "Object Dependencies"),
                     bodyMessage,
                     QMessageBox::Yes,
@@ -1573,7 +1586,7 @@ void StdCmdDelete::activated(int iMsg)
     }
     catch (const Base::Exception& e) {
         QMessageBox::critical(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Delete Failed"),
             QString::fromLatin1(e.what())
         );
@@ -1581,14 +1594,16 @@ void StdCmdDelete::activated(int iMsg)
     }
     catch (...) {
         QMessageBox::critical(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Delete Failed"),
             QStringLiteral("Unknown error")
         );
     }
     commitCommand();
-    Gui::getMainWindow()->setUpdatesEnabled(true);
-    Gui::getMainWindow()->update();
+    if (auto* mw = Gui::activeMainWindow()) {
+        mw->setUpdatesEnabled(true);
+        mw->update();
+    }
 }
 
 bool StdCmdDelete::isActive()
@@ -1638,7 +1653,7 @@ void StdCmdRefresh::activated([[maybe_unused]] int iMsg)
     }
     catch (Base::Exception& /*e*/) {
         auto ret = QMessageBox::warning(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Dependency Error"),
             qApp->translate(
                 "Std_Refresh",
@@ -1997,7 +2012,7 @@ protected:
 
     Gui::Action* createAction() override
     {
-        auto pcAction = new ActionGroup(this, getMainWindow());
+        auto pcAction = new ActionGroup(this, Gui::activeMainWindow());
         pcAction->setDropDownMenu(true);
         applyCommandData(this->className(), pcAction);
 
@@ -2120,7 +2135,7 @@ protected:
         }
         if (failed) {
             QMessageBox::critical(
-                getMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("Expression Error"),
                 QObject::tr(
                     "Failed to parse some of the expressions.\n"
@@ -2154,7 +2169,7 @@ protected:
         catch (const Base::Exception& e) {
             abortCommand();
             QMessageBox::critical(
-                getMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("Failed to Paste Expressions"),
                 QString::fromLatin1(e.what())
             );

@@ -64,7 +64,7 @@
 #include "ImageView.h"
 #include "Inventor/SoAxisCrossKit.h"
 #include "Macro.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 #include "Navigation/NavigationStyle.h"
 #include "OverlayParams.h"
 #include "OverlayManager.h"
@@ -339,7 +339,7 @@ StdCmdFreezeViews::StdCmdFreezeViews()
 
 Action* StdCmdFreezeViews::createAction()
 {
-    auto pcAction = new ActionGroup(this, getMainWindow());
+    auto pcAction = new ActionGroup(this, Gui::activeMainWindow());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -432,7 +432,7 @@ void StdCmdFreezeViews::onSaveViews()
 {
     // Save the views to an XML file
     QString fn = FileDialog::getSaveFileName(
-        getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Save Frozen Views"),
         QString(),
         QStringLiteral("%1 (*.cam)").arg(QObject::tr("Frozen views"))
@@ -478,7 +478,7 @@ void StdCmdFreezeViews::onRestoreViews()
     // Should we clear the already saved views
     if (savedViews > 0) {
         auto ret = QMessageBox::question(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Restore Views"),
             QObject::tr(
                 "Importing the restored views would clear the already stored views.\n"
@@ -494,7 +494,7 @@ void StdCmdFreezeViews::onRestoreViews()
 
     // Restore the views from an XML file
     QString fn = FileDialog::getOpenFileName(
-        getMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Restore Frozen Views"),
         QString(),
         QStringLiteral("%1 (*.cam)").arg(QObject::tr("Frozen views"))
@@ -505,7 +505,7 @@ void StdCmdFreezeViews::onRestoreViews()
     QFile file(fn);
     if (!file.open(QFile::ReadOnly)) {
         QMessageBox::critical(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Restore Views"),
             QObject::tr("Cannot open file '%1'.").arg(fn)
         );
@@ -710,7 +710,7 @@ StdCmdDrawStyle::StdCmdDrawStyle()
 
 Gui::Action* StdCmdDrawStyle::createAction()
 {
-    auto pcAction = new Gui::ActionGroup(this, Gui::getMainWindow());
+    auto pcAction = new Gui::ActionGroup(this, Gui::activeMainWindow());
     pcAction->setDropDownMenu(true);
     pcAction->setIsMode(true);
     applyCommandData(this->className(), pcAction);
@@ -1827,11 +1827,13 @@ void StdMainFullscreen::activated(int iMsg)
         view->setCurrentViewMode(MDIView::Child);
     }
 
-    if (getMainWindow()->isFullScreen()) {
-        getMainWindow()->showNormal();
-    }
-    else {
-        getMainWindow()->showFullScreen();
+    if (auto* mw = Gui::activeMainWindow()) {
+        if (mw->isFullScreen()) {
+            mw->showNormal();
+        }
+        else {
+            mw->showFullScreen();
+        }
     }
 }
 
@@ -1892,7 +1894,7 @@ StdViewDockUndockFullscreen::StdViewDockUndockFullscreen()
 
 Action* StdViewDockUndockFullscreen::createAction()
 {
-    auto pcAction = new ActionGroup(this, getMainWindow());
+    auto pcAction = new ActionGroup(this, Gui::activeMainWindow());
     pcAction->setDropDownMenu(true);
     pcAction->setText(QCoreApplication::translate(this->className(), getMenuText()));
 
@@ -1910,8 +1912,10 @@ Action* StdViewDockUndockFullscreen::createAction()
 void StdViewDockUndockFullscreen::activated(int iMsg)
 {
     // Check if main window is in fullscreen mode.
-    if (getMainWindow()->isFullScreen()) {
-        getMainWindow()->showNormal();
+    if (auto* mw = Gui::activeMainWindow()) {
+        if (mw->isFullScreen()) {
+            mw->showNormal();
+        }
     }
 
     MDIView* view = Application::Instance->activeWindow();
@@ -2058,7 +2062,7 @@ void StdViewScreenShot::activated(int iMsg)
             }
         }
 
-        FileOptionsDialog fd(getMainWindow(), Qt::WindowFlags());
+        FileOptionsDialog fd(Gui::uiParentWidget(), Qt::WindowFlags());
         fd.setFileMode(QFileDialog::AnyFile);
         fd.setAcceptMode(QFileDialog::AcceptSave);
         fd.setWindowTitle(QObject::tr("Save Image"));
@@ -2236,7 +2240,7 @@ void StdViewLoadImage::activated(int iMsg)
     }
 
     // Reading an image
-    QFileDialog dialog(Gui::getMainWindow());
+    QFileDialog dialog(Gui::uiParentWidget());
     dialog.setWindowTitle(QObject::tr("Choose an Image File to Open"));
     dialog.setMimeTypeFilters(mimeTypeFilters);
     dialog.selectMimeTypeFilter(QStringLiteral("image/png"));
@@ -2246,7 +2250,7 @@ void StdViewLoadImage::activated(int iMsg)
 
     if (dialog.exec()) {
         QString fileName = dialog.selectedFiles().constFirst();
-        ImageView* view = new ImageView(Gui::getMainWindow());
+        ImageView* view = new ImageView(Gui::uiParentWidget());
         view->loadFile(fileName);
         view->resize(400, 300);
         Application::Instance->addWindow(view);
@@ -3264,9 +3268,11 @@ StdCmdTreeCollapse::StdCmdTreeCollapse()
 void StdCmdTreeCollapse::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    QList<TreeWidget*> tree = Gui::getMainWindow()->findChildren<TreeWidget*>();
-    for (QList<TreeWidget*>::iterator it = tree.begin(); it != tree.end(); ++it) {
-        (*it)->expandSelectedItems(TreeItemMode::CollapseItem);
+    if (auto* mw = Gui::activeMainWindow()) {
+        const QList<TreeWidget*> trees = mw->findChildren<TreeWidget*>();
+        for (auto* tree : trees) {
+            tree->expandSelectedItems(TreeItemMode::CollapseItem);
+        }
     }
 }
 
@@ -3290,9 +3296,11 @@ StdCmdTreeExpand::StdCmdTreeExpand()
 void StdCmdTreeExpand::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    QList<TreeWidget*> tree = Gui::getMainWindow()->findChildren<TreeWidget*>();
-    for (QList<TreeWidget*>::iterator it = tree.begin(); it != tree.end(); ++it) {
-        (*it)->expandSelectedItems(TreeItemMode::ExpandItem);
+    if (auto* mw = Gui::activeMainWindow()) {
+        const QList<TreeWidget*> trees = mw->findChildren<TreeWidget*>();
+        for (auto* tree : trees) {
+            tree->expandSelectedItems(TreeItemMode::ExpandItem);
+        }
     }
 }
 
@@ -3355,9 +3363,11 @@ void StdCmdTreeSelectAllInstances::activated(int iMsg)
     }
     Selection().selStackPush();
     Selection().clearCompleteSelection();
-    const auto trees = getMainWindow()->findChildren<TreeWidget*>();
-    for (auto tree : trees) {
-        tree->selectAllInstances(*vpd);
+    if (auto* mw = Gui::activeMainWindow()) {
+        const auto trees = mw->findChildren<TreeWidget*>();
+        for (auto tree : trees) {
+            tree->selectAllInstances(*vpd);
+        }
     }
     Selection().selStackPush();
 }
@@ -3389,7 +3399,7 @@ void StdCmdSceneInspector::activated(int iMsg)
     if (doc) {
         static QPointer<Gui::Dialog::DlgInspector> dlg = nullptr;
         if (!dlg) {
-            dlg = new Gui::Dialog::DlgInspector(getMainWindow());
+            dlg = new Gui::Dialog::DlgInspector(Gui::uiParentWidget());
         }
         dlg->setDocument(doc);
         dlg->setAttribute(Qt::WA_DeleteOnClose);
@@ -3447,7 +3457,7 @@ void StdCmdDemoMode::activated(int iMsg)
     Q_UNUSED(iMsg);
     static QPointer<QDialog> dlg = nullptr;
     if (!dlg) {
-        dlg = new Gui::Dialog::DemoMode(getMainWindow());
+        dlg = new Gui::Dialog::DemoMode(Gui::uiParentWidget());
     }
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     dlg->show();
@@ -3743,11 +3753,13 @@ StdTreeDrag::StdTreeDrag()
 void StdTreeDrag::activated(int)
 {
     if (Gui::Selection().hasSelection()) {
-        const auto trees = getMainWindow()->findChildren<TreeWidget*>();
-        for (auto tree : trees) {
-            if (tree->isVisible()) {
-                tree->startDragging();
-                break;
+        if (auto* mw = Gui::activeMainWindow()) {
+            const auto trees = mw->findChildren<TreeWidget*>();
+            for (auto tree : trees) {
+                if (tree->isVisible()) {
+                    tree->startDragging();
+                    break;
+                }
             }
         }
     }

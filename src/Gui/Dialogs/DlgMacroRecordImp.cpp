@@ -32,7 +32,7 @@
 #include "Application.h"
 #include "FileDialog.h"
 #include "Macro.h"
-#include "MainWindow.h"
+#include "GuiShell.h"
 
 
 using namespace Gui::Dialog;
@@ -100,7 +100,7 @@ void DlgMacroRecordImp::onButtonStartClicked()
     // test if the path already set
     if (ui->lineEditPath->text().isEmpty()) {
         QMessageBox::information(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             tr("Macro recorder"),
             tr("Specify a place to save first.")
         );
@@ -110,7 +110,7 @@ void DlgMacroRecordImp::onButtonStartClicked()
     QDir dir(macroPath);
     if (!dir.exists()) {
         QMessageBox::information(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             tr("Macro recorder"),
             tr("The macro directory does not exist. Choose another one.")
         );
@@ -140,7 +140,7 @@ void DlgMacroRecordImp::onButtonStartClicked()
     QFile file(fn);
     if (!file.open(QFile::WriteOnly)) {
         QMessageBox::information(
-            getMainWindow(),
+            Gui::uiParentWidget(),
             tr("Macro recorder"),
             tr("You have no write permission for the directory. Choose another one.")
         );

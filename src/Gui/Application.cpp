@@ -816,7 +816,7 @@ void Application::open(const char* FileName, const char* Module)
     else {
         wc.restoreCursor();
         QMessageBox::warning(
-            Gui::activeMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Unknown filetype"),
             QObject::tr("Cannot open unknown filetype: %1").arg(QLatin1String(te.c_str()))
         );
@@ -925,7 +925,7 @@ void Application::importFrom(const char* FileName, const char* DocName, const ch
     else {
         wc.restoreCursor();
         QMessageBox::warning(
-            Gui::activeMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Unknown filetype"),
             QObject::tr("Cannot open unknown filetype: %1").arg(QLatin1String(te.c_str()))
         );
@@ -1002,7 +1002,7 @@ void Application::exportTo(const char* FileName, const char* DocName, const char
             e.reportException();
             wc.restoreCursor();
             QMessageBox::critical(
-                Gui::activeMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("Export failed"),
                 QString::fromUtf8(e.what())
             );
@@ -1012,7 +1012,7 @@ void Application::exportTo(const char* FileName, const char* DocName, const char
     else {
         wc.restoreCursor();
         QMessageBox::warning(
-            Gui::activeMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Unknown filetype"),
             QObject::tr("Cannot save to unknown filetype: %1").arg(QLatin1String(te.c_str()))
         );
@@ -1211,7 +1211,7 @@ void Application::checkForRecomputes()
     WaitCursor wc;
     wc.restoreCursor();
     auto res = QMessageBox::warning(
-        Gui::activeMainWindow(),
+        Gui::uiParentWidget(),
         QObject::tr("Recomputation required"),
         QObject::tr(
             "Some documents require recomputation for migration purposes. "
@@ -1237,7 +1237,7 @@ void Application::checkForRecomputes()
     }
     if (hasError) {
         QMessageBox::critical(
-            Gui::activeMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Recompute error"),
             QObject::tr(
                 "Failed to recompute some documents.\n"
@@ -1251,7 +1251,7 @@ void Application::checkPartialRestore(App::Document* doc)
 {
     if (doc && doc->testStatus(App::Document::PartialRestore)) {
         QMessageBox::critical(
-            Gui::activeMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Error"),
             QObject::tr(
                 "There were errors while loading the file. Some data might have been "
@@ -1266,7 +1266,7 @@ void Application::checkRestoreError(App::Document* doc)
 {
     if (doc && doc->testStatus(App::Document::RestoreError)) {
         QMessageBox::critical(
-            Gui::activeMainWindow(),
+            Gui::uiParentWidget(),
             QObject::tr("Error"),
             QObject::tr(
                 "There were serious errors while loading the file. Some data might have "
@@ -2535,7 +2535,7 @@ bool Application::activateWorkbench(const char* name)
         if (!d->startingUp) {
             wc.restoreCursor();
             QMessageBox::critical(
-                Gui::activeMainWindow(),
+                Gui::uiParentWidget(),
                 QObject::tr("Workbench failure"),
                 QObject::tr("%1").arg(msg)
             );
