@@ -34,6 +34,8 @@
 #include <QMessageLogContext>
 #include <QMdiSubWindow>
 #include <QMenu>
+#include <QUrl>
+#include <QUrlQuery>
 #include <QRegularExpression>
 #include <QRegularExpressionMatch>
 #include <QScreen>
@@ -93,6 +95,8 @@
 #include "StandardDockWidgetRegistration.h"
 #include "DockWindowManager.h"
 #include "ToolBarManager.h"
+#include "ModuleIO.h"
+#include "DownloadManager.h"
 #include "Macro.h"
 #include "PreferencePackManager.h"
 #include "PythonConsolePy.h"
@@ -812,7 +816,7 @@ void Application::open(const char* FileName, const char* Module)
     else {
         wc.restoreCursor();
         QMessageBox::warning(
-            getMainWindow(),
+            Gui::activeMainWindow(),
             QObject::tr("Unknown filetype"),
             QObject::tr("Cannot open unknown filetype: %1").arg(QLatin1String(te.c_str()))
         );
@@ -921,7 +925,7 @@ void Application::importFrom(const char* FileName, const char* DocName, const ch
     else {
         wc.restoreCursor();
         QMessageBox::warning(
-            getMainWindow(),
+            Gui::activeMainWindow(),
             QObject::tr("Unknown filetype"),
             QObject::tr("Cannot open unknown filetype: %1").arg(QLatin1String(te.c_str()))
         );
@@ -998,7 +1002,7 @@ void Application::exportTo(const char* FileName, const char* DocName, const char
             e.reportException();
             wc.restoreCursor();
             QMessageBox::critical(
-                getMainWindow(),
+                Gui::activeMainWindow(),
                 QObject::tr("Export failed"),
                 QString::fromUtf8(e.what())
             );
@@ -1008,7 +1012,7 @@ void Application::exportTo(const char* FileName, const char* DocName, const char
     else {
         wc.restoreCursor();
         QMessageBox::warning(
-            getMainWindow(),
+            Gui::activeMainWindow(),
             QObject::tr("Unknown filetype"),
             QObject::tr("Cannot save to unknown filetype: %1").arg(QLatin1String(te.c_str()))
         );
@@ -1207,7 +1211,7 @@ void Application::checkForRecomputes()
     WaitCursor wc;
     wc.restoreCursor();
     auto res = QMessageBox::warning(
-        getMainWindow(),
+        Gui::activeMainWindow(),
         QObject::tr("Recomputation required"),
         QObject::tr(
             "Some documents require recomputation for migration purposes. "
@@ -1233,7 +1237,7 @@ void Application::checkForRecomputes()
     }
     if (hasError) {
         QMessageBox::critical(
-            getMainWindow(),
+            Gui::activeMainWindow(),
             QObject::tr("Recompute error"),
             QObject::tr(
                 "Failed to recompute some documents.\n"
@@ -1247,7 +1251,7 @@ void Application::checkPartialRestore(App::Document* doc)
 {
     if (doc && doc->testStatus(App::Document::PartialRestore)) {
         QMessageBox::critical(
-            getMainWindow(),
+            Gui::activeMainWindow(),
             QObject::tr("Error"),
             QObject::tr(
                 "There were errors while loading the file. Some data might have been "
@@ -1262,7 +1266,7 @@ void Application::checkRestoreError(App::Document* doc)
 {
     if (doc && doc->testStatus(App::Document::RestoreError)) {
         QMessageBox::critical(
-            getMainWindow(),
+            Gui::activeMainWindow(),
             QObject::tr("Error"),
             QObject::tr(
                 "There were serious errors while loading the file. Some data might have "
@@ -1709,7 +1713,7 @@ void Application::updateActions(bool delay)
         shell->updateActions(delay);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->updateActions(delay);
     }
 }
@@ -1720,7 +1724,7 @@ void Application::showMessage(const QString& message, int timeout)
         shell->showMessage(message, timeout);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->showMessage(message, timeout);
     }
 }
@@ -1731,7 +1735,7 @@ void Application::setStatusPaneText(int pane, const QString& text)
         shell->setStatusPaneText(pane, text);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->setPaneText(pane, text);
     }
 }
@@ -1742,7 +1746,7 @@ void Application::addStatusPermanentWidget(QWidget* widget, int stretch)
         shell->addStatusPermanentWidget(widget, stretch);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         if (auto* sb = mw->statusBar()) {
             sb->addPermanentWidget(widget, stretch);
         }
@@ -1755,7 +1759,7 @@ void Application::removeStatusWidget(QWidget* widget)
         shell->removeStatusWidget(widget);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         if (auto* sb = mw->statusBar()) {
             sb->removeWidget(widget);
         }
@@ -1768,7 +1772,7 @@ void Application::addWindow(Gui::MDIView* view)
         shell->addWindow(view);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->addWindow(view);
     }
 }
@@ -1779,7 +1783,7 @@ void Application::removeWindow(Gui::MDIView* view, bool close)
         shell->removeWindow(view, close);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->removeWindow(view, close);
     }
 }
@@ -1789,7 +1793,7 @@ QList<QWidget*> Application::windows() const
     if (auto* shell = Gui::activeShell()) {
         return shell->windows();
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         return mw->windows();
     }
     return {};
@@ -1800,7 +1804,7 @@ QMdiArea* Application::mdiArea() const
     if (auto* shell = Gui::activeShell()) {
         return shell->mdiArea();
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         return mw->getMdiArea();
     }
     return nullptr;
@@ -1811,7 +1815,7 @@ Gui::MDIView* Application::activeWindow() const
     if (auto* shell = Gui::activeShell()) {
         return shell->activeWindow();
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         return mw->activeWindow();
     }
     return nullptr;
@@ -1823,7 +1827,7 @@ void Application::setActiveWindow(Gui::MDIView* view)
         shell->setActiveWindow(view);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->setActiveWindow(view);
     }
 }
@@ -1834,7 +1838,7 @@ void Application::tabChanged(Gui::MDIView* view)
         shell->tabChanged(view);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->tabChanged(view);
     }
 }
@@ -1845,7 +1849,7 @@ void Application::tile()
         shell->tile();
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->tile();
     }
 }
@@ -1856,7 +1860,7 @@ void Application::cascade()
         shell->cascade();
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->cascade();
     }
 }
@@ -1867,7 +1871,7 @@ void Application::closeActiveWindow()
         shell->closeActiveWindow();
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->closeActiveWindow();
     }
 }
@@ -1877,7 +1881,7 @@ bool Application::closeAllDocuments(bool close)
     if (auto* shell = Gui::activeShell()) {
         return shell->closeAllDocuments(close);
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         return mw->closeAllDocuments(close);
     }
     return true;
@@ -1889,7 +1893,7 @@ void Application::activateNextWindow()
         shell->activateNextWindow();
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->activateNextWindow();
     }
 }
@@ -1900,7 +1904,7 @@ void Application::activatePreviousWindow()
         shell->activatePreviousWindow();
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->activatePreviousWindow();
     }
 }
@@ -1911,7 +1915,7 @@ void Application::showStatus(int type, const QString& message)
         shell->showStatus(type, message);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->showStatus(type, message);
     }
 }
@@ -1922,7 +1926,7 @@ void Application::showHints(const std::list<InputHint>& hints)
         shell->showHints(hints);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->showHints(hints);
     }
 }
@@ -1933,7 +1937,7 @@ void Application::hideHints()
         shell->hideHints();
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->hideHints();
     }
 }
@@ -1944,7 +1948,7 @@ void Application::setUserSchema(int userSchema)
         shell->setUserSchema(userSchema);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->setUserSchema(userSchema);
     }
 }
@@ -1955,7 +1959,7 @@ void Application::initDockWindows(bool show)
         shell->initDockWindows(show);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->initDockWindows(show);
     }
 }
@@ -1966,7 +1970,7 @@ void Application::appendRecentFile(const QString& filename)
         shell->appendRecentFile(filename);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->appendRecentFile(filename);
     }
 }
@@ -1977,7 +1981,7 @@ void Application::appendRecentMacro(const QString& filename)
         shell->appendRecentMacro(filename);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
         mw->appendRecentMacro(filename);
     }
 }
@@ -1988,7 +1992,7 @@ void Application::setMainWindowTitle(const QString& title)
         shell->setMainWindowTitle(title);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = Gui::activeMainWindow()) {
         mw->setWindowTitle(title);
     }
 }
@@ -1999,7 +2003,7 @@ void Application::setMainWindowModified(bool modified)
         shell->setMainWindowModified(modified);
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = Gui::activeMainWindow()) {
         mw->setWindowModified(modified);
     }
 }
@@ -2010,7 +2014,7 @@ void Application::setWaitCursor()
         shell->setWaitCursor();
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = Gui::activeMainWindow()) {
         mw->setCursor(Qt::WaitCursor);
     }
 }
@@ -2021,7 +2025,7 @@ void Application::unsetCursor()
         shell->unsetCursor();
         return;
     }
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = Gui::activeMainWindow()) {
         mw->unsetCursor();
     }
 }
@@ -2039,7 +2043,7 @@ void Application::attachDockWindowMenu(QMenu* menu)
         return;
     }
 
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = Gui::activeMainWindow()) {
         DockWindowManager::instance(mw, "BaseApp/MainWindow")->attachDockWindowMenu(menu);
     }
 }
@@ -2057,7 +2061,7 @@ void Application::attachToolBarMenu(QMenu* menu)
         return;
     }
 
-    if (auto* mw = getMainWindow()) {
+    if (auto* mw = Gui::activeMainWindow()) {
         ToolBarManager::getInstance(mw, "BaseApp/MainWindow")->attachToolBarMenu(menu);
     }
 }
@@ -2159,6 +2163,148 @@ void Application::updateWindowsMenu()
     if (numWindows > 0) {
         actions.last()->setVisible(true);
     }
+}
+
+int Application::confirmSave(App::Document* doc, QWidget* parent, bool addCheckbox)
+{
+    if (!doc) {
+        return MainWindow::ConfirmSaveResult::Cancel;
+    }
+
+    QMessageBox box(parent ? parent : Gui::activeMainWindow());
+    box.setObjectName(QStringLiteral("confirmSave"));
+    box.setIcon(QMessageBox::Question);
+    box.setWindowFlags(box.windowFlags() | Qt::WindowStaysOnTopHint);
+    box.setWindowTitle(QObject::tr("Unsaved Document"));
+    const QString docName = QString::fromStdString(doc->Label.getStrValue());
+    const QString text
+        = (!docName.isEmpty()
+               ? QObject::tr("Save all changes to document '%1' before closing?").arg(docName)
+               : QObject::tr("Save all changes to document before closing?"));
+    box.setText(text);
+
+    box.setInformativeText(QObject::tr("Otherwise, all changes will be lost."));
+    box.setStandardButtons(QMessageBox::Discard | QMessageBox::Cancel | QMessageBox::Save);
+    box.setDefaultButton(QMessageBox::Save);
+    box.setEscapeButton(QMessageBox::Cancel);
+
+    QCheckBox checkBox(QObject::tr("Apply to all"));
+    ParameterGrp::handle hGrp;
+    if (addCheckbox) {
+        hGrp = App::GetApplication()
+                   .GetUserParameter()
+                   .GetGroup("BaseApp")
+                   ->GetGroup("Preferences")
+                   ->GetGroup("General");
+        checkBox.setChecked(hGrp->GetBool("ConfirmAll", false));
+        checkBox.blockSignals(true);
+        box.addButton(&checkBox, QMessageBox::ResetRole);
+    }
+
+    QAbstractButton* saveBtn = box.button(QMessageBox::Save);
+    if (saveBtn && saveBtn->shortcut().isEmpty()) {
+        QString text = saveBtn->text();
+        text.prepend(QLatin1Char('&'));
+        saveBtn->setShortcut(QKeySequence::mnemonic(text));
+    }
+
+    QAbstractButton* discardBtn = box.button(QMessageBox::Discard);
+    if (discardBtn && discardBtn->shortcut().isEmpty()) {
+        QString text = discardBtn->text();
+        text.prepend(QLatin1Char('&'));
+        discardBtn->setShortcut(QKeySequence::mnemonic(text));
+    }
+
+    int res = MainWindow::ConfirmSaveResult::Cancel;
+    box.adjustSize();  // Silence warnings from Qt on Windows
+
+    MDIView* activeView = activeWindow();
+    App::Document* activeDoc = (activeView ? activeView->getAppDocument() : nullptr);
+    if (activeDoc != doc) {
+        const QList<QWidget*> listOfMDIs = windows();
+        for (QWidget* widget : listOfMDIs) {
+            auto mdiView = qobject_cast<MDIView*>(widget);
+            if (mdiView != nullptr && mdiView->getAppDocument() == doc) {
+                setActiveWindow(mdiView);
+            }
+        }
+    }
+
+    switch (box.exec()) {
+        case QMessageBox::Save:
+            res = checkBox.isChecked() ? MainWindow::ConfirmSaveResult::SaveAll
+                                       : MainWindow::ConfirmSaveResult::Save;
+            break;
+        case QMessageBox::Discard:
+            res = checkBox.isChecked() ? MainWindow::ConfirmSaveResult::DiscardAll
+                                       : MainWindow::ConfirmSaveResult::Discard;
+            break;
+    }
+
+    if (addCheckbox && res && hGrp) {
+        hGrp->SetBool("ConfirmAll", checkBox.isChecked());
+    }
+    return res;
+}
+
+void Application::loadUrls(App::Document* doc, const QList<QUrl>& urls)
+{
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+        mw->loadUrls(doc, urls);
+        return;
+    }
+
+    QStringList files;
+    for (const auto& it : urls) {
+        if (it.isLocalFile()) {
+            QFileInfo info(it.toLocalFile());
+            if (info.exists() && info.isFile()) {
+                if (info.isSymLink()) {
+                    info.setFile(info.symLinkTarget());
+                }
+
+                std::vector<std::string> module = App::GetApplication().getImportModules(
+                    info.completeSuffix().toLatin1()
+                );
+                if (module.empty()) {
+                    module = App::GetApplication().getImportModules(info.suffix().toLatin1());
+                }
+                if (!module.empty()) {
+                    files << info.absoluteFilePath();
+                }
+                else {
+                    Base::Console().message(
+                        "No support to load file '%s'\n",
+                        (const char*)info.absoluteFilePath().toUtf8()
+                    );
+                }
+            }
+            continue;
+        }
+
+        if (it.scheme().toLower() == QLatin1String("http")) {
+            Gui::Dialog::DownloadManager* dm = Gui::Dialog::DownloadManager::getInstance();
+            dm->download(dm->redirectUrl(it));
+        }
+        else if (it.scheme().toLower() == QLatin1String("https")) {
+            QUrl url = it;
+            QUrlQuery urlq(url);
+            if (urlq.hasQueryItem(QLatin1String("sid"))) {
+                urlq.removeAllQueryItems(QLatin1String("sid"));
+                url.setQuery(urlq);
+                url.setScheme(QLatin1String("http"));
+            }
+            Gui::Dialog::DownloadManager* dm = Gui::Dialog::DownloadManager::getInstance();
+            dm->download(dm->redirectUrl(url));
+        }
+        else if (it.scheme().toLower() == QLatin1String("ftp")) {
+            Gui::Dialog::DownloadManager::getInstance()->download(it);
+        }
+    }
+
+    QByteArray docName = doc ? QByteArray(doc->getName())
+                             : qApp->translate("StdCmdNew", "Unnamed").toUtf8();
+    ModuleIO::importFiles(files, docName);
 }
 
 void Application::tryClose(QCloseEvent* e)
@@ -2311,7 +2457,7 @@ bool Application::activateWorkbench(const char* name)
             if (auto* shell = Gui::activeShell()) {
                 shell->activateWorkbench(QString::fromLatin1(name));
             }
-            else if (auto* mw = getMainWindow()) {
+            else if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
                 mw->activateWorkbench(QString::fromLatin1(name));
             }
             this->signalActivateWorkbench(name);
@@ -2389,7 +2535,7 @@ bool Application::activateWorkbench(const char* name)
         if (!d->startingUp) {
             wc.restoreCursor();
             QMessageBox::critical(
-                getMainWindow(),
+                Gui::activeMainWindow(),
                 QObject::tr("Workbench failure"),
                 QObject::tr("%1").arg(msg)
             );
@@ -3074,7 +3220,7 @@ void Application::runApplication()
 
     // boot phase reference point
     // https://forum.freecad.org/viewtopic.php?f=10&t=21665
-    Gui::getMainWindow()->setProperty("eventLoop", true);
+    mw.setProperty("eventLoop", true);
 
 #ifdef USE_3DCONNEXION_NAVLIB
     if (Instance->pNavlibInterface) {
@@ -3107,9 +3253,15 @@ void Application::setStatus(Status pos, bool on)
 
 void Application::setStyleSheet(const QString& qssFile, bool tiledBackground)
 {
-    Gui::MainWindow* mw = getMainWindow();
-    auto mdi = mw->findChild<QMdiArea*>();
-    mdi->setProperty("showImage", tiledBackground);
+    auto* mw = Gui::activeMainWindow();
+    if (!mw) {
+        return;
+    }
+
+    auto* mdi = mw->findChild<QMdiArea*>();
+    if (mdi) {
+        mdi->setProperty("showImage", tiledBackground);
+    }
 
     // Qt's style sheet doesn't support it to define the link color of a QLabel
     // or in the property editor when an expression is set because therefore the
@@ -3206,14 +3358,18 @@ void Application::setStyleSheet(const QString& qssFile, bool tiledBackground)
         if (tiledBackground) {
             qApp->setStyleSheet(defaultStyleSheet);
             ActionStyleEvent e(ActionStyleEvent::Restore);
-            qApp->sendEvent(getMainWindow(), &e);
-            mdi->setBackground(QPixmap(QLatin1String("images:background.png")));
+            qApp->sendEvent(mw, &e);
+            if (mdi) {
+                mdi->setBackground(QPixmap(QLatin1String("images:background.png")));
+            }
         }
         else {
             qApp->setStyleSheet(defaultStyleSheet);
             ActionStyleEvent e(ActionStyleEvent::Restore);
-            qApp->sendEvent(getMainWindow(), &e);
-            mdi->setBackground(QBrush(QColor(160, 160, 160)));
+            qApp->sendEvent(mw, &e);
+            if (mdi) {
+                mdi->setBackground(QBrush(QColor(160, 160, 160)));
+            }
         }
     }
 
@@ -3230,7 +3386,10 @@ void Application::setStyleSheet(const QString& qssFile, bool tiledBackground)
 
 void Application::reloadStyleSheet()
 {
-    const MainWindow* mw = getMainWindow();
+    const auto* mw = Gui::activeMainWindow();
+    if (!mw) {
+        return;
+    }
 
     const QString qssFile = mw->property("fc_currentStyleSheet").toString();
     const bool tiledBackground = mw->property("fc_tiledBackground").toBool();

@@ -758,7 +758,7 @@ void View3DInventor::dropEvent(QDropEvent* e)
 {
     const QMimeData* data = e->mimeData();
     if (data->hasUrls()) {
-        getMainWindow()->loadUrls(getAppDocument(), data->urls());
+        Application::Instance->loadUrls(getAppDocument(), data->urls());
     }
     else {
         MDIView::dropEvent(e);

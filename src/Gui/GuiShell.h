@@ -26,13 +26,13 @@
 #include <FCGlobal.h>
 
 #include <QList>
+#include <QMainWindow>
 
 #include <list>
 #include <memory>
 #include <string>
 
 class QMdiArea;
-class QMainWindow;
 class QString;
 class QWidget;
 

@@ -448,7 +448,7 @@ ToolBarManager* ToolBarManager::getInstance()
     if (auto* shell = Gui::activeShell()) {
         return getInstance(shell->mainWindow(), shell->chromeStatePrefix());
     }
-    return getInstance(getMainWindow(), "BaseApp/MainWindow");
+    return getInstance(Gui::activeMainWindow(), "BaseApp/MainWindow");
 }
 
 ToolBarManager* ToolBarManager::getInstance(QMainWindow* hostWindow, const std::string& statePrefix)

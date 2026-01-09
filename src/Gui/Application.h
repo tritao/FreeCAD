@@ -37,6 +37,7 @@
 class QCloseEvent;
 class QMdiArea;
 class QMenu;
+class QUrl;
 class QWidget;
 class SoNode;
 class NavlibInterface;
@@ -257,6 +258,8 @@ public:
     void attachToolBarMenu(QMenu* menu);
     void attachWindowsMenu(QMenu* menu);
     void updateWindowsMenu();
+    int confirmSave(App::Document* doc, QWidget* parent = nullptr, bool addCheckBox = false);
+    void loadUrls(App::Document* doc, const QList<QUrl>& urls);
 
     /** @name workbench handling */
     //@{

@@ -102,11 +102,13 @@ App::Document* FileHandler::createDocumentIfNeeded()
 
 bool FileHandler::activateEditor()
 {
-    QList<EditorView*> views = getMainWindow()->findChildren<EditorView*>();
-    for (const auto& it : views) {
-        if (it->fileName() == filename) {
-            it->setFocus();
-            return true;
+    if (auto* mw = Gui::activeMainWindow()) {
+        const QList<EditorView*> views = mw->findChildren<EditorView*>();
+        for (const auto& it : views) {
+            if (it->fileName() == filename) {
+                it->setFocus();
+                return true;
+            }
         }
     }
 

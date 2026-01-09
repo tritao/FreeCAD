@@ -46,6 +46,7 @@
 #include "ApplicationPy.h"
 #include "BitmapFactory.h"
 #include "Command.h"
+#include "GuiShell.h"
 #include "Dialogs/DlgPreferencesImp.h"
 #include "Document.h"
 #include "DocumentObserverPython.h"
@@ -1664,7 +1665,7 @@ PyObject* ApplicationPy::sShowPreferences(PyObject* /*self*/, PyObject* args)
         return nullptr;
     }
 
-    Gui::Dialog::DlgPreferencesImp cDlg(getMainWindow());
+    Gui::Dialog::DlgPreferencesImp cDlg(Gui::activeMainWindow());
     if (pstr) {
         cDlg.activateGroupPage(QString::fromUtf8(pstr), idx);
     }
@@ -1685,7 +1686,7 @@ PyObject* ApplicationPy::sShowPreferencesByName(PyObject* /*self*/, PyObject* ar
         return nullptr;
     }
 
-    Gui::Dialog::DlgPreferencesImp cDlg(getMainWindow());
+    Gui::Dialog::DlgPreferencesImp cDlg(Gui::activeMainWindow());
     if (pstr && prefType) {
         cDlg.activateGroupPageByPageName(QString::fromUtf8(pstr), QString::fromUtf8(prefType));
     }

@@ -33,7 +33,6 @@
 #include "Application.h"
 #include "BitmapFactory.h"
 #include "CommandT.h"
-#include "MainWindow.h"
 #include "View3DInventor.h"
 #include "View3DInventorViewer.h"
 
@@ -74,7 +73,9 @@ void ToolHandler::deactivate()
 
     unsetCursor();
 
-    Gui::MainWindow::getInstance()->hideHints();
+    if (Application::Instance) {
+        Application::Instance->hideHints();
+    }
 }
 
 //**************************************************************************

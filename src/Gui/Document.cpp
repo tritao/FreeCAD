@@ -60,6 +60,7 @@
 #include "Command.h"
 #include "Control.h"
 #include "FileDialog.h"
+#include "GuiShell.h"
 #include "MainWindow.h"
 #include "MDIView.h"
 #include "NotificationArea.h"
@@ -1469,7 +1470,7 @@ static bool checkCanonicalPath(const std::map<App::Document*, bool>& docs)
         }
     }
     int ret = QMessageBox::warning(
-        getMainWindow(),
+        Gui::activeMainWindow(),
         QObject::tr("Identical physical path"),
         msg,
         QMessageBox::Yes,
@@ -1481,7 +1482,7 @@ static bool checkCanonicalPath(const std::map<App::Document*, bool>& docs)
 bool Document::askIfSavingFailed(const QString& error)
 {
     int ret = QMessageBox::question(
-        getMainWindow(),
+        Gui::activeMainWindow(),
         QObject::tr("Could not save document"),
         QObject::tr(
             "There was an issue trying to save the file. "
@@ -1542,7 +1543,7 @@ bool Document::save()
 
             if (docs.size() > 1) {
                 int ret = QMessageBox::question(
-                    getMainWindow(),
+                    Gui::activeMainWindow(),
                     QObject::tr("Save dependent files"),
                     QObject::tr(
                         "The file contains external dependencies. "
@@ -1589,7 +1590,7 @@ bool Document::save()
         }
         catch (const Base::Exception& e) {
             QMessageBox::critical(
-                getMainWindow(),
+                Gui::activeMainWindow(),
                 QObject::tr("Saving document failed"),
                 QString::fromLatin1(e.what())
             );
@@ -1613,7 +1614,7 @@ bool Document::saveAs()
         name = QString::fromUtf8(getDocument()->Label.getValue());
     }
     QString fn = FileDialog::getSaveFileName(
-        getMainWindow(),
+        Gui::activeMainWindow(),
         QObject::tr("Save %1 Document").arg(exe),
         name,
         QStringLiteral("%1 %2 (*.FCStd)").arg(exe, QObject::tr("Document"))
@@ -1647,7 +1648,7 @@ bool Document::saveAs()
         }
         catch (const Base::Exception& e) {
             QMessageBox::critical(
-                getMainWindow(),
+                Gui::activeMainWindow(),
                 QObject::tr("Saving document failed"),
                 QString::fromLatin1(e.what())
             );
@@ -1669,7 +1670,7 @@ void Document::saveAll()
     catch (Base::Exception& e) {
         e.reportException();
         int ret = QMessageBox::critical(
-            getMainWindow(),
+            Gui::activeMainWindow(),
             QObject::tr("Failed to save document"),
             QObject::tr("Documents contains cyclic dependencies. Do you still want to save them?"),
             QMessageBox::Yes,
@@ -1719,7 +1720,7 @@ void Document::saveAll()
         }
         catch (const Base::Exception& e) {
             QMessageBox::critical(
-                getMainWindow(),
+                Gui::activeMainWindow(),
                 QObject::tr("Failed to save document")
                     + QStringLiteral(": %1").arg(QString::fromUtf8(doc->getName())),
                 QString::fromLatin1(e.what())
@@ -1736,7 +1737,7 @@ bool Document::saveCopy()
 
     QString exe = qApp->applicationName();
     QString fn = FileDialog::getSaveFileName(
-        getMainWindow(),
+        Gui::activeMainWindow(),
         QObject::tr("Save %1 Document").arg(exe),
         QString::fromUtf8(getDocument()->FileName.getValue()),
         QObject::tr("%1 document (*.FCStd)").arg(exe)
@@ -2222,7 +2223,7 @@ MDIView* Document::createView(const Base::Type& typeId, CreateViewMode mode)
             saveCameraSettings(ppReturn);
         }
 
-        auto view3D = new View3DInventor(this, getMainWindow(), shareWidget);
+        auto view3D = new View3DInventor(this, Gui::activeMainWindow(), shareWidget);
         if (!theViews.empty()) {
             auto firstView = static_cast<View3DInventor*>(theViews.front());
             std::string overrideMode = firstView->getViewer()->getOverrideMode();
@@ -2442,7 +2443,7 @@ bool Document::canClose(bool checkModify, bool checkLink)
 
     bool ok = true;
     if (checkModify && isModified() && !getDocument()->testStatus(App::Document::PartialDoc)) {
-        int res = getMainWindow()->confirmSave(getDocument(), getActiveView());
+        int res = Application::Instance->confirmSave(getDocument(), getActiveView());
         switch (res) {
             case MainWindow::ConfirmSaveResult::Cancel:
                 ok = false;
@@ -2817,7 +2818,7 @@ bool Document::checkTransactionID(bool undo, int iSteps)
             str << "    " << doc->getName() << "\n";
         }
         int ret = QMessageBox::warning(
-            getMainWindow(),
+            Gui::activeMainWindow(),
             undo ? QObject::tr("Undo") : QObject::tr("Redo"),
             QStringLiteral("%1,\n%2%3")
                 .arg(

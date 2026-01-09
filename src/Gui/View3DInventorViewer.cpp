@@ -107,6 +107,7 @@
 #include "Application.h"
 #include "Command.h"
 #include "Document.h"
+#include "GuiShell.h"
 #include "GLPainter.h"
 #include "Inventor/SoAxisCrossKit.h"
 #include "Inventor/SoFCBackgroundGradient.h"
@@ -750,7 +751,7 @@ View3DInventorViewer::~View3DInventorViewer()
     delete this->navigation;
 
     // Note: When closing the application the main window doesn't exist any more.
-    if (getMainWindow()) {
+    if (Gui::activeMainWindow()) {
         Application::Instance->setStatusPaneText(2, QLatin1String(""));
     }
 
@@ -4556,7 +4557,7 @@ void View3DInventorViewer::dropEvent(QDropEvent* ev)
 {
     const QMimeData* data = ev->mimeData();
     if (data->hasUrls() && selectionRoot && selectionRoot->pcDocument) {
-        getMainWindow()->loadUrls(selectionRoot->pcDocument->getDocument(), data->urls());
+        Application::Instance->loadUrls(selectionRoot->pcDocument->getDocument(), data->urls());
     }
     else {
         inherited::dropEvent(ev);

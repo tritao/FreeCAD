@@ -175,7 +175,7 @@ DockWindowManager* DockWindowManager::instance()
     if (auto* shell = Gui::activeShell()) {
         return instance(shell->mainWindow(), shell->chromeStatePrefix());
     }
-    return instance(getMainWindow(), "BaseApp/MainWindow");
+    return instance(Gui::activeMainWindow(), "BaseApp/MainWindow");
 }
 
 namespace {

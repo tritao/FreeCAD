@@ -37,7 +37,7 @@
 
 #include <Gui/Application.h>
 #include <Gui/MDIView.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/View3DInventor.h>
 #include <Gui/View3DInventorViewer.h>
 #include <Gui/ViewProvider.h>
@@ -195,7 +195,8 @@ void NavlibInterface::enableNavigation()
 
 void NavlibInterface::connectActiveTab()
 {
-    auto pQMdiArea = Gui::MainWindow::getInstance()->findChild<QMdiArea*>();
+    auto* mw = Gui::activeMainWindow();
+    auto pQMdiArea = mw ? mw->findChild<QMdiArea*>() : nullptr;
     if (pQMdiArea == nullptr)
         return;
 
