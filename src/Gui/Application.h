@@ -228,6 +228,9 @@ public:
 
     void showMessage(const QString& message, int timeout = 0);
     void setStatusPaneText(int pane, const QString& text);
+    void showStatusBar();
+    bool isStatusBarVisible() const;
+    void setStatusBarVisible(bool visible);
     void addStatusPermanentWidget(QWidget* widget, int stretch = 0);
     void removeStatusWidget(QWidget* widget);
     void addWindow(Gui::MDIView* view);

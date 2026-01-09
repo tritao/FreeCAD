@@ -1740,6 +1740,52 @@ void Application::setStatusPaneText(int pane, const QString& text)
     }
 }
 
+void Application::showStatusBar()
+{
+    if (auto* shell = Gui::activeShell()) {
+        if (auto* sb = shell->services().statusBar()) {
+            sb->show();
+        }
+        return;
+    }
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+        if (auto* sb = mw->statusBar()) {
+            sb->show();
+        }
+    }
+}
+
+bool Application::isStatusBarVisible() const
+{
+    if (auto* shell = Gui::activeShell()) {
+        if (auto* sb = shell->services().statusBar()) {
+            return sb->isVisible();
+        }
+        return false;
+    }
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+        if (auto* sb = mw->statusBar()) {
+            return sb->isVisible();
+        }
+    }
+    return false;
+}
+
+void Application::setStatusBarVisible(bool visible)
+{
+    if (auto* shell = Gui::activeShell()) {
+        if (auto* sb = shell->services().statusBar()) {
+            sb->setVisible(visible);
+        }
+        return;
+    }
+    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+        if (auto* sb = mw->statusBar()) {
+            sb->setVisible(visible);
+        }
+    }
+}
+
 void Application::addStatusPermanentWidget(QWidget* widget, int stretch)
 {
     if (auto* shell = Gui::activeShell()) {

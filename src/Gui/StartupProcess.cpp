@@ -432,7 +432,7 @@ void StartupPostProcess::setBranding()
         if (!px.isNull()) {
             auto logo = new QLabel();
             logo->setPixmap(px.scaledToHeight(32));
-            mainWindow->statusBar()->addPermanentWidget(logo, 0);
+            Application::Instance->addStatusPermanentWidget(logo, 0);
             logo->setFrameShape(QFrame::NoFrame);
         }
     }

@@ -28,6 +28,7 @@
 #include "Action.h"
 #include "Application.h"
 #include "GuiShell.h"
+#include "GuiShellServices.h"
 #include "MainWindow.h"
 #include "View.h"
 #include "Document.h"
@@ -400,9 +401,9 @@ protected:
     Action* action;
     bool eventFilter(QObject* obj, QEvent* event) override
     {
-        if (auto* mw = Gui::activeMainWindow(); mw && obj == mw->statusBar()
-            && ((event->type() == QEvent::Hide) || (event->type() == QEvent::Show))) {
-            this->action->setChecked(mw->statusBar()->isVisible());
+        Q_UNUSED(obj);
+        if ((event->type() == QEvent::Hide) || (event->type() == QEvent::Show)) {
+            this->action->setChecked(Gui::Application::Instance->isStatusBarVisible());
         }
         return false;
     }
@@ -427,7 +428,12 @@ Action* StdCmdStatusBar::createAction()
     pcAction->setCheckable(true);
     pcAction->setBlockedChecked(false);
     auto fsb = new FilterStatusBar(pcAction);
-    if (auto* mw = Gui::activeMainWindow()) {
+    if (auto* shell = Gui::activeShell()) {
+        if (auto* sb = shell->services().statusBar()) {
+            sb->installEventFilter(fsb);
+        }
+    }
+    else if (auto* mw = Gui::activeMainWindow()) {
         if (auto* sb = mw->statusBar()) {
             sb->installEventFilter(fsb);
         }
@@ -438,11 +444,7 @@ Action* StdCmdStatusBar::createAction()
 
 void StdCmdStatusBar::activated(int iMsg)
 {
-    if (auto* mw = Gui::activeMainWindow()) {
-        if (auto* sb = mw->statusBar()) {
-            sb->setVisible(iMsg != 0);
-        }
-    }
+    Gui::Application::Instance->setStatusBarVisible(iMsg != 0);
 }
 
 bool StdCmdStatusBar::isActive()
