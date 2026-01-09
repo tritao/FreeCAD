@@ -30,6 +30,8 @@
 #include <Base/Parameter.h>
 #include <Gui/TaskView/TaskWatcher.h>
 
+class QMainWindow;
+
 namespace Base
 {
 class PyObjectBase;
@@ -82,6 +84,14 @@ public:
      * Activates the workbench and adds/removes GUI elements.
      */
     bool activate();
+
+    /**
+     * Applies the workbench chrome (menus/toolbars/docks) to an arbitrary host window.
+     *
+     * This is intended for alternative shells that still want to reuse the existing workbench-driven
+     * chrome managers without reimplementing them.
+     */
+    bool applyChromeTo(QMainWindow* hostWindow, const std::string& statePrefix);
     /**
      * Translates the window titles of all menus, toolbars and dock windows.
      */
