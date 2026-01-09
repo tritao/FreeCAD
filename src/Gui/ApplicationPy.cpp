@@ -24,6 +24,7 @@
 #include <QDir>
 #include <QPrinter>
 #include <QFileInfo>
+#include <QWidget>
 #include <Inventor/SoInput.h>
 #include <Inventor/actions/SoGetPrimitiveCountAction.h>
 #include <Inventor/nodes/SoSeparator.h>
@@ -185,6 +186,30 @@ PyMethodDef ApplicationPy::Methods[] = {
      "uiParentWidget() -> QWidget\n"
      "\n"
      "Return the active UI parent widget (main window if available, otherwise the active window)."},
+    {"showStatusBar",
+     (PyCFunction)ApplicationPy::sShowStatusBar,
+     METH_VARARGS,
+     "showStatusBar() -> None\n"
+     "\n"
+     "Ensure the current shell status bar is visible."},
+    {"addStatusPermanentWidget",
+     (PyCFunction)ApplicationPy::sAddStatusPermanentWidget,
+     METH_VARARGS,
+     "addStatusPermanentWidget(widget, stretch=0) -> None\n"
+     "\n"
+     "Add a permanent widget to the current shell status bar.\n"
+     "\n"
+     "This is shell-aware and should be preferred over direct access to\n"
+     "getMainWindow().statusBar().insertPermanentWidget(...).\n"
+     "\n"
+     "widget : QWidget\n"
+     "stretch : int"},
+    {"removeStatusWidget",
+     (PyCFunction)ApplicationPy::sRemoveStatusWidget,
+     METH_VARARGS,
+     "removeStatusWidget(widget) -> None\n"
+     "\n"
+     "Remove a status bar widget previously added to the current shell."},
     {"updateGui",
      (PyCFunction)ApplicationPy::sUpdateGui,
      METH_VARARGS,
@@ -1024,6 +1049,67 @@ PyObject* ApplicationPy::sUiParentWidget(PyObject* /*self*/, PyObject* args)
     catch (const Py::Exception&) {
         return nullptr;
     }
+}
+
+PyObject* ApplicationPy::sShowStatusBar(PyObject* /*self*/, PyObject* args)
+{
+    if (!PyArg_ParseTuple(args, "")) {
+        return nullptr;
+    }
+
+    PY_TRY
+    {
+        Application::Instance->showStatusBar();
+        Py_Return;
+    }
+    PY_CATCH;
+}
+
+PyObject* ApplicationPy::sAddStatusPermanentWidget(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* pyWidget = nullptr;
+    int stretch = 0;
+    if (!PyArg_ParseTuple(args, "O|i", &pyWidget, &stretch)) {
+        return nullptr;
+    }
+
+    PY_TRY
+    {
+        PythonWrapper wrap;
+        auto* object = wrap.toQObject(Py::Object(pyWidget));
+        auto* widget = qobject_cast<QWidget*>(object);
+        if (!widget) {
+            PyErr_SetString(PyExc_TypeError, "Expected a QWidget");
+            return nullptr;
+        }
+
+        Application::Instance->addStatusPermanentWidget(widget, stretch);
+        Py_Return;
+    }
+    PY_CATCH;
+}
+
+PyObject* ApplicationPy::sRemoveStatusWidget(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* pyWidget = nullptr;
+    if (!PyArg_ParseTuple(args, "O", &pyWidget)) {
+        return nullptr;
+    }
+
+    PY_TRY
+    {
+        PythonWrapper wrap;
+        auto* object = wrap.toQObject(Py::Object(pyWidget));
+        auto* widget = qobject_cast<QWidget*>(object);
+        if (!widget) {
+            PyErr_SetString(PyExc_TypeError, "Expected a QWidget");
+            return nullptr;
+        }
+
+        Application::Instance->removeStatusWidget(widget);
+        Py_Return;
+    }
+    PY_CATCH;
 }
 
 PyObject* ApplicationPy::sUpdateGui(PyObject* /*self*/, PyObject* args)
