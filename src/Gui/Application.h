@@ -26,6 +26,7 @@
 
 #include <QList>
 #include <QPixmap>
+#include <list>
 #include <map>
 #include <string>
 
@@ -45,6 +46,7 @@ class ApplicationPy;
 class BaseView;
 class CommandManager;
 class Document;
+struct InputHint;
 class MacroManager;
 class MDIView;
 class MainWindow;
@@ -239,6 +241,11 @@ public:
     bool closeAllDocuments(bool close = true);
     void activateNextWindow();
     void activatePreviousWindow();
+    void showStatus(int type, const QString& message);
+    void showHints(const std::list<InputHint>& hints);
+    void hideHints();
+    void setUserSchema(int userSchema);
+    void initDockWindows(bool show);
 
     /** @name workbench handling */
     //@{

@@ -6349,7 +6349,7 @@ void DocumentObjectItem::displayStatusInfo()
         Application::Instance->showMessage(status);
     }
     else {
-        getMainWindow()->showStatus(MainWindow::Err, status);
+        Application::Instance->showStatus(MainWindow::Err, status);
         QTreeWidget* tree = this->treeWidget();
         QPoint pos = tree->visualItemRect(this).topRight();
         QToolTip::showText(tree->mapToGlobal(pos), info);

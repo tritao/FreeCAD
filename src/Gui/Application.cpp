@@ -79,6 +79,7 @@
 #include "FileDialog.h"
 #include "GuiApplication.h"
 #include "GuiInitScript.h"
+#include "InputHint.h"
 #include "InputHintPy.h"
 #include "LinkViewPy.h"
 #include "MainWindow.h"
@@ -1299,7 +1300,7 @@ void Application::slotActiveDocument(const App::Document& Doc)
         if (!hGrp->GetBool("IgnoreProjectSchema")) {
             int userSchema = Doc.UnitSystem.getValue();
             Base::UnitsApi::setSchema(userSchema);
-            getMainWindow()->setUserSchema(userSchema);
+            setUserSchema(userSchema);
             Application::Instance->onUpdate();
         }
         else {  // set up Unit system default
@@ -1894,6 +1895,61 @@ void Application::activatePreviousWindow()
     }
     if (auto* mw = getMainWindow()) {
         mw->activatePreviousWindow();
+    }
+}
+
+void Application::showStatus(int type, const QString& message)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->showStatus(type, message);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->showStatus(type, message);
+    }
+}
+
+void Application::showHints(const std::list<InputHint>& hints)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->showHints(hints);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->showHints(hints);
+    }
+}
+
+void Application::hideHints()
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->hideHints();
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->hideHints();
+    }
+}
+
+void Application::setUserSchema(int userSchema)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->setUserSchema(userSchema);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->setUserSchema(userSchema);
+    }
+}
+
+void Application::initDockWindows(bool show)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->initDockWindows(show);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->initDockWindows(show);
     }
 }
 

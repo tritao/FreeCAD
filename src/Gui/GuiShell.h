@@ -27,6 +27,7 @@
 
 #include <QList>
 
+#include <list>
 #include <memory>
 #include <string>
 
@@ -38,6 +39,7 @@ class QWidget;
 namespace Gui
 {
 
+struct InputHint;
 class MDIView;
 class GuiShellServices;
 
@@ -69,6 +71,12 @@ public:
     virtual bool closeAllDocuments(bool close = true) = 0;
     virtual void activateNextWindow() = 0;
     virtual void activatePreviousWindow() = 0;
+
+    virtual void showStatus(int type, const QString& message) = 0;
+    virtual void showHints(const std::list<InputHint>& hints) = 0;
+    virtual void hideHints() = 0;
+    virtual void setUserSchema(int userSchema) = 0;
+    virtual void initDockWindows(bool show) = 0;
 };
 
 GuiExport IGuiShell* activeShell();

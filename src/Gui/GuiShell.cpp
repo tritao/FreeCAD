@@ -23,6 +23,7 @@
 #include "GuiShell.h"
 
 #include "GuiShellServices.h"
+#include "InputHint.h"
 #include "MainWindow.h"
 #include "MDIView.h"
 
@@ -231,6 +232,43 @@ public:
     {
         if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
             mw->activatePreviousWindow();
+        }
+    }
+
+    void showStatus(int type, const QString& message) override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->showStatus(type, message);
+            return;
+        }
+        showMessage(message, 0);
+    }
+
+    void showHints(const std::list<InputHint>& hints) override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->showHints(hints);
+        }
+    }
+
+    void hideHints() override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->hideHints();
+        }
+    }
+
+    void setUserSchema(int userSchema) override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->setUserSchema(userSchema);
+        }
+    }
+
+    void initDockWindows(bool show) override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->initDockWindows(show);
         }
     }
 

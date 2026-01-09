@@ -243,7 +243,7 @@ std::list<InputHint> ToolHandler::getToolHints() const
 
 void ToolHandler::updateHint() const
 {
-    Gui::getMainWindow()->showHints(getToolHints());
+    Gui::Application::Instance->showHints(getToolHints());
 }
 
 void ToolHandler::applyCursor()

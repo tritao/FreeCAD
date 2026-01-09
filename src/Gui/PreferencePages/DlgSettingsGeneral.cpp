@@ -857,7 +857,7 @@ public:
 
     void onTimer() override
     {
-        getMainWindow()->initDockWindows(true);
+        Gui::Application::Instance->initDockWindows(true);
         OverlayManager::instance()->reload(OverlayManager::ReloadMode::ReloadResume);
     }
 };

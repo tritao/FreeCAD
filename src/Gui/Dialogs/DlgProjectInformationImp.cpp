@@ -36,7 +36,7 @@
 #include "Dialogs/DlgProjectInformationImp.h"
 #include "ui_DlgProjectInformation.h"
 
-#include "MainWindow.h"
+#include "Application.h"
 
 #if 0  // needed for Qt's lupdate utility
     qApp->translate("Gui::Dialog::DlgSettingsDocument", "All rights reserved");
@@ -155,7 +155,7 @@ void DlgProjectInformationImp::accept()
     _doc->CreatedBy.setValue(ui->lineEditCreator->text().toUtf8());
     _doc->LastModifiedBy.setValue(ui->lineEditCreator->text().toUtf8());
     _doc->Company.setValue(ui->lineEditCompany->text().toUtf8());
-    getMainWindow()->setUserSchema(ui->comboBox_unitSystem->currentIndex());
+    Application::Instance->setUserSchema(ui->comboBox_unitSystem->currentIndex());
     QByteArray licenseName {ui->comboLicense->currentData().toByteArray()};
     // Is this really necessary?
     if (licenseName.isEmpty()) {
