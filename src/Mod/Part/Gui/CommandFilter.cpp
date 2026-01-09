@@ -28,6 +28,7 @@
 
 
 #include <Gui/Action.h>
+#include <Gui/Application.h>
 #include <Gui/BitmapFactory.h>
 #include <Gui/Command.h>
 #include <Gui/MainWindow.h>
@@ -176,7 +177,7 @@ void PartCmdSelectFilter::languageChange()
 
 bool PartCmdSelectFilter::isActive()
 {
-    Gui::MDIView* view = Gui::getMainWindow()->activeWindow();
+    Gui::MDIView* view = Gui::Application::Instance->activeWindow();
     return view && view->isDerivedFrom<Gui::View3DInventor>();
 }
 

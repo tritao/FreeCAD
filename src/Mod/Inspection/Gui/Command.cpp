@@ -106,7 +106,7 @@ bool CmdInspectElement::isActive()
         return false;
     }
 
-    Gui::MDIView* view = Gui::getMainWindow()->activeWindow();
+    Gui::MDIView* view = Gui::Application::Instance->activeWindow();
     if (view && view->isDerivedFrom<Gui::View3DInventor>()) {
         Gui::View3DInventorViewer* viewer = static_cast<Gui::View3DInventor*>(view)->getViewer();
         return !viewer->isEditing();

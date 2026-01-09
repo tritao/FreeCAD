@@ -52,6 +52,7 @@
 
 #include <App/Document.h>
 #include <Base/Converter.h>
+#include <Gui/Application.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
 #include <Gui/Utilities.h>
@@ -611,7 +612,7 @@ void CurveOnMeshHandler::Private::vertexCallback(void* ud, SoEventCallback* cb)
                                 self->d_ptr->createGrid();
                             }
                             else if (self->d_ptr->mesh != mesh) {
-                                Gui::getMainWindow()->statusBar()->showMessage(
+                                Gui::Application::Instance->showMessage(
                                     tr("Wrong mesh selected")
                                 );
                                 return;
@@ -652,7 +653,7 @@ void CurveOnMeshHandler::Private::vertexCallback(void* ud, SoEventCallback* cb)
                 }
             }
             else {
-                Gui::getMainWindow()->statusBar()->showMessage(tr("No point was selected"));
+                Gui::Application::Instance->showMessage(tr("No point was selected"));
             }
         }
         else if (mbe->getButton() == SoMouseButtonEvent::BUTTON2

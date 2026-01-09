@@ -529,7 +529,7 @@ void TaskLeaderLine::onTrackerClicked(bool clicked)
 
         QString msg = tr("Pick a starting point for leader line");
         getMainWindow()->statusBar()->show();
-        Gui::getMainWindow()->showMessage(msg, MessageDisplayTime);
+        Gui::Application::Instance->showMessage(msg, MessageDisplayTime);
         ui->pbTracker->setText(tr("Save points"));
         ui->pbTracker->setEnabled(true);
         ui->pbCancelEdit->setEnabled(true);
@@ -564,7 +564,7 @@ void TaskLeaderLine::onTrackerClicked(bool clicked)
                 qgLead->startPathEdit();
                 QString msg = tr("Click and drag markers to adjust leader line");
                 getMainWindow()->statusBar()->show();
-                Gui::getMainWindow()->showMessage(msg, MessageDisplayTime);
+                Gui::Application::Instance->showMessage(msg, MessageDisplayTime);
                 ui->pbTracker->setText(tr("Save changes"));
                 ui->pbTracker->setEnabled(true);
                 ui->pbCancelEdit->setEnabled(true);
@@ -581,7 +581,7 @@ void TaskLeaderLine::onTrackerClicked(bool clicked)
 
             QString msg = tr("Pick a starting point for leader line");
             getMainWindow()->statusBar()->show();
-            Gui::getMainWindow()->showMessage(msg, MessageDisplayTime);
+            Gui::Application::Instance->showMessage(msg, MessageDisplayTime);
             ui->pbTracker->setText(tr("Save changes"));
             ui->pbTracker->setEnabled(true);
             ui->pbCancelEdit->setEnabled(true);
@@ -615,7 +615,7 @@ void TaskLeaderLine::startTracker()
     setEditCursor(Qt::CrossCursor);
     QString msg = tr("Left click to set a point");
     Gui::getMainWindow()->statusBar()->show();
-    Gui::getMainWindow()->showMessage(msg, MessageDisplayTime);
+    Gui::Application::Instance->showMessage(msg, MessageDisplayTime);
 }
 
 void TaskLeaderLine::onTrackerFinished(std::vector<QPointF> trackerScenePoints, QGIView* qgParent)
@@ -641,7 +641,7 @@ void TaskLeaderLine::onTrackerFinished(std::vector<QPointF> trackerScenePoints, 
 
     QString msg = tr("Press OK or Cancel to continue");
     getMainWindow()->statusBar()->show();
-    Gui::getMainWindow()->showMessage(msg, MessageDisplayTime);
+    Gui::Application::Instance->showMessage(msg, MessageDisplayTime);
     enableTaskButtons(true);
 
             // ??? why does the tracker go to sleep when we are finished with it? why not removeTracker
@@ -773,7 +773,7 @@ void TaskLeaderLine::abandonEditSession()
     }
     QString msg = tr("In progress edit abandoned. Start over.");
     getMainWindow()->statusBar()->show();
-    Gui::getMainWindow()->showMessage(msg, MessageDuration);
+    Gui::Application::Instance->showMessage(msg, MessageDuration);
 
     m_pbTrackerState = TrackerAction::EDIT;
     ui->pbTracker->setText(tr("Edit points"));

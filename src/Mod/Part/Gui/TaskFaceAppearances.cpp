@@ -338,7 +338,7 @@ void FaceAppearances::slotDeleteObject(const Gui::ViewProvider& obj)
 void FaceAppearances::onBoxSelectionToggled(bool checked)
 {
     Gui::View3DInventor* view = qobject_cast<Gui::View3DInventor*>(
-        Gui::getMainWindow()->activeWindow()
+        Gui::Application::Instance->activeWindow()
     );
     // toggle the button state and feature
     d->boxSelection = checked;

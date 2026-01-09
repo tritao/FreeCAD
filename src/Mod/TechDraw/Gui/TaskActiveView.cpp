@@ -122,7 +122,7 @@ void TaskActiveView::updatePreview()
         return;
     }
 
-    View3DInventor* view3d = qobject_cast<View3DInventor*>(Gui::getMainWindow()->activeWindow());
+    View3DInventor* view3d = qobject_cast<View3DInventor*>(Gui::Application::Instance->activeWindow());
     if (!view3d) {
         Gui::Document* pageGuiDocument =
             Gui::Application::Instance->getDocument(m_pageFeat->getDocument()->getName());
@@ -130,7 +130,7 @@ void TaskActiveView::updatePreview()
         if (!views3dAll.empty()) {
             view3d = qobject_cast<View3DInventor*>(views3dAll.front());
         } else {
-             auto mdiWindows = Gui::getMainWindow()->windows();
+             auto mdiWindows = Gui::Application::Instance->windows();
              for (auto& mdi : mdiWindows) {
                  auto mdiView = qobject_cast<View3DInventor*>(mdi);
                  if (mdiView) {
@@ -229,7 +229,7 @@ void TaskActiveView::enableCrop(bool state)
 
 TechDraw::DrawViewImage* TaskActiveView::createActiveView()
 {
-    View3DInventor* view3d = qobject_cast<View3DInventor*>(Gui::getMainWindow()->activeWindow());
+    View3DInventor* view3d = qobject_cast<View3DInventor*>(Gui::Application::Instance->activeWindow());
     if (!view3d) {
         // Fallback 1: Try to find a 3D view in the page's document
         Gui::Document* pageGuiDocument =

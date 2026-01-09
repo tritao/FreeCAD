@@ -1072,7 +1072,7 @@ void CmdTestImageNode::activated(int)
     roundRectPath.closeSubpath();
 
 
-    Gui::MDIView* view = Gui::getMainWindow()->activeWindow();
+    Gui::MDIView* view = Gui::Application::Instance->activeWindow();
     Gui::View3DInventorViewer* viewer = static_cast<Gui::View3DInventor*>(view)->getViewer();
     SoImage* node = new SoImage();
 
@@ -1195,7 +1195,7 @@ void CmdTestWidgetShape::activated(int)
 {
     SandboxGui::SoWidgetShape* shape = new SandboxGui::SoWidgetShape;
     shape->setWidget(new QCalendarWidget());
-    Gui::MDIView* view = Gui::getMainWindow()->activeWindow();
+    Gui::MDIView* view = Gui::Application::Instance->activeWindow();
     Gui::View3DInventorViewer* viewer = static_cast<Gui::View3DInventor*>(view)->getViewer();
     static_cast<SoGroup*>(viewer->getSceneGraph())->addChild(shape);
 }
@@ -1389,7 +1389,7 @@ void CmdTestGraphicsView::activated(int)
     view3D->setWindowTitle(QStringLiteral("Graphics scene"));
     view3D->setWindowIcon(QApplication::windowIcon());
     view3D->resize(400, 300);
-    Gui::getMainWindow()->addWindow(view3D);
+    Gui::Application::Instance->addWindow(view3D);
 }
 
 bool CmdTestGraphicsView::isActive(void)

@@ -1105,7 +1105,7 @@ void SheetTableView::mousePressEvent(QMouseEvent* event)
 
 void SheetTableView::selectionChanged(const QItemSelection& selected, const QItemSelection& deselected)
 {
-    Gui::getMainWindow()->updateActions();
+    Gui::Application::Instance->updateActions();
     QTableView::selectionChanged(selected, deselected);
 }
 

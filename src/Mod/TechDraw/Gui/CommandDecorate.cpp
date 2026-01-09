@@ -99,7 +99,7 @@ void CmdTechDrawToggleFrame::activated(int iMsg)
         return;
     }
 
-    auto mvp = dynamic_cast<MDIViewPage *>(Gui::getMainWindow()->activeWindow());
+    auto mvp = dynamic_cast<MDIViewPage *>(Gui::Application::Instance->activeWindow());
     if (!mvp) {
         QMessageBox::warning(Gui::uiParentWidget(), QObject::tr("No TechDraw Page"),
             QObject::tr("Need a TechDraw Page for this command"));
@@ -125,7 +125,7 @@ bool CmdTechDrawToggleFrame::isActive()
         return false;
     }
 
-    auto mvp = dynamic_cast<MDIViewPage *>(Gui::getMainWindow()->activeWindow());
+    auto mvp = dynamic_cast<MDIViewPage *>(Gui::Application::Instance->activeWindow());
     return mvp != nullptr;
 }
 

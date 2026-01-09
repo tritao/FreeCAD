@@ -674,7 +674,7 @@ bool CmdMeshVertexCurvatureInfo::isActive()
         return false;
     }
 
-    Gui::MDIView* view = Gui::getMainWindow()->activeWindow();
+    Gui::MDIView* view = Gui::Application::Instance->activeWindow();
     if (view && view->isDerivedFrom<Gui::View3DInventor>()) {
         Gui::View3DInventorViewer* viewer = static_cast<Gui::View3DInventor*>(view)->getViewer();
         return !viewer->isEditing();
@@ -736,7 +736,7 @@ bool CmdMeshPolySegm::isActive()
         return false;
     }
 
-    Gui::MDIView* view = Gui::getMainWindow()->activeWindow();
+    Gui::MDIView* view = Gui::Application::Instance->activeWindow();
     if (view && view->isDerivedFrom<Gui::View3DInventor>()) {
         Gui::View3DInventorViewer* viewer = static_cast<Gui::View3DInventor*>(view)->getViewer();
         return !viewer->isEditing();
@@ -787,7 +787,7 @@ bool CmdMeshAddFacet::isActive()
         return false;
     }
 
-    Gui::MDIView* view = Gui::getMainWindow()->activeWindow();
+    Gui::MDIView* view = Gui::Application::Instance->activeWindow();
     if (view && view->isDerivedFrom<Gui::View3DInventor>()) {
         Gui::View3DInventorViewer* viewer = static_cast<Gui::View3DInventor*>(view)->getViewer();
         return !viewer->isEditing();
@@ -854,7 +854,7 @@ bool CmdMeshPolyCut::isActive()
         return false;
     }
 
-    Gui::MDIView* view = Gui::getMainWindow()->activeWindow();
+    Gui::MDIView* view = Gui::Application::Instance->activeWindow();
     if (view && view->isDerivedFrom<Gui::View3DInventor>()) {
         Gui::View3DInventorViewer* viewer = static_cast<Gui::View3DInventor*>(view)->getViewer();
         return !viewer->isEditing();
@@ -921,7 +921,7 @@ bool CmdMeshPolyTrim::isActive()
         return false;
     }
 
-    Gui::MDIView* view = Gui::getMainWindow()->activeWindow();
+    Gui::MDIView* view = Gui::Application::Instance->activeWindow();
     if (view && view->isDerivedFrom<Gui::View3DInventor>()) {
         Gui::View3DInventorViewer* viewer = static_cast<Gui::View3DInventor*>(view)->getViewer();
         return !viewer->isEditing();
@@ -1066,7 +1066,7 @@ bool CmdMeshPolySplit::isActive()
         return false;
     }
 
-    Gui::MDIView* view = Gui::getMainWindow()->activeWindow();
+    Gui::MDIView* view = Gui::Application::Instance->activeWindow();
     if (view && view->isDerivedFrom<Gui::View3DInventor>()) {
         Gui::View3DInventorViewer* viewer = static_cast<Gui::View3DInventor*>(view)->getViewer();
         return !viewer->isEditing();
@@ -1161,7 +1161,7 @@ bool CmdMeshEvaluateFacet::isActive()
         return false;
     }
 
-    Gui::MDIView* view = Gui::getMainWindow()->activeWindow();
+    Gui::MDIView* view = Gui::Application::Instance->activeWindow();
     if (view && view->isDerivedFrom<Gui::View3DInventor>()) {
         Gui::View3DInventorViewer* viewer = static_cast<Gui::View3DInventor*>(view)->getViewer();
         return !viewer->isEditing();
@@ -1292,7 +1292,7 @@ bool CmdMeshRemoveCompByHand::isActive()
     }
 
     Gui::View3DInventor* view = dynamic_cast<Gui::View3DInventor*>(
-        Gui::getMainWindow()->activeWindow()
+        Gui::Application::Instance->activeWindow()
     );
     if (view) {
         Gui::View3DInventorViewer* viewer = view->getViewer();
@@ -1666,7 +1666,7 @@ bool CmdMeshFillInteractiveHole::isActive()
         return false;
     }
 
-    Gui::MDIView* view = Gui::getMainWindow()->activeWindow();
+    Gui::MDIView* view = Gui::Application::Instance->activeWindow();
     if (view && view->isDerivedFrom<Gui::View3DInventor>()) {
         Gui::View3DInventorViewer* viewer = static_cast<Gui::View3DInventor*>(view)->getViewer();
         return !viewer->isEditing();

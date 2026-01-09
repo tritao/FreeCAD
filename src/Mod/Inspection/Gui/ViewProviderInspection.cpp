@@ -604,7 +604,7 @@ void ViewProviderInspection::inspectCallback(void* ud, SoEventCallback* n)
             if (vp && vp->isDerivedFrom<ViewProviderInspection>()) {
                 ViewProviderInspection* that = static_cast<ViewProviderInspection*>(vp);
                 QString info = that->inspectDistance(point);
-                Gui::getMainWindow()->setPaneText(1, info);
+                Gui::Application::Instance->setStatusPaneText(1, info);
                 if (addflag) {
                     ViewProviderProxyObject::addFlag(view, info, point);
                 }
@@ -626,7 +626,7 @@ void ViewProviderInspection::inspectCallback(void* ud, SoEventCallback* n)
                     if (vp && vp->isDerivedFrom<ViewProviderInspection>()) {
                         ViewProviderInspection* self = static_cast<ViewProviderInspection*>(vp);
                         QString info = self->inspectDistance(point);
-                        Gui::getMainWindow()->setPaneText(1, info);
+                        Gui::Application::Instance->setStatusPaneText(1, info);
                         if (addflag) {
                             ViewProviderProxyObject::addFlag(view, info, point);
                         }

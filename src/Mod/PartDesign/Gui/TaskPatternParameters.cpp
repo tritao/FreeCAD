@@ -242,7 +242,7 @@ void TaskPatternParameters::enterReferenceSelectionMode()
     Gui::Selection().clearSelection();
     // Add selection gate (allow edges, faces, potentially datums)
     addReferenceSelectionGate(AllowSelection::EDGE | AllowSelection::FACE | AllowSelection::PLANAR);
-    Gui::getMainWindow()->showMessage(
+    Gui::Application::Instance->showMessage(
         tr("Select a direction reference (edge, face, datum line)")
     );  // User feedback
 }
@@ -252,7 +252,7 @@ void TaskPatternParameters::exitReferenceSelectionMode()
     exitSelectionMode();
 
     hideBase();
-    Gui::getMainWindow()->showMessage(QString());
+    Gui::Application::Instance->showMessage(QString());
     activeDirectionWidget = nullptr;
 }
 

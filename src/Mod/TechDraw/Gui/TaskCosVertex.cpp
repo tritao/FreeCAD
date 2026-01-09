@@ -169,7 +169,7 @@ void TaskCosVertex::onTrackerClicked(bool clicked)
 
     QString msg = tr("Pick a point for cosmetic vertex");
     getMainWindow()->statusBar()->show();
-    Gui::getMainWindow()->showMessage(msg, 3000);
+    Gui::Application::Instance->showMessage(msg, 3000);
     ui->pbTracker->setText(tr("Escape picking"));
     ui->pbTracker->setEnabled(true);
     m_pbTrackerState = TrackerAction::CANCEL;
@@ -200,7 +200,7 @@ void TaskCosVertex::startTracker()
     setEditCursor(Qt::CrossCursor);
     QString msg = tr("Left click to set a point");
     Gui::getMainWindow()->statusBar()->show();
-    Gui::getMainWindow()->showMessage(msg, 3000);
+    Gui::Application::Instance->showMessage(msg, 3000);
 }
 
 void TaskCosVertex::onTrackerFinished(std::vector<QPointF> pts, QGIView* qgParent)
@@ -275,7 +275,7 @@ void TaskCosVertex::abandonEditSession()
 {
     QString msg = tr("In progress edit abandoned. Start over.");
     getMainWindow()->statusBar()->show();
-    Gui::getMainWindow()->showMessage(msg, 4000);
+    Gui::Application::Instance->showMessage(msg, 4000);
 
     ui->pbTracker->setEnabled(true);
 

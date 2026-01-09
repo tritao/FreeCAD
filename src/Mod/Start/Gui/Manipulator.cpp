@@ -59,7 +59,7 @@ void CmdStart::activated(int iMsg)
         existingView = gsl::owner<StartGui::StartView*>(new StartGui::StartView(mw));
         mw->addWindow(existingView);  // Transfers ownership
     }
-    Gui::getMainWindow()->setActiveWindow(existingView);
+    Gui::Application::Instance->setActiveWindow(existingView);
     existingView->show();
 }
 

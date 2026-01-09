@@ -24,6 +24,7 @@
 
 
 #include <App/DocumentObjectPy.h>
+#include <Gui/Application.h>
 #include <Gui/BitmapFactory.h>
 #include <Gui/Document.h>
 #include <Gui/EditorView.h>
@@ -158,7 +159,7 @@ private:
             edit->setDisplayName(Gui::EditorView::FileName);
             edit->open(fileName);
             edit->resize(400, 300);
-            Gui::getMainWindow()->addWindow(edit);
+            Gui::Application::Instance->addWindow(edit);
 
             QFont font = editor->font();
             font.setFamily(QStringLiteral("Arial"));

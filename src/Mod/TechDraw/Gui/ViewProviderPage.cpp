@@ -308,7 +308,7 @@ bool ViewProviderPage::showMDIViewPage()
         m_graphicsScene->redrawAllViews();
         m_graphicsScene->fixOrphans(true);
         m_graphicsView->update();
-        Gui::getMainWindow()->setActiveWindow(m_mdiView);
+        Gui::Application::Instance->setActiveWindow(m_mdiView);
     }
 
     m_graphicsView->centerOnPage();
@@ -337,7 +337,7 @@ void ViewProviderPage::createMDIViewPage()
 
     m_mdiView->setWindowTitle(tabTitle + QStringLiteral("[*]"));
     m_mdiView->setWindowIcon(Gui::BitmapFactory().pixmap("TechDraw_TreePage"));
-    Gui::getMainWindow()->addWindow(m_mdiView);
+    Gui::Application::Instance->addWindow(m_mdiView);
 }
 
 void ViewProviderPage::switchToMdiViewPage()
@@ -350,9 +350,9 @@ void ViewProviderPage::switchToMdiViewPage()
 void ViewProviderPage::removeMDIView()
 {
     if (!m_mdiView.isNull()) {//m_mdiView is a QPointer
-        QList<QWidget*> wList = Gui::getMainWindow()->windows();
+        QList<QWidget*> wList = Gui::Application::Instance->windows();
         if (wList.contains(m_mdiView)) {
-            Gui::getMainWindow()->removeWindow(m_mdiView);
+            Gui::Application::Instance->removeWindow(m_mdiView);
             m_mdiView = nullptr;     //m_mdiView will eventually be deleted and
             m_graphicsView = nullptr;//will take m_graphicsView with it
             Gui::MDIView* aw =

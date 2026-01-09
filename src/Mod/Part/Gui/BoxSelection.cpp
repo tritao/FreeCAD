@@ -199,7 +199,7 @@ void BoxSelection::addShapeToSelection(
 void BoxSelection::start(TopAbs_ShapeEnum shape)
 {
     Gui::View3DInventor* view = qobject_cast<Gui::View3DInventor*>(
-        Gui::getMainWindow()->activeWindow()
+        Gui::Application::Instance->activeWindow()
     );
     if (view) {
         Gui::View3DInventorViewer* viewer = view->getViewer();

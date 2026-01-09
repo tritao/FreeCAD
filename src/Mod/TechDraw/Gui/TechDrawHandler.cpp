@@ -55,7 +55,7 @@ TechDrawHandler::~TechDrawHandler()
 
 void TechDrawHandler::activate(QGVPage* vp)
 {
-    auto* mdi = qobject_cast<MDIViewPage*>(Gui::getMainWindow()->activeWindow());
+    auto* mdi = qobject_cast<MDIViewPage*>(Gui::Application::Instance->activeWindow());
     if (!mdi) {
         return;
     }
@@ -76,7 +76,7 @@ void TechDrawHandler::deactivate()
     // So to prevent the menu from appearing when the tool is cleared by right mouse click
     // we set a small timer.
     QTimer::singleShot(100, []() { // 100 milliseconds delay
-        auto* mdi = qobject_cast<MDIViewPage*>(Gui::getMainWindow()->activeWindow());
+        auto* mdi = qobject_cast<MDIViewPage*>(Gui::Application::Instance->activeWindow());
         if (!mdi) {
             return;
         }
