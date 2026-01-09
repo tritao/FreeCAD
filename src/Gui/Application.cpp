@@ -1017,6 +1017,7 @@ void Application::createStandardOperations()
     Gui::CreateStructureCommands();
     Gui::CreateTestCommands();
     Gui::CreateLinkCommands();
+    Gui::CreateFCUICommands();
 }
 
 void Application::slotNewDocument(const App::Document& Doc, bool isMainDoc)
@@ -2272,6 +2273,7 @@ static void init_resources()
     Q_INIT_RESOURCE(resource);
     Q_INIT_RESOURCE(translation);
     Q_INIT_RESOURCE(FreeCAD_translation);
+    Q_INIT_RESOURCE(fcui_sample);
 }
 
 void Application::initApplication()

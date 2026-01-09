@@ -506,17 +506,35 @@ if(FREECAD_USE_3DCONNEXION_LEGACY)
     list(APPEND Gui_UIC_SRCS Dialogs/DlgCustomizeSpNavSettings.ui)
 endif(FREECAD_USE_3DCONNEXION_LEGACY)
 
-set (FreeCAD_TR_QRC ${CMAKE_CURRENT_BINARY_DIR}/Language/FreeCAD_translation.qrc)
-qt_find_and_add_translation(QM_SRCS "Language/FreeCAD_*.ts"
-    ${CMAKE_CURRENT_BINARY_DIR}/Language)
-qt_create_resource_file_prefix(${FreeCAD_TR_QRC} ${QM_SRCS})
-set(Gui_RES_SRCS
-    Icons/resource.qrc
-    Language/translation.qrc
-    ${FreeCAD_TR_QRC}
-)
+	set (FreeCAD_TR_QRC ${CMAKE_CURRENT_BINARY_DIR}/Language/FreeCAD_translation.qrc)
+	qt_find_and_add_translation(QM_SRCS "Language/FreeCAD_*.ts"
+	    ${CMAKE_CURRENT_BINARY_DIR}/Language)
+	qt_create_resource_file_prefix(${FreeCAD_TR_QRC} ${QM_SRCS})
 
-qt_add_resources(Gui_QRC_SRCS ${Gui_RES_SRCS})
+	# FCUI shell module: authored in python and compiled to JSON at build time.
+	set(FCUI_SHELL_PY ${CMAKE_CURRENT_SOURCE_DIR}/FCUI/shell/main.fcui.py)
+	set(FCUI_SHELL_JSON ${CMAKE_CURRENT_BINARY_DIR}/FCUI/shell/main.fcuim.json)
+	add_custom_command(
+	    OUTPUT ${FCUI_SHELL_JSON}
+	    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/FCUI/tools/fcui_compile.py
+	            --in ${FCUI_SHELL_PY} --out ${FCUI_SHELL_JSON} --pretty
+	    DEPENDS ${FCUI_SHELL_PY} ${CMAKE_CURRENT_SOURCE_DIR}/FCUI/tools/fcui_compile.py
+	    COMMENT "Compiling FCUI shell module: ${FCUI_SHELL_PY}"
+	    VERBATIM
+	)
+
+	set(FCUI_SHELL_QRC ${CMAKE_CURRENT_BINARY_DIR}/FCUI/fcui_shell.qrc)
+	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/FCUI/fcui_shell.qrc.in ${FCUI_SHELL_QRC} @ONLY)
+	set_property(SOURCE ${FCUI_SHELL_QRC} APPEND PROPERTY OBJECT_DEPENDS ${FCUI_SHELL_JSON})
+
+	set(Gui_RES_SRCS
+	    Icons/resource.qrc
+	    Language/translation.qrc
+	    ${FreeCAD_TR_QRC}
+	    ${FCUI_SHELL_QRC}
+	)
+
+	qt_add_resources(Gui_QRC_SRCS ${Gui_RES_SRCS})
 
 SOURCE_GROUP("Uic" FILES ${Gui_UIC_HDRS})
 
@@ -525,6 +543,7 @@ SET(Command_CPP_SRCS
     Action.cpp
     ActionFunction.cpp
     Command.cpp
+    CommandFCUI.cpp
     CommandDoc.cpp
     CommandFeat.cpp
     CommandMacro.cpp
@@ -550,6 +569,20 @@ SET(Command_SRCS
     CommandActionPy.h
 )
 SOURCE_GROUP("Command" FILES ${Command_SRCS})
+
+# FCUI (prototype)
+SET(FCUI_SRCS
+    FCUI/FCUIQtRuntime.cpp
+    FCUI/FCUIQtRuntime.h
+    FCUI/FCUIQtHost.h
+    FCUI/VmEval.cpp
+    FCUI/VmEval.h
+    FCUI/FreeCADFCUIHost.cpp
+    FCUI/FreeCADFCUIHost.h
+    FCUI/FCUIShellWindow.cpp
+    FCUI/FCUIShellWindow.h
+)
+SOURCE_GROUP("FCUI" FILES ${FCUI_SRCS})
 
 # The dialog sources
 SET(Dialog_CPP_SRCS
@@ -1483,6 +1516,7 @@ SET(FreeCADGui_SRCS
     ${View_SRCS}
     ${Workbench_SRCS}
     ${Selection_SRCS}
+    ${FCUI_SRCS}
     ${FreeCADGui_SRCS}
 )
 

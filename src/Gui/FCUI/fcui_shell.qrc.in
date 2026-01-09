@@ -1,6 +1,7 @@
 <!DOCTYPE RCC>
 <RCC version="1.0">
   <qresource prefix="/fcui">
-    <file alias="app_shell.fcuim.json">examples/app_shell.fcuim.json</file>
+    <file alias="shell/main.fcuim.json">@FCUI_SHELL_JSON@</file>
   </qresource>
 </RCC>
+
