@@ -6345,7 +6345,7 @@ void DocumentObjectItem::displayStatusInfo()
                          .arg(info, QString::fromLatin1(Obj->getNameInDocument()));
 
     if (!Obj->isError()) {
-        getMainWindow()->showMessage(status);
+        Application::Instance->showMessage(status);
     }
     else {
         getMainWindow()->showStatus(MainWindow::Err, status);

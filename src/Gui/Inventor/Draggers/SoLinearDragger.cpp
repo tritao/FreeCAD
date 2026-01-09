@@ -34,8 +34,8 @@
 #include "SoLinearDragger.h"
 
 #include <Base/Quantity.h>
+#include <Gui/Application.h>
 #include <Gui/Inventor/SoToggleSwitch.h>
-#include <Gui/MainWindow.h>
 #include <Gui/SoTextLabel.h>
 #include <Gui/Utilities.h>
 
@@ -282,7 +282,7 @@ void SoLinearDragger::drag()
         QObject::tr("Translation:"),
         QString::fromStdString(quantity.getUserString())
     );
-    getMainWindow()->showMessage(message, 3000);
+    Application::Instance->showMessage(message, 3000);
 }
 
 void SoLinearDragger::dragFinish()

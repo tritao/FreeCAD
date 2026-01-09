@@ -25,6 +25,7 @@
 #include "GuiShellServices.h"
 #include "MainWindow.h"
 
+#include <QStatusBar>
 #include <QMainWindow>
 #include <QPointer>
 
@@ -60,6 +61,19 @@ public:
     {
         if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
             mw->updateActions(delay);
+        }
+    }
+
+    void showMessage(const QString& message, int timeout) override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->showMessage(message, timeout);
+            return;
+        }
+        if (auto* w = mainWindow_.data()) {
+            if (auto* sb = w->statusBar()) {
+                sb->showMessage(message, timeout);
+            }
         }
     }
 

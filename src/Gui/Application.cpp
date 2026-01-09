@@ -1705,6 +1705,17 @@ void Application::updateActions(bool delay)
     }
 }
 
+void Application::showMessage(const QString& message, int timeout)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->showMessage(message, timeout);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->showMessage(message, timeout);
+    }
+}
+
 void Application::tryClose(QCloseEvent* e)
 {
     e->setAccepted(getMainWindow()->closeAllDocuments(false));

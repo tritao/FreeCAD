@@ -29,6 +29,7 @@
 #include <string>
 
 class QMainWindow;
+class QString;
 
 namespace Gui
 {
@@ -44,6 +45,7 @@ public:
     virtual std::string chromeStatePrefix() const = 0;
     virtual GuiShellServices& services() = 0;
     virtual void updateActions(bool delay = false) = 0;
+    virtual void showMessage(const QString& message, int timeout = 0) = 0;
 };
 
 GuiExport IGuiShell* activeShell();

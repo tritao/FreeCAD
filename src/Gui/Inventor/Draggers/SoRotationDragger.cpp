@@ -36,8 +36,8 @@
 #include "SoRotationDragger.h"
 
 #include <Base/Quantity.h>
+#include <Gui/Application.h>
 #include <Gui/Inventor/SoToggleSwitch.h>
-#include <Gui/MainWindow.h>
 #include <Gui/Utilities.h>
 
 #include "SoRotationDraggerGeometry.h"
@@ -265,7 +265,7 @@ void SoRotationDragger::drag()
         QObject::tr("Rotation:"),
         QString::fromStdString(quantity.getUserString())
     );
-    getMainWindow()->showMessage(message, 3000);
+    Application::Instance->showMessage(message, 3000);
 }
 
 void SoRotationDragger::dragFinish()

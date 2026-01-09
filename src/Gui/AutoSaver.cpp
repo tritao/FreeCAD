@@ -38,8 +38,8 @@
 #include <Base/Writer.h>
 
 #include "AutoSaver.h"
+#include "Application.h"
 #include "Document.h"
-#include "MainWindow.h"
 #include "ViewProvider.h"
 #include "WaitCursor.h"
 
@@ -176,7 +176,7 @@ void AutoSaver::saveDocument(const std::string& name, AutoSaveProperty& saver)
         bool save = hGrp->GetBool("SaveThumbnail", true);
         hGrp->SetBool("SaveThumbnail", false);
 
-        getMainWindow()->showMessage(tr("Wait until the auto-recovery file has been saved…"), 5000);
+        Application::Instance->showMessage(tr("Wait until the auto-recovery file has been saved…"), 5000);
         // qApp->processEvents();
 
         Base::TimeElapsed startTime;

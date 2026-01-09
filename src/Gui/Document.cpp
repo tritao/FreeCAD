@@ -1497,7 +1497,7 @@ bool Document::askIfSavingFailed(const QString& error)
 
     if (ret == QMessageBox::No) {
         // TODO: Understand what exactly is supposed to be returned here
-        getMainWindow()->showMessage(QObject::tr("Saving aborted"), 2000);
+        Application::Instance->showMessage(QObject::tr("Saving aborted"), 2000);
         return false;
     }
     else if (ret == QMessageBox::Yes) {
@@ -1605,7 +1605,7 @@ bool Document::save()
 /// Save the document under a new file name
 bool Document::saveAs()
 {
-    getMainWindow()->showMessage(QObject::tr("Save document under new filename…"));
+    Application::Instance->showMessage(QObject::tr("Save document under new filename…"));
 
     QString exe = qApp->applicationName();
     QString name = QString::fromUtf8(getDocument()->FileName.getValue());
@@ -1655,7 +1655,7 @@ bool Document::saveAs()
         return true;
     }
     else {
-        getMainWindow()->showMessage(QObject::tr("Saving aborted"), 2000);
+        Application::Instance->showMessage(QObject::tr("Saving aborted"), 2000);
         return false;
     }
 }
@@ -1732,7 +1732,7 @@ void Document::saveAll()
 /// Save a copy of the document under a new file name
 bool Document::saveCopy()
 {
-    getMainWindow()->showMessage(QObject::tr("Save a copy of the document under new filename…"));
+    Application::Instance->showMessage(QObject::tr("Save a copy of the document under new filename…"));
 
     QString exe = qApp->applicationName();
     QString fn = FileDialog::getSaveFileName(
@@ -1757,7 +1757,7 @@ bool Document::saveCopy()
         return true;
     }
     else {
-        getMainWindow()->showMessage(QObject::tr("Saving aborted"), 2000);
+        Application::Instance->showMessage(QObject::tr("Saving aborted"), 2000);
         return false;
     }
 }

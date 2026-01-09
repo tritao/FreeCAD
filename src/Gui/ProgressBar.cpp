@@ -33,6 +33,7 @@
 
 
 #include "ProgressBar.h"
+#include "Application.h"
 #include "MainWindow.h"
 #include "ProgressDialog.h"
 #include "WaitCursor.h"
@@ -328,7 +329,7 @@ void SequencerBar::showRemainingTime()
                 );
             }
             else {
-                getMainWindow()->showMessage(status);
+                Application::Instance->showMessage(status);
             }
         }
     }
@@ -366,7 +367,7 @@ void SequencerBar::resetData()
         d->waitCursor = nullptr;
         d->bar->leaveControlEvents(d->guiThread);
         getMainWindow()->setPaneText(1, QString());
-        getMainWindow()->showMessage(QString());
+        Application::Instance->showMessage(QString());
     }
 
     SequencerBase::resetData();
@@ -396,7 +397,7 @@ void SequencerBar::setText(const char* pszTxt)
         );
     }
     else {
-        getMainWindow()->showMessage(d->text);
+        Application::Instance->showMessage(d->text);
     }
 }
 

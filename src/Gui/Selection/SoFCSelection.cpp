@@ -42,7 +42,8 @@
 #include <Base/UnitsApi.h>
 
 #include "SoFCSelection.h"
-#include "MainWindow.h"
+#include "Application.h"
+#include "Window.h"
 #include "SoFCSelectionAction.h"
 #include "SoFCUnifiedSelection.h"
 #include "ViewParams.h"
@@ -482,7 +483,7 @@ void SoFCSelection::handleEvent(SoHandleEventAction* action)
                                 fabs(pt[2]) > 1e-7 ? pt[2] : 0.0
                             );
 
-                            getMainWindow()->showMessage(QString::fromLatin1(buf));
+                            Application::Instance->showMessage(QString::fromLatin1(buf));
                         }
                     }
                 }
@@ -527,7 +528,7 @@ void SoFCSelection::handleEvent(SoHandleEventAction* action)
                             fabs(pt[2]) > 1e-7 ? pt[2] : 0.0
                         );
 
-                        getMainWindow()->showMessage(QString::fromLatin1(buf));
+                        Application::Instance->showMessage(QString::fromLatin1(buf));
                     }
                 }
 

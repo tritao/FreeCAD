@@ -926,7 +926,7 @@ void ManualAlignment::continueAlignment()
         grp.addToViewer(myViewer->getViewer(0));
         grp.setAlignable(true);
 
-        Gui::getMainWindow()->showMessage(tr("Select points in the left and right view"));
+        Gui::Application::Instance->showMessage(tr("Select points in the left and right view"));
 
         myViewer->getViewer(0)->setEditingCursor(QCursor(Qt::PointingHandCursor));
         myViewer->getViewer(1)->setEditingCursor(QCursor(Qt::PointingHandCursor));
@@ -1014,7 +1014,7 @@ void ManualAlignment::finish()
     closeViewer();
     reset();
 
-    Gui::getMainWindow()->showMessage(tr("The alignment has finished"));
+    Gui::Application::Instance->showMessage(tr("The alignment has finished"));
 
     // If an event receiver has been defined send the manual alignment finished event to it
     Q_EMIT emitFinished();
@@ -1033,7 +1033,7 @@ void ManualAlignment::cancel()
     myTransform = Base::Placement();
     reset();
 
-    Gui::getMainWindow()->showMessage(tr("The alignment has been canceled"));
+    Gui::Application::Instance->showMessage(tr("The alignment has been canceled"));
 
     // If an event receiver has been defined send the manual alignment cancelled event to it
     Q_EMIT emitCanceled();
@@ -1076,7 +1076,7 @@ void ManualAlignment::align()
         myAlignModel.activeGroup().removeFromViewer(myViewer->getViewer(0));
         myAlignModel.activeGroup().setAlignable(false);
         std::vector<App::DocumentObject*> pViews = myAlignModel.activeGroup().getViews();
-        Gui::getMainWindow()->showMessage(tr("Try to align group of views"));
+        Gui::Application::Instance->showMessage(tr("Try to align group of views"));
 
         // Compute alignment
         bool ok = computeAlignment(myAlignModel.activeGroup().getPoints(), myFixedGroup.getPoints());
@@ -1120,17 +1120,17 @@ void ManualAlignment::showInstructions()
 {
     // Now we can start the actual alignment
     if (myAlignModel.activeGroup().countPoints() < myPickPoints) {
-        Gui::getMainWindow()->showMessage(tr("Too few points picked in the left view."
+        Gui::Application::Instance->showMessage(tr("Too few points picked in the left view."
                                              " At least %1 points are needed.")
                                               .arg(myPickPoints));
     }
     else if (myFixedGroup.countPoints() < myPickPoints) {
-        Gui::getMainWindow()->showMessage(tr("Too few points picked in the right view."
+        Gui::Application::Instance->showMessage(tr("Too few points picked in the right view."
                                              " At least %1 points are needed.")
                                               .arg(myPickPoints));
     }
     else if (myAlignModel.activeGroup().countPoints() != myFixedGroup.countPoints()) {
-        Gui::getMainWindow()->showMessage(
+        Gui::Application::Instance->showMessage(
             tr("Different number of points picked in left and right view. "
                "On the left view %1 points are picked, "
                "on the right view %2 points are picked.")
@@ -1347,17 +1347,17 @@ void ManualAlignment::probePickedCallback(void* ud, SoEventCallback* n)
                     auto that = static_cast<Gui::ViewProviderDocumentObject*>(vp);
                     if (self->applyPickedProbe(that, point)) {
                         const SbVec3f& vec = point->getPoint();
-                        Gui::getMainWindow()->showMessage(
+                        Gui::Application::Instance->showMessage(
                             tr("Point picked at (%1,%2,%3)").arg(vec[0]).arg(vec[1]).arg(vec[2])
                         );
                     }
                     else {
-                        Gui::getMainWindow()->showMessage(tr("No point was found on model"));
+                        Gui::Application::Instance->showMessage(tr("No point was found on model"));
                     }
                 }
             }
             else {
-                Gui::getMainWindow()->showMessage(tr("No point was picked"));
+                Gui::Application::Instance->showMessage(tr("No point was picked"));
             }
         }
         else if (mbe->getButton() == SoMouseButtonEvent::BUTTON2

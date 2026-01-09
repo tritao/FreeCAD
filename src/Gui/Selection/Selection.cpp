@@ -883,7 +883,7 @@ int SelectionSingleton::setPreselect(
                            ));
 
             if (getMainWindow()) {
-                getMainWindow()->showMessage(msg);
+                Application::Instance->showMessage(msg);
                 Gui::MDIView* mdi = Gui::Application::Instance->activeDocument()->getActiveView();
                 mdi->setOverrideCursor(QCursor(Qt::ForbiddenCursor));
             }
@@ -1007,7 +1007,7 @@ void printPreselectionInfo(
     if (getMainWindow()) {
         QString message
             = getPreselectionInfo(documentName, objectName, subElementName, x, y, z, precision);
-        getMainWindow()->showMessage(message);
+        Application::Instance->showMessage(message);
     }
 }
 }  // namespace Gui
@@ -1228,7 +1228,7 @@ bool SelectionSingleton::addSelection(
                         "Selection not allowed by filter"
                     );
                 }
-                getMainWindow()->showMessage(msg);
+                Application::Instance->showMessage(msg);
                 Gui::MDIView* mdi = Gui::Application::Instance->activeDocument()->getActiveView();
                 mdi->setOverrideCursor(Qt::ForbiddenCursor);
             }

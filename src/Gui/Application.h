@@ -219,6 +219,8 @@ public:
     void checkForDeprecatedSettings();
     void checkForPreviousCrashes();
 
+    void showMessage(const QString& message, int timeout = 0);
+
     /** @name workbench handling */
     //@{
     /// Activate a named workbench

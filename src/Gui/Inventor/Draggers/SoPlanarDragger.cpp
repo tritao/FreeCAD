@@ -53,7 +53,7 @@
 
 #include "SoPlanarDragger.h"
 
-#include "MainWindow.h"
+#include "Application.h"
 #include "SoFCDB.h"
 
 #include <SoTextLabel.h>
@@ -283,7 +283,7 @@ void SoPlanarDragger::drag()
                               QString::fromStdString(quantityX.getUserString()),
                               QString::fromStdString(quantityY.getUserString())
                           );
-    getMainWindow()->showMessage(message, 3000);
+    Application::Instance->showMessage(message, 3000);
 }
 
 void SoPlanarDragger::dragFinish()

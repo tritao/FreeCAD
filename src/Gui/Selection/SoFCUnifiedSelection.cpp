@@ -82,7 +82,7 @@
 #include "Application.h"
 #include "Document.h"
 #include "DocumentObserver.h"
-#include "MainWindow.h"
+#include "Window.h"
 #include "SoFCInteractiveElement.h"
 #include "SoFCSelectionAction.h"
 #include "ViewParams.h"
@@ -753,7 +753,7 @@ bool SoFCUnifiedSelection::setSelection(const std::vector<PickedInfo>& infos, bo
                     fabs(pt[2]) > 1e-7 ? pt[2] : 0.0
                 );
 
-                getMainWindow()->showMessage(QString::fromLatin1(buf));
+                Application::Instance->showMessage(QString::fromLatin1(buf));
             }
             detailPath->truncate(0);
             if (vpd->getDetailPath(info.element.c_str(), detailPath, true, detNext)
@@ -863,7 +863,7 @@ bool SoFCUnifiedSelection::setSelection(const std::vector<PickedInfo>& infos, bo
                 fabs(pt[2]) > 1e-7 ? pt[2] : 0.0
             );
 
-            getMainWindow()->showMessage(QString::fromLatin1(buf));
+            Application::Instance->showMessage(QString::fromLatin1(buf));
         }
     }
 
