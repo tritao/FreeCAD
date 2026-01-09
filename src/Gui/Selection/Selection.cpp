@@ -1267,7 +1267,7 @@ bool SelectionSingleton::addSelection(
 
     notify(std::move(Chng));
 
-    getMainWindow()->updateActions();
+    Application::Instance->updateActions();
 
     rmvPreselect(true);
 
@@ -1346,7 +1346,7 @@ void SelectionSingleton::selStackGoBack(int count)
         _SelStackBack.pop_back();
     }
     _SelStackForward = std::move(tmpStack);
-    getMainWindow()->updateActions();
+    Application::Instance->updateActions();
 }
 
 void SelectionSingleton::selStackGoForward(int count)
@@ -1386,7 +1386,7 @@ void SelectionSingleton::selStackGoForward(int count)
         tmpStack.pop_front();
     }
     _SelStackForward = std::move(tmpStack);
-    getMainWindow()->updateActions();
+    Application::Instance->updateActions();
 }
 
 std::vector<SelectionObject> SelectionSingleton::selStackGet(
@@ -1470,7 +1470,7 @@ bool SelectionSingleton::addSelections(
     }
 
     if (update) {
-        getMainWindow()->updateActions();
+        Application::Instance->updateActions();
     }
     return true;
 }
@@ -1636,7 +1636,7 @@ void SelectionSingleton::rmvSelection(
             );
             notify(std::move(Chng));
         }
-        getMainWindow()->updateActions();
+        Application::Instance->updateActions();
     }
 }
 
@@ -1800,7 +1800,7 @@ void SelectionSingleton::setSelection(const char* pDocName, const std::vector<Ap
     if (touched) {
         _SelStackForward.clear();
         notify(SelectionChanges(SelectionChanges::SetSelection, pDocName));
-        getMainWindow()->updateActions();
+        Application::Instance->updateActions();
     }
 }
 
@@ -1854,7 +1854,7 @@ void SelectionSingleton::clearSelection(const char* pDocName, bool clearPreSelec
 
         notify(SelectionChanges(SelectionChanges::ClrSelection, docName.c_str()));
 
-        getMainWindow()->updateActions();
+        Application::Instance->updateActions();
     }
 }
 
@@ -1902,7 +1902,7 @@ void SelectionSingleton::clearCompleteSelection(bool clearPreSelect)
     FC_LOG("Clear selection");
 
     notify(std::move(Chng));
-    getMainWindow()->updateActions();
+    Application::Instance->updateActions();
 }
 
 bool SelectionSingleton::isSelected(
@@ -2105,7 +2105,7 @@ void SelectionSingleton::slotDeletedObject(const App::DocumentObject& Obj)
             );
             notify(std::move(Chng));
         }
-        getMainWindow()->updateActions();
+        Application::Instance->updateActions();
     }
 
     if (!_PickedList.empty()) {

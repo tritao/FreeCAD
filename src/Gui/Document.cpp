@@ -1156,7 +1156,7 @@ void Document::slotChangedObject(const App::DocumentObject& Obj, const App::Prop
         setModified(true);
     }
 
-    getMainWindow()->updateActions(true);
+    Application::Instance->updateActions(true);
 }
 
 void Document::slotRelabelObject(const App::DocumentObject& Obj)
@@ -1214,7 +1214,7 @@ void Document::slotUndoDocument(const App::Document& doc)
     }
 
     signalUndoDocument(*this);
-    getMainWindow()->updateActions();
+    Application::Instance->updateActions();
 }
 
 void Document::slotRedoDocument(const App::Document& doc)
@@ -1224,7 +1224,7 @@ void Document::slotRedoDocument(const App::Document& doc)
     }
 
     signalRedoDocument(*this);
-    getMainWindow()->updateActions();
+    Application::Instance->updateActions();
 }
 
 void Document::slotRecomputed(const App::Document& doc)
@@ -1232,7 +1232,7 @@ void Document::slotRecomputed(const App::Document& doc)
     if (d->_pcDocument != &doc) {
         return;
     }
-    getMainWindow()->updateActions();
+    Application::Instance->updateActions();
     TreeWidget::updateStatus();
 }
 
@@ -1269,7 +1269,7 @@ void Document::slotSkipRecompute(const App::Document& doc, const std::vector<App
 
 void Document::slotTouchedObject(const App::DocumentObject& Obj)
 {
-    getMainWindow()->updateActions(true);
+    Application::Instance->updateActions(true);
     if (!isModified()) {
         FC_LOG(Obj.getFullName() << " touched");
         setModified(true);

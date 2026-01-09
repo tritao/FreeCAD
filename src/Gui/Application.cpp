@@ -1696,7 +1696,13 @@ void Application::updateActive()
 
 void Application::updateActions(bool delay)
 {
-    getMainWindow()->updateActions(delay);
+    if (auto* shell = Gui::activeShell()) {
+        shell->updateActions(delay);
+        return;
+    }
+    if (auto* mw = getMainWindow()) {
+        mw->updateActions(delay);
+    }
 }
 
 void Application::tryClose(QCloseEvent* e)

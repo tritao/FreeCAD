@@ -56,6 +56,13 @@ public:
         return services_;
     }
 
+    void updateActions(bool delay) override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->updateActions(delay);
+        }
+    }
+
 private:
     QPointer<QMainWindow> mainWindow_;
     GuiShellServices services_;

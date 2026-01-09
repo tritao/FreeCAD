@@ -497,7 +497,7 @@ void Command::_invoke(int id, bool disablelog)
                 }
             }
 
-            getMainWindow()->updateActions();
+            Application::Instance->updateActions();
 
             // If this command starts an editing, let the transaction persist
             if (!editDoc && getGuiApplication()->editDocument()) {

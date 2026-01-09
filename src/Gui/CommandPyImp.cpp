@@ -68,7 +68,7 @@ PyObject* CommandPy::update(PyObject* args)
         return nullptr;
     }
 
-    getMainWindow()->updateActions();
+    Application::Instance->updateActions();
     Py_Return;
 }
 

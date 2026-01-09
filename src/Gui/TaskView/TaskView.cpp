@@ -667,7 +667,7 @@ void TaskView::showDialog(TaskDialog* dlg)
     ActiveDialog->open();
 
     saveCurrentWidth();
-    getMainWindow()->updateActions();
+    Gui::Application::Instance->updateActions();
 
     triggerMinimumSizeHint();
 
@@ -676,7 +676,7 @@ void TaskView::showDialog(TaskDialog* dlg)
 
 void TaskView::removeDialog()
 {
-    getMainWindow()->updateActions();
+    Gui::Application::Instance->updateActions();
 
     if (ActiveCtrl) {
         dialogLayout->removeWidget(ActiveCtrl);

@@ -43,6 +43,7 @@ public:
     virtual QMainWindow* mainWindow() const = 0;
     virtual std::string chromeStatePrefix() const = 0;
     virtual GuiShellServices& services() = 0;
+    virtual void updateActions(bool delay = false) = 0;
 };
 
 GuiExport IGuiShell* activeShell();
