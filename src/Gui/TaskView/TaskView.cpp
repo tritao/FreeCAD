@@ -734,9 +734,13 @@ void TaskView::updateWatcher()
         return;
     }
 
+    if (watcherTransferInProgress) {
+        return;
+    }
+
     if (ActiveWatcher.empty()) {
         auto panel = Gui::Control().taskPanel();
-        if (panel && panel->ActiveWatcher.size()) {
+        if (panel && panel != this && !panel->watcherTransferInProgress && panel->ActiveWatcher.size()) {
             takeTaskWatcher(panel);
         }
     }
@@ -799,6 +803,23 @@ void TaskView::addTaskWatcher(const std::vector<TaskWatcher*>& Watcher)
 
 void TaskView::takeTaskWatcher(TaskView* other)
 {
+    if (!other || other == this) {
+        return;
+    }
+
+    struct TransferGuard {
+        TaskView* a;
+        TaskView* b;
+        explicit TransferGuard(TaskView* a, TaskView* b) : a(a), b(b) {
+            a->watcherTransferInProgress = true;
+            b->watcherTransferInProgress = true;
+        }
+        ~TransferGuard() {
+            a->watcherTransferInProgress = false;
+            b->watcherTransferInProgress = false;
+        }
+    } guard(this, other);
+
     clearTaskWatcher();
     ActiveWatcher.swap(other->ActiveWatcher);
     other->clearTaskWatcher();

@@ -231,6 +231,7 @@ protected:
     int currentWidth = 0;
     ParameterGrp::handle hGrp;
     bool showTaskWatcher;
+    bool watcherTransferInProgress = false;
 
     Connection connectApplicationActiveDocument;
     Connection connectApplicationDeleteDocument;
