@@ -24,7 +24,9 @@
  ***************************************************************************/
 
 #include <sstream>
-#include <boost/regex.hpp>
+#include <charconv>
+#include <string_view>
+#include <system_error>
 
 #include <FCConfig.h>
 
@@ -41,6 +43,81 @@ char format2[1024];  // Warning! Can't go over 512 characters!!!
 unsigned int format2_len = 1024;
 
 using namespace Base;
+
+namespace
+{
+bool parseSwigVersionLine(std::string_view line, int& major, int& minor, int& micro)
+{
+    if (!line.empty() && line.back() == '\r') {
+        line.remove_suffix(1);
+    }
+
+    constexpr std::string_view prefix = "# Version ";
+    if (line.size() < prefix.size() || line.compare(0, prefix.size(), prefix) != 0) {
+        return false;
+    }
+
+    auto rest = line.substr(prefix.size());
+
+    auto rtrimWhitespace = [](std::string_view v) {
+        while (!v.empty()) {
+            const char ch = v.back();
+            if (ch == ' ' || ch == '\t') {
+                v.remove_suffix(1);
+                continue;
+            }
+            break;
+        }
+        return v;
+    };
+
+    rest = rtrimWhitespace(rest);
+
+    const auto dot1 = rest.find('.');
+    if (dot1 == std::string_view::npos) {
+        return false;
+    }
+    const auto dot2 = rest.find('.', dot1 + 1);
+    if (dot2 == std::string_view::npos) {
+        return false;
+    }
+
+    const auto majorPart = rest.substr(0, dot1);
+    const auto minorPart = rest.substr(dot1 + 1, dot2 - (dot1 + 1));
+    const auto microPart = rest.substr(dot2 + 1);
+
+    auto isDigits = [](std::string_view v) {
+        if (v.empty()) {
+            return false;
+        }
+        for (const char c : v) {
+            if (c < '0' || c > '9') {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    if (majorPart.size() != 1 || majorPart[0] < '1' || majorPart[0] > '9') {
+        return false;
+    }
+    if (minorPart.size() != 1 || minorPart[0] < '0' || minorPart[0] > '9') {
+        return false;
+    }
+    if (!isDigits(microPart)) {
+        return false;
+    }
+
+    auto parseInt = [](std::string_view v, int& out) {
+        const char* begin = v.data();
+        const char* end = v.data() + v.size();
+        auto result = std::from_chars(begin, end, out);
+        return result.ec == std::errc {} && result.ptr == end;
+    };
+
+    return parseInt(majorPart, major) && parseInt(minorPart, minor) && parseInt(microPart, micro);
+}
+}  // namespace
 
 PyException::PyException(const Py::Object& obj)
 {
@@ -902,18 +979,16 @@ int getSWIGVersionFromModule(const std::string& module)
         // file can have the extension .py or .pyc
         filename = filename.substr(0, filename.rfind('.'));
         filename += ".py";
-        boost::regex rx("^# Version ([1-9])\\.([0-9])\\.([0-9]+)");
-        boost::cmatch what;
 
         std::string line;
         Base::FileInfo fi(filename);
 
         Base::ifstream str(fi, std::ios::in);
         while (str && std::getline(str, line)) {
-            if (boost::regex_match(line.c_str(), what, rx)) {
-                int major = std::atoi(what[1].first);
-                int minor = std::atoi(what[2].first);
-                int micro = std::atoi(what[3].first);
+            int major = 0;
+            int minor = 0;
+            int micro = 0;
+            if (parseSwigVersionLine(line, major, minor, micro)) {
                 int version = (major << 16) + (minor << 8) + micro;
                 moduleMap[module] = version;
                 return version;

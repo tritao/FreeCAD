@@ -22,15 +22,16 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <cstring>
 #include <limits>
 
-#include <boost/algorithm/string/predicate.hpp>
 #include "Base/Exception.h"
 #include "Base/Tools.h"
 
 #include "Rotation.h"
 #include "Matrix.h"
 #include "Precision.h"
+#include "StringViewTools.h"
 
 
 using namespace Base;
@@ -985,7 +986,7 @@ Rotation::EulerSequence Rotation::eulerSequenceFromName(const char* name)
 {
     if (name) {
         for (unsigned i = 0; i < sizeof(EulerSequenceNames) / sizeof(EulerSequenceNames[0]); ++i) {
-            if (boost::iequals(name, EulerSequenceNames[i])) {
+            if (Base::StringViewTools::iequalsAscii(name, EulerSequenceNames[i])) {
                 return static_cast<EulerSequence>(i + 1);
             }
         }
