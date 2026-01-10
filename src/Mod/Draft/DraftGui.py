@@ -1634,7 +1634,8 @@ class DraftToolBar:
             else:
                 self.groupmenu.addAction(l)
         if not pos:
-            pos = FreeCADGui.getMainWindow().cursor().pos()
+            mw = FreeCADGui.getMainWindow()
+            pos = mw.cursor().pos() if mw else QtGui.QCursor.pos()
         self.groupmenu.popup(pos)
         self.groupmenu.triggered.connect(self.popupTriggered)
 

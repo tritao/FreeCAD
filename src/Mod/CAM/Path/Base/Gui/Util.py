@@ -450,7 +450,10 @@ class PropertyLabel(QtCore.QObject):
 
 def getDocNode():
     doc = FreeCADGui.ActiveDocument.Document.Name
-    tws = FreeCADGui.getMainWindow().findChildren(QtGui.QTreeWidget)
+    mw = FreeCADGui.getMainWindow()
+    if not mw:
+        return None
+    tws = mw.findChildren(QtGui.QTreeWidget)
 
     for tw in tws:
         if tw.topLevelItemCount() != 1 or tw.topLevelItem(0).text(0) != "Application":

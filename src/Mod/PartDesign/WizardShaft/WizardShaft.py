@@ -106,7 +106,6 @@ class TaskWizardShaft:
         self.form.setLayout(layout)
 
         # Switch to feature window
-        mdi = FreeCADGui.getMainWindow().findChild(QtGui.QMdiArea)
         cw.setActiveSubWindow(featureWindow)
 
     def showDiagram(self, diagram):

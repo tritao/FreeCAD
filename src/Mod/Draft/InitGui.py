@@ -159,7 +159,9 @@ class DraftWorkbench(FreeCADGui.Workbench):
                 )
                 FreeCADGui.draftToolBar.loadedPreferences = True
 
-        FreeCADGui.getMainWindow().mainWindowClosed.connect(self.Deactivated)
+        mw = FreeCADGui.getMainWindow()
+        if mw:
+            mw.mainWindowClosed.connect(self.Deactivated)
 
         FreeCAD.Console.PrintLog("Loading Draft workbench, done.\n")
 

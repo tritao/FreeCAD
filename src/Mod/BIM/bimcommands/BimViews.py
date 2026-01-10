@@ -185,7 +185,10 @@ class BIM_Views:
     def onClose(self, event):
         from PySide import QtGui
 
-        st = FreeCADGui.getMainWindow().statusBar()
+        mw = FreeCADGui.getMainWindow()
+        if not mw:
+            return
+        st = mw.statusBar()
         statuswidget = st.findChild(QtGui.QToolBar, "BIMStatusWidget")
         if statuswidget and hasattr(statuswidget, "bimviewsbutton"):
             statuswidget.bimviewsbutton.setChecked(False)
@@ -682,9 +685,12 @@ def show(item, column=None):
                 FreeCADGui.Selection.addSelection(o)
             if not hasattr(FreeCADGui.ActiveDocument.ActiveView, "getSceneGraph"):
                 # Find first 3d view and switch to it
-                for w in FreeCADGui.getMainWindow().getWindows():
+                mw = FreeCADGui.getMainWindow()
+                if not mw:
+                    return
+                for w in mw.getWindows():
                     if hasattr(w, "getSceneGraph"):
-                        FreeCADGui.getMainWindow().setActiveWindow(w)
+                        mw.setActiveWindow(w)
                         break
             FreeCADGui.runCommand("Std_OrthographicCamera")
             FreeCADGui.ActiveDocument.ActiveView.viewTop()

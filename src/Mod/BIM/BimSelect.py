@@ -102,9 +102,9 @@ class CyclicObjectSelector:
             self.objectIndex = 0
         object_name = self.selectableObjects[self.objectIndex]["Object"]
         subelement_name = self.selectableObjects[self.objectIndex]["Component"]
-        FreeCADGui.getMainWindow().showMessage(
-            "Cycle preselected (TAB): {} - {}".format(object_name, subelement_name), 0
-        )
+        mw = FreeCADGui.getMainWindow()
+        if mw:
+            mw.showMessage("Cycle preselected (TAB): {} - {}".format(object_name, subelement_name), 0)
         FreeCADGui.Selection.setPreselection(
             FreeCAD.ActiveDocument.getObject(object_name), subelement_name
         )
