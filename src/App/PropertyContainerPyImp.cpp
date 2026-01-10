@@ -27,10 +27,8 @@
 #include "PropertyContainer.h"
 #include "Property.h"
 #include "DocumentObject.h"
+#include <Base/BufferIStream.h>
 #include <Base/PyWrapParseTupleAndKeywords.h>
-
-#include <boost/iostreams/device/array.hpp>
-#include <boost/iostreams/stream.hpp>
 
 #include "PropertyUnits.h"
 
@@ -612,8 +610,7 @@ PyObject* PropertyContainerPy::restorePropertyContent(PyObject* args)
 
     // check if it really is a buffer
     try {
-        using Device = boost::iostreams::basic_array_source<char>;
-        boost::iostreams::stream<Device> stream((char*)buf.buf, buf.len);
+        Base::BufferIStream stream(static_cast<const char*>(buf.buf), static_cast<std::size_t>(buf.len));
         prop->restoreFromStream(stream);
     }
     catch (...) {
