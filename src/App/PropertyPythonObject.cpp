@@ -21,11 +21,9 @@
  *   Suite 330, Boston, MA  02111-1307, USA                                *
  *                                                                         *
  ***************************************************************************/
-
-
-
 #include <algorithm>
 #include <iostream>
+#include <regex>
 #include <string>
 #include <vector>
 
@@ -331,6 +329,31 @@ void PropertyPythonObject::fromString(const std::string& repr)
     }
 }
 
+void PropertyPythonObject::loadPickle(const std::string& str)
+{
+    // find the custom attributes and restore them
+    Base::PyGILStateLocker lock;
+    try {
+        std::string buffer = str;
+        std::regex pickle(R"(S'(\w+)'.+S'(\w+)'\n)");
+        std::match_results<std::string::const_iterator> what;
+        std::string::const_iterator start, end;
+        start = buffer.begin();
+        end = buffer.end();
+        while (std::regex_search(start, end, what, pickle)) {
+            std::string key = std::string(what[1].first, what[1].second);
+            std::string val = std::string(what[2].first, what[2].second);
+            this->object.setAttr(key, Py::String(val));
+            buffer = std::string(what[2].second, end);
+            start = buffer.begin();
+            end = buffer.end();
+        }
+    }
+    catch (Py::Exception&) {
+        Base::PyException e;  // extract the Python error text
+        e.reportException();
+    }
+}
 
 std::string PropertyPythonObject::encodeValue(const std::string& str) const
 {
@@ -467,6 +490,7 @@ void PropertyPythonObject::Restore(Base::XMLReader& reader)
     }
     else {
         bool load_json = false;
+        bool load_pickle = false;
         bool load_failed = false;
         std::string buffer = reader.getAttribute<const char*>("value");
         if (reader.hasAttribute("encoded") && strcmp(reader.getAttribute<const char*>("encoded"), "yes") == 0) {
@@ -478,6 +502,10 @@ void PropertyPythonObject::Restore(Base::XMLReader& reader)
 
         Base::PyGILStateLocker lock;
         try {
+            std::regex pickle(R"(^\(i(\w+)\n(\w+)\n)");
+            std::match_results<std::string::const_iterator> what;
+            std::string::const_iterator start = buffer.begin();
+            std::string::const_iterator end = buffer.end();
             if (reader.hasAttribute("module") && reader.hasAttribute("class")) {
                 std::string moduleName = reader.getAttribute<const char*>("module");
                 if (!isAllowedModule(moduleName)) {
@@ -507,6 +535,17 @@ void PropertyPythonObject::Restore(Base::XMLReader& reader)
                 }
                 load_json = true;
             }
+            else if (std::regex_search(start, end, what, pickle)) {
+                std::string name = std::string(what[1].first, what[1].second);
+                std::string type = std::string(what[2].first, what[2].second);
+                Py::Module mod(PyImport_ImportModule(name.c_str()), true);
+                if (mod.isNull()) {
+                    throw Py::Exception();
+                }
+                this->object = PyObject_CallObject(mod.getAttr(type).ptr(), nullptr);
+                load_pickle = true;
+                buffer = std::string(what[2].second, end);
+            }
             else if (reader.hasAttribute("json")) {
                 load_json = true;
             }
@@ -521,6 +560,9 @@ void PropertyPythonObject::Restore(Base::XMLReader& reader)
         aboutToSetValue();
         if (load_json) {
             this->fromString(buffer);
+        }
+        else if (load_pickle) {
+            this->loadPickle(buffer);
         }
         else if (!load_failed) {
             Base::Console().warning(

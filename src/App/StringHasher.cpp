@@ -21,9 +21,11 @@
  **************************************************************************************************/
 
 #include <array>
+#include <charconv>
 #include <cstdint>
 #include <cstring>
 #include <deque>
+#include <string_view>
 
 #include <Base/Base64.h>
 #include <Base/ByteBuffer.h>
@@ -34,8 +36,6 @@
 #include <Base/Stream.h>
 #include <Base/Writer.h>
 
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <boost/bimap.hpp>
 #include <boost/bimap/set_of.hpp>
 #include <boost/bimap/unordered_set_of.hpp>
@@ -93,6 +93,41 @@ Base::ByteBuffer sha1Digest(Base::BytesView bytes)
     }
 
     return Base::ByteBuffer::copy(Base::BytesView(out.data(), out.size()));
+}
+
+void splitKeepEmpty(std::vector<std::string_view>& out, std::string_view input, char delim)
+{
+    out.clear();
+    std::size_t start = 0;
+    while (true) {
+        const std::size_t pos = input.find(delim, start);
+        if (pos == std::string_view::npos) {
+            out.push_back(input.substr(start));
+            return;
+        }
+        out.push_back(input.substr(start, pos - start));
+        start = pos + 1;
+    }
+}
+
+unsigned long parseUnsignedLong(std::string_view view, int base)
+{
+    unsigned long value = 0;
+    const auto res = std::from_chars(view.data(), view.data() + view.size(), value, base);
+    if (res.ec != std::errc {}) {
+        return 0;
+    }
+    return value;
+}
+
+long parseLong(std::string_view view, int base)
+{
+    long value = 0;
+    const auto res = std::from_chars(view.data(), view.data() + view.size(), value, base);
+    if (res.ec != std::errc {}) {
+        return 0;
+    }
+    return value;
 }
 
 }  // namespace
@@ -670,7 +705,7 @@ void StringHasher::restoreStreamNew(std::istream& stream, std::size_t count)
     std::string content;
     boost::io::ios_flags_saver ifs(stream);
     stream >> std::hex;
-    std::vector<std::string> tokens;
+    std::vector<std::string_view> tokens;
     long lastid = 0;
     const StringID* last = nullptr;
 
@@ -681,25 +716,24 @@ void StringHasher::restoreStreamNew(std::istream& stream, std::size_t count)
             FC_THROWM(Base::RuntimeError, "Invalid string table");
         }
 
-        tokens.clear();
-        boost::split(tokens, tmp, boost::is_any_of("."));
+        splitKeepEmpty(tokens, tmp, '.');
         if (tokens.size() < 2) {
             FC_THROWM(Base::RuntimeError, "Invalid string table");
         }
 
         long id = 0;
         bool relative = false;
-        if (tokens[0][0] == '-') {
+        if (!tokens[0].empty() && tokens[0][0] == '-') {
             relative = true;
-            id = lastid + strtol(tokens[0].c_str() + 1, nullptr, 16);
+            id = lastid + static_cast<long>(parseUnsignedLong(tokens[0].substr(1), 16));
         }
         else {
-            id = strtol(tokens[0].c_str(), nullptr, 16);
+            id = static_cast<long>(parseUnsignedLong(tokens[0], 16));
         }
 
         lastid = id;
 
-        unsigned long flag = strtol(tokens[1].c_str(), nullptr, 16);
+        unsigned long flag = parseUnsignedLong(tokens[1], 16);
         StringIDRef sid(new StringID(id, Base::ByteBuffer{}, static_cast<StringID::Flag>(flag)));
 
         StringID& d = *sid._sid;
@@ -709,13 +743,7 @@ void StringHasher::restoreStreamNew(std::istream& stream, std::size_t count)
         if (relative && last) {
             for (; j < (int)tokens.size() && j - 2 < last->_sids.size(); ++j) {
                 long m = last->_sids[j - 2].value();
-                long n;
-                if (tokens[j][0] == '-') {
-                    n = -strtol(&tokens[j][1], nullptr, 16);
-                }
-                else {
-                    n = strtol(&tokens[j][0], nullptr, 16);
-                }
+                long n = parseLong(tokens[j], 16);
                 StringIDRef sid = getID(m + n);
                 if (!sid) {
                     FC_THROWM(Base::RuntimeError, "Invalid string id reference");
@@ -724,7 +752,7 @@ void StringHasher::restoreStreamNew(std::istream& stream, std::size_t count)
             }
         }
         for (; j < (int)tokens.size(); ++j) {
-            long n = strtol(tokens[j].data(), nullptr, 16);
+            long n = static_cast<long>(parseUnsignedLong(tokens[j], 16));
             StringIDRef sid = getID(relative ? id - n : n);
             if (!sid) {
                 FC_THROWM(Base::RuntimeError, "Invalid string id reference");

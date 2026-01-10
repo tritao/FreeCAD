@@ -33,7 +33,9 @@
 #include <xercesc/util/TranscodingException.hpp>
 #include <xercesc/util/XMLString.hpp>
 
-#include <boost/regex.hpp>
+#include <cctype>
+#include <optional>
+#include <string_view>
 
 #include <App/DocumentObjectPy.h>
 #include <App/DocumentPy.h>
@@ -240,6 +242,39 @@ void applyElementColorOverrideAction(
         throw Py::TypeError("target must be of type coin.SoNode or coin.SoPath");
     }
 }
+
+bool isWordChar(unsigned char c)
+{
+    return (std::isalnum(c) != 0) || c == static_cast<unsigned char>('_');
+}
+
+std::optional<std::string> extractWordDirAfterMarker(std::string_view path, std::string_view marker)
+{
+    const std::size_t markerPos = path.find(marker);
+    if (markerPos == std::string_view::npos) {
+        return std::nullopt;
+    }
+
+    std::size_t pos = markerPos + marker.size();
+    if (pos >= path.size()) {
+        return std::nullopt;
+    }
+
+    const std::size_t start = pos;
+    while (pos < path.size() && path[pos] != '/') {
+        if (!isWordChar(static_cast<unsigned char>(path[pos]))) {
+            return std::nullopt;
+        }
+        ++pos;
+    }
+
+    if (pos == start || pos >= path.size() || path[pos] != '/') {
+        return std::nullopt;
+    }
+
+    return std::string(path.substr(start, pos - start));
+}
+
 }  // namespace
 
 // Application methods structure
@@ -1657,19 +1692,14 @@ PyObject* ApplicationPy::sAddCommand(PyObject* /*self*/, PyObject* args)
         filename = fi.filePath();
         module = fi.fileNamePure();
         // for the group name get the directory name after 'Mod'
-        boost::regex rx("/Mod/(\\w+)/");
-        boost::smatch what;
-        if (boost::regex_search(filename, what, rx)) {
-            group = what[1];
+        if (auto g = extractWordDirAfterMarker(filename, "/Mod/")) {
+            group = std::move(*g);
+        }
+        else if (auto g = extractWordDirAfterMarker(filename, "/Ext/freecad/")) {
+            group = std::move(*g);
         }
         else {
-            rx = "/Ext/freecad/(\\w+)/";
-            if (boost::regex_search(filename, what, rx)) {
-                group = what[1];
-            }
-            else {
-                group = module;
-            }
+            group = module;
         }
     }
     catch (Py::Exception& e) {

@@ -26,10 +26,12 @@
 
 #include <TopoDS_Shape.hxx>
 #include <array>
+#include <charconv>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <sstream>
-#include <boost/regex.hpp>
+#include <string_view>
 
 #include <APIHeaderSection_MakeHeader.hxx>
 #include <BinTools.hxx>
@@ -302,17 +304,55 @@ std::pair<std::string, unsigned long> TopoShape::getElementTypeAndIndex(const ch
 {
     std::string strName = Data::oldElementName(RawName);
     const char* Name = strName.c_str();
-    int index = 0;
-    std::string element;
-    boost::regex ex("^(Face|Edge|Vertex)([1-9][0-9]*)$");
-    boost::cmatch what;
-
-    if (Name && boost::regex_match(Name, what, ex)) {
-        element = what[1].str();
-        index = std::atoi(what[2].str().c_str());
+    if (!Name) {
+        return {"", 0};
     }
 
-    return std::make_pair(element, index);
+    const std::string_view input(Name);
+
+    constexpr std::string_view facePrefix = "Face";
+    constexpr std::string_view edgePrefix = "Edge";
+    constexpr std::string_view vertexPrefix = "Vertex";
+
+    std::string_view element;
+    std::size_t pos = 0;
+    if (input.starts_with(facePrefix)) {
+        element = facePrefix;
+        pos = facePrefix.size();
+    }
+    else if (input.starts_with(edgePrefix)) {
+        element = edgePrefix;
+        pos = edgePrefix.size();
+    }
+    else if (input.starts_with(vertexPrefix)) {
+        element = vertexPrefix;
+        pos = vertexPrefix.size();
+    }
+    else {
+        return {"", 0};
+    }
+
+    if (pos >= input.size()) {
+        return {"", 0};
+    }
+
+    const std::string_view digits = input.substr(pos);
+    if (digits.front() < '1' || digits.front() > '9') {
+        return {"", 0};
+    }
+    for (const unsigned char c : digits) {
+        if (std::isdigit(c) == 0) {
+            return {"", 0};
+        }
+    }
+
+    unsigned long index = 0;
+    const auto res = std::from_chars(digits.data(), digits.data() + digits.size(), index, 10);
+    if (res.ec != std::errc {}) {
+        return {"", 0};
+    }
+
+    return {std::string(element), index};
 }
 
 std::vector<const char*> TopoShape::getElementTypes() const
