@@ -59,11 +59,8 @@ struct ActionDisabler
     ActionDisabler()
     {
         QMenuBar* menuBar = nullptr;
-        if (auto* shell = Gui::activeShell()) {
+        if (auto* shell = Gui::ensureActiveShell()) {
             menuBar = shell->services().menuBar();
-        }
-        else if (auto* mw = Gui::activeMainWindow()) {
-            menuBar = mw->menuBar();
         }
         if (!menuBar) {
             return;

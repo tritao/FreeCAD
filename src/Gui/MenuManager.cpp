@@ -201,11 +201,8 @@ MenuManager::~MenuManager() = default;
 void MenuManager::setup(MenuItem* menuItems) const
 {
     QMenuBar* menuBar = nullptr;
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         menuBar = shell->services().menuBar();
-    }
-    else if (auto* mw = Gui::activeMainWindow()) {
-        menuBar = mw->menuBar();
     }
     setup(menuItems, menuBar);
 }
@@ -353,11 +350,8 @@ void MenuManager::setup(MenuItem* item, QMenu* menu) const
 void MenuManager::retranslate() const
 {
     QMenuBar* menuBar = nullptr;
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         menuBar = shell->services().menuBar();
-    }
-    else if (auto* mw = Gui::activeMainWindow()) {
-        menuBar = mw->menuBar();
     }
     retranslate(menuBar);
 }

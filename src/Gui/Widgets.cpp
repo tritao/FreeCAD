@@ -1778,14 +1778,14 @@ void adjustDialogPosition(QDialog* dialog)
     if (!dialog) {
         return;
     }
-    const auto* mw = Gui::activeMainWindow();
-    if (!mw) {
+    const auto* parent = Gui::uiParentWidget();
+    if (!parent) {
         return;
     }
 
     dialog->adjustSize();  // ensure correct size
 
-    const QRect mainWindowRect {mw->mapToGlobal(QPoint(0, 0)), mw->size()};
+    const QRect mainWindowRect {parent->mapToGlobal(QPoint(0, 0)), parent->size()};
     const QRect dialogRect {dialog->frameGeometry()};
 
     const bool isFullyInside = mainWindowRect.contains(dialogRect);

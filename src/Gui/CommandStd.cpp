@@ -371,10 +371,13 @@ void StdCmdRestartInSafeMode::activated(int iMsg)
             if (!args.contains(safeModeArgument)) {
                 args.append(safeModeArgument);
             }
-            if (auto* mw = Gui::activeMainWindow()) {
-                if (mw->close()) {
-                    QProcess::startDetached(QApplication::applicationFilePath(), args);
-                }
+            auto* shell = Gui::ensureActiveShell();
+            auto* mw = shell ? shell->mainWindow() : nullptr;
+            if (!mw) {
+                return;
+            }
+            if (mw->close()) {
+                QProcess::startDetached(QApplication::applicationFilePath(), args);
             }
         });
     }
@@ -502,7 +505,8 @@ StdCmdCommandLine::StdCmdCommandLine()
 void StdCmdCommandLine::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    auto* mw = Gui::activeMainWindow();
+    auto* shell = Gui::ensureActiveShell();
+    auto* mw = shell ? shell->mainWindow() : nullptr;
     if (!mw) {
         return;
     }

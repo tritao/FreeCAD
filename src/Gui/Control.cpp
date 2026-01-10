@@ -76,11 +76,8 @@ QTabBar* ControlSingleton::findTabBar(QDockWidget* widget) const
     }
 
     int count = 1;
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         count += shell->tabifiedDockWidgets(widget).size();
-    }
-    else if (auto* mw = Gui::activeMainWindow()) {
-        count += mw->tabifiedDockWidgets(widget).size();
     }
 
     if (count <= 1) {

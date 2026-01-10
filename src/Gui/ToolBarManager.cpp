@@ -445,10 +445,10 @@ void ToolBarGrip::updateSize()
 
 ToolBarManager* ToolBarManager::getInstance()
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         return getInstance(shell->mainWindow(), shell->chromeStatePrefix());
     }
-    return getInstance(Gui::activeMainWindow(), "BaseApp/MainWindow");
+    return nullptr;
 }
 
 ToolBarManager* ToolBarManager::getInstance(QMainWindow* hostWindow, const std::string& statePrefix)
