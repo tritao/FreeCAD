@@ -69,6 +69,13 @@ target_include_directories(
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
+target_include_directories(
+    FreeCADApp
+    SYSTEM
+    PUBLIC
+    ${Boost_INCLUDE_DIRS}
+)
+
 if(FREECAD_HAS_QT)
     target_include_directories(
         FreeCADApp

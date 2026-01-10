@@ -15,6 +15,11 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/src/Mod/Import/App/dxf
 )
 
+include_directories(
+    SYSTEM
+    ${Boost_INCLUDE_DIRS}
+)
+
 link_directories(${OCC_LIBRARY_DIR})
 
 
