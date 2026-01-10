@@ -21,9 +21,6 @@
  *   Suite 330, Boston, MA  02111-1307, USA                                *
  *                                                                         *
  ***************************************************************************/
-
-
-
 #include <algorithm>
 #include <iostream>
 #include <string>
@@ -330,7 +327,6 @@ void PropertyPythonObject::fromString(const std::string& repr)
         e.reportException();
     }
 }
-
 
 std::string PropertyPythonObject::encodeValue(const std::string& str) const
 {

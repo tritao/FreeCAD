@@ -21,8 +21,8 @@
  *                                                                          *
  ***************************************************************************/
 
-#include <boost/algorithm/string/replace.hpp>
-#include <boost/regex.hpp>
+#include <algorithm>
+#include <cctype>
 #include <string>
 
 #include <Base/TimeInfo.h>
@@ -146,7 +146,7 @@ void BackupPolicy::applyTimeStamp(const std::string& sourcename, const std::stri
     if (fi.exists()) {
         if (numberOfFiles > 0) {
             // replace . by - in format to avoid . between base name and extension
-            boost::replace_all(saveBackupDateFormat, ".", "-");
+            std::replace(saveBackupDateFormat.begin(), saveBackupDateFormat.end(), '.', '-');
             {
                 // Remove all extra backups
                 std::string filename = fi.fileName();
@@ -341,27 +341,20 @@ bool BackupPolicy::startsWith(const std::string& st1, const std::string& st2) co
     return st1.substr(0, st2.length()) == st2;
 }
 
-bool BackupPolicy::checkValidString(const std::string& cmpl, const boost::regex& e) const
-{
-    boost::smatch what;
-    const bool res = boost::regex_search(cmpl, what, e);
-    return res;
-}
-
 bool BackupPolicy::checkValidComplement(const std::string& file,
                           const std::string& pbn,
                           const std::string& ext) const
 {
     const std::string cmpl =
         file.substr(pbn.length(), file.length() - pbn.length() - ext.length() - 1);
-    const boost::regex e(R"(^[^.]*$)");
-    return checkValidString(cmpl, e);
+    return cmpl.find('.') == std::string::npos;
 }
 
 bool BackupPolicy::checkDigits(const std::string& cmpl) const
 {
-    const boost::regex e(R"(^[0-9]*$)");
-    return checkValidString(cmpl, e);
+    return std::all_of(cmpl.begin(), cmpl.end(), [](unsigned char c) {
+        return std::isdigit(c) != 0;
+    });
 }
 
 bool BackupPolicy::renameFileNoErase(Base::FileInfo fi, const std::string& newName)

@@ -24,6 +24,8 @@
 
 #include <algorithm>
 
+#include <QCoreApplication>
+
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <GCPnts_AbscissaPoint.hxx>

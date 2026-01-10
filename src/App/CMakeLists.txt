@@ -89,9 +89,16 @@ target_compile_definitions(FreeCADApp PRIVATE FREECAD_BUILD_QT=$<BOOL:${FREECAD_
 
 set(FreeCADApp_LIBS
     FreeCADBase
-    ${Boost_LIBRARIES}
+    Boost::program_options
+    Boost::thread
+    Boost::date_time
     fmt::fmt
 )
+
+if(UNIX AND NOT APPLE)
+    # Boost.Thread 1.67+ headers reference pthread_condattr_*
+    list(APPEND FreeCADApp_LIBS pthread)
+endif()
 
 if(BUILD_TRACY_FRAME_PROFILER)
     list(APPEND FreeCADApp_LIBS TracyClient)
