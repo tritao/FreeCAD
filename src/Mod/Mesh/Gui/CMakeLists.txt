@@ -165,6 +165,13 @@ target_include_directories(
     PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}
 )
+
+target_include_directories(
+    MeshGui
+    SYSTEM
+    PRIVATE
+    ${Boost_INCLUDE_DIRS}
+)
 target_link_libraries(MeshGui ${MeshGui_LIBS})
 
 if (MSVC)

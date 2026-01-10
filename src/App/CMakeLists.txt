@@ -73,6 +73,7 @@ target_include_directories(
     FreeCADApp
     SYSTEM
     PUBLIC
+    ${Boost_INCLUDE_DIRS}
 )
 
 if(BUILD_QT)

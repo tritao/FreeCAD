@@ -129,6 +129,7 @@ ENDIF()
 
 # Needed so that the generated config.h can be used
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
+INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
 TARGET_LINK_LIBRARIES(orocos-kdl ${Boost_LIBRARIES})
 
 INSTALL(TARGETS orocos-kdl

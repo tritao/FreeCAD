@@ -25,6 +25,13 @@ SET(Cloud_SRCS
 )
 
 add_library(Cloud SHARED ${Cloud_SRCS})
+
+target_include_directories(
+    Cloud
+    SYSTEM
+    PRIVATE
+    ${Boost_INCLUDE_DIRS}
+)
 target_link_libraries(Cloud ${Cloud_LIBS})
 
 if(FREECAD_USE_PCH)
