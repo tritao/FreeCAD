@@ -140,12 +140,13 @@ private:
         QFileInfo fi;
         fi.setFile(fileName);
         QString ext = fi.completeSuffix().toLower();
-        QList<Gui::EditorView*> views;
-        if (auto* mw = Gui::activeMainWindow()) {
-            views = mw->findChildren<Gui::EditorView*>();
+        QList<QWidget*> windows;
+        if (Gui::Application::Instance) {
+            windows = Gui::Application::Instance->windows();
         }
-        for (auto view : views) {
-            if (view->fileName() == fileName) {
+        for (QWidget* widget : windows) {
+            auto* view = qobject_cast<Gui::EditorView*>(widget);
+            if (view && view->fileName() == fileName) {
                 view->setFocus();
                 return Py::None();
             }
