@@ -163,12 +163,15 @@ DlgSettingsGeneral::~DlgSettingsGeneral() = default;
  */
 void DlgSettingsGeneral::setRecentFileSize()
 {
-    if (auto* mw = Gui::activeMainWindow()) {
-        auto recent = mw->findChild<RecentFilesAction*>(QLatin1String("recentFiles"));
-        if (recent) {
-            ParameterGrp::handle hGrp = WindowParameter::getDefaultParameter()->GetGroup("RecentFiles");
-            recent->resizeList(hGrp->GetInt("RecentFiles", 4));
-        }
+    if (!Gui::Application::Instance) {
+        return;
+    }
+
+    Gui::Command* cmd = Gui::Application::Instance->commandManager().getCommandByName("Std_RecentFiles");
+    auto* recent = cmd ? qobject_cast<RecentFilesAction*>(cmd->getAction()) : nullptr;
+    if (recent) {
+        ParameterGrp::handle hGrp = WindowParameter::getDefaultParameter()->GetGroup("RecentFiles");
+        recent->resizeList(hGrp->GetInt("RecentFiles", 4));
     }
 }
 
@@ -497,8 +500,10 @@ int DlgSettingsGeneral::getCurrentIconSize() const
 {
     ParameterGrp::handle hGrp = WindowParameter::getDefaultParameter()->GetGroup("General");
     int current = 0;
-    if (auto* mw = Gui::activeMainWindow()) {
-        current = mw->iconSize().width();
+    if (auto* shell = Gui::ensureActiveShell()) {
+        if (auto* mw = shell->mainWindow()) {
+            current = mw->iconSize().width();
+        }
     }
     return hGrp->GetInt("ToolbarIconSize", current);
 }

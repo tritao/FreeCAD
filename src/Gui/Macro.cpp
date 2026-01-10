@@ -347,8 +347,10 @@ PythonConsole* MacroManager::getPythonConsole() const
 {
     // search for the Python console
     if (!this->pyConsole) {
-        if (auto* mw = Gui::activeMainWindow()) {
-            this->pyConsole = mw->findChild<Gui::PythonConsole*>();
+        if (auto* shell = Gui::ensureActiveShell()) {
+            if (auto* mw = shell->mainWindow()) {
+                this->pyConsole = mw->findChild<Gui::PythonConsole*>();
+            }
         }
     }
 

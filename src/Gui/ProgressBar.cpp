@@ -568,8 +568,10 @@ void ProgressBar::setupTaskBarProgress()
 {
     if (!m_taskbarButton || !m_taskbarProgress) {
         m_taskbarButton = new QWinTaskbarButton(this);
-        if (auto* mw = Gui::activeMainWindow()) {
-            m_taskbarButton->setWindow(mw->windowHandle());
+        if (auto* shell = Gui::ensureActiveShell()) {
+            if (auto* mw = shell->mainWindow()) {
+                m_taskbarButton->setWindow(mw->windowHandle());
+            }
         }
         // m_myButton->setOverlayIcon(QIcon(""));
 
@@ -637,9 +639,11 @@ bool ProgressBar::eventFilter(QObject* o, QEvent* e)
             case QEvent::Close: {
                 // avoid to exit while app is working
                 // note: all other widget types are allowed to be closed anyway
-                if (auto* mw = Gui::activeMainWindow(); mw && o == mw) {
+                if (auto* shell = Gui::ensureActiveShell()) {
+                    if (auto* mw = shell->mainWindow(); mw && o == mw) {
                     e->ignore();
                     return true;
+                    }
                 }
             } break;
 

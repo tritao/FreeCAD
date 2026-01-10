@@ -323,12 +323,12 @@ void PropertyEditor::closeEditor()
         // Brute-force workaround for https://github.com/FreeCAD/FreeCAD/issues/14350
         int currentIndex = 0;
         QTabBar* tabBar = nullptr;
-        if (auto* mw = Gui::activeMainWindow()) {
-            if (auto* mdiArea = mw->findChild<QMdiArea*>()) {
-            tabBar = mdiArea->findChild<QTabBar*>();
-            if (tabBar) {
-                currentIndex = tabBar->currentIndex();
-            }
+        if (Gui::Application::Instance) {
+            if (auto* mdiArea = Gui::Application::Instance->mdiArea()) {
+                tabBar = mdiArea->findChild<QTabBar*>();
+                if (tabBar) {
+                    currentIndex = tabBar->currentIndex();
+                }
             }
         }
 #endif

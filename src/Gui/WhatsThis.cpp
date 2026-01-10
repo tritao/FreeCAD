@@ -76,7 +76,8 @@ bool StdCmdDescription::inDescriptionMode()
 void StdCmdDescription::setSource(const QString& src)
 {
     if (!src.isEmpty()) {
-        auto* mw = Gui::activeMainWindow();
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
         if (!mw) {
             return;
         }

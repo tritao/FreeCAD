@@ -412,8 +412,10 @@ void ProgressDialog::setupTaskBarProgress()
 {
     if (!m_taskbarButton || !m_taskbarProgress) {
         m_taskbarButton = new QWinTaskbarButton(this);
-        if (auto* mw = Gui::activeMainWindow()) {
-            m_taskbarButton->setWindow(mw->windowHandle());
+        if (auto* shell = Gui::ensureActiveShell()) {
+            if (auto* mw = shell->mainWindow()) {
+                m_taskbarButton->setWindow(mw->windowHandle());
+            }
         }
         // m_myButton->setOverlayIcon(QIcon(""));
 

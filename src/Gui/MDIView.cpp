@@ -493,8 +493,8 @@ void MDIView::setCurrentViewMode(ViewMode mode)
         // To make a global shortcut working from this window we need to add
         // all existing actions from the mainwindow and its sub-widgets
 
-        if (auto* mw = Gui::activeMainWindow()) {
-            QList<QAction*> acts = mw->findChildren<QAction*>();
+        if (auto* shell = Gui::ensureActiveShell()) {
+            QList<QAction*> acts = shell->mainWindow()->findChildren<QAction*>();
             addActions(acts);
         }
 

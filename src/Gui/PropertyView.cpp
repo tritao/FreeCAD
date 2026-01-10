@@ -21,6 +21,7 @@
  ***************************************************************************/
 
 
+#include <QApplication>
 #include <QEvent>
 #include <QGridLayout>
 #include <QTimer>
@@ -175,9 +176,10 @@ void PropertyView::setShowAll(bool enable)
 {
     if (_ShowAll != enable) {
         _ShowAll = enable;
-        if (auto* mw = Gui::activeMainWindow()) {
-            const auto views = mw->findChildren<PropertyView*>();
-            for (auto view : views) {
+        const QWidgetList toplevel = QApplication::topLevelWidgets();
+        for (QWidget* w : toplevel) {
+            const auto views = w->findChildren<PropertyView*>();
+            for (auto* view : views) {
                 if (view->isVisible()) {
                     view->propertyEditorData->buildUp();
                     view->propertyEditorView->buildUp();
