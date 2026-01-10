@@ -769,8 +769,10 @@ MenuItem* StdWorkbench::setupMenuBar() const
               << "Separator";
     }
 #endif
-    *tool << "Std_Measure"
-          << "Std_AnnotationLabel"
+#ifdef BUILD_MEASURE
+    *tool << "Std_Measure";
+#endif
+    *tool << "Std_AnnotationLabel"
           << "Std_UnitsCalculator"
           << "Std_ClarifySelection"
           << "Separator"
@@ -862,7 +864,11 @@ ToolBarItem* StdWorkbench::setupToolBars() const
     auto view = new ToolBarItem(root);
     view->setCommand("View");
     *view << "Std_ViewFitAll" << "Std_ViewFitSelection" << "Std_ViewGroup" << "Std_AlignToSelection"
-          << "Separator" << "Std_DrawStyle" << "Std_TreeViewActions" << "Std_Measure";
+          << "Separator" << "Std_DrawStyle" << "Std_TreeViewActions"
+#ifdef BUILD_MEASURE
+          << "Std_Measure"
+#endif
+        ;
 
     // Individual views
     auto individualViews = new ToolBarItem(root, ToolBarItem::DefaultVisibility::Hidden);

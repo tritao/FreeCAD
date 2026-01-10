@@ -56,6 +56,10 @@ if (BUILD_ADDONMGR)
     add_definitions(-DBUILD_ADDONMGR )
 endif(BUILD_ADDONMGR)
 
+if (BUILD_MEASURE)
+    add_definitions(-DBUILD_MEASURE )
+endif(BUILD_MEASURE)
+
 if (BUILD_TRACY_FRAME_PROFILER)
     add_definitions(-DBUILD_TRACY_FRAME_PROFILER)
 endif()
