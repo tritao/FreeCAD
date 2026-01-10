@@ -24,8 +24,8 @@
 #include <QApplication>
 #include <QDebug>
 #include <QDockWidget>
-#include <QMainWindow>
 #include <QPointer>
+#include <QTabBar>
 
 #include <App/AutoTransaction.h>
 #include <Gui/ComboView.h>
@@ -71,20 +71,36 @@ void ControlSingleton::showDockWidget(QWidget* widget)
 
 QTabBar* ControlSingleton::findTabBar(QDockWidget* widget) const
 {
-    auto* mw = Gui::activeMainWindow();
-    if (!mw) {
+    if (!widget) {
         return nullptr;
     }
 
-    int count = mw->tabifiedDockWidgets(widget).size() + 1;
-    if (count > 1) {
-        QList<QTabBar*> bars = mw->findChildren<QTabBar*>();
-        for (auto it : bars) {
-            if (it->count() <= count) {
-                for (int i = 0; i < count; i++) {
-                    if (it->tabText(i) == widget->windowTitle()) {
-                        return it;
-                    }
+    int count = 1;
+    if (auto* shell = Gui::activeShell()) {
+        count += shell->tabifiedDockWidgets(widget).size();
+    }
+    else if (auto* mw = Gui::activeMainWindow()) {
+        count += mw->tabifiedDockWidgets(widget).size();
+    }
+
+    if (count <= 1) {
+        return nullptr;
+    }
+
+    QWidget* searchRoot = widget->window();
+    if (!searchRoot) {
+        searchRoot = Gui::uiParentWidget();
+    }
+    if (!searchRoot) {
+        return nullptr;
+    }
+
+    const QList<QTabBar*> bars = searchRoot->findChildren<QTabBar*>();
+    for (auto* bar : bars) {
+        if (bar->count() <= count) {
+            for (int i = 0; i < count; i++) {
+                if (bar->tabText(i) == widget->windowTitle()) {
+                    return bar;
                 }
             }
         }
