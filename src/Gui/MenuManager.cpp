@@ -31,6 +31,7 @@
 #include "Application.h"
 #include "Command.h"
 #include "GuiShell.h"
+#include "GuiShellServices.h"
 #include "MainWindow.h"
 
 
@@ -199,8 +200,14 @@ MenuManager::~MenuManager() = default;
 
 void MenuManager::setup(MenuItem* menuItems) const
 {
-    auto* mw = Gui::activeMainWindow();
-    setup(menuItems, mw ? mw->menuBar() : nullptr);
+    QMenuBar* menuBar = nullptr;
+    if (auto* shell = Gui::activeShell()) {
+        menuBar = shell->services().menuBar();
+    }
+    else if (auto* mw = Gui::activeMainWindow()) {
+        menuBar = mw->menuBar();
+    }
+    setup(menuItems, menuBar);
 }
 
 void MenuManager::setup(MenuItem* menuItems, QMenuBar* menuBar) const
@@ -345,8 +352,14 @@ void MenuManager::setup(MenuItem* item, QMenu* menu) const
 
 void MenuManager::retranslate() const
 {
-    auto* mw = Gui::activeMainWindow();
-    retranslate(mw ? mw->menuBar() : nullptr);
+    QMenuBar* menuBar = nullptr;
+    if (auto* shell = Gui::activeShell()) {
+        menuBar = shell->services().menuBar();
+    }
+    else if (auto* mw = Gui::activeMainWindow()) {
+        menuBar = mw->menuBar();
+    }
+    retranslate(menuBar);
 }
 
 void MenuManager::retranslate(QMenuBar* menuBar) const

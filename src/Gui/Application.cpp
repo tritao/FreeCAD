@@ -1750,7 +1750,7 @@ void Application::showStatusBar()
         }
         return;
     }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+    if (auto* mw = Gui::activeMainWindow()) {
         if (auto* sb = mw->statusBar()) {
             sb->show();
         }
@@ -1765,7 +1765,7 @@ bool Application::isStatusBarVisible() const
         }
         return false;
     }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+    if (auto* mw = Gui::activeMainWindow()) {
         if (auto* sb = mw->statusBar()) {
             return sb->isVisible();
         }
@@ -1781,7 +1781,7 @@ void Application::setStatusBarVisible(bool visible)
         }
         return;
     }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+    if (auto* mw = Gui::activeMainWindow()) {
         if (auto* sb = mw->statusBar()) {
             sb->setVisible(visible);
         }
@@ -1794,7 +1794,7 @@ void Application::addStatusPermanentWidget(QWidget* widget, int stretch)
         shell->addStatusPermanentWidget(widget, stretch);
         return;
     }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+    if (auto* mw = Gui::activeMainWindow()) {
         if (auto* sb = mw->statusBar()) {
             sb->addPermanentWidget(widget, stretch);
         }
@@ -1807,7 +1807,7 @@ void Application::removeStatusWidget(QWidget* widget)
         shell->removeStatusWidget(widget);
         return;
     }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+    if (auto* mw = Gui::activeMainWindow()) {
         if (auto* sb = mw->statusBar()) {
             sb->removeWidget(widget);
         }
