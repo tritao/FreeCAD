@@ -94,8 +94,8 @@ class GuiImageBuilder(ImageBuilder):
         # Create a new view
         Path.Log.debug("CAM - Preparing view\n")
 
-        mw = FreeCADGui.activeMainWindow()
-        if not mw:
+        mdi = FreeCADGui.mdiArea()
+        if not mdi:
             return 0
         num_windows = len(FreeCADGui.getWindows())
 
@@ -109,7 +109,6 @@ class GuiImageBuilder(ImageBuilder):
             view_obj.viewIsometric()
 
         # Resize the window
-        mdi = mw.findChild(QtGui.QMdiArea)
         view_window = mdi.activeSubWindow()
         view_window.resize(500, 500)
         view_window.showMaximized()

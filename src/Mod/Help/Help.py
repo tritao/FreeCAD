@@ -506,7 +506,9 @@ def openBrowserHTML(html, baseurl, title, icon, dialog=False):
         dock.setWindowIcon(QtGui.QIcon(icon))
         dock.show()
     else:
-        mdi = mw.findChild(QtWidgets.QMdiArea)
+        mdi = FreeCADGui.mdiArea()
+        if not mdi:
+            return
         sw = mdi.addSubWindow(view)
         sw.setWindowTitle(title)
         sw.setWindowIcon(QtGui.QIcon(icon))

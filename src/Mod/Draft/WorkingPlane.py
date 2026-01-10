@@ -1855,8 +1855,9 @@ if FreeCAD.GuiUp:
     _view_observer_active = False
 
     def _view_observer_start():
-        mw = FreeCADGui.getMainWindow()
-        mdi = mw.findChild(QtWidgets.QMdiArea)
+        mdi = FreeCADGui.mdiArea()
+        if not mdi:
+            return
         global _view_observer_active
         if not _view_observer_active:
             mdi.subWindowActivated.connect(_view_observer_callback)
@@ -1864,8 +1865,9 @@ if FreeCAD.GuiUp:
             _view_observer_callback()  # Trigger initial update.
 
     def _view_observer_stop():
-        mw = FreeCADGui.getMainWindow()
-        mdi = mw.findChild(QtWidgets.QMdiArea)
+        mdi = FreeCADGui.mdiArea()
+        if not mdi:
+            return
         global _view_observer_active
         if _view_observer_active:
             mdi.subWindowActivated.disconnect(_view_observer_callback)

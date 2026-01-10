@@ -36,9 +36,9 @@ class TaskWizardShaft:
     Gui = FreeCADGui
 
     def __init__(self, doc):
-        mw = QtGui.QApplication.activeWindow()
-        # cw = mw.centralWidget() # This is a qmdiarea widget
-        cw = mw.findChild(QtGui.QMdiArea)
+        cw = FreeCADGui.mdiArea()
+        if not cw:
+            raise RuntimeError("No MDI area available")
         self.doc = doc
 
         # Get active document or create a new one

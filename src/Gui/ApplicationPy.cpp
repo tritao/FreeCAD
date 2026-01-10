@@ -24,6 +24,7 @@
 #include <QDir>
 #include <QPrinter>
 #include <QFileInfo>
+#include <QMdiArea>
 #include <QWidget>
 #include <Inventor/SoInput.h>
 #include <Inventor/actions/SoGetPrimitiveCountAction.h>
@@ -226,6 +227,21 @@ PyMethodDef ApplicationPy::Methods[] = {
      "\n"
      "view : MDIView\n"
      "close : bool"},
+    {"mdiArea",
+     (PyCFunction)ApplicationPy::sMdiArea,
+     METH_VARARGS,
+     "mdiArea() -> QMdiArea or None\n"
+     "\n"
+     "Return the current shell MDI area widget."},
+    {"showMessage",
+     (PyCFunction)ApplicationPy::sShowMessage,
+     METH_VARARGS,
+     "showMessage(message, timeout=0) -> None\n"
+     "\n"
+     "Show a message in the current shell status bar.\n"
+     "\n"
+     "message : str\n"
+     "timeout : int"},
     {"showStatusBar",
      (PyCFunction)ApplicationPy::sShowStatusBar,
      METH_VARARGS,
@@ -1192,6 +1208,55 @@ PyObject* ApplicationPy::sRemoveWindow(PyObject* /*self*/, PyObject* args)
             app->removeWindow(mdiView, Base::asBoolean(closeObj));
         }
 
+        Py_Return;
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sMdiArea(PyObject* /*self*/, PyObject* args)
+{
+    if (!PyArg_ParseTuple(args, "")) {
+        return nullptr;
+    }
+
+    try {
+        auto* app = Gui::Application::Instance;
+        if (!app) {
+            Py_RETURN_NONE;
+        }
+
+        auto* mdi = app->mdiArea();
+        if (!mdi) {
+            Py_RETURN_NONE;
+        }
+
+        PythonWrapper wrap;
+        if (!wrap.loadCoreModule() || !wrap.loadGuiModule() || !wrap.loadWidgetsModule()) {
+            throw Py::RuntimeError("Failed to load Python wrapper for Qt");
+        }
+
+        return Py::new_reference_to(wrap.fromQWidget(mdi, "QMdiArea"));
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sShowMessage(PyObject* /*self*/, PyObject* args)
+{
+    char* message = nullptr;
+    int timeout = 0;
+    if (!PyArg_ParseTuple(args, "s|i", &message, &timeout)) {
+        return nullptr;
+    }
+
+    try {
+        auto* app = Gui::Application::Instance;
+        if (app) {
+            app->showMessage(QString::fromUtf8(message), timeout);
+        }
         Py_Return;
     }
     catch (const Py::Exception&) {

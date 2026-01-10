@@ -1172,16 +1172,19 @@ class Snapper:
             if self.dim2.Distance:
                 self.dim2.on()
 
-    def get_quarter_widget(self, mw):
+    def get_quarter_widget(self):
         views = []
-        for w in mw.findChild(QtWidgets.QMdiArea).findChildren(QtWidgets.QWidget):
+        mdi = Gui.mdiArea()
+        if not mdi:
+            return views
+        for w in mdi.findChildren(QtWidgets.QWidget):
             if w.inherits("SIM::Coin3D::Quarter::QuarterWidget"):
                 views.append(w)
         return views
 
     def device_pixel_ratio(self):
         device_pixel_ratio = 1
-        for w in self.get_quarter_widget(Gui.getMainWindow()):
+        for w in self.get_quarter_widget():
             device_pixel_ratio = w.devicePixelRatio()
         return device_pixel_ratio
 
@@ -1216,7 +1219,7 @@ class Snapper:
 
     def setCursor(self, mode=None):
         """Set the cursor to the given mode or unset it."""
-        views = self.get_quarter_widget(Gui.getMainWindow())
+        views = self.get_quarter_widget()
         if self.selectMode or mode is None:
             self.cursorMode = None
             self.cursorQt = None

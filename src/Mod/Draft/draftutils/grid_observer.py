@@ -88,8 +88,9 @@ if FreeCAD.GuiUp:
         deactivated and is the reverse of the start operation.
         """
 
-        mw = FreeCADGui.getMainWindow()
-        mdi = mw.findChild(QtWidgets.QMdiArea)
+        mdi = FreeCADGui.mdiArea()
+        if not mdi:
+            return
         global _view_observer_active
         if not _view_observer_active:
             # Connect callback to subWindowActivated signal
