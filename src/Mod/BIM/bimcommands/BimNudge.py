@@ -40,63 +40,58 @@ class BIM_Nudge:
         from PySide import QtGui
         import WorkingPlane
 
-        mw = FreeCADGui.getMainWindow()
-        if mw:
-            st = mw.statusBar()
-            statuswidget = st.findChild(QtGui.QToolBar, "BIMStatusWidget")
-            if statuswidget:
-                nudgeValue = statuswidget.nudge.text().replace("&", "")
-                dist = 0
-                if "auto" in nudgeValue.lower():
-                    unit = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Units").GetInt(
-                        "UserSchema", 0
-                    )
-                    if unit in [2, 3, 5, 7]:
-                        scale = [1.5875, 3.175, 6.35, 25.4, 152.4, 304.8]
-                    else:
-                        scale = [1, 5, 10, 50, 100, 500]
-                    viewsize = (
-                        FreeCADGui.ActiveDocument.ActiveView.getCameraNode()
-                        .getViewVolume()
-                        .getWidth()
-                    )
-                    if viewsize < 250:
-                        dist = scale[0]
-                    elif viewsize < 750:
-                        dist = scale[1]
-                    elif viewsize < 4500:
-                        dist = scale[2]
-                    elif viewsize < 8000:
-                        dist = scale[3]
-                    elif viewsize < 25000:
-                        dist = scale[4]
-                    else:
-                        dist = scale[5]
-                    # u = FreeCAD.Units.Quantity(dist,FreeCAD.Units.Length).UserString
-                    statuswidget.nudge.setText(translate("BIM", "Auto"))
+        statuswidget = FreeCADGui.findChild(QtGui.QToolBar, "BIMStatusWidget")
+        if statuswidget:
+            nudgeValue = statuswidget.nudge.text().replace("&", "")
+            dist = 0
+            if "auto" in nudgeValue.lower():
+                unit = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Units").GetInt(
+                    "UserSchema", 0
+                )
+                if unit in [2, 3, 5, 7]:
+                    scale = [1.5875, 3.175, 6.35, 25.4, 152.4, 304.8]
                 else:
+                    scale = [1, 5, 10, 50, 100, 500]
+                viewsize = (
+                    FreeCADGui.ActiveDocument.ActiveView.getCameraNode().getViewVolume().getWidth()
+                )
+                if viewsize < 250:
+                    dist = scale[0]
+                elif viewsize < 750:
+                    dist = scale[1]
+                elif viewsize < 4500:
+                    dist = scale[2]
+                elif viewsize < 8000:
+                    dist = scale[3]
+                elif viewsize < 25000:
+                    dist = scale[4]
+                else:
+                    dist = scale[5]
+                # u = FreeCAD.Units.Quantity(dist,FreeCAD.Units.Length).UserString
+                statuswidget.nudge.setText(translate("BIM", "Auto"))
+            else:
+                try:
+                    dist = FreeCAD.Units.Quantity(nudgeValue)
+                except ValueError:
                     try:
-                        dist = FreeCAD.Units.Quantity(nudgeValue)
+                        dist = float(nudgeValue)
                     except ValueError:
-                        try:
-                            dist = float(nudgeValue)
-                        except ValueError:
-                            return None
-                    else:
-                        dist = dist.Value
-                if not dist:
-                    return None
-                if mode == "dist":
-                    return dist
-                wp = WorkingPlane.get_working_plane()
-                if mode == "up":
-                    return FreeCAD.Vector(wp.v).multiply(dist)
-                if mode == "down":
-                    return FreeCAD.Vector(wp.v).negative().multiply(dist)
-                if mode == "right":
-                    return FreeCAD.Vector(wp.u).multiply(dist)
-                if mode == "left":
-                    return FreeCAD.Vector(wp.u).negative().multiply(dist)
+                        return None
+                else:
+                    dist = dist.Value
+            if not dist:
+                return None
+            if mode == "dist":
+                return dist
+            wp = WorkingPlane.get_working_plane()
+            if mode == "up":
+                return FreeCAD.Vector(wp.v).multiply(dist)
+            if mode == "down":
+                return FreeCAD.Vector(wp.v).negative().multiply(dist)
+            if mode == "right":
+                return FreeCAD.Vector(wp.u).multiply(dist)
+            if mode == "left":
+                return FreeCAD.Vector(wp.u).negative().multiply(dist)
         return None
 
     def toStr(self, objs):
@@ -131,19 +126,16 @@ class BIM_Nudge_Switch(BIM_Nudge):
     def Activated(self):
         from PySide import QtGui
 
-        mw = FreeCADGui.getMainWindow()
-        if mw:
-            st = mw.statusBar()
-            statuswidget = st.findChild(QtGui.QToolBar, "BIMStatusWidget")
-            if statuswidget:
-                nudgeValue = statuswidget.nudge.text()
-                nudge = self.getNudgeValue("dist")
-                if nudge:
-                    u = FreeCAD.Units.Quantity(nudge, FreeCAD.Units.Length).UserString
-                    if "auto" in nudgeValue.lower():
-                        statuswidget.nudge.setText(u)
-                    else:
-                        statuswidget.nudge.setText(translate("BIM", "Auto"))
+        statuswidget = FreeCADGui.findChild(QtGui.QToolBar, "BIMStatusWidget")
+        if statuswidget:
+            nudgeValue = statuswidget.nudge.text()
+            nudge = self.getNudgeValue("dist")
+            if nudge:
+                u = FreeCAD.Units.Quantity(nudge, FreeCAD.Units.Length).UserString
+                if "auto" in nudgeValue.lower():
+                    statuswidget.nudge.setText(u)
+                else:
+                    statuswidget.nudge.setText(translate("BIM", "Auto"))
 
 
 class BIM_Nudge_Up(BIM_Nudge):

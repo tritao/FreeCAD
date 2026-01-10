@@ -924,8 +924,10 @@ def getCoinSVG(cutplane, objs, cameradata=None, linewidth=0.2, singleface=False,
 def closeViewer(name):
     """Close temporary viewers"""
 
-    mw = FreeCADGui.getMainWindow()
-    for sw in mw.findChildren(QtGui.QMdiSubWindow):
+    mdi = FreeCADGui.mdiArea()
+    if not mdi:
+        return
+    for sw in mdi.findChildren(QtGui.QMdiSubWindow):
         if sw.windowTitle() == name:
             sw.close()
 

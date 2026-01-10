@@ -106,8 +106,7 @@ def on_add_property():
     psets = list(set([obj.getGroupOfProperty(p) for p in obj.PropertiesList]))
     psets = [p for p in psets if p]
     psets = [p for p in psets if p not in ["Base", "IFC", "Geometry"]]
-    mw = FreeCADGui.getMainWindow()
-    editor = mw.findChild(QtGui.QTabWidget, "propertyTab")
+    editor = FreeCADGui.findChild(QtGui.QTabWidget, "propertyTab")
     pset = None
     if editor:
         wid = editor.currentWidget()
@@ -189,7 +188,6 @@ def on_add_pset():
     from . import ifc_psets
 
     obj = sel[0]
-    mw = FreeCADGui.getMainWindow()
     # read standard psets
     psetpath = os.path.join(
         FreeCAD.getResourceDir(), "Mod", "BIM", "Presets", "pset_definitions.csv"
@@ -266,9 +264,8 @@ def on_activate():
         checked = True
     else:
         checked = False
-    mw = FreeCADGui.getMainWindow()
-    statuswidget = mw.findChild(QtGui.QToolBar, "BIMStatusWidget")
-    if hasattr(statuswidget, "lock_button"):
+    statuswidget = FreeCADGui.findChild(QtGui.QToolBar, "BIMStatusWidget")
+    if statuswidget and hasattr(statuswidget, "lock_button"):
         statuswidget.lock_button.setChecked(checked)
     on_toggle_lock(checked, noconvert=True)
 

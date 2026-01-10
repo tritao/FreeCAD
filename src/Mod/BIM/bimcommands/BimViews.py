@@ -53,9 +53,7 @@ class BIM_Views:
         self.allItemsInTree = []
         self.oldData = [[], []]
         bimviewsbutton = None
-        mw = FreeCADGui.getMainWindow()
-        st = mw.statusBar()
-        statuswidget = st.findChild(QtGui.QToolBar, "BIMStatusWidget")
+        statuswidget = FreeCADGui.findChild(QtGui.QToolBar, "BIMStatusWidget")
         if statuswidget and hasattr(statuswidget, "bimviewsbutton"):
             bimviewsbutton = statuswidget.bimviewsbutton
         if vm:
@@ -185,11 +183,7 @@ class BIM_Views:
     def onClose(self, event):
         from PySide import QtGui
 
-        mw = FreeCADGui.getMainWindow()
-        if not mw:
-            return
-        st = mw.statusBar()
-        statuswidget = st.findChild(QtGui.QToolBar, "BIMStatusWidget")
+        statuswidget = FreeCADGui.findChild(QtGui.QToolBar, "BIMStatusWidget")
         if statuswidget and hasattr(statuswidget, "bimviewsbutton"):
             statuswidget.bimviewsbutton.setChecked(False)
         PARAMS.SetBool("RestoreBimViews", False)
