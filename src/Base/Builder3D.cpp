@@ -26,8 +26,6 @@
 #include <algorithm>
 #include <string>
 #include <string_view>
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/predicate.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/tokenizer.hpp>
 
@@ -1262,7 +1260,7 @@ namespace Base
 BaseExport Vector3f stringToVector(std::string str)
 {
     std::string_view view = str;
-    if (!boost::starts_with(view, "(") || !boost::ends_with(str, ")")) {
+    if (!view.starts_with('(') || !view.ends_with(')')) {
         throw std::runtime_error("string is not a tuple");
     }
 
