@@ -432,13 +432,8 @@ Action* StdCmdStatusBar::createAction()
     pcAction->setCheckable(true);
     pcAction->setBlockedChecked(false);
     auto fsb = new FilterStatusBar(pcAction);
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         if (auto* sb = shell->services().statusBar()) {
-            sb->installEventFilter(fsb);
-        }
-    }
-    else if (auto* mw = Gui::activeMainWindow()) {
-        if (auto* sb = mw->statusBar()) {
             sb->installEventFilter(fsb);
         }
     }
@@ -457,8 +452,8 @@ bool StdCmdStatusBar::isActive()
     if (!checked) {
         Action* act = this->getAction();
         if (act) {
-            if (auto* mw = Gui::activeMainWindow()) {
-                if (auto* sb = mw->statusBar()) {
+            if (auto* shell = Gui::ensureActiveShell()) {
+                if (auto* sb = shell->services().statusBar()) {
                     act->setChecked(sb->isVisible());
                 }
             }

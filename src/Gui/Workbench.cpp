@@ -452,18 +452,12 @@ void Workbench::deactivated()
 
 bool Workbench::activate()
 {
-    QMainWindow* hostWindow = nullptr;
-    std::string statePrefix;
-    if (auto* shell = Gui::activeShell()) {
-        hostWindow = shell->mainWindow();
-        statePrefix = shell->chromeStatePrefix();
-    }
-    else {
-        hostWindow = Gui::activeMainWindow();
-        statePrefix = "BaseApp/MainWindow";
+    auto* shell = Gui::ensureActiveShell();
+    if (!shell) {
+        return false;
     }
 
-    const bool ok = applyChromeTo(hostWindow, statePrefix);
+    const bool ok = applyChromeTo(shell->mainWindow(), shell->chromeStatePrefix());
     setupCustomShortcuts();
     return ok;
 }
@@ -506,16 +500,9 @@ bool Workbench::applyChromeTo(QMainWindow* hostWindow, const std::string& stateP
 
 void Workbench::retranslate() const
 {
-    QMainWindow* hostWindow = nullptr;
-    std::string statePrefix;
-    if (auto* shell = Gui::activeShell()) {
-        hostWindow = shell->mainWindow();
-        statePrefix = shell->chromeStatePrefix();
-    }
-    else {
-        hostWindow = Gui::activeMainWindow();
-        statePrefix = "BaseApp/MainWindow";
-    }
+    auto* shell = Gui::ensureActiveShell();
+    auto* hostWindow = shell ? shell->mainWindow() : nullptr;
+    const auto statePrefix = shell ? shell->chromeStatePrefix() : std::string {};
 
     if (auto* mgr = ToolBarManager::getInstance(hostWindow, statePrefix)) {
         mgr->retranslate();
@@ -996,7 +983,8 @@ BlankWorkbench::~BlankWorkbench() = default;
 
 void BlankWorkbench::activated()
 {
-    auto* hostWindow = Gui::activeMainWindow();
+    auto* shell = Gui::ensureActiveShell();
+    auto* hostWindow = shell ? shell->mainWindow() : nullptr;
     if (!hostWindow) {
         return;
     }
@@ -1013,7 +1001,9 @@ void BlankWorkbench::activated()
 
 void BlankWorkbench::deactivated()
 {
-    if (auto* hostWindow = Gui::activeMainWindow()) {
+    auto* shell = Gui::ensureActiveShell();
+    auto* hostWindow = shell ? shell->mainWindow() : nullptr;
+    if (hostWindow) {
         if (auto* sb = hostWindow->statusBar()) {
             sb->show();
         }
