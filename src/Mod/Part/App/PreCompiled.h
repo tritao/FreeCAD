@@ -55,7 +55,6 @@
 #include <QtGlobal>
 
 // Boost
-#include <boost/regex.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/math/special_functions/fpclassify.hpp>

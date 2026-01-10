@@ -43,7 +43,6 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/math/special_functions/fpclassify.hpp>
-#include <boost/regex.hpp>
 
 // Qt
 #include <QtConcurrentMap>

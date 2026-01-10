@@ -22,7 +22,6 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/algorithm/string/regex.hpp>
 #include <boost/format.hpp>
 
 #include <Base/Exception.h>
@@ -784,6 +783,25 @@ std::string PythonConverter::process(const Sketcher::Constraint* constraint, Geo
 std::vector<std::string> PythonConverter::multiLine(std::string&& singlestring)
 {
     std::vector<std::string> tokens;
-    split_regex(tokens, singlestring, boost::regex("(\n)+"));
+
+    // Match boost::algorithm::split_regex(tokens, s, boost::regex("(\\n)+")) semantics:
+    // split on runs of '\n' and include empty tokens for leading/trailing delimiters.
+    std::size_t begin = 0;
+    for (;;) {
+        const std::size_t newlinePos = singlestring.find('\n', begin);
+        if (newlinePos == std::string::npos) {
+            tokens.emplace_back(singlestring.substr(begin));
+            break;
+        }
+
+        tokens.emplace_back(singlestring.substr(begin, newlinePos - begin));
+
+        std::size_t afterRun = newlinePos + 1;
+        while (afterRun < singlestring.size() && singlestring[afterRun] == '\n') {
+            ++afterRun;
+        }
+        begin = afterRun;
+    }
+
     return tokens;
 }

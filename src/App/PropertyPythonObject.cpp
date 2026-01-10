@@ -25,7 +25,7 @@
 
 
 #include <iostream>
-#include <boost/regex.hpp>
+#include <regex>
 
 #include <Base/Base64.h>
 #include <Base/Console.h>
@@ -186,12 +186,12 @@ void PropertyPythonObject::loadPickle(const std::string& str)
     Base::PyGILStateLocker lock;
     try {
         std::string buffer = str;
-        boost::regex pickle(R"(S'(\w+)'.+S'(\w+)'\n)");
-        boost::match_results<std::string::const_iterator> what;
+        std::regex pickle(R"(S'(\w+)'.+S'(\w+)'\n)");
+        std::match_results<std::string::const_iterator> what;
         std::string::const_iterator start, end;
         start = buffer.begin();
         end = buffer.end();
-        while (boost::regex_search(start, end, what, pickle)) {
+        while (std::regex_search(start, end, what, pickle)) {
             std::string key = std::string(what[1].first, what[1].second);
             std::string val = std::string(what[2].first, what[2].second);
             this->object.setAttr(key, Py::String(val));
@@ -353,8 +353,8 @@ void PropertyPythonObject::Restore(Base::XMLReader& reader)
 
         Base::PyGILStateLocker lock;
         try {
-            boost::regex pickle(R"(^\(i(\w+)\n(\w+)\n)");
-            boost::match_results<std::string::const_iterator> what;
+            std::regex pickle(R"(^\(i(\w+)\n(\w+)\n)");
+            std::match_results<std::string::const_iterator> what;
             std::string::const_iterator start, end;
             start = buffer.begin();
             end = buffer.end();
@@ -378,7 +378,7 @@ void PropertyPythonObject::Restore(Base::XMLReader& reader)
                 }
                 load_json = true;
             }
-            else if (boost::regex_search(start, end, what, pickle)) {
+            else if (std::regex_search(start, end, what, pickle)) {
                 std::string name = std::string(what[1].first, what[1].second);
                 std::string type = std::string(what[2].first, what[2].second);
                 Py::Module mod(PyImport_ImportModule(name.c_str()), true);

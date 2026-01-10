@@ -46,7 +46,6 @@
 #include <vector>
 
 // Boost
-#include <boost/regex.hpp>
 
 // Xerces
 #include <xercesc/util/XercesDefs.hpp>

@@ -29,11 +29,12 @@
 #endif
 #include <memory>
 #include <sstream>
+#include <cctype>
+#include <cstdlib>
 
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/math/special_functions/fpclassify.hpp>  // needed for compilation on some systems
-#include <boost/regex.hpp>
 
 #include <Base/Console.h>
 #include <Base/Converter.h>
@@ -47,6 +48,52 @@
 
 
 using namespace Points;
+
+namespace
+{
+bool tryParsePointLine(const std::string& line, Base::Vector3d& point)
+{
+    const char* cursor = line.c_str();
+
+    auto skipSpace = [&cursor]() {
+        while (*cursor && std::isspace(static_cast<unsigned char>(*cursor))) {
+            ++cursor;
+        }
+    };
+
+    skipSpace();
+    char* end = nullptr;
+    const double x = std::strtod(cursor, &end);
+    if (end == cursor) {
+        return false;
+    }
+    cursor = end;
+
+    skipSpace();
+    const double y = std::strtod(cursor, &end);
+    if (end == cursor) {
+        return false;
+    }
+    cursor = end;
+
+    skipSpace();
+    const double z = std::strtod(cursor, &end);
+    if (end == cursor) {
+        return false;
+    }
+    cursor = end;
+
+    skipSpace();
+    if (*cursor != '\0') {
+        return false;
+    }
+
+    point.x = x;
+    point.y = y;
+    point.z = z;
+    return true;
+}
+}  // namespace
 
 void PointsAlgos::Load(PointKernel& points, const char* FileName)
 {
@@ -67,16 +114,6 @@ void PointsAlgos::Load(PointKernel& points, const char* FileName)
 
 void PointsAlgos::LoadAscii(PointKernel& points, const char* FileName)
 {
-    boost::regex rx(
-        "^\\s*([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)"
-        "\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)"
-        "\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)\\s*$"
-    );
-    // boost::regex rx("(\\b[0-9]+\\.([0-9]+\\b)?|\\.[0-9]+\\b)");
-    // boost::regex
-    // rx("^\\s*(-?[0-9]*)\\.([0-9]+)\\s+(-?[0-9]*)\\.([0-9]+)\\s+(-?[0-9]*)\\.([0-9]+)\\s*$");
-    boost::cmatch what;
-
     Base::Vector3d pt;
     int LineCnt = 0;
     std::string line;
@@ -101,11 +138,7 @@ void PointsAlgos::LoadAscii(PointKernel& points, const char* FileName)
     try {
         // read file
         while (std::getline(file, line)) {
-            if (boost::regex_match(line.c_str(), what, rx)) {
-                pt.x = std::atof(what[1].first);
-                pt.y = std::atof(what[4].first);
-                pt.z = std::atof(what[7].first);
-
+            if (tryParsePointLine(line, pt)) {
                 points.setPoint(LineCnt, pt);
                 seq.next();
                 LineCnt++;

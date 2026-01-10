@@ -25,6 +25,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <string_view>
 
 #ifndef _Standard_Version_HeaderFile
 # include <Standard_Version.hxx>
@@ -1730,15 +1731,15 @@ TopoShape& TopoShape::makeShapeWithElementMap(
                     }
                     Data::MappedName other_name = other_key.name;
 
-                    ensureElementMap()->encodeElementName(
-                        *other_info.shapetype,
-                        other_name,
-                        ss2,
-                        &sids,
-                        Tag,
-                        nullptr,
-                        other_key.tag
-                    );
+	                    ensureElementMap()->encodeElementName(
+	                        *other_info.shapetype,
+	                        other_name,
+	                        ss2,
+	                        &sids,
+	                        Tag,
+	                        Base::BytesView {},
+	                        other_key.tag
+	                    );
                     ss << other_name;
                     if ((name_type == 1 && other_info.index < 0)
                         || (name_type == 2 && other_info.index > 0)) {
@@ -1825,7 +1826,7 @@ TopoShape& TopoShape::makeShapeWithElementMap(
                     }
                 }
                 else if (it == newNames.end()
-                         || !boost::starts_with(it->first.getType(), info.shapetype)) {
+                         || !std::string_view{it->first.getType()}.starts_with(info.shapetype)) {
                     break;
                 }
                 else {
@@ -2038,7 +2039,7 @@ TopoShape TopoShape::getSubTopoShape(const char* Type, bool silent) const
     }
 
     Data::MappedElement mapped = getElementName(Type);
-    if (!mapped.index && boost::starts_with(Type, elementMapPrefix())) {
+    if (!mapped.index && std::string_view{Type}.starts_with(elementMapPrefix())) {
         if (!silent) {
             FC_THROWM(Base::CADKernelError, "Mapped element not found: " << Type);
         }
@@ -5189,7 +5190,7 @@ Data::MappedName TopoShape::setElementComboName(
     if (!marker) {
         marker = elementMapPrefix().c_str();
     }
-    else if (!boost::starts_with(marker, elementMapPrefix())) {
+    else if (!std::string_view{marker}.starts_with(elementMapPrefix())) {
         _marker = elementMapPrefix() + marker;
         marker = _marker.c_str();
     }
@@ -5835,11 +5836,11 @@ TopoShape& TopoShape::makeElementBoolean(
     if (strcmp(maker, Part::OpCodes::Compound) == 0) {
         return makeElementCompound(shapes, op, SingleShapeCompoundCreationPolicy::returnShape);
     }
-    else if (boost::starts_with(maker, Part::OpCodes::Face)) {
+    else if (std::string_view{maker}.starts_with(Part::OpCodes::Face)) {
         std::string prefix(Part::OpCodes::Face);
         prefix += '.';
         const char* face_maker = 0;
-        if (boost::starts_with(maker, prefix)) {
+        if (std::string_view{maker}.starts_with(prefix)) {
             face_maker = maker + prefix.size();
         }
         return makeElementFace(shapes, op, face_maker);

@@ -27,6 +27,8 @@
 #include <limits>
 #include <vector>
 
+#include <QCoreApplication>
+
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <Mod/Part/App/FCBRepAlgoAPI_Section.h>

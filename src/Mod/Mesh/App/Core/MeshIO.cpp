@@ -34,7 +34,6 @@
 #include <boost/convert.hpp>
 #include <boost/convert/spirit.hpp>
 #include <boost/lexical_cast.hpp>
-#include <boost/regex.hpp>
 
 #include "IO/Reader3MF.h"
 #include "IO/ReaderOBJ.h"
@@ -94,6 +93,80 @@ int numDigits(int number)
     }
     return digits;
 }
+
+namespace
+{
+bool parseFloat3FromLine(const std::string& line,
+                         const char* keyword1,
+                         const char* keyword2,
+                         float& x,
+                         float& y,
+                         float& z)
+{
+    std::istringstream str(line);
+    std::string word1;
+    if (!(str >> word1) || word1 != keyword1) {
+        return false;
+    }
+    if (keyword2 && *keyword2) {
+        std::string word2;
+        if (!(str >> word2) || word2 != keyword2) {
+            return false;
+        }
+    }
+    if (!(str >> x >> y >> z)) {
+        return false;
+    }
+    str >> std::ws;
+    return str.eof();
+}
+
+bool parseUnsigned3FromLine(const std::string& line,
+                            const char* keyword,
+                            unsigned int& a,
+                            unsigned int& b,
+                            unsigned int& c)
+{
+    std::istringstream str(line);
+    std::string word;
+    if (!(str >> word) || word != keyword) {
+        return false;
+    }
+    if (!(str >> a >> b >> c)) {
+        return false;
+    }
+    str >> std::ws;
+    return str.eof();
+}
+
+bool parseInt3FromLine(const std::string& line, const char* keyword, int& a, int& b, int& c)
+{
+    std::istringstream str(line);
+    std::string word;
+    if (!(str >> word) || word != keyword) {
+        return false;
+    }
+    if (!(str >> a >> b >> c)) {
+        return false;
+    }
+    str >> std::ws;
+    return str.eof();
+}
+
+bool parseInt3NoKeywordFromLine(const std::string& line, int& a, int& b, int& c)
+{
+    std::istringstream str(line);
+    str >> std::ws;
+    if (str.eof()) {
+        return false;
+    }
+    if (!(str >> a >> b >> c)) {
+        return false;
+    }
+    str >> std::ws;
+    return str.eof();
+}
+}  // namespace
 
 /* Usage by CMeshNastran, CMeshCadmouldFE. Added by Sergey Sukhov (26.04.2002)*/
 struct NODE
@@ -414,18 +487,6 @@ bool MeshInput::LoadOBJ(std::istream& input, const char* filename)
 /** Loads an SMF file. */
 bool MeshInput::LoadSMF(std::istream& input)
 {
-    boost::regex rx_p(
-        "^v\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)"
-        "\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)"
-        "\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)\\s*$"
-    );
-    boost::regex rx_f3(
-        "^f\\s+([-+]?[0-9]+)"
-        "\\s+([-+]?[0-9]+)"
-        "\\s+([-+]?[0-9]+)\\s*$"
-    );
-    boost::cmatch what;
-
     unsigned long segment = 0;
     MeshPointArray meshPoints;
     MeshFacetArray meshFacets;
@@ -445,19 +506,13 @@ bool MeshInput::LoadSMF(std::istream& input)
     }
 
     while (std::getline(input, line)) {
-        if (boost::regex_match(line.c_str(), what, rx_p)) {
-            fX = (float)std::atof(what[1].first);
-            fY = (float)std::atof(what[4].first);
-            fZ = (float)std::atof(what[7].first);
+        if (parseFloat3FromLine(line, "v", nullptr, fX, fY, fZ)) {
             meshPoints.push_back(MeshPoint(Base::Vector3f(fX, fY, fZ)));
         }
-        else if (boost::regex_match(line.c_str(), what, rx_f3)) {
+        else if (parseInt3FromLine(line, "f", i1, i2, i3)) {
             // 3-vertex face
-            i1 = std::atoi(what[1].first);
             i1 = i1 > 0 ? i1 - 1 : i1 + static_cast<int>(meshPoints.size());
-            i2 = std::atoi(what[2].first);
             i2 = i2 > 0 ? i2 - 1 : i2 + static_cast<int>(meshPoints.size());
-            i3 = std::atoi(what[3].first);
             i3 = i3 > 0 ? i3 - 1 : i3 + static_cast<int>(meshPoints.size());
             item.SetVertices(i1, i2, i3);
             item.SetProperty(segment);
@@ -480,9 +535,6 @@ bool MeshInput::LoadSMF(std::istream& input)
 bool MeshInput::LoadOFF(std::istream& input)
 {
     // http://edutechwiki.unige.ch/en/3D_file_format
-    boost::regex rx_n(R"(^\s*([0-9]+)\s+([0-9]+)\s+([0-9]+)\s*$)");
-    boost::cmatch what;
-
     bool colorPerVertex = false;
     std::vector<Base::Color> diffuseColor;
     MeshPointArray meshPoints;
@@ -516,9 +568,8 @@ bool MeshInput::LoadOFF(std::istream& input)
     while (true) {
         std::getline(input, line);
         boost::algorithm::to_lower(line);
-        if (boost::regex_match(line.c_str(), what, rx_n)) {
-            numPoints = std::atoi(what[1].first);
-            numFaces = std::atoi(what[2].first);
+        int unused = 0;
+        if (parseInt3NoKeywordFromLine(line, numPoints, numFaces, unused)) {
             break;
         }
     }
@@ -669,15 +720,6 @@ bool MeshInput::LoadPLY(std::istream& input)
 
 bool MeshInput::LoadMeshNode(std::istream& input)
 {
-    boost::regex rx_p(
-        "^v\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)"
-        "\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)"
-        "\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)\\s*$"
-    );
-    boost::regex rx_f(R"(^f\s+([0-9]+)\s+([0-9]+)\s+([0-9]+)\s*$)");
-    boost::regex rx_e("\\s*]\\s*");
-    boost::cmatch what;
-
     MeshPointArray meshPoints;
     MeshFacetArray meshFacets;
 
@@ -697,19 +739,13 @@ bool MeshInput::LoadMeshNode(std::istream& input)
 
     while (std::getline(input, line)) {
         boost::algorithm::to_lower(line);
-        if (boost::regex_match(line.c_str(), what, rx_p)) {
-            fX = (float)std::atof(what[1].first);
-            fY = (float)std::atof(what[4].first);
-            fZ = (float)std::atof(what[7].first);
+        if (parseFloat3FromLine(line, "v", nullptr, fX, fY, fZ)) {
             meshPoints.push_back(MeshPoint(Base::Vector3f(fX, fY, fZ)));
         }
-        else if (boost::regex_match(line.c_str(), what, rx_f)) {
-            i1 = std::atoi(what[1].first);
-            i2 = std::atoi(what[2].first);
-            i3 = std::atoi(what[3].first);
+        else if (parseUnsigned3FromLine(line, "f", i1, i2, i3)) {
             meshFacets.push_back(MeshFacet(i1 - 1, i2 - 1, i3 - 1));
         }
-        else if (boost::regex_match(line.c_str(), what, rx_e)) {
+        else if (line.find(']') != std::string::npos) {
             break;
         }
     }
@@ -728,18 +764,6 @@ bool MeshInput::LoadMeshNode(std::istream& input)
 /** Loads an ASCII STL file. */
 bool MeshInput::LoadAsciiSTL(std::istream& input)
 {
-    boost::regex rx_p(
-        "^\\s*VERTEX\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)"
-        "\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)"
-        "\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)\\s*$"
-    );
-    boost::regex rx_f(
-        "^\\s*FACET\\s+NORMAL\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)"
-        "\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)"
-        "\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)\\s*$"
-    );
-    boost::cmatch what;
-
     std::string line;
     float fX {}, fY {}, fZ {};
     unsigned long ulVertexCt {}, ulFacetCt {};
@@ -783,16 +807,10 @@ bool MeshInput::LoadAsciiSTL(std::istream& input)
     ulVertexCt = 0;
     while (std::getline(input, line)) {
         boost::algorithm::to_upper(line);
-        if (boost::regex_match(line.c_str(), what, rx_f)) {
-            fX = (float)std::atof(what[1].first);
-            fY = (float)std::atof(what[4].first);
-            fZ = (float)std::atof(what[7].first);
+        if (parseFloat3FromLine(line, "FACET", "NORMAL", fX, fY, fZ)) {
             clFacet.SetNormal(Base::Vector3f(fX, fY, fZ));
         }
-        else if (boost::regex_match(line.c_str(), what, rx_p)) {
-            fX = (float)std::atof(what[1].first);
-            fY = (float)std::atof(what[4].first);
-            fZ = (float)std::atof(what[7].first);
+        else if (parseFloat3FromLine(line, "VERTEX", nullptr, fX, fY, fZ)) {
             clFacet._aclPoints[ulVertexCt++].Set(fX, fY, fZ);
             if (ulVertexCt == 3) {
                 ulVertexCt = 0;
@@ -985,16 +1003,6 @@ bool MeshInput::LoadNastran(std::istream& input)
         return false;
     }
 
-    boost::regex rx_t(
-        "\\s*CTRIA3\\s+([0-9]+)\\s+([0-9]+)"
-        "\\s+([0-9]+)\\s+([0-9]+)\\s+([0-9]+)\\s*"
-    );
-    boost::regex rx_q(
-        "\\s*CQUAD4\\s+([0-9]+)\\s+([0-9]+)"
-        "\\s+([0-9]+)\\s+([0-9]+)\\s+([0-9]+)\\s+([0-9]+)\\s*"
-    );
-    boost::cmatch what;
-
     std::string line;
     MeshFacet clMeshFacet;
     MeshPointArray vVertices;
@@ -1081,22 +1089,56 @@ bool MeshInput::LoadNastran(std::istream& input)
             mNode[index].z = (float)z.get();
         }
         else if (line.rfind("GRID", 0) == 0) {
+            bool parsed = false;
+            {
+                std::istringstream str(line);
+                std::string card;
+                long id {};
+                if ((str >> card >> id) && card == "GRID") {
+                    auto parse3Floats = [](const std::string& s1,
+                                           const std::string& s2,
+                                           const std::string& s3,
+                                           float& xOut,
+                                           float& yOut,
+                                           float& zOut) -> bool {
+                        std::istringstream xs(s1);
+                        std::istringstream ys(s2);
+                        std::istringstream zs(s3);
+                        float x {}, y {}, z {};
+                        if ((xs >> x) && (ys >> y) && (zs >> z)) {
+                            xOut = x;
+                            yOut = y;
+                            zOut = z;
+                            return true;
+                        }
+                        return false;
+                    };
 
-            boost::regex rx_spaceDelimited(
-                "\\s*GRID\\s+([0-9]+)"
-                "\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)"
-                "\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)"
-                "\\s+([-+]?[0-9]*)\\.?([0-9]+([eE][-+]?[0-9]+)?)\\s*"
-            );
-
-            if (boost::regex_match(line.c_str(), what, rx_spaceDelimited)) {
-                // insert the read-in vertex into a map to preserve the order
-                index = std::atol(what[1].first) - 1;
-                mNode[index].x = (float)std::atof(what[2].first);
-                mNode[index].y = (float)std::atof(what[5].first);
-                mNode[index].z = (float)std::atof(what[8].first);
+                    std::string t3, t4, t5;
+                    if (str >> t3 >> t4 >> t5) {
+                        float x {}, y {}, z {};
+                        if (parse3Floats(t3, t4, t5, x, y, z)) {
+                            index = static_cast<int>(id) - 1;
+                            mNode[index].x = x;
+                            mNode[index].y = y;
+                            mNode[index].z = z;
+                            parsed = true;
+                        }
+                        else {
+                            std::string t6;
+                            if ((str >> t6) && parse3Floats(t4, t5, t6, x, y, z)) {
+                                index = static_cast<int>(id) - 1;
+                                mNode[index].x = x;
+                                mNode[index].y = y;
+                                mNode[index].z = z;
+                                parsed = true;
+                            }
+                        }
+                    }
+                }
             }
-            else {
+
+            if (!parsed) {
                 // Classic NASTRAN uses a fixed 8 character field width:
                 // 1       8       16      24      32      40
                 // $-------ID------CP------X1------X2------X3------CD------PS------9-------+-------
@@ -1144,22 +1186,26 @@ bool MeshInput::LoadNastran(std::istream& input)
             }
         }
         else if (line.rfind("CTRIA3 ", 0) == 0) {
-            if (boost::regex_match(line.c_str(), what, rx_t)) {
-                // insert the read-in triangle into a map to preserve the order
-                index = std::atol(what[1].first) - 1;
-                mTria[index].iV[0] = std::atol(what[3].first) - 1;
-                mTria[index].iV[1] = std::atol(what[4].first) - 1;
-                mTria[index].iV[2] = std::atol(what[5].first) - 1;
+            std::istringstream str(line);
+            std::string card;
+            long eid {}, pid {}, n1 {}, n2 {}, n3 {};
+            if ((str >> card >> eid >> pid >> n1 >> n2 >> n3) && card == "CTRIA3") {
+                index = static_cast<int>(eid) - 1;
+                mTria[index].iV[0] = static_cast<int>(n1) - 1;
+                mTria[index].iV[1] = static_cast<int>(n2) - 1;
+                mTria[index].iV[2] = static_cast<int>(n3) - 1;
             }
         }
         else if (line.rfind("CQUAD4", 0) == 0) {
-            if (boost::regex_match(line.c_str(), what, rx_q)) {
-                // insert the read-in quadrangle into a map to preserve the order
-                index = std::atol(what[1].first) - 1;
-                mQuad[index].iV[0] = std::atol(what[3].first) - 1;
-                mQuad[index].iV[1] = std::atol(what[4].first) - 1;
-                mQuad[index].iV[2] = std::atol(what[5].first) - 1;
-                mQuad[index].iV[3] = std::atol(what[6].first) - 1;
+            std::istringstream str(line);
+            std::string card;
+            long eid {}, pid {}, n1 {}, n2 {}, n3 {}, n4 {};
+            if ((str >> card >> eid >> pid >> n1 >> n2 >> n3 >> n4) && card == "CQUAD4") {
+                index = static_cast<int>(eid) - 1;
+                mQuad[index].iV[0] = static_cast<int>(n1) - 1;
+                mQuad[index].iV[1] = static_cast<int>(n2) - 1;
+                mQuad[index].iV[2] = static_cast<int>(n3) - 1;
+                mQuad[index].iV[3] = static_cast<int>(n4) - 1;
             }
         }
     }

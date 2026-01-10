@@ -31,8 +31,7 @@
 # include <TopoDS_Face.hxx>
 # include <TopoDS_Wire.hxx>
 
-
-#include <boost_regex.hpp>
+#include <algorithm>
 
 #include <App/DocumentObject.h>
 #include <App/DocumentObjectPy.h>
@@ -1239,27 +1238,47 @@ private:
         std::string empty;
         std::string endline = "--endOfLine--";
         std::string linebreak = "\\n";
+
+        svg.erase(std::remove(svg.begin(), svg.end(), '\r'), svg.end());
+
+        auto replaceAll = [](std::string& input, const std::string& from, const std::string& to) {
+            if (from.empty()) {
+                return;
+            }
+            size_t pos = 0;
+            while ((pos = input.find(from, pos)) != std::string::npos) {
+                input.replace(pos, from.size(), to);
+                pos += to.size();
+            }
+        };
+
+        auto removeFirstSpan = [](std::string& input,
+                                  const std::string& startToken,
+                                  const std::string& endToken) {
+            const size_t start = input.find(startToken);
+            if (start == std::string::npos) {
+                return;
+            }
+            const size_t end = input.find(endToken, start + startToken.size());
+            if (end == std::string::npos) {
+                return;
+            }
+            input.erase(start, (end + endToken.size()) - start);
+        };
+
         // removing linebreaks for regex to work
-        boost::regex e1 ("\\n");
-        svg = boost::regex_replace(svg, e1, endline);
+        replaceAll(svg, "\n", endline);
         // removing starting xml definition
-        boost::regex e2 ("<\\?xml.*?\\?>");
-        svg = boost::regex_replace(svg, e2, empty);
+        removeFirstSpan(svg, "<?xml", "?>");
         // removing starting svg tag
-        boost::regex e3 ("<svg.*?>");
-        svg = boost::regex_replace(svg, e3, empty);
-        // removing sodipodi tags -- DANGEROUS, some sodipodi tags are single, better leave it
-        //boost::regex e4 ("<sodipodi.*?>");
-        //svg = boost::regex_replace(svg, e4, empty);
+        removeFirstSpan(svg, "<svg", ">");
         // removing metadata tags
-        boost::regex e5 ("<metadata.*?</metadata>");
-        svg = boost::regex_replace(svg, e5, empty);
+        removeFirstSpan(svg, "<metadata", "</metadata>");
         // removing closing svg tags
-        boost::regex e6 ("</svg>");
-        svg = boost::regex_replace(svg, e6, empty);
+        replaceAll(svg, "</svg>", empty);
         // restoring linebreaks
-        boost::regex e7 ("--endOfLine--");
-        svg = boost::regex_replace(svg, e7, linebreak);
+        replaceAll(svg, endline, linebreak);
+
         Py::String result(svg);
         return result;
     }
