@@ -40,17 +40,24 @@ class PartDesignWorkbench(Workbench):
 
     def Initialize(self):
         # load the module
-        try:
-            import traceback
-            from PartDesign.WizardShaft import WizardShaft
-        except RuntimeError:
-            print("{}".format(traceback.format_exc()))
-        except ImportError:
-            print("Wizard shaft module cannot be loaded")
+        import importlib.util
+        import traceback
+
+        def _try_import_hole_gui():
             try:
                 from FeatureHole import HoleGui
             except Exception:
                 pass
+
+        try:
+            if importlib.util.find_spec("PartDesign.WizardShaft") is None:
+                _try_import_hole_gui()
+            else:
+                from PartDesign.WizardShaft import WizardShaft
+        except RuntimeError:
+            print("{}".format(traceback.format_exc()))
+        except ImportError:
+            _try_import_hole_gui()
 
         import PartDesignGui
         import PartDesign
