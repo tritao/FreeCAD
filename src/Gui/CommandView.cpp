@@ -339,7 +339,7 @@ StdCmdFreezeViews::StdCmdFreezeViews()
 
 Action* StdCmdFreezeViews::createAction()
 {
-    auto pcAction = new ActionGroup(this, Gui::activeMainWindow());
+    auto pcAction = new ActionGroup(this, Gui::uiParentObject());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 
@@ -710,7 +710,7 @@ StdCmdDrawStyle::StdCmdDrawStyle()
 
 Gui::Action* StdCmdDrawStyle::createAction()
 {
-    auto pcAction = new Gui::ActionGroup(this, Gui::activeMainWindow());
+    auto pcAction = new Gui::ActionGroup(this, Gui::uiParentObject());
     pcAction->setDropDownMenu(true);
     pcAction->setIsMode(true);
     applyCommandData(this->className(), pcAction);
@@ -1894,7 +1894,7 @@ StdViewDockUndockFullscreen::StdViewDockUndockFullscreen()
 
 Action* StdViewDockUndockFullscreen::createAction()
 {
-    auto pcAction = new ActionGroup(this, Gui::activeMainWindow());
+    auto pcAction = new ActionGroup(this, Gui::uiParentObject());
     pcAction->setDropDownMenu(true);
     pcAction->setText(QCoreApplication::translate(this->className(), getMenuText()));
 

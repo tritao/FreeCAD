@@ -1208,7 +1208,7 @@ void RecentMacrosAction::activateFile(int id)
             == Qt::ShiftModifier) {  // open for editing on Shift+click
             auto editor = new PythonEditor();
             editor->setWindowIcon(Gui::BitmapFactory().iconFromTheme("applications-python"));
-            auto edit = new PythonEditorView(editor, Gui::activeMainWindow());
+            auto edit = new PythonEditorView(editor, Gui::uiParentWidget());
             edit->setDisplayName(PythonEditorView::FileName);
             edit->open(filename);
             edit->resize(400, 300);

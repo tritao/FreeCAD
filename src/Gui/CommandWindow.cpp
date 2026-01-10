@@ -301,7 +301,7 @@ bool StdCmdDockViewMenu::isActive()
 Action* StdCmdDockViewMenu::createAction()
 {
     Action* pcAction;
-    pcAction = new DockWidgetAction(this, Gui::activeMainWindow());
+    pcAction = new DockWidgetAction(this, Gui::uiParentObject());
     applyCommandData(this->className(), pcAction);
     return pcAction;
 }
@@ -337,7 +337,7 @@ bool StdCmdToolBarMenu::isActive()
 Action* StdCmdToolBarMenu::createAction()
 {
     Action* pcAction;
-    pcAction = new ToolBarAction(this, Gui::activeMainWindow());
+    pcAction = new ToolBarAction(this, Gui::uiParentObject());
     applyCommandData(this->className(), pcAction);
     return pcAction;
 }
@@ -497,7 +497,7 @@ Action* StdCmdWindowsMenu::createAction()
     // Allow one to show 10 menu items in the 'Window' menu and one separator.
     // If we have more windows then the user can use the 'Windows...' item.
     WindowAction* pcAction;
-    pcAction = new WindowAction(this, Gui::activeMainWindow());
+    pcAction = new WindowAction(this, Gui::uiParentObject());
     for (int i = 0; i < 10; i++) {
         QAction* window = pcAction->addAction(QObject::tr(getToolTipText()));
         window->setCheckable(true);

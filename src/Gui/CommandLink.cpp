@@ -96,7 +96,7 @@ bool StdCmdLinkMakeGroup::isActive()
 
 Action* StdCmdLinkMakeGroup::createAction()
 {
-    auto pcAction = new ActionGroup(this, Gui::activeMainWindow());
+    auto pcAction = new ActionGroup(this, Gui::uiParentObject());
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
 

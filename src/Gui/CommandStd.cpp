@@ -123,7 +123,7 @@ Action* StdCmdWorkbench::createAction()
 {
     Action* pcAction;
 
-    pcAction = new WorkbenchGroup(this, Gui::activeMainWindow());
+    pcAction = new WorkbenchGroup(this, Gui::uiParentObject());
     pcAction->setShortcut(QString::fromLatin1(getAccel()));
     applyCommandData(this->className(), pcAction);
     if (getPixmap()) {
@@ -169,7 +169,7 @@ void StdCmdRecentFiles::activated(int iMsg)
  */
 Action* StdCmdRecentFiles::createAction()
 {
-    auto pcAction = new RecentFilesAction(this, Gui::activeMainWindow());
+    auto pcAction = new RecentFilesAction(this, Gui::uiParentObject());
     pcAction->setObjectName(QLatin1String("recentFiles"));
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
@@ -212,7 +212,7 @@ void StdCmdRecentMacros::activated(int iMsg)
  */
 Action* StdCmdRecentMacros::createAction()
 {
-    auto pcAction = new RecentMacrosAction(this, Gui::activeMainWindow());
+    auto pcAction = new RecentMacrosAction(this, Gui::uiParentObject());
     pcAction->setObjectName(QLatin1String("recentMacros"));
     pcAction->setDropDownMenu(true);
     applyCommandData(this->className(), pcAction);
@@ -241,7 +241,7 @@ Action* StdCmdAbout::createAction()
     Action* pcAction;
 
     QString exe = qApp->applicationName();
-    pcAction = new Action(this, Gui::activeMainWindow());
+    pcAction = new Action(this, Gui::uiParentObject());
     pcAction->setText(QCoreApplication::translate(this->className(), getMenuText()).arg(exe));
     pcAction->setToolTip(QCoreApplication::translate(this->className(), getToolTipText()).arg(exe));
     pcAction->setStatusTip(QCoreApplication::translate(this->className(), getStatusTip()).arg(exe));
@@ -881,7 +881,7 @@ StdCmdUserEditMode::StdCmdUserEditMode()
 
 Gui::Action* StdCmdUserEditMode::createAction()
 {
-    auto pcAction = new Gui::ActionGroup(this, Gui::activeMainWindow());
+    auto pcAction = new Gui::ActionGroup(this, Gui::uiParentObject());
     pcAction->setDropDownMenu(true);
     pcAction->setIsMode(true);
     applyCommandData(this->className(), pcAction);

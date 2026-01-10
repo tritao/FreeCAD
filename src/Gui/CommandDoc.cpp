@@ -1113,7 +1113,7 @@ Action* StdCmdUndo::createAction()
 {
     Action* pcAction;
 
-    pcAction = new UndoAction(this, Gui::activeMainWindow());
+    pcAction = new UndoAction(this, Gui::uiParentObject());
     pcAction->setShortcut(QString::fromLatin1(getAccel()));
     applyCommandData(this->className(), pcAction);
     if (getPixmap()) {
@@ -1158,7 +1158,7 @@ Action* StdCmdRedo::createAction()
 {
     Action* pcAction;
 
-    pcAction = new RedoAction(this, Gui::activeMainWindow());
+    pcAction = new RedoAction(this, Gui::uiParentObject());
     pcAction->setShortcut(QString::fromLatin1(getAccel()));
     applyCommandData(this->className(), pcAction);
     if (getPixmap()) {
@@ -2012,7 +2012,7 @@ protected:
 
     Gui::Action* createAction() override
     {
-        auto pcAction = new ActionGroup(this, Gui::activeMainWindow());
+        auto pcAction = new ActionGroup(this, Gui::uiParentObject());
         pcAction->setDropDownMenu(true);
         applyCommandData(this->className(), pcAction);
 

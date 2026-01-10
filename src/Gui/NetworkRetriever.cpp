@@ -422,7 +422,7 @@ Action* StdCmdDownloadOnlineHelp::createAction()
     Action* pcAction;
 
     QString exe = QString::fromStdString(App::Application::getExecutableName());
-    pcAction = new Action(this, Gui::activeMainWindow());
+    pcAction = new Action(this, Gui::uiParentObject());
     pcAction->setText(QCoreApplication::translate(this->className(), getMenuText()));
     pcAction->setToolTip(QCoreApplication::translate(this->className(), getToolTipText()).arg(exe));
     pcAction->setStatusTip(QCoreApplication::translate(this->className(), getStatusTip()).arg(exe));

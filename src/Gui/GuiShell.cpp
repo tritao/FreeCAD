@@ -484,6 +484,14 @@ QWidget* uiParentWidget()
     return QApplication::activeWindow();
 }
 
+QObject* uiParentObject()
+{
+    if (auto* w = uiParentWidget()) {
+        return w;
+    }
+    return QApplication::instance();
+}
+
 void setRightSideMessage(const QString& message)
 {
     if (auto* shell = activeShell()) {

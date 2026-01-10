@@ -2223,7 +2223,7 @@ MDIView* Document::createView(const Base::Type& typeId, CreateViewMode mode)
             saveCameraSettings(ppReturn);
         }
 
-        auto view3D = new View3DInventor(this, Gui::activeMainWindow(), shareWidget);
+        auto view3D = new View3DInventor(this, Gui::uiParentWidget(), shareWidget);
         if (!theViews.empty()) {
             auto firstView = static_cast<View3DInventor*>(theViews.front());
             std::string overrideMode = firstView->getViewer()->getOverrideMode();

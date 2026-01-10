@@ -1599,7 +1599,7 @@ void OverlayManager::destruct()
 
 OverlayManager::OverlayManager()
 {
-    d = new Private(this, Gui::activeMainWindow());
+    d = new Private(this, Gui::uiParentWidget());
     qApp->installEventFilter(this);
 }
 

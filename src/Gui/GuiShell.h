@@ -35,6 +35,7 @@
 
 class QMdiArea;
 class QDockWidget;
+class QObject;
 class QToolBar;
 class QString;
 class QWidget;
@@ -108,6 +109,7 @@ GuiExport IGuiShell* activeShell();
 GuiExport GuiShellEvents* activeShellEvents();
 GuiExport QMainWindow* activeMainWindow();
 GuiExport QWidget* uiParentWidget();
+GuiExport QObject* uiParentObject();
 GuiExport void setRightSideMessage(const QString& message);
 GuiExport bool isRightSideMessageVisible();
 GuiExport void setActiveShell(std::unique_ptr<IGuiShell> shell);

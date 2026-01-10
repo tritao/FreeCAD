@@ -1043,7 +1043,7 @@ void Command::printConflictingAccelerators() const
 Action* Command::createAction()
 {
     Action* pcAction;
-    pcAction = new Action(this, Gui::activeMainWindow());
+    pcAction = new Action(this, Gui::uiParentObject());
     applyCommandData(this->className(), pcAction);
     if (sPixmap) {
         pcAction->setIcon(Gui::BitmapFactory().iconFromTheme(sPixmap));
@@ -1137,7 +1137,7 @@ Command* GroupCommand::getCommand(int idx) const
 
 Action* GroupCommand::createAction()
 {
-    auto* pcAction = new ActionGroup(this, Gui::activeMainWindow());
+    auto* pcAction = new ActionGroup(this, Gui::uiParentObject());
     pcAction->setMenuRole(QAction::NoRole);
     pcAction->setDropDownMenu(hasDropDownMenu());
     pcAction->setExclusive(isExclusive());
@@ -1285,7 +1285,7 @@ void MacroCommand::activated(int iMsg)
 Action* MacroCommand::createAction()
 {
     Action* pcAction;
-    pcAction = new Action(this, Gui::activeMainWindow());
+    pcAction = new Action(this, Gui::uiParentObject());
     pcAction->setText(QString::fromUtf8(sMenuText));
     pcAction->setToolTip(QString::fromUtf8(sToolTipText));
     pcAction->setStatusTip(QString::fromUtf8(sStatusTip));
@@ -1510,7 +1510,7 @@ Action* PythonCommand::createAction()
     auto qtAction = new QAction(nullptr);
     Action* pcAction;
 
-    pcAction = new Action(this, qtAction, Gui::activeMainWindow());
+    pcAction = new Action(this, qtAction, Gui::uiParentObject());
     applyCommandData(this->getName(), pcAction);
     if (strcmp(getResource("Pixmap"), "") != 0) {
         pcAction->setIcon(Gui::BitmapFactory().iconFromTheme(getResource("Pixmap")));
@@ -1734,7 +1734,7 @@ bool PythonGroupCommand::isActive()
 
 Action* PythonGroupCommand::createAction()
 {
-    auto pcAction = new Gui::ActionGroup(this, Gui::activeMainWindow());
+    auto pcAction = new Gui::ActionGroup(this, Gui::uiParentObject());
     pcAction->setDropDownMenu(hasDropDownMenu());
     pcAction->setExclusive(isExclusive());
 
