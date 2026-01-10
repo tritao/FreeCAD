@@ -69,8 +69,7 @@ def set_properties_editor(statuswidget):
     else:
         from PySide import QtCore, QtGui  # lazy loading
 
-        mw = FreeCADGui.getMainWindow()
-        editor = mw.findChild(QtGui.QTabWidget, "propertyTab")
+        editor = FreeCADGui.findChild(QtGui.QTabWidget, "propertyTab")
         if editor:
             pTabCornerWidget = QtGui.QWidget()
             pButton1 = QtGui.QToolButton(pTabCornerWidget)
@@ -286,9 +285,8 @@ def set_menu(locked=False):
     from PySide import QtGui  # lazy loading
 
     # switch Std_Save and IFC_Save
-    mw = FreeCADGui.getMainWindow()
     wb = FreeCADGui.activeWorkbench()
-    save_action = mw.findChild(QtGui.QAction, "Std_Save")
+    save_action = FreeCADGui.findChild(QtGui.QAction, "Std_Save")
     if locked and "IFC_Save" in FreeCADGui.listCommands():
         if not hasattr(FreeCADGui, "IFC_WBManipulator"):
             FreeCADGui.IFC_WBManipulator = IFC_WBManipulator()
@@ -313,8 +311,7 @@ def set_button(checked=False, setchecked=False):
 
     from PySide import QtGui  # lazy loading
 
-    mw = FreeCADGui.getMainWindow()
-    statuswidget = mw.findChild(QtGui.QToolBar, "BIMStatusWidget")
+    statuswidget = FreeCADGui.findChild(QtGui.QToolBar, "BIMStatusWidget")
     if hasattr(statuswidget, "lock_button"):
         lock_button = statuswidget.lock_button
         if checked:
@@ -517,8 +514,7 @@ def get_lock_status():
         return PARAMS.GetBool("SingleDoc")
     from PySide import QtGui
 
-    mw = FreeCADGui.getMainWindow()
-    statuswidget = mw.findChild(QtGui.QToolBar, "BIMStatusWidget")
+    statuswidget = FreeCADGui.findChild(QtGui.QToolBar, "BIMStatusWidget")
     if hasattr(statuswidget, "lock_button"):
         return statuswidget.lock_button.isChecked()
     else:

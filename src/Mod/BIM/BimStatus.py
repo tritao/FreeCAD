@@ -99,8 +99,7 @@ def setStatusIcons(show=True):
             # a.setCheckable(True)
             # a.setChecked(FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM").GetBool("toggle"+t.replace(" ",""),True))
             FreeCADGui.BimToggleMenu.addAction(a)
-        mw = FreeCADGui.getMainWindow()
-        pos = mw.cursor().pos() if mw else QtGui.QCursor.pos()
+        pos = QtGui.QCursor.pos()
         FreeCADGui.BimToggleMenu.triggered.connect(toggleSaveSettings)
         # QtCore.QObject.connect(FreeCADGui.BimToggleMenu,QtCore.SIGNAL("triggered(QAction *)"),toggleSaveSettings)
         FreeCADGui.BimToggleMenu.popup(pos)
@@ -115,128 +114,123 @@ def setStatusIcons(show=True):
 
     # main code
 
-    mw = FreeCADGui.getMainWindow()
-    if mw:
-        st = mw.statusBar()
-        statuswidget = st.findChild(QtGui.QToolBar, "BIMStatusWidget")
-        if show:
-            if statuswidget:
-                statuswidget.show()
-                if hasattr(statuswidget, "propertybuttons"):
-                    statuswidget.propertybuttons.show()
-            else:
-                statuswidget = FreeCADGui.UiLoader().createWidget("Gui::ToolBar")
-                statuswidget.setObjectName("BIMStatusWidget")
-                text = translate(
-                    "BIMStatusWidget",
-                    "BIM Status Widget",
-                    "A context menu action used to show or hide this toolbar widget",
-                )
-                statuswidget.setWindowTitle(text)
-                s = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/General").GetInt(
-                    "ToolbarIconSize", 24
-                )
-                statuswidget.setIconSize(QtCore.QSize(s, s))
-                FreeCADGui.addStatusPermanentWidget(statuswidget)
-
-                # report panels toggle button
-                togglebutton = QtGui.QAction()
-                togglemenu = QtGui.QMenu()
-                for t in [
-                    "Toggle",
-                    "Report view",
-                    "Python console",
-                    "Selection view",
-                    "Combo View",
-                ]:
-                    a = QtGui.QAction(t)
-                    togglemenu.addAction(a)
-                togglemenu.triggered.connect(toggleSaveSettings)
-                togglebutton.setIcon(QtGui.QIcon(":/icons/BIM_TogglePanels.svg"))
-                togglebutton.setText("")
-                togglebutton.setToolTip(translate("BIM", "Toggle report panels on/off (Ctrl+0)"))
-                togglebutton.setCheckable(True)
-                rv = mw.findChild(QtGui.QWidget, "Python console")
-                if rv and rv.isVisible():
-                    togglebutton.setChecked(True)
-                statuswidget.togglebutton = togglebutton
-                # togglebutton.setMenu(togglemenu)
-                togglebutton.triggered.connect(toggle)
-                statuswidget.addAction(togglebutton)
-
-                # bim views widget toggle button
-                from bimcommands import BimViews
-
-                bimviewsbutton = QtGui.QAction()
-                bimviewsbutton.setIcon(QtGui.QIcon(":/icons/BIM_Views.svg"))
-
-                bimviewsbutton.setText("")
-                bimviewsbutton.setToolTip(
-                    translate("BIM", "Toggle BIM views panel on/off (Ctrl+9)")
-                )
-                bimviewsbutton.setCheckable(True)
-                if BimViews.findWidget():
-                    bimviewsbutton.setChecked(True)
-                statuswidget.bimviewsbutton = bimviewsbutton
-                bimviewsbutton.triggered.connect(toggleBimViews)
-                statuswidget.addAction(bimviewsbutton)
-
-                # background toggle button
-                bgbutton = QtGui.QAction()
-                # bwidth = bgbutton.fontMetrics().boundingRect("AAAA").width()
-                # bgbutton.setMaximumWidth(bwidth)
-                bgbutton.setIcon(QtGui.QIcon(":/icons/BIM_Background.svg"))
-                bgbutton.setText("")
-                bgbutton.setToolTip(
-                    translate("BIM", "Toggle 3D view background between simple and gradient")
-                )
-                statuswidget.bgbutton = bgbutton
-                bgbutton.triggered.connect(toggleBackground)
-                statuswidget.addAction(bgbutton)
-
-                # ifc widgets
-                try:
-                    from nativeifc import ifc_status
-                except:
-                    pass
-                else:
-                    ifc_status.set_status_widget(statuswidget)
-
-                # nudge button
-                nudge = QtGui.QPushButton(nudgeLabelsM[-1])
-                nudge.setIcon(QtGui.QIcon(":/icons/BIM_Nudge.svg"))
-                nudge.setFlat(True)
-                nudge.setToolTip(
-                    translate(
-                        "BIM",
-                        "The value of the nudge movement (rotation is always 45°)."
-                        "CTRL+arrows to move\nCTRL+, to rotate left"
-                        "CTRL+. to rotate right\nCTRL+PgUp to extend extrusion"
-                        "CTRL+PgDown to shrink extrusion"
-                        "CTRL+/ to switch between auto and manual mode",
-                    )
-                )
-                statuswidget.addWidget(nudge)
-                statuswidget.nudge = nudge
-                menu = QtGui.QMenu(nudge)
-                gnudge = QtGui.QActionGroup(menu)
-                for u in nudgeLabelsM:
-                    a = QtGui.QAction(gnudge)
-                    a.setText(u)
-                    menu.addAction(a)
-                nudge.setMenu(menu)
-                gnudge.triggered.connect(setNudge)
-                statuswidget.nudgeLabelsI = nudgeLabelsI
-                statuswidget.nudgeLabelsM = nudgeLabelsM
-                statuswidget.show()
-
+    statuswidget = FreeCADGui.findChild(QtGui.QToolBar, "BIMStatusWidget")
+    if show:
+        if statuswidget:
+            statuswidget.show()
+            if hasattr(statuswidget, "propertybuttons"):
+                statuswidget.propertybuttons.show()
         else:
-            if statuswidget is None:
-                # when switching workbenches, the toolbar sometimes "jumps"
-                # out of the status bar to any other dock area...
-                statuswidget = mw.findChild(QtGui.QToolBar, "BIMStatusWidget")
-            if statuswidget:
-                statuswidget.hide()
-                statuswidget.toggleViewAction().setVisible(False)
-                if hasattr(statuswidget, "propertybuttons"):
-                    statuswidget.propertybuttons.hide()
+            statuswidget = FreeCADGui.UiLoader().createWidget("Gui::ToolBar")
+            statuswidget.setObjectName("BIMStatusWidget")
+            text = translate(
+                "BIMStatusWidget",
+                "BIM Status Widget",
+                "A context menu action used to show or hide this toolbar widget",
+            )
+            statuswidget.setWindowTitle(text)
+            s = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/General").GetInt(
+                "ToolbarIconSize", 24
+            )
+            statuswidget.setIconSize(QtCore.QSize(s, s))
+            FreeCADGui.addStatusPermanentWidget(statuswidget)
+
+            # report panels toggle button
+            togglebutton = QtGui.QAction()
+            togglemenu = QtGui.QMenu()
+            for t in [
+                "Toggle",
+                "Report view",
+                "Python console",
+                "Selection view",
+                "Combo View",
+            ]:
+                a = QtGui.QAction(t)
+                togglemenu.addAction(a)
+            togglemenu.triggered.connect(toggleSaveSettings)
+            togglebutton.setIcon(QtGui.QIcon(":/icons/BIM_TogglePanels.svg"))
+            togglebutton.setText("")
+            togglebutton.setToolTip(translate("BIM", "Toggle report panels on/off (Ctrl+0)"))
+            togglebutton.setCheckable(True)
+            rv = FreeCADGui.findChild(QtGui.QWidget, "Python console")
+            if rv and rv.isVisible():
+                togglebutton.setChecked(True)
+            statuswidget.togglebutton = togglebutton
+            # togglebutton.setMenu(togglemenu)
+            togglebutton.triggered.connect(toggle)
+            statuswidget.addAction(togglebutton)
+
+            # bim views widget toggle button
+            from bimcommands import BimViews
+
+            bimviewsbutton = QtGui.QAction()
+            bimviewsbutton.setIcon(QtGui.QIcon(":/icons/BIM_Views.svg"))
+
+            bimviewsbutton.setText("")
+            bimviewsbutton.setToolTip(translate("BIM", "Toggle BIM views panel on/off (Ctrl+9)"))
+            bimviewsbutton.setCheckable(True)
+            if BimViews.findWidget():
+                bimviewsbutton.setChecked(True)
+            statuswidget.bimviewsbutton = bimviewsbutton
+            bimviewsbutton.triggered.connect(toggleBimViews)
+            statuswidget.addAction(bimviewsbutton)
+
+            # background toggle button
+            bgbutton = QtGui.QAction()
+            # bwidth = bgbutton.fontMetrics().boundingRect("AAAA").width()
+            # bgbutton.setMaximumWidth(bwidth)
+            bgbutton.setIcon(QtGui.QIcon(":/icons/BIM_Background.svg"))
+            bgbutton.setText("")
+            bgbutton.setToolTip(
+                translate("BIM", "Toggle 3D view background between simple and gradient")
+            )
+            statuswidget.bgbutton = bgbutton
+            bgbutton.triggered.connect(toggleBackground)
+            statuswidget.addAction(bgbutton)
+
+            # ifc widgets
+            try:
+                from nativeifc import ifc_status
+            except:
+                pass
+            else:
+                ifc_status.set_status_widget(statuswidget)
+
+            # nudge button
+            nudge = QtGui.QPushButton(nudgeLabelsM[-1])
+            nudge.setIcon(QtGui.QIcon(":/icons/BIM_Nudge.svg"))
+            nudge.setFlat(True)
+            nudge.setToolTip(
+                translate(
+                    "BIM",
+                    "The value of the nudge movement (rotation is always 45°)."
+                    "CTRL+arrows to move\nCTRL+, to rotate left"
+                    "CTRL+. to rotate right\nCTRL+PgUp to extend extrusion"
+                    "CTRL+PgDown to shrink extrusion"
+                    "CTRL+/ to switch between auto and manual mode",
+                )
+            )
+            statuswidget.addWidget(nudge)
+            statuswidget.nudge = nudge
+            menu = QtGui.QMenu(nudge)
+            gnudge = QtGui.QActionGroup(menu)
+            for u in nudgeLabelsM:
+                a = QtGui.QAction(gnudge)
+                a.setText(u)
+                menu.addAction(a)
+            nudge.setMenu(menu)
+            gnudge.triggered.connect(setNudge)
+            statuswidget.nudgeLabelsI = nudgeLabelsI
+            statuswidget.nudgeLabelsM = nudgeLabelsM
+            statuswidget.show()
+
+    else:
+        if statuswidget is None:
+            # when switching workbenches, the toolbar sometimes "jumps"
+            # out of the status bar to any other dock area...
+            statuswidget = FreeCADGui.findChild(QtGui.QToolBar, "BIMStatusWidget")
+        if statuswidget:
+            statuswidget.hide()
+            statuswidget.toggleViewAction().setVisible(False)
+            if hasattr(statuswidget, "propertybuttons"):
+                statuswidget.propertybuttons.hide()

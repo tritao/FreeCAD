@@ -65,6 +65,8 @@ public:
     static PyObject* sRemoveWindow             (PyObject *self,PyObject *args);
     static PyObject* sMdiArea                  (PyObject *self,PyObject *args);
     static PyObject* sShowMessage              (PyObject *self,PyObject *args);
+    static PyObject* sFindChild                (PyObject *self,PyObject *args);
+    static PyObject* sFindChildren             (PyObject *self,PyObject *args);
     static PyObject* sShowStatusBar            (PyObject *self,PyObject *args);
     static PyObject* sAddStatusPermanentWidget (PyObject *self,PyObject *args);
     static PyObject* sRemoveStatusWidget       (PyObject *self,PyObject *args);

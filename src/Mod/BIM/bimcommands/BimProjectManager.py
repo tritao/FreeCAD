@@ -770,26 +770,21 @@ class BIM_ProjectManager:
                 )
 
             # set the status bar widgets
-            mw = FreeCADGui.getMainWindow()
-            if mw:
-                st = mw.statusBar()
-                statuswidget = st.findChild(QtGui.QToolBar, "BIMStatusWidget")
-                if statuswidget:
-                    statuswidget.unitLabel.setText(statuswidget.unitsList[bimunit])
-                    # change the unit of the nudge button
-                    nudgeactions = statuswidget.nudge.menu().actions()
-                    if bimunit in [2, 3, 5, 7]:
-                        nudgelabels = statuswidget.nudgeLabelsI
-                    else:
-                        nudgelabels = statuswidget.nudgeLabelsM
-                    for i in range(len(nudgelabels)):
-                        nudgeactions[i].setText(nudgelabels[i])
-                    if not "auto" in statuswidget.nudge.text().replace("&", "").lower():
-                        statuswidget.nudge.setText(
-                            FreeCAD.Units.Quantity(
-                                statuswidget.nudge.text().replace("&", "")
-                            ).UserString
-                        )
+            statuswidget = FreeCADGui.findChild(QtGui.QToolBar, "BIMStatusWidget")
+            if statuswidget:
+                statuswidget.unitLabel.setText(statuswidget.unitsList[bimunit])
+                # change the unit of the nudge button
+                nudgeactions = statuswidget.nudge.menu().actions()
+                if bimunit in [2, 3, 5, 7]:
+                    nudgelabels = statuswidget.nudgeLabelsI
+                else:
+                    nudgelabels = statuswidget.nudgeLabelsM
+                for i in range(len(nudgelabels)):
+                    nudgeactions[i].setText(nudgelabels[i])
+                if not "auto" in statuswidget.nudge.text().replace("&", "").lower():
+                    statuswidget.nudge.setText(
+                        FreeCAD.Units.Quantity(statuswidget.nudge.text().replace("&", "")).UserString
+                    )
 
             FreeCAD.Console.PrintMessage(
                 translate("BIM", "Template successfully loaded into the current document") + "\n"

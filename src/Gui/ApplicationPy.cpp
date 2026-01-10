@@ -242,6 +242,24 @@ PyMethodDef ApplicationPy::Methods[] = {
      "\n"
      "message : str\n"
      "timeout : int"},
+    {"findChild",
+     (PyCFunction)ApplicationPy::sFindChild,
+     METH_VARARGS,
+     "findChild(typeNameOrType, objectName='') -> QObject or None\n"
+     "\n"
+     "Find the first Qt object under the current shell root.\n"
+     "\n"
+     "typeNameOrType : str or type\n"
+     "objectName : str"},
+    {"findChildren",
+     (PyCFunction)ApplicationPy::sFindChildren,
+     METH_VARARGS,
+     "findChildren(typeNameOrType, objectName='') -> list[QObject]\n"
+     "\n"
+     "Find all Qt objects under the current shell root.\n"
+     "\n"
+     "typeNameOrType : str or type\n"
+     "objectName : str"},
     {"showStatusBar",
      (PyCFunction)ApplicationPy::sShowStatusBar,
      METH_VARARGS,
@@ -1258,6 +1276,126 @@ PyObject* ApplicationPy::sShowMessage(PyObject* /*self*/, PyObject* args)
             app->showMessage(QString::fromUtf8(message), timeout);
         }
         Py_Return;
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+namespace
+{
+QObject* getActiveShellRoot()
+{
+    if (auto* mw = Gui::activeMainWindow()) {
+        return mw;
+    }
+    if (auto* parent = Gui::uiParentWidget()) {
+        return parent;
+    }
+    return nullptr;
+}
+
+QString getQtClassName(PyObject* typeNameOrType)
+{
+    if (!typeNameOrType) {
+        return {};
+    }
+
+    if (PyUnicode_Check(typeNameOrType)) {
+        return QString::fromUtf8(PyUnicode_AsUTF8(typeNameOrType));
+    }
+
+    if (PyObject_HasAttrString(typeNameOrType, "__name__")) {
+        PyObject* pyName = PyObject_GetAttrString(typeNameOrType, "__name__");
+        if (!pyName) {
+            throw Py::Exception();
+        }
+        QString name = PyUnicode_Check(pyName) ? QString::fromUtf8(PyUnicode_AsUTF8(pyName))
+                                               : QString();
+        Py_DECREF(pyName);
+        return name;
+    }
+
+    throw Py::TypeError("typeNameOrType must be a str or a Qt type");
+}
+}  // namespace
+
+PyObject* ApplicationPy::sFindChild(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* typeNameOrType = nullptr;
+    char* objectName = nullptr;
+    if (!PyArg_ParseTuple(args, "O|s", &typeNameOrType, &objectName)) {
+        return nullptr;
+    }
+
+    try {
+        auto* root = getActiveShellRoot();
+        if (!root) {
+            Py_RETURN_NONE;
+        }
+
+        const QString qType = getQtClassName(typeNameOrType);
+        const QString qName = objectName ? QString::fromUtf8(objectName) : QString();
+        const QList<QObject*> all = root->findChildren<QObject*>();
+        for (auto* obj : all) {
+            if (!qName.isEmpty() && obj->objectName() != qName) {
+                continue;
+            }
+            if (!qType.isEmpty() && !obj->inherits(qType.toUtf8().constData())) {
+                continue;
+            }
+
+            PythonWrapper wrap;
+            if (!wrap.loadCoreModule() || !wrap.loadGuiModule() || !wrap.loadWidgetsModule()) {
+                throw Py::RuntimeError("Failed to load Python wrapper for Qt");
+            }
+
+            return Py::new_reference_to(wrap.fromQObject(obj));
+        }
+
+        Py_RETURN_NONE;
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sFindChildren(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* typeNameOrType = nullptr;
+    char* objectName = nullptr;
+    if (!PyArg_ParseTuple(args, "O|s", &typeNameOrType, &objectName)) {
+        return nullptr;
+    }
+
+    try {
+        Py::List results;
+
+        auto* root = getActiveShellRoot();
+        if (!root) {
+            return Py::new_reference_to(results);
+        }
+
+        const QString qType = getQtClassName(typeNameOrType);
+        const QString qName = objectName ? QString::fromUtf8(objectName) : QString();
+
+        PythonWrapper wrap;
+        if (!wrap.loadCoreModule() || !wrap.loadGuiModule() || !wrap.loadWidgetsModule()) {
+            throw Py::RuntimeError("Failed to load Python wrapper for Qt");
+        }
+
+        const QList<QObject*> all = root->findChildren<QObject*>();
+        for (auto* obj : all) {
+            if (!qName.isEmpty() && obj->objectName() != qName) {
+                continue;
+            }
+            if (!qType.isEmpty() && !obj->inherits(qType.toUtf8().constData())) {
+                continue;
+            }
+            results.append(wrap.fromQObject(obj));
+        }
+
+        return Py::new_reference_to(results);
     }
     catch (const Py::Exception&) {
         return nullptr;

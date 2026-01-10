@@ -328,31 +328,26 @@ class BIM_Setup:
             FreeCADGui.Snapper.setGrid()
 
         # set the status bar widgets
-        mw = FreeCADGui.getMainWindow()
-        if mw:
-            st = mw.statusBar()
-            statuswidget = st.findChild(QtGui.QToolBar, "BIMStatusWidget")
-            if statuswidget:
-                if hasattr(statuswidget, "unitLabel"):
-                    statuswidget.unitLabel.setText(
-                        statuswidget.unitsList[self.form.settingUnits.currentIndex()]
-                    )
-                # change the unit of the nudge button
-                nudgeactions = statuswidget.nudge.menu().actions()
-                if unit in [2, 3, 5, 7]:
-                    nudgelabels = statuswidget.nudgeLabelsI
-                else:
-                    nudgelabels = statuswidget.nudgeLabelsM
-                for i in range(len(nudgelabels)):
-                    nudgeactions[i].setText(nudgelabels[i])
-                try:
-                    t = FreeCAD.Units.Quantity(
-                        statuswidget.nudge.text().replace("&", "")
-                    ).UserString
-                except:
-                    pass  # auto mode
-                else:
-                    statuswidget.nudge.setText(t)
+        statuswidget = FreeCADGui.findChild(QtGui.QToolBar, "BIMStatusWidget")
+        if statuswidget:
+            if hasattr(statuswidget, "unitLabel"):
+                statuswidget.unitLabel.setText(
+                    statuswidget.unitsList[self.form.settingUnits.currentIndex()]
+                )
+            # change the unit of the nudge button
+            nudgeactions = statuswidget.nudge.menu().actions()
+            if unit in [2, 3, 5, 7]:
+                nudgelabels = statuswidget.nudgeLabelsI
+            else:
+                nudgelabels = statuswidget.nudgeLabelsM
+            for i in range(len(nudgelabels)):
+                nudgeactions[i].setText(nudgelabels[i])
+            try:
+                t = FreeCAD.Units.Quantity(statuswidget.nudge.text().replace("&", "")).UserString
+            except:
+                pass  # auto mode
+            else:
+                statuswidget.nudge.setText(t)
 
         # Set different default values
         if FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM").GetBool(
