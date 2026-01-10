@@ -29,7 +29,9 @@
 #include <QTextStream>
 #include <QTreeWidgetItem>
 
-#include <boost/regex.hpp>
+#include <cctype>
+#include <string_view>
+
 #include <boost/algorithm/string/replace.hpp>
 
 #include <App/AutoTransaction.h>
@@ -70,6 +72,100 @@
 FC_LOG_LEVEL_INIT("Command", false)
 
 using namespace Gui;
+
+namespace
+{
+
+bool isWordChar(unsigned char c)
+{
+    return (std::isalnum(c) != 0) || c == static_cast<unsigned char>('_');
+}
+
+std::size_t findHeaderStart(std::string_view text, std::size_t from)
+{
+    std::size_t pos = from;
+    while (true) {
+        pos = text.find("##@@ ", pos);
+        if (pos == std::string_view::npos) {
+            return pos;
+        }
+        if (pos == 0 || text[pos - 1] == '\n') {
+            return pos;
+        }
+        ++pos;
+    }
+}
+
+bool parseHeader(std::string_view text,
+                 std::size_t headerStart,
+                 std::string& pathName,
+                 std::string& docName,
+                 std::string& objName,
+                 std::string& propName,
+                 std::string& comment,
+                 std::size_t& expressionStart)
+{
+    std::size_t pos = headerStart;
+    if (!text.substr(pos).starts_with("##@@ ")) {
+        return false;
+    }
+    pos += 5;  // "##@@ "
+
+    const std::size_t pathEnd = text.find(' ', pos);
+    if (pathEnd == std::string_view::npos || pathEnd == pos) {
+        return false;
+    }
+    pathName.assign(text.substr(pos, pathEnd - pos));
+    pos = pathEnd + 1;
+
+    auto parseWordTo = [&](char delim, std::string& out) -> bool {
+        const std::size_t start = pos;
+        while (pos < text.size() && text[pos] != delim) {
+            if (!isWordChar(static_cast<unsigned char>(text[pos]))) {
+                return false;
+            }
+            ++pos;
+        }
+        if (pos == start || pos >= text.size() || text[pos] != delim) {
+            return false;
+        }
+        out.assign(text.substr(start, pos - start));
+        ++pos;  // consume delimiter
+        return true;
+    };
+
+    if (!parseWordTo('#', docName)) {
+        return false;
+    }
+    if (!parseWordTo('.', objName)) {
+        return false;
+    }
+    if (!parseWordTo(' ', propName)) {
+        return false;
+    }
+
+    // Skip remainder of line, must contain at least one non-newline character.
+    const std::size_t lineEnd = text.find('\n', pos);
+    if (lineEnd == std::string_view::npos || lineEnd == pos) {
+        return false;
+    }
+    pos = lineEnd + 1;
+
+    if (!text.substr(pos).starts_with("##@@")) {
+        return false;
+    }
+    pos += 4;  // "##@@"
+
+    const std::size_t commentEnd = text.find('\n', pos);
+    if (commentEnd == std::string_view::npos) {
+        return false;
+    }
+    comment.assign(text.substr(pos, commentEnd - pos));
+    expressionStart = commentEnd + 1;
+    return true;
+}
+
+}  // namespace
 
 
 //===========================================================================
@@ -2146,25 +2242,27 @@ protected:
 
         bool failed = false;
         std::string txt = QApplication::clipboard()->text().toUtf8().constData();
-        const char* tstart = txt.c_str();
-        const char* tend = tstart + txt.size();
+        const std::string_view view(txt);
 
-        static boost::regex rule("^##@@ ([^ ]+) (\\w+)#(\\w+)\\.(\\w+) [^\n]+\n##@@([^\n]*)\n");
-        boost::cmatch m;
-        if (!boost::regex_search(tstart, m, rule)) {
+        std::size_t headerPos = findHeaderStart(view, 0);
+        if (headerPos == std::string_view::npos) {
             FC_WARN("No expression header found");
             return;
         }
-        boost::cmatch m2;
-        bool found = true;
-        for (; found; m = m2) {
-            found = boost::regex_search(m[0].second, tend, m2, rule);
 
-            auto pathName = m.str(1);
-            auto docName = m.str(2);
-            auto objName = m.str(3);
-            auto propName = m.str(4);
-            auto comment = m.str(5);
+        for (; headerPos != std::string_view::npos; ) {
+            std::string pathName;
+            std::string docName;
+            std::string objName;
+            std::string propName;
+            std::string comment;
+            std::size_t exprStart = 0;
+            if (!parseHeader(view, headerPos, pathName, docName, objName, propName, comment, exprStart)) {
+                FC_WARN("Invalid expression header");
+                return;
+            }
+
+            const std::size_t nextHeaderPos = findHeaderStart(view, exprStart);
 
             App::Document* doc = App::GetApplication().getDocument(docName.c_str());
             if (!doc) {
@@ -2186,9 +2284,9 @@ protected:
                 continue;
             }
 
-            size_t len = (found ? m2[0].first : tend) - m[0].second;
+            size_t len = (nextHeaderPos == std::string_view::npos ? view.size() : nextHeaderPos) - exprStart;
             try {
-                App::ExpressionPtr expr(App::Expression::parse(obj, std::string(m[0].second, len)));
+                App::ExpressionPtr expr(App::Expression::parse(obj, std::string(view.substr(exprStart, len))));
                 if (expr && !comment.empty()) {
                     if (comment[0] == '&') {
                         expr->comment = comment.c_str() + 1;
@@ -2203,9 +2301,13 @@ protected:
                 exprs[doc][prop][App::ObjectIdentifier::parse(obj, pathName)] = std::move(expr);
             }
             catch (Base::Exception& e) {
-                FC_ERR(e.what() << std::endl << m[0].str());
+                FC_ERR(e.what() << std::endl
+                                << "##@@ " << pathName << ' ' << docName << '#'
+                                << objName << '.' << propName);
                 failed = true;
             }
+
+            headerPos = nextHeaderPos;
         }
         if (failed) {
             QMessageBox::critical(

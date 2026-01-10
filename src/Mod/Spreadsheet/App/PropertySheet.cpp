@@ -23,10 +23,10 @@
  ***************************************************************************/
 
 #include <algorithm>
+#include <string_view>
 
 #include <boost/range/adaptor/map.hpp>
 #include <boost/range/algorithm/copy.hpp>
-#include <boost/regex.hpp>
 
 #include <App/Document.h>
 #include <App/DocumentObject.h>
@@ -128,28 +128,73 @@ const Cell* PropertySheet::getValueFromAlias(const std::string& alias) const
 
 bool PropertySheet::isValidCellAddressName(const std::string& candidate)
 {
-    /* Check if it matches a cell reference */
-    static const boost::regex e("\\${0,1}([A-Z]{1,2})\\${0,1}([0-9]{1,5})");
-    boost::cmatch cm;
+    // Accepted form: [$]A..Z{1,2}[$]0..9{1,5}
+    std::string_view view(candidate);
+    size_t pos = 0;
 
-    if (boost::regex_match(candidate.c_str(), cm, e)) {
-        const boost::sub_match<const char*> colstr = cm[1];
-        const boost::sub_match<const char*> rowstr = cm[2];
-
-        if (App::validRow(rowstr.str()) >= 0 && App::validColumn(colstr.str())) {
-            return true;
-        }
+    if (pos < view.size() && view[pos] == '$') {
+        ++pos;
     }
-    return false;
+
+    const size_t colStart = pos;
+    while (pos < view.size()) {
+        const char ch = view[pos];
+        if (ch < 'A' || ch > 'Z') {
+            break;
+        }
+        ++pos;
+    }
+    const size_t colLen = pos - colStart;
+    if (colLen < 1 || colLen > 2) {
+        return false;
+    }
+
+    if (pos < view.size() && view[pos] == '$') {
+        ++pos;
+    }
+
+    const size_t rowStart = pos;
+    while (pos < view.size()) {
+        const char ch = view[pos];
+        if (ch < '0' || ch > '9') {
+            break;
+        }
+        ++pos;
+    }
+    const size_t rowLen = pos - rowStart;
+    if (rowLen < 1 || rowLen > 5) {
+        return false;
+    }
+
+    if (pos != view.size()) {
+        return false;
+    }
+
+    return App::validRow(std::string(view.substr(rowStart, rowLen))) >= 0
+        && App::validColumn(std::string(view.substr(colStart, colLen)));
 }
 
 bool PropertySheet::isValidAlias(const std::string& candidate)
 {
     /* Ensure it only contains allowed characters */
-    static const boost::regex gen("^[A-Za-z][_A-Za-z0-9]*$");
-    boost::cmatch cm;
-    if (!boost::regex_match(candidate.c_str(), cm, gen)) {
+    if (candidate.empty()) {
         return false;
+    }
+
+    const char first = candidate.front();
+    const bool firstIsAlpha = (first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z');
+    if (!firstIsAlpha) {
+        return false;
+    }
+
+    for (size_t i = 1; i < candidate.size(); ++i) {
+        const char ch = candidate[i];
+        const bool isAlpha = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
+        const bool isDigit = (ch >= '0' && ch <= '9');
+        const bool isAllowed = isAlpha || isDigit || ch == '_' || ch == '-';
+        if (!isAllowed) {
+            return false;
+        }
     }
 
     /* Check if it is used before */

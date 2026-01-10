@@ -25,11 +25,11 @@
  ***************************************************************************/
 
 #include <cstdlib>
+#include <charconv>
+#include <cctype>
 #include <cstring>
 #include <limits>
 #include <string_view>
-
-#include <boost/regex.hpp>
 
 #include "ComplexGeoData.h"
 #include "ElementMap.h"
@@ -58,17 +58,37 @@ ComplexGeoData::ComplexGeoData() = default;
 
 std::pair<std::string, unsigned long> ComplexGeoData::getTypeAndIndex(const char* Name)
 {
-    int index = 0;
-    std::string element;
-    boost::regex ex("^([^0-9]*)([0-9]*)$");
-    boost::cmatch what;
-
-    if (Name && boost::regex_match(Name, what, ex)) {
-        element = what[1].str();
-        index = std::atoi(what[2].str().c_str());
+    if (!Name) {
+        return {"", 0};
     }
 
-    return std::make_pair(element, index);
+    const std::string_view input(Name);
+
+    std::size_t split = 0;
+    while (split < input.size()
+           && std::isdigit(static_cast<unsigned char>(input[split])) == 0) {
+        ++split;
+    }
+
+    // Match the old regex semantics: a sequence of non-digits followed by digits only.
+    for (std::size_t i = split; i < input.size(); ++i) {
+        if (std::isdigit(static_cast<unsigned char>(input[i])) == 0) {
+            return {"", 0};
+        }
+    }
+
+    std::string element(input.substr(0, split));
+
+    unsigned long index = 0;
+    if (split != input.size()) {
+        const std::string_view digits = input.substr(split);
+        const auto res = std::from_chars(digits.data(), digits.data() + digits.size(), index, 10);
+        if (res.ec != std::errc {}) {
+            index = 0;
+        }
+    }
+
+    return {std::move(element), index};
 }
 
 Data::Segment* ComplexGeoData::getSubElementByName(const char* name) const

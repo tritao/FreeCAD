@@ -23,7 +23,6 @@
  ***************************************************************************/
 
 #include <boost/tokenizer.hpp>
-#include <boost/regex.hpp>
 #include <deque>
 #include <memory>
 #include <sstream>

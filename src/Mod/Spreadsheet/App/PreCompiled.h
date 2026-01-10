@@ -41,7 +41,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/range/adaptor/map.hpp>
 #include <boost/range/algorithm/copy.hpp>
-#include <boost/regex.hpp>
 #include <boost/tokenizer.hpp>
 
 // Qt

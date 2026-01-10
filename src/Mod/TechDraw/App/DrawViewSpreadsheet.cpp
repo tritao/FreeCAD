@@ -24,7 +24,7 @@
 
 #include <iomanip>
 #include <sstream>
-#include <boost_regex.hpp>
+#include <cctype>
 
 
 #include <App/Property.h>
@@ -152,48 +152,50 @@ std::string DrawViewSpreadsheet::getSheetImage()
     transform(scellstart.begin(), scellstart.end(), scellstart.begin(), ::toupper);
     transform(scellend.begin(), scellend.end(), scellend.begin(), ::toupper);
 
-    std::string colPart;
-    std::string rowPart;
-    boost::regex re{"([A-Z]*)([0-9]*)"};
-    boost::smatch what;
     int iRowStart = 0, iRowEnd = 0;
     std::string sColStart, sColEnd;
-    if (boost::regex_search(scellstart, what, re)) {
-        if (what.size() < 3) {
-            Base::Console().error("%s - start cell (%s) is invalid\n", getNameInDocument(),
-                                  CellStart.getValue());
-            return std::string();
+    auto parseCell = [](const std::string& cell, std::string& colOut, int& rowOut) -> bool {
+        if (cell.empty()) {
+            return false;
         }
 
-        colPart = what[1];
-        sColStart = colPart;
-        rowPart = what[2];
+        size_t pos = 0;
+        while (pos < cell.size() && cell[pos] >= 'A' && cell[pos] <= 'Z') {
+            ++pos;
+        }
+        if (pos == 0) {
+            return false;
+        }
+        colOut.assign(cell, 0, pos);
+
+        const size_t digitStart = pos;
+        while (pos < cell.size() && std::isdigit(static_cast<unsigned char>(cell[pos]))) {
+            ++pos;
+        }
+        if (digitStart == pos || pos != cell.size()) {
+            return false;
+        }
+
         try {
-            iRowStart = std::stoi(rowPart);
+            rowOut = std::stoi(cell.substr(digitStart));
         }
         catch (...) {
-            Base::Console().error("%s - start cell (%s) invalid row\n",
-                                    getNameInDocument(), rowPart.c_str());
-            return std::string();
+            return false;
         }
-    }
+        return true;
+    };
 
-    if (boost::regex_search(scellend, what, re)) {
-        if (what.size() < 3) {
-            Base::Console().error("%s - end cell (%s) is invalid\n", getNameInDocument(), CellEnd.getValue());
-        } else {
-            colPart = what[1];
-            sColEnd = colPart;
-            rowPart = what[2];
-            try {
-                iRowEnd = std::stoi(rowPart);
-            }
-            catch (...) {
-                Base::Console().error("%s - end cell (%s) invalid row\n",
-                                      getNameInDocument(), rowPart.c_str());
-                return std::string();
-            }
-        }
+    if (!parseCell(scellstart, sColStart, iRowStart)) {
+        Base::Console().error("%s - start cell (%s) is invalid\n",
+                              getNameInDocument(),
+                              CellStart.getValue());
+        return std::string();
+    }
+    if (!parseCell(scellend, sColEnd, iRowEnd)) {
+        Base::Console().error("%s - end cell (%s) is invalid\n",
+                              getNameInDocument(),
+                              CellEnd.getValue());
+        return std::string();
     }
 
     const std::vector <std::string> availcolumns = getAvailColumns();

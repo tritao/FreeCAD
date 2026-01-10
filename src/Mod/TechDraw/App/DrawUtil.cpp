@@ -23,10 +23,10 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
+#include <cctype>
 #include <limits>
 #include <sstream>
-
-#include <boost_regex.hpp>
 
 #include <QChar>
 #include <QPointF>
@@ -76,29 +76,27 @@ using namespace TechDraw;
 /*static*/ int DrawUtil::getIndexFromName(const std::string& geomName)
 {
     //   Base::Console().message("DU::getIndexFromName(%s)\n", geomName.c_str());
-    boost::regex re("\\d+$");// one of more digits at end of string
-    boost::match_results<std::string::const_iterator> what;
-    boost::match_flag_type flags = boost::match_default;
-    //   char* endChar;
-    std::string::const_iterator begin = geomName.begin();
-    auto pos = geomName.rfind('.');
-    if (pos != std::string::npos) {
-        begin += pos + 1;
-    }
-    std::string::const_iterator end = geomName.end();
     std::stringstream ErrorMsg;
 
     if (geomName.empty()) {
         throw Base::ValueError("getIndexFromName - empty geometry name");
     }
 
+    const auto pos = geomName.rfind('.');
+    const size_t tokenStart = (pos == std::string::npos) ? 0 : (pos + 1);
+    const size_t tokenEnd = geomName.size();
 
-    if (boost::regex_search(begin, end, what, re, flags)) {
-        return int(std::stoi(what.str()));
-    } else {
+    size_t digitStart = tokenEnd;
+    while (digitStart > tokenStart
+           && std::isdigit(static_cast<unsigned char>(geomName[digitStart - 1]))) {
+        --digitStart;
+    }
+    if (digitStart == tokenEnd) {
         ErrorMsg << "getIndexFromName: malformed geometry name - " << geomName;
         throw Base::ValueError(ErrorMsg.str());
     }
+
+    return std::stoi(geomName.substr(digitStart));
 }
 
 /*static*/ std::vector<int> DrawUtil::getIndexFromName(const std::vector<std::string>& geomNames)
@@ -117,23 +115,15 @@ std::string DrawUtil::getGeomTypeFromName(const std::string& geomName)
         throw Base::ValueError("getGeomTypeFromName - empty geometry name");
     }
 
-    boost::regex re("^[a-zA-Z]*");//one or more letters at start of string
-    boost::match_results<std::string::const_iterator> what;
-    boost::match_flag_type flags = boost::match_default;
-    std::string::const_iterator begin = geomName.begin();
-    auto pos = geomName.rfind('.');
-    if (pos != std::string::npos) {
-        begin += pos + 1;
-    }
-    std::string::const_iterator end = geomName.end();
-    std::stringstream ErrorMsg;
+    const auto pos = geomName.rfind('.');
+    const size_t tokenStart = (pos == std::string::npos) ? 0 : (pos + 1);
 
-    if (boost::regex_search(begin, end, what, re, flags)) {
-        return what.str();
-    } else {
-        ErrorMsg << "In getGeomTypeFromName: malformed geometry name - " << geomName;
-        throw Base::ValueError(ErrorMsg.str());
+    size_t typeEnd = tokenStart;
+    while (typeEnd < geomName.size()
+           && std::isalpha(static_cast<unsigned char>(geomName[typeEnd]))) {
+        ++typeEnd;
     }
+    return geomName.substr(tokenStart, typeEnd - tokenStart);
 }
 
 //! Check if all geomNames are of same geomType
@@ -1862,9 +1852,8 @@ std::string DrawUtil::translateArbitrary(std::string context, std::string baseNa
 //! commands.
 std::string DrawUtil::cleanFilespecBackslash(const std::string& filespec)
 {
-    std::string forwardSlash{"/"};
-    boost::regex rxBackslash("\\\\");    //this rx really means match to a single '\'
-    std::string noBackslash = boost::regex_replace(filespec, rxBackslash, forwardSlash);
+    std::string noBackslash = filespec;
+    std::replace(noBackslash.begin(), noBackslash.end(), '\\', '/');
     return noBackslash;
 }
 

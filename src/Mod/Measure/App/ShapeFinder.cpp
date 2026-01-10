@@ -26,8 +26,6 @@
 //! and its placement.
 
 
-#include <boost_regex.hpp>
-
 #include <BRep_Builder.hxx>
 #include <BRepTools.hxx>
 #include <TopoDS.hxx>
