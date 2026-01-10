@@ -51,7 +51,6 @@
 #include <Gui/Application.h>
 #include <Gui/Command.h>
 #include <Gui/Document.h>
-#include <Gui/MainWindow.h>
 #include <Gui/GuiShell.h>
 #include <Gui/MDIView.h>
 #include <Gui/Selection/Selection.h>
@@ -349,8 +348,7 @@ TechDraw::DrawPage* DrawGuiUtil::findPage(Gui::Command* cmd, bool findAny)
 
         if (docPages.size() > 1) {
             // multiple pages in document, use active page if there is one
-            auto* w = Gui::getMainWindow();
-            auto* mv = w->activeWindow();
+            auto* mv = Gui::Application::Instance ? Gui::Application::Instance->activeWindow() : nullptr;
             auto* mvp = qobject_cast<MDIViewPage*>(mv);
             if (mvp) {
                 QGSPage* qp = mvp->getViewProviderPage()->getQGSPage();

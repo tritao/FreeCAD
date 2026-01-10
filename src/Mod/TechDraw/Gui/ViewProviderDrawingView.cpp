@@ -359,7 +359,7 @@ void ViewProviderDrawingView::showProgressMessage(const std::string featureName,
     if (Gui::uiParentWidget()) {
         //neither of these work! Base::Console().message() output preempts these messages??
 //        Gui::Application::Instance->showMessage(msg, 3000);
-//        Gui::getMainWindow()->showStatus(Gui::MainWindow::Msg, msg);
+//        Gui::Application::Instance->showStatus(Gui::MainWindow::Msg, msg);
         //Temporary implementation. This works, but the messages are queued up and
         //not displayed in the report window in real time??
         Base::Console().message("%s\n", qPrintable(msg));

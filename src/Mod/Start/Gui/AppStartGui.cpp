@@ -30,7 +30,7 @@
 #include <Base/PyObjectBase.h>
 #include <Gui/Language/Translator.h>
 #include <Gui/Command.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/WidgetFactory.h>
 #include "DlgStartPreferencesImp.h"
 
@@ -92,7 +92,10 @@ public:
         // It's possible that "Start_Start" didn't result in the creation of an MDI window, if it
         // was called to early. This polls the views to make sure the view was created, and if it
         // was not, re-calls the command.
-        auto mw = Gui::getMainWindow();
+        auto mw = Gui::activeMainWindow();
+        if (!mw) {
+            return;
+        }
         auto existingView = mw->findChild<StartGui::StartView*>(QLatin1String("StartView"));
         if (!existingView) {
             Launch();

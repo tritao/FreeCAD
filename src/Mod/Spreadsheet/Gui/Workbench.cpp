@@ -33,7 +33,7 @@
 #include <App/Range.h>
 #include <Gui/Application.h>
 #include <Gui/Command.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/MenuManager.h>
 #include <Gui/ToolBarManager.h>
 
@@ -67,7 +67,12 @@ Workbench::~Workbench() = default;
 void Workbench::activated()
 {
     if (!initialized) {
-        QList<QToolBar*> bars = Gui::getMainWindow()->findChildren<QToolBar*>(
+        auto* mainWindow = Gui::activeMainWindow();
+        if (!mainWindow) {
+            return;
+        }
+
+        QList<QToolBar*> bars = mainWindow->findChildren<QToolBar*>(
             QStringLiteral("Spreadsheet")
         );
 
@@ -75,9 +80,9 @@ void Workbench::activated()
             QToolBar* bar = bars[0];
             QtColorPicker* foregroundColor;
             QtColorPicker* backgroundColor;
-            QPalette palette = Gui::getMainWindow()->palette();
+            QPalette palette = mainWindow->palette();
 
-            QList<QtColorPicker*> fgList = Gui::getMainWindow()->findChildren<QtColorPicker*>(
+            QList<QtColorPicker*> fgList = mainWindow->findChildren<QtColorPicker*>(
                 QStringLiteral("Spreadsheet_ForegroundColor")
             );
             if (!fgList.empty()) {
@@ -100,7 +105,7 @@ void Workbench::activated()
             foregroundColor->setStatusTip(QObject::tr("Sets the text color of spreadsheet cells"));
             bar->addWidget(foregroundColor);
 
-            QList<QtColorPicker*> bgList = Gui::getMainWindow()->findChildren<QtColorPicker*>(
+            QList<QtColorPicker*> bgList = mainWindow->findChildren<QtColorPicker*>(
                 QStringLiteral("Spreadsheet_BackgroundColor")
             );
             if (!bgList.empty()) {

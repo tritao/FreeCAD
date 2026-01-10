@@ -82,6 +82,21 @@ public:
         }
     }
 
+    void setRightSideMessage(const QString& message) override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            mw->setRightSideMessage(message);
+        }
+    }
+
+    bool isRightSideMessageVisible() const override
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            return mw->isRightSideMessageVisible();
+        }
+        return false;
+    }
+
     void setStatusPaneText(int pane, const QString& text) override
     {
         if (pane < 0) {
@@ -351,6 +366,28 @@ QWidget* uiParentWidget()
         return mw;
     }
     return QApplication::activeWindow();
+}
+
+void setRightSideMessage(const QString& message)
+{
+    if (auto* shell = activeShell()) {
+        shell->setRightSideMessage(message);
+        return;
+    }
+    if (auto* mw = qobject_cast<MainWindow*>(getMainWindow())) {
+        mw->setRightSideMessage(message);
+    }
+}
+
+bool isRightSideMessageVisible()
+{
+    if (auto* shell = activeShell()) {
+        return shell->isRightSideMessageVisible();
+    }
+    if (auto* mw = qobject_cast<MainWindow*>(getMainWindow())) {
+        return mw->isRightSideMessageVisible();
+    }
+    return false;
 }
 
 void setActiveShell(std::unique_ptr<IGuiShell> shell)

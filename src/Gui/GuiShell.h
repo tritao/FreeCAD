@@ -53,6 +53,8 @@ public:
     virtual GuiShellServices& services() = 0;
     virtual void updateActions(bool delay = false) = 0;
     virtual void showMessage(const QString& message, int timeout = 0) = 0;
+    virtual void setRightSideMessage(const QString& message) = 0;
+    virtual bool isRightSideMessageVisible() const = 0;
     virtual void setStatusPaneText(int pane, const QString& text) = 0;
     virtual void addStatusPermanentWidget(QWidget* widget, int stretch = 0) = 0;
     virtual void removeStatusWidget(QWidget* widget) = 0;
@@ -90,6 +92,8 @@ public:
 GuiExport IGuiShell* activeShell();
 GuiExport QMainWindow* activeMainWindow();
 GuiExport QWidget* uiParentWidget();
+GuiExport void setRightSideMessage(const QString& message);
+GuiExport bool isRightSideMessageVisible();
 GuiExport void setActiveShell(std::unique_ptr<IGuiShell> shell);
 
 GuiExport std::unique_ptr<IGuiShell> createClassicShell(QMainWindow* mainWindow);

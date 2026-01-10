@@ -51,7 +51,7 @@
 #include <Gui/Application.h>
 #include <Gui/Command.h>
 #include <Gui/Document.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/ModuleIO.h>
 #include <Gui/View3DInventor.h>
 #include <Gui/View3DInventorViewer.h>
@@ -189,7 +189,8 @@ StartView::StartView(QWidget* parent)
         auto updateFun = [this, recentFilesListWidget]() {
             configureRecentFilesListWidget(recentFilesListWidget, _recentFilesLabel);
         };
-        auto recentFiles = Gui::getMainWindow()->findChild<Gui::RecentFilesAction*>();
+        auto* mw = Gui::activeMainWindow();
+        auto recentFiles = mw ? mw->findChild<Gui::RecentFilesAction*>() : nullptr;
         if (recentFiles != nullptr) {
             connect(recentFiles, &Gui::RecentFilesAction::recentFilesListModified, this, updateFun);
         }

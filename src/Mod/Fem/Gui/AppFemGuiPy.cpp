@@ -28,7 +28,7 @@
 #include <Gui/BitmapFactory.h>
 #include <Gui/Document.h>
 #include <Gui/EditorView.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/TextEdit.h>
 #include <Mod/Fem/App/FemAnalysis.h>
 
@@ -140,7 +140,10 @@ private:
         QFileInfo fi;
         fi.setFile(fileName);
         QString ext = fi.completeSuffix().toLower();
-        QList<Gui::EditorView*> views = Gui::getMainWindow()->findChildren<Gui::EditorView*>();
+        QList<Gui::EditorView*> views;
+        if (auto* mw = Gui::activeMainWindow()) {
+            views = mw->findChildren<Gui::EditorView*>();
+        }
         for (auto view : views) {
             if (view->fileName() == fileName) {
                 view->setFocus();

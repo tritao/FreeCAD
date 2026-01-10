@@ -3557,7 +3557,12 @@ bool ViewProviderSketch::setEdit(int ModNum)
     // intercept del key press from main app
     listener = new ShortcutListener(this);
 
-    Gui::getMainWindow()->installEventFilter(listener);
+    if (auto* mw = Gui::activeMainWindow()) {
+        mw->installEventFilter(listener);
+    }
+    else if (qApp) {
+        qApp->installEventFilter(listener);
+    }
 
     Workbench::enterEditMode();
 
@@ -3710,7 +3715,12 @@ void ViewProviderSketch::unsetEdit(int ModNum)
     Workbench::leaveEditMode();
 
     if (listener) {
-        Gui::getMainWindow()->removeEventFilter(listener);
+        if (auto* mw = Gui::activeMainWindow()) {
+            mw->removeEventFilter(listener);
+        }
+        if (qApp) {
+            qApp->removeEventFilter(listener);
+        }
         delete listener;
     }
 

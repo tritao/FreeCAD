@@ -37,7 +37,6 @@
 #include <Gui/BitmapFactory.h>
 #include <Gui/CommandT.h>
 #include <Gui/Document.h>
-#include <Gui/MainWindow.h>
 #include <Gui/ViewProviderDocumentObject.h>
 #include <Mod/TechDraw/App/DrawHatch.h>
 #include <Mod/TechDraw/App/DrawGeomHatch.h>
@@ -355,9 +354,7 @@ void ViewProviderPage::removeMDIView()
             Gui::Application::Instance->removeWindow(m_mdiView);
             m_mdiView = nullptr;     //m_mdiView will eventually be deleted and
             m_graphicsView = nullptr;//will take m_graphicsView with it
-            Gui::MDIView* aw =
-                Gui::getMainWindow()
-                    ->activeWindow();//WF: this bit should be in the remove window logic, not here.
+            Gui::MDIView* aw = Gui::Application::Instance ? Gui::Application::Instance->activeWindow() : nullptr;
             if (aw) {
                 aw->showMaximized();
             }

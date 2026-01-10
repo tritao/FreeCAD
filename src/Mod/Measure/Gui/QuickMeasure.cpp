@@ -34,7 +34,7 @@
 #include <App/Part.h>
 #include <Base/UnitsApi.h>
 #include <Gui/Application.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Control.h>
 
@@ -116,7 +116,7 @@ void QuickMeasure::tryMeasureSelection()
 
 bool QuickMeasure::shouldMeasure(const Gui::SelectionChanges& msg) const
 {
-    if (!Gui::getMainWindow()->isRightSideMessageVisible()) {
+    if (!Gui::isRightSideMessageVisible()) {
         // don't measure if there's no where to show the result
         return false;
     }
@@ -334,7 +334,7 @@ void QuickMeasure::printResult()
 
 void QuickMeasure::print(const QString& message)
 {
-    Gui::getMainWindow()->setRightSideMessage(message);
+    Gui::setRightSideMessage(message);
 }
 
 

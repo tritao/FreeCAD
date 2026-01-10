@@ -31,7 +31,7 @@
 
 #include <Gui/Application.h>
 #include <Gui/Command.h>
-#include <Gui/MainWindow.h>
+#include <Gui/GuiShell.h>
 #include <Gui/MenuManager.h>
 
 #include <gsl/pointers>
@@ -53,11 +53,15 @@ CmdStart::CmdStart()
 void CmdStart::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    auto mw = Gui::getMainWindow();
+    auto* mw = Gui::activeMainWindow();
+    if (!mw) {
+        return;
+    }
+
     auto existingView = mw->findChild<StartGui::StartView*>(QLatin1String("StartView"));
     if (!existingView) {
         existingView = gsl::owner<StartGui::StartView*>(new StartGui::StartView(mw));
-        mw->addWindow(existingView);  // Transfers ownership
+        Gui::Application::Instance->addWindow(existingView);  // Transfers ownership
     }
     Gui::Application::Instance->setActiveWindow(existingView);
     existingView->show();

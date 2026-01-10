@@ -48,6 +48,7 @@
 #include <Base/PyObjectBase.h>
 #include <Gui/Application.h>
 #include <Gui/BitmapFactory.h>
+#include <Gui/GuiShell.h>
 #include <Gui/MainWindow.h>
 #include <Gui/StartupProcess.h>
 #include <Gui/SoFCDB.h>
@@ -221,7 +222,7 @@ static PyObject* FreeCADGui_embedToWindow(PyObject* /*self*/, PyObject* args)
         return nullptr;
     }
 
-    QWidget* widget = Gui::getMainWindow();
+    QWidget* widget = Gui::activeMainWindow();
     if (!widget) {
         PyErr_SetString(Base::PyExc_FC_GeneralError, "No main window");
         return nullptr;
@@ -325,10 +326,12 @@ static QWidget* setupMainWindow()
         }
     }
     else {
-        Gui::getMainWindow()->show();
+        if (auto* mw = Gui::activeMainWindow()) {
+            mw->show();
+        }
     }
 
-    return Gui::getMainWindow();
+    return Gui::activeMainWindow();
 }
 
 PyMOD_INIT_FUNC(FreeCADGui)

@@ -48,7 +48,6 @@
 #include <App/Document.h>
 #include <Gui/BitmapFactory.h>
 #include <Gui/CommandT.h>
-#include <Gui/MainWindow.h>
 #include <Gui/View3DInventor.h>
 #include <Gui/View3DInventorViewer.h>
 #include <Gui/Application.h>
@@ -389,9 +388,7 @@ void PartGui::DlgProjectionOnSurface::onSelectionChanged(const Gui::SelectionCha
 
 void PartGui::DlgProjectionOnSurface::get_camera_direction()
 {
-    auto mainWindow = Gui::getMainWindow();
-
-    auto mdiObject = dynamic_cast<Gui::View3DInventor*>(mainWindow->activeWindow());
+    auto mdiObject = dynamic_cast<Gui::View3DInventor*>(Gui::Application::Instance->activeWindow());
     if (!mdiObject) {
         return;
     }
@@ -1398,9 +1395,7 @@ void DlgProjectOnSurface::onAddEdgeClicked()
 
 void DlgProjectOnSurface::onGetCurrentCamDirClicked()
 {
-    auto mainWindow = Gui::getMainWindow();
-
-    auto mdiObject = dynamic_cast<Gui::View3DInventor*>(mainWindow->activeWindow());
+    auto mdiObject = dynamic_cast<Gui::View3DInventor*>(Gui::Application::Instance->activeWindow());
     if (!mdiObject) {
         return;
     }
