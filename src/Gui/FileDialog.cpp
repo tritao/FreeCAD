@@ -46,6 +46,7 @@
 
 #include "FileDialog.h"
 #include "GuiShell.h"
+#include "GuiShellServices.h"
 #include "Tools.h"
 
 
@@ -57,11 +58,13 @@ struct ActionDisabler
 {
     ActionDisabler()
     {
-        auto mainWin = Gui::activeMainWindow();
-        if (!mainWin) {
-            return;
+        QMenuBar* menuBar = nullptr;
+        if (auto* shell = Gui::activeShell()) {
+            menuBar = shell->services().menuBar();
         }
-        QMenuBar* menuBar = mainWin->menuBar();
+        else if (auto* mw = Gui::activeMainWindow()) {
+            menuBar = mw->menuBar();
+        }
         if (!menuBar) {
             return;
         }

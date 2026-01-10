@@ -2314,7 +2314,7 @@ int Application::confirmSave(App::Document* doc, QWidget* parent, bool addCheckb
         return MainWindow::ConfirmSaveResult::Cancel;
     }
 
-    QMessageBox box(parent ? parent : Gui::activeMainWindow());
+    QMessageBox box(parent ? parent : Gui::uiParentWidget());
     box.setObjectName(QStringLiteral("confirmSave"));
     box.setIcon(QMessageBox::Question);
     box.setWindowFlags(box.windowFlags() | Qt::WindowStaysOnTopHint);
