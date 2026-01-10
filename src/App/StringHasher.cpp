@@ -26,6 +26,7 @@
 #include <Base/Base64.h>
 #include <Base/ByteBuffer.h>
 #include <Base/BytesView.h>
+#include <Base/BufferIStream.h>
 #include <Base/Console.h>
 #include <Base/HashUtils.h>
 #include <Base/Reader.h>
@@ -39,7 +40,6 @@
 #include <boost/bimap/set_of.hpp>
 #include <boost/bimap/unordered_set_of.hpp>
 #include <boost/io/ios_state.hpp>
-#include <boost/iostreams/stream.hpp>
 
 #include "MappedElement.h"
 #include "StringHasher.h"
@@ -48,8 +48,6 @@
 
 
 FC_LOG_LEVEL_INIT("App", true, true)
-
-namespace bio = boost::iostreams;
 using namespace App;
 
 ///////////////////////////////////////////////////////////
@@ -145,7 +143,7 @@ StringID::IndexID StringID::fromString(const char* name, bool eof, int size)
     if (size < 0) {
         size = static_cast<int>(std::strlen(name));
     }
-    bio::stream<bio::array_source> iss(name, size);
+    Base::BufferIStream iss(name, static_cast<std::size_t>(size));
     char sep = 0;
     char sep2 = 0;
     iss >> sep >> std::hex >> res.id >> sep2 >> res.index;
