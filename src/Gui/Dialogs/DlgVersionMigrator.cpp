@@ -393,16 +393,19 @@ void DlgVersionMigrator::restart(const QString& message)
     restarting->exec();
 
     connect(qApp, &QCoreApplication::aboutToQuit, [=] {
-        if (auto* mw = Gui::activeMainWindow()) {
-            if (mw->close()) {
-                auto args = QApplication::arguments();
-                args.removeFirst();
-                QProcess::startDetached(
-                    QApplication::applicationFilePath(),
-                    args,
-                    QApplication::applicationDirPath()
-                );
-            }
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
+        if (!mw) {
+            return;
+        }
+        if (mw->close()) {
+            auto args = QApplication::arguments();
+            args.removeFirst();
+            QProcess::startDetached(
+                QApplication::applicationFilePath(),
+                args,
+                QApplication::applicationDirPath()
+            );
         }
     });
     QCoreApplication::exit(0);

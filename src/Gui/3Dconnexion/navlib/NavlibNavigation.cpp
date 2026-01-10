@@ -195,10 +195,10 @@ void NavlibInterface::enableNavigation()
 
 void NavlibInterface::connectActiveTab()
 {
-    auto* mw = Gui::activeMainWindow();
-    auto pQMdiArea = mw ? mw->findChild<QMdiArea*>() : nullptr;
-    if (pQMdiArea == nullptr)
+    auto* pQMdiArea = Gui::Application::Instance ? Gui::Application::Instance->mdiArea() : nullptr;
+    if (pQMdiArea == nullptr) {
         return;
+    }
 
     auto pQTabBar = pQMdiArea->findChild<QTabBar*>();
     if (pQTabBar == nullptr)

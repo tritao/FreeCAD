@@ -809,7 +809,7 @@ void StdCmdDrawStyle::updateIcon(const MDIView* view)
         return;
     }
     std::string mode(viewer->getOverrideMode());
-    auto actionGroup = dynamic_cast<Gui::ActionGroup*>(_pcAction);
+    auto actionGroup = dynamic_cast<Gui::ActionGroup*>(_pcAction.data());
     if (!actionGroup) {
         return;
     }

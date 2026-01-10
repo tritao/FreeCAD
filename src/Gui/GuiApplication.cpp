@@ -166,7 +166,9 @@ bool GUIApplication::notify(QObject* receiver, QEvent* event)
 void GUIApplication::commitData(QSessionManager& manager)
 {
     if (manager.allowsInteraction()) {
-        if (auto* mw = Gui::activeMainWindow()) {
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
+        if (mw) {
             if (!mw->close()) {
                 // cancel the shutdown
                 manager.release();
@@ -178,7 +180,9 @@ void GUIApplication::commitData(QSessionManager& manager)
         // no user interaction allowed, thus close all documents and
         // the main window
         App::GetApplication().closeAllDocuments();
-        if (auto* mw = Gui::activeMainWindow()) {
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
+        if (mw) {
             mw->close();
         }
     }

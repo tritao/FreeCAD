@@ -1411,8 +1411,10 @@ namespace
 {
 QObject* getActiveShellRoot()
 {
-    if (auto* mw = Gui::activeMainWindow()) {
-        return mw;
+    if (auto* shell = Gui::ensureActiveShell()) {
+        if (auto* mw = shell->mainWindow()) {
+            return mw;
+        }
     }
     if (auto* parent = Gui::uiParentWidget()) {
         return parent;

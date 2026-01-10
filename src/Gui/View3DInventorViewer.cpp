@@ -751,8 +751,10 @@ View3DInventorViewer::~View3DInventorViewer()
     delete this->navigation;
 
     // Note: When closing the application the main window doesn't exist any more.
-    if (Gui::activeMainWindow()) {
-        Application::Instance->setStatusPaneText(2, QLatin1String(""));
+    if (auto* shell = Gui::ensureActiveShell()) {
+        if (shell->mainWindow()) {
+            Application::Instance->setStatusPaneText(2, QLatin1String(""));
+        }
     }
 
     detachSelection();

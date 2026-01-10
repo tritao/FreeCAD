@@ -975,21 +975,24 @@ void DlgPreferencesImp::restartIfRequired()
 
         int exec = restartBox.exec();
 
-        if (exec == QMessageBox::Ok) {
-            // restart FreeCAD after a delay to give time to this dialog to close
-            const int ms = 1000;
-            QTimer::singleShot(ms, []() {
-                QStringList args = QApplication::arguments();
-                args.pop_front();
-                if (auto* mw = Gui::activeMainWindow()) {
-                    if (mw->close()) {
-                        QProcess::startDetached(QApplication::applicationFilePath(), args);
-                    }
-                }
-            });
-        }
-    }
-}
+	        if (exec == QMessageBox::Ok) {
+	            // restart FreeCAD after a delay to give time to this dialog to close
+	            const int ms = 1000;
+	            QTimer::singleShot(ms, []() {
+	                QStringList args = QApplication::arguments();
+	                args.pop_front();
+	                auto* shell = Gui::ensureActiveShell();
+	                auto* mw = shell ? shell->mainWindow() : nullptr;
+	                if (!mw) {
+	                    return;
+	                }
+	                if (mw->close()) {
+	                    QProcess::startDetached(QApplication::applicationFilePath(), args);
+	                }
+	            });
+	        }
+	    }
+	}
 
 void DlgPreferencesImp::showEvent(QShowEvent* ev)
 {

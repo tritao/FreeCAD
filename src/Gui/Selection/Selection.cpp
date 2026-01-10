@@ -882,7 +882,7 @@ int SelectionSingleton::setPreselect(
                                QString::fromLatin1(pSubName)
                            ));
 
-            if (Gui::activeMainWindow()) {
+            if (Gui::ensureActiveShell()) {
                 Application::Instance->showMessage(msg);
                 if (auto* doc = Gui::Application::Instance->activeDocument()) {
                     if (Gui::MDIView* mdi = doc->getActiveView()) {
@@ -1007,7 +1007,7 @@ void printPreselectionInfo(
     double precision
 )
 {
-    if (Gui::activeMainWindow()) {
+    if (Gui::ensureActiveShell()) {
         QString message
             = getPreselectionInfo(documentName, objectName, subElementName, x, y, z, precision);
         Application::Instance->showMessage(message);
@@ -1223,7 +1223,7 @@ bool SelectionSingleton::addSelection(
         auto pObject
             = getObjectOfType(temp, App::DocumentObject::getClassTypeId(), gateResolve, &subelement);
         if (!ActiveGate->allow(pObject ? pObject->getDocument() : temp.pDoc, pObject, subelement)) {
-            if (Gui::activeMainWindow()) {
+            if (Gui::ensureActiveShell()) {
                 QString msg;
                 if (ActiveGate->notAllowedReason.length() > 0) {
                     msg = QObject::tr(ActiveGate->notAllowedReason.c_str());

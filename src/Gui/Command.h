@@ -30,6 +30,8 @@
 #include <vector>
 #include <fastsignals/signal.h>
 
+#include <QPointer>
+
 #include <Base/Type.h>
 #include <Gui/Application.h>
 
@@ -342,7 +344,7 @@ protected:
     const char* sAccel;
     //@}
 protected:
-    Action* _pcAction; /**< The Action item. */
+    QPointer<Action> _pcAction; /**< The Action item. */
     std::string displayText;
 };
 

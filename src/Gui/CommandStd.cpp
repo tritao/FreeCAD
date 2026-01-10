@@ -84,7 +84,7 @@ void StdCmdWorkbench::activated(int i)
 {
     try {
         Workbench* w = WorkbenchManager::instance()->active();
-        QList<QAction*> items = static_cast<WorkbenchGroup*>(_pcAction)->actions();
+        QList<QAction*> items = static_cast<WorkbenchGroup*>(_pcAction.data())->actions();
         std::string switch_to = (const char*)items[i]->objectName().toLatin1();
         if (w) {
             std::string current_w = w->name();
@@ -937,7 +937,7 @@ void StdCmdUserEditMode::languageChange()
 
 void StdCmdUserEditMode::updateIcon(int mode)
 {
-    auto actionGroup = dynamic_cast<Gui::ActionGroup*>(_pcAction);
+    auto actionGroup = dynamic_cast<Gui::ActionGroup*>(_pcAction.data());
     if (!actionGroup) {
         return;
     }

@@ -1771,14 +1771,8 @@ void Application::setStatusPaneText(int pane, const QString& text)
 
 void Application::showStatusBar()
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         if (auto* sb = shell->services().statusBar()) {
-            sb->show();
-        }
-        return;
-    }
-    if (auto* mw = Gui::activeMainWindow()) {
-        if (auto* sb = mw->statusBar()) {
             sb->show();
         }
     }
@@ -1786,30 +1780,19 @@ void Application::showStatusBar()
 
 bool Application::isStatusBarVisible() const
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         if (auto* sb = shell->services().statusBar()) {
             return sb->isVisible();
         }
         return false;
-    }
-    if (auto* mw = Gui::activeMainWindow()) {
-        if (auto* sb = mw->statusBar()) {
-            return sb->isVisible();
-        }
     }
     return false;
 }
 
 void Application::setStatusBarVisible(bool visible)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         if (auto* sb = shell->services().statusBar()) {
-            sb->setVisible(visible);
-        }
-        return;
-    }
-    if (auto* mw = Gui::activeMainWindow()) {
-        if (auto* sb = mw->statusBar()) {
             sb->setVisible(visible);
         }
     }
@@ -1817,27 +1800,15 @@ void Application::setStatusBarVisible(bool visible)
 
 void Application::addStatusPermanentWidget(QWidget* widget, int stretch)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->addStatusPermanentWidget(widget, stretch);
-        return;
-    }
-    if (auto* mw = Gui::activeMainWindow()) {
-        if (auto* sb = mw->statusBar()) {
-            sb->addPermanentWidget(widget, stretch);
-        }
     }
 }
 
 void Application::removeStatusWidget(QWidget* widget)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->removeStatusWidget(widget);
-        return;
-    }
-    if (auto* mw = Gui::activeMainWindow()) {
-        if (auto* sb = mw->statusBar()) {
-            sb->removeWidget(widget);
-        }
     }
 }
 
@@ -1847,13 +1818,8 @@ void Application::addDockWidget(Qt::DockWidgetArea area, QDockWidget* dockWidget
         return;
     }
 
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->addDockWidget(area, dockWidget);
-        return;
-    }
-
-    if (auto* mw = Gui::activeMainWindow()) {
-        mw->addDockWidget(area, dockWidget);
     }
 }
 
@@ -1863,13 +1829,8 @@ void Application::tabifyDockWidget(QDockWidget* first, QDockWidget* second)
         return;
     }
 
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->tabifyDockWidget(first, second);
-        return;
-    }
-
-    if (auto* mw = Gui::activeMainWindow()) {
-        mw->tabifyDockWidget(first, second);
     }
 }
 
@@ -1879,12 +1840,8 @@ Qt::DockWidgetArea Application::dockWidgetArea(QDockWidget* dockWidget) const
         return Qt::NoDockWidgetArea;
     }
 
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         return shell->dockWidgetArea(dockWidget);
-    }
-
-    if (auto* mw = Gui::activeMainWindow()) {
-        return mw->dockWidgetArea(dockWidget);
     }
 
     return Qt::NoDockWidgetArea;
@@ -1896,12 +1853,8 @@ QList<QDockWidget*> Application::tabifiedDockWidgets(QDockWidget* dockWidget) co
         return {};
     }
 
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         return shell->tabifiedDockWidgets(dockWidget);
-    }
-
-    if (auto* mw = Gui::activeMainWindow()) {
-        return mw->tabifiedDockWidgets(dockWidget);
     }
 
     return {};
@@ -1913,13 +1866,8 @@ void Application::addToolBar(QToolBar* toolBar)
         return;
     }
 
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->addToolBar(toolBar);
-        return;
-    }
-
-    if (auto* mw = Gui::activeMainWindow()) {
-        mw->addToolBar(toolBar);
     }
 }
 
@@ -1929,25 +1877,15 @@ void Application::addToolBar(Qt::ToolBarArea area, QToolBar* toolBar)
         return;
     }
 
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->addToolBar(area, toolBar);
-        return;
-    }
-
-    if (auto* mw = Gui::activeMainWindow()) {
-        mw->addToolBar(area, toolBar);
     }
 }
 
 void Application::addToolBarBreak(Qt::ToolBarArea area)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->addToolBarBreak(area);
-        return;
-    }
-
-    if (auto* mw = Gui::activeMainWindow()) {
-        mw->addToolBarBreak(area);
     }
 }
 
@@ -1957,12 +1895,8 @@ Qt::ToolBarArea Application::toolBarArea(QToolBar* toolBar) const
         return Qt::NoToolBarArea;
     }
 
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         return shell->toolBarArea(toolBar);
-    }
-
-    if (auto* mw = Gui::activeMainWindow()) {
-        return mw->toolBarArea(toolBar);
     }
 
     return Qt::NoToolBarArea;
@@ -1974,12 +1908,8 @@ bool Application::toolBarBreak(QToolBar* toolBar) const
         return false;
     }
 
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         return shell->toolBarBreak(toolBar);
-    }
-
-    if (auto* mw = Gui::activeMainWindow()) {
-        return mw->toolBarBreak(toolBar);
     }
 
     return false;
@@ -2131,45 +2061,29 @@ void Application::appendRecentMacro(const QString& filename)
 
 void Application::setMainWindowTitle(const QString& title)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->setMainWindowTitle(title);
-        return;
-    }
-    if (auto* mw = Gui::activeMainWindow()) {
-        mw->setWindowTitle(title);
     }
 }
 
 void Application::setMainWindowModified(bool modified)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->setMainWindowModified(modified);
-        return;
-    }
-    if (auto* mw = Gui::activeMainWindow()) {
-        mw->setWindowModified(modified);
     }
 }
 
 void Application::setWaitCursor()
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->setWaitCursor();
-        return;
-    }
-    if (auto* mw = Gui::activeMainWindow()) {
-        mw->setCursor(Qt::WaitCursor);
     }
 }
 
 void Application::unsetCursor()
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->unsetCursor();
-        return;
-    }
-    if (auto* mw = Gui::activeMainWindow()) {
-        mw->unsetCursor();
     }
 }
 
@@ -2179,15 +2093,10 @@ void Application::attachDockWindowMenu(QMenu* menu)
         return;
     }
 
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         if (auto* docking = shell->services().docking()) {
             docking->attachDockWindowMenu(menu);
         }
-        return;
-    }
-
-    if (auto* mw = Gui::activeMainWindow()) {
-        DockWindowManager::instance(mw, "BaseApp/MainWindow")->attachDockWindowMenu(menu);
     }
 }
 
@@ -2197,15 +2106,10 @@ void Application::attachToolBarMenu(QMenu* menu)
         return;
     }
 
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         if (auto* toolBars = shell->services().toolBars()) {
             toolBars->attachToolBarMenu(menu);
         }
-        return;
-    }
-
-    if (auto* mw = Gui::activeMainWindow()) {
-        ToolBarManager::getInstance(mw, "BaseApp/MainWindow")->attachToolBarMenu(menu);
     }
 }
 
@@ -3394,7 +3298,8 @@ void Application::setStatus(Status pos, bool on)
 
 void Application::setStyleSheet(const QString& qssFile, bool tiledBackground)
 {
-    auto* mw = Gui::activeMainWindow();
+    auto* shell = Gui::ensureActiveShell();
+    auto* mw = shell ? shell->mainWindow() : nullptr;
     if (!mw) {
         return;
     }
@@ -3527,7 +3432,8 @@ void Application::setStyleSheet(const QString& qssFile, bool tiledBackground)
 
 void Application::reloadStyleSheet()
 {
-    const auto* mw = Gui::activeMainWindow();
+    const auto* shell = Gui::ensureActiveShell();
+    const auto* mw = shell ? shell->mainWindow() : nullptr;
     if (!mw) {
         return;
     }

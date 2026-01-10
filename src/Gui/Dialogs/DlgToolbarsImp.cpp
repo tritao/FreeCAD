@@ -613,7 +613,8 @@ void DlgCustomToolbarsImp::addCustomToolbar(const QString& name)
     QVariant data = ui->workbenchBox->itemData(ui->workbenchBox->currentIndex(), Qt::UserRole);
     Workbench* w = WorkbenchManager::instance()->active();
     if (w && w->name() == std::string((const char*)data.toByteArray())) {
-        auto* mw = Gui::activeMainWindow();
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
         if (!mw) {
             return;
         }
@@ -627,7 +628,8 @@ void DlgCustomToolbarsImp::removeCustomToolbar(const QString& name)
     QVariant data = ui->workbenchBox->itemData(ui->workbenchBox->currentIndex(), Qt::UserRole);
     Workbench* w = WorkbenchManager::instance()->active();
     if (w && w->name() == std::string((const char*)data.toByteArray())) {
-        auto* mw = Gui::activeMainWindow();
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
         if (!mw) {
             return;
         }
@@ -647,7 +649,8 @@ void DlgCustomToolbarsImp::renameCustomToolbar(const QString& old_name, const QS
     QVariant data = ui->workbenchBox->itemData(ui->workbenchBox->currentIndex(), Qt::UserRole);
     Workbench* w = WorkbenchManager::instance()->active();
     if (w && w->name() == std::string((const char*)data.toByteArray())) {
-        auto* mw = Gui::activeMainWindow();
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
         if (!mw) {
             return;
         }
@@ -711,7 +714,8 @@ void DlgCustomToolbarsImp::addCustomCommand(const QString& name, const QByteArra
     QVariant data = ui->workbenchBox->itemData(ui->workbenchBox->currentIndex(), Qt::UserRole);
     Workbench* w = WorkbenchManager::instance()->active();
     if (w && w->name() == std::string((const char*)data.toByteArray())) {
-        auto* mw = Gui::activeMainWindow();
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
         if (!mw) {
             return;
         }
@@ -744,7 +748,8 @@ void DlgCustomToolbarsImp::removeCustomCommand(const QString& name, const QByteA
     QVariant data = ui->workbenchBox->itemData(ui->workbenchBox->currentIndex(), Qt::UserRole);
     Workbench* w = WorkbenchManager::instance()->active();
     if (w && w->name() == std::string((const char*)data.toByteArray())) {
-        auto* mw = Gui::activeMainWindow();
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
         if (!mw) {
             return;
         }
@@ -780,7 +785,8 @@ void DlgCustomToolbarsImp::moveUpCustomCommand(const QString& name, const QByteA
     QVariant data = ui->workbenchBox->itemData(ui->workbenchBox->currentIndex(), Qt::UserRole);
     Workbench* w = WorkbenchManager::instance()->active();
     if (w && w->name() == std::string((const char*)data.toByteArray())) {
-        auto* mw = Gui::activeMainWindow();
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
         if (!mw) {
             return;
         }
@@ -827,7 +833,8 @@ void DlgCustomToolbarsImp::moveDownCustomCommand(const QString& name, const QByt
     QVariant data = ui->workbenchBox->itemData(ui->workbenchBox->currentIndex(), Qt::UserRole);
     Workbench* w = WorkbenchManager::instance()->active();
     if (w && w->name() == std::string((const char*)data.toByteArray())) {
-        auto* mw = Gui::activeMainWindow();
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
         if (!mw) {
             return;
         }

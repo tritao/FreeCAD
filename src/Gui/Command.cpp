@@ -183,14 +183,12 @@ CommandBase::~CommandBase()
 
     // Command can be destroyed before the MainWindow, for example, dynamic
     // command created (and later deleted) by user for a pie menu.
-    if (Gui::activeMainWindow()) {
-        delete _pcAction;
-    }
+    delete _pcAction;
 }
 
 Action* CommandBase::getAction() const
 {
-    return _pcAction;
+    return _pcAction.data();
 }
 
 Action* CommandBase::createAction()
