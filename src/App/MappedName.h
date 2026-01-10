@@ -32,7 +32,6 @@
 #include <string_view>
 #include <vector>
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <boost/functional/hash.hpp>
 
 #include <Base/ByteBuffer.h>
@@ -68,7 +67,7 @@ public:
         if (!name) {
             return;
         }
-        if (boost::starts_with(name, ELEMENT_MAP_PREFIX)) {
+        if (std::string_view{name}.starts_with(ELEMENT_MAP_PREFIX)) {
             name += ELEMENT_MAP_PREFIX_SIZE;
         }
 
@@ -86,7 +85,7 @@ public:
     {
         auto size = nameString.size();
         const char* name = nameString.c_str();
-        if (boost::starts_with(nameString, ELEMENT_MAP_PREFIX)) {
+        if (nameString.starts_with(ELEMENT_MAP_PREFIX)) {
             name += ELEMENT_MAP_PREFIX_SIZE;
             size -= ELEMENT_MAP_PREFIX_SIZE;
         }

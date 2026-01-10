@@ -31,10 +31,9 @@
 # pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"
 #endif
 
-#include <boost/algorithm/string/predicate.hpp>
+#include <cmath>
+
 #include <boost/io/ios_state.hpp>
-#include <boost/math/special_functions/round.hpp>
-#include <boost/math/special_functions/trunc.hpp>
 
 #include <numbers>
 #include <limits>
@@ -51,6 +50,7 @@
 #include <Base/PlacementPy.h>
 #include <Base/QuantityPy.h>
 #include <Base/RotationPy.h>
+#include <Base/StringViewTools.h>
 #include <Base/Tools.h>
 #include <Base/VectorPy.h>
 #include <Base/Precision.h>
@@ -2300,13 +2300,13 @@ Py::Object FunctionExpression::evaluate(const Expression *expr, int f, const std
             _EXPR_THROW("Function requires the first argument to be a string.", expr);
         std::string type(pytype.as_string());
         Py::Object res;
-        if (boost::iequals(type, "matrix"))
+        if (Base::StringViewTools::iequalsAscii(type, "matrix"))
             res = Py::asObject(new Base::MatrixPy(Base::Matrix4D()));
-        else if (boost::iequals(type, "vector"))
+        else if (Base::StringViewTools::iequalsAscii(type, "vector"))
             res = Py::asObject(new Base::VectorPy(Base::Vector3d()));
-        else if (boost::iequals(type, "placement"))
+        else if (Base::StringViewTools::iequalsAscii(type, "placement"))
             res = Py::asObject(new Base::PlacementPy(Base::Placement()));
-        else if (boost::iequals(type, "rotation"))
+        else if (Base::StringViewTools::iequalsAscii(type, "rotation"))
             res = Py::asObject(new Base::RotationPy(Base::Rotation()));
         else
             _EXPR_THROW("Unknown type '" << type << "'.", expr);
@@ -2523,7 +2523,7 @@ Py::Object FunctionExpression::evaluate(const Expression *expr, int f, const std
         // Compute new unit for exponentiation
         double exponent = v2.getValue();
         if (!v1.isDimensionless()) {
-            if (exponent - boost::math::round(exponent) < 1e-9)
+            if (exponent - std::round(exponent) < 1e-9)
                 unit = v1.getUnit().pow(exponent);
             else
                 _EXPR_THROW("Exponent must be an integer when used with a unit.",expr);
@@ -2624,10 +2624,10 @@ Py::Object FunctionExpression::evaluate(const Expression *expr, int f, const std
         break;
     }
     case ROUND:
-        output = boost::math::round(value);
+        output = std::round(value);
         break;
     case TRUNC:
-        output = boost::math::trunc(value);
+        output = std::trunc(value);
         break;
     case CEIL:
         output = ceil(value);

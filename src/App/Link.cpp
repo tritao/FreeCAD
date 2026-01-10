@@ -23,11 +23,12 @@
  ****************************************************************************/
 
 #include <limits>
+#include <string_view>
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <boost/range.hpp>
 #include <boost/property_map/property_map.hpp>
 
+#include <Base/StringViewTools.h>
 #include <Base/Tools.h>
 #include <Base/Uuid.h>
 
@@ -379,7 +380,9 @@ App::DocumentObjectExecReturn* LinkBaseExtension::extensionExecute()
         }
 
         PropertyPythonObject* proxy = nullptr;
-        if (getLinkExecuteProperty() && !boost::iequals(getLinkExecuteValue(), "none")
+        if (getLinkExecuteProperty()
+            && !Base::StringViewTools::iequalsAscii(getLinkExecuteValue() ? getLinkExecuteValue() : "",
+                                                   "none")
             && (!_LinkOwner.getValue()
                 || !container->getDocument()->getObjectByID(_LinkOwner.getValue()))) {
             // Check if this is an element link. Do not invoke appLinkExecute()
@@ -500,7 +503,7 @@ LinkBaseExtension::getOnChangeCopyObjects(std::vector<App::DocumentObject*>* exc
         else if ((iter = map.find(parent->getNameInDocument())) != map.end()) {
             v = iter->second.c_str();
         }
-        if (boost::equals(v, "-")) {
+        if (std::string_view{v} == "-") {
             if (excludes) {
                 excludes->push_back(obj);
             }
@@ -764,7 +767,7 @@ bool LinkBaseExtension::isCopyOnChangeProperty(DocumentObject* obj, const App::P
         return false;
     }
     auto group = prop.getGroup();
-    return group && boost::starts_with(group, _GroupPrefix);
+    return group && std::string_view{group}.starts_with(_GroupPrefix);
 }
 
 void LinkBaseExtension::setupCopyOnChange(DocumentObject* parent, bool checkSource)
@@ -823,7 +826,7 @@ bool LinkBaseExtension::setupCopyOnChange(
 
         std::string groupName;
         groupName = _GroupPrefix;
-        if (boost::starts_with(linkedGroupName, _GroupPrefix)) {
+        if (std::string_view{linkedGroupName}.starts_with(_GroupPrefix)) {
             groupName += linkedGroupName + sizeof(_GroupPrefix) - 1;
         }
         else {
@@ -838,7 +841,7 @@ bool LinkBaseExtension::setupCopyOnChange(
             }
             else {
                 const char* otherGroupName = p->getGroup();
-                if (!otherGroupName || !boost::starts_with(otherGroupName, _GroupPrefix)) {
+                if (!otherGroupName || !std::string_view{otherGroupName}.starts_with(_GroupPrefix)) {
                     FC_WARN(p->getFullName()
                             << " shadows another CopyOnChange property " << prop->getFullName());
                     continue;
@@ -872,7 +875,7 @@ bool LinkBaseExtension::setupCopyOnChange(
                 continue;
             }
             auto gname = prop->getGroup();
-            if (!gname || !boost::starts_with(gname, _GroupPrefix)) {
+            if (!gname || !std::string_view{gname}.starts_with(_GroupPrefix)) {
                 continue;
             }
             if (!newProps.contains(prop)) {
@@ -1257,7 +1260,7 @@ int LinkBaseExtension::getElementIndex(const char* subname, const char** psubnam
         if (owner && owner->isAttachedToDocument()) {
             std::string ownerName(owner->getNameInDocument());
             ownerName += '_';
-            if (boost::algorithm::starts_with(name, ownerName.c_str())) {
+            if (std::string_view{name}.starts_with(ownerName)) {
                 for (const char* txt = dot - 1; txt >= name + ownerName.size(); --txt) {
                     if (*txt == 'i') {
                         idx = getArrayIndex(txt + 1, nullptr);
@@ -1281,13 +1284,17 @@ int LinkBaseExtension::getElementIndex(const char* subname, const char** psubnam
             }
             if (subname[0] == '$') {
                 CharRange sub(subname + 1, dot);
-                if (boost::equals(sub, linked->Label.getValue())) {
+                const std::string_view subView(sub.begin(),
+                                               static_cast<std::size_t>(sub.end() - sub.begin()));
+                if (subView == linked->Label.getValue()) {
                     idx = 0;
                 }
             }
             else {
                 CharRange sub(subname, dot);
-                if (boost::equals(sub, linked->getNameInDocument())) {
+                const std::string_view subView(sub.begin(),
+                                               static_cast<std::size_t>(sub.end() - sub.begin()));
+                if (subView == linked->getNameInDocument()) {
                     idx = 0;
                 }
             }
@@ -1558,19 +1565,23 @@ bool LinkBaseExtension::extensionGetSubObject(DocumentObject*& ret,
         auto group = getLinkCopyOnChangeGroupValue();
         if (subname[0] == '$') {
             CharRange sub(subname + 1, dot);
-            if (group && boost::equals(sub, group->Label.getValue())) {
+            const std::string_view subView(sub.begin(),
+                                           static_cast<std::size_t>(sub.end() - sub.begin()));
+            if (group && subView == group->Label.getValue()) {
                 linked = group;
             }
-            else if (!boost::equals(sub, linked->Label.getValue())) {
+            else if (subView != linked->Label.getValue()) {
                 dot = nullptr;
             }
         }
         else {
             CharRange sub(subname, dot);
-            if (group && boost::equals(sub, group->getNameInDocument())) {
+            const std::string_view subView(sub.begin(),
+                                           static_cast<std::size_t>(sub.end() - sub.begin()));
+            if (group && subView == group->getNameInDocument()) {
                 linked = group;
             }
-            else if (!boost::equals(sub, linked->getNameInDocument())) {
+            else if (subView != linked->getNameInDocument()) {
                 dot = nullptr;
             }
         }
@@ -1644,7 +1655,7 @@ void LinkBaseExtension::checkGeoElementMap(const App::DocumentObject* obj,
     if (linked && obj && linked->getDocument() != obj->getDocument()) {
         _postfix = Data::POSTFIX_EXTERNAL_TAG;
         if (postfix) {
-            if (!boost::starts_with(postfix, Data::ComplexGeoData::elementMapPrefix())) {
+            if (!std::string_view{postfix}.starts_with(Data::ComplexGeoData::elementMapPrefix())) {
                 _postfix += Data::ComplexGeoData::elementMapPrefix();
             }
             _postfix += postfix;
@@ -1756,7 +1767,7 @@ void LinkBaseExtension::parseSubName() const
     for (std::size_t i = 1; i < subs.size(); ++i) {
         auto& sub = subs[i];
         element = Data::findElementName(sub.c_str());
-        if (!Base::Tools::isNullOrEmpty(element) && boost::starts_with(sub, mySubName)) {
+        if (!Base::Tools::isNullOrEmpty(element) && sub.starts_with(mySubName)) {
             mySubElements.emplace_back(element);
         }
     }

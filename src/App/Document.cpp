@@ -37,7 +37,6 @@
 #include <algorithm>
 #include <filesystem>
 
-#include <boost/algorithm/string.hpp>
 #include <boost/bimap.hpp>
 #include <boost/graph/strong_components.hpp>
 
@@ -57,6 +56,7 @@
 #include <Base/Exception.h>
 #include <Base/FileInfo.h>
 #include <Base/PathUtils.h>
+#include <Base/StringViewTools.h>
 #include <Base/TimeInfo.h>
 #include <Base/Reader.h>
 #include <Base/Writer.h>
@@ -396,7 +396,7 @@ int Document::_openTransaction(const char* name, int id)
 void Document::renameTransaction(const char* name, const int id) const
 {
     if (name && d->activeUndoTransaction && d->activeUndoTransaction->getID() == id) {
-        if (boost::starts_with(d->activeUndoTransaction->Name, "-> ")) {
+        if (d->activeUndoTransaction->Name.starts_with("-> ")) {
             d->activeUndoTransaction->Name.resize(3);
         }
         else {
@@ -1699,7 +1699,7 @@ static std::string checkFileName(const char* file)
             .GetParameterGroupByPath("User parameter:BaseApp/Preferences/Document")
             ->GetBool("CheckExtension", true)) {
         const char* ext = strrchr(file, '.');
-        if ((ext == nullptr) || !boost::iequals(ext + 1, "fcstd")) {
+        if ((ext == nullptr) || !Base::StringViewTools::iequalsAscii(ext + 1, "fcstd")) {
             if (ext && ext[1] == 0) {
                 fn += "FCStd";
             }

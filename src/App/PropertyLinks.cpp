@@ -25,7 +25,6 @@
 #include <filesystem>
 #include <string_view>
 #include <system_error>
-#include <boost/algorithm/string/predicate.hpp>
 
 #include <Base/Console.h>
 #include <Base/Exception.h>
@@ -1190,14 +1189,15 @@ DocumentObject* PropertyLinkList::find(const char* name, int* pindex) const
     }
     if (_lValueList.size() <= DONT_MAP_UNDER) {
         int index = -1;
-        for (auto obj : _lValueList) {
-            ++index;
-            if (obj && obj->getNameInDocument() && boost::equals(name, obj->getNameInDocument())) {
-                if (pindex) {
-                    *pindex = index;
+            for (auto obj : _lValueList) {
+                ++index;
+                if (obj && obj->getNameInDocument()
+                    && std::string_view{name} == obj->getNameInDocument()) {
+                    if (pindex) {
+                        *pindex = index;
+                    }
+                    return obj;
                 }
-                return obj;
-            }
         }
         return nullptr;
     }
@@ -1439,7 +1439,7 @@ std::vector<std::string> PropertyLinkSub::getSubValuesStartsWith(const char* sta
     for (size_t i = 0; i < _ShadowSubList.size(); ++i) {
         const auto& sub = getSubNameWithStyle(_cSubList[i], _ShadowSubList[i], newStyle, tmp);
         auto element = Data::findElementName(sub.c_str());
-        if (element && boost::starts_with(element, starter)) {
+        if (element && starter && std::string_view{element}.starts_with(starter)) {
             ret.emplace_back(element);
         }
     }
@@ -3327,7 +3327,7 @@ public:
         }
 
         const std::string_view fileView(filename);
-        if (boost::algorithm::starts_with(fileView, "https://")) {
+        if (fileView.starts_with("https://")) {
             if (fullPath) {
                 *fullPath = std::string(fileView);
             }
@@ -3420,7 +3420,7 @@ public:
         }
 
         const std::string_view view(p);
-        if (boost::algorithm::starts_with(view, "https://")) {
+        if (view.starts_with("https://")) {
             return std::string(view);
         }
 
@@ -5909,7 +5909,7 @@ bool PropertyXLinkContainer::isLinkedToDocument(const App::Document& doc) const
     if (iter != _XLinks.end()) {
         size_t len = strlen(doc.getName());
         return iter->first.size() > len && iter->first[len] == '#'
-            && boost::starts_with(iter->first, doc.getName());
+            && iter->first.starts_with(doc.getName());
     }
     return false;
 }

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <unordered_map>
 #include <vector>
+#include <string_view>
 #ifndef FC_DEBUG
 #include <random>
 #endif
@@ -862,7 +863,7 @@ IndexedName ElementMap::find(const MappedName& name, ElementIDRefs* sids) const
             res = childName.toIndexedName();
         }
 
-        if (res && boost::equals(res.getType(), child.indexedName.getType())
+        if (res && std::string_view{res.getType()} == child.indexedName.getType()
             && child.indexedName.getIndex() <= res.getIndex()
             && child.indexedName.getIndex() + child.count > res.getIndex()) {
             res.setIndex(res.getIndex() + it->second.childMap->offset);

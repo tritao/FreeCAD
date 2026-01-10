@@ -22,6 +22,8 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <string_view>
+
 #include <Base/MatrixPy.h>
 #include <Base/PlacementPy.h>
 #include <Base/Reader.h>
@@ -1327,7 +1329,7 @@ bool PropertyComplexGeoData::checkElementMapVersion(const char* ver) const
     else {
         prefix = "0.";
     }
-    if (!boost::starts_with(ver, prefix)) {
+    if (!ver || !std::string_view{ver}.starts_with(prefix)) {
         return true;
     }
     return data->checkElementMapVersion(ver + 2);

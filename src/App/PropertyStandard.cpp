@@ -23,16 +23,15 @@
  ***************************************************************************/
 
 #include <algorithm>
+#include <cmath>
 #include <set>
 #include <limits>
 #include <memory>
 #include <list>
 #include <map>
 #include <string>
+#include <string_view>
 #include <vector>
-
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/math/special_functions/round.hpp>
 
 #include <Base/Console.h>
 #include <Base/Exception.h>
@@ -150,13 +149,13 @@ void PropertyInteger::setPathValue(const ObjectIdentifier& path, const boost::an
         setValue(boost::any_cast<int>(value));
     }
     else if (value.type() == typeid(double)) {
-        setValue(boost::math::round(boost::any_cast<double>(value)));
+        setValue(std::lround(boost::any_cast<double>(value)));
     }
     else if (value.type() == typeid(float)) {
-        setValue(boost::math::round(boost::any_cast<float>(value)));
+        setValue(std::lround(boost::any_cast<float>(value)));
     }
     else if (value.type() == typeid(Quantity)) {
-        setValue(boost::math::round(boost::any_cast<Quantity>(value).getValue()));
+        setValue(std::lround(boost::any_cast<Quantity>(value).getValue()));
     }
     else {
         throw bad_cast();
@@ -299,7 +298,7 @@ void PropertyEnumeration::setEnums(const char** plEnums)
     // For backward compatibility, if the property container is not attached to
     // any document (i.e. its full name starts with '?'), do not notify, or
     // else existing code may crash.
-    bool notify = !boost::starts_with(getFullName(), "?");
+    bool notify = !std::string_view{getFullName()}.starts_with("?");
     if (notify) {
         aboutToSetValue();
     }
@@ -373,7 +372,7 @@ void PropertyEnumeration::setEnumVector(const std::vector<std::string>& values)
     // For backward compatibility, if the property container is not attached to
     // any document (i.e. its full name starts with '?'), do not notify, or
     // else existing code may crash.
-    bool notify = !boost::starts_with(getFullName(), "?");
+    bool notify = !std::string_view{getFullName()}.starts_with("?");
     if (notify) {
         aboutToSetValue();
     }
@@ -2106,10 +2105,10 @@ void PropertyBool::setPathValue(const ObjectIdentifier& path, const boost::any& 
         setValue(boost::any_cast<long>(value) != 0);
     }
     else if (value.type() == typeid(double)) {
-        setValue(boost::math::round(boost::any_cast<double>(value)));
+        setValue(std::lround(boost::any_cast<double>(value)) != 0);
     }
     else if (value.type() == typeid(float)) {
-        setValue(boost::math::round(boost::any_cast<float>(value)));
+        setValue(std::lround(boost::any_cast<float>(value)) != 0);
     }
     else if (value.type() == typeid(Quantity)) {
         setValue(boost::any_cast<Quantity>(value).getValue() != 0);
