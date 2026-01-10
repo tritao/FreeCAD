@@ -480,13 +480,15 @@ class VPPostLineplot(view_base_fempostvisualization.VPPostVisualization):
     def show_visualization(self):
 
         if not hasattr(self, "_plot") or not self._plot:
-            main = FreeCADGui.getMainWindow()
+            parent = FreeCADGui.uiParentWidget()
+            if not parent:
+                return
             self._plot = Plot.Plot()
             self._plot.setWindowTitle(self.Object.Label)
-            self._plot.setParent(main)
+            self._plot.setParent(parent)
             self._plot.setWindowFlags(QtGui.Qt.Dialog)
             self._plot.resize(
-                main.size().height() / 2, main.size().height() / 3
+                parent.size().height() / 2, parent.size().height() / 3
             )  # keep the aspect ratio
             self.update_visualization()
 

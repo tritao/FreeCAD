@@ -50,10 +50,13 @@ class BIM_Welcome:
         self.form.adjustSize()
 
         # center the dialog over FreeCAD window
-        mw = FreeCADGui.getMainWindow()
-        self.form.move(
-            mw.frameGeometry().topLeft() + mw.rect().center() - self.form.rect().center()
-        )
+        parent = FreeCADGui.uiParentWidget()
+        if parent:
+            self.form.move(
+                parent.frameGeometry().topLeft()
+                + parent.rect().center()
+                - self.form.rect().center()
+            )
 
         # show dialog and run setup dialog afterwards if OK was pressed
         result = self.form.exec_()

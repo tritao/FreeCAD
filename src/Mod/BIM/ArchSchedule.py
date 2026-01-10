@@ -868,10 +868,13 @@ class ArchScheduleTaskPanel:
             self.form.checkAutoUpdate.setChecked(self.obj.AutoUpdate)
 
         # center over FreeCAD window
-        mw = FreeCADGui.getMainWindow()
-        self.form.move(
-            mw.frameGeometry().topLeft() + mw.rect().center() - self.form.rect().center()
-        )
+        parent = FreeCADGui.uiParentWidget()
+        if parent:
+            self.form.move(
+                parent.frameGeometry().topLeft()
+                + parent.rect().center()
+                - self.form.rect().center()
+            )
 
         self.form.show()
 

@@ -171,10 +171,13 @@ class BIM_Classification:
             self.form.onlyVisible.stateChanged.connect(self.onVisible)
             self.form.checkPrefix.stateChanged.connect(self.onPrefix)
         # center the dialog over FreeCAD window
-        mw = FreeCADGui.getMainWindow()
-        self.form.move(
-            mw.frameGeometry().topLeft() + mw.rect().center() - self.form.rect().center()
-        )
+        parent = FreeCADGui.uiParentWidget()
+        if parent:
+            self.form.move(
+                parent.frameGeometry().topLeft()
+                + parent.rect().center()
+                - self.form.rect().center()
+            )
 
         self.updateClasses()
 

@@ -137,7 +137,7 @@ def run_fem_solver(solver, working_dir=None):
             App.Console.PrintError(error_message + "\n")
             if App.GuiUp:
                 QtGui.QMessageBox.critical(
-                    FreeCADGui.getMainWindow(), "Can't start Solver", error_message
+                    FreeCADGui.uiParentWidget(), "Can't start Solver", error_message
                 )
             return
         except DirectoryDoesNotExistError:
@@ -145,7 +145,7 @@ def run_fem_solver(solver, working_dir=None):
             App.Console.PrintError(error_message + "\n")
             if App.GuiUp:
                 QtGui.QMessageBox.critical(
-                    FreeCADGui.getMainWindow(), "Can't start Solver", error_message
+                    FreeCADGui.uiParentWidget(), "Can't start Solver", error_message
                 )
             return
         if not machine.running:
@@ -262,7 +262,7 @@ def _getBesideBase(solver):
         App.Console.PrintError(error_message + "\n")
         if App.GuiUp:
             QtGui.QMessageBox.critical(
-                FreeCADGui.getMainWindow(), "Can't start Solver", error_message
+                FreeCADGui.uiParentWidget(), "Can't start Solver", error_message
             )
         raise MustSaveError()
         # TODO may be do not abort but use a temporary directory
@@ -285,7 +285,7 @@ def _getCustomBase(solver):
         App.Console.PrintError(error_message + "\n")
         if App.GuiUp:
             QtGui.QMessageBox.critical(
-                FreeCADGui.getMainWindow(), "Can't start Solver", error_message
+                FreeCADGui.uiParentWidget(), "Can't start Solver", error_message
             )
         raise DirectoryDoesNotExistError("Invalid path")
     return path

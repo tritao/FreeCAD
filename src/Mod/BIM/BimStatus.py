@@ -78,8 +78,13 @@ def setStatusIcons(show=True):
             # load dialog
             form = FreeCADGui.PySideUic.loadUi(":/ui/dialogNudgeValue.ui")
             # center the dialog over FreeCAD window
-            mw = FreeCADGui.getMainWindow()
-            form.move(mw.frameGeometry().topLeft() + mw.rect().center() - form.rect().center())
+            parent = FreeCADGui.uiParentWidget()
+            if parent:
+                form.move(
+                    parent.frameGeometry().topLeft()
+                    + parent.rect().center()
+                    - form.rect().center()
+                )
             result = form.exec_()
             if not result:
                 return

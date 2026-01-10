@@ -101,10 +101,13 @@ class BIM_Layers:
         self.dialog.resize(w, h)
 
         # center the dialog over FreeCAD window
-        mw = FreeCADGui.getMainWindow()
-        self.dialog.move(
-            mw.frameGeometry().topLeft() + mw.rect().center() - self.dialog.rect().center()
-        )
+        parent = FreeCADGui.uiParentWidget()
+        if parent:
+            self.dialog.move(
+                parent.frameGeometry().topLeft()
+                + parent.rect().center()
+                - self.dialog.rect().center()
+            )
 
         # connect signals/slots
         self.dialog.buttonNew.clicked.connect(self.addItem)

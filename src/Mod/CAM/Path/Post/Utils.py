@@ -213,7 +213,7 @@ class GCodeHighlighter(QtGui.QSyntaxHighlighter):
 class GCodeEditorDialog(QtGui.QDialog):
     def __init__(self, text="", parent=None, refactored=False):
         if parent is None:
-            parent = FreeCADGui.getMainWindow()
+            parent = FreeCADGui.uiParentWidget()
         QtGui.QDialog.__init__(self, parent)
 
         layout = QtGui.QVBoxLayout(self)

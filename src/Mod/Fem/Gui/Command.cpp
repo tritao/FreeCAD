@@ -2219,7 +2219,7 @@ plt.title(\""
         << titleLabel << "\")\n\
 plt.grid()\n\
 fig_manager = plt.get_current_fig_manager()\n\
-fig_manager.window.setParent(FreeCADGui.getMainWindow())\n\
+fig_manager.window.setParent(FreeCADGui.uiParentWidget())\n\
 fig_manager.window.setWindowFlag(QtCore.Qt.Tool)\n\
 plt.show()\n";
     return oss.str();

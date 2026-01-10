@@ -2422,10 +2422,13 @@ class ComponentTaskPanel:
         self.ifcEditor = FreeCADGui.PySideUic.loadUi(":/ui/dialogIfcPropertiesRedux.ui")
 
         # center the dialog over FreeCAD window
-        mw = FreeCADGui.getMainWindow()
-        self.ifcEditor.move(
-            mw.frameGeometry().topLeft() + mw.rect().center() - self.ifcEditor.rect().center()
-        )
+        parent = FreeCADGui.uiParentWidget()
+        if parent:
+            self.ifcEditor.move(
+                parent.frameGeometry().topLeft()
+                + parent.rect().center()
+                - self.ifcEditor.rect().center()
+            )
         self.ifcModel = QtGui.QStandardItemModel()
         self.ifcEditor.treeProperties.setModel(self.ifcModel)
         # self.ifcEditor.treeProperties.setDragDropMode(QtGui.QAbstractItemView.InternalMove)

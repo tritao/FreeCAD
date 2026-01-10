@@ -62,10 +62,13 @@ class BIM_Setup:
         self.form = FreeCADGui.PySideUic.loadUi(":/ui/dialogSetup.ui")
 
         # center the dialog over FreeCAD window
-        mw = FreeCADGui.getMainWindow()
-        self.form.move(
-            mw.frameGeometry().topLeft() + mw.rect().center() - self.form.rect().center()
-        )
+        parent = FreeCADGui.uiParentWidget()
+        if parent:
+            self.form.move(
+                parent.frameGeometry().topLeft()
+                + parent.rect().center()
+                - self.form.rect().center()
+            )
 
         # connect signals / slots
         self.form.comboPresets.currentIndexChanged[int].connect(self.setPreset)

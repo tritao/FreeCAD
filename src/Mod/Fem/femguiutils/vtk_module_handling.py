@@ -223,7 +223,7 @@ def vtk_module_handling():
         import FreeCADGui
 
         button = QtGui.QMessageBox.critical(
-            FreeCADGui.getMainWindow(),
+            FreeCADGui.uiParentWidget(),
             translate("FEM", "VTK Python module conflict"),
             message,
             buttons=buttons,
@@ -249,7 +249,7 @@ def vtk_compatibility_abort(inform=True):
             translate = FreeCAD.Qt.translate
 
             button = QtGui.QMessageBox.critical(
-                FreeCADGui.getMainWindow(),
+                FreeCADGui.uiParentWidget(),
                 translate("FEM", "VTK Python Module Conflict"),
                 translate(
                     "FEM", "This functionality is not available due to VTK Python module conflict"

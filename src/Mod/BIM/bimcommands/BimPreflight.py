@@ -195,10 +195,13 @@ class BIM_Preflight_TaskPanel:
             if not self.rform:
                 self.rform = FreeCADGui.PySideUic.loadUi(":/ui/dialogPreflightResults.ui")
                 # center the dialog over FreeCAD window
-                mw = FreeCADGui.getMainWindow()
-                self.rform.move(
-                    mw.frameGeometry().topLeft() + mw.rect().center() - self.rform.rect().center()
-                )
+                parent = FreeCADGui.uiParentWidget()
+                if parent:
+                    self.rform.move(
+                        parent.frameGeometry().topLeft()
+                        + parent.rect().center()
+                        - self.rform.rect().center()
+                    )
                 self.rform.buttonReport.clicked.connect(self.toReport)
                 self.rform.buttonOK.clicked.connect(self.closeReport)
             self.rform.textBrowser.setText(self.results[test])

@@ -87,8 +87,13 @@ class BIM_Material:
         self.dlg.resize(w, h)
         self.dlg.setWindowTitle(translate("BIM", "Select Material"))
         self.dlg.setWindowIcon(QtGui.QIcon(":/icons/Arch_Material.svg"))
-        mw = FreeCADGui.getMainWindow()
-        self.dlg.move(mw.frameGeometry().topLeft() + mw.rect().center() - self.dlg.rect().center())
+        parent = FreeCADGui.uiParentWidget()
+        if parent:
+            self.dlg.move(
+                parent.frameGeometry().topLeft()
+                + parent.rect().center()
+                - self.dlg.rect().center()
+            )
         lay = QtGui.QVBoxLayout(self.dlg)
         matList = QtGui.QListWidget(self.dlg)
         matList.setSortingEnabled(True)
@@ -332,8 +337,13 @@ class BIM_Material:
                 # load dialog
                 form = FreeCADGui.PySideUic.loadUi(":/ui/dialogListWidget.ui")
                 # center the dialog over FreeCAD window
-                mw = FreeCADGui.getMainWindow()
-                form.move(mw.frameGeometry().topLeft() + mw.rect().center() - form.rect().center())
+                parent = FreeCADGui.uiParentWidget()
+                if parent:
+                    form.move(
+                        parent.frameGeometry().topLeft()
+                        + parent.rect().center()
+                        - form.rect().center()
+                    )
                 form.setWindowTitle(translate("BIM", "Select material to merge to"))
                 form.setWindowIcon(QtGui.QIcon(":/icons/Arch_Material.svg"))
                 for i in range(self.dlg.matList.count()):

@@ -161,10 +161,13 @@ class BIM_IfcExplorer:
         self.dialog.rejected.connect(self.close)
 
         # center the dialog over FreeCAD window
-        mw = FreeCADGui.getMainWindow()
-        self.dialog.move(
-            mw.frameGeometry().topLeft() + mw.rect().center() - self.dialog.rect().center()
-        )
+        parent = FreeCADGui.uiParentWidget()
+        if parent:
+            self.dialog.move(
+                parent.frameGeometry().topLeft()
+                + parent.rect().center()
+                - self.dialog.rect().center()
+            )
 
         # open a file and show the dialog
         self.open()

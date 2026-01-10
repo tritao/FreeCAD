@@ -621,7 +621,7 @@ class _TaskPanel:
         # its parent being defined as FC main window
         # "Tool" type also is non modal, and dialog doesn't add a tab in the OS task bar
         # See Qt::WindowFlags for more details
-        fig_manager.window.setParent(FreeCADGui.getMainWindow())
+        fig_manager.window.setParent(FreeCADGui.uiParentWidget())
         fig_manager.window.setWindowFlag(QtCore.Qt.Tool)
 
     def update_colors_stats(self, res_values, res_unit, minm, maxm):

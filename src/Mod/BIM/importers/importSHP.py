@@ -66,7 +66,7 @@ def insert(filename, docname, record=None):
             from PySide import QtGui
 
             reply = QtGui.QInputDialog.getItem(
-                FreeCADGui.getMainWindow(),
+                FreeCADGui.uiParentWidget(),
                 translate("Arch", "Shapes elevation"),
                 translate("Arch", "Choose which field provides shapes elevations:"),
                 fields,
@@ -140,7 +140,7 @@ def checkShapeFileLibrary():
             from PySide import QtGui
 
             reply = QtGui.QMessageBox.question(
-                FreeCADGui.getMainWindow(),
+                FreeCADGui.uiParentWidget(),
                 translate("Arch", "Shapefile module not found"),
                 translate(
                     "Arch",

@@ -133,7 +133,7 @@ class ToolBitLibraryDock(object):
         self._add_tool_controller_to_doc()
 
     def _open_editor(self):
-        library = LibraryEditor(parent=FreeCADGui.getMainWindow())
+        library = LibraryEditor(parent=FreeCADGui.uiParentWidget())
         library.open()
         # After editing, we might need to refresh the libraries in the browser widget
         # Assuming _populate_libraries is the correct method to call

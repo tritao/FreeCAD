@@ -119,7 +119,9 @@ def on_add_property():
                 pset = wid.currentIndex().data()
     form = FreeCADGui.PySideUic.loadUi(":/ui/dialogAddProperty.ui")
     # center the dialog over FreeCAD window
-    form.move(mw.frameGeometry().topLeft() + mw.rect().center() - form.rect().center())
+    parent = FreeCADGui.uiParentWidget()
+    if parent:
+        form.move(parent.frameGeometry().topLeft() + parent.rect().center() - form.rect().center())
     form.field_pset.clear()
     form.field_pset.addItems(psets)
     if pset and (pset in psets):
@@ -200,7 +202,9 @@ def on_add_pset():
     psetkeys.sort()
     form = FreeCADGui.PySideUic.loadUi(":/ui/dialogAddPSet.ui")
     # center the dialog over FreeCAD window
-    form.move(mw.frameGeometry().topLeft() + mw.rect().center() - form.rect().center())
+    parent = FreeCADGui.uiParentWidget()
+    if parent:
+        form.move(parent.frameGeometry().topLeft() + parent.rect().center() - form.rect().center())
     form.field_pset.clear()
     form.field_pset.addItems(psetkeys)
     # execute

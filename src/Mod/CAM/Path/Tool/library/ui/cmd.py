@@ -87,7 +87,7 @@ class CommandLibraryEditorOpen:
         return True
 
     def Activated(self):
-        library = LibraryEditor(parent=FreeCADGui.getMainWindow())
+        library = LibraryEditor(parent=FreeCADGui.uiParentWidget())
         library.open()
 
 

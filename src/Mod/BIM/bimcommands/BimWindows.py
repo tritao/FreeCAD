@@ -219,8 +219,11 @@ class BIM_Windows_TaskPanel:
         from PySide import QtGui
 
         form = FreeCADGui.PySideUic.loadUi(":/ui/dialogMaterialChooser.ui")
-        mw = FreeCADGui.getMainWindow()
-        form.move(mw.frameGeometry().topLeft() + mw.rect().center() - form.rect().center())
+        parent = FreeCADGui.uiParentWidget()
+        if parent:
+            form.move(
+                parent.frameGeometry().topLeft() + parent.rect().center() - form.rect().center()
+            )
         materials = [o for o in FreeCAD.ActiveDocument.Objects if Draft.getType(o) == "Material"]
         it = QtGui.QListWidgetItem(translate("BIM", "None"))
         it.setIcon(QtGui.QIcon(":/icons/button_invalid.svg"))

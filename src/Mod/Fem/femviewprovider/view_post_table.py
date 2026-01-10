@@ -253,14 +253,16 @@ class VPPostTable(view_base_fempostvisualization.VPPostVisualization):
     def show_visualization(self):
 
         if not hasattr(self, "_tableview") or not self._tableview:
-            main = FreeCADGui.getMainWindow()
+            parent = FreeCADGui.uiParentWidget()
+            if not parent:
+                return
             self._tableModel = vtv.VtkTableModel()
             self._tableview = vtv.VtkTableView(self._tableModel)
             self._tableview.setWindowTitle(self.Object.Label)
-            self._tableview.setParent(main)
+            self._tableview.setParent(parent)
             self._tableview.setWindowFlags(QtGui.Qt.Dialog)
             self._tableview.resize(
-                main.size().height() / 2, main.size().height() / 3
+                parent.size().height() / 2, parent.size().height() / 3
             )  # keep the aspect ratio
 
             self.update_visualization()

@@ -89,12 +89,15 @@ class GCodeHighlighter(QtGui.QSyntaxHighlighter):
 class GCodeEditorDialog(QtGui.QDialog):
     tool = None
 
-    def __init__(self, PathObj, parent=FreeCADGui.getMainWindow()):
+    def __init__(self, PathObj, parent=None):
         self.PathObj = PathObj
         if hasattr(PathObj, "ToolController"):
             self.tool = PathObj.ToolController.Tool
         else:
             self.tool = None
+
+        if parent is None:
+            parent = FreeCADGui.uiParentWidget()
 
         QtGui.QDialog.__init__(self, parent)
         layout = QtGui.QVBoxLayout(self)

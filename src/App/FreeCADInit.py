@@ -382,7 +382,7 @@ class FCADLogger:
             if App.GuiUp:
                 import FreeCADGui, PySide
                 PySide.QtGui.QMessageBox.critical(
-                    FreeCADGui.getMainWindow(),
+                    FreeCADGui.uiParentWidget(),
                     self.title,
                     str(e),
                 )

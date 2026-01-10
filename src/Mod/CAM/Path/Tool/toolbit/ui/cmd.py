@@ -105,7 +105,7 @@ class CommandToolBitSave:
             return
         toolbit = tool_obj.Proxy
 
-        dialog = AssetSaveDialog(ToolBit, toolbit_serializers, FreeCADGui.getMainWindow())
+        dialog = AssetSaveDialog(ToolBit, toolbit_serializers, FreeCADGui.uiParentWidget())
         dialog_result = dialog.exec_(toolbit)
         if not dialog_result:
             return
@@ -138,7 +138,7 @@ class CommandToolBitLoad:
         return FreeCAD.ActiveDocument is not None
 
     def Activated(self):
-        dialog = ToolBitOpenDialog(toolbit_serializers, FreeCADGui.getMainWindow())
+        dialog = ToolBitOpenDialog(toolbit_serializers, FreeCADGui.uiParentWidget())
         toolbits = dialog.exec()
         for toolbit in toolbits:
             toolbit.attach_to_doc(FreeCAD.ActiveDocument)

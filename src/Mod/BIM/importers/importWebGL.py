@@ -130,7 +130,7 @@ def getHTMLTemplate():
             ).format(custom_path)
 
             reply = QtWidgets.QMessageBox.question(
-                FreeCADGui.getMainWindow(),
+                FreeCADGui.uiParentWidget(),
                 translate("BIM", "WebGL Template Not Found"),
                 message,
                 QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
@@ -168,8 +168,7 @@ def getHTMLTemplate():
             "custom template under menu Preferences → Import-Export → WebGL.",
         ).format(default_template_path)
 
-        # Use getMainWindow() as parent following FreeCAD patterns
-        parent = FreeCADGui.getMainWindow()
+        parent = FreeCADGui.uiParentWidget()
         title = translate("BIM", "WebGL Export Template Error")
 
         QtWidgets.QMessageBox.critical(parent, title, message)
