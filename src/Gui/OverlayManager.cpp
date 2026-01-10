@@ -260,16 +260,19 @@ struct OverlayInfo
         }
 
         if (forced) {
-            if (auto* mw = Gui::activeMainWindow()) {
-                for (auto d : mw->findChildren<QDockWidget*>()) {
-                    if (mw->dockWidgetArea(d) == dockArea && d->toggleViewAction()->isChecked()) {
-                        addWidget(d, false);
-                    }
+            auto* shell = Gui::ensureActiveShell();
+            auto* mw = shell ? shell->mainWindow() : nullptr;
+            if (!mw) {
+                return true;
+            }
+            for (auto d : mw->findChildren<QDockWidget*>()) {
+                if (mw->dockWidgetArea(d) == dockArea && d->toggleViewAction()->isChecked()) {
+                    addWidget(d, false);
                 }
-                if (visible) {
-                    dock->show();
-                    tabWidget->setCurrent(dock);
-                }
+            }
+            if (visible) {
+                dock->show();
+                tabWidget->setCurrent(dock);
             }
         }
         else {
@@ -495,7 +498,8 @@ public:
         }
 
         if (dockPos == Qt::NoDockWidgetArea) {
-            auto* mw = Gui::activeMainWindow();
+            auto* shell = Gui::ensureActiveShell();
+            auto* mw = shell ? shell->mainWindow() : nullptr;
             if (!mw) {
                 return false;
             }
@@ -750,18 +754,19 @@ public:
         _top.tabWidget->setRect(QRect(rectLeft.width() - ofs.width(), ofs.height(), tw, rect.height()));
     }
 
-    void setOverlayMode(OverlayMode mode)
-    {
-        switch (mode) {
-            case OverlayManager::OverlayMode::DisableAll:
-            case OverlayManager::OverlayMode::EnableAll: {
-                auto* mw = Gui::activeMainWindow();
-                if (!mw) {
-                    return;
-                }
-                auto docks = mw->findChildren<QDockWidget*>();
-                // put visible dock widget first
-                std::sort(docks.begin(), docks.end(), [](const QDockWidget* a, const QDockWidget* b) {
+	    void setOverlayMode(OverlayMode mode)
+	    {
+	        switch (mode) {
+	            case OverlayManager::OverlayMode::DisableAll:
+	            case OverlayManager::OverlayMode::EnableAll: {
+	                auto* shell = Gui::ensureActiveShell();
+	                auto* mw = shell ? shell->mainWindow() : nullptr;
+	                if (!mw) {
+	                    return;
+	                }
+	                auto docks = mw->findChildren<QDockWidget*>();
+	                // put visible dock widget first
+	                std::sort(docks.begin(), docks.end(), [](const QDockWidget* a, const QDockWidget* b) {
                     return !a->visibleRegion().isEmpty() && b->visibleRegion().isEmpty();
                 });
                 for (auto dock : docks) {
@@ -1055,16 +1060,17 @@ public:
                 if (action == &_actClose) {
                     dock->toggleViewAction()->activate(QAction::Trigger);
                 }
-                else {
-                    auto it = _overlayMap.find(dock);
-                    if (it != _overlayMap.end()) {
-                        auto* mw = Gui::activeMainWindow();
-                        if (!mw) {
-                            return;
-                        }
-                        it->second->tabWidget->removeWidget(dock);
-                        mw->addDockWidget(it->second->dockArea, dock);
-                        _overlayMap.erase(it);
+	                else {
+	                    auto it = _overlayMap.find(dock);
+	                    if (it != _overlayMap.end()) {
+	                        auto* shell = Gui::ensureActiveShell();
+	                        auto* mw = shell ? shell->mainWindow() : nullptr;
+	                        if (!mw) {
+	                            return;
+	                        }
+	                        it->second->tabWidget->removeWidget(dock);
+	                        mw->addDockWidget(it->second->dockArea, dock);
+	                        _overlayMap.erase(it);
                         dock->show();
                         dock->setFloating(true);
                         refresh();
@@ -1105,14 +1111,15 @@ public:
 
     // Warning, the caller may be deleted during the call. So do not pass
     // parameter using reference, pass by value instead.
-    void dragDockWidget(QPoint pos, QWidget* srcWidget, QPoint dragOffset, QSize dragSize, bool drop)
-    {
-        auto* mw = Gui::activeMainWindow();
-        if (!mw) {
-            return;
-        }
-        auto mdi = Application::Instance->mdiArea();
-        if (!mdi) {
+	    void dragDockWidget(QPoint pos, QWidget* srcWidget, QPoint dragOffset, QSize dragSize, bool drop)
+	    {
+	        auto* shell = Gui::ensureActiveShell();
+	        auto* mw = shell ? shell->mainWindow() : nullptr;
+	        if (!mw) {
+	            return;
+	        }
+	        auto mdi = Application::Instance->mdiArea();
+	        if (!mdi) {
             return;
         }
 
@@ -1770,7 +1777,8 @@ static inline bool isNear(const QPoint& a, const QPoint& b, int tol = 16)
 
 bool OverlayManager::eventFilter(QObject* o, QEvent* ev)
 {
-    auto* mw = Gui::activeMainWindow();
+    auto* shell = Gui::ensureActiveShell();
+    auto* mw = shell ? shell->mainWindow() : nullptr;
     if (d->intercepting || !mw || !o->isWidgetType()) {
         return false;
     }

@@ -815,7 +815,8 @@ void OverlayTabWidget::restore(ParameterGrp::handle handle)
             continue;
         }
         OverlayManager::instance()->registerDockWidget(name, this);
-        auto* mw = Gui::activeMainWindow();
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
         auto dock = mw ? mw->findChild<QDockWidget*>(name) : nullptr;
         if (dock) {
             addWidget(dock, dock->windowTitle());
@@ -1757,8 +1758,10 @@ void OverlayTabWidget::setRect(QRect rect)
 
 void OverlayTabWidget::addWidget(QDockWidget* dock, const QString& title)
 {
-    auto* mw = Gui::activeMainWindow();
-    if (!mw || !Application::Instance->mdiArea()) {
+    auto* shell = Gui::ensureActiveShell();
+    auto* mw = shell ? shell->mainWindow() : nullptr;
+    auto* mdi = Application::Instance->mdiArea();
+    if (!mw || !mdi) {
         return;
     }
 
@@ -1787,7 +1790,7 @@ void OverlayTabWidget::addWidget(QDockWidget* dock, const QString& title)
     dock->setFeatures(dock->features() & ~QDockWidget::DockWidgetFloatable);
     if (count() == 1) {
         QRect rect = dock->geometry();
-        QSize sizeMain = Application::Instance->mdiArea()->size();
+        QSize sizeMain = mdi->size();
         switch (dockArea) {
             case Qt::LeftDockWidgetArea:
             case Qt::RightDockWidgetArea:
@@ -1827,12 +1830,16 @@ void OverlayTabWidget::removeWidget(QDockWidget* dock, QDockWidget* lastDock)
     OverlayManager::setFocusView();
     dock->show();
     if (lastDock) {
-        if (auto* mw = Gui::activeMainWindow()) {
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
+        if (mw) {
             mw->tabifyDockWidget(lastDock, dock);
         }
     }
     else {
-        if (auto* mw = Gui::activeMainWindow()) {
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
+        if (mw) {
             mw->addDockWidget(dockArea, dock);
         }
     }
@@ -2012,7 +2019,9 @@ void OverlayTabWidget::onCurrentChanged(int index)
 void OverlayTabWidget::onSizeGripMove(const QPoint& p)
 {
     auto* mdi = Application::Instance->mdiArea();
-    if (!Gui::activeMainWindow() || !mdi) {
+    auto* shell = Gui::ensureActiveShell();
+    auto* mw = shell ? shell->mainWindow() : nullptr;
+    if (!mw || !mdi) {
         return;
     }
 
@@ -2285,7 +2294,9 @@ void OverlayTitleBar::mousePressEvent(QMouseEvent* me)
 {
     mouseMovePending = false;
     QWidget* parent = parentWidget();
-    if (OverlayTabWidget::_Dragging || !parent || !Gui::activeMainWindow() || me->button() != Qt::LeftButton) {
+    auto* shell = Gui::ensureActiveShell();
+    auto* mw = shell ? shell->mainWindow() : nullptr;
+    if (OverlayTabWidget::_Dragging || !parent || !mw || me->button() != Qt::LeftButton) {
         return;
     }
 
@@ -2315,10 +2326,7 @@ void OverlayTitleBar::mousePressEvent(QMouseEvent* me)
         }
     }
     ignoreMouse = false;
-    QSize mwSize;
-    if (auto* mw = Gui::activeMainWindow()) {
-        mwSize = mw->size();
-    }
+    const QSize mwSize = mw->size();
     dragSize.setWidth(
         std::max(
             OverlayParams::getDockOverlayMinimumSize(),
@@ -2728,7 +2736,9 @@ void OverlaySplitterHandle::mouseMoveEvent(QMouseEvent* me)
 
 void OverlaySplitterHandle::mousePressEvent(QMouseEvent* me)
 {
-    if (OverlayTabWidget::_Dragging || !Gui::activeMainWindow() || me->button() != Qt::LeftButton) {
+    auto* shell = Gui::ensureActiveShell();
+    auto* mw = shell ? shell->mainWindow() : nullptr;
+    if (OverlayTabWidget::_Dragging || !mw || me->button() != Qt::LeftButton) {
         return;
     }
 
@@ -2744,10 +2754,7 @@ void OverlaySplitterHandle::mousePressEvent(QMouseEvent* me)
         dragSize = QSize();
     }
 
-    QSize mwSize;
-    if (auto* mw = Gui::activeMainWindow()) {
-        mwSize = mw->size();
-    }
+    const QSize mwSize = mw->size();
     dragSize.setWidth(
         std::max(
             OverlayParams::getDockOverlayMinimumSize(),
