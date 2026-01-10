@@ -31,8 +31,6 @@
 #include <string_view>
 #include <vector>
 
-#include <boost/algorithm/string/predicate.hpp>
-
 #include <Base/ByteBuffer.h>
 #include <Base/BytesView.h>
 #include <utility>

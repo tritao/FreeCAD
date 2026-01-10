@@ -27,6 +27,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <string_view>
 
 #include <boost/regex.hpp>
 
@@ -213,7 +214,10 @@ std::string ComplexGeoData::getElementMapVersion() const
 
 bool ComplexGeoData::checkElementMapVersion(const char* ver) const
 {
-    return !boost::ends_with(ver, "5");
+    if (!ver) {
+        return true;
+    }
+    return !std::string_view{ver}.ends_with("5");
 }
 
 size_t ComplexGeoData::getElementMapSize(bool flush) const
@@ -382,7 +386,7 @@ char ComplexGeoData::elementType(const Data::IndexedName& element) const
         return 0;
     }
     for (auto& type : getElementTypes()) {
-        if (boost::equals(element.getType(), type)) {
+        if (std::string_view{element.getType()} == type) {
             return type[0];
         }
     }
@@ -435,7 +439,7 @@ char ComplexGeoData::elementType(const char* name) const
 
     if (type && (type[0] != 0)) {
         for (auto& elementTypes : getElementTypes()) {
-            if (boost::starts_with(type, elementTypes)) {
+            if (std::string_view{type}.starts_with(elementTypes)) {
                 return type[0];
             }
         }
@@ -651,7 +655,7 @@ void ComplexGeoData::RestoreDocFile(Base::Reader& reader)
     std::string marker;
     std::string ver;
     reader >> marker;
-    if (boost::equals(marker, "BeginElementMap")) {
+    if (marker == "BeginElementMap") {
         resetElementMap();
         reader >> ver;
         if (ver != "v1") {

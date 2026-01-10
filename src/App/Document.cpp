@@ -39,13 +39,11 @@
 #include <format>
 #include <optional>
 
-#include <boost/algorithm/string.hpp>
-#include <boost/bimap.hpp>
 #include <boost/graph/strong_components.hpp>
 #include <boost/graph/topological_sort.hpp>
 
-#include <boost/regex.hpp>
 #include <random>
+#include <regex>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -60,6 +58,7 @@
 #include <Base/FileInfo.h>
 #include <Base/PathUtils.h>
 #include <Base/Sha1.h>
+#include <Base/StringViewTools.h>
 #include <Base/TimeInfo.h>
 #include <Base/Reader.h>
 #include <Base/Writer.h>
@@ -435,7 +434,7 @@ int Document::_openTransaction(std::string name, int id)
 void Document::renameTransaction(const std::string& name, const int id) const
 {
     if (!name.empty() && d->activeUndoTransaction && d->activeUndoTransaction->getID() == id) {
-        if (boost::starts_with(d->activeUndoTransaction->Name, "-> ")) {
+        if (d->activeUndoTransaction->Name.starts_with("-> ")) {
             d->activeUndoTransaction->Name.resize(3);
         }
         else {
@@ -1871,19 +1870,28 @@ static std::string checkFileName(const char* file)
             ->GetBool("CheckExtension", true)) {
         constexpr std::size_t backupExtLen = sizeof(".fcbak") - 1;
         constexpr std::size_t backupAndDocExtLen = sizeof(".fcbak.fcstd") - 1;
-        if (boost::iends_with(fn, ".fcbak.fcstd")) {
+        const auto iendsWithAscii = [](std::string_view value, std::string_view suffix) {
+            if (value.size() < suffix.size()) {
+                return false;
+            }
+            return Base::StringViewTools::iequalsAscii(
+                value.substr(value.size() - suffix.size()),
+                suffix
+            );
+        };
+        if (iendsWithAscii(fn, ".fcbak.fcstd")) {
             fn.erase(fn.size() - backupAndDocExtLen);
             fn += ".FCStd";
             return fn;
         }
-        if (boost::iends_with(fn, ".fcbak")) {
+        if (iendsWithAscii(fn, ".fcbak")) {
             fn.erase(fn.size() - backupExtLen);
             fn += ".FCStd";
             return fn;
         }
 
         const char* ext = strrchr(fn.c_str(), '.');
-        if ((ext == nullptr) || !boost::iequals(ext + 1, "fcstd")) {
+        if ((ext == nullptr) || !Base::StringViewTools::iequalsAscii(ext + 1, "fcstd")) {
             if (ext && ext[1] == 0) {
                 fn += "FCStd";
             }
