@@ -25,8 +25,6 @@
 #include <cassert>
 #include <limits>
 
-#include <boost/algorithm/string/predicate.hpp>
-
 #include <App/DocumentObjectPy.h>
 #include <Base/GeometryPyCXX.h>
 #include <Base/Tools.h>
@@ -1254,7 +1252,7 @@ Property* ObjectIdentifier::resolveProperty(const App::DocumentObject* obj,
     else {
         ptype = it->second;
         if (ptype != PseudoShape && !subObjectName.getString().empty()
-            && !boost::ends_with(subObjectName.getString(), ".")) {
+            && !subObjectName.getString().ends_with('.')) {
             return nullptr;
         }
         return &const_cast<App::DocumentObject*>(obj)->Label;  // fake the property
@@ -1940,7 +1938,7 @@ std::string ObjectIdentifier::ResolveResults::resolveErrorString() const
     }
     else if (!resolvedProperty) {
         if (propertyType != PseudoShape && !subObjectName.getString().empty()
-            && !boost::ends_with(subObjectName.getString(), ".")) {
+            && !subObjectName.getString().ends_with('.')) {
             ss << "Non geometry subname reference must end with '.'";
         }
         else {

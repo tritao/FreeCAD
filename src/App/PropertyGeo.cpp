@@ -22,6 +22,8 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <string_view>
+
 #include <Base/MatrixPy.h>
 #include <Base/PlacementPy.h>
 #include <Base/Reader.h>
@@ -1308,6 +1310,18 @@ bool PropertyComplexGeoData::checkElementMapVersion(const char* ver) const
     auto data = getComplexData();
     if (!data) {
         return false;
+    }
+    auto owner = freecad_cast<DocumentObject*>(getContainer());
+    std::ostringstream ss;
+    const char* prefix;
+    if (owner && owner->getDocument() && owner->getDocument()->getStringHasher() == data->Hasher) {
+        prefix = "1.";
+    }
+    else {
+        prefix = "0.";
+    }
+    if (!ver || !std::string_view{ver}.starts_with(prefix)) {
+        return true;
     }
     return data->checkElementMapVersion(ver + 2);
 }
