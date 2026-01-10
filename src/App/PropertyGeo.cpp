@@ -22,6 +22,8 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <string_view>
+
 #include <Base/MatrixPy.h>
 #include <Base/PlacementPy.h>
 #include <Base/Reader.h>
