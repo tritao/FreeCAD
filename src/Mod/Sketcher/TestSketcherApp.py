@@ -34,7 +34,7 @@ from SketcherTests.TestSketchCarbonCopyReverseMapping import TestSketchCarbonCop
 try:
     import FreeCADGui
 
-    if FreeCADGui.getMainWindow() is not None:
+    if FreeCADGui.activeMainWindow() is not None:
         from SketcherTests.TestPlacementUpdate import TestSketchPlacementUpdate
 except (ImportError, AttributeError):
     pass  # GUI not available, skip GUI tests

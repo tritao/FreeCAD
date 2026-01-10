@@ -464,7 +464,9 @@ def openBrowserHTML(html, baseurl, title, icon, dialog=False):
     # save dock widget size and location
     def onDockLocationChanged(area):
         PREFS.SetInt("dockWidgetArea", int(area.value))
-        mw = FreeCADGui.getMainWindow()
+        mw = FreeCADGui.activeMainWindow()
+        if not mw:
+            return
         dock = mw.findChild(QtWidgets.QDockWidget, "HelpWidget")
         if dock:
             PREFS.SetBool("dockWidgetFloat", dock.isFloating())
@@ -478,7 +480,9 @@ def openBrowserHTML(html, baseurl, title, icon, dialog=False):
                 show(url.toString(), view=self)
             return super().acceptNavigationRequest(url, _type, isMainFrame)
 
-    mw = FreeCADGui.getMainWindow()
+    mw = FreeCADGui.activeMainWindow()
+    if not mw:
+        return
     view = QtWebEngineWidgets.QWebEngineView()
     page = HelpPage(None, view)
     page.setHtml(html, baseUrl=QtCore.QUrl(baseurl))

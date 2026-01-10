@@ -264,7 +264,9 @@ class FemExamples(QtGui.QWidget):
 
 def show_examplegui():
     QtGui.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-    mw = FreeCADGui.getMainWindow()
+    mw = FreeCADGui.activeMainWindow()
+    if not mw:
+        return
     example_widget = QtGui.QDockWidget("FEM Examples", mw)
     example_widget.setWidget(FemExamples())
     mw.addDockWidget(QtCore.Qt.RightDockWidgetArea, example_widget)

@@ -450,7 +450,7 @@ class PropertyLabel(QtCore.QObject):
 
 def getDocNode():
     doc = FreeCADGui.ActiveDocument.Document.Name
-    mw = FreeCADGui.getMainWindow()
+    mw = FreeCADGui.activeMainWindow()
     if not mw:
         return None
     tws = mw.findChildren(QtGui.QTreeWidget)

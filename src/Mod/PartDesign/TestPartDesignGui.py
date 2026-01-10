@@ -313,7 +313,10 @@ class CreateSketch(unittest.TestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(App.ActiveDocument.Body)
         FreeCADGui.runCommand("Std_OrthographicCamera", 1)
-        mw = FreeCADGui.getMainWindow()
+        mw = FreeCADGui.activeMainWindow()
+        self.assertTrue(mw is not None)
+        if mw is None:
+            return
         workflowcheck = CallableCheckExemptionDialog(self)
         QtCore.QTimer.singleShot(100, workflowcheck)
         FreeCADGui.runCommand("PartDesign_CompSketches", 0)

@@ -262,7 +262,7 @@ class MaterialEditor:
 
     def verifyMaterial(self):
         if self.edited:
-            reply = QtGui.QMessageBox.question(self.widget, #FreeCADGui.getMainWindow(),
+            reply = QtGui.QMessageBox.question(self.widget, #FreeCADGui.uiParentWidget(),
                                                 translate("Material","The document has been modified."),
                                                 translate("Material","Save changes?"),
                                                 QtGui.QMessageBox.Save | QtGui.QMessageBox.Discard | QtGui.QMessageBox.Cancel,
@@ -346,7 +346,7 @@ class MaterialEditor:
         """
 
         if self.edited:
-            reply = QtGui.QMessageBox.question(self.widget, #FreeCADGui.getMainWindow(),
+            reply = QtGui.QMessageBox.question(self.widget, #FreeCADGui.uiParentWidget(),
                                                 translate("Material","The document has been modified."),
                                                 translate("Material","Save changes?"),
                                                 QtGui.QMessageBox.Save | QtGui.QMessageBox.Discard | QtGui.QMessageBox.Cancel,

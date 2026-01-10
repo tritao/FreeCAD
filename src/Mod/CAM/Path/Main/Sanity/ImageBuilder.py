@@ -94,7 +94,9 @@ class GuiImageBuilder(ImageBuilder):
         # Create a new view
         Path.Log.debug("CAM - Preparing view\n")
 
-        mw = FreeCADGui.getMainWindow()
+        mw = FreeCADGui.activeMainWindow()
+        if not mw:
+            return 0
         num_windows = len(mw.getWindows())
 
         # Create and configure the view
@@ -141,7 +143,9 @@ class GuiImageBuilder(ImageBuilder):
 
     def destroy_view(self, idx):
         Path.Log.debug("CAM - destroying view\n")
-        mw = FreeCADGui.getMainWindow()
+        mw = FreeCADGui.activeMainWindow()
+        if not mw:
+            return
         windows = mw.getWindows()
         mw.removeWindow(windows[idx])
 

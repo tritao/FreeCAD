@@ -13,7 +13,7 @@ import FreeCADGui, __main__
 class MainWindow:
 	def __init__(self):
 		self.app = QtGui.qApp
-		self.mw = FreeCADGui.getMainWindow()
+		self.mw = FreeCADGui.activeMainWindow()
 		self.dock = {}
 
 	def setWindowTitle(self, name):
@@ -50,7 +50,7 @@ class PythonQtWorkbench (__main__.Workbench):
 	ToolTip = "Python Qt workbench"
 
 	def __init__(self):
-		self.mw = FreeCADGui.getMainWindow()
+		self.mw = FreeCADGui.activeMainWindow()
 		self.dock = {}
 		self.item = []
 

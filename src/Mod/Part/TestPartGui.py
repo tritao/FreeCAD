@@ -34,7 +34,9 @@ from PySide import QtWidgets
 
 def findDockWidget(name):
     """Get a dock widget by name"""
-    mw = FreeCADGui.getMainWindow()
+    mw = FreeCADGui.activeMainWindow()
+    if not mw:
+        return None
     dws = mw.findChildren(QtWidgets.QDockWidget)
     for dw in dws:
         if dw.objectName() == name:
