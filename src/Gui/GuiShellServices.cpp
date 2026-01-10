@@ -23,12 +23,16 @@
 #include "GuiShellServices.h"
 
 #include "DockWindowManager.h"
+#include "MainWindow.h"
 #include "ToolBarManager.h"
 
 #include <QMainWindow>
+#include <QMap>
 #include <QMenuBar>
 #include <QPointer>
+#include <QString>
 #include <QStatusBar>
+#include <QUrl>
 
 namespace Gui
 {
@@ -43,6 +47,7 @@ public:
 
     QPointer<QMainWindow> hostWindow;
     std::string statePrefix;
+    QMap<QString, QPointer<UrlHandler>> urlHandlers;
 };
 
 GuiShellServices::GuiShellServices(QMainWindow* hostWindow, std::string statePrefix)
@@ -75,6 +80,37 @@ QStatusBar* GuiShellServices::statusBar() const
         return w->statusBar();
     }
     return nullptr;
+}
+
+void GuiShellServices::setUrlHandler(const QString& scheme, UrlHandler* handler)
+{
+    if (scheme.isEmpty()) {
+        return;
+    }
+    if (!handler) {
+        d->urlHandlers.remove(scheme);
+        return;
+    }
+    d->urlHandlers[scheme] = handler;
+}
+
+void GuiShellServices::unsetUrlHandler(const QString& scheme)
+{
+    if (scheme.isEmpty()) {
+        return;
+    }
+    d->urlHandlers.remove(scheme);
+}
+
+bool GuiShellServices::openUrl(App::Document* doc, const QUrl& url) const
+{
+    auto it = d->urlHandlers.find(url.scheme());
+    if (it == d->urlHandlers.end() || it->isNull()) {
+        return false;
+    }
+
+    (*it)->openUrl(doc, url);
+    return true;
 }
 
 ToolBarManager* GuiShellServices::toolBars()

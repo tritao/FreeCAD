@@ -2441,13 +2441,14 @@ int Application::confirmSave(App::Document* doc, QWidget* parent, bool addCheckb
 
 void Application::loadUrls(App::Document* doc, const QList<QUrl>& urls)
 {
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->loadUrls(doc, urls);
-        return;
-    }
+    Gui::IGuiShell* shell = Gui::activeShell();
 
     QStringList files;
     for (const auto& it : urls) {
+        if (shell && shell->services().openUrl(doc, it)) {
+            continue;
+        }
+
         if (it.isLocalFile()) {
             QFileInfo info(it.toLocalFile());
             if (info.exists() && info.isFile()) {

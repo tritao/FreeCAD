@@ -78,6 +78,9 @@
 #include <Base/Interpreter.h>
 #include <Base/Stream.h>
 #include <Base/Tools.h>
+
+#include "GuiShell.h"
+#include "GuiShellServices.h"
 #include <Base/UnitsApi.h>
 #include <DAGView/DAGView.h>
 #include <TaskView/TaskView.h>
@@ -2224,72 +2227,45 @@ void MainWindow::insertFromMimeData(const QMimeData* mimeData)
 
 void MainWindow::setUrlHandler(const QString& scheme, Gui::UrlHandler* handler)
 {
-    d->urlHandler[scheme] = handler;
+    if (!scheme.isEmpty()) {
+        d->urlHandler[scheme] = handler;
+    }
+    if (auto* shell = Gui::activeShell(); shell && shell->mainWindow() == this) {
+        shell->services().setUrlHandler(scheme, handler);
+    }
 }
 
 void MainWindow::unsetUrlHandler(const QString& scheme)
 {
     d->urlHandler.remove(scheme);
+    if (auto* shell = Gui::activeShell(); shell && shell->mainWindow() == this) {
+        shell->services().unsetUrlHandler(scheme);
+    }
 }
 
 void MainWindow::loadUrls(App::Document* doc, const QList<QUrl>& urls)
 {
-    QStringList files;
-    for (const auto& it : urls) {
-        QMap<QString, QPointer<UrlHandler>>::iterator jt = d->urlHandler.find(it.scheme());
-        if (jt != d->urlHandler.end() && !jt->isNull()) {
-            // delegate the loading to the url handler
-            (*jt)->openUrl(doc, it);
-            continue;
-        }
-
-        QFileInfo info(it.toLocalFile());
-        if (info.exists() && info.isFile()) {
-            if (info.isSymLink()) {
-                info.setFile(info.symLinkTarget());
-            }
-            std::vector<std::string> module = App::GetApplication().getImportModules(
-                info.completeSuffix().toLatin1()
-            );
-            if (module.empty()) {
-                module = App::GetApplication().getImportModules(info.suffix().toLatin1());
-            }
-            if (!module.empty()) {
-                // ok, we support files with this extension
-                files << info.absoluteFilePath();
-            }
-            else {
-                Base::Console().message(
-                    "No support to load file '%s'\n",
-                    (const char*)info.absoluteFilePath().toUtf8()
-                );
-            }
-        }
-        else if (it.scheme().toLower() == QLatin1String("http")) {
-            Gui::Dialog::DownloadManager* dm = Gui::Dialog::DownloadManager::getInstance();
-            dm->download(dm->redirectUrl(it));
-        }
-
-        else if (it.scheme().toLower() == QLatin1String("https")) {
-            QUrl url = it;
-            QUrlQuery urlq(url);
-            if (urlq.hasQueryItem(QLatin1String("sid"))) {
-                urlq.removeAllQueryItems(QLatin1String("sid"));
-                url.setQuery(urlq);
-                url.setScheme(QLatin1String("http"));
-            }
-            Gui::Dialog::DownloadManager* dm = Gui::Dialog::DownloadManager::getInstance();
-            dm->download(dm->redirectUrl(url));
-        }
-
-        else if (it.scheme().toLower() == QLatin1String("ftp")) {
-            Gui::Dialog::DownloadManager::getInstance()->download(it);
-        }
+    if (!Application::Instance) {
+        return;
     }
 
-    QByteArray docName = doc ? QByteArray(doc->getName())
-                             : qApp->translate("StdCmdNew", "Unnamed").toUtf8();
-    ModuleIO::importFiles(files, docName);
+    if (auto* shell = Gui::activeShell(); shell && shell->mainWindow() == this) {
+        Application::Instance->loadUrls(doc, urls);
+        return;
+    }
+
+    QList<QUrl> remainingUrls;
+    remainingUrls.reserve(urls.size());
+    for (const auto& url : urls) {
+        QMap<QString, QPointer<UrlHandler>>::iterator it = d->urlHandler.find(url.scheme());
+        if (it != d->urlHandler.end() && !it->isNull()) {
+            (*it)->openUrl(doc, url);
+            continue;
+        }
+        remainingUrls.push_back(url);
+    }
+
+    Application::Instance->loadUrls(doc, remainingUrls);
 }
 
 void MainWindow::changeEvent(QEvent* e)

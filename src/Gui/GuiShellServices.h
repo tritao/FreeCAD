@@ -31,12 +31,20 @@
 class QMainWindow;
 class QMenuBar;
 class QStatusBar;
+class QString;
+class QUrl;
+
+namespace App
+{
+class Document;
+}
 
 namespace Gui
 {
 
 class DockWindowManager;
 class ToolBarManager;
+class UrlHandler;
 
 class GuiExport GuiShellServices
 {
@@ -49,6 +57,10 @@ public:
 
     QMenuBar* menuBar() const;
     QStatusBar* statusBar() const;
+
+    void setUrlHandler(const QString& scheme, UrlHandler* handler);
+    void unsetUrlHandler(const QString& scheme);
+    bool openUrl(App::Document* doc, const QUrl& url) const;
 
     ToolBarManager* toolBars();
     DockWindowManager* docking();
