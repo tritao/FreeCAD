@@ -34,7 +34,6 @@
 #  define WINVER 0x502 // needed for SetDllDirectory
 #  include <Windows.h>
 # endif
-# include <boost/program_options.hpp>
 # include <boost/date_time/posix_time/posix_time.hpp>
 # include <boost/scope_exit.hpp>
 # include <chrono>
@@ -129,7 +128,7 @@
 #include "Part.h"
 #include "GeoFeaturePy.h"
 #include "Placement.h"
-#include "ProgramOptionsUtilities.h"
+#include "CommandLine.h"
 #include "Property.h"
 #include "PropertyContainer.h"
 #include "PropertyExpressionEngine.h"
@@ -2203,185 +2202,22 @@ void Application::initTypes()
 
 namespace {
 
-void parseProgramOptions(int ac, char ** av, const std::string& exe, boost::program_options::variables_map& vm)
+App::CommandLineOptions parseProgramOptions(int ac, char** av, const std::string& exe)
 {
-    // Declare a group of options that will be
-    // allowed only on the command line
-    boost::program_options::options_description generic("Generic options");
-    generic.add_options()
-    ("version,v", "Prints version string")
-    ("verbose", "Prints verbose version string")
-    ("help,h", "Prints help message")
-    ("console,c", "Starts in console mode")
-    ("response-file", boost::program_options::value<std::string>(),"Can be specified with '@name', too")
-    ("dump-config", "Dumps configuration")
-    ("get-config", boost::program_options::value<std::string>(), "Prints the value of the requested configuration key")
-    ("set-config", boost::program_options::value< std::vector<std::string> >()->multitoken(), "Sets the value of a configuration key")
-    ("keep-deprecated-paths", "If set then config files are kept on the old location")
-    ;
-
-    // Declare a group of options that will be
-    // allowed both on the command line and in
-    // the config file
-    std::stringstream descr;
-    descr << "Writes " << exe << ".log to the user directory.";
-    boost::program_options::options_description config("Configuration");
-    config.add_options()
-    ("write-log,l", descr.str().c_str())
-    ("log-file", boost::program_options::value<std::string>(), "Unlike --write-log this allows logging to an arbitrary file")
-    ("user-cfg,u", boost::program_options::value<std::string>(),"User config file to load/save user settings")
-    ("system-cfg,s", boost::program_options::value<std::string>(),"System config file to load/save system settings")
-    ("run-test,t", boost::program_options::value<std::string>()->implicit_value(""),"Run a given test case (use 0 (zero) to run all tests). If no argument is provided then return list of all available tests.")
-    ("run-open,r", boost::program_options::value<std::string>()->implicit_value(""),"Run a given test case (use 0 (zero) to run all tests). If no argument is provided then return list of all available tests.  Keeps UI open after test(s) complete.")
-    ("module-path,M", boost::program_options::value< std::vector<std::string> >()->composing(),"Additional module paths")
-    ("macro-path,E", boost::program_options::value< std::vector<std::string> >()->composing(),"Additional macro paths")
-    ("python-path,P", boost::program_options::value< std::vector<std::string> >()->composing(),"Additional python paths")
-    ("disable-addon", boost::program_options::value< std::vector<std::string> >()->composing(),"Disable a given addon.")
-    ("single-instance", "Allow to run a single instance of the application")
-    ("safe-mode", "Force enable safe mode")
-    ("pass", boost::program_options::value< std::vector<std::string> >()->multitoken(), "Ignores the following arguments and pass them through to be used by a script")
-    ;
-
-
-    // Hidden options, will be allowed both on the command line and
-    // in the config file, but will not be shown to the user.
-    boost::program_options::options_description hidden("Hidden options");
-    hidden.add_options()
-    ("input-file", boost::program_options::value< std::vector<std::string> >(), "input file")
-    ("output",     boost::program_options::value<std::string>(),"output file")
-    ("hidden",                                             "don't show the main window")
-    // this are to ignore for the window system (QApplication)
-    ("style",      boost::program_options::value< std::string >(), "set the application GUI style")
-    ("stylesheet", boost::program_options::value< std::string >(), "set the application stylesheet")
-    ("session",    boost::program_options::value< std::string >(), "restore the application from an earlier session")
-    ("reverse",                                               "set the application's layout direction from right to left")
-    ("widgetcount",                                           "print debug messages about widgets")
-    ("graphicssystem", boost::program_options::value< std::string >(), "backend to be used for on-screen widgets and pixmaps")
-    ("display",    boost::program_options::value< std::string >(), "set the X-Server")
-    ("geometry ",  boost::program_options::value< std::string >(), "set the X-Window geometry")
-    ("font",       boost::program_options::value< std::string >(), "set the X-Window font")
-    ("fn",         boost::program_options::value< std::string >(), "set the X-Window font")
-    ("background", boost::program_options::value< std::string >(), "set the X-Window background color")
-    ("bg",         boost::program_options::value< std::string >(), "set the X-Window background color")
-    ("foreground", boost::program_options::value< std::string >(), "set the X-Window foreground color")
-    ("fg",         boost::program_options::value< std::string >(), "set the X-Window foreground color")
-    ("button",     boost::program_options::value< std::string >(), "set the X-Window button color")
-    ("btn",        boost::program_options::value< std::string >(), "set the X-Window button color")
-    ("name",       boost::program_options::value< std::string >(), "set the X-Window name")
-    ("title",      boost::program_options::value< std::string >(), "set the X-Window title")
-    ("visual",     boost::program_options::value< std::string >(), "set the X-Window to color scheme")
-    ("ncols",      boost::program_options::value< int    >(), "set the X-Window to color scheme")
-    ("cmap",                                                  "set the X-Window to color scheme")
-#if defined(FC_OS_MACOSX)
-    ("psn",        boost::program_options::value< std::string >(), "process serial number")
-#endif
-    ;
-
-
-    //0000723: improper handling of qt specific command line arguments
-    std::vector<std::string> args;
-    bool merge=false;
-    for (int i=1; i<ac; i++) {
-        if (merge) {
-            merge = false;
-            args.back() += "=";
-            args.back() += av[i];
-        }
-        else {
-            args.emplace_back(av[i]);
-        }
-        if (strcmp(av[i],"-style") == 0) {
-            merge = true;
-        }
-        else if (strcmp(av[i],"-stylesheet") == 0) {
-            merge = true;
-        }
-        else if (strcmp(av[i],"-session") == 0) {
-            merge = true;
-        }
-        else if (strcmp(av[i],"-graphicssystem") == 0) {
-            merge = true;
-        }
-    }
-
-    // 0000659: SIGABRT on startup in boost::program_options (Boost 1.49)
-    // Add some text to the constructor
-    boost::program_options::options_description cmdline_options("Command-line options");
-    cmdline_options.add(generic).add(config).add(hidden);
-
-    boost::program_options::options_description config_file_options("Config");
-    config_file_options.add(config).add(hidden);
-
-    boost::program_options::options_description visible("Allowed options");
-    visible.add(generic).add(config);
-
-    boost::program_options::positional_options_description p;
-    p.add("input-file", -1);
-
-    try {
-        store( boost::program_options::command_line_parser(args).
-               options(cmdline_options).positional(p).extra_parser(Util::customSyntax).run(), vm);
-
-        std::ifstream ifs("FreeCAD.cfg");
-        if (ifs)
-            store(parse_config_file(ifs, config_file_options), vm);
-        notify(vm);
-    }
-    catch (const std::exception& e) {
-        std::stringstream str;
-        str << e.what() << '\n' << '\n' << visible << '\n';
-        throw Base::UnknownProgramOption(str.str());
-    }
-    catch (...) {
-        std::stringstream str;
-        str << "Wrong or unknown option, bailing out!" << '\n' << '\n' << visible << '\n';
-        throw Base::UnknownProgramOption(str.str());
-    }
-
-    if (vm.contains("help")) {
-        std::stringstream str;
-        str << exe << '\n' << '\n';
-        str << "For a detailed description see https://www.freecad.org/wiki/Start_up_and_Configuration" << '\n'<<'\n';
-        str << "Usage: " << exe << " [options] File1 File2 ..." << '\n' << '\n';
-        str << visible << '\n';
-        throw Base::ProgramInformation(str.str());
-    }
-
-    if (vm.contains("response-file")) {
-        // Load the file and tokenize it
-        std::ifstream ifs(vm["response-file"].as<std::string>().c_str());
-        if (!ifs) {
-            Base::Console().error("Could no open the response file\n");
-            std::stringstream str;
-            str << "Could no open the response file: '"
-                << vm["response-file"].as<std::string>() << "'" << '\n';
-            throw Base::UnknownProgramOption(str.str());
-        }
-        // Read the whole file into a string
-        std::stringstream ss;
-        ss << ifs.rdbuf();
-        // Split the file content
-        boost::char_separator<char> sep(" \n\r");
-        boost::tokenizer<boost::char_separator<char> > tok(ss.str(), sep);
-        std::vector<std::string> args2;
-        copy(tok.begin(), tok.end(), back_inserter(args2));
-        // Parse the file and store the options
-        store( boost::program_options::command_line_parser(args2).
-               options(cmdline_options).positional(p).extra_parser(Util::customSyntax).run(), vm);
-    }
+    return App::parseCommandLine(ac, av, exe);
 }
 
-void processProgramOptions(const boost::program_options::variables_map& vm, std::map<std::string,std::string>& mConfig)
+void processProgramOptions(const App::CommandLineOptions& options, std::map<std::string, std::string>& mConfig)
 {
-    if (vm.contains("version") && !vm.contains("verbose")) {
+    if (options.has("version") && !options.has("verbose")) {
         std::stringstream str;
         str << mConfig["ExeName"] << " " << mConfig["ExeVersion"]
             << " Revision: " << mConfig["BuildRevision"] << '\n';
         throw Base::ProgramInformation(str.str());
     }
 
-    if (vm.contains("module-path")) {
-        auto  Mods = vm["module-path"].as< std::vector<std::string> >();
+    if (options.has("module-path")) {
+        const auto& Mods = options.values("module-path");
         std::string temp;
         for (const auto & It : Mods)
             temp += It + ";";
@@ -2389,8 +2225,8 @@ void processProgramOptions(const boost::program_options::variables_map& vm, std:
         mConfig["AdditionalModulePaths"] = temp;
     }
 
-    if (vm.contains("macro-path")) {
-        std::vector<std::string> Macros = vm["macro-path"].as< std::vector<std::string> >();
+    if (options.has("macro-path")) {
+        const auto& Macros = options.values("macro-path");
         std::string temp;
         for (const auto & It : Macros)
             temp += It + ";";
@@ -2398,14 +2234,14 @@ void processProgramOptions(const boost::program_options::variables_map& vm, std:
         mConfig["AdditionalMacroPaths"] = std::move(temp);
     }
 
-    if (vm.contains("python-path")) {
-        auto  Paths = vm["python-path"].as< std::vector<std::string> >();
+    if (options.has("python-path")) {
+        const auto& Paths = options.values("python-path");
         for (const auto & It : Paths)
             Base::Interpreter().addPythonPath(It.c_str());
     }
 
-    if (vm.contains("disable-addon")) {
-        auto Addons = vm["disable-addon"].as< std::vector<std::string> >();
+    if (options.has("disable-addon")) {
+        const auto& Addons = options.values("disable-addon");
         std::string temp;
         for (const auto & It : Addons) {
             temp += It + ";";
@@ -2414,8 +2250,8 @@ void processProgramOptions(const boost::program_options::variables_map& vm, std:
         mConfig["DisabledAddons"] = temp;
     }
 
-    if (vm.contains("input-file")) {
-        auto  files(vm["input-file"].as< std::vector<std::string> >());
+    if (options.has("input-file")) {
+        const auto& files = options.values("input-file");
         int OpenFileCount=0;
         for (const auto & It : files) {
 
@@ -2429,34 +2265,34 @@ void processProgramOptions(const boost::program_options::variables_map& vm, std:
         mConfig["OpenFileCount"] = buffer.str();
     }
 
-    if (vm.contains("output")) {
-        mConfig["SaveFile"] = vm["output"].as<std::string>();
+    if (options.has("output")) {
+        mConfig["SaveFile"] = options.valueOr("output");
     }
 
-    if (vm.contains("hidden")) {
+    if (options.has("hidden")) {
         mConfig["StartHidden"] = "1";
     }
 
-    if (vm.contains("write-log")) {
+    if (options.has("write-log")) {
         mConfig["LoggingFile"] = "1";
         mConfig["LoggingFileName"] = mConfig["UserAppData"] + mConfig["ExeName"] + ".log";
     }
 
-    if (vm.contains("log-file")) {
+    if (options.has("log-file")) {
         mConfig["LoggingFile"] = "1";
-        mConfig["LoggingFileName"] = vm["log-file"].as<std::string>();
+        mConfig["LoggingFileName"] = options.valueOr("log-file");
     }
 
-    if (vm.contains("user-cfg")) {
-        mConfig["UserParameter"] = vm["user-cfg"].as<std::string>();
+    if (options.has("user-cfg")) {
+        mConfig["UserParameter"] = options.valueOr("user-cfg");
     }
 
-    if (vm.contains("system-cfg")) {
-        mConfig["SystemParameter"] = vm["system-cfg"].as<std::string>();
+    if (options.has("system-cfg")) {
+        mConfig["SystemParameter"] = options.valueOr("system-cfg");
     }
 
-    if (vm.contains("run-test") || vm.contains("run-open")) {
-        std::string testCase = vm.contains("run-open") ? vm["run-open"].as<std::string>() : vm["run-test"].as<std::string>();
+    if (options.has("run-test") || options.has("run-open")) {
+        std::string testCase = options.has("run-open") ? options.valueOr("run-open") : options.valueOr("run-test");
 
         if ( "0" == testCase) {
             testCase = "TestApp.All";
@@ -2467,14 +2303,14 @@ void processProgramOptions(const boost::program_options::variables_map& vm, std:
         mConfig["TestCase"] = std::move(testCase);
         mConfig["RunMode"] = "Internal";
         mConfig["ScriptFileName"] = "FreeCADTest";
-        mConfig["ExitTests"] = vm.contains("run-open") ? "no" : "yes";
+        mConfig["ExitTests"] = options.has("run-open") ? "no" : "yes";
     }
 
-    if (vm.contains("single-instance")) {
+    if (options.has("single-instance")) {
         mConfig["SingleInstance"] = "1";
     }
 
-    if (vm.contains("dump-config")) {
+    if (options.has("dump-config")) {
         std::stringstream str;
         for (const auto & it : mConfig) {
             str << it.first << "=" << it.second << '\n';
@@ -2482,8 +2318,8 @@ void processProgramOptions(const boost::program_options::variables_map& vm, std:
         throw Base::ProgramInformation(str.str());
     }
 
-    if (vm.contains("get-config")) {
-        auto configKey = vm["get-config"].as<std::string>();
+    if (options.has("get-config")) {
+        auto configKey = options.valueOr("get-config");
         std::stringstream str;
         std::map<std::string,std::string>::iterator pos;
         pos = mConfig.find(configKey);
@@ -2494,8 +2330,8 @@ void processProgramOptions(const boost::program_options::variables_map& vm, std:
         throw Base::ProgramInformation(str.str());
     }
 
-    if (vm.contains("set-config")) {
-        auto  configKeyValue = vm["set-config"].as< std::vector<std::string> >();
+    if (options.has("set-config")) {
+        const auto& configKeyValue = options.values("set-config");
         for (const auto& it : configKeyValue) {
             auto pos = it.find('=');
             if (pos != std::string::npos) {
@@ -2553,24 +2389,24 @@ void Application::initConfig(int argc, char ** argv)
         }
     }
 
-    boost::program_options::variables_map vm;
+    App::CommandLineOptions options;
     {
         BOOST_SCOPE_EXIT_ALL(&) {
             // console-mode needs to be set (if possible) also in case parseProgramOptions
             // throws, as it's needed when reporting such exceptions
-            if (vm.contains("console")) {
+            if (options.has("console")) {
                 mConfig["Console"] = "1";
                 mConfig["RunMode"] = "Cmd";
             }
         };
-        parseProgramOptions(argc, argv, mConfig["ExeName"], vm);
+        options = parseProgramOptions(argc, argv, mConfig["ExeName"]);
     }
 
-    if (vm.contains("keep-deprecated-paths")) {
+    if (options.has("keep-deprecated-paths")) {
         mConfig["KeepDeprecatedPaths"] = "1";
     }
 
-    if (vm.contains("safe-mode")) {
+    if (options.has("safe-mode")) {
         mConfig["SafeMode"] = "1";
     }
 
@@ -2618,7 +2454,7 @@ void Application::initConfig(int argc, char ** argv)
         Base::Console().warning("Encoding of Python paths failed\n");
 
     // Handle the options that have impact on the init process
-    processProgramOptions(vm, mConfig);
+    processProgramOptions(options, mConfig);
 
     // Init console ===========================================================
     Base::PyGILStateLocker lock;
@@ -2645,7 +2481,7 @@ void Application::initConfig(int argc, char ** argv)
 #endif
 
     // Banner ===========================================================
-    if (mConfig["RunMode"] != "Cmd" && !(vm.contains("verbose") && vm.contains("version"))) {
+    if (mConfig["RunMode"] != "Cmd" && !(options.has("verbose") && options.has("version"))) {
         // Remove banner if FreeCAD is invoked via the -c command as regular
         // Python interpreter
         if (mConfig["Verbose"] != "Strict")
@@ -2757,7 +2593,7 @@ void Application::initConfig(int argc, char ** argv)
 
     logStatus();
 
-    if (vm.contains("verbose") && vm.contains("version")) {
+    if (options.has("verbose") && options.has("version")) {
         Application::_pcSingleton = new Application(mConfig);
         throw Base::ProgramInformation(Application::verboseVersionEmitMessage);
     }
@@ -3044,15 +2880,6 @@ void Application::LoadParameters()
         _pcUserParamMngr->CreateDocument();
     }
 }
-
-#if defined(_MSC_VER) && BOOST_VERSION < 108200
-    // fix weird error while linking boost (all versions of VC)
-    // VS2010: https://forum.freecad.org/viewtopic.php?f=4&t=1886&p=12553&hilit=boost%3A%3Afilesystem%3A%3Aget#p12553
-    namespace boost { namespace program_options { std::string arg="arg"; } }
-    namespace boost { namespace program_options {
-    const unsigned options_description::m_default_line_length = 80;
-    } }
-#endif
 
 // A helper function to simplify the main part.
 template<class T>

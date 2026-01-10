@@ -85,7 +85,6 @@ target_compile_definitions(FreeCADApp PRIVATE FREECAD_BUILD_QT=$<BOOL:${BUILD_QT
 
 set(FreeCADApp_LIBS
     FreeCADBase
-    Boost::program_options
     Boost::thread
     Boost::date_time
     fmt::fmt
@@ -305,6 +304,7 @@ SET(FreeCADApp_CPP_SRCS
     ${Document_CPP_SRCS}
     ${Properties_CPP_SRCS}
     Application.cpp
+    CommandLine.cpp
     ApplicationDirectories.cpp
     ApplicationDirectoriesPyImp.cpp
     ApplicationPy.cpp
@@ -344,6 +344,7 @@ SET(FreeCADApp_HPP_SRCS
     ${Document_HPP_SRCS}
     ${Properties_HPP_SRCS}
     Application.h
+    CommandLine.h
     ApplicationDirectories.h
     AutoTransaction.h
     Branding.h
