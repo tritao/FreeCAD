@@ -5,7 +5,6 @@ add_library(FreeCADBase SHARED)
 if(WIN32)
     add_definitions(-DFCBase)
     add_definitions(-DPYCXX_DLL)
-    add_definitions(-DBOOST_DYN_LINK)
     add_definitions(-DZIPIOS_UTF8)
 endif(WIN32)
 
@@ -26,7 +25,6 @@ target_include_directories(
     FreeCADBase
     SYSTEM
     PUBLIC
-    ${Boost_INCLUDE_DIRS}
     ${PYCXX_INCLUDE_DIR}
     ${Python3_INCLUDE_DIRS}
     ${XercesC_INCLUDE_DIRS}
@@ -37,7 +35,6 @@ target_include_directories(
 
 if(MSVC)
     set(FreeCADBase_LIBS
-        ${Boost_LIBRARIES}
         ${XercesC_LIBRARIES}
         ${ZLIB_LIBRARIES}
         ${ICU_LIBRARIES}
@@ -63,7 +60,6 @@ if(MSVC)
 elseif(MINGW)
     set(FreeCADBase_LIBS
         ${XercesC_LIBRARIES}
-        ${Boost_LIBRARIES}
         ${ZLIB_LIBRARIES}
         ${ICU_LIBRARIES}
         Rpcrt4.lib
@@ -71,7 +67,6 @@ elseif(MINGW)
 else(MSVC)
     set(FreeCADBase_LIBS
         ${XercesC_LIBRARIES}
-        ${Boost_LIBRARIES}
         ${ZLIB_LIBRARIES}
         ${ICU_LIBRARIES}
     )
