@@ -38,6 +38,7 @@
 #include <xercesc/sax/SAXParseException.hpp>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include <FCConfig.h>
@@ -46,7 +47,6 @@
 # include <unistd.h>
 #endif
 
-#include <boost/algorithm/string.hpp>
 #include <fmt/printf.h>
 
 #include "Parameter.h"
@@ -55,6 +55,7 @@
 #include "Exception.h"
 #include "FileInfo.h"
 #include "FileLock.h"
+#include "StringViewTools.h"
 #include "Tools.h"
 
 FC_LOG_LEVEL_INIT("Parameter", true, true)
@@ -384,13 +385,22 @@ Base::Reference<ParameterGrp> ParameterGrp::GetGroup(const char* Name)
     }
 
     Base::Reference<ParameterGrp> hGrp = this;
-    std::vector<std::string> tokens;
-    boost::split(tokens, Name, boost::is_any_of("/"));
-    for (auto& token : tokens) {
-        boost::trim(token);
-        if (token.empty()) {
+    std::string_view nameView = Name;
+    std::size_t start = 0;
+    while (start <= nameView.size()) {
+        const std::size_t end = nameView.find('/', start);
+        std::string_view tokenView = (end == std::string_view::npos)
+            ? nameView.substr(start)
+            : nameView.substr(start, end - start);
+        tokenView = Base::StringViewTools::trim(tokenView);
+        if (tokenView.empty()) {
+            if (end == std::string_view::npos) {
+                break;
+            }
+            start = end + 1;
             continue;
         }
+        const std::string token(tokenView);
         hGrp = hGrp->_GetGroup(token.c_str());
         if (!hGrp) {
             // The group is clearing. Return some dummy group to avoid caller
@@ -399,6 +409,10 @@ Base::Reference<ParameterGrp> ParameterGrp::GetGroup(const char* Name)
             hGrp->_cName = Name;
             break;
         }
+        if (end == std::string_view::npos) {
+            break;
+        }
+        start = end + 1;
     }
     if (hGrp == this) {
         throw Base::ValueError("Empty group name");
@@ -539,22 +553,22 @@ const char* ParameterGrp::TypeName(ParamType Type)
 ParameterGrp::ParamType ParameterGrp::TypeValue(const char* Name)
 {
     if (Name) {
-        if (boost::equals(Name, "FCBool")) {
+        if (std::string_view(Name) == "FCBool") {
             return ParamType::FCBool;
         }
-        if (boost::equals(Name, "FCInt")) {
+        if (std::string_view(Name) == "FCInt") {
             return ParamType::FCInt;
         }
-        if (boost::equals(Name, "FCUInt")) {
+        if (std::string_view(Name) == "FCUInt") {
             return ParamType::FCUInt;
         }
-        if (boost::equals(Name, "FCText")) {
+        if (std::string_view(Name) == "FCText") {
             return ParamType::FCText;
         }
-        if (boost::equals(Name, "FCFloat")) {
+        if (std::string_view(Name) == "FCFloat") {
             return ParamType::FCFloat;
         }
-        if (boost::equals(Name, "FCParamGroup")) {
+        if (std::string_view(Name) == "FCParamGroup") {
             return ParamType::FCGroup;
         }
     }
