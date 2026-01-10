@@ -137,9 +137,6 @@ protected:
     void doAction(SoAction* action) override;
 
 private:
-    void startSelection(SoAction* action);
-    void stopSelection(SoAction* action);
-    void renderSelectionGeometry(const SbVec3f*);
     void startVisibility(SoAction* action);
     void stopVisibility(SoAction* action);
     void renderVisibleFaces(const SbVec3f*);
@@ -148,7 +145,6 @@ private:
 
 private:
     MeshRenderer render;
-    GLuint* selectBuf {nullptr};
 };
 // NOLINTEND
 
