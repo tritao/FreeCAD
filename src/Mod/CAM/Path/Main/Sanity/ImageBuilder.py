@@ -97,7 +97,7 @@ class GuiImageBuilder(ImageBuilder):
         mw = FreeCADGui.activeMainWindow()
         if not mw:
             return 0
-        num_windows = len(mw.getWindows())
+        num_windows = len(FreeCADGui.getWindows())
 
         # Create and configure the view
         view_obj = FreeCADGui.ActiveDocument.createView("Gui::View3DInventor")
@@ -143,11 +143,10 @@ class GuiImageBuilder(ImageBuilder):
 
     def destroy_view(self, idx):
         Path.Log.debug("CAM - destroying view\n")
-        mw = FreeCADGui.activeMainWindow()
-        if not mw:
+        windows = FreeCADGui.getWindows()
+        if idx < 0 or idx >= len(windows):
             return
-        windows = mw.getWindows()
-        mw.removeWindow(windows[idx])
+        FreeCADGui.removeWindow(windows[idx])
 
     def restore_visibility(self):
         Path.Log.debug("CAM - Restoring visibility\n")

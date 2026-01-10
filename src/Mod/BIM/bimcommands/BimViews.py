@@ -685,12 +685,9 @@ def show(item, column=None):
                 FreeCADGui.Selection.addSelection(o)
             if not hasattr(FreeCADGui.ActiveDocument.ActiveView, "getSceneGraph"):
                 # Find first 3d view and switch to it
-                mw = FreeCADGui.getMainWindow()
-                if not mw:
-                    return
-                for w in mw.getWindows():
+                for w in FreeCADGui.getWindows():
                     if hasattr(w, "getSceneGraph"):
-                        mw.setActiveWindow(w)
+                        FreeCADGui.setActiveWindow(w)
                         break
             FreeCADGui.runCommand("Std_OrthographicCamera")
             FreeCADGui.ActiveDocument.ActiveView.viewTop()

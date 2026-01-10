@@ -58,6 +58,7 @@
 #include "MainWindow.h"
 #include "MainWindowPy.h"
 #include "MDIView.h"
+#include "MDIViewPy.h"
 #include "PythonEditor.h"
 #include "PythonWrapper.h"
 #include "SoFCDB.h"
@@ -193,6 +194,38 @@ PyMethodDef ApplicationPy::Methods[] = {
      "activeWindow() -> MDIView or None\n"
      "\n"
      "Return the active MDI view of the current shell."},
+    {"getWindows",
+     (PyCFunction)ApplicationPy::sGetWindows,
+     METH_VARARGS,
+     "getWindows() -> list[MDIView]\n"
+     "\n"
+     "Return all MDI views for the current shell.\n"
+     "\n"
+     "This is shell-aware and should be preferred over\n"
+     "getMainWindow().getWindows()."},
+    {"setActiveWindow",
+     (PyCFunction)ApplicationPy::sSetActiveWindow,
+     METH_VARARGS,
+     "setActiveWindow(view) -> None\n"
+     "\n"
+     "Set the active MDI view of the current shell.\n"
+     "\n"
+     "This is shell-aware and should be preferred over\n"
+     "getMainWindow().setActiveWindow(view).\n"
+     "\n"
+     "view : MDIView"},
+    {"removeWindow",
+     (PyCFunction)ApplicationPy::sRemoveWindow,
+     METH_VARARGS,
+     "removeWindow(view, close=True) -> None\n"
+     "\n"
+     "Remove an MDI view from the current shell.\n"
+     "\n"
+     "This is shell-aware and should be preferred over\n"
+     "getMainWindow().removeWindow(view).\n"
+     "\n"
+     "view : MDIView\n"
+     "close : bool"},
     {"showStatusBar",
      (PyCFunction)ApplicationPy::sShowStatusBar,
      METH_VARARGS,
@@ -1076,6 +1109,90 @@ PyObject* ApplicationPy::sActiveWindow(PyObject* /*self*/, PyObject* args)
         }
 
         return Py::new_reference_to(Py::asObject(view->getPyObject()));
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sGetWindows(PyObject* /*self*/, PyObject* args)
+{
+    if (!PyArg_ParseTuple(args, "")) {
+        return nullptr;
+    }
+
+    try {
+        Py::List mdis;
+
+        auto* app = Gui::Application::Instance;
+        if (!app) {
+            return Py::new_reference_to(mdis);
+        }
+
+        const QList<QWidget*> windows = app->windows();
+        for (auto* widget : windows) {
+            auto* view = dynamic_cast<Gui::MDIView*>(widget);
+            if (view) {
+                mdis.append(Py::asObject(view->getPyObject()));
+            }
+        }
+
+        return Py::new_reference_to(mdis);
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sSetActiveWindow(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* viewObj = nullptr;
+    if (!PyArg_ParseTuple(args, "O", &viewObj)) {
+        return nullptr;
+    }
+
+    try {
+        Py::Object view(viewObj);
+        Py::ExtensionObject<MDIViewPy> mdi(view.callMemberFunction("cast_to_base"));
+        auto* mdiView = mdi.extensionObject()->getMDIViewPtr();
+        if (!mdiView) {
+            throw Py::RuntimeError("Invalid MDIView");
+        }
+
+        auto* app = Gui::Application::Instance;
+        if (app) {
+            app->setActiveWindow(mdiView);
+        }
+
+        Py_Return;
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sRemoveWindow(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* viewObj = nullptr;
+    PyObject* closeObj = Py_True;
+    if (!PyArg_ParseTuple(args, "O|O!", &viewObj, &PyBool_Type, &closeObj)) {
+        return nullptr;
+    }
+
+    try {
+        Py::Object view(viewObj);
+        Py::ExtensionObject<MDIViewPy> mdi(view.callMemberFunction("cast_to_base"));
+        auto* mdiView = mdi.extensionObject()->getMDIViewPtr();
+        if (!mdiView) {
+            throw Py::RuntimeError("Invalid MDIView");
+        }
+
+        auto* app = Gui::Application::Instance;
+        if (app) {
+            app->removeWindow(mdiView, Base::asBoolean(closeObj));
+        }
+
+        Py_Return;
     }
     catch (const Py::Exception&) {
         return nullptr;
