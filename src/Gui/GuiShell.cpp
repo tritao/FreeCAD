@@ -22,6 +22,7 @@
 
 #include "GuiShell.h"
 
+#include "GuiShellEvents.h"
 #include "GuiShellServices.h"
 #include "InputHint.h"
 #include "MainWindow.h"
@@ -46,12 +47,25 @@ class ClassicShell final : public IGuiShell
 public:
     explicit ClassicShell(QMainWindow* mainWindow)
         : mainWindow_(mainWindow)
+        , events_(mainWindow)
         , services_(mainWindow, chromeStatePrefix())
-    {}
+    {
+        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+            QObject::connect(
+                mw, &MainWindow::workbenchActivated, &events_, &GuiShellEvents::workbenchActivated
+            );
+            QObject::connect(mw, &MainWindow::mainWindowClosed, &events_, &GuiShellEvents::mainWindowClosed);
+        }
+    }
 
     QMainWindow* mainWindow() const override
     {
         return mainWindow_.data();
+    }
+
+    GuiShellEvents* events() const override
+    {
+        return const_cast<GuiShellEvents*>(&events_);
     }
 
     std::string chromeStatePrefix() const override
@@ -433,6 +447,7 @@ public:
 
 private:
     QPointer<QMainWindow> mainWindow_;
+    GuiShellEvents events_;
     GuiShellServices services_;
 };
 
@@ -443,6 +458,14 @@ std::unique_ptr<IGuiShell> g_activeShell;
 IGuiShell* activeShell()
 {
     return g_activeShell.get();
+}
+
+GuiShellEvents* activeShellEvents()
+{
+    if (auto* shell = activeShell()) {
+        return shell->events();
+    }
+    return nullptr;
 }
 
 QMainWindow* activeMainWindow()

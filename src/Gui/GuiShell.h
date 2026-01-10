@@ -42,6 +42,8 @@ class QWidget;
 namespace Gui
 {
 
+class GuiShellEvents;
+
 struct InputHint;
 class MDIView;
 class GuiShellServices;
@@ -52,6 +54,7 @@ public:
     virtual ~IGuiShell() = default;
 
     virtual QMainWindow* mainWindow() const = 0;
+    virtual GuiShellEvents* events() const = 0;
     virtual std::string chromeStatePrefix() const = 0;
     virtual GuiShellServices& services() = 0;
     virtual void updateActions(bool delay = false) = 0;
@@ -102,6 +105,7 @@ public:
 };
 
 GuiExport IGuiShell* activeShell();
+GuiExport GuiShellEvents* activeShellEvents();
 GuiExport QMainWindow* activeMainWindow();
 GuiExport QWidget* uiParentWidget();
 GuiExport void setRightSideMessage(const QString& message);

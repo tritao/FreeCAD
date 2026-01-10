@@ -45,6 +45,7 @@
 #include "PreferencePages/DlgSettingsWorkbenchesImp.h"
 #include "Document.h"
 #include "EditorView.h"
+#include "GuiShellEvents.h"
 #include "GuiShell.h"
 #include "Macro.h"
 #include "ModuleIO.h"
@@ -641,9 +642,12 @@ WorkbenchGroup::WorkbenchGroup(Command* pcCmd, QObject* parent)
     );
     // NOLINTEND
 
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        connect(mw, &MainWindow::workbenchActivated, this, &WorkbenchGroup::onWorkbenchActivated);
-    }
+	if (auto* events = Gui::activeShellEvents()) {
+	    connect(events, &GuiShellEvents::workbenchActivated, this, &WorkbenchGroup::onWorkbenchActivated);
+	}
+	else if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
+	    connect(mw, &MainWindow::workbenchActivated, this, &WorkbenchGroup::onWorkbenchActivated);
+	}
 }
 
 QAction* WorkbenchGroup::getOrCreateAction(const QString& wbName)

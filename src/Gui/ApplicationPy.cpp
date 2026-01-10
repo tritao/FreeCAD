@@ -77,6 +77,7 @@
 #include "Inventor/MarkerBitmaps.h"
 #include "Language/Translator.h"
 #include "InputHint.h"
+#include "GuiShellEvents.h"
 
 
 using namespace Gui;
@@ -346,6 +347,12 @@ PyMethodDef ApplicationPy::Methods[] = {
 	     "hideHints() -> None\n"
 	     "\n"
 	     "Hide any currently displayed input hints in the current shell."},
+	    {"shellEvents",
+	     (PyCFunction)ApplicationPy::sShellEvents,
+	     METH_VARARGS,
+	     "shellEvents() -> QObject or None\n"
+	     "\n"
+	     "Return the current shell events object (signals like workbenchActivated, mainWindowClosed)."},
 	    {"showStatusBar",
 	     (PyCFunction)ApplicationPy::sShowStatusBar,
 	     METH_VARARGS,
@@ -1829,6 +1836,30 @@ PyObject* ApplicationPy::sHideHints(PyObject* /*self*/, PyObject* args)
             app->hideHints();
         }
         Py_Return;
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sShellEvents(PyObject* /*self*/, PyObject* args)
+{
+    if (!PyArg_ParseTuple(args, "")) {
+        return nullptr;
+    }
+
+    try {
+        auto* events = Gui::activeShellEvents();
+        if (!events) {
+            Py_RETURN_NONE;
+        }
+
+        PythonWrapper wrap;
+        if (!wrap.loadCoreModule() || !wrap.loadGuiModule() || !wrap.loadWidgetsModule()) {
+            throw Py::RuntimeError("Failed to load Python wrapper for Qt");
+        }
+
+        return Py::new_reference_to(wrap.fromQObject(events));
     }
     catch (const Py::Exception&) {
         return nullptr;

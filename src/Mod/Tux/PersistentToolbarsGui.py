@@ -236,6 +236,24 @@ def onStart():
         return
 
     if not _connected:
+        events = None
+        try:
+            events = Gui.shellEvents()
+        except Exception:
+            pass
+
+        if events:
+            try:
+                events.mainWindowClosed.connect(onClose)
+                events.workbenchActivated.connect(lambda _name=None: onWorkbenchActivated())
+            except Exception:
+                pass
+            else:
+                timer.stop()
+                _connected = True
+                onWorkbenchActivated()
+                return
+
         app = QtGui.QApplication.instance()
         if app:
             app.aboutToQuit.connect(onClose)

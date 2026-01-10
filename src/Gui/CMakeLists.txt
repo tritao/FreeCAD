@@ -1385,10 +1385,11 @@ SET(FreeCADGui_CPP_SRCS
     ExpressionBinding.cpp
     ExpressionBindingPy.cpp
     GraphicsViewZoom.cpp
-    ExpressionCompleter.cpp
-    GuiShell.cpp
-    GuiShellServices.cpp
-    FileHandler.cpp
+	    ExpressionCompleter.cpp
+	    GuiShell.cpp
+	    GuiShellEvents.cpp
+	    GuiShellServices.cpp
+	    FileHandler.cpp
     FileHandler.h
     FreeCADStyle.cpp
     GuiApplication.cpp
@@ -1426,10 +1427,11 @@ SET(FreeCADGui_SRCS
     EditableDatumLabel.h
     ExpressionBinding.h
     ExpressionBindingPy.h
-    ExpressionCompleter.h
-    GuiShell.h
-    GuiShellServices.h
-    FreeCADGuiInit.py
+	    ExpressionCompleter.h
+	    GuiShell.h
+	    GuiShellEvents.h
+	    GuiShellServices.h
+	    FreeCADGuiInit.py
     FreeCADStyle.h
     GraphicsViewZoom.h
     GuiApplication.h
