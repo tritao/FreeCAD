@@ -31,6 +31,9 @@
 #include <limits>
 #include <locale>
 #include <iomanip>
+#include <cstring>
+#include <streambuf>
+#include <string_view>
 
 #include "Writer.h"
 #include "Base64.h"
@@ -41,21 +44,46 @@
 #include "Stream.h"
 #include "Tools.h"
 
-#include <boost/iostreams/filtering_stream.hpp>
 #include <zipios++/zipinputstream.h>
 
 using namespace Base;
 
-// boost iostream filter to escape ']]>' in text file saved into CDATA section.
-// It does not check if the character is valid utf8 or not.
-struct cdata_filter
+namespace
 {
+class CDataEscapeStreambuf: public std::streambuf
+{
+public:
+    explicit CDataEscapeStreambuf(std::streambuf* downstream)
+        : downstream(downstream)
+    {}
 
-    using char_type = char;
-    using category = boost::iostreams::output_filter_tag;
+protected:
+    int sync() override
+    {
+        return downstream->pubsync();
+    }
 
-    template<typename Device>
-    inline bool put(Device& dev, char ch)
+    int_type overflow(int_type ch) override
+    {
+        if (traits_type::eq_int_type(ch, traits_type::eof())) {
+            return traits_type::not_eof(ch);
+        }
+
+        const char c = traits_type::to_char_type(ch);
+        writeChar(c);
+        return ch;
+    }
+
+    std::streamsize xsputn(const char* s, std::streamsize count) override
+    {
+        for (std::streamsize i = 0; i < count; ++i) {
+            writeChar(s[i]);
+        }
+        return count;
+    }
+
+private:
+    void writeChar(char ch)
     {
         switch (state) {
             case 0:
@@ -69,17 +97,34 @@ struct cdata_filter
                 break;
             case 2:
                 if (ch == '>') {
-                    static const char escape[] = "]]><![CDATA[";
-                    boost::iostreams::write(dev, escape, sizeof(escape) - 1);
+                    static constexpr std::string_view escape = "]]><![CDATA[";
+                    downstream->sputn(escape.data(), static_cast<std::streamsize>(escape.size()));
                 }
                 state = 0;
                 break;
         }
-        return boost::iostreams::put(dev, ch);
+        downstream->sputc(ch);
     }
 
+private:
+    std::streambuf* downstream;
     int state = 0;
 };
+
+class CDataEscapeOStream: public std::ostream
+{
+public:
+    explicit CDataEscapeOStream(std::ostream& downstream)
+        : std::ostream(nullptr)
+        , buf(downstream.rdbuf())
+    {
+        rdbuf(&buf);
+    }
+
+private:
+    CDataEscapeStreambuf buf;
+};
+}  // namespace
 
 // ---------------------------------------------------------------------------
 //  Writer: Constructors and Destructor
@@ -128,11 +173,8 @@ std::ostream& Writer::beginCharStream(CharStreamFormat format)
     }
     else {
         Stream() << "<![CDATA[";
-        CharStream = std::make_unique<boost::iostreams::filtering_ostream>();
-        auto* filteredStream = dynamic_cast<boost::iostreams::filtering_ostream*>(CharStream.get());
-        filteredStream->push(cdata_filter());
-        filteredStream->push(Stream());
-        *filteredStream << std::setprecision(std::numeric_limits<double>::digits10 + 1);
+        CharStream = std::make_unique<CDataEscapeOStream>(Stream());
+        *CharStream << std::setprecision(std::numeric_limits<double>::digits10 + 1);
     }
 
     checkErrNo();
