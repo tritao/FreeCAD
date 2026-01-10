@@ -33,7 +33,6 @@
 #include "BitmapFactory.h"
 #include "Document.h"
 #include "GuiShell.h"
-#include "MainWindow.h"
 
 
 using namespace Gui;
@@ -52,11 +51,21 @@ TextDocumentEditorView::TextDocumentEditorView(App::TextDocument* txtDoc, QPlain
 
     // clang-format off
     // update editor actions on request
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        connect(editor, &QPlainTextEdit::undoAvailable, mw, &MainWindow::updateEditorActions);
-        connect(editor, &QPlainTextEdit::redoAvailable, mw, &MainWindow::updateEditorActions);
-        connect(editor, &QPlainTextEdit::copyAvailable, mw, &MainWindow::updateEditorActions);
-    }
+    connect(editor, &QPlainTextEdit::undoAvailable, this, [](bool) {
+        if (Application::Instance) {
+            Application::Instance->updateEditorActions();
+        }
+    });
+    connect(editor, &QPlainTextEdit::redoAvailable, this, [](bool) {
+        if (Application::Instance) {
+            Application::Instance->updateEditorActions();
+        }
+    });
+    connect(editor, &QPlainTextEdit::copyAvailable, this, [](bool) {
+        if (Application::Instance) {
+            Application::Instance->updateEditorActions();
+        }
+    });
     connect(editor, &QPlainTextEdit::textChanged, this, &TextDocumentEditorView::textChanged);
     // clang-format on
 }
@@ -69,8 +78,8 @@ TextDocumentEditorView::~TextDocumentEditorView()
 
 void TextDocumentEditorView::showEvent(QShowEvent* event)
 {
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->updateEditorActions();
+    if (Application::Instance) {
+        Application::Instance->updateEditorActions();
     }
     MDIView::showEvent(event);
 }
@@ -80,8 +89,8 @@ void TextDocumentEditorView::closeEvent(QCloseEvent* event)
     MDIView::closeEvent(event);
     if (event->isAccepted()) {
         aboutToClose = true;
-        if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-            mw->updateEditorActions();
+        if (Application::Instance) {
+            Application::Instance->updateEditorActions();
         }
     }
 }

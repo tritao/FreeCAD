@@ -20,6 +20,7 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <QApplication>
 #include <QCoreApplication>
 #include <QStatusBar>
 #include <QEvent>
@@ -29,7 +30,7 @@
 #include "Application.h"
 #include "GuiShell.h"
 #include "GuiShellServices.h"
-#include "MainWindow.h"
+#include "MDIView.h"
 #include "View.h"
 #include "Document.h"
 #include "Dialogs/DlgActivateWindowImp.h"
@@ -265,8 +266,11 @@ StdCmdUserInterface::StdCmdUserInterface()
 
 void StdCmdUserInterface::activated(int)
 {
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->switchToDockedMode();
+    const QWidgetList toplevel = QApplication::topLevelWidgets();
+    for (QWidget* widget : toplevel) {
+        if (auto* view = dynamic_cast<MDIView*>(widget)) {
+            view->setCurrentViewMode(MDIView::Child);
+        }
     }
 }
 

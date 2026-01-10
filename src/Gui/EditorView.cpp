@@ -45,7 +45,6 @@
 #include "FileDialog.h"
 #include "GuiShell.h"
 #include "Macro.h"
-#include "MainWindow.h"
 #include "PythonEditor.h"
 #include "PythonTracing.h"
 #include "WaitCursor.h"
@@ -104,11 +103,21 @@ EditorView::EditorView(TextEdit* editor, QWidget* parent)
 
     // clang-format off
     // update editor actions on request
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        connect(editor, &QPlainTextEdit::undoAvailable, mw, &MainWindow::updateEditorActions);
-        connect(editor, &QPlainTextEdit::redoAvailable, mw, &MainWindow::updateEditorActions);
-        connect(editor, &QPlainTextEdit::copyAvailable, mw, &MainWindow::updateEditorActions);
-    }
+    connect(editor, &QPlainTextEdit::undoAvailable, this, [](bool) {
+        if (Application::Instance) {
+            Application::Instance->updateEditorActions();
+        }
+    });
+    connect(editor, &QPlainTextEdit::redoAvailable, this, [](bool) {
+        if (Application::Instance) {
+            Application::Instance->updateEditorActions();
+        }
+    });
+    connect(editor, &QPlainTextEdit::copyAvailable, this, [](bool) {
+        if (Application::Instance) {
+            Application::Instance->updateEditorActions();
+        }
+    });
 
     connect(editor, &TextEdit::showSearchBar, d->searchBar, &SearchBar::activate);
     connect(editor, &TextEdit::findNext, d->searchBar, &SearchBar::findNext);
@@ -173,8 +182,8 @@ QPlainTextEdit* EditorView::getEditor() const
 
 void EditorView::showEvent(QShowEvent* event)
 {
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->updateEditorActions();
+    if (Application::Instance) {
+        Application::Instance->updateEditorActions();
     }
     MDIView::showEvent(event);
 }
@@ -189,8 +198,8 @@ void EditorView::closeEvent(QCloseEvent* event)
     MDIView::closeEvent(event);
     if (event->isAccepted()) {
         d->aboutToClose = true;
-        if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-            mw->updateEditorActions();
+        if (Application::Instance) {
+            Application::Instance->updateEditorActions();
         }
     }
 }

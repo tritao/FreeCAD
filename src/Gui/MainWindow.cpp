@@ -1026,17 +1026,8 @@ void MainWindow::whatsThis()
 
 void MainWindow::showDocumentation(const QString& help)
 {
-    Base::PyGILStateLocker lock;
-    try {
-        PyObject* module = PyImport_ImportModule("Help");
-        if (module) {
-            Py_DECREF(module);
-            Gui::Command::addModule(Gui::Command::Gui, "Help");
-            Gui::Command::doCommand(Gui::Command::Gui, "Help.show(\"%s\")", help.toStdString().c_str());
-        }
-    }
-    catch (const Base::Exception& e) {
-        e.reportException();
+    if (Application::Instance) {
+        Application::Instance->showDocumentation(help);
     }
 }
 
@@ -1713,32 +1704,8 @@ void MainWindow::_updateActions()
 
 void MainWindow::updateEditorActions()
 {
-    Command* cmd = nullptr;
-    CommandManager& mgr = Application::Instance->commandManager();
-
-    cmd = mgr.getCommandByName("Std_Cut");
-    if (cmd) {
-        cmd->testActive();
-    }
-
-    cmd = mgr.getCommandByName("Std_Copy");
-    if (cmd) {
-        cmd->testActive();
-    }
-
-    cmd = mgr.getCommandByName("Std_Paste");
-    if (cmd) {
-        cmd->testActive();
-    }
-
-    cmd = mgr.getCommandByName("Std_Undo");
-    if (cmd) {
-        cmd->testActive();
-    }
-
-    cmd = mgr.getCommandByName("Std_Redo");
-    if (cmd) {
-        cmd->testActive();
+    if (Application::Instance) {
+        Application::Instance->updateEditorActions();
     }
 }
 

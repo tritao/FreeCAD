@@ -69,7 +69,6 @@
 #include "ui_DlgPreferences.h"
 #include "BitmapFactory.h"
 #include "GuiShell.h"
-#include "MainWindow.h"
 #include "Tools.h"
 #include "WidgetFactory.h"
 
@@ -361,14 +360,9 @@ DlgPreferencesImp::~DlgPreferencesImp()
 void DlgPreferencesImp::setupConnections()
 {
     connect(ui->buttonBox, &QDialogButtonBox::clicked, this, &DlgPreferencesImp::onButtonBoxClicked);
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        connect(ui->buttonBox, &QDialogButtonBox::helpRequested, mw, &MainWindow::whatsThis);
-    }
-    else {
-        connect(ui->buttonBox, &QDialogButtonBox::helpRequested, this, []() {
-            QWhatsThis::enterWhatsThisMode();
-        });
-    }
+    connect(ui->buttonBox, &QDialogButtonBox::helpRequested, this, []() {
+        QWhatsThis::enterWhatsThisMode();
+    });
     connect(ui->groupsTreeView, &QTreeView::clicked, this, &DlgPreferencesImp::onPageSelected);
     connect(ui->groupsTreeView, &QTreeView::expanded, this, &DlgPreferencesImp::onGroupExpanded);
     connect(ui->groupsTreeView, &QTreeView::collapsed, this, &DlgPreferencesImp::onGroupCollapsed);

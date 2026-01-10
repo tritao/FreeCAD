@@ -230,6 +230,8 @@ public:
     void checkForPreviousCrashes();
 
     void showMessage(const QString& message, int timeout = 0);
+    void updateEditorActions();
+    void showDocumentation(const QString& help);
     void setStatusPaneText(int pane, const QString& text);
     void showStatusBar();
     bool isStatusBarVisible() const;

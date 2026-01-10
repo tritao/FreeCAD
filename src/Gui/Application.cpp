@@ -1711,34 +1711,61 @@ void Application::updateActive()
 
 void Application::updateActions(bool delay)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->updateActions(delay);
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->updateActions(delay);
     }
 }
 
 void Application::showMessage(const QString& message, int timeout)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->showMessage(message, timeout);
-        return;
     }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->showMessage(message, timeout);
+}
+
+void Application::updateEditorActions()
+{
+    CommandManager& mgr = commandManager();
+
+    if (Command* cmd = mgr.getCommandByName("Std_Cut")) {
+        cmd->testActive();
+    }
+    if (Command* cmd = mgr.getCommandByName("Std_Copy")) {
+        cmd->testActive();
+    }
+    if (Command* cmd = mgr.getCommandByName("Std_Paste")) {
+        cmd->testActive();
+    }
+    if (Command* cmd = mgr.getCommandByName("Std_Undo")) {
+        cmd->testActive();
+    }
+    if (Command* cmd = mgr.getCommandByName("Std_Redo")) {
+        cmd->testActive();
+    }
+}
+
+void Application::showDocumentation(const QString& help)
+{
+    Base::PyGILStateLocker lock;
+    try {
+        PyObject* module = PyImport_ImportModule("Help");
+        if (module) {
+            Py_DECREF(module);
+            Gui::Command::addModule(Gui::Command::Gui, "Help");
+            Gui::Command::doCommand(
+                Gui::Command::Gui, "Help.show(\"%s\")", help.toStdString().c_str()
+            );
+        }
+    }
+    catch (const Base::Exception& e) {
+        e.reportException();
     }
 }
 
 void Application::setStatusPaneText(int pane, const QString& text)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->setStatusPaneText(pane, text);
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->setPaneText(pane, text);
     }
 }
 
@@ -1960,221 +1987,145 @@ bool Application::toolBarBreak(QToolBar* toolBar) const
 
 void Application::addWindow(Gui::MDIView* view)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->addWindow(view);
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->addWindow(view);
     }
 }
 
 void Application::removeWindow(Gui::MDIView* view, bool close)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->removeWindow(view, close);
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->removeWindow(view, close);
     }
 }
 
 QList<QWidget*> Application::windows() const
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         return shell->windows();
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        return mw->windows();
     }
     return {};
 }
 
 QMdiArea* Application::mdiArea() const
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         return shell->mdiArea();
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        return mw->getMdiArea();
     }
     return nullptr;
 }
 
 Gui::MDIView* Application::activeWindow() const
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         return shell->activeWindow();
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        return mw->activeWindow();
     }
     return nullptr;
 }
 
 void Application::setActiveWindow(Gui::MDIView* view)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->setActiveWindow(view);
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->setActiveWindow(view);
     }
 }
 
 void Application::tabChanged(Gui::MDIView* view)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->tabChanged(view);
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->tabChanged(view);
     }
 }
 
 void Application::tile()
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->tile();
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->tile();
     }
 }
 
 void Application::cascade()
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->cascade();
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->cascade();
     }
 }
 
 void Application::closeActiveWindow()
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->closeActiveWindow();
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->closeActiveWindow();
     }
 }
 
 bool Application::closeAllDocuments(bool close)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         return shell->closeAllDocuments(close);
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        return mw->closeAllDocuments(close);
     }
     return true;
 }
 
 void Application::activateNextWindow()
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->activateNextWindow();
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->activateNextWindow();
     }
 }
 
 void Application::activatePreviousWindow()
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->activatePreviousWindow();
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->activatePreviousWindow();
     }
 }
 
 void Application::showStatus(int type, const QString& message)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->showStatus(type, message);
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->showStatus(type, message);
     }
 }
 
 void Application::showHints(const std::list<InputHint>& hints)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->showHints(hints);
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->showHints(hints);
     }
 }
 
 void Application::hideHints()
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->hideHints();
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->hideHints();
     }
 }
 
 void Application::setUserSchema(int userSchema)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->setUserSchema(userSchema);
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->setUserSchema(userSchema);
     }
 }
 
 void Application::initDockWindows(bool show)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->initDockWindows(show);
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->initDockWindows(show);
     }
 }
 
 void Application::appendRecentFile(const QString& filename)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->appendRecentFile(filename);
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->appendRecentFile(filename);
     }
 }
 
 void Application::appendRecentMacro(const QString& filename)
 {
-    if (auto* shell = Gui::activeShell()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
         shell->appendRecentMacro(filename);
-        return;
-    }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        mw->appendRecentMacro(filename);
     }
 }
 
@@ -2647,11 +2598,8 @@ bool Application::activateWorkbench(const char* name)
         }
         // now try to create and activate the matching workbench object
         else if (WorkbenchManager::instance()->activate(name, type)) {
-            if (auto* shell = Gui::activeShell()) {
+            if (auto* shell = Gui::ensureActiveShell()) {
                 shell->activateWorkbench(QString::fromLatin1(name));
-            }
-            else if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-                mw->activateWorkbench(QString::fromLatin1(name));
             }
             this->signalActivateWorkbench(name);
             ok = true;

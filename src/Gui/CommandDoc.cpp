@@ -1218,10 +1218,11 @@ void StdCmdCopy::activated(int iMsg)
     Q_UNUSED(iMsg);
     bool done = getGuiApplication()->sendMsgToFocusView("Copy");
     if (!done) {
-        if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-            QMimeData* mimeData = mw->createMimeDataFromSelection();
-            QClipboard* cb = QApplication::clipboard();
-            cb->setMimeData(mimeData);
+        if (auto* shell = Gui::ensureActiveShell()) {
+            if (QMimeData* mimeData = shell->createMimeDataFromSelection()) {
+                QClipboard* cb = QApplication::clipboard();
+                cb->setMimeData(mimeData);
+            }
         }
     }
 }
@@ -1260,8 +1261,8 @@ void StdCmdPaste::activated(int iMsg)
         const QMimeData* mimeData = cb->mimeData();
         if (mimeData) {
             WaitCursor wc;
-            if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-                mw->insertFromMimeData(mimeData);
+            if (auto* shell = Gui::ensureActiveShell()) {
+                shell->insertFromMimeData(mimeData);
             }
         }
     }
@@ -1277,8 +1278,8 @@ bool StdCmdPaste::isActive()
     if (!mime) {
         return false;
     }
-    if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        return mw->canInsertFromMimeData(mime);
+    if (auto* shell = Gui::ensureActiveShell()) {
+        return shell->canInsertFromMimeData(mime);
     }
     return mime->hasUrls() || mime->hasImage();
 }

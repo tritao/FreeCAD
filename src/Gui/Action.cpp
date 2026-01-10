@@ -49,7 +49,6 @@
 #include "GuiShell.h"
 #include "Macro.h"
 #include "ModuleIO.h"
-#include "MainWindow.h"
 #include "PythonEditor.h"
 #include "WhatsThis.h"
 #include "Widgets.h"
@@ -644,9 +643,6 @@ WorkbenchGroup::WorkbenchGroup(Command* pcCmd, QObject* parent)
 
 	if (auto* events = Gui::activeShellEvents()) {
 	    connect(events, &GuiShellEvents::workbenchActivated, this, &WorkbenchGroup::onWorkbenchActivated);
-	}
-	else if (auto* mw = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-	    connect(mw, &MainWindow::workbenchActivated, this, &WorkbenchGroup::onWorkbenchActivated);
 	}
 }
 

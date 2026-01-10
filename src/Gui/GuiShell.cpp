@@ -31,6 +31,7 @@
 #include <QApplication>
 #include <QDockWidget>
 #include <QLabel>
+#include <QMimeData>
 #include <QStatusBar>
 #include <QMainWindow>
 #include <QPointer>
@@ -264,6 +265,29 @@ public:
 		        return false;
 		    }
 
+		    QMimeData* createMimeDataFromSelection() const override
+		    {
+		        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+		            return mw->createMimeDataFromSelection();
+		        }
+		        return nullptr;
+		    }
+
+		    bool canInsertFromMimeData(const QMimeData* mimeData) const override
+		    {
+		        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+		            return mw->canInsertFromMimeData(mimeData);
+		        }
+		        return false;
+		    }
+
+		    void insertFromMimeData(const QMimeData* mimeData) override
+		    {
+		        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+		            mw->insertFromMimeData(mimeData);
+		        }
+		    }
+
 		    void addWindow(MDIView* view) override
 		    {
 		        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
@@ -458,6 +482,22 @@ std::unique_ptr<IGuiShell> g_activeShell;
 IGuiShell* activeShell()
 {
     return g_activeShell.get();
+}
+
+IGuiShell* ensureActiveShell()
+{
+    if (auto* shell = activeShell()) {
+        return shell;
+    }
+
+    // If a classic main window exists but no shell has been registered (yet),
+    // create the default shell on demand so callsites don't need to special-case MainWindow.
+    if (auto* mw = getMainWindow()) {
+        setActiveShell(createClassicShell(mw));
+        return activeShell();
+    }
+
+    return nullptr;
 }
 
 GuiShellEvents* activeShellEvents()

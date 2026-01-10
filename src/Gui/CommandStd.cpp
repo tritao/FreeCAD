@@ -555,8 +555,8 @@ StdCmdOnlineHelp::StdCmdOnlineHelp()
 void StdCmdOnlineHelp::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    if (auto* w = qobject_cast<MainWindow*>(Gui::activeMainWindow())) {
-        w->showDocumentation(QStringLiteral("Online_Help_Startpage"));
+    if (Application::Instance) {
+        Application::Instance->showDocumentation(QStringLiteral("Online_Help_Startpage"));
     }
 }
 

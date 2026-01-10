@@ -35,6 +35,7 @@
 
 class QMdiArea;
 class QDockWidget;
+class QMimeData;
 class QObject;
 class QToolBar;
 class QString;
@@ -75,6 +76,10 @@ public:
     virtual Qt::ToolBarArea toolBarArea(QToolBar* toolBar) const = 0;
     virtual bool toolBarBreak(QToolBar* toolBar) const = 0;
 
+    virtual QMimeData* createMimeDataFromSelection() const = 0;
+    virtual bool canInsertFromMimeData(const QMimeData* mimeData) const = 0;
+    virtual void insertFromMimeData(const QMimeData* mimeData) = 0;
+
     virtual void addWindow(MDIView* view) = 0;
     virtual void removeWindow(MDIView* view, bool close = true) = 0;
     virtual QList<QWidget*> windows() const = 0;
@@ -106,6 +111,7 @@ public:
 };
 
 GuiExport IGuiShell* activeShell();
+GuiExport IGuiShell* ensureActiveShell();
 GuiExport GuiShellEvents* activeShellEvents();
 GuiExport QMainWindow* activeMainWindow();
 GuiExport QWidget* uiParentWidget();
