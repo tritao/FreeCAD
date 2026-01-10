@@ -1172,11 +1172,12 @@ PyObject* ApplicationPy::sGetMainWindow(PyObject* /*self*/, PyObject* args)
         return nullptr;
     }
 
-    try {
-        auto* mw = Gui::activeMainWindow();
-        if (!mw) {
-            Py_RETURN_NONE;
-        }
+	try {
+	    auto* shell = Gui::ensureActiveShell();
+	    auto* mw = shell ? shell->mainWindow() : nullptr;
+	    if (!mw) {
+	        Py_RETURN_NONE;
+	    }
 
         if (auto* classic = qobject_cast<Gui::MainWindow*>(mw)) {
             return Py::new_reference_to(MainWindowPy::createWrapper(classic));
