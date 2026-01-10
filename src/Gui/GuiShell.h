@@ -70,6 +70,9 @@ public:
     virtual void tabifyDockWidget(QDockWidget* first, QDockWidget* second) = 0;
     virtual Qt::DockWidgetArea dockWidgetArea(QDockWidget* dockWidget) const = 0;
     virtual QList<QDockWidget*> tabifiedDockWidgets(QDockWidget* dockWidget) const = 0;
+    virtual void resizeDocks(const QList<QDockWidget*>& docks,
+                             const QList<int>& sizes,
+                             Qt::Orientation orientation) = 0;
     virtual void addToolBar(QToolBar* toolBar) = 0;
     virtual void addToolBar(Qt::ToolBarArea area, QToolBar* toolBar) = 0;
     virtual void addToolBarBreak(Qt::ToolBarArea area) = 0;

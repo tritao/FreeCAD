@@ -216,6 +216,15 @@ public:
 		        return {};
 		    }
 
+		    void resizeDocks(const QList<QDockWidget*>& docks,
+		                     const QList<int>& sizes,
+		                     Qt::Orientation orientation) override
+		    {
+		        if (auto* w = mainWindow_.data()) {
+		            w->resizeDocks(docks, sizes, orientation);
+		        }
+		    }
+
 		    void addToolBar(QToolBar* toolBar) override
 		    {
 		        if (!toolBar) {

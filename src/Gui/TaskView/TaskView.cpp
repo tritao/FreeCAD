@@ -861,8 +861,12 @@ void TaskView::tryRestoreWidth()
 {
     if (shouldRestoreWidth()) {
         if (auto parent = qobject_cast<QDockWidget*>(parentWidget())) {
-            if (auto* mw = Gui::activeMainWindow()) {
-                mw->resizeDocks({parent}, {currentWidth}, Qt::Horizontal);
+            if (auto* shell = Gui::ensureActiveShell()) {
+                QList<QDockWidget*> docks;
+                docks.append(parent);
+                QList<int> sizes;
+                sizes.append(currentWidth);
+                shell->resizeDocks(docks, sizes, Qt::Horizontal);
             }
         }
     }
