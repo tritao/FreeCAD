@@ -255,7 +255,7 @@ class BIMWorkbench(Workbench):
                 return {"MenuText": label, "ToolTip": tooltip, "Icon": "Draft_Arc"}
 
             def IsActive(self):
-                return hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+                return hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
 
         class BIM_SplineTools:
             def GetCommands(self):
@@ -267,7 +267,7 @@ class BIMWorkbench(Workbench):
                 return {"MenuText": label, "ToolTip": tooltip, "Icon": "Draft_BSpline"}
 
             def IsActive(self):
-                return hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+                return hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
 
         class BIM_AxisTools:
             def GetCommands(self):
@@ -279,7 +279,7 @@ class BIMWorkbench(Workbench):
                 return {"MenuText": label, "ToolTip": tooltip, "Icon": "Arch_Axis"}
 
             def IsActive(self):
-                return hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+                return hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
 
         class BIM_OffsetTools:
             def GetCommands(self):
@@ -292,7 +292,7 @@ class BIMWorkbench(Workbench):
                 return {"MenuText": label, "ToolTip": tooltip, "Icon": "BIM_Offset2D"}
 
             def IsActive(self):
-                return hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+                return hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
 
         class BIM_ArrayTools:
             def GetCommands(self):
@@ -311,7 +311,7 @@ class BIMWorkbench(Workbench):
                 return {"MenuText": label, "ToolTip": tooltip, "Icon": "Draft_Array"}
 
             def IsActive(self):
-                return hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+                return hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
 
         class BIM_BooleanTools:
             def GetCommands(self):
@@ -324,7 +324,7 @@ class BIMWorkbench(Workbench):
                 return {"MenuText": label, "ToolTip": tooltip, "Icon": "BIM_Fuse"}
 
             def IsActive(self):
-                return hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+                return hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
 
         class BIM_IfcManageTools:
             def GetCommands(self):
@@ -353,7 +353,7 @@ class BIMWorkbench(Workbench):
                 return {"MenuText": label, "ToolTip": tooltip, "Icon": "BIM_Report"}
 
             def IsActive(self):
-                return hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+                return hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
 
         # create generic tools command
         class BIM_GenericTools:
@@ -368,7 +368,7 @@ class BIMWorkbench(Workbench):
                 return {"MenuText": t, "ToolTip": t, "Icon": "BIM_Box"}
 
             def IsActive(self):
-                v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+                v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
                 return v
 
         # create 2D views command
@@ -384,7 +384,7 @@ class BIMWorkbench(Workbench):
                 return {"MenuText": t, "ToolTip": t, "Icon": "BIM_DrawingView"}
 
             def IsActive(self):
-                v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+                v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
                 return v
 
         # Register grouped commands
@@ -424,7 +424,7 @@ class BIMWorkbench(Workbench):
                     }
 
                 def IsActive(self):
-                    v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+                    v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
                     return v
 
             FreeCADGui.addCommand("Arch_RebarTools", RebarGroupCommand())

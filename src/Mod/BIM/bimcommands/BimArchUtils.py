@@ -46,7 +46,7 @@ class Arch_Add:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v and len(FreeCADGui.Selection.getSelection()) > 1
 
     def Activated(self):
@@ -104,7 +104,7 @@ class Arch_Remove:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v and bool(FreeCADGui.Selection.getSelection())
 
     def Activated(self):
@@ -165,7 +165,7 @@ class Arch_SplitMesh:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v and bool(FreeCADGui.Selection.getSelection())
 
     def Activated(self):
@@ -198,7 +198,7 @@ class Arch_MeshToShape:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v and bool(FreeCADGui.Selection.getSelection())
 
     def Activated(self):
@@ -245,7 +245,7 @@ class Arch_SelectNonSolidMeshes:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
     def Activated(self):
@@ -280,7 +280,7 @@ class Arch_RemoveShape:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v and bool(FreeCADGui.Selection.getSelection())
 
     def Activated(self):
@@ -303,7 +303,7 @@ class Arch_CloseHoles:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v and bool(FreeCADGui.Selection.getSelection())
 
     def Activated(self):
@@ -326,7 +326,7 @@ class Arch_Check:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v and bool(FreeCADGui.Selection.getSelection())
 
     def Activated(self):
@@ -355,7 +355,7 @@ class Arch_Survey:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
     def Activated(self):
@@ -376,7 +376,7 @@ class Arch_ToggleIfcBrepFlag:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v and bool(FreeCADGui.Selection.getSelection())
 
     def Activated(self):
@@ -400,7 +400,7 @@ class Arch_Component:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
     def Activated(self):
@@ -433,7 +433,7 @@ class Arch_CloneComponent:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
     def Activated(self):
@@ -466,7 +466,7 @@ class Arch_IfcSpreadsheet:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
     def Activated(self):
@@ -501,7 +501,7 @@ class Arch_ToggleSubs:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v and bool(FreeCADGui.Selection.getSelection())
 
     def Activated(self):
@@ -550,7 +550,7 @@ class Arch_MergeWalls:
         toolbars.
         """
 
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v and bool(FreeCADGui.Selection.getSelection())
 
     def Activated(self):

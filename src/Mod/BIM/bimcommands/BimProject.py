@@ -40,7 +40,7 @@ class BIM_Project:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v and not hasattr(FreeCAD.ActiveDocument, "IfcFilePath")
 
     def Activated(self):

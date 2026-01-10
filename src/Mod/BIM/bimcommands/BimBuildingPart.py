@@ -52,7 +52,7 @@ class Arch_Level:
 
     def IsActive(self):
 
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
     def Activated(self):
@@ -82,7 +82,7 @@ class Arch_Building:
 
     def IsActive(self):
 
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
     def Activated(self):

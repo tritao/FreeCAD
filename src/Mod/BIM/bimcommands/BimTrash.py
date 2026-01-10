@@ -64,7 +64,7 @@ class BIM_Trash:
                 obj.ViewObject.hide()
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
 

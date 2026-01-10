@@ -49,7 +49,7 @@ class Arch_Pipe:
 
     def IsActive(self):
 
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
     def Activated(self):
@@ -93,7 +93,7 @@ class Arch_PipeConnector:
 
     def IsActive(self):
 
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
     def Activated(self):
@@ -134,7 +134,7 @@ class Arch_PipeGroupCommand:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
 

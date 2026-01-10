@@ -42,7 +42,7 @@ class BIM_Text:
         }
 
     def IsActive(self):
-        act_win = FreeCADGui.getMainWindow().getActiveWindow()
+        act_win = FreeCADGui.activeWindow()
         return hasattr(act_win, "getSceneGraph") or hasattr(act_win, "getPage")
 
     def Activated(self):

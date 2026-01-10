@@ -62,7 +62,7 @@ class Arch_Panel:
 
     def IsActive(self):
 
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
     def Activated(self):
@@ -291,7 +291,7 @@ class Arch_PanelCut:
 
     def IsActive(self):
 
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
     def Activated(self):
@@ -326,7 +326,7 @@ class Arch_PanelSheet:
 
     def IsActive(self):
 
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
     def Activated(self):
@@ -365,7 +365,7 @@ class Arch_Nest:
 
     def IsActive(self):
 
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
     def Activated(self):
@@ -537,7 +537,7 @@ class Arch_PanelGroup:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
 

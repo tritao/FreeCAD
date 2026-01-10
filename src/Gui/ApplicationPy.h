@@ -59,6 +59,7 @@ public:
 
     static PyObject* sGetMainWindow            (PyObject *self,PyObject *args);
     static PyObject* sUiParentWidget           (PyObject *self,PyObject *args);
+    static PyObject* sActiveWindow             (PyObject *self,PyObject *args);
     static PyObject* sShowStatusBar            (PyObject *self,PyObject *args);
     static PyObject* sAddStatusPermanentWidget (PyObject *self,PyObject *args);
     static PyObject* sRemoveStatusWidget       (PyObject *self,PyObject *args);

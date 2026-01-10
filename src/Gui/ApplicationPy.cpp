@@ -57,6 +57,7 @@
 #include "Macro.h"
 #include "MainWindow.h"
 #include "MainWindowPy.h"
+#include "MDIView.h"
 #include "PythonEditor.h"
 #include "PythonWrapper.h"
 #include "SoFCDB.h"
@@ -186,6 +187,12 @@ PyMethodDef ApplicationPy::Methods[] = {
      "uiParentWidget() -> QWidget\n"
      "\n"
      "Return the active UI parent widget (main window if available, otherwise the active window)."},
+    {"activeWindow",
+     (PyCFunction)ApplicationPy::sActiveWindow,
+     METH_VARARGS,
+     "activeWindow() -> MDIView or None\n"
+     "\n"
+     "Return the active MDI view of the current shell."},
     {"showStatusBar",
      (PyCFunction)ApplicationPy::sShowStatusBar,
      METH_VARARGS,
@@ -1045,6 +1052,30 @@ PyObject* ApplicationPy::sUiParentWidget(PyObject* /*self*/, PyObject* args)
         }
 
         return Py::new_reference_to(wrap.fromQWidget(parent, "QWidget"));
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sActiveWindow(PyObject* /*self*/, PyObject* args)
+{
+    if (!PyArg_ParseTuple(args, "")) {
+        return nullptr;
+    }
+
+    try {
+        auto* app = Gui::Application::Instance;
+        if (!app) {
+            Py_RETURN_NONE;
+        }
+
+        auto* view = app->activeWindow();
+        if (!view) {
+            Py_RETURN_NONE;
+        }
+
+        return Py::new_reference_to(Py::asObject(view->getPyObject()));
     }
     catch (const Py::Exception&) {
         return nullptr;

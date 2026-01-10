@@ -55,7 +55,7 @@ class Arch_Axis:
 
     def IsActive(self):
 
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
 
@@ -96,7 +96,7 @@ class Arch_AxisSystem:
 
     def IsActive(self):
 
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
 
@@ -122,7 +122,7 @@ class Arch_Grid:
 
     def IsActive(self):
 
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
 
@@ -139,7 +139,7 @@ class Arch_AxisTools:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v
 
 

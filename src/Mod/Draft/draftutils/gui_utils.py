@@ -73,8 +73,7 @@ def get_3d_view():
     import FreeCADGui as Gui
     from pivy import coin
 
-    mw = Gui.getMainWindow()
-    view = mw.getActiveWindow()
+    view = Gui.activeWindow()
     if view is None:
         return None
     if not hasattr(view, "getSceneGraph"):

@@ -46,7 +46,7 @@ class Arch_CutPlane:
         }
 
     def IsActive(self):
-        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        v = hasattr(FreeCADGui.activeWindow(), "getSceneGraph")
         return v and len(FreeCADGui.Selection.getSelection()) > 1
 
     def Activated(self):
