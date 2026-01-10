@@ -22,10 +22,12 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/iostreams/stream.hpp>
+#include <cstddef>
+#include <istream>
 
 #include "Persistence.h"
 #include "PyWrapParseTupleAndKeywords.h"
+#include "Stream.h"
 #include "Writer.h"
 
 // generated out of Persistence.pyi
@@ -142,8 +144,18 @@ PyObject* PersistencePy::restoreContent(PyObject* args)
 
     // check if it really is a buffer
     try {
-        using Device = boost::iostreams::basic_array_source<char>;
-        boost::iostreams::stream<Device> stream((char*)buf.buf, buf.len);
+        class BufferIStreambuf: public std::streambuf
+        {
+        public:
+            BufferIStreambuf(const char* data, std::size_t size)
+            {
+                char* begin = const_cast<char*>(data);
+                setg(begin, begin, begin + static_cast<std::ptrdiff_t>(size));
+            }
+        };
+
+        BufferIStreambuf streambuf(static_cast<const char*>(buf.buf), static_cast<std::size_t>(buf.len));
+        std::istream stream(&streambuf);
         getPersistencePtr()->restoreFromStream(stream);
     }
     catch (...) {
