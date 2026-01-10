@@ -76,7 +76,6 @@
 #include <boost_graph_adjacency_list.hpp>
 #include <fastsignals/signal.h>
 
-#include <boost/program_options.hpp>
 #include <boost/utility.hpp>
 #include <boost/bind/bind.hpp>
 #include <boost/core/ignore_unused.hpp>
