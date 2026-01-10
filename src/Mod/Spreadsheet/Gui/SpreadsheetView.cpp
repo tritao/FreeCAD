@@ -132,7 +132,7 @@ SheetView::SheetView(Gui::Document* pcDocument, App::DocumentObject* docObj, QWi
     palette.setColor(QPalette::Text, QColor(0, 0, 0));
     ui->cells->setPalette(palette);
 
-    if (auto* mainWindow = Gui::activeMainWindow()) {
+    if (auto* mainWindow = Gui::uiParentWidget()) {
         QList<QtColorPicker*> bgList = mainWindow->findChildren<QtColorPicker*>(
             QStringLiteral("Spreadsheet_BackgroundColor")
         );

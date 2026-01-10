@@ -24,6 +24,7 @@
 #include <QCoreApplication>
 #include <QCoreApplication>
 #include <QLayout>
+#include <QWidget>
 
 
 #include "Manipulator.h"
@@ -53,14 +54,21 @@ CmdStart::CmdStart()
 void CmdStart::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    auto* mw = Gui::activeMainWindow();
-    if (!mw) {
+    if (!Gui::Application::Instance) {
         return;
     }
 
-    auto existingView = mw->findChild<StartGui::StartView*>(QLatin1String("StartView"));
+    StartGui::StartView* existingView = nullptr;
+    const QList<QWidget*> windows = Gui::Application::Instance->windows();
+    for (QWidget* widget : windows) {
+        if (auto* view = qobject_cast<StartGui::StartView*>(widget)) {
+            existingView = view;
+            break;
+        }
+    }
+
     if (!existingView) {
-        existingView = gsl::owner<StartGui::StartView*>(new StartGui::StartView(mw));
+        existingView = gsl::owner<StartGui::StartView*>(new StartGui::StartView(Gui::uiParentWidget()));
         Gui::Application::Instance->addWindow(existingView);  // Transfers ownership
     }
     Gui::Application::Instance->setActiveWindow(existingView);

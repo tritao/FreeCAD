@@ -189,8 +189,8 @@ StartView::StartView(QWidget* parent)
         auto updateFun = [this, recentFilesListWidget]() {
             configureRecentFilesListWidget(recentFilesListWidget, _recentFilesLabel);
         };
-        auto* mw = Gui::activeMainWindow();
-        auto recentFiles = mw ? mw->findChild<Gui::RecentFilesAction*>() : nullptr;
+        Gui::Command* cmd = Gui::Application::Instance->commandManager().getCommandByName("Std_RecentFiles");
+        auto recentFiles = cmd ? qobject_cast<Gui::RecentFilesAction*>(cmd->getAction()) : nullptr;
         if (recentFiles != nullptr) {
             connect(recentFiles, &Gui::RecentFilesAction::recentFilesListModified, this, updateFun);
         }

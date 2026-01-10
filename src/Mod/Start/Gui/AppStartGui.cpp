@@ -23,6 +23,7 @@
 
 #include <QString>
 #include <QTimer>
+#include <QWidget>
 
 
 #include <Base/Console.h>
@@ -92,12 +93,20 @@ public:
         // It's possible that "Start_Start" didn't result in the creation of an MDI window, if it
         // was called to early. This polls the views to make sure the view was created, and if it
         // was not, re-calls the command.
-        auto mw = Gui::activeMainWindow();
-        if (!mw) {
+        if (!Gui::Application::Instance) {
             return;
         }
-        auto existingView = mw->findChild<StartGui::StartView*>(QLatin1String("StartView"));
-        if (!existingView) {
+
+        bool hasStartView = false;
+        const QList<QWidget*> windows = Gui::Application::Instance->windows();
+        for (QWidget* widget : windows) {
+            if (qobject_cast<StartGui::StartView*>(widget)) {
+                hasStartView = true;
+                break;
+            }
+        }
+
+        if (!hasStartView) {
             Launch();
         }
     }
