@@ -12,20 +12,20 @@ import FreeCADGui, __main__
 
 class MainWindow:
 	def __init__(self):
-		self.app = QtGui.qApp
-		self.mw = FreeCADGui.activeMainWindow()
-		self.dock = {}
+			self.app = QtGui.qApp
+			self.mw = FreeCADGui.uiParentWidget()
+			self.dock = {}
 
 	def setWindowTitle(self, name):
 		self.mw.setWindowTitle(name)
 
 	def addCalendar(self):
-		d = QtGui.QDockWidget()
-		d.setWindowTitle("Calendar")
-		c = QtGui.QCalendarWidget()
-		d.setWidget(c)
-		self.mw.addDockWidget(QtCore.Qt.RightDockWidgetArea,d)
-		self.dock[d] = c
+			d = QtGui.QDockWidget()
+			d.setWindowTitle("Calendar")
+			c = QtGui.QCalendarWidget()
+			d.setWidget(c)
+			FreeCADGui.addDockWidget(QtCore.Qt.RightDockWidgetArea, d)
+			self.dock[d] = c
 
 	def information(self, title, text):
 		QtGui.QMessageBox.information(self.mw, title, text)
@@ -50,9 +50,9 @@ class PythonQtWorkbench (__main__.Workbench):
 	ToolTip = "Python Qt workbench"
 
 	def __init__(self):
-		self.mw = FreeCADGui.activeMainWindow()
-		self.dock = {}
-		self.item = []
+			self.mw = FreeCADGui.uiParentWidget()
+			self.dock = {}
+			self.item = []
 
 	def information(self):
 		QtGui.QMessageBox.information(self.mw, "Info", "This is an information")
@@ -75,24 +75,31 @@ class PythonQtWorkbench (__main__.Workbench):
 		QtCore.QObject.connect(self.item[2], QtCore.SIGNAL("triggered()"), self.critical)
 
 	def Activated(self):
-		self.__title__ = self.mw.windowTitle()
-		self.mw.setWindowTitle("FreeCAD -- PythonQt")
+			self.__title__ = self.mw.windowTitle()
+			self.mw.setWindowTitle("FreeCAD -- PythonQt")
 
-		d = QtGui.QDockWidget()
-		d.setWindowTitle("Calendar")
-		c = QtGui.QCalendarWidget()
-		d.setWidget(c)
-		self.mw.addDockWidget(QtCore.Qt.RightDockWidgetArea,d)
-		self.dock[d] = c
+			d = QtGui.QDockWidget()
+			d.setWindowTitle("Calendar")
+			c = QtGui.QCalendarWidget()
+			d.setWidget(c)
+			FreeCADGui.addDockWidget(QtCore.Qt.RightDockWidgetArea, d)
+			self.dock[d] = c
 
-		bar = self.mw.menuBar()
-		a=bar.actions()
-		for i in a:
-			if i.objectName() == "&Windows":
-				break
-		bar.insertMenu(i, self.menu)
-		self.menu.setTitle("Python Qt")
-		self.menu.menuAction().setVisible(True)
+			bar = FreeCADGui.findChild("QMenuBar")
+			if not bar:
+				return
+			a=bar.actions()
+			windows_action = None
+			for i in a:
+				if i.objectName() == "&Windows":
+					windows_action = i
+					break
+			if windows_action:
+				bar.insertMenu(windows_action, self.menu)
+			else:
+				bar.addMenu(self.menu)
+			self.menu.setTitle("Python Qt")
+			self.menu.menuAction().setVisible(True)
 
 	def Deactivated(self):
 		self.mw.setWindowTitle(self.__title__)

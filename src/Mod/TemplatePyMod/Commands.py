@@ -85,10 +85,10 @@ class TemplatePyMod_Cmd3:
     def Activated(self):
         import PythonQt
         from PySide import QtGui
-        mw=FreeCADGui.activeMainWindow()
-        if mw is None:
+        parent = FreeCADGui.uiParentWidget()
+        if parent is None:
             return
-        QtGui.QMessageBox.information(mw,"PySide","""PySide was loaded successfully.""")
+        QtGui.QMessageBox.information(parent, "PySide", """PySide was loaded successfully.""")
         FreeCADGui.activateWorkbench("PythonQtWorkbench")
 
     def GetResources(self):
@@ -175,10 +175,10 @@ class TemplatePyMod_Cmd5:
 
 			# Create a renderArea in which to see our scene graph.
 			# The render area will appear within the main window.
-			mw = FreeCADGui.activeMainWindow()
-			if mw is None:
+			parent = FreeCADGui.uiParentWidget()
+			if parent is None:
 				return
-			myRenderArea = sogui.SoGuiRenderArea(mw)
+			myRenderArea = sogui.SoGuiRenderArea(parent)
 
 			# Make myCamera see everything.
 			myCamera.viewAll(root, myRenderArea.getViewportRegion())

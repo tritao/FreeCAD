@@ -157,16 +157,15 @@ class BIM_Views:
             tabs = PARAMS.GetString("BimViewTabs", "")
             vm.setObjectName("BIM Views Manager")
             vm.setWindowTitle(translate("BIM", "BIM"))
-            mw = FreeCADGui.getMainWindow()
             vm.setFloating(floating)
             vm.setGeometry(vm.x(), vm.y(), width, height)
-            mw.addDockWidget(self.getDockArea(area), vm)
+            FreeCADGui.addDockWidget(self.getDockArea(area), vm)
             if tabs:
                 tabs = tabs.split("+")
                 for tab in tabs:
-                    dw = mw.findChild(QtGui.QDockWidget, tab)
+                    dw = FreeCADGui.findChild(QtGui.QDockWidget, tab)
                     if dw:
-                        mw.tabifyDockWidget(dw, vm)
+                        FreeCADGui.tabifyDockWidget(dw, vm)
                         break
 
             # restore saved settings
@@ -567,13 +566,12 @@ class BIM_Views:
             PARAMS.SetInt("BimViewArea", area.value)
         else:
             PARAMS.SetInt("BimViewArea", int(area))
-        mw = FreeCADGui.getMainWindow()
         vm = findWidget()
         if vm:
             PARAMS.SetBool("BimViewFloat", vm.isFloating())
             PARAMS.SetInt("BimViewWidth", vm.width())
             PARAMS.SetInt("BimViewHeight", vm.height())
-            tabs = "+".join([o.objectName() for o in mw.tabifiedDockWidgets(vm)])
+            tabs = "+".join([o.objectName() for o in FreeCADGui.tabifiedDockWidgets(vm)])
             PARAMS.SetString("BimViewTabs", tabs)
 
     def getDockArea(self, area):
@@ -635,8 +633,7 @@ def findWidget():
 
     from PySide import QtGui
 
-    mw = FreeCADGui.getMainWindow()
-    vm = mw.findChild(QtGui.QDockWidget, "BIM Views Manager")
+    vm = FreeCADGui.findChild(QtGui.QDockWidget, "BIM Views Manager")
     if vm:
         return vm
     return None

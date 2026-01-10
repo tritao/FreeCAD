@@ -28,6 +28,7 @@
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QDir>
+#include <QDockWidget>
 #include <QFileInfo>
 #include <QLocale>
 #include <QMessageBox>
@@ -44,6 +45,7 @@
 #include <QSurfaceFormat>
 #include <QTextStream>
 #include <QTimer>
+#include <QToolBar>
 #include <QWindow>
 #include <QStyleFactory>
 #include <Qt>
@@ -1810,6 +1812,150 @@ void Application::removeStatusWidget(QWidget* widget)
             sb->removeWidget(widget);
         }
     }
+}
+
+void Application::addDockWidget(Qt::DockWidgetArea area, QDockWidget* dockWidget)
+{
+    if (!dockWidget) {
+        return;
+    }
+
+    if (auto* shell = Gui::activeShell()) {
+        shell->addDockWidget(area, dockWidget);
+        return;
+    }
+
+    if (auto* mw = Gui::activeMainWindow()) {
+        mw->addDockWidget(area, dockWidget);
+    }
+}
+
+void Application::tabifyDockWidget(QDockWidget* first, QDockWidget* second)
+{
+    if (!first || !second) {
+        return;
+    }
+
+    if (auto* shell = Gui::activeShell()) {
+        shell->tabifyDockWidget(first, second);
+        return;
+    }
+
+    if (auto* mw = Gui::activeMainWindow()) {
+        mw->tabifyDockWidget(first, second);
+    }
+}
+
+Qt::DockWidgetArea Application::dockWidgetArea(QDockWidget* dockWidget) const
+{
+    if (!dockWidget) {
+        return Qt::NoDockWidgetArea;
+    }
+
+    if (auto* shell = Gui::activeShell()) {
+        return shell->dockWidgetArea(dockWidget);
+    }
+
+    if (auto* mw = Gui::activeMainWindow()) {
+        return mw->dockWidgetArea(dockWidget);
+    }
+
+    return Qt::NoDockWidgetArea;
+}
+
+QList<QDockWidget*> Application::tabifiedDockWidgets(QDockWidget* dockWidget) const
+{
+    if (!dockWidget) {
+        return {};
+    }
+
+    if (auto* shell = Gui::activeShell()) {
+        return shell->tabifiedDockWidgets(dockWidget);
+    }
+
+    if (auto* mw = Gui::activeMainWindow()) {
+        return mw->tabifiedDockWidgets(dockWidget);
+    }
+
+    return {};
+}
+
+void Application::addToolBar(QToolBar* toolBar)
+{
+    if (!toolBar) {
+        return;
+    }
+
+    if (auto* shell = Gui::activeShell()) {
+        shell->addToolBar(toolBar);
+        return;
+    }
+
+    if (auto* mw = Gui::activeMainWindow()) {
+        mw->addToolBar(toolBar);
+    }
+}
+
+void Application::addToolBar(Qt::ToolBarArea area, QToolBar* toolBar)
+{
+    if (!toolBar) {
+        return;
+    }
+
+    if (auto* shell = Gui::activeShell()) {
+        shell->addToolBar(area, toolBar);
+        return;
+    }
+
+    if (auto* mw = Gui::activeMainWindow()) {
+        mw->addToolBar(area, toolBar);
+    }
+}
+
+void Application::addToolBarBreak(Qt::ToolBarArea area)
+{
+    if (auto* shell = Gui::activeShell()) {
+        shell->addToolBarBreak(area);
+        return;
+    }
+
+    if (auto* mw = Gui::activeMainWindow()) {
+        mw->addToolBarBreak(area);
+    }
+}
+
+Qt::ToolBarArea Application::toolBarArea(QToolBar* toolBar) const
+{
+    if (!toolBar) {
+        return Qt::NoToolBarArea;
+    }
+
+    if (auto* shell = Gui::activeShell()) {
+        return shell->toolBarArea(toolBar);
+    }
+
+    if (auto* mw = Gui::activeMainWindow()) {
+        return mw->toolBarArea(toolBar);
+    }
+
+    return Qt::NoToolBarArea;
+}
+
+bool Application::toolBarBreak(QToolBar* toolBar) const
+{
+    if (!toolBar) {
+        return false;
+    }
+
+    if (auto* shell = Gui::activeShell()) {
+        return shell->toolBarBreak(toolBar);
+    }
+
+    if (auto* mw = Gui::activeMainWindow()) {
+        return mw->toolBarBreak(toolBar);
+    }
+
+    return false;
 }
 
 void Application::addWindow(Gui::MDIView* view)

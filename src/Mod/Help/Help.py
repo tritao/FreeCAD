@@ -477,8 +477,7 @@ def openBrowserHTML(html, baseurl, title, icon, dialog=False):
                 show(url.toString(), view=self)
             return super().acceptNavigationRequest(url, _type, isMainFrame)
 
-    mw = FreeCADGui.activeMainWindow()
-    if not mw:
+    if not FreeCADGui.uiParentWidget():
         return
     view = QtWebEngineWidgets.QWebEngineView()
     page = HelpPage(None, view)
@@ -490,11 +489,11 @@ def openBrowserHTML(html, baseurl, title, icon, dialog=False):
         floating = PREFS.GetBool("dockWidgetFloat", True)
         height = PREFS.GetBool("dockWidgetWidth", 200)
         width = PREFS.GetBool("dockWidgetHeight", 300)
-        dock = mw.findChild(QtWidgets.QDockWidget, "HelpWidget")
+        dock = FreeCADGui.findChild(QtWidgets.QDockWidget, "HelpWidget")
         if not dock:
             dock = QtWidgets.QDockWidget()
             dock.setObjectName("HelpWidget")
-            mw.addDockWidget(getDockArea(area), dock)
+            FreeCADGui.addDockWidget(getDockArea(area), dock)
             dock.setFloating(floating)
             dock.setGeometry(dock.x(), dock.y(), width, height)
             dock.dockLocationChanged.connect(onDockLocationChanged)

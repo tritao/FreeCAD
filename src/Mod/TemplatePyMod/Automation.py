@@ -17,14 +17,9 @@ def makeSnapshotWithGui():
 	from PySide import QtGui
 	import FreeCADGui
 
-	def getMainWindow():
-		toplevel = QtGui.QApplication.topLevelWidgets()
-		for i in toplevel:
-			if i.metaObject().className() == "Gui::MainWindow":
-				return i
+	mw = FreeCADGui.uiParentWidget()
+	if mw is None:
 		raise RuntimeError("No main window found")
-
-	mw=getMainWindow()
 	mw.hide()
 	#mw.showMinimized()
 

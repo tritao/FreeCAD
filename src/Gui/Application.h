@@ -26,6 +26,7 @@
 
 #include <QList>
 #include <QPixmap>
+#include <Qt>
 #include <list>
 #include <map>
 #include <string>
@@ -39,6 +40,8 @@ class QMdiArea;
 class QMenu;
 class QUrl;
 class QWidget;
+class QDockWidget;
+class QToolBar;
 class SoNode;
 class NavlibInterface;
 
@@ -233,6 +236,15 @@ public:
     void setStatusBarVisible(bool visible);
     void addStatusPermanentWidget(QWidget* widget, int stretch = 0);
     void removeStatusWidget(QWidget* widget);
+    void addDockWidget(Qt::DockWidgetArea area, QDockWidget* dockWidget);
+    void tabifyDockWidget(QDockWidget* first, QDockWidget* second);
+    Qt::DockWidgetArea dockWidgetArea(QDockWidget* dockWidget) const;
+    QList<QDockWidget*> tabifiedDockWidgets(QDockWidget* dockWidget) const;
+    void addToolBar(QToolBar* toolBar);
+    void addToolBar(Qt::ToolBarArea area, QToolBar* toolBar);
+    void addToolBarBreak(Qt::ToolBarArea area);
+    Qt::ToolBarArea toolBarArea(QToolBar* toolBar) const;
+    bool toolBarBreak(QToolBar* toolBar) const;
     void addWindow(Gui::MDIView* view);
     void removeWindow(Gui::MDIView* view, bool close = true);
     QList<QWidget*> windows() const;

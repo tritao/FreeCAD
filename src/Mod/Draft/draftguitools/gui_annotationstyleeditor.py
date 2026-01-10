@@ -105,10 +105,13 @@ class AnnotationStyleEditor(gui_base.GuiCommandSimplest):
         self.form.resize(w, h)
 
         # center the dialog over FreeCAD window
-        mw = Gui.getMainWindow()
-        self.form.move(
-            mw.frameGeometry().topLeft() + mw.rect().center() - self.form.rect().center()
-        )
+        parent = Gui.uiParentWidget()
+        if parent:
+            self.form.move(
+                parent.frameGeometry().topLeft()
+                + parent.rect().center()
+                - self.form.rect().center()
+            )
 
         # set icons
         self.form.setWindowIcon(QtGui.QIcon(":/icons/Draft_Annotation_Style.svg"))

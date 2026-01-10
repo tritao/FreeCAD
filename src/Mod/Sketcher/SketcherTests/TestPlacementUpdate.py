@@ -9,7 +9,7 @@ import FreeCAD
 try:
     import FreeCADGui
 
-    GUI_AVAILABLE = FreeCADGui.activeMainWindow() is not None
+    GUI_AVAILABLE = FreeCADGui.uiParentWidget() is not None
 except (ImportError, AttributeError):
     GUI_AVAILABLE = False
 

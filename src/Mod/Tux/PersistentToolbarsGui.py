@@ -28,7 +28,8 @@ from PySide import QtGui
 
 conectedToolbars = []
 timer = QtCore.QTimer()
-mw = Gui.getMainWindow()
+_lastWorkbench = None
+_connected = False
 
 
 def isConnected(i):
@@ -44,8 +45,12 @@ def isConnected(i):
 def onRestore(active):
     """Restore current workbench toolbars position."""
 
+    mw = Gui.uiParentWidget()
+    if not mw:
+        return
+
     toolbars = {}
-    tb = mw.findChildren(QtGui.QToolBar)
+    tb = Gui.findChildren("QToolBar")
     pUser = App.ParamGet("User parameter:Tux/PersistentToolbars/User")
     pSystem = App.ParamGet("User parameter:Tux/PersistentToolbars/System")
 
@@ -80,7 +85,7 @@ def onRestore(active):
                 and i not in bottomRestore
             ):
 
-                area = mw.toolBarArea(toolbars[i])
+                area = Gui.toolBarArea(toolbars[i])
 
                 if area == QtCore.Qt.ToolBarArea.LeftToolBarArea:
                     leftRestore.append(i)
@@ -95,33 +100,33 @@ def onRestore(active):
 
         for i in topRestore:
             if i == "Break":
-                mw.addToolBarBreak(QtCore.Qt.TopToolBarArea)
+                Gui.addToolBarBreak(QtCore.Qt.TopToolBarArea)
             elif i in toolbars:
-                mw.addToolBar(QtCore.Qt.TopToolBarArea, toolbars[i])
+                Gui.addToolBar(QtCore.Qt.TopToolBarArea, toolbars[i])
             else:
                 pass
 
         for i in leftRestore:
             if i == "Break":
-                mw.addToolBarBreak(QtCore.Qt.LeftToolBarArea)
+                Gui.addToolBarBreak(QtCore.Qt.LeftToolBarArea)
             elif i in toolbars:
-                mw.addToolBar(QtCore.Qt.LeftToolBarArea, toolbars[i])
+                Gui.addToolBar(QtCore.Qt.LeftToolBarArea, toolbars[i])
             else:
                 pass
 
         for i in rightRestore:
             if i == "Break":
-                mw.addToolBarBreak(QtCore.Qt.RightToolBarArea)
+                Gui.addToolBarBreak(QtCore.Qt.RightToolBarArea)
             elif i in toolbars:
-                mw.addToolBar(QtCore.Qt.RightToolBarArea, toolbars[i])
+                Gui.addToolBar(QtCore.Qt.RightToolBarArea, toolbars[i])
             else:
                 pass
 
         for i in bottomRestore:
             if i == "Break":
-                mw.addToolBarBreak(QtCore.Qt.BottomToolBarArea)
+                Gui.addToolBarBreak(QtCore.Qt.BottomToolBarArea)
             elif i in toolbars:
-                mw.addToolBar(QtCore.Qt.BottomToolBarArea, toolbars[i])
+                Gui.addToolBar(QtCore.Qt.BottomToolBarArea, toolbars[i])
             else:
                 pass
     else:
@@ -131,7 +136,7 @@ def onRestore(active):
 def onSave():
     """Save current workbench toolbars position."""
 
-    tb = mw.findChildren(QtGui.QToolBar)
+    tb = Gui.findChildren("QToolBar")
     active = Gui.activeWorkbench().__class__.__name__
     p = App.ParamGet("User parameter:Tux/PersistentToolbars/User")
     group = p.GetGroup(active)
@@ -144,11 +149,11 @@ def onSave():
     for i in tb:
         if i.objectName() and i.isVisible() and not i.isFloating():
 
-            area = mw.toolBarArea(i)
+            area = Gui.toolBarArea(i)
 
             x = i.geometry().x()
             y = i.geometry().y()
-            b = mw.toolBarBreak(i)
+            b = Gui.toolBarBreak(i)
             n = i.objectName()
 
             if area == QtCore.Qt.ToolBarArea.TopToolBarArea:
@@ -212,9 +217,12 @@ def onSave():
 def onWorkbenchActivated():
     """When workbench gets activated restore toolbar position."""
 
+    global _lastWorkbench
+
     active = Gui.activeWorkbench().__class__.__name__
 
-    if active:
+    if active and active != _lastWorkbench:
+        _lastWorkbench = active
         onRestore(active)
     else:
         pass
@@ -222,19 +230,18 @@ def onWorkbenchActivated():
 
 def onStart():
     """Start persistent toolbars."""
-    if mw.property("eventLoop"):
-        start = False
-        try:
-            mw.mainWindowClosed
-            mw.workbenchActivated
-            start = True
-        except AttributeError:
-            pass
-        if start:
-            timer.stop()
-            onWorkbenchActivated()
-            mw.mainWindowClosed.connect(onClose)
-            mw.workbenchActivated.connect(onWorkbenchActivated)
+    global _connected
+
+    if not Gui.uiParentWidget():
+        return
+
+    if not _connected:
+        app = QtGui.QApplication.instance()
+        if app:
+            app.aboutToQuit.connect(onClose)
+            _connected = True
+
+    onWorkbenchActivated()
 
 
 def onClose():

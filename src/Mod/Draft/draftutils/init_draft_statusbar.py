@@ -175,10 +175,7 @@ def _set_scale(action):
     """
     triggered by scale pushbutton, set DefaultAnnoScaleMultiplier in preferences
     """
-    mw = Gui.getMainWindow()
-    sb = mw.statusBar()
-
-    scale_widget = sb.findChild(QtWidgets.QToolBar, "draft_scale_widget")
+    scale_widget = Gui.findChild(QtWidgets.QToolBar, "draft_scale_widget")
 
     if action.text() == translate("draft", "Custom"):
         title_text = translate("draft", "Set Custom Scale")
@@ -210,9 +207,6 @@ def init_draft_statusbar_scale():
     """
     this function initializes draft statusbar scale widget
     """
-    mw = Gui.getMainWindow()
-    sb = mw.statusBar()
-
     scale_widget = QtWidgets.QToolBar()
     # prevent the widget from showing up in the toolbar area context menu:
     scale_widget.toggleViewAction().setVisible(False)
@@ -268,12 +262,9 @@ def init_draft_statusbar_snap():
         label.setFixedWidth(2)
         return label
 
-    mw = Gui.getMainWindow()
-    sb = mw.statusBar()
-
     # check if the toolbar is available, without it the required actions
     # may be missing:
-    if mw.findChild(QtWidgets.QToolBar, "Draft Snap") is None:
+    if Gui.findChild(QtWidgets.QToolBar, "Draft Snap") is None:
         return
 
     # snap widget:
@@ -333,54 +324,32 @@ def show_draft_statusbar_scale():
     """
     shows draft statusbar scale widget
     """
-    mw = Gui.getMainWindow()
-    sb = mw.statusBar()
-
-    scale_widget = sb.findChild(QtWidgets.QToolBar, "draft_scale_widget")
+    scale_widget = Gui.findChild(QtWidgets.QToolBar, "draft_scale_widget")
     if scale_widget:
+        Gui.addStatusPermanentWidget(scale_widget)
         scale_widget.show()
     else:
-        scale_widget = mw.findChild(QtWidgets.QToolBar, "draft_scale_widget")
-        if scale_widget:
-            Gui.addStatusPermanentWidget(scale_widget)
-            scale_widget.show()
-        else:
-            init_draft_statusbar_scale()
+        init_draft_statusbar_scale()
 
 
 def show_draft_statusbar_snap():
     """
     shows draft statusbar snap widget
     """
-    mw = Gui.getMainWindow()
-    sb = mw.statusBar()
-
-    snap_widget = sb.findChild(QtWidgets.QToolBar, "draft_snap_widget")
+    snap_widget = Gui.findChild(QtWidgets.QToolBar, "draft_snap_widget")
     if snap_widget:
+        Gui.addStatusPermanentWidget(snap_widget)
         snap_widget.setOrientation(QtCore.Qt.Orientation.Horizontal)
         snap_widget.show()
     else:
-        snap_widget = mw.findChild(QtWidgets.QToolBar, "draft_snap_widget")
-        if snap_widget:
-            Gui.addStatusPermanentWidget(snap_widget)
-            snap_widget.setOrientation(QtCore.Qt.Orientation.Horizontal)
-            snap_widget.show()
-        else:
-            init_draft_statusbar_snap()
+        init_draft_statusbar_snap()
 
 
 def hide_draft_statusbar_scale():
     """
     hides draft statusbar scale widget
     """
-    mw = Gui.getMainWindow()
-    sb = mw.statusBar()
-
-    scale_widget = sb.findChild(QtWidgets.QToolBar, "draft_scale_widget")
-    if scale_widget is None:
-        # when switching workbenches, the toolbar sometimes "jumps"
-        # out of the status bar to any other dock area...
-        scale_widget = mw.findChild(QtWidgets.QToolBar, "draft_scale_widget")
+    scale_widget = Gui.findChild(QtWidgets.QToolBar, "draft_scale_widget")
     if scale_widget:
         scale_widget.hide()
 
@@ -389,14 +358,7 @@ def hide_draft_statusbar_snap():
     """
     hides draft statusbar snap widget
     """
-    mw = Gui.getMainWindow()
-    sb = mw.statusBar()
-
-    snap_widget = sb.findChild(QtWidgets.QToolBar, "draft_snap_widget")
-    if snap_widget is None:
-        # when switching workbenches, the toolbar sometimes "jumps"
-        # out of the status bar to any other dock area...
-        snap_widget = mw.findChild(QtWidgets.QToolBar, "draft_snap_widget")
+    snap_widget = Gui.findChild(QtWidgets.QToolBar, "draft_snap_widget")
     if snap_widget:
         snap_widget.hide()
 

@@ -313,14 +313,14 @@ class CreateSketch(unittest.TestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(App.ActiveDocument.Body)
         FreeCADGui.runCommand("Std_OrthographicCamera", 1)
-        mw = FreeCADGui.activeMainWindow()
-        self.assertTrue(mw is not None)
-        if mw is None:
+        parent = FreeCADGui.uiParentWidget()
+        self.assertTrue(parent is not None)
+        if parent is None:
             return
         workflowcheck = CallableCheckExemptionDialog(self)
         QtCore.QTimer.singleShot(100, workflowcheck)
         FreeCADGui.runCommand("PartDesign_CompSketches", 0)
-        taskspanel = mw.findChild(QtGui.QWidget, "PartDesignGui__TaskFeaturePick")
+        taskspanel = FreeCADGui.findChild(QtGui.QWidget, "PartDesignGui__TaskFeaturePick")
         self.assertTrue(taskspanel is not None)
         if taskspanel is not None:
             QtCore.QTimer.singleShot(0, taskspanel, QtCore.SLOT("hide()"))

@@ -48,8 +48,8 @@ def displayGui(report, title=None, text=None):
     from . import reportdialog
 
     if not report.isEmpty():
-        mw = Gui.getMainWindow()
-        dialog = reportdialog.ReportDialog(report, title, text, mw)
+        parent = Gui.uiParentWidget()
+        dialog = reportdialog.ReportDialog(report, title, text, parent)
         dialog.exec_()
 
 

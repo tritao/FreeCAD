@@ -26,8 +26,6 @@ import FreeCADGui as Gui
 from PySide import QtGui
 from PySide import QtCore
 
-mw = Gui.getMainWindow()
-statusBar = mw.statusBar() if mw else None
 p = App.ParamGet("User parameter:Tux/NavigationIndicator")
 pView = App.ParamGet("User parameter:BaseApp/Preferences/View")
 pMWin = App.ParamGet("User parameter:BaseApp/Preferences/MainWindow")
@@ -662,7 +660,7 @@ def retranslateUi():
     a0.setText(translate("NavigationIndicator", "Undefined"))
 
 
-indicator = IndicatorButton(statusBar)
+indicator = IndicatorButton()
 indicator.setFlat(True)
 indicator.adjustSize()
 indicator.setObjectName("NavigationIndicator")
@@ -931,9 +929,8 @@ retranslateUi()
 onCompact()
 onTooltip()
 
-if statusBar:
-    Gui.showStatusBar()
-    Gui.addStatusPermanentWidget(indicator)
+Gui.showStatusBar()
+Gui.addStatusPermanentWidget(indicator)
 
 setCurrent()
 

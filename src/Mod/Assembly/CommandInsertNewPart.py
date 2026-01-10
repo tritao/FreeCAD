@@ -186,8 +186,7 @@ class TaskAssemblyNewPart(JointObject.TaskAssemblyCreateJoint):
     def expandLinkManually(self, link):
         # Should not be necessary
         # This is a workaround of https://github.com/FreeCAD/FreeCAD/issues/17904
-        mw = Gui.getMainWindow()
-        trees = mw.findChildren(QtGui.QTreeWidget)
+        trees = Gui.findChildren(QtGui.QTreeWidget)
 
         Gui.Selection.addSelection(link)
         for tree in trees:

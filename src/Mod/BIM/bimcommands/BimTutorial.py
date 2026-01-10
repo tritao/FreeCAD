@@ -57,8 +57,9 @@ class BIM_Tutorial:
         from PySide import QtCore, QtGui
 
         # find existing tutorial
-        m = FreeCADGui.getMainWindow()
-        self.dock = m.findChild(QtGui.QDockWidget, "BIMTutorial")
+        if not FreeCADGui.uiParentWidget():
+            return
+        self.dock = FreeCADGui.findChild(QtGui.QDockWidget, "BIMTutorial")
 
         if not self.dock:
             # set the tutorial dialog up
@@ -77,9 +78,10 @@ class BIM_Tutorial:
             self.form.textEdit.setOpenExternalLinks(True)
 
             self.dock = QtGui.QDockWidget()
+            self.dock.setObjectName("BIMTutorial")
             self.dock.setWidget(self.form)
 
-            m.addDockWidget(QtCore.Qt.RightDockWidgetArea, self.dock)
+            FreeCADGui.addDockWidget(QtCore.Qt.RightDockWidgetArea, self.dock)
 
             # load icons
             self.pixyes = QtGui.QPixmap(":/icons/button_valid.svg").scaled(16, 16)

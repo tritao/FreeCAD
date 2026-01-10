@@ -45,18 +45,17 @@ class BIM_TogglePanels:
     def Activated(self):
         from PySide import QtCore, QtGui
 
-        mw = FreeCADGui.getMainWindow()
         togglebutton = None
-        st = mw.statusBar()
-        statuswidget = st.findChild(QtGui.QToolBar, "BIMStatusWidget")
+        statuswidget = FreeCADGui.findChild(QtGui.QToolBar, "BIMStatusWidget")
         if statuswidget:
             if hasattr(statuswidget, "togglebutton"):
                 togglebutton = statuswidget.togglebutton
-        dockwidgets = mw.findChildren(QtGui.QDockWidget)
+        dockwidgets = FreeCADGui.findChildren(QtGui.QDockWidget)
+        bottom_area = int(getattr(QtCore.Qt.BottomDockWidgetArea, "value", QtCore.Qt.BottomDockWidgetArea))
         bottomwidgets = [
             w
             for w in dockwidgets
-            if ((mw.dockWidgetArea(w) == QtCore.Qt.BottomDockWidgetArea) and w.isVisible())
+            if ((FreeCADGui.dockWidgetArea(w) == bottom_area) and w.isVisible())
         ]
         if bottomwidgets:
             hidden = ""
@@ -70,8 +69,10 @@ class BIM_TogglePanels:
             widgets = PARAMS.GetString(
                 "HiddenWidgets", "Python console;;Report view;;Selection view;;"
             )
-            widgets = [mw.findChild(QtGui.QWidget, w) for w in widgets.split(";;") if w]
+            widgets = [FreeCADGui.findChild(QtGui.QWidget, w) for w in widgets.split(";;") if w]
             for w in widgets:
+                if not w:
+                    continue
                 w.show()
             if togglebutton:
                 togglebutton.setChecked(True)

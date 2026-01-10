@@ -28,10 +28,12 @@
 #include "MDIView.h"
 
 #include <QApplication>
+#include <QDockWidget>
 #include <QLabel>
 #include <QStatusBar>
 #include <QMainWindow>
 #include <QPointer>
+#include <QToolBar>
 #include <Qt>
 
 namespace Gui
@@ -145,22 +147,113 @@ public:
         }
     }
 
-    void removeStatusWidget(QWidget* widget) override
-    {
-        if (!widget) {
-            return;
-        }
+	    void removeStatusWidget(QWidget* widget) override
+	    {
+	        if (!widget) {
+	            return;
+	        }
         if (auto* w = mainWindow_.data()) {
             if (auto* sb = w->statusBar()) {
                 sb->removeWidget(widget);
             }
-        }
-    }
+	        }
+	    }
 
-    void addWindow(MDIView* view) override
-    {
-        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
-            mw->addWindow(view);
+	    void addDockWidget(Qt::DockWidgetArea area, QDockWidget* dockWidget) override
+	    {
+	        if (!dockWidget) {
+	            return;
+	        }
+	        if (auto* w = mainWindow_.data()) {
+	            w->addDockWidget(area, dockWidget);
+	        }
+	    }
+
+	    void tabifyDockWidget(QDockWidget* first, QDockWidget* second) override
+	    {
+	        if (!first || !second) {
+	            return;
+	        }
+	        if (auto* w = mainWindow_.data()) {
+	            w->tabifyDockWidget(first, second);
+	        }
+	    }
+
+	    Qt::DockWidgetArea dockWidgetArea(QDockWidget* dockWidget) const override
+	    {
+	        if (!dockWidget) {
+	            return Qt::NoDockWidgetArea;
+	        }
+	        if (auto* w = mainWindow_.data()) {
+	            return w->dockWidgetArea(dockWidget);
+	        }
+	        return Qt::NoDockWidgetArea;
+	    }
+
+		    QList<QDockWidget*> tabifiedDockWidgets(QDockWidget* dockWidget) const override
+		    {
+		        if (!dockWidget) {
+		            return {};
+		        }
+		        if (auto* w = mainWindow_.data()) {
+		            return w->tabifiedDockWidgets(dockWidget);
+		        }
+		        return {};
+		    }
+
+		    void addToolBar(QToolBar* toolBar) override
+		    {
+		        if (!toolBar) {
+		            return;
+		        }
+		        if (auto* w = mainWindow_.data()) {
+		            w->addToolBar(toolBar);
+		        }
+		    }
+
+		    void addToolBar(Qt::ToolBarArea area, QToolBar* toolBar) override
+		    {
+		        if (!toolBar) {
+		            return;
+		        }
+		        if (auto* w = mainWindow_.data()) {
+		            w->addToolBar(area, toolBar);
+		        }
+		    }
+
+		    void addToolBarBreak(Qt::ToolBarArea area) override
+		    {
+		        if (auto* w = mainWindow_.data()) {
+		            w->addToolBarBreak(area);
+		        }
+		    }
+
+		    Qt::ToolBarArea toolBarArea(QToolBar* toolBar) const override
+		    {
+		        if (!toolBar) {
+		            return Qt::NoToolBarArea;
+		        }
+		        if (auto* w = mainWindow_.data()) {
+		            return w->toolBarArea(toolBar);
+		        }
+		        return Qt::NoToolBarArea;
+		    }
+
+		    bool toolBarBreak(QToolBar* toolBar) const override
+		    {
+		        if (!toolBar) {
+		            return false;
+		        }
+		        if (auto* w = mainWindow_.data()) {
+		            return w->toolBarBreak(toolBar);
+		        }
+		        return false;
+		    }
+
+		    void addWindow(MDIView* view) override
+		    {
+		        if (auto* mw = qobject_cast<MainWindow*>(mainWindow_.data())) {
+		            mw->addWindow(view);
         }
     }
 

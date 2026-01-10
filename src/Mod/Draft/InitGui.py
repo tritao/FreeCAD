@@ -159,9 +159,14 @@ class DraftWorkbench(FreeCADGui.Workbench):
                 )
                 FreeCADGui.draftToolBar.loadedPreferences = True
 
-        mw = FreeCADGui.getMainWindow()
-        if mw:
-            mw.mainWindowClosed.connect(self.Deactivated)
+        try:
+            from PySide import QtWidgets
+
+            app = QtWidgets.QApplication.instance()
+            if app:
+                app.aboutToQuit.connect(self.Deactivated)
+        except Exception:
+            pass
 
         FreeCAD.Console.PrintLog("Loading Draft workbench, done.\n")
 

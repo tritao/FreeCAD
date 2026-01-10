@@ -1550,8 +1550,7 @@ class Snapper:
     def get_snap_toolbar(self):
         """Get the snap toolbar."""
         if not (hasattr(self, "toolbar") and self.toolbar):
-            mw = Gui.getMainWindow()
-            self.toolbar = mw.findChild(QtWidgets.QToolBar, "Draft Snap")
+            self.toolbar = Gui.findChild(QtWidgets.QToolBar, "Draft Snap")
         if self.toolbar:
             return self.toolbar
 
@@ -1615,8 +1614,7 @@ class Snapper:
         """
         if (not show) and (not params.get_param("GridHideInOtherWorkbenches")):
             return
-        mw = Gui.getMainWindow()
-        views = mw.getWindowsOfType(
+        views = Gui.getWindowsOfType(
             App.Base.TypeId.fromName("Gui::View3DInventor")
         )  # All 3D views.
         for view in views:

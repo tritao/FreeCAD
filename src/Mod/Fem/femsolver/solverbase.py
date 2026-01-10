@@ -89,12 +89,12 @@ class ViewProxy:
                 'directory is set to "Beside *.FCStd File".'
             )
             App.Console.PrintError(error_message + "\n")
-            QtGui.QMessageBox.critical(Gui.getMainWindow(), "Can't open Task Panel", error_message)
+            QtGui.QMessageBox.critical(Gui.uiParentWidget(), "Can't open Task Panel", error_message)
             return False
         except DirectoryDoesNotExistError:
             error_message = "Selected working directory doesn't exist."
             App.Console.PrintError(error_message + "\n")
-            QtGui.QMessageBox.critical(Gui.getMainWindow(), "Can't open Task Panel", error_message)
+            QtGui.QMessageBox.critical(Gui.uiParentWidget(), "Can't open Task Panel", error_message)
             return False
         task = solver_taskpanel.ControlTaskPanel(machine)
         Gui.Control.showDialog(task)

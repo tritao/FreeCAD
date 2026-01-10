@@ -69,24 +69,12 @@ class TaskPanel:
         pass
 
     def setupUi(self):
-        mw = self.getMainWindow()
-        form = mw.findChild(QtGui.QWidget, "TaskPanel")
+        form = Gui.findChild(QtGui.QWidget, "TaskPanel")
         form.pushButton = form.findChild(QtGui.QPushButton, "pushButton")
         form.listWidget = form.findChild(QtGui.QListWidget, "listWidget")
         self.form = form
         #Connect Signals and Slots
         QtCore.QObject.connect(form.pushButton, QtCore.SIGNAL("clicked()"), self.addElement)
-
-    def getMainWindow(self):
-        "returns the main window"
-        # using QtGui.QApplication.activeWindow() isn't very reliable because if another
-        # widget than the mainwindow is active (e.g. a dialog) the wrong widget is
-        # returned
-        toplevel = QtGui.QApplication.topLevelWidgets()
-        for i in toplevel:
-            if i.metaObject().className() == "Gui::MainWindow":
-                return i
-        raise RuntimeError("No main window found")
 
     def addElement(self):
         item=QtGui.QInputDialog.getText(self.form, 'Add item', 'Enter:')

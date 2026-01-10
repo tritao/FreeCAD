@@ -27,12 +27,15 @@
 
 #include <QList>
 #include <QMainWindow>
+#include <Qt>
 
 #include <list>
 #include <memory>
 #include <string>
 
 class QMdiArea;
+class QDockWidget;
+class QToolBar;
 class QString;
 class QWidget;
 
@@ -58,6 +61,15 @@ public:
     virtual void setStatusPaneText(int pane, const QString& text) = 0;
     virtual void addStatusPermanentWidget(QWidget* widget, int stretch = 0) = 0;
     virtual void removeStatusWidget(QWidget* widget) = 0;
+    virtual void addDockWidget(Qt::DockWidgetArea area, QDockWidget* dockWidget) = 0;
+    virtual void tabifyDockWidget(QDockWidget* first, QDockWidget* second) = 0;
+    virtual Qt::DockWidgetArea dockWidgetArea(QDockWidget* dockWidget) const = 0;
+    virtual QList<QDockWidget*> tabifiedDockWidgets(QDockWidget* dockWidget) const = 0;
+    virtual void addToolBar(QToolBar* toolBar) = 0;
+    virtual void addToolBar(Qt::ToolBarArea area, QToolBar* toolBar) = 0;
+    virtual void addToolBarBreak(Qt::ToolBarArea area) = 0;
+    virtual Qt::ToolBarArea toolBarArea(QToolBar* toolBar) const = 0;
+    virtual bool toolBarBreak(QToolBar* toolBar) const = 0;
 
     virtual void addWindow(MDIView* view) = 0;
     virtual void removeWindow(MDIView* view, bool close = true) = 0;

@@ -22,9 +22,11 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QDockWidget>
 #include <QPrinter>
 #include <QFileInfo>
 #include <QMdiArea>
+#include <QToolBar>
 #include <QWidget>
 #include <Inventor/SoInput.h>
 #include <Inventor/actions/SoGetPrimitiveCountAction.h>
@@ -39,6 +41,7 @@
 #include <App/PropertyFile.h>
 #include <Base/Interpreter.h>
 #include <Base/Console.h>
+#include <Base/TypePy.h>
 #include <Base/PyWrapParseTupleAndKeywords.h>
 #include <CXX/Objects.hxx>
 
@@ -195,18 +198,29 @@ PyMethodDef ApplicationPy::Methods[] = {
      "activeWindow() -> MDIView or None\n"
      "\n"
      "Return the active MDI view of the current shell."},
-    {"getWindows",
-     (PyCFunction)ApplicationPy::sGetWindows,
-     METH_VARARGS,
-     "getWindows() -> list[MDIView]\n"
+	    {"getWindows",
+	     (PyCFunction)ApplicationPy::sGetWindows,
+	     METH_VARARGS,
+	     "getWindows() -> list[MDIView]\n"
      "\n"
      "Return all MDI views for the current shell.\n"
      "\n"
-     "This is shell-aware and should be preferred over\n"
-     "getMainWindow().getWindows()."},
-    {"setActiveWindow",
-     (PyCFunction)ApplicationPy::sSetActiveWindow,
-     METH_VARARGS,
+	     "This is shell-aware and should be preferred over\n"
+	     "getMainWindow().getWindows()."},
+	    {"getWindowsOfType",
+	     (PyCFunction)ApplicationPy::sGetWindowsOfType,
+	     METH_VARARGS,
+	     "getWindowsOfType(typeid) -> list[MDIView]\n"
+	     "\n"
+	     "Return all MDI views of the given type for the current shell.\n"
+	     "\n"
+	     "This is shell-aware and should be preferred over\n"
+	     "getMainWindow().getWindowsOfType(typeid).\n"
+	     "\n"
+	     "typeid : Base.TypeId"},
+	    {"setActiveWindow",
+	     (PyCFunction)ApplicationPy::sSetActiveWindow,
+	     METH_VARARGS,
      "setActiveWindow(view) -> None\n"
      "\n"
      "Set the active MDI view of the current shell.\n"
@@ -260,10 +274,67 @@ PyMethodDef ApplicationPy::Methods[] = {
      "\n"
      "typeNameOrType : str or type\n"
      "objectName : str"},
-    {"showStatusBar",
-     (PyCFunction)ApplicationPy::sShowStatusBar,
+    {"addDockWidget",
+     (PyCFunction)ApplicationPy::sAddDockWidget,
      METH_VARARGS,
-     "showStatusBar() -> None\n"
+     "addDockWidget(area, dockWidget) -> None\n"
+     "\n"
+     "Add a QDockWidget to the current shell.\n"
+     "\n"
+     "area : QtCore.Qt.DockWidgetArea or int\n"
+     "dockWidget : QDockWidget"},
+    {"tabifyDockWidget",
+     (PyCFunction)ApplicationPy::sTabifyDockWidget,
+     METH_VARARGS,
+     "tabifyDockWidget(first, second) -> None\n"
+     "\n"
+     "Tabify two QDockWidget instances in the current shell."},
+    {"dockWidgetArea",
+     (PyCFunction)ApplicationPy::sDockWidgetArea,
+     METH_VARARGS,
+     "dockWidgetArea(dockWidget) -> int\n"
+     "\n"
+     "Return the dock widget area as an int (QtCore.Qt.DockWidgetArea value)."},
+	    {"tabifiedDockWidgets",
+	     (PyCFunction)ApplicationPy::sTabifiedDockWidgets,
+	     METH_VARARGS,
+	     "tabifiedDockWidgets(dockWidget) -> list[QDockWidget]\n"
+	     "\n"
+	     "Return the dock widgets tabified with the given dock widget."},
+	    {"addToolBar",
+	     (PyCFunction)ApplicationPy::sAddToolBar,
+	     METH_VARARGS,
+	     "addToolBar(toolBar) -> None\n"
+	     "addToolBar(area, toolBar) -> None\n"
+	     "\n"
+	     "Add a QToolBar to the current shell.\n"
+	     "\n"
+	     "area : QtCore.Qt.ToolBarArea or int\n"
+	     "toolBar : QToolBar"},
+	    {"addToolBarBreak",
+	     (PyCFunction)ApplicationPy::sAddToolBarBreak,
+	     METH_VARARGS,
+	     "addToolBarBreak(area) -> None\n"
+	     "\n"
+	     "Insert a toolbar break in the given area for the current shell.\n"
+	     "\n"
+	     "area : QtCore.Qt.ToolBarArea or int"},
+	    {"toolBarArea",
+	     (PyCFunction)ApplicationPy::sToolBarArea,
+	     METH_VARARGS,
+	     "toolBarArea(toolBar) -> int\n"
+	     "\n"
+	     "Return the tool bar area as an int (QtCore.Qt.ToolBarArea value)."},
+	    {"toolBarBreak",
+	     (PyCFunction)ApplicationPy::sToolBarBreak,
+	     METH_VARARGS,
+	     "toolBarBreak(toolBar) -> bool\n"
+	     "\n"
+	     "Return True if the given tool bar is preceded by a toolbar break."},
+	    {"showStatusBar",
+	     (PyCFunction)ApplicationPy::sShowStatusBar,
+	     METH_VARARGS,
+	     "showStatusBar() -> None\n"
      "\n"
      "Ensure the current shell status bar is visible."},
     {"addStatusPermanentWidget",
@@ -1178,6 +1249,38 @@ PyObject* ApplicationPy::sGetWindows(PyObject* /*self*/, PyObject* args)
     }
 }
 
+PyObject* ApplicationPy::sGetWindowsOfType(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* t = nullptr;
+    if (!PyArg_ParseTuple(args, "O!", &Base::TypePy::Type, &t)) {
+        return nullptr;
+    }
+
+    try {
+        Py::List mdis;
+
+        auto* app = Gui::Application::Instance;
+        if (!app) {
+            return Py::new_reference_to(mdis);
+        }
+
+        Base::Type typeId = *static_cast<Base::TypePy*>(t)->getBaseTypePtr();
+
+        const QList<QWidget*> windows = app->windows();
+        for (auto* widget : windows) {
+            auto* view = dynamic_cast<Gui::MDIView*>(widget);
+            if (view && view->isDerivedFrom(typeId)) {
+                mdis.append(Py::asObject(view->getPyObject()));
+            }
+        }
+
+        return Py::new_reference_to(mdis);
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
 PyObject* ApplicationPy::sSetActiveWindow(PyObject* /*self*/, PyObject* args)
 {
     PyObject* viewObj = nullptr;
@@ -1396,6 +1499,249 @@ PyObject* ApplicationPy::sFindChildren(PyObject* /*self*/, PyObject* args)
         }
 
         return Py::new_reference_to(results);
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sAddDockWidget(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* areaObj = nullptr;
+    PyObject* dockObj = nullptr;
+    if (!PyArg_ParseTuple(args, "OO", &areaObj, &dockObj)) {
+        return nullptr;
+    }
+
+    try {
+        auto* app = Gui::Application::Instance;
+        if (!app) {
+            Py_Return;
+        }
+
+        PythonWrapper wrap;
+        auto area = static_cast<Qt::DockWidgetArea>(wrap.toEnum(areaObj));
+
+        QObject* obj = wrap.toQObject(Py::Object(dockObj));
+        auto* dock = qobject_cast<QDockWidget*>(obj);
+        if (!dock) {
+            throw Py::TypeError("dockWidget must be a QDockWidget");
+        }
+
+        app->addDockWidget(area, dock);
+        Py_Return;
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sTabifyDockWidget(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* firstObj = nullptr;
+    PyObject* secondObj = nullptr;
+    if (!PyArg_ParseTuple(args, "OO", &firstObj, &secondObj)) {
+        return nullptr;
+    }
+
+    try {
+        auto* app = Gui::Application::Instance;
+        if (!app) {
+            Py_Return;
+        }
+
+        PythonWrapper wrap;
+        QObject* firstQ = wrap.toQObject(Py::Object(firstObj));
+        QObject* secondQ = wrap.toQObject(Py::Object(secondObj));
+
+        auto* first = qobject_cast<QDockWidget*>(firstQ);
+        auto* second = qobject_cast<QDockWidget*>(secondQ);
+        if (!first || !second) {
+            throw Py::TypeError("arguments must be QDockWidget");
+        }
+
+        app->tabifyDockWidget(first, second);
+        Py_Return;
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sDockWidgetArea(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* dockObj = nullptr;
+    if (!PyArg_ParseTuple(args, "O", &dockObj)) {
+        return nullptr;
+    }
+
+    try {
+        auto* app = Gui::Application::Instance;
+        if (!app) {
+            return PyLong_FromLong(static_cast<long>(Qt::NoDockWidgetArea));
+        }
+
+        PythonWrapper wrap;
+        QObject* obj = wrap.toQObject(Py::Object(dockObj));
+        auto* dock = qobject_cast<QDockWidget*>(obj);
+        if (!dock) {
+            throw Py::TypeError("dockWidget must be a QDockWidget");
+        }
+
+        const auto area = app->dockWidgetArea(dock);
+        return PyLong_FromLong(static_cast<long>(area));
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sTabifiedDockWidgets(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* dockObj = nullptr;
+    if (!PyArg_ParseTuple(args, "O", &dockObj)) {
+        return nullptr;
+    }
+
+    try {
+        Py::List results;
+        auto* app = Gui::Application::Instance;
+        if (!app) {
+            return Py::new_reference_to(results);
+        }
+
+        PythonWrapper wrap;
+        if (!wrap.loadCoreModule() || !wrap.loadGuiModule() || !wrap.loadWidgetsModule()) {
+            throw Py::RuntimeError("Failed to load Python wrapper for Qt");
+        }
+
+        QObject* obj = wrap.toQObject(Py::Object(dockObj));
+        auto* dock = qobject_cast<QDockWidget*>(obj);
+        if (!dock) {
+            throw Py::TypeError("dockWidget must be a QDockWidget");
+        }
+
+        const QList<QDockWidget*> docks = app->tabifiedDockWidgets(dock);
+        for (auto* d : docks) {
+            results.append(wrap.fromQWidget(d, "QDockWidget"));
+        }
+
+        return Py::new_reference_to(results);
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sAddToolBar(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* firstObj = nullptr;
+    PyObject* secondObj = nullptr;
+    if (!PyArg_ParseTuple(args, "O|O", &firstObj, &secondObj)) {
+        return nullptr;
+    }
+
+    try {
+        auto* app = Gui::Application::Instance;
+        if (!app) {
+            Py_Return;
+        }
+
+        PythonWrapper wrap;
+        QObject* obj = wrap.toQObject(Py::Object(secondObj ? secondObj : firstObj));
+        auto* toolBar = qobject_cast<QToolBar*>(obj);
+        if (!toolBar) {
+            throw Py::TypeError("toolBar must be a QToolBar");
+        }
+
+        if (secondObj) {
+            auto area = static_cast<Qt::ToolBarArea>(wrap.toEnum(firstObj));
+            app->addToolBar(area, toolBar);
+        }
+        else {
+            app->addToolBar(toolBar);
+        }
+
+        Py_Return;
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sAddToolBarBreak(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* areaObj = nullptr;
+    if (!PyArg_ParseTuple(args, "O", &areaObj)) {
+        return nullptr;
+    }
+
+    try {
+        auto* app = Gui::Application::Instance;
+        if (!app) {
+            Py_Return;
+        }
+
+        PythonWrapper wrap;
+        auto area = static_cast<Qt::ToolBarArea>(wrap.toEnum(areaObj));
+        app->addToolBarBreak(area);
+        Py_Return;
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sToolBarArea(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* toolBarObj = nullptr;
+    if (!PyArg_ParseTuple(args, "O", &toolBarObj)) {
+        return nullptr;
+    }
+
+    try {
+        auto* app = Gui::Application::Instance;
+        if (!app) {
+            return PyLong_FromLong(static_cast<long>(Qt::NoToolBarArea));
+        }
+
+        PythonWrapper wrap;
+        QObject* obj = wrap.toQObject(Py::Object(toolBarObj));
+        auto* toolBar = qobject_cast<QToolBar*>(obj);
+        if (!toolBar) {
+            throw Py::TypeError("toolBar must be a QToolBar");
+        }
+
+        const auto area = app->toolBarArea(toolBar);
+        return PyLong_FromLong(static_cast<long>(area));
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sToolBarBreak(PyObject* /*self*/, PyObject* args)
+{
+    PyObject* toolBarObj = nullptr;
+    if (!PyArg_ParseTuple(args, "O", &toolBarObj)) {
+        return nullptr;
+    }
+
+    try {
+        auto* app = Gui::Application::Instance;
+        if (!app) {
+            Py_RETURN_FALSE;
+        }
+
+        PythonWrapper wrap;
+        QObject* obj = wrap.toQObject(Py::Object(toolBarObj));
+        auto* toolBar = qobject_cast<QToolBar*>(obj);
+        if (!toolBar) {
+            throw Py::TypeError("toolBar must be a QToolBar");
+        }
+
+        const bool isBreak = app->toolBarBreak(toolBar);
+        return PyBool_FromLong(isBreak ? 1 : 0);
     }
     catch (const Py::Exception&) {
         return nullptr;

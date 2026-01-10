@@ -711,7 +711,7 @@ class Edit(gui_base_original.Modifier):
             action = self.tracker_menu.addAction(label)
             action.setData(wrapper)
 
-        self.tracker_menu.popup(Gui.getMainWindow().cursor().pos())
+        self.tracker_menu.popup(QtGui.QCursor.pos())
 
         QtCore.QObject.connect(
             self.tracker_menu, QtCore.SIGNAL("triggered(QAction *)"), self.evaluate_menu_action

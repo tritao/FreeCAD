@@ -224,9 +224,7 @@ class DraftToolBar:
         self.bottomtray = self.tray
         self.setupTray()
         self.setupStyle()
-        mw = FreeCADGui.getMainWindow()
-        mw.addToolBar(self.tray)
-        self.tray.setParent(mw)
+        FreeCADGui.addToolBar(self.tray)
         self.tray.hide()
         self.display_point_active = False  # prevent cyclic processing of point values
 
@@ -1634,8 +1632,7 @@ class DraftToolBar:
             else:
                 self.groupmenu.addAction(l)
         if not pos:
-            mw = FreeCADGui.getMainWindow()
-            pos = mw.cursor().pos() if mw else QtGui.QCursor.pos()
+            pos = QtGui.QCursor.pos()
         self.groupmenu.popup(pos)
         self.groupmenu.triggered.connect(self.popupTriggered)
 

@@ -61,25 +61,11 @@ except ImportError:
     raise ImportError("matplotlib not installed")
 
 
-def getMainWindow():
-    """Return the FreeCAD main window."""
-    toplevel = PySide.QtGui.QApplication.topLevelWidgets()
-    for i in toplevel:
-        if i.metaObject().className() == "Gui::MainWindow":
-            return i
-    return None
-
-
 def getMdiArea():
     """Return FreeCAD MdiArea."""
-    mw = getMainWindow()
-    if not mw:
-        return None
-    childs = mw.children()
-    for c in childs:
-        if isinstance(c, PySide.QtGui.QMdiArea):
-            return c
-    return None
+    import FreeCADGui as Gui
+
+    return Gui.mdiArea()
 
 
 def getPlot():
