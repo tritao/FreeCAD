@@ -1073,7 +1073,9 @@ void StdCmdQuit::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
     // close the main window and exit the event loop
-    if (auto* mw = Gui::activeMainWindow()) {
+    auto* shell = Gui::ensureActiveShell();
+    auto* mw = shell ? shell->mainWindow() : nullptr;
+    if (mw) {
         mw->close();
     }
 }
@@ -1465,7 +1467,9 @@ void StdCmdDelete::activated(int iMsg)
 
         App::TransactionLocker tlock;
 
-        if (auto* mw = Gui::activeMainWindow()) {
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
+        if (mw) {
             mw->setUpdatesEnabled(false);
         }
         auto editDoc = Application::Instance->editDocument();
@@ -1601,7 +1605,9 @@ void StdCmdDelete::activated(int iMsg)
         );
     }
     commitCommand();
-    if (auto* mw = Gui::activeMainWindow()) {
+    auto* shell = Gui::ensureActiveShell();
+    auto* mw = shell ? shell->mainWindow() : nullptr;
+    if (mw) {
         mw->setUpdatesEnabled(true);
         mw->update();
     }

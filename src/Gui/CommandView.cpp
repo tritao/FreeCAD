@@ -1827,7 +1827,11 @@ void StdMainFullscreen::activated(int iMsg)
         view->setCurrentViewMode(MDIView::Child);
     }
 
-    if (auto* mw = Gui::activeMainWindow()) {
+    if (auto* shell = Gui::ensureActiveShell()) {
+        auto* mw = shell->mainWindow();
+        if (!mw) {
+            return;
+        }
         if (mw->isFullScreen()) {
             mw->showNormal();
         }
@@ -1912,9 +1916,11 @@ Action* StdViewDockUndockFullscreen::createAction()
 void StdViewDockUndockFullscreen::activated(int iMsg)
 {
     // Check if main window is in fullscreen mode.
-    if (auto* mw = Gui::activeMainWindow()) {
-        if (mw->isFullScreen()) {
-            mw->showNormal();
+    if (auto* shell = Gui::ensureActiveShell()) {
+        if (auto* mw = shell->mainWindow()) {
+            if (mw->isFullScreen()) {
+                mw->showNormal();
+            }
         }
     }
 
@@ -3268,11 +3274,14 @@ StdCmdTreeCollapse::StdCmdTreeCollapse()
 void StdCmdTreeCollapse::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    if (auto* mw = Gui::activeMainWindow()) {
-        const QList<TreeWidget*> trees = mw->findChildren<TreeWidget*>();
-        for (auto* tree : trees) {
-            tree->expandSelectedItems(TreeItemMode::CollapseItem);
-        }
+    auto* shell = Gui::ensureActiveShell();
+    auto* mw = shell ? shell->mainWindow() : nullptr;
+    if (!mw) {
+        return;
+    }
+    const QList<TreeWidget*> trees = mw->findChildren<TreeWidget*>();
+    for (auto* tree : trees) {
+        tree->expandSelectedItems(TreeItemMode::CollapseItem);
     }
 }
 
@@ -3296,11 +3305,14 @@ StdCmdTreeExpand::StdCmdTreeExpand()
 void StdCmdTreeExpand::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    if (auto* mw = Gui::activeMainWindow()) {
-        const QList<TreeWidget*> trees = mw->findChildren<TreeWidget*>();
-        for (auto* tree : trees) {
-            tree->expandSelectedItems(TreeItemMode::ExpandItem);
-        }
+    auto* shell = Gui::ensureActiveShell();
+    auto* mw = shell ? shell->mainWindow() : nullptr;
+    if (!mw) {
+        return;
+    }
+    const QList<TreeWidget*> trees = mw->findChildren<TreeWidget*>();
+    for (auto* tree : trees) {
+        tree->expandSelectedItems(TreeItemMode::ExpandItem);
     }
 }
 
@@ -3363,11 +3375,14 @@ void StdCmdTreeSelectAllInstances::activated(int iMsg)
     }
     Selection().selStackPush();
     Selection().clearCompleteSelection();
-    if (auto* mw = Gui::activeMainWindow()) {
-        const auto trees = mw->findChildren<TreeWidget*>();
-        for (auto tree : trees) {
-            tree->selectAllInstances(*vpd);
-        }
+    auto* shell = Gui::ensureActiveShell();
+    auto* mw = shell ? shell->mainWindow() : nullptr;
+    if (!mw) {
+        return;
+    }
+    const auto trees = mw->findChildren<TreeWidget*>();
+    for (auto tree : trees) {
+        tree->selectAllInstances(*vpd);
     }
     Selection().selStackPush();
 }
@@ -3753,13 +3768,16 @@ StdTreeDrag::StdTreeDrag()
 void StdTreeDrag::activated(int)
 {
     if (Gui::Selection().hasSelection()) {
-        if (auto* mw = Gui::activeMainWindow()) {
-            const auto trees = mw->findChildren<TreeWidget*>();
-            for (auto tree : trees) {
-                if (tree->isVisible()) {
-                    tree->startDragging();
-                    break;
-                }
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
+        if (!mw) {
+            return;
+        }
+        const auto trees = mw->findChildren<TreeWidget*>();
+        for (auto tree : trees) {
+            if (tree->isVisible()) {
+                tree->startDragging();
+                break;
             }
         }
     }

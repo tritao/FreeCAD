@@ -195,7 +195,8 @@ bool GUIApplication::event(QEvent* ev)
         // With the current implementation of the splash screen boot procedure, Qt will
         // start an event loop before FreeCAD is fully initialized. This event loop will
         // process the QFileOpenEvent that is sent by macOS before the main window is ready.
-        auto* mw = Gui::activeMainWindow();
+        auto* shell = Gui::ensureActiveShell();
+        auto* mw = shell ? shell->mainWindow() : nullptr;
         if (!mw || !mw->property("eventLoop").toBool()) {
             // If we never reach this point when opening FreeCAD by double clicking an
             // .FCStd file, then the workaround isn't needed anymore and can be removed
