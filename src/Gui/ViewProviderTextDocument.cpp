@@ -117,7 +117,7 @@ bool ViewProviderTextDocument::doubleClicked()
         FontName.touch();
         SyntaxHighlighter.touch();
 
-        auto* host = Gui::activeMainWindow();
+        auto* host = Gui::uiParentWidget();
         auto* view = new TextDocumentEditorView {getObject<App::TextDocument>(), editorWidget, host};
         Application::Instance->addWindow(view);
     }

@@ -267,8 +267,10 @@ void DlgSettingsGeneral::saveSettings()
     QVariant size = ui->toolbarIconSize->itemData(ui->toolbarIconSize->currentIndex());
     int pixel = size.toInt();
     hGrp->SetInt("ToolbarIconSize", pixel);
-    if (auto* mw = Gui::activeMainWindow()) {
-        mw->setIconSize(QSize(pixel, pixel));
+    if (auto* shell = Gui::ensureActiveShell()) {
+        if (auto* mw = shell->mainWindow()) {
+            mw->setIconSize(QSize(pixel, pixel));
+        }
     }
 
     int blinkTime {hGrp->GetBool("EnableCursorBlinking", true) ? -1 : 0};
