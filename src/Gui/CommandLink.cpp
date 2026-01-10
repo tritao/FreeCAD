@@ -897,12 +897,7 @@ void StdCmdLinkSelectLinked::activated(int)
         }
     }
     else {
-        auto* shell = Gui::ensureActiveShell();
-        auto* mw = shell ? shell->mainWindow() : nullptr;
-        if (!mw) {
-            return;
-        }
-        const auto trees = mw->findChildren<TreeWidget*>();
+        const auto trees = Gui::findUiChildren<TreeWidget*>();
         for (auto tree : trees) {
             tree->selectLinkedObject(linked);
         }
@@ -943,12 +938,7 @@ void StdCmdLinkSelectLinkedFinal::activated(int)
     }
     Selection().selStackPush();
     Selection().clearCompleteSelection();
-    auto* shell = Gui::ensureActiveShell();
-    auto* mw = shell ? shell->mainWindow() : nullptr;
-    if (!mw) {
-        return;
-    }
-    const auto trees = mw->findChildren<TreeWidget*>();
+    const auto trees = Gui::findUiChildren<TreeWidget*>();
     for (auto tree : trees) {
         tree->selectLinkedObject(linked);
     }
@@ -988,12 +978,7 @@ void StdCmdLinkSelectAllLinks::activated(int)
     }
     Selection().selStackPush();
     Selection().clearCompleteSelection();
-    auto* shell = Gui::ensureActiveShell();
-    auto* mw = shell ? shell->mainWindow() : nullptr;
-    if (!mw) {
-        return;
-    }
-    const auto trees = mw->findChildren<TreeWidget*>();
+    const auto trees = Gui::findUiChildren<TreeWidget*>();
     for (auto tree : trees) {
         tree->selectAllLinks(sels[0].pObject);
     }

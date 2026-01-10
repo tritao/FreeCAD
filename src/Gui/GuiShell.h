@@ -27,6 +27,7 @@
 
 #include <QList>
 #include <QMainWindow>
+#include <QString>
 #include <Qt>
 
 #include <list>
@@ -119,6 +120,25 @@ GuiExport GuiShellEvents* activeShellEvents();
 GuiExport QMainWindow* activeMainWindow();
 GuiExport QWidget* uiParentWidget();
 GuiExport QObject* uiParentObject();
+
+template<typename T>
+T findUiChild(const QString& name = QString(), Qt::FindChildOptions options = Qt::FindChildrenRecursively)
+{
+    if (auto* root = uiParentWidget()) {
+        return root->findChild<T>(name, options);
+    }
+    return nullptr;
+}
+
+template<typename T>
+QList<T> findUiChildren(const QString& name = QString(), Qt::FindChildOptions options = Qt::FindChildrenRecursively)
+{
+    if (auto* root = uiParentWidget()) {
+        return root->findChildren<T>(name, options);
+    }
+    return {};
+}
+
 GuiExport void setRightSideMessage(const QString& message);
 GuiExport bool isRightSideMessageVisible();
 GuiExport void setActiveShell(std::unique_ptr<IGuiShell> shell);

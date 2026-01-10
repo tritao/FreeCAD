@@ -3274,12 +3274,7 @@ StdCmdTreeCollapse::StdCmdTreeCollapse()
 void StdCmdTreeCollapse::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    auto* shell = Gui::ensureActiveShell();
-    auto* mw = shell ? shell->mainWindow() : nullptr;
-    if (!mw) {
-        return;
-    }
-    const QList<TreeWidget*> trees = mw->findChildren<TreeWidget*>();
+    const QList<TreeWidget*> trees = Gui::findUiChildren<TreeWidget*>();
     for (auto* tree : trees) {
         tree->expandSelectedItems(TreeItemMode::CollapseItem);
     }
@@ -3305,12 +3300,7 @@ StdCmdTreeExpand::StdCmdTreeExpand()
 void StdCmdTreeExpand::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    auto* shell = Gui::ensureActiveShell();
-    auto* mw = shell ? shell->mainWindow() : nullptr;
-    if (!mw) {
-        return;
-    }
-    const QList<TreeWidget*> trees = mw->findChildren<TreeWidget*>();
+    const QList<TreeWidget*> trees = Gui::findUiChildren<TreeWidget*>();
     for (auto* tree : trees) {
         tree->expandSelectedItems(TreeItemMode::ExpandItem);
     }
@@ -3375,12 +3365,7 @@ void StdCmdTreeSelectAllInstances::activated(int iMsg)
     }
     Selection().selStackPush();
     Selection().clearCompleteSelection();
-    auto* shell = Gui::ensureActiveShell();
-    auto* mw = shell ? shell->mainWindow() : nullptr;
-    if (!mw) {
-        return;
-    }
-    const auto trees = mw->findChildren<TreeWidget*>();
+    const auto trees = Gui::findUiChildren<TreeWidget*>();
     for (auto tree : trees) {
         tree->selectAllInstances(*vpd);
     }
@@ -3768,12 +3753,7 @@ StdTreeDrag::StdTreeDrag()
 void StdTreeDrag::activated(int)
 {
     if (Gui::Selection().hasSelection()) {
-        auto* shell = Gui::ensureActiveShell();
-        auto* mw = shell ? shell->mainWindow() : nullptr;
-        if (!mw) {
-            return;
-        }
-        const auto trees = mw->findChildren<TreeWidget*>();
+        const auto trees = Gui::findUiChildren<TreeWidget*>();
         for (auto tree : trees) {
             if (tree->isVisible()) {
                 tree->startDragging();
