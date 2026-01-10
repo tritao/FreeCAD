@@ -76,6 +76,7 @@
 #include "WorkbenchManipulatorPython.h"
 #include "Inventor/MarkerBitmaps.h"
 #include "Language/Translator.h"
+#include "InputHint.h"
 
 
 using namespace Gui;
@@ -331,6 +332,20 @@ PyMethodDef ApplicationPy::Methods[] = {
 	     "toolBarBreak(toolBar) -> bool\n"
 	     "\n"
 	     "Return True if the given tool bar is preceded by a toolbar break."},
+	    {"showHints",
+	     (PyCFunction)ApplicationPy::sShowHints,
+	     METH_VARARGS,
+	     "showHints(*hints) -> None\n"
+	     "\n"
+	     "Show input hints in the current shell.\n"
+	     "\n"
+	     "hints : InputHint"},
+	    {"hideHints",
+	     (PyCFunction)ApplicationPy::sHideHints,
+	     METH_VARARGS,
+	     "hideHints() -> None\n"
+	     "\n"
+	     "Hide any currently displayed input hints in the current shell."},
 	    {"showStatusBar",
 	     (PyCFunction)ApplicationPy::sShowStatusBar,
 	     METH_VARARGS,
@@ -1742,6 +1757,78 @@ PyObject* ApplicationPy::sToolBarBreak(PyObject* /*self*/, PyObject* args)
 
         const bool isBreak = app->toolBarBreak(toolBar);
         return PyBool_FromLong(isBreak ? 1 : 0);
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sShowHints(PyObject* /*self*/, PyObject* args)
+{
+    try {
+        std::list<InputHint> hints;
+
+        static auto userInputFromPyObject = [](const Py::Object& object) -> InputHint::UserInput {
+            Py::Long value(object.getAttr("value"));
+            return static_cast<InputHint::UserInput>(value.as_long());
+        };
+
+        static auto inputSequenceFromPyObject = [](const Py::Object& sequence) -> InputHint::InputSequence {
+            if (sequence.isTuple()) {
+                Py::Tuple pyInputs(sequence);
+
+                std::list<InputHint::UserInput> inputs;
+                for (auto pyInput : pyInputs) {
+                    inputs.push_back(userInputFromPyObject(pyInput));
+                }
+
+                return InputHint::InputSequence(inputs);
+            }
+
+            return userInputFromPyObject(sequence);
+        };
+
+        static auto hintFromPyObject = [](const Py::Object& object) -> InputHint {
+            Py::List pySequences = object.getAttr("sequences");
+
+            std::list<InputHint::InputSequence> sequences;
+            for (auto pySequence : pySequences) {
+                sequences.push_back(inputSequenceFromPyObject(pySequence));
+            }
+
+            return InputHint {
+                .message = QString::fromStdString(object.getAttr("message").as_string()),
+                .sequences = sequences
+            };
+        };
+
+        Py::Tuple pyArgs(args);
+        for (auto arg : pyArgs) {
+            hints.push_back(hintFromPyObject(arg));
+        }
+
+        if (auto* app = Gui::Application::Instance) {
+            app->showHints(hints);
+        }
+
+        Py_Return;
+    }
+    catch (const Py::Exception&) {
+        return nullptr;
+    }
+}
+
+PyObject* ApplicationPy::sHideHints(PyObject* /*self*/, PyObject* args)
+{
+    if (!PyArg_ParseTuple(args, "")) {
+        return nullptr;
+    }
+
+    try {
+        if (auto* app = Gui::Application::Instance) {
+            app->hideHints();
+        }
+        Py_Return;
     }
     catch (const Py::Exception&) {
         return nullptr;

@@ -76,6 +76,8 @@ public:
     static PyObject* sAddToolBarBreak          (PyObject *self,PyObject *args);
     static PyObject* sToolBarArea              (PyObject *self,PyObject *args);
     static PyObject* sToolBarBreak             (PyObject *self,PyObject *args);
+    static PyObject* sShowHints                (PyObject *self,PyObject *args);
+    static PyObject* sHideHints                (PyObject *self,PyObject *args);
     static PyObject* sShowStatusBar            (PyObject *self,PyObject *args);
     static PyObject* sAddStatusPermanentWidget (PyObject *self,PyObject *args);
     static PyObject* sRemoveStatusWidget       (PyObject *self,PyObject *args);
