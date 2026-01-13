@@ -25,10 +25,10 @@
 
 #include <QLocale>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/tokenizer.hpp>
 #include <iomanip>
 #include <sstream>
 
+#include <Base/StringTokenizer.h>
 
 #include <App/ExpressionParser.h>
 #include <Base/Console.h>
@@ -856,28 +856,18 @@ void Cell::restore(Base::XMLReader& reader, bool checkAlias)
         setContent(content);
     }
     if (style) {
-        using namespace boost;
         std::set<std::string> styleSet;
 
-        escaped_list_separator<char> e('\0', '|', '\0');
-        std::string line = std::string(style);
-        tokenizer<escaped_list_separator<char>> tok(line, e);
-
-        for (tokenizer<escaped_list_separator<char>>::iterator i = tok.begin(); i != tok.end(); ++i) {
-            styleSet.insert(*i);
+        for (const auto& token : Base::splitEscaped(style, '|', '\0', '\0')) {
+            styleSet.insert(token);
         }
         setStyle(styleSet);
     }
     if (alignment) {
         int alignmentCode = 0;
-        using namespace boost;
 
-        escaped_list_separator<char> e('\0', '|', '\0');
-        std::string line = std::string(alignment);
-        tokenizer<escaped_list_separator<char>> tok(line, e);
-
-        for (tokenizer<escaped_list_separator<char>>::iterator i = tok.begin(); i != tok.end(); ++i) {
-            alignmentCode = decodeAlignment(*i, alignmentCode);
+        for (const auto& token : Base::splitEscaped(alignment, '|', '\0', '\0')) {
+            alignmentCode = decodeAlignment(token, alignmentCode);
         }
 
         setAlignment(alignmentCode);
