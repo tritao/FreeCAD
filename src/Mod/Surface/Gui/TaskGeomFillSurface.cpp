@@ -534,8 +534,15 @@ void GeomFillSurface::onSelectionChanged(const Gui::SelectionChanges& msg)
             auto jt = element.begin();
 
             // remove the element of the bitset at position 'row'
-            const boost::dynamic_bitset<>& old_booleans = editedObject->ReversedList.getValues();
-            boost::dynamic_bitset<> new_booleans = old_booleans >> 1;
+            const auto& old_booleans = editedObject->ReversedList.getValues();
+            std::vector<bool> new_booleans;
+            new_booleans.resize(old_booleans.size());
+            if (!old_booleans.empty()) {
+                for (std::size_t i = 0; i + 1 < old_booleans.size(); ++i) {
+                    new_booleans[i] = old_booleans[i + 1];
+                }
+                new_booleans.back() = false;
+            }
             new_booleans.resize(objects.size() - 1);
 
             // double-check in case 'old_booleans' is out of sync
@@ -583,8 +590,15 @@ void GeomFillSurface::onDeleteEdge()
         this->vp->highlightReferences(false);
 
         // remove the element of the bitset at position 'row'
-        const boost::dynamic_bitset<>& old_booleans = editedObject->ReversedList.getValues();
-        boost::dynamic_bitset<> new_booleans = old_booleans >> 1;
+        const auto& old_booleans = editedObject->ReversedList.getValues();
+        std::vector<bool> new_booleans;
+        new_booleans.resize(old_booleans.size());
+        if (!old_booleans.empty()) {
+            for (std::size_t i = 0; i + 1 < old_booleans.size(); ++i) {
+                new_booleans[i] = old_booleans[i + 1];
+            }
+            new_booleans.back() = false;
+        }
         new_booleans.resize(objects.size() - 1);
 
         // double-check in case 'old_booleans' is out of sync

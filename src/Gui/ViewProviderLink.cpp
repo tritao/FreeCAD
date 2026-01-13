@@ -1319,7 +1319,7 @@ void LinkView::resetRoot()
 
 void LinkView::setChildren(
     const std::vector<App::DocumentObject*>& children,
-    const boost::dynamic_bitset<>& vis,
+    const std::vector<bool>& vis,
     SnapshotType type
 )
 {
@@ -2296,7 +2296,7 @@ void ViewProviderLink::updateDataPrivate(App::LinkBaseExtension* ext, const App:
             // elements is about to be collapsed, preserve the materials
             if (!elements.empty()) {
                 std::vector<App::Material> materials;
-                boost::dynamic_bitset<> overrideMaterials;
+                std::vector<bool> overrideMaterials;
                 overrideMaterials.resize(elements.size(), false);
                 bool overrideMaterial = false;
                 bool hasMaterial = false;

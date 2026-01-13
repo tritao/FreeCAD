@@ -2081,7 +2081,7 @@ void LinkBaseExtension::update(App::DocumentObject* parent, const Property* prop
                 update(parent, getVisibilityListProperty());
             }
             else {
-                boost::dynamic_bitset<> vis;
+                std::vector<bool> vis;
                 vis.resize(elements.size(), true);
                 std::unordered_set<const App::DocumentObject*> hiddenElements;
                 for (size_t i = 0; i < elements.size(); ++i) {

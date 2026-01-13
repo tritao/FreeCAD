@@ -299,7 +299,7 @@ void GeomFillSurface::createBezierSurface(TopoDS_Wire& aWire)
     GeomFill_BezierCurves aSurfBuilder;  // Create Surface Builder
 
     std::size_t edgeCount = curves.size();
-    const boost::dynamic_bitset<>& booleans = ReversedList.getValues();
+    const auto& booleans = ReversedList.getValues();
     if (edgeCount == booleans.size()) {
         for (std::size_t i = 0; i < edgeCount; i++) {
             if (booleans[i]) {
@@ -374,7 +374,7 @@ void GeomFillSurface::createBSplineSurface(TopoDS_Wire& aWire)
     GeomFill_BSplineCurves aSurfBuilder;  // Create Surface Builder
 
     std::size_t edgeCount = curves.size();
-    const boost::dynamic_bitset<>& booleans = ReversedList.getValues();
+    const auto& booleans = ReversedList.getValues();
     if (edgeCount == booleans.size()) {
         for (std::size_t i = 0; i < edgeCount; i++) {
             if (booleans[i]) {

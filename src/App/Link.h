@@ -25,6 +25,7 @@
 #ifndef APP_LINK_H
 #define APP_LINK_H
 
+#include <vector>
 #include <unordered_set>
 #include <Base/Parameter.h>
 #include <Base/Bitmask.h>
@@ -181,9 +182,9 @@ public:
 
 #define LINK_PARAM_VISIBILITIES(...)                                                               \
     (VisibilityList,                                                                               \
-     boost::dynamic_bitset<>,                                                                      \
+     std::vector<bool>,                                                                            \
      App::PropertyBoolList,                                                                        \
-     boost::dynamic_bitset<>(),                                                                    \
+     std::vector<bool>(),                                                                          \
      "The visibility state of each link element",                                                  \
      ##__VA_ARGS__)
 
