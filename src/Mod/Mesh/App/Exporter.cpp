@@ -23,9 +23,7 @@
  ***************************************************************************/
 
 #include <algorithm>
-#include <boost/algorithm/string/replace.hpp>
 #include <vector>
-
 
 #include <App/Application.h>
 #include <App/ComplexGeoData.h>
@@ -90,7 +88,6 @@ static std::vector<std::string> expandSubObjectNames(
 
 Exporter::Exporter() = default;
 
-// static
 int Exporter::addObject(App::DocumentObject* obj, float tol)
 {
     int count = 0;

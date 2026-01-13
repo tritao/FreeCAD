@@ -25,7 +25,7 @@
 
 #include <QMessageBox>
 #include <Base/StringPredicates.h>
-#include <boost/algorithm/string.hpp>
+#include <Base/StringTools.h>
 
 #include <App/Application.h>
 #include <App/Document.h>
@@ -188,7 +188,7 @@ void DlgBindSheet::accept()
 
         auto checkAddress = [](std::string& addr, CellAddress& cell, bool quote) {
             std::string copy(addr);
-            boost::to_upper(copy);
+            Base::StringTools::toUpperAsciiInPlace(copy);
             cell = App::stringToAddress(copy.c_str(), true);
             if (!cell.isValid()) {
                 std::string msg("Invalid cell: ");

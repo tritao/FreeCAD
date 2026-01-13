@@ -34,7 +34,6 @@
 #include <cctype>
 #include <cstdlib>
 
-#include <boost/algorithm/string.hpp>
 #include <cmath>  // needed for compilation on some systems
 
 #include <Base/Console.h>
@@ -43,6 +42,7 @@
 #include <Base/FileInfo.h>
 #include <Base/Sequencer.h>
 #include <Base/Stream.h>
+#include <Base/StringTools.h>
 
 #include "PointsAlgos.h"
 #include <E57Format.h>
@@ -820,8 +820,8 @@ std::size_t PlyReader::readHeader(
         }
 
         // since the file is loaded in binary mode we may get the CR at the end
-        boost::trim(line);
-        boost::split(list, line, boost::is_any_of("\t\r "), boost::token_compress_on);
+        Base::StringTools::trimInPlace(line);
+        Base::StringTools::splitAnyOf(list, line, "\t\r ", true);
 
         std::istringstream str(line);
         str.imbue(std::locale::classic());
@@ -980,8 +980,8 @@ void PlyReader::readAscii(std::istream& inp, std::size_t offset, Eigen::MatrixXd
         }
 
         // since the file is loaded in binary mode we may get the CR at the end
-        boost::trim(line);
-        boost::split(list, line, boost::is_any_of("\t\r "), boost::token_compress_on);
+        Base::StringTools::trimInPlace(line);
+        Base::StringTools::splitAnyOf(list, line, "\t\r ", true);
 
         std::istringstream str(line);
 
@@ -1281,8 +1281,8 @@ std::size_t PcdReader::readHeader(
         }
 
         // since the file is loaded in binary mode we may get the CR at the end
-        boost::trim(line);
-        boost::split(list, line, boost::is_any_of("\t\r "), boost::token_compress_on);
+        Base::StringTools::trimInPlace(line);
+        Base::StringTools::splitAnyOf(list, line, "\t\r ", true);
 
         std::istringstream str(line);
         str.imbue(std::locale::classic());
@@ -1348,8 +1348,8 @@ void PcdReader::readAscii(std::istream& inp, Eigen::MatrixXd& data)
         }
 
         // since the file is loaded in binary mode we may get the CR at the end
-        boost::trim(line);
-        boost::split(list, line, boost::is_any_of("\t\r "), boost::token_compress_on);
+        Base::StringTools::trimInPlace(line);
+        Base::StringTools::splitAnyOf(list, line, "\t\r ", true);
 
         std::istringstream str(line);
 

@@ -34,7 +34,7 @@
 #include <cctype>
 #include <string_view>
 
-#include <boost/algorithm/string/replace.hpp>
+#include <Base/StringTools.h>
 
 #include <App/AutoTransaction.h>
 #include <App/Document.h>
@@ -2303,9 +2303,9 @@ protected:
                                 || v.second->comment.find('\n') != std::string::npos
                                 || v.second->comment.find('\r') != std::string::npos) {
                                 std::string comment = v.second->comment;
-                                boost::replace_all(comment, "&", "&amp;");
-                                boost::replace_all(comment, "\n", "&#10;");
-                                boost::replace_all(comment, "\r", "&#13;");
+                                Base::StringTools::replaceAll(comment, "&", "&amp;");
+                                Base::StringTools::replaceAll(comment, "\n", "&#10;");
+                                Base::StringTools::replaceAll(comment, "\r", "&#13;");
                                 ss << '&' << comment;
                             }
                             else {
@@ -2380,9 +2380,9 @@ protected:
                 if (expr && !comment.empty()) {
                     if (comment[0] == '&') {
                         expr->comment = comment.c_str() + 1;
-                        boost::replace_all(expr->comment, "&amp;", "&");
-                        boost::replace_all(expr->comment, "&#10;", "\n");
-                        boost::replace_all(expr->comment, "&#13;", "\r");
+                        Base::StringTools::replaceAll(expr->comment, "&amp;", "&");
+                        Base::StringTools::replaceAll(expr->comment, "&#10;", "\n");
+                        Base::StringTools::replaceAll(expr->comment, "&#13;", "\r");
                     }
                     else {
                         expr->comment = comment;
