@@ -1165,8 +1165,7 @@ bool ViewProviderSketch::mouseButtonPressed(int Button, bool pressed, const SbVe
     SbVec3f point = line.getPosition();
     SbVec3f normal = line.getDirection();
 
-    // use scoped_ptr to make sure that instance gets deleted in all cases
-    boost::scoped_ptr<SoPickedPoint> pp(this->getPointOnRay(cursorPos, viewer));
+    std::unique_ptr<SoPickedPoint> pp(this->getPointOnRay(cursorPos, viewer));
     EditModeCoinManager::PreselectionResult clickResult
         = getPreselectionResultAtViewportPos(cursorPos, viewer);
     EditModeCoinManager::PreselectionResult resolvedClickResult
