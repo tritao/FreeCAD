@@ -28,10 +28,9 @@
 #include <Base/MatrixPy.h>
 #include <Base/PyWrapParseTupleAndKeywords.h>
 #include <Base/Stream.h>
+#include <Base/StringTools.h>
 #include <Base/Tools.h>
 #include <Base/VectorPy.h>
-
-#include <boost/algorithm/string.hpp>
 
 #include "Core/Degeneration.h"
 #include "Core/Segmentation.h"
@@ -183,7 +182,7 @@ PyObject* MeshPy::read(PyObject* args, PyObject* kwds)
     static const std::array<const char*, 3> keywords_stream {"Stream", "Format", nullptr};
     if (Base::Wrapped_ParseTupleAndKeywords(args, kwds, "Os", keywords_stream, &input, &Ext)) {
         std::string fmt(Ext);
-        boost::to_upper(fmt);
+        Base::StringTools::toUpperAsciiInPlace(fmt);
         if (ext.find(fmt) != ext.end()) {
             format = ext[fmt];
         }
@@ -248,7 +247,7 @@ PyObject* MeshPy::write(PyObject* args, PyObject* kwds) const
         )) {
         if (Ext) {
             std::string fmt(Ext);
-            boost::to_upper(fmt);
+            Base::StringTools::toUpperAsciiInPlace(fmt);
             if (ext.find(fmt) != ext.end()) {
                 format = ext[fmt];
             }
@@ -293,7 +292,7 @@ PyObject* MeshPy::write(PyObject* args, PyObject* kwds) const
         Base::Wrapped_ParseTupleAndKeywords(args, kwds, "Os|sO", keywords_stream, &input, &Ext, &ObjName, &List)
     ) {
         std::string fmt(Ext);
-        boost::to_upper(fmt);
+        Base::StringTools::toUpperAsciiInPlace(fmt);
         if (ext.find(fmt) != ext.end()) {
             format = ext[fmt];
         }

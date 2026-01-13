@@ -40,9 +40,6 @@
 #include <XCAFDoc_ShapeTool.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 
-
-#include <boost/algorithm/string.hpp>
-
 #include <App/Application.h>
 #include <App/Document.h>
 #include <App/DocumentObject.h>

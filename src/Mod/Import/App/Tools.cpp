@@ -29,10 +29,9 @@
 
 #include <fmt/format.h>
 
-#include <boost/algorithm/string.hpp>
-
 #include "Tools.h"
 #include <Base/Console.h>
+#include <Base/StringTools.h>
 #include <Mod/Part/App/TopoShape.h>
 
 // See https://dev.opencascade.org/content/occt-3d-viewer-becomes-srgb-aware
@@ -78,7 +77,7 @@ std::string Tools::labelName(TDF_Label label)
         extstr.ToUTF8CString(str);
         txt = str;
         delete[] str;
-        boost::trim(txt);
+        Base::StringTools::trimInPlace(txt);
     }
     return txt;
 }
