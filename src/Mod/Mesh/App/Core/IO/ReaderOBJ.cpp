@@ -22,7 +22,6 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/algorithm/string.hpp>
 #include <istream>
 #include <map>
 
@@ -30,6 +29,7 @@
 #include "Core/MeshKernel.h"
 #include <Base/Color.h>
 #include <Base/FileInfo.h>
+#include <Base/StringTools.h>
 #include <Base/StringPredicates.h>
 #include <Base/StringTokenizer.h>
 #include <Base/Stream.h>
@@ -366,7 +366,7 @@ bool ReaderOBJ::Load(std::istream& str)
     ReaderOBJImp reader(_material);
     std::string line;
     while (std::getline(str, line)) {
-        boost::trim(line);
+        Base::StringTools::trimInPlace(line);
         reader.Load(line);
     }
     reader.SetupMaterial();

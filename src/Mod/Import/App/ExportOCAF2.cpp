@@ -38,9 +38,6 @@
 
 
 #include <XCAFDoc_ShapeMapTool.hxx>
-
-#include <boost/algorithm/string.hpp>
-
 #include <App/Application.h>
 #include <App/Document.h>
 #include <App/DocumentObject.h>
