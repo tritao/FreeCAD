@@ -27,8 +27,8 @@
 
 #include <functional>
 #include <set>
+#include <unordered_map>
 
-#include <boost/unordered/unordered_map.hpp>
 #include <fastsignals/signal.h>
 #include <boost_graph_adjacency_list.hpp>
 #include <boost/graph/topological_sort.hpp>
@@ -213,16 +213,16 @@ private:
 
     std::vector<App::ObjectIdentifier> computeEvaluationOrder(ExecuteOption option);
 
-    void buildGraphStructures(const App::ObjectIdentifier& path,
-                              const std::shared_ptr<Expression> expression,
-                              boost::unordered_map<App::ObjectIdentifier, int>& nodes,
-                              boost::unordered_map<int, App::ObjectIdentifier>& revNodes,
-                              std::vector<Edge>& edges) const;
+	    void buildGraphStructures(const App::ObjectIdentifier& path,
+	                              const std::shared_ptr<Expression> expression,
+	                              std::unordered_map<App::ObjectIdentifier, int>& nodes,
+	                              std::unordered_map<int, App::ObjectIdentifier>& revNodes,
+	                              std::vector<Edge>& edges) const;
 
-    void buildGraph(const ExpressionMap& exprs,
-                    boost::unordered_map<int, App::ObjectIdentifier>& revNodes,
-                    DiGraph& g,
-                    ExecuteOption option = ExecuteAll) const;
+	    void buildGraph(const ExpressionMap& exprs,
+	                    std::unordered_map<int, App::ObjectIdentifier>& revNodes,
+	                    DiGraph& g,
+	                    ExecuteOption option = ExecuteAll) const;
 
     void slotChangedObject(const App::DocumentObject& obj, const App::Property& prop);
     void slotChangedProperty(const App::DocumentObject& obj, const App::Property& prop);
