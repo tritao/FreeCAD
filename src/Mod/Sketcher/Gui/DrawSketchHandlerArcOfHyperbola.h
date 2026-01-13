@@ -24,6 +24,8 @@
 
 #pragma once
 
+#include <cmath>
+
 #include <Gui/Notifications.h>
 #include <Gui/Command.h>
 #include <Gui/CommandT.h>
@@ -268,6 +270,19 @@ public:
                 delta14.x * bDir.x + delta14.y * bDir.y
             );
             double endAngle = atanh((delta14Prime.y * a) / (delta14Prime.x * b));
+
+            if (std::isnan(startAngle) || std::isnan(endAngle)) {
+                Gui::NotifyError(
+                    sketchgui,
+                    QT_TRANSLATE_NOOP("Notifications", "Error"),
+                    QT_TRANSLATE_NOOP(
+                        "Notifications",
+                        "Cannot create arc of hyperbola from invalid angles, try again!"
+                    )
+                );
+                sketchgui->purgeHandler();
+                return false;
+            }
 
             bool isOriginalArcCCW = true;
 

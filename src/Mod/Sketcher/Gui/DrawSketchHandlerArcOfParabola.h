@@ -24,7 +24,7 @@
 
 #pragma once
 
-#include <boost/math/special_functions/fpclassify.hpp>
+#include <cmath>
 
 #include <Gui/Notifications.h>
 
@@ -153,7 +153,7 @@ public:
 
             arcAngle = u - startValue;
 
-            if (!boost::math::isnan(arcAngle)) {
+            if (!std::isnan(arcAngle)) {
                 EditCurve.resize(33);
                 for (std::size_t i = 0; i < 33; i++) {
                     double angle = startValue + i * arcAngle / 32.0;

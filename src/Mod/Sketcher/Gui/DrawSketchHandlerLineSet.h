@@ -27,7 +27,7 @@
 #include <QApplication>
 
 #include <Inventor/events/SoKeyboardEvent.h>
-#include <boost/math/special_functions/fpclassify.hpp>
+#include <cmath>
 
 #include <Gui/Notifications.h>
 #include <Gui/Command.h>
@@ -280,7 +280,7 @@ public:
                 if ((x2 * y3 - x3 * y2) - (x1 * y3 - x3 * y1) + (x1 * y2 - x2 * y1) > 0) {
                     arcRadius *= -1;
                 }
-                if (boost::math::isnan(arcRadius) || boost::math::isinf(arcRadius)) {
+                if (std::isnan(arcRadius) || std::isinf(arcRadius)) {
                     arcRadius = 0.f;
                 }
 
@@ -295,7 +295,7 @@ public:
                 double rxe = onSketchPos.x - CenterPoint.x;
                 double rye = onSketchPos.y - CenterPoint.y;
                 double arcAngle = atan2(-rxe * ry + rye * rx, rxe * rx + rye * ry);
-                if (boost::math::isnan(arcAngle) || boost::math::isinf(arcAngle)) {
+                if (std::isnan(arcAngle) || std::isinf(arcAngle)) {
                     arcAngle = 0.f;
                 }
                 if (arcRadius >= 0 && arcAngle > 0) {
@@ -483,7 +483,7 @@ public:
                 firstsegment = false;
             }
             else if (SegmentMode == SEGMENT_MODE_Arc) {  // We're dealing with an Arc
-                if (!boost::math::isnormal(arcRadius)) {
+                if (!std::isnormal(arcRadius)) {
                     Mode = STATUS_SEEK_Second;
                     return true;
                 }
