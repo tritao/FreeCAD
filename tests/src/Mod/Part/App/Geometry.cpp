@@ -2,7 +2,6 @@
 
 #include <gtest/gtest.h>
 
-#include <boost/core/ignore_unused.hpp>
 #include "Mod/Part/App/Geometry.h"
 #include <src/App/InitApplication.h>
 #include <BRepBuilderAPI_MakeVertex.hxx>

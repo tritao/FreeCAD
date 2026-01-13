@@ -22,7 +22,6 @@
  ***************************************************************************/
 
 
-#include <boost/core/ignore_unused.hpp>
 #include <QMessageBox>
 #include <QTimer>
 #include <QMenu>
@@ -580,7 +579,7 @@ bool ViewProviderAssembly::tryMouseMove(const SbVec2s& cursorPos, Gui::View3DInv
 
                     Base::Vector3d projInitialPositionRot
                         = initialPositionRot.ProjectToPlane(newJcsGlobalPlc.getPosition(), norm);
-                    boost::ignore_unused(projInitialPositionRot);
+                    static_cast<void>(projInitialPositionRot);
                     double angle
                         = (newPosRot - center).GetAngleOriented(initialPositionRot - center, norm);
                     Base::Rotation zRotation = Base::Rotation(Base::Vector3d(0., 0., 1.), angle);
@@ -1186,7 +1185,7 @@ void ViewProviderAssembly::endMoveDragger()
 
 void ViewProviderAssembly::draggerMotionCallback(void* data, SoDragger* d)
 {
-    boost::ignore_unused(d);
+    static_cast<void>(d);
     auto sudoThis = static_cast<ViewProviderAssembly*>(data);
 
     Base::Placement draggerPlc = sudoThis->getDraggerPlacement();

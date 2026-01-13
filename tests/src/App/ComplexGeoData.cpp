@@ -3,7 +3,6 @@
 #include <gtest/gtest.h>
 
 #include <array>
-#include <boost/core/ignore_unused.hpp>
 
 #include <App/Application.h>
 #include <App/ComplexGeoData.h>
@@ -481,9 +480,9 @@ TEST_F(ComplexGeoDataTest, traceElement)
     // Arrange
     Data::TraceCallback cb =
         [name](const Data::MappedName& elementname, int offset, long encodedTag, long tag) {
-            boost::ignore_unused(offset);
-            boost::ignore_unused(encodedTag);
-            boost::ignore_unused(tag);
+            static_cast<void>(offset);
+            static_cast<void>(encodedTag);
+            static_cast<void>(tag);
             EXPECT_STREQ(elementname.toString().c_str(), name.substr(1).c_str());
             return false;
         };

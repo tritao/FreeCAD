@@ -36,7 +36,6 @@
 #include <sstream>
 #include <iostream>
 
-#include <boost/core/ignore_unused.hpp>
 
 // Qt
 #include <Gui/QtAll.h>
