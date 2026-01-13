@@ -30,8 +30,6 @@
 #include <utility>
 #include <vector>
 
-#include <boost/version.hpp>
-
 #if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
 # include <QFile>
 # include <QFileInfo>
@@ -410,7 +408,7 @@ void ProgramInformation::getLibraryVersions(std::stringstream& str)
 #endif
     str << "Coin " << fcCoin3dVersion << ", ";
     str << "Vtk " << fcVtkVersion << ", ";
-    str << "boost " << BOOST_LIB_VERSION << ", ";
+    str << "boost " << fcBoostVersion << ", ";
     str << "Eigen3 " << fcEigen3Version;
 #if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
     str << ", ";

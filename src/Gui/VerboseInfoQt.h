@@ -25,8 +25,6 @@
 #include <map>
 #include <string>
 
-#include <boost/version.hpp>
-
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -236,7 +234,7 @@ inline void getVerboseCommonInfo(QTextStream& str, const std::map<std::string, s
     str << "Qt " << QT_VERSION_STR << ", ";
     str << "Coin " << fcCoin3dVersion << ", ";
     str << "Vtk " << fcVtkVersion << ", ";
-    str << "boost " << BOOST_LIB_VERSION << ", ";
+    str << "boost " << fcBoostVersion << ", ";
     str << "Eigen3 " << fcEigen3Version << ", ";
     str << "PySide " << fcPysideVersion << '\n';
     str << "shiboken " << fcShibokenVersion << ", ";
