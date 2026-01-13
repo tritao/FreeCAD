@@ -27,6 +27,7 @@
 #ifndef APP_TRANSACTION_H
 #define APP_TRANSACTION_H
 
+#include <list>
 #include <unordered_map>
 #include <Base/Factory.h>
 #include <Base/Persistence.h>
@@ -150,12 +151,11 @@ private:
 private:
     int transID;
     using Info = std::pair<const TransactionalObject*, TransactionObject*>;
-    bmi::multi_index_container<
-        Info,
-        bmi::indexed_by<
-            bmi::sequenced<>,
-            bmi::hashed_unique<bmi::member<Info, const TransactionalObject*, &Info::first>>>>
-        _Objects;
+    using InfoList = std::list<Info>;
+    using InfoListIterator = InfoList::iterator;
+
+    InfoList _Objects;
+    std::unordered_map<const TransactionalObject*, InfoListIterator> _ObjectsByObject;
 };
 
 /**

@@ -26,8 +26,12 @@
 #ifndef SRC_APP_PROPERTYCONTAINER_H_
 #define SRC_APP_PROPERTYCONTAINER_H_
 
+#include <climits>
+#include <functional>
+#include <list>
 #include <map>
 #include <cstring>
+#include <unordered_map>
 #include <vector>
 #include <string>
 #include <Base/Persistence.h>
@@ -157,31 +161,17 @@ struct AppExport PropertyData
       const void* m_container;
   };
 
-    // clang-format off
+    using PropertySpecList = std::list<PropertySpec>;
+    using PropertySpecListIterator = PropertySpecList::iterator;
 
-    /**
-     * @brief A multi index container for holding the property spec.
-     *
-     * The multi index has the following index:
-     * - a sequence, to preserve creation order
-     * - hash index on property name
-     * - hash index on property pointer offset
-     */
-    mutable bmi::multi_index_container<
-        PropertySpec,
-        bmi::indexed_by<
-            bmi::sequenced<>,
-            bmi::hashed_unique<
-                bmi::member<PropertySpec, const char*, &PropertySpec::Name>,
-                CStringHasher,
-                CStringHasher
-            >,
-            bmi::hashed_unique<
-                bmi::member<PropertySpec, short, &PropertySpec::Offset>
-            >
-        >
-    > propertyData;
-    // clang-format on
+    mutable PropertySpecList propertyData;
+    mutable std::unordered_map<
+        const char*,
+        PropertySpecListIterator,
+        CStringHasher,
+        CStringHasher
+    > propertyDataByName;
+    mutable std::unordered_map<short, PropertySpecListIterator> propertyDataByOffset;
 
   /// Whether the property data is merged with the parent.
   mutable bool parentMerged = false;

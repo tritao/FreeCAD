@@ -27,16 +27,14 @@
 #define SRC_APP_DYNAMICPROPERTY_H_
 
 #include <cstring>
+#include <functional>
+#include <list>
 #include <map>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 #include <utility>
-
-#include <boost/multi_index_container.hpp>
-#include <boost/multi_index/hashed_index.hpp>
-#include <boost/multi_index/sequenced_index.hpp>
-#include <boost/multi_index/member.hpp>
-#include <boost/multi_index/mem_fun.hpp>
 #include <FCGlobal.h>
 #include <Base/Hash.h>
 
@@ -52,8 +50,6 @@ namespace App
 {
 class Property;
 class PropertyContainer;
-
-namespace bmi = boost::multi_index;
 
 struct CStringHasher
 {
@@ -73,6 +69,26 @@ struct CStringHasher
             return false;
         }
         return std::strcmp(a, b) == 0;
+    }
+};
+
+struct TransparentStringHash
+{
+    using is_transparent = void;
+
+    std::size_t operator()(std::string_view s) const noexcept
+    {
+        return std::hash<std::string_view> {}(s);
+    }
+};
+
+struct TransparentStringEq
+{
+    using is_transparent = void;
+
+    bool operator()(std::string_view a, std::string_view b) const noexcept
+    {
+        return a == b;
     }
 };
 
@@ -220,14 +236,13 @@ private:
     std::string getUniquePropertyName(const PropertyContainer& pc, const char* Name) const;
 
 private:
-    bmi::multi_index_container<
-        PropData,
-        bmi::indexed_by<
-            bmi::hashed_unique<bmi::const_mem_fun<PropData, const char*, &PropData::getName>,
-                               CStringHasher,
-                               CStringHasher>,
-            bmi::hashed_unique<bmi::member<PropData, Property*, &PropData::property>>>>
-        props;
+    using PropList = std::list<PropData>;
+    using PropListIterator = PropList::iterator;
+
+    PropList props;
+    std::unordered_map<std::string, PropListIterator, TransparentStringHash, TransparentStringEq>
+        propsByName;
+    std::unordered_map<Property*, PropListIterator> propsByProperty;
 };
 
 }  // namespace App

@@ -49,10 +49,7 @@ EdgeProperty::EdgeProperty() = default;
 
 bool Gui::DAG::hasRecord(const App::DocumentObject* dObjectIn, const GraphLinkContainer& containerIn)
 {
-    using List = GraphLinkContainer::index<GraphLinkRecord::ByDObject>::type;
-    const List& list = containerIn.get<GraphLinkRecord::ByDObject>();
-    List::const_iterator it = list.find(dObjectIn);
-    return it != list.end();
+    return containerIn.byDObject.find(dObjectIn) != containerIn.byDObject.end();
 }
 
 bool Gui::DAG::hasRecord(
@@ -60,19 +57,14 @@ bool Gui::DAG::hasRecord(
     const GraphLinkContainer& containerIn
 )
 {
-    using List = GraphLinkContainer::index<GraphLinkRecord::ByVPDObject>::type;
-    const List& list = containerIn.get<GraphLinkRecord::ByVPDObject>();
-    List::const_iterator it = list.find(VPDObjectIn);
-    return it != list.end();
+    return containerIn.byVPDObject.find(VPDObjectIn) != containerIn.byVPDObject.end();
 }
 
 const GraphLinkRecord& Gui::DAG::findRecord(Vertex vertexIn, const GraphLinkContainer& containerIn)
 {
-    using List = GraphLinkContainer::index<GraphLinkRecord::ByVertex>::type;
-    const List& list = containerIn.get<GraphLinkRecord::ByVertex>();
-    List::const_iterator it = list.find(vertexIn);
-    assert(it != list.end());
-    return *it;
+    auto it = containerIn.byVertex.find(vertexIn);
+    assert(it != containerIn.byVertex.end());
+    return *it->second;
 }
 
 const GraphLinkRecord& Gui::DAG::findRecord(
@@ -80,11 +72,9 @@ const GraphLinkRecord& Gui::DAG::findRecord(
     const GraphLinkContainer& containerIn
 )
 {
-    using List = GraphLinkContainer::index<GraphLinkRecord::ByDObject>::type;
-    const List& list = containerIn.get<GraphLinkRecord::ByDObject>();
-    List::const_iterator it = list.find(dObjectIn);
-    assert(it != list.end());
-    return *it;
+    auto it = containerIn.byDObject.find(dObjectIn);
+    assert(it != containerIn.byDObject.end());
+    return *it->second;
 }
 
 const GraphLinkRecord& Gui::DAG::findRecord(
@@ -92,20 +82,16 @@ const GraphLinkRecord& Gui::DAG::findRecord(
     const GraphLinkContainer& containerIn
 )
 {
-    using List = GraphLinkContainer::index<GraphLinkRecord::ByVPDObject>::type;
-    const List& list = containerIn.get<GraphLinkRecord::ByVPDObject>();
-    List::const_iterator it = list.find(VPDObjectIn);
-    assert(it != list.end());
-    return *it;
+    auto it = containerIn.byVPDObject.find(VPDObjectIn);
+    assert(it != containerIn.byVPDObject.end());
+    return *it->second;
 }
 
 const GraphLinkRecord& Gui::DAG::findRecord(const RectItem* rectIn, const GraphLinkContainer& containerIn)
 {
-    using List = GraphLinkContainer::index<GraphLinkRecord::ByRectItem>::type;
-    const List& list = containerIn.get<GraphLinkRecord::ByRectItem>();
-    List::const_iterator it = list.find(rectIn);
-    assert(it != list.end());
-    return *it;
+    auto it = containerIn.byRectItem.find(rectIn);
+    assert(it != containerIn.byRectItem.end());
+    return *it->second;
 }
 
 const GraphLinkRecord& Gui::DAG::findRecord(
@@ -113,18 +99,22 @@ const GraphLinkRecord& Gui::DAG::findRecord(
     const GraphLinkContainer& containerIn
 )
 {
-    using List = GraphLinkContainer::index<GraphLinkRecord::ByUniqueName>::type;
-    const List& list = containerIn.get<GraphLinkRecord::ByUniqueName>();
-    List::const_iterator it = list.find(stringIn);
-    assert(it != list.end());
-    return *it;
+    auto it = containerIn.byUniqueName.find(stringIn);
+    assert(it != containerIn.byUniqueName.end());
+    return *it->second;
 }
 
 void Gui::DAG::eraseRecord(const ViewProviderDocumentObject* VPDObjectIn, GraphLinkContainer& containerIn)
 {
-    using List = GraphLinkContainer::index<GraphLinkRecord::ByVPDObject>::type;
-    const List& list = containerIn.get<GraphLinkRecord::ByVPDObject>();
-    List::iterator it = list.find(VPDObjectIn);
-    assert(it != list.end());
-    containerIn.get<GraphLinkRecord::ByVPDObject>().erase(it);
+    auto it = containerIn.byVPDObject.find(VPDObjectIn);
+    assert(it != containerIn.byVPDObject.end());
+
+    const auto listIt = it->second;
+
+    containerIn.byDObject.erase(listIt->DObject);
+    containerIn.byRectItem.erase(listIt->rectItem);
+    containerIn.byUniqueName.erase(listIt->uniqueName);
+    containerIn.byVertex.erase(listIt->vertex);
+    containerIn.byVPDObject.erase(it);
+    containerIn.records.erase(listIt);
 }
