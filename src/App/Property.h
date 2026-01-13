@@ -28,7 +28,7 @@
 
 #include <Base/Exception.h>
 #include <Base/Persistence.h>
-#include <boost/any.hpp>
+#include <any>
 #include <fastsignals/signal.h>
 #include <bitset>
 #include <string>
@@ -271,7 +271,7 @@ public:
      * @param[in] path The path to the property.
      * @param[in] value The value to set.
      */
-    virtual void setPathValue(const App::ObjectIdentifier& path, const boost::any& value);
+    virtual void setPathValue(const App::ObjectIdentifier& path, const std::any& value);
 
     /**
      * @brief Get the value of the property identified by the path.
@@ -284,7 +284,7 @@ public:
      * @param[in] path The path to the property.
      * @return The value of the property.
      */
-    virtual const boost::any getPathValue(const App::ObjectIdentifier& path) const;
+    virtual const std::any getPathValue(const App::ObjectIdentifier& path) const;
 
     /**
      * @brief Get the Python value of the property identified by the path.

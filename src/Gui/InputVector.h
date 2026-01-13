@@ -23,6 +23,7 @@
 #ifndef GUI_INPUTVECTOR_H
 #define GUI_INPUTVECTOR_H
 
+#include <any>
 #include <memory>
 #include <QApplication>
 #include <QDialog>
@@ -444,7 +445,7 @@ public:
     virtual Base::Vector3d getDirection() const = 0;
     virtual void setDirection(const Base::Vector3d& dir) = 0;
     virtual bool directionActivated(LocationDialog* dlg, int index) = 0;
-    virtual boost::any get() = 0;
+    virtual std::any get() = 0;
 };
 
 /** This is the template class that implements the interface of AbstractUi.
@@ -461,7 +462,7 @@ public:
     {}
     ~LocationImpUi() override = default;
 
-    boost::any get() override
+    std::any get() override
     {
         return ui;
     }
@@ -594,7 +595,7 @@ public:
         : LocationDialog(parent, fl)
         , ui(new LocationImpUi<T>(t))
     {
-        std::shared_ptr<T> uit = boost::any_cast<std::shared_ptr<T>>(ui->get());
+        std::shared_ptr<T> uit = std::any_cast<std::shared_ptr<T>>(ui->get());
         uit->setupUi(this);
         ui->retranslate(this);
     }

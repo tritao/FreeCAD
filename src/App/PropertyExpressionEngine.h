@@ -141,7 +141,7 @@ public:
 
     void setValue(const App::ObjectIdentifier& path, std::shared_ptr<App::Expression> expr);
 
-    const boost::any getPathValue(const App::ObjectIdentifier& path) const override;
+    const std::any getPathValue(const App::ObjectIdentifier& path) const override;
 
     /// Execute options
     enum ExecuteOption

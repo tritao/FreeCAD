@@ -1240,10 +1240,10 @@ void DocumentObject::clearExpression(const ObjectIdentifier& path)
 const PropertyExpressionEngine::ExpressionInfo
 DocumentObject::getExpression(const ObjectIdentifier& path) const
 {
-    boost::any value = ExpressionEngine.getPathValue(path);
+    App::any value = ExpressionEngine.getPathValue(path);
 
     if (value.type() == typeid(PropertyExpressionEngine::ExpressionInfo)) {
-        return boost::any_cast<PropertyExpressionEngine::ExpressionInfo>(value);
+        return std::any_cast<PropertyExpressionEngine::ExpressionInfo>(value);
     }
     else {
         return PropertyExpressionEngine::ExpressionInfo();

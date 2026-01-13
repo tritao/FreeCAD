@@ -101,7 +101,7 @@ public:
         return sizeof(Base::Vector3d);
     }
 
-    const boost::any getPathValue(const ObjectIdentifier& path) const override;
+    const std::any getPathValue(const ObjectIdentifier& path) const override;
 
     bool getPyPathValue(const ObjectIdentifier& path, Py::Object& res) const override;
 
@@ -350,9 +350,9 @@ public:
     /// Get valid paths for this property; used by auto completer
     void getPaths(std::vector<ObjectIdentifier>& paths) const override;
 
-    void setPathValue(const ObjectIdentifier& path, const boost::any& value) override;
+    void setPathValue(const ObjectIdentifier& path, const std::any& value) override;
 
-    const boost::any getPathValue(const ObjectIdentifier& path) const override;
+    const std::any getPathValue(const ObjectIdentifier& path) const override;
 
     bool getPyPathValue(const ObjectIdentifier& path, Py::Object& res) const override;
 
@@ -488,9 +488,9 @@ public:
     /// Get valid paths for this property; used by auto completer
     void getPaths(std::vector<ObjectIdentifier>& paths) const override;
 
-    void setPathValue(const ObjectIdentifier& path, const boost::any& value) override;
+    void setPathValue(const ObjectIdentifier& path, const std::any& value) override;
 
-    const boost::any getPathValue(const ObjectIdentifier& path) const override;
+    const std::any getPathValue(const ObjectIdentifier& path) const override;
 
     bool getPyPathValue(const ObjectIdentifier& path, Py::Object& res) const override;
 

@@ -186,7 +186,7 @@ public:
 
     bool hasComponent() const {return !components.empty();}
 
-    boost::any getValueAsAny() const;
+    App::any getValueAsAny() const;
 
     Py::Object getPyValue() const;
 

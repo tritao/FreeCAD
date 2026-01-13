@@ -84,8 +84,8 @@ public:
         _Format = fmt;
     }
 
-    void setPathValue(const App::ObjectIdentifier& path, const boost::any& value) override;
-    const boost::any getPathValue(const App::ObjectIdentifier& path) const override;
+    void setPathValue(const App::ObjectIdentifier& path, const std::any& value) override;
+    const std::any getPathValue(const App::ObjectIdentifier& path) const override;
 
     bool isSame(const Property& other) const override
     {

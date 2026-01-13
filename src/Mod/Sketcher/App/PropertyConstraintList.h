@@ -143,8 +143,8 @@ public:
 
 
     const Constraint* getConstraint(const App::ObjectIdentifier& path) const;
-    void setPathValue(const App::ObjectIdentifier& path, const boost::any& value) override;
-    const boost::any getPathValue(const App::ObjectIdentifier& path) const override;
+    void setPathValue(const App::ObjectIdentifier& path, const std::any& value) override;
+    const std::any getPathValue(const App::ObjectIdentifier& path) const override;
     App::ObjectIdentifier canonicalPath(const App::ObjectIdentifier& p) const override;
     void getPaths(std::vector<App::ObjectIdentifier>& paths) const override;
 

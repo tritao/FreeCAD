@@ -146,7 +146,7 @@ static inline bool is_type(const App::any &value, const std::type_info& t) {
 template<class T>
 static inline const T &cast(const App::any &value) {
 #ifdef USE_FAST_ANY
-    return *value.cast<T>();
+    return *std::any_cast<T>(&value);
 #else
     return App::any_cast<const T&>(value);
 #endif
@@ -155,18 +155,18 @@ static inline const T &cast(const App::any &value) {
 template<class T>
 static inline T &cast(App::any &value) {
 #ifdef USE_FAST_ANY
-    return *value.cast<T>();
+    return *std::any_cast<T>(&value);
 #else
     return App::any_cast<T&>(value);
 #endif
 }
 
 template<class T>
-static inline T &&cast(App::any &&value) {
+static inline T cast(App::any &&value) {
 #ifdef USE_FAST_ANY
-    return std::move(*value.cast<T>());
+    return std::move(*std::any_cast<T>(&value));
 #else
-    return App::any_cast<T&&>(std::move(value));
+    return std::any_cast<T>(std::move(value));
 #endif
 }
 
@@ -414,7 +414,7 @@ static inline Py::Object __pyObjectFromAny(const App::any &value) {
 }
 
 static Py::Object _pyObjectFromAny(const App::any &value, const Expression *e) {
-    if(value.empty())
+    if (!value.has_value())
         return Py::Object();
     else if (isAnyPyObject(value))
         return __pyObjectFromAny(value);
@@ -562,9 +562,9 @@ static inline bool anyToDouble(double &res, const App::any &value) {
 }
 
 bool isAnyEqual(const App::any &v1, const App::any &v2) {
-    if(v1.empty())
-        return v2.empty();
-    else if(v2.empty())
+    if (!v1.has_value())
+        return !v2.has_value();
+    else if (!v2.has_value())
         return false;
 
     if(!is_type(v1,v2.type())) {

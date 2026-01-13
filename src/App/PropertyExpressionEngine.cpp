@@ -498,10 +498,10 @@ void PropertyExpressionEngine::onContainerRestored()
 /**
  * @brief Get expression for \a path.
  * @param path ObjectIndentifier to query for.
- * @return Expression for \a path, or empty boost::any if not found.
+ * @return Expression for \a path, or empty std::any if not found.
  */
 
-const boost::any PropertyExpressionEngine::getPathValue(const App::ObjectIdentifier& path) const
+const std::any PropertyExpressionEngine::getPathValue(const App::ObjectIdentifier& path) const
 {
     // Get a canonical path
     ObjectIdentifier usePath(canonicalPath(path));
@@ -511,7 +511,7 @@ const boost::any PropertyExpressionEngine::getPathValue(const App::ObjectIdentif
         return i->second;
     }
 
-    return boost::any();
+    return std::any();
 }
 
 /**
