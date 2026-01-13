@@ -139,8 +139,8 @@ void AreaParams::dump(const char* msg) const
 CAreaConfig::CAreaConfig(const CAreaParams& p, bool noFitArcs)
 {
 #define AREA_CONF_SAVE_AND_APPLY(_param) \
-    PARAM_FNAME(_param) = BOOST_PP_CAT(CArea::get_, PARAM_FARG(_param))(); \
-    BOOST_PP_CAT(CArea::set_, PARAM_FARG(_param))(p.PARAM_FNAME(_param));
+    PARAM_FNAME(_param) = FC_PP_CAT(CArea::get_, PARAM_FARG(_param))(); \
+    FC_PP_CAT(CArea::set_, PARAM_FARG(_param))(p.PARAM_FNAME(_param));
 
     PARAM_FOREACH(AREA_CONF_SAVE_AND_APPLY, AREA_PARAMS_CAREA);
 
@@ -154,7 +154,7 @@ CAreaConfig::~CAreaConfig()
 {
 
 #define AREA_CONF_RESTORE(_param) \
-    BOOST_PP_CAT(CArea::set_, PARAM_FARG(_param))(PARAM_FNAME(_param));
+    FC_PP_CAT(CArea::set_, PARAM_FARG(_param))(PARAM_FNAME(_param));
 
     PARAM_FOREACH(AREA_CONF_RESTORE, AREA_PARAMS_CAREA);
 }
