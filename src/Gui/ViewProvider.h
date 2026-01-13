@@ -28,11 +28,11 @@
 #include <vector>
 #include <QIcon>
 #include <fastsignals/signal.h>
-#include <boost/intrusive_ptr.hpp>
 
 #include <App/Material.h>
 #include <App/TransactionalObject.h>
 #include <Base/BoundBox.h>
+#include <Base/IntrusivePtr.h>
 #include <Base/Vector3D.h>
 
 #include "TreeItemMode.h"
@@ -86,102 +86,24 @@ enum ViewStatus
 };
 
 
-/** Convenience smart pointer to manage the lifetime of coin nodes.
- *
- * This class is copied from Inventor/misc/SoRefPtr.h and can be removed when the
- * minimum supported coin version provides this header.
- */
-template<typename T>
-class SoRefPtr
-{
-public:
-    SoRefPtr(void) noexcept
-        : ptr(NULL)
-    {}
-
-    explicit SoRefPtr(T* p)
-        : ptr(p)
-    {
-        if (this->ptr) {
-            this->ptr->ref();
-        }
-    }
-
-    SoRefPtr(const SoRefPtr& other)
-        : ptr(other.ptr)
-    {
-        if (this->ptr) {
-            this->ptr->ref();
-        }
-    }
-
-    SoRefPtr(SoRefPtr&& other) noexcept
-        : ptr(other.ptr)
-    {
-        other.ptr = NULL;
-    }
-
-    ~SoRefPtr(void)
-    {
-        if (this->ptr) {
-            this->ptr->unref();
-        }
-    }
-
-    SoRefPtr& operator=(SoRefPtr other) noexcept
-    {
-        this->swap(other);
-        return *this;
-    }
-
-    void reset(T* p = NULL)
-    {
-        SoRefPtr tmp(p);
-        this->swap(tmp);
-    }
-
-    T* get(void) const noexcept
-    {
-        return this->ptr;
-    }
-    T& operator*(void) const
-    {
-        return *this->ptr;
-    }
-    T* operator->(void) const noexcept
-    {
-        return this->ptr;
-    }
-    explicit operator bool(void) const noexcept
-    {
-        return this->ptr != NULL;
-    }
-
-    void swap(SoRefPtr& other) noexcept
-    {
-        using std::swap;
-        swap(this->ptr, other.ptr);
-    }
-
-private:
-    T* ptr;
-};
-
 /** Convenience smart pointer to wrap coin node.
  *
- * This class isn't merged with SoRefPtr because it can be removed in the future
+ * It is basically Base::IntrusivePtr plus implicit pointer conversion to save the
+ * trouble of typing get() all the time.
  */
 template<class T>
-class CoinPtr: public SoRefPtr<T>
+class CoinPtr: public Base::IntrusivePtr<T>
 {
 public:
-    using SoRefPtr<T>::SoRefPtr;
-
-    CoinPtr& operator=(T* ptr)
-    {
-        SoRefPtr<T>::reset(ptr);
-        return *this;
-    }
+    using inherited = Base::IntrusivePtr<T>;
+    CoinPtr() = default;
+    CoinPtr(T* p, bool add_ref = true)
+        : inherited(p, add_ref)
+    {}
+    template<class Y>
+    CoinPtr(CoinPtr<Y> const& r)
+        : inherited(r)
+    {}
 
     operator T*() const
     {
