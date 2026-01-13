@@ -25,7 +25,7 @@
 #ifndef SKETCHERGUI_DrawSketchHandlerArcOfHyperbola_H
 #define SKETCHERGUI_DrawSketchHandlerArcOfHyperbola_H
 
-#include <boost/math/special_functions/fpclassify.hpp>
+#include <cmath>
 
 #include <Gui/Notifications.h>
 #include <Gui/Command.h>
@@ -111,7 +111,7 @@ public:
                         - (onSketchPos.x - centerPoint.x) * sin(phi))
                 / sinh(angleatpoint);
 
-            if (!boost::math::isnan(b)) {
+            if (!std::isnan(b)) {
                 for (int i = 15; i >= -15; i--) {
                     // P(U) = O + MajRad*Cosh(U)*XDir + MinRad*Sinh(U)*YDir
                     // double angle = i*std::numbers::pi/16.0;
@@ -170,8 +170,8 @@ public:
 
             arcAngle = angleatpoint - startAngle;
 
-            // if(!boost::math::isnan(angle1) && !boost::math::isnan(angle2)){
-            if (!boost::math::isnan(arcAngle)) {
+            // if(!std::isnan(angle1) && !std::isnan(angle2)){
+            if (!std::isnan(arcAngle)) {
                 EditCurve.resize(33);
                 for (int i = 0; i < 33; i++) {
                     // P(U) = O + MajRad*Cosh(U)*XDir + MinRad*Sinh(U)*YDir
@@ -264,7 +264,7 @@ public:
                    * b)
             );
 
-            if (boost::math::isnan(startAngle) || boost::math::isnan(endAngle)) {
+            if (std::isnan(startAngle) || std::isnan(endAngle)) {
                 Gui::NotifyError(
                     sketchgui,
                     QT_TRANSLATE_NOOP("Notifications", "Error"),

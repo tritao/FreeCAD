@@ -37,7 +37,7 @@
 #include <map>
 
 // boost
-#include <boost/math/special_functions/fpclassify.hpp>
+#include <cmath>
 
 // OpenCasCade
 #include <Geom_BSplineSurface.hxx>
