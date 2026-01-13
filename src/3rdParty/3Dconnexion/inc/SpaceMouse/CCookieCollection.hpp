@@ -22,18 +22,7 @@
 #include <map>
 #include <memory>
 #include <stdexcept>
-#if (!defined(_MSC_VER) || (_MSC_VER > 1600))
 #include <mutex>
-#else
-#pragma warning(disable : 4482) // non-standard
-#include <boost/thread/lock_guard.hpp>
-#include <boost/thread/mutex.hpp>
-namespace std {
-using boost::lock_guard;
-using boost::mutex;
-using boost::unique_lock;
-} // namespace std
-#endif
 
 namespace TDx {
 namespace SpaceMouse {

@@ -28,7 +28,7 @@
 #include "MED_Structures.hxx"
 #include "MED_Algorithm.hxx"
 
-#include <boost/thread/mutex.hpp>
+#include <mutex>
 
 namespace MED
 {
@@ -37,7 +37,7 @@ namespace MED
   //! Define a base class that wraps the MED API
   struct MEDWRAPPER_EXPORT TWrapper
   {
-    typedef boost::mutex TMutex;
+    typedef std::mutex TMutex;
     //! This is a synchronization primitive which allows one to support thread safety for the MED access
     TMutex myMutex;
 
