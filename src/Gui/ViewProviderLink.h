@@ -170,7 +170,7 @@ public:
 
     void setChildren(
         const std::vector<App::DocumentObject*>& children,
-        const boost::dynamic_bitset<>& vis,
+        const std::vector<bool>& vis,
         SnapshotType type = SnapshotVisible
     );
 

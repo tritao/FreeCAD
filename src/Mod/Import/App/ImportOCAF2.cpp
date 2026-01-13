@@ -456,7 +456,7 @@ bool ImportOCAF2::createGroup(
     Info& info,
     const TopoDS_Shape& shape,
     std::vector<App::DocumentObject*>& children,
-    const boost::dynamic_bitset<>& visibilities,
+    const std::vector<bool>& visibilities,
     bool canReduce
 )
 {
@@ -525,7 +525,7 @@ App::DocumentObject* ImportOCAF2::loadShapes()
 
     std::vector<App::DocumentObject*> objs;
     aShapeTool->GetFreeShapes(labels);
-    boost::dynamic_bitset<> vis;
+    std::vector<bool> vis;
     int count = 0;
     for (Standard_Integer i = 1; i <= labels.Length(); i++) {
         auto label = labels.Value(i);
@@ -733,7 +733,7 @@ App::DocumentObject* ImportOCAF2::loadShape(
 struct ChildInfo
 {
     std::vector<Base::Placement> plas;
-    boost::dynamic_bitset<> vis;
+    std::vector<bool> vis;
     std::map<size_t, Base::Color> colors;
     std::vector<TDF_Label> labels;
     TopoDS_Shape shape;
@@ -751,7 +751,7 @@ bool ImportOCAF2::createAssembly(
 
     std::vector<App::DocumentObject*> children;
     std::map<App::DocumentObject*, ChildInfo> childrenMap;
-    boost::dynamic_bitset<> visibilities;
+    std::vector<bool> visibilities;
     std::map<std::string, Base::Color> shuoColors;
 
     auto doc = _doc;

@@ -27,6 +27,7 @@
 #include <boost/preprocessor/seq/for_each.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
+#include <vector>
 #include <unordered_set>
 #include <Base/Parameter.h>
 #include <Base/Bitmask.h>
@@ -196,9 +197,9 @@ public:
 
 #define LINK_PARAM_VISIBILITIES(...)                                                               \
     (VisibilityList,                                                                               \
-     boost::dynamic_bitset<>,                                                                      \
+     std::vector<bool>,                                                                            \
      App::PropertyBoolList,                                                                        \
-     boost::dynamic_bitset<>(),                                                                    \
+     std::vector<bool>(),                                                                          \
      "The visibility state of each link element",                                                  \
      ##__VA_ARGS__)
 
