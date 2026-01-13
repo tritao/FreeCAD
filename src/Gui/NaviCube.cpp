@@ -32,7 +32,6 @@
 #else
 # include <GL/gl.h>
 #endif
-#include <boost/math/constants/constants.hpp>
 #include <Inventor/nodes/SoOrthographicCamera.h>
 #include <Inventor/events/SoEvent.h>
 #include <Inventor/events/SoLocation2Event.h>
@@ -1171,7 +1170,7 @@ SbRotation NaviCubeImplementation::getNearestOrientation(PickId pickId)
 
 bool NaviCubeImplementation::mouseReleased(short x, short y)
 {
-    static const float pi = boost::math::constants::pi<float>();
+    constexpr float pi = std::numbers::pi_v<float>;
 
     setHilite(PickId::None);
     m_MouseDown = false;

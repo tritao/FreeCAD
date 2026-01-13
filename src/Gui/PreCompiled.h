@@ -70,7 +70,6 @@
 #include <fastsignals/signal.h>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/interprocess/sync/file_lock.hpp>
-#include <boost/math/constants/constants.hpp>
 
 // Xerces
 #include <xercesc/util/TranscodingException.hpp>
