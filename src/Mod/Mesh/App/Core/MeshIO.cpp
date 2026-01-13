@@ -24,15 +24,17 @@
 
 
 #include <algorithm>
+#include <charconv>
+#include <cctype>
 #include <cmath>
 #include <iomanip>
+#include <optional>
 #include <sstream>
+#include <string>
 #include <string_view>
 
 
 #include <boost/algorithm/string.hpp>
-#include <boost/convert.hpp>
-#include <boost/convert/spirit.hpp>
 
 #include "IO/Reader3MF.h"
 #include "IO/ReaderOBJ.h"
@@ -95,6 +97,68 @@ int numDigits(int number)
 
 namespace
 {
+std::string normalizeNastranNumber(std::string s)
+{
+    for (char& c : s) {
+        if (c == 'd' || c == 'D') {
+            c = 'E';
+        }
+    }
+
+    if (s.find_first_of("eE") == std::string::npos) {
+        const auto exponentPos = s.find_last_of("+-");
+        if (exponentPos != std::string::npos && exponentPos != 0) {
+            bool hasDigitBefore = false;
+            for (std::size_t i = 0; i < exponentPos; ++i) {
+                if (std::isdigit(static_cast<unsigned char>(s[i]))) {
+                    hasDigitBefore = true;
+                    break;
+                }
+            }
+
+            bool hasDigitAfter = false;
+            for (std::size_t i = exponentPos + 1; i < s.size(); ++i) {
+                if (std::isdigit(static_cast<unsigned char>(s[i]))) {
+                    hasDigitAfter = true;
+                    break;
+                }
+            }
+
+            if (hasDigitBefore && hasDigitAfter) {
+                s.insert(exponentPos, 1, 'E');
+            }
+        }
+    }
+
+    return s;
+}
+
+std::optional<int> parseIntStrict(const std::string& s)
+{
+    int value {};
+    const char* first = s.data();
+    const char* last = first + s.size();
+    const auto [ptr, ec] = std::from_chars(first, last, value);
+    if (ec != std::errc() || ptr != last) {
+        return std::nullopt;
+    }
+    return value;
+}
+
+template <class T>
+std::optional<T> parseFloatNastran(const std::string& s)
+{
+    const std::string normalized = normalizeNastranNumber(s);
+    T value {};
+    const char* first = normalized.data();
+    const char* last = first + normalized.size();
+    const auto [ptr, ec] = std::from_chars(first, last, value, std::chars_format::general);
+    if (ec != std::errc() || ptr != last) {
+        return std::nullopt;
+    }
+    return value;
+}
+
 bool parseFloat3FromLine(const std::string& line,
                          const char* keyword1,
                          const char* keyword2,
@@ -1062,30 +1126,29 @@ bool MeshInput::LoadNastran(std::istream& input)
             auto yString = boost::trim_copy(std::string(yView));
             auto zString = boost::trim_copy(std::string(zView));
 
-            auto converter = boost::cnv::spirit();
-            auto indexCheck = boost::convert<int>(indexString, converter);
-            if (!indexCheck.is_initialized()) {
+            const auto indexCheck = parseIntStrict(indexString);
+            if (!indexCheck) {
                 // File format error: index couldn't be converted to an integer
                 badElementCounter++;
                 continue;
             }
-            index = indexCheck.get() - 1;  // Minus one so we are zero-indexed to match existing code
+            index = *indexCheck - 1;  // Minus one so we are zero-indexed to match existing code
 
             // Get the high-precision versions first
-            auto x = boost::convert<double>(xString, converter);
-            auto y = boost::convert<double>(yString, converter);
-            auto z = boost::convert<double>(zString, converter);
+            const auto x = parseFloatNastran<double>(xString);
+            const auto y = parseFloatNastran<double>(yString);
+            const auto z = parseFloatNastran<double>(zString);
 
-            if (!x.is_initialized() || !y.is_initialized() || !z.is_initialized()) {
+            if (!x || !y || !z) {
                 // File format error: x, y or z could not be converted
                 badElementCounter++;
                 continue;
             }
 
             // Now drop precision:
-            mNode[index].x = (float)x.get();
-            mNode[index].y = (float)y.get();
-            mNode[index].z = (float)z.get();
+            mNode[index].x = static_cast<float>(*x);
+            mNode[index].y = static_cast<float>(*y);
+            mNode[index].z = static_cast<float>(*z);
         }
         else if (line.rfind("GRID", 0) == 0) {
             bool parsed = false;
@@ -1159,29 +1222,28 @@ bool MeshInput::LoadNastran(std::istream& input)
                 auto yString = boost::trim_copy(std::string(yView));
                 auto zString = boost::trim_copy(std::string(zView));
 
-                auto converter = boost::cnv::spirit();
-                auto indexCheck = boost::convert<int>(indexString, converter);
-                if (!indexCheck.is_initialized()) {
+                const auto indexCheck = parseIntStrict(indexString);
+                if (!indexCheck) {
                     // File format error: index couldn't be converted to an integer
                     badElementCounter++;
                     continue;
                 }
                 // Minus one so we are zero-indexed to match existing code
-                index = indexCheck.get() - 1;
+                index = *indexCheck - 1;
 
-                auto x = boost::convert<float>(xString, converter);
-                auto y = boost::convert<float>(yString, converter);
-                auto z = boost::convert<float>(zString, converter);
+                const auto x = parseFloatNastran<float>(xString);
+                const auto y = parseFloatNastran<float>(yString);
+                const auto z = parseFloatNastran<float>(zString);
 
-                if (!x.is_initialized() || !y.is_initialized() || !z.is_initialized()) {
+                if (!x || !y || !z) {
                     // File format error: x, y or z could not be converted
                     badElementCounter++;
                     continue;
                 }
 
-                mNode[index].x = x.get();
-                mNode[index].y = y.get();
-                mNode[index].z = z.get();
+                mNode[index].x = *x;
+                mNode[index].y = *y;
+                mNode[index].z = *z;
             }
         }
         else if (line.rfind("CTRIA3 ", 0) == 0) {
