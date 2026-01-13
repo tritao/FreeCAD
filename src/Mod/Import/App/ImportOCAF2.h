@@ -169,7 +169,7 @@ private:
         Info& info,
         const TopoDS_Shape& shape,
         std::vector<App::DocumentObject*>& children,
-        const boost::dynamic_bitset<>& visibilities,
+        const std::vector<bool>& visibilities,
         bool canReduce = false
     );
     bool getColor(const TopoDS_Shape& shape, Info& info, bool check = false, bool noDefault = false);

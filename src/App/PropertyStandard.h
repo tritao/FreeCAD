@@ -29,7 +29,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include <boost/dynamic_bitset.hpp>
 #include <Base/Uuid.h>
 
 #include "Property.h"
@@ -984,10 +983,10 @@ private:
 /** Bool list properties
  *
  */
-class AppExport PropertyBoolList: public PropertyListsT<bool, boost::dynamic_bitset<>>
+class AppExport PropertyBoolList: public PropertyListsT<bool, std::vector<bool>>
 {
     TYPESYSTEM_HEADER_WITH_OVERRIDE();
-    using inherited = PropertyListsT<bool, boost::dynamic_bitset<>>;
+    using inherited = PropertyListsT<bool, std::vector<bool>>;
 
 public:
     PropertyBoolList();
