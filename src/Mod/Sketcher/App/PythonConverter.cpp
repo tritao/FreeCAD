@@ -22,7 +22,8 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/format.hpp>
+#include <fmt/format.h>
+#include <fmt/printf.h>
 
 #include <Base/Exception.h>
 #include <Mod/Sketcher/App/Constraint.h>
@@ -41,9 +42,9 @@ std::string PythonConverter::convert(const Part::Geometry* geo, Mode mode)
     std::string command;
     auto sg = process(geo);
 
-    command = boost::str(
-        boost::format("addGeometry(%s,%s)\n") % sg.creation % (sg.construction ? "True" : "False")
-    );
+    command = fmt::sprintf("addGeometry(%s,%s)\n",
+                           sg.creation.c_str(),
+                           sg.construction ? "True" : "False");
 
     // clang-format off: keep line breaks for readability
     if ((!geo->is<Part::GeomEllipse>()
@@ -51,8 +52,7 @@ std::string PythonConverter::convert(const Part::Geometry* geo, Mode mode)
          || !geo->is<Part::GeomArcOfHyperbola>()
          || !geo->is<Part::GeomArcOfParabola>()
          || !geo->is<Part::GeomBSplineCurve>()) && mode == Mode::CreateInternalGeometry) {
-        command +=
-            boost::str(boost::format("exposeInternalGeometry(len(ActiveSketch.Geometry))\n"));
+        command += "exposeInternalGeometry(len(ActiveSketch.Geometry))\n";
     }
     // clang-format on
 
@@ -65,7 +65,7 @@ std::string PythonConverter::convert(const Sketcher::Constraint* constraint, Geo
     std::string command;
     auto cg = process(constraint, geoIdMode);
 
-    command = boost::str(boost::format("addConstraint(%s)\n") % cg);
+    command = fmt::sprintf("addConstraint(%s)\n", cg.c_str());
 
     return command;
 }
@@ -86,26 +86,26 @@ std::string PythonConverter::convert(
 
         if (ngeos > 0) {
             if (construction) {
-                command = boost::str(
-                    boost::format(
-                        "constrGeoList = []\n%s%s.addGeometry(constrGeoList,%s)\n"
-                        "del constrGeoList\n"
-                    )
-                    % geolist % doc % "True"
-                );
+                command = fmt::sprintf(
+                    "constrGeoList = []\n%s%s.addGeometry(constrGeoList,%s)\n"
+                    "del constrGeoList\n",
+                    geolist.c_str(),
+                    doc.c_str(),
+                    "True");
             }
             else {
-                command = boost::str(
-                    boost::format("geoList = []\n%s%s.addGeometry(geoList,%s)\ndel geoList\n")
-                    % geolist % doc % "False"
-                );
+                command = fmt::sprintf(
+                    "geoList = []\n%s%s.addGeometry(geoList,%s)\ndel geoList\n",
+                    geolist.c_str(),
+                    doc.c_str(),
+                    "False");
             }
         }
 
         return command;
     };
 
-    std::string command = boost::str(boost::format("lastGeoId = len(ActiveSketch.Geometry)\n"));
+    std::string command = "lastGeoId = len(ActiveSketch.Geometry)\n";
 
     // Adds a list of consecutive geometries of a same construction type to the generating command
     auto addToCommands = [&command,
@@ -139,10 +139,14 @@ std::string PythonConverter::convert(
         }
 
         if (sg.construction) {
-            geolist = boost::str(boost::format("%sconstrGeoList.append(%s)\n") % geolist % sg.creation);
+            geolist = fmt::sprintf("%sconstrGeoList.append(%s)\n",
+                                   geolist.c_str(),
+                                   sg.creation.c_str());
         }
         else {
-            geolist = boost::str(boost::format("%sgeoList.append(%s)\n") % geolist % sg.creation);
+            geolist = fmt::sprintf("%sgeoList.append(%s)\n",
+                                   geolist.c_str(),
+                                   sg.creation.c_str());
         }
 
         ngeos++;
@@ -160,8 +164,8 @@ std::string PythonConverter::convert(
                 || !geo->is<Part::GeomArcOfHyperbola>()
                 || !geo->is<Part::GeomArcOfParabola>()
                 || !geo->is<Part::GeomBSplineCurve>()) {
-                std::string newcommand =
-                    boost::str(boost::format("exposeInternalGeometry(lastGeoId + %d)\n") % (index));
+                std::string newcommand = fmt::sprintf("exposeInternalGeometry(lastGeoId + %d)\n",
+                                                      index);
                 command += newcommand;
             }
             // clang-format on
@@ -180,7 +184,7 @@ std::string PythonConverter::convert(
     if (constraints.size() == 1) {
         auto cg = convert(constraints[0], geoIdMode);
 
-        return boost::str(boost::format("%s.%s\n") % doc % cg);
+        return fmt::sprintf("%s.%s\n", doc.c_str(), cg.c_str());
     }
 
     std::string constraintlist = "constraintList = []";
@@ -188,16 +192,15 @@ std::string PythonConverter::convert(
     for (auto constraint : constraints) {
         auto cg = process(constraint, geoIdMode);
 
-        constraintlist = boost::str(
-            boost::format("%s\nconstraintList.append(%s)") % constraintlist % cg
-        );
+        constraintlist = fmt::sprintf("%s\nconstraintList.append(%s)",
+                                      constraintlist.c_str(),
+                                      cg.c_str());
     }
 
     if (!constraints.empty()) {
-        constraintlist = boost::str(
-            boost::format("%s\n%s.addConstraint(constraintList)\ndel constraintList\n")
-            % constraintlist % doc
-        );
+        constraintlist = fmt::sprintf("%s\n%s.addConstraint(constraintList)\ndel constraintList\n",
+                                      constraintlist.c_str(),
+                                      doc.c_str());
     }
 
     return constraintlist;
@@ -234,11 +237,14 @@ PythonConverter::SingleGeometry PythonConverter::process(const Part::Geometry* g
              [](const Part::Geometry* geo) {
                  auto sgeo = static_cast<const Part::GeomLineSegment*>(geo);
                  SingleGeometry sg;
-                 sg.creation = boost::str(
-                     boost::format("Part.LineSegment(App.Vector(%f, %f, %f),App.Vector(%f, %f, %f))")
-                     % sgeo->getStartPoint().x % sgeo->getStartPoint().y % sgeo->getStartPoint().z
-                     % sgeo->getEndPoint().x % sgeo->getEndPoint().y % sgeo->getEndPoint().z
-                 );
+                 sg.creation = fmt::sprintf(
+                     "Part.LineSegment(App.Vector(%f, %f, %f),App.Vector(%f, %f, %f))",
+                     sgeo->getStartPoint().x,
+                     sgeo->getStartPoint().y,
+                     sgeo->getStartPoint().z,
+                     sgeo->getEndPoint().x,
+                     sgeo->getEndPoint().y,
+                     sgeo->getEndPoint().z);
                  sg.construction = Sketcher::GeometryFacade::getConstruction(geo);
                  return sg;
              }},
@@ -248,15 +254,18 @@ PythonConverter::SingleGeometry PythonConverter::process(const Part::Geometry* g
                  double startAngle, endAngle;
                  arc->getRange(startAngle, endAngle, /*emulateCCWXY=*/true);
                  SingleGeometry sg;
-                 sg.creation = boost::str(
-                     boost::format(
-                         "Part.ArcOfCircle(Part.Circle(App.Vector(%f, %f, "
-                         "%f), App.Vector(%f, %f, %f), %f), %f, %f)"
-                     )
-                     % arc->getCenter().x % arc->getCenter().y % arc->getCenter().z
-                     % arc->getAxisDirection().x % arc->getAxisDirection().y
-                     % arc->getAxisDirection().z % arc->getRadius() % startAngle % endAngle
-                 );
+                 sg.creation = fmt::sprintf(
+                     "Part.ArcOfCircle(Part.Circle(App.Vector(%f, %f, "
+                     "%f), App.Vector(%f, %f, %f), %f), %f, %f)",
+                     arc->getCenter().x,
+                     arc->getCenter().y,
+                     arc->getCenter().z,
+                     arc->getAxisDirection().x,
+                     arc->getAxisDirection().y,
+                     arc->getAxisDirection().z,
+                     arc->getRadius(),
+                     startAngle,
+                     endAngle);
                  sg.construction = Sketcher::GeometryFacade::getConstruction(geo);
                  return sg;
              }},
@@ -264,10 +273,10 @@ PythonConverter::SingleGeometry PythonConverter::process(const Part::Geometry* g
              [](const Part::Geometry* geo) {
                  auto sgeo = static_cast<const Part::GeomPoint*>(geo);
                  SingleGeometry sg;
-                 sg.creation = boost::str(
-                     boost::format("Part.Point(App.Vector(%f, %f, %f))") % sgeo->getPoint().x
-                     % sgeo->getPoint().y % sgeo->getPoint().z
-                 );
+                 sg.creation = fmt::sprintf("Part.Point(App.Vector(%f, %f, %f))",
+                                            sgeo->getPoint().x,
+                                            sgeo->getPoint().y,
+                                            sgeo->getPoint().z);
                  sg.construction = Sketcher::GeometryFacade::getConstruction(geo);
                  return sg;
              }},
@@ -278,14 +287,18 @@ PythonConverter::SingleGeometry PythonConverter::process(const Part::Geometry* g
                  auto center = ellipse->getCenter();
                  auto periapsis = center + ellipse->getMajorAxisDir() * ellipse->getMajorRadius();
                  auto positiveB = center + ellipse->getMinorAxisDir() * ellipse->getMinorRadius();
-                 sg.creation = boost::str(
-                     boost::format(
-                         "Part.Ellipse(App.Vector(%f, %f, %f), App.Vector(%f, "
-                         "%f, %f), App.Vector(%f, %f, %f))"
-                     )
-                     % periapsis.x % periapsis.y % periapsis.z % positiveB.x % positiveB.y
-                     % positiveB.z % center.x % center.y % center.z
-                 );
+                 sg.creation = fmt::sprintf(
+                     "Part.Ellipse(App.Vector(%f, %f, %f), App.Vector(%f, "
+                     "%f, %f), App.Vector(%f, %f, %f))",
+                     periapsis.x,
+                     periapsis.y,
+                     periapsis.z,
+                     positiveB.x,
+                     positiveB.y,
+                     positiveB.z,
+                     center.x,
+                     center.y,
+                     center.z);
                  sg.construction = Sketcher::GeometryFacade::getConstruction(geo);
                  return sg;
              }},
@@ -298,14 +311,20 @@ PythonConverter::SingleGeometry PythonConverter::process(const Part::Geometry* g
                  auto center = aoe->getCenter();
                  auto periapsis = center + aoe->getMajorAxisDir() * aoe->getMajorRadius();
                  auto positiveB = center + aoe->getMinorAxisDir() * aoe->getMinorRadius();
-                 sg.creation = boost::str(
-                     boost::format(
-                         "Part.ArcOfEllipse(Part.Ellipse(App.Vector(%f, %f, %f), App.Vector(%f, "
-                         "%f, %f), App.Vector(%f, %f, %f)), %f, %f)"
-                     )
-                     % periapsis.x % periapsis.y % periapsis.z % positiveB.x % positiveB.y
-                     % positiveB.z % center.x % center.y % center.z % startAngle % endAngle
-                 );
+                 sg.creation = fmt::sprintf(
+                     "Part.ArcOfEllipse(Part.Ellipse(App.Vector(%f, %f, %f), App.Vector(%f, "
+                     "%f, %f), App.Vector(%f, %f, %f)), %f, %f)",
+                     periapsis.x,
+                     periapsis.y,
+                     periapsis.z,
+                     positiveB.x,
+                     positiveB.y,
+                     positiveB.z,
+                     center.x,
+                     center.y,
+                     center.z,
+                     startAngle,
+                     endAngle);
                  sg.construction = Sketcher::GeometryFacade::getConstruction(geo);
                  return sg;
              }},
@@ -318,15 +337,20 @@ PythonConverter::SingleGeometry PythonConverter::process(const Part::Geometry* g
                  auto center = aoh->getCenter();
                  auto majAxisPoint = center + aoh->getMajorAxisDir() * aoh->getMajorRadius();
                  auto minAxisPoint = center + aoh->getMinorAxisDir() * aoh->getMinorRadius();
-                 sg.creation = boost::str(
-                     boost::format(
-                         "Part.ArcOfHyperbola(Part.Hyperbola(App.Vector(%f, %f, %f), "
-                         "App.Vector(%f, %f, %f), App.Vector(%f, %f, %f)), %f, %f)"
-                     )
-                     % majAxisPoint.x % majAxisPoint.y % majAxisPoint.z % minAxisPoint.x
-                     % minAxisPoint.y % minAxisPoint.z % center.x % center.y % center.z % startAngle
-                     % endAngle
-                 );
+                 sg.creation = fmt::sprintf(
+                     "Part.ArcOfHyperbola(Part.Hyperbola(App.Vector(%f, %f, %f), "
+                     "App.Vector(%f, %f, %f), App.Vector(%f, %f, %f)), %f, %f)",
+                     majAxisPoint.x,
+                     majAxisPoint.y,
+                     majAxisPoint.z,
+                     minAxisPoint.x,
+                     minAxisPoint.y,
+                     minAxisPoint.z,
+                     center.x,
+                     center.y,
+                     center.z,
+                     startAngle,
+                     endAngle);
                  sg.construction = Sketcher::GeometryFacade::getConstruction(geo);
                  return sg;
              }},
@@ -338,14 +362,17 @@ PythonConverter::SingleGeometry PythonConverter::process(const Part::Geometry* g
                  SingleGeometry sg;
                  auto focus = aop->getFocus();
                  auto axisPoint = aop->getCenter();
-                 sg.creation = boost::str(
-                     boost::format(
-                         "Part.ArcOfParabola(Part.Parabola(App.Vector(%f, %f, %f), "
-                         "App.Vector(%f, %f, %f), App.Vector(0, 0, 1)), %f, %f)"
-                     )
-                     % focus.x % focus.y % focus.z % axisPoint.x % axisPoint.y % axisPoint.z
-                     % startAngle % endAngle
-                 );
+                 sg.creation = fmt::sprintf(
+                     "Part.ArcOfParabola(Part.Parabola(App.Vector(%f, %f, %f), "
+                     "App.Vector(%f, %f, %f), App.Vector(0, 0, 1)), %f, %f)",
+                     focus.x,
+                     focus.y,
+                     focus.z,
+                     axisPoint.x,
+                     axisPoint.y,
+                     axisPoint.z,
+                     startAngle,
+                     endAngle);
                  sg.construction = Sketcher::GeometryFacade::getConstruction(geo);
                  return sg;
              }},
@@ -359,24 +386,28 @@ PythonConverter::SingleGeometry PythonConverter::process(const Part::Geometry* g
                  std::string weights = makeSplineInfoArrayString(bSpline->getWeights());
 
                  SingleGeometry sg;
-                 sg.creation = boost::str(
-                     boost::format("Part.BSplineCurve(%s, %s, %s, %s, %d, %s, False)")
-                     % controlpoints.c_str() % mults.c_str() % knots.c_str()
-                     % (bSpline->isPeriodic() ? "True" : "False") % bSpline->getDegree()
-                     % weights.c_str()
-                 );
+                 sg.creation = fmt::sprintf("Part.BSplineCurve(%s, %s, %s, %s, %d, %s, False)",
+                                            controlpoints.c_str(),
+                                            mults.c_str(),
+                                            knots.c_str(),
+                                            bSpline->isPeriodic() ? "True" : "False",
+                                            bSpline->getDegree(),
+                                            weights.c_str());
                  sg.construction = Sketcher::GeometryFacade::getConstruction(geo);
                  return sg;
              }},
             {Part::GeomCircle::getClassTypeId(), [](const Part::Geometry* geo) {
                  auto circle = static_cast<const Part::GeomCircle*>(geo);
                  SingleGeometry sg;
-                 sg.creation = boost::str(
-                     boost::format("Part.Circle(App.Vector(%f, %f, %f), App.Vector(%f, %f, %f), %f)")
-                     % circle->getCenter().x % circle->getCenter().y % circle->getCenter().z
-                     % circle->getAxisDirection().x % circle->getAxisDirection().y
-                     % circle->getAxisDirection().z % circle->getRadius()
-                 );
+                 sg.creation = fmt::sprintf(
+                     "Part.Circle(App.Vector(%f, %f, %f), App.Vector(%f, %f, %f), %f)",
+                     circle->getCenter().x,
+                     circle->getCenter().y,
+                     circle->getCenter().z,
+                     circle->getAxisDirection().x,
+                     circle->getAxisDirection().y,
+                     circle->getAxisDirection().z,
+                     circle->getRadius());
                  sg.construction = Sketcher::GeometryFacade::getConstruction(geo);
                  return sg;
              }},
