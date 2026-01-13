@@ -27,9 +27,9 @@
 #include <App/DocumentObject.h>
 #include <Base/Exception.h>
 #include <Gui/Command.h>
+#include <fmt/printf.h>
 #include <type_traits>
 #include <typeinfo>
-#include <boost/format.hpp>
 
 
 namespace Gui
@@ -68,15 +68,31 @@ public:
         }
         throw Base::TypeError("Not a std::stringstream or std::ostringstream");
     }
-    static std::string toStr(boost::format& f)
+
+    template<typename T>
+    static decltype(auto) printfArg(T&& v)
     {
-        return f.str();
+        return std::forward<T>(v);
     }
 
-    template<typename T, typename... Args>
-    static std::string toStr(boost::format& f, T&& t, Args&&... args)
+    static std::string printfArg(const QString& s)
     {
-        return toStr(f % std::forward<T>(t), std::forward<Args>(args)...);
+        return s.toStdString();
+    }
+
+    static std::string printfArg(const std::stringstream& s)
+    {
+        return s.str();
+    }
+
+    static std::string printfArg(const std::ostringstream& s)
+    {
+        return s.str();
+    }
+
+    static std::string printfArg(const std::ostream& s)
+    {
+        return str(s);
     }
 };
 
@@ -287,8 +303,7 @@ void cmdAppDocumentArgs(const App::Document* doc, const std::string& cmd, Args&&
 {
     std::string _cmd;
     try {
-        boost::format fmt(cmd);
-        _cmd = FormatString::toStr(fmt, std::forward<Args>(args)...);
+        _cmd = fmt::sprintf(cmd.c_str(), FormatString::printfArg(std::forward<Args>(args))...);
         Gui::Command::doCommand(
             Gui::Command::Doc,
             "App.getDocument('%s').%s",
@@ -436,8 +451,7 @@ void cmdAppObjectArgs(const App::DocumentObject* obj, const std::string& cmd, Ar
 {
     std::string _cmd;
     try {
-        boost::format fmt(cmd);
-        _cmd = FormatString::toStr(fmt, std::forward<Args>(args)...);
+        _cmd = fmt::sprintf(cmd.c_str(), FormatString::printfArg(std::forward<Args>(args))...);
         Gui::Command::doCommand(
             Gui::Command::Doc,
             "App.getDocument('%s').getObject('%s').%s",
@@ -472,8 +486,7 @@ void cmdGuiObjectArgs(const App::DocumentObject* obj, const std::string& cmd, Ar
 {
     std::string _cmd;
     try {
-        boost::format fmt(cmd);
-        _cmd = FormatString::toStr(fmt, std::forward<Args>(args)...);
+        _cmd = fmt::sprintf(cmd.c_str(), FormatString::printfArg(std::forward<Args>(args))...);
         Gui::Command::doCommand(
             Gui::Command::Gui,
             "Gui.getDocument('%s').getObject('%s').%s",
@@ -518,8 +531,7 @@ void doCommandT(Gui::Command::DoCmd_Type cmdType, const std::string& cmd, Args&&
 {
     std::string _cmd;
     try {
-        boost::format fmt(cmd);
-        _cmd = FormatString::toStr(fmt, std::forward<Args>(args)...);
+        _cmd = fmt::sprintf(cmd.c_str(), FormatString::printfArg(std::forward<Args>(args))...);
         Gui::Command::doCommand(cmdType, "%s", _cmd.c_str());
     }
     catch (const std::exception& e) {

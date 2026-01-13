@@ -42,7 +42,6 @@
 
 
 #include <boost/algorithm/string.hpp>
-#include <boost/format.hpp>
 
 #include <App/Application.h>
 #include <App/Document.h>

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 #include <regex>
+
+#include <fmt/format.h>
+
 #include "PartTestHelpers.h"
 
 // NOLINTBEGIN(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
@@ -85,12 +88,12 @@ void rectangle(double height, double width, const char* name)
     std::vector<std::string> rectstring {
         "import FreeCAD, Part",
         "V1 = FreeCAD.Vector(0, 0, 0)",
-        boost::str(boost::format("V2 = FreeCAD.Vector(%d, 0, 0)") % height),
-        boost::str(boost::format("V3 = FreeCAD.Vector(%d, %d, 0)") % height % width),
-        boost::str(boost::format("V4 = FreeCAD.Vector(0, %d, 0)") % width),
+        fmt::format("V2 = FreeCAD.Vector({}, 0, 0)", height),
+        fmt::format("V3 = FreeCAD.Vector({}, {}, 0)", height, width),
+        fmt::format("V4 = FreeCAD.Vector(0, {}, 0)", width),
         "P1 = Part.makePolygon([V1, V2, V3, V4],True)",
         "F1 = Part.Face(P1)",  // Make the face or the volume calc won't work right.
-        boost::str(boost::format("Part.show(F1,'%s')") % name),
+        fmt::format("Part.show(F1,'{}')", name),
     };
     ExecutePython(rectstring);
 }

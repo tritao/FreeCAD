@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 #include <gtest/gtest.h>
-#include <boost/format.hpp>
 #include <App/Application.h>
 #include <App/Document.h>
 #include "Base/Interpreter.h"
