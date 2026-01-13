@@ -23,6 +23,7 @@
  ***************************************************************************/
 
 #include <QComboBox>
+#include <QFile>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -33,6 +34,7 @@
 #include <QSplitter>
 #include <QTableView>
 #include <QVBoxLayout>
+#include <QXmlStreamReader>
 
 #include "Base/Console.h"
 
@@ -88,46 +90,39 @@ ButtonModel::ButtonModel(QObject* parent)
 }
 
 // Process the given Mapping tree to load in the Button mappings.
-void ButtonModel::load3DConnexionButtonMapping(boost::property_tree::ptree ButtonMapTree)
+void ButtonModel::load3DConnexionButtonMapping(QXmlStreamReader& xml)
 {
     spaceballButtonGroup()->Clear();
 
-    for (const auto& Map : ButtonMapTree.get_child("Mapping")) {
-        if ("Map" == Map.first) {
-            std::string ButtonDescription;
-            std::string ButtonCode;
-            std::string ButtonCommand;
-            std::string ButtonDownTime;
-
-            // Inspect Map attributes
-            for (const auto& kv : Map.second.get_child("<xmlattr>")) {
-                std::string Attribute;
-                std::string Value;
-
-                Attribute = kv.first.data();
-                Value = kv.second.data();
-
-                if (0 == Attribute.compare("Description")) {
-                    ButtonDescription = Value;
-                }
-                if (0 == Attribute.compare("KeyCode")) {
-                    ButtonCode = Value;
-                }
-                if (0 == Attribute.compare("DownTime")) {
-                    ButtonDownTime = Value;
-                }
-                if (0 == Attribute.compare("Command")) {
-                    ButtonCommand = Value;
-                }
+    bool inMapping = false;
+    while (!xml.atEnd()) {
+        xml.readNext();
+        if (xml.isStartElement()) {
+            if (!inMapping && xml.name() == QLatin1String("Mapping")) {
+                inMapping = true;
             }
+            else if (inMapping && xml.name() == QLatin1String("Map")) {
+                const auto attrs = xml.attributes();
+                const QString buttonDescription = attrs.value(QLatin1String("Description")).toString();
+                const QString buttonCode = attrs.value(QLatin1String("KeyCode")).toString();
+                const QString buttonCommand = attrs.value(QLatin1String("Command")).toString();
 
-            // ButtonCode is mandatory, the remaining attributes optional.
-            if (!ButtonCode.empty()) {
-                Base::Reference<ParameterGrp> newGroup;
+                if (!buttonCode.isEmpty()) {
+                    Base::Reference<ParameterGrp> newGroup =
+                        spaceballButtonGroup()->GetGroup(buttonCode.toLatin1());
+                    newGroup->SetASCII("Command", buttonCommand.toLatin1());
+                    newGroup->SetASCII("Description", buttonDescription.toLatin1());
+                }
 
-                newGroup = spaceballButtonGroup()->GetGroup(ButtonCode.c_str());
-                newGroup->SetASCII("Command", ButtonCommand.c_str());
-                newGroup->SetASCII("Description", ButtonDescription.c_str());
+                xml.skipCurrentElement();
+            }
+        }
+        else if (xml.isEndElement()) {
+            if (inMapping && xml.name() == QLatin1String("Mapping")) {
+                inMapping = false;
+            }
+            else if (xml.name() == QLatin1String("ButtonMap")) {
+                return;
             }
         }
     }
@@ -137,42 +132,42 @@ void ButtonModel::load3DConnexionButtonMapping(boost::property_tree::ptree Butto
 // For now the Button mapping file (3DConnexion.xml) is held the same folder as the FreeCAD executable.
 void ButtonModel::load3DConnexionButtons(const char* RequiredDeviceName)
 {
-    try {
-        boost::property_tree::ptree tree;
-        boost::property_tree::ptree DeviceTree;
-
-        // exception thrown if no file found
-        std::string path = App::Application::getResourceDir();
-        path += "3Dconnexion/3DConnexion.xml";
-        read_xml(path.c_str(), tree);
-
-        for (const auto& ButtonMap : tree.get_child("")) {
-            if ("ButtonMap" == ButtonMap.first) {
-                // Inspect ButtonMap attributes for DeviceName
-                for (const auto& kv : ButtonMap.second.get_child("<xmlattr>")) {
-                    std::string Attribute;
-                    std::string Value;
-
-                    Attribute = kv.first.data();
-                    Value = kv.second.data();
-
-                    if (0 == Attribute.compare("DeviceName")) {
-                        if (0 == Value.compare(RequiredDeviceName)) {
-                            // We found the ButtonMap we want to load up
-                            DeviceTree = ButtonMap.second;
-                        }
-                    }
-                }
-            }
-        }
-        // If we found the required devices ButtonMap
-        if (!DeviceTree.empty()) {
-            load3DConnexionButtonMapping(DeviceTree);
-        }
+    if (!RequiredDeviceName || !*RequiredDeviceName) {
+        return;
     }
-    catch (const std::exception& e) {
+
+    const QString requiredDeviceName = QString::fromLatin1(RequiredDeviceName);
+    const QString path = QString::fromStdString(App::Application::getResourceDir())
+        + QLatin1String("3Dconnexion/3DConnexion.xml");
+
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         // We don't mind not finding the file to be opened
-        Base::Console().warning("%s\n", e.what());
+        Base::Console().warning("Cannot open '%s'\n", path.toLocal8Bit().constData());
+        return;
+    }
+
+    QXmlStreamReader xml(&file);
+    while (!xml.atEnd()) {
+        xml.readNext();
+        if (!xml.isStartElement() || xml.name() != QLatin1String("ButtonMap")) {
+            continue;
+        }
+
+        const QString deviceName = xml.attributes().value(QLatin1String("DeviceName")).toString();
+        if (deviceName == requiredDeviceName) {
+            load3DConnexionButtonMapping(xml);
+            if (xml.hasError()) {
+                Base::Console().warning("%s\n", xml.errorString().toLocal8Bit().constData());
+            }
+            return;
+        }
+
+        xml.skipCurrentElement();
+    }
+
+    if (xml.hasError()) {
+        Base::Console().warning("%s\n", xml.errorString().toLocal8Bit().constData());
     }
 }
 
@@ -964,35 +959,33 @@ void DlgCustomizeSpaceball::onModifyMacroAction(const QByteArray& macroName)
 QStringList DlgCustomizeSpaceball::getModels()
 {
     QStringList modelList;
-    try {
-        boost::property_tree::ptree tree;
-        boost::property_tree::ptree DeviceTree;
+    const QString path = QString::fromStdString(App::Application::getResourceDir())
+        + QLatin1String("3Dconnexion/3DConnexion.xml");
 
-        // exception thrown if no file found
-        std::string path = App::Application::getResourceDir();
-        path += "3Dconnexion/3DConnexion.xml";
-        read_xml(path.c_str(), tree);
-
-        for (const auto& ButtonMap : tree.get_child("")) {
-            if ("ButtonMap" == ButtonMap.first) {
-                // Inspect ButtonMap attributes for DeviceName
-                for (const auto& kv : ButtonMap.second.get_child("<xmlattr>")) {
-                    std::string Attribute;
-                    std::string Value;
-
-                    Attribute = kv.first.data();
-                    Value = kv.second.data();
-
-                    if (0 == Attribute.compare("DeviceName")) {
-                        modelList << QString::fromStdString(Value);
-                    }
-                }
-            }
-        }
-    }
-    catch (const std::exception& e) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         // We don't mind not finding the file to be opened
-        Base::Console().warning("%s\n", e.what());
+        Base::Console().warning("Cannot open '%s'\n", path.toLocal8Bit().constData());
+        return modelList;
+    }
+
+    QXmlStreamReader xml(&file);
+    while (!xml.atEnd()) {
+        xml.readNext();
+        if (!xml.isStartElement() || xml.name() != QLatin1String("ButtonMap")) {
+            continue;
+        }
+
+        const QString deviceName = xml.attributes().value(QLatin1String("DeviceName")).toString();
+        if (!deviceName.isEmpty()) {
+            modelList << deviceName;
+        }
+
+        xml.skipCurrentElement();
+    }
+
+    if (xml.hasError()) {
+        Base::Console().warning("%s\n", xml.errorString().toLocal8Bit().constData());
     }
 
     return modelList;
