@@ -39,7 +39,6 @@
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/register/point.hpp>
 #include <boost/geometry/index/rtree.hpp>
-#include <boost/range/adaptor/transformed.hpp>
 
 // OCC
 #include <Bnd_Box.hxx>
