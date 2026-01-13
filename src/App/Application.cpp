@@ -34,11 +34,13 @@
 #  define WINVER 0x502 // needed for SetDllDirectory
 #  include <Windows.h>
 # endif
-# include <boost/date_time/posix_time/posix_time.hpp>
-# include <boost/scope_exit.hpp>
 # include <chrono>
+# include <ctime>
+# include <iomanip>
 # include <random>
 # include <memory>
+# include <sstream>
+# include <type_traits>
 # include <utility>
 # include <set>
 # include <list>
@@ -93,6 +95,7 @@
 #include <Base/UnitPy.h>
 #include <Base/UnitsApi.h>
 #include <Base/VectorPy.h>
+#include <Base/ScopeGuard.h>
 
 #include "Annotation.h"
 #include "Application.h"
@@ -2391,14 +2394,14 @@ void Application::initConfig(int argc, char ** argv)
 
     App::CommandLineOptions options;
     {
-        BOOST_SCOPE_EXIT_ALL(&) {
+        [[maybe_unused]] const auto consoleModeGuard = Base::makeScopeExit([&] {
             // console-mode needs to be set (if possible) also in case parseProgramOptions
             // throws, as it's needed when reporting such exceptions
             if (options.has("console")) {
                 mConfig["Console"] = "1";
                 mConfig["RunMode"] = "Cmd";
             }
-        };
+        });
         options = parseProgramOptions(argc, argv, mConfig["ExeName"]);
     }
 
@@ -2801,9 +2804,19 @@ void Application::runApplication()
 
 void Application::logStatus()
 {
-    const std::string time_str = boost::posix_time::to_simple_string(
-        boost::posix_time::second_clock::local_time());
-    Base::Console().log("Time = %s\n", time_str.c_str());
+    const auto now = std::chrono::system_clock::now();
+    const std::time_t now_time_t = std::chrono::system_clock::to_time_t(now);
+
+    std::tm local_tm {};
+#ifdef _WIN32
+    localtime_s(&local_tm, &now_time_t);
+#else
+    localtime_r(&now_time_t, &local_tm);
+#endif
+
+    std::ostringstream time_stream;
+    time_stream << std::put_time(&local_tm, "%Y-%m-%d %H:%M:%S");
+    Base::Console().log("Time = %s\n", time_stream.str().c_str());
 
     for (const auto & It : mConfig) {
         Base::Console().log("%s = %s\n", It.first.c_str(), It.second.c_str());
