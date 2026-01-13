@@ -56,7 +56,7 @@
 #include <QtGlobal>
 
 // Boost
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 #include <cmath>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>

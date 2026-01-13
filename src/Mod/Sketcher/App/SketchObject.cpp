@@ -72,8 +72,8 @@
 #include <gp_Parab.hxx>
 #include <gp_Pln.hxx>
 
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
+
 #include <boost/geometry/geometries/register/point.hpp>
 #include <boost/iostreams/device/array.hpp>
 #include <boost/iostreams/stream.hpp>
@@ -7205,7 +7205,7 @@ int SketchObject::carbonCopy(App::DocumentObject* pObj, bool construction)
             else {
                 auto egf = ExternalGeometryFacade::getFacade(geo);
                 const auto& ref = egf->getRef();
-                if (boost::starts_with(ref, myName)) {
+                if (Base::startsWith(ref, myName)) {
                     int geoId;
                     PointPos posId;
                     if (this->geoIdFromShapeType(ref.c_str() + myName.size(), geoId, posId)) {
@@ -11535,8 +11535,8 @@ App::DocumentObject *SketchObject::getSubObject(
     else if (!pyObj || !mapped) {
         if (!pyObj
             || (index > 0
-                && !boost::algorithm::contains(subname, "edge")
-                && !boost::algorithm::contains(subname, "vertex")))
+                && !Base::contains(subname, "edge")
+                && !Base::contains(subname, "vertex")))
             return Part2DObject::getSubObject(subname,pyObj,pmat,transform,depth);
     }
     else {
@@ -11546,21 +11546,21 @@ App::DocumentObject *SketchObject::getSubObject(
     }
 
     if (subshape.isNull()) {
-        if (boost::equals(shapetype,"Edge") ||
-            boost::equals(shapetype,"edge")) {
+        if (Base::equals(shapetype,"Edge") ||
+            Base::equals(shapetype,"edge")) {
             geo = getGeometry(index - 1);
             if (!geo)
                 return nullptr;
         }
-        else if (boost::equals(shapetype,"ExternalEdge")) {
+        else if (Base::equals(shapetype,"ExternalEdge")) {
             int GeoId = index - 1;
             GeoId = -GeoId - 3;
             geo = getGeometry(GeoId);
             if(!geo)
                 return nullptr;
         }
-        else if (boost::equals(shapetype,"Vertex") ||
-                 boost::equals(shapetype,"vertex")) {
+        else if (Base::equals(shapetype,"Vertex") ||
+                 Base::equals(shapetype,"vertex")) {
             int VtId = index- 1;
             int GeoId;
             PointPos PosId;
@@ -11569,13 +11569,13 @@ App::DocumentObject *SketchObject::getSubObject(
                 return nullptr;
             point = getPoint(GeoId,PosId);
         }
-        else if (boost::equals(shapetype,"RootPoint"))
+        else if (Base::equals(shapetype,"RootPoint"))
             point = getPoint(Sketcher::GeoEnum::RtPnt,PointPos::start);
-        else if (boost::equals(shapetype,"H_Axis"))
+        else if (Base::equals(shapetype,"H_Axis"))
             geo = getGeometry(Sketcher::GeoEnum::HAxis);
-        else if (boost::equals(shapetype,"V_Axis"))
+        else if (Base::equals(shapetype,"V_Axis"))
             geo = getGeometry(Sketcher::GeoEnum::VAxis);
-        else if (boost::equals(shapetype,"Constraint")) {
+        else if (Base::equals(shapetype,"Constraint")) {
             int ConstrId = PropertyConstraintList::getIndexFromConstraintName(shapetype);
             const std::vector< Constraint * > &vals = this->Constraints.getValues();
             if (ConstrId < 0 || ConstrId >= int(vals.size()))
@@ -11635,7 +11635,7 @@ std::vector<Data::IndexedName>
 SketchObject::getHigherElements(const char *element, bool silent) const
 {
     std::vector<Data::IndexedName> res;
-        if (boost::istarts_with(element, "vertex")) {
+        if (Base::istartsWith(element, "vertex")) {
             int n = 0;
             int index = atoi(element+6);
             for (auto cstr : Constraints.getValues()) {
@@ -11651,15 +11651,15 @@ SketchObject::getHigherElements(const char *element, bool silent) const
         return res;
 
     auto getNames = [this, &silent, &res](const char *element) {
-        bool internal = boost::starts_with(element, internalPrefix());
+        bool internal = Base::startsWith(element, internalPrefix());
         const auto &shape = internal ? InternalShape.getShape() : Shape.getShape();
         for (const auto &indexedName : shape.getHigherElements(element+(internal?internalPrefix().size() : 0), silent)) {
             if (!internal) {
                 res.push_back(indexedName);
             }
-            else if (boost::equals(indexedName.getType(), "Face")
-                    || boost::equals(indexedName.getType(), "Edge")
-                    || boost::equals(indexedName.getType(), "Wire")) {
+            else if (Base::equals(indexedName.getType(), "Face")
+                    || Base::equals(indexedName.getType(), "Edge")
+                    || Base::equals(indexedName.getType(), "Wire")) {
                 res.emplace_back((internalPrefix() + indexedName.getType()).c_str(), indexedName.getIndex());
             }
         }
@@ -11721,7 +11721,7 @@ const std::string &SketchObject::internalPrefix()
 
 const char *SketchObject::convertInternalName(const char *name)
 {
-    if (name && boost::starts_with(name, internalPrefix()))
+    if (name && Base::startsWith(name, internalPrefix()))
         return name + internalPrefix().size();
     return nullptr;
 }
@@ -11778,9 +11778,9 @@ App::ElementNamePair SketchObject::getElementName(
             return Part2DObject::getElementName(name,type);
     }
     if(index && type==ElementNameType::Export) {
-        if(boost::starts_with(ret.oldName,"Vertex"))
+        if(Base::startsWith(ret.oldName,"Vertex"))
             ret.oldName[0] = 'v';
-        else if(boost::starts_with(ret.oldName,"Edge"))
+        else if(Base::startsWith(ret.oldName,"Edge"))
             ret.oldName[0] = 'e';
     }
     ret.newName = convertSubName(index, true);
@@ -11845,9 +11845,9 @@ Data::IndexedName SketchObject::checkSubName(const char *subname) const
     // if not a mapped name parse the indexed name directly, uppercasing "edge" and "vertex"
     if(!mappedSubname)  {
         Data::IndexedName result(subname, types, true);
-        if (boost::equals(result.getType(), "edge"))
+        if (Base::equals(result.getType(), "edge"))
             return Data::IndexedName("Edge", result.getIndex());
-        if (boost::equals(result.getType(), "vertex"))
+        if (Base::equals(result.getType(), "vertex"))
             return Data::IndexedName("Vertex", result.getIndex());
         return result;
     }
@@ -11975,22 +11975,22 @@ bool SketchObject::geoIdFromShapeType(const Data::IndexedName & indexedName,
     if (!indexedName)
         return false;
     const char *shapetype = indexedName.getType();
-    if (boost::equals(shapetype,"Edge") ||
-        boost::equals(shapetype,"edge")) {
+    if (Base::equals(shapetype,"Edge") ||
+        Base::equals(shapetype,"edge")) {
         geoId = indexedName.getIndex() - 1;
-    } else if (boost::equals(shapetype,"ExternalEdge")) {
+    } else if (Base::equals(shapetype,"ExternalEdge")) {
         geoId = indexedName.getIndex() - 1;
         geoId = Sketcher::GeoEnum::RefExt - geoId;
-    } else if (boost::equals(shapetype,"Vertex") ||
-               boost::equals(shapetype,"vertex")) {
+    } else if (Base::equals(shapetype,"Vertex") ||
+               Base::equals(shapetype,"vertex")) {
         int VtId = indexedName.getIndex() - 1;
         getGeoVertexIndex(VtId,geoId,posId);
         if (posId==PointPos::none) return false;
-    } else if (boost::equals(shapetype,"H_Axis")) {
+    } else if (Base::equals(shapetype,"H_Axis")) {
         geoId = Sketcher::GeoEnum::HAxis;
-    } else if (boost::equals(shapetype,"V_Axis")) {
+    } else if (Base::equals(shapetype,"V_Axis")) {
         geoId = Sketcher::GeoEnum::VAxis;
-    } else if (boost::equals(shapetype,"RootPoint")) {
+    } else if (Base::equals(shapetype,"RootPoint")) {
         geoId = Sketcher::GeoEnum::RtPnt;
         posId = PointPos::start;
     } else
@@ -12048,9 +12048,9 @@ std::string SketchObject::convertSubName(const Data::IndexedName &indexedName, b
         // element mapping of the public shape and internal geometry.
         if (indexedName.getIndex() <= 0)
             ss << '.' << indexedName;
-        else if (boost::starts_with(indexedName.getType(), "Edge"))
+        else if (Base::startsWith(indexedName.getType(), "Edge"))
             ss << ".e" << (indexedName.getType() + 1) << indexedName.getIndex();
-        else if (boost::starts_with(indexedName.getType(), "Vertex"))
+        else if (Base::startsWith(indexedName.getType(), "Vertex"))
             ss << ".v" << (indexedName.getType() + 1) << indexedName.getIndex();
         else
             ss << '.' << indexedName;

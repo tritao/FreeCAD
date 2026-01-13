@@ -68,7 +68,7 @@
 // Boost
 #include <boost_graph_adjacency_list.hpp>
 #include <fastsignals/signal.h>
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 #include <boost/interprocess/sync/file_lock.hpp>
 
 // Xerces

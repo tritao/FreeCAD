@@ -37,7 +37,7 @@
 #include <vector>
 
 // boost
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 #include <boost/range/adaptor/indexed.hpp>
 
 // OpenCasCade =====================================================================================

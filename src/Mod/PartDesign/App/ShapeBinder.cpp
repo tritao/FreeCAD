@@ -31,7 +31,7 @@
 
 #include <unordered_map>
 #include <unordered_set>
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 
 #include <App/Application.h>
 #include <App/Document.h>
@@ -510,7 +510,7 @@ App::DocumentObject* SubShapeBinder::getSubObject(
                     continue;
                 }
             }
-            else if (!boost::equals(sobj->getNameInDocument(), name)) {
+            else if (!Base::equals(sobj->getNameInDocument(), name)) {
                 continue;
             }
             name = Data::noElementName(sub.c_str());
@@ -957,7 +957,7 @@ void SubShapeBinder::update(SubShapeBinder::UpdateOption options)
     // collect transformation matrix cache entries
     std::unordered_set<std::string> caches;
     for (const auto& name : getDynamicPropertyNames()) {
-        if (boost::starts_with(name, "Cache_")) {
+        if (Base::startsWith(name, "Cache_")) {
             caches.emplace(name);
         }
     }
@@ -1211,7 +1211,7 @@ void SubShapeBinder::setLinks(
         for (auto& whole : wholeSubs) {
             for (auto it = v.second.begin(); it != v.second.end();) {
                 auto& sub = *it;
-                if (!boost::starts_with(sub, whole) || sub.size() == whole.size()) {
+                if (!Base::startsWith(sub, whole) || sub.size() == whole.size()) {
                     ++it;
                 }
                 else {
@@ -1237,7 +1237,7 @@ void SubShapeBinder::setLinks(
             for (auto& sub : s) {
                 for (auto it = subs.begin(); it != subs.end();) {
                     if (sub[sub.size() - 1] == '.') {
-                        if (boost::starts_with(*it, sub)) {
+                        if (Base::startsWith(*it, sub)) {
                             FC_LOG("Remove subname " << *it << " because of whole selection " << sub);
                             it = subs.erase(it);
                         }
@@ -1245,7 +1245,7 @@ void SubShapeBinder::setLinks(
                             ++it;
                         }
                     }
-                    else if (it->empty() || (it->back() == '.' && boost::starts_with(sub, *it))) {
+                    else if (it->empty() || (it->back() == '.' && Base::startsWith(sub, *it))) {
                         FC_LOG("Remove whole subname " << *it << " because of " << sub);
                         it = subs.erase(it);
                     }

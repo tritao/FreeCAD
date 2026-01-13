@@ -24,6 +24,7 @@
 
 
 #include <QMessageBox>
+#include <Base/StringPredicates.h>
 #include <boost/algorithm/string.hpp>
 
 #include <App/Application.h>
@@ -209,7 +210,7 @@ void DlgBindSheet::accept()
         checkAddress(fromEnd, fromCellEnd, false);
 
         std::string toStart(ui->lineEditToStart->text().trimmed().toLatin1().constData());
-        if (boost::starts_with(toStart, "=")) {
+        if (Base::startsWith(toStart, "=")) {
             toStart.erase(toStart.begin());
         }
         else {
@@ -217,7 +218,7 @@ void DlgBindSheet::accept()
         }
 
         std::string toEnd(ui->lineEditToEnd->text().trimmed().toLatin1().constData());
-        if (boost::starts_with(toEnd, "=")) {
+        if (Base::startsWith(toEnd, "=")) {
             toEnd.erase(toEnd.begin());
         }
         else {

@@ -25,7 +25,7 @@
 
 #include <array>
 #include <set>
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 #include <QApplication>
 
 
@@ -1603,7 +1603,7 @@ void SelectionSingleton::rmvSelection(
         // if no subname is specified, remove all subobjects of the matching object
         if (!temp.SubName.empty()) {
             // otherwise, match subojects with common prefix, separated by '.'
-            if (!boost::starts_with(It->SubName, temp.SubName)
+            if (!Base::startsWith(It->SubName, temp.SubName)
                 || (It->SubName.length() != temp.SubName.length()
                     && It->SubName[temp.SubName.length() - 1] != '.')) {
                 continue;
@@ -2025,7 +2025,7 @@ int SelectionSingleton::checkSelection(
             if (s.SubName == pSubName) {
                 return 1;
             }
-            if (resolve > ResolveMode::OldStyleElement && boost::starts_with(s.SubName, prefix)) {
+            if (resolve > ResolveMode::OldStyleElement && Base::startsWith(s.SubName, prefix)) {
                 return 1;
             }
         }
