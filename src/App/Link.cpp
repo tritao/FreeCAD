@@ -25,7 +25,6 @@
 #include <limits>
 #include <string_view>
 
-#include <boost/range.hpp>
 #include <boost/property_map/property_map.hpp>
 
 #include <Base/StringViewTools.h>
@@ -53,7 +52,7 @@ using namespace App;
 using namespace Base;
 namespace sp = std::placeholders;
 
-using CharRange = boost::iterator_range<const char*>;
+using CharRange = std::string_view;
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -1263,17 +1262,13 @@ int LinkBaseExtension::getElementIndex(const char* subname, const char** psubnam
                 return -1;
             }
             if (subname[0] == '$') {
-                CharRange sub(subname + 1, dot);
-                const std::string_view subView(sub.begin(),
-                                               static_cast<std::size_t>(sub.end() - sub.begin()));
+                CharRange subView(subname + 1, static_cast<std::size_t>(dot - (subname + 1)));
                 if (subView == linked->Label.getValue()) {
                     idx = 0;
                 }
             }
             else {
-                CharRange sub(subname, dot);
-                const std::string_view subView(sub.begin(),
-                                               static_cast<std::size_t>(sub.end() - sub.begin()));
+                CharRange subView(subname, static_cast<std::size_t>(dot - subname));
                 if (subView == linked->getNameInDocument()) {
                     idx = 0;
                 }
@@ -1544,9 +1539,7 @@ bool LinkBaseExtension::extensionGetSubObject(DocumentObject*& ret,
     if (const char* dot = strchr(subname, '.')) {
         auto group = getLinkCopyOnChangeGroupValue();
         if (subname[0] == '$') {
-            CharRange sub(subname + 1, dot);
-            const std::string_view subView(sub.begin(),
-                                           static_cast<std::size_t>(sub.end() - sub.begin()));
+            CharRange subView(subname + 1, static_cast<std::size_t>(dot - (subname + 1)));
             if (group && subView == group->Label.getValue()) {
                 linked = group;
             }
@@ -1555,9 +1548,7 @@ bool LinkBaseExtension::extensionGetSubObject(DocumentObject*& ret,
             }
         }
         else {
-            CharRange sub(subname, dot);
-            const std::string_view subView(sub.begin(),
-                                           static_cast<std::size_t>(sub.end() - sub.begin()));
+            CharRange subView(subname, static_cast<std::size_t>(dot - subname));
             if (group && subView == group->getNameInDocument()) {
                 linked = group;
             }

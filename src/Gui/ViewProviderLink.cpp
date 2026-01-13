@@ -33,6 +33,7 @@
 #include <set>
 #include <map>
 #include <string>
+#include <string_view>
 #include <Base/StringPredicates.h>
 #include <Inventor/SoPickedPoint.h>
 #include <Inventor/actions/SoGetBoundingBoxAction.h>
@@ -53,8 +54,6 @@
 #include <QMenu>
 #include <QCheckBox>
 
-
-#include <boost/range.hpp>
 #include <App/ElementNamingUtils.h>
 #include <App/Document.h>
 #include <Base/BoundBoxPy.h>
@@ -98,7 +97,7 @@ void updateWindingOrder(Gui::LinkView* linkView, App::LinkBaseExtension* ext)
 }
 }  // namespace
 
-using CharRange = boost::iterator_range<const char*>;
+using CharRange = std::string_view;
 ////////////////////////////////////////////////////////////////////////////
 
 static inline bool appendPathSafe(SoPath* path, SoNode* node)
@@ -1775,10 +1774,9 @@ bool LinkView::linkGetDetailPath(const char* subname, SoFullPath* path, SoDetail
                 }
                 int i = 0;
                 if (subname[0] == '$') {
-                    CharRange name(subname + 1, dot);
+                    const CharRange name(subname + 1, static_cast<std::size_t>(dot - (subname + 1)));
                     for (const auto& info : nodeArray) {
-                        if (info->isLinked()
-                            && Base::equals(name, info->linkInfo->getLinkedLabel())) {
+                        if (info->isLinked() && Base::equals(name, info->linkInfo->getLinkedLabel())) {
                             idx = i;
                             break;
                         }
@@ -1786,7 +1784,7 @@ bool LinkView::linkGetDetailPath(const char* subname, SoFullPath* path, SoDetail
                     }
                 }
                 else {
-                    CharRange name(subname, dot);
+                    const CharRange name(subname, static_cast<std::size_t>(dot - subname));
                     for (const auto& info : nodeArray) {
                         if (info->isLinked() && Base::equals(name, info->linkInfo->getLinkedName())) {
                             idx = i;
@@ -2896,13 +2894,13 @@ bool ViewProviderLink::getDetailPath(const char* subname, SoFullPath* pPath, boo
         if (auto linked = ext->getLinkedObjectValue()) {
             if (const char* dot = strchr(subname, '.')) {
                 if (subname[0] == '$') {
-                    CharRange sub(subname + 1, dot);
+                    CharRange sub(subname + 1, static_cast<std::size_t>(dot - (subname + 1)));
                     if (!Base::equals(sub, linked->Label.getValue())) {
                         dot = nullptr;
                     }
                 }
                 else {
-                    CharRange sub(subname, dot);
+                    CharRange sub(subname, static_cast<std::size_t>(dot - subname));
                     if (!Base::equals(sub, linked->getNameInDocument())) {
                         dot = nullptr;
                     }
