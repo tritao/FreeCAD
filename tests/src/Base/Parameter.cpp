@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include <boost/core/ignore_unused.hpp>
 #include <Base/FileInfo.h>
 #include <Base/FileLock.h>
 #include <Base/Parameter.h>
@@ -32,8 +31,8 @@ public:
     }
     void OnChange(ParameterGrp::SubjectType& rCaller, ParameterGrp::MessageType Reason) override
     {
-        boost::ignore_unused(rCaller);
-        boost::ignore_unused(Reason);
+        static_cast<void>(rCaller);
+        static_cast<void>(Reason);
         notify++;
     }
 

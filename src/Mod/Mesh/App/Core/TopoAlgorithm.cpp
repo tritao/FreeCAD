@@ -24,7 +24,6 @@
 
 
 #include <algorithm>
-#include <boost/core/ignore_unused.hpp>
 #include <cmath>
 #include <limits>
 #include <queue>
@@ -1923,5 +1922,5 @@ void MeshComponents::SearchForComponents(
     // sort components by size (descending order)
     std::sort(aclConnectComp.begin(), aclConnectComp.end(), CNofFacetsCompare());
     aclT = aclConnectComp;
-    boost::ignore_unused(ulVisited);
+    static_cast<void>(ulVisited);
 }

@@ -20,7 +20,6 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/bind/bind.hpp>
 #include <Inventor/SoPickedPoint.h>
 #include <Inventor/events/SoMouseButtonEvent.h>
 #include <Inventor/nodes/SoCoordinate3.h>

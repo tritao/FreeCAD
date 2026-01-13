@@ -48,13 +48,13 @@
 
 #include <CXX/Extensions.hxx>
 #include <CXX/Objects.hxx>
+#include <fastsignals/connection.h>
 
 #include "AppCloud.h"
 
 
 using namespace App;
 using namespace std;
-using namespace boost::placeholders;
 XERCES_CPP_NAMESPACE_USE
 
 /* Python entry */
@@ -1496,7 +1496,9 @@ bool Cloud::Module::cloudRestore(const char* BucketName)
     Document* doc = GetApplication().getActiveDocument();
     // clean up if the document is not empty
     // !TODO: mind exceptions while restoring!
-    doc->signalLinkXsetValue.connect(boost::bind(&Cloud::Module::LinkXSetValue, this, _1));
+    fastsignals::scoped_connection linkXsetValueConnection = doc->signalLinkXsetValue.connect(
+        [this](std::string filename) { LinkXSetValue(std::move(filename)); }
+    );
 
     doc->clearUndos();
 
@@ -1553,6 +1555,5 @@ bool Cloud::Module::cloudRestore(const char* BucketName)
     string uri;
     uri = this->URL.getStrValue() + ":" + this->TCPPort.getStrValue() + "/" + string(BucketName);
     doc->FileName.setValue(uri);
-    doc->signalLinkXsetValue.disconnect(boost::bind(&Cloud::Module::LinkXSetValue, this, _1));
     return (true);
 }

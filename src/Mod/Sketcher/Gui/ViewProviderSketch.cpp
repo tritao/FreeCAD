@@ -22,8 +22,6 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/bind/bind.hpp>
-#include <boost/core/ignore_unused.hpp>
 #include <Inventor/SbBox3f.h>
 #include <Inventor/SbLine.h>
 #include <Inventor/SbTime.h>
@@ -2234,6 +2232,32 @@ void ViewProviderSketch::moveConstraint(Sketcher::Constraint* Constr, int constN
         return;
 
     Sketcher::SketchObject* obj = getSketchObject();
+    int intGeoCount = obj->getHighestCurveIndex() + 1;
+    int extGeoCount = obj->getExternalGeometryCount();
+#endif
+
+    // with memory allocation
+    const std::vector<Part::Geometry*> geomlist = getSolvedSketch().extractGeometry(true, true);
+
+    // lambda to finalize the move
+    auto cleanAndDraw = [this, geomlist](){
+        // delete the cloned objects
+        for (Part::Geometry* geomPtr : geomlist) {
+            if (geomPtr) {
+                delete geomPtr;
+            }
+        }
+
+        draw(true, false);
+    };
+
+#ifdef FC_DEBUG
+    assert(int(geomlist.size()) == extGeoCount + intGeoCount);
+    assert((Constr->First >= -extGeoCount && Constr->First < intGeoCount)
+           || Constr->First != GeoEnum::GeoUndef);
+    static_cast<void>(intGeoCount);
+    static_cast<void>(extGeoCount);
+#endif
 
     if (Constr->Type == Distance || Constr->Type == DistanceX || Constr->Type == DistanceY
         || Constr->Type == Radius || Constr->Type == Diameter || Constr->Type == Weight) {
@@ -4096,7 +4120,7 @@ bool ViewProviderSketch::setEdit(int ModNum)
     connectRedoDocument = getDocument()->signalRedoDocument.connect(
         std::bind(&ViewProviderSketch::slotRedoDocument, this, sp::_1));
     connectSolverUpdate = getSketchObject()
-            ->signalSolverUpdate.connect(boost::bind(&ViewProviderSketch::slotSolverUpdate, this));
+            ->signalSolverUpdate.connect([this] { slotSolverUpdate(); });
     //NOLINTEND
 
     // There are geometry extensions introduced by the solver and geometry extensions introduced by

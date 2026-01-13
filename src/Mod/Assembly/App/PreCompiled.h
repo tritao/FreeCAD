@@ -35,7 +35,6 @@
 #include <vector>
 #include <unordered_map>
 
-#include <boost/core/ignore_unused.hpp>
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
