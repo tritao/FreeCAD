@@ -27,6 +27,7 @@
 
 #include <App/DocumentObjectPy.h>
 #include <Base/GeometryPyCXX.h>
+#include <Base/Hash.h>
 #include <Base/Tools.h>
 #include <Base/Interpreter.h>
 #include <Base/QuantityPy.h>
@@ -387,7 +388,8 @@ std::size_t ObjectIdentifier::hash() const
     if (_hash && !_cache.empty()) {
         return _hash;
     }
-    const_cast<ObjectIdentifier*>(this)->_hash = boost::hash_value(toString());
+    const std::string str = toString();
+    const_cast<ObjectIdentifier*>(this)->_hash = Base::fnv1a64(str.data(), str.size());
     return _hash;
 }
 
