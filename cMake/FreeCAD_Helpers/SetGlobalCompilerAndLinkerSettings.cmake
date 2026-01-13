@@ -5,6 +5,9 @@ macro(SetGlobalCompilerAndLinkerSettings)
     include_directories(${CMAKE_BINARY_DIR}/src
                         ${CMAKE_SOURCE_DIR}/src)
 
+    find_package(Threads REQUIRED)
+    link_libraries(Threads::Threads)
+
     # check for 64-bit platform
     if(CMAKE_SIZEOF_VOID_P EQUAL 8)
         message(STATUS "Platform is 64-bit, set -D_OCC64")
