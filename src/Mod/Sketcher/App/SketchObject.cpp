@@ -23,6 +23,10 @@
  ***************************************************************************/
 
 #include <algorithm>
+#include <charconv>
+#include <cmath>
+#include <limits>
+#include <vector>
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
@@ -31,8 +35,6 @@
 #include <TopoDS_Shape.hxx>
 
 #include <boost/geometry/geometries/register/point.hpp>
-#include <boost/iostreams/device/array.hpp>
-#include <boost/iostreams/stream.hpp>
 #include <boost/geometry.hpp>
 
 #include <App/Application.h>
@@ -70,7 +72,6 @@
 using namespace Sketcher;
 using namespace Base;
 namespace sp = std::placeholders;
-namespace bio = boost::iostreams;
 
 FC_LOG_LEVEL_INIT("Sketch", true, true)
 
@@ -1940,8 +1941,9 @@ Data::IndexedName SketchObject::checkSubName(const char *subname) const
         return result;
     }
 
-    bio::stream<bio::array_source> iss(mappedSubname+1, std::strlen(mappedSubname+1));
     int id = -1;
+    const char* idTail = nullptr;
+    const char* idTailEnd = nullptr;
     bool valid = false;
     switch (mappedSubname[0]) {
         case '\0':  // check length != 0
@@ -1949,10 +1951,17 @@ Data::IndexedName SketchObject::checkSubName(const char *subname) const
 
         case 'g':  // = geometry
         case 'e':  // = external geometry
-            if (iss >> id) {
+        {
+            const char* begin = mappedSubname + 1;
+            const char* end = begin + std::strlen(begin);
+            const auto res = std::from_chars(begin, end, id);
+            if (res.ptr != begin && res.ec == std::errc {}) {
                 valid = true;
+                idTail = res.ptr;
+                idTailEnd = end;
             }
             break;
+        }
 
         // for RootPoint, H_Axis, V_Axis
         default: {
@@ -1992,7 +2001,14 @@ Data::IndexedName SketchObject::checkSubName(const char *subname) const
     if (geo && GeometryFacade::getId(geo) == id) {
         char sep;
         int posId = static_cast<int>(PointPos::none);
-        if ((iss >> sep >> posId) && sep == 'v') {
+        bool hasPosId = false;
+        if (idTail && idTail < idTailEnd) {
+            sep = *idTail;
+            const char* posBegin = idTail + 1;
+            const auto res = std::from_chars(posBegin, idTailEnd, posId);
+            hasPosId = (sep == 'v' && res.ptr != posBegin && res.ec == std::errc {});
+        }
+        if (hasPosId) {
             int idx = getVertexIndexGeoPos(geoId, static_cast<PointPos>(posId));
 
             // Outside edit-mode circles exposes the seam point but not the center, while in edit-mode we expose the center but not the seam.
