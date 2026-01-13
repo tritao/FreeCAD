@@ -22,7 +22,7 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/math/special_functions/fpclassify.hpp>
+#include <cmath>
 #include <limits>
 
 #include <Inventor/errors/SoDebugError.h>
@@ -634,8 +634,7 @@ void ViewProviderStructured::cut(const std::vector<SbVec2f>& picked, Gui::View3D
     for (const auto& point : points) {
         // valid point?
         Base::Vector3d vec(point);
-        if (!(boost::math::isnan(point.x) || boost::math::isnan(point.y)
-              || boost::math::isnan(point.z))) {
+        if (!(std::isnan(point.x) || std::isnan(point.y) || std::isnan(point.z))) {
             SbVec3f pt(point.x, point.y, point.z);
 
             // project from 3d to 2d
@@ -754,7 +753,7 @@ void ViewProviderPointsBuilder::createPoints(
          ++it, idx++) {
         vec[idx].setValue(it->x, it->y, it->z);
         // valid point?
-        if (!(boost::math::isnan(it->x) || boost::math::isnan(it->y) || boost::math::isnan(it->z))) {
+        if (!(std::isnan(it->x) || std::isnan(it->y) || std::isnan(it->z))) {
             indices.push_back(idx);
         }
     }

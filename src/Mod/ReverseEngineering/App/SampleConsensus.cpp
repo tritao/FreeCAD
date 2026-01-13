@@ -22,7 +22,7 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/math/special_functions/fpclassify.hpp>
+#include <cmath>
 
 
 #include <Base/Exception.h>
@@ -61,7 +61,7 @@ double SampleConsensus::perform(std::vector<float>& parameters, std::vector<int>
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
     cloud->reserve(myPoints.size());
     for (Points::PointKernel::const_iterator it = myPoints.begin(); it != myPoints.end(); ++it) {
-        if (!boost::math::isnan(it->x) && !boost::math::isnan(it->y) && !boost::math::isnan(it->z)) {
+        if (!std::isnan(it->x) && !std::isnan(it->y) && !std::isnan(it->z)) {
             cloud->push_back(pcl::PointXYZ(it->x, it->y, it->z));
         }
     }
@@ -90,8 +90,7 @@ double SampleConsensus::perform(std::vector<float>& parameters, std::vector<int>
         for (std::vector<Base::Vector3d>::const_iterator it = myNormals.begin();
              it != myNormals.end();
              ++it) {
-            if (!boost::math::isnan(it->x) && !boost::math::isnan(it->y)
-                && !boost::math::isnan(it->z)) {
+            if (!std::isnan(it->x) && !std::isnan(it->y) && !std::isnan(it->z)) {
                 normals->push_back(pcl::Normal(it->x, it->y, it->z));
             }
         }

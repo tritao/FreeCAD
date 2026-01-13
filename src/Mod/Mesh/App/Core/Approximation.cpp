@@ -33,7 +33,7 @@
 #include <Mod/Mesh/App/WildMagic4/Wm4ApprPolyFit3.h>
 #include <Mod/Mesh/App/WildMagic4/Wm4ApprQuadraticFit3.h>
 #include <Mod/Mesh/App/WildMagic4/Wm4ApprSphereFit3.h>
-#include <boost/math/special_functions/fpclassify.hpp>
+#include <cmath>
 
 // #define FC_USE_EIGEN
 #include <Eigen/Eigen>
@@ -224,7 +224,7 @@ float PlaneFit::Fit()
 
     // It may happen that the result have nan values
     for (int i = 0; i < 3; i++) {
-        if (boost::math::isnan(W[i])) {
+        if (std::isnan(W[i])) {
             return std::numeric_limits<float>::max();
         }
     }
@@ -234,7 +234,7 @@ float PlaneFit::Fit()
     // In this case create an orthonormal basis
     bool validUV = true;
     for (int i = 0; i < 3; i++) {
-        if (boost::math::isnan(U[i]) || boost::math::isnan(V[i])) {
+        if (std::isnan(U[i]) || std::isnan(V[i])) {
             validUV = false;
             break;
         }
@@ -252,7 +252,7 @@ float PlaneFit::Fit()
 #endif
 
     // In case sigma is nan
-    if (boost::math::isnan(sigma)) {
+    if (std::isnan(sigma)) {
         return std::numeric_limits<float>::max();
     }
 

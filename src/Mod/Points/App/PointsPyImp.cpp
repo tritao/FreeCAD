@@ -22,7 +22,7 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/math/special_functions/fpclassify.hpp>
+#include <cmath>
 
 
 #include <Base/Builder3D.h>
@@ -230,8 +230,7 @@ PyObject* PointsPy::fromValid(PyObject* args) const
         std::unique_ptr<PointKernel> pts(new PointKernel());
         pts->reserve(points->size());
         for (const auto& point : *points) {
-            if (!boost::math::isnan(point.x) && !boost::math::isnan(point.y)
-                && !boost::math::isnan(point.z)) {
+            if (!std::isnan(point.x) && !std::isnan(point.y) && !std::isnan(point.z)) {
                 pts->push_back(point);
             }
         }

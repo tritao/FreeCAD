@@ -22,7 +22,7 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/math/special_functions/fpclassify.hpp>
+#include <cmath>
 
 
 #include <Base/Tools.h>
@@ -58,7 +58,7 @@ void RegionGrowing::perform(int ksearch)
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
     cloud->reserve(myPoints.size());
     for (Points::PointKernel::const_iterator it = myPoints.begin(); it != myPoints.end(); ++it) {
-        if (!boost::math::isnan(it->x) && !boost::math::isnan(it->y) && !boost::math::isnan(it->z)) {
+        if (!std::isnan(it->x) && !std::isnan(it->y) && !std::isnan(it->z)) {
             cloud->push_back(pcl::PointXYZ(it->x, it->y, it->z));
         }
     }
@@ -116,7 +116,7 @@ void RegionGrowing::perform(const std::vector<Base::Vector3f>& myNormals)
     for (std::size_t index = 0; index < num_points; index++) {
         const Base::Vector3f& p = points[index];
         const Base::Vector3f& n = myNormals[index];
-        if (!boost::math::isnan(p.x) && !boost::math::isnan(p.y) && !boost::math::isnan(p.z)) {
+        if (!std::isnan(p.x) && !std::isnan(p.y) && !std::isnan(p.z)) {
             cloud->push_back(pcl::PointXYZ(p.x, p.y, p.z));
             normals->push_back(pcl::Normal(n.x, n.y, n.z));
         }
