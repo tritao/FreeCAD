@@ -2249,7 +2249,7 @@ PropertySheet::BindingType PropertySheet::getBinding(
     return BindingNone;
 }
 
-void PropertySheet::setPathValue(const ObjectIdentifier& path, const boost::any& value)
+void PropertySheet::setPathValue(const ObjectIdentifier& path, const std::any& value)
 {
     if (!owner) {
         FC_THROWM(Base::RuntimeError, "Invalid state");
@@ -2423,10 +2423,10 @@ void PropertySheet::setPathValue(const ObjectIdentifier& path, const boost::any&
     FC_THROWM(Base::TypeError, "Invalid path value '" << "' for " << getFullName());
 }
 
-const boost::any PropertySheet::getPathValue(const App::ObjectIdentifier& path) const
+const std::any PropertySheet::getPathValue(const App::ObjectIdentifier& path) const
 {
     if (isBindingPath(path)) {
-        return boost::any();
+        return std::any();
     }
     return path.getValue();
 }

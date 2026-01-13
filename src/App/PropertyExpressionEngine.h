@@ -203,9 +203,9 @@ public:
      *
      * @param[in] path ObjectIndentifier to query for.
      *
-     * @return The expression for @a path, or empty boost::any if not found.
+     * @return The expression for @a path, or empty std::any if not found.
      */
-    const boost::any getPathValue(const App::ObjectIdentifier& path) const override;
+    const std::any getPathValue(const App::ObjectIdentifier& path) const override;
 
     /// Execute options
     enum ExecuteOption
