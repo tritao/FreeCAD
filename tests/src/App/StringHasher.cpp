@@ -89,11 +89,11 @@ TEST_F(StringIDTest, value)  // NOLINT
 {
     // Arrange
     const long expectedValueA {0};
-    auto idA = App::StringID(expectedValueA, Base::ByteBuffer{});
+    auto idA = App::StringID(expectedValueA, Base::ByteBuffer {});
     const long expectedValueB {42};
-    auto idB = App::StringID(expectedValueB, Base::ByteBuffer{});
+    auto idB = App::StringID(expectedValueB, Base::ByteBuffer {});
     const long expectedValueC {314159};
-    auto idC = App::StringID(expectedValueC, Base::ByteBuffer{});
+    auto idC = App::StringID(expectedValueC, Base::ByteBuffer {});
 
     // Act
     auto valueA = idA.value();
@@ -224,13 +224,13 @@ TEST_F(StringIDTest, data)  // NOLINT
 {
     // Arrange
     QByteArray expectedData {"data", 4};
-    auto id = App::StringID(1, expectedData);
+    auto id = App::StringID(1, toByteBuffer(expectedData));
 
     // Act
     auto data = id.data();
 
     // Assert
-    EXPECT_EQ(expectedData, data);
+    EXPECT_EQ(toByteBuffer(expectedData), data);
 }
 
 TEST_F(StringIDTest, postfix)  // NOLINT
@@ -242,7 +242,7 @@ TEST_F(StringIDTest, getPyObject)  // NOLINT
 {
     // Arrange
     Py_Initialize();
-    auto id = new App::StringID(1, Base::ByteBuffer{});
+    auto id = new App::StringID(1, Base::ByteBuffer {});
     id->ref();
 
     // Act
@@ -257,7 +257,7 @@ TEST_F(StringIDTest, getPyObjectWithIndex)  // NOLINT
 {
     // Arrange
     Py_Initialize();
-    auto id = new App::StringID(1, Base::ByteBuffer{});
+    auto id = new App::StringID(1, Base::ByteBuffer {});
     id->ref();
 
     // Act
@@ -391,7 +391,8 @@ TEST_F(StringIDTest, fromStringQByteArray)  // NOLINT
     const QByteArray testString {"#1:fcad", 7};
 
     // Act
-    auto result = App::StringID::fromString(Base::BytesView(testString.constData(), testString.size()), true);
+    auto result
+        = App::StringID::fromString(Base::BytesView(testString.constData(), testString.size()), true);
 
     // Assert
     EXPECT_EQ(result.id, 1);
@@ -838,8 +839,8 @@ TEST_F(StringIDRefTest, operatorLess)  // NOLINT
     // Arrange
     auto emptySIDA = App::StringIDRef();
     auto emptySIDB = App::StringIDRef();
-    auto lowID = App::StringIDRef(new App::StringID {1, nullptr});
-    auto highID = App::StringIDRef(new App::StringID {2, nullptr});
+    auto lowID = App::StringIDRef(new App::StringID {1, Base::ByteBuffer {}});
+    auto highID = App::StringIDRef(new App::StringID {2, Base::ByteBuffer {}});
 
     // Act & Assert
     EXPECT_FALSE(emptySIDA < emptySIDB);
@@ -857,9 +858,9 @@ TEST_F(StringIDRefTest, operatorEquality)  // NOLINT
     // Arrange
     auto emptySIDA = App::StringIDRef();
     auto emptySIDB = App::StringIDRef();
-    auto nonEmptyA = App::StringIDRef(new App::StringID {1, nullptr});
-    auto nonEmptyB = App::StringIDRef(new App::StringID {1, nullptr});
-    auto nonEmptyOther = App::StringIDRef(new App::StringID {2, nullptr});
+    auto nonEmptyA = App::StringIDRef(new App::StringID {1, Base::ByteBuffer {}});
+    auto nonEmptyB = App::StringIDRef(new App::StringID {1, Base::ByteBuffer {}});
+    auto nonEmptyOther = App::StringIDRef(new App::StringID {2, Base::ByteBuffer {}});
 
     // Act & Assert
     EXPECT_TRUE(emptySIDA == emptySIDB);
@@ -873,9 +874,9 @@ TEST_F(StringIDRefTest, operatorInequality)  // NOLINT
     // Arrange
     auto emptySIDA = App::StringIDRef();
     auto emptySIDB = App::StringIDRef();
-    auto nonEmptyA = App::StringIDRef(new App::StringID {1, nullptr});
-    auto nonEmptyB = App::StringIDRef(new App::StringID {1, nullptr});
-    auto nonEmptyOther = App::StringIDRef(new App::StringID {2, nullptr});
+    auto nonEmptyA = App::StringIDRef(new App::StringID {1, Base::ByteBuffer {}});
+    auto nonEmptyB = App::StringIDRef(new App::StringID {1, Base::ByteBuffer {}});
+    auto nonEmptyOther = App::StringIDRef(new App::StringID {2, Base::ByteBuffer {}});
 
     // Act & Assert
     EXPECT_FALSE(emptySIDA != emptySIDB);
@@ -888,7 +889,7 @@ TEST_F(StringIDRefTest, booleanConversion)  // NOLINT
 {
     // Arrange
     auto emptySID = App::StringIDRef();
-    auto nonEmpty = App::StringIDRef(new App::StringID {1, nullptr});
+    auto nonEmpty = App::StringIDRef(new App::StringID {1, Base::ByteBuffer {}});
 
     // Act & Assert
     EXPECT_FALSE(emptySID);
@@ -990,8 +991,12 @@ TEST_F(StringIDRefTest, isBinary)  // NOLINT
 {
     // Arrange
     auto nothing = App::StringIDRef();
-    auto binary = App::StringIDRef(new App::StringID {1, Base::ByteBuffer{}, App::StringID::Flag::Binary});
-    auto nonBinary = App::StringIDRef(new App::StringID {1, Base::ByteBuffer{}, App::StringID::Flag::None});
+    auto binary = App::StringIDRef(
+        new App::StringID {1, Base::ByteBuffer {}, App::StringID::Flag::Binary}
+    );
+    auto nonBinary = App::StringIDRef(
+        new App::StringID {1, Base::ByteBuffer {}, App::StringID::Flag::None}
+    );
 
     // Act & Assert
     EXPECT_FALSE(nothing.isBinary());
@@ -1003,8 +1008,12 @@ TEST_F(StringIDRefTest, isHashed)  // NOLINT
 {
     // Arrange
     auto nothing = App::StringIDRef();
-    auto hashed = App::StringIDRef(new App::StringID {1, Base::ByteBuffer{}, App::StringID::Flag::Hashed});
-    auto nonHashed = App::StringIDRef(new App::StringID {1, Base::ByteBuffer{}, App::StringID::Flag::None});
+    auto hashed = App::StringIDRef(
+        new App::StringID {1, Base::ByteBuffer {}, App::StringID::Flag::Hashed}
+    );
+    auto nonHashed = App::StringIDRef(
+        new App::StringID {1, Base::ByteBuffer {}, App::StringID::Flag::None}
+    );
 
     // Act & Assert
     EXPECT_FALSE(nothing.isHashed());
@@ -1057,7 +1066,9 @@ TEST_F(StringIDRefTest, mark)  // NOLINT
 TEST_F(StringIDRefTest, isMarked)  // NOLINT
 {
     // Arrange
-    auto marked = App::StringIDRef(new App::StringID(1, Base::ByteBuffer{}, App::StringID::Flag::Marked));
+    auto marked = App::StringIDRef(
+        new App::StringID(1, Base::ByteBuffer {}, App::StringID::Flag::Marked)
+    );
     auto notMarked = App::StringIDRef(createStringID());
 
     // Act & Assert
@@ -1214,7 +1225,10 @@ TEST_F(StringHasherTest, getIDFromQByteArrayShort)  // NOLINT
     Hasher()->setThreshold(string.size() + 1);
 
     // Act
-    auto id = Hasher()->getID(Base::BytesView(qba.constData(), qba.size()), App::StringHasher::Option::Hashable);
+    auto id = Hasher()->getID(
+        Base::BytesView(qba.constData(), qba.size()),
+        App::StringHasher::Option::Hashable
+    );
 
     // Assert
     EXPECT_STREQ(string.data(), id.constData());
@@ -1231,7 +1245,10 @@ TEST_F(StringHasherTest, getIDFromQByteArrayLongHashable)  // NOLINT
     Hasher()->setThreshold(string.size() - 1);
 
     // Act
-    auto id = Hasher()->getID(Base::BytesView(qba.constData(), qba.size()), App::StringHasher::Option::Hashable);
+    auto id = Hasher()->getID(
+        Base::BytesView(qba.constData(), qba.size()),
+        App::StringHasher::Option::Hashable
+    );
 
     // Assert
     EXPECT_STRNE(string.data(), id.constData());
@@ -1247,7 +1264,10 @@ TEST_F(StringHasherTest, getIDFromQByteArrayLongUnhashable)  // NOLINT
     Hasher()->setThreshold(string.size() - 1);
 
     // Act
-    auto id = Hasher()->getID(Base::BytesView(qba.constData(), qba.size()), App::StringHasher::Option::None);
+    auto id = Hasher()->getID(
+        Base::BytesView(qba.constData(), qba.size()),
+        App::StringHasher::Option::None
+    );
 
     // Assert
     EXPECT_STREQ(string.data(), id.constData());
@@ -1263,7 +1283,10 @@ TEST_F(StringHasherTest, getIDFromQByteArrayNoCopy)  // NOLINT
     Hasher()->setThreshold(string.size() + 1);
 
     // Act
-    auto id = Hasher()->getID(Base::BytesView(qba.constData(), qba.size()), App::StringHasher::Option::NoCopy);
+    auto id = Hasher()->getID(
+        Base::BytesView(qba.constData(), qba.size()),
+        App::StringHasher::Option::NoCopy
+    );
 
     // Assert
     EXPECT_STREQ(string.data(), id.constData());
@@ -1309,7 +1332,10 @@ TEST_F(StringHasherTest, getIDFromQByteArrayBinaryFlag)  // NOLINT
     QByteArray qba(string.data(), string.size());
 
     // Act
-    auto id = Hasher()->getID(Base::BytesView(qba.constData(), qba.size()), App::StringHasher::Option::Binary);
+    auto id = Hasher()->getID(
+        Base::BytesView(qba.constData(), qba.size()),
+        App::StringHasher::Option::Binary
+    );
 
     // Assert
     EXPECT_TRUE(id.isBinary());

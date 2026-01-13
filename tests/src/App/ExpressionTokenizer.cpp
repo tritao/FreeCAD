@@ -37,7 +37,8 @@ TEST(ExpressionTokenizer, TruncatesToSeparatorWhenCursorAtTokenStart)
 TEST(ExpressionTokenizer, HandlesUtf8AtEndUsingByteCursorPositions)
 {
     App::ExpressionTokenizer tokenizer;
-    const std::string prefix = u8"α.β";
+    // Use UTF-8 byte sequence directly (C++20 `u8""` is `char8_t[]`).
+    const std::string prefix = "\xCE\xB1.\xCE\xB2";
     const std::string completion = tokenizer.perform(prefix, /*posBytes*/ prefix.size());
 
     EXPECT_EQ(completion, prefix);

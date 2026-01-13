@@ -6,8 +6,7 @@
 #include "App/MappedName.h"
 
 #include <Base/BytesView.h>
-
-#include <boost/functional/hash.hpp>
+#include <Base/Hash.h>
 
 #include <string>
 
@@ -241,8 +240,9 @@ TEST(MappedName, fromRawDataCopy)
 {
     // Arrange
     const std::string testBytes("TESTTEST", 8);
-    Data::MappedName temp =
-        Data::MappedName::fromRawData(Base::BytesView(testBytes.data(), testBytes.size()));
+    Data::MappedName temp = Data::MappedName::fromRawData(
+        Base::BytesView(testBytes.data(), testBytes.size())
+    );
     temp.append("TESTPOSTFIX");
     temp.compact();  // Always call compact before accessing data!
 
@@ -261,8 +261,9 @@ TEST(MappedName, fromRawDataCopyStartposAndSize)
 {
     // Arrange
     const std::string testBytes("TESTTEST", 8);
-    Data::MappedName temp =
-        Data::MappedName::fromRawData(Base::BytesView(testBytes.data(), testBytes.size()));
+    Data::MappedName temp = Data::MappedName::fromRawData(
+        Base::BytesView(testBytes.data(), testBytes.size())
+    );
     temp.append("ABCDEFGHIJKLM");  // postfix
     temp.compact();                // Always call compact before accessing data!
 
@@ -958,8 +959,8 @@ TEST(MappedName, hash)
     std::size_t seed = 0U;
     const auto data = mappedName.dataBytes();
     const auto postfix = mappedName.postfixBytes();
-    seed = boost::hash_range(seed, data.data(), data.data() + data.size());
-    seed = boost::hash_range(seed, postfix.data(), postfix.data() + postfix.size());
+    Base::fnv1a64Append(seed, data.data(), data.size());
+    Base::fnv1a64Append(seed, postfix.data(), postfix.size());
     EXPECT_EQ(mappedName.hash(), seed);
 }
 
