@@ -23,12 +23,12 @@
 #include <future>
 #include <thread>
 
-#include <boost/scope_exit.hpp>
 #include <gtest/gtest.h>
 
 #include "App/Application.h"
 #include "App/Document.h"
 #include "App/FeatureTest.h"
+#include "Base/ScopeGuard.h"
 #include <src/App/InitApplication.h>
 
 using namespace std::chrono_literals;
@@ -66,10 +66,9 @@ TEST_F(AsyncRecomputeTest, CloseDocumentWaitsForInFlightAsyncRecompute)
     ASSERT_NE(object, nullptr);
 
     App::FeatureTestAsyncBlocker::resetBlocker();
-    BOOST_SCOPE_EXIT_ALL(&)
-    {
+    [[maybe_unused]] const auto blockerGuard = Base::makeScopeExit([] {
         App::FeatureTestAsyncBlocker::releaseBlocker();
-    };
+    });
 
     object->touch();
 
