@@ -61,30 +61,28 @@
  *     <your_build_dir>/src/Mod/CAM/App.CMakeFiles/Path.dir/Area.cpp.i
  * \endcode
  *
- * \section intro_boost_preproc Introduction of Boost.Preprocessor
+ * \section intro_preproc Parameter tuple lists
  *
- * The macros here make heavy use of the awesome
- * [Boost.Preprocessor](http://www.boost.org/libs/preprocessor/) (short for
- * Boost.PP).  Here are is a brief introduction on Boost.PP concept in order to
- * explain why this marco library is designed the way it is.
+ * The macros here use a small set of local preprocessor helpers to iterate
+ * parameter tuples and parenthesized comma-separated lists. Here is a brief
+ * introduction to the tuple/list convention in order to explain why this macro
+ * library is designed the way it is.
  *
- * In Boost.PP, a sequence is defined as,
+ * A list is defined as,
  * \code{.sh}
- *     (a)(b)(c)...
+ *     (a, b, c)
  * \endcode
  *
- * A sequence cannot be empty. Thus, \c () is not a sequence. And also those
+ * A list cannot be empty. Thus, \c () is not a list. And also those
  * <tt>a, b, c</tt> here cannot directly contain <tt>,</tt>. These restriction
  * is due to the fact that <tt>( ) ,</tt> are among those very few special
- * characters recognized by the preprocssor. \c a can itself be a sequence or
- * other Boost.PP types, so by right, our parameter can be defined as something
- * like
+ * characters recognized by the preprocessor. \c a can itself be a nested list,
+ * so by right, our parameter can be defined as something like
  * \code{.sh}
- *     ((type)(name)(default)...)
+ *     ((type, name, default, ...))
  * \endcode
  *
- * A bit awkward to write. So another Boost.PP type is chosen, tuple, to define
- * each individual parameter. A tuple is defined as
+ * Each individual parameter is written as a tuple. A tuple is defined as
  * \code{.sh}
  *     (a,b,c ...)
  * \endcode
@@ -118,19 +116,15 @@
  *   conflicts.
  *
  * - \c default is the default value of this parameter. Right now, you must
- *   supply a default value. Boost.PP has trouble dealing with empty values.
- *   Remember that a sequence cannot be empty. Neither can tuple. Only array,
- *   something like <tt>(0,())</tt> for an empty array. It is awkward to write,
- *   and didn't add much functionality I want, hence the restriction of
- *   non-empty defaults here.
+ *   supply a default value. Empty values make preprocessor argument handling
+ *   fragile, hence the restriction of non-empty defaults here.
  *
  * - \c doc is a string to describe the variable.
  *
  * - \c seq \anchor ParamSeq. Right now this field is used by \c enum and
  *   \c enum2 type parameter to define its enumerations. As the name suggests,
- *   it must be a sequence.  It is not a tuple because looping through tuple is
- *   not as easy as sequence. Other type of parameter do not need to have this
- *   field
+ *   it must be a parenthesized comma-separated list. Other type of parameter do
+ *   not need to have this field.
  *
  * - \c info is used to provide the supplimentery information for \c enum2 type
  *   of parameter, which can be converted to a user defined enum type by
@@ -155,29 +149,343 @@
  * And #PARAM_FIELD_STR to stringify.
  *
  * Here \a _param is the parameter definition described above in the form of a
- * Boost.PP tuple, and is usually supplied by various \ref ParamLooper "looper macros"
+ * parameter tuple, and is usually supplied by various \ref ParamLooper "looper macros"
  *
- * You can of course directly use various Boost.PP sequence looper to pass
- * additional arguments to the operation macro. See #PARAM_PY_DICT_SET_VALUE for
- * an example of using tuple, and the more complex example #PARAM_ENUM_CONVERT
+ * You can of course directly use the local list loopers to pass additional
+ * arguments to the operation macro. See #PARAM_PY_DICT_SET_VALUE for an example
+ * of using tuple, and the more complex example #PARAM_ENUM_CONVERT
  *
  * Note that when generating comma separated list, the first and last comma are
  * conveniently omitted, so that the macros can be mixed with others intuitively
  */
 
-#include <boost/preprocessor/cat.hpp>
-#include <boost/preprocessor/seq/seq.hpp>
-#include <boost/preprocessor/seq/elem.hpp>
-#include <boost/preprocessor/seq/for_each.hpp>
-#include <boost/preprocessor/seq/for_each_i.hpp>
-#include <boost/preprocessor/seq/pop_front.hpp>
-#include <boost/preprocessor/stringize.hpp>
-#include <boost/preprocessor/logical/not.hpp>
-#include <boost/preprocessor/tuple/elem.hpp>
-#include <boost/preprocessor/tuple/enum.hpp>
-#include <boost/preprocessor/punctuation/comma_if.hpp>
-#include <boost/preprocessor/comparison/greater.hpp>
 #include <type_traits>
+
+// Local (tiny) preprocessor helpers to avoid Boost.Preprocessor dependency.
+#define FC_PP_CAT(a, b) FC_PP_CAT_I(a, b)
+#define FC_PP_CAT_I(a, b) a##b
+
+#define FC_PP_STRINGIZE(x) FC_PP_STRINGIZE_I(x)
+#define FC_PP_STRINGIZE_I(x) #x
+
+#define FC_PP_REM(...) __VA_ARGS__
+
+#define FC_PP_BOOL(x) FC_PP_CAT(FC_PP_BOOL_, x)
+#define FC_PP_BOOL_0 0
+#define FC_PP_BOOL_1 1
+#define FC_PP_BOOL_2 1
+#define FC_PP_BOOL_3 1
+#define FC_PP_BOOL_4 1
+#define FC_PP_BOOL_5 1
+#define FC_PP_BOOL_6 1
+#define FC_PP_BOOL_7 1
+#define FC_PP_BOOL_8 1
+#define FC_PP_BOOL_9 1
+#define FC_PP_BOOL_10 1
+#define FC_PP_BOOL_11 1
+#define FC_PP_BOOL_12 1
+#define FC_PP_BOOL_13 1
+#define FC_PP_BOOL_14 1
+#define FC_PP_BOOL_15 1
+#define FC_PP_BOOL_16 1
+
+#define FC_PP_IF(x, t, f) FC_PP_CAT(FC_PP_IF_, FC_PP_BOOL(x))(t, f)
+#define FC_PP_IF_0(t, f) f
+#define FC_PP_IF_1(t, f) t
+
+#define FC_PP_COMMA_IF(x) FC_PP_CAT(FC_PP_COMMA_IF_, FC_PP_BOOL(x))
+#define FC_PP_COMMA_IF_0
+#define FC_PP_COMMA_IF_1 ,
+
+// Argument counting helpers for comma-separated lists (up to 16 elements).
+#define FC_PP_NARG(...) FC_PP_NARG_I(__VA_ARGS__, FC_PP_RSEQ_N())
+#define FC_PP_NARG_I(...) FC_PP_ARG_N(__VA_ARGS__)
+#define FC_PP_ARG_N(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, N, ...) N
+#define FC_PP_RSEQ_N() 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
+
+#define FC_PP_FOR_EACH_I(op, ...) \
+    FC_PP_CAT(FC_PP_FOR_EACH_I_, FC_PP_NARG(__VA_ARGS__))(op, __VA_ARGS__)
+#define FC_PP_FOR_EACH_I_0(op, ...)
+#define FC_PP_FOR_EACH_I_1(op, a1) op(0, a1)
+#define FC_PP_FOR_EACH_I_2(op, a1, a2) op(0, a1) op(1, a2)
+#define FC_PP_FOR_EACH_I_3(op, a1, a2, a3) op(0, a1) op(1, a2) op(2, a3)
+#define FC_PP_FOR_EACH_I_4(op, a1, a2, a3, a4) op(0, a1) op(1, a2) op(2, a3) op(3, a4)
+#define FC_PP_FOR_EACH_I_5(op, a1, a2, a3, a4, a5) op(0, a1) op(1, a2) op(2, a3) op(3, a4) op(4, a5)
+#define FC_PP_FOR_EACH_I_6(op, a1, a2, a3, a4, a5, a6) \
+    op(0, a1) op(1, a2) op(2, a3) op(3, a4) op(4, a5) op(5, a6)
+#define FC_PP_FOR_EACH_I_7(op, a1, a2, a3, a4, a5, a6, a7) \
+    op(0, a1) op(1, a2) op(2, a3) op(3, a4) op(4, a5) op(5, a6) op(6, a7)
+#define FC_PP_FOR_EACH_I_8(op, a1, a2, a3, a4, a5, a6, a7, a8) \
+    op(0, a1) op(1, a2) op(2, a3) op(3, a4) op(4, a5) op(5, a6) op(6, a7) op(7, a8)
+#define FC_PP_FOR_EACH_I_9(op, a1, a2, a3, a4, a5, a6, a7, a8, a9) \
+    op(0, a1) op(1, a2) op(2, a3) op(3, a4) op(4, a5) op(5, a6) op(6, a7) op(7, a8) op(8, a9)
+#define FC_PP_FOR_EACH_I_10(op, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) \
+    op(0, a1) op(1, a2) op(2, a3) op(3, a4) op(4, a5) op(5, a6) op(6, a7) op(7, a8) op(8, a9) \
+        op(9, a10)
+#define FC_PP_FOR_EACH_I_11(op, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11) \
+    op(0, a1) op(1, a2) op(2, a3) op(3, a4) op(4, a5) op(5, a6) op(6, a7) op(7, a8) op(8, a9) \
+        op(9, a10) op(10, a11)
+#define FC_PP_FOR_EACH_I_12(op, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12) \
+    op(0, a1) op(1, a2) op(2, a3) op(3, a4) op(4, a5) op(5, a6) op(6, a7) op(7, a8) op(8, a9) \
+        op(9, a10) op(10, a11) op(11, a12)
+#define FC_PP_FOR_EACH_I_13(op, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13) \
+    op(0, a1) op(1, a2) op(2, a3) op(3, a4) op(4, a5) op(5, a6) op(6, a7) op(7, a8) op(8, a9) \
+        op(9, a10) op(10, a11) op(11, a12) op(12, a13)
+#define FC_PP_FOR_EACH_I_14(op, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14) \
+    op(0, a1) op(1, a2) op(2, a3) op(3, a4) op(4, a5) op(5, a6) op(6, a7) op(7, a8) op(8, a9) \
+        op(9, a10) op(10, a11) op(11, a12) op(12, a13) op(13, a14)
+#define FC_PP_FOR_EACH_I_15(op, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15) \
+    op(0, a1) op(1, a2) op(2, a3) op(3, a4) op(4, a5) op(5, a6) op(6, a7) op(7, a8) op(8, a9) \
+        op(9, a10) op(10, a11) op(11, a12) op(12, a13) op(13, a14) op(14, a15)
+#define FC_PP_FOR_EACH_I_16(op, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16) \
+    op(0, a1) op(1, a2) op(2, a3) op(3, a4) op(4, a5) op(5, a6) op(6, a7) op(7, a8) op(8, a9) \
+        op(9, a10) op(10, a11) op(11, a12) op(12, a13) op(13, a14) op(14, a15) op(15, a16)
+
+// Helpers for iterating a parenthesized comma-list, e.g. `(A, B, C)`.
+// This is used for enum option lists in parameter tuples.
+#define FC_PP_LIST_ELEM_0(_0, ...) _0
+#define FC_PP_LIST_ELEM_1(_0, _1, ...) _1
+#define FC_PP_LIST_ELEM_2(_0, _1, _2, ...) _2
+#define FC_PP_LIST_ELEM_3(_0, _1, _2, _3, ...) _3
+#define FC_PP_LIST_ELEM_4(_0, _1, _2, _3, _4, ...) _4
+#define FC_PP_LIST_ELEM_5(_0, _1, _2, _3, _4, _5, ...) _5
+#define FC_PP_LIST_ELEM_6(_0, _1, _2, _3, _4, _5, _6, ...) _6
+#define FC_PP_LIST_ELEM_7(_0, _1, _2, _3, _4, _5, _6, _7, ...) _7
+#define FC_PP_LIST_ELEM_8(_0, _1, _2, _3, _4, _5, _6, _7, _8, ...) _8
+#define FC_PP_LIST_ELEM_9(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, ...) _9
+#define FC_PP_LIST_ELEM_10(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, ...) _10
+#define FC_PP_LIST_ELEM_11(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, ...) _11
+#define FC_PP_LIST_ELEM_12(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, ...) _12
+#define FC_PP_LIST_ELEM_13(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, ...) _13
+#define FC_PP_LIST_ELEM_14(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, ...) _14
+#define FC_PP_LIST_ELEM_15(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, ...) \
+    _15
+
+#define FC_PP_LIST_NARG(list) FC_PP_NARG list
+
+#define FC_PP_FOR_EACH_I_LIST(op, list) \
+    FC_PP_CAT(FC_PP_FOR_EACH_I_LIST_, FC_PP_LIST_NARG(list))(op, list)
+#define FC_PP_FOR_EACH_I_LIST_0(op, list)
+#define FC_PP_FOR_EACH_I_LIST_1(op, list) op(0, FC_PP_LIST_ELEM_0 list)
+#define FC_PP_FOR_EACH_I_LIST_2(op, list) \
+    op(0, FC_PP_LIST_ELEM_0 list) op(1, FC_PP_LIST_ELEM_1 list)
+#define FC_PP_FOR_EACH_I_LIST_3(op, list) \
+    op(0, FC_PP_LIST_ELEM_0 list) op(1, FC_PP_LIST_ELEM_1 list) op(2, FC_PP_LIST_ELEM_2 list)
+#define FC_PP_FOR_EACH_I_LIST_4(op, list) \
+    op(0, FC_PP_LIST_ELEM_0 list) op(1, FC_PP_LIST_ELEM_1 list) op(2, FC_PP_LIST_ELEM_2 list) \
+        op(3, FC_PP_LIST_ELEM_3 list)
+#define FC_PP_FOR_EACH_I_LIST_5(op, list) \
+    op(0, FC_PP_LIST_ELEM_0 list) op(1, FC_PP_LIST_ELEM_1 list) op(2, FC_PP_LIST_ELEM_2 list) \
+        op(3, FC_PP_LIST_ELEM_3 list) op(4, FC_PP_LIST_ELEM_4 list)
+#define FC_PP_FOR_EACH_I_LIST_6(op, list) \
+    op(0, FC_PP_LIST_ELEM_0 list) op(1, FC_PP_LIST_ELEM_1 list) op(2, FC_PP_LIST_ELEM_2 list) \
+        op(3, FC_PP_LIST_ELEM_3 list) op(4, FC_PP_LIST_ELEM_4 list) op(5, FC_PP_LIST_ELEM_5 list)
+#define FC_PP_FOR_EACH_I_LIST_7(op, list) \
+    op(0, FC_PP_LIST_ELEM_0 list) op(1, FC_PP_LIST_ELEM_1 list) op(2, FC_PP_LIST_ELEM_2 list) \
+        op(3, FC_PP_LIST_ELEM_3 list) op(4, FC_PP_LIST_ELEM_4 list) op(5, FC_PP_LIST_ELEM_5 list) \
+            op(6, FC_PP_LIST_ELEM_6 list)
+#define FC_PP_FOR_EACH_I_LIST_8(op, list) \
+    op(0, FC_PP_LIST_ELEM_0 list) op(1, FC_PP_LIST_ELEM_1 list) op(2, FC_PP_LIST_ELEM_2 list) \
+        op(3, FC_PP_LIST_ELEM_3 list) op(4, FC_PP_LIST_ELEM_4 list) op(5, FC_PP_LIST_ELEM_5 list) \
+            op(6, FC_PP_LIST_ELEM_6 list) op(7, FC_PP_LIST_ELEM_7 list)
+#define FC_PP_FOR_EACH_I_LIST_9(op, list) \
+    op(0, FC_PP_LIST_ELEM_0 list) op(1, FC_PP_LIST_ELEM_1 list) op(2, FC_PP_LIST_ELEM_2 list) \
+        op(3, FC_PP_LIST_ELEM_3 list) op(4, FC_PP_LIST_ELEM_4 list) op(5, FC_PP_LIST_ELEM_5 list) \
+            op(6, FC_PP_LIST_ELEM_6 list) op(7, FC_PP_LIST_ELEM_7 list) \
+                op(8, FC_PP_LIST_ELEM_8 list)
+#define FC_PP_FOR_EACH_I_LIST_10(op, list) \
+    op(0, FC_PP_LIST_ELEM_0 list) op(1, FC_PP_LIST_ELEM_1 list) op(2, FC_PP_LIST_ELEM_2 list) \
+        op(3, FC_PP_LIST_ELEM_3 list) op(4, FC_PP_LIST_ELEM_4 list) op(5, FC_PP_LIST_ELEM_5 list) \
+            op(6, FC_PP_LIST_ELEM_6 list) op(7, FC_PP_LIST_ELEM_7 list) \
+                op(8, FC_PP_LIST_ELEM_8 list) op(9, FC_PP_LIST_ELEM_9 list)
+#define FC_PP_FOR_EACH_I_LIST_11(op, list) \
+    op(0, FC_PP_LIST_ELEM_0 list) op(1, FC_PP_LIST_ELEM_1 list) op(2, FC_PP_LIST_ELEM_2 list) \
+        op(3, FC_PP_LIST_ELEM_3 list) op(4, FC_PP_LIST_ELEM_4 list) op(5, FC_PP_LIST_ELEM_5 list) \
+            op(6, FC_PP_LIST_ELEM_6 list) op(7, FC_PP_LIST_ELEM_7 list) \
+                op(8, FC_PP_LIST_ELEM_8 list) op(9, FC_PP_LIST_ELEM_9 list) \
+                    op(10, FC_PP_LIST_ELEM_10 list)
+#define FC_PP_FOR_EACH_I_LIST_12(op, list) \
+    op(0, FC_PP_LIST_ELEM_0 list) op(1, FC_PP_LIST_ELEM_1 list) op(2, FC_PP_LIST_ELEM_2 list) \
+        op(3, FC_PP_LIST_ELEM_3 list) op(4, FC_PP_LIST_ELEM_4 list) op(5, FC_PP_LIST_ELEM_5 list) \
+            op(6, FC_PP_LIST_ELEM_6 list) op(7, FC_PP_LIST_ELEM_7 list) \
+                op(8, FC_PP_LIST_ELEM_8 list) op(9, FC_PP_LIST_ELEM_9 list) \
+                    op(10, FC_PP_LIST_ELEM_10 list) op(11, FC_PP_LIST_ELEM_11 list)
+#define FC_PP_FOR_EACH_I_LIST_13(op, list) \
+    op(0, FC_PP_LIST_ELEM_0 list) op(1, FC_PP_LIST_ELEM_1 list) op(2, FC_PP_LIST_ELEM_2 list) \
+        op(3, FC_PP_LIST_ELEM_3 list) op(4, FC_PP_LIST_ELEM_4 list) op(5, FC_PP_LIST_ELEM_5 list) \
+            op(6, FC_PP_LIST_ELEM_6 list) op(7, FC_PP_LIST_ELEM_7 list) \
+                op(8, FC_PP_LIST_ELEM_8 list) op(9, FC_PP_LIST_ELEM_9 list) \
+                    op(10, FC_PP_LIST_ELEM_10 list) op(11, FC_PP_LIST_ELEM_11 list) \
+                        op(12, FC_PP_LIST_ELEM_12 list)
+#define FC_PP_FOR_EACH_I_LIST_14(op, list) \
+    op(0, FC_PP_LIST_ELEM_0 list) op(1, FC_PP_LIST_ELEM_1 list) op(2, FC_PP_LIST_ELEM_2 list) \
+        op(3, FC_PP_LIST_ELEM_3 list) op(4, FC_PP_LIST_ELEM_4 list) op(5, FC_PP_LIST_ELEM_5 list) \
+            op(6, FC_PP_LIST_ELEM_6 list) op(7, FC_PP_LIST_ELEM_7 list) \
+                op(8, FC_PP_LIST_ELEM_8 list) op(9, FC_PP_LIST_ELEM_9 list) \
+                    op(10, FC_PP_LIST_ELEM_10 list) op(11, FC_PP_LIST_ELEM_11 list) \
+                        op(12, FC_PP_LIST_ELEM_12 list) op(13, FC_PP_LIST_ELEM_13 list)
+#define FC_PP_FOR_EACH_I_LIST_15(op, list) \
+    op(0, FC_PP_LIST_ELEM_0 list) op(1, FC_PP_LIST_ELEM_1 list) op(2, FC_PP_LIST_ELEM_2 list) \
+        op(3, FC_PP_LIST_ELEM_3 list) op(4, FC_PP_LIST_ELEM_4 list) op(5, FC_PP_LIST_ELEM_5 list) \
+            op(6, FC_PP_LIST_ELEM_6 list) op(7, FC_PP_LIST_ELEM_7 list) \
+                op(8, FC_PP_LIST_ELEM_8 list) op(9, FC_PP_LIST_ELEM_9 list) \
+                    op(10, FC_PP_LIST_ELEM_10 list) op(11, FC_PP_LIST_ELEM_11 list) \
+                        op(12, FC_PP_LIST_ELEM_12 list) op(13, FC_PP_LIST_ELEM_13 list) \
+                            op(14, FC_PP_LIST_ELEM_14 list)
+#define FC_PP_FOR_EACH_I_LIST_16(op, list) \
+    op(0, FC_PP_LIST_ELEM_0 list) op(1, FC_PP_LIST_ELEM_1 list) op(2, FC_PP_LIST_ELEM_2 list) \
+        op(3, FC_PP_LIST_ELEM_3 list) op(4, FC_PP_LIST_ELEM_4 list) op(5, FC_PP_LIST_ELEM_5 list) \
+            op(6, FC_PP_LIST_ELEM_6 list) op(7, FC_PP_LIST_ELEM_7 list) \
+                op(8, FC_PP_LIST_ELEM_8 list) op(9, FC_PP_LIST_ELEM_9 list) \
+                    op(10, FC_PP_LIST_ELEM_10 list) op(11, FC_PP_LIST_ELEM_11 list) \
+                        op(12, FC_PP_LIST_ELEM_12 list) op(13, FC_PP_LIST_ELEM_13 list) \
+                            op(14, FC_PP_LIST_ELEM_14 list) op(15, FC_PP_LIST_ELEM_15 list)
+
+#define FC_PP_FOR_EACH_I_D_LIST(op, data, list) \
+    FC_PP_CAT(FC_PP_FOR_EACH_I_D_LIST_, FC_PP_LIST_NARG(list))(op, data, list)
+#define FC_PP_FOR_EACH_I_D_LIST_0(op, data, list)
+#define FC_PP_FOR_EACH_I_D_LIST_1(op, data, list) op(data, 0, FC_PP_LIST_ELEM_0 list)
+#define FC_PP_FOR_EACH_I_D_LIST_2(op, data, list) \
+    op(data, 0, FC_PP_LIST_ELEM_0 list) op(data, 1, FC_PP_LIST_ELEM_1 list)
+#define FC_PP_FOR_EACH_I_D_LIST_3(op, data, list) \
+    op(data, 0, FC_PP_LIST_ELEM_0 list) op(data, 1, FC_PP_LIST_ELEM_1 list) \
+        op(data, 2, FC_PP_LIST_ELEM_2 list)
+#define FC_PP_FOR_EACH_I_D_LIST_4(op, data, list) \
+    op(data, 0, FC_PP_LIST_ELEM_0 list) op(data, 1, FC_PP_LIST_ELEM_1 list) \
+        op(data, 2, FC_PP_LIST_ELEM_2 list) op(data, 3, FC_PP_LIST_ELEM_3 list)
+#define FC_PP_FOR_EACH_I_D_LIST_5(op, data, list) \
+    op(data, 0, FC_PP_LIST_ELEM_0 list) op(data, 1, FC_PP_LIST_ELEM_1 list) \
+        op(data, 2, FC_PP_LIST_ELEM_2 list) op(data, 3, FC_PP_LIST_ELEM_3 list) \
+            op(data, 4, FC_PP_LIST_ELEM_4 list)
+#define FC_PP_FOR_EACH_I_D_LIST_6(op, data, list) \
+    op(data, 0, FC_PP_LIST_ELEM_0 list) op(data, 1, FC_PP_LIST_ELEM_1 list) \
+        op(data, 2, FC_PP_LIST_ELEM_2 list) op(data, 3, FC_PP_LIST_ELEM_3 list) \
+            op(data, 4, FC_PP_LIST_ELEM_4 list) op(data, 5, FC_PP_LIST_ELEM_5 list)
+#define FC_PP_FOR_EACH_I_D_LIST_7(op, data, list) \
+    op(data, 0, FC_PP_LIST_ELEM_0 list) op(data, 1, FC_PP_LIST_ELEM_1 list) \
+        op(data, 2, FC_PP_LIST_ELEM_2 list) op(data, 3, FC_PP_LIST_ELEM_3 list) \
+            op(data, 4, FC_PP_LIST_ELEM_4 list) op(data, 5, FC_PP_LIST_ELEM_5 list) \
+                op(data, 6, FC_PP_LIST_ELEM_6 list)
+#define FC_PP_FOR_EACH_I_D_LIST_8(op, data, list) \
+    op(data, 0, FC_PP_LIST_ELEM_0 list) op(data, 1, FC_PP_LIST_ELEM_1 list) \
+        op(data, 2, FC_PP_LIST_ELEM_2 list) op(data, 3, FC_PP_LIST_ELEM_3 list) \
+            op(data, 4, FC_PP_LIST_ELEM_4 list) op(data, 5, FC_PP_LIST_ELEM_5 list) \
+                op(data, 6, FC_PP_LIST_ELEM_6 list) op(data, 7, FC_PP_LIST_ELEM_7 list)
+#define FC_PP_FOR_EACH_I_D_LIST_9(op, data, list) \
+    op(data, 0, FC_PP_LIST_ELEM_0 list) op(data, 1, FC_PP_LIST_ELEM_1 list) \
+        op(data, 2, FC_PP_LIST_ELEM_2 list) op(data, 3, FC_PP_LIST_ELEM_3 list) \
+            op(data, 4, FC_PP_LIST_ELEM_4 list) op(data, 5, FC_PP_LIST_ELEM_5 list) \
+                op(data, 6, FC_PP_LIST_ELEM_6 list) op(data, 7, FC_PP_LIST_ELEM_7 list) \
+                    op(data, 8, FC_PP_LIST_ELEM_8 list)
+#define FC_PP_FOR_EACH_I_D_LIST_10(op, data, list) \
+    op(data, 0, FC_PP_LIST_ELEM_0 list) op(data, 1, FC_PP_LIST_ELEM_1 list) \
+        op(data, 2, FC_PP_LIST_ELEM_2 list) op(data, 3, FC_PP_LIST_ELEM_3 list) \
+            op(data, 4, FC_PP_LIST_ELEM_4 list) op(data, 5, FC_PP_LIST_ELEM_5 list) \
+                op(data, 6, FC_PP_LIST_ELEM_6 list) op(data, 7, FC_PP_LIST_ELEM_7 list) \
+                    op(data, 8, FC_PP_LIST_ELEM_8 list) op(data, 9, FC_PP_LIST_ELEM_9 list)
+#define FC_PP_FOR_EACH_I_D_LIST_11(op, data, list) \
+    op(data, 0, FC_PP_LIST_ELEM_0 list) op(data, 1, FC_PP_LIST_ELEM_1 list) \
+        op(data, 2, FC_PP_LIST_ELEM_2 list) op(data, 3, FC_PP_LIST_ELEM_3 list) \
+            op(data, 4, FC_PP_LIST_ELEM_4 list) op(data, 5, FC_PP_LIST_ELEM_5 list) \
+                op(data, 6, FC_PP_LIST_ELEM_6 list) op(data, 7, FC_PP_LIST_ELEM_7 list) \
+                    op(data, 8, FC_PP_LIST_ELEM_8 list) op(data, 9, FC_PP_LIST_ELEM_9 list) \
+                        op(data, 10, FC_PP_LIST_ELEM_10 list)
+#define FC_PP_FOR_EACH_I_D_LIST_12(op, data, list) \
+    op(data, 0, FC_PP_LIST_ELEM_0 list) op(data, 1, FC_PP_LIST_ELEM_1 list) \
+        op(data, 2, FC_PP_LIST_ELEM_2 list) op(data, 3, FC_PP_LIST_ELEM_3 list) \
+            op(data, 4, FC_PP_LIST_ELEM_4 list) op(data, 5, FC_PP_LIST_ELEM_5 list) \
+                op(data, 6, FC_PP_LIST_ELEM_6 list) op(data, 7, FC_PP_LIST_ELEM_7 list) \
+                    op(data, 8, FC_PP_LIST_ELEM_8 list) op(data, 9, FC_PP_LIST_ELEM_9 list) \
+                        op(data, 10, FC_PP_LIST_ELEM_10 list) op(data, 11, FC_PP_LIST_ELEM_11 list)
+#define FC_PP_FOR_EACH_I_D_LIST_13(op, data, list) \
+    op(data, 0, FC_PP_LIST_ELEM_0 list) op(data, 1, FC_PP_LIST_ELEM_1 list) \
+        op(data, 2, FC_PP_LIST_ELEM_2 list) op(data, 3, FC_PP_LIST_ELEM_3 list) \
+            op(data, 4, FC_PP_LIST_ELEM_4 list) op(data, 5, FC_PP_LIST_ELEM_5 list) \
+                op(data, 6, FC_PP_LIST_ELEM_6 list) op(data, 7, FC_PP_LIST_ELEM_7 list) \
+                    op(data, 8, FC_PP_LIST_ELEM_8 list) op(data, 9, FC_PP_LIST_ELEM_9 list) \
+                        op(data, 10, FC_PP_LIST_ELEM_10 list) op(data, 11, FC_PP_LIST_ELEM_11 list) \
+                            op(data, 12, FC_PP_LIST_ELEM_12 list)
+#define FC_PP_FOR_EACH_I_D_LIST_14(op, data, list) \
+    op(data, 0, FC_PP_LIST_ELEM_0 list) op(data, 1, FC_PP_LIST_ELEM_1 list) \
+        op(data, 2, FC_PP_LIST_ELEM_2 list) op(data, 3, FC_PP_LIST_ELEM_3 list) \
+            op(data, 4, FC_PP_LIST_ELEM_4 list) op(data, 5, FC_PP_LIST_ELEM_5 list) \
+                op(data, 6, FC_PP_LIST_ELEM_6 list) op(data, 7, FC_PP_LIST_ELEM_7 list) \
+                    op(data, 8, FC_PP_LIST_ELEM_8 list) op(data, 9, FC_PP_LIST_ELEM_9 list) \
+                        op(data, 10, FC_PP_LIST_ELEM_10 list) op(data, 11, FC_PP_LIST_ELEM_11 list) \
+                            op(data, 12, FC_PP_LIST_ELEM_12 list) \
+                                op(data, 13, FC_PP_LIST_ELEM_13 list)
+#define FC_PP_FOR_EACH_I_D_LIST_15(op, data, list) \
+    op(data, 0, FC_PP_LIST_ELEM_0 list) op(data, 1, FC_PP_LIST_ELEM_1 list) \
+        op(data, 2, FC_PP_LIST_ELEM_2 list) op(data, 3, FC_PP_LIST_ELEM_3 list) \
+            op(data, 4, FC_PP_LIST_ELEM_4 list) op(data, 5, FC_PP_LIST_ELEM_5 list) \
+                op(data, 6, FC_PP_LIST_ELEM_6 list) op(data, 7, FC_PP_LIST_ELEM_7 list) \
+                    op(data, 8, FC_PP_LIST_ELEM_8 list) op(data, 9, FC_PP_LIST_ELEM_9 list) \
+                        op(data, 10, FC_PP_LIST_ELEM_10 list) op(data, 11, FC_PP_LIST_ELEM_11 list) \
+                            op(data, 12, FC_PP_LIST_ELEM_12 list) \
+                                op(data, 13, FC_PP_LIST_ELEM_13 list) \
+                                    op(data, 14, FC_PP_LIST_ELEM_14 list)
+#define FC_PP_FOR_EACH_I_D_LIST_16(op, data, list) \
+    op(data, 0, FC_PP_LIST_ELEM_0 list) op(data, 1, FC_PP_LIST_ELEM_1 list) \
+        op(data, 2, FC_PP_LIST_ELEM_2 list) op(data, 3, FC_PP_LIST_ELEM_3 list) \
+            op(data, 4, FC_PP_LIST_ELEM_4 list) op(data, 5, FC_PP_LIST_ELEM_5 list) \
+                op(data, 6, FC_PP_LIST_ELEM_6 list) op(data, 7, FC_PP_LIST_ELEM_7 list) \
+                    op(data, 8, FC_PP_LIST_ELEM_8 list) op(data, 9, FC_PP_LIST_ELEM_9 list) \
+                        op(data, 10, FC_PP_LIST_ELEM_10 list) op(data, 11, FC_PP_LIST_ELEM_11 list) \
+                            op(data, 12, FC_PP_LIST_ELEM_12 list) \
+                                op(data, 13, FC_PP_LIST_ELEM_13 list) \
+                                    op(data, 14, FC_PP_LIST_ELEM_14 list) \
+                                        op(data, 15, FC_PP_LIST_ELEM_15 list)
+
+// Like FC_PP_FOR_EACH_I, but forwards an extra context argument (which may be a
+// parenthesized tuple) to each invocation.
+#define FC_PP_FOR_EACH_I_D(op, data, ...) \
+    FC_PP_CAT(FC_PP_FOR_EACH_I_D_, FC_PP_NARG(__VA_ARGS__))(op, data, __VA_ARGS__)
+#define FC_PP_FOR_EACH_I_D_0(op, data, ...)
+#define FC_PP_FOR_EACH_I_D_1(op, data, a1) op(data, 0, a1)
+#define FC_PP_FOR_EACH_I_D_2(op, data, a1, a2) op(data, 0, a1) op(data, 1, a2)
+#define FC_PP_FOR_EACH_I_D_3(op, data, a1, a2, a3) op(data, 0, a1) op(data, 1, a2) op(data, 2, a3)
+#define FC_PP_FOR_EACH_I_D_4(op, data, a1, a2, a3, a4) \
+    op(data, 0, a1) op(data, 1, a2) op(data, 2, a3) op(data, 3, a4)
+#define FC_PP_FOR_EACH_I_D_5(op, data, a1, a2, a3, a4, a5) \
+    op(data, 0, a1) op(data, 1, a2) op(data, 2, a3) op(data, 3, a4) op(data, 4, a5)
+#define FC_PP_FOR_EACH_I_D_6(op, data, a1, a2, a3, a4, a5, a6) \
+    op(data, 0, a1) op(data, 1, a2) op(data, 2, a3) op(data, 3, a4) op(data, 4, a5) op(data, 5, a6)
+#define FC_PP_FOR_EACH_I_D_7(op, data, a1, a2, a3, a4, a5, a6, a7) \
+    op(data, 0, a1) op(data, 1, a2) op(data, 2, a3) op(data, 3, a4) op(data, 4, a5) \
+        op(data, 5, a6) op(data, 6, a7)
+#define FC_PP_FOR_EACH_I_D_8(op, data, a1, a2, a3, a4, a5, a6, a7, a8) \
+    op(data, 0, a1) op(data, 1, a2) op(data, 2, a3) op(data, 3, a4) op(data, 4, a5) \
+        op(data, 5, a6) op(data, 6, a7) op(data, 7, a8)
+#define FC_PP_FOR_EACH_I_D_9(op, data, a1, a2, a3, a4, a5, a6, a7, a8, a9) \
+    op(data, 0, a1) op(data, 1, a2) op(data, 2, a3) op(data, 3, a4) op(data, 4, a5) \
+        op(data, 5, a6) op(data, 6, a7) op(data, 7, a8) op(data, 8, a9)
+#define FC_PP_FOR_EACH_I_D_10(op, data, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) \
+    op(data, 0, a1) op(data, 1, a2) op(data, 2, a3) op(data, 3, a4) op(data, 4, a5) \
+        op(data, 5, a6) op(data, 6, a7) op(data, 7, a8) op(data, 8, a9) op(data, 9, a10)
+#define FC_PP_FOR_EACH_I_D_11(op, data, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11) \
+    op(data, 0, a1) op(data, 1, a2) op(data, 2, a3) op(data, 3, a4) op(data, 4, a5) op(data, 5, a6) \
+        op(data, 6, a7) op(data, 7, a8) op(data, 8, a9) op(data, 9, a10) op(data, 10, a11)
+#define FC_PP_FOR_EACH_I_D_12(op, data, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12) \
+    op(data, 0, a1) op(data, 1, a2) op(data, 2, a3) op(data, 3, a4) op(data, 4, a5) \
+        op(data, 5, a6) op(data, 6, a7) op(data, 7, a8) op(data, 8, a9) op(data, 9, a10) \
+            op(data, 10, a11) op(data, 11, a12)
+#define FC_PP_FOR_EACH_I_D_13(op, data, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13) \
+    op(data, 0, a1) op(data, 1, a2) op(data, 2, a3) op(data, 3, a4) op(data, 4, a5) \
+        op(data, 5, a6) op(data, 6, a7) op(data, 7, a8) op(data, 8, a9) op(data, 9, a10) \
+            op(data, 10, a11) op(data, 11, a12) op(data, 12, a13)
+#define FC_PP_FOR_EACH_I_D_14(op, data, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14) \
+    op(data, 0, a1) op(data, 1, a2) op(data, 2, a3) op(data, 3, a4) op(data, 4, a5) \
+        op(data, 5, a6) op(data, 6, a7) op(data, 7, a8) op(data, 8, a9) op(data, 9, a10) \
+            op(data, 10, a11) op(data, 11, a12) op(data, 12, a13) op(data, 13, a14)
+#define FC_PP_FOR_EACH_I_D_15(op, data, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15) \
+    op(data, 0, a1) op(data, 1, a2) op(data, 2, a3) op(data, 3, a4) op(data, 4, a5) op(data, 5, a6) \
+        op(data, 6, a7) op(data, 7, a8) op(data, 8, a9) op(data, 9, a10) op(data, 10, a11) \
+            op(data, 11, a12) op(data, 12, a13) op(data, 13, a14) op(data, 14, a15)
+#define FC_PP_FOR_EACH_I_D_16(op, data, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16) \
+    op(data, 0, a1) op(data, 1, a2) op(data, 2, a3) op(data, 3, a4) op(data, 4, a5) \
+        op(data, 5, a6) op(data, 6, a7) op(data, 7, a8) op(data, 8, a9) op(data, 9, a10) \
+            op(data, 10, a11) op(data, 11, a12) op(data, 12, a13) op(data, 13, a14) \
+                op(data, 14, a15) op(data, 15, a16)
 
 /** \defgroup ParamHelper Parameters helper macros
  * \ingroup PATH
@@ -198,17 +506,50 @@
 #define PARAM_IPROP 5
 #define PARAM_IINFO 6
 
-#define PARAM_FIELD(_idx, _param) BOOST_PP_TUPLE_ELEM(PARAM_I##_idx, _param)
+// Field extraction helpers. Note that not all parameters have all fields.
+#define PARAM_FTYPE(_param) PARAM_FTYPE_IMPL _param
+#define PARAM_FTYPE_IMPL(_type, ...) _type
 
-#define PARAM_FTYPE(_param) PARAM_FIELD(TYPE, _param)
-#define PARAM_FARG(_param) PARAM_FIELD(ARG, _param)
-#define PARAM_FNAME(_param) PARAM_FIELD(NAME, _param)
-#define PARAM_FDEF(_param) PARAM_FIELD(DEF, _param)
-#define PARAM_FDOC(_param) PARAM_FIELD(DOC, _param)
-#define PARAM_FSEQ(_param) PARAM_FIELD(SEQ, _param)
-#define PARAM_FPROP(_param) PARAM_FIELD(PROP, _param)
-#define PARAM_FINFO(_param) PARAM_FIELD(INFO, _param)
-#define PARAM_FENUM_TYPE(_param) PARAM_FINFO(_param)
+#define PARAM_FARG(_param) PARAM_FARG_IMPL _param
+#define PARAM_FARG_IMPL(_type, _arg, ...) _arg
+
+#define PARAM_FNAME(_param) PARAM_FNAME_IMPL _param
+#define PARAM_FNAME_IMPL(_type, _arg, _name, ...) _name
+
+#define PARAM_FDEF(_param) PARAM_FDEF_IMPL _param
+#define PARAM_FDEF_IMPL(_type, _arg, _name, _def, ...) _def
+
+#define PARAM_FDOC(_param) PARAM_FDOC_IMPL _param
+#define PARAM_FDOC_IMPL(_type, _arg, _name, _def, _doc, ...) _doc
+
+#define PARAM_FSEQ(_param) PARAM_FSEQ_IMPL _param
+#define PARAM_FSEQ_IMPL(_type, _arg, _name, _def, _doc, _seq, ...) _seq
+
+// PROP shares the same slot as SEQ.
+#define PARAM_FPROP(_param) PARAM_FSEQ(_param)
+
+#define PARAM_FINFO(_param) PARAM_FINFO_IMPL _param
+#define PARAM_FINFO_IMPL(_type, _arg, _name, _def, _doc, _seq, _info, ...) _info
+
+#define PARAM_FIELD(_idx, _param) FC_PP_CAT(PARAM_FIELD_, _idx)(_param)
+#define PARAM_FIELD_TYPE(_param) PARAM_FTYPE(_param)
+#define PARAM_FIELD_ARG(_param) PARAM_FARG(_param)
+#define PARAM_FIELD_NAME(_param) PARAM_FNAME(_param)
+#define PARAM_FIELD_DEF(_param) PARAM_FDEF(_param)
+#define PARAM_FIELD_DOC(_param) PARAM_FDOC(_param)
+#define PARAM_FIELD_SEQ(_param) PARAM_FSEQ(_param)
+#define PARAM_FIELD_PROP(_param) PARAM_FPROP(_param)
+#define PARAM_FIELD_INFO(_param) PARAM_FINFO(_param)
+
+#define PARAM_FENUM_TYPE(_param) PARAM_FENUM_TYPE_FROM_PARAM _param
+#define PARAM_FENUM_TYPE_FROM_PARAM(_type, _arg, _name, _def, _doc, _seq, _info, ...) \
+    PARAM_FENUM_TYPE_FROM_INFO _info
+#define PARAM_FENUM_TYPE_FROM_INFO(_type, _prefix, ...) _type
+
+#define PARAM_FENUM_PREFIX(_param) PARAM_FENUM_PREFIX_FROM_PARAM _param
+#define PARAM_FENUM_PREFIX_FROM_PARAM(_type, _arg, _name, _def, _doc, _seq, _info, ...) \
+    PARAM_FENUM_PREFIX_FROM_INFO _info
+#define PARAM_FENUM_PREFIX_FROM_INFO(_type, _prefix, ...) _prefix
 /** @} */
 
 
@@ -216,14 +557,16 @@
  * \defgroup ParamStringizer Field stringizers
  * \ingroup ParamHelper
  * @{ */
-#define PARAM_FIELD_STR(_idx, _param) BOOST_PP_STRINGIZE(BOOST_PP_TUPLE_ELEM(PARAM_I##_idx,_param))
+#define PARAM_FIELD_STR(_idx, _param) FC_PP_STRINGIZE(PARAM_FIELD(_idx, _param))
 
+#define PARAM_FTYPE_STR(_param) PARAM_FIELD_STR(TYPE, _param)
+#define PARAM_FARG_STR(_param) PARAM_FIELD_STR(ARG, _param)
 #define PARAM_FNAME_STR(_param) PARAM_FIELD_STR(NAME, _param)
 #define PARAM_FDEF_STR(_param) PARAM_FIELD_STR(DEF, _param)
 /** @} */
 
 /** Helper for #PARAM_FSEQ_STR */
-#define PARAM_FSEQ_STR_(_i, _elem) BOOST_PP_COMMA_IF(_i) BOOST_PP_STRINGIZE(_elem)
+#define PARAM_FSEQ_STR_(_i, _elem) FC_PP_COMMA_IF(_i) FC_PP_STRINGIZE(_elem)
 
 /** \c SEQ stringizer will stringify each element separately
  *
@@ -231,7 +574,7 @@
  *      #seq[0], #seq[1] ...
  * \ingroup ParamHelper
  */
-#define PARAM_FSEQ_STR(_param) PARAM_FOREACH_I(PARAM_FSEQ_STR_, PARAM_FSEQ(_param))
+#define PARAM_FSEQ_STR(_param) FC_PP_FOR_EACH_I_LIST(PARAM_FSEQ_STR_, PARAM_FSEQ(_param))
 
 
 /** \defgroup ParamLooper Looper macros
@@ -240,7 +583,7 @@
  */
 
 /** Helper for #PARAM_FOREACH */
-#define PARAM_FOREACH_(_, _op, _param) _op(_param)
+#define PARAM_FOREACH_APPLY(_op, _i, _param) _op(_param)
 
 /** Apply macro \a _op to each parameter in sequence \a _seq
  *
@@ -250,10 +593,10 @@
  * \endcode
  * \ingroup ParamLooper
  */
-#define PARAM_FOREACH(_op, _seq) BOOST_PP_SEQ_FOR_EACH(PARAM_FOREACH_, _op, _seq)
+#define PARAM_FOREACH(_op, _seq) _seq(PARAM_FOREACH_APPLY, 0, _op)
 
 /** Helper for #PARAM_FOREACH_I */
-#define PARAM_FOREACH_I_(_, _op, _i, _param) _op(_i, _param)
+#define PARAM_FOREACH_I_APPLY(_op, _i, _param) _op(_i, _param)
 
 /** Apply macro \a _op to each parameter in sequence \a _seq with additional index
  *
@@ -263,11 +606,11 @@
  * \endcode
  * \ingroup ParamLooper
  * */
-#define PARAM_FOREACH_I(_op, _seq) BOOST_PP_SEQ_FOR_EACH_I(PARAM_FOREACH_I_, _op, _seq)
+#define PARAM_FOREACH_I(_op, _seq) _seq(PARAM_FOREACH_I_APPLY, 0, _op)
 
 
 /** Helper for #PARAM_TYPED_FOREACH */
-#define PARAM_TYPED_FOREACH_(_1, _op, _param) PARAM_TYPED(_op, _param)(_param)
+#define PARAM_TYPED_FOREACH_APPLY(_op, _i, _param) PARAM_TYPED(_op, _param)(_param)
 
 /** Type depended macro construction
  *
@@ -278,14 +621,14 @@
  * \endcode
  * \ingroup ParamLooper
  */
-#define PARAM_TYPED(_op, _param) BOOST_PP_CAT(_op, PARAM_FTYPE(_param))
+#define PARAM_TYPED(_op, _param) FC_PP_CAT(_op, PARAM_FTYPE(_param))
 
 /** Apply type dependent macro call to a sequence of parameters
  *
  * \a _op will be converted to \a _op##\<type\> for each parameter
  * \ingroup ParamLooper
  */
-#define PARAM_TYPED_FOREACH(_op, _seq) BOOST_PP_SEQ_FOR_EACH(PARAM_TYPED_FOREACH_, _op, _seq)
+#define PARAM_TYPED_FOREACH(_op, _seq) _seq(PARAM_TYPED_FOREACH_APPLY, 0, _op)
 
 
 /** \defgroup ParamCommon Common helpers
@@ -317,7 +660,7 @@
 
 
 /** Helper for #PARAM_DECLARE */
-#define PARAM_DECLARE_(_1, _src, _param) PARAM_TYPE(_param) _src(_param);
+#define PARAM_DECLARE_APPLY(_src, _i, _param) PARAM_TYPE(_param) _src(_param);
 
 /**
  * Declares parameters using the given field as name
@@ -328,7 +671,7 @@
  * accessors" to directly access the field. Or, supply your own macro to append
  * any prefix as you like. For example:
  * \code{.unparsed}
- *      #define MY_SRC(_param) BOOST_PP_CAT(my,PARAM_FNAME(_param))
+ *      #define MY_SRC(_param) FC_PP_CAT(my,PARAM_FNAME(_param))
  *      ->
  *          my##<name>
  * \endcode
@@ -339,11 +682,12 @@
  * \endcode
  * \ingroup ParamCommon
  */
-#define PARAM_DECLARE(_src, _seq) BOOST_PP_SEQ_FOR_EACH(PARAM_DECLARE_, _src, _seq)
+#define PARAM_DECLARE(_src, _seq) _seq(PARAM_DECLARE_APPLY, 0, _src)
 
 
 /** Helper for #PARAM_DECLARE_INIT */
-#define PARAM_DECLARE_INIT_(_1, _src, _param) PARAM_TYPE(_param) _src(_param) = PARAM_FDEF(_param);
+#define PARAM_DECLARE_INIT_APPLY(_src, _i, _param) \
+    PARAM_TYPE(_param) _src(_param) = PARAM_FDEF(_param);
 
 /**
  * Declares parameters with initialization to default using the given field as
@@ -358,16 +702,16 @@
  * \endcode
  * \ingroup ParamCommon
  */
-#define PARAM_DECLARE_INIT(_src, _seq) BOOST_PP_SEQ_FOR_EACH(PARAM_DECLARE_INIT_, _src, _seq)
+#define PARAM_DECLARE_INIT(_src, _seq) _seq(PARAM_DECLARE_INIT_APPLY, 0, _src)
 
 
-#define PARAM_ENUM_DECLARE_enum_(_1, _name, _i, _elem) \
-    BOOST_PP_COMMA_IF(_i) BOOST_PP_CAT(_name, _elem)
+#define PARAM_ENUM_DECLARE_enum_(data, _i, _elem) \
+    FC_PP_COMMA_IF(_i) FC_PP_CAT(FC_PP_REM data, _elem)
 
 #define PARAM_ENUM_DECLARE_enum(_param) \
     enum \
     { \
-        BOOST_PP_SEQ_FOR_EACH_I(PARAM_ENUM_DECLARE_enum_, PARAM_FNAME(_param), PARAM_FSEQ(_param)) \
+        FC_PP_FOR_EACH_I_D_LIST(PARAM_ENUM_DECLARE_enum_, (PARAM_FNAME(_param)), PARAM_FSEQ(_param)) \
     };
 
 #define PARAM_ENUM_DECLARE_short(_param)
@@ -392,9 +736,125 @@
  * \ingroup ParamEnumHelper*/
 #define PARAM_ENUM_DECLARE(_seq) PARAM_TYPED_FOREACH(PARAM_ENUM_DECLARE_, _seq)
 
+
+/** \addgroup ParamEnumHelper Enum convert helpers
+ * @{ */
+#define PARAM_ENUM_CONVERT_short(...)
+#define PARAM_ENUM_CONVERT_long(...)
+#define PARAM_ENUM_CONVERT_double(...)
+#define PARAM_ENUM_CONVERT_bool(...)
+#define PARAM_ENUM_CONVERT_enum(...)
+#define PARAM_ENUM_CONVERT_enum2 PARAM_ENUM_CONVERT_SINGLE
+
+#define PARAM_ENUM_CONVERT_enum_(_dst, _name, _prefix, _elem) \
+    case FC_PP_CAT(_name, _elem): \
+        _dst = FC_PP_CAT(_prefix, _elem); \
+        break;
+
+#define PARAM_ENUM_CONVERT__impl(_data, _elem) \
+    PARAM_ENUM_CONVERT_enum_( \
+        FC_PP_LIST_ELEM_0 _data, \
+        FC_PP_LIST_ELEM_1 _data, \
+        FC_PP_LIST_ELEM_2 _data, \
+        _elem \
+    )
+
+#define PARAM_ENUM_CONVERT__(_data, _i, _elem) PARAM_ENUM_CONVERT__impl(_data, _elem)
+
+/** Convert single enum parameter value into user defined enum type
+ *
+ * This macro is used by #PARAM_ENUM_CONVERT to convert each parameter, but
+ * you can use it directly for a single parameter. Check #PARAM_NUM_CONVERT
+ * for more detail. Make sure the outer parenthesis of \c _param is stripped,
+ * i.e. not double but single parenthesis
+ */
+#define PARAM_ENUM_CONVERT_SINGLE(_src, _dst, _default, _param) \
+    PARAM_FENUM_TYPE(_param) _dst(_param); \
+    switch (_src(_param)) { \
+        FC_PP_FOR_EACH_I_D_LIST( \
+            PARAM_ENUM_CONVERT__, \
+            (_dst(_param), PARAM_FNAME(_param), PARAM_FENUM_PREFIX(_param)), \
+            PARAM_FSEQ(_param) \
+        ) \
+        default: \
+            _default(_param); \
+    }
+
 /** Default handling in #PARAM_ENUM_CONVERT and #PARAM_ENUM_CHECK*/
 #define PARAM_ENUM_EXCEPT(_param) \
     throw Base::ValueError("invalid value for enum " PARAM_FNAME_STR(_param))
+
+/** @} */
+
+/* Convert ParamHelper defined enum type to user defined ones
+ *
+ * This assumes the user defined enum type is given in \ref ParamSeq "seq_type"
+ * of the parameter definition, and it has the same postfix as the ones
+ * specified in \ref ParamSeq "seq" member of the parameter definition. See
+ * \ref ParamEnumHelper "here" for implementations
+ *
+ * \ingroup ParamEnumHelper
+ *
+ * \arg \c _src: Macro to generate source variable. The signature must be
+ * <tt>_src(_param)<\tt>, where \c _param is the tuple defining the parameter.
+ * You pass any of the \ref ParamAccessor "parameter accessors" to directly
+ * access the field. Or, supply your own macro to append any prefix as you
+ * like.
+ * \arg \c _dst: Same as above.
+ * \arg \c _default: A macro to call for invalid value. Signature should be
+ * <tt>_default(_param)<\tt>, where \c _param is the parameter definition. You
+ * can use #PARAM_ENUM_EXCEPT to throw Base::ValueError exception in FreeCAD
+ * \arg \c _seq: Parameter sequence
+ *
+ * For example, with the following parameter definition
+ * \code{.unparsed}
+ * #define MY_PARAM_TEST \
+ *      ((enum,test1,Test1,0,"it's a test",(Foo)(Bar),(MyEnum1,myEnum1)) \
+ *      ((enum,test2,Test2,0,"it's a test",(Foo)(Bar),(MyEnum2,myEnum2)))
+ *
+ *  #define MY_DST(_param) FC_PP_CAT(my,PARAM_FNAME(_param))
+ * \code{.unparsed}
+ *
+ * calling
+ * \code{.unparsed}
+ *      PARAM_ENUM_CONVERT(PARAM_FNAME,MY_DST,My,PARAM_ENUM_EXCEP,MY_PARAM_TEST)
+ * \code{.unparsed}
+ *
+ * expands to
+ * \code{.unparsed}
+ *      MyEnum1 myTest1;
+ *      switch(Test1) {
+ *      case Test1Foo:
+ *          myTest1 = myEnum1Foo;
+ *          break;
+ *      case Test1Bar:
+ *          myTest1 = myEnum1Bar;
+ *          break;
+ *      default:
+ *          throw Base::ValueError("invalid value for enum Test1");
+ *      }
+ *      MyEnum2 myTest2;
+ *      switch(Test2) {
+ *      case Test1Foo:
+ *          myTest2 = myEnum2Foo;
+ *          break;
+ *      case Test2Bar:
+ *          myTest2 = myEnum2Bar;
+ *          break;
+ *      default:
+ *          throw Base::ValueError("invalid value for enum Test2");
+ *      }
+ * \endcode
+ *
+ * The above code assumes you've already defined \a Test1 and \a Test2 some
+ * where as the source variable.
+ */
+#define PARAM_ENUM_CONVERT(_src, _dst, _default, _seq) \
+    _seq(PARAM_ENUM_CONVERT_, 0, _src, _dst, _default)
+
+#define PARAM_ENUM_CONVERT_(_src, _dst, _default, _i, _param) \
+    PARAM_TYPED(PARAM_ENUM_CONVERT_, _param)(_src, _dst, _default, _param)
+
 
 #define PARAM_ENUM_CHECK_short(...)
 #define PARAM_ENUM_CHECK_long(...)
@@ -403,28 +863,27 @@
 #define PARAM_ENUM_CHECK_enum PARAM_ENUM_CHECK_SINGLE
 #define PARAM_ENUM_CHECK_enum2 PARAM_ENUM2_CHECK_SINGLE
 
-#define PARAM_ENUM_CHECK_enum_(_1, _name, _i, _elem) \
-    case BOOST_PP_CAT(_name, _elem): \
+#define PARAM_ENUM_CHECK_enum_(_data, _i, _elem) \
+    case FC_PP_CAT(FC_PP_REM _data, _elem): \
         break;
 
-#define PARAM_ENUM2_CHECK_enum_(_1, _name, _i, _elem) \
+#define PARAM_ENUM2_CHECK_enum_(_data, _i, _elem) \
     case (_elem): \
         break;
 
-#define PARAM_ENUM_CHECK_(_1, _args, _param) \
-    PARAM_TYPED(PARAM_ENUM_CHECK_, _param) \
-    (BOOST_PP_TUPLE_ELEM(0, _args), BOOST_PP_TUPLE_ELEM(1, _args), _param)
+#define PARAM_ENUM_CHECK_(_src, _default, _i, _param) \
+    PARAM_TYPED(PARAM_ENUM_CHECK_, _param)(_src, _default, _param)
 
 #define PARAM_ENUM_CHECK_SINGLE(_src, _default, _param) \
     switch (_src(_param)) { \
-        BOOST_PP_SEQ_FOR_EACH_I(PARAM_ENUM_CHECK_enum_, PARAM_FNAME(_param), PARAM_FSEQ(_param)) \
+        FC_PP_FOR_EACH_I_D_LIST(PARAM_ENUM_CHECK_enum_, (PARAM_FNAME(_param)), PARAM_FSEQ(_param)) \
         default: \
             _default(_param); \
     }
 
 #define PARAM_ENUM2_CHECK_SINGLE(_src, _default, _param) \
     switch (_src(_param)) { \
-        BOOST_PP_SEQ_FOR_EACH_I(PARAM_ENUM2_CHECK_enum_, PARAM_FNAME(_param), PARAM_FSEQ(_param)) \
+        FC_PP_FOR_EACH_I_D_LIST(PARAM_ENUM2_CHECK_enum_, (PARAM_FNAME(_param)), PARAM_FSEQ(_param)) \
         default: \
             _default(_param); \
     }
@@ -448,8 +907,7 @@
  *
  * \arg \c _seq: Parameter sequence
  */
-#define PARAM_ENUM_CHECK(_src, _default, _seq) \
-    BOOST_PP_SEQ_FOR_EACH(PARAM_ENUM_CHECK_, (_src, _default), _seq)
+#define PARAM_ENUM_CHECK(_src, _default, _seq) _seq(PARAM_ENUM_CHECK_, 0, _src, _default)
 
 
 #define PARAM_ENUM_STRING_DECLARE_short(...)
@@ -460,10 +918,10 @@
 
 /** Helper for #PARAM_ENUM_STRING_DECLARE */
 #define PARAM_ENUM_STRING_DECLARE_enum(_prefix, _param) \
-    BOOST_PP_CAT(_prefix, PARAM_FNAME(_param))[] = {PARAM_FSEQ_STR(_param), NULL};
+    FC_PP_CAT(_prefix, PARAM_FNAME(_param))[] = {PARAM_FSEQ_STR(_param), NULL};
 
 /** Helper for #PARAM_ENUM_STRING_DECLARE */
-#define PARAM_ENUM_STRING_DECLARE_(_1, _prefix, _param) \
+#define PARAM_ENUM_STRING_DECLARE_(_prefix, _i, _param) \
     PARAM_TYPED(PARAM_ENUM_STRING_DECLARE_, _param)(_prefix, _param)
 
 /** Make \c enum string list
@@ -478,12 +936,11 @@
  *      PARAM_ENUM_STRING_DECLARE(static const char *Enum, MyParamsSeq)
  * \ingroup ParamEnumHelper
  */
-#define PARAM_ENUM_STRING_DECLARE(_prefix, _seq) \
-    BOOST_PP_SEQ_FOR_EACH(PARAM_ENUM_STRING_DECLARE_, _prefix, _seq)
+#define PARAM_ENUM_STRING_DECLARE(_prefix, _seq) _seq(PARAM_ENUM_STRING_DECLARE_, 0, _prefix)
 
 
 /** Helper for #PARAM_INIT */
-#define PARAM_INIT_(_, _src, _i, _param) BOOST_PP_COMMA_IF(_i) _src(_param)(PARAM_FDEF(_param))
+#define PARAM_INIT_(_src, _i, _param) FC_PP_COMMA_IF(_i) _src(_param)(PARAM_FDEF(_param))
 
 /** Constructor initialization
  *
@@ -496,13 +953,12 @@
  * \endcode
  * \ingroup ParamCommon
  */
-#define PARAM_INIT(_src, _seq) BOOST_PP_SEQ_FOR_EACH_I(PARAM_INIT_, _src, _seq)
+// NOTE: The parameter sequence provides _i only as "first/not-first" (0/1).
+#define PARAM_INIT(_src, _seq) _seq(PARAM_INIT_, 0, _src)
 
 
 /** Helper for #PARAM_OP */
-#define PARAM_OP_(_, _args, _param) \
-    BOOST_PP_TUPLE_ELEM(0, _args) \
-    (_param) BOOST_PP_TUPLE_ELEM(1, _args) BOOST_PP_TUPLE_ELEM(2, _args)(_param);
+#define PARAM_OP_(_src, _op, _dst, _i, _param) _src(_param) _op _dst(_param);
 
 /** Perform operation on two instance of each parameter in a sequence
  *
@@ -521,12 +977,12 @@
  *
  * \ingroup ParamCommon
  */
-#define PARAM_OP(_src, _op, _dst, _seq) BOOST_PP_SEQ_FOR_EACH(PARAM_COPY_, (_src, _op, _dst), _seq)
+#define PARAM_OP(_src, _op, _dst, _seq) _seq(PARAM_OP_, 0, _src, _op, _dst)
 
 
 /** Helper for #PARAM_ARGS_DEF */
-#define PARAM_ARGS_DEF_(_, _src, _i, _param) \
-    BOOST_PP_COMMA_IF(_i) PARAM_TYPE(_param) _src(_param) = PARAM_FDEF(_param)
+#define PARAM_ARGS_DEF_(_src, _i, _param) \
+    FC_PP_COMMA_IF(_i) PARAM_TYPE(_param) _src(_param) = PARAM_FDEF(_param)
 
 /** Declare the parameters as function argument list with defaults.
  *
@@ -539,11 +995,11 @@
  * \endcode
  * \ingroup ParamCommon
  */
-#define PARAM_ARGS_DEF(_src, _seq) BOOST_PP_SEQ_FOR_EACH_I(PARAM_ARGS_DEF_, _src, _seq)
+#define PARAM_ARGS_DEF(_src, _seq) _seq(PARAM_ARGS_DEF_, 0, _src)
 
 
 /** Helper for #PARAM_ARGS */
-#define PARAM_ARGS_(_, _src, _i, _param) BOOST_PP_COMMA_IF(_i) PARAM_TYPE(_param) _src(_param)
+#define PARAM_ARGS_(_src, _i, _param) FC_PP_COMMA_IF(_i) PARAM_TYPE(_param) _src(_param)
 
 /** Declare the parameters as function argument list without defaults.
  *
@@ -556,7 +1012,7 @@
  * \endcode
  * \ingroup ParamCommon
  */
-#define PARAM_ARGS(_src, _seq) BOOST_PP_SEQ_FOR_EACH_I(PARAM_ARGS_, _src, _seq)
+#define PARAM_ARGS(_src, _seq) _seq(PARAM_ARGS_, 0, _src)
 
 
 /** \defgroup ParamPy Python helper
@@ -570,13 +1026,13 @@
  */
 
 /** Helper for #PARAM_PY_DOC_enum */
-#define PARAM_PY_DOC_enum_(_i, _elem) BOOST_PP_IF(_i, ",", " ") #_i "=" #_elem
+#define PARAM_PY_DOC_enum_(_i, _elem) FC_PP_IF(_i, ",", " ") #_i "=" #_elem
 
 /** Generate doc for an enum parameter */
 #define PARAM_PY_DOC_enum(_field, _param) \
     "\n* " PARAM_FIELD_STR(_field, _param) "(" PARAM_FDEF_STR( \
         _param \
-    ) "):" PARAM_FOREACH_I(PARAM_PY_DOC_enum_, PARAM_FSEQ(_param)) ". " PARAM_FDOC(_param) "\n"
+    ) "):" FC_PP_FOR_EACH_I_LIST(PARAM_PY_DOC_enum_, PARAM_FSEQ(_param)) ". " PARAM_FDOC(_param) "\n"
 
 /* Generate doc for other type of parameter */
 #define PARAM_PY_DOC_short(_field, _param) \
@@ -586,17 +1042,17 @@
 #define PARAM_PY_DOC_bool PARAM_PY_DOC_short
 #define PARAM_PY_DOC_enum2 PARAM_PY_DOC_enum
 
-#define PARAM_PY_DOC_(_, _field, _param) PARAM_TYPED(PARAM_PY_DOC_, _param)(_field, _param)
+#define PARAM_PY_DOC_(_field, _i, _param) PARAM_TYPED(PARAM_PY_DOC_, _param)(_field, _param)
 
 /* Generate document of a sequence of parameters
  * \ingroup ParamDoc
  */
-#define PARAM_PY_DOC(_field, _seq) BOOST_PP_SEQ_FOR_EACH(PARAM_PY_DOC_, _field, _seq)
+#define PARAM_PY_DOC(_field, _seq) _seq(PARAM_PY_DOC_, 0, _field)
 
 
 /** Helper for #PARAM_PY_ARGS_DOC */
-#define PARAM_PY_ARGS_DOC_(_, _field, _i, _param) \
-    BOOST_PP_IF(_i, ", ", " ") PARAM_FIELD_STR(_field, _param) "=" PARAM_FDEF_STR(_param)
+#define PARAM_PY_ARGS_DOC_(_field, _i, _param) \
+    FC_PP_IF(_i, ", ", " ") PARAM_FIELD_STR(_field, _param) "=" PARAM_FDEF_STR(_param)
 
 /** Generate argument list string
  * \arg \c _field: specifies the \ref ParamField "field" to use as name
@@ -608,11 +1064,11 @@
  *
  * \ingroup ParamDoc
  */
-#define PARAM_PY_ARGS_DOC(_field, _seq) BOOST_PP_SEQ_FOR_EACH_I(PARAM_PY_ARGS_DOC_, _field, _seq)
+#define PARAM_PY_ARGS_DOC(_field, _seq) _seq(PARAM_PY_ARGS_DOC_, 0, _field)
 
 
 /** Helper for #PARAM_FIELDS */
-#define PARAM_FIELDS_(_1, _src, _i, _param) BOOST_PP_COMMA_IF(_i) _src(_param)
+#define PARAM_FIELDS_(_src, _i, _param) FC_PP_COMMA_IF(_i) _src(_param)
 
 /** Expand to a list of the given field in the parameter sequence
  *
@@ -625,7 +1081,8 @@
  * \endcode
  * \ingroup ParamCommon ParamPy
  */
-#define PARAM_FIELDS(_src, _seq) BOOST_PP_SEQ_FOR_EACH_I(PARAM_FIELDS_, _src, _seq)
+#undef PARAM_FIELDS
+#define PARAM_FIELDS(_src, _seq) _seq(PARAM_FIELDS_, 0, _src)
 
 
 #define PARAM_PY_CAST_short(_v) (_v)
@@ -644,8 +1101,8 @@
 
 
 /** Helper for #PARAM_PY_FIELDS */
-#define PARAM_PY_FIELDS_(_1, _src, _i, _param) \
-    BOOST_PP_COMMA_IF(_i) PARAM_TYPED(PARAM_CAST_PY_, _param)(_src(_param), _param)
+#define PARAM_PY_FIELDS_(_src, _i, _param) \
+    FC_PP_COMMA_IF(_i) PARAM_TYPED(PARAM_CAST_PY_, _param)(_src(_param), _param)
 
 /** Expand to a comma separated list of the given field in the sequence
  *
@@ -655,18 +1112,17 @@
  * The field will be casted from python C to C type
  * \ingroup ParamCommon ParamPy
  */
-#define PARAM_PY_FIELDS(_src, _seq) BOOST_PP_SEQ_FOR_EACH_I(PARAM_PY_FIELDS_, _src, _seq)
+#undef PARAM_PY_FIELDS
+#define PARAM_PY_FIELDS(_src, _seq) _seq(PARAM_PY_FIELDS_, 0, _src)
 
 
 /** Helper for #PARAM_FIELD_STRINGS */
-#define PARAM_FIELD_STRINGS_(_1, _field, _i, _param) \
-    BOOST_PP_COMMA_IF(_i) PARAM_FIELD_STR(_field, _param)
+#define PARAM_FIELD_STRINGS_(_field, _i, _param) FC_PP_COMMA_IF(_i) PARAM_FIELD_STR(_field, _param)
 
 /** Expand to a list of stringified fields
  * \ingroup ParamStringizer ParamPy
  */
-#define PARAM_FIELD_STRINGS(_field, _seq) \
-    BOOST_PP_SEQ_FOR_EACH_I(PARAM_FIELD_STRINGS_, _field, _seq)
+#define PARAM_FIELD_STRINGS(_field, _seq) _seq(PARAM_FIELD_STRINGS_, 0, _field)
 
 
 #define PARAM_PYARG_short "h"
@@ -692,12 +1148,13 @@
 #define PARAM_PY_TYPE_enum2 short
 
 /** Helper for #PARAM_PY_DECLARE */
-#define PARAM_PY_DECLARE_(_1, _src, _param) PARAM_TYPED(PARAM_PY_TYPE_, _param) _src(_param);
+#define PARAM_PY_DECLARE_(_src, _i, _param) PARAM_TYPED(PARAM_PY_TYPE_, _param) _src(_param);
 
 /** Declare field variables for Python C type without initialization
  * \ingroup ParamPy
  */
-#define PARAM_PY_DECLARE(_src, _seq) BOOST_PP_SEQ_FOR_EACH(PARAM_PY_DECLARE_, _src, _seq)
+#undef PARAM_PY_DECLARE
+#define PARAM_PY_DECLARE(_src, _seq) _seq(PARAM_PY_DECLARE_, 0, _src)
 
 #define PARAM_PY_INIT_short(_v) _v
 #define PARAM_PY_INIT_long(_v) _v
@@ -707,18 +1164,19 @@
 #define PARAM_PY_INIT_enum2(_v) static_cast<short>(_v)
 
 /** Helper for #PARAM_PY_DECLARE_INIT */
-#define PARAM_PY_DECLARE_INIT_(_1, _src, _param) \
+#define PARAM_PY_DECLARE_INIT_(_src, _i, _param) \
     PARAM_TYPED(PARAM_PY_TYPE_, _param) \
     _src(_param) = PARAM_TYPED(PARAM_PY_INIT_, _param)(PARAM_FDEF(_param));
 
 /** Declare field variables of Python c type with initialization to default
  * \ingroup ParamPy
  */
-#define PARAM_PY_DECLARE_INIT(_src, _seq) BOOST_PP_SEQ_FOR_EACH(PARAM_PY_DECLARE_INIT_, _src, _seq)
+#undef PARAM_PY_DECLARE_INIT
+#define PARAM_PY_DECLARE_INIT(_src, _seq) _seq(PARAM_PY_DECLARE_INIT_, 0, _src)
 
 
 /** Helper for #PARAM_REF */
-#define PARAM_REF_(_1, _src, _i, _param) BOOST_PP_COMMA_IF(_i) & _src(_param)
+#define PARAM_REF_(_src, _i, _param) FC_PP_COMMA_IF(_i) & _src(_param)
 
 /** Generate a list of field references
  *
@@ -731,7 +1189,8 @@
  * \endcode
  * \ingroup ParamPy
  */
-#define PARAM_REF(_src, _seq) BOOST_PP_SEQ_FOR_EACH_I(PARAM_REF_, _src, _seq)
+#undef PARAM_REF
+#define PARAM_REF(_src, _seq) _seq(PARAM_REF_, 0, _src)
 
 #define PARAM_CAST_PYOBJ_short(_v) PyLong_FromLong(_v)
 #define PARAM_CAST_PYOBJ_long(_v) PyLong_FromLong(_v)
@@ -748,11 +1207,11 @@
 #define PARAM_PY_STR(_field, _param) PyUnicode_FromString(PARAM_FIELD_STR(_field, _param))
 
 /** Helper for #PARAM_PY_DICT_SET_VALUE */
-#define PARAM_PY_DICT_SET_VALUE_(_1, _args, _param) \
+#define PARAM_PY_DICT_SET_VALUE_(_dict, _field, _src, _i, _param) \
     PyDict_SetItem( \
-        BOOST_PP_TUPLE_ELEM(0, _args), \
-        PARAM_PY_STR(BOOST_PP_TUPLE_ELEM(1, _args), _param), \
-        PARAM_TYPED(PARAM_CAST_PYOBJ_, _param)(BOOST_PP_TUPLE_ELEM(2, _args)(_param)) \
+        _dict, \
+        PARAM_PY_STR(_field, _param), \
+        PARAM_TYPED(PARAM_CAST_PYOBJ_, _param)(_src(_param)) \
     );
 
 /** Populate a Python dict with a structure variable
@@ -771,16 +1230,17 @@
  * \ingroup ParamPy
  */
 #define PARAM_PY_DICT_SET_VALUE(_dict, _field, _src, _seq) \
-    BOOST_PP_SEQ_FOR_EACH(PARAM_PY_DICT_SET_VALUE_, (_dict, _field, _src), _seq)
+    _seq(PARAM_PY_DICT_SET_VALUE_, 0, _dict, _field, _src)
 
 
-#define PARAM_PY_DICT_DOC_enum_(_i, _elem) BOOST_PP_IF(_i, ",", " ") #_i "=" #_elem
+#define PARAM_PY_DICT_DOC_enum_(_i, _elem) FC_PP_IF(_i, ",", " ") #_i "=" #_elem
 
 /** Generate doc for an enum parameter */
 #define PARAM_PY_DICT_DOC_enum(_param) \
-    "(" PARAM_FDEF_STR( \
-        _param \
-    ) ") - " PARAM_FOREACH_I(PARAM_PY_DOC_enum_, PARAM_FSEQ(_param)) ".\n" PARAM_FDOC(_param) "\n"
+    "(" PARAM_FDEF_STR(_param) ") - " FC_PP_FOR_EACH_I_LIST( \
+        PARAM_PY_DOC_enum_, \
+        PARAM_FSEQ(_param) \
+    ) ".\n" PARAM_FDOC(_param) "\n"
 
 /* Generate doc for other type of parameter */
 #define PARAM_PY_DICT_DOC_(_param) "(" PARAM_FDEF_STR(_param) ") - " PARAM_FDOC(_param) "\n"
@@ -793,10 +1253,10 @@
 #define PARAM_PY_DICT_DOC_enum2 PARAM_PY_DICT_DOC_enum
 
 /** Helper for #PARAM_PY_DICT_SET_DOC */
-#define PARAM_PY_DICT_SET_DOC_(_1, _args, _param) \
+#define PARAM_PY_DICT_SET_DOC_(_dict, _field, _i, _param) \
     PyDict_SetItem( \
-        BOOST_PP_TUPLE_ELEM(0, _args), \
-        PARAM_PY_STR(BOOST_PP_TUPLE_ELEM(1, _args), _param), \
+        _dict, \
+        PARAM_PY_STR(_field, _param), \
         PyUnicode_FromString(PARAM_TYPED(PARAM_PY_DICT_DOC_, _param)(_param)) \
     );
 
@@ -813,8 +1273,7 @@
  * \endcode
  * \ingroup ParamDoc
  */
-#define PARAM_PY_DICT_SET_DOC(_dict, _field, _seq) \
-    BOOST_PP_SEQ_FOR_EACH(PARAM_PY_DICT_SET_DOC_, (_dict, _field), _seq)
+#define PARAM_PY_DICT_SET_DOC(_dict, _field, _seq) _seq(PARAM_PY_DICT_SET_DOC_, 0, _dict, _field)
 
 
 /** \defgroup ParamProperty Property Macros
@@ -844,8 +1303,12 @@
         this->_prop_.setContainer(this); \
         propertyData.addProperty( \
             static_cast<App::PropertyContainer*>(this), \
-            BOOST_PP_STRINGIZE(_prop_), &this->_prop_, (_group_), (_type_), (_Docu_) \
-            ); \
+            FC_PP_STRINGIZE(_prop_), \
+            &this->_prop_, \
+            (_group_), \
+            (_type_), \
+            (_Docu_) \
+        ); \
     } while (0)
 
 /** Generic property adding */
@@ -875,13 +1338,13 @@
     );
 
 /** Helper for #PARAM_PROP_ADD */
-#define PARAM_PROP_ADD_TYPED(_1, _group, _i, _param) \
+#define PARAM_PROP_ADD_TYPED(_group, _i, _param) \
     PARAM_TYPED(PARAM_PROP_ADD_, _param)(_group, _param)
 
 /** Add FreeCAD properties
  * \ingroup ParamProperty
  */
-#define PARAM_PROP_ADD(_group, _seq) BOOST_PP_SEQ_FOR_EACH_I(PARAM_PROP_ADD_TYPED, _group, _seq)
+#define PARAM_PROP_ADD(_group, _seq) _seq(PARAM_PROP_ADD_TYPED, 0, _group)
 
 #define PARAM_PROP_SET_ENUM_short(...)
 #define PARAM_PROP_SET_ENUM_long(...)
@@ -891,21 +1354,20 @@
 
 /** Setup \c enum type parameter */
 #define PARAM_PROP_SET_ENUM_enum(_prefix, _param) \
-    PARAM_FNAME(_param).setEnums(BOOST_PP_CAT(_prefix, PARAM_FNAME(_param)));
+    PARAM_FNAME(_param).setEnums(FC_PP_CAT(_prefix, PARAM_FNAME(_param)));
 
 /** Helper for #PARAM_PROP_SET_ENUM */
-#define PARAM_PROP_SET_ENUM_TYPED(_1, _prefix, _param) \
+#define PARAM_PROP_SET_ENUM_TYPED(_prefix, _i, _param) \
     PARAM_TYPED(PARAM_PROP_SET_ENUM_, _param)(_prefix, _param)
 
 /* Setup the \c enum string list for \c enum type properties
  * \ingroup ParamProperty
  */
-#define PARAM_PROP_SET_ENUM(_prefix, _seq) \
-    BOOST_PP_SEQ_FOR_EACH(PARAM_PROP_SET_ENUM_TYPED, _prefix, _seq)
+#define PARAM_PROP_SET_ENUM(_prefix, _seq) _seq(PARAM_PROP_SET_ENUM_TYPED, 0, _prefix)
 
 
 /** Helper for #PARAM_PROP_ARGS */
-#define PARAM_PROP_ARGS_(_i, _param) BOOST_PP_COMMA_IF(_i) PARAM_FNAME(_param).getValue()
+#define PARAM_PROP_ARGS_(_i, _param) FC_PP_COMMA_IF(_i) PARAM_FNAME(_param).getValue()
 
 /** Expand the property list as function arguments
  *
