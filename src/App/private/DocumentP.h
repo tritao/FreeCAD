@@ -34,9 +34,7 @@
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
-#include <optional>
 
-#include <boost/bimap.hpp>
 #include <boost/graph/adjacency_list.hpp>
 
 #include <CXX/Objects.hxx>
@@ -65,7 +63,6 @@ using Path = std::vector<size_t>;
 
 namespace App
 {
-using HasherMap = boost::bimap<StringHasherRef, int>;
 class Transaction;
 
 // Pimpl class
@@ -97,10 +94,21 @@ struct DocumentP
     unsigned int TransactionLock {0};
     // Id and name that the next transaction will take
     // as soon as there is a change to the document
-    int bookedTransaction { 0 }; 
+    int bookedTransaction { 0 };
 
     std::string programVersion;
-    mutable HasherMap hashers;
+    struct HasherRegistry
+    {
+        void clear()
+        {
+            byIndex.clear();
+            byHasher.clear();
+        }
+
+        std::unordered_map<int, StringHasherRef> byIndex;
+        std::unordered_map<StringHasher*, int> byHasher;
+    };
+    mutable HasherRegistry hashers;
     std::multimap<const App::DocumentObject*, std::unique_ptr<App::DocumentObjectExecReturn>>
         _RecomputeLog;
     ExportInfo exportInfo;
