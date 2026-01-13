@@ -7,9 +7,6 @@ cmake_minimum_required(VERSION 3.5)
 find_package(Qt5Widgets REQUIRED)
 find_package(Qt5Gui REQUIRED)
 
-# Boost
-find_package(Boost COMPONENTS signals REQUIRED)
-
 # Coin3d
 #find_package(Coin3D REQUIRED)
 
@@ -29,8 +26,6 @@ set(FREECAD_LIBPACK_DIR ${CMAKE_SOURCE_DIR} CACHE PATH  "Directory of the FreeCA
 
 # -----------------------------------------------------------------------------
 
-add_definitions(-DBOOST_ALL_DYN_LINK)
-
 include_directories(
     ${FREECAD_SRC_DIR}
 )
@@ -38,7 +33,6 @@ include_directories(
 include_directories(
     SYSTEM
     ${FastSignals_INCLUDE_DIRS}
-    ${Boost_INCLUDE_DIRS}
     #${COIN3D_INCLUDE_DIRS}
     ${PYCXX_INCLUDE_DIR}
     ${Python3_INCLUDE_DIRS}
@@ -58,7 +52,6 @@ set(MyPlugin_SRCS
 )
 
 set(MyPlugin_LIBS
-    ${Boost_LIBRARIES}
     #${COIN3D_LIBRARIES}
     ${Python3_LIBRARIES}
     ${Qt5Core_LIBRARIES}
@@ -76,7 +69,6 @@ set(FreeCADPlugin_SRCS
 )
 
 set(FreeCADPlugin_LIBS
-    ${Boost_LIBRARIES}
     #${COIN3D_LIBRARIES}
     ${Python3_LIBRARIES}
     ${Qt5Core_LIBRARIES}
