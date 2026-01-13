@@ -298,6 +298,7 @@ SET(FreeCADBase_HPP_SRCS
     UnlimitedUnsigned.h
     UniqueNameManager.h
     Uuid.h
+    UuidTag.h
     Vector3D.h
     ViewProj.h
     Writer.h
