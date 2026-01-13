@@ -48,7 +48,6 @@
 #include <boost/geometry/geometries/register/point.hpp>
 #include <boost/iostreams/device/array.hpp>
 #include <boost/iostreams/stream.hpp>
-#include <boost/range/adaptor/map.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/geometry.hpp>
 
