@@ -33,8 +33,7 @@
  * navigation styles, it does not fill many of the global variables defined in
  * NavigationStyle.
  *
- * It uses a statemachine based on boost::statechart to simplify differences in
- * event handling depending on mode.
+ * It uses a small state machine to simplify differences in event handling depending on mode.
  *
  * Dealing with touchscreen gestures with Qt5 on Windows is a pain in the arse.
  *
@@ -81,19 +80,12 @@
 #include "Application.h"
 #include "SoTouchEvents.h"
 #include "View3DInventorViewer.h"
-
-#include <boost/statechart/custom_reaction.hpp>
-#include <boost/statechart/state_machine.hpp>
-#include <boost/statechart/state.hpp>
-
-
-namespace sc = boost::statechart;
 #define NS Gui::GestureNavigationStyle
 
 namespace Gui
 {
 
-class NS::Event: public sc::event<NS::Event>
+class NS::Event
 {
 public:
     Event()
@@ -253,53 +245,66 @@ public:
     };
     std::shared_ptr<Flags> flags;
     // storing these values as a separate unit allows one to effectively write to
-    // const object. Statechart passes all events as const, unfortunately, so
-    // this is a workaround. I've considered casting away const instead, but
-    // the internet seems to have mixed opinion if it's undefined behavior or
-    // not. Also, it seems, statechart can copy the event internally. --DeepSOIC
+    // const object. Events are passed around as const by convention, so this is
+    // a convenient place for state machine logic to put its results.
 };
 
 //------------------------------state machine ---------------------------
 
-class NS::NaviMachine: public sc::state_machine<NS::NaviMachine, NS::IdleState>
+class NS::NaviMachine
 {
 public:
-    using superclass = sc::state_machine<NS::NaviMachine, NS::IdleState>;
+    class State
+    {
+    public:
+        explicit State(NaviMachine& machine)
+            : machine(machine)
+        {}
 
-    explicit NaviMachine(NS& ns)
-        : ns(ns)
-    {}
+        virtual ~State() = default;
+        virtual void onEnter(const NS::Event* /*ev*/)
+        {}
+        virtual void react(const NS::Event& ev) = 0;
+
+    protected:
+        NaviMachine& machine;
+    };
+
+    explicit NaviMachine(NS& ns);
+    void processEvent(NS::Event& ev);
+
+    template<typename TState>
+    void requestTransit(const NS::Event& ev)
+    {
+        pending.reset(new TState(*this));
+        pendingEnterEvent = &ev;
+    }
+
     NS& ns;
 
-public:
-    virtual void processEvent(NS::Event& ev)
-    {
-        if (ns.logging) {
-            ev.log();
-        }
-        this->process_event(ev);
-    }
+private:
+    std::unique_ptr<State> state;
+    std::unique_ptr<State> pending;
+    const NS::Event* pendingEnterEvent {nullptr};
 };
 
-class NS::IdleState: public sc::state<NS::IdleState, NS::NaviMachine>
+class NS::IdleState: public NS::NaviMachine::State
 {
 public:
-    using reactions = sc::custom_reaction<NS::Event>;
+    using State::State;
 
-    explicit IdleState(my_context ctx)
-        : my_base(ctx)
+    void onEnter(const NS::Event* /*ev*/) override
     {
-        auto& ns = this->outermost_context().ns;
+        auto& ns = machine.ns;
         ns.setViewingMode(NavigationStyle::IDLE);
         if (ns.logging) {
             Base::Console().log(" -> IdleState\n");
         }
     }
-    virtual ~IdleState() = default;
 
-    sc::result react(const NS::Event& ev)
+    void react(const NS::Event& ev) override
     {
-        auto& ns = this->outermost_context().ns;
+        auto& ns = machine.ns;
 
         auto posn = ns.normalizePixelPos(ev.inventor_event->getPosition());
 
@@ -311,7 +316,8 @@ public:
                                                                        // interactiveCountInc()
                     ns.setViewingMode(NavigationStyle::SEEK_MODE);
                     ev.flags->processed = true;
-                    return transit<NS::AwaitingReleaseState>();
+                    machine.requestTransit<NS::AwaitingReleaseState>(ev);
+                    return;
                 }
             };  // not end of SEEK_WAIT_MODE. Fall through by design!!!
                 /* FALLTHRU */
@@ -321,7 +327,8 @@ public:
                 if (!ev.flags->processed) {
                     if (ev.isMouseButtonEvent()) {
                         ev.flags->processed = true;
-                        return transit<NS::AwaitingReleaseState>();
+                        machine.requestTransit<NS::AwaitingReleaseState>(ev);
+                        return;
                     }
                     else if (ev.isGestureEvent() || ev.isKeyboardEvent() || ev.isMotion3Event()) {
                         ns.setViewingMode(NavigationStyle::IDLE);
@@ -329,13 +336,14 @@ public:
                 }
             } break;  // end of animation modes
             case BOXZOOM:
-                return forward_event();
+                return;
         }
 
         // testing for draggers
         if (ev.isPress(1) && ev.mbstate() == 0x100) {
             if (ns.isDraggerUnderCursor(ev.inventor_event->getPosition())) {
-                return transit<NS::InteractState>();
+                machine.requestTransit<NS::InteractState>(ev);
+                return;
             }
         }
 
@@ -343,7 +351,8 @@ public:
         if ((ev.isPress(1) && ev.mbstate() == 0x100) || (ev.isPress(2) && ev.mbstate() == 0x001)) {
             ns.postponedEvents.post(ev);
             ev.flags->processed = true;
-            return transit<NS::AwaitingMoveState>();
+            machine.requestTransit<NS::AwaitingMoveState>(ev);
+            return;
         }
 
         // MMB click
@@ -351,13 +360,15 @@ public:
             ev.flags->processed = true;
             ns.setupPanningPlane(ns.viewer->getCamera());
             ns.lookAtPoint(ev.inventor_event->getPosition());
-            return transit<NS::AwaitingReleaseState>();
+            machine.requestTransit<NS::AwaitingReleaseState>(ev);
+            return;
         }
 
         // touchscreen gestures
         if (ev.isGestureActive()) {
             ev.flags->processed = true;
-            return transit<NS::GestureState>();
+            machine.requestTransit<NS::GestureState>(ev);
+            return;
         }
 
         // keyboard
@@ -387,34 +398,58 @@ public:
                     ev.flags->processed = false;
             }
         }
-
-        return forward_event();
     }
 };
 
-class NS::AwaitingMoveState: public sc::state<NS::AwaitingMoveState, NS::NaviMachine>
+NS::NaviMachine::NaviMachine(NS& ns)
+    : ns(ns)
 {
-public:
-    using reactions = sc::custom_reaction<NS::Event>;
+    state.reset(new IdleState(*this));
+    state->onEnter(nullptr);
+}
 
+void NS::NaviMachine::processEvent(NS::Event& ev)
+{
+    if (ns.logging) {
+        ev.log();
+    }
+    if (!state) {
+        state.reset(new IdleState(*this));
+        state->onEnter(nullptr);
+    }
+
+    pending.reset();
+    pendingEnterEvent = nullptr;
+
+    state->react(ev);
+
+    if (pending) {
+        state = std::move(pending);
+        state->onEnter(pendingEnterEvent);
+    }
+}
+
+class NS::AwaitingMoveState: public NS::NaviMachine::State
+{
 private:
     SbVec2s base_pos;
     SbTime since;      // the time of mouse-down event
     int hold_timeout;  // in milliseconds
 
 public:
-    explicit AwaitingMoveState(my_context ctx)
-        : my_base(ctx)
+    using State::State;
+
+    void onEnter(const NS::Event* triggeringEvent) override
     {
-        auto& ns = this->outermost_context().ns;
+        auto& ns = machine.ns;
         if (ns.logging) {
             Base::Console().log(" -> AwaitingMoveState\n");
         }
         ns.setViewingMode(NavigationStyle::IDLE);
-        this->base_pos
-            = static_cast<const NS::Event*>(this->triggering_event())->inventor_event->getPosition();
-        this->since
-            = static_cast<const NS::Event*>(this->triggering_event())->inventor_event->getTime();
+        if (triggeringEvent) {
+            this->base_pos = triggeringEvent->inventor_event->getPosition();
+            this->since = triggeringEvent->inventor_event->getTime();
+        }
 
         ns.mouseMoveThreshold = App::GetApplication()
                                     .GetParameterGroupByPath("User parameter:BaseApp/Preferences/View")
@@ -433,15 +468,16 @@ public:
         // Tap-and-hold altogether, but my attempts to use ungrabGesture and
         // unregisterRecognizer routines failed to affect anything.
     }
-    virtual ~AwaitingMoveState()
+
+    ~AwaitingMoveState() override
     {
         // always clear postponed events when leaving this state.
-        this->outermost_context().ns.postponedEvents.discardAll();
+        machine.ns.postponedEvents.discardAll();
     }
 
-    sc::result react(const NS::Event& ev)
+    void react(const NS::Event& ev) override
     {
-        auto& ns = this->outermost_context().ns;
+        auto& ns = machine.ns;
 
         /// refire(): forwards all postponed events + this event
         auto refire = [&] {
@@ -460,7 +496,8 @@ public:
         if (ev.isRelease(2) && ev.mbstate() == 0 && !ns.viewer->isEditing()
             && ns.isPopupMenuEnabled()) {
             ns.openPopupMenu(ev.inventor_event->getPosition());
-            return transit<NS::IdleState>();
+            machine.requestTransit<NS::IdleState>(ev);
+            return;
         }
 
         // roll gestures
@@ -476,7 +513,8 @@ public:
         // The roll gesture is fired when one of the two buttons in then released.
         if ((ev.isRelease(1) && ev.mbstate() == 0x001) || (ev.isRelease(2) && ev.mbstate() == 0x100)) {
             ns.onRollGesture(ns.rollDir);
-            return transit<NS::AwaitingReleaseState>();
+            machine.requestTransit<NS::AwaitingReleaseState>(ev);
+            return;
         }
 
         if (ev.isMouseButtonEvent() && ev.mbstate() == 0) {
@@ -484,19 +522,22 @@ public:
             if (long_click) {
                 // emulate RMB-click
                 ns.openPopupMenu(ev.inventor_event->getPosition());
-                return transit<NS::IdleState>();
+                machine.requestTransit<NS::IdleState>(ev);
+                return;
             }
             else {
                 // refire all events && return to idle state
                 ns.setViewingMode(NavigationStyle::SELECTION);
                 refire();
-                return transit<NS::IdleState>();
+                machine.requestTransit<NS::IdleState>(ev);
+                return;
             }
         }
         if (ev.isPress(3)) {
             // mmb pressed, exit navigation
             refire();
-            return transit<NS::IdleState>();
+            machine.requestTransit<NS::IdleState>(ev);
+            return;
         }
         if (ev.isMouseButtonEvent() /* and still not processed*/) {
             ns.postponedEvents.post(ev);
@@ -510,7 +551,8 @@ public:
                         ns.tryStartBoxSelection(this->base_pos, event, ev.modifiers & NS::Event::CTRLDOWN)
                     ) {
                         ev.flags->processed = true;
-                        return transit<NS::IdleState>();
+                        machine.requestTransit<NS::IdleState>(ev);
+                        return;
                     }
                 }
                 // mouse moved while buttons are held. decide how to navigate...
@@ -520,53 +562,56 @@ public:
                             bool alt = ev.modifiers & NS::Event::ALTDOWN;
                             bool allowSpin = alt == ns.is2DViewing();
                             if (allowSpin) {
-                                return transit<NS::RotateState>();
+                                machine.requestTransit<NS::RotateState>(ev);
+                                return;
                             }
                             else {
                                 refire();
-                                return transit<NS::IdleState>();
+                                machine.requestTransit<NS::IdleState>(ev);
+                                return;
                             }
                         }
                         else {
-                            return transit<NS::StickyPanState>();
+                            machine.requestTransit<NS::StickyPanState>(ev);
+                            return;
                         }
                     } break;
                     case 0x001:
-                        return transit<NS::PanState>();
-                        break;
+                        machine.requestTransit<NS::PanState>(ev);
+                        return;
                     case (0x101):
-                        return transit<NS::TiltState>();
-                        break;
+                        machine.requestTransit<NS::TiltState>(ev);
+                        return;
                     default:
                         // MMB was held? refire all events.
                         refire();
-                        return transit<NS::IdleState>();
+                        machine.requestTransit<NS::IdleState>(ev);
+                        return;
                 }
             }
         }
         if (ev.isGestureActive()) {
             ev.flags->processed = true;
-            return transit<NS::GestureState>();
+            machine.requestTransit<NS::GestureState>(ev);
         }
-        return forward_event();
     }
 };
 
-class NS::RotateState: public sc::state<NS::RotateState, NS::NaviMachine>
+class NS::RotateState: public NS::NaviMachine::State
 {
-public:
-    using reactions = sc::custom_reaction<NS::Event>;
-
 private:
     SbVec2s base_pos;
 
 public:
-    explicit RotateState(my_context ctx)
-        : my_base(ctx)
+    using State::State;
+
+    void onEnter(const NS::Event* triggeringEvent) override
     {
-        auto& ns = this->outermost_context().ns;
-        const auto inventorEvent
-            = static_cast<const NS::Event*>(this->triggering_event())->inventor_event;
+        auto& ns = machine.ns;
+        if (!triggeringEvent) {
+            return;
+        }
+        const auto inventorEvent = triggeringEvent->inventor_event;
         ns.saveCursorPosition(inventorEvent);
         ns.setViewingMode(NavigationStyle::DRAGGING);
         this->base_pos = inventorEvent->getPosition();
@@ -574,70 +619,70 @@ public:
             Base::Console().log(" -> RotateState\n");
         }
     }
-    virtual ~RotateState() = default;
 
-    sc::result react(const NS::Event& ev)
+    void react(const NS::Event& ev) override
     {
         if (ev.isMouseButtonEvent()) {
             ev.flags->processed = true;
             if (ev.mbstate() == 0x101) {
-                return transit<NS::TiltState>();
+                machine.requestTransit<NS::TiltState>(ev);
+                return;
             }
             if (ev.mbstate() == 0) {
-                return transit<NS::IdleState>();
+                machine.requestTransit<NS::IdleState>(ev);
+                return;
             }
         }
         if (ev.isLocation2Event()) {
             ev.flags->processed = true;
             SbVec2s pos = ev.inventor_event->getPosition();
-            auto& ns = this->outermost_context().ns;
+            auto& ns = machine.ns;
             ns.spin_simplified(ns.normalizePixelPos(pos), ns.normalizePixelPos(this->base_pos));
             this->base_pos = pos;
         }
-        return forward_event();
     }
 };
 
-class NS::PanState: public sc::state<NS::PanState, NS::NaviMachine>
+class NS::PanState: public NS::NaviMachine::State
 {
-public:
-    using reactions = sc::custom_reaction<NS::Event>;
-
 private:
     SbVec2s base_pos;
     float ratio;
 
 public:
-    explicit PanState(my_context ctx)
-        : my_base(ctx)
+    using State::State;
+
+    void onEnter(const NS::Event* triggeringEvent) override
     {
-        auto& ns = this->outermost_context().ns;
+        auto& ns = machine.ns;
         ns.setViewingMode(NavigationStyle::PANNING);
-        this->base_pos
-            = static_cast<const NS::Event*>(this->triggering_event())->inventor_event->getPosition();
+        if (triggeringEvent) {
+            this->base_pos = triggeringEvent->inventor_event->getPosition();
+        }
         if (ns.logging) {
             Base::Console().log(" -> PanState\n");
         }
         this->ratio = ns.viewer->getSoRenderManager()->getViewportRegion().getViewportAspectRatio();
         ns.setupPanningPlane(ns.viewer->getSoRenderManager()->getCamera());  // set up panningplane
     }
-    virtual ~PanState() = default;
 
-    sc::result react(const NS::Event& ev)
+    void react(const NS::Event& ev) override
     {
         if (ev.isMouseButtonEvent()) {
             ev.flags->processed = true;
             if (ev.mbstate() == 0x101) {
-                return transit<NS::TiltState>();
+                machine.requestTransit<NS::TiltState>(ev);
+                return;
             }
             if (ev.mbstate() == 0) {
-                return transit<NS::IdleState>();
+                machine.requestTransit<NS::IdleState>(ev);
+                return;
             }
         }
         if (ev.isLocation2Event()) {
             ev.flags->processed = true;
             SbVec2s pos = ev.inventor_event->getPosition();
-            auto& ns = this->outermost_context().ns;
+            auto& ns = machine.ns;
             ns.panCamera(
                 ns.viewer->getSoRenderManager()->getCamera(),
                 this->ratio,
@@ -647,52 +692,52 @@ public:
             );
             this->base_pos = pos;
         }
-        return forward_event();
     }
 };
 
-class NS::StickyPanState: public sc::state<NS::StickyPanState, NS::NaviMachine>
+class NS::StickyPanState: public NS::NaviMachine::State
 {
-public:
-    using reactions = sc::custom_reaction<NS::Event>;
-
 private:
     SbVec2s base_pos;
     float ratio;
 
 public:
-    explicit StickyPanState(my_context ctx)
-        : my_base(ctx)
+    using State::State;
+
+    void onEnter(const NS::Event* triggeringEvent) override
     {
-        auto& ns = this->outermost_context().ns;
+        auto& ns = machine.ns;
         ns.setViewingMode(NavigationStyle::PANNING);
-        this->base_pos
-            = static_cast<const NS::Event*>(this->triggering_event())->inventor_event->getPosition();
+        if (triggeringEvent) {
+            this->base_pos = triggeringEvent->inventor_event->getPosition();
+        }
         if (ns.logging) {
             Base::Console().log(" -> StickyPanState\n");
         }
         this->ratio = ns.viewer->getSoRenderManager()->getViewportRegion().getViewportAspectRatio();
         ns.setupPanningPlane(ns.viewer->getSoRenderManager()->getCamera());  // set up panningplane
     }
-    virtual ~StickyPanState()
+
+    ~StickyPanState() override
     {
-        auto& ns = this->outermost_context().ns;
+        auto& ns = machine.ns;
         ns.button2down = false;  // a workaround for dealing with Qt not sending UP event after a
                                  // tap-hold-drag sequence.
     }
 
-    sc::result react(const NS::Event& ev)
+    void react(const NS::Event& ev) override
     {
         if (ev.isMouseButtonEvent()) {
             ev.flags->processed = true;
             if (ev.isRelease(1)) {
-                return transit<NS::IdleState>();
+                machine.requestTransit<NS::IdleState>(ev);
+                return;
             }
         }
         if (ev.isLocation2Event()) {
             ev.flags->processed = true;
             SbVec2s pos = ev.inventor_event->getPosition();
-            auto& ns = this->outermost_context().ns;
+            auto& ns = machine.ns;
             ns.panCamera(
                 ns.viewer->getSoRenderManager()->getCamera(),
                 this->ratio,
@@ -702,79 +747,77 @@ public:
             );
             this->base_pos = pos;
         }
-        return forward_event();
     }
 };
 
-class NS::TiltState: public sc::state<NS::TiltState, NS::NaviMachine>
+class NS::TiltState: public NS::NaviMachine::State
 {
-public:
-    using reactions = sc::custom_reaction<NS::Event>;
-
 private:
     SbVec2s base_pos;
 
 public:
-    explicit TiltState(my_context ctx)
-        : my_base(ctx)
+    using State::State;
+
+    void onEnter(const NS::Event* triggeringEvent) override
     {
-        auto& ns = this->outermost_context().ns;
+        auto& ns = machine.ns;
         ns.setRotationCenter(ns.viewer->getFocalPoint());
         ns.setViewingMode(NavigationStyle::DRAGGING);
-        this->base_pos
-            = static_cast<const NS::Event*>(this->triggering_event())->inventor_event->getPosition();
+        if (triggeringEvent) {
+            this->base_pos = triggeringEvent->inventor_event->getPosition();
+        }
         if (ns.logging) {
             Base::Console().log(" -> TiltState\n");
         }
         ns.setupPanningPlane(ns.viewer->getSoRenderManager()->getCamera());  // set up panningplane
     }
-    virtual ~TiltState() = default;
 
-    sc::result react(const NS::Event& ev)
+    void react(const NS::Event& ev) override
     {
         if (ev.isMouseButtonEvent()) {
             ev.flags->processed = true;
             if (ev.mbstate() == 0x001) {
-                return transit<NS::PanState>();
+                machine.requestTransit<NS::PanState>(ev);
+                return;
             }
             if (ev.mbstate() == 0x100) {
-                return transit<NS::RotateState>();
+                machine.requestTransit<NS::RotateState>(ev);
+                return;
             }
             if (ev.mbstate() == 0) {
-                return transit<NS::IdleState>();
+                machine.requestTransit<NS::IdleState>(ev);
+                return;
             }
         }
         if (ev.isLocation2Event()) {
             ev.flags->processed = true;
-            auto& ns = this->outermost_context().ns;
+            auto& ns = machine.ns;
             SbVec2s pos = ev.inventor_event->getPosition();
             float dx = (ns.normalizePixelPos(pos) - ns.normalizePixelPos(base_pos))[0];
             ns.doRotate(ns.viewer->getSoRenderManager()->getCamera(), dx * (-2), SbVec2f(0.5, 0.5));
             this->base_pos = pos;
         }
-        return forward_event();
     }
 };
 
 
-class NS::GestureState: public sc::state<NS::GestureState, NS::NaviMachine>
+class NS::GestureState: public NS::NaviMachine::State
 {
-public:
-    using reactions = sc::custom_reaction<NS::Event>;
-
 private:
     SbVec2s base_pos;
     float ratio;
     bool enableTilt = false;
 
 public:
-    explicit GestureState(my_context ctx)
-        : my_base(ctx)
+    using State::State;
+
+    void onEnter(const NS::Event* triggeringEvent) override
     {
-        auto& ns = this->outermost_context().ns;
+        auto& ns = machine.ns;
         ns.setViewingMode(NavigationStyle::PANNING);
-        this->base_pos
-            = static_cast<const NS::Event*>(this->triggering_event())->inventor_event->getPosition();
+        if (triggeringEvent) {
+            this->base_pos = triggeringEvent->inventor_event->getPosition();
+        }
         if (ns.logging) {
             Base::Console().log(" -> GestureState\n");
         }
@@ -784,24 +827,26 @@ public:
                            .GetParameterGroupByPath("User parameter:BaseApp/Preferences/View")
                            ->GetBool("DisableTouchTilt", true));
     }
-    virtual ~GestureState()
+
+    ~GestureState() override
     {
-        auto& ns = this->outermost_context().ns;
+        auto& ns = machine.ns;
         // a workaround for Qt not always sending release evends during touchecreen gestures on Windows
         ns.button1down = false;
         ns.button2down = false;
     }
 
-    sc::result react(const NS::Event& ev)
+    void react(const NS::Event& ev) override
     {
-        auto& ns = this->outermost_context().ns;
+        auto& ns = machine.ns;
         if (ev.isMouseButtonEvent()) {
             ev.flags->processed = true;
             if (ev.mbstate() == 0) {
                 // a fail-safe: if gesture end event doesn't arrive, a mouse click should be able to
                 // stop this mode.
                 Base::Console().warning("leaving gesture state by mouse-click (fail-safe)\n");
-                return transit<NS::IdleState>();
+                machine.requestTransit<NS::IdleState>(ev);
+                return;
             }
         }
         if (ev.isLocation2Event()) {
@@ -812,11 +857,13 @@ public:
         if (ev.isGestureEvent()) {
             ev.flags->processed = true;
             if (ev.asGestureEvent()->state == SoGestureEvent::SbGSEnd) {
-                return transit<NS::IdleState>();
+                machine.requestTransit<NS::IdleState>(ev);
+                return;
             }
             else if (ev.asGestureEvent()->state == SoGestureEvent::SbGsCanceled) {
                 // should maybe undo the camera change caused by gesture events received so far...
-                return transit<NS::IdleState>();
+                machine.requestTransit<NS::IdleState>(ev);
+                return;
                 //} else if (ev.asGestureEvent()->state == SoGestureEvent::SbGSStart){
                 //    //ignore?
             }
@@ -859,34 +906,31 @@ public:
                 ev.flags->processed = false;
             }
         }
-        return forward_event();
     }
 };
 
-class NS::AwaitingReleaseState: public sc::state<NS::AwaitingReleaseState, NS::NaviMachine>
+class NS::AwaitingReleaseState: public NS::NaviMachine::State
 {
 public:
-    using reactions = sc::custom_reaction<NS::Event>;
+    using State::State;
 
-public:
-    explicit AwaitingReleaseState(my_context ctx)
-        : my_base(ctx)
+    void onEnter(const NS::Event* /*ev*/) override
     {
-        auto& ns = this->outermost_context().ns;
+        auto& ns = machine.ns;
         if (ns.logging) {
             Base::Console().log(" -> AwaitingReleaseState\n");
         }
     }
-    virtual ~AwaitingReleaseState() = default;
 
-    sc::result react(const NS::Event& ev)
+    void react(const NS::Event& ev) override
     {
-        auto& ns = this->outermost_context().ns;
+        auto& ns = machine.ns;
 
         if (ev.isMouseButtonEvent()) {
             ev.flags->processed = true;
             if (ev.mbstate() == 0) {
-                return transit<NS::IdleState>();
+                machine.requestTransit<NS::IdleState>(ev);
+                return;
             }
         }
 
@@ -911,38 +955,35 @@ public:
         if (ev.isGestureActive()) {
             ev.flags->processed = true;
             // another gesture can start...
-            return transit<NS::GestureState>();
+            machine.requestTransit<NS::GestureState>(ev);
+            return;
         }
-        return forward_event();
     }
 };
 
-class NS::InteractState: public sc::state<NS::InteractState, NS::NaviMachine>
+class NS::InteractState: public NS::NaviMachine::State
 {
 public:
-    using reactions = sc::custom_reaction<NS::Event>;
+    using State::State;
 
-public:
-    explicit InteractState(my_context ctx)
-        : my_base(ctx)
+    void onEnter(const NS::Event* /*ev*/) override
     {
-        auto& ns = this->outermost_context().ns;
+        auto& ns = machine.ns;
         ns.setViewingMode(NavigationStyle::INTERACT);
         if (ns.logging) {
             Base::Console().log(" -> InteractState\n");
         }
     }
-    virtual ~InteractState() = default;
 
-    sc::result react(const NS::Event& ev)
+    void react(const NS::Event& ev) override
     {
         if (ev.isMouseButtonEvent()) {
             ev.flags->processed = false;  // feed all events to the dragger/whatever
             if (ev.mbstate() == 0) {      // all buttons released?
-                return transit<NS::IdleState>();
+                machine.requestTransit<NS::IdleState>(ev);
+                return;
             }
         }
-        return forward_event();
     }
 };
 
@@ -962,7 +1003,6 @@ GestureNavigationStyle::GestureNavigationStyle()
                         .GetParameterGroupByPath("User parameter:BaseApp/Preferences/View")
                         ->GetBool("NavigationDebug");
     mouseMoveThreshold = QApplication::startDragDistance();
-    naviMachine->initiate();
 }
 
 GestureNavigationStyle::~GestureNavigationStyle() = default;
