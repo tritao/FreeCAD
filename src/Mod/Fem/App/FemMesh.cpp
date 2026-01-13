@@ -53,8 +53,6 @@
 #include <TopoDS_Vertex.hxx>
 #include <gp_Pnt.hxx>
 
-#include <boost/assign/list_of.hpp>
-
 #include <App/Application.h>
 #include <Base/Console.h>
 #include <Base/Exception.h>
@@ -76,8 +74,6 @@
 
 using namespace Fem;
 using namespace Base;
-using namespace boost;
-
 SMESH_Gen* FemMesh::_mesh_gen = nullptr;
 
 TYPESYSTEM_SOURCE(Fem::FemMesh, Base::Persistence)
@@ -491,8 +487,8 @@ std::map<int, int> FemMesh::getccxVolumesByFace(const TopoDS_Face& face) const
 
     static std::map<int, std::vector<int>> elem_order;
     if (elem_order.empty()) {
-        std::vector<int> c3d4 = boost::assign::list_of(1)(0)(2)(3);
-        std::vector<int> c3d10 = boost::assign::list_of(1)(0)(2)(3)(4)(6)(5)(8)(7)(9);
+        std::vector<int> c3d4 {1, 0, 2, 3};
+        std::vector<int> c3d10 {1, 0, 2, 3, 4, 6, 5, 8, 7, 9};
 
         elem_order.insert(std::make_pair(c3d4.size(), c3d4));
         elem_order.insert(std::make_pair(c3d10.size(), c3d10));
@@ -1826,11 +1822,11 @@ void FemMesh::writeABAQUS(
     //
     // seg2 FreeCAD --> B31, B31R, T3D2 CalculiX
     // N1, N2
-    std::vector<int> seg2 = boost::assign::list_of(0)(1);
+    std::vector<int> seg2 {0, 1};
     //
     // seg3 FreeCAD --> B32, B32R, T3D3 D CalculiX
     // N1, N3, N2
-    std::vector<int> seg3 = boost::assign::list_of(0)(2)(1);
+    std::vector<int> seg3 {0, 2, 1};
 
     elemOrderMap.insert(std::make_pair(variants["Seg2"], seg2));
     edgeTypeMap.insert(std::make_pair(seg2.size(), variants["Seg2"]));
@@ -1841,19 +1837,19 @@ void FemMesh::writeABAQUS(
     //
     // tria3 FreeCAD --> S3, M3D3, CPS3, CPE3, CAX3 CalculiX
     // N1, N2, N3
-    std::vector<int> tria3 = boost::assign::list_of(0)(1)(2);
+    std::vector<int> tria3 {0, 1, 2};
     //
     // tria6 FreeCAD --> S6 M3D6, CPS6, CPE6, CAX6 CalculiX
     // N1, N2, N3, N4, N5, N6
-    std::vector<int> tria6 = boost::assign::list_of(0)(1)(2)(3)(4)(5);
+    std::vector<int> tria6 {0, 1, 2, 3, 4, 5};
     //
     // quad4 FreeCAD --> S4, S4R, M3D4, M3D4R, CPS4, CPS4R, CPE4, CPE4R, CAX4, CAX4R CalculiX
     // N1, N2, N3, N4
-    std::vector<int> quad4 = boost::assign::list_of(0)(1)(2)(3);
+    std::vector<int> quad4 {0, 1, 2, 3};
     //
     // quad8 FreeCAD --> S8, S8R, M3D8, M3D8R, CPS8, CPS8R, CPE8, CPE8R, CAX8, CAX8R CalculiX
     // N1, N2, N3, N4, N5, N6, N7, N8
-    std::vector<int> quad8 = boost::assign::list_of(0)(1)(2)(3)(4)(5)(6)(7);
+    std::vector<int> quad8 {0, 1, 2, 3, 4, 5, 6, 7};
 
     elemOrderMap.insert(std::make_pair(variants["Tria3"], tria3));
     faceTypeMap.insert(std::make_pair(tria3.size(), variants["Tria3"]));
@@ -1869,29 +1865,28 @@ void FemMesh::writeABAQUS(
     //
     // tetra4 FreeCAD --> C3D4, F3D4 CalculiX
     // N2, N1, N3, N4
-    std::vector<int> tetra4 = boost::assign::list_of(1)(0)(2)(3);
+    std::vector<int> tetra4 {1, 0, 2, 3};
     // tetra10: FreeCAD --> C3D10, C3D10T CalculiX
     // N2, N1, N3, N4, N5, N7, N6, N9, N8, N10
-    std::vector<int> tetra10 = boost::assign::list_of(1)(0)(2)(3)(4)(6)(5)(8)(7)(9);
+    std::vector<int> tetra10 {1, 0, 2, 3, 4, 6, 5, 8, 7, 9};
 
     // tetra node order for the system which is used for hexa8, hexa20, penta6 and penta15
     // be careful with activating because of method getccxVolumesByFace())
     // hexa8 FreeCAD --> C3D8, C3D8R, C3D8I, F3D8 CalculiX
     // N6, N7, N8, N5, N2, N3, N4, N1
-    std::vector<int> hexa8 = boost::assign::list_of(5)(6)(7)(4)(1)(2)(3)(0);
+    std::vector<int> hexa8 {5, 6, 7, 4, 1, 2, 3, 0};
     //
     // hexa20 FreeCAD --> C3D20, C3D20R CalculiX
     // N6, N7, N8, N5, N2, N3, N4, N1, N14, N15, N16, N13, N10, N11, N12, N9, N18, N19, N20, N17
-    std::vector<int> hexa20
-        = boost::assign::list_of(5)(6)(7)(4)(1)(2)(3)(0)(13)(14)(15)(12)(9)(10)(11)(8)(17)(18)(19)(16);
+    std::vector<int> hexa20 {5, 6, 7, 4, 1, 2, 3, 0, 13, 14, 15, 12, 9, 10, 11, 8, 17, 18, 19, 16};
     //
     // penta6 FreeCAD --> C3D6, F3D6 CalculiX
     // N5, N6, N4, N2, N3, N1
-    std::vector<int> penta6 = boost::assign::list_of(4)(5)(3)(1)(2)(0);
+    std::vector<int> penta6 {4, 5, 3, 1, 2, 0};
     //
     // penta15 FreeCAD --> C3D15 CalculiX
     // N5, N6, N4, N2, N3, N1, N11, N12, N10, N8, N9, N7, N14, N15, N13
-    std::vector<int> penta15 = boost::assign::list_of(4)(5)(3)(1)(2)(0)(10)(11)(9)(7)(8)(6)(13)(14)(12);
+    std::vector<int> penta15 {4, 5, 3, 1, 2, 0, 10, 11, 9, 7, 8, 6, 13, 14, 12};
 
     elemOrderMap.insert(std::make_pair(variants["Tetra4"], tetra4));
     volTypeMap.insert(std::make_pair(tetra4.size(), variants["Tetra4"]));
