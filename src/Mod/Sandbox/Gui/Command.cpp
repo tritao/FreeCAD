@@ -50,11 +50,10 @@
 # include <Inventor/nodes/SoImage.h>
 # include <Inventor/nodes/SoCone.h>
 # include <cmath>
-# include <boost/thread/thread.hpp>
-# include <boost/thread/mutex.hpp>
-# include <boost/thread/condition_variable.hpp>
-# include <boost/thread/future.hpp>
-# include <boost/bind/bind.hpp>
+# include <future>
+# include <mutex>
+# include <thread>
+# include <utility>
 # include <memory>
 
 #include <Base/Console.h>
@@ -78,8 +77,6 @@
 #include "Workbench.h"
 #include "GLGraphicsView.h"
 #include "TaskPanelView.h"
-
-namespace bp = boost::placeholders;
 
 DEF_STD_CMD(CmdSandboxDocumentThread)
 
@@ -641,15 +638,15 @@ void CmdSandboxMeshLoaderBoost::activated(int)
     QString fn = Gui::FileDialog::getOpenFileName(Gui::getMainWindow(),
         QObject::tr("Import mesh"), QString(), filter.join(QLatin1String(";;")));
 
-    boost::packaged_task< Base::Reference<Mesh::MeshObject> > pt
-        (boost::bind(&loadMesh, fn));
-    boost::unique_future< Base::Reference<Mesh::MeshObject> > fi=pt.get_future();
-    boost::thread task(boost::move(pt)); // launch task on a thread
-    fi.wait(); // wait for it to be finished
+    std::packaged_task<Base::Reference<Mesh::MeshObject>()> task([fn] { return loadMesh(fn); });
+    std::future<Base::Reference<Mesh::MeshObject>> future = task.get_future();
+    std::thread worker(std::move(task));  // launch task on a thread
+    worker.detach();
+    future.wait(); // wait for it to be finished
 
     App::Document* doc = App::GetApplication().getActiveDocument();
     Mesh::Feature* mesh = doc->addObject<Mesh::Feature>("Mesh");
-    mesh->Mesh.setValuePtr((Mesh::MeshObject*)fi.get());
+    mesh->Mesh.setValuePtr((Mesh::MeshObject*)future.get());
     mesh->purgeTouched();
 }
 
@@ -823,7 +820,9 @@ void CmdSandboxMeshTestJob::activated(int)
         Base::Console().message("Mesh test (step %d)…\n",iteration++);
         MeshTestJob meshJob;
         QFuture<Mesh::MeshObject*> mesh_future = QtConcurrent::mapped
-            (mesh_groups, boost::bind(&MeshTestJob::run, &meshJob, bp::_1));
+            (mesh_groups, [&meshJob](const Mesh::MeshObjectConstRefArray& group) {
+                return meshJob.run(group);
+            });
 
         // keep it responsive during computation
         QFutureWatcher<Mesh::MeshObject*> mesh_watcher;
