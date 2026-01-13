@@ -54,13 +54,13 @@
 #include <gp_Pnt.hxx>
 
 #include <boost/assign/list_of.hpp>
-#include <boost/tokenizer.hpp>  //to simplify parsing input files we use the boost lib
 
 #include <App/Application.h>
 #include <Base/Console.h>
 #include <Base/Exception.h>
 #include <Base/FileInfo.h>
 #include <Base/Reader.h>
+#include <Base/StringTokenizer.h>
 #include <Base/Stream.h>
 #include <Base/TimeInfo.h>
 #include <Base/Writer.h>
@@ -942,10 +942,7 @@ class GRIDFreeFieldElement: public GRIDElement
 {
     void read(const std::string& str, const std::string&) override
     {
-        char_separator<char> sep(",");
-        tokenizer<char_separator<char>> tokens(str, sep);
-        std::vector<std::string> token_results;
-        token_results.assign(tokens.begin(), tokens.end());
+        std::vector<std::string> token_results = Base::splitChar(str, ',');
         if (token_results.size() < 6) {
             return;  // Line does not include Nodal coordinates
         }
@@ -1002,10 +999,7 @@ class CTRIA3FreeFieldElement: public CTRIA3Element
 public:
     void read(const std::string& str, const std::string&) override
     {
-        char_separator<char> sep(",");
-        tokenizer<char_separator<char>> tokens(str, sep);
-        std::vector<std::string> token_results;
-        token_results.assign(tokens.begin(), tokens.end());
+        std::vector<std::string> token_results = Base::splitChar(str, ',');
         if (token_results.size() < 6) {
             return;  // Line does not include enough nodal IDs
         }
@@ -1079,10 +1073,7 @@ class CTETRAFreeFieldElement: public CTETRAElement
 public:
     void read(const std::string& str, const std::string&) override
     {
-        char_separator<char> sep(",");
-        tokenizer<char_separator<char>> tokens(str, sep);
-        std::vector<std::string> token_results;
-        token_results.assign(tokens.begin(), tokens.end());
+        std::vector<std::string> token_results = Base::splitChar(str, ',');
         if (token_results.size() < 14) {
             return;  // Line does not include enough nodal IDs
         }

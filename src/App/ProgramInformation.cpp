@@ -33,7 +33,6 @@
 #include <vector>
 
 #include <boost/version.hpp>
-#include <boost/tokenizer.hpp>
 
 #if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
 # include <QFile>
@@ -56,6 +55,7 @@
 #include <Base/Console.h>
 #include <Base/Exception.h>
 #include <Base/Interpreter.h>
+#include <Base/StringTokenizer.h>
 
 #include "Application.h"
 #include "Metadata.h"
@@ -553,9 +553,7 @@ void ProgramInformation::getVerboseAddOnsInfo(
     const auto additionalModules = getValueOrEmpty(mConfig, "AdditionalModulePaths");
 
     if (!additionalModules.empty()) {
-        boost::char_separator<char> sep(";");
-        boost::tokenizer<boost::char_separator<char>> mods(additionalModules, sep);
-        for (const auto& mod : mods) {
+        for (const auto& mod : Base::splitAnyOf(additionalModules, ";")) {
             auto moduleInfo = getModuleInfoString(mod);
             if (!moduleInfo.empty()) {
                 addons.push_back(std::move(moduleInfo));
