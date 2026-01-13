@@ -2803,7 +2803,7 @@ void Application::initConfig(int argc, char ** argv)
 #ifdef OCC_VERSION_STRING_EXT
     mConfig["OCC_VERSION"] = OCC_VERSION_STRING_EXT;
 #endif
-    mConfig["BOOST_VERSION"] = BOOST_LIB_VERSION;
+    mConfig["BOOST_VERSION"] = fcBoostVersion;
     mConfig["PYTHON_VERSION"] = PY_VERSION;
 #if defined(FREECAD_BUILD_QT) && FREECAD_BUILD_QT
     mConfig["QT_VERSION"] = QT_VERSION_STR;
