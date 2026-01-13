@@ -32,8 +32,6 @@
 #include <set>
 #include <vector>
 
-#include <boost/math/constants/constants.hpp>
-
 #include <Inventor/SbVec3f.h>
 #include <Inventor/SbVec4f.h>
 #include <Inventor/actions/SoAction.h>
@@ -1024,7 +1022,7 @@ SbRotation NaviCubeImplementation::getNearestOrientation(PickId pickId)
 
 bool NaviCubeImplementation::mouseReleased(short x, short y)
 {
-    static const float pi = boost::math::constants::pi<float>();
+    constexpr float pi = std::numbers::pi_v<float>;
 
     mouseDown = false;
 

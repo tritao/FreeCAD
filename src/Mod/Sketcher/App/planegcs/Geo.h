@@ -25,7 +25,7 @@
 #pragma once
 
 #include "Util.h"
-#include <boost/math/constants/constants.hpp>
+#include <cmath>
 #include "../../SketcherGlobal.h"
 
 #ifdef _MSC_VER
@@ -93,7 +93,7 @@ public:
 
     double length() const
     {
-        return sqrt(x * x + y * y);
+        return std::sqrt(x * x + y * y);
     }
 
     // returns length and writes length deriv into the dlength argument.
