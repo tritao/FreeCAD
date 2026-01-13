@@ -39,7 +39,6 @@
 #include <optional>
 #include <regex>
 
-#include <boost/bimap.hpp>
 #include <boost/graph/strong_components.hpp>
 
 #include <random>
@@ -1130,12 +1129,24 @@ std::pair<bool, int> Document::addStringHasher(const StringHasherRef& hasher) co
     if (!hasher) {
         return std::make_pair(false, 0);
     }
-    auto ret =
-        d->hashers.left.insert(HasherMap::left_map::value_type(hasher, static_cast<int>(d->hashers.size())));
-    if (ret.second) {
+
+    auto* ptr = static_cast<StringHasher*>(hasher);
+    const auto found = d->hashers.byHasher.find(ptr);
+    if (found != d->hashers.byHasher.end()) {
+        return std::make_pair(false, found->second);
+    }
+
+    int idx = static_cast<int>(d->hashers.byIndex.size());
+    while (d->hashers.byIndex.contains(idx)) {
+        ++idx;
+    }
+
+    d->hashers.byIndex.emplace(idx, hasher);
+    d->hashers.byHasher.emplace(ptr, idx);
+    {
         hasher->clearMarks();
     }
-    return std::make_pair(ret.second, ret.first->second);
+    return std::make_pair(true, idx);
 }
 
 StringHasherRef Document::getStringHasher(const int idx) const
@@ -1147,10 +1158,11 @@ StringHasherRef Document::getStringHasher(const int idx) const
         }
         return hasher;
     }
-    const auto it = d->hashers.right.find(idx);
-    if (it == d->hashers.right.end()) {
+    const auto it = d->hashers.byIndex.find(idx);
+    if (it == d->hashers.byIndex.end()) {
         hasher = new StringHasher;
-        d->hashers.right.insert(HasherMap::right_map::value_type(idx, hasher));
+        d->hashers.byIndex.emplace(idx, hasher);
+        d->hashers.byHasher.emplace(static_cast<StringHasher*>(hasher), idx);
     }
     else {
         hasher = it->second;
