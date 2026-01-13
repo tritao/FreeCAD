@@ -30,6 +30,7 @@
 #include "Core/MeshKernel.h"
 #include <Base/Color.h>
 #include <Base/FileInfo.h>
+#include <Base/StringPredicates.h>
 #include <Base/StringTokenizer.h>
 #include <Base/Stream.h>
 #include <Base/Tools.h>
@@ -121,11 +122,11 @@ private:
     bool Ignore(const std::string& line) const
     {
         // clang-format off
-        return boost::starts_with(line, "vn ") ||
-               boost::starts_with(line, "vt ") ||
-               boost::starts_with(line, "s ") ||
-               boost::starts_with(line, "o ") ||
-               boost::starts_with(line, "#");
+        return Base::startsWith(line, "vn ") ||
+               Base::startsWith(line, "vt ") ||
+               Base::startsWith(line, "s ") ||
+               Base::startsWith(line, "o ") ||
+               Base::startsWith(line, "#");
         // clang-format on
     }
 

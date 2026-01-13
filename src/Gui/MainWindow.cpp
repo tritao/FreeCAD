@@ -68,7 +68,7 @@
 
 #include <algorithm>
 #include <vector>
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 
 #include <App/Application.h>
 #include <App/Document.h>
@@ -382,12 +382,12 @@ MainWindow::MainWindow(QWidget* parent, Qt::WindowFlags f)
             if (Param != d->hGrp || !Name) {
                 return;
             }
-            if (boost::equals(Name, "StatusBar")) {
+            if (Base::equals(Name, "StatusBar")) {
                 if (auto sb = getMainWindow()->statusBar()) {
                     sb->setVisible(d->hGrp->GetBool("StatusBar", sb->isVisible()));
                 }
             }
-            else if (boost::equals(Name, "MainWindowState")) {
+            else if (Base::equals(Name, "MainWindowState")) {
                 OverlayManager::instance()->reload(OverlayManager::ReloadMode::ReloadPause);
                 d->restoreStateTimer.start(100);
             }
