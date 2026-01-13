@@ -25,8 +25,6 @@
 #ifndef ASSEMBLY_AssemblyObject_H
 #define ASSEMBLY_AssemblyObject_H
 
-#include <boost/signals2.hpp>
-
 #include <Mod/Assembly/AssemblyGlobal.h>
 
 #include <App/FeaturePython.h>
