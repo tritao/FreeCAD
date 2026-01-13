@@ -18,7 +18,7 @@
 #include "Document.h"
 #include "DocumentObject.h"
 
-#include <boost/io/ios_state.hpp>
+#include <Base/ScopeGuard.h>
 
 namespace
 {
@@ -188,7 +188,8 @@ void ElementMap::save(std::ostream& stream,
             continue;
         }
 
-        boost::io::ios_flags_saver ifs(stream);
+        const auto oldFlags = stream.flags();
+        [[maybe_unused]] const auto flagsGuard = Base::makeScopeExit([&] { stream.flags(oldFlags); });
         stream << std::hex;
 
         for (auto& dequeueOfMappedNameRef : indexedName.second.names) {
@@ -421,7 +422,8 @@ ElementMapPtr ElementMap::restore(::App::StringHasherRef hasherRef,
             FC_THROWM(Base::RuntimeError, "missing element name outerCount");  // NOLINT
         }
 
-        boost::io::ios_flags_saver ifs(stream);
+        const auto oldFlags = stream.flags();
+        [[maybe_unused]] const auto flagsGuard = Base::makeScopeExit([&] { stream.flags(oldFlags); });
         stream >> std::hex;
 
         indices.names.resize(outerCount);
@@ -717,7 +719,8 @@ void ElementMap::encodeElementName(char element_type,
     if (forceTag || (tag != 0)) {
         assert(element_type);
         auto pos = ss.tellp();
-        boost::io::ios_flags_saver ifs(ss);
+        const auto oldFlags = ss.flags();
+        [[maybe_unused]] const auto flagsGuard = Base::makeScopeExit([&] { ss.flags(oldFlags); });
         ss << POSTFIX_TAG << std::hex;
         if (tag < 0) {
             ss << '-' << -tag;

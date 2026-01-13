@@ -33,7 +33,7 @@
 
 #include <cmath>
 
-#include <boost/io/ios_state.hpp>
+#include <Base/ScopeGuard.h>
 
 #include <numbers>
 #include <limits>
@@ -1316,7 +1316,8 @@ void NumberExpression::_toString(std::ostream &ss, bool,int) const
     // https://en.cppreference.com/w/cpp/types/numeric_limits/digits10
     // https://en.cppreference.com/w/cpp/types/numeric_limits/max_digits10
     // https://www.boost.org/doc/libs/1_63_0/libs/multiprecision/doc/html/boost_multiprecision/tut/limits/constants.html
-    boost::io::ios_flags_saver ifs(ss);
+    const auto oldFlags = ss.flags();
+    [[maybe_unused]] const auto flagsGuard = Base::makeScopeExit([&] { ss.flags(oldFlags); });
     ss << std::setprecision(std::numeric_limits<double>::digits10) << getValue();
 
     /* Trim of any extra spaces */
