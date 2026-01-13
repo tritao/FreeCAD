@@ -694,9 +694,9 @@ public:
             try {
                 signal();
             }
-            catch (const boost::exception&) {
+            catch (...) {
                 // reported by code analyzers
-                Base::Console().warning("~DocOpenGuard: Unexpected boost exception\n");
+                Base::Console().warning("~DocOpenGuard: Unexpected exception\n");
             }
         }
     }
@@ -1126,9 +1126,9 @@ Application::TransactionSignaller::~TransactionSignaller() {
         try {
             GetApplication().signalCloseTransaction(abort);
         }
-        catch (const boost::exception&) {
+        catch (...) {
             // reported by code analyzers
-            Base::Console().warning("~TransactionSignaller: Unexpected boost exception\n");
+            Base::Console().warning("~TransactionSignaller: Unexpected exception\n");
         }
     }
 }
