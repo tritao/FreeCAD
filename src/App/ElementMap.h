@@ -33,6 +33,7 @@
 
 #include <Base/ByteBuffer.h>
 #include <Base/BytesView.h>
+#include <Base/HashUtils.h>
 
 #include <cstring>
 #include <deque>
@@ -41,8 +42,6 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
-
-#include <boost/functional/hash.hpp>
 
 
 namespace Data
@@ -438,9 +437,7 @@ private:
     {
         std::size_t operator()(const Base::ByteBuffer& bytes) const noexcept
         {
-            std::size_t seed = 0U;
-            boost::hash_range(seed, bytes.data(), bytes.data() + bytes.size());
-            return seed;
+            return Base::fnv1a64(bytes.view());
         }
     };
 

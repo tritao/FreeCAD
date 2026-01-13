@@ -22,6 +22,7 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <cstring>
 #include <map>
 #include <vector>
 #include <string>
@@ -33,7 +34,9 @@
 #include <boost/multi_index/mem_fun.hpp>
 
 #include <Base/Reader.h>
+#include <Base/Hash.h>
 #include <Base/Tools.h>
+
 #include <Base/UniqueNameManager.h>
 #include <Base/Writer.h>
 
@@ -52,7 +55,7 @@ std::size_t CStringHasher::operator()(const char* s) const {
     if (!s) {
         return 0;
     }
-    return boost::hash_range(s, s + std::strlen(s));
+    return Base::fnv1a64(s, std::strlen(s));
 }
 
 bool CStringHasher::operator()(const char* a, const char* b) const {
