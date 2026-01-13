@@ -35,6 +35,7 @@
 # include <iostream>
 # include <limits>
 # include <memory>
+# include <random>
 # include <ranges>
 # include <sstream>
 # include <string>
@@ -50,7 +51,6 @@
 # include <boost/geometry/geometries/register/point.hpp>
 # include <boost/iostreams/device/array.hpp>
 # include <boost/iostreams/stream.hpp>
-# include <boost/random.hpp>
 # include <boost/range/adaptor/map.hpp>
 # include <boost/uuid/uuid_io.hpp>
 # include <boost/geometry.hpp>

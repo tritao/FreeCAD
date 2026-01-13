@@ -46,6 +46,7 @@
 #include <map>
 #include <memory>
 #include <numbers>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -57,7 +58,6 @@
 // Boost
 #include <boost/algorithm/string/predicate.hpp>
 #include <cmath>
-#include <boost/random.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 
