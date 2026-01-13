@@ -1165,8 +1165,7 @@ bool ViewProviderSketch::mouseButtonPressed(int Button, bool pressed, const SbVe
     SbVec3f point = line.getPosition();
     SbVec3f normal = line.getDirection();
 
-    // use scoped_ptr to make sure that instance gets deleted in all cases
-    boost::scoped_ptr<SoPickedPoint> pp(this->getPointOnRay(cursorPos, viewer));
+    std::unique_ptr<SoPickedPoint> pp(this->getPointOnRay(cursorPos, viewer));
     EditModeCoinManager::PreselectionResult clickResult
         = getPreselectionResultAtViewportPos(cursorPos, viewer);
     EditModeCoinManager::PreselectionResult resolvedClickResult
@@ -2232,9 +2231,6 @@ void ViewProviderSketch::moveConstraint(Sketcher::Constraint* Constr, int constN
         return;
 
     Sketcher::SketchObject* obj = getSketchObject();
-    int intGeoCount = obj->getHighestCurveIndex() + 1;
-    int extGeoCount = obj->getExternalGeometryCount();
-#endif
 
     // with memory allocation
     const std::vector<Part::Geometry*> geomlist = getSolvedSketch().extractGeometry(true, true);
@@ -2252,11 +2248,11 @@ void ViewProviderSketch::moveConstraint(Sketcher::Constraint* Constr, int constN
     };
 
 #ifdef FC_DEBUG
+    int intGeoCount = obj->getHighestCurveIndex() + 1;
+    int extGeoCount = obj->getExternalGeometryCount();
     assert(int(geomlist.size()) == extGeoCount + intGeoCount);
     assert((Constr->First >= -extGeoCount && Constr->First < intGeoCount)
            || Constr->First != GeoEnum::GeoUndef);
-    static_cast<void>(intGeoCount);
-    static_cast<void>(extGeoCount);
 #endif
 
     if (Constr->Type == Distance || Constr->Type == DistanceX || Constr->Type == DistanceY
