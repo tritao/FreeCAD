@@ -24,8 +24,6 @@
 
 #pragma once
 
-#include <boost/signals2.hpp>
-
 #include <Mod/Assembly/AssemblyGlobal.h>
 
 #include <App/FeaturePython.h>
