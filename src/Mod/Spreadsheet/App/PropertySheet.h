@@ -238,8 +238,8 @@ public:
 
     std::string getColumn(int offset = 0) const;
 
-    void setPathValue(const App::ObjectIdentifier& path, const boost::any& value) override;
-    const boost::any getPathValue(const App::ObjectIdentifier& path) const override;
+    void setPathValue(const App::ObjectIdentifier& path, const std::any& value) override;
+    const std::any getPathValue(const App::ObjectIdentifier& path) const override;
 
     unsigned getBindingBorder(App::CellAddress address) const;
 
