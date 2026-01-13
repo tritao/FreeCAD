@@ -27,7 +27,6 @@
 #endif
 
 #include <Base/StringPredicates.h>
-#include <boost/range/adaptor/indexed.hpp>
 #if defined(__clang__)
 # pragma clang diagnostic push
 # pragma clang diagnostic ignored "-Wextra-semi"
@@ -324,8 +323,8 @@ private:
                 if (it != partColor.end() && Base::startsWith(subname, "Face")) {
                     const auto& colors = it->second;
                     std::string face("Face");
-                    for (const auto& element : colors | boost::adaptors::indexed(1)) {
-                        cols[face + std::to_string(element.index())] = element.value();
+                    for (std::size_t i = 0; i < colors.size(); ++i) {
+                        cols[face + std::to_string(i + 1)] = colors[i];
                     }
                 }
                 return cols;

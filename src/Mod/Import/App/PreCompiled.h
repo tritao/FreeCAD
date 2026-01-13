@@ -37,8 +37,9 @@
 
 // boost
 #include <Base/StringPredicates.h>
-#include <boost/range/adaptor/indexed.hpp>
 
 // OpenCasCade =====================================================================================
 // Base
 #include <Mod/Part/App/OpenCascadeAll.h>
+
+#endif
