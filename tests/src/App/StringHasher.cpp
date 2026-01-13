@@ -224,13 +224,13 @@ TEST_F(StringIDTest, data)  // NOLINT
 {
     // Arrange
     QByteArray expectedData {"data", 4};
-    auto id = App::StringID(1, expectedData);
+    auto id = App::StringID(1, toByteBuffer(expectedData));
 
     // Act
     auto data = id.data();
 
     // Assert
-    EXPECT_EQ(expectedData, data);
+    EXPECT_EQ(toByteBuffer(expectedData), data);
 }
 
 TEST_F(StringIDTest, postfix)  // NOLINT
@@ -838,8 +838,8 @@ TEST_F(StringIDRefTest, operatorLess)  // NOLINT
     // Arrange
     auto emptySIDA = App::StringIDRef();
     auto emptySIDB = App::StringIDRef();
-    auto lowID = App::StringIDRef(new App::StringID {1, nullptr});
-    auto highID = App::StringIDRef(new App::StringID {2, nullptr});
+    auto lowID = App::StringIDRef(new App::StringID {1, Base::ByteBuffer {}});
+    auto highID = App::StringIDRef(new App::StringID {2, Base::ByteBuffer {}});
 
     // Act & Assert
     EXPECT_FALSE(emptySIDA < emptySIDB);
@@ -857,9 +857,9 @@ TEST_F(StringIDRefTest, operatorEquality)  // NOLINT
     // Arrange
     auto emptySIDA = App::StringIDRef();
     auto emptySIDB = App::StringIDRef();
-    auto nonEmptyA = App::StringIDRef(new App::StringID {1, nullptr});
-    auto nonEmptyB = App::StringIDRef(new App::StringID {1, nullptr});
-    auto nonEmptyOther = App::StringIDRef(new App::StringID {2, nullptr});
+    auto nonEmptyA = App::StringIDRef(new App::StringID {1, Base::ByteBuffer {}});
+    auto nonEmptyB = App::StringIDRef(new App::StringID {1, Base::ByteBuffer {}});
+    auto nonEmptyOther = App::StringIDRef(new App::StringID {2, Base::ByteBuffer {}});
 
     // Act & Assert
     EXPECT_TRUE(emptySIDA == emptySIDB);
@@ -873,9 +873,9 @@ TEST_F(StringIDRefTest, operatorInequality)  // NOLINT
     // Arrange
     auto emptySIDA = App::StringIDRef();
     auto emptySIDB = App::StringIDRef();
-    auto nonEmptyA = App::StringIDRef(new App::StringID {1, nullptr});
-    auto nonEmptyB = App::StringIDRef(new App::StringID {1, nullptr});
-    auto nonEmptyOther = App::StringIDRef(new App::StringID {2, nullptr});
+    auto nonEmptyA = App::StringIDRef(new App::StringID {1, Base::ByteBuffer {}});
+    auto nonEmptyB = App::StringIDRef(new App::StringID {1, Base::ByteBuffer {}});
+    auto nonEmptyOther = App::StringIDRef(new App::StringID {2, Base::ByteBuffer {}});
 
     // Act & Assert
     EXPECT_FALSE(emptySIDA != emptySIDB);
@@ -888,7 +888,7 @@ TEST_F(StringIDRefTest, booleanConversion)  // NOLINT
 {
     // Arrange
     auto emptySID = App::StringIDRef();
-    auto nonEmpty = App::StringIDRef(new App::StringID {1, nullptr});
+    auto nonEmpty = App::StringIDRef(new App::StringID {1, Base::ByteBuffer {}});
 
     // Act & Assert
     EXPECT_FALSE(emptySID);
