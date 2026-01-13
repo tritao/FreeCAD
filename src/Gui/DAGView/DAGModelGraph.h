@@ -24,7 +24,11 @@
 #pragma once
 
 #include <bitset>
+#include <iterator>
+#include <list>
+#include <map>
 #include <memory>
+#include <unordered_map>
 
 #include <boost_graph_adjacency_list.hpp>
 #include <boost_graph_reverse_graph.hpp>
@@ -32,9 +36,6 @@
 #include <boost/graph/graphviz.hpp>
 #include <boost/graph/iteration_macros.hpp>
 #include <boost/graph/topological_sort.hpp>
-#include <boost/multi_index_container.hpp>
-#include <boost/multi_index/member.hpp>
-#include <boost/multi_index/ordered_index.hpp>
 #include <fastsignals/signal.h>
 
 #include "DAGRectItem.h"
@@ -281,25 +282,40 @@ struct GraphLinkRecord
     //@}
 };
 
-namespace BMI = boost::multi_index;
-using GraphLinkContainer = boost::multi_index_container<
-    GraphLinkRecord,
-    BMI::indexed_by<
-        BMI::ordered_unique<
-            BMI::tag<GraphLinkRecord::ByDObject>,
-            BMI::member<GraphLinkRecord, const App::DocumentObject*, &GraphLinkRecord::DObject>>,
-        BMI::ordered_unique<
-            BMI::tag<GraphLinkRecord::ByVPDObject>,
-            BMI::member<GraphLinkRecord, const Gui::ViewProviderDocumentObject*, &GraphLinkRecord::VPDObject>>,
-        BMI::ordered_unique<
-            BMI::tag<GraphLinkRecord::ByRectItem>,
-            BMI::member<GraphLinkRecord, const RectItem*, &GraphLinkRecord::rectItem>>,
-        BMI::ordered_unique<
-            BMI::tag<GraphLinkRecord::ByUniqueName>,
-            BMI::member<GraphLinkRecord, std::string, &GraphLinkRecord::uniqueName>>,
-        BMI::ordered_unique<
-            BMI::tag<GraphLinkRecord::ByVertex>,
-            BMI::member<GraphLinkRecord, Vertex, &GraphLinkRecord::vertex>>>>;
+class GraphLinkContainer
+{
+public:
+    bool insert(const GraphLinkRecord& record)
+    {
+        if (!record.DObject || !record.VPDObject || !record.rectItem) {
+            return false;
+        }
+        if (byDObject.contains(record.DObject) || byVPDObject.contains(record.VPDObject)
+            || byRectItem.contains(record.rectItem) || byUniqueName.contains(record.uniqueName)
+            || byVertex.contains(record.vertex)) {
+            return false;
+        }
+
+        records.push_back(record);
+        auto it = std::prev(records.end());
+        byDObject.emplace(record.DObject, it);
+        byVPDObject.emplace(record.VPDObject, it);
+        byRectItem.emplace(record.rectItem, it);
+        byUniqueName.emplace(record.uniqueName, it);
+        byVertex.emplace(record.vertex, it);
+        return true;
+    }
+
+    using iterator = std::list<GraphLinkRecord>::iterator;
+    using const_iterator = std::list<GraphLinkRecord>::const_iterator;
+
+    std::list<GraphLinkRecord> records;
+    std::unordered_map<const App::DocumentObject*, iterator> byDObject;
+    std::unordered_map<const Gui::ViewProviderDocumentObject*, iterator> byVPDObject;
+    std::unordered_map<const RectItem*, iterator> byRectItem;
+    std::unordered_map<std::string, iterator> byUniqueName;
+    std::map<Vertex, iterator> byVertex;
+};
 
 bool hasRecord(const App::DocumentObject* dObjectIn, const GraphLinkContainer& containerIn);
 bool hasRecord(const ViewProviderDocumentObject* VPDObjectIn, const GraphLinkContainer& containerIn);
