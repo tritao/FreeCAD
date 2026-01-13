@@ -25,7 +25,8 @@
 #ifndef GUI_NAVIGATIONSTATECHART_H
 #define GUI_NAVIGATIONSTATECHART_H
 
-#include <boost/statechart/event.hpp>
+#include <memory>
+
 #include <Gui/Navigation/NavigationStyle.h>
 
 // NOLINTBEGIN(cppcoreguidelines-avoid*, readability-avoid-const-params-in-decls)
@@ -41,7 +42,7 @@ class GuiExport NavigationStateChart: public UserNavigationStyle
     TYPESYSTEM_HEADER_WITH_OVERRIDE();
 
 public:
-    struct Event: public boost::statechart::event<Event>
+    struct Event
     {
         using Button = SoMouseButtonEvent::Button;
         using Key = SoKeyboardEvent::Key;
@@ -120,30 +121,6 @@ public:
     virtual ~NaviStateMachine() = default;
 
     virtual void process_event(const NavigationStateChart::Event&) = 0;
-};
-
-template<typename T>
-class NaviStateMachineT: public NaviStateMachine
-{
-public:
-    explicit NaviStateMachineT(T* t)
-        : object(t)
-    {
-        object->initiate();
-    }
-
-    ~NaviStateMachineT() override
-    {
-        object.reset();
-    }
-
-    void process_event(const NavigationStateChart::Event& ev) override
-    {
-        object->process_event(ev);
-    }
-
-private:
-    std::unique_ptr<T> object;
 };
 
 }  // namespace Gui
