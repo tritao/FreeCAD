@@ -27,13 +27,14 @@
 #ifdef FC_OS_LINUX
 # include <unistd.h>
 #endif
+#include <charconv>
+#include <locale>
 #include <memory>
 #include <sstream>
 #include <cctype>
 #include <cstdlib>
 
 #include <boost/algorithm/string.hpp>
-#include <boost/lexical_cast.hpp>
 #include <cmath>  // needed for compilation on some systems
 
 #include <Base/Console.h>
@@ -51,6 +52,32 @@ using namespace Points;
 
 namespace
 {
+template<typename T>
+T parseIntegralStrict(const std::string& token, const char* errorMessage)
+{
+    T value {};
+    const char* begin = token.data();
+    const char* end = begin + token.size();
+    const auto [ptr, ec] = std::from_chars(begin, end, value);
+    if (ec != std::errc() || ptr != end) {
+        throw Base::BadFormatError(errorMessage);
+    }
+    return value;
+}
+
+double parseDoubleStrictClassic(const std::string& token, const char* errorMessage)
+{
+    std::istringstream str(token);
+    str.imbue(std::locale::classic());
+    double value {};
+    str >> value;
+    str >> std::ws;
+    if (!str || !str.eof()) {
+        throw Base::BadFormatError(errorMessage);
+    }
+    return value;
+}
+
 bool tryParsePointLine(const std::string& line, Base::Vector3d& point)
 {
     const char* cursor = line.c_str();
@@ -833,7 +860,7 @@ std::size_t PlyReader::readHeader(
             }
 
             std::string name = list[1];
-            std::size_t count = boost::lexical_cast<std::size_t>(list[2]);
+            std::size_t count = parseIntegralStrict<std::size_t>(list[2], "Not a valid ply file");
             if (name == "vertex") {
                 element = name;
                 numPoints = count;
@@ -960,7 +987,7 @@ void PlyReader::readAscii(std::istream& inp, std::size_t offset, Eigen::MatrixXd
 
         Eigen::Index size = Eigen::Index(list.size());
         for (Eigen::Index col = 0; col < size && col < numFields; col++) {
-            double value = boost::lexical_cast<double>(list[col]);
+            double value = parseDoubleStrictClassic(list[col], "Not a valid ply file");
             data(row, col) = value;
         }
 
@@ -1269,7 +1296,7 @@ std::size_t PcdReader::readHeader(
         }
         else if (kw == "SIZE") {
             for (std::size_t i = 1; i < list.size(); i++) {
-                sizes.push_back(boost::lexical_cast<int>(list[i]));
+                sizes.push_back(parseIntegralStrict<int>(list[i], ""));
             }
         }
         else if (kw == "TYPE") {
@@ -1328,7 +1355,7 @@ void PcdReader::readAscii(std::istream& inp, Eigen::MatrixXd& data)
 
         Eigen::Index size = Eigen::Index(list.size());
         for (Eigen::Index col = 0; col < size && col < numFields; col++) {
-            double value = boost::lexical_cast<double>(list[col]);
+            double value = parseDoubleStrictClassic(list[col], "");
             data(row, col) = value;
         }
 
