@@ -22,7 +22,6 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/core/ignore_unused.hpp>
 #include <Inventor/SbBox3f.h>
 #include <Inventor/SbLine.h>
 #include <Inventor/SbTime.h>
@@ -1927,8 +1926,8 @@ void ViewProviderSketch::moveConstraint(Sketcher::Constraint* Constr, int constN
     assert(int(geomlist.size()) == extGeoCount + intGeoCount);
     assert((Constr->First >= -extGeoCount && Constr->First < intGeoCount)
            || Constr->First != GeoEnum::GeoUndef);
-    boost::ignore_unused(intGeoCount);
-    boost::ignore_unused(extGeoCount);
+    static_cast<void>(intGeoCount);
+    static_cast<void>(extGeoCount);
 #endif
 
     if (Constr->Type == Distance || Constr->Type == DistanceX || Constr->Type == DistanceY
@@ -3534,7 +3533,7 @@ bool ViewProviderSketch::setEdit(int ModNum)
     connectRedoDocument = getDocument()->signalRedoDocument.connect(
         std::bind(&ViewProviderSketch::slotRedoDocument, this, sp::_1));
     connectSolverUpdate = getSketchObject()
-            ->signalSolverUpdate.connect(boost::bind(&ViewProviderSketch::slotSolverUpdate, this));
+            ->signalSolverUpdate.connect([this] { slotSolverUpdate(); });
     //NOLINTEND
 
     // There are geometry extensions introduced by the solver and geometry extensions introduced by

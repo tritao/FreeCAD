@@ -69,11 +69,8 @@
 #include <boost_graph_adjacency_list.hpp>
 #include <fastsignals/signal.h>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/bind/bind.hpp>
-#include <boost/core/ignore_unused.hpp>
 #include <boost/interprocess/sync/file_lock.hpp>
 #include <boost/math/constants/constants.hpp>
-#include <boost/utility.hpp>
 
 // Xerces
 #include <xercesc/util/TranscodingException.hpp>

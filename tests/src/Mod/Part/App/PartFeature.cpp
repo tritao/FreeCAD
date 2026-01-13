@@ -2,7 +2,6 @@
 
 #include <gtest/gtest.h>
 
-#include <boost/core/ignore_unused.hpp>
 #include "Mod/Part/App/FeaturePartCommon.h"
 #include <src/App/InitApplication.h>
 #include <BRepBuilderAPI_MakeVertex.hxx>
@@ -152,7 +151,7 @@ TEST_F(FeaturePartTest, getRelatedElements)
     auto label1 = _common->Label.getValue();
     auto label2 = _boxes[1]->Label.getValue();
     const TopoShape& ts = _common->Shape.getShape();
-    boost::ignore_unused(ts);
+    static_cast<void>(ts);
     auto result = Feature::getRelatedElements(
         _doc->getObject(label1),
         "Edge2",
@@ -186,9 +185,9 @@ TEST_F(FeaturePartTest, getElementFromSource)
     auto label1 = _common->Label.getValue();
     auto label2 = _boxes[1]->Label.getValue();
     const TopoShape& ts = _common->Shape.getShape();
-    boost::ignore_unused(label1);
-    boost::ignore_unused(label2);
-    boost::ignore_unused(ts);
+    static_cast<void>(label1);
+    static_cast<void>(label2);
+    static_cast<void>(ts);
     auto element = Feature::getElementFromSource(
         _common,
         "Part__Box001",  // "Edge1",

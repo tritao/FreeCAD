@@ -24,7 +24,6 @@
 
 #include <algorithm>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/core/ignore_unused.hpp>
 #include <vector>
 
 
@@ -304,7 +303,7 @@ Exporter3MF::~Exporter3MF()
 
 bool Exporter3MF::addMesh(const char* name, const MeshObject& mesh)
 {
-    boost::ignore_unused(name);
+    static_cast<void>(name);
     bool ok = d->writer3mf.AddMesh(mesh.getKernel(), mesh.getTransform());
     if (ok) {
         for (const auto& it : d->ext) {

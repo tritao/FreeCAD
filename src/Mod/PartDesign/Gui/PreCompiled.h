@@ -30,7 +30,6 @@
 #endif
 
 // Boost
-#include <boost/core/ignore_unused.hpp>
 
 // OCC
 #include <Standard_Version.hxx>

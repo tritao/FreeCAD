@@ -21,7 +21,6 @@
  ***************************************************************************/
 
 
-#include <boost/core/ignore_unused.hpp>
 #include <QAction>
 #include <QMessageBox>
 
@@ -64,7 +63,7 @@ TaskShapeBinder::TaskShapeBinder(ViewProviderShapeBinder* view, bool newObj, QWi
     , ui(new Ui_TaskShapeBinder)
     , vp(view)
 {
-    boost::ignore_unused(newObj);
+    static_cast<void>(newObj);
 
     // we need a separate container widget to add all controls to
     proxy = new QWidget(this);

@@ -38,7 +38,6 @@
 
 // boost
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/core/ignore_unused.hpp>
 #include <boost/range/adaptor/indexed.hpp>
 
 // OpenCasCade =====================================================================================

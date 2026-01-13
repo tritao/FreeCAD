@@ -160,7 +160,6 @@
 #endif
 
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/core/ignore_unused.hpp>
 
 #include <App/Material.h>
 #include <App/ElementNamingUtils.h>
@@ -4617,7 +4616,7 @@ TopoShape& TopoShape::makeGTransform(
     bool copy
 )
 {
-    boost::ignore_unused(op);
+    static_cast<void>(op);
     _Shape = shape.transformGShape(rclTrf, copy);
     return *this;
 }
