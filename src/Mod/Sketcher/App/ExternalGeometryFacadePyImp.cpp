@@ -544,8 +544,7 @@ void ExternalGeometryFacadePy::setGeometryLayerId(Py::Long Id)
 
 Py::String ExternalGeometryFacadePy::getTag() const
 {
-    std::string tmp = boost::uuids::to_string(getExternalGeometryFacadePtr()->getTag());
-    return Py::String(tmp);
+    return Py::String(getExternalGeometryFacadePtr()->getTag().toString());
 }
 
 Py::Object ExternalGeometryFacadePy::getGeometry() const

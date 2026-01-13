@@ -22,15 +22,12 @@
  *                                                                         *
  ***************************************************************************/
 
-
-#include <boost/uuid/uuid_io.hpp>
-
-
 #include <Base/GeometryPyCXX.h>
 #include <Base/Matrix.h>
 #include <Base/MatrixPy.h>
 #include <Base/Placement.h>
 #include <Base/PlacementPy.h>
+#include <Base/UuidTag.h>
 #include <Base/Vector3D.h>
 #include <Base/VectorPy.h>
 
@@ -469,8 +466,7 @@ PyObject* GeometryPy::getExtensions(PyObject* args) const
 
 Py::String GeometryPy::getTag() const
 {
-    std::string tmp = boost::uuids::to_string(getGeometryPtr()->getTag());
-    return {tmp};
+    return {getGeometryPtr()->getTag().toString()};
 }
 
 PyObject* GeometryPy::getCustomAttributes(const char* /*attr*/) const

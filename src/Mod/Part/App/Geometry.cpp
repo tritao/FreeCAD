@@ -386,7 +386,7 @@ void Geometry::Restore(Base::XMLReader& reader)
     }
 }
 
-boost::uuids::uuid Geometry::getTag() const
+Base::UuidTag Geometry::getTag() const
 {
     return tag;
 }
@@ -498,22 +498,7 @@ void Geometry::deleteExtension(const std::string& name)
 
 void Geometry::createNewTag()
 {
-    // Initialize a random number generator, to avoid Valgrind false positives.
-    // The random number generator is not threadsafe so we guard it.  See
-    // https://www.boost.org/doc/libs/1_62_0/libs/uuid/uuid.html#Design%20notes
-    static std::mt19937 ran;
-    static bool seeded = false;
-    static std::mutex random_number_mutex;
-
-    std::lock_guard<std::mutex> guard(random_number_mutex);
-
-    if (!seeded) {
-        ran.seed(static_cast<std::uint64_t>(std::time(nullptr)));
-        seeded = true;
-    }
-    static boost::uuids::basic_random_generator<std::mt19937> gen(&ran);
-
-    tag = gen();
+    tag = Base::UuidTag::randomV4();
 }
 
 void Geometry::assignTag(const Part::Geometry* geo)

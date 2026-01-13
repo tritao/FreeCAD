@@ -168,22 +168,12 @@ public:
 private:
     App::ObjectIdentifier makeArrayPath(int idx);
     App::ObjectIdentifier makeSimplePath(const Constraint* c);
-	    App::ObjectIdentifier makePath(int idx, const Constraint* c);
+    App::ObjectIdentifier makePath(int idx, const Constraint* c);
 
-	    std::vector<Constraint*> _lValueList;
-	    struct UuidHash
-	    {
-	        std::size_t operator()(const boost::uuids::uuid& uuid) const noexcept
-	        {
-	            std::size_t hash = 0;
-	            for (auto byte : uuid) {
-	                hash = (hash * 131) + byte;
-	            }
-	            return hash;
-	        }
-	    };
-	    using UuidMap = std::unordered_map<boost::uuids::uuid, std::size_t, UuidHash>;
-	    UuidMap valueMap;
+    std::vector<Constraint*> _lValueList;
+
+    using UuidMap = std::unordered_map<Base::UuidTag, std::size_t, Base::UuidTagHash>;
+    UuidMap valueMap;
 
     std::vector<unsigned int> validGeometryKeys;
     bool invalidGeometry;
