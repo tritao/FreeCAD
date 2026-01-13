@@ -210,7 +210,7 @@ void NavlibInterface::enableNavigation()
     PutFrameTimingSource(TimingSource::SpaceMouse);
 
     Gui::Application::Instance->signalActivateView.connect(
-        boost::bind(&NavlibInterface::onViewChanged, this, boost::placeholders::_1));
+        [this](auto* view) { onViewChanged(view); });
 
     Gui::Application::Instance->signalActivateWorkbench.connect([this](const char* wb) {
         exportCommands(std::string(wb));

@@ -8,7 +8,6 @@
 
 #include "PartTestHelpers.h"
 
-#include <boost/core/ignore_unused.hpp>
 #include <BRepAdaptor_CompCurve.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
@@ -3086,8 +3085,8 @@ TEST_F(TopoShapeExpansionTest, traceElement)
     // Arrange
     Data::TraceCallback cb =
         [name](const Data::MappedName& elementname, int offset, long encodedTag, long tag) {
-            boost::ignore_unused(offset);
-            boost::ignore_unused(tag);
+            static_cast<void>(offset);
+            static_cast<void>(tag);
             // TODO:  This is likely a flawed way to address testing a callback.
             // Also, it isn't clear exactly what the correct results are, although as soon as
             // we start addressing History, we will quickly discover that, and likely the right

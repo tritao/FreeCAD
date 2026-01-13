@@ -21,7 +21,6 @@
  ***************************************************************************/
 
 
-#include <boost/core/ignore_unused.hpp>
 #include <Inventor/actions/SoGetBoundingBoxAction.h>
 #include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/events/SoMouseButtonEvent.h>
@@ -95,7 +94,7 @@ SoLabelTextFormat SoFCColorBarBase::getFormat() const
 
 void SoFCColorBarBase::applyFormat(const SoLabelTextFormat& fmt)
 {
-    boost::ignore_unused(fmt);
+    static_cast<void>(fmt);
 }
 
 float SoFCColorBarBase::getBoundingWidth(const SbVec2s& size)
@@ -250,7 +249,7 @@ void SoFCColorBar::setFormat(const SoLabelTextFormat& fmt)
 
 void SoFCColorBar::setViewportSize(const SbVec2s& size)
 {
-    boost::ignore_unused(size);
+    static_cast<void>(size);
 }
 
 void SoFCColorBar::setRange(float fMin, float fMax, int prec)

@@ -22,7 +22,6 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/core/ignore_unused.hpp>
 #include <numeric>
 #include <limits>
 
@@ -162,7 +161,7 @@ public:
     void Validate(const MeshCore::MeshKernel& kernel) override
     {
         // do nothing
-        boost::ignore_unused(kernel);
+        static_cast<void>(kernel);
     }
 
     void Validate()

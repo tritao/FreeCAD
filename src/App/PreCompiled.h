@@ -76,12 +76,6 @@
 #include <boost_graph_adjacency_list.hpp>
 #include <fastsignals/signal.h>
 
-#include <boost/utility.hpp>
-#include <boost/bind/bind.hpp>
-#include <boost/core/ignore_unused.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/scope_exit.hpp>
-
 #include <fmt/format.h>
 
 // Qt -- only QtCore

@@ -40,7 +40,6 @@
 #include <vector>
 
 // Boost
-#include <boost/core/ignore_unused.hpp>
 #include <boost/math/special_functions/fpclassify.hpp>
 
 #ifdef FC_OS_WIN32

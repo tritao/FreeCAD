@@ -220,12 +220,7 @@ TaskPostWidget::TaskPostWidget(
     m_icon = icon;
 
     m_connection = m_object->signalChanged.connect(
-        boost::bind(
-            &TaskPostWidget::handlePropertyChange,
-            this,
-            boost::placeholders::_1,
-            boost::placeholders::_2
-        )
+        [this](const App::DocumentObject& obj, const App::Property& prop) { handlePropertyChange(obj, prop); }
     );
 }
 

@@ -21,7 +21,6 @@
  *                                                                          *
  ***************************************************************************/
 
-#include <boost/core/ignore_unused.hpp>
 #include <cmath>
 #include <vector>
 #include <unordered_map>
@@ -1780,12 +1779,12 @@ int AssemblyObject::slidingPartIndex(App::DocumentObject* joint)
 {
     App::DocumentObject* part1 = getMovingPartFromRef(joint, "Reference1");
     App::DocumentObject* obj1 = getObjFromJointRef(joint, "Reference1");
-    boost::ignore_unused(obj1);
+    static_cast<void>(obj1);
     Base::Placement plc1 = getPlacementFromProp(joint, "Placement1");
 
     App::DocumentObject* part2 = getMovingPartFromRef(joint, "Reference2");
     App::DocumentObject* obj2 = getObjFromJointRef(joint, "Reference2");
-    boost::ignore_unused(obj2);
+    static_cast<void>(obj2);
     Base::Placement plc2 = getPlacementFromProp(joint, "Placement2");
 
     int slidingFound = 0;
