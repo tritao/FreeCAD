@@ -23,7 +23,9 @@
 #include <charconv>
 #include <cstring>
 #include <deque>
+#include <map>
 #include <string_view>
+#include <unordered_set>
 
 #include <Base/Base64.h>
 #include <Base/ByteBuffer.h>
@@ -36,10 +38,6 @@
 #include <Base/ScopeGuard.h>
 #include <Base/Stream.h>
 #include <Base/Writer.h>
-
-#include <boost/bimap.hpp>
-#include <boost/bimap/set_of.hpp>
-#include <boost/bimap/unordered_set_of.hpp>
 
 #include "MappedElement.h"
 #include "StringHasher.h"
@@ -122,15 +120,40 @@ struct StringIDHasher
     }
 };
 
-using HashMapBase =
-    boost::bimap<boost::bimaps::unordered_set_of<StringID*, StringIDHasher, StringIDHasher>,
-                 boost::bimaps::set_of<long>>;
-
-class StringHasher::HashMap: public HashMapBase
+class StringHasher::HashMap
 {
 public:
+    using Left = std::unordered_set<StringID*, StringIDHasher, StringIDHasher>;
+    using Right = std::map<long, StringID*>;
+
     bool SaveAll = false;
     int Threshold = 0;
+
+    Left left;
+    Right right;
+
+    void clear()
+    {
+        left.clear();
+        right.clear();
+    }
+
+    std::size_t size() const
+    {
+        return right.size();
+    }
+
+    bool eraseById(long id)
+    {
+        auto it = right.find(id);
+        if (it == right.end()) {
+            return false;
+        }
+        StringID* sid = it->second;
+        right.erase(it);
+        left.erase(sid);
+        return true;
+    }
 };
 
 ///////////////////////////////////////////////////////////
@@ -140,7 +163,7 @@ TYPESYSTEM_SOURCE_ABSTRACT(App::StringID, Base::BaseClass)
 StringID::~StringID()
 {
     if (_hasher) {
-        _hasher->_hashes->right.erase(_id);
+        _hasher->_hashes->eraseById(_id);
     }
 }
 
@@ -258,7 +281,7 @@ void StringHasher::compact()
         StringIDRef sid = pendings.front();
         pendings.pop_front();
         // Try to erase the map entry for this StringID
-        if (_hashes->right.erase(sid.value()) == 0U) {
+        if (!_hashes->eraseById(sid.value())) {
             continue;  // If nothing was erased, there's nothing more to do
         }
         sid._sid->_hasher = nullptr;
@@ -328,7 +351,7 @@ StringIDRef StringHasher::getID(Base::BytesView data, Options options)
 
     auto it = _hashes->left.find(&dataID);
     if (it != _hashes->left.end()) {
-        return {it->first};
+        return {*it};
     }
 
     if (!hashed && !nocopy) {
@@ -373,7 +396,7 @@ StringIDRef StringHasher::getID(const Data::MappedName& name, const std::vector<
     // Check to see if there is already an entry in the hash table for this StringID
     auto it = _hashes->left.find(&tempID);
     if (it != _hashes->left.end()) {
-        auto res = StringIDRef(it->first);
+        auto res = StringIDRef(*it);
         if (indexed) {
             res._index = indexed.getIndex();
         }
@@ -785,13 +808,22 @@ StringID* StringHasher::insert(const StringIDRef& sid)
     auto& hasher = *sid._sid;
     hasher._hasher = this;
     hasher.ref();
-    auto res = _hashes->right.insert(_hashes->right.end(),
-                                     HashMap::right_map::value_type(sid.value(), &hasher));
-    if (res->second != &hasher) {
+
+    auto [rit, inserted] = _hashes->right.emplace(sid.value(), &hasher);
+    if (!inserted) {
         hasher._hasher = nullptr;
         hasher.unref();
+        return rit->second;
     }
-    return res->second;
+
+    auto [lit, insertedLeft] = _hashes->left.insert(&hasher);
+    if (!insertedLeft) {
+        _hashes->right.erase(rit);
+        hasher._hasher = nullptr;
+        hasher.unref();
+        return *lit;
+    }
+    return &hasher;
 }
 
 void StringHasher::restoreStream(std::istream& stream, std::size_t count)
