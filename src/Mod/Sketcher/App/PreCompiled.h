@@ -44,11 +44,8 @@
 #include <QDateTime>
 
 // Boost
-#include <boost/algorithm/string.hpp>
 #include <Base/StringPredicates.h>
 #include <boost/geometry/geometries/register/point.hpp>
-#include <boost/iostreams/device/array.hpp>
-#include <boost/iostreams/stream.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/geometry.hpp>
 
