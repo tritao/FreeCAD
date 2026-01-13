@@ -40,8 +40,6 @@
 #include <Inventor/nodes/SoShapeHints.h>
 #include <Inventor/sensors/SoIdleSensor.h>
 
-#include <boost/range/adaptors.hpp>
-
 #include <App/Annotation.h>
 #include <App/Document.h>
 #include <App/DocumentObjectGroup.h>
@@ -371,11 +369,11 @@ void ViewProviderMeshCurvature::setVertexCurvatureMode(int mode)
     SbColor* diffcol = pcColorMat->diffuseColor.startEditing();
     float* transp = pcColorMat->transparency.startEditing();
 
-    for (auto const& value : fValues | boost::adaptors::indexed(0)) {
-        Base::Color c = pcColorBar->getColor(value.value());
+    for (std::size_t i = 0; i < fValues.size(); ++i) {
+        Base::Color c = pcColorBar->getColor(fValues[i]);
         // NOLINTBEGIN
-        diffcol[value.index()].setValue(c.r, c.g, c.b);
-        transp[value.index()] = c.transparency();
+        diffcol[i].setValue(c.r, c.g, c.b);
+        transp[i] = c.transparency();
         // NOLINTEND
     }
 
