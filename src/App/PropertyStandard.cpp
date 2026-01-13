@@ -31,6 +31,7 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <stdexcept>
 #include <vector>
 
 #include <Base/Console.h>
@@ -2279,6 +2280,41 @@ PropertyBoolList::~PropertyBoolList() = default;
 //**************************************************************************
 // Base class implementer
 
+namespace
+{
+std::vector<bool> parseBoolBitsetString(const std::string& str)
+{
+    std::vector<bool> values;
+    values.resize(str.size());
+
+    const std::size_t n = str.size();
+    for (std::size_t pos = 0; pos < n; ++pos) {
+        const char ch = str[pos];
+        if (ch == '0' || ch == '1') {
+            values[n - 1 - pos] = (ch == '1');
+        }
+        else {
+            throw std::invalid_argument("invalid bit string");
+        }
+    }
+
+    return values;
+}
+
+std::string toBoolBitsetString(const std::vector<bool>& values)
+{
+    std::string out;
+    out.resize(values.size());
+
+    const std::size_t n = values.size();
+    for (std::size_t pos = 0; pos < n; ++pos) {
+        out[pos] = values[n - 1 - pos] ? '1' : '0';
+    }
+
+    return out;
+}
+}  // namespace
+
 PyObject* PropertyBoolList::getPyObject()
 {
     PyObject* tuple = PyTuple_New(getSize());
@@ -2300,8 +2336,7 @@ void PropertyBoolList::setPyObject(PyObject* value)
     std::string str;
     if (PyUnicode_Check(value)) {
         str = PyUnicode_AsUTF8(value);
-        boost::dynamic_bitset<> values(str);
-        setValues(values);
+        setValues(parseBoolBitsetString(str));
     }
     else {
         inherited::setPyObject(value);
@@ -2326,9 +2361,7 @@ bool PropertyBoolList::getPyValue(PyObject* item) const
 void PropertyBoolList::Save(Base::Writer& writer) const
 {
     writer.Stream() << writer.ind() << "<BoolList value=\"";
-    std::string bitset;
-    boost::to_string(_lValueList, bitset);
-    writer.Stream() << bitset << "\"/>";
+    writer.Stream() << toBoolBitsetString(_lValueList) << "\"/>";
     writer.Stream() << std::endl;
 }
 
@@ -2338,8 +2371,7 @@ void PropertyBoolList::Restore(Base::XMLReader& reader)
     reader.readElement("BoolList");
     // get the value of my Attribute
     string str = reader.getAttribute<const char*>("value");
-    boost::dynamic_bitset<> bitset(str);
-    setValues(bitset);
+    setValues(parseBoolBitsetString(str));
 }
 
 Property* PropertyBoolList::Copy() const
