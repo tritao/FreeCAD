@@ -22,7 +22,6 @@
 
 #include <FCConfig.h>
 
-#include <boost/interprocess/sync/file_lock.hpp>
 #include <Inventor/errors/SoDebugError.h>
 #include <Inventor/errors/SoError.h>
 #include <QCheckBox>
@@ -56,6 +55,7 @@
 #include <Base/Interpreter.h>
 #include <Base/Exception.h>
 #include <Base/FileInfo.h>
+#include <Base/FileLock.h>
 #include <Base/Parameter.h>
 #include <Base/Stream.h>
 #include <Base/Tools.h>
@@ -2560,44 +2560,28 @@ void tryRunEventLoop(GUISingleApplication& mainApp)
     Base::FileInfo fi(out.str());
     Base::ofstream lock(fi);
 
-#if !defined(FC_OS_WIN32) || (BOOST_VERSION < 107600)
-    std::string filename = out.str();
-#else
-    std::wstring filename = fi.toStdWString();
-#endif
-    try {
-        boost::interprocess::file_lock flock(filename.c_str());
-        if (flock.try_lock()) {
-            Base::Console().log("Init: Executing event loop…\n");
-            QApplication::exec();
+    Base::FileLock flock(out.str());
+    if (flock.tryLock(0)) {
+        Base::Console().log("Init: Executing event loop…\n");
+        QApplication::exec();
 
-            // Qt can't handle exceptions thrown from event handlers, so we need
-            // to manually rethrow SystemExitExceptions.
-            if (mainApp.caughtException) {
-                throw Base::SystemExitException(*mainApp.caughtException.get());
-            }
+        // Qt can't handle exceptions thrown from event handlers, so we need
+        // to manually rethrow SystemExitExceptions.
+        if (mainApp.caughtException) {
+            throw Base::SystemExitException(*mainApp.caughtException.get());
+        }
 
-            // close the lock file, in case of a crash we can see the existing lock file
-            // on the next restart and try to repair the documents, if needed.
-            flock.unlock();
-            lock.close();
-            fi.deleteFile();
-        }
-        else {
-            Base::Console().error(
-                "Failed to create a file lock for the IPC.\n"
-                "The application will be terminated.\n"
-                "Attempted lock file: %s",
-                fi.filePath().c_str()
-            );
-        }
+        // close the lock file, in case of a crash we can see the existing lock file
+        // on the next restart and try to repair the documents, if needed.
+        flock.unlock();
+        lock.close();
+        fi.deleteFile();
     }
-    catch (const boost::interprocess::interprocess_exception& e) {
-        QString msg = QString::fromLocal8Bit(e.what());
+    else {
         Base::Console().error(
-            "Failed to create a file lock for the IPC: %s\n"
+            "Failed to create a file lock for the IPC.\n"
+            "The application will be terminated.\n"
             "Attempted lock file: %s\n",
-            msg.toUtf8().constData(),
             fi.filePath().c_str()
         );
     }
@@ -2968,25 +2952,16 @@ void Application::checkForDeprecatedSettings()
 
 void Application::checkForPreviousCrashes()
 {
-    try {
-        Gui::Dialog::DocumentRecoveryFinder finder;
-        if (!finder.checkForPreviousCrashes()) {
+    Gui::Dialog::DocumentRecoveryFinder finder;
+    if (!finder.checkForPreviousCrashes()) {
 
-            // If the recovery dialog wasn't shown check the cache size periodically
-            Gui::Dialog::ApplicationCache cache;
-            cache.applyUserSettings();
-            if (cache.periodicCheckOfSize()) {
-                qint64 total = cache.size();
-                cache.performAction(total);
-            }
+        // If the recovery dialog wasn't shown check the cache size periodically
+        Gui::Dialog::ApplicationCache cache;
+        cache.applyUserSettings();
+        if (cache.periodicCheckOfSize()) {
+            qint64 total = cache.size();
+            cache.performAction(total);
         }
-    }
-    catch (const boost::interprocess::interprocess_exception& e) {
-        QString msg = QString::fromLocal8Bit(e.what());
-        Base::Console().warning(
-            "Failed check for previous crashes because of IPC error: %s\n",
-            msg.toUtf8().constData()
-        );
     }
 }
 
