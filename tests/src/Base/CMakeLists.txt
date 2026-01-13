@@ -20,6 +20,7 @@ add_executable(Base_tests_run
         Quantity.cpp
         Reader.cpp
         Rotation.cpp
+        Sha1.cpp
         SchemaTests.cpp
         ServiceProvider.cpp
         Stream.cpp

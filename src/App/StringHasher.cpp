@@ -33,6 +33,7 @@
 #include <Base/BufferIStream.h>
 #include <Base/Console.h>
 #include <Base/Reader.h>
+#include <Base/Sha1.h>
 #include <Base/Stream.h>
 #include <Base/Writer.h>
 
@@ -40,7 +41,6 @@
 #include <boost/bimap/set_of.hpp>
 #include <boost/bimap/unordered_set_of.hpp>
 #include <Base/ScopeGuard.h>
-#include <boost/uuid/detail/sha1.hpp>
 
 #include "MappedElement.h"
 #include "StringHasher.h"
@@ -75,24 +75,13 @@ std::size_t hashCombine(std::size_t a, std::size_t b)
     return a ^ (b + 0x9e3779b97f4a7c15ULL + (a << 6) + (a >> 2));
 }
 
-Base::ByteBuffer sha1Digest(Base::BytesView bytes)
+Base::ByteBuffer sha1DigestToByteBuffer(Base::BytesView bytes)
 {
-    boost::uuids::detail::sha1 sha1;
-    sha1.process_bytes(bytes.data(), bytes.size());
-
-    unsigned int digestWords[5] {};
-    sha1.get_digest(digestWords);
-
-    std::array<char, 20> out {};
-    for (int i = 0; i < 5; ++i) {
-        const std::uint32_t w = digestWords[i];
-        out[i * 4 + 0] = static_cast<char>((w >> 24) & 0xFFU);
-        out[i * 4 + 1] = static_cast<char>((w >> 16) & 0xFFU);
-        out[i * 4 + 2] = static_cast<char>((w >> 8) & 0xFFU);
-        out[i * 4 + 3] = static_cast<char>((w >> 0) & 0xFFU);
-    }
-
-    return Base::ByteBuffer::copy(Base::BytesView(out.data(), out.size()));
+    const auto digest = Base::sha1Digest(bytes);
+    return Base::ByteBuffer::copy(Base::BytesView(
+        reinterpret_cast<const char*>(digest.data()),
+        digest.size()
+    ));
 }
 
 void splitKeepEmpty(std::vector<std::string_view>& out, std::string_view input, char delim)
@@ -352,7 +341,7 @@ StringIDRef StringHasher::getID(Base::BytesView data, Options options)
 
     StringID dataID;
     if (hashed) {
-        dataID._data = sha1Digest(data);
+        dataID._data = sha1DigestToByteBuffer(data);
     }
     else {
         dataID._data = Base::ByteBuffer::borrow(data);
