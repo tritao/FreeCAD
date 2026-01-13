@@ -26,6 +26,8 @@
 #include <cassert>
 
 #include <atomic>
+#include <iterator>
+
 #include <Base/Console.h>
 #include <Base/Reader.h>
 #include <Base/Writer.h>
@@ -56,8 +58,7 @@ Transaction::Transaction(int id)
 
 Transaction::~Transaction()
 {
-    auto& index = _Objects.get<0>();
-    for (const auto& It : index) {
+    for (const auto& It : _Objects) {
         if (It.second->status == TransactionObject::New) {
             // If an object has been removed from the document the transaction
             // status is 'New'. The 'pcNameInDocument' member serves as criterion
@@ -134,28 +135,30 @@ bool Transaction::isEmpty() const
 
 bool Transaction::hasObject(const TransactionalObject* Obj) const
 {
-#if BOOST_VERSION < 107500
-    return !!_Objects.get<1>().count(Obj);
-#else
-    return !!_Objects.get<1>().contains(Obj);
-#endif
+    return _ObjectsByObject.find(Obj) != _ObjectsByObject.end();
 }
 
 void Transaction::changeProperty(TransactionalObject* Obj,
                                  std::function<void(TransactionObject* to)> changeFunc)
 {
-    auto& index = _Objects.get<1>();
-    auto pos = index.find(Obj);
+    auto pos = _ObjectsByObject.find(Obj);
+    TransactionObject* to = nullptr;
 
-    if (pos != index.end()) {
-        auto To = pos->second;
-        changeFunc(To);
+    if (pos != _ObjectsByObject.end()) {
+        to = pos->second->second;
     }
-    else if (auto To = TransactionFactory::instance().createTransaction(Obj->getTypeId())) {
-        To->status = TransactionObject::Chn;
-        index.emplace(Obj, To);
-        changeFunc(To);
+    else {
+        to = TransactionFactory::instance().createTransaction(Obj->getTypeId());
+        if (!to) {
+            return;
+        }
+        to->status = TransactionObject::Chn;
+        _Objects.emplace_back(Obj, to);
+        auto inserted = std::prev(_Objects.end());
+        _ObjectsByObject.emplace(Obj, inserted);
     }
+
+    changeFunc(to);
 }
 
 void Transaction::renameProperty(TransactionalObject* Obj, const Property* pcProp, const char* oldName)
@@ -180,14 +183,13 @@ void Transaction::apply(Document& Doc, bool forward)
 {
     std::string errMsg;
     try {
-        auto& index = _Objects.get<0>();
-        for (auto& info : index) {
+        for (auto& info : _Objects) {
             info.second->applyDel(Doc, const_cast<TransactionalObject*>(info.first));
         }
-        for (auto& info : index) {
+        for (auto& info : _Objects) {
             info.second->applyNew(Doc, const_cast<TransactionalObject*>(info.first));
         }
-        for (auto& info : index) {
+        for (auto& info : _Objects) {
             info.second->applyChn(Doc, const_cast<TransactionalObject*>(info.first), forward);
         }
     }
@@ -208,66 +210,86 @@ void Transaction::apply(Document& Doc, bool forward)
 
 void Transaction::addObjectNew(TransactionalObject* Obj)
 {
-    auto& index = _Objects.get<1>();
-    auto pos = index.find(Obj);
-    if (pos != index.end()) {
-        if (pos->second->status == TransactionObject::Del) {
+    auto pos = _ObjectsByObject.find(Obj);
+    if (pos != _ObjectsByObject.end()) {
+        auto it = pos->second;
+        if (it->second->status == TransactionObject::Del) {
             // first remove the item from the container before deleting it
-            auto second = pos->second;
-            auto first = pos->first;
-            index.erase(pos);
+            auto second = it->second;
+            auto first = it->first;
+            _Objects.erase(it);
+            _ObjectsByObject.erase(pos);
             delete second;
             delete first;
         }
         else {
-            pos->second->status = TransactionObject::New;
-            pos->second->_NameInDocument = Obj->detachFromDocument();
+            it->second->status = TransactionObject::New;
+            it->second->_NameInDocument = Obj->detachFromDocument();
             // move item at the end to make sure the order of removal is kept
-            auto& seq = _Objects.get<0>();
-            seq.relocate(seq.end(), _Objects.project<0>(pos));
+            _Objects.splice(_Objects.end(), _Objects, it);
         }
     }
-    else if (auto To = TransactionFactory::instance().createTransaction(Obj->getTypeId())) {
+    else {
+        TransactionObject* To = TransactionFactory::instance().createTransaction(Obj->getTypeId());
+        if (!To) {
+            return;
+        }
         To->status = TransactionObject::New;
         To->_NameInDocument = Obj->detachFromDocument();
-        index.emplace(Obj, To);
+        _Objects.emplace_back(Obj, To);
+        auto inserted = std::prev(_Objects.end());
+        _ObjectsByObject.emplace(Obj, inserted);
     }
 }
 
 void Transaction::addObjectDel(const TransactionalObject* Obj)
 {
-    auto& index = _Objects.get<1>();
-    auto pos = index.find(Obj);
+    auto pos = _ObjectsByObject.find(Obj);
 
     // is it created in this transaction ?
-    if (pos != index.end() && pos->second->status == TransactionObject::New) {
+    if (pos != _ObjectsByObject.end() && pos->second->second->status == TransactionObject::New) {
         // remove completely from transaction
-        delete pos->second;
-        index.erase(pos);
+        auto it = pos->second;
+        delete it->second;
+        _Objects.erase(it);
+        _ObjectsByObject.erase(pos);
     }
-    else if (pos != index.end() && pos->second->status == TransactionObject::Chn) {
-        pos->second->status = TransactionObject::Del;
+    else if (pos != _ObjectsByObject.end() && pos->second->second->status == TransactionObject::Chn) {
+        pos->second->second->status = TransactionObject::Del;
     }
-    else if (auto To = TransactionFactory::instance().createTransaction(Obj->getTypeId())) {
+    else {
+        TransactionObject* To = TransactionFactory::instance().createTransaction(Obj->getTypeId());
+        if (!To) {
+            return;
+        }
         To->status = TransactionObject::Del;
-        index.emplace(Obj, To);
+        _Objects.emplace_back(Obj, To);
+        auto inserted = std::prev(_Objects.end());
+        _ObjectsByObject.emplace(Obj, inserted);
     }
 }
 
 void Transaction::addObjectChange(const TransactionalObject* Obj, const Property* Prop)
 {
-    auto& index = _Objects.get<1>();
-    auto pos = index.find(Obj);
+    auto pos = _ObjectsByObject.find(Obj);
 
-    if (pos != index.end()) {
-        auto To = pos->second;
-        To->setProperty(Prop);
+    TransactionObject* to = nullptr;
+
+    if (pos != _ObjectsByObject.end()) {
+        to = pos->second->second;
     }
-    else if (auto To = TransactionFactory::instance().createTransaction(Obj->getTypeId())) {
-        To->status = TransactionObject::Chn;
-        index.emplace(Obj, To);
-        To->setProperty(Prop);
+    else {
+        to = TransactionFactory::instance().createTransaction(Obj->getTypeId());
+        if (!to) {
+            return;
+        }
+        to->status = TransactionObject::Chn;
+        _Objects.emplace_back(Obj, to);
+        auto inserted = std::prev(_Objects.end());
+        _ObjectsByObject.emplace(Obj, inserted);
     }
+
+    to->setProperty(Prop);
 }
 
 
@@ -566,12 +588,13 @@ void TransactionFactory::addProducer(const Base::Type& type, Base::AbstractProdu
  */
 TransactionObject* TransactionFactory::createTransaction(const Base::Type& type) const
 {
-    for (const auto& it : producers) {
-        if (type.isDerivedFrom(it.first)) {
-            return static_cast<TransactionObject*>(it.second->Produce());
+    std::map<Base::Type, Base::AbstractProducer*>::const_iterator it;
+    for (it = producers.begin(); it != producers.end(); ++it) {
+        if (type.isDerivedFrom(it->first)) {
+            return static_cast<TransactionObject*>(it->second->Produce());
         }
     }
 
-    Base::Console().log("Cannot create transaction object from %s\n", type.getName());
+    assert(0);
     return nullptr;
 }

@@ -26,19 +26,14 @@
 
 #pragma once
 
+#include <functional>
+#include <list>
 #include <unordered_map>
 #include <Base/Factory.h>
 #include <Base/Persistence.h>
 #include <App/PropertyContainer.h>
+
 #include "TransactionDefs.h"
-
-#include <boost/multi_index_container.hpp>
-#include <boost/multi_index/hashed_index.hpp>
-#include <boost/multi_index/sequenced_index.hpp>
-#include <boost/multi_index/member.hpp>
-#include <boost/multi_index/mem_fun.hpp>
-
-namespace bmi = boost::multi_index;
 
 namespace App
 {
@@ -61,7 +56,6 @@ class TransactionalObject;
 class AppExport Transaction: public Base::Persistence
 {
     TYPESYSTEM_HEADER_WITH_OVERRIDE();
-
 
 public:
     /**
@@ -159,12 +153,11 @@ private:
 private:
     int transID;
     using Info = std::pair<const TransactionalObject*, TransactionObject*>;
-    bmi::multi_index_container<
-        Info,
-        bmi::indexed_by<
-            bmi::sequenced<>,
-            bmi::hashed_unique<bmi::member<Info, const TransactionalObject*, &Info::first>>>>
-        _Objects;
+    using InfoList = std::list<Info>;
+    using InfoListIterator = InfoList::iterator;
+
+    InfoList _Objects;
+    std::unordered_map<const TransactionalObject*, InfoListIterator> _ObjectsByObject;
 };
 
 /**
