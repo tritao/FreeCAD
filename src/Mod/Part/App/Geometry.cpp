@@ -115,13 +115,13 @@
 # include <GeomAdaptor_HCurve.hxx>
 #endif
 
-#include <boost/random.hpp>
 #include <cmath>
 #include <ctime>
 #include <fstream>
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <random>
 #include <vector>
 
 // FreeType Headers
@@ -500,7 +500,7 @@ void Geometry::createNewTag()
     // Initialize a random number generator, to avoid Valgrind false positives.
     // The random number generator is not threadsafe so we guard it.  See
     // https://www.boost.org/doc/libs/1_62_0/libs/uuid/uuid.html#Design%20notes
-    static boost::mt19937 ran;
+    static std::mt19937 ran;
     static bool seeded = false;
     static std::mutex random_number_mutex;
 
@@ -510,7 +510,7 @@ void Geometry::createNewTag()
         ran.seed(static_cast<std::uint64_t>(std::time(nullptr)));
         seeded = true;
     }
-    static boost::uuids::basic_random_generator<boost::mt19937> gen(&ran);
+    static boost::uuids::basic_random_generator<std::mt19937> gen(&ran);
 
     tag = gen();
 }

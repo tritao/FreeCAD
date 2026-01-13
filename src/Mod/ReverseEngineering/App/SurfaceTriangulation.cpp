@@ -36,7 +36,6 @@
 // http://svn.pointclouds.org/pcl/tags/pcl-1.5.1/test/
 #if defined(HAVE_PCL_SURFACE)
 # include <cmath>
-# include <boost/random.hpp>
 # include <pcl/common/common.h>
 # include <pcl/common/io.h>
 # include <pcl/features/normal_3d.h>

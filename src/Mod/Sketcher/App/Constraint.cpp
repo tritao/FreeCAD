@@ -23,9 +23,9 @@
  ***************************************************************************/
 
 #include <QDateTime>
-#include <boost/random.hpp>
 #include <algorithm>
 #include <cmath>
+#include <random>
 #include <ranges>
 #include <stdexcept>
 #include <string>
@@ -56,7 +56,7 @@ Constraint::Constraint()
     // Initialize a random number generator, to avoid Valgrind false positives.
     // The random number generator is not threadsafe so we guard it.  See
     // https://www.boost.org/doc/libs/1_62_0/libs/uuid/uuid.html#Design%20notes
-    static boost::mt19937 ran;
+    static std::mt19937 ran;
     static bool seeded = false;
     static std::mutex random_number_mutex;
 
@@ -66,7 +66,7 @@ Constraint::Constraint()
         ran.seed(QDateTime::currentMSecsSinceEpoch() & 0xffffffff);
         seeded = true;
     }
-    static boost::uuids::basic_random_generator<boost::mt19937> gen(&ran);
+    static boost::uuids::basic_random_generator<std::mt19937> gen(&ran);
 
     tag = gen();
 }
