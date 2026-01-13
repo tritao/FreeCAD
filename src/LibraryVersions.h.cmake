@@ -26,6 +26,9 @@
 
 // No CMake version info for libarea, Zipios, or KDL
 
+// Boost
+constexpr const char * fcBoostVersion = "${Boost_VERSION_STRING}";
+
 // Coin3D
 constexpr const char * fcCoin3dVersion = "${COIN3D_VERSION}";
 
