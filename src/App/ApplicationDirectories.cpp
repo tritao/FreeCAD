@@ -206,16 +206,6 @@ void ApplicationDirectories::configurePaths(std::map<std::string,std::string>& m
     auto cacheHome = standardPaths.cache;
     auto tempPath = standardPaths.temp;
 
-#if defined(FC_OS_WIN32)
-    // Keep the old behaviour. On systems with non-7-bit-ASCII application
-    // data directories, GetTempPathW will return a path in DOS format. This
-    // path will be accepted by boost's file_lock class.
-#if (BOOST_VERSION < 107600)
-    tempPath = Base::FileInfo::stringToPath(Base::FileInfo::getTempPath());
-    cacheHome = tempPath;
-#endif
-#endif
-
     if (mConfig.contains("SafeMode")) {
         if (startSafeMode(mConfig)) {
             // If we're in safe mode, don't try to set any directories here, they've been overridden

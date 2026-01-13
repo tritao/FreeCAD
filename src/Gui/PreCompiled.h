@@ -68,7 +68,6 @@
 #include <boost_graph_adjacency_list.hpp>
 #include <fastsignals/signal.h>
 #include <Base/StringPredicates.h>
-#include <boost/interprocess/sync/file_lock.hpp>
 
 // Xerces
 #include <xercesc/util/TranscodingException.hpp>

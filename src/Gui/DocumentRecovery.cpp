@@ -24,8 +24,6 @@
 // write a property to file only when it has been modified
 // implement xml meta file
 
-
-#include <boost/interprocess/sync/file_lock.hpp>
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDateTime>
@@ -51,6 +49,7 @@
 #include <App/Document.h>
 #include <App/ProjectFile.h>
 #include <Base/Exception.h>
+#include <Base/FileLock.h>
 #include <Gui/Application.h>
 #include <Gui/Command.h>
 #include <Gui/Dialogs/DlgCheckableMessageBox.h>
@@ -810,12 +809,8 @@ void DocumentRecoveryHandler::checkForPreviousCrashes(
         if (bn.startsWith(exeName) && bn.indexOf(uiid) < 0) {
             QString fn = it.absoluteFilePath();
 
-#if !defined(FC_OS_WIN32) || (BOOST_VERSION < 107600)
-            boost::interprocess::file_lock flock(fn.toUtf8());
-#else
-            boost::interprocess::file_lock flock(fn.toStdWString().c_str());
-#endif
-            if (flock.try_lock()) {
+            Base::FileLock flock(fn.toUtf8().toStdString());
+            if (flock.tryLock(0)) {
                 // OK, this file is a leftover from a previous crash
                 QString crashedUiid = bn.mid(exeName.length() + 1);
                 // search for transient directories with this UIID
