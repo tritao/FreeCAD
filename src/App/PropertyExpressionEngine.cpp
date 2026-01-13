@@ -23,7 +23,6 @@
  ***************************************************************************/
 
 #include <boost/graph/topological_sort.hpp>
-#include <boost/unordered/unordered_map.hpp>
 #include <boost_graph_adjacency_list.hpp>
 
 #include <App/Application.h>
@@ -127,11 +126,11 @@ struct PropertyExpressionEngine::Private
      * dependencies.
      */
     static void buildGraph(const ExpressionMap& exprs,
-                    boost::unordered_map<int, App::ObjectIdentifier>& revNodes,
+                    std::unordered_map<int, App::ObjectIdentifier>& revNodes,
                     DiGraph& g,
                     ExecuteOption option = ExecuteAll)
     {
-        boost::unordered_map<ObjectIdentifier, int> nodes;
+        std::unordered_map<ObjectIdentifier, int> nodes;
         std::vector<Edge> edges;
 
         // Build data structure for graph
@@ -180,8 +179,8 @@ struct PropertyExpressionEngine::Private
     static void buildGraphStructures(
     const ObjectIdentifier& path,
     const std::shared_ptr<Expression> expression,
-    boost::unordered_map<ObjectIdentifier, int>& nodes,
-    boost::unordered_map<int, ObjectIdentifier>& revNodes,
+    std::unordered_map<ObjectIdentifier, int>& nodes,
+    std::unordered_map<int, ObjectIdentifier>& revNodes,
     std::vector<Edge>& edges)
     {
         /* Insert target property into nodes structure */
@@ -619,7 +618,7 @@ std::vector<App::ObjectIdentifier>
 PropertyExpressionEngine::computeEvaluationOrder(ExecuteOption option)
 {
     std::vector<App::ObjectIdentifier> evaluationOrder;
-    boost::unordered_map<int, ObjectIdentifier> revNodes;
+    std::unordered_map<int, ObjectIdentifier> revNodes;
     DiGraph g;
 
     Private::buildGraph(expressions, revNodes, g, option);
@@ -846,7 +845,7 @@ PropertyExpressionEngine::validateExpression(const ObjectIdentifier& path,
 
     // Build graph; an exception will be thrown if it is not a DAG
     try {
-        boost::unordered_map<int, ObjectIdentifier> revNodes;
+        std::unordered_map<int, ObjectIdentifier> revNodes;
         DiGraph g;
 
         Private::buildGraph(newExpressions, revNodes, g);

@@ -26,6 +26,7 @@
 
 #include <functional>
 #include <set>
+#include <unordered_map>
 
 #include <fastsignals/signal.h>
 
