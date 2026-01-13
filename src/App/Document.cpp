@@ -934,8 +934,7 @@ Document::~Document()
     try {
         clearUndos();
     }
-    catch (const boost::exception&) {
-    }
+    catch (...) {}
 
 #ifdef FC_LOGUPDATECHAIN
     Console().log("-Delete Features of %s \n", getName());
