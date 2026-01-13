@@ -30,11 +30,9 @@
 #include <QTreeView>
 #include "PropertyPage.h"
 
-#include <boost/property_tree/ptree.hpp>
-#include <boost/property_tree/xml_parser.hpp>
-
 class Command;
 class QPushButton;
+class QXmlStreamReader;
 
 namespace Gui
 {
@@ -68,7 +66,7 @@ public:
     void loadConfig(const char* RequiredDeviceName);
 
 private:
-    void load3DConnexionButtonMapping(boost::property_tree::ptree ButtonMapTree);
+    void load3DConnexionButtonMapping(QXmlStreamReader& xml);
     void load3DConnexionButtons(const char* RequiredDeviceName);
     ParameterGrp::handle spaceballButtonGroup() const;
     QString getLabel(const int& number) const;
