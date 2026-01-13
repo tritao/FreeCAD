@@ -36,7 +36,7 @@
 #include <unordered_map>
 
 // boost
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 
 // fmt
 #include <fmt/format.h>

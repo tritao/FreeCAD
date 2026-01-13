@@ -33,7 +33,7 @@
 #include <set>
 #include <map>
 #include <string>
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 #include <Inventor/SoPickedPoint.h>
 #include <Inventor/actions/SoGetBoundingBoxAction.h>
 #include <Inventor/details/SoDetail.h>
@@ -1778,7 +1778,7 @@ bool LinkView::linkGetDetailPath(const char* subname, SoFullPath* path, SoDetail
                     CharRange name(subname + 1, dot);
                     for (const auto& info : nodeArray) {
                         if (info->isLinked()
-                            && boost::equals(name, info->linkInfo->getLinkedLabel())) {
+                            && Base::equals(name, info->linkInfo->getLinkedLabel())) {
                             idx = i;
                             break;
                         }
@@ -1788,7 +1788,7 @@ bool LinkView::linkGetDetailPath(const char* subname, SoFullPath* path, SoDetail
                 else {
                     CharRange name(subname, dot);
                     for (const auto& info : nodeArray) {
-                        if (info->isLinked() && boost::equals(name, info->linkInfo->getLinkedName())) {
+                        if (info->isLinked() && Base::equals(name, info->linkInfo->getLinkedName())) {
                             idx = i;
                             break;
                         }
@@ -1849,7 +1849,7 @@ bool LinkView::linkGetDetailPath(const char* subname, SoFullPath* path, SoDetail
                     nextsub = subname;
                 }
                 else {
-                    if (!boost::algorithm::starts_with(subname, v.first)) {
+                    if (!Base::startsWith(subname, v.first)) {
                         continue;
                     }
                     nextsub = subname + v.first.size();
@@ -2897,13 +2897,13 @@ bool ViewProviderLink::getDetailPath(const char* subname, SoFullPath* pPath, boo
             if (const char* dot = strchr(subname, '.')) {
                 if (subname[0] == '$') {
                     CharRange sub(subname + 1, dot);
-                    if (!boost::equals(sub, linked->Label.getValue())) {
+                    if (!Base::equals(sub, linked->Label.getValue())) {
                         dot = nullptr;
                     }
                 }
                 else {
                     CharRange sub(subname, dot);
-                    if (!boost::equals(sub, linked->getNameInDocument())) {
+                    if (!Base::equals(sub, linked->getNameInDocument())) {
                         dot = nullptr;
                     }
                 }
@@ -3653,7 +3653,7 @@ std::map<std::string, Base::Color> ViewProviderLink::getElementColorsFrom(
                 ++pos;
             }
             const char* element = sub.oldName.c_str() + pos;
-            if (boost::starts_with(element, wildcard)) {
+            if (Base::startsWith(element, wildcard)) {
                 colors[sub.oldName] = colorList[i];
             }
             else if (!element[0] && wildcard == "Face") {
@@ -3752,8 +3752,8 @@ std::map<std::string, Base::Color> ViewProviderLink::getElementColorsFrom(
         }
 
         if (isPrefix) {
-            if (!boost::starts_with(sub.newName, subname + offset)
-                && !boost::starts_with(sub.oldName, subname + offset)) {
+            if (!Base::startsWith(sub.newName, subname + offset)
+                && !Base::startsWith(sub.oldName, subname + offset)) {
                 continue;
             }
         }
