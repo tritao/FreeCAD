@@ -34,7 +34,6 @@
 #else
 # include <GL/gl.h>
 #endif
-#include <boost/math/constants/constants.hpp>
 #include <Inventor/actions/SoAction.h>
 #include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/actions/SoPickAction.h>
@@ -952,7 +951,7 @@ SbRotation NaviCubeImplementation::getNearestOrientation(PickId pickId)
 
 bool NaviCubeImplementation::mouseReleased(short x, short y)
 {
-    static const float pi = boost::math::constants::pi<float>();
+    constexpr float pi = std::numbers::pi_v<float>;
     auto resetClickState = [this]() {
         m_LastClickPickId = PickId::None;
         m_ClickTimer.invalidate();
