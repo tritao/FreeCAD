@@ -23,11 +23,11 @@
 
 #include <cinttypes>
 #include <iomanip>
-#include <boost/algorithm/string.hpp>
 
 #include <Base/Exception.h>
 #include <Base/Reader.h>
 #include <Base/Rotation.h>
+#include <Base/StringTools.h>
 #include <Base/Vector3D.h>
 #include <Base/Writer.h>
 
@@ -93,14 +93,14 @@ Vector3d Command::getCenter() const
 double Command::getValue(const std::string& attr) const
 {
     std::string a(attr);
-    boost::to_upper(a);
+    Base::StringTools::toUpperAsciiInPlace(a);
     return getParam(a);
 }
 
 bool Command::has(const std::string& attr) const
 {
     std::string a(attr);
-    boost::to_upper(a);
+    Base::StringTools::toUpperAsciiInPlace(a);
     return Parameters.contains(a);
 }
 
@@ -198,7 +198,7 @@ void Command::setFromGCode(const std::string& str)
             if (mode == "command") {
                 if (!key.empty() && !value.empty()) {
                     std::string cmd = key + value;
-                    boost::to_upper(cmd);
+                    Base::StringTools::toUpperAsciiInPlace(cmd);
                     Name = cmd;
                     key = "";
                     value = "";
@@ -215,7 +215,7 @@ void Command::setFromGCode(const std::string& str)
             else if (mode == "argument") {
                 if (!key.empty() && !value.empty()) {
                     double val = std::atof(value.c_str());
-                    boost::to_upper(key);
+                    Base::StringTools::toUpperAsciiInPlace(key);
                     Parameters[key] = val;
                     key = "";
                     value = "";
@@ -253,13 +253,13 @@ void Command::setFromGCode(const std::string& str)
         if ((mode == "command") || (mode == "comment")) {
             std::string cmd = key + value;
             if (mode == "command") {
-                boost::to_upper(cmd);
+                Base::StringTools::toUpperAsciiInPlace(cmd);
             }
             Name = cmd;
         }
         else {
             double val = std::atof(value.c_str());
-            boost::to_upper(key);
+            Base::StringTools::toUpperAsciiInPlace(key);
             Parameters[key] = val;
         }
     }
