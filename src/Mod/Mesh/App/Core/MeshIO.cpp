@@ -34,8 +34,6 @@
 #include <string_view>
 
 
-#include <boost/algorithm/string.hpp>
-
 #include "IO/Reader3MF.h"
 #include "IO/ReaderOBJ.h"
 #include "IO/ReaderPLY.h"
@@ -50,6 +48,7 @@
 #include <Base/Reader.h>
 #include <Base/Sequencer.h>
 #include <Base/Stream.h>
+#include <Base/StringTools.h>
 #include <Base/Tools.h>
 #include <Base/Writer.h>
 #include <zipios++/gzipoutputstream.h>
@@ -481,7 +480,7 @@ bool MeshInput::LoadSTL(std::istream& input)
         return (ulCt == 0);
     }
     szBuf[ulBytes] = 0;
-    boost::algorithm::to_upper(szBuf);
+    Base::StringTools::toUpperAsciiInPlace(szBuf);
 
     try {
         if (!strstr(szBuf, "SOLID") && !strstr(szBuf, "FACET") && !strstr(szBuf, "NORMAL")
@@ -616,7 +615,7 @@ bool MeshInput::LoadOFF(std::istream& input)
     }
 
     std::getline(input, line);
-    boost::algorithm::to_lower(line);
+    Base::StringTools::toLowerAsciiInPlace(line);
     if (line.find("coff") != std::string::npos) {
         // we expect colors to be there per vertex: x y z r g b a
         colorPerVertex = true;
@@ -630,7 +629,7 @@ bool MeshInput::LoadOFF(std::istream& input)
 
     while (true) {
         std::getline(input, line);
-        boost::algorithm::to_lower(line);
+        Base::StringTools::toLowerAsciiInPlace(line);
         int unused = 0;
         if (parseInt3NoKeywordFromLine(line, numPoints, numFaces, unused)) {
             break;
@@ -801,7 +800,7 @@ bool MeshInput::LoadMeshNode(std::istream& input)
     }
 
     while (std::getline(input, line)) {
-        boost::algorithm::to_lower(line);
+        Base::StringTools::toLowerAsciiInPlace(line);
         if (parseFloat3FromLine(line, "v", nullptr, fX, fY, fZ)) {
             meshPoints.push_back(MeshPoint(Base::Vector3f(fX, fY, fZ)));
         }
@@ -844,7 +843,7 @@ bool MeshInput::LoadAsciiSTL(std::istream& input)
 
     // count facets
     while (std::getline(input, line)) {
-        boost::algorithm::to_upper(line);
+        Base::StringTools::toUpperAsciiInPlace(line);
         if (line.find("ENDFACET") != std::string::npos) {
             ulFacetCt++;
         }
@@ -869,7 +868,7 @@ bool MeshInput::LoadAsciiSTL(std::istream& input)
 
     ulVertexCt = 0;
     while (std::getline(input, line)) {
-        boost::algorithm::to_upper(line);
+        Base::StringTools::toUpperAsciiInPlace(line);
         if (parseFloat3FromLine(line, "FACET", "NORMAL", fX, fY, fZ)) {
             clFacet.SetNormal(Base::Vector3f(fX, fY, fZ));
         }
@@ -1079,7 +1078,7 @@ bool MeshInput::LoadNastran(std::istream& input)
     int badElementCounter = 0;
 
     while (std::getline(input, line)) {
-        boost::algorithm::to_upper(ltrim(line));
+        Base::StringTools::toUpperAsciiInPlace(ltrim(line));
         if (line.empty()) {
             // Skip all the following tests
         }
@@ -1121,10 +1120,10 @@ bool MeshInput::LoadNastran(std::istream& input)
 
             // We have to strip off any whitespace (technically really just any *trailing*
             // whitespace):
-            auto indexString = boost::trim_copy(std::string(indexView));
-            auto xString = boost::trim_copy(std::string(xView));
-            auto yString = boost::trim_copy(std::string(yView));
-            auto zString = boost::trim_copy(std::string(zView));
+            auto indexString = Base::StringTools::trimCopy(indexView);
+            auto xString = Base::StringTools::trimCopy(xView);
+            auto yString = Base::StringTools::trimCopy(yView);
+            auto zString = Base::StringTools::trimCopy(zView);
 
             const auto indexCheck = parseIntStrict(indexString);
             if (!indexCheck) {
@@ -1217,10 +1216,10 @@ bool MeshInput::LoadNastran(std::istream& input)
                 auto yView = std::string_view(&line[32], 8);
                 auto zView = std::string_view(&line[40], 8);
 
-                auto indexString = boost::trim_copy(std::string(indexView));
-                auto xString = boost::trim_copy(std::string(xView));
-                auto yString = boost::trim_copy(std::string(yView));
-                auto zString = boost::trim_copy(std::string(zView));
+                auto indexString = Base::StringTools::trimCopy(indexView);
+                auto xString = Base::StringTools::trimCopy(xView);
+                auto yString = Base::StringTools::trimCopy(yView);
+                auto zString = Base::StringTools::trimCopy(zView);
 
                 const auto indexCheck = parseIntStrict(indexString);
                 if (!indexCheck) {

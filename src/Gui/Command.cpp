@@ -30,7 +30,7 @@
 #include <QKeySequence>
 #include <QMessageBox>
 
-#include <boost/algorithm/string/replace.hpp>
+#include <Base/StringTools.h>
 
 #include <FCConfig.h>
 
@@ -429,7 +429,7 @@ void Command::invoke(int i, TriggerSource trigger)
     CommandTrigger cmdTrigger(_trigger, trigger);
     if (displayText.empty()) {
         displayText = getMenuText() ? getMenuText() : "";
-        boost::replace_all(displayText, "&", "");
+        Base::StringTools::replaceAll(displayText, "&", "");
         if (displayText.empty()) {
             displayText = getName();
         }

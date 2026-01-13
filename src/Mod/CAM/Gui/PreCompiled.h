@@ -27,9 +27,6 @@
 
 #include <FCConfig.h>
 
-// boost
-#include <boost/algorithm/string/replace.hpp>
-
 // OCC
 #include <TopExp_Explorer.hxx>
 

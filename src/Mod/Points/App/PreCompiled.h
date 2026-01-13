@@ -40,7 +40,6 @@
 #include <vector>
 
 // boost
-#include <boost/algorithm/string.hpp>
 #include <cmath>
 
 // Qt

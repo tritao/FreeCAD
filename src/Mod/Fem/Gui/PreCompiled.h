@@ -44,8 +44,6 @@
 #include <vector>
 
 // boost
-#include <boost/algorithm/string.hpp>
-
 #ifdef FC_OS_WIN32
 # include <windows.h>
 #endif

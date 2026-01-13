@@ -51,9 +51,6 @@
 #include <vector>
 
 // boost
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/replace.hpp>
-
 // Xerces
 #include <xercesc/dom/DOM.hpp>
 #include <xercesc/dom/DOMImplementation.hpp>

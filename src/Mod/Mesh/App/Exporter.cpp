@@ -23,9 +23,9 @@
  ***************************************************************************/
 
 #include <algorithm>
-#include <boost/algorithm/string/replace.hpp>
 #include <vector>
 
+#include <Base/StringTools.h>
 
 #include <App/Application.h>
 #include <App/ComplexGeoData.h>
@@ -93,11 +93,11 @@ Exporter::Exporter() = default;
 std::string Exporter::xmlEscape(const std::string& input)
 {
     std::string out(input);
-    boost::replace_all(out, "&", "&amp;");
-    boost::replace_all(out, "\"", "&quot;");
-    boost::replace_all(out, "'", "&apos;");
-    boost::replace_all(out, "<", "&lt;");
-    boost::replace_all(out, ">", "&gt;");
+    Base::StringTools::replaceAll(out, "&", "&amp;");
+    Base::StringTools::replaceAll(out, "\"", "&quot;");
+    Base::StringTools::replaceAll(out, "'", "&apos;");
+    Base::StringTools::replaceAll(out, "<", "&lt;");
+    Base::StringTools::replaceAll(out, ">", "&gt;");
     return out;
 }
 

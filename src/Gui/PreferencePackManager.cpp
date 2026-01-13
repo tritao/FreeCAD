@@ -27,8 +27,9 @@
 
 
 #include <filesystem>
-#include <boost/algorithm/string.hpp>
 #include <QDir>
+
+#include <Base/StringTools.h>
 
 #include "PreferencePackManager.h"
 #include "App/Metadata.h"
@@ -267,7 +268,12 @@ std::vector<std::filesystem::path> Gui::PreferencePackManager::modPaths() const
     std::vector<std::filesystem::path> result;
 
     if (additionalModules != config.end()) {
-        boost::split(result, additionalModules->second, boost::is_any_of(";"), boost::token_compress_on);
+        std::vector<std::string> modules;
+        Base::StringTools::splitAnyOf(modules, additionalModules->second, ";", true);
+        result.reserve(result.size() + modules.size());
+        for (const auto& module : modules) {
+            result.emplace_back(module);
+        }
     }
     result.emplace_back(userModPath);
     return result;
