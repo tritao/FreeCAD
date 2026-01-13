@@ -39,7 +39,7 @@
 #include <boost/bimap.hpp>
 #include <boost/bimap/set_of.hpp>
 #include <boost/bimap/unordered_set_of.hpp>
-#include <boost/io/ios_state.hpp>
+#include <Base/ScopeGuard.h>
 #include <boost/uuid/detail/sha1.hpp>
 
 #include "MappedElement.h"
@@ -583,7 +583,8 @@ void StringHasher::SaveDocFile(Base::Writer& writer) const
 void StringHasher::saveStream(std::ostream& stream) const
 {
     Base::TextOutputStream textStreamWrapper(stream);
-    boost::io::ios_flags_saver ifs(stream);
+    const auto oldFlags = stream.flags();
+    [[maybe_unused]] const auto flagsGuard = Base::makeScopeExit([&] { stream.flags(oldFlags); });
     stream << std::hex;
 
     long anchor = 0;
@@ -703,7 +704,8 @@ void StringHasher::restoreStreamNew(std::istream& stream, std::size_t count)
     Base::TextInputStream asciiStream(stream);
     _hashes->clear();
     std::string content;
-    boost::io::ios_flags_saver ifs(stream);
+    const auto oldFlags = stream.flags();
+    [[maybe_unused]] const auto flagsGuard = Base::makeScopeExit([&] { stream.flags(oldFlags); });
     stream >> std::hex;
     std::vector<std::string_view> tokens;
     long lastid = 0;
