@@ -32,6 +32,12 @@
 #include <memory>
 #include <functional>
 
+#include <boost/multi_index_container.hpp>
+#include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/sequenced_index.hpp>
+#include <boost/multi_index/member.hpp>
+#include <boost/multi_index/mem_fun.hpp>
+
 #include <FCGlobal.h>
 
 
@@ -46,6 +52,8 @@ namespace App
 {
 class Property;
 class PropertyContainer;
+
+namespace bmi = boost::multi_index;
 
 struct AppExport CStringHasher
 {
