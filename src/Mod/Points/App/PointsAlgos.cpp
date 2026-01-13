@@ -34,7 +34,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
-#include <boost/math/special_functions/fpclassify.hpp>  // needed for compilation on some systems
+#include <cmath>  // needed for compilation on some systems
 
 #include <Base/Console.h>
 #include <Base/Converter.h>
@@ -2044,7 +2044,7 @@ void PlyWriter::write(const std::string& filename)
     const std::vector<Base::Vector3f>& pts = points.getBasicPoints();
     for (Eigen::Index i = 0; i < numPoints; i++) {
         const Base::Vector3f& p = pts[i];
-        if (!boost::math::isnan(p.x) && !boost::math::isnan(p.y) && !boost::math::isnan(p.z)) {
+        if (!std::isnan(p.x) && !std::isnan(p.y) && !std::isnan(p.z)) {
             numValid++;
         }
     }
@@ -2130,13 +2130,13 @@ void PlyWriter::write(const std::string& filename)
     out << "end_header" << std::endl;
 
     for (Eigen::Index r = 0; r < numPoints; r++) {
-        if (boost::math::isnan(data(r, 0))) {
+        if (std::isnan(data(r, 0))) {
             continue;
         }
-        if (boost::math::isnan(data(r, 1))) {
+        if (std::isnan(data(r, 1))) {
             continue;
         }
-        if (boost::math::isnan(data(r, 2))) {
+        if (std::isnan(data(r, 2))) {
             continue;
         }
         for (Eigen::Index c = 0; c < col; c++) {
@@ -2316,7 +2316,7 @@ void PcdWriter::write(const std::string& filename)
     for (Eigen::Index r = 0; r < numPoints; r++) {
         for (Eigen::Index c = 0; c < col; c++) {
             double value = data(r, c);
-            if (boost::math::isnan(value)) {
+            if (std::isnan(value)) {
                 out << "nan ";
             }
             else {

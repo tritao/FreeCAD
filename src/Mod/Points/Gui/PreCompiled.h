@@ -33,7 +33,7 @@
 #include <memory>
 
 // boost
-#include <boost/math/special_functions/fpclassify.hpp>
+#include <cmath>
 
 // Qt
 #include <QDialog>

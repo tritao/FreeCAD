@@ -41,7 +41,7 @@
 #include <vector>
 
 // Boost
-#include <boost/math/special_functions/fpclassify.hpp>
+#include <cmath>
 
 #ifdef FC_OS_WIN32
 # include <windows.h>

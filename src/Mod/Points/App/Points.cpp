@@ -23,7 +23,7 @@
  ***************************************************************************/
 
 #include <QtConcurrentMap>
-#include <boost/math/special_functions/fpclassify.hpp>
+#include <cmath>
 #include <cmath>
 #include <iostream>
 
@@ -164,7 +164,7 @@ PointKernel::size_type PointKernel::countValid() const
 {
     size_type num = 0;
     for (const auto& it : *this) {
-        if (!(boost::math::isnan(it.x) || boost::math::isnan(it.y) || boost::math::isnan(it.z))) {
+        if (!(std::isnan(it.x) || std::isnan(it.y) || std::isnan(it.z))) {
             num++;
         }
     }
@@ -176,7 +176,7 @@ std::vector<PointKernel::value_type> PointKernel::getValidPoints() const
     std::vector<PointKernel::value_type> valid;
     valid.reserve(countValid());
     for (const auto& it : *this) {
-        if (!(boost::math::isnan(it.x) || boost::math::isnan(it.y) || boost::math::isnan(it.z))) {
+        if (!(std::isnan(it.x) || std::isnan(it.y) || std::isnan(it.z))) {
             valid.emplace_back(
                 static_cast<float_type>(it.x),
                 static_cast<float_type>(it.y),
