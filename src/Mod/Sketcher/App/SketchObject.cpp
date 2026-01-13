@@ -38,6 +38,10 @@
 #include <boost/iostreams/stream.hpp>
 #include <boost/geometry.hpp>
 
+#include <HLRAlgo_Projector.hxx>
+#include <HLRBRep_Algo.hxx>
+#include <HLRBRep_HLRToShape.hxx>
+
 #include <App/Application.h>
 #include <App/Document.h>
 #include <App/ElementNamingUtils.h>
