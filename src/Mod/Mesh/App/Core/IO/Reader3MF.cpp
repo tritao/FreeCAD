@@ -22,7 +22,6 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/tokenizer.hpp>
 #include <memory>
 #include <ostream>
 #include <sstream>
@@ -33,6 +32,7 @@
 #include "Core/MeshIO.h"
 #include "Core/MeshKernel.h"
 #include <Base/InputSource.h>
+#include <Base/StringTokenizer.h>
 #include <Base/XMLTools.h>
 #include <Base/ZipHeader.h>
 #include <zipios++/zipfile.h>
@@ -252,10 +252,7 @@ std::optional<Base::Matrix4D> Reader3MF::ReadTransform(DOMNode* transformAttr)
 
     if (transformAttr) {
         std::string transform = StrX(transformAttr->getNodeValue()).c_str();
-        boost::char_separator<char> sep(" ,");
-        boost::tokenizer<boost::char_separator<char>> tokens(transform, sep);
-        std::vector<std::string> token_results;
-        token_results.assign(tokens.begin(), tokens.end());
+        std::vector<std::string> token_results = Base::splitAnyOf(transform, " ,");
         if (token_results.size() == numEntries) {
             Base::Matrix4D mat;
             // NOLINTBEGIN

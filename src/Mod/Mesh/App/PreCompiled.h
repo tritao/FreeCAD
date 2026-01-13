@@ -52,7 +52,6 @@
 // boost
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/tokenizer.hpp>
 
 // Xerces
 #include <xercesc/dom/DOM.hpp>
