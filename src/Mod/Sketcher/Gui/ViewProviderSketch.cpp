@@ -968,8 +968,7 @@ bool ViewProviderSketch::mouseButtonPressed(int Button, bool pressed, const SbVe
     SbVec3f point = line.getPosition();
     SbVec3f normal = line.getDirection();
 
-    // use scoped_ptr to make sure that instance gets deleted in all cases
-    boost::scoped_ptr<SoPickedPoint> pp(this->getPointOnRay(cursorPos, viewer));
+    std::unique_ptr<SoPickedPoint> pp(this->getPointOnRay(cursorPos, viewer));
 
     // Radius maximum to allow double click event
     const int dblClickRadius = 5;
@@ -1071,7 +1070,7 @@ bool ViewProviderSketch::mouseButtonPressed(int Button, bool pressed, const SbVe
                         std::stringstream ss;
                         ss << "Vertex" << preselection.getPreselectionVertexIndex();
 
-                        preselectToSelection(ss, pp, true);
+                        preselectToSelection(ss, *pp, true);
                     }
                     setSketchMode(STATUS_NONE);
                     return true;
@@ -1084,7 +1083,7 @@ bool ViewProviderSketch::mouseButtonPressed(int Button, bool pressed, const SbVe
                         else// external geometry
                             ss << "ExternalEdge" << preselection.getPreselectionExternalEdgeIndex();
 
-                        preselectToSelection(ss, pp, true);
+                        preselectToSelection(ss, *pp, true);
                     }
                     setSketchMode(STATUS_NONE);
                     return true;
@@ -1106,7 +1105,7 @@ bool ViewProviderSketch::mouseButtonPressed(int Button, bool pressed, const SbVe
                                 break;
                         }
 
-                        preselectToSelection(ss, pp, true);
+                        preselectToSelection(ss, *pp, true);
                     }
                     setSketchMode(STATUS_NONE);
                     return true;
@@ -1122,7 +1121,7 @@ bool ViewProviderSketch::mouseButtonPressed(int Button, bool pressed, const SbVe
                             std::stringstream ss;
                             ss << Sketcher::PropertyConstraintList::getConstraintName(id);
 
-                            preselectToSelection(ss, pp, true);
+                            preselectToSelection(ss, *pp, true);
                         }
                     }
                     setSketchMode(STATUS_NONE);
@@ -1251,7 +1250,7 @@ bool ViewProviderSketch::mouseButtonPressed(int Button, bool pressed, const SbVe
                         std::stringstream ss;
                         ss << "Vertex" << preselection.getPreselectionVertexIndex();
 
-                        preselectToSelection(ss, pp, false);
+                        preselectToSelection(ss, *pp, false);
                     }
                     setSketchMode(STATUS_NONE);
                     generateContextMenu();
@@ -1267,7 +1266,7 @@ bool ViewProviderSketch::mouseButtonPressed(int Button, bool pressed, const SbVe
                             ss << "ExternalEdge" << preselection.getPreselectionExternalEdgeIndex();
                         }
 
-                        preselectToSelection(ss, pp, false);
+                        preselectToSelection(ss, *pp, false);
                     }
                     setSketchMode(STATUS_NONE);
                     generateContextMenu();
@@ -1290,7 +1289,7 @@ bool ViewProviderSketch::mouseButtonPressed(int Button, bool pressed, const SbVe
                                 break;
                         }
 
-                        preselectToSelection(ss, pp, false);
+                        preselectToSelection(ss, *pp, false);
                     }
                     setSketchMode(STATUS_NONE);
                     generateContextMenu();
@@ -1302,7 +1301,7 @@ bool ViewProviderSketch::mouseButtonPressed(int Button, bool pressed, const SbVe
                             std::stringstream ss;
                             ss << Sketcher::PropertyConstraintList::getConstraintName(id);
 
-                            preselectToSelection(ss, pp, false);
+                            preselectToSelection(ss, *pp, false);
                         }
                     }
                     setSketchMode(STATUS_NONE);
@@ -4788,7 +4787,7 @@ void ViewProviderSketch::generateContextMenu()
 }
 
 void ViewProviderSketch::preselectToSelection(const std::stringstream& ss,
-                                              boost::scoped_ptr<SoPickedPoint>& pp,
+                                              const SoPickedPoint& pp,
                                               bool toggle)
 {
     // If toggle true and preselection already selected remove from selection
@@ -4797,7 +4796,7 @@ void ViewProviderSketch::preselectToSelection(const std::stringstream& ss,
     }
     // add to selection
     else {
-        addSelection2(ss.str(), pp->getPoint()[0], pp->getPoint()[1], pp->getPoint()[2]);
+        addSelection2(ss.str(), pp.getPoint()[0], pp.getPoint()[1], pp.getPoint()[2]);
         drag.resetIds();
     }
 }

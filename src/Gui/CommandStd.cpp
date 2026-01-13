@@ -31,6 +31,8 @@
 #include <QTimer>
 #include <QProcess>
 
+#include <memory>
+
 #include <App/Document.h>
 #include <Base/Exception.h>
 #include <Base/Interpreter.h>
@@ -264,7 +266,7 @@ void StdCmdAbout::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
     const Gui::Dialog::AboutDialogFactory* f = Gui::Dialog::AboutDialogFactory::defaultFactory();
-    boost::scoped_ptr<QDialog> dlg(f->create(getMainWindow()));
+    std::unique_ptr<QDialog> dlg(f->create(getMainWindow()));
     dlg->exec();
 }
 

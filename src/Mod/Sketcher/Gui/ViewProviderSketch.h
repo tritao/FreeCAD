@@ -839,7 +839,7 @@ private:
 
     void preselectToSelection(
         const std::stringstream& ss,
-        boost::scoped_ptr<SoPickedPoint>& pp,
+        const SoPickedPoint& pp,
         bool toggle
     );
     //@}
