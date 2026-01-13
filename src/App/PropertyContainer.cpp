@@ -26,12 +26,6 @@
 #include <vector>
 #include <string>
 
-#include <boost/multi_index_container.hpp>
-#include <boost/multi_index/hashed_index.hpp>
-#include <boost/multi_index/sequenced_index.hpp>
-#include <boost/multi_index/member.hpp>
-#include <boost/multi_index/mem_fun.hpp>
-
 #include <Base/Console.h>
 #include <Base/Exception.h>
 #include <Base/Reader.h>
@@ -414,39 +408,6 @@ void PropertyContainer::onPropertyStatusChanged(const Property &prop, unsigned l
     (void)oldStatus;
 }
 
-namespace bmi = boost::multi_index;
-
-struct PropertyData::Impl
-{
-    /**
-     * @brief A multi index container for holding the property spec.
-     *
-     * The multi index has the following index:
-     * - a sequence, to preserve creation order
-     * - hash index on property name
-     * - hash index on property pointer offset
-     */
-    // clang-format off
-    mutable bmi::multi_index_container<
-    PropertySpec,
-    bmi::indexed_by<
-        bmi::sequenced<>,
-        bmi::hashed_unique<
-            bmi::member<PropertySpec, const char*, &PropertySpec::Name>,
-            CStringHasher,
-            CStringHasher
-        >,
-        bmi::hashed_unique<
-            bmi::member<PropertySpec, short, &PropertySpec::Offset>
-        >
-    >
-    > propertyData;
-     // clang-format on
-};
-
-PropertyData::PropertyData(): impl(std::make_unique<Impl>()) {};
-PropertyData::~PropertyData() = default;
-
 void PropertyData::addProperty(OffsetBase offsetBase,const char* PropName, Property *Prop, const char* PropertyGroup , PropertyType Type, const char* PropertyDocu)
 {
 #ifdef FC_DEBUG
@@ -456,15 +417,17 @@ void PropertyData::addProperty(OffsetBase offsetBase,const char* PropName, Prope
         short offset = offsetBase.getOffsetTo(Prop);
         if(offset < 0)
             throw Base::RuntimeError("Invalid static property");
-        auto &index = impl->propertyData.get<1>();
-        auto it = index.find(PropName);
-        if(it == index.end()) {
+        auto it = propertyDataByName.find(PropName);
+        if(it == propertyDataByName.end()) {
             if(parentMerged)
                 throw Base::RuntimeError("Cannot add static property");
-            index.emplace(PropName, PropertyGroup, PropertyDocu, offset, Type);
+            propertyData.emplace_back(PropName, PropertyGroup, PropertyDocu, offset, Type);
+            auto inserted = std::prev(propertyData.end());
+            propertyDataByName.emplace(PropName, inserted);
+            propertyDataByOffset.emplace(offset, inserted);
         } else{
 #ifdef FC_DEBUG
-            if(it->Offset != offset) {
+            if(it->second->Offset != offset) {
                 FC_ERR("Duplicate property '" << PropName << "'");
             }
 #endif
@@ -485,9 +448,15 @@ void PropertyData::merge(PropertyData *other) const {
     }
     if(other)  {
         other->merge();
-        auto &index = impl->propertyData.get<0>();
-        for(const auto &spec : other->impl->propertyData.get<0>())
-            index.push_back(spec);
+        for(const auto &spec : other->propertyData) {
+            if (propertyDataByName.find(spec.Name) != propertyDataByName.end()) {
+                continue;
+            }
+            propertyData.push_back(spec);
+            auto inserted = std::prev(propertyData.end());
+            propertyDataByName.emplace(spec.Name, inserted);
+            propertyDataByOffset.emplace(spec.Offset, inserted);
+        }
     }
 }
 
@@ -498,9 +467,19 @@ void PropertyData::split(PropertyData *other) {
         parentMerged = false;
     }
     if(other)  {
-        auto &index = impl->propertyData.get<2>();
-        for(const auto &spec : other->impl->propertyData.get<0>())
-            index.erase(spec.Offset);
+        for(const auto &spec : other->propertyData) {
+            auto it = propertyDataByOffset.find(spec.Offset);
+            if (it == propertyDataByOffset.end()) {
+                continue;
+            }
+            auto listIt = it->second;
+            propertyDataByOffset.erase(it);
+            auto nameIt = propertyDataByName.find(listIt->Name);
+            if (nameIt != propertyDataByName.end()) {
+                propertyDataByName.erase(nameIt);
+            }
+            propertyData.erase(listIt);
+        }
     }
 }
 
@@ -508,10 +487,9 @@ const PropertyData::PropertySpec *PropertyData::findProperty(OffsetBase offsetBa
 {
     (void)offsetBase;
     merge();
-    auto &index = impl->propertyData.get<1>();
-    auto it = index.find(PropName);
-    if(it != index.end())
-        return &(*it);
+    auto it = propertyDataByName.find(PropName);
+    if(it != propertyDataByName.end())
+        return &(*it->second);
     return nullptr;
 }
 
@@ -522,10 +500,9 @@ const PropertyData::PropertySpec *PropertyData::findProperty(OffsetBase offsetBa
     if(diff<0)
         return nullptr;
 
-    auto &index = impl->propertyData.get<2>();
-    auto it = index.find(diff);
-    if(it!=index.end())
-        return &(*it);
+    auto it = propertyDataByOffset.find(diff);
+    if(it!=propertyDataByOffset.end())
+        return &(*it->second);
 
     return nullptr;
 }
@@ -613,7 +590,7 @@ Property *PropertyData::getPropertyByName(OffsetBase offsetBase,const char* name
 void PropertyData::getPropertyMap(OffsetBase offsetBase,std::map<std::string,Property*> &Map) const
 {
     merge();
-    for(auto &spec : impl->propertyData.get<0>())
+    for(auto &spec : propertyData)
         Map[spec.Name] = reinterpret_cast<Property *>(spec.Offset + offsetBase.getOffset());
 }
 
@@ -621,8 +598,8 @@ void PropertyData::getPropertyList(OffsetBase offsetBase,std::vector<Property*> 
 {
     merge();
     size_t base = List.size();
-    List.reserve(base+impl->propertyData.size());
-    for (auto &spec : impl->propertyData.get<0>())
+    List.reserve(base+propertyData.size());
+    for (auto &spec : propertyData)
         List.push_back(reinterpret_cast<Property *>(spec.Offset + offsetBase.getOffset()));
 }
 
@@ -631,8 +608,8 @@ void PropertyData::getPropertyNamedList(OffsetBase offsetBase,
 {
     merge();
     size_t base = List.size();
-    List.reserve(base+impl->propertyData.size());
-    for (auto &spec : impl->propertyData.get<0>()) {
+    List.reserve(base+propertyData.size());
+    for (auto &spec : propertyData) {
         auto prop = reinterpret_cast<Property *>(spec.Offset + offsetBase.getOffset());
         List.emplace_back(prop->getName(),prop);
     }
@@ -643,8 +620,7 @@ void PropertyData::visitProperties(OffsetBase offsetBase,
 {
     merge();
     char* offset = offsetBase.getOffset();
-    for (const auto& spec : impl->propertyData.get<0>()) {
+    for (const auto& spec : propertyData) {
         visitor(reinterpret_cast<Property*>(spec.Offset + offset));
     };
 }
-

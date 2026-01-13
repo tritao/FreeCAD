@@ -23,22 +23,20 @@
  ***************************************************************************/
 
 
-#pragma once
+#ifndef SRC_APP_DYNAMICPROPERTY_H_
+#define SRC_APP_DYNAMICPROPERTY_H_
 
+#include <cstring>
+#include <functional>
+#include <list>
 #include <map>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 #include <utility>
-#include <memory>
-#include <functional>
-
-#include <boost/multi_index_container.hpp>
-#include <boost/multi_index/hashed_index.hpp>
-#include <boost/multi_index/sequenced_index.hpp>
-#include <boost/multi_index/member.hpp>
-#include <boost/multi_index/mem_fun.hpp>
-
 #include <FCGlobal.h>
+#include <Base/Hash.h>
 
 
 namespace Base
@@ -53,12 +51,45 @@ namespace App
 class Property;
 class PropertyContainer;
 
-namespace bmi = boost::multi_index;
-
-struct AppExport CStringHasher
+struct CStringHasher
 {
-    std::size_t operator()(const char* s) const;
-    bool operator()(const char* a, const char* b) const;
+    inline std::size_t operator()(const char* s) const
+    {
+        if (!s) {
+            return 0;
+        }
+        return Base::fnv1a64(s, std::strlen(s));
+    }
+    inline bool operator()(const char* a, const char* b) const
+    {
+        if (!a) {
+            return !b;
+        }
+        if (!b) {
+            return false;
+        }
+        return std::strcmp(a, b) == 0;
+    }
+};
+
+struct TransparentStringHash
+{
+    using is_transparent = void;
+
+    std::size_t operator()(std::string_view s) const noexcept
+    {
+        return std::hash<std::string_view> {}(s);
+    }
+};
+
+struct TransparentStringEq
+{
+    using is_transparent = void;
+
+    bool operator()(std::string_view a, std::string_view b) const noexcept
+    {
+        return a == b;
+    }
 };
 
 /** This class implements an interface to add properties at run-time to an object
@@ -148,7 +179,10 @@ public:
     void clear();
 
     /// Get property count
-    size_t size() const;
+    size_t size() const
+    {
+        return props.size();
+    }
 
     void save(const Property* prop, Base::Writer& writer) const;
 
@@ -202,8 +236,15 @@ private:
     std::string getUniquePropertyName(const PropertyContainer& pc, const char* Name) const;
 
 private:
-    struct Impl;
-    std::unique_ptr<Impl> impl;
+    using PropList = std::list<PropData>;
+    using PropListIterator = PropList::iterator;
+
+    PropList props;
+    std::unordered_map<std::string, PropListIterator, TransparentStringHash, TransparentStringEq>
+        propsByName;
+    std::unordered_map<Property*, PropListIterator> propsByProperty;
 };
 
 }  // namespace App
+
+#endif  // SRC_APP_DYNAMICPROPERTY_H_
