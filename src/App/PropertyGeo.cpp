@@ -192,14 +192,14 @@ void PropertyVector::getPaths(std::vector<ObjectIdentifier>& paths) const
                     << ObjectIdentifier::SimpleComponent(ObjectIdentifier::String("z")));
 }
 
-const boost::any PropertyVector::getPathValue(const ObjectIdentifier& path) const
+const std::any PropertyVector::getPathValue(const ObjectIdentifier& path) const
 {
     Base::Unit unit = getUnit();
     if (unit != Unit::One) {
         std::string p = path.getSubPathStr();
         if (p == ".x" || p == ".y" || p == ".z") {
             // Convert double to quantity
-            return Base::Quantity(boost::any_cast<double>(Property::getPathValue(path)), unit);
+            return Base::Quantity(std::any_cast<double>(Property::getPathValue(path)), unit);
         }
     }
     return Property::getPathValue(path);
@@ -589,33 +589,33 @@ void PropertyPlacement::getPaths(std::vector<ObjectIdentifier>& paths) const
 
 namespace
 {
-double toDouble(const boost::any& value)
+double toDouble(const std::any& value)
 {
     double avalue {};
 
     if (value.type() == typeid(Base::Quantity)) {
-        avalue = boost::any_cast<Base::Quantity>(value).getValue();
+        avalue = std::any_cast<Base::Quantity>(value).getValue();
     }
     else if (value.type() == typeid(double)) {
-        avalue = boost::any_cast<double>(value);
+        avalue = std::any_cast<double>(value);
     }
     else if (value.type() == typeid(int)) {
-        avalue = boost::any_cast<int>(value);
+        avalue = std::any_cast<int>(value);
     }
     else if (value.type() == typeid(unsigned int)) {
-        avalue = boost::any_cast<unsigned int>(value);
+        avalue = std::any_cast<unsigned int>(value);
     }
     else if (value.type() == typeid(short)) {
-        avalue = boost::any_cast<short>(value);
+        avalue = std::any_cast<short>(value);
     }
     else if (value.type() == typeid(unsigned short)) {
-        avalue = boost::any_cast<unsigned short>(value);
+        avalue = std::any_cast<unsigned short>(value);
     }
     else if (value.type() == typeid(long)) {
-        avalue = boost::any_cast<long>(value);
+        avalue = std::any_cast<long>(value);
     }
     else if (value.type() == typeid(unsigned long)) {
-        avalue = boost::any_cast<unsigned long>(value);
+        avalue = std::any_cast<unsigned long>(value);
     }
     else {
         throw std::bad_cast();
@@ -624,7 +624,7 @@ double toDouble(const boost::any& value)
 }
 }  // namespace
 
-void PropertyPlacement::setPathValue(const ObjectIdentifier& path, const boost::any& value)
+void PropertyPlacement::setPathValue(const ObjectIdentifier& path, const std::any& value)
 {
     auto updateAxis = [this](int index, double coord) {
         Base::Vector3d axis;
@@ -694,7 +694,7 @@ void PropertyPlacement::setPathValue(const ObjectIdentifier& path, const boost::
     }
 }
 
-const boost::any PropertyPlacement::getPathValue(const ObjectIdentifier& path) const
+const std::any PropertyPlacement::getPathValue(const ObjectIdentifier& path) const
 {
     auto getAxis = [](const Base::Placement& plm) {
         Base::Vector3d axis;
@@ -716,12 +716,12 @@ const boost::any PropertyPlacement::getPathValue(const ObjectIdentifier& path) c
     if (p == ".Rotation.Angle") {
         // Convert angle to degrees
         return Base::Quantity(
-            Base::toDegrees(boost::any_cast<double>(Property::getPathValue(path))),
+            Base::toDegrees(std::any_cast<double>(Property::getPathValue(path))),
             Unit::Angle);
     }
     else if (p == ".Base.x" || p == ".Base.y" || p == ".Base.z") {
         // Convert double to quantity
-        return Base::Quantity(boost::any_cast<double>(Property::getPathValue(path)), Unit::Length);
+        return Base::Quantity(std::any_cast<double>(Property::getPathValue(path)), Unit::Length);
     }
     else if (p == ".Rotation.Axis.x") {
         return getAxis(_cPos).x;
@@ -1123,7 +1123,7 @@ void PropertyRotation::getPaths(std::vector<ObjectIdentifier>& paths) const
                     << ObjectIdentifier::SimpleComponent(ObjectIdentifier::String("z")));
 }
 
-void PropertyRotation::setPathValue(const ObjectIdentifier& path, const boost::any& value)
+void PropertyRotation::setPathValue(const ObjectIdentifier& path, const std::any& value)
 {
     auto updateAxis = [this](int index, double coord) {
         Base::Vector3d axis;
@@ -1153,7 +1153,7 @@ void PropertyRotation::setPathValue(const ObjectIdentifier& path, const boost::a
     }
 }
 
-const boost::any PropertyRotation::getPathValue(const ObjectIdentifier& path) const
+const std::any PropertyRotation::getPathValue(const ObjectIdentifier& path) const
 {
     auto getAxis = [](const Base::Rotation& rot) {
         Base::Vector3d axis;
@@ -1166,7 +1166,7 @@ const boost::any PropertyRotation::getPathValue(const ObjectIdentifier& path) co
     if (p == ".Angle") {
         // Convert angle to degrees
         return Base::Quantity(
-            Base::toDegrees(boost::any_cast<double>(Property::getPathValue(path))),
+            Base::toDegrees(std::any_cast<double>(Property::getPathValue(path))),
             Unit::Angle);
     }
     else if (p == ".Axis.x") {

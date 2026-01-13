@@ -32,7 +32,7 @@
 #include <set>
 #include <string>
 #include <vector>
-#include <boost/any.hpp>
+#include <any>
 #include <FCConfig.h>
 
 #include "ElementNamingUtils.h"
@@ -44,44 +44,44 @@ class Object;
 namespace App
 {
 
-using any = boost::any;
+using any = std::any;
 
 /**
- * @brief Extract a const reference from a boost::any object.
+ * @brief Extract a const reference from a std::any object.
  *
- * This function is a wrapper around boost::any_cast that allows
- * to extract a const reference from a boost::any object.
+ * This function is a wrapper around std::any_cast that allows
+ * to extract a const reference from a std::any object.
  *
  * @tparam T The type to extract.
  *
- * @param[in] value The boost::any object to extract from.
+ * @param[in] value The std::any object to extract from.
  *
  * @return A const reference to the extracted value.
- * @throws boost::bad_any_cast if the type of the value does not match T.
+ * @throws std::bad_any_cast if the type of the value does not match T.
  */
-template<class T>
-inline const T& any_cast(const boost::any& value)
+	template<class T>
+inline const T& any_cast(const std::any& value)
 {
-    return boost::any_cast<const T&>(value);
+    return std::any_cast<const T&>(value);
 }
 
 /**
- * @brief Extract a mutable reference from a boost::any object.
+ * @brief Extract a mutable reference from a std::any object.
  *
- * This function is a wrapper around boost::any_cast that allows
- * to extract a mutable reference from a boost::any object.
+ * This function is a wrapper around std::any_cast that allows
+ * to extract a mutable reference from a std::any object.
  *
  * @tparam T The type to extract.
  *
- * @param[in] value The boost::any object to extract from.
+ * @param[in] value The std::any object to extract from.
  *
  * @return A const reference to the extracted value.
- * @throws boost::bad_any_cast if the type of the value does not match T.
+ * @throws std::bad_any_cast if the type of the value does not match T.
  */
-template<class T>
-inline T& any_cast(boost::any& value)
+	template<class T>
+inline T& any_cast(std::any& value)
 {
-    return boost::any_cast<T&>(value);
+    return std::any_cast<T&>(value);
 }
 
 class Property;

@@ -85,8 +85,8 @@ public:
         return sizeof(long);
     }
 
-    void setPathValue(const App::ObjectIdentifier& path, const boost::any& value) override;
-    const boost::any getPathValue(const App::ObjectIdentifier& /*path*/) const override
+    void setPathValue(const App::ObjectIdentifier& path, const std::any& value) override;
+    const std::any getPathValue(const App::ObjectIdentifier& /*path*/) const override
     {
         return _lValue;
     }
@@ -248,9 +248,9 @@ public:
     Property* Copy() const override;
     void Paste(const Property& from) override;
 
-    void setPathValue(const App::ObjectIdentifier& path, const boost::any& value) override;
+    void setPathValue(const App::ObjectIdentifier& path, const std::any& value) override;
     virtual bool setPyPathValue(const App::ObjectIdentifier& path, const Py::Object& value);
-    const boost::any getPathValue(const App::ObjectIdentifier& /*path*/) const override;
+    const std::any getPathValue(const App::ObjectIdentifier& /*path*/) const override;
     bool getPyPathValue(const ObjectIdentifier& path, Py::Object& r) const override;
 
     bool isSame(const Property& other) const override
@@ -584,8 +584,8 @@ public:
         return sizeof(double);
     }
 
-    void setPathValue(const App::ObjectIdentifier& path, const boost::any& value) override;
-    const boost::any getPathValue(const App::ObjectIdentifier& path) const override;
+    void setPathValue(const App::ObjectIdentifier& path, const std::any& value) override;
+    const std::any getPathValue(const App::ObjectIdentifier& path) const override;
 
     bool isSame(const Property& other) const override
     {
@@ -790,8 +790,8 @@ public:
     void Paste(const Property& from) override;
     unsigned int getMemSize() const override;
 
-    void setPathValue(const App::ObjectIdentifier& path, const boost::any& value) override;
-    const boost::any getPathValue(const App::ObjectIdentifier& path) const override;
+    void setPathValue(const App::ObjectIdentifier& path, const std::any& value) override;
+    const std::any getPathValue(const App::ObjectIdentifier& path) const override;
 
     bool isSame(const Property& other) const override
     {
@@ -965,8 +965,8 @@ public:
         return sizeof(bool);
     }
 
-    void setPathValue(const App::ObjectIdentifier& path, const boost::any& value) override;
-    const boost::any getPathValue(const App::ObjectIdentifier& path) const override;
+    void setPathValue(const App::ObjectIdentifier& path, const std::any& value) override;
+    const std::any getPathValue(const App::ObjectIdentifier& path) const override;
 
     bool isSame(const Property& other) const override
     {
