@@ -22,7 +22,6 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/tokenizer.hpp>
 #include <deque>
 #include <memory>
 #include <sstream>
@@ -33,6 +32,9 @@
 #include <set>
 #include <vector>
 
+#include <boost_graph_adjacency_list.hpp>
+#include <boost/graph/topological_sort.hpp>
+
 #include <App/Application.h>
 #include <App/Document.h>
 #include <App/DynamicProperty.h>
@@ -41,6 +43,7 @@
 #include <Base/Exception.h>
 #include <Base/FileInfo.h>
 #include <Base/Reader.h>
+#include <Base/StringTokenizer.h>
 #include <Base/Stream.h>
 
 #include "Sheet.h"
@@ -228,26 +231,13 @@ bool Sheet::importFromFile(const std::string& filename, char delimiter, char quo
         std::string line;
 
         while (std::getline(file, line)) {
-            using namespace boost;
-
             try {
-                escaped_list_separator<char> e;
                 int col = 0;
 
-                if (quoteChar) {
-                    e = escaped_list_separator<char>(escapeChar, delimiter, quoteChar);
-                }
-                else {
-                    e = escaped_list_separator<char>('\0', delimiter, '\0');
-                }
-
-                tokenizer<escaped_list_separator<char>> tok(line, e);
-
-                for (tokenizer<escaped_list_separator<char>>::iterator i = tok.begin();
-                     i != tok.end();
-                     ++i) {
-                    if (!i->empty()) {
-                        setCell(CellAddress(row, col), (*i).c_str());
+                char effectiveEscapeChar = quoteChar ? escapeChar : '\0';
+                for (const auto& field : Base::splitEscaped(line, delimiter, quoteChar, effectiveEscapeChar)) {
+                    if (!field.empty()) {
+                        setCell(CellAddress(row, col), field.c_str());
                     }
                     col++;
                 }
