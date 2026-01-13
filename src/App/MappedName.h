@@ -32,10 +32,9 @@
 #include <string_view>
 #include <vector>
 
-#include <boost/functional/hash.hpp>
-
 #include <Base/ByteBuffer.h>
 #include <Base/BytesView.h>
+#include <Base/Hash.h>
 #include <utility>
 
 #include "ElementNamingUtils.h"
@@ -1013,8 +1012,8 @@ public:
     std::size_t hash() const
     {
         std::size_t seed = 0U;
-        boost::hash_range(seed, this->data.data(), this->data.data() + this->data.size());
-        boost::hash_range(seed, this->postfix.data(), this->postfix.data() + this->postfix.size());
+        Base::fnv1a64Append(seed, this->data.data(), this->data.size());
+        Base::fnv1a64Append(seed, this->postfix.data(), this->postfix.size());
         return seed;
     }
 

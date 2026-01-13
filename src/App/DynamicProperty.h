@@ -26,6 +26,7 @@
 #ifndef SRC_APP_DYNAMICPROPERTY_H_
 #define SRC_APP_DYNAMICPROPERTY_H_
 
+#include <cstring>
 #include <map>
 #include <string>
 #include <vector>
@@ -37,6 +38,7 @@
 #include <boost/multi_index/member.hpp>
 #include <boost/multi_index/mem_fun.hpp>
 #include <FCGlobal.h>
+#include <Base/Hash.h>
 
 
 namespace Base
@@ -60,7 +62,7 @@ struct CStringHasher
         if (!s) {
             return 0;
         }
-        return boost::hash_range(s, s + std::strlen(s));
+        return Base::fnv1a64(s, std::strlen(s));
     }
     inline bool operator()(const char* a, const char* b) const
     {

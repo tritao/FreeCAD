@@ -34,6 +34,7 @@
 
 #include <Base/ByteBuffer.h>
 #include <Base/BytesView.h>
+#include <Base/Hash.h>
 
 #include <cstring>
 #include <deque>
@@ -42,8 +43,6 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
-
-#include <boost/functional/hash.hpp>
 
 
 namespace Data
@@ -319,15 +318,13 @@ private:
         std::map<ElementMap*, int> mapIndices;
     };
 
-    struct ByteBufferHash
-    {
-        std::size_t operator()(const Base::ByteBuffer& bytes) const noexcept
-        {
-            std::size_t seed = 0U;
-            boost::hash_range(seed, bytes.data(), bytes.data() + bytes.size());
-            return seed;
-        }
-    };
+	    struct ByteBufferHash
+	    {
+	        std::size_t operator()(const Base::ByteBuffer& bytes) const noexcept
+	        {
+	            return Base::fnv1a64(bytes.data(), bytes.size());
+	        }
+	    };
 
     std::unordered_map<Base::ByteBuffer, ChildMapInfo, ByteBufferHash> childElements;
     std::size_t childElementSize = 0;
