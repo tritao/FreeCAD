@@ -28,11 +28,11 @@
 #include <vector>
 #include <QIcon>
 #include <fastsignals/signal.h>
-#include <boost/intrusive_ptr.hpp>
 
 #include <App/Material.h>
 #include <App/TransactionalObject.h>
 #include <Base/BoundBox.h>
+#include <Base/IntrusivePtr.h>
 #include <Base/Vector3D.h>
 
 #include "TreeItemMode.h"
