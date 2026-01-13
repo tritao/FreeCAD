@@ -23,7 +23,6 @@
 
 #include <algorithm>
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <QAbstractItemView>
 #include <QContextMenuEvent>
 #include <QLineEdit>
@@ -40,6 +39,7 @@
 #include <App/ObjectIdentifier.h>
 #include <Gui/Application.h>
 #include <Gui/MainWindow.h>
+#include <Base/StringPredicates.h>
 #include <Base/Tools.h>
 #include <CXX/Extensions.hxx>
 
@@ -809,7 +809,7 @@ QStringList ExpressionCompleter::splitPath(const QString& input) const
             }
 
             if (!stringList.empty()) {
-                if (!trim.empty() && boost::ends_with(stringList.back(), trim)) {
+                if (!trim.empty() && Base::endsWith(stringList.back(), trim)) {
                     stringList.back().resize(stringList.back().size() - trim.size());
                 }
                 while (stringListIter != stringList.end()) {
@@ -901,8 +901,10 @@ void ExpressionCompleter::slotUpdate(const QString& prefix, int pos)
         std::string_view(prefixUtf8.constData(), static_cast<std::size_t>(prefixUtf8.size())),
         static_cast<std::size_t>(posBytes)
     );
-    const QString completionPrefix =
-        QString::fromUtf8(completionPrefixUtf8.c_str(), static_cast<int>(completionPrefixUtf8.size()));
+    const QString completionPrefix = QString::fromUtf8(
+        completionPrefixUtf8.c_str(),
+        static_cast<int>(completionPrefixUtf8.size())
+    );
     if (completionPrefix.isEmpty()) {
         if (auto itemView = popup()) {
             itemView->setVisible(false);

@@ -67,7 +67,7 @@
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoShapeHints.h>
 
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 
 #include <App/Application.h>
 #include <App/Document.h>
@@ -768,7 +768,7 @@ std::map<std::string, Base::Color> ViewProviderPartExt::getElementColors(const c
         return ret;
     }
 
-    if (boost::starts_with(element, "Face")) {
+    if (Base::startsWith(element, "Face")) {
         auto size = ShapeAppearance.getSize();
         if (element[4] == '*') {
             auto color = ShapeAppearance.getDiffuseColor();
@@ -806,7 +806,7 @@ std::map<std::string, Base::Color> ViewProviderPartExt::getElementColors(const c
             }
         }
     }
-    else if (boost::starts_with(element, "Edge")) {
+    else if (Base::startsWith(element, "Edge")) {
         auto size = LineColorArray.getSize();
         if (element[4] == '*') {
             auto color = LineColor.getValue();
@@ -833,7 +833,7 @@ std::map<std::string, Base::Color> ViewProviderPartExt::getElementColors(const c
             }
         }
     }
-    else if (boost::starts_with(element, "Vertex")) {
+    else if (Base::startsWith(element, "Vertex")) {
         auto size = PointColorArray.getSize();
         if (element[5] == '*') {
             auto color = PointColor.getValue();

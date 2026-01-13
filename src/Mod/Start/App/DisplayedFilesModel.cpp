@@ -20,8 +20,6 @@
  *   <https://www.gnu.org/licenses/>.                                       *
  *                                                                          *
  ***************************************************************************/
-
-#include <boost/algorithm/string/predicate.hpp>
 #include <QByteArray>
 #include <QFileInfo>
 #include <QLocale>
@@ -39,6 +37,7 @@
 #include <App/Application.h>
 #include <App/ProjectFile.h>
 #include <Base/FileInfo.h>
+#include <Base/StringPredicates.h>
 #include <Base/TimeInfo.h>
 #include <Base/Stream.h>
 
@@ -115,7 +114,7 @@ bool freecadCanOpen(const QString& extension)
     auto importTypes = App::GetApplication().getImportTypes();
     return std::ranges::find_if(
                importTypes,
-               [&ext](const auto& item) { return boost::iequals(item, ext); }
+               [&ext](const auto& item) { return Base::iequals(item, ext); }
            )
         != importTypes.end();
 }

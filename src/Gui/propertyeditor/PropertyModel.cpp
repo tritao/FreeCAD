@@ -22,8 +22,8 @@
  ***************************************************************************/
 
 #include <limits>
-#include <boost/algorithm/string/predicate.hpp>
 
+#include <Base/StringPredicates.h>
 #include <Base/Tools.h>
 
 #include "PropertyItem.h"
@@ -373,7 +373,7 @@ void PropertyModel::findOrCreateChildren(const PropertyModel::PropertyList& prop
         GroupInfo& groupInfo = getGroupInfo(prop);
         groupInfo.children.push_back(item);
 
-        item->setLinked(boost::ends_with(jt.first, "*"));
+        item->setLinked(Base::endsWith(jt.first, "*"));
         setPropertyItemName(item, prop->getName(), groupInfo.groupItem->propertyName());
 
         if (jt.second != item->getPropertyData()) {

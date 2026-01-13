@@ -22,7 +22,7 @@
  ***************************************************************************/
 
 #include <algorithm>
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 #include <QApplication>
 #include <QClipboard>
 #include <QInputDialog>
@@ -981,7 +981,8 @@ void PropertyEditor::contextMenuEvent(QContextMenuEvent*)
 
     // rename property group
     if (!props.empty() && std::all_of(props.begin(), props.end(), [](auto prop) {
-            return prop->testStatus(App::Property::PropDynamic);
+            return prop->testStatus(App::Property::PropDynamic)
+                && !Base::startsWith(prop->getName(), prop->getGroup());
         })) {
         QAction* renameGroupAction = menu.addAction(tr("Rename Property Group"));
         renameGroupAction->setData(QVariant(MA_EditPropGroup));

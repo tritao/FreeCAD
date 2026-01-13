@@ -34,7 +34,7 @@
 #include <QStyleOption>
 
 
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 
 #include <Base/Tools.h>
 
@@ -470,15 +470,15 @@ void ToolBarManager::setupConnection()
 {
     auto refreshParams = [this](const char* name) {
         bool sizeChanged = false;
-        if (!name || boost::equals(name, "ToolbarIconSize")) {
+        if (!name || Base::equals(name, "ToolbarIconSize")) {
             _toolBarIconSize = hGeneral->GetInt("ToolbarIconSize", 24);
             sizeChanged = true;
         }
-        if (!name || boost::equals(name, "StatusBarIconSize")) {
+        if (!name || Base::equals(name, "StatusBarIconSize")) {
             _statusBarIconSize = hGeneral->GetInt("StatusBarIconSize", 0);
             sizeChanged = true;
         }
-        if (!name || boost::equals(name, "MenuBarIconSize")) {
+        if (!name || Base::equals(name, "MenuBarIconSize")) {
             _menuBarIconSize = hGeneral->GetInt("MenuBarIconSize", 0);
             sizeChanged = true;
         }
