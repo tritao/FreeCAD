@@ -117,7 +117,7 @@ void PropertyQuantity::setPyObject(PyObject* value)
     }
 }
 
-void PropertyQuantity::setPathValue(const ObjectIdentifier& /*path*/, const boost::any& value)
+void PropertyQuantity::setPathValue(const ObjectIdentifier& /*path*/, const std::any& value)
 {
     auto q = App::anyToQuantity(value);
     aboutToSetValue();
@@ -128,7 +128,7 @@ void PropertyQuantity::setPathValue(const ObjectIdentifier& /*path*/, const boos
     setValue(q.getValue());
 }
 
-const boost::any PropertyQuantity::getPathValue(const ObjectIdentifier& /*path*/) const
+const std::any PropertyQuantity::getPathValue(const ObjectIdentifier& /*path*/) const
 {
     Quantity quantity(_dValue, _Unit);
     quantity.setFormat(_Format);

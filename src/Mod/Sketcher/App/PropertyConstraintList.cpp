@@ -514,7 +514,7 @@ int PropertyConstraintList::getIndexFromConstraintName(const string& name)
     return std::atoi(name.substr(10, 4000).c_str()) - 1;
 }
 
-void PropertyConstraintList::setPathValue(const ObjectIdentifier& path, const boost::any& value)
+void PropertyConstraintList::setPathValue(const ObjectIdentifier& path, const std::any& value)
 {
     if (path.numSubComponents() != 2 || path.getPropertyComponent(0).getName() != getName()) {
         FC_THROWM(Base::ValueError, "invalid constraint path " << path.toString());
@@ -524,7 +524,7 @@ void PropertyConstraintList::setPathValue(const ObjectIdentifier& path, const bo
     double dvalue;
 
     if (value.type() == typeid(double)) {
-        dvalue = boost::any_cast<double>(value);
+        dvalue = App::any_cast<double>(value);
     }
     else if (value.type() == typeid(float)) {
         dvalue = App::any_cast<float>(value);
@@ -605,9 +605,9 @@ const Constraint* PropertyConstraintList::getConstraint(const ObjectIdentifier& 
     FC_THROWM(Base::ValueError, "Invalid constraint path " << path.toString());
 }
 
-const boost::any PropertyConstraintList::getPathValue(const ObjectIdentifier& path) const
+const std::any PropertyConstraintList::getPathValue(const ObjectIdentifier& path) const
 {
-    return boost::any(getConstraint(path)->getPresentationValue());
+    return std::any(getConstraint(path)->getPresentationValue());
 }
 
 ObjectIdentifier PropertyConstraintList::canonicalPath(const ObjectIdentifier& p) const

@@ -3,6 +3,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <any>
+
 #include "Base/Quantity.h"
 
 #include "App/Application.h"
@@ -25,9 +27,9 @@ void PrintTo(const Quantity& qty, std::ostream* os)
 }
 }  // namespace Base
 
-namespace boost
+namespace std
 {
-void PrintTo(const boost::any& e, std::ostream* os)
+void PrintTo(const std::any& e, std::ostream* os)
 {
     *os << "any (";
     if (e.type() == typeid(Base::Quantity)) {
@@ -53,7 +55,7 @@ void PrintTo(const boost::any& e, std::ostream* os)
     }
     *os << ")";
 }
-}  // namespace boost
+}  // namespace std
 
 namespace App::ExpressionParser::Test
 {
@@ -95,7 +97,7 @@ protected:
         return Base::Quantity::parse(quantity_text);
     }
 
-    boost::any parseExpr(const char* text)
+    std::any parseExpr(const char* text)
     {
         try {
             const auto expression = parse(thisObj, text);

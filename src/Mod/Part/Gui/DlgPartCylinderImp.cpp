@@ -23,6 +23,8 @@
  ***************************************************************************/
 
 
+#include <any>
+
 #include "DlgPartCylinderImp.h"
 #include "ui_DlgPartCylinder.h"
 
@@ -40,7 +42,7 @@ DlgPartCylinderImp::~DlgPartCylinderImp() = default;
 
 Ui_DlgPartCylinderPtr DlgPartCylinderImp::getUi() const
 {
-    return boost::any_cast<Ui_DlgPartCylinderPtr>(ui->get());
+    return std::any_cast<Ui_DlgPartCylinderPtr>(ui->get());
 }
 
 double DlgPartCylinderImp::getRadius() const

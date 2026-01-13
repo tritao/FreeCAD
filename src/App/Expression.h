@@ -525,8 +525,7 @@ public:
     /// Check if the expression has a component.
     bool hasComponent() const {return !components.empty();}
 
-    /// Get the value as boost::any.
-    boost::any getValueAsAny() const;
+    App::any getValueAsAny() const;
 
     /// Get the value as a Python object.
     Py::Object getPyValue() const;
