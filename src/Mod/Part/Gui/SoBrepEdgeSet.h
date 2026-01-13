@@ -35,8 +35,6 @@
 
 
 class SoCoordinateElement;
-class SoGLCoordinateElement;
-class SoTextureCoordinateBundle;
 
 namespace PartGui
 {
@@ -82,7 +80,7 @@ private:
     using SelContextPtr = std::shared_ptr<SelContext>;
 
     void renderShape(
-        const SoGLCoordinateElement* const vertexlist,
+        SoGLRenderAction* action,
         const int32_t* vertexindices,
         int num_vertexindices
     );
