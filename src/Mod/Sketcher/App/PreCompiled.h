@@ -42,12 +42,11 @@
 # include <vector>
 
 // Qt
-# include <QDateTime>
+
 
 // Boost
 # include <Base/StringPredicates.h>
 # include <boost/geometry/geometries/register/point.hpp>
-# include <boost/uuid/uuid_io.hpp>
 # include <boost/geometry.hpp>
 
 // OpenCasCade

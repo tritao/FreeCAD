@@ -22,9 +22,6 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <boost/uuid/uuid_io.hpp>
-
-
 #include "GeometryFacade.h"
 #include "GeometryFacadePy.h"
 
@@ -86,7 +83,7 @@ void GeometryFacade::initExtension()
         getGeo()->setExtension(std::make_unique<SketchGeometryExtension>());  // Create getExtension
 
         // Base::Console().warning("%s\nSketcher Geometry without Extension: %s \n",
-        // boost::uuids::to_string(Geo->getTag()).c_str());
+        // Geo->getTag().toString().c_str());
     }
 
     SketchGeoExtension = std::static_pointer_cast<const SketchGeometryExtension>(

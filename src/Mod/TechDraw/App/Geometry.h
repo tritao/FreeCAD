@@ -24,7 +24,6 @@
 #define TECHDRAW_GEOMETRY_H
 
 #include <memory>
-#include <boost/uuid/uuid.hpp>
 
 #include <Base/Reader.h>
 #include <Base/Vector3D.h>

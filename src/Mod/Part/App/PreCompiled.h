@@ -55,11 +55,8 @@
 // Qt
 #include <QtGlobal>
 
-// Boost
+// Base
 #include <Base/StringPredicates.h>
-#include <cmath>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
 
 // OpenCasCade
 #include "OpenCascadeAll.h"

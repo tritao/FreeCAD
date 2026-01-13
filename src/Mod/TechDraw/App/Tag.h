@@ -27,7 +27,7 @@
 #include <string>
 #include <string_view>
 
-#include <boost/uuid/uuid.hpp>
+#include <Base/UuidTag.h>
 
 #include <Mod/TechDraw/TechDrawGlobal.h>
 
@@ -44,22 +44,22 @@ class TechDrawExport Tag {
 public:
     virtual ~Tag() = default;
     //Uniqueness
-    boost::uuids::uuid getTag() const;
+    Base::UuidTag getTag() const;
     virtual std::string getTagAsString() const;
 
-    static boost::uuids::uuid fromString(const std::string& tagString);
+    static Base::UuidTag fromString(const std::string& tagString);
 
 
 protected:
     Tag();
-    void setTag(const boost::uuids::uuid& newTag);
+    void setTag(const Base::UuidTag& newTag);
     void Save(Base::Writer& writer) const;
     // Setting elementName is only for backwards compatibility!
     void Restore(Base::XMLReader& reader, std::string_view elementName="Tag");
 
 private:
     void createNewTag();
-    boost::uuids::uuid tag{};
+    Base::UuidTag tag{};
 };
 }
 
