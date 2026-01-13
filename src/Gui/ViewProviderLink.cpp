@@ -33,6 +33,7 @@
 #include <set>
 #include <map>
 #include <string>
+#include <string_view>
 #include <Base/StringPredicates.h>
 #include <Inventor/SoPickedPoint.h>
 #include <Inventor/actions/SoGetBoundingBoxAction.h>
@@ -53,8 +54,6 @@
 #include <QMenu>
 #include <QCheckBox>
 
-
-#include <boost/range.hpp>
 #include <App/ElementNamingUtils.h>
 #include <App/Document.h>
 #include <Base/BoundBoxPy.h>
@@ -88,6 +87,7 @@ FC_LOG_LEVEL_INIT("App::Link", true, true)
 using namespace Gui;
 using namespace Base;
 
+<<<<<<< HEAD
 namespace
 {
 void updateWindingOrder(Gui::LinkView* linkView, App::LinkBaseExtension* ext)
@@ -98,7 +98,7 @@ void updateWindingOrder(Gui::LinkView* linkView, App::LinkBaseExtension* ext)
 }
 }  // namespace
 
-using CharRange = boost::iterator_range<const char*>;
+using CharRange = std::string_view;
 ////////////////////////////////////////////////////////////////////////////
 
 static inline bool appendPathSafe(SoPath* path, SoNode* node)
@@ -1775,11 +1775,10 @@ bool LinkView::linkGetDetailPath(const char* subname, SoFullPath* path, SoDetail
                 }
                 int i = 0;
                 if (subname[0] == '$') {
-                    CharRange name(subname + 1, dot);
                     for (const auto& info : nodeArray) {
                         if (info->isLinked()
                             && Base::equals(
-                                std::string_view(name.begin(), name.size()),
+                                CharRange(subname + 1, static_cast<std::size_t>(dot - (subname + 1))),
                                 info->linkInfo->getLinkedLabel()
                             )) {
                             idx = i;
@@ -1789,11 +1788,10 @@ bool LinkView::linkGetDetailPath(const char* subname, SoFullPath* path, SoDetail
                     }
                 }
                 else {
-                    CharRange name(subname, dot);
                     for (const auto& info : nodeArray) {
                         if (info->isLinked()
                             && Base::equals(
-                                std::string_view(name.begin(), name.size()),
+                                CharRange(subname, static_cast<std::size_t>(dot - subname)),
                                 info->linkInfo->getLinkedName()
                             )) {
                             idx = i;
@@ -2903,14 +2901,18 @@ bool ViewProviderLink::getDetailPath(const char* subname, SoFullPath* pPath, boo
         if (auto linked = ext->getLinkedObjectValue()) {
             if (const char* dot = strchr(subname, '.')) {
                 if (subname[0] == '$') {
-                    CharRange sub(subname + 1, dot);
-                    if (!Base::equals(std::string_view(sub.begin(), sub.size()), linked->Label.getValue())) {
+                    if (!Base::equals(
+                            CharRange(subname + 1, static_cast<std::size_t>(dot - (subname + 1))),
+                            linked->Label.getValue()
+                        )) {
                         dot = nullptr;
                     }
                 }
                 else {
-                    CharRange sub(subname, dot);
-                    if (!Base::equals(std::string_view(sub.begin(), sub.size()), linked->getNameInDocument())) {
+                    if (!Base::equals(
+                            CharRange(subname, static_cast<std::size_t>(dot - subname)),
+                            linked->getNameInDocument()
+                        )) {
                         dot = nullptr;
                     }
                 }
