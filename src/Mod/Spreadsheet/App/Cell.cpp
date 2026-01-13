@@ -24,7 +24,7 @@
 
 
 #include <QLocale>
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 #include <iomanip>
 #include <sstream>
 
@@ -189,7 +189,7 @@ void Cell::setExpression(App::ExpressionPtr&& expr)
     owner->removeDependencies(address);
 
     if (expr && !expr->comment.empty()) {
-        if (!boost::starts_with(expr->comment, "<Cell ")) {
+        if (!Base::startsWith(expr->comment, "<Cell ")) {
             FC_WARN(
                 "Unknown style of cell " << owner->sheet()->getFullName() << '.' << address.toString()
             );

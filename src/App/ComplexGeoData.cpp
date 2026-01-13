@@ -41,7 +41,6 @@
 #include <Base/Rotation.h>
 #include <Base/Writer.h>
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <Base/BufferIStream.h>
 
 

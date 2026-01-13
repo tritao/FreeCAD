@@ -30,6 +30,7 @@
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QTimer>
+#include <Base/StringPredicates.h>
 
 
 #include <App/Application.h>
@@ -504,7 +505,7 @@ TaskDlgDressUpParameters::TaskDlgDressUpParameters(ViewProviderDressUp* DressUpV
     for (auto& shadowSub : shadowSubs) {
         auto displayName = shadowSub.oldName;
         // If there is a missing tag on the shadow sub, take a guess at a new name.
-        if (boost::starts_with(shadowSub.oldName, Data::MISSING_PREFIX)) {
+        if (Base::startsWith(shadowSub.oldName, Data::MISSING_PREFIX)) {
             Part::Feature::guessNewLink(displayName, base, shadowSub.newName.c_str());
             newSubList.emplace_back(displayName);
             changed = true;

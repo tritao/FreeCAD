@@ -27,7 +27,6 @@
 #include "MappedName.h"
 
 #include "Base/Console.h"
-#include <boost/algorithm/string/predicate.hpp>
 #include <Base/BufferIStream.h>
 
 

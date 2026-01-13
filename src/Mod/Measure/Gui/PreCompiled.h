@@ -45,7 +45,7 @@
 #include <Mod/Part/App/OpenCascadeAll.h>
 
 // Boost
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 
 // GL
 // Include glext before QtAll/InventorAll

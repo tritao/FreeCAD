@@ -24,9 +24,8 @@
 #include <QShortcutEvent>
 #include <QApplication>
 
-#include <boost/algorithm/string/predicate.hpp>
-
 #include <Base/Console.h>
+#include <Base/StringPredicates.h>
 #include <Base/Tools.h>
 #include "ShortcutManager.h"
 #include "Command.h"
@@ -87,7 +86,7 @@ void ShortcutManager::destroy()
 void ShortcutManager::OnChange(Base::Subject<const char*>& src, const char* reason)
 {
     if (hSetting == &src) {
-        if (boost::equals(reason, "ShortcutTimeout")) {
+        if (Base::equals(reason, "ShortcutTimeout")) {
             timeout = hSetting->GetInt("ShortcutTimeout");
         }
         return;

@@ -20,15 +20,17 @@
  *   <https://www.gnu.org/licenses/>.                                       *
  *                                                                          *
  ***************************************************************************/
-
 #include "DisplayedFilesModel.h"
 
-#include <boost/algorithm/string/predicate.hpp>
-
+#include <QByteArray>
 #include <QDateTime>
+#include <QFileInfo>
+#include <QLocale>
 #include <QThreadPool>
 
 #include <App/Application.h>
+#include <Base/FileInfo.h>
+#include <Base/StringPredicates.h>
 
 #include "FcstdInfoSource.h"
 #include "FileUtilities.h"
@@ -57,7 +59,7 @@ static bool freecadCanOpen(const QString& extension)
     auto importTypes = App::GetApplication().getImportTypes();
     return std::ranges::find_if(
                importTypes,
-               [&ext](const auto& item) { return boost::iequals(item, ext); }
+               [&ext](const auto& item) { return Base::iequals(item, ext); }
            )
         != importTypes.end();
 }

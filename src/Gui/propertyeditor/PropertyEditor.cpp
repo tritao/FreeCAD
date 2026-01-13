@@ -22,7 +22,7 @@
  ***************************************************************************/
 
 #include <algorithm>
-#include <boost/algorithm/string/predicate.hpp>
+#include <Base/StringPredicates.h>
 #include <QApplication>
 #include <QClipboard>
 #include <QCompleter>
@@ -1095,14 +1095,15 @@ void PropertyEditor::contextMenuEvent(QContextMenuEvent*)
 
     // rename property group
     if (!props.empty() && std::all_of(props.begin(), props.end(), [](auto prop) {
-            return prop->testStatus(App::Property::PropDynamic);
+            return prop->testStatus(App::Property::PropDynamic)
+                && !Base::startsWith(prop->getName(), prop->getGroup());
         })) {
         QAction* renameGroupAction = menu.addAction(tr("Rename Property Group"));
         renameGroupAction->setData(QVariant(MA_EditPropGroup));
 
         // Check if any property name starts with its group name
         bool hasGroupPrefix = std::any_of(props.begin(), props.end(), [](auto prop) {
-            return boost::starts_with(prop->getName(), prop->getGroup());
+            return Base::startsWith(prop->getName(), prop->getGroup());
         });
 
         if (hasGroupPrefix) {

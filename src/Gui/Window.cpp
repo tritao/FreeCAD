@@ -20,11 +20,10 @@
  *                                                                         *
  ***************************************************************************/
 
-
-#include <boost/algorithm/string.hpp>
 #include <qglobal.h>
 
 #include <App/Application.h>
+#include <Base/StringPredicates.h>
 
 #include "Window.h"
 
@@ -71,7 +70,7 @@ bool WindowParameter::setGroupName(const char* name)
     const auto& list = App::GetApplication().GetParameterSetList();
 
     auto found = std::find_if(list.begin(), list.end(), [prefGroup](auto item) {
-        return boost::starts_with(prefGroup, item.first);
+        return Base::startsWith(prefGroup, item.first);
     });
 
     if (found != list.end()) {
