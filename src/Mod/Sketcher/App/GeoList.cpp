@@ -24,7 +24,6 @@
 
 #include <cassert>
 
-#include <boost/core/ignore_unused.hpp>
 
 #include <Base/Exception.h>
 #include <Base/Vector3D.h>
@@ -376,7 +375,7 @@ GeoListModel<GeometryFacadeUniquePtr>::GeoListModel(
     // Under the Single Responsibility Principle GeoListModel cannot be made
     // responsible for releasing those pointers.
     assert(ownerT == false);
-    boost::ignore_unused(ownerT);
+    static_cast<void>(ownerT);
 }
 
 template<>

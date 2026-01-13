@@ -55,7 +55,6 @@
 
 // Boost
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/core/ignore_unused.hpp>
 #include <boost/math/special_functions/fpclassify.hpp>
 #include <boost/random.hpp>
 #include <boost/uuid/uuid_generators.hpp>

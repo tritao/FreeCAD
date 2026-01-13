@@ -24,7 +24,6 @@
 
 #include <limits>
 
-#include <boost/core/ignore_unused.hpp>
 #include <boost/geometry/geometries/register/point.hpp>
 #include <boost/graph/graph_concepts.hpp>
 
@@ -1785,7 +1784,7 @@ public:
         }
         for (auto& info : edges) {
             if (auto wire = info.wireInfo.get()) {
-                boost::ignore_unused(wire);
+                static_cast<void>(wire);
 
                 ENSURE(wire->vertices.front().edgeInfo()->wireInfo.get() == wire);
             }
