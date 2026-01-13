@@ -25,9 +25,6 @@
 #include <algorithm>
 #include <string_view>
 
-#include <boost/range/adaptor/map.hpp>
-#include <boost/range/algorithm/copy.hpp>
-
 #include <App/Document.h>
 #include <App/DocumentObject.h>
 #include <App/DocumentObserver.h>
@@ -970,7 +967,10 @@ void PropertySheet::insertRows(int row, int count)
     std::map<App::ObjectIdentifier, App::ObjectIdentifier> renames;
 
     /* Copy all keys from cells map */
-    boost::copy(data | boost::adaptors::map_keys, std::back_inserter(keys));
+    keys.reserve(data.size());
+    for (const auto& item : data) {
+        keys.push_back(item.first);
+    }
 
     /* Sort them */
     std::sort(keys.begin(), keys.end(), std::bind(&PropertySheet::rowSortFunc, this, sp::_1, sp::_2));  // NOLINT
@@ -1048,7 +1048,10 @@ void PropertySheet::removeRows(int row, int count)
     std::map<App::ObjectIdentifier, App::ObjectIdentifier> renames;
 
     /* Copy all keys from cells map */
-    boost::copy(data | boost::adaptors::map_keys, std::back_inserter(keys));
+    keys.reserve(data.size());
+    for (const auto& item : data) {
+        keys.push_back(item.first);
+    }
 
     /* Sort them */
     std::sort(keys.begin(), keys.end(), std::bind(&PropertySheet::rowSortFunc, this, sp::_1, sp::_2));
@@ -1117,7 +1120,10 @@ void PropertySheet::insertColumns(int col, int count)
     std::map<App::ObjectIdentifier, App::ObjectIdentifier> renames;
 
     /* Copy all keys from cells map */
-    boost::copy(data | boost::adaptors::map_keys, std::back_inserter(keys));
+    keys.reserve(data.size());
+    for (const auto& item : data) {
+        keys.push_back(item.first);
+    }
 
     /* Sort them */
     std::sort(keys.begin(), keys.end());
@@ -1195,7 +1201,10 @@ void PropertySheet::removeColumns(int col, int count)
     std::map<App::ObjectIdentifier, App::ObjectIdentifier> renames;
 
     /* Copy all keys from cells map */
-    boost::copy(data | boost::adaptors::map_keys, std::back_inserter(keys));
+    keys.reserve(data.size());
+    for (const auto& item : data) {
+        keys.push_back(item.first);
+    }
 
     /* Sort them */
     std::sort(keys.begin(), keys.end(), std::bind(&PropertySheet::colSortFunc, this, sp::_1, sp::_2));  // NOLINT

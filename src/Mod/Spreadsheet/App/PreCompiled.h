@@ -40,8 +40,6 @@
 
 // boost
 #include <Base/StringPredicates.h>
-#include <boost/range/adaptor/map.hpp>
-#include <boost/range/algorithm/copy.hpp>
 
 // Qt
 #include <QLocale>
