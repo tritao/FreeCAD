@@ -46,8 +46,6 @@
 
 // Boost
 # include <Base/StringPredicates.h>
-# include <boost/geometry/geometries/register/point.hpp>
-# include <boost/geometry.hpp>
 
 // OpenCasCade
 # include <BRepAdaptor_Curve.hxx>
