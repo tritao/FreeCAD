@@ -24,8 +24,6 @@
 
 #include <limits>
 
-#include <boost/graph/graph_concepts.hpp>
-
 #include <BRepLib.hxx>
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>

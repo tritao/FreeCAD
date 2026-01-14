@@ -27,15 +27,11 @@
 #endif
 
 #include <cmath>
+#include <cassert>
 #include <numbers>
 
 #include <algorithm>
 #define DEBUG_DERIVS 0
-#if DEBUG_DERIVS
-# include <cassert>
-#endif
-
-#include <boost/graph/graph_concepts.hpp>
 
 #include "Constraints.h"
 
