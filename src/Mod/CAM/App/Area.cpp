@@ -22,15 +22,10 @@
  ****************************************************************************/
 
 
-// From Boost 1.75 on the geometry component requires C++14
-#define BOOST_GEOMETRY_DISABLE_DEPRECATED_03_WARNING
-
+#include <algorithm>
+#include <cmath>
 #include <limits>
 #include <optional>
-
-#include <boost/geometry.hpp>
-#include <boost/geometry/geometries/register/point.hpp>
-#include <boost/geometry/index/rtree.hpp>
 
 #include <Bnd_Box.hxx>
 #include <BRep_Builder.hxx>
@@ -75,6 +70,7 @@
 #include <Mod/Part/App/FaceMakerBullseye.h>
 #include <Mod/Part/App/FuzzyHelper.h>
 #include <Mod/Part/App/PartFeature.h>
+#include <Mod/Part/App/SpatialIndex.h>
 #include <Mod/CAM/App/PathSegmentWalker.h>
 #include <Mod/CAM/libarea/Area.h>
 
@@ -87,13 +83,6 @@
 # pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
 #endif
 
-
-namespace bg = boost::geometry;
-namespace bgi = boost::geometry::index;
-
-using RParameters = bgi::linear<16>;
-
-BOOST_GEOMETRY_REGISTER_POINT_3D_GET_SET(gp_Pnt, double, bg::cs::cartesian, X, Y, Z, SetX, SetY, SetZ)
 
 #define AREA_LOG FC_LOG
 #define AREA_WARN FC_WARN
@@ -900,7 +889,7 @@ static inline void getEndPoints(const TopoDS_Wire& wire, gp_Pnt& p1, gp_Pnt& p2)
 struct WireJoiner
 {
 
-    using Box = bg::model::box<gp_Pnt>;
+    using Box = Part::Spatial::Aabb3d;
 
     static bool getBBox(const TopoDS_Edge& e, Box& box)
     {
@@ -915,7 +904,7 @@ struct WireJoiner
         }
         Standard_Real xMin, yMin, zMin, xMax, yMax, zMax;
         bound.Get(xMin, yMin, zMin, xMax, yMax, zMax);
-        box = Box(gp_Pnt(xMin, yMin, zMin), gp_Pnt(xMax, yMax, zMax));
+        box = Box::fromMinMax(xMin, yMin, zMin, xMax, yMax, zMax);
         return true;
     }
 
@@ -925,6 +914,9 @@ struct WireJoiner
         gp_Pnt p1;
         gp_Pnt p2;
         Box box;
+        int vmapNodeStart {-1};
+        int vmapNodeEnd {-1};
+        int boxMapNode {-1};
         int iteration;
         int iStart[2];  // adjacent list index start for p1 and p2
         int iEnd[2];    // adjacent list index end
@@ -993,17 +985,8 @@ struct WireJoiner
         }
     };
 
-    bgi::rtree<VertexInfo, RParameters, PntGetter> vmap;
-
-    struct BoxGetter
-    {
-        using result_type = const Box&;
-        result_type operator()(Edges::iterator it) const
-        {
-            return it->box;
-        }
-    };
-    bgi::rtree<Edges::iterator, RParameters, BoxGetter> boxMap;
+    Part::Spatial::AabbTree3d<VertexInfo> vmap;
+    Part::Spatial::AabbTree3d<EdgeInfo*> boxMap;
 
     BRep_Builder builder;
     TopoDS_Compound comp;
@@ -1016,19 +999,19 @@ struct WireJoiner
     void remove(Edges::iterator it)
     {
         if (it->hasBox) {
-            boxMap.remove(it);
+            boxMap.remove(it->boxMapNode);
         }
-        vmap.remove(VertexInfo(it, true));
-        vmap.remove(VertexInfo(it, false));
+        vmap.remove(it->vmapNodeStart);
+        vmap.remove(it->vmapNodeEnd);
         edges.erase(it);
     }
 
     void add(Edges::iterator it)
     {
-        vmap.insert(VertexInfo(it, true));
-        vmap.insert(VertexInfo(it, false));
+        it->vmapNodeStart = vmap.insert(Box::fromPoint(it->p1), VertexInfo(it, true));
+        it->vmapNodeEnd = vmap.insert(Box::fromPoint(it->p2), VertexInfo(it, false));
         if (it->hasBox) {
-            boxMap.insert(it);
+            it->boxMapNode = boxMap.insert(it->box, &(*it));
         }
     }
 
@@ -1066,26 +1049,25 @@ struct WireJoiner
             bool done = false;
             for (int idx = 0; !done && idx < 2; ++idx) {
                 while (!edges.empty()) {
-                    std::vector<VertexInfo> ret;
-                    ret.reserve(1);
                     const gp_Pnt& pt = idx == 0 ? pstart : pend;
-                    vmap.query(bgi::nearest(pt, 1), std::back_inserter(ret));
-                    assert(ret.size() == 1);
-                    double d = ret[0].pt().SquareDistance(pt);
+                    auto nearest = vmap.nearest(pt);
+                    assert(nearest);
+                    const VertexInfo& vinfo = nearest->first;
+                    double d = nearest->second;
                     if (d > tol) {
                         break;
                     }
 
-                    const auto& info = *ret[0].it;
-                    bool start = ret[0].start;
+                    const auto& info = *vinfo.it;
+                    bool start = vinfo.start;
                     if (d > Precision::SquareConfusion()) {
                         // insert a filling edge to solve the tolerance problem
-                        const gp_Pnt& pt = ret[idx].pt();
+                        const gp_Pnt& fillPt = vinfo.pt();
                         if (idx) {
-                            mkWire.Add(BRepBuilderAPI_MakeEdge(pend, pt).Edge());
+                            mkWire.Add(BRepBuilderAPI_MakeEdge(pend, fillPt).Edge());
                         }
                         else {
-                            mkWire.Add(BRepBuilderAPI_MakeEdge(pt, pstart).Edge());
+                            mkWire.Add(BRepBuilderAPI_MakeEdge(fillPt, pstart).Edge());
                         }
                     }
 
@@ -1105,7 +1087,7 @@ struct WireJoiner
                         pend = info.p1;
                         mkWire.Add(TopoDS::Edge(info.edge.Reversed()));
                     }
-                    remove(ret[0].it);
+                    remove(vinfo.it);
                     if (pstart.SquareDistance(pend) <= Precision::SquareConfusion()) {
                         done = true;
                         break;
@@ -1131,12 +1113,14 @@ struct WireJoiner
             gp_Pnt pt;
             bool intersects = false;
 
-            for (auto vit = boxMap.qbegin(bgi::intersects(info.box));
-                 !intersects && vit != boxMap.qend();
-                 ++vit) {
-                const auto& other = *(*vit);
+            boxMap.queryOverlap(info.box, [&](EdgeInfo* otherPtr, int) {
+                if (intersects) {
+                    return;
+                }
+
+                const auto& other = *otherPtr;
                 if (info.edge.IsSame(other.edge)) {
-                    continue;
+                    return;
                 }
 
                 for (int i = 0; i < 2; ++i) {
@@ -1159,7 +1143,7 @@ struct WireJoiner
                         AREA_WARN("BRepExtrema_DistShapeShape failed");
                     }
                 }
-            }
+            });
 
             if (!intersects) {
                 ++it;
@@ -1217,6 +1201,36 @@ struct WireJoiner
             info.reset();
         }
 
+        int rcount = 0;
+        auto queryVerticesWithin = [&](const gp_Pnt& point, double tol2) {
+            std::vector<std::pair<VertexInfo, double>> result;
+            if (tol2 <= 0.0 || vmap.empty()) {
+                return result;
+            }
+
+            const double radius = std::sqrt(tol2);
+            const Box query = Box::fromMinMax(
+                point.X() - radius,
+                point.Y() - radius,
+                point.Z() - radius,
+                point.X() + radius,
+                point.Y() + radius,
+                point.Z() + radius
+            );
+
+            vmap.queryOverlap(query, [&](const VertexInfo& vinfo, int) {
+                const double d2 = vinfo.pt().SquareDistance(point);
+                if (d2 <= tol2) {
+                    result.emplace_back(vinfo, d2);
+                }
+            });
+
+            std::sort(result.begin(), result.end(), [](const auto& a, const auto& b) {
+                return a.second < b.second;
+            });
+            return result;
+        };
+
         for (auto& info : edges) {
             if (BRep_Tool::IsClosed(info.edge)) {
                 auto wire = BRepBuilderAPI_MakeWire(info.edge).Wire();
@@ -1234,12 +1248,10 @@ struct WireJoiner
                 info.iEnd[i] = info.iStart[i] = (int)adjacentList.size();
 
                 // populate adjacent list
-                constexpr int intMax = std::numeric_limits<int>::max();
-                for (auto vit = vmap.qbegin(bgi::nearest(pt[i], intMax)); vit != vmap.qend(); ++vit) {
-                    if (vit->pt().SquareDistance(pt[i]) > tol) {
-                        break;
-                    }
-                    auto& vinfo = *vit;
+                auto candidates = queryVerticesWithin(pt[i], tol);
+                rcount += (int)candidates.size();
+                for (const auto& [vinfo, d2] : candidates) {
+                    (void)d2;
                     // yes, we push ourself too, because other edges require
                     // this info in the adjacent list. We'll do filtering later.
                     adjacentList.push_back(vinfo);
@@ -2898,6 +2910,7 @@ struct WireInfo
 {
     TopoDS_Wire wire;
     std::deque<gp_Pnt> points;
+    std::vector<int> rtreeNodes;
     gp_Pnt pt_end;
     bool isClosed;
 
@@ -2914,15 +2927,7 @@ struct WireInfo
 using Wires = std::list<WireInfo>;
 using RValue = std::pair<Wires::iterator, size_t>;
 
-struct RGetter
-{
-    using result_type = const gp_Pnt&;
-    result_type operator()(const RValue& v) const
-    {
-        return v.first->points[v.second];
-    }
-};
-using RTree = bgi::rtree<RValue, RParameters, RGetter>;
+using RTree = Part::Spatial::AabbTree3d<RValue>;
 
 struct ShapeParams
 {
@@ -3045,8 +3050,12 @@ struct GetWires
         }
         auto it = wires.end();
         --it;
+        it->rtreeNodes.clear();
+        it->rtreeNodes.reserve(it->points.size());
         for (size_t i = 0, count = it->points.size(); i < count; ++i) {
-            rtree.insert(RValue(it, i));
+            it->rtreeNodes.push_back(
+                rtree.insert(Part::Spatial::Aabb3d::fromPoint(it->points[i]), RValue(it, i))
+            );
         }
     }
 };
@@ -3106,7 +3115,11 @@ struct ShapeInfo
 
         RResults ret;
         {
-            myRTree.query(bgi::nearest(pt, myParams.k), bgi::inserter(ret));
+            auto nearest = myRTree.kNearest(pt, static_cast<std::size_t>(myParams.k));
+            for (const auto& [value, dist2] : nearest) {
+                (void)dist2;
+                ret.emplace(value.first, value.second);
+            }
         }
 
         TopoDS_Shape v = BRepBuilderAPI_MakeVertex(pt);
@@ -3358,7 +3371,7 @@ struct ShapeInfo
                 pend = myBestWire->pend();
             }
             for (size_t i = 0, count = myBestWire->points.size(); i < count; ++i) {
-                myRTree.remove(RValue(myBestWire, i));
+                myRTree.remove(myBestWire->rtreeNodes[i]);
             }
             myWires.erase(myBestWire);
             if (myWires.empty()) {
