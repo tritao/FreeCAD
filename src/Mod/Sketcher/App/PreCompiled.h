@@ -40,10 +40,11 @@
 #include <string>
 #include <vector>
 
-// Boost
+// Qt
+#include <QDateTime>
+
+// Base
 #include <Base/StringPredicates.h>
-#include <boost/geometry/geometries/register/point.hpp>
-#include <boost/geometry.hpp>
 
 // OpenCasCade
 #include <BRepAdaptor_Curve.hxx>
