@@ -28,13 +28,6 @@
 #include <vector>
 #include <unordered_set>
 
-#include <boost/preprocessor/cat.hpp>
-#include <boost/preprocessor/expand.hpp>
-#include <boost/preprocessor/seq/cat.hpp>
-#include <boost/preprocessor/seq/for_each.hpp>
-#include <boost/preprocessor/stringize.hpp>
-#include <boost/preprocessor/tuple/elem.hpp>
-
 #include <Base/Parameter.h>
 #include <Base/Bitmask.h>
 #include "DocumentObject.h"
@@ -49,6 +42,25 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
 #endif
+
+#define FC_PP_CAT(a, b) FC_PP_CAT_I(a, b)
+#define FC_PP_CAT_I(a, b) a##b
+
+#define FC_PP_CAT3(a, b, c) FC_PP_CAT(a, FC_PP_CAT(b, c))
+
+#define FC_PP_STRINGIZE(x) FC_PP_STRINGIZE_I(x)
+#define FC_PP_STRINGIZE_I(x) #x
+
+#define FC_PP_TUPLE_ELEM(i, tuple) FC_PP_CAT(FC_PP_TUPLE_ELEM_, i) tuple
+#define FC_PP_TUPLE_ELEM_0(a, ...) a
+#define FC_PP_TUPLE_ELEM_1(a, b, ...) b
+#define FC_PP_TUPLE_ELEM_2(a, b, c, ...) c
+#define FC_PP_TUPLE_ELEM_3(a, b, c, d, ...) d
+#define FC_PP_TUPLE_ELEM_4(a, b, c, d, e, ...) e
+#define FC_PP_TUPLE_ELEM_5(a, b, c, d, e, f, ...) f
+#define FC_PP_TUPLE_ELEM_6(a, b, c, d, e, f, g, ...) g
+#define FC_PP_TUPLE_ELEM_7(a, b, c, d, e, f, g, h, ...) h
+#define FC_PP_TUPLE_ELEM_8(a, b, c, d, e, f, g, h, i, ...) i
 
 #define LINK_THROW(_type, _msg)                                                                    \
     do {                                                                                           \
@@ -229,45 +241,43 @@ public:
      "Link colored elements",                                                                      \
      ##__VA_ARGS__)
 
-#define LINK_PARAM(_param) (LINK_PARAM_##_param())
+#define LINK_PNAME(_param) FC_PP_TUPLE_ELEM(0, _param)
+#define LINK_PTYPE(_param) FC_PP_TUPLE_ELEM(1, _param)
+#define LINK_PPTYPE(_param) FC_PP_TUPLE_ELEM(2, _param)
+#define LINK_PDEF(_param) FC_PP_TUPLE_ELEM(3, _param)
+#define LINK_PDOC(_param) FC_PP_TUPLE_ELEM(4, _param)
 
-#define LINK_PNAME(_param) BOOST_PP_TUPLE_ELEM(0, _param)
-#define LINK_PTYPE(_param) BOOST_PP_TUPLE_ELEM(1, _param)
-#define LINK_PPTYPE(_param) BOOST_PP_TUPLE_ELEM(2, _param)
-#define LINK_PDEF(_param) BOOST_PP_TUPLE_ELEM(3, _param)
-#define LINK_PDOC(_param) BOOST_PP_TUPLE_ELEM(4, _param)
-
-#define LINK_PINDEX(_param) BOOST_PP_CAT(Prop, LINK_PNAME(_param))
+#define LINK_PINDEX(_param) FC_PP_CAT(Prop, LINK_PNAME(_param))
     //@}
 
-#define LINK_PARAMS                                                                                \
-    LINK_PARAM(PLACEMENT)                                                                          \
-    LINK_PARAM(LINK_PLACEMENT)                                                                     \
-    LINK_PARAM(OBJECT)                                                                             \
-    LINK_PARAM(CLAIM_CHILD)                                                                        \
-    LINK_PARAM(TRANSFORM)                                                                          \
-    LINK_PARAM(SCALE)                                                                              \
-    LINK_PARAM(SCALE_VECTOR)                                                                       \
-    LINK_PARAM(PLACEMENTS)                                                                         \
-    LINK_PARAM(SCALES)                                                                             \
-    LINK_PARAM(VISIBILITIES)                                                                       \
-    LINK_PARAM(COUNT)                                                                              \
-    LINK_PARAM(ELEMENTS)                                                                           \
-    LINK_PARAM(SHOW_ELEMENT)                                                                       \
-    LINK_PARAM(MODE)                                                                               \
-    LINK_PARAM(LINK_EXECUTE)                                                                       \
-    LINK_PARAM(COLORED_ELEMENTS)                                                                   \
-    LINK_PARAM(COPY_ON_CHANGE)                                                                     \
-    LINK_PARAM(COPY_ON_CHANGE_SOURCE)                                                              \
-    LINK_PARAM(COPY_ON_CHANGE_GROUP)                                                               \
-    LINK_PARAM(COPY_ON_CHANGE_TOUCHED)
+#define LINK_PARAMS(_apply, _data)                                                                 \
+    _apply(_data, LINK_PARAM_PLACEMENT())                                                          \
+    _apply(_data, LINK_PARAM_LINK_PLACEMENT())                                                     \
+    _apply(_data, LINK_PARAM_OBJECT())                                                             \
+    _apply(_data, LINK_PARAM_CLAIM_CHILD())                                                        \
+    _apply(_data, LINK_PARAM_TRANSFORM())                                                          \
+    _apply(_data, LINK_PARAM_SCALE())                                                              \
+    _apply(_data, LINK_PARAM_SCALE_VECTOR())                                                       \
+    _apply(_data, LINK_PARAM_PLACEMENTS())                                                         \
+    _apply(_data, LINK_PARAM_SCALES())                                                             \
+    _apply(_data, LINK_PARAM_VISIBILITIES())                                                       \
+    _apply(_data, LINK_PARAM_COUNT())                                                              \
+    _apply(_data, LINK_PARAM_ELEMENTS())                                                           \
+    _apply(_data, LINK_PARAM_SHOW_ELEMENT())                                                       \
+    _apply(_data, LINK_PARAM_MODE())                                                               \
+    _apply(_data, LINK_PARAM_LINK_EXECUTE())                                                       \
+    _apply(_data, LINK_PARAM_COLORED_ELEMENTS())                                                   \
+    _apply(_data, LINK_PARAM_COPY_ON_CHANGE())                                                     \
+    _apply(_data, LINK_PARAM_COPY_ON_CHANGE_SOURCE())                                              \
+    _apply(_data, LINK_PARAM_COPY_ON_CHANGE_GROUP())                                               \
+    _apply(_data, LINK_PARAM_COPY_ON_CHANGE_TOUCHED())
 
     enum PropIndex
     {
-#define LINK_PINDEX_DEFINE(_1, _2, _param) LINK_PINDEX(_param),
+#define LINK_PINDEX_DEFINE(_data, _param) LINK_PINDEX(_param),
 
         // defines Prop##Name enumeration value
-        BOOST_PP_SEQ_FOR_EACH(LINK_PINDEX_DEFINE, _, LINK_PARAMS) PropMax
+        LINK_PARAMS(LINK_PINDEX_DEFINE, _) PropMax
     };
 
     virtual void setProperty(int idx, Property* prop);
@@ -295,11 +305,11 @@ public:
         {}
     };
 
-#define LINK_PROP_INFO(_1, _var, _param)                                                           \
-    _var.push_back(PropInfo(BOOST_PP_CAT(Prop, LINK_PNAME(_param)),                                \
-                            BOOST_PP_STRINGIZE(LINK_PNAME(_param)),                                \
-                                               LINK_PPTYPE(_param)::getClassTypeId(),              \
-                                               LINK_PDOC(_param)));
+#define LINK_PROP_INFO(_var, _param)                                                               \
+    _var.push_back(PropInfo(FC_PP_CAT(Prop, LINK_PNAME(_param)),                                   \
+                            FC_PP_STRINGIZE(LINK_PNAME(_param)),                                  \
+                            LINK_PPTYPE(_param)::getClassTypeId(),                                 \
+                            LINK_PDOC(_param)));
 
     virtual const std::vector<PropInfo>& getPropertyInfo() const;
 
@@ -314,27 +324,27 @@ public:
         CopyOnChangeTracking = 3
     };
 
-#define LINK_PROP_GET(_1, _2, _param)                                                              \
-    LINK_PTYPE(_param) BOOST_PP_SEQ_CAT((get)(LINK_PNAME(_param))(Value))() const                  \
+#define LINK_PROP_GET(_data, _param)                                                               \
+    LINK_PTYPE(_param) FC_PP_CAT3(get, LINK_PNAME(_param), Value)() const                          \
     {                                                                                              \
         auto prop = props[LINK_PINDEX(_param)];                                                    \
         if (!prop)                                                                                 \
             return LINK_PDEF(_param);                                                              \
         return static_cast<const LINK_PPTYPE(_param)*>(prop)->getValue();                          \
     }                                                                                              \
-    const LINK_PPTYPE(_param) * BOOST_PP_SEQ_CAT((get)(LINK_PNAME(_param))(Property))() const      \
+    const LINK_PPTYPE(_param)* FC_PP_CAT3(get, LINK_PNAME(_param), Property)() const               \
     {                                                                                              \
         auto prop = props[LINK_PINDEX(_param)];                                                    \
         return static_cast<const LINK_PPTYPE(_param)*>(prop);                                      \
     }                                                                                              \
-    LINK_PPTYPE(_param) * BOOST_PP_SEQ_CAT((get)(LINK_PNAME(_param))(Property))()                  \
+    LINK_PPTYPE(_param)* FC_PP_CAT3(get, LINK_PNAME(_param), Property)()                           \
     {                                                                                              \
         auto prop = props[LINK_PINDEX(_param)];                                                    \
         return static_cast<LINK_PPTYPE(_param)*>(prop);                                            \
     }
 
     // defines get##Name##Property() and get##Name##Value() accessor
-    BOOST_PP_SEQ_FOR_EACH(LINK_PROP_GET, _, LINK_PARAMS)
+    LINK_PARAMS(LINK_PROP_GET, _)
 
     PropertyLinkList* _getElementListProperty() const;
     const std::vector<App::DocumentObject*>& _getElementListValue() const;
@@ -541,13 +551,13 @@ public:
      */
     //@{
 
-#define LINK_ENAME(_param) BOOST_PP_TUPLE_ELEM(5, _param)
-#define LINK_ETYPE(_param) BOOST_PP_TUPLE_ELEM(6, _param)
-#define LINK_EPTYPE(_param) BOOST_PP_TUPLE_ELEM(7, _param)
-#define LINK_EGROUP(_param) BOOST_PP_TUPLE_ELEM(8, _param)
+#define LINK_ENAME(_param) FC_PP_TUPLE_ELEM(5, _param)
+#define LINK_ETYPE(_param) FC_PP_TUPLE_ELEM(6, _param)
+#define LINK_EPTYPE(_param) FC_PP_TUPLE_ELEM(7, _param)
+#define LINK_EGROUP(_param) FC_PP_TUPLE_ELEM(8, _param)
 
 #define _LINK_PROP_ADD(_add_property, _param)                                                      \
-    _add_property(BOOST_PP_STRINGIZE(LINK_ENAME(_param)),                                          \
+    _add_property(FC_PP_STRINGIZE(LINK_ENAME(_param)),                                             \
                                      LINK_ENAME(_param),                                           \
                                      (LINK_PDEF(_param)),                                          \
                                      LINK_EGROUP(_param),                                          \
@@ -555,64 +565,65 @@ public:
                                      LINK_PDOC(_param));                                           \
     setProperty(LINK_PINDEX(_param), &LINK_ENAME(_param));
 
-#define LINK_PROP_ADD(_1, _2, _param) _LINK_PROP_ADD(_ADD_PROPERTY_TYPE, _param);
+#define LINK_PROP_ADD(_data, _param) _LINK_PROP_ADD(_ADD_PROPERTY_TYPE, _param);
 
-#define LINK_PROP_ADD_EXTENSION(_1, _2, _param)                                                    \
+#define LINK_PROP_ADD_EXTENSION(_data, _param)                                                     \
     _LINK_PROP_ADD(_EXTENSION_ADD_PROPERTY_TYPE, _param);
 
-#define LINK_PROPS_ADD(_seq) BOOST_PP_SEQ_FOR_EACH(LINK_PROP_ADD, _, _seq)
+#define LINK_PROPS_ADD(_seq) _seq(LINK_PROP_ADD, _)
 
-#define LINK_PROPS_ADD_EXTENSION(_seq) BOOST_PP_SEQ_FOR_EACH(LINK_PROP_ADD_EXTENSION, _, _seq)
+#define LINK_PROPS_ADD_EXTENSION(_seq) _seq(LINK_PROP_ADD_EXTENSION, _)
 
-#define _LINK_PROP_SET(_1, _2, _param) setProperty(LINK_PINDEX(_param), &LINK_ENAME(_param));
+#define _LINK_PROP_SET(_data, _param) setProperty(LINK_PINDEX(_param), &LINK_ENAME(_param));
 
-#define LINK_PROPS_SET(_seq) BOOST_PP_SEQ_FOR_EACH(_LINK_PROP_SET, _, _seq)
+#define LINK_PROPS_SET(_seq) _seq(_LINK_PROP_SET, _)
 
     /// Helper for defining default extended parameter
 #define _LINK_PARAM_EXT(_name, _type, _ptype, _def, _doc, ...)                                     \
-    ((_name, _type, _ptype, _def, _doc, _name, _ptype, App::Prop_None, " Link"))
+    (_name, _type, _ptype, _def, _doc, _name, _ptype, App::Prop_None, " Link")
 
     /** Define default extended parameter
      * It simply reuses Name as Property_Name, Property_Type as
      * Derived_Property_Type, and App::Prop_None as App::PropertyType
      */
-#define LINK_PARAM_EXT(_param) BOOST_PP_EXPAND(_LINK_PARAM_EXT LINK_PARAM_##_param())
+#define LINK_PARAM_EXT(_param) LINK_PARAM_EXT_I(LINK_PARAM_##_param())
+#define LINK_PARAM_EXT_I(_param_tuple) _LINK_PARAM_EXT _param_tuple
 
     /// Helper for extended parameter with app property type
-#define _LINK_PARAM_EXT_ATYPE(_name, _type, _ptype, _def, _doc, _atype)                            \
-    ((_name, _type, _ptype, _def, _doc, _name, _ptype, _atype, " Link"))
+#define _LINK_PARAM_EXT_ATYPE(_name, _type, _ptype, _def, _doc, _atype, ...)                       \
+    (_name, _type, _ptype, _def, _doc, _name, _ptype, _atype, " Link")
 
     /// Define extended parameter with app property type
-#define LINK_PARAM_EXT_ATYPE(_param, _atype)                                                       \
-    BOOST_PP_EXPAND(_LINK_PARAM_EXT_ATYPE LINK_PARAM_##_param(_atype))
+#define LINK_PARAM_EXT_ATYPE(_param, _atype) LINK_PARAM_EXT_ATYPE_I(LINK_PARAM_##_param(_atype))
+#define LINK_PARAM_EXT_ATYPE_I(_param_tuple) _LINK_PARAM_EXT_ATYPE _param_tuple
 
     /// Helper for extended parameter with derived property type
-#define _LINK_PARAM_EXT_TYPE(_name, _type, _ptype, _def, _doc, _dtype)                             \
-    ((_name, _type, _ptype, _def, _doc, _name, _dtype, App::Prop_None, " Link"))
+#define _LINK_PARAM_EXT_TYPE(_name, _type, _ptype, _def, _doc, _dtype, ...)                        \
+    (_name, _type, _ptype, _def, _doc, _name, _dtype, App::Prop_None, " Link")
 
     /// Define extended parameter with derived property type
-#define LINK_PARAM_EXT_TYPE(_param, _dtype)                                                        \
-    BOOST_PP_EXPAND(_LINK_PARAM_EXT_TYPE LINK_PARAM_##_param(_dtype))
+#define LINK_PARAM_EXT_TYPE(_param, _dtype) LINK_PARAM_EXT_TYPE_I(LINK_PARAM_##_param(_dtype))
+#define LINK_PARAM_EXT_TYPE_I(_param_tuple) _LINK_PARAM_EXT_TYPE _param_tuple
 
     /// Helper for extended parameter with a different property name
-#define _LINK_PARAM_EXT_NAME(_name, _type, _ptype, _def, _doc, _pname)                             \
-    ((_name, _type, _ptype, _def, _doc, _pname, _ptype, App::Prop_None, " Link"))
+#define _LINK_PARAM_EXT_NAME(_name, _type, _ptype, _def, _doc, _pname, ...)                        \
+    (_name, _type, _ptype, _def, _doc, _pname, _ptype, App::Prop_None, " Link")
 
     /// Define extended parameter with a different property name
-#define LINK_PARAM_EXT_NAME(_param, _pname)                                                        \
-    BOOST_PP_EXPAND(_LINK_PARAM_EXT_NAME LINK_PARAM_##_param(_pname))
+#define LINK_PARAM_EXT_NAME(_param, _pname) LINK_PARAM_EXT_NAME_I(LINK_PARAM_##_param(_pname))
+#define LINK_PARAM_EXT_NAME_I(_param_tuple) _LINK_PARAM_EXT_NAME _param_tuple
     //@}
 
-#define LINK_PARAMS_EXT                                                                            \
-    LINK_PARAM_EXT(SCALE)                                                                          \
-    LINK_PARAM_EXT_ATYPE(SCALE_VECTOR, App::Prop_Hidden)                                           \
-    LINK_PARAM_EXT(SCALES)                                                                         \
-    LINK_PARAM_EXT(VISIBILITIES)                                                                   \
-    LINK_PARAM_EXT(PLACEMENTS)                                                                     \
-    LINK_PARAM_EXT(ELEMENTS)
+#define LINK_PARAMS_EXT(_apply, _data)                                                             \
+    _apply(_data, LINK_PARAM_EXT(SCALE))                                                           \
+    _apply(_data, LINK_PARAM_EXT_ATYPE(SCALE_VECTOR, App::Prop_Hidden))                            \
+    _apply(_data, LINK_PARAM_EXT(SCALES))                                                          \
+    _apply(_data, LINK_PARAM_EXT(VISIBILITIES))                                                    \
+    _apply(_data, LINK_PARAM_EXT(PLACEMENTS))                                                      \
+    _apply(_data, LINK_PARAM_EXT(ELEMENTS))
 
-#define LINK_PROP_DEFINE(_1, _2, _param) LINK_ETYPE(_param) LINK_ENAME(_param);
-#define LINK_PROPS_DEFINE(_seq) BOOST_PP_SEQ_FOR_EACH(LINK_PROP_DEFINE, _, _seq)
+#define LINK_PROP_DEFINE(_data, _param) LINK_ETYPE(_param) LINK_ENAME(_param);
+#define LINK_PROPS_DEFINE(_seq) _seq(LINK_PROP_DEFINE, _)
 
     // defines the actual properties
     LINK_PROPS_DEFINE(LINK_PARAMS_EXT)
@@ -636,20 +647,20 @@ class AppExport Link: public App::DocumentObject, public App::LinkExtension
     using inherited = App::DocumentObject;
 
 public:
-#define LINK_PARAMS_LINK                                                                           \
-    LINK_PARAM_EXT_TYPE(OBJECT, App::PropertyXLink)                                                \
-    LINK_PARAM_EXT(CLAIM_CHILD)                                                                    \
-    LINK_PARAM_EXT(TRANSFORM)                                                                      \
-    LINK_PARAM_EXT(LINK_PLACEMENT)                                                                 \
-    LINK_PARAM_EXT(PLACEMENT)                                                                      \
-    LINK_PARAM_EXT(SHOW_ELEMENT)                                                                   \
-    LINK_PARAM_EXT_TYPE(COUNT, App::PropertyIntegerConstraint)                                     \
-    LINK_PARAM_EXT(LINK_EXECUTE)                                                                   \
-    LINK_PARAM_EXT_ATYPE(COLORED_ELEMENTS, App::Prop_Hidden)                                       \
-    LINK_PARAM_EXT(COPY_ON_CHANGE)                                                                 \
-    LINK_PARAM_EXT_TYPE(COPY_ON_CHANGE_SOURCE, App::PropertyXLink)                                 \
-    LINK_PARAM_EXT(COPY_ON_CHANGE_GROUP)                                                           \
-    LINK_PARAM_EXT(COPY_ON_CHANGE_TOUCHED)
+#define LINK_PARAMS_LINK(_apply, _data)                                                            \
+    _apply(_data, LINK_PARAM_EXT_TYPE(OBJECT, App::PropertyXLink))                                 \
+    _apply(_data, LINK_PARAM_EXT(CLAIM_CHILD))                                                     \
+    _apply(_data, LINK_PARAM_EXT(TRANSFORM))                                                       \
+    _apply(_data, LINK_PARAM_EXT(LINK_PLACEMENT))                                                  \
+    _apply(_data, LINK_PARAM_EXT(PLACEMENT))                                                       \
+    _apply(_data, LINK_PARAM_EXT(SHOW_ELEMENT))                                                    \
+    _apply(_data, LINK_PARAM_EXT_TYPE(COUNT, App::PropertyIntegerConstraint))                      \
+    _apply(_data, LINK_PARAM_EXT(LINK_EXECUTE))                                                    \
+    _apply(_data, LINK_PARAM_EXT_ATYPE(COLORED_ELEMENTS, App::Prop_Hidden))                        \
+    _apply(_data, LINK_PARAM_EXT(COPY_ON_CHANGE))                                                  \
+    _apply(_data, LINK_PARAM_EXT_TYPE(COPY_ON_CHANGE_SOURCE, App::PropertyXLink))                  \
+    _apply(_data, LINK_PARAM_EXT(COPY_ON_CHANGE_GROUP))                                            \
+    _apply(_data, LINK_PARAM_EXT(COPY_ON_CHANGE_TOUCHED))
 
     LINK_PROPS_DEFINE(LINK_PARAMS_LINK)
 
@@ -692,17 +703,17 @@ class AppExport LinkElement: public App::DocumentObject, public App::LinkBaseExt
     using inherited = App::DocumentObject;
 
 public:
-#define LINK_PARAMS_ELEMENT                                                                        \
-    LINK_PARAM_EXT(SCALE)                                                                          \
-    LINK_PARAM_EXT_ATYPE(SCALE_VECTOR, App::Prop_Hidden)                                           \
-    LINK_PARAM_EXT_TYPE(OBJECT, App::PropertyXLink)                                                \
-    LINK_PARAM_EXT(TRANSFORM)                                                                      \
-    LINK_PARAM_EXT(LINK_PLACEMENT)                                                                 \
-    LINK_PARAM_EXT(PLACEMENT)                                                                      \
-    LINK_PARAM_EXT(COPY_ON_CHANGE)                                                                 \
-    LINK_PARAM_EXT_TYPE(COPY_ON_CHANGE_SOURCE, App::PropertyXLink)                                 \
-    LINK_PARAM_EXT(COPY_ON_CHANGE_GROUP)                                                           \
-    LINK_PARAM_EXT(COPY_ON_CHANGE_TOUCHED)
+#define LINK_PARAMS_ELEMENT(_apply, _data)                                                         \
+    _apply(_data, LINK_PARAM_EXT(SCALE))                                                           \
+    _apply(_data, LINK_PARAM_EXT_ATYPE(SCALE_VECTOR, App::Prop_Hidden))                            \
+    _apply(_data, LINK_PARAM_EXT_TYPE(OBJECT, App::PropertyXLink))                                 \
+    _apply(_data, LINK_PARAM_EXT(TRANSFORM))                                                       \
+    _apply(_data, LINK_PARAM_EXT(LINK_PLACEMENT))                                                  \
+    _apply(_data, LINK_PARAM_EXT(PLACEMENT))                                                       \
+    _apply(_data, LINK_PARAM_EXT(COPY_ON_CHANGE))                                                  \
+    _apply(_data, LINK_PARAM_EXT_TYPE(COPY_ON_CHANGE_SOURCE, App::PropertyXLink))                  \
+    _apply(_data, LINK_PARAM_EXT(COPY_ON_CHANGE_GROUP))                                            \
+    _apply(_data, LINK_PARAM_EXT(COPY_ON_CHANGE_TOUCHED))
 
     // defines the actual properties
     LINK_PROPS_DEFINE(LINK_PARAMS_ELEMENT)
@@ -745,12 +756,12 @@ class AppExport LinkGroup: public App::DocumentObject, public App::LinkBaseExten
     using inherited = App::DocumentObject;
 
 public:
-#define LINK_PARAMS_GROUP                                                                          \
-    LINK_PARAM_EXT(ELEMENTS)                                                                       \
-    LINK_PARAM_EXT(PLACEMENT)                                                                      \
-    LINK_PARAM_EXT(VISIBILITIES)                                                                   \
-    LINK_PARAM_EXT(MODE)                                                                           \
-    LINK_PARAM_EXT_ATYPE(COLORED_ELEMENTS, App::Prop_Hidden)
+#define LINK_PARAMS_GROUP(_apply, _data)                                                           \
+    _apply(_data, LINK_PARAM_EXT(ELEMENTS))                                                        \
+    _apply(_data, LINK_PARAM_EXT(PLACEMENT))                                                       \
+    _apply(_data, LINK_PARAM_EXT(VISIBILITIES))                                                    \
+    _apply(_data, LINK_PARAM_EXT(MODE))                                                            \
+    _apply(_data, LINK_PARAM_EXT_ATYPE(COLORED_ELEMENTS, App::Prop_Hidden))
 
     // defines the actual properties
     LINK_PROPS_DEFINE(LINK_PARAMS_GROUP)

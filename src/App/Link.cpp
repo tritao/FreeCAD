@@ -25,8 +25,6 @@
 #include <limits>
 #include <string_view>
 
-#include <boost/property_map/property_map.hpp>
-
 #include <Base/StringViewTools.h>
 #include <Base/Tools.h>
 #include <Base/Uuid.h>
@@ -202,7 +200,7 @@ const std::vector<LinkBaseExtension::PropInfo>& LinkBaseExtension::getPropertyIn
 {
     static std::vector<LinkBaseExtension::PropInfo> PropsInfo;
     if (PropsInfo.empty()) {
-        BOOST_PP_SEQ_FOR_EACH(LINK_PROP_INFO, PropsInfo, LINK_PARAMS);
+        LINK_PARAMS(LINK_PROP_INFO, PropsInfo);
     }
     return PropsInfo;
 }
