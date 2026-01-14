@@ -58,6 +58,8 @@
 # include <Shlobj.h>
 #endif
 
+#include <QCoreApplication>
+
 #if defined(FC_OS_BSD)
 #include <sys/param.h>
 #include <sys/sysctl.h>
@@ -74,6 +76,7 @@
 #include <Base/ConsoleObserver.h>
 #include <Base/PlatformPaths.h>
 #include <Base/ServiceProvider.h>
+#include <Base/StringPredicates.h>
 #include <Base/CoordinateSystemPy.h>
 #include <Base/Translation.h>
 #include <Base/Exception.h>
@@ -1386,7 +1389,7 @@ std::vector<std::string> Application::getImportModules(const std::string& extens
     for (const auto & it : _mImportTypes) {
         const std::vector<std::string>& types = it.types;
         for (const auto & jt : types) {
-            if (boost::iequals(extension, jt)) {
+            if (Base::iequals(extension, jt)) {
                 modules.push_back(it.module);
             }
         }
@@ -1411,7 +1414,7 @@ std::vector<std::string> Application::getImportTypes(const std::string& Module) 
 {
     std::vector<std::string> types;
     for (const auto & it : _mImportTypes) {
-        if (boost::iequals(Module, it.module)) {
+        if (Base::iequals(Module, it.module)) {
             types.insert(types.end(), it.types.begin(), it.types.end());
         }
     }
@@ -1438,7 +1441,7 @@ std::map<std::string, std::string> Application::getImportFilters(const std::stri
     for (const auto & it : _mImportTypes) {
         const std::vector<std::string>& types = it.types;
         for (const auto & jt : types) {
-            if (boost::iequals(extension, jt)) {
+            if (Base::iequals(extension, jt)) {
                 moduleFilter[it.filter] = it.module;
             }
         }
@@ -1589,7 +1592,7 @@ std::vector<std::string> Application::getExportModules(const std::string& extens
     for (const auto & it : _mExportTypes) {
         const std::vector<std::string>& types = it.types;
         for (const auto & jt : types) {
-            if (boost::iequals(extension, jt)) {
+            if (Base::iequals(extension, jt)) {
                 modules.push_back(it.module);
             }
         }
@@ -1614,7 +1617,7 @@ std::vector<std::string> Application::getExportTypes(const std::string& Module) 
 {
     std::vector<std::string> types;
     for (const auto & it : _mExportTypes) {
-        if (boost::iequals(Module, it.module)) {
+        if (Base::iequals(Module, it.module)) {
             types.insert(types.end(), it.types.begin(), it.types.end());
         }
     }
@@ -1641,7 +1644,7 @@ std::map<std::string, std::string> Application::getExportFilters(const std::stri
     for (const auto & it : _mExportTypes) {
         const std::vector<std::string>& types = it.types;
         for (const auto & jt : types) {
-            if (boost::iequals(extension, jt)) {
+            if (Base::iequals(extension, jt)) {
                 moduleFilter[it.filter] = it.module;
             }
         }
@@ -2572,7 +2575,7 @@ void Application::initConfig(int argc, char ** argv)
 #ifdef OCC_VERSION_STRING_EXT
     mConfig["OCC_VERSION"] = OCC_VERSION_STRING_EXT;
 #endif
-    mConfig["BOOST_VERSION"] = BOOST_LIB_VERSION;
+    mConfig["BOOST_VERSION"] = fcBoostVersion;
     mConfig["PYTHON_VERSION"] = PY_VERSION;
     mConfig["QT_VERSION"] = QT_VERSION_STR;
     mConfig["EIGEN_VERSION"] = fcEigen3Version;
@@ -2587,7 +2590,7 @@ void Application::initConfig(int argc, char ** argv)
 
     if (options.has("verbose") && options.has("version")) {
         Application::_pcSingleton = new Application(mConfig);
-        throw Base::ProgramInformation(Application::verboseVersionEmitMessage);
+        throw Base::ProgramInformation(ProgramInformation::verboseVersionEmitMessage);
     }
 }
 
