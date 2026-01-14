@@ -24,9 +24,6 @@
 
 #pragma once
 
-#include <boost/preprocessor/seq/for_each.hpp>
-#include <boost/algorithm/string/predicate.hpp>
-
 #include <vector>
 #include <unordered_set>
 
@@ -37,32 +34,6 @@
 #include "FeaturePython.h"
 #include "GroupExtension.h"
 #include "PropertyLinks.h"
-
-
-// FIXME: ISO C++11 requires at least one argument for the "..." in a variadic macro
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
-#endif
-
-#define FC_PP_CAT(a, b) FC_PP_CAT_I(a, b)
-#define FC_PP_CAT_I(a, b) a##b
-
-#define FC_PP_CAT3(a, b, c) FC_PP_CAT(a, FC_PP_CAT(b, c))
-
-#define FC_PP_STRINGIZE(x) FC_PP_STRINGIZE_I(x)
-#define FC_PP_STRINGIZE_I(x) #x
-
-#define FC_PP_TUPLE_ELEM(i, tuple) FC_PP_CAT(FC_PP_TUPLE_ELEM_, i) tuple
-#define FC_PP_TUPLE_ELEM_0(a, ...) a
-#define FC_PP_TUPLE_ELEM_1(a, b, ...) b
-#define FC_PP_TUPLE_ELEM_2(a, b, c, ...) c
-#define FC_PP_TUPLE_ELEM_3(a, b, c, d, ...) d
-#define FC_PP_TUPLE_ELEM_4(a, b, c, d, e, ...) e
-#define FC_PP_TUPLE_ELEM_5(a, b, c, d, e, f, ...) f
-#define FC_PP_TUPLE_ELEM_6(a, b, c, d, e, f, g, ...) g
-#define FC_PP_TUPLE_ELEM_7(a, b, c, d, e, f, g, h, ...) h
-#define FC_PP_TUPLE_ELEM_8(a, b, c, d, e, f, g, h, i, ...) i
 
 #define LINK_THROW(_type, _msg)                                                                    \
     do {                                                                                           \
@@ -108,189 +79,232 @@ public:
 
     /**
      * @name Parameter definition.
-     * @brief Parameter definition (Name, Type, Property Type, Default, Document).
-     *
-     * The variadic is here so that the parameter can be extended by adding
-     * extra fields.  See LINK_PARAM_EXT() for an example.
+     * @brief Parameter definition (Name, Type, Property Type, Default, Document,
+     * Derived Property Type, App::PropertyType).
      *
      * @{
      */
 
-#define LINK_PARAM_LINK_PLACEMENT(...)                                                             \
-    (LinkPlacement,                                                                                \
-     Base::Placement,                                                                              \
-     App::PropertyPlacement,                                                                       \
-     Base::Placement(),                                                                            \
-     "Link placement",                                                                             \
-     ##__VA_ARGS__)
+#define LINK_PARAM_LINK_PLACEMENT(_apply, _data)                                                   \
+    _apply(_data,                                                                                  \
+           LinkPlacement,                                                                          \
+           Base::Placement,                                                                        \
+           App::PropertyPlacement,                                                                 \
+           (Base::Placement()),                                                                    \
+           "Link placement",                                                                       \
+           App::PropertyPlacement,                                                                 \
+           App::Prop_None)
 
-#define LINK_PARAM_PLACEMENT(...)                                                                  \
-    (Placement,                                                                                    \
-     Base::Placement,                                                                              \
-     App::PropertyPlacement,                                                                       \
-     Base::Placement(),                                                                            \
-     "Alias to LinkPlacement to make the link object compatibale with other objects",              \
-     ##__VA_ARGS__)
+#define LINK_PARAM_PLACEMENT(_apply, _data)                                                        \
+    _apply(_data,                                                                                  \
+           Placement,                                                                              \
+           Base::Placement,                                                                        \
+           App::PropertyPlacement,                                                                 \
+           (Base::Placement()),                                                                    \
+           "Alias to LinkPlacement to make the link object compatibale with other objects",        \
+           App::PropertyPlacement,                                                                 \
+           App::Prop_None)
 
-#define LINK_PARAM_OBJECT(...)                                                                     \
-    (LinkedObject, App::DocumentObject*, App::PropertyLink, 0, "Linked object", ##__VA_ARGS__)
+#define LINK_PARAM_OBJECT(_apply, _data)                                                           \
+    _apply(_data,                                                                                  \
+           LinkedObject,                                                                           \
+           App::DocumentObject*,                                                                   \
+           App::PropertyLink,                                                                      \
+           (0),                                                                                    \
+           "Linked object",                                                                        \
+           App::PropertyXLink,                                                                     \
+           App::Prop_None)
 
-#define LINK_PARAM_TRANSFORM(...)                                                                  \
-    (LinkTransform,                                                                                \
-     bool,                                                                                         \
-     App::PropertyBool,                                                                            \
-     false,                                                                                        \
-     "Set to false to override linked object's placement",                                         \
-     ##__VA_ARGS__)
+#define LINK_PARAM_TRANSFORM(_apply, _data)                                                        \
+    _apply(_data,                                                                                  \
+           LinkTransform,                                                                          \
+           bool,                                                                                   \
+           App::PropertyBool,                                                                      \
+           (false),                                                                                \
+           "Set to false to override linked object's placement",                                   \
+           App::PropertyBool,                                                                      \
+           App::Prop_None)
 
-#define LINK_PARAM_CLAIM_CHILD(...)                                                                \
-    (LinkClaimChild,                                                                               \
-     bool,                                                                                         \
-     App::PropertyBool,                                                                            \
-     false,                                                                                        \
-     "Claim the linked object as a child",                                                         \
-     ##__VA_ARGS__)
+#define LINK_PARAM_CLAIM_CHILD(_apply, _data)                                                      \
+    _apply(_data,                                                                                  \
+           LinkClaimChild,                                                                         \
+           bool,                                                                                   \
+           App::PropertyBool,                                                                      \
+           (false),                                                                                \
+           "Claim the linked object as a child",                                                   \
+           App::PropertyBool,                                                                      \
+           App::Prop_None)
 
-#define LINK_PARAM_COPY_ON_CHANGE(...)                                                             \
-    (LinkCopyOnChange,                                                                             \
-     long,                                                                                         \
-     App::PropertyEnumeration,                                                                     \
-     ((long)0),                                                                                    \
-     "Disabled: turns off copy-on-change\n"                                                        \
-     "Enabled: copies the linked object when any property marked CopyOnChange changes\n"           \
-     "Owned: the linked object has been copied and is owned by the link; changes to the original\n"\
-     "       will be synced back to the copy\n"                                                    \
-     "Tracking: copies the linked object when any property marked CopyOnChange changes, and keeps\n"\
-     "       future edits to the link in sync with the original",                                  \
-     ##__VA_ARGS__)
+#define LINK_PARAM_COPY_ON_CHANGE(_apply, _data)                                                   \
+    _apply(_data,                                                                                  \
+           LinkCopyOnChange,                                                                       \
+           long,                                                                                   \
+           App::PropertyEnumeration,                                                               \
+           ((long)0),                                                                              \
+           "Disabled: turns off copy-on-change\n"                                                  \
+           "Enabled: copies the linked object when any property marked CopyOnChange changes\n"     \
+           "Owned: the linked object has been copied and is owned by the link; changes to the "    \
+           "original\n"                                                                            \
+           "       will be synced back to the copy\n"                                              \
+           "Tracking: copies the linked object when any property marked CopyOnChange changes, and " \
+           "keeps\n"                                                                               \
+           "       future edits to the link in sync with the original",                            \
+           App::PropertyEnumeration,                                                               \
+           App::Prop_None)
 
-#define LINK_PARAM_COPY_ON_CHANGE_SOURCE(...)                                                      \
-    (LinkCopyOnChangeSource,                                                                       \
-     App::DocumentObject*,                                                                         \
-     App::PropertyLink,                                                                            \
-     0,                                                                                            \
-     "The copy-on-change source object",                                                           \
-     ##__VA_ARGS__)
+#define LINK_PARAM_COPY_ON_CHANGE_SOURCE(_apply, _data)                                            \
+    _apply(_data,                                                                                  \
+           LinkCopyOnChangeSource,                                                                 \
+           App::DocumentObject*,                                                                   \
+           App::PropertyLink,                                                                      \
+           (0),                                                                                    \
+           "The copy-on-change source object",                                                     \
+           App::PropertyXLink,                                                                     \
+           App::Prop_None)
 
-#define LINK_PARAM_COPY_ON_CHANGE_GROUP(...)                                                       \
-    (LinkCopyOnChangeGroup,                                                                        \
-     App::DocumentObject*,                                                                         \
-     App::PropertyLink,                                                                            \
-     0,                                                                                            \
-     "Linked to an internal group object for holding on change copies",                             \
-     ##__VA_ARGS__)
+#define LINK_PARAM_COPY_ON_CHANGE_GROUP(_apply, _data)                                             \
+    _apply(_data,                                                                                  \
+           LinkCopyOnChangeGroup,                                                                  \
+           App::DocumentObject*,                                                                   \
+           App::PropertyLink,                                                                      \
+           (0),                                                                                    \
+           "Linked to an internal group object for holding on change copies",                       \
+           App::PropertyLink,                                                                      \
+           App::Prop_None)
 
-#define LINK_PARAM_COPY_ON_CHANGE_TOUCHED(...)                                                     \
-    (LinkCopyOnChangeTouched,                                                                      \
-     bool,                                                                                         \
-     App::PropertyBool,                                                                            \
-     0,                                                                                            \
-     "Indicating the copy on change source object has been changed",                               \
-     ##__VA_ARGS__)
+#define LINK_PARAM_COPY_ON_CHANGE_TOUCHED(_apply, _data)                                           \
+    _apply(_data,                                                                                  \
+           LinkCopyOnChangeTouched,                                                                \
+           bool,                                                                                   \
+           App::PropertyBool,                                                                      \
+           (0),                                                                                    \
+           "Indicating the copy on change source object has been changed",                         \
+           App::PropertyBool,                                                                      \
+           App::Prop_None)
 
-#define LINK_PARAM_SCALE(...)                                                                      \
-    (Scale, double, App::PropertyFloat, 1.0, "Scale factor", ##__VA_ARGS__)
+#define LINK_PARAM_SCALE(_apply, _data)                                                            \
+    _apply(_data, Scale, double, App::PropertyFloat, (1.0), "Scale factor", App::PropertyFloat, App::Prop_None)
 
-#define LINK_PARAM_SCALE_VECTOR(...)                                                               \
-    (ScaleVector,                                                                                  \
-     Base::Vector3d,                                                                               \
-     App::PropertyVector,                                                                          \
-     Base::Vector3d(1, 1, 1),                                                                      \
-     "Scale factors",                                                                              \
-     ##__VA_ARGS__)
+#define LINK_PARAM_SCALE_VECTOR(_apply, _data)                                                     \
+    _apply(_data,                                                                                  \
+           ScaleVector,                                                                            \
+           Base::Vector3d,                                                                         \
+           App::PropertyVector,                                                                    \
+           (Base::Vector3d(1, 1, 1)),                                                              \
+           "Scale factors",                                                                        \
+           App::PropertyVector,                                                                    \
+           App::Prop_Hidden)
 
-#define LINK_PARAM_PLACEMENTS(...)                                                                 \
-    (PlacementList,                                                                                \
-     std::vector<Base::Placement>,                                                                 \
-     App::PropertyPlacementList,                                                                   \
-     std::vector<Base::Placement>(),                                                               \
-     "The placement for each link element",                                                        \
-     ##__VA_ARGS__)
+#define LINK_PARAM_PLACEMENTS(_apply, _data)                                                       \
+    _apply(_data,                                                                                  \
+           PlacementList,                                                                          \
+           std::vector<Base::Placement>,                                                           \
+           App::PropertyPlacementList,                                                             \
+           (std::vector<Base::Placement>()),                                                       \
+           "The placement for each link element",                                                  \
+           App::PropertyPlacementList,                                                             \
+           App::Prop_None)
 
-#define LINK_PARAM_SCALES(...)                                                                     \
-    (ScaleList,                                                                                    \
-     std::vector<Base::Vector3d>,                                                                  \
-     App::PropertyVectorList,                                                                      \
-     std::vector<Base::Vector3d>(),                                                                \
-     "The scale factors for each link element",                                                    \
-     ##__VA_ARGS__)
+#define LINK_PARAM_SCALES(_apply, _data)                                                           \
+    _apply(_data,                                                                                  \
+           ScaleList,                                                                              \
+           std::vector<Base::Vector3d>,                                                            \
+           App::PropertyVectorList,                                                                \
+           (std::vector<Base::Vector3d>()),                                                        \
+           "The scale factors for each link element",                                              \
+           App::PropertyVectorList,                                                                \
+           App::Prop_None)
 
-#define LINK_PARAM_VISIBILITIES(...)                                                               \
-    (VisibilityList,                                                                               \
-     std::vector<bool>,                                                                            \
-     App::PropertyBoolList,                                                                        \
-     std::vector<bool>(),                                                                          \
-     "The visibility state of each link element",                                                  \
-     ##__VA_ARGS__)
+#define LINK_PARAM_VISIBILITIES(_apply, _data)                                                     \
+    _apply(_data,                                                                                  \
+           VisibilityList,                                                                         \
+           std::vector<bool>,                                                                      \
+           App::PropertyBoolList,                                                                  \
+           (std::vector<bool>()),                                                                  \
+           "The visibility state of each link element",                                            \
+           App::PropertyBoolList,                                                                  \
+           App::Prop_None)
 
-#define LINK_PARAM_COUNT(...)                                                                      \
-    (ElementCount, int, App::PropertyInteger, 0, "Link element count", ##__VA_ARGS__)
+#define LINK_PARAM_COUNT(_apply, _data)                                                            \
+    _apply(_data,                                                                                  \
+           ElementCount,                                                                           \
+           int,                                                                                    \
+           App::PropertyInteger,                                                                   \
+           (0),                                                                                    \
+           "Link element count",                                                                   \
+           App::PropertyIntegerConstraint,                                                         \
+           App::Prop_None)
 
-#define LINK_PARAM_ELEMENTS(...)                                                                   \
-    (ElementList,                                                                                  \
-     std::vector<App::DocumentObject*>,                                                            \
-     App::PropertyLinkList,                                                                        \
-     std::vector<App::DocumentObject*>(),                                                          \
-     "The link element object list",                                                               \
-     ##__VA_ARGS__)
+#define LINK_PARAM_ELEMENTS(_apply, _data)                                                         \
+    _apply(_data,                                                                                  \
+           ElementList,                                                                            \
+           std::vector<App::DocumentObject*>,                                                      \
+           App::PropertyLinkList,                                                                  \
+           (std::vector<App::DocumentObject*>()),                                                  \
+           "The link element object list",                                                         \
+           App::PropertyLinkList,                                                                  \
+           App::Prop_None)
 
-#define LINK_PARAM_SHOW_ELEMENT(...)                                                               \
-    (ShowElement, bool, App::PropertyBool, true, "Enable link element list", ##__VA_ARGS__)
+#define LINK_PARAM_SHOW_ELEMENT(_apply, _data)                                                     \
+    _apply(_data, ShowElement, bool, App::PropertyBool, (true), "Enable link element list", App::PropertyBool, App::Prop_None)
 
-#define LINK_PARAM_MODE(...)                                                                       \
-    (LinkMode, long, App::PropertyEnumeration, ((long)0), "Link group mode", ##__VA_ARGS__)
+#define LINK_PARAM_MODE(_apply, _data)                                                             \
+    _apply(_data,                                                                                  \
+           LinkMode,                                                                               \
+           long,                                                                                   \
+           App::PropertyEnumeration,                                                               \
+           ((long)0),                                                                              \
+           "Link group mode",                                                                      \
+           App::PropertyEnumeration,                                                               \
+           App::Prop_None)
 
-#define LINK_PARAM_LINK_EXECUTE(...)                                                               \
-    (LinkExecute,                                                                                  \
-     const char*,                                                                                  \
-     App::PropertyString,                                                                          \
-     (""),                                                                                         \
-     "Link execute function. Default to 'appLinkExecute'. 'None' to disable.",                     \
-     ##__VA_ARGS__)
+#define LINK_PARAM_LINK_EXECUTE(_apply, _data)                                                     \
+    _apply(_data,                                                                                  \
+           LinkExecute,                                                                            \
+           const char*,                                                                            \
+           App::PropertyString,                                                                    \
+           (""),                                                                                   \
+           "Link execute function. Default to 'appLinkExecute'. 'None' to disable.",               \
+           App::PropertyString,                                                                    \
+           App::Prop_None)
 
-#define LINK_PARAM_COLORED_ELEMENTS(...)                                                           \
-    (ColoredElements,                                                                              \
-     App::DocumentObject*,                                                                         \
-     App::PropertyLinkSubHidden,                                                                   \
-     0,                                                                                            \
-     "Link colored elements",                                                                      \
-     ##__VA_ARGS__)
-
-#define LINK_PNAME(_param) FC_PP_TUPLE_ELEM(0, _param)
-#define LINK_PTYPE(_param) FC_PP_TUPLE_ELEM(1, _param)
-#define LINK_PPTYPE(_param) FC_PP_TUPLE_ELEM(2, _param)
-#define LINK_PDEF(_param) FC_PP_TUPLE_ELEM(3, _param)
-#define LINK_PDOC(_param) FC_PP_TUPLE_ELEM(4, _param)
-
-#define LINK_PINDEX(_param) FC_PP_CAT(Prop, LINK_PNAME(_param))
+#define LINK_PARAM_COLORED_ELEMENTS(_apply, _data)                                                 \
+    _apply(_data,                                                                                  \
+           ColoredElements,                                                                        \
+           App::DocumentObject*,                                                                   \
+           App::PropertyLinkSubHidden,                                                             \
+           (0),                                                                                    \
+           "Link colored elements",                                                                \
+           App::PropertyLinkSubHidden,                                                             \
+           App::Prop_Hidden)
     //@}
 
 #define LINK_PARAMS(_apply, _data)                                                                 \
-    _apply(_data, LINK_PARAM_PLACEMENT())                                                          \
-    _apply(_data, LINK_PARAM_LINK_PLACEMENT())                                                     \
-    _apply(_data, LINK_PARAM_OBJECT())                                                             \
-    _apply(_data, LINK_PARAM_CLAIM_CHILD())                                                        \
-    _apply(_data, LINK_PARAM_TRANSFORM())                                                          \
-    _apply(_data, LINK_PARAM_SCALE())                                                              \
-    _apply(_data, LINK_PARAM_SCALE_VECTOR())                                                       \
-    _apply(_data, LINK_PARAM_PLACEMENTS())                                                         \
-    _apply(_data, LINK_PARAM_SCALES())                                                             \
-    _apply(_data, LINK_PARAM_VISIBILITIES())                                                       \
-    _apply(_data, LINK_PARAM_COUNT())                                                              \
-    _apply(_data, LINK_PARAM_ELEMENTS())                                                           \
-    _apply(_data, LINK_PARAM_SHOW_ELEMENT())                                                       \
-    _apply(_data, LINK_PARAM_MODE())                                                               \
-    _apply(_data, LINK_PARAM_LINK_EXECUTE())                                                       \
-    _apply(_data, LINK_PARAM_COLORED_ELEMENTS())                                                   \
-    _apply(_data, LINK_PARAM_COPY_ON_CHANGE())                                                     \
-    _apply(_data, LINK_PARAM_COPY_ON_CHANGE_SOURCE())                                              \
-    _apply(_data, LINK_PARAM_COPY_ON_CHANGE_GROUP())                                               \
-    _apply(_data, LINK_PARAM_COPY_ON_CHANGE_TOUCHED())
+    LINK_PARAM_PLACEMENT(_apply, _data)                                                            \
+    LINK_PARAM_LINK_PLACEMENT(_apply, _data)                                                       \
+    LINK_PARAM_OBJECT(_apply, _data)                                                               \
+    LINK_PARAM_CLAIM_CHILD(_apply, _data)                                                          \
+    LINK_PARAM_TRANSFORM(_apply, _data)                                                            \
+    LINK_PARAM_SCALE(_apply, _data)                                                                \
+    LINK_PARAM_SCALE_VECTOR(_apply, _data)                                                         \
+    LINK_PARAM_PLACEMENTS(_apply, _data)                                                           \
+    LINK_PARAM_SCALES(_apply, _data)                                                               \
+    LINK_PARAM_VISIBILITIES(_apply, _data)                                                         \
+    LINK_PARAM_COUNT(_apply, _data)                                                                \
+    LINK_PARAM_ELEMENTS(_apply, _data)                                                             \
+    LINK_PARAM_SHOW_ELEMENT(_apply, _data)                                                         \
+    LINK_PARAM_MODE(_apply, _data)                                                                 \
+    LINK_PARAM_LINK_EXECUTE(_apply, _data)                                                         \
+    LINK_PARAM_COLORED_ELEMENTS(_apply, _data)                                                     \
+    LINK_PARAM_COPY_ON_CHANGE(_apply, _data)                                                       \
+    LINK_PARAM_COPY_ON_CHANGE_SOURCE(_apply, _data)                                                \
+    LINK_PARAM_COPY_ON_CHANGE_GROUP(_apply, _data)                                                 \
+    LINK_PARAM_COPY_ON_CHANGE_TOUCHED(_apply, _data)
 
     /// The property indices.
     enum PropIndex
     {
-#define LINK_PINDEX_DEFINE(_data, _param) LINK_PINDEX(_param),
+#define LINK_PINDEX_DEFINE(_data, _name, _type, _ptype, _def, _doc, _dtype, _atype) Prop##_name,
 
         // defines Prop##Name enumeration value
         LINK_PARAMS(LINK_PINDEX_DEFINE, _) PropMax
@@ -353,11 +367,8 @@ public:
         {}
     };
 
-#define LINK_PROP_INFO(_var, _param)                                                               \
-    _var.push_back(PropInfo(FC_PP_CAT(Prop, LINK_PNAME(_param)),                                   \
-                            FC_PP_STRINGIZE(LINK_PNAME(_param)),                                  \
-                            LINK_PPTYPE(_param)::getClassTypeId(),                                 \
-                            LINK_PDOC(_param)));
+#define LINK_PROP_INFO(_var, _name, _type, _ptype, _def, _doc, _dtype, _atype)                    \
+    _var.push_back(PropInfo(Prop##_name, #_name, _ptype::getClassTypeId(), _doc));
 
     /// Get the property info of this link.
     virtual const std::vector<PropInfo>& getPropertyInfo() const;
@@ -377,23 +388,23 @@ public:
         CopyOnChangeTracking = 3 ///< Tracking copy-on-change behavior.
     };
 
-#define LINK_PROP_GET(_data, _param)                                                               \
-    LINK_PTYPE(_param) FC_PP_CAT3(get, LINK_PNAME(_param), Value)() const                          \
+#define LINK_PROP_GET(_data, _name, _type, _ptype, _def, _doc, _dtype, _atype)                    \
+    _type get##_name##Value() const                                                                \
     {                                                                                              \
-        auto prop = props[LINK_PINDEX(_param)];                                                    \
+        auto prop = props[Prop##_name];                                                            \
         if (!prop)                                                                                 \
-            return LINK_PDEF(_param);                                                              \
-        return static_cast<const LINK_PPTYPE(_param)*>(prop)->getValue();                          \
+            return _def;                                                                           \
+        return static_cast<const _ptype*>(prop)->getValue();                                       \
     }                                                                                              \
-    const LINK_PPTYPE(_param)* FC_PP_CAT3(get, LINK_PNAME(_param), Property)() const               \
+    const _ptype* get##_name##Property() const                                                     \
     {                                                                                              \
-        auto prop = props[LINK_PINDEX(_param)];                                                    \
-        return static_cast<const LINK_PPTYPE(_param)*>(prop);                                      \
+        auto prop = props[Prop##_name];                                                            \
+        return static_cast<const _ptype*>(prop);                                                   \
     }                                                                                              \
-    LINK_PPTYPE(_param)* FC_PP_CAT3(get, LINK_PNAME(_param), Property)()                           \
+    _ptype* get##_name##Property()                                                                 \
     {                                                                                              \
-        auto prop = props[LINK_PINDEX(_param)];                                                    \
-        return static_cast<LINK_PPTYPE(_param)*>(prop);                                            \
+        auto prop = props[Prop##_name];                                                            \
+        return static_cast<_ptype*>(prop);                                                         \
     }
 
     // defines get##Name##Property() and get##Name##Value() accessor
@@ -877,96 +888,41 @@ public:
     LinkExtension();
     ~LinkExtension() override = default;
 
-    /**
-     * @name Helpers for defining extended properties.
-     * @brief Macros that help define properties that extend the properties of the linked object.
+    /** \name Helpers for defining Link properties
      *
-     * Extended property definition:
-     * `(Name, Type, Property_Type, Default, %Document, Property_Name,
-     *  Derived_Property_Type, App_Property_Type, Group)`
-     *
-     * This helper simply reuses `Name` as `Property_Name`, `Property_Type` as
-     * `Derived_Property_type`, `Prop_None` as `App_Propert_Type`.
-     *
-     * @note
-     * Because PropertyView will merge linked object's properties into
-     * ours, we set the default group name as ' Link' with a leading space to
-     * try to make our group before others
-     * {@
+     * Reuse LINK_PARAM_* definitions above and keep all link-related properties under the " Link"
+     * group (leading space for sorting).
      */
+    //@{
 
-#define LINK_ENAME(_param) FC_PP_TUPLE_ELEM(5, _param)
-#define LINK_ETYPE(_param) FC_PP_TUPLE_ELEM(6, _param)
-#define LINK_EPTYPE(_param) FC_PP_TUPLE_ELEM(7, _param)
-#define LINK_EGROUP(_param) FC_PP_TUPLE_ELEM(8, _param)
+#define _LINK_PROP_ADD(_add_property, _name, _def, _atype, _doc)                                   \
+    _add_property(#_name, _name, _def, " Link", _atype, _doc);                                     \
+    setProperty(Prop##_name, &_name);
 
-#define _LINK_PROP_ADD(_add_property, _param)                                                      \
-    _add_property(FC_PP_STRINGIZE(LINK_ENAME(_param)),                                             \
-                                     LINK_ENAME(_param),                                           \
-                                     (LINK_PDEF(_param)),                                          \
-                                     LINK_EGROUP(_param),                                          \
-                                     LINK_EPTYPE(_param),                                          \
-                                     LINK_PDOC(_param));                                           \
-    setProperty(LINK_PINDEX(_param), &LINK_ENAME(_param));
+#define LINK_PROP_ADD(_data, _name, _type, _ptype, _def, _doc, _dtype, _atype)                     \
+    _LINK_PROP_ADD(_ADD_PROPERTY_TYPE, _name, _def, _atype, _doc);
 
-#define LINK_PROP_ADD(_data, _param) _LINK_PROP_ADD(_ADD_PROPERTY_TYPE, _param);
-
-#define LINK_PROP_ADD_EXTENSION(_data, _param)                                                     \
-    _LINK_PROP_ADD(_EXTENSION_ADD_PROPERTY_TYPE, _param);
+#define LINK_PROP_ADD_EXTENSION(_data, _name, _type, _ptype, _def, _doc, _dtype, _atype)           \
+    _LINK_PROP_ADD(_EXTENSION_ADD_PROPERTY_TYPE, _name, _def, _atype, _doc);
 
 #define LINK_PROPS_ADD(_seq) _seq(LINK_PROP_ADD, _)
-
 #define LINK_PROPS_ADD_EXTENSION(_seq) _seq(LINK_PROP_ADD_EXTENSION, _)
 
-#define _LINK_PROP_SET(_data, _param) setProperty(LINK_PINDEX(_param), &LINK_ENAME(_param));
+#define _LINK_PROP_SET(_data, _name, _type, _ptype, _def, _doc, _dtype, _atype)                    \
+    setProperty(Prop##_name, &_name);
 
 #define LINK_PROPS_SET(_seq) _seq(_LINK_PROP_SET, _)
-
-    /// Helper for defining default extended parameter
-#define _LINK_PARAM_EXT(_name, _type, _ptype, _def, _doc, ...)                                     \
-    (_name, _type, _ptype, _def, _doc, _name, _ptype, App::Prop_None, " Link")
-
-    /** Define default extended parameter
-     * It simply reuses Name as Property_Name, Property_Type as
-     * Derived_Property_Type, and App::Prop_None as App::PropertyType
-     */
-#define LINK_PARAM_EXT(_param) LINK_PARAM_EXT_I(LINK_PARAM_##_param())
-#define LINK_PARAM_EXT_I(_param_tuple) _LINK_PARAM_EXT _param_tuple
-
-    /// Helper for extended parameter with app property type
-#define _LINK_PARAM_EXT_ATYPE(_name, _type, _ptype, _def, _doc, _atype, ...)                       \
-    (_name, _type, _ptype, _def, _doc, _name, _ptype, _atype, " Link")
-
-    /// Define extended parameter with app property type
-#define LINK_PARAM_EXT_ATYPE(_param, _atype) LINK_PARAM_EXT_ATYPE_I(LINK_PARAM_##_param(_atype))
-#define LINK_PARAM_EXT_ATYPE_I(_param_tuple) _LINK_PARAM_EXT_ATYPE _param_tuple
-
-    /// Helper for extended parameter with derived property type
-#define _LINK_PARAM_EXT_TYPE(_name, _type, _ptype, _def, _doc, _dtype, ...)                        \
-    (_name, _type, _ptype, _def, _doc, _name, _dtype, App::Prop_None, " Link")
-
-    /// Define extended parameter with derived property type
-#define LINK_PARAM_EXT_TYPE(_param, _dtype) LINK_PARAM_EXT_TYPE_I(LINK_PARAM_##_param(_dtype))
-#define LINK_PARAM_EXT_TYPE_I(_param_tuple) _LINK_PARAM_EXT_TYPE _param_tuple
-
-    /// Helper for extended parameter with a different property name
-#define _LINK_PARAM_EXT_NAME(_name, _type, _ptype, _def, _doc, _pname, ...)                        \
-    (_name, _type, _ptype, _def, _doc, _pname, _ptype, App::Prop_None, " Link")
-
-    /// Define extended parameter with a different property name
-#define LINK_PARAM_EXT_NAME(_param, _pname) LINK_PARAM_EXT_NAME_I(LINK_PARAM_##_param(_pname))
-#define LINK_PARAM_EXT_NAME_I(_param_tuple) _LINK_PARAM_EXT_NAME _param_tuple
     //@}
 
 #define LINK_PARAMS_EXT(_apply, _data)                                                             \
-    _apply(_data, LINK_PARAM_EXT(SCALE))                                                           \
-    _apply(_data, LINK_PARAM_EXT_ATYPE(SCALE_VECTOR, App::Prop_Hidden))                            \
-    _apply(_data, LINK_PARAM_EXT(SCALES))                                                          \
-    _apply(_data, LINK_PARAM_EXT(VISIBILITIES))                                                    \
-    _apply(_data, LINK_PARAM_EXT(PLACEMENTS))                                                      \
-    _apply(_data, LINK_PARAM_EXT(ELEMENTS))
+    LINK_PARAM_SCALE(_apply, _data)                                                                \
+    LINK_PARAM_SCALE_VECTOR(_apply, _data)                                                         \
+    LINK_PARAM_SCALES(_apply, _data)                                                               \
+    LINK_PARAM_VISIBILITIES(_apply, _data)                                                         \
+    LINK_PARAM_PLACEMENTS(_apply, _data)                                                           \
+    LINK_PARAM_ELEMENTS(_apply, _data)
 
-#define LINK_PROP_DEFINE(_data, _param) LINK_ETYPE(_param) LINK_ENAME(_param);
+#define LINK_PROP_DEFINE(_data, _name, _type, _ptype, _def, _doc, _dtype, _atype) _dtype _name;
 #define LINK_PROPS_DEFINE(_seq) _seq(LINK_PROP_DEFINE, _)
 
     // defines the actual properties
@@ -1000,19 +956,19 @@ class AppExport Link: public App::DocumentObject, public App::LinkExtension
 
 public:
 #define LINK_PARAMS_LINK(_apply, _data)                                                            \
-    _apply(_data, LINK_PARAM_EXT_TYPE(OBJECT, App::PropertyXLink))                                 \
-    _apply(_data, LINK_PARAM_EXT(CLAIM_CHILD))                                                     \
-    _apply(_data, LINK_PARAM_EXT(TRANSFORM))                                                       \
-    _apply(_data, LINK_PARAM_EXT(LINK_PLACEMENT))                                                  \
-    _apply(_data, LINK_PARAM_EXT(PLACEMENT))                                                       \
-    _apply(_data, LINK_PARAM_EXT(SHOW_ELEMENT))                                                    \
-    _apply(_data, LINK_PARAM_EXT_TYPE(COUNT, App::PropertyIntegerConstraint))                      \
-    _apply(_data, LINK_PARAM_EXT(LINK_EXECUTE))                                                    \
-    _apply(_data, LINK_PARAM_EXT_ATYPE(COLORED_ELEMENTS, App::Prop_Hidden))                        \
-    _apply(_data, LINK_PARAM_EXT(COPY_ON_CHANGE))                                                  \
-    _apply(_data, LINK_PARAM_EXT_TYPE(COPY_ON_CHANGE_SOURCE, App::PropertyXLink))                  \
-    _apply(_data, LINK_PARAM_EXT(COPY_ON_CHANGE_GROUP))                                            \
-    _apply(_data, LINK_PARAM_EXT(COPY_ON_CHANGE_TOUCHED))
+    LINK_PARAM_OBJECT(_apply, _data)                                                               \
+    LINK_PARAM_CLAIM_CHILD(_apply, _data)                                                          \
+    LINK_PARAM_TRANSFORM(_apply, _data)                                                            \
+    LINK_PARAM_LINK_PLACEMENT(_apply, _data)                                                       \
+    LINK_PARAM_PLACEMENT(_apply, _data)                                                            \
+    LINK_PARAM_SHOW_ELEMENT(_apply, _data)                                                         \
+    LINK_PARAM_COUNT(_apply, _data)                                                                \
+    LINK_PARAM_LINK_EXECUTE(_apply, _data)                                                         \
+    LINK_PARAM_COLORED_ELEMENTS(_apply, _data)                                                     \
+    LINK_PARAM_COPY_ON_CHANGE(_apply, _data)                                                       \
+    LINK_PARAM_COPY_ON_CHANGE_SOURCE(_apply, _data)                                                \
+    LINK_PARAM_COPY_ON_CHANGE_GROUP(_apply, _data)                                                 \
+    LINK_PARAM_COPY_ON_CHANGE_TOUCHED(_apply, _data)
 
     LINK_PROPS_DEFINE(LINK_PARAMS_LINK)
 
@@ -1067,16 +1023,16 @@ class AppExport LinkElement: public App::DocumentObject, public App::LinkBaseExt
 
 public:
 #define LINK_PARAMS_ELEMENT(_apply, _data)                                                         \
-    _apply(_data, LINK_PARAM_EXT(SCALE))                                                           \
-    _apply(_data, LINK_PARAM_EXT_ATYPE(SCALE_VECTOR, App::Prop_Hidden))                            \
-    _apply(_data, LINK_PARAM_EXT_TYPE(OBJECT, App::PropertyXLink))                                 \
-    _apply(_data, LINK_PARAM_EXT(TRANSFORM))                                                       \
-    _apply(_data, LINK_PARAM_EXT(LINK_PLACEMENT))                                                  \
-    _apply(_data, LINK_PARAM_EXT(PLACEMENT))                                                       \
-    _apply(_data, LINK_PARAM_EXT(COPY_ON_CHANGE))                                                  \
-    _apply(_data, LINK_PARAM_EXT_TYPE(COPY_ON_CHANGE_SOURCE, App::PropertyXLink))                  \
-    _apply(_data, LINK_PARAM_EXT(COPY_ON_CHANGE_GROUP))                                            \
-    _apply(_data, LINK_PARAM_EXT(COPY_ON_CHANGE_TOUCHED))
+    LINK_PARAM_SCALE(_apply, _data)                                                                \
+    LINK_PARAM_SCALE_VECTOR(_apply, _data)                                                         \
+    LINK_PARAM_OBJECT(_apply, _data)                                                               \
+    LINK_PARAM_TRANSFORM(_apply, _data)                                                            \
+    LINK_PARAM_LINK_PLACEMENT(_apply, _data)                                                       \
+    LINK_PARAM_PLACEMENT(_apply, _data)                                                            \
+    LINK_PARAM_COPY_ON_CHANGE(_apply, _data)                                                       \
+    LINK_PARAM_COPY_ON_CHANGE_SOURCE(_apply, _data)                                                \
+    LINK_PARAM_COPY_ON_CHANGE_GROUP(_apply, _data)                                                 \
+    LINK_PARAM_COPY_ON_CHANGE_TOUCHED(_apply, _data)
 
 
     /// Define the various properties for a link element.
@@ -1139,11 +1095,11 @@ class AppExport LinkGroup: public App::DocumentObject, public App::LinkBaseExten
 
 public:
 #define LINK_PARAMS_GROUP(_apply, _data)                                                           \
-    _apply(_data, LINK_PARAM_EXT(ELEMENTS))                                                        \
-    _apply(_data, LINK_PARAM_EXT(PLACEMENT))                                                       \
-    _apply(_data, LINK_PARAM_EXT(VISIBILITIES))                                                    \
-    _apply(_data, LINK_PARAM_EXT(MODE))                                                            \
-    _apply(_data, LINK_PARAM_EXT_ATYPE(COLORED_ELEMENTS, App::Prop_Hidden))
+    LINK_PARAM_ELEMENTS(_apply, _data)                                                             \
+    LINK_PARAM_PLACEMENT(_apply, _data)                                                            \
+    LINK_PARAM_VISIBILITIES(_apply, _data)                                                         \
+    LINK_PARAM_MODE(_apply, _data)                                                                 \
+    LINK_PARAM_COLORED_ELEMENTS(_apply, _data)
 
     /// Define the various properties of the link group.
     LINK_PROPS_DEFINE(LINK_PARAMS_GROUP)
