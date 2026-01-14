@@ -23,8 +23,9 @@
  ***************************************************************************/
 
 #include <algorithm>
-#include <boost/graph/topological_sort.hpp>
 #include <boost_graph_adjacency_list.hpp>
+#include <boost/graph/depth_first_search.hpp>
+#include <boost/graph/topological_sort.hpp>
 #include <unordered_map>
 
 #include <App/Application.h>
