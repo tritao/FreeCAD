@@ -40,10 +40,6 @@
 #include <string>
 #include <vector>
 
-// boost
-#include <boost/graph/boyer_myrvold_planar_test.hpp>
-#include <boost/graph/is_kuratowski_subgraph.hpp>
-
 // Qt
 #include <QApplication>
 #include <QCollator>
