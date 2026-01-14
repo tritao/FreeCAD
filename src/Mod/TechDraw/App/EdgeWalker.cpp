@@ -36,7 +36,6 @@
 # include <ShapeExtend_WireData.hxx>
 # include <ShapeFix_Wire.hxx>
 # include <TopExp.hxx>
-# include <boost/graph/boyer_myrvold_planar_test.hpp>
 
 
 #include <Base/Console.h>
