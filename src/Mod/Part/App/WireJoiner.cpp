@@ -24,7 +24,6 @@
 
 #include <limits>
 
-#include <boost/geometry/geometries/register/point.hpp>
 #include <boost/graph/graph_concepts.hpp>
 
 #include <BRepLib.hxx>
@@ -59,7 +58,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <deque>
-#include <boost/geometry.hpp>
 #include <utility>
 
 #include <Base/Console.h>
@@ -71,18 +69,12 @@
 
 #include "WireJoiner.h"
 
+#include "SpatialIndex.h"
+
 #include "Geometry.h"
 #include "PartFeature.h"
 #include "TopoShapeOpCode.h"
 #include "TopoShapeMapper.h"
-
-namespace bg = boost::geometry;
-namespace bgi = boost::geometry::index;
-
-const size_t RParametersNumber = 16UL;
-using RParameters = bgi::linear<RParametersNumber>;
-
-BOOST_GEOMETRY_REGISTER_POINT_3D_GET_SET(gp_Pnt, double, bg::cs::cartesian, X, Y, Z, SetX, SetY, SetZ)
 
 FC_LOG_LEVEL_INIT("WireJoiner", true, true)
 
@@ -133,7 +125,7 @@ public:
     int catchIteration {};
     int iteration = 0;
 
-    using Box = bg::model::box<gp_Pnt>;
+    using Box = Spatial::Aabb3d;
 
     bool checkBBox(const Bnd_Box& box) const
     {
@@ -197,7 +189,7 @@ public:
         Standard_Real yMax = Standard_Real();
         Standard_Real zMax = Standard_Real();
         bound.Get(xMin, yMin, zMin, xMax, yMax, zMax);
-        box = Box(gp_Pnt(xMin, yMin, zMin), gp_Pnt(xMax, yMax, zMax));
+        box = Box::fromMinMax(xMin, yMin, zMin, xMax, yMax, zMax);
         return true;
     }
 
@@ -214,6 +206,9 @@ public:
         gp_Pnt p2;
         gp_Pnt mid;
         Box box;
+        int vmapNodeStart {-1};
+        int vmapNodeEnd {-1};
+        int boxMapNode {-1};
         std::array<int, 2> iStart {};  // adjacent list index start for p1 and p2
         std::array<int, 2> iEnd {};    // adjacent list index end
         int iteration {};
@@ -700,17 +695,36 @@ public:
         }
     };
 
-    bgi::rtree<VertexInfo, RParameters, PntGetter> vmap {};
+    Spatial::AabbTree3d<VertexInfo> vmap {};
+    Spatial::AabbTree3d<EdgeInfo*> boxMap {};
 
-    struct BoxGetter
+    std::vector<std::pair<VertexInfo, double>> queryVerticesWithin(const gp_Pnt& point, double tol2) const
     {
-        using result_type = const Box&;
-        result_type operator()(Edges::iterator it) const
-        {
-            return it->box;
+        std::vector<std::pair<VertexInfo, double>> result;
+        if (tol2 <= 0.0 || vmap.empty()) {
+            return result;
         }
-    };
-    bgi::rtree<Edges::iterator, RParameters, BoxGetter> boxMap {};
+
+        const double radius = std::sqrt(tol2);
+        Spatial::Aabb3d query = Spatial::Aabb3d::fromMinMax(
+            point.X() - radius,
+            point.Y() - radius,
+            point.Z() - radius,
+            point.X() + radius,
+            point.Y() + radius,
+            point.Z() + radius
+        );
+
+        vmap.queryOverlap(query, [&](const VertexInfo& vinfo, int) {
+            const double d2 = vinfo.pt().SquareDistance(point);
+            if (d2 < tol2) {
+                result.emplace_back(vinfo, d2);
+            }
+        });
+
+        std::ranges::sort(result, [](const auto& a, const auto& b) { return a.second < b.second; });
+        return result;
+    }
 
     BRep_Builder builder;
     TopoDS_Compound compound;
@@ -741,10 +755,10 @@ public:
     Edges::iterator remove(Edges::iterator it)
     {
         if (it->queryBBox) {
-            boxMap.remove(it);
+            boxMap.remove(it->boxMapNode);
         }
-        vmap.remove(VertexInfo(it, true));
-        vmap.remove(VertexInfo(it, false));
+        vmap.remove(it->vmapNodeStart);
+        vmap.remove(it->vmapNodeEnd);
         return edges.erase(it);
     }
 
@@ -764,10 +778,10 @@ public:
 
     void add(Edges::iterator it)
     {
-        vmap.insert(VertexInfo(it, true));
-        vmap.insert(VertexInfo(it, false));
+        it->vmapNodeStart = vmap.insert(Spatial::Aabb3d::fromPoint(it->p1), VertexInfo(it, true));
+        it->vmapNodeEnd = vmap.insert(Spatial::Aabb3d::fromPoint(it->p2), VertexInfo(it, false));
         if (it->queryBBox) {
-            boxMap.insert(it);
+            it->boxMapNode = boxMap.insert(it->box, &(*it));
         }
         showShape(it->edge, "add");
     }
@@ -836,18 +850,14 @@ public:
     {
         std::unique_ptr<Geometry> geo;
         constexpr int max = std::numeric_limits<int>::max();
-        for (auto vit = vmap.qbegin(bgi::nearest(p1, max)); vit != vmap.qend(); ++vit) {
-            auto& vinfo = *vit;
+        auto candidates = queryVerticesWithin(p1, tol);
+        for (const auto& [vinfo, d1] : candidates) {
             if (canShowShape()) {
 #if OCC_VERSION_HEX < 0x070800
                 FC_MSG("addcheck " << vinfo.edge().HashCode(max));
 #else
                 FC_MSG("addcheck " << std::hash<TopoDS_Edge> {}(vinfo.edge()));
 #endif
-            }
-            double d1 = vinfo.pt().SquareDistance(p1);
-            if (d1 >= tol) {
-                break;
             }
             if (v1.IsNull()) {
                 ev1 = vinfo.edge();
@@ -882,13 +892,10 @@ public:
         }
 
         if (v2.IsNull()) {
-            for (auto vit = vmap.qbegin(bgi::nearest(p2, 1)); vit != vmap.qend(); ++vit) {
-                auto& vinfo = *vit;
-                double d1 = vinfo.pt().SquareDistance(p2);
-                if (d1 < tol) {
-                    v2 = vit->vertex();
-                    ev2 = vit->edge();
-                }
+            auto nearest = vmap.nearest(p2);
+            if (nearest && nearest->second < tol) {
+                v2 = nearest->first.vertex();
+                ev2 = nearest->first.edge();
             }
         }
 
@@ -954,33 +961,36 @@ public:
     }
 
     // This method was originally part of WireJoinerP::join(), split to reduce cognitive complexity
-    void joinMakeWire(const int idx, BRepBuilderAPI_MakeWire& mkWire, const Edges::iterator it, bool& done)
+    void joinMakeWire(
+        const int idx,
+        BRepBuilderAPI_MakeWire& mkWire,
+        gp_Pnt& pstart,
+        gp_Pnt& pend,
+        bool& done
+    )
     {
         double tol = myTol2;
-        gp_Pnt pstart(it->p1);
-        gp_Pnt pend(it->p2);
         while (!edges.empty()) {
-            std::vector<VertexInfo> ret;
-            ret.reserve(1);
             const gp_Pnt& pt = idx == 0 ? pstart : pend;
-            vmap.query(bgi::nearest(pt, 1), std::back_inserter(ret));
+            auto nearest = vmap.nearest(pt);
+            ENSURE(nearest);
 
-            ENSURE(ret.size() == 1);
-            double dist = ret[0].pt().SquareDistance(pt);
+            const VertexInfo& vinfo = nearest->first;
+            double dist = nearest->second;
             if (dist > tol) {
                 break;
             }
 
-            const auto& info = *ret[0].it;
-            bool start = ret[0].start;
+            const auto& info = *vinfo.it;
+            bool start = vinfo.start;
             if (dist > Precision::SquareConfusion()) {
                 // insert a filling edge to solve the tolerance problem
-                const gp_Pnt& pt = ret[idx].pt();
+                const gp_Pnt& fillPt = vinfo.pt();
                 if (idx != 0) {
-                    mkWire.Add(BRepBuilderAPI_MakeEdge(pend, pt).Edge());
+                    mkWire.Add(BRepBuilderAPI_MakeEdge(pend, fillPt).Edge());
                 }
                 else {
-                    mkWire.Add(BRepBuilderAPI_MakeEdge(pt, pstart).Edge());
+                    mkWire.Add(BRepBuilderAPI_MakeEdge(fillPt, pstart).Edge());
                 }
             }
 
@@ -1000,7 +1010,7 @@ public:
                 pend = info.p1;
                 mkWire.Add(TopoDS::Edge(info.edge.Reversed()));
             }
-            remove(ret[0].it);
+            remove(vinfo.it);
             if (pstart.SquareDistance(pend) <= Precision::SquareConfusion()) {
                 done = true;
                 break;
@@ -1020,11 +1030,13 @@ public:
             auto it = edges.begin();
             BRepBuilderAPI_MakeWire mkWire;
             mkWire.Add(it->edge);
+            gp_Pnt pstart(it->p1);
+            gp_Pnt pend(it->p2);
             remove(it);
 
             bool done = false;
             for (int idx = 0; !done && idx < 2; ++idx) {
-                joinMakeWire(idx, mkWire, it, done);
+                joinMakeWire(idx, mkWire, pstart, pend, done);
             }
 
             builder.Add(compound, mkWire.Wire());
@@ -1369,14 +1381,14 @@ public:
             auto& params = intersects[&info];
             checkSelfIntersection(info, params);
 
-            for (auto vit = boxMap.qbegin(bgi::intersects(info.box)); vit != boxMap.qend(); ++vit) {
-                const auto& other = *(*vit);
+            boxMap.queryOverlap(info.box, [&](EdgeInfo* otherPtr, int) {
+                const auto& other = *otherPtr;
                 if (other.iteration <= idx) {
                     // means the edge is before us, and we've already checked intersection
-                    continue;
+                    return;
                 }
                 checkIntersection(info, other, params, intersects[&other]);
-            }
+            });
         }
 
         idx = 0;
@@ -1513,8 +1525,8 @@ public:
         Bnd_Box bbox;
         for (const auto& vertex : vertices) {
             auto current = vertex.edgeInfo();
-            bbox.Add(current->box.min_corner());
-            bbox.Add(current->box.max_corner());
+            bbox.Add(gp_Pnt(current->box.xMin, current->box.yMin, current->box.zMin));
+            bbox.Add(gp_Pnt(current->box.xMax, current->box.yMax, current->box.zMax));
             wireData->Add(current->shape(vertex.start));
             showShape(current, "edge");
             current->iteration = -1;
@@ -1546,7 +1558,14 @@ public:
                 }
             }
             bbox.Enlarge(myTol);
-            first->box = Box(bbox.CornerMin(), bbox.CornerMax());
+            Standard_Real xMin = Standard_Real();
+            Standard_Real yMin = Standard_Real();
+            Standard_Real zMin = Standard_Real();
+            Standard_Real xMax = Standard_Real();
+            Standard_Real yMax = Standard_Real();
+            Standard_Real zMax = Standard_Real();
+            bbox.Get(xMin, yMin, zMin, xMax, yMax, zMax);
+            first->box = Box::fromMinMax(xMin, yMin, zMin, xMax, yMax, zMax);
         }
     }
 
@@ -1620,12 +1639,9 @@ public:
                 }
                 info.iEnd[ic] = info.iStart[ic] = (int)adjacentList.size();
 
-                constexpr int max = std::numeric_limits<int>::max();
-                for (auto vit = vmap.qbegin(bgi::nearest(pt[ic], max)); vit != vmap.qend(); ++vit) {
-                    auto& vinfo = *vit;
-                    if (vinfo.pt().SquareDistance(pt[ic]) > myTol2) {
-                        break;
-                    }
+                auto candidates = queryVerticesWithin(pt[ic], myTol2);
+                for (const auto& [vinfo, d2] : candidates) {
+                    (void)d2;
 
                     // We must push ourself too, because the adjacency
                     // information is shared among all connected edges.
