@@ -87,7 +87,6 @@ FC_LOG_LEVEL_INIT("App::Link", true, true)
 using namespace Gui;
 using namespace Base;
 
-<<<<<<< HEAD
 namespace
 {
 void updateWindingOrder(Gui::LinkView* linkView, App::LinkBaseExtension* ext)
