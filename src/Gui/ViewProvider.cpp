@@ -607,6 +607,7 @@ PyObject* ViewProvider::getPyObject()
     return pyViewObject;
 }
 
+#include <boost_graph_adjacency_list.hpp>
 #include <boost/graph/topological_sort.hpp>
 
 namespace Gui

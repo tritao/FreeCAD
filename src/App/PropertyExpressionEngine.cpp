@@ -23,6 +23,10 @@
  ***************************************************************************/
 
 
+#include <boost_graph_adjacency_list.hpp>
+#include <boost/graph/depth_first_search.hpp>
+#include <boost/graph/topological_sort.hpp>
+
 #include <App/Application.h>
 #include <App/Document.h>
 #include <App/DocumentObject.h>
@@ -44,6 +48,12 @@ using namespace boost;
 namespace sp = std::placeholders;
 
 TYPESYSTEM_SOURCE_ABSTRACT(App::PropertyExpressionContainer, App::PropertyXLinkContainer)
+
+struct PropertyExpressionEngine::DiGraph
+{
+    using Graph = boost::adjacency_list<boost::listS, boost::vecS, boost::directedS>;
+    Graph graph;
+};
 
 static std::set<PropertyExpressionContainer*> _ExprContainers;
 
@@ -621,18 +631,18 @@ void PropertyExpressionEngine::buildGraph(const ExpressionMap& exprs,
     }
 
     // Create graph
-    g = DiGraph(nodes.size());
+    g.graph = DiGraph::Graph(nodes.size());
 
     // Add edges to graph
     for (const auto& edge : edges) {
-        add_edge(edge.first, edge.second, g);
+        add_edge(edge.first, edge.second, g.graph);
     }
 
     // Check for cycles
     bool has_cycle = false;
     int src = -1;
     cycle_detector vis(has_cycle, src);
-    depth_first_search(g, visitor(vis));
+    depth_first_search(g.graph, visitor(vis));
 
     if (has_cycle) {
         std::string s = revNodes[src].toString() + " reference creates a cyclic dependency.";
@@ -658,7 +668,7 @@ PropertyExpressionEngine::computeEvaluationOrder(ExecuteOption option)
 
     /* Compute evaluation order for expressions */
     std::vector<int> c;
-    topological_sort(g, std::back_inserter(c));
+    topological_sort(g.graph, std::back_inserter(c));
 
     for (int i : c) {
         // we return the evaluation order for our properties, not the dependencies

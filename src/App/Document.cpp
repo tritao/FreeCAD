@@ -40,6 +40,7 @@
 #include <regex>
 
 #include <boost/graph/strong_components.hpp>
+#include <boost/graph/topological_sort.hpp>
 
 #include <random>
 #include <unordered_map>

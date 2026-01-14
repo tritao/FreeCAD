@@ -30,8 +30,6 @@
 #include <unordered_map>
 
 #include <fastsignals/signal.h>
-#include <boost_graph_adjacency_list.hpp>
-#include <boost/graph/topological_sort.hpp>
 
 #include <FCConfig.h>
 
@@ -202,7 +200,7 @@ protected:
     void hasSetValue() override;
 
 private:
-    using DiGraph = boost::adjacency_list<boost::listS, boost::vecS, boost::directedS>;
+    struct DiGraph;
     using Edge = std::pair<int, int>;
 // Note: use std::map instead of unordered_map to keep the binding order stable
 #if defined(FC_OS_MACOSX) || defined(FC_OS_BSD) || defined(_LIBCPP_VERSION)

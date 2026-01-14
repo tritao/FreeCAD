@@ -27,6 +27,14 @@
 
 #include <vector>
 #include <unordered_set>
+
+#include <boost/preprocessor/cat.hpp>
+#include <boost/preprocessor/expand.hpp>
+#include <boost/preprocessor/seq/cat.hpp>
+#include <boost/preprocessor/seq/for_each.hpp>
+#include <boost/preprocessor/stringize.hpp>
+#include <boost/preprocessor/tuple/elem.hpp>
+
 #include <Base/Parameter.h>
 #include <Base/Bitmask.h>
 #include "DocumentObject.h"
