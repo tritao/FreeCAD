@@ -48,7 +48,6 @@
 
 #include <Base/Observer.h>
 #include <Base/Parameter.h>
-#include <Base/ProgressIndicator.h>
 #include "TransactionDefs.h"
 
 // forward declarations
@@ -1011,9 +1010,6 @@ public:
     bool hasLinksTo(const DocumentObject *obj) const;
     /// @}
 
-    /// Gets the base progress indicator instance.
-    Base::ProgressIndicator& getProgressIndicator() { return _progressIndicator; }
-
     friend class App::Document;
 
 protected:
@@ -1221,8 +1217,6 @@ private:
     int _globalTransactionID { 0 };
     bool _globalTransactionTmpName {false};
     std::string _globalTransactionName;
-
-    Base::ProgressIndicator _progressIndicator;
 
     static Base::ConsoleObserverStd  *_pConsoleObserverStd;
     static Base::ConsoleObserverFile *_pConsoleObserverFile;
