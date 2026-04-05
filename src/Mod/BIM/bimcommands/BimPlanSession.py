@@ -238,6 +238,9 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
         except Exception:
             return False
 
+    def on_created_object(self, obj):
+        self.session._register_plan_object(obj)
+
 
 class _PlanEditCommandHost(gui_base.DraftInteractionHost):
     """Embedded Draft-style host for modifiers used inside Plan Edit."""
@@ -283,6 +286,9 @@ class PlanEditSession:
         self._preview_line_tracker = None
         self._preview_rect_tracker = None
         self._preview_grip_trackers = []
+        self._rect_wall_start = None
+        self._rect_wall_params = None
+        self._rect_wall_preview_trackers = []
         self._edit_wall_visibility = None
         self._dragging_grip = False
         self._ignore_selection_changes = False
@@ -345,6 +351,9 @@ class PlanEditSession:
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
             return True
+        if self._has_active_rect_wall_tool():
+            self._cancel_rect_wall_tool()
+            return True
         if self._has_active_wall_edit():
             self._cancel_wall_edit()
             return True
@@ -355,6 +364,7 @@ class PlanEditSession:
             return
         self._tearing_down = True
         self._cancel_embedded_tool()
+        self._cancel_rect_wall_tool(refresh=False)
         self._cancel_wall_edit(restore=False, refresh=False)
         self._cancel_pending_edit()
         self._clear_wall_grips()
@@ -383,6 +393,9 @@ class PlanEditSession:
         self._edit_endpoints = None
         self._preview_points = None
         self._preview_rect_tracker = None
+        self._rect_wall_start = None
+        self._rect_wall_params = None
+        self._rect_wall_preview_trackers = []
         self._edit_wall_visibility = None
         self._embedded_host = None
         self._embedded_tool = None
@@ -402,6 +415,7 @@ class PlanEditSession:
             panel = self.task_panel
             self.task_panel = None
             self._cancel_embedded_tool()
+            self._cancel_rect_wall_tool(refresh=False)
             self._cancel_wall_edit(restore=not teardown, refresh=False)
             self._cancel_pending_edit()
             self._clear_wall_grips()
@@ -501,11 +515,14 @@ class PlanEditSession:
     def activate_select_tool(self):
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
+        if self._has_active_rect_wall_tool():
+            self._cancel_rect_wall_tool()
         self._cancel_wall_edit()
 
     def activate_wall_tool(self):
         from bimcommands import BimWall
 
+        self._cancel_rect_wall_tool(refresh=False)
         self._cancel_wall_edit()
         self._cancel_pending_edit()
         self.selected_wall = None
@@ -516,9 +533,27 @@ class PlanEditSession:
             pass
         self._start_embedded_tool("Wall", BimWall.Arch_Wall(), host_class=_PlanEditWallHost)
 
+    def activate_rect_wall_tool(self):
+        self._cancel_embedded_tool()
+        self._cancel_wall_edit()
+        self._cancel_pending_edit()
+        self.selected_wall = None
+        self._clear_wall_grips()
+        self._clear_rect_wall_preview()
+        self._rect_wall_start = None
+        self._rect_wall_params = self._get_wall_defaults()
+        self.current_tool = "Rect Wall"
+        FreeCAD.activeDraftCommand = self
+        FreeCADGui.Snapper.getPoint(
+            callback=self._handle_rect_wall_point,
+            title=translate("BIM_PlanEdit", "First rectangle corner"),
+        )
+        self._refresh_task_panel_status()
+
     def activate_move_tool(self):
         from draftguitools import gui_move
 
+        self._cancel_rect_wall_tool(refresh=False)
         self._cancel_wall_edit()
         self._cancel_pending_edit()
         self._clear_wall_grips()
@@ -527,6 +562,7 @@ class PlanEditSession:
     def activate_join_tool(self):
         import Draft
 
+        self._cancel_rect_wall_tool(refresh=False)
         selection = []
         try:
             selection = FreeCADGui.Selection.getSelection()
@@ -669,6 +705,25 @@ class PlanEditSession:
             return _copy_plane(self._interaction_plane)
         return WorkingPlane.get_working_plane(update=False)
 
+    def _project_plan_point(self, point):
+        plane = self.get_interaction_plane()
+        if plane and hasattr(plane, "project_point"):
+            try:
+                return plane.project_point(point)
+            except Exception:
+                pass
+        return point
+
+    def _get_wall_defaults(self):
+        from draftutils import params
+
+        return {
+            "align": ["Center", "Left", "Right"][params.get_param_arch("WallAlignment")],
+            "width": params.get_param_arch("WallWidth"),
+            "height": params.get_param_arch("WallHeight"),
+            "offset": params.get_param_arch("WallOffset"),
+        }
+
     def _capture_background_state(self):
         params = _view_param_group()
         return {
@@ -704,18 +759,52 @@ class PlanEditSession:
         if not self.doc:
             return
         for obj in self.doc.Objects:
-            view_object = getattr(obj, "ViewObject", None)
-            if not view_object:
-                continue
-            state = {}
-            for prop in ("Visibility", "Transparency", "Selectable"):
-                if hasattr(view_object, prop):
-                    try:
-                        state[prop] = getattr(view_object, prop)
-                    except Exception:
-                        pass
-            if state:
-                self._saved_object_view_state[obj.Name] = state
+            self._register_object_view_state(obj)
+
+    def _register_object_view_state(self, obj):
+        if not obj:
+            return
+        view_object = getattr(obj, "ViewObject", None)
+        if not view_object:
+            return
+        state = {}
+        for prop in ("Visibility", "Transparency", "Selectable"):
+            if hasattr(view_object, prop):
+                try:
+                    state[prop] = getattr(view_object, prop)
+                except Exception:
+                    pass
+        if state:
+            self._saved_object_view_state[obj.Name] = state
+
+    def _add_object_to_active_storey(self, obj):
+        storey = self.active_storey
+        if not storey or not obj:
+            return False
+        if obj is storey or obj in getattr(storey, "InListRecursive", []):
+            return True
+        try:
+            if hasattr(storey, "addObject"):
+                storey.addObject(obj)
+                return True
+        except Exception:
+            pass
+        group = getattr(storey, "Group", None)
+        if group is None:
+            return False
+        try:
+            if obj not in group:
+                storey.Group = list(group) + [obj]
+            return True
+        except Exception:
+            return False
+
+    def _register_plan_object(self, obj):
+        if not obj:
+            return
+        self._add_object_to_active_storey(obj)
+        self._register_object_view_state(obj)
+        self._apply_storey_visibility()
 
     def _restore_object_view_state(self):
         if not self.doc or not self._saved_object_view_state:
@@ -976,6 +1065,153 @@ class PlanEditSession:
         except Exception:
             pass
 
+    def _has_active_rect_wall_tool(self):
+        return self._rect_wall_start is not None or self.current_tool == "Rect Wall"
+
+    def _clear_rect_wall_preview(self):
+        for tracker in self._rect_wall_preview_trackers:
+            try:
+                tracker.finalize()
+            except Exception:
+                pass
+        self._rect_wall_preview_trackers = []
+
+    def _cancel_rect_wall_tool(self, refresh=True):
+        if not self._has_active_rect_wall_tool():
+            return False
+        self._stop_snapper()
+        self._clear_rect_wall_preview()
+        self._rect_wall_start = None
+        self._rect_wall_params = None
+        FreeCAD.activeDraftCommand = None
+        self.current_tool = "Select"
+        if refresh:
+            self._refresh_task_panel_status()
+        return True
+
+    def _get_rect_wall_corners(self, point):
+        start = self._rect_wall_start
+        if start is None or point is None:
+            return None
+        end = self._project_plan_point(point)
+        if end is None:
+            return None
+        x1, y1 = start.x, start.y
+        x2, y2 = end.x, end.y
+        z = start.z
+        if abs(x2 - x1) < _MIN_WALL_LENGTH or abs(y2 - y1) < _MIN_WALL_LENGTH:
+            return None
+        return [
+            FreeCAD.Vector(x1, y1, z),
+            FreeCAD.Vector(x2, y1, z),
+            FreeCAD.Vector(x2, y2, z),
+            FreeCAD.Vector(x1, y2, z),
+        ]
+
+    def _update_rect_wall_preview(self, point, info):
+        del info
+        corners = self._get_rect_wall_corners(point)
+        if not corners:
+            return
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except Exception:
+            return
+
+        segments = list(zip(corners, corners[1:] + corners[:1]))
+        if not self._rect_wall_preview_trackers:
+            for start, end in segments:
+                tracker = DraftTrackers.rectangleTracker(face=True)
+                self._rect_wall_preview_trackers.append(tracker)
+        for tracker, (start, end) in zip(self._rect_wall_preview_trackers, segments):
+            footprint = self._get_preview_footprint(
+                [start, end],
+                width=self._rect_wall_params["width"],
+                align=self._rect_wall_params["align"],
+            )
+            if not footprint:
+                continue
+            axis = end.sub(start)
+            if axis.Length < _MIN_WALL_LENGTH:
+                continue
+            axis.normalize()
+            rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), axis)
+            perp = rotation.multVec(FreeCAD.Vector(0, 1, 0))
+            tracker.setPlane(axis, perp)
+            tracker.setorigin(footprint[0])
+            tracker.update(footprint[2])
+            tracker.on()
+
+    def _create_rect_wall_run(self, corners):
+        from bimcommands import BimWall
+
+        walls = []
+        self.doc.openTransaction(translate("BIM_PlanEdit", "Create Rectangular Wall Run"))
+        try:
+            walls = BimWall.create_wall_run_from_points(
+                corners,
+                width=self._rect_wall_params["width"],
+                height=self._rect_wall_params["height"],
+                align=self._rect_wall_params["align"],
+                offset=self._rect_wall_params["offset"],
+                closed=True,
+                on_created=self._register_plan_object,
+            )
+            BimWall.autojoin_wall_run(walls, closed=True)
+            self.doc.commitTransaction()
+            self.doc.recompute()
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+            raise
+        return walls
+
+    def _handle_rect_wall_point(self, point=None, obj=None):
+        del obj
+        if point is None:
+            self._cancel_rect_wall_tool()
+            return
+
+        point = self._project_plan_point(point)
+        if self._rect_wall_start is None:
+            self._rect_wall_start = point
+            FreeCADGui.Snapper.getPoint(
+                callback=self._handle_rect_wall_point,
+                movecallback=self._update_rect_wall_preview,
+                last=point,
+                title=translate("BIM_PlanEdit", "Opposite rectangle corner"),
+                mode="line",
+            )
+            return
+
+        corners = self._get_rect_wall_corners(point)
+        if not corners:
+            self._cancel_rect_wall_tool()
+            return
+
+        try:
+            walls = self._create_rect_wall_run(corners)
+        except Exception:
+            self._cancel_rect_wall_tool()
+            FreeCAD.Console.PrintError(
+                translate("BIM_PlanEdit", "Failed to create the rectangular wall run.\n")
+            )
+            return
+
+        try:
+            FreeCADGui.Selection.clearSelection()
+            for wall in walls:
+                FreeCADGui.Selection.addSelection(wall)
+        except (ReferenceError, RuntimeError):
+            pass
+
+        self._cancel_rect_wall_tool(refresh=False)
+        self.current_tool = "Select"
+        self._refresh_selected_wall()
+        self._refresh_task_panel_status()
+
     def _has_active_wall_edit(self):
         return (
             self._edit_wall is not None or self._dragging_grip or self._embedded_tool_name == "Wall"
@@ -1187,12 +1423,13 @@ class PlanEditSession:
         delta = point.sub(original_midpoint)
         return [original_endpoints[0].add(delta), original_endpoints[1].add(delta)]
 
-    def _get_preview_footprint(self, points):
+    def _get_preview_footprint(self, points, width=None, align=None):
         wall = self._edit_wall
-        if not wall or not points or len(points) != 2:
+        if not points or len(points) != 2:
             return None
 
-        width = getattr(getattr(wall, "Width", None), "Value", 0.0) or 0.0
+        if width is None and wall:
+            width = getattr(getattr(wall, "Width", None), "Value", 0.0) or 0.0
         if width <= 0:
             return None
 
@@ -1203,7 +1440,8 @@ class PlanEditSession:
         rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), axis)
         perp = rotation.multVec(FreeCAD.Vector(0, 1, 0))
 
-        align = getattr(wall, "Align", "Center")
+        if align is None:
+            align = getattr(wall, "Align", "Center") if wall else "Center"
         if align == "Center":
             y_min = -width / 2
             y_max = width / 2
@@ -1457,15 +1695,20 @@ class PlanEditSession:
         self._update_dragged_wall(snapped_point)
 
     def _on_key_pressed(self, event_callback):
-        if self._tearing_down or not self._dragging_grip:
+        if self._tearing_down:
             return
         try:
             from pivy import coin
         except Exception:
             return
         event = event_callback.getEvent()
-        if event.getKey() == coin.SoKeyboardEvent.ESCAPE:
+        if event.getKey() != coin.SoKeyboardEvent.ESCAPE:
+            return
+        if self._dragging_grip:
             self._cancel_drag_edit()
+            return
+        if self._has_active_rect_wall_tool():
+            self._cancel_rect_wall_tool()
 
     # Selection observer interface
 
@@ -1644,16 +1887,19 @@ class PlanEditDockWidget:
         buttons.setSpacing(6)
         self.select_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Select"))
         self.wall_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Wall"))
+        self.rect_wall_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Rect Wall"))
         self.move_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Move"))
         self.join_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Join"))
         self.reapply_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Reapply View"))
         self.select_button.clicked.connect(self.on_select_clicked)
         self.wall_button.clicked.connect(self.on_wall_clicked)
+        self.rect_wall_button.clicked.connect(self.on_rect_wall_clicked)
         self.move_button.clicked.connect(self.on_move_clicked)
         self.join_button.clicked.connect(self.on_join_clicked)
         self.reapply_button.clicked.connect(self.on_reapply_clicked)
         buttons.addWidget(self.select_button)
         buttons.addWidget(self.wall_button)
+        buttons.addWidget(self.rect_wall_button)
         buttons.addWidget(self.move_button)
         buttons.addWidget(self.join_button)
         buttons.addWidget(self.reapply_button)
@@ -1763,6 +2009,7 @@ class PlanEditDockWidget:
         self.storey_combo = None
         self.select_button = None
         self.wall_button = None
+        self.rect_wall_button = None
         self.move_button = None
         self.join_button = None
         self.reapply_button = None
@@ -1854,6 +2101,9 @@ class PlanEditDockWidget:
 
     def on_wall_clicked(self):
         self.session.activate_wall_tool()
+
+    def on_rect_wall_clicked(self):
+        self.session.activate_rect_wall_tool()
 
     def on_move_clicked(self):
         self.session.activate_move_tool()
