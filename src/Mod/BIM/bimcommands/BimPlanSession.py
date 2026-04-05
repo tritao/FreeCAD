@@ -32,6 +32,7 @@ translate = FreeCAD.Qt.translate
 
 _PLAN_PAPER_RGB = (0.9569, 0.9529, 0.9373)
 _DEFAULT_DOCK_AREA = 2
+_MIN_WALL_LENGTH = 10.0
 
 _active_session = None
 
@@ -121,7 +122,6 @@ def start_session():
         return session
     return None
 
-
 class PlanEditSession:
     """Owns the viewer state and control dock for Plan Edit mode."""
 
@@ -144,6 +144,7 @@ class PlanEditSession:
         self._edit_endpoints = None
         self._preview_points = None
         self._preview_line_tracker = None
+        self._preview_rect_tracker = None
         self._preview_grip_trackers = []
         self._edit_wall_visibility = None
         self._dragging_grip = False
@@ -228,6 +229,7 @@ class PlanEditSession:
         self._edit_endpoint = None
         self._edit_endpoints = None
         self._preview_points = None
+        self._preview_rect_tracker = None
         self._edit_wall_visibility = None
 
     def shutdown(self, close_dialog=True, teardown=False):
@@ -797,13 +799,55 @@ class PlanEditSession:
             return None
 
         if endpoint == "Start":
-            return [point, original_endpoints[1]]
+            axis = original_endpoints[1].sub(original_endpoints[0]).normalize()
+            projected = axis.dot(point.sub(original_endpoints[1]))
+            if projected > -_MIN_WALL_LENGTH:
+                return None
+            return [original_endpoints[1].add(axis.multiply(projected)), original_endpoints[1]]
         elif endpoint == "End":
-            return [original_endpoints[0], point]
+            axis = original_endpoints[1].sub(original_endpoints[0]).normalize()
+            projected = axis.dot(point.sub(original_endpoints[0]))
+            if projected < _MIN_WALL_LENGTH:
+                return None
+            return [original_endpoints[0], original_endpoints[0].add(axis.multiply(projected))]
 
         original_midpoint = (original_endpoints[0] + original_endpoints[1]) * 0.5
         delta = point.sub(original_midpoint)
         return [original_endpoints[0].add(delta), original_endpoints[1].add(delta)]
+
+    def _get_preview_footprint(self, points):
+        wall = self._edit_wall
+        if not wall or not points or len(points) != 2:
+            return None
+
+        width = getattr(getattr(wall, "Width", None), "Value", 0.0) or 0.0
+        if width <= 0:
+            return None
+
+        axis = points[1].sub(points[0])
+        if axis.Length < _MIN_WALL_LENGTH:
+            return None
+        axis.normalize()
+        rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), axis)
+        perp = rotation.multVec(FreeCAD.Vector(0, 1, 0))
+
+        align = getattr(wall, "Align", "Center")
+        if align == "Center":
+            y_min = -width / 2
+            y_max = width / 2
+        elif align == "Left":
+            y_min = -width
+            y_max = 0.0
+        else:
+            y_min = 0.0
+            y_max = width
+
+        return [
+            points[0].add(FreeCAD.Vector(perp).multiply(y_min)),
+            points[1].add(FreeCAD.Vector(perp).multiply(y_min)),
+            points[1].add(FreeCAD.Vector(perp).multiply(y_max)),
+            points[0].add(FreeCAD.Vector(perp).multiply(y_max)),
+        ]
 
     def _sync_drag_preview(self, points):
         if not points or len(points) != 2:
@@ -820,6 +864,19 @@ class PlanEditSession:
             self._preview_line_tracker.on()
         self._preview_line_tracker.p1(points[0])
         self._preview_line_tracker.p2(points[1])
+
+        footprint = self._get_preview_footprint(points)
+        if footprint:
+            if self._preview_rect_tracker is None:
+                self._preview_rect_tracker = DraftTrackers.rectangleTracker()
+                self._preview_rect_tracker.on()
+            axis = points[1].sub(points[0]).normalize()
+            rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), axis)
+            perp = rotation.multVec(FreeCAD.Vector(0, 1, 0))
+            self._preview_rect_tracker.setPlane(axis, perp)
+            self._preview_rect_tracker.setorigin(footprint[0])
+            self._preview_rect_tracker.update(footprint[2])
+            self._preview_rect_tracker.on()
 
         midpoint = (points[0] + points[1]) * 0.5
         midpoint_marker = FreeCADGui.getMarkerIndex(
@@ -854,6 +911,13 @@ class PlanEditSession:
             except Exception:
                 pass
         self._preview_line_tracker = None
+
+        if self._preview_rect_tracker:
+            try:
+                self._preview_rect_tracker.finalize()
+            except Exception:
+                pass
+        self._preview_rect_tracker = None
 
         for tracker in self._preview_grip_trackers:
             try:
@@ -1093,8 +1157,6 @@ class PlanEditSession:
 
         self._wall_tool_pending_ticks += 1
 
-        # Wait a few timer ticks so we don't revert before the wall command
-        # has actually started its interactive mode.
         if not self._wall_tool_seen_active and self._wall_tool_pending_ticks < 10:
             return
 
