@@ -31,12 +31,18 @@ import Arch
 import Part
 import WorkingPlane
 from bimtests import TestArchBaseGui
+from bimcommands import BimPlanSession
 from bimcommands.BimWall import Arch_Wall
 from unittest.mock import patch
 
 
 class MockTracker:
     """A dummy tracker to absorb GUI calls during logic tests."""
+
+    def __init__(self):
+        self.last_points = None
+        self._width = None
+        self._height = None
 
     def off(self):
         pass
@@ -48,10 +54,20 @@ class MockTracker:
         pass
 
     def update(self, points):
-        pass
+        self.last_points = points
 
     def setorigin(self, arg):
         pass
+
+    def width(self, value=None):
+        if value is not None:
+            self._width = value
+        return self._width
+
+    def height(self, value=None):
+        if value is not None:
+            self._height = value
+        return self._height
 
 
 class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
@@ -64,8 +80,84 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
 
     def tearDown(self):
         """Restore original preferences after the test."""
+        session = BimPlanSession.get_active_session()
+        if session:
+            session.shutdown(close_dialog=False, teardown=True)
         self.params.SetInt("WallBaseline", self.original_wall_base)
         super().tearDown()
+
+    def assertPlaneIsSaneTop(self, plane):
+        self.assertIsNotNone(plane, "Expected an interaction plane.")
+        self.assertAlmostEqual(plane.u.x, 1.0, delta=1e-9)
+        self.assertAlmostEqual(plane.u.y, 0.0, delta=1e-9)
+        self.assertAlmostEqual(plane.u.z, 0.0, delta=1e-9)
+        self.assertAlmostEqual(plane.v.x, 0.0, delta=1e-9)
+        self.assertAlmostEqual(plane.v.y, 1.0, delta=1e-9)
+        self.assertAlmostEqual(plane.v.z, 0.0, delta=1e-9)
+        self.assertAlmostEqual(plane.axis.x, 0.0, delta=1e-9)
+        self.assertAlmostEqual(plane.axis.y, 0.0, delta=1e-9)
+        self.assertAlmostEqual(plane.axis.z, 1.0, delta=1e-9)
+
+    def test_plan_edit_embedded_wall_uses_sane_top_plane(self):
+        """Embedded wall creation in Plan Edit should start from a clean top plane."""
+
+        self.params.SetInt("WallBaseline", 0)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session.activate_wall_tool()
+        self.pump_gui_events()
+
+        self.assertEqual(session.current_tool, "Wall")
+        self.assertIsNotNone(session._embedded_tool, "Wall tool should be embedded in Plan Edit.")
+        self.assertIsInstance(session._embedded_tool, Arch_Wall)
+
+        self.assertPlaneIsSaneTop(session.get_interaction_plane())
+        self.assertPlaneIsSaneTop(session._embedded_tool._plane)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_embedded_wall_first_update_stays_sane(self):
+        """The first embedded wall preview update in Plan Edit should stay bounded."""
+
+        self.params.SetInt("WallBaseline", 0)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session.activate_wall_tool()
+        self.pump_gui_events()
+
+        cmd = session._embedded_tool
+        self.assertIsInstance(cmd, Arch_Wall)
+
+        cmd.tracker = MockTracker()
+        first = FreeCAD.Vector(1000, 1000, 0)
+        second = FreeCAD.Vector(3000, 1000, 0)
+
+        cmd.getPoint(first)
+        self.assertEqual(len(cmd.points), 1)
+
+        self.assertTrue(
+            FreeCADGui.Control.activeDialog(),
+            "Embedded wall point picking should open a live Draft dialog.",
+        )
+        cmd.update(second, None)
+
+        self.assertPlaneIsSaneTop(cmd._plane)
+        self.assertIsNotNone(cmd.tracker.last_points, "Expected a preview update on the tracker.")
+        self.assertEqual(len(cmd.tracker.last_points), 2)
+        for point in cmd.tracker.last_points:
+            self.assertLess(abs(point.x), 1e6)
+            self.assertLess(abs(point.y), 1e6)
+            self.assertLess(abs(point.z), 1e6)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
 
     def test_create_baseless_wall_interactive_mode(self):
         """
