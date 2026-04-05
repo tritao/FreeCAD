@@ -98,13 +98,16 @@ class Arch_Wall:
         return self._get_host().project_point(point, getattr(self, "wp", None))
 
     def _request_point(self, title, move_callback=None, last=None, mode=None, hints=None):
+        extra_widget = None
+        if self._get_host().supports_extra_widget():
+            extra_widget = self.taskbox()
         self._get_host().request_point(
             callback=self.getPoint,
             move_callback=move_callback,
             last=last,
             title=title,
             mode=mode,
-            extra_widget=self.taskbox(),
+            extra_widget=extra_widget,
             hints=hints,
         )
 
@@ -534,9 +537,12 @@ class Arch_Wall:
                 dv = dv.negative()
                 self.tracker.update([b.add(dv).sub(ov), point.add(dv).sub(ov)])
             if self.Length:
-                self.Length.setText(
-                    FreeCAD.Units.Quantity(bv.Length, FreeCAD.Units.Length).UserString
-                )
+                try:
+                    self.Length.setText(
+                        FreeCAD.Units.Quantity(bv.Length, FreeCAD.Units.Length).UserString
+                    )
+                except RuntimeError:
+                    self.Length = None
 
     def taskbox(self):
         """Set up a simple gui widget for the interactive mode."""
