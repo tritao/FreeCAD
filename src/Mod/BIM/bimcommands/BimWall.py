@@ -40,6 +40,116 @@ class WallBaselineMode(Enum):
     SKETCH = 2
 
 
+def create_baseless_wall_from_endpoints(
+    p0,
+    p1,
+    *,
+    width,
+    height,
+    align="Center",
+    offset=0.0,
+    material=None,
+    auto_group=True,
+    on_created=None,
+):
+    """Create one baseless wall segment from two global endpoints."""
+
+    import Arch
+
+    line_vector = p1.sub(p0)
+    length = line_vector.Length
+    if length <= 0:
+        return None
+
+    midpoint = (p0 + p1) * 0.5
+    direction = line_vector.normalize()
+    rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), direction)
+    wall = Arch.makeWall(
+        length=length,
+        width=width,
+        height=height,
+        align=align,
+        offset=offset,
+    )
+    wall.Placement = FreeCAD.Placement(midpoint, rotation)
+    if material is not None:
+        wall.Material = material
+    if auto_group and FreeCAD.GuiUp:
+        try:
+            import Draft
+
+            Draft.autogroup(wall)
+        except Exception:
+            pass
+    if on_created:
+        on_created(wall)
+    return wall
+
+
+def create_wall_run_from_points(
+    points,
+    *,
+    width,
+    height,
+    align="Center",
+    offset=0.0,
+    material=None,
+    auto_group=True,
+    closed=False,
+    on_created=None,
+):
+    """Create a run of baseless wall segments from ordered global points."""
+
+    if not points or len(points) < 2:
+        return []
+
+    segments = list(zip(points, points[1:]))
+    if closed and len(points) > 2:
+        segments.append((points[-1], points[0]))
+
+    walls = []
+    for start, end in segments:
+        wall = create_baseless_wall_from_endpoints(
+            start,
+            end,
+            width=width,
+            height=height,
+            align=align,
+            offset=offset,
+            material=material,
+            auto_group=auto_group,
+            on_created=on_created,
+        )
+        if wall is not None:
+            walls.append(wall)
+    return walls
+
+
+def autojoin_wall_run(walls, *, closed=False):
+    """Apply the standard non-destructive autojoin policy to a wall run."""
+
+    from draftutils import params
+    import Arch
+
+    if not walls or len(walls) < 2:
+        return
+    if not params.get_param_arch("autoJoinWalls"):
+        return
+
+    host = walls[0]
+    if closed:
+        additions = [wall for wall in walls[1:] if wall is not None and wall is not host]
+        if additions:
+            Arch.addComponents(additions, host)
+        return
+
+    for wall in walls[1:]:
+        if wall is None or wall is host:
+            continue
+        Arch.addComponents(wall, host)
+        host = wall
+
+
 class Arch_Wall:
     """The command definition for the Arch workbench's gui tool, Arch Wall.
 
@@ -585,6 +695,14 @@ class Arch_Wall:
                         f"Arch.addComponents(FreeCAD.ActiveDocument.{wall_obj.Name}, FreeCAD.ActiveDocument.{oldWall.Name})"
                     )
 
+    def _notify_wall_created(self, wall_obj):
+        if wall_obj is None:
+            return
+        try:
+            self._get_host().on_created_object(wall_obj)
+        except Exception:
+            pass
+
     def create_wall(self):
         """Orchestrate wall creation according to the baseline mode."""
         from draftutils import params
@@ -611,11 +729,22 @@ class Arch_Wall:
         # Create the wall object (either baseless or from a baseline)
         wall_obj = None
         if self.baseline_mode == WallBaselineMode.NONE:
-            wall_obj = self._create_baseless_wall(p0, p1)
+            wall_obj = create_baseless_wall_from_endpoints(
+                self.points[0],
+                self.points[1],
+                width=self.Width,
+                height=self.Height,
+                align=self.Align,
+                offset=self.Offset,
+                material=self.MultiMat,
+                auto_group=True,
+                on_created=self._get_host().on_created_object,
+            )
         else:
             baseline_obj = self._create_baseline_object(p0, p1)
             if baseline_obj:
                 wall_obj = self._create_wall_from_baseline(baseline_obj)
+                self._notify_wall_created(wall_obj)
 
         # Delegate all joining logic to the helper function
         self._handle_wall_joining(wall_obj)
