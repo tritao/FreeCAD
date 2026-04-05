@@ -36,7 +36,7 @@ class TestArchBase(unittest.TestCase):
         uniquely-named document and cleaning up any potential leftovers from a previously failed
         run.
         """
-        self.doc_name = f"{self.__class__.__name__}_{self._testMethodName}"
+        self.doc_name = "___".join(self.id().split(".")[2:]) or self.__class__.__name__
 
         # Close any document of the same name that might have been left over from a crashed or
         # aborted test run. FreeCAD.getDocument() raises a NameError if the document is not found,
