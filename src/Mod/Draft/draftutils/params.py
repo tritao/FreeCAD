@@ -568,6 +568,7 @@ def _get_param_dictionary():
         "DoorPreset":                  ("int",       5),
         "DoorSill":                    ("float",     0.0),
         "DoorWidth":                   ("float",     1000.0),
+        "FootprintCutHeight":          ("float",     1000.0),
         "FreeLinking":                 ("bool",      False),
         "forceIfcPythonParser":        ("bool",      False),  # importIFClegacy.py
         "getStandardType":             ("bool",      False),

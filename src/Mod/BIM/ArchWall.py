@@ -800,19 +800,59 @@ class _Wall(ArchComponent.Component):
         ArchComponent.Component.onChanged(self, obj, prop)
 
     def getFootprint(self, obj):
-        """Get the faces that make up the base/foot of the wall.
+        """Get the plan faces that represent this wall in footprint mode.
+
+        The preferred representation is a horizontal section through the wall
+        solid at a standard plan cut height. This makes hosted openings appear
+        naturally in footprint mode because the wall shape has already been cut
+        by them. If that section cannot be computed, fall back to the literal
+        bottom faces of the wall.
 
         Returns
         -------
         list of <Part.Face>
-            The faces that make up the foot of the wall.
+            The faces that make up the wall footprint.
         """
 
+        import Part
+
+        shape = getattr(obj, "Shape", None)
+        if shape and (not shape.isNull()) and shape.Solids:
+            bb = shape.BoundBox
+            if bb.ZLength > 0.001:
+                cut_height = params.get_param_arch("FootprintCutHeight")
+                cut_z = max(bb.ZMin + 0.001, min(bb.ZMax - 0.001, bb.ZMin + cut_height))
+                cut_plane = Part.makePlane(1, 1)
+                cut_plane.translate(FreeCAD.Vector(bb.Center.x, bb.Center.y, cut_z))
+                try:
+                    section_plane, _, _ = ArchCommands.getCutVolume(cut_plane, shape)
+                    if section_plane:
+                        section = shape.section(section_plane)
+                        if section and section.Edges:
+                            try:
+                                edge_groups = Part.sortEdges(section.Edges)
+                            except AttributeError:
+                                edge_groups = Part.__sortEdges__(section.Edges)
+                            faces = []
+                            for edges in edge_groups:
+                                wire = Part.Wire(edges)
+                                if not wire.isClosed():
+                                    continue
+                                face = Part.Face(wire)
+                                if face.Area <= 0:
+                                    continue
+                                face.translate(FreeCAD.Vector(0, 0, bb.ZMin - cut_z))
+                                faces.append(face)
+                            if faces:
+                                return faces
+                except Part.OCCError:
+                    pass
+
         faces = []
-        if obj.Shape:
-            for f in obj.Shape.Faces:
+        if shape:
+            for f in shape.Faces:
                 if f.normalAt(0, 0).getAngle(FreeCAD.Vector(0, 0, -1)) < 0.01:
-                    if abs(abs(f.CenterOfMass.z) - abs(obj.Shape.BoundBox.ZMin)) < 0.001:
+                    if abs(abs(f.CenterOfMass.z) - abs(shape.BoundBox.ZMin)) < 0.001:
                         faces.append(f)
         return faces
 
