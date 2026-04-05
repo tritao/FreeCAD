@@ -184,6 +184,22 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
     def supports_extra_widget(self):
         return False
 
+    def resolve_point_request_modifiers(self, ctrl, shift, alt):
+        del alt
+        return ctrl, False
+
+    def default_ortho_enabled(self):
+        return True
+
+    def free_angle_override_active(self):
+        try:
+            from PySide import QtCore, QtGui
+
+            modifiers = QtGui.QApplication.keyboardModifiers()
+            return bool(modifiers & QtCore.Qt.ShiftModifier)
+        except Exception:
+            return False
+
 
 class _PlanEditCommandHost(gui_base.DraftInteractionHost):
     """Embedded Draft-style host for modifiers used inside Plan Edit."""

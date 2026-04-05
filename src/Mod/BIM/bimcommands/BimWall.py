@@ -99,6 +99,31 @@ class Arch_Wall:
 
         return self._get_host().project_point(point, getattr(self, "wp", None))
 
+    def _apply_interactive_alignment(self, point):
+        point = self._project_to_working_plane(point)
+        if (
+            point is None
+            or len(getattr(self, "points", [])) != 1
+            or not self._get_host().default_ortho_enabled()
+            or self._get_host().free_angle_override_active()
+        ):
+            return point
+
+        base = self.points[0]
+        delta = point.sub(base)
+        wp = getattr(self, "wp", None)
+        if not wp:
+            return point
+
+        axis_u = getattr(wp, "u", None)
+        axis_v = getattr(wp, "v", None)
+        if not axis_u or not axis_v:
+            return point
+
+        if abs(delta.dot(axis_u)) >= abs(delta.dot(axis_v)):
+            return base.add(axis_u.multiply(delta.dot(axis_u)))
+        return base.add(axis_v.multiply(delta.dot(axis_v)))
+
     def _request_point(self, title, move_callback=None, last=None, mode=None, hints=None):
         extra_widget = None
         if self._get_host().supports_extra_widget():
@@ -111,6 +136,7 @@ class Arch_Wall:
             mode=mode,
             extra_widget=extra_widget,
             hints=hints,
+            modifier_resolver=self._get_host().resolve_point_request_modifiers,
         )
 
     def _teardown_interactive(self):
@@ -265,7 +291,7 @@ class Arch_Wall:
         if point is None:
             self.cancel_interactive()
             return
-        point = self._project_to_working_plane(point)
+        point = self._apply_interactive_alignment(point)
         self.points.append(point)
         if len(self.points) == 1:
             self.tracker.width(self.Width)
@@ -532,7 +558,7 @@ class Arch_Wall:
 
         import DraftVecUtils
 
-        point = self._project_to_working_plane(point)
+        point = self._apply_interactive_alignment(point)
 
         if FreeCADGui.Control.activeDialog():
             b = self.points[0]
