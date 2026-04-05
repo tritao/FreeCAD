@@ -31,7 +31,7 @@ from draftguitools import gui_base
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
 
-_PLAN_PAPER_RGB = (0.9569, 0.9529, 0.9373)
+_PLAN_PAPER_RGB = (1.0, 1.0, 1.0)
 _DEFAULT_DOCK_AREA = 2
 _MIN_WALL_LENGTH = 10.0
 _PLAN_EDIT_SNAP_SET = {
@@ -59,25 +59,6 @@ def _unsigned_to_rgb(color):
         ((color >> 16) & 0xFF) / 255.0,
         ((color >> 8) & 0xFF) / 255.0,
     )
-
-
-def _mix_rgb(left, right, amount):
-    return tuple((1.0 - amount) * l + amount * r for l, r in zip(left, right))
-
-
-def _relative_luminance(color):
-    return 0.2126 * color[0] + 0.7152 * color[1] + 0.0722 * color[2]
-
-
-def _lift_for_plan_mode(color):
-    luminance = _relative_luminance(color)
-    if luminance < 0.25:
-        amount = 0.42
-    elif luminance < 0.55:
-        amount = 0.30
-    else:
-        amount = 0.18
-    return _mix_rgb(color, _PLAN_PAPER_RGB, amount)
 
 
 def _apply_viewer_background(viewer, state):
@@ -108,13 +89,13 @@ def _make_plan_background_state(state):
         return None
 
     return {
-        "gradient": state["gradient"],
-        "radial_gradient": state["radial_gradient"],
-        "use_mid": state["use_mid"],
-        "background": _lift_for_plan_mode(state["background"]),
-        "background2": _lift_for_plan_mode(state["background2"]),
-        "background3": _lift_for_plan_mode(state["background3"]),
-        "background4": _lift_for_plan_mode(state["background4"]),
+        "gradient": False,
+        "radial_gradient": False,
+        "use_mid": False,
+        "background": _PLAN_PAPER_RGB,
+        "background2": _PLAN_PAPER_RGB,
+        "background3": _PLAN_PAPER_RGB,
+        "background4": _PLAN_PAPER_RGB,
     }
 
 
@@ -845,6 +826,18 @@ class PlanEditSession:
         except Exception:
             return False
 
+    def _is_plan_background_object(self, obj):
+        if not obj:
+            return False
+        if getattr(obj, "IfcType", "") == "Slab":
+            return True
+        try:
+            import Draft
+
+            return Draft.getType(obj) == "Structure" and getattr(obj, "IfcType", "") == "Slab"
+        except Exception:
+            return False
+
     def _get_object_storeys(self, obj):
         if not obj:
             return []
@@ -895,6 +888,11 @@ class PlanEditSession:
                             setattr(view_object, prop, value)
                         except Exception:
                             pass
+                if self._is_plan_background_object(obj) and hasattr(view_object, "Selectable"):
+                    try:
+                        view_object.Selectable = False
+                    except Exception:
+                        pass
                 continue
 
             if hasattr(view_object, "Visibility"):
