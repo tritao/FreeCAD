@@ -131,6 +131,14 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
         super().__init__(command)
         self.session = session
 
+    def activate_command(self, command=None):
+        super().activate_command(command)
+        self.session._on_embedded_command_started("Wall")
+
+    def deactivate_command(self, command=None):
+        super().deactivate_command(command)
+        self.session._on_embedded_command_finished("Wall")
+
     def request_point(
         self,
         callback,
@@ -150,14 +158,6 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
             extra_widget=None,
         )
 
-    def activate_command(self, command=None):
-        super().activate_command(command)
-        self.session._on_wall_command_started()
-
-    def deactivate_command(self, command=None):
-        super().deactivate_command(command)
-        self.session._on_wall_command_finished()
-
     def clear_ui_state(self):
         return
 
@@ -166,6 +166,26 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
 
     def show_continue(self):
         return
+
+    def continue_mode_enabled(self):
+        return False
+
+
+class _PlanEditCommandHost(gui_base.DraftInteractionHost):
+    """Embedded Draft-style host for modifiers used inside Plan Edit."""
+
+    def __init__(self, session, tool_name, command=None):
+        super().__init__(command)
+        self.session = session
+        self.tool_name = tool_name
+
+    def activate_command(self, command=None):
+        super().activate_command(command)
+        self.session._on_embedded_command_started(self.tool_name)
+
+    def deactivate_command(self, command=None):
+        super().deactivate_command(command)
+        self.session._on_embedded_command_finished(self.tool_name)
 
     def continue_mode_enabled(self):
         return False
@@ -208,6 +228,8 @@ class PlanEditSession:
         self._working_plane = None
         self._wall_host = None
         self._wall_command = None
+        self._move_host = None
+        self._move_command = None
         self._finishing = False
         self._tearing_down = False
         app = QtGui.QApplication.instance()
@@ -250,6 +272,9 @@ class PlanEditSession:
 
     def finish(self, cont=False, close_dialog=True, closed=False):
         del cont, closed
+        if self._has_active_move_tool():
+            self._cancel_move_tool()
+            return True
         if self._has_active_wall_edit():
             self._cancel_wall_edit()
             return True
@@ -259,6 +284,7 @@ class PlanEditSession:
         if self._tearing_down:
             return
         self._tearing_down = True
+        self._cancel_move_tool()
         self._cancel_wall_edit(restore=False, refresh=False)
         self._cancel_pending_edit()
         self._clear_wall_grips()
@@ -279,6 +305,8 @@ class PlanEditSession:
         self._edit_wall_visibility = None
         self._wall_host = None
         self._wall_command = None
+        self._move_host = None
+        self._move_command = None
 
     def shutdown(self, close_dialog=True, teardown=False):
         global _active_session
@@ -291,6 +319,7 @@ class PlanEditSession:
             teardown = teardown or self._tearing_down
             panel = self.task_panel
             self.task_panel = None
+            self._cancel_move_tool()
             self._cancel_wall_edit(restore=not teardown, refresh=False)
             self._cancel_pending_edit()
             self._clear_wall_grips()
@@ -366,20 +395,22 @@ class PlanEditSession:
         self.apply_plan_view(fit=False)
         self._refresh_task_panel_status()
 
-    def _on_wall_command_started(self):
+    def _on_embedded_command_started(self, tool_name):
         if self._tearing_down:
             return
-        self.current_tool = "Wall"
+        self.current_tool = tool_name
         self._refresh_task_panel_status()
 
-    def _on_wall_command_finished(self):
+    def _on_embedded_command_finished(self, tool_name):
         if self._tearing_down:
             return
-        if self.current_tool == "Wall":
+        if self.current_tool == tool_name:
             self.current_tool = "Select"
             self._refresh_task_panel_status()
 
     def activate_select_tool(self):
+        if self._has_active_move_tool():
+            self._cancel_move_tool()
         self._cancel_wall_edit()
 
     def activate_wall_tool(self):
@@ -398,6 +429,20 @@ class PlanEditSession:
         self._wall_command = BimWall.Arch_Wall()
         self._wall_host = _PlanEditWallHost(self, self._wall_command)
         self._wall_command.Activated(host=self._wall_host)
+
+    def activate_move_tool(self):
+        from draftguitools import gui_move
+
+        self.current_tool = "Move"
+        if self._has_active_move_tool():
+            self._cancel_move_tool()
+        self._cancel_wall_edit()
+        self._cancel_pending_edit()
+        self._clear_wall_grips()
+        self._refresh_task_panel_status()
+        self._move_command = gui_move.Move()
+        self._move_host = _PlanEditCommandHost(self, "Move", self._move_command)
+        self._move_command.Activated(host=self._move_host)
 
     def stretch_selected_wall(self, endpoint):
         self._start_wall_edit(endpoint)
@@ -617,6 +662,8 @@ class PlanEditSession:
             self._ignore_selection_changes = False
             self._wall_host = None
             self._wall_command = None
+            self._move_host = None
+            self._move_command = None
             return
         self._stop_snapper()
         FreeCAD.activeDraftCommand = None
@@ -630,6 +677,8 @@ class PlanEditSession:
         self._ignore_selection_changes = False
         self._wall_host = None
         self._wall_command = None
+        self._move_host = None
+        self._move_command = None
         self._sync_wall_grips()
 
     def _stop_snapper(self):
@@ -644,6 +693,18 @@ class PlanEditSession:
 
     def _has_active_wall_edit(self):
         return self._edit_wall is not None or self._dragging_grip or self._wall_command is not None
+
+    def _has_active_move_tool(self):
+        return self._move_command is not None
+
+    def _cancel_move_tool(self):
+        if self._tearing_down or self._move_command is None:
+            return
+        if hasattr(self._move_command, "finish"):
+            try:
+                self._move_command.finish(cont=False)
+            except Exception:
+                pass
 
     def _cancel_wall_edit(self, restore=True, refresh=True):
         if not self._has_active_wall_edit():
@@ -1287,12 +1348,15 @@ class PlanEditDockWidget:
         buttons.setSpacing(6)
         self.select_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Select"))
         self.wall_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Wall"))
+        self.move_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Move"))
         self.reapply_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Reapply View"))
         self.select_button.clicked.connect(self.on_select_clicked)
         self.wall_button.clicked.connect(self.on_wall_clicked)
+        self.move_button.clicked.connect(self.on_move_clicked)
         self.reapply_button.clicked.connect(self.on_reapply_clicked)
         buttons.addWidget(self.select_button)
         buttons.addWidget(self.wall_button)
+        buttons.addWidget(self.move_button)
         buttons.addWidget(self.reapply_button)
         layout.addLayout(buttons)
 
@@ -1400,6 +1464,7 @@ class PlanEditDockWidget:
         self.storey_combo = None
         self.select_button = None
         self.wall_button = None
+        self.move_button = None
         self.reapply_button = None
         self.stretch_start_button = None
         self.stretch_end_button = None
@@ -1489,6 +1554,9 @@ class PlanEditDockWidget:
 
     def on_wall_clicked(self):
         self.session.activate_wall_tool()
+
+    def on_move_clicked(self):
+        self.session.activate_move_tool()
 
     def on_reapply_clicked(self):
         self.session.apply_plan_view(fit=False)
