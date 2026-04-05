@@ -112,6 +112,9 @@ class TestArchSiteGui(TestArchBaseGui.TestArchBaseGui):
             finally:
                 # Close reopened document to keep test isolation
                 FreeCAD.closeDocument(reopened.Name)
+                # Reopening the saved test document replaces the original test document lifecycle.
+                # Mark it consumed so the shared tearDown does not try to close it again.
+                self.document = None
         finally:
             try:
                 os.unlink(path)
