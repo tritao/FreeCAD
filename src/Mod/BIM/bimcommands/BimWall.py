@@ -87,6 +87,19 @@ class Arch_Wall:
         FreeCADGui.Snapper.cancelPointRequest()
         self._point_request_active = False
 
+    def _project_to_working_plane(self, point):
+        if point is None:
+            return None
+
+        wp = getattr(self, "wp", None)
+        if not wp or not hasattr(wp, "project_point"):
+            return point
+
+        try:
+            return wp.project_point(point)
+        except Exception:
+            return point
+
     def _teardown_interactive(self):
 
         tracker = self.tracker
@@ -239,6 +252,7 @@ class Arch_Wall:
         if point is None:
             self.cancel_interactive()
             return
+        point = self._project_to_working_plane(point)
         self.points.append(point)
         if len(self.points) == 1:
             self.tracker.width(self.Width)
@@ -504,6 +518,8 @@ class Arch_Wall:
         """
 
         import DraftVecUtils
+
+        point = self._project_to_working_plane(point)
 
         if FreeCADGui.Control.activeDialog():
             b = self.points[0]
