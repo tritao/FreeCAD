@@ -1496,6 +1496,7 @@ class Snapper:
         title=None,
         mode="point",
         hints=None,
+        modifier_resolver=None,
     ):
         """Get a 3D point from the screen.
 
@@ -1531,6 +1532,9 @@ class Snapper:
         ``hints`` is an optional list of ``Gui.InputHint`` instances to
         display in the status bar for the duration of the point pick. They are
         cleared automatically when the user picks a point or cancels.
+
+        ``modifier_resolver`` is an optional callable that can override the
+        Ctrl/Shift modifier state used for snapping and constraints.
         """
         if (
             last is None
@@ -1539,6 +1543,8 @@ class Snapper:
             and extradlg is None
             and title is None
             and mode == "point"
+            and hints is None
+            and modifier_resolver is None
         ):
             self._clear_point_callbacks()
             return
@@ -1558,6 +1564,12 @@ class Snapper:
             mousepos = event.getPosition()
             ctrl = event.wasCtrlDown()
             shift = event.wasShiftDown()
+            alt = event.wasAltDown()
+            if modifier_resolver:
+                try:
+                    ctrl, shift = modifier_resolver(ctrl, shift, alt)
+                except Exception:
+                    pass
             self.pt = Gui.Snapper.snap(mousepos, lastpoint=last, active=ctrl, constrain=shift)
             self.ui.displayPoint(self.pt, last, plane=self._get_wp(), mask=Gui.Snapper.affinity)
             if movecallback:
