@@ -26,6 +26,7 @@
 
 import FreeCAD
 import FreeCADGui
+from draftguitools import gui_base
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -122,6 +123,54 @@ def start_session():
         return session
     return None
 
+
+class _PlanEditWallHost(gui_base.DraftInteractionHost):
+    """Embedded Draft-style host for wall creation inside Plan Edit."""
+
+    def __init__(self, session, command=None):
+        super().__init__(command)
+        self.session = session
+
+    def request_point(
+        self,
+        callback,
+        move_callback=None,
+        last=None,
+        title=None,
+        mode=None,
+        extra_widget=None,
+    ):
+        del extra_widget
+        super().request_point(
+            callback=callback,
+            move_callback=move_callback,
+            last=last,
+            title=title,
+            mode=mode,
+            extra_widget=None,
+        )
+
+    def activate_command(self, command=None):
+        super().activate_command(command)
+        self.session._on_wall_command_started()
+
+    def deactivate_command(self, command=None):
+        super().deactivate_command(command)
+        self.session._on_wall_command_finished()
+
+    def clear_ui_state(self):
+        return
+
+    def reset_edit(self):
+        return
+
+    def show_continue(self):
+        return
+
+    def continue_mode_enabled(self):
+        return False
+
+
 class PlanEditSession:
     """Owns the viewer state and control dock for Plan Edit mode."""
 
@@ -157,11 +206,8 @@ class PlanEditSession:
         self._saved_camera_type = None
         self._saved_background = None
         self._working_plane = None
-        self._tool_monitor = QtCore.QTimer()
-        self._tool_monitor.setInterval(150)
-        self._tool_monitor.timeout.connect(self._monitor_tools)
-        self._wall_tool_seen_active = False
-        self._wall_tool_pending_ticks = 0
+        self._wall_host = None
+        self._wall_command = None
         self._finishing = False
         self._tearing_down = False
         app = QtGui.QApplication.instance()
@@ -231,6 +277,8 @@ class PlanEditSession:
         self._preview_points = None
         self._preview_rect_tracker = None
         self._edit_wall_visibility = None
+        self._wall_host = None
+        self._wall_command = None
 
     def shutdown(self, close_dialog=True, teardown=False):
         global _active_session
@@ -318,15 +366,28 @@ class PlanEditSession:
         self.apply_plan_view(fit=False)
         self._refresh_task_panel_status()
 
+    def _on_wall_command_started(self):
+        if self._tearing_down:
+            return
+        self.current_tool = "Wall"
+        self._refresh_task_panel_status()
+
+    def _on_wall_command_finished(self):
+        if self._tearing_down:
+            return
+        if self.current_tool == "Wall":
+            self.current_tool = "Select"
+            self._refresh_task_panel_status()
+
     def activate_select_tool(self):
         self._cancel_wall_edit()
 
     def activate_wall_tool(self):
+        from bimcommands import BimWall
+
         self.current_tool = "Wall"
         self._cancel_wall_edit()
         self._cancel_pending_edit()
-        self._wall_tool_seen_active = False
-        self._wall_tool_pending_ticks = 0
         self.selected_wall = None
         self._clear_wall_grips()
         try:
@@ -334,8 +395,9 @@ class PlanEditSession:
         except (ReferenceError, RuntimeError):
             pass
         self._refresh_task_panel_status()
-        FreeCADGui.runCommand("Arch_Wall")
-        self._tool_monitor.start()
+        self._wall_command = BimWall.Arch_Wall()
+        self._wall_host = _PlanEditWallHost(self, self._wall_command)
+        self._wall_command.Activated(host=self._wall_host)
 
     def stretch_selected_wall(self, endpoint):
         self._start_wall_edit(endpoint)
@@ -545,9 +607,6 @@ class PlanEditSession:
 
     def _cancel_pending_edit(self):
         if self._tearing_down:
-            self._tool_monitor.stop()
-            self._wall_tool_seen_active = False
-            self._wall_tool_pending_ticks = 0
             self._restore_edit_wall_visibility()
             self._clear_drag_preview()
             self._edit_wall = None
@@ -556,6 +615,8 @@ class PlanEditSession:
             self._preview_points = None
             self._dragging_grip = False
             self._ignore_selection_changes = False
+            self._wall_host = None
+            self._wall_command = None
             return
         self._stop_snapper()
         FreeCAD.activeDraftCommand = None
@@ -567,10 +628,9 @@ class PlanEditSession:
         self._preview_points = None
         self._dragging_grip = False
         self._ignore_selection_changes = False
+        self._wall_host = None
+        self._wall_command = None
         self._sync_wall_grips()
-        self._tool_monitor.stop()
-        self._wall_tool_seen_active = False
-        self._wall_tool_pending_ticks = 0
 
     def _stop_snapper(self):
         snapper = getattr(FreeCADGui, "Snapper", None)
@@ -583,7 +643,7 @@ class PlanEditSession:
             pass
 
     def _has_active_wall_edit(self):
-        return self._edit_wall is not None or self._dragging_grip or self._is_wall_command_active()
+        return self._edit_wall is not None or self._dragging_grip or self._wall_command is not None
 
     def _cancel_wall_edit(self, restore=True, refresh=True):
         if not self._has_active_wall_edit():
@@ -605,60 +665,15 @@ class PlanEditSession:
         return True
 
     def _cancel_wall_subtool(self):
-        if self._tearing_down or not self._is_wall_command_active():
+        if self._tearing_down or self._wall_command is None:
             return
 
-        command = getattr(FreeCAD, "activeDraftCommand", None)
-        if command and hasattr(command, "cancel_interactive"):
+        if hasattr(self._wall_command, "cancel_interactive"):
             try:
-                command.cancel_interactive()
+                self._wall_command.cancel_interactive()
                 return
             except Exception:
                 pass
-
-        toolbar = getattr(FreeCADGui, "draftToolBar", None)
-        escaped = False
-        if toolbar:
-            try:
-                toolbar.escape()
-                escaped = True
-            except Exception:
-                pass
-
-        if FreeCADGui.ActiveDocument:
-            try:
-                FreeCADGui.ActiveDocument.resetEdit()
-            except Exception:
-                pass
-
-        if getattr(FreeCADGui, "Snapper", None):
-            try:
-                FreeCADGui.Snapper.off()
-            except Exception:
-                pass
-
-        if toolbar and (
-            not escaped
-            or getattr(toolbar, "isTaskOn", False)
-            or getattr(toolbar, "cancel", None)
-            or getattr(toolbar, "pointcallback", None)
-        ):
-            try:
-                toolbar.offUi()
-                toolbar.sourceCmd = None
-                toolbar.pointcallback = None
-                toolbar.cancel = None
-                toolbar.mask = None
-                toolbar.isTaskOn = False
-            except Exception:
-                pass
-
-        try:
-            FreeCADGui.Control.closeDialog()
-        except Exception:
-            pass
-
-        FreeCAD.activeDraftCommand = None
 
     def _start_wall_edit(self, mode):
         if not self.is_selected_wall_baseless():
@@ -1139,43 +1154,6 @@ class PlanEditSession:
             return
         del doc
         self._refresh_selected_wall()
-
-    def _monitor_tools(self):
-        if self._tearing_down:
-            self._tool_monitor.stop()
-            return
-        if self.current_tool != "Wall":
-            self._tool_monitor.stop()
-            self._wall_tool_seen_active = False
-            self._wall_tool_pending_ticks = 0
-            return
-
-        if self._is_wall_command_active():
-            self._wall_tool_seen_active = True
-            self._wall_tool_pending_ticks = 0
-            return
-
-        self._wall_tool_pending_ticks += 1
-
-        if not self._wall_tool_seen_active and self._wall_tool_pending_ticks < 10:
-            return
-
-        self.current_tool = "Select"
-        self._tool_monitor.stop()
-        self._wall_tool_seen_active = False
-        self._wall_tool_pending_ticks = 0
-        self._refresh_task_panel_status()
-
-    def _is_wall_command_active(self):
-        command = getattr(FreeCAD, "activeDraftCommand", None)
-        if command is None:
-            return False
-
-        feature_name = getattr(command, "featureName", "")
-        if feature_name == "Wall":
-            return True
-
-        return command.__class__.__name__ == "Arch_Wall"
 
     def attach_task_panel(self, panel):
         if self.task_panel is panel:
