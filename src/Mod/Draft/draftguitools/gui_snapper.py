@@ -155,6 +155,7 @@ class Snapper:
         # fmt: on
 
         self.init_active_snaps()
+        self._snap_mode_stack = []
         self.set_snap_style()
 
         self.cursors = coll.OrderedDict(
@@ -192,6 +193,28 @@ class Snapper:
             if bool(int(snap)):
                 self.active_snaps.append(self.snaps[i])
             i += 1
+
+    def get_snap_modes(self):
+        """Return the currently active snap names."""
+        return list(self.active_snaps)
+
+    def set_snap_modes(self, active_snaps):
+        """Replace the current active snaps with the provided snap names."""
+        valid_snaps = [snap for snap in self.snaps if snap in set(active_snaps)]
+        self.active_snaps = valid_snaps
+        self.save_snap_state()
+        return list(self.active_snaps)
+
+    def push_snap_modes(self, active_snaps):
+        """Save current snap state and apply a temporary snap profile."""
+        self._snap_mode_stack.append(self.get_snap_modes())
+        return self.set_snap_modes(active_snaps)
+
+    def pop_snap_modes(self):
+        """Restore the most recently pushed temporary snap profile."""
+        if not self._snap_mode_stack:
+            return self.get_snap_modes()
+        return self.set_snap_modes(self._snap_mode_stack.pop())
 
     def set_snap_style(self):
         self.snapStyle = params.get_param("snapStyle")
