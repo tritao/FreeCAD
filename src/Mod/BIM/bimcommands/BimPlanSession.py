@@ -34,6 +34,17 @@ translate = FreeCAD.Qt.translate
 _PLAN_PAPER_RGB = (0.9569, 0.9529, 0.9373)
 _DEFAULT_DOCK_AREA = 2
 _MIN_WALL_LENGTH = 10.0
+_PLAN_EDIT_SNAP_SET = {
+    "Lock",
+    "Near",
+    "Extension",
+    "Endpoint",
+    "Midpoint",
+    "Perpendicular",
+    "Ortho",
+    "Intersection",
+    "WorkingPlane",
+}
 
 _active_session = None
 
@@ -133,11 +144,11 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
 
     def activate_command(self, command=None):
         super().activate_command(command)
-        self.session._on_embedded_command_started("Wall")
+        self.session._on_embedded_command_started("Wall", command or self.command)
 
     def deactivate_command(self, command=None):
         super().deactivate_command(command)
-        self.session._on_embedded_command_finished("Wall")
+        self.session._on_embedded_command_finished("Wall", command or self.command)
 
     def request_point(
         self,
@@ -170,6 +181,9 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
     def continue_mode_enabled(self):
         return False
 
+    def supports_extra_widget(self):
+        return False
+
 
 class _PlanEditCommandHost(gui_base.DraftInteractionHost):
     """Embedded Draft-style host for modifiers used inside Plan Edit."""
@@ -181,11 +195,11 @@ class _PlanEditCommandHost(gui_base.DraftInteractionHost):
 
     def activate_command(self, command=None):
         super().activate_command(command)
-        self.session._on_embedded_command_started(self.tool_name)
+        self.session._on_embedded_command_started(self.tool_name, command or self.command)
 
     def deactivate_command(self, command=None):
         super().deactivate_command(command)
-        self.session._on_embedded_command_finished(self.tool_name)
+        self.session._on_embedded_command_finished(self.tool_name, command or self.command)
 
     def continue_mode_enabled(self):
         return False
@@ -225,11 +239,11 @@ class PlanEditSession:
         self._saved_camera = None
         self._saved_camera_type = None
         self._saved_background = None
+        self._saved_object_view_state = {}
         self._working_plane = None
-        self._wall_host = None
-        self._wall_command = None
-        self._move_host = None
-        self._move_command = None
+        self._embedded_host = None
+        self._embedded_tool = None
+        self._embedded_tool_name = None
         self._finishing = False
         self._tearing_down = False
         app = QtGui.QApplication.instance()
@@ -255,7 +269,10 @@ class PlanEditSession:
 
         self.storeys = self.collect_storeys()
         self.active_storey = self.find_initial_storey()
+        self._capture_object_view_state()
         self.apply_plan_view()
+        self._apply_plan_snap_profile()
+        self._apply_storey_visibility()
         self._attach_selection_observer()
         self._register_edit_callbacks()
         self._refresh_selected_wall()
@@ -272,8 +289,8 @@ class PlanEditSession:
 
     def finish(self, cont=False, close_dialog=True, closed=False):
         del cont, closed
-        if self._has_active_move_tool():
-            self._cancel_move_tool()
+        if self._has_active_embedded_tool():
+            self._cancel_embedded_tool()
             return True
         if self._has_active_wall_edit():
             self._cancel_wall_edit()
@@ -284,7 +301,7 @@ class PlanEditSession:
         if self._tearing_down:
             return
         self._tearing_down = True
-        self._cancel_move_tool()
+        self._cancel_embedded_tool()
         self._cancel_wall_edit(restore=False, refresh=False)
         self._cancel_pending_edit()
         self._clear_wall_grips()
@@ -303,10 +320,9 @@ class PlanEditSession:
         self._preview_points = None
         self._preview_rect_tracker = None
         self._edit_wall_visibility = None
-        self._wall_host = None
-        self._wall_command = None
-        self._move_host = None
-        self._move_command = None
+        self._embedded_host = None
+        self._embedded_tool = None
+        self._embedded_tool_name = None
 
     def shutdown(self, close_dialog=True, teardown=False):
         global _active_session
@@ -319,7 +335,7 @@ class PlanEditSession:
             teardown = teardown or self._tearing_down
             panel = self.task_panel
             self.task_panel = None
-            self._cancel_move_tool()
+            self._cancel_embedded_tool()
             self._cancel_wall_edit(restore=not teardown, refresh=False)
             self._cancel_pending_edit()
             self._clear_wall_grips()
@@ -393,30 +409,37 @@ class PlanEditSession:
     def set_active_storey(self, storey):
         self.active_storey = storey
         self.apply_plan_view(fit=False)
+        self._apply_storey_visibility()
         self._refresh_task_panel_status()
 
-    def _on_embedded_command_started(self, tool_name):
+    def _on_embedded_command_started(self, tool_name, command=None):
         if self._tearing_down:
             return
+        self._embedded_tool_name = tool_name
+        if command is not None:
+            self._embedded_tool = command
         self.current_tool = tool_name
         self._refresh_task_panel_status()
 
-    def _on_embedded_command_finished(self, tool_name):
+    def _on_embedded_command_finished(self, tool_name, command=None):
         if self._tearing_down:
             return
+        if command is None or self._embedded_tool is command:
+            self._embedded_host = None
+            self._embedded_tool = None
+            self._embedded_tool_name = None
         if self.current_tool == tool_name:
             self.current_tool = "Select"
             self._refresh_task_panel_status()
 
     def activate_select_tool(self):
-        if self._has_active_move_tool():
-            self._cancel_move_tool()
+        if self._has_active_embedded_tool():
+            self._cancel_embedded_tool()
         self._cancel_wall_edit()
 
     def activate_wall_tool(self):
         from bimcommands import BimWall
 
-        self.current_tool = "Wall"
         self._cancel_wall_edit()
         self._cancel_pending_edit()
         self.selected_wall = None
@@ -425,24 +448,50 @@ class PlanEditSession:
             FreeCADGui.Selection.clearSelection()
         except (ReferenceError, RuntimeError):
             pass
-        self._refresh_task_panel_status()
-        self._wall_command = BimWall.Arch_Wall()
-        self._wall_host = _PlanEditWallHost(self, self._wall_command)
-        self._wall_command.Activated(host=self._wall_host)
+        self._start_embedded_tool("Wall", BimWall.Arch_Wall(), host_class=_PlanEditWallHost)
 
     def activate_move_tool(self):
         from draftguitools import gui_move
 
-        self.current_tool = "Move"
-        if self._has_active_move_tool():
-            self._cancel_move_tool()
         self._cancel_wall_edit()
         self._cancel_pending_edit()
         self._clear_wall_grips()
-        self._refresh_task_panel_status()
-        self._move_command = gui_move.Move()
-        self._move_host = _PlanEditCommandHost(self, "Move", self._move_command)
-        self._move_command.Activated(host=self._move_host)
+        self._start_embedded_tool("Move", gui_move.Move())
+
+    def activate_join_tool(self):
+        import Draft
+
+        selection = []
+        try:
+            selection = FreeCADGui.Selection.getSelection()
+        except (ReferenceError, RuntimeError):
+            selection = []
+
+        if not selection:
+            FreeCAD.Console.PrintWarning(
+                translate("BIM_PlanEdit", "Select objects to join before using Join.\n")
+            )
+            return
+
+        if self._has_active_embedded_tool():
+            self._cancel_embedded_tool()
+        self._cancel_wall_edit()
+        self._cancel_pending_edit()
+        self._clear_wall_grips()
+
+        if all(Draft.getType(obj) == "Wall" for obj in selection):
+            from bimcommands import BimArchUtils
+
+            self.current_tool = "Join"
+            self._refresh_task_panel_status()
+            BimArchUtils.Arch_MergeWalls().Activated()
+            self.current_tool = "Select"
+            self._refresh_selected_wall()
+            return
+
+        from draftguitools import gui_join
+
+        self._start_embedded_tool("Join", gui_join.Join())
 
     def stretch_selected_wall(self, endpoint):
         self._start_wall_edit(endpoint)
@@ -496,6 +545,9 @@ class PlanEditSession:
     def restore_state(self):
         import WorkingPlane
 
+        self._restore_object_view_state()
+        self._restore_snap_profile()
+
         if self.viewer:
             try:
                 self.viewer.setOverrideMode("As Is")
@@ -547,6 +599,139 @@ class PlanEditSession:
             "background3": _unsigned_to_rgb(params.GetUnsigned("BackgroundColor3", 2880160255)),
             "background4": _unsigned_to_rgb(params.GetUnsigned("BackgroundColor4", 1869583359)),
         }
+
+    def _apply_plan_snap_profile(self):
+        snapper = getattr(FreeCADGui, "Snapper", None)
+        if not snapper or not hasattr(snapper, "push_snap_modes"):
+            return
+        try:
+            snapper.push_snap_modes(_PLAN_EDIT_SNAP_SET)
+        except Exception:
+            pass
+
+    def _restore_snap_profile(self):
+        snapper = getattr(FreeCADGui, "Snapper", None)
+        if not snapper or not hasattr(snapper, "pop_snap_modes"):
+            return
+        try:
+            snapper.pop_snap_modes()
+        except Exception:
+            pass
+
+    def _capture_object_view_state(self):
+        self._saved_object_view_state = {}
+        if not self.doc:
+            return
+        for obj in self.doc.Objects:
+            view_object = getattr(obj, "ViewObject", None)
+            if not view_object:
+                continue
+            state = {}
+            for prop in ("Visibility", "Transparency", "Selectable"):
+                if hasattr(view_object, prop):
+                    try:
+                        state[prop] = getattr(view_object, prop)
+                    except Exception:
+                        pass
+            if state:
+                self._saved_object_view_state[obj.Name] = state
+
+    def _restore_object_view_state(self):
+        if not self.doc or not self._saved_object_view_state:
+            return
+        for obj_name, state in self._saved_object_view_state.items():
+            obj = self.doc.getObject(obj_name)
+            if not obj:
+                continue
+            view_object = getattr(obj, "ViewObject", None)
+            if not view_object:
+                continue
+            for prop, value in state.items():
+                if hasattr(view_object, prop):
+                    try:
+                        setattr(view_object, prop, value)
+                    except Exception:
+                        pass
+
+    def _is_storey_object(self, obj):
+        if not obj:
+            return False
+        if getattr(obj, "IfcType", "") == "Building Storey":
+            return True
+        try:
+            import Draft
+
+            return Draft.getType(obj) == "Floor"
+        except Exception:
+            return False
+
+    def _get_object_storeys(self, obj):
+        if not obj:
+            return []
+        storeys = []
+        seen = set()
+        parents = list(getattr(obj, "InListRecursive", []) or getattr(obj, "InList", []))
+        if self._is_storey_object(obj):
+            parents.insert(0, obj)
+        for parent in parents:
+            if not parent or parent.Name in seen:
+                continue
+            seen.add(parent.Name)
+            if self._is_storey_object(parent):
+                storeys.append(parent)
+        return storeys
+
+    def _apply_storey_visibility(self):
+        if not self.doc or not self._saved_object_view_state:
+            return
+
+        active_storey_name = getattr(self.active_storey, "Name", None)
+
+        if active_storey_name is None:
+            self._restore_object_view_state()
+            return
+
+        for obj in self.doc.Objects:
+            view_object = getattr(obj, "ViewObject", None)
+            state = self._saved_object_view_state.get(obj.Name)
+            if not view_object or not state:
+                continue
+
+            storeys = self._get_object_storeys(obj)
+            if not storeys:
+                for prop, value in state.items():
+                    if hasattr(view_object, prop):
+                        try:
+                            setattr(view_object, prop, value)
+                        except Exception:
+                            pass
+                continue
+
+            belongs_to_active = any(parent.Name == active_storey_name for parent in storeys)
+            if belongs_to_active:
+                for prop, value in state.items():
+                    if hasattr(view_object, prop):
+                        try:
+                            setattr(view_object, prop, value)
+                        except Exception:
+                            pass
+                continue
+
+            if hasattr(view_object, "Visibility"):
+                try:
+                    view_object.Visibility = state.get("Visibility", True)
+                except Exception:
+                    pass
+            if hasattr(view_object, "Transparency"):
+                try:
+                    view_object.Transparency = max(int(state.get("Transparency", 0)), 85)
+                except Exception:
+                    pass
+            if hasattr(view_object, "Selectable"):
+                try:
+                    view_object.Selectable = False
+                except Exception:
+                    pass
 
     def _set_active_object(self, obj):
         context = "Arch"
@@ -650,6 +835,17 @@ class PlanEditSession:
             self._sync_wall_grips()
         self._refresh_task_panel_status()
 
+    def _start_embedded_tool(self, tool_name, command, host_class=_PlanEditCommandHost):
+        self.current_tool = tool_name
+        self._refresh_task_panel_status()
+        self._embedded_tool = command
+        self._embedded_tool_name = tool_name
+        if host_class is _PlanEditWallHost:
+            self._embedded_host = host_class(self, command)
+        else:
+            self._embedded_host = host_class(self, tool_name, command)
+        command.Activated(host=self._embedded_host)
+
     def _cancel_pending_edit(self):
         if self._tearing_down:
             self._restore_edit_wall_visibility()
@@ -660,10 +856,9 @@ class PlanEditSession:
             self._preview_points = None
             self._dragging_grip = False
             self._ignore_selection_changes = False
-            self._wall_host = None
-            self._wall_command = None
-            self._move_host = None
-            self._move_command = None
+            self._embedded_host = None
+            self._embedded_tool = None
+            self._embedded_tool_name = None
             return
         self._stop_snapper()
         FreeCAD.activeDraftCommand = None
@@ -675,10 +870,9 @@ class PlanEditSession:
         self._preview_points = None
         self._dragging_grip = False
         self._ignore_selection_changes = False
-        self._wall_host = None
-        self._wall_command = None
-        self._move_host = None
-        self._move_command = None
+        self._embedded_host = None
+        self._embedded_tool = None
+        self._embedded_tool_name = None
         self._sync_wall_grips()
 
     def _stop_snapper(self):
@@ -692,17 +886,30 @@ class PlanEditSession:
             pass
 
     def _has_active_wall_edit(self):
-        return self._edit_wall is not None or self._dragging_grip or self._wall_command is not None
+        return (
+            self._edit_wall is not None
+            or self._dragging_grip
+            or self._embedded_tool_name == "Wall"
+        )
 
-    def _has_active_move_tool(self):
-        return self._move_command is not None
+    def _has_active_embedded_tool(self):
+        return self._embedded_tool is not None
 
-    def _cancel_move_tool(self):
-        if self._tearing_down or self._move_command is None:
+    def _cancel_embedded_tool(self, tool_name=None):
+        if self._tearing_down or self._embedded_tool is None:
             return
-        if hasattr(self._move_command, "finish"):
+        if tool_name is not None and self._embedded_tool_name != tool_name:
+            return
+        tool = self._embedded_tool
+        if hasattr(tool, "cancel_interactive"):
             try:
-                self._move_command.finish(cont=False)
+                tool.cancel_interactive()
+                return
+            except Exception:
+                pass
+        if hasattr(tool, "finish"):
+            try:
+                tool.finish(cont=False)
             except Exception:
                 pass
 
@@ -726,15 +933,7 @@ class PlanEditSession:
         return True
 
     def _cancel_wall_subtool(self):
-        if self._tearing_down or self._wall_command is None:
-            return
-
-        if hasattr(self._wall_command, "cancel_interactive"):
-            try:
-                self._wall_command.cancel_interactive()
-                return
-            except Exception:
-                pass
+        self._cancel_embedded_tool("Wall")
 
     def _start_wall_edit(self, mode):
         if not self.is_selected_wall_baseless():
@@ -1349,14 +1548,17 @@ class PlanEditDockWidget:
         self.select_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Select"))
         self.wall_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Wall"))
         self.move_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Move"))
+        self.join_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Join"))
         self.reapply_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Reapply View"))
         self.select_button.clicked.connect(self.on_select_clicked)
         self.wall_button.clicked.connect(self.on_wall_clicked)
         self.move_button.clicked.connect(self.on_move_clicked)
+        self.join_button.clicked.connect(self.on_join_clicked)
         self.reapply_button.clicked.connect(self.on_reapply_clicked)
         buttons.addWidget(self.select_button)
         buttons.addWidget(self.wall_button)
         buttons.addWidget(self.move_button)
+        buttons.addWidget(self.join_button)
         buttons.addWidget(self.reapply_button)
         layout.addLayout(buttons)
 
@@ -1465,6 +1667,7 @@ class PlanEditDockWidget:
         self.select_button = None
         self.wall_button = None
         self.move_button = None
+        self.join_button = None
         self.reapply_button = None
         self.stretch_start_button = None
         self.stretch_end_button = None
@@ -1557,6 +1760,9 @@ class PlanEditDockWidget:
 
     def on_move_clicked(self):
         self.session.activate_move_tool()
+
+    def on_join_clicked(self):
+        self.session.activate_join_tool()
 
     def on_reapply_clicked(self):
         self.session.apply_plan_view(fit=False)
