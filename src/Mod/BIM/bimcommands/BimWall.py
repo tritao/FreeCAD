@@ -223,7 +223,22 @@ class Arch_Wall:
         )
 
     def _get_interaction_wp(self):
-        return getattr(self, "_plane", None)
+        plane = getattr(self, "_plane", None)
+        if plane is not None:
+            return plane
+
+        wp = getattr(self, "wp", None)
+        if wp is None:
+            try:
+                wp = self._get_host().get_working_plane()
+            except Exception:
+                wp = None
+        if wp is None:
+            return None
+
+        plane = self._sanitize_working_plane(self._make_snapshot_plane(wp))
+        self._plane = plane
+        return plane
 
     def _project_to_working_plane(self, point):
         return self._get_host().project_point(point, self._get_interaction_wp())
@@ -678,6 +693,7 @@ class Arch_Wall:
                     and wall_obj.Base
                     and ArchWall.areSameWallTypes([wall_obj, oldWall])
                 ):
+                    FreeCADGui.doCommand("import Arch")
                     FreeCADGui.doCommand(
                         f"Arch.joinWalls([FreeCAD.ActiveDocument.{wall_obj.Name}, FreeCAD.ActiveDocument.{oldWall.Name}], delete=True, deletebase=True)"
                     )
@@ -691,6 +707,7 @@ class Arch_Wall:
                         FreeCADGui.doCommand(
                             f"FreeCAD.ActiveDocument.{wallGrp.Name}.removeObject(FreeCAD.ActiveDocument.{wall_obj.Name})"
                         )
+                    FreeCADGui.doCommand("import Arch")
                     FreeCADGui.doCommand(
                         f"Arch.addComponents(FreeCAD.ActiveDocument.{wall_obj.Name}, FreeCAD.ActiveDocument.{oldWall.Name})"
                     )
@@ -726,17 +743,23 @@ class Arch_Wall:
         if not hasattr(self, "baseline_mode"):
             self.baseline_mode = WallBaselineMode(params.get_param("WallBaseline", path="Mod/BIM"))
 
+        align = getattr(self, "Align", "Center")
+        width = getattr(self, "Width", params.get_param_arch("WallWidth"))
+        height = getattr(self, "Height", params.get_param_arch("WallHeight"))
+        offset = getattr(self, "Offset", params.get_param_arch("WallOffset"))
+        material = getattr(self, "MultiMat", None)
+
         # Create the wall object (either baseless or from a baseline)
         wall_obj = None
         if self.baseline_mode == WallBaselineMode.NONE:
             wall_obj = create_baseless_wall_from_endpoints(
                 self.points[0],
                 self.points[1],
-                width=self.Width,
-                height=self.Height,
-                align=self.Align,
-                offset=self.Offset,
-                material=self.MultiMat,
+                width=width,
+                height=height,
+                align=align,
+                offset=offset,
+                material=material,
                 auto_group=True,
                 on_created=self._get_host().on_created_object,
             )
