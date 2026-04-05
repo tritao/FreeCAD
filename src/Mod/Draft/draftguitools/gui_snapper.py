@@ -180,7 +180,9 @@ class Snapper:
         # is too slow for this function which gets called repeatedly when moving
         # the mouse
         # See: https://github.com/FreeCAD/FreeCAD/issues/24013
-        return WorkingPlane.get_working_plane(update=False)
+        return getattr(self, "interaction_plane", None) or WorkingPlane.get_working_plane(
+            update=False
+        )
 
     def init_active_snaps(self):
         """
@@ -1334,6 +1336,7 @@ class Snapper:
         self.mask = None
         self.selectMode = False
         self.running = False
+        self.interaction_plane = None
         self.holdPoints = []
         self.lastObj = []
         self.lastObjSubelements = []
@@ -1497,6 +1500,7 @@ class Snapper:
         mode="point",
         hints=None,
         modifier_resolver=None,
+        interaction_plane=None,
     ):
         """Get a 3D point from the screen.
 
@@ -1551,6 +1555,13 @@ class Snapper:
 
         self.pt = None
         self.holdPoints = []
+        self.interaction_plane = interaction_plane
+        # Point requests should start from a clean constraint state. Otherwise
+        # stale mask/affinity/basepoint values from a previous command can
+        # distort the first preview frame of the next interactive request.
+        self.unconstrain()
+        self.mask = None
+        self.constraintAxis = None
         self.ui = Gui.draftToolBar
         self.view = gui_utils.get_3d_view()
 

@@ -191,7 +191,7 @@ class Tracker:
             ]
 
     def _get_wp(self):
-        return FreeCAD.DraftWorkingPlane
+        return getattr(self, "working_plane", None) or FreeCAD.DraftWorkingPlane
 
 
 class snapTracker(Tracker):
@@ -1562,8 +1562,8 @@ class boxTracker(Tracker):
         w = coin.SoDrawStyle()
         w.style = coin.SoDrawStyle.LINES
         self.cube = coin.SoCube()
-        self.cube.height.setValue(width)
-        self.cube.depth.setValue(height)
+        self.cube.height.setValue(float(width))
+        self.cube.depth.setValue(float(height))
         self.baseline = None
         if line:
             self.baseline = line
@@ -1589,7 +1589,7 @@ class boxTracker(Tracker):
             bp = self.baseline.Shape.Edges[0].Vertexes[0].Point
         else:
             return
-        self.cube.width.setValue(lvec.Length)
+        self.cube.width.setValue(float(lvec.Length))
         bp = bp.add(lvec.multiply(0.5))
         bp = bp.add(DraftVecUtils.scaleTo(normal, self.cube.depth.getValue() / 2.0))
         self.pos(bp)
@@ -1612,21 +1612,21 @@ class boxTracker(Tracker):
     def width(self, w=None):
         """Set the width."""
         if w:
-            self.cube.height.setValue(w)
+            self.cube.height.setValue(float(w))
         else:
             return self.cube.height.getValue()
 
     def length(self, l=None):
         """Set the length."""
         if l:
-            self.cube.width.setValue(l)
+            self.cube.width.setValue(float(l))
         else:
             return self.cube.width.getValue()
 
     def height(self, h=None):
         """Set the height."""
         if h:
-            self.cube.depth.setValue(h)
+            self.cube.depth.setValue(float(h))
             self.update()
         else:
             return self.cube.depth.getValue()
