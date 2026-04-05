@@ -55,6 +55,12 @@ class TestArchBaseGui(TestArchBase):
         The workbench is already activated by setUpClass.
         """
         super().setUp()
+        if FreeCAD.GuiUp:
+            FreeCAD.setActiveDocument(self.doc_name)
+            try:
+                FreeCADGui.ActiveDocument = FreeCADGui.getDocument(self.doc_name)
+            except Exception:
+                pass
 
     def tearDown(self):
         """
