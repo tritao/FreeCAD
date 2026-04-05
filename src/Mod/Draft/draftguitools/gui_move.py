@@ -63,10 +63,12 @@ class Move(gui_base_original.Modifier):
             ),
         }
 
-    def Activated(self):
+    def Activated(self, host=None):
         """Execute when the command is called."""
         super().Activated(
-            name="Move", is_subtool=isinstance(App.activeDraftCommand, SubelementHighlight)
+            name="Move",
+            is_subtool=isinstance(App.activeDraftCommand, SubelementHighlight),
+            host=host,
         )
         if not self.ui:
             return

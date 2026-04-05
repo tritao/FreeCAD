@@ -42,6 +42,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 import DraftVecUtils
 import WorkingPlane
+from draftguitools import gui_base
 from draftguitools import gui_tool_utils
 from draftguitools import gui_trackers as trackers
 from draftutils import gui_utils
@@ -73,12 +74,13 @@ class DraftTool:
 
     def __init__(self):
         self.commitList = []
+        self.host = None
 
     def IsActive(self):
         """Return True when this command should be available."""
         return bool(gui_utils.get_3d_view())
 
-    def Activated(self, name="None", is_subtool=False):
+    def Activated(self, name="None", is_subtool=False, host=None):
         """Execute when the command is called.
 
         If an active Gui Command exists, it will call the `finish` method
@@ -104,7 +106,8 @@ class DraftTool:
         """
         if App.activeDraftCommand and not is_subtool:
             App.activeDraftCommand.finish()
-        App.activeDraftCommand = self
+        self.host = host or gui_base.DraftInteractionHost(self)
+        self.host.activate_command(self)
 
         # The Part module is first initialized when using any Gui Command
         # for the first time.
@@ -122,11 +125,12 @@ class DraftTool:
         self.point = None
         self.pos = []
         self.support = None
-        self.ui = Gui.draftToolBar
-        self.ui.mouse = True  # reset mouse movement
-        self.ui.sourceCmd = self
+        self.ui = self.host.get_ui()
+        if self.ui:
+            self.ui.mouse = True  # reset mouse movement
+            self.ui.sourceCmd = self
         self.view = gui_utils.get_3d_view()
-        self.wp = WorkingPlane.get_working_plane()
+        self.wp = self.host.get_working_plane()
 
         self.planetrack = None
         if params.get_param("showPlaneTracker"):
@@ -175,15 +179,26 @@ class DraftTool:
         and the list will be set to empty.
         """
         self.node = []
-        App.activeDraftCommand = None
+        if self.host:
+            self.host.deactivate_command(self)
+        else:
+            App.activeDraftCommand = None
         if self.ui:
-            self.ui.offUi()
-            self.ui.sourceCmd = None
-        if hasattr(Gui, "Snapper"):
+            if self.host:
+                self.host.clear_ui_state()
+            else:
+                self.ui.offUi()
+                self.ui.sourceCmd = None
+        if self.host:
+            self.host.stop_point_request()
+        elif hasattr(Gui, "Snapper"):
             Gui.Snapper.off()
         if self.planetrack:
             self.planetrack.finalize()
-        self.wp._restore()
+        if self.host:
+            self.host.restore_working_plane(self.wp)
+        else:
+            self.wp._restore()
         if self.commitList:
             last_cmd = self.commitList[-1][1][-1]
             if last_cmd.find("recompute") >= 0:
@@ -262,7 +277,7 @@ class Creator(DraftTool):
     of this class.
     """
 
-    def Activated(self, name="None"):
+    def Activated(self, name="None", host=None):
         """Execute when the command is called.
 
         Parameters
@@ -271,7 +286,7 @@ class Creator(DraftTool):
             It defaults to `'None'`.
             It is the `featureName` of the object, to know what is being run.
         """
-        super().Activated(name)
+        super().Activated(name, host=host)
         # call _save to sync with _restore called in finish method
         self.wp._save()
         self.support = gui_tool_utils.get_support()
@@ -305,8 +320,8 @@ class Modifier(DraftTool):
         self.copymode = False
         self.selection_done = False
 
-    def Activated(self, name="None", is_subtool=False):
-        super().Activated(name, is_subtool)
+    def Activated(self, name="None", is_subtool=False, host=None):
+        super().Activated(name, is_subtool, host=host)
         # call _save to sync with _restore called in finish method
         self.wp._save()
         self.selection_done = False
