@@ -36,11 +36,129 @@ from PySide import QtCore
 
 import FreeCAD as App
 import FreeCADGui as Gui
+import WorkingPlane
 from draftguitools import gui_trackers as trackers
 from draftutils import gui_utils
 from draftutils import params
 from draftutils import todo
 from draftutils.messages import _toolmsg, _log
+
+
+class DraftInteractionHost:
+    """Shared host adapter for commands that use Draft interactive services.
+
+    This keeps point acquisition, task UI ownership, working-plane access and
+    command activation in one place so commands can later be embedded in other
+    hosts without having to rewrite their internal state machines.
+    """
+
+    def __init__(self, command=None):
+        self.command = command
+
+    def activate_command(self, command=None):
+        if command is not None:
+            self.command = command
+        App.activeDraftCommand = self.command
+
+    def deactivate_command(self, command=None):
+        target = command or self.command
+        if App.activeDraftCommand is target:
+            App.activeDraftCommand = None
+
+    def get_working_plane(self):
+        return WorkingPlane.get_working_plane()
+
+    def project_point(self, point, working_plane=None):
+        if point is None:
+            return None
+        wp = working_plane or self.get_working_plane()
+        if not wp or not hasattr(wp, "project_point"):
+            return point
+        try:
+            return wp.project_point(point)
+        except Exception:
+            return point
+
+    def create_box_tracker(self):
+        return trackers.boxTracker()
+
+    def request_point(
+        self,
+        callback,
+        move_callback=None,
+        last=None,
+        title=None,
+        mode=None,
+        extra_widget=None,
+    ):
+        if not hasattr(Gui, "Snapper"):
+            return
+
+        kwargs = {
+            "callback": callback,
+        }
+        if move_callback is not None:
+            kwargs["movecallback"] = move_callback
+        if last is not None:
+            kwargs["last"] = last
+        if title is not None:
+            kwargs["title"] = title
+        if mode is not None:
+            kwargs["mode"] = mode
+        if extra_widget is not None:
+            kwargs["extradlg"] = extra_widget
+        Gui.Snapper.getPoint(**kwargs)
+
+    def stop_point_request(self):
+        snapper = getattr(Gui, "Snapper", None)
+        if not snapper:
+            return
+        try:
+            if hasattr(snapper, "cancelPointRequest"):
+                snapper.cancelPointRequest()
+            else:
+                snapper.getPoint()
+                snapper.off()
+        except Exception:
+            pass
+
+    def clear_ui_state(self):
+        toolbar = getattr(Gui, "draftToolBar", None)
+        if not toolbar:
+            return
+
+        try:
+            toolbar.offUi()
+        except Exception:
+            pass
+
+        try:
+            toolbar.cancel = None
+            toolbar.sourceCmd = None
+            toolbar.pointcallback = None
+            toolbar.mask = None
+            toolbar.isTaskOn = False
+        except Exception:
+            pass
+
+    def show_continue(self):
+        toolbar = getattr(Gui, "draftToolBar", None)
+        if toolbar and hasattr(toolbar, "continueCmd"):
+            try:
+                toolbar.continueCmd.show()
+            except Exception:
+                pass
+
+    def continue_mode_enabled(self):
+        toolbar = getattr(Gui, "draftToolBar", None)
+        return bool(getattr(toolbar, "continueMode", False))
+
+    def reset_edit(self):
+        if Gui.ActiveDocument:
+            try:
+                Gui.ActiveDocument.resetEdit()
+            except Exception:
+                pass
 
 
 class GuiCommandSimplest:
