@@ -27,6 +27,7 @@
 import FreeCAD
 import FreeCADGui
 from enum import Enum
+from draftguitools import gui_base
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -80,25 +81,32 @@ class Arch_Wall:
         self.Length = None
         self._point_request_active = False
 
-    def _cancel_point_request(self):
-        if not self._point_request_active:
-            return
+    def _get_host(self):
+        host = getattr(self, "host", None)
+        if host is None:
+            host = gui_base.DraftInteractionHost(self)
+            self.host = host
+        return host
 
-        FreeCADGui.Snapper.cancelPointRequest()
-        self._point_request_active = False
+    def _clear_draft_ui_state(self):
+        self._get_host().clear_ui_state()
+
+    def _stop_snapper(self):
+        self._get_host().stop_point_request()
 
     def _project_to_working_plane(self, point):
-        if point is None:
-            return None
+        return self._get_host().project_point(point, getattr(self, "wp", None))
 
-        wp = getattr(self, "wp", None)
-        if not wp or not hasattr(wp, "project_point"):
-            return point
-
-        try:
-            return wp.project_point(point)
-        except Exception:
-            return point
+    def _request_point(self, title, move_callback=None, last=None, mode=None, hints=None):
+        self._get_host().request_point(
+            callback=self.getPoint,
+            move_callback=move_callback,
+            last=last,
+            title=title,
+            mode=mode,
+            extra_widget=self.taskbox(),
+            hints=hints,
+        )
 
     def _teardown_interactive(self):
 
@@ -108,17 +116,13 @@ class Arch_Wall:
             tracker.finalize()
         self.tracker = None
 
-        if self.wp is not None:
-            self.wp._restore()
+        self._get_host().restore_working_plane(self.wp)
+        self._stop_snapper()
+        self._clear_draft_ui_state()
 
-        self._cancel_point_request()
-        FreeCADGui.Snapper.off()
+        self._get_host().reset_edit()
 
-        gui_doc = FreeCADGui.ActiveDocument
-        if gui_doc and gui_doc.getInEdit() is not None:
-            gui_doc.resetEdit()
-
-        FreeCAD.activeDraftCommand = None
+        self._get_host().deactivate_command(self)
         self._reset_interactive_state()
 
     def cancel_interactive(self):
@@ -135,7 +139,7 @@ class Arch_Wall:
         del cont, closed
         self.cancel_interactive()
 
-    def Activated(self):
+    def Activated(self, host=None):
         """Executed when Arch Wall is called.
 
         Creates a wall from the object selected by the user. If no objects are
@@ -144,11 +148,10 @@ class Arch_Wall:
         """
 
         import Draft
-        import WorkingPlane
         from draftutils import params
-        import draftguitools.gui_trackers as DraftTrackers
 
         self.doc = FreeCAD.ActiveDocument
+        self.host = host or gui_base.DraftInteractionHost(self)
         self.Align = ["Center", "Left", "Right"][params.get_param_arch("WallAlignment")]
         self.MultiMat = None
         self.Length = None
@@ -201,19 +204,17 @@ class Arch_Wall:
 
         # interactive mode
 
-        FreeCAD.activeDraftCommand = self  # register as a Draft command for auto grid on/off
-        self.wp = WorkingPlane.get_working_plane()
-        self.wp._save()
+        self._get_host().activate_command(self)
         self.points = []
-        self.tracker = DraftTrackers.boxTracker()
-        FreeCADGui.Snapper.getPoint(
-            callback=self.getPoint,
-            extradlg=self.taskbox(),
+        self.wp = self._get_host().get_working_plane()
+        self.wp._save()
+        self.tracker = self._get_host().create_box_tracker()
+        self._request_point(
             title=translate("Arch", "First Point of Wall"),
             hints=self.get_hints(),
         )
         self._point_request_active = True
-        FreeCADGui.draftToolBar.continueCmd.show()
+        self._get_host().show_continue()
 
     def get_hints(self):
         """Return status bar input hints for the current tool state."""
@@ -258,11 +259,9 @@ class Arch_Wall:
             self.tracker.width(self.Width)
             self.tracker.height(self.Height)
             self.tracker.on()
-            FreeCADGui.Snapper.getPoint(
+            self._request_point(
                 last=self.points[0],
-                callback=self.getPoint,
-                movecallback=self.update,
-                extradlg=self.taskbox(),
+                move_callback=self.update,
                 title=translate("Arch", "Next point"),
                 mode="line",
                 hints=self.get_hints(),
@@ -465,10 +464,9 @@ class Arch_Wall:
         tracker = self.tracker
         if tracker is not None:
             tracker.off()
-
-        self.wp._restore()
-        FreeCAD.activeDraftCommand = None
-        FreeCADGui.Snapper.off()
+        self._get_host().restore_working_plane(self.wp)
+        self._get_host().deactivate_command(self)
+        self._stop_snapper()
 
         p0 = self.wp.get_local_coords(self.points[0])
         p1 = self.wp.get_local_coords(self.points[1])
@@ -499,8 +497,8 @@ class Arch_Wall:
             tracker.finalize()
         self.tracker = None
         self._reset_interactive_state()
-        if FreeCADGui.draftToolBar.continueMode:
-            self.Activated()
+        if self._get_host().continue_mode_enabled():
+            self.Activated(host=self._get_host())
 
     def update(self, point, info):
         # info parameter is not used but needed for compatibility with the snapper
