@@ -2,7 +2,7 @@
 
 # ***************************************************************************
 # *                                                                         *
-# *   Copyright (c) 2013 Yorik van Havre <yorik@uncreated.net>              *
+# *   Copyright (c) 2026 FreeCAD contributors                               *
 # *                                                                         *
 # *   This file is part of FreeCAD.                                         *
 # *                                                                         *
@@ -22,15 +22,24 @@
 # *                                                                         *
 # ***************************************************************************
 
-"""Import all Arch module unit tests in GUI mode."""
+"""GUI regressions for footprint display data."""
 
-from bimtests.TestArchImportersGui import TestArchImportersGui
-from bimtests.TestArchAxisGui import TestArchAxisGui
-from bimtests.TestArchBuildingPartGui import TestArchBuildingPartGui
-from bimtests.TestArchStairsGui import TestArchStairsGui
-from bimtests.TestArchFootprintGui import TestArchFootprintGui
-from bimtests.TestArchReportGui import TestArchReportGui
-from bimtests.TestArchSiteGui import TestArchSiteGui
-from bimtests.TestArchWallGui import TestArchWallGui
-from bimtests.TestWebGLExportGui import TestWebGLExportGui
-from bimtests.TestArchCoveringGui import TestArchCoveringGui
+import Arch
+from bimtests import TestArchBaseGui
+
+
+class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
+
+    def test_new_wall_populates_footprint_display_data(self):
+        """New walls should populate their footprint nodes on shape update."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        proxy = wall.ViewObject.Proxy
+        self.assertIn("Footprint", wall.ViewObject.listDisplayModes())
+        self.assertTrue(hasattr(proxy, "fcoords"))
+        self.assertTrue(hasattr(proxy, "fset"))
+        self.assertGreater(proxy.fcoords.point.getNum(), 0)
+        self.assertGreater(proxy.fset.coordIndex.getNum(), 0)

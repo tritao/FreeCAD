@@ -821,6 +821,8 @@ class _Wall(ArchComponent.Component):
             bb = shape.BoundBox
             if bb.ZLength > 0.001:
                 cut_height = params.get_param_arch("FootprintCutHeight")
+                if cut_height is None:
+                    cut_height = 1000.0
                 cut_z = max(bb.ZMin + 0.001, min(bb.ZMax - 0.001, bb.ZMin + cut_height))
                 cut_plane = Part.makePlane(1, 1)
                 cut_plane.translate(FreeCAD.Vector(bb.Center.x, bb.Center.y, cut_z))

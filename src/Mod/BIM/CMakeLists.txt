@@ -261,6 +261,7 @@ SET(bimtests_SRCS
     bimtests/TestArchTruss.py
     bimtests/TestWebGLExport.py
     bimtests/TestWebGLExportGui.py
+    bimtests/TestArchFootprintGui.py
     bimtests/TestArchImportersGui.py
     bimtests/TestArchBuildingPartGui.py
     bimtests/TestArchStairsGui.py
