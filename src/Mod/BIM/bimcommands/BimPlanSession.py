@@ -118,6 +118,23 @@ def _make_plan_background_state(state):
     }
 
 
+def _copy_plane(plane):
+    import WorkingPlane
+
+    if plane is None:
+        return None
+
+    def _copy_vec(vec):
+        return FreeCAD.Vector(vec.x, vec.y, vec.z)
+
+    return WorkingPlane.PlaneBase(
+        _copy_vec(plane.u),
+        _copy_vec(plane.v),
+        _copy_vec(plane.axis),
+        _copy_vec(plane.position),
+    )
+
+
 def get_active_session():
     return _active_session
 
@@ -136,7 +153,15 @@ def start_session():
 
 
 class _PlanEditWallHost(gui_base.DraftInteractionHost):
-    """Embedded Draft-style host for wall creation inside Plan Edit."""
+    """Embedded Draft-style host for wall creation inside Plan Edit.
+
+    This host overrides the generic interaction policy hooks from
+    `DraftInteractionHost` so plan wall creation can:
+    - avoid task widgets
+    - keep ortho on by default
+    - use `Shift` as a temporary free-angle override
+    - continue chained wall runs from the last endpoint
+    """
 
     def __init__(self, session, command=None):
         super().__init__(command)
@@ -150,6 +175,12 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
         super().deactivate_command(command)
         self.session._on_embedded_command_finished("Wall", command or self.command)
 
+    def get_working_plane(self):
+        return self.session.get_interaction_plane()
+
+    def get_interaction_plane(self):
+        return self.session.get_interaction_plane()
+
     def request_point(
         self,
         callback,
@@ -158,6 +189,8 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
         title=None,
         mode=None,
         extra_widget=None,
+        hints=None,
+        modifier_resolver=None,
     ):
         del extra_widget
         super().request_point(
@@ -167,6 +200,8 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
             title=title,
             mode=mode,
             extra_widget=None,
+            hints=hints,
+            modifier_resolver=modifier_resolver,
         )
 
     def clear_ui_state(self):
@@ -180,6 +215,9 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
 
     def continue_mode_enabled(self):
         return False
+
+    def continue_wall_chain_enabled(self):
+        return True
 
     def supports_extra_widget(self):
         return False
@@ -257,6 +295,7 @@ class PlanEditSession:
         self._saved_background = None
         self._saved_object_view_state = {}
         self._working_plane = None
+        self._interaction_plane = None
         self._embedded_host = None
         self._embedded_tool = None
         self._embedded_tool_name = None
@@ -298,9 +337,7 @@ class PlanEditSession:
         panel.refresh()
         panel.show()
         panel.raise_()
-        FreeCAD.Console.PrintMessage(
-            translate("BIM_PlanEdit", "Entered BIM Plan Edit mode.\n")
-        )
+        FreeCAD.Console.PrintMessage(translate("BIM_PlanEdit", "Entered BIM Plan Edit mode.\n"))
         return True
 
     def finish(self, cont=False, close_dialog=True, closed=False):
@@ -323,6 +360,17 @@ class PlanEditSession:
         self._clear_wall_grips()
         self._detach_selection_observer()
         self._unregister_edit_callbacks()
+
+    def _document_is_alive(self):
+        doc = self.doc
+        if not doc:
+            return False
+        try:
+            _ = doc.Name
+            return True
+        except Exception:
+            self.doc = None
+            return False
 
     def _discard_runtime_references(self):
         self.doc = None
@@ -348,6 +396,8 @@ class PlanEditSession:
         self._finishing = True
 
         try:
+            if not self._document_is_alive():
+                self.begin_teardown()
             teardown = teardown or self._tearing_down
             panel = self.task_panel
             self.task_panel = None
@@ -548,6 +598,13 @@ class PlanEditSession:
         wp = WorkingPlane.get_working_plane(update=False)
         offset = self.get_storey_elevation(self.active_storey) if self.active_storey else 0.0
         wp.set_to_top(offset=offset)
+        if hasattr(wp, "_update_all"):
+            wp._update_all(_hist_add=False)
+        # Keep a dedicated immutable-like plan plane for embedded tools instead
+        # of reusing Draft's live PlaneGui state, which can be mutated by other
+        # Draft UI paths during interaction.
+        self._interaction_plane = WorkingPlane.PlaneBase()
+        self._interaction_plane.set_to_top(offset=offset)
 
         if self.active_storey:
             self._set_active_object(self.active_storey)
@@ -563,6 +620,7 @@ class PlanEditSession:
 
         self._restore_object_view_state()
         self._restore_snap_profile()
+        self._interaction_plane = None
 
         if self.viewer:
             try:
@@ -603,6 +661,13 @@ class PlanEditSession:
         self._working_plane = WorkingPlane.get_working_plane(update=False)
         if hasattr(self._working_plane, "save"):
             self._working_plane.save()
+
+    def get_interaction_plane(self):
+        import WorkingPlane
+
+        if self._interaction_plane is not None:
+            return _copy_plane(self._interaction_plane)
+        return WorkingPlane.get_working_plane(update=False)
 
     def _capture_background_state(self):
         params = _view_param_group()
@@ -655,8 +720,18 @@ class PlanEditSession:
     def _restore_object_view_state(self):
         if not self.doc or not self._saved_object_view_state:
             return
+        try:
+            doc = self.doc
+            _ = doc.Name
+        except Exception:
+            self.doc = None
+            return
         for obj_name, state in self._saved_object_view_state.items():
-            obj = self.doc.getObject(obj_name)
+            try:
+                obj = doc.getObject(obj_name)
+            except Exception:
+                self.doc = None
+                return
             if not obj:
                 continue
             view_object = getattr(obj, "ViewObject", None)
@@ -903,9 +978,7 @@ class PlanEditSession:
 
     def _has_active_wall_edit(self):
         return (
-            self._edit_wall is not None
-            or self._dragging_grip
-            or self._embedded_tool_name == "Wall"
+            self._edit_wall is not None or self._dragging_grip or self._embedded_tool_name == "Wall"
         )
 
     def _has_active_embedded_tool(self):
@@ -963,7 +1036,11 @@ class PlanEditSession:
 
         wall = self.selected_wall
         proxy = getattr(wall, "Proxy", None)
-        if not proxy or not hasattr(proxy, "calc_endpoints") or not hasattr(proxy, "set_from_endpoints"):
+        if (
+            not proxy
+            or not hasattr(proxy, "calc_endpoints")
+            or not hasattr(proxy, "set_from_endpoints")
+        ):
             return
 
         endpoints = proxy.calc_endpoints(wall)
@@ -1006,7 +1083,11 @@ class PlanEditSession:
             return
 
         proxy = getattr(wall, "Proxy", None)
-        if not proxy or not hasattr(proxy, "calc_endpoints") or not hasattr(proxy, "set_from_endpoints"):
+        if (
+            not proxy
+            or not hasattr(proxy, "calc_endpoints")
+            or not hasattr(proxy, "set_from_endpoints")
+        ):
             self.current_tool = "Select"
             self._refresh_task_panel_status()
             return
@@ -1308,7 +1389,9 @@ class PlanEditSession:
         for picked_point in picked_points:
             path = picked_point.getPath()
             point = path.getNode(path.getLength() - 2)
-            if hasattr(point, "subElementName") and "EditNode" in str(point.subElementName.getValue()):
+            if hasattr(point, "subElementName") and "EditNode" in str(
+                point.subElementName.getValue()
+            ):
                 return point
         return None
 
@@ -1525,9 +1608,7 @@ class PlanEditDockWidget:
         self.form.setWindowTitle(translate("BIM_PlanEdit", "Plan Edit"))
         self.form.setObjectName("BIMPlanEditDock")
         self.form.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
-        self.form.setAllowedAreas(
-            QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea
-        )
+        self.form.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
         self.form.setFeatures(
             QtGui.QDockWidget.DockWidgetClosable
             | QtGui.QDockWidget.DockWidgetMovable
