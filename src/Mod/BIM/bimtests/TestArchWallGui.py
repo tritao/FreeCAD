@@ -231,6 +231,37 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         finally:
             arch_params.SetBool("autoJoinWalls", original_autojoin)
 
+    def test_plan_edit_keeps_slabs_visible_but_not_selectable(self):
+        """Active-storey slabs should not block wall picking in Plan Edit."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+
+        rect = Draft.makeRectangle(6000, 6000)
+        slab = Arch.makeStructure(rect, height=200, name="TestSlab")
+        slab.IfcType = "Slab"
+
+        level.addObject(wall)
+        level.addObject(slab)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertTrue(wall.ViewObject.Selectable)
+        self.assertTrue(slab.ViewObject.Visibility)
+        self.assertFalse(
+            slab.ViewObject.Selectable,
+            "Slabs should stay visible as background context but not intercept selection.",
+        )
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_create_baseless_wall_interactive_mode(self):
         """
         Tests the interactive creation of a baseless wall by simulating the
