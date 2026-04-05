@@ -779,6 +779,7 @@ class _Structure(ArchComponent.Component):
                 ),
                 locked=True,
             )
+
         if not "Width" in pl:
             obj.addProperty(
                 "App::PropertyLength",
@@ -908,6 +909,50 @@ class _Structure(ArchComponent.Component):
             self.ArchSkPropSetPickedUuid = ""
         if not hasattr(self, "ArchSkPropSetListPrev"):
             self.ArchSkPropSetListPrev = []
+
+    def getFootprint(self, obj):
+        """Return a light plan footprint for flat slabs.
+
+        This derives the outline from the highest horizontal slab faces and
+        flattens it to the slab base elevation. Sloped slabs will need a
+        projection-based footprint path instead.
+        """
+
+        if getattr(obj, "IfcType", "Beam") != "Slab":
+            return []
+
+        shape = getattr(obj, "Shape", None)
+        if not shape or shape.isNull():
+            return []
+
+        top_faces = []
+        top_z = None
+        base_z = shape.BoundBox.ZMin
+        for face in shape.Faces:
+            normal = face.normalAt(0, 0)
+            if normal.getAngle(FreeCAD.Vector(0, 0, 1)) >= 0.01:
+                continue
+            z_value = face.CenterOfMass.z
+            if top_z is None or z_value > top_z + 0.001:
+                top_faces = [face]
+                top_z = z_value
+            elif abs(z_value - top_z) < 0.001:
+                top_faces.append(face)
+
+        if not top_faces:
+            return []
+
+        delta_z = base_z - top_z
+        if abs(delta_z) < 0.001:
+            return top_faces
+
+        flattened = []
+        translation = FreeCAD.Vector(0, 0, delta_z)
+        for face in top_faces:
+            moved = face.copy()
+            moved.translate(translation)
+            flattened.append(moved)
+        return flattened
 
     def dumps(self):  # Supercede Arch.Component.dumps()
         dump = super().dumps()
@@ -1421,6 +1466,70 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
         self.setProperties(vobj)
         vobj.ShapeColor = ArchCommands.getDefaultColor("Structure")
 
+    def _is_slab(self, vobj):
+        return getattr(vobj.Object, "IfcType", "Beam") == "Slab"
+
+    def ensureFootprintGroup(self, vobj=None):
+        """Ensure slabs expose the generic Footprint display mode."""
+
+        if vobj is None:
+            vobj = getattr(getattr(self, "Object", None), "ViewObject", None)
+        if not vobj or not self._is_slab(vobj):
+            return None
+        return super().ensureFootprintGroup(vobj)
+
+    def getDisplayModes(self, vobj):
+        modes = super().getDisplayModes(vobj)
+        if not self._is_slab(vobj) and "Footprint" in modes:
+            modes.remove("Footprint")
+        return modes
+
+    def _drop_footprint_group(self, vobj):
+        self.footprintgroup = None
+        if hasattr(self, "fcoords"):
+            del self.fcoords
+        if hasattr(self, "fset"):
+            del self.fset
+        if getattr(vobj, "DisplayMode", None) == "Footprint" and hasattr(vobj, "listDisplayModes"):
+            if "Flat Lines" in vobj.listDisplayModes():
+                vobj.DisplayMode = "Flat Lines"
+
+    def createFootprintGroup(self):
+        """Set up a subtle filled footprint style for slabs."""
+
+        from pivy import coin
+
+        base_color = ArchCommands.getDefaultColor("Structure")
+        fill_color = tuple((component + 2.0) / 3.0 for component in base_color[:3])
+
+        self.fcoords = coin.SoCoordinate3()
+        self.fset = coin.SoIndexedFaceSet()
+        material = coin.SoMaterial()
+        material.diffuseColor.setValue(fill_color)
+        material.transparency.setValue(0.7)
+        shape_hints = coin.SoShapeHints()
+        shape_hints.faceType = coin.SoShapeHints.UNKNOWN_FACE_TYPE
+
+        sep = coin.SoSeparator()
+        sep.addChild(material)
+        sep.addChild(shape_hints)
+        sep.addChild(self.fcoords)
+        sep.addChild(self.fset)
+        return sep
+
+    def attach(self, vobj):
+        """Attach display modes, adding Footprint only for slabs."""
+
+        from pivy import coin
+
+        self.Object = vobj.Object
+        self.hiresgroup = coin.SoSeparator()
+        self.meshcolor = coin.SoBaseColor()
+        self.hiresgroup.addChild(self.meshcolor)
+        self.hiresgroup.setName("HiRes")
+        vobj.addDisplayMode(self.hiresgroup, "HiRes")
+        self.refreshFootprint(vobj)
+
     def setProperties(self, vobj):
 
         pl = vobj.PropertiesList
@@ -1514,8 +1623,10 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
                     IfcType = None
                 if IfcType == "Slab":
                     obj.ViewObject.NodeType = "Area"
+                    self.refreshFootprint(obj.ViewObject)
                 else:
                     obj.ViewObject.NodeType = "Linear"
+                    self._drop_footprint_group(obj.ViewObject)
         else:
             ArchComponent.ViewProviderComponent.updateData(self, obj, prop)
 

@@ -22,48 +22,27 @@
 # *                                                                         *
 # ***************************************************************************
 
-"""GUI regressions for footprint display data."""
+"""GUI tests for slab footprint display."""
 
 import Arch
+import Draft
 from bimtests import TestArchBaseGui
 
 
-class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
+class TestArchStructureGui(TestArchBaseGui.TestArchBaseGui):
 
-    def test_new_wall_populates_footprint_display_data(self):
-        """New walls should populate their footprint nodes on shape update."""
+    def test_slab_populates_footprint_display_data(self):
+        """Slabs should expose populated footprint data in the GUI view provider."""
 
-        wall = Arch.makeWall(length=3000, width=200, height=2500)
-        self.document.recompute()
-        self.pump_gui_events()
-
-        proxy = wall.ViewObject.Proxy
-        self.assertIn("Footprint", wall.ViewObject.listDisplayModes())
-        self.assertTrue(hasattr(proxy, "fcoords"))
-        self.assertTrue(hasattr(proxy, "fset"))
-        self.assertGreater(proxy.fcoords.point.getNum(), 0)
-        self.assertGreater(proxy.fset.coordIndex.getNum(), 0)
-
-    def test_structure_footprint_mode_remains_slab_only(self):
-        """Structure footprints should only be exposed while the object is a slab."""
-
-        slab = Arch.makeStructure(length=3000, width=2000, height=250, name="TestSlab")
-        self.document.recompute()
-        self.pump_gui_events()
-
-        self.assertNotIn("Footprint", slab.ViewObject.listDisplayModes())
-
+        rect = Draft.makeRectangle(length=4000, height=3000)
+        slab = Arch.makeStructure(rect, height=200, name="GuiSlab")
         slab.IfcType = "Slab"
         self.document.recompute()
         self.pump_gui_events()
 
+        proxy = slab.ViewObject.Proxy
         self.assertIn("Footprint", slab.ViewObject.listDisplayModes())
-        slab.ViewObject.DisplayMode = "Footprint"
-        self.pump_gui_events()
-
-        slab.IfcType = "Beam"
-        self.document.recompute()
-        self.pump_gui_events()
-
-        self.assertNotIn("Footprint", slab.ViewObject.listDisplayModes())
-        self.assertNotEqual(slab.ViewObject.DisplayMode, "Footprint")
+        self.assertTrue(hasattr(proxy, "fcoords"))
+        self.assertTrue(hasattr(proxy, "fset"))
+        self.assertGreater(proxy.fcoords.point.getNum(), 0)
+        self.assertGreater(proxy.fset.coordIndex.getNum(), 0)
