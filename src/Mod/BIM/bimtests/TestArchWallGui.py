@@ -163,6 +163,74 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_rect_wall_tool_creates_four_walls(self):
+        """Plan Edit should create a rectangular run as four baseless walls."""
+
+        level = Arch.makeFloor(name="Level 0")
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        before = {obj.Name for obj in self.document.Objects}
+        session.activate_rect_wall_tool()
+        self.pump_gui_events()
+
+        self.assertEqual(session.current_tool, "Rect Wall")
+
+        session._handle_rect_wall_point(FreeCAD.Vector(0, 0, 0))
+        session._handle_rect_wall_point(FreeCAD.Vector(3000, 2000, 0))
+        self.pump_gui_events()
+
+        created = [obj for obj in self.document.Objects if obj.Name not in before]
+        walls = [obj for obj in created if Draft.getType(obj) == "Wall"]
+        self.assertEqual(len(walls), 4, "Expected exactly four walls from a rectangular run.")
+        for wall in walls:
+            self.assertIn(level, wall.InListRecursive)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_rect_wall_tool_autojoins_closed_run(self):
+        """Rectangular wall runs should autojoin as one closed addition host when enabled."""
+
+        arch_params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Arch")
+        original_autojoin = arch_params.GetBool("autoJoinWalls", False)
+
+        try:
+            arch_params.SetBool("autoJoinWalls", True)
+            level = Arch.makeFloor(name="Level 0")
+            self.document.recompute()
+
+            FreeCADGui.Selection.clearSelection()
+            FreeCADGui.Selection.addSelection(level)
+
+            session = BimPlanSession.start_session()
+            self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+            self.pump_gui_events()
+
+            before = {obj.Name for obj in self.document.Objects}
+            session.activate_rect_wall_tool()
+            self.pump_gui_events()
+
+            session._handle_rect_wall_point(FreeCAD.Vector(0, 0, 0))
+            session._handle_rect_wall_point(FreeCAD.Vector(3000, 2000, 0))
+            self.pump_gui_events()
+
+            created = [obj for obj in self.document.Objects if obj.Name not in before]
+            walls = [obj for obj in created if Draft.getType(obj) == "Wall"]
+            self.assertEqual(len(walls), 4)
+            self.assertEqual(sum(len(wall.Additions) for wall in walls), 3)
+
+            session.shutdown(close_dialog=False)
+            self.pump_gui_events()
+        finally:
+            arch_params.SetBool("autoJoinWalls", original_autojoin)
+
     def test_create_baseless_wall_interactive_mode(self):
         """
         Tests the interactive creation of a baseless wall by simulating the
