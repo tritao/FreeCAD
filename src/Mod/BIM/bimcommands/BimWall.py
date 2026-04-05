@@ -80,25 +80,38 @@ class Arch_Wall:
         self.Length = None
         self._point_request_active = False
 
-    def _cancel_point_request(self):
-        if not self._point_request_active:
-            return
+    def _get_host(self):
+        host = getattr(self, "host", None)
+        if host is None:
+            host = gui_base.DraftInteractionHost(self)
+            self.host = host
+        return host
 
-        FreeCADGui.Snapper.cancelPointRequest()
-        self._point_request_active = False
+    def _clear_draft_ui_state(self):
+        self._get_host().clear_ui_state()
+
+    def _stop_snapper(self):
+        self._get_host().stop_point_request()
 
     def _project_to_working_plane(self, point):
         if point is None:
             return None
 
-        wp = getattr(self, "wp", None)
-        if not wp or not hasattr(wp, "project_point"):
-            return point
+        return self._get_host().project_point(point, getattr(self, "wp", None))
 
-        try:
-            return wp.project_point(point)
-        except Exception:
-            return point
+    def _request_point(self, title, move_callback=None, last=None, mode=None, hints=None):
+        extra_widget = None
+        if self._get_host().supports_extra_widget():
+            extra_widget = self.taskbox()
+        self._get_host().request_point(
+            callback=self.getPoint,
+            move_callback=move_callback,
+            last=last,
+            title=title,
+            mode=mode,
+            extra_widget=extra_widget,
+            hints=hints,
+        )
 
     def _teardown_interactive(self):
 
@@ -536,9 +549,12 @@ class Arch_Wall:
                 dv = dv.negative()
                 self.tracker.update([b.add(dv).sub(ov), point.add(dv).sub(ov)])
             if self.Length:
-                self.Length.setText(
-                    FreeCAD.Units.Quantity(bv.Length, FreeCAD.Units.Length).UserString
-                )
+                try:
+                    self.Length.setText(
+                        FreeCAD.Units.Quantity(bv.Length, FreeCAD.Units.Length).UserString
+                    )
+                except RuntimeError:
+                    self.Length = None
 
     def taskbox(self):
         """Set up a simple gui widget for the interactive mode."""
