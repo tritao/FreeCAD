@@ -30,9 +30,9 @@ import Draft
 import Arch
 import Part
 import WorkingPlane
+import importlib
 from bimtests import TestArchBaseGui
 from bimcommands import BimPlanSession
-from bimcommands.BimWall import Arch_Wall
 from unittest.mock import patch
 
 
@@ -68,6 +68,10 @@ class MockTracker:
         if value is not None:
             self._height = value
         return self._height
+
+
+def current_arch_wall_class():
+    return importlib.import_module("bimcommands.BimWall").Arch_Wall
 
 
 class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
@@ -112,7 +116,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
 
         self.assertEqual(session.current_tool, "Wall")
         self.assertIsNotNone(session._embedded_tool, "Wall tool should be embedded in Plan Edit.")
-        self.assertIsInstance(session._embedded_tool, Arch_Wall)
+        self.assertIsInstance(session._embedded_tool, current_arch_wall_class())
 
         self.assertPlaneIsSaneTop(session.get_interaction_plane())
         self.assertPlaneIsSaneTop(session._embedded_tool._plane)
@@ -133,7 +137,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.pump_gui_events()
 
         cmd = session._embedded_tool
-        self.assertIsInstance(cmd, Arch_Wall)
+        self.assertIsInstance(cmd, current_arch_wall_class())
 
         cmd.tracker = MockTracker()
         first = FreeCAD.Vector(1000, 1000, 0)
@@ -172,7 +176,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.params.SetInt("WallBaseline", 0)
 
         # 2. Arrange: Simulate the state of the command after two clicks
-        cmd = Arch_Wall()
+        cmd = current_arch_wall_class()()
         cmd.doc = self.document
         cmd.wp = WorkingPlane.get_working_plane()
         cmd.points = [FreeCAD.Vector(1000, 1000, 0), FreeCAD.Vector(3000, 1000, 0)]
@@ -228,7 +232,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         # 1. Arrange: Set preference to "Draft line" mode
         self.params.SetInt("WallBaseline", 1)  # Corresponds to WallBaselineMode.DRAFT_LINE
 
-        cmd = Arch_Wall()
+        cmd = current_arch_wall_class()()
         cmd.doc = self.document
         cmd.wp = WorkingPlane.get_working_plane()
         cmd.points = [FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(2000, 0, 0)]
@@ -268,7 +272,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         # 1. Arrange: Set preference to "Sketch" mode
         self.params.SetInt("WallBaseline", 2)  # Corresponds to WallBaselineMode.SKETCH
 
-        cmd = Arch_Wall()
+        cmd = current_arch_wall_class()()
         cmd.doc = self.document
         cmd.wp = WorkingPlane.get_working_plane()
         cmd.points = [FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(2000, 0, 0)]
@@ -398,7 +402,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
 
         self.params.SetInt("WallBaseline", 0)
 
-        cmd = Arch_Wall()
+        cmd = current_arch_wall_class()()
         cmd.doc = self.document
         cmd.wp = wp
         cmd.points = [p1_global, p2_global]
@@ -445,7 +449,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
 
         self.params.SetInt("WallBaseline", 2)
 
-        cmd = Arch_Wall()
+        cmd = current_arch_wall_class()()
         cmd.doc = self.document
         cmd.wp = WorkingPlane.get_working_plane()
         cmd.Align = "Left"
@@ -527,7 +531,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         Simulates the core logic of the Arch_Wall command's interactive mode.
         """
         try:
-            cmd = Arch_Wall()
+            cmd = current_arch_wall_class()()
 
             # This calls the real Activated() method, but the mock intercepts the
             # calls to params.get_param, allowing us to control the outcome.
