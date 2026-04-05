@@ -1632,16 +1632,25 @@ class DraftToolBar:
             self.new_point = FreeCAD.Vector(point)
             self.last_point = FreeCAD.Vector(last)
 
-            if self.relativeMode:
-                if self.globalMode:
+            try:
+                if self.relativeMode:
+                    if self.globalMode:
+                        delta = point - last
+                    else:
+                        delta = plane.get_local_coords(point - last, as_vector=True)
+                else:
+                    if self.globalMode:
+                        delta = point
+                    else:
+                        delta = plane.get_local_coords(point)
+            except FreeCAD.Base.FreeCADError:
+                # Embedded workflows can transiently leave the shared working
+                # plane in a singular state. This UI path only needs a display
+                # delta, so fall back to global coordinates instead of raising.
+                if self.relativeMode:
                     delta = point - last
                 else:
-                    delta = plane.get_local_coords(point - last, as_vector=True)
-            else:
-                if self.globalMode:
                     delta = point
-                else:
-                    delta = plane.get_local_coords(point)
 
             length, _, phi = DraftVecUtils.get_spherical_coords(*delta)
             phi = math.degrees(phi)
