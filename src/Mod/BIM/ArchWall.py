@@ -1515,6 +1515,15 @@ class _Wall(ArchComponent.Component):
 
         if getattr(obj, "Base", None) and Arch.is_debasable(obj):
             base_edge = obj.Base.Shape.Edges[0]
+            # Straight legacy walls can still carry a placement offset relative
+            # to their trace object, so endpoint grips must follow the wall
+            # object placement, not the raw base geometry.
+            placement = getattr(obj, "Placement", None)
+            if placement:
+                return [
+                    placement.multVec(base_edge.Vertexes[0].Point),
+                    placement.multVec(base_edge.Vertexes[1].Point),
+                ]
             return [base_edge.Vertexes[0].Point, base_edge.Vertexes[1].Point]
 
         # The wall's shape is centered, so its endpoints in local coordinates

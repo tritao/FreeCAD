@@ -2055,14 +2055,14 @@ class PlanEditSession:
         if len(endpoints) != 2:
             return
 
-        midpoint = (endpoints[0] + endpoints[1]) * 0.5
+        grip_start, grip_end, midpoint = self._get_visible_wall_grip_positions(wall, endpoints)
         midpoint_marker = FreeCADGui.getMarkerIndex(
             "DIAMOND_FILLED", params.get_param_view("MarkerSize")
         )
 
         self._grip_trackers = [
-            DraftTrackers.editTracker(pos=endpoints[0], name=wall.Name, idx=0),
-            DraftTrackers.editTracker(pos=endpoints[1], name=wall.Name, idx=1),
+            DraftTrackers.editTracker(pos=grip_start, name=wall.Name, idx=0),
+            DraftTrackers.editTracker(pos=grip_end, name=wall.Name, idx=1),
             DraftTrackers.editTracker(
                 pos=midpoint,
                 name=wall.Name,
@@ -2070,6 +2070,57 @@ class PlanEditSession:
                 marker=midpoint_marker,
             ),
         ]
+
+    def _get_visible_wall_grip_positions(self, wall, endpoints):
+        """Return grip positions shifted onto the visible wall body.
+
+        Endpoint editing still uses the wall trace, but for aligned/offset walls
+        the visible footprint can be shifted sideways. Grip markers should follow
+        that visible centerline so they sit on the wall the user sees.
+        """
+        import DraftVecUtils
+
+        start = FreeCAD.Vector(endpoints[0])
+        end = FreeCAD.Vector(endpoints[1])
+        midpoint = (start + end) * 0.5
+
+        axis = end.sub(start)
+        axis.z = 0
+        if DraftVecUtils.isNull(axis):
+            return start, end, midpoint
+
+        proxy = getattr(wall, "Proxy", None)
+        if not proxy or not hasattr(proxy, "getFootprint"):
+            return start, end, midpoint
+
+        try:
+            faces = proxy.getFootprint(wall)
+        except Exception:
+            return start, end, midpoint
+        if not faces:
+            return start, end, midpoint
+
+        area_sum = 0.0
+        center = FreeCAD.Vector()
+        for face in faces:
+            try:
+                weight = float(face.Area)
+                face_center = face.CenterOfMass
+            except Exception:
+                continue
+            center = center.add(face_center.multiply(weight))
+            area_sum += weight
+
+        if area_sum <= 0.0:
+            return start, end, midpoint
+
+        center.multiply(1.0 / area_sum)
+        shift = center.sub(midpoint)
+        axis.normalize()
+        shift = shift.sub(axis.multiply(shift.dot(axis)))
+        shift.z = 0
+
+        return start.add(shift), end.add(shift), midpoint.add(shift)
 
     def _clear_wall_grips(self):
         for tracker in self._grip_trackers:
