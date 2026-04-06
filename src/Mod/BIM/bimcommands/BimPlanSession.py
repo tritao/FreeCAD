@@ -271,6 +271,7 @@ class PlanEditSession:
         self._selection_observer_added = False
         self._document_observer_added = False
         self._pending_selected_wall_reset = False
+        self._wall_edit_modal_active = False
         self._edit_wall = None
         self._edit_endpoint = None
         self._edit_endpoints = None
@@ -282,13 +283,15 @@ class PlanEditSession:
         self._rect_wall_params = None
         self._rect_wall_preview_trackers = []
         self._edit_wall_visibility = None
-        self._dragging_grip = False
         self._edit_opening = None
         self._edit_opening_handle_index = None
         self._ignore_selection_changes = False
         self._mouse_moved_cb = None
+        self._mouse_wheel_cb = None
+        self._mouse_wheel_event_type = None
         self._mouse_pressed_cb = None
         self._key_pressed_cb = None
+        self._overlay_refresh_queued = False
         self._render_manager = None
         self._saved_camera = None
         self._saved_camera_type = None
@@ -750,6 +753,37 @@ class PlanEditSession:
             "offset": params.get_param_arch("WallOffset"),
         }
 
+    def _get_plan_view_height(self):
+        if not self.view or not hasattr(self.view, "getCameraNode"):
+            return None
+        try:
+            camera = self.view.getCameraNode()
+        except (AttributeError, ReferenceError, RuntimeError):
+            return None
+        if camera is None or not hasattr(camera, "height"):
+            return None
+        try:
+            return float(camera.height.getValue())
+        except Exception:
+            return None
+
+    def _get_plan_overlay_scale(self):
+        height = self._get_plan_view_height()
+        if not height or height <= 0:
+            return 1.0
+        if height <= 5000.0:
+            return 1.0
+        if height >= 30000.0:
+            return 0.35
+        scale = 5000.0 / height
+        return max(0.35, min(1.0, scale * 2.0))
+
+    def _scaled_line_width(self, base_width):
+        return max(1.0, base_width * self._get_plan_overlay_scale())
+
+    def _scaled_marker_size(self, base_size):
+        return max(4, int(round(base_size * self._get_plan_overlay_scale())))
+
     def _capture_background_state(self):
         params = _view_param_group()
         return {
@@ -1199,6 +1233,15 @@ class PlanEditSession:
                 self._mouse_moved_cb = self.view.addEventCallbackPivy(
                     coin.SoLocation2Event.getClassTypeId(), self._on_mouse_moved
                 )
+            if self._mouse_wheel_cb is None:
+                event_type = getattr(coin, "SoMouseWheelEvent", None)
+                if event_type is not None:
+                    self._mouse_wheel_event_type = event_type.getClassTypeId()
+                else:
+                    self._mouse_wheel_event_type = coin.SoEvent.getClassTypeId()
+                self._mouse_wheel_cb = self.view.addEventCallbackPivy(
+                    self._mouse_wheel_event_type, self._on_mouse_wheel
+                )
             if self._mouse_pressed_cb is None:
                 self._mouse_pressed_cb = self.view.addEventCallbackPivy(
                     coin.SoMouseButtonEvent.getClassTypeId(), self._on_mouse_pressed
@@ -1212,6 +1255,8 @@ class PlanEditSession:
         except Exception:
             self._key_pressed_cb = None
             self._mouse_moved_cb = None
+            self._mouse_wheel_cb = None
+            self._mouse_wheel_event_type = None
             self._mouse_pressed_cb = None
             self._render_manager = None
             return
@@ -1219,6 +1264,8 @@ class PlanEditSession:
         if not self.view:
             self._key_pressed_cb = None
             self._mouse_moved_cb = None
+            self._mouse_wheel_cb = None
+            self._mouse_wheel_event_type = None
             self._mouse_pressed_cb = None
             self._render_manager = None
             return
@@ -1232,6 +1279,10 @@ class PlanEditSession:
                 self.view.removeEventCallbackSWIG(
                     coin.SoLocation2Event.getClassTypeId(), self._mouse_moved_cb
                 )
+            if self._mouse_wheel_cb and self._mouse_wheel_event_type:
+                self.view.removeEventCallbackSWIG(
+                    self._mouse_wheel_event_type, self._mouse_wheel_cb
+                )
             if self._mouse_pressed_cb:
                 self.view.removeEventCallbackSWIG(
                     coin.SoMouseButtonEvent.getClassTypeId(), self._mouse_pressed_cb
@@ -1241,6 +1292,8 @@ class PlanEditSession:
 
         self._key_pressed_cb = None
         self._mouse_moved_cb = None
+        self._mouse_wheel_cb = None
+        self._mouse_wheel_event_type = None
         self._mouse_pressed_cb = None
         self._render_manager = None
 
@@ -1253,6 +1306,18 @@ class PlanEditSession:
 
         previous_wall = self.selected_wall
         previous_opening = self.selected_opening
+        if self._is_wall_edit_modal_active():
+            self.selected_wall = self._edit_wall
+            self.selected_opening = None
+            if previous_wall != self.selected_wall:
+                self._sync_wall_grips()
+            self._sync_hovered_wall_overlay()
+            if previous_opening is not None or self.current_tool != "Select":
+                self._sync_selected_opening_overlay()
+                self._sync_selected_opening_handles()
+            self._sync_hovered_opening_overlay()
+            self._refresh_task_panel_status()
+            return
         self.selected_wall = None
         self.selected_opening = None
         try:
@@ -1300,13 +1365,13 @@ class PlanEditSession:
 
     def _cancel_pending_edit(self):
         if self._tearing_down:
+            self._wall_edit_modal_active = False
             self._restore_edit_wall_visibility()
-            self._clear_drag_preview()
+            self._clear_wall_edit_preview()
             self._edit_wall = None
             self._edit_endpoint = None
             self._edit_endpoints = None
             self._preview_points = None
-            self._dragging_grip = False
             self._ignore_selection_changes = False
             self._embedded_host = None
             self._embedded_tool = None
@@ -1314,13 +1379,13 @@ class PlanEditSession:
             return
         self._stop_snapper()
         FreeCAD.activeDraftCommand = None
+        self._wall_edit_modal_active = False
         self._restore_edit_wall_visibility()
-        self._clear_drag_preview()
+        self._clear_wall_edit_preview()
         self._edit_wall = None
         self._edit_endpoint = None
         self._edit_endpoints = None
         self._preview_points = None
-        self._dragging_grip = False
         self._ignore_selection_changes = False
         self._embedded_host = None
         self._embedded_tool = None
@@ -1491,9 +1556,10 @@ class PlanEditSession:
         self._refresh_task_panel_status()
 
     def _has_active_wall_edit(self):
-        return (
-            self._edit_wall is not None or self._dragging_grip or self._embedded_tool_name == "Wall"
-        )
+        return self._is_wall_edit_modal_active() or self._embedded_tool_name == "Wall"
+
+    def _is_wall_edit_modal_active(self):
+        return bool(self._wall_edit_modal_active and self._edit_wall)
 
     def _has_active_embedded_tool(self):
         return self._embedded_tool is not None
@@ -1524,10 +1590,6 @@ class PlanEditSession:
             return False
 
         self._cancel_wall_subtool()
-
-        if restore and self._dragging_grip:
-            self._cancel_drag_edit()
-            return True
 
         self.current_tool = "Select"
         self._cancel_pending_edit()
@@ -1562,10 +1624,23 @@ class PlanEditSession:
             return
 
         self.current_tool = "Move Wall" if mode == "Move" else f"Stretch {mode}"
+        self._set_hovered_wall(None)
+        self._set_hovered_opening(None)
+        self.selected_wall = wall
+        self.selected_opening = None
+        self._wall_edit_modal_active = True
         self._edit_wall = wall
         self._edit_endpoint = mode
         self._edit_endpoints = endpoints
+        self._preview_points = list(endpoints)
+        self._edit_wall_visibility = None
+        try:
+            self._edit_wall_visibility = wall.ViewObject.Visibility
+            wall.ViewObject.Visibility = False
+        except Exception:
+            self._edit_wall_visibility = None
         self._clear_wall_grips()
+        self._sync_wall_edit_preview(self._preview_points)
         self._refresh_task_panel_status()
 
         title = {
@@ -1573,10 +1648,18 @@ class PlanEditSession:
             "End": translate("BIM_PlanEdit", "Pick new end point"),
             "Move": translate("BIM_PlanEdit", "Pick new wall midpoint"),
         }.get(mode, translate("BIM_PlanEdit", "Pick wall point"))
+        last = self._get_wall_edit_reference_point()
 
         FreeCAD.activeDraftCommand = self
+        if getattr(FreeCADGui, "Snapper", None):
+            try:
+                FreeCADGui.Snapper.setSelectMode(False)
+            except Exception:
+                pass
         FreeCADGui.Snapper.getPoint(
             callback=self._finish_wall_edit,
+            movecallback=self._update_wall_edit_point_pick,
+            last=last,
             title=title,
         )
 
@@ -1585,14 +1668,11 @@ class PlanEditSession:
 
         wall = self._edit_wall
         endpoint = self._edit_endpoint
-        original_endpoints = self._edit_endpoints
-        self._edit_wall = None
-        self._edit_endpoint = None
-        self._edit_endpoints = None
-        FreeCAD.activeDraftCommand = None
+        new_points = self._compute_wall_edit_points(point)
 
-        if point is None or not wall or not endpoint:
+        if point is None or not wall or not endpoint or not new_points:
             self.current_tool = "Select"
+            self._cancel_pending_edit()
             self._refresh_task_panel_status()
             return
 
@@ -1603,34 +1683,28 @@ class PlanEditSession:
             or not hasattr(proxy, "set_from_endpoints")
         ):
             self.current_tool = "Select"
+            self._cancel_pending_edit()
             self._refresh_task_panel_status()
             return
 
-        if not original_endpoints or len(original_endpoints) != 2:
-            self.current_tool = "Select"
-            self._refresh_task_panel_status()
-            return
+        transaction_name = (
+            translate("BIM_PlanEdit", "Move Wall")
+            if endpoint == "Move"
+            else translate("BIM_PlanEdit", "Stretch Wall Endpoint")
+        )
 
-        if endpoint == "Start":
-            new_points = [point, original_endpoints[1]]
-            transaction_name = translate("BIM_PlanEdit", "Stretch Wall Endpoint")
-        elif endpoint == "End":
-            new_points = [original_endpoints[0], point]
-            transaction_name = translate("BIM_PlanEdit", "Stretch Wall Endpoint")
-        else:
-            original_midpoint = (original_endpoints[0] + original_endpoints[1]) * 0.5
-            delta = point.sub(original_midpoint)
-            new_points = [original_endpoints[0].add(delta), original_endpoints[1].add(delta)]
-            transaction_name = translate("BIM_PlanEdit", "Move Wall")
-
-        self.doc.openTransaction(transaction_name)
-        proxy.set_from_endpoints(wall, new_points)
-        self.doc.commitTransaction()
         try:
+            self.doc.openTransaction(transaction_name)
+            proxy.set_from_endpoints(wall, new_points)
+            self.doc.commitTransaction()
             self.doc.recompute()
-        except (ReferenceError, RuntimeError):
-            self.doc = None
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
             self.current_tool = "Select"
+            self._cancel_pending_edit()
             return
 
         try:
@@ -1639,48 +1713,42 @@ class PlanEditSession:
         except (ReferenceError, RuntimeError):
             pass
         self.current_tool = "Select"
+        self._cancel_pending_edit()
+        self.selected_wall = wall
         self._sync_wall_grips()
         self._refresh_task_panel_status()
 
-    def _begin_grip_drag(self, grip_index):
+    def _start_wall_grip_edit(self, grip_index):
         if grip_index not in (0, 1, 2) or not self.is_selected_wall_endpoint_editable():
             return
+        self._start_wall_edit({0: "Start", 1: "End", 2: "Move"}[grip_index])
 
-        wall = self.selected_wall
-        proxy = getattr(wall, "Proxy", None)
-        if not proxy or not hasattr(proxy, "calc_endpoints"):
-            return
-
-        endpoints = proxy.calc_endpoints(wall)
-        if len(endpoints) != 2:
-            return
-
-        self._dragging_grip = True
-        self._ignore_selection_changes = True
-        self._set_hovered_wall(None)
-        self._set_hovered_opening(None)
-        self._edit_wall = wall
-        self._edit_endpoint = {0: "Start", 1: "End", 2: "Move"}[grip_index]
-        self._edit_endpoints = endpoints
-        self._preview_points = list(endpoints)
-        self.current_tool = "Move Wall" if grip_index == 2 else f"Stretch {self._edit_endpoint}"
-        self._edit_wall_visibility = None
+    def _activate_wall_grip(self, grip_index):
         try:
-            self._edit_wall_visibility = wall.ViewObject.Visibility
-            wall.ViewObject.Visibility = False
-        except Exception:
-            self._edit_wall_visibility = None
-        self._clear_wall_grips()
-        self._sync_drag_preview(self._preview_points)
-        FreeCAD.activeDraftCommand = self
-        if getattr(FreeCADGui, "Snapper", None):
-            try:
-                FreeCADGui.Snapper.setSelectMode(False)
-            except Exception:
-                pass
-        self._refresh_task_panel_status()
+            from PySide import QtCore
+        except ImportError:
+            self._activate_wall_grip_now(grip_index)
+            return
 
-    def _compute_drag_points(self, point):
+        QtCore.QTimer.singleShot(0, lambda: self._activate_wall_grip_now(grip_index))
+
+    def _activate_wall_grip_now(self, grip_index):
+        if self._tearing_down or self.current_tool != "Select":
+            return
+        self._start_wall_grip_edit(grip_index)
+
+    def _get_wall_edit_reference_point(self):
+        if not self._edit_endpoints or len(self._edit_endpoints) != 2:
+            return None
+        if self._edit_endpoint == "Move":
+            return (self._edit_endpoints[0] + self._edit_endpoints[1]) * 0.5
+        if self._edit_endpoint == "Start":
+            return self._edit_endpoints[0]
+        if self._edit_endpoint == "End":
+            return self._edit_endpoints[1]
+        return None
+
+    def _compute_wall_edit_points(self, point):
         endpoint = self._edit_endpoint
         original_endpoints = self._edit_endpoints
         if point is None or not endpoint or not original_endpoints:
@@ -1739,7 +1807,7 @@ class PlanEditSession:
             points[0].add(FreeCAD.Vector(perp).multiply(y_max)),
         ]
 
-    def _sync_drag_preview(self, points):
+    def _sync_wall_edit_preview(self, points):
         if not points or len(points) != 2:
             return
 
@@ -1750,7 +1818,9 @@ class PlanEditSession:
             return
 
         if self._preview_line_tracker is None:
-            self._preview_line_tracker = DraftTrackers.lineTracker(ontop=True)
+            self._preview_line_tracker = DraftTrackers.lineTracker(
+                swidth=self._scaled_line_width(2), ontop=True
+            )
             self._preview_line_tracker.on()
         self._preview_line_tracker.p1(points[0])
         self._preview_line_tracker.p2(points[1])
@@ -1769,9 +1839,8 @@ class PlanEditSession:
             self._preview_rect_tracker.on()
 
         midpoint = (points[0] + points[1]) * 0.5
-        midpoint_marker = FreeCADGui.getMarkerIndex(
-            "DIAMOND_FILLED", params.get_param_view("MarkerSize")
-        )
+        marker_size = self._scaled_marker_size(params.get_param_view("MarkerSize"))
+        midpoint_marker = FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size)
 
         grip_specs = (
             (points[0], 0, None),
@@ -1794,7 +1863,7 @@ class PlanEditSession:
             tracker.set(position)
             tracker.on()
 
-    def _clear_drag_preview(self):
+    def _clear_wall_edit_preview(self):
         if self._preview_line_tracker:
             try:
                 self._preview_line_tracker.finalize()
@@ -1825,66 +1894,20 @@ class PlanEditSession:
                 pass
         self._edit_wall_visibility = None
 
-    def _update_dragged_wall(self, point):
-        new_points = self._compute_drag_points(point)
+    def _update_wall_edit_preview(self, point):
+        new_points = self._compute_wall_edit_points(point)
         if not new_points:
             return
         self._preview_points = new_points
-        self._sync_drag_preview(new_points)
+        self._sync_wall_edit_preview(new_points)
 
-    def _cancel_drag_edit(self):
+    def _update_wall_edit_point_pick(self, point=None, snap_info=None):
+        del snap_info
+        self._update_wall_edit_preview(point)
+
+    def _cancel_wall_edit_point_pick(self):
         self.current_tool = "Select"
         self._cancel_pending_edit()
-        self._refresh_task_panel_status()
-
-    def _commit_drag_edit(self):
-        wall = self._edit_wall
-        endpoint = self._edit_endpoint
-        preview_points = self._preview_points
-        if not wall or not endpoint or not preview_points or len(preview_points) != 2:
-            self._cancel_pending_edit()
-            self.current_tool = "Select"
-            self._refresh_task_panel_status()
-            return
-
-        proxy = getattr(wall, "Proxy", None)
-        if not proxy or not hasattr(proxy, "set_from_endpoints"):
-            self._cancel_pending_edit()
-            self.current_tool = "Select"
-            self._refresh_task_panel_status()
-            return
-
-        if self.doc:
-            try:
-                transaction_name = (
-                    translate("BIM_PlanEdit", "Move Wall")
-                    if endpoint == "Move"
-                    else translate("BIM_PlanEdit", "Stretch Wall Endpoint")
-                )
-                self.doc.openTransaction(transaction_name)
-                proxy.set_from_endpoints(wall, preview_points)
-                self.doc.commitTransaction()
-                self.doc.recompute()
-            except Exception:
-                try:
-                    self.doc.abortTransaction()
-                except Exception:
-                    pass
-                self._cancel_pending_edit()
-                self.current_tool = "Select"
-                self._refresh_task_panel_status()
-                return
-
-        try:
-            FreeCADGui.Selection.clearSelection()
-            FreeCADGui.Selection.addSelection(wall)
-        except (ReferenceError, RuntimeError):
-            pass
-
-        self.current_tool = "Select"
-        self._cancel_pending_edit()
-        self.selected_wall = wall
-        self._sync_wall_grips()
         self._refresh_task_panel_status()
 
     def _get_edit_node(self, mouse_pos):
@@ -1913,25 +1936,6 @@ class PlanEditSession:
                 return point
         return None
 
-    def _get_snapped_drag_point(self, event):
-        if not getattr(FreeCADGui, "Snapper", None):
-            return None
-
-        pos = event.getPosition().getValue()
-        constrain = bool(event.wasShiftDown())
-        reference = None
-        if self._edit_endpoints:
-            if self._edit_endpoint == "Move":
-                reference = (self._edit_endpoints[0] + self._edit_endpoints[1]) * 0.5
-            elif self._edit_endpoint == "Start":
-                reference = self._edit_endpoints[1]
-            else:
-                reference = self._edit_endpoints[0]
-        try:
-            return FreeCADGui.Snapper.snap((pos[0], pos[1]), reference, constrain=constrain)
-        except Exception:
-            return None
-
     def _on_mouse_pressed(self, event_callback):
         if self._tearing_down:
             return
@@ -1945,8 +1949,6 @@ class PlanEditSession:
             return
 
         if event.getState() == coin.SoMouseButtonEvent.DOWN:
-            if self._dragging_grip:
-                return
             if self.current_tool != "Select":
                 return
             pos = event.getPosition().getValue()
@@ -1971,19 +1973,15 @@ class PlanEditSession:
             else:
                 if obj != self.selected_wall:
                     self.selected_wall = obj
-                self._begin_grip_drag(index)
-        elif event.getState() == coin.SoMouseButtonEvent.UP and self._dragging_grip:
-            self._commit_drag_edit()
+                self._activate_wall_grip(index)
+            if hasattr(event_callback, "setHandled"):
+                try:
+                    event_callback.setHandled()
+                except Exception:
+                    pass
 
     def _on_mouse_moved(self, event_callback):
         if self._tearing_down:
-            return
-        if self._dragging_grip:
-            event = event_callback.getEvent()
-            snapped_point = self._get_snapped_drag_point(event)
-            if snapped_point is None:
-                return
-            self._update_dragged_wall(snapped_point)
             return
         if self.current_tool != "Select":
             self._set_hovered_wall(None)
@@ -1992,6 +1990,49 @@ class PlanEditSession:
         event = event_callback.getEvent()
         pos = event.getPosition().getValue()
         self._update_hovered_plan_target((pos[0], pos[1]))
+        self._refresh_plan_overlay_visuals()
+
+    def _on_mouse_wheel(self, event_callback):
+        if self._tearing_down:
+            return
+        event = event_callback.getEvent()
+        try:
+            event_type_name = str(event.getTypeId().getName())
+        except Exception:
+            event_type_name = ""
+        if event_type_name != "SoMouseWheelEvent":
+            return
+        self._queue_plan_overlay_visual_refresh()
+
+    def _queue_plan_overlay_visual_refresh(self):
+        if self._overlay_refresh_queued or self._tearing_down:
+            return
+        try:
+            from PySide import QtCore
+        except ImportError:
+            self._refresh_plan_overlay_visuals()
+            return
+        self._overlay_refresh_queued = True
+        QtCore.QTimer.singleShot(0, self._flush_plan_overlay_visual_refresh)
+
+    def _flush_plan_overlay_visual_refresh(self):
+        self._overlay_refresh_queued = False
+        self._refresh_plan_overlay_visuals()
+
+    def _refresh_plan_overlay_visuals(self):
+        if self._tearing_down:
+            return
+        if self.current_tool == "Select":
+            self._sync_hovered_wall_overlay()
+            self._sync_hovered_opening_overlay()
+            if self.selected_wall:
+                self._sync_wall_grips()
+            if self.selected_opening:
+                self._sync_selected_opening_overlay()
+                self._sync_selected_opening_handles()
+            return
+        if self._edit_wall and self._preview_points:
+            self._sync_wall_edit_preview(self._preview_points)
 
     def _on_key_pressed(self, event_callback):
         if self._tearing_down:
@@ -2003,8 +2044,8 @@ class PlanEditSession:
         event = event_callback.getEvent()
         if event.getKey() != coin.SoKeyboardEvent.ESCAPE:
             return
-        if self._dragging_grip:
-            self._cancel_drag_edit()
+        if self._edit_wall and self.current_tool != "Select":
+            self._cancel_wall_edit_point_pick()
             return
         if self.current_tool == "Move Opening":
             self._cancel_opening_handle_point_pick()
@@ -2165,9 +2206,8 @@ class PlanEditSession:
         if len(grip_positions) != 3:
             return
         grip_start, grip_end, midpoint = grip_positions
-        midpoint_marker = FreeCADGui.getMarkerIndex(
-            "DIAMOND_FILLED", params.get_param_view("MarkerSize")
-        )
+        marker_size = self._scaled_marker_size(params.get_param_view("MarkerSize"))
+        midpoint_marker = FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size)
 
         self._grip_trackers = [
             DraftTrackers.editTracker(pos=grip_start, name=wall.Name, idx=0),
@@ -2380,7 +2420,7 @@ class PlanEditSession:
         self._create_wall_overlay_trackers(
             self.hovered_wall,
             color=(0.42, 0.62, 0.9),
-            width=2,
+            width=self._scaled_line_width(2),
             tracker_store=self._wall_hover_trackers,
         )
 
@@ -2419,7 +2459,7 @@ class PlanEditSession:
         self._create_opening_overlay_trackers(
             self.hovered_opening,
             color=(0.38, 0.62, 0.96),
-            width=2,
+            width=self._scaled_line_width(2),
             tracker_store=self._opening_hover_trackers,
         )
 
@@ -2456,7 +2496,7 @@ class PlanEditSession:
         self._create_opening_overlay_trackers(
             self.selected_opening,
             color=(0.12, 0.38, 0.95),
-            width=3,
+            width=self._scaled_line_width(3),
             tracker_store=self._opening_overlay_trackers,
         )
 
@@ -2512,7 +2552,7 @@ class PlanEditSession:
         except ImportError:
             return
 
-        marker_size = params.get_param_view("MarkerSize")
+        marker_size = self._scaled_marker_size(params.get_param_view("MarkerSize"))
         markers = {
             "move": FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size),
             "flip_hinge": FreeCADGui.getMarkerIndex("CIRCLE_FILLED", marker_size),
@@ -2570,7 +2610,11 @@ class PlanEditSession:
             if len(polyline) < 2:
                 continue
             for start, end in zip(polyline, polyline[1:]):
-                tracker = DraftTrackers.lineTracker(scolor=preview_color, swidth=3, ontop=True)
+                tracker = DraftTrackers.lineTracker(
+                    scolor=preview_color,
+                    swidth=self._scaled_line_width(3),
+                    ontop=True,
+                )
                 tracker.p1(start)
                 tracker.p2(end)
                 tracker.on()
@@ -2584,7 +2628,7 @@ class PlanEditSession:
         guide = DraftTrackers.lineTracker(
             dotted=True,
             scolor=preview_color,
-            swidth=1,
+            swidth=self._scaled_line_width(1),
             ontop=True,
         )
         guide.p1(guide_start)

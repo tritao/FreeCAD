@@ -102,6 +102,20 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertAlmostEqual(plane.axis.y, 0.0, delta=1e-9)
         self.assertAlmostEqual(plane.axis.z, 1.0, delta=1e-9)
 
+    class _FakeKeyEvent:
+        def __init__(self, key):
+            self._key = key
+
+        def getKey(self):
+            return self._key
+
+    class _FakeEventCallback:
+        def __init__(self, event):
+            self._event = event
+
+        def getEvent(self):
+            return self._event
+
     def _make_hosted_door(self, wall, name="TestDoor", width=900.0, height=2100.0):
         sketch = self.document.addObject("Sketcher::SketchObject", name + "Sketch")
         sketch.addGeometry(
@@ -664,6 +678,146 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertIsNone(session.selected_opening)
         self.assertEqual(len(session._wall_hover_trackers), 0)
         self.assertEqual(len(session._grip_trackers), 3)
+
+    def test_plan_edit_wall_grip_move_uses_point_pick_commit(self):
+        """Wall grips should use click-move-click editing instead of hold-drag."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        original_endpoints = wall.Proxy.calc_endpoints(wall)
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ):
+            session._start_wall_grip_edit(2)
+
+        self.assertEqual(session.current_tool, "Move Wall")
+        self.assertIs(session.selected_wall, wall)
+        self.assertIn("callback", captured)
+        self.assertIn("movecallback", captured)
+        self.assertIn("last", captured)
+
+        new_midpoint = captured["last"].add(FreeCAD.Vector(1000, 0, 0))
+        captured["movecallback"](new_midpoint, None)
+        self.assertIsNotNone(session._preview_points)
+        self.assertNotEqual(session._preview_points, list(original_endpoints))
+
+        captured["callback"](new_midpoint, None)
+        self.pump_gui_events()
+
+        moved_endpoints = wall.Proxy.calc_endpoints(wall)
+        self.assertAlmostEqual(
+            moved_endpoints[0].x - original_endpoints[0].x,
+            1000.0,
+            delta=1e-6,
+        )
+        self.assertAlmostEqual(
+            moved_endpoints[1].x - original_endpoints[1].x,
+            1000.0,
+            delta=1e-6,
+        )
+        self.assertEqual(session.current_tool, "Select")
+        self.assertIs(session.selected_wall, wall)
+        self.assertEqual(len(session._grip_trackers), 3)
+
+    def test_plan_edit_wall_grip_move_escape_cancels_and_keeps_selection(self):
+        """Esc should cancel an active wall point-pick edit and restore wall grips."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        original_endpoints = wall.Proxy.calc_endpoints(wall)
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ):
+            session._start_wall_grip_edit(2)
+
+        new_midpoint = captured["last"].add(FreeCAD.Vector(1000, 0, 0))
+        captured["movecallback"](new_midpoint, None)
+
+        from pivy import coin
+
+        session._on_key_pressed(
+            self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.ESCAPE))
+        )
+        self.pump_gui_events()
+
+        canceled_endpoints = wall.Proxy.calc_endpoints(wall)
+        self.assertAlmostEqual(canceled_endpoints[0].x, original_endpoints[0].x, delta=1e-6)
+        self.assertAlmostEqual(canceled_endpoints[1].x, original_endpoints[1].x, delta=1e-6)
+        self.assertEqual(session.current_tool, "Select")
+        self.assertIs(session.selected_wall, wall)
+        self.assertEqual(len(session._grip_trackers), 3)
+
+    def test_plan_edit_wall_grip_activation_is_deferred(self):
+        """Wall grip activation should defer point-pick start until after the click event unwinds."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        calls = []
+
+        def fake_single_shot(delay, callback):
+            calls.append((delay, callback))
+
+        with patch("PySide.QtCore.QTimer.singleShot", side_effect=fake_single_shot):
+            session._activate_wall_grip(2)
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], 0)
+        self.assertEqual(session.current_tool, "Select")
+
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ):
+            calls[0][1]()
+
+        self.assertEqual(session.current_tool, "Move Wall")
+        self.assertIs(session.selected_wall, wall)
+        self.assertIn("callback", captured)
+        self.assertIn("movecallback", captured)
 
     def test_plan_edit_can_flip_selected_door_hinge(self):
         """Selected door handles should expose hinge flipping in Plan Edit."""
