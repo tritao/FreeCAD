@@ -2009,9 +2009,6 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         self.lcoords = coin.SoCoordinate3()
         self.lset = coin.SoLineSet()
 
-        fill_material = coin.SoMaterial()
-        fill_material.diffuseColor.setValue((0.84, 0.84, 0.82))
-        fill_material.transparency.setValue(0.2)
         shape_hints = coin.SoShapeHints()
         shape_hints.faceType = coin.SoShapeHints.UNKNOWN_FACE_TYPE
 
@@ -2026,11 +2023,14 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         lmat.rgb = (0.15, 0.15, 0.15)
 
         sep = coin.SoSeparator()
-        fill_sep = coin.SoSeparator()
-        fill_sep.addChild(fill_material)
-        fill_sep.addChild(shape_hints)
-        fill_sep.addChild(self.fcoords)
-        fill_sep.addChild(self.fset)
+        fill_sep = ArchComponent.ViewProviderComponent.buildFootprintFillSeparator(
+            self,
+            (0.84, 0.84, 0.82),
+            0.2,
+            self.fcoords,
+            self.fset,
+            shape_hints=shape_hints,
+        )
         line_sep = coin.SoSeparator()
         line_sep.addChild(loffset)
         line_sep.addChild(lmat)

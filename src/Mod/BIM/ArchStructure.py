@@ -1503,17 +1503,20 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
 
         self.fcoords = coin.SoCoordinate3()
         self.fset = coin.SoIndexedFaceSet()
-        material = coin.SoMaterial()
-        material.diffuseColor.setValue(fill_color)
-        material.transparency.setValue(0.7)
         shape_hints = coin.SoShapeHints()
         shape_hints.faceType = coin.SoShapeHints.UNKNOWN_FACE_TYPE
 
         sep = coin.SoSeparator()
-        sep.addChild(material)
-        sep.addChild(shape_hints)
-        sep.addChild(self.fcoords)
-        sep.addChild(self.fset)
+        sep.addChild(
+            ArchComponent.ViewProviderComponent.buildFootprintFillSeparator(
+                self,
+                fill_color,
+                0.7,
+                self.fcoords,
+                self.fset,
+                shape_hints=shape_hints,
+            )
+        )
         return sep
 
     def attach(self, vobj):

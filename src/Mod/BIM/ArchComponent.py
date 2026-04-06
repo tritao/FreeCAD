@@ -1766,6 +1766,30 @@ class ViewProviderComponent:
             self.fcoords.point.setValues(verts)
             self.fset.coordIndex.setValues(0, len(fdata), fdata)
 
+    def buildFootprintFillSeparator(
+        self, fill_color, transparency, fcoords, fset, shape_hints=None
+    ):
+        """Build a flat, unlit footprint fill subtree for plan graphics."""
+
+        from pivy import coin
+
+        material = coin.SoMaterial()
+        material.diffuseColor.setValue(fill_color)
+        material.transparency.setValue(transparency)
+        light_model = coin.SoLightModel()
+        light_model.model = coin.SoLightModel.BASE_COLOR
+        if shape_hints is None:
+            shape_hints = coin.SoShapeHints()
+            shape_hints.faceType = coin.SoShapeHints.UNKNOWN_FACE_TYPE
+
+        fill_sep = coin.SoSeparator()
+        fill_sep.addChild(material)
+        fill_sep.addChild(light_model)
+        fill_sep.addChild(shape_hints)
+        fill_sep.addChild(fcoords)
+        fill_sep.addChild(fset)
+        return fill_sep
+
     def ensureFootprintGroup(self, vobj=None):
         """Ensure the generic Footprint display mode node exists.
 
