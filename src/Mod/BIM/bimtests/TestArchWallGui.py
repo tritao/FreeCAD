@@ -642,6 +642,29 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertGreater(len(session._wall_hover_trackers), 0)
         self.assertEqual(len(session._grip_trackers), 0)
 
+    def test_plan_edit_clicking_hovered_wall_selects_it(self):
+        """Clicking a hovered wall should promote it to selected wall state."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("wall", wall),
+        ):
+            activated = session._activate_wall_target((100, 100))
+
+        self.assertTrue(activated)
+        self.assertIs(session.selected_wall, wall)
+        self.assertIsNone(session.selected_opening)
+        self.assertEqual(len(session._wall_hover_trackers), 0)
+        self.assertEqual(len(session._grip_trackers), 3)
+
     def test_plan_edit_can_flip_selected_door_hinge(self):
         """Selected door handles should expose hinge flipping in Plan Edit."""
 

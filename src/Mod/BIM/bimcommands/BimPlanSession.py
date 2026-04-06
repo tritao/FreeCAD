@@ -1953,6 +1953,8 @@ class PlanEditSession:
             if not node:
                 if self._activate_opening_target((pos[0], pos[1]), event_callback):
                     return
+                if self._activate_wall_target((pos[0], pos[1]), event_callback):
+                    return
                 return
             try:
                 doc = FreeCAD.getDocument(str(node.documentName.getValue()))
@@ -2306,6 +2308,28 @@ class PlanEditSession:
             self._queue_restore_selected_opening(opening)
         return True
 
+    def _select_wall_for_plan_edit(self, wall):
+        if not wall:
+            return False
+        try:
+            import Draft
+
+            if Draft.getType(wall) != "Wall":
+                return False
+        except Exception:
+            return False
+
+        self.current_tool = "Select"
+        self.selected_opening = None
+        self.hovered_opening = None
+        self.selected_wall = wall
+        self._pending_selected_opening_intent = None
+        self._sync_selected_opening_overlay()
+        self._sync_selected_opening_handles()
+        self._sync_wall_grips()
+        self._refresh_task_panel_status()
+        return True
+
     def _activate_opening_target(self, mouse_pos, event_callback=None):
         target_kind, opening = self._get_plan_target_at_position(mouse_pos)
         if target_kind != "opening":
@@ -2315,6 +2339,30 @@ class PlanEditSession:
         self._set_hovered_wall(None)
         self._set_hovered_opening(None)
         self._select_opening_for_plan_edit(opening, queue_restore=True)
+        if event_callback and hasattr(event_callback, "setHandled"):
+            try:
+                event_callback.setHandled()
+            except Exception:
+                pass
+        return True
+
+    def _activate_wall_target(self, mouse_pos, event_callback=None):
+        target_kind, wall = self._get_plan_target_at_position(mouse_pos)
+        if target_kind != "wall":
+            wall = None
+        if not self._select_wall_for_plan_edit(wall):
+            return False
+        self._set_hovered_wall(None)
+        previous_ignore = self._ignore_selection_changes
+        self._ignore_selection_changes = True
+        try:
+            try:
+                FreeCADGui.Selection.clearSelection()
+                FreeCADGui.Selection.addSelection(wall)
+            except Exception:
+                pass
+        finally:
+            self._ignore_selection_changes = previous_ignore
         if event_callback and hasattr(event_callback, "setHandled"):
             try:
                 event_callback.setHandled()
