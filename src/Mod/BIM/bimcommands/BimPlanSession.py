@@ -259,9 +259,11 @@ class PlanEditSession:
         self.active_storey = None
         self.selected_wall = None
         self.selected_opening = None
+        self.hovered_wall = None
         self.hovered_opening = None
         self._pending_selected_opening_intent = None
         self._grip_trackers = []
+        self._wall_hover_trackers = []
         self._opening_hover_trackers = []
         self._opening_overlay_trackers = []
         self._opening_handle_trackers = []
@@ -360,6 +362,7 @@ class PlanEditSession:
         self._cancel_rect_wall_tool(refresh=False)
         self._cancel_wall_edit(restore=False, refresh=False)
         self._cancel_pending_edit()
+        self._clear_hovered_wall_overlay()
         self._clear_wall_grips()
         self._clear_hovered_opening_overlay()
         self._clear_selected_opening_overlay()
@@ -387,6 +390,7 @@ class PlanEditSession:
         self.viewer = None
         self.selected_wall = None
         self.selected_opening = None
+        self.hovered_wall = None
         self.hovered_opening = None
         self._pending_selected_opening_intent = None
         self._edit_wall = None
@@ -421,6 +425,7 @@ class PlanEditSession:
             self._cancel_rect_wall_tool(refresh=False)
             self._cancel_wall_edit(restore=not teardown, refresh=False)
             self._cancel_pending_edit()
+            self._clear_hovered_wall_overlay()
             self._clear_wall_grips()
             self._clear_hovered_opening_overlay()
             self._clear_selected_opening_overlay()
@@ -1272,6 +1277,7 @@ class PlanEditSession:
             self.selected_opening = self._pending_selected_opening_intent
         if previous_wall != self.selected_wall:
             self._sync_wall_grips()
+        self._sync_hovered_wall_overlay()
         if previous_opening != self.selected_opening or self.current_tool != "Select":
             self._sync_selected_opening_overlay()
             self._sync_selected_opening_handles()
@@ -1280,6 +1286,7 @@ class PlanEditSession:
 
     def _start_embedded_tool(self, tool_name, command, host_class=_PlanEditCommandHost):
         self.current_tool = tool_name
+        self._set_hovered_wall(None)
         self._set_hovered_opening(None)
         self._refresh_task_panel_status()
         self._embedded_tool = command
@@ -1649,6 +1656,7 @@ class PlanEditSession:
 
         self._dragging_grip = True
         self._ignore_selection_changes = True
+        self._set_hovered_wall(None)
         self._set_hovered_opening(None)
         self._edit_wall = wall
         self._edit_endpoint = {0: "Start", 1: "End", 2: "Move"}[grip_index]
@@ -1975,11 +1983,12 @@ class PlanEditSession:
             self._update_dragged_wall(snapped_point)
             return
         if self.current_tool != "Select":
+            self._set_hovered_wall(None)
             self._set_hovered_opening(None)
             return
         event = event_callback.getEvent()
         pos = event.getPosition().getValue()
-        self._update_hovered_opening((pos[0], pos[1]))
+        self._update_hovered_plan_target((pos[0], pos[1]))
 
     def _on_key_pressed(self, event_callback):
         if self._tearing_down:
@@ -2066,6 +2075,9 @@ class PlanEditSession:
         }:
             self._sync_hovered_opening_overlay()
             return
+        if obj == self.hovered_wall and prop in {"Shape", "Additions", "Subtractions", "Hosts"}:
+            self._sync_hovered_wall_overlay()
+            return
         if obj != self.selected_wall:
             return
         if prop not in {"Shape", "Additions", "Subtractions", "Hosts"}:
@@ -2075,6 +2087,9 @@ class PlanEditSession:
     def slotDeletedObject(self, obj):
         if self._tearing_down:
             return
+        if obj == self.hovered_wall:
+            self.hovered_wall = None
+            self._clear_hovered_wall_overlay()
         if obj == self.hovered_opening:
             self.hovered_opening = None
             self._clear_hovered_opening_overlay()
@@ -2170,6 +2185,28 @@ class PlanEditSession:
                 pass
         self._grip_trackers = []
 
+    def _get_wall_overlay_polylines(self, wall):
+        if not wall:
+            return []
+        proxy = getattr(wall, "Proxy", None)
+        if not proxy or not hasattr(proxy, "getFootprint"):
+            return []
+        try:
+            faces = proxy.getFootprint(wall) or []
+        except Exception:
+            return []
+
+        polylines = []
+        for face in faces:
+            for wire in face.Wires:
+                points = [vertex.Point for vertex in wire.Vertexes]
+                if len(points) < 2:
+                    continue
+                if points[0].distanceToPoint(points[-1]) > 0.001:
+                    points.append(points[0])
+                polylines.append(points)
+        return polylines
+
     def _get_opening_overlay_polylines(self, opening):
         if not opening:
             return []
@@ -2184,16 +2221,17 @@ class PlanEditSession:
         except Exception:
             return []
 
-    def _get_opening_target_at_position(self, mouse_pos):
+    def _get_plan_target_at_position(self, mouse_pos):
         if not self.view or not mouse_pos:
-            return None
+            return (None, None)
         try:
             infos = self.view.getObjectsInfo((int(mouse_pos[0]), int(mouse_pos[1])))
         except (AttributeError, ReferenceError, RuntimeError):
-            return None
+            return (None, None)
         if not infos:
-            return None
+            return (None, None)
 
+        wall_candidate = None
         for info in infos:
             if not info:
                 continue
@@ -2209,14 +2247,41 @@ class PlanEditSession:
                 continue
             obj = doc.getObject(str(obj_name))
             if self._is_hosted_opening_object(obj):
-                return obj
-        return None
+                return ("opening", obj)
+            try:
+                import Draft
 
-    def _update_hovered_opening(self, mouse_pos):
+                if wall_candidate is None and Draft.getType(obj) == "Wall":
+                    wall_candidate = obj
+            except Exception:
+                pass
+        if wall_candidate is not None:
+            return ("wall", wall_candidate)
+        return (None, None)
+
+    def _update_hovered_plan_target(self, mouse_pos):
         if self.current_tool != "Select":
+            self._set_hovered_wall(None)
             self._set_hovered_opening(None)
             return
-        self._set_hovered_opening(self._get_opening_target_at_position(mouse_pos))
+        target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
+        if target_kind == "opening":
+            self._set_hovered_wall(None)
+            self._set_hovered_opening(target_obj)
+        elif target_kind == "wall":
+            self._set_hovered_opening(None)
+            self._set_hovered_wall(target_obj)
+        else:
+            self._set_hovered_wall(None)
+            self._set_hovered_opening(None)
+
+    def _set_hovered_wall(self, wall):
+        if wall == self.selected_wall:
+            wall = None
+        if self.hovered_wall == wall:
+            return
+        self.hovered_wall = wall
+        self._sync_hovered_wall_overlay()
 
     def _set_hovered_opening(self, opening):
         if opening == self.selected_opening:
@@ -2242,9 +2307,12 @@ class PlanEditSession:
         return True
 
     def _activate_opening_target(self, mouse_pos, event_callback=None):
-        opening = self._get_opening_target_at_position(mouse_pos)
+        target_kind, opening = self._get_plan_target_at_position(mouse_pos)
+        if target_kind != "opening":
+            opening = None
         if not self._is_hosted_opening_object(opening):
             return False
+        self._set_hovered_wall(None)
         self._set_hovered_opening(None)
         self._select_opening_for_plan_edit(opening, queue_restore=True)
         if event_callback and hasattr(event_callback, "setHandled"):
@@ -2253,6 +2321,43 @@ class PlanEditSession:
             except Exception:
                 pass
         return True
+
+    def _sync_hovered_wall_overlay(self):
+        self._clear_hovered_wall_overlay()
+        if self.current_tool != "Select":
+            return
+        if not self.hovered_wall or self.hovered_wall == self.selected_wall:
+            return
+        self._create_wall_overlay_trackers(
+            self.hovered_wall,
+            color=(0.42, 0.62, 0.9),
+            width=2,
+            tracker_store=self._wall_hover_trackers,
+        )
+
+    def _clear_hovered_wall_overlay(self):
+        for tracker in self._wall_hover_trackers:
+            try:
+                tracker.finalize()
+            except Exception:
+                pass
+        self._wall_hover_trackers = []
+
+    def _create_wall_overlay_trackers(self, wall, color, width, tracker_store):
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            return
+
+        for polyline in self._get_wall_overlay_polylines(wall):
+            if len(polyline) < 2:
+                continue
+            for start, end in zip(polyline, polyline[1:]):
+                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                tracker.p1(start)
+                tracker.p2(end)
+                tracker.on()
+                tracker_store.append(tracker)
 
     def _sync_hovered_opening_overlay(self):
         self._clear_hovered_opening_overlay()
@@ -2484,6 +2589,7 @@ class PlanEditSession:
         if not opening:
             return
         self.current_tool = "Move Opening"
+        self._set_hovered_wall(None)
         self._set_hovered_opening(None)
         self._edit_opening = opening
         self._edit_opening_handle_index = handle_index
