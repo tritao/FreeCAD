@@ -261,6 +261,7 @@ class PlanEditSession:
         self.selected_opening = None
         self._grip_trackers = []
         self._opening_overlay_trackers = []
+        self._opening_handle_trackers = []
         self._selection_observer_added = False
         self._document_observer_added = False
         self._pending_selected_wall_reset = False
@@ -276,6 +277,8 @@ class PlanEditSession:
         self._rect_wall_preview_trackers = []
         self._edit_wall_visibility = None
         self._dragging_grip = False
+        self._edit_opening = None
+        self._edit_opening_handle_index = None
         self._ignore_selection_changes = False
         self._mouse_moved_cb = None
         self._mouse_pressed_cb = None
@@ -355,6 +358,7 @@ class PlanEditSession:
         self._cancel_pending_edit()
         self._clear_wall_grips()
         self._clear_selected_opening_overlay()
+        self._clear_selected_opening_handles()
         self._detach_selection_observer()
         self._detach_document_observer()
         self._unregister_edit_callbacks()
@@ -378,6 +382,8 @@ class PlanEditSession:
         self.selected_wall = None
         self.selected_opening = None
         self._edit_wall = None
+        self._edit_opening = None
+        self._edit_opening_handle_index = None
         self._edit_endpoint = None
         self._edit_endpoints = None
         self._preview_points = None
@@ -409,6 +415,7 @@ class PlanEditSession:
             self._cancel_pending_edit()
             self._clear_wall_grips()
             self._clear_selected_opening_overlay()
+            self._clear_selected_opening_handles()
             self._detach_selection_observer()
             self._detach_document_observer()
             self._unregister_edit_callbacks()
@@ -1247,6 +1254,7 @@ class PlanEditSession:
             self._sync_wall_grips()
         if previous_opening != self.selected_opening or self.current_tool != "Select":
             self._sync_selected_opening_overlay()
+            self._sync_selected_opening_handles()
         self._refresh_task_panel_status()
 
     def _start_embedded_tool(self, tool_name, command, host_class=_PlanEditCommandHost):
@@ -1287,8 +1295,11 @@ class PlanEditSession:
         self._embedded_host = None
         self._embedded_tool = None
         self._embedded_tool_name = None
+        self._edit_opening = None
+        self._edit_opening_handle_index = None
         self._sync_wall_grips()
         self._sync_selected_opening_overlay()
+        self._sync_selected_opening_handles()
 
     def _stop_snapper(self):
         snapper = getattr(FreeCADGui, "Snapper", None)
@@ -1323,6 +1334,7 @@ class PlanEditSession:
         if refresh:
             self._refresh_task_panel_status()
         self._sync_selected_opening_overlay()
+        self._sync_selected_opening_handles()
         return True
 
     def _get_rect_wall_corners(self, point):
@@ -1954,17 +1966,24 @@ class PlanEditSession:
         if self._ignore_selection_changes:
             return
         if sub in ("EditNode0", "EditNode1", "EditNode2"):
-            self.selected_wall = FreeCAD.getDocument(doc).getObject(obj)
-            self._clear_wall_grips()
-            edit_mode = {
-                "EditNode0": "Start",
-                "EditNode1": "End",
-                "EditNode2": "Move",
-            }[sub]
-            if edit_mode == "Move":
-                self.move_selected_wall()
+            target = FreeCAD.getDocument(doc).getObject(obj)
+            if self._is_hosted_opening_object(target):
+                self.selected_opening = target
+                self.selected_wall = None
+                self._clear_wall_grips()
+                self._activate_opening_handle(target, int(sub[-1]))
             else:
-                self.stretch_selected_wall(edit_mode)
+                self.selected_wall = target
+                self._clear_wall_grips()
+                edit_mode = {
+                    "EditNode0": "Start",
+                    "EditNode1": "End",
+                    "EditNode2": "Move",
+                }[sub]
+                if edit_mode == "Move":
+                    self.move_selected_wall()
+                else:
+                    self.stretch_selected_wall(edit_mode)
             return
         del doc, obj, sub, point
         self._refresh_selected_wall()
@@ -2009,6 +2028,7 @@ class PlanEditSession:
             "IfcType",
         }:
             self._sync_selected_opening_overlay()
+            self._sync_selected_opening_handles()
             return
         if obj != self.selected_wall:
             return
@@ -2022,6 +2042,7 @@ class PlanEditSession:
         if obj == self.selected_opening:
             self.selected_opening = None
             self._sync_selected_opening_overlay()
+            self._sync_selected_opening_handles()
             return
         if obj != self.selected_wall:
             return
@@ -2153,6 +2174,167 @@ class PlanEditSession:
             except Exception:
                 pass
         self._opening_overlay_trackers = []
+
+    def _get_selected_opening_edit_handles(self, opening):
+        if not opening:
+            return []
+        view_object = getattr(opening, "ViewObject", None)
+        proxy = getattr(view_object, "Proxy", None)
+        if not proxy or not hasattr(proxy, "get_plan_edit_handles"):
+            return []
+        try:
+            return list(proxy.get_plan_edit_handles() or [])
+        except Exception:
+            return []
+
+    def _execute_opening_handle(self, opening, handle_index, point=None):
+        proxy = getattr(getattr(opening, "ViewObject", None), "Proxy", None)
+        if not proxy or not hasattr(proxy, "execute_plan_edit_handle"):
+            return False
+        try:
+            return bool(proxy.execute_plan_edit_handle(handle_index, point))
+        except Exception:
+            return False
+
+    def _sync_selected_opening_handles(self):
+        self._clear_selected_opening_handles()
+        if self.current_tool != "Select":
+            return
+        if not self._is_hosted_opening_object(self.selected_opening):
+            return
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+            from draftutils import params
+        except Exception:
+            return
+
+        marker_size = params.get_param_view("MarkerSize")
+        markers = {
+            "move": FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size),
+            "flip_hinge": FreeCADGui.getMarkerIndex("CIRCLE_FILLED", marker_size),
+            "flip_opening": FreeCADGui.getMarkerIndex("CROSS", marker_size),
+        }
+        handle_color = (0.12, 0.38, 0.95)
+        for idx, handle in enumerate(
+            self._get_selected_opening_edit_handles(self.selected_opening)
+        ):
+            role = handle.role
+            point = handle.point
+            if role not in markers or point is None:
+                continue
+            tracker = DraftTrackers.editTracker(
+                pos=point,
+                name=self.selected_opening.Name,
+                idx=idx,
+                marker=markers[role],
+            )
+            tracker.setColor(handle_color)
+            tracker.on()
+            self._opening_handle_trackers.append(tracker)
+
+    def _clear_selected_opening_handles(self):
+        for tracker in self._opening_handle_trackers:
+            try:
+                tracker.finalize()
+            except Exception:
+                pass
+        self._opening_handle_trackers = []
+
+    def _activate_opening_handle(self, opening, handle_index):
+        handles = self._get_selected_opening_edit_handles(opening)
+        if handle_index < 0 or handle_index >= len(handles):
+            return
+        handle = handles[handle_index]
+        if handle.interaction == "point_pick":
+            self._start_opening_handle_point_pick(opening, handle_index, handle)
+        else:
+            self._execute_selected_opening_handle(opening, handle_index, handle)
+
+    def _start_opening_handle_point_pick(self, opening, handle_index, handle):
+        if not opening:
+            return
+        self.current_tool = "Move Opening"
+        self._edit_opening = opening
+        self._edit_opening_handle_index = handle_index
+        self._refresh_task_panel_status()
+        FreeCAD.activeDraftCommand = self
+        FreeCADGui.Snapper.getPoint(
+            callback=self._finish_opening_handle_point_pick,
+            title=handle.title or translate("BIM_PlanEdit", "Pick new opening position"),
+        )
+
+    def _finish_opening_handle_point_pick(self, point=None, obj=None):
+        del obj
+        opening = self._edit_opening
+        handle_index = self._edit_opening_handle_index
+        self._edit_opening = None
+        self._edit_opening_handle_index = None
+        FreeCAD.activeDraftCommand = None
+
+        if point is None or not opening:
+            self.current_tool = "Select"
+            self._sync_selected_opening_overlay()
+            self._sync_selected_opening_handles()
+            self._refresh_task_panel_status()
+            return
+
+        handles = self._get_selected_opening_edit_handles(opening)
+        if handle_index is None or handle_index < 0 or handle_index >= len(handles):
+            self.current_tool = "Select"
+            self._refresh_task_panel_status()
+            return
+        handle = handles[handle_index]
+
+        try:
+            self.doc.openTransaction(
+                handle.transaction or translate("BIM_PlanEdit", "Edit Opening")
+            )
+            moved = self._execute_opening_handle(opening, handle_index, point)
+            if not moved:
+                raise RuntimeError("Unable to execute opening handle")
+            self.doc.commitTransaction()
+            self.doc.recompute()
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+            self.current_tool = "Select"
+            self._sync_selected_opening_overlay()
+            self._sync_selected_opening_handles()
+            self._refresh_task_panel_status()
+            return
+
+        try:
+            FreeCADGui.Selection.clearSelection()
+            FreeCADGui.Selection.addSelection(opening)
+        except Exception:
+            pass
+        self.current_tool = "Select"
+        self.selected_opening = opening
+        self._sync_selected_opening_overlay()
+        self._sync_selected_opening_handles()
+        self._refresh_task_panel_status()
+
+    def _execute_selected_opening_handle(self, opening, handle_index, handle):
+        try:
+            self.doc.openTransaction(
+                handle.transaction or translate("BIM_PlanEdit", "Edit Opening")
+            )
+            executed = self._execute_opening_handle(opening, handle_index)
+            if not executed:
+                raise RuntimeError("Unable to execute opening handle")
+            self.doc.commitTransaction()
+            self.doc.recompute()
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+            return
+        self.selected_opening = opening
+        self._sync_selected_opening_overlay()
+        self._sync_selected_opening_handles()
 
 
 class PlanEditDockWidget:
