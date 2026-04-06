@@ -1089,7 +1089,10 @@ class Snapper:
                 if obj and (obj.isDerivedFrom("Part::Feature") or utils.get_type(obj) == "Axis"):
                     # obj sub is face, shape is edge:
                     if "Face" in sub_name and shape.ShapeType == "Edge":
-                        face = obj.Shape.Faces[int(sub_name[4:]) - 1]
+                        face_index = int(sub_name[4:]) - 1
+                        if face_index < 0 or face_index >= len(obj.Shape.Faces):
+                            continue
+                        face = obj.Shape.Faces[face_index]
                         try:
                             pts = geo_intersections.findIntersection(face, shape)
                             for pt in pts:
@@ -1100,7 +1103,10 @@ class Snapper:
                         pass
                     # obj sub is edge, shape is face:
                     elif shape.ShapeType == "Face":
-                        edge = obj.Shape.Edges[int(sub_name[4:]) - 1]
+                        edge_index = int(sub_name[4:]) - 1
+                        if edge_index < 0 or edge_index >= len(obj.Shape.Edges):
+                            continue
+                        edge = obj.Shape.Edges[edge_index]
                         try:
                             pts = geo_intersections.findIntersection(edge, shape)
                             for pt in pts:
