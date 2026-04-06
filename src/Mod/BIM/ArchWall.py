@@ -1537,6 +1537,57 @@ class _Wall(ArchComponent.Component):
 
         return [p1_global, p2_global]
 
+    def calc_edit_grip_positions(self, obj):
+        """Returns visible grip positions for endpoint editing.
+
+        Editing still uses the wall centerline, but aligned/offset walls can
+        display their body shifted sideways from that trace. Grip markers should
+        sit on the visible wall body while still editing the underlying
+        centerline.
+        """
+        import DraftVecUtils
+
+        endpoints = self.calc_endpoints(obj)
+        if len(endpoints) != 2:
+            return endpoints
+
+        start = FreeCAD.Vector(endpoints[0])
+        end = FreeCAD.Vector(endpoints[1])
+        midpoint = (start + end) * 0.5
+
+        axis = end.sub(start)
+        axis.z = 0
+        if DraftVecUtils.isNull(axis):
+            return [start, end, midpoint]
+
+        try:
+            faces = self.getFootprint(obj)
+        except Exception:
+            return [start, end, midpoint]
+        if not faces:
+            return [start, end, midpoint]
+
+        area_sum = 0.0
+        center = FreeCAD.Vector()
+        for face in faces:
+            try:
+                weight = float(face.Area)
+                face_center = face.CenterOfMass
+            except Exception:
+                continue
+            center = center.add(face_center.multiply(weight))
+            area_sum += weight
+
+        if area_sum <= 0.0:
+            return [start, end, midpoint]
+
+        center.multiply(1.0 / area_sum)
+        axis.normalize()
+        shift = center.sub(midpoint)
+        shift = shift.sub(axis.multiply(shift.dot(axis)))
+        shift.z = 0
+        return [start.add(shift), end.add(shift), midpoint.add(shift)]
+
     def set_from_endpoints(self, obj, pts):
         """Sets the wall from two global points.
 
