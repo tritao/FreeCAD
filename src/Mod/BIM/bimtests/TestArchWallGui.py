@@ -620,6 +620,28 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertEqual(len(session._opening_handle_trackers), 3)
 
+    def test_plan_edit_hovered_wall_shows_preselection_overlay(self):
+        """Walls should get a lightweight hover overlay before actual selection."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(
+            session.view,
+            "getObjectsInfo",
+            return_value=[{"Document": self.document.Name, "Object": wall.Name, "Component": ""}],
+        ):
+            session._update_hovered_plan_target((100, 100))
+
+        self.assertIs(session.hovered_wall, wall)
+        self.assertIsNone(session.hovered_opening)
+        self.assertGreater(len(session._wall_hover_trackers), 0)
+        self.assertEqual(len(session._grip_trackers), 0)
+
     def test_plan_edit_can_flip_selected_door_hinge(self):
         """Selected door handles should expose hinge flipping in Plan Edit."""
 
