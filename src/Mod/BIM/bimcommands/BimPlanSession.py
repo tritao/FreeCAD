@@ -1964,6 +1964,9 @@ class PlanEditSession:
         if self._dragging_grip:
             self._cancel_drag_edit()
             return
+        if self.current_tool == "Move Opening":
+            self._cancel_opening_handle_point_pick()
+            return
         if self._has_active_rect_wall_tool():
             self._cancel_rect_wall_tool()
 
@@ -2167,37 +2170,36 @@ class PlanEditSession:
         self._opening_overlay_trackers = []
 
     def _get_selected_opening_edit_handles(self, opening):
-        if not opening:
+        proxy = self._get_opening_view_proxy(opening, "get_plan_edit_handles")
+        if not proxy:
             return []
+        return list(proxy.get_plan_edit_handles() or [])
+
+    def _get_opening_view_proxy(self, opening, *attrs):
+        if not opening:
+            return None
         view_object = getattr(opening, "ViewObject", None)
         proxy = getattr(view_object, "Proxy", None)
-        if not proxy or not hasattr(proxy, "get_plan_edit_handles"):
-            return []
-        try:
-            return list(proxy.get_plan_edit_handles() or [])
-        except Exception:
-            return []
+        if not proxy:
+            return None
+        for attr in attrs:
+            if not hasattr(proxy, attr):
+                return None
+        return proxy
 
     def _project_opening_handle_point(self, opening, handle, point):
         if point is None or not opening or getattr(handle, "role", None) != "move":
             return point
-        view_object = getattr(opening, "ViewObject", None)
-        proxy = getattr(view_object, "Proxy", None)
-        if not proxy or not hasattr(proxy, "project_point_to_host_axis"):
+        proxy = self._get_opening_view_proxy(opening, "project_point_to_host_axis")
+        if not proxy:
             return point
-        try:
-            return proxy.project_point_to_host_axis(point)
-        except Exception:
-            return point
+        return proxy.project_point_to_host_axis(point)
 
     def _execute_opening_handle(self, opening, handle_index, point=None):
-        proxy = getattr(getattr(opening, "ViewObject", None), "Proxy", None)
-        if not proxy or not hasattr(proxy, "execute_plan_edit_handle"):
+        proxy = self._get_opening_view_proxy(opening, "execute_plan_edit_handle")
+        if not proxy:
             return False
-        try:
-            return bool(proxy.execute_plan_edit_handle(handle_index, point))
-        except Exception:
-            return False
+        return bool(proxy.execute_plan_edit_handle(handle_index, point))
 
     def _sync_selected_opening_handles(self):
         self._clear_selected_opening_handles()
@@ -2208,7 +2210,7 @@ class PlanEditSession:
         try:
             import draftguitools.gui_trackers as DraftTrackers
             from draftutils import params
-        except Exception:
+        except ImportError:
             return
 
         marker_size = params.get_param_view("MarkerSize")
@@ -2243,17 +2245,13 @@ class PlanEditSession:
                 pass
         self._opening_handle_trackers = []
 
-    def _get_opening_move_preview_polylines(self, opening, point):
+    def _get_opening_move_preview_state(self, opening, point):
         if not opening or point is None:
-            return []
-        view_object = getattr(opening, "ViewObject", None)
-        proxy = getattr(view_object, "Proxy", None)
-        if not proxy or not hasattr(proxy, "get_plan_move_preview_polylines"):
-            return []
-        try:
-            return list(proxy.get_plan_move_preview_polylines(point) or [])
-        except Exception:
-            return []
+            return None
+        proxy = self._get_opening_view_proxy(opening, "get_plan_move_preview_state")
+        if not proxy:
+            return None
+        return proxy.get_plan_move_preview_state(point)
 
     def _sync_opening_move_preview(self, opening, point):
         self._clear_opening_move_preview()
@@ -2261,11 +2259,15 @@ class PlanEditSession:
             return
         try:
             import draftguitools.gui_trackers as DraftTrackers
-        except Exception:
+        except ImportError:
+            return
+
+        preview_state = self._get_opening_move_preview_state(opening, point)
+        if not preview_state:
             return
 
         preview_color = (0.12, 0.38, 0.95)
-        for polyline in self._get_opening_move_preview_polylines(opening, point):
+        for polyline in preview_state.get("polylines", []):
             if len(polyline) < 2:
                 continue
             for start, end in zip(polyline, polyline[1:]):
@@ -2274,6 +2276,32 @@ class PlanEditSession:
                 tracker.p2(end)
                 tracker.on()
                 self._opening_move_preview_trackers.append(tracker)
+
+        guide_start = preview_state.get("guide_start")
+        guide_end = preview_state.get("guide_end")
+        if guide_start is None or guide_end is None:
+            return
+
+        guide = DraftTrackers.lineTracker(
+            dotted=True,
+            scolor=preview_color,
+            swidth=1,
+            ontop=True,
+        )
+        guide.p1(guide_start)
+        guide.p2(guide_end)
+        guide.on()
+        self._opening_move_preview_trackers.append(guide)
+
+        try:
+            dim = DraftTrackers.archDimTracker(mode=1)
+        except Exception:
+            return
+        dim.dimnode.textColor.setValue(preview_color)
+        dim.p1(guide_start)
+        dim.p2(guide_end)
+        dim.on()
+        self._opening_move_preview_trackers.append(dim)
 
     def _clear_opening_move_preview(self):
         for tracker in self._opening_move_preview_trackers:
@@ -2286,7 +2314,7 @@ class PlanEditSession:
     def _activate_opening_handle(self, opening, handle_index):
         try:
             from PySide import QtCore
-        except Exception:
+        except ImportError:
             self._activate_opening_handle_now(opening, handle_index)
             return
 
@@ -2378,22 +2406,54 @@ class PlanEditSession:
                 self.doc.abortTransaction()
             except Exception:
                 pass
-            self.current_tool = "Select"
+            self._restore_selected_opening(opening)
+            return
+
+        self._queue_restore_selected_opening(opening)
+
+    def _cancel_opening_handle_point_pick(self):
+        opening = self._edit_opening
+        self._edit_opening = None
+        self._edit_opening_handle_index = None
+        self._stop_snapper()
+        FreeCAD.activeDraftCommand = None
+        self._clear_opening_move_preview()
+        self.current_tool = "Select"
+        if opening:
+            self.selected_opening = opening
+        self._sync_selected_opening_overlay()
+        self._sync_selected_opening_handles()
+        self._refresh_task_panel_status()
+
+    def _restore_selected_opening(self, opening):
+        self.current_tool = "Select"
+        self.selected_opening = opening
+        if not opening:
             self._sync_selected_opening_overlay()
             self._sync_selected_opening_handles()
             self._refresh_task_panel_status()
             return
-
+        previous_ignore = self._ignore_selection_changes
+        self._ignore_selection_changes = True
         try:
-            FreeCADGui.Selection.clearSelection()
-            FreeCADGui.Selection.addSelection(opening)
-        except Exception:
-            pass
-        self.current_tool = "Select"
-        self.selected_opening = opening
+            try:
+                FreeCADGui.Selection.clearSelection()
+                FreeCADGui.Selection.addSelection(opening)
+            except Exception:
+                pass
+        finally:
+            self._ignore_selection_changes = previous_ignore
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
         self._refresh_task_panel_status()
+
+    def _queue_restore_selected_opening(self, opening):
+        try:
+            from PySide import QtCore
+        except ImportError:
+            self._restore_selected_opening(opening)
+            return
+        QtCore.QTimer.singleShot(0, lambda: self._restore_selected_opening(opening))
 
     def _execute_selected_opening_handle(self, opening, handle_index, handle):
         try:

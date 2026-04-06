@@ -1570,28 +1570,33 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
 
         return polylines
 
-    def get_plan_move_preview_polylines(self, point):
-        """Return preview polylines for moving the opening along its host."""
+    def get_plan_move_preview_state(self, point):
+        """Return visible preview geometry for moving the opening along its host."""
 
         if point is None:
-            return []
+            return None
 
-        projected = self.project_point_to_host_axis(point)
-        context = self.get_plan_move_context()
         handles = self.get_plan_edit_handles()
         move_handle = next((handle for handle in handles if handle.role == "move"), None)
+        projected = self.project_point_to_host_axis(point)
+        context = self.get_plan_move_context()
         if not move_handle or move_handle.point is None or projected is None or not context:
-            return []
+            return None
 
         axis_u = context["axis_u"]
         delta_vec = projected.sub(move_handle.point)
         delta = FreeCAD.Vector(axis_u).multiply(delta_vec.dot(axis_u))
+        preview_point = FreeCAD.Vector(move_handle.point).add(delta)
         polylines = []
         for polyline in self.get_plan_overlay_polylines():
             if len(polyline) < 2:
                 continue
             polylines.append([FreeCAD.Vector(point).add(delta) for point in polyline])
-        return polylines
+        return {
+            "guide_start": FreeCAD.Vector(move_handle.point),
+            "guide_end": preview_point,
+            "polylines": polylines,
+        }
 
     def get_plan_edit_handles(self):
         """Return plan-edit handle specs for hosted openings."""
