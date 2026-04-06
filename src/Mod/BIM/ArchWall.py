@@ -2141,7 +2141,7 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         for face in faces:
             for wire in face.Wires:
                 for edge in wire.Edges:
-                    polyline = edge.tessellate(1)
+                    polyline = self._collect_edge_points(edge)
                     if len(polyline) < 2:
                         continue
                     start_idx = len(line_verts)
@@ -2154,6 +2154,23 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         if line_verts:
             self.lcoords.point.setValues(line_verts)
             self.lset.numVertices.setValues(0, len(line_counts), line_counts)
+
+    def _collect_edge_points(self, edge):
+        points = edge.tessellate(1)
+        if points and all(isinstance(point, FreeCAD.Vector) for point in points):
+            return points
+
+        try:
+            points = edge.discretize(Deflection=1.0)
+        except Exception:
+            points = []
+        if points:
+            return [
+                point if isinstance(point, FreeCAD.Vector) else FreeCAD.Vector(point)
+                for point in points
+            ]
+
+        return [vertex.Point for vertex in edge.Vertexes]
 
     def getDisplayModes(self, vobj):
         """Define the display modes unique to the Arch Wall.
