@@ -262,6 +262,7 @@ class PlanEditSession:
         self._grip_trackers = []
         self._opening_overlay_trackers = []
         self._opening_handle_trackers = []
+        self._opening_move_preview_trackers = []
         self._selection_observer_added = False
         self._document_observer_added = False
         self._pending_selected_wall_reset = False
@@ -359,6 +360,7 @@ class PlanEditSession:
         self._clear_wall_grips()
         self._clear_selected_opening_overlay()
         self._clear_selected_opening_handles()
+        self._clear_opening_move_preview()
         self._detach_selection_observer()
         self._detach_document_observer()
         self._unregister_edit_callbacks()
@@ -416,6 +418,7 @@ class PlanEditSession:
             self._clear_wall_grips()
             self._clear_selected_opening_overlay()
             self._clear_selected_opening_handles()
+            self._clear_opening_move_preview()
             self._detach_selection_observer()
             self._detach_document_observer()
             self._unregister_edit_callbacks()
@@ -1927,9 +1930,15 @@ class PlanEditSession:
                 index = int(str(node.subElementName.getValue())[8:])
             except Exception:
                 return
-            if obj != self.selected_wall:
-                self.selected_wall = obj
-            self._begin_grip_drag(index)
+            if self._is_hosted_opening_object(obj):
+                self.selected_opening = obj
+                self.selected_wall = None
+                self._clear_wall_grips()
+                self._activate_opening_handle(obj, index)
+            else:
+                if obj != self.selected_wall:
+                    self.selected_wall = obj
+                self._begin_grip_drag(index)
         elif event.getState() == coin.SoMouseButtonEvent.UP and self._dragging_grip:
             self._commit_drag_edit()
 
@@ -1966,24 +1975,6 @@ class PlanEditSession:
         if self._ignore_selection_changes:
             return
         if sub in ("EditNode0", "EditNode1", "EditNode2"):
-            target = FreeCAD.getDocument(doc).getObject(obj)
-            if self._is_hosted_opening_object(target):
-                self.selected_opening = target
-                self.selected_wall = None
-                self._clear_wall_grips()
-                self._activate_opening_handle(target, int(sub[-1]))
-            else:
-                self.selected_wall = target
-                self._clear_wall_grips()
-                edit_mode = {
-                    "EditNode0": "Start",
-                    "EditNode1": "End",
-                    "EditNode2": "Move",
-                }[sub]
-                if edit_mode == "Move":
-                    self.move_selected_wall()
-                else:
-                    self.stretch_selected_wall(edit_mode)
             return
         del doc, obj, sub, point
         self._refresh_selected_wall()
@@ -2187,6 +2178,18 @@ class PlanEditSession:
         except Exception:
             return []
 
+    def _project_opening_handle_point(self, opening, handle, point):
+        if point is None or not opening or getattr(handle, "role", None) != "move":
+            return point
+        view_object = getattr(opening, "ViewObject", None)
+        proxy = getattr(view_object, "Proxy", None)
+        if not proxy or not hasattr(proxy, "project_point_to_host_axis"):
+            return point
+        try:
+            return proxy.project_point_to_host_axis(point)
+        except Exception:
+            return point
+
     def _execute_opening_handle(self, opening, handle_index, point=None):
         proxy = getattr(getattr(opening, "ViewObject", None), "Proxy", None)
         if not proxy or not hasattr(proxy, "execute_plan_edit_handle"):
@@ -2240,7 +2243,61 @@ class PlanEditSession:
                 pass
         self._opening_handle_trackers = []
 
+    def _get_opening_move_preview_polylines(self, opening, point):
+        if not opening or point is None:
+            return []
+        view_object = getattr(opening, "ViewObject", None)
+        proxy = getattr(view_object, "Proxy", None)
+        if not proxy or not hasattr(proxy, "get_plan_move_preview_polylines"):
+            return []
+        try:
+            return list(proxy.get_plan_move_preview_polylines(point) or [])
+        except Exception:
+            return []
+
+    def _sync_opening_move_preview(self, opening, point):
+        self._clear_opening_move_preview()
+        if self.current_tool != "Move Opening" or not opening or point is None:
+            return
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except Exception:
+            return
+
+        preview_color = (0.12, 0.38, 0.95)
+        for polyline in self._get_opening_move_preview_polylines(opening, point):
+            if len(polyline) < 2:
+                continue
+            for start, end in zip(polyline, polyline[1:]):
+                tracker = DraftTrackers.lineTracker(scolor=preview_color, swidth=3, ontop=True)
+                tracker.p1(start)
+                tracker.p2(end)
+                tracker.on()
+                self._opening_move_preview_trackers.append(tracker)
+
+    def _clear_opening_move_preview(self):
+        for tracker in self._opening_move_preview_trackers:
+            try:
+                tracker.finalize()
+            except Exception:
+                pass
+        self._opening_move_preview_trackers = []
+
     def _activate_opening_handle(self, opening, handle_index):
+        try:
+            from PySide import QtCore
+        except Exception:
+            self._activate_opening_handle_now(opening, handle_index)
+            return
+
+        QtCore.QTimer.singleShot(
+            0,
+            lambda: self._activate_opening_handle_now(opening, handle_index),
+        )
+
+    def _activate_opening_handle_now(self, opening, handle_index):
+        if self._tearing_down or not opening:
+            return
         handles = self._get_selected_opening_edit_handles(opening)
         if handle_index < 0 or handle_index >= len(handles):
             return
@@ -2256,12 +2313,32 @@ class PlanEditSession:
         self.current_tool = "Move Opening"
         self._edit_opening = opening
         self._edit_opening_handle_index = handle_index
+        self._clear_selected_opening_overlay()
+        self._clear_selected_opening_handles()
+        self._sync_opening_move_preview(opening, handle.point)
         self._refresh_task_panel_status()
         FreeCAD.activeDraftCommand = self
         FreeCADGui.Snapper.getPoint(
+            last=handle.point,
             callback=self._finish_opening_handle_point_pick,
+            movecallback=self._update_opening_handle_point_pick,
             title=handle.title or translate("BIM_PlanEdit", "Pick new opening position"),
         )
+
+    def _update_opening_handle_point_pick(self, point=None, snap_info=None):
+        del snap_info
+        opening = self._edit_opening
+        handle_index = self._edit_opening_handle_index
+        if not opening or handle_index is None:
+            self._clear_opening_move_preview()
+            return
+        handles = self._get_selected_opening_edit_handles(opening)
+        if handle_index < 0 or handle_index >= len(handles):
+            self._clear_opening_move_preview()
+            return
+        handle = handles[handle_index]
+        point = self._project_opening_handle_point(opening, handle, point)
+        self._sync_opening_move_preview(opening, point)
 
     def _finish_opening_handle_point_pick(self, point=None, obj=None):
         del obj
@@ -2270,6 +2347,7 @@ class PlanEditSession:
         self._edit_opening = None
         self._edit_opening_handle_index = None
         FreeCAD.activeDraftCommand = None
+        self._clear_opening_move_preview()
 
         if point is None or not opening:
             self.current_tool = "Select"
@@ -2284,6 +2362,7 @@ class PlanEditSession:
             self._refresh_task_panel_status()
             return
         handle = handles[handle_index]
+        point = self._project_opening_handle_point(opening, handle, point)
 
         try:
             self.doc.openTransaction(

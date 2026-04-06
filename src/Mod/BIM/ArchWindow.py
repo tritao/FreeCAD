@@ -1570,6 +1570,29 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
 
         return polylines
 
+    def get_plan_move_preview_polylines(self, point):
+        """Return preview polylines for moving the opening along its host."""
+
+        if point is None:
+            return []
+
+        projected = self.project_point_to_host_axis(point)
+        context = self.get_plan_move_context()
+        handles = self.get_plan_edit_handles()
+        move_handle = next((handle for handle in handles if handle.role == "move"), None)
+        if not move_handle or move_handle.point is None or projected is None or not context:
+            return []
+
+        axis_u = context["axis_u"]
+        delta_vec = projected.sub(move_handle.point)
+        delta = FreeCAD.Vector(axis_u).multiply(delta_vec.dot(axis_u))
+        polylines = []
+        for polyline in self.get_plan_overlay_polylines():
+            if len(polyline) < 2:
+                continue
+            polylines.append([FreeCAD.Vector(point).add(delta) for point in polyline])
+        return polylines
+
     def get_plan_edit_handles(self):
         """Return plan-edit handle specs for hosted openings."""
 
@@ -1625,37 +1648,37 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             )
         ]
 
-        if self._get_effective_opening_kind() == "Door":
+        capabilities = self._get_plan_edit_capabilities()
+        if capabilities["can_flip_opening"]:
             hinge_at_min, swing_sign = self._get_door_symbol_style()
             hinge_u = umin if hinge_at_min else umax
             hinge_v = symbol_vmin if swing_sign < 0 else symbol_vmax
-            flip_hinge_u = umax if hinge_at_min else umin
             flip_open_v = symbol_vmax if swing_sign < 0 else symbol_vmin
-
-            flip_hinge = origin.add(FreeCAD.Vector(axis_u).multiply(flip_hinge_u)).add(
-                FreeCAD.Vector(axis_v).multiply(hinge_v)
-            )
-            flip_hinge.z = base_z
             flip_open = origin.add(FreeCAD.Vector(axis_u).multiply(mid_u)).add(
                 FreeCAD.Vector(axis_v).multiply(flip_open_v)
             )
             flip_open.z = base_z
-
-            handles.extend(
-                [
+            if capabilities["can_flip_hinge"]:
+                flip_hinge_u = umax if hinge_at_min else umin
+                flip_hinge = origin.add(FreeCAD.Vector(axis_u).multiply(flip_hinge_u)).add(
+                    FreeCAD.Vector(axis_v).multiply(hinge_v)
+                )
+                flip_hinge.z = base_z
+                handles.append(
                     OpeningPlanEditHandle(
                         role="flip_hinge",
                         point=flip_hinge,
                         interaction="immediate",
                         transaction=translate("BIM_PlanEdit", "Flip Opening Hinge"),
-                    ),
-                    OpeningPlanEditHandle(
-                        role="flip_opening",
-                        point=flip_open,
-                        interaction="immediate",
-                        transaction=translate("BIM_PlanEdit", "Flip Opening Direction"),
-                    ),
-                ]
+                    )
+                )
+            handles.append(
+                OpeningPlanEditHandle(
+                    role="flip_opening",
+                    point=flip_open,
+                    interaction="immediate",
+                    transaction=translate("BIM_PlanEdit", "Flip Opening Direction"),
+                )
             )
 
         return handles
@@ -1678,6 +1701,63 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             return True
         return False
 
+    def get_plan_move_context(self):
+        """Return the host-aligned move context for plan editing."""
+
+        if not hasattr(self, "Object"):
+            return None
+
+        shape = getattr(self.Object, "Shape", None)
+        cut_z, base_z = self._get_footprint_cut_context()
+        if cut_z is None:
+            return None
+
+        section_profile = None
+        if shape and not shape.isNull():
+            section_profile = self._get_opening_section_profile(shape, cut_z)
+        if section_profile is None:
+            section_profile = self._get_base_opening_profile(base_z)
+        if not section_profile:
+            return None
+
+        return {
+            "origin": FreeCAD.Vector(section_profile["origin"]),
+            "axis_u": FreeCAD.Vector(section_profile["axis_u"]),
+            "axis_v": FreeCAD.Vector(section_profile["axis_v"]),
+            "base_z": base_z,
+        }
+
+    def project_point_to_host_axis(self, point):
+        """Project a picked plan point onto the hosted opening move axis."""
+
+        obj = getattr(self, "Object", None)
+        if not obj or point is None:
+            return point
+
+        context = self.get_plan_move_context()
+        if not context:
+            return point
+
+        base = getattr(obj, "Base", None)
+        target = base if base else obj
+        placement = getattr(target, "Placement", None)
+        if placement is None:
+            return point
+
+        origin = context["origin"]
+        axis_u = context["axis_u"]
+        axis_v = context["axis_v"]
+        current = FreeCAD.Vector(placement.Base)
+        delta = point.sub(origin)
+        current_delta = current.sub(origin)
+        target_u = delta.dot(axis_u)
+        current_v = current_delta.dot(axis_v)
+        projected = origin.add(FreeCAD.Vector(axis_u).multiply(target_u)).add(
+            FreeCAD.Vector(axis_v).multiply(current_v)
+        )
+        projected.z = current.z
+        return projected
+
     def move_along_host(self, point):
         """Move the opening base along the host wall axis."""
 
@@ -1690,20 +1770,25 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         placement = getattr(target, "Placement", None)
         if placement is None:
             return False
+        placement = FreeCAD.Placement(placement)
 
-        origin, axis_u, axis_v = self._get_host_plan_basis()
-        current = FreeCAD.Vector(placement.Base)
-        delta = point.sub(origin)
-        current_delta = current.sub(origin)
-        target_u = delta.dot(axis_u)
-        current_v = current_delta.dot(axis_v)
-        new_base = origin.add(FreeCAD.Vector(axis_u).multiply(target_u)).add(
-            FreeCAD.Vector(axis_v).multiply(current_v)
-        )
-        new_base.z = current.z
+        new_base = self.project_point_to_host_axis(point)
+        if new_base is None:
+            return False
         placement.Base = new_base
         target.Placement = placement
+        self._touch_hosts()
         return True
+
+    def _touch_hosts(self):
+        obj = getattr(self, "Object", None)
+        if not obj:
+            return
+        for host in set(getattr(obj, "Hosts", None) or []):
+            try:
+                host.touch()
+            except Exception:
+                pass
 
     def updateFootprint(self):
         if not hasattr(self, "lcoords") or not hasattr(self, "lset"):
@@ -1888,6 +1973,28 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
                 if "Edge" in s:
                     idxs.append(int(s[4:]) - 1)  # Edge indices in string are 1-based.
         return idxs
+
+    def _get_plan_edit_capabilities(self):
+        parts = getattr(self.Object, "WindowParts", []) or []
+        has_opening_mode = any(
+            token.startswith("Mode") and token[4:].isdigit()
+            for part in parts
+            for token in part.split(",")
+        )
+        parts_str = "".join(getattr(self.Object, "WindowParts", []) or [])
+        is_door = self._get_effective_opening_kind() == "Door"
+        can_flip_opening = is_door and has_opening_mode
+        can_flip_hinge = (
+            can_flip_opening
+            and len(self.getHingeEdgeIndices()) == 1
+            and "Mode9" not in parts_str
+            and "Mode10" not in parts_str
+        )
+        return {
+            "can_move": True,
+            "can_flip_opening": can_flip_opening,
+            "can_flip_hinge": can_flip_hinge,
+        }
 
     def setEdit(self, vobj, mode):
         if mode != 0:
