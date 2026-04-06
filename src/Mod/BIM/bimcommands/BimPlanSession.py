@@ -1275,6 +1275,7 @@ class PlanEditSession:
             and self._is_hosted_opening_object(self._pending_selected_opening_intent)
         ):
             self.selected_opening = self._pending_selected_opening_intent
+            self._pending_selected_opening_intent = None
         if previous_wall != self.selected_wall:
             self._sync_wall_grips()
         self._sync_hovered_wall_overlay()
