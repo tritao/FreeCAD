@@ -559,6 +559,35 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertIsNone(session.selected_wall)
         self.assertEqual(len(session._grip_trackers), 0)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertEqual(len(session._opening_handle_trackers), 3)
+
+    def test_plan_edit_can_flip_selected_door_hinge(self):
+        """Selected door handles should expose hinge flipping in Plan Edit."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="FlipDoor")
+        original_parts = list(door.WindowParts)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        session._activate_opening_handle(door, 1)
+        self.pump_gui_events()
+
+        self.assertNotEqual(original_parts, list(door.WindowParts))
 
     def test_plan_edit_shows_grips_for_straight_base_wall(self):
         """Straight base-driven walls should get the same grip overlays as baseless walls."""

@@ -36,6 +36,7 @@ __url__ = "https://www.freecad.org"
 #  by defining a volume that gets subtracted from them.
 
 import os
+from dataclasses import dataclass
 
 import FreeCAD
 import ArchCommands
@@ -100,6 +101,15 @@ def recolorize(attr):  # names is [docname,objname]
         obj = attr
         if hasattr(obj.ViewObject, "Proxy") and hasattr(obj.ViewObject.Proxy, "colorize"):
             obj.ViewObject.Proxy.colorize(obj)
+
+
+@dataclass(frozen=True)
+class OpeningPlanEditHandle:
+    role: str
+    point: Vector
+    interaction: str = "immediate"
+    title: str = ""
+    transaction: str = ""
 
 
 class _Window(ArchComponent.Component):
@@ -1559,6 +1569,141 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             polylines.append([start, end])
 
         return polylines
+
+    def get_plan_edit_handles(self):
+        """Return plan-edit handle specs for hosted openings."""
+
+        if not hasattr(self, "Object"):
+            return []
+
+        shape = getattr(self.Object, "Shape", None)
+        cut_z, base_z = self._get_footprint_cut_context()
+        if cut_z is None:
+            return []
+
+        section_profile = None
+        if shape and not shape.isNull():
+            section_profile = self._get_opening_section_profile(shape, cut_z)
+        if section_profile is None:
+            section_profile = self._get_base_opening_profile(base_z)
+        if not section_profile:
+            return []
+
+        origin = section_profile["origin"]
+        axis_u = section_profile["axis_u"]
+        axis_v = section_profile["axis_v"]
+        umin = section_profile["umin"]
+        umax = section_profile["umax"]
+        vmin = section_profile["vmin"]
+        vmax = section_profile["vmax"]
+
+        host_v_bounds = self._get_host_plan_v_bounds(origin, axis_u, axis_v)
+        if host_v_bounds is not None:
+            vmin, vmax = host_v_bounds
+
+        width_v = max(vmax - vmin, 0.0)
+        symbol_inset = min(width_v * 0.25, 30.0)
+        symbol_vmin = vmin + symbol_inset
+        symbol_vmax = vmax - symbol_inset
+        if symbol_vmax <= symbol_vmin:
+            symbol_vmin = vmin
+            symbol_vmax = vmax
+
+        mid_u = (umin + umax) * 0.5
+        mid_v = (symbol_vmin + symbol_vmax) * 0.5
+        move_point = origin.add(FreeCAD.Vector(axis_u).multiply(mid_u)).add(
+            FreeCAD.Vector(axis_v).multiply(mid_v)
+        )
+        move_point.z = base_z
+        handles = [
+            OpeningPlanEditHandle(
+                role="move",
+                point=move_point,
+                interaction="point_pick",
+                title=translate("BIM_PlanEdit", "Pick new opening position"),
+                transaction=translate("BIM_PlanEdit", "Move Opening"),
+            )
+        ]
+
+        if self._get_effective_opening_kind() == "Door":
+            hinge_at_min, swing_sign = self._get_door_symbol_style()
+            hinge_u = umin if hinge_at_min else umax
+            hinge_v = symbol_vmin if swing_sign < 0 else symbol_vmax
+            flip_hinge_u = umax if hinge_at_min else umin
+            flip_open_v = symbol_vmax if swing_sign < 0 else symbol_vmin
+
+            flip_hinge = origin.add(FreeCAD.Vector(axis_u).multiply(flip_hinge_u)).add(
+                FreeCAD.Vector(axis_v).multiply(hinge_v)
+            )
+            flip_hinge.z = base_z
+            flip_open = origin.add(FreeCAD.Vector(axis_u).multiply(mid_u)).add(
+                FreeCAD.Vector(axis_v).multiply(flip_open_v)
+            )
+            flip_open.z = base_z
+
+            handles.extend(
+                [
+                    OpeningPlanEditHandle(
+                        role="flip_hinge",
+                        point=flip_hinge,
+                        interaction="immediate",
+                        transaction=translate("BIM_PlanEdit", "Flip Opening Hinge"),
+                    ),
+                    OpeningPlanEditHandle(
+                        role="flip_opening",
+                        point=flip_open,
+                        interaction="immediate",
+                        transaction=translate("BIM_PlanEdit", "Flip Opening Direction"),
+                    ),
+                ]
+            )
+
+        return handles
+
+    def execute_plan_edit_handle(self, handle_index, point=None):
+        """Execute a previously advertised plan-edit handle."""
+
+        handles = self.get_plan_edit_handles()
+        if handle_index < 0 or handle_index >= len(handles):
+            return False
+
+        role = handles[handle_index].role
+        if role == "move":
+            return self.move_along_host(point)
+        if role == "flip_hinge":
+            self.invertHinge()
+            return True
+        if role == "flip_opening":
+            self.invertOpening()
+            return True
+        return False
+
+    def move_along_host(self, point):
+        """Move the opening base along the host wall axis."""
+
+        obj = getattr(self, "Object", None)
+        if not obj or point is None:
+            return False
+
+        base = getattr(obj, "Base", None)
+        target = base if base else obj
+        placement = getattr(target, "Placement", None)
+        if placement is None:
+            return False
+
+        origin, axis_u, axis_v = self._get_host_plan_basis()
+        current = FreeCAD.Vector(placement.Base)
+        delta = point.sub(origin)
+        current_delta = current.sub(origin)
+        target_u = delta.dot(axis_u)
+        current_v = current_delta.dot(axis_v)
+        new_base = origin.add(FreeCAD.Vector(axis_u).multiply(target_u)).add(
+            FreeCAD.Vector(axis_v).multiply(current_v)
+        )
+        new_base.z = current.z
+        placement.Base = new_base
+        target.Placement = placement
+        return True
 
     def updateFootprint(self):
         if not hasattr(self, "lcoords") or not hasattr(self, "lset"):
