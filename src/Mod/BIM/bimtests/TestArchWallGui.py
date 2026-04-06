@@ -561,6 +561,65 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertEqual(len(session._opening_handle_trackers), 3)
 
+    def test_plan_edit_hovered_hosted_door_shows_preselection_overlay(self):
+        """Hosted openings should get a hover overlay independent of global preselection."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="HoverDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(
+            session.view,
+            "getObjectsInfo",
+            return_value=[{"Document": self.document.Name, "Object": door.Name, "Component": ""}],
+        ):
+            session._update_hovered_opening((100, 100))
+
+        self.assertIs(session.hovered_opening, door)
+        self.assertGreater(len(session._opening_hover_trackers), 0)
+        self.assertEqual(len(session._opening_handle_trackers), 0)
+
+    def test_plan_edit_clicking_hovered_hosted_door_selects_it(self):
+        """Clicking a hovered hosted opening should promote it to selected opening state."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="ClickHoverDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(
+            session,
+            "_get_opening_target_at_position",
+            return_value=door,
+        ):
+            activated = session._activate_opening_target((100, 100))
+
+        self.assertTrue(activated)
+        self.assertIs(session.selected_opening, door)
+        self.assertIsNone(session.selected_wall)
+        self.assertEqual(len(session._grip_trackers), 0)
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertEqual(len(session._opening_handle_trackers), 3)
+
     def test_plan_edit_can_flip_selected_door_hinge(self):
         """Selected door handles should expose hinge flipping in Plan Edit."""
 
