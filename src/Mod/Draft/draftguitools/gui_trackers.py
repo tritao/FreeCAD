@@ -1720,6 +1720,7 @@ class archDimTracker(Tracker):
             self.param1.setValue(-1 * sign * self.offset)
         else:
             self.Distance = (p2.sub(p1)).Length
+            self.param1.setValue(self.offset)
 
         text = FreeCAD.Units.Quantity(self.Distance, FreeCAD.Units.Length).UserString
         self.matrix.setValue(*plane.get_placement().Matrix.transposed().A)
@@ -1876,6 +1877,7 @@ class editableArchDimTracker:
             self.label.setLabelDistance(-1 * sign * self.offset)
         else:
             self.Distance = (p2.sub(p1)).Length
+            self.label.setLabelDistance(self.offset)
         text = FreeCAD.Units.Quantity(self.Distance, FreeCAD.Units.Length).UserString
         volume = self.camera.getViewVolume()
         scale = self.view.getSize()[1] / volume.getHeight()

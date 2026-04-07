@@ -2060,6 +2060,22 @@ class PlanEditSession:
             points[0].add(FreeCAD.Vector(perp).multiply(y_max)),
         ]
 
+    def _get_wall_edit_readout_offset(self, mode):
+        if mode != 1:
+            return None
+        wall = self._edit_wall
+        width = getattr(getattr(wall, "Width", None), "Value", 0.0) if wall else 0.0
+        width = float(width or 0.0)
+        if width <= 0:
+            return 100.0
+        align = getattr(wall, "Align", "Center") if wall else "Center"
+        gap = max(width * 0.25, 100.0)
+        if align == "Left":
+            return gap
+        if align == "Right":
+            return -(gap)
+        return width * 0.5 + gap
+
     def _update_wall_edit_preview_geometry(self, points):
         if not points or len(points) != 2:
             return
@@ -2187,6 +2203,9 @@ class PlanEditSession:
                     dim.setColor(readout_color)
             except Exception:
                 pass
+            offset = self._get_wall_edit_readout_offset(mode)
+            if offset is not None:
+                dim.offset = offset
             dim.p1(start)
             dim.p2(end)
             dim.on()
