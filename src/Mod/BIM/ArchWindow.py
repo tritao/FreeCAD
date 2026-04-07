@@ -1271,6 +1271,159 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             "vmax": v_center + half_thickness,
         }
 
+    def _get_hosted_subvolume_section_profile(self, cut_z):
+        """Return a hosted opening profile from the same subvolume used to cut the host."""
+
+        hosts = getattr(self.Object, "Hosts", None) or []
+        host = hosts[0] if hosts else None
+        if not host:
+            return None
+
+        object_proxy = getattr(self.Object, "Proxy", None)
+        if not object_proxy or not hasattr(object_proxy, "getSubVolume"):
+            return None
+
+        try:
+            subvolume = object_proxy.getSubVolume(self.Object, host=host)
+        except Exception:
+            subvolume = None
+        if not subvolume or subvolume.isNull():
+            return None
+
+        return self._get_opening_section_profile(subvolume, cut_z)
+
+    def _get_plan_symbol_source_profile(self, shape, cut_z, base_z):
+        """Return the raw opening profile used to size plan-edit symbols."""
+
+        hosts = getattr(self.Object, "Hosts", None) or []
+        if hosts:
+            profile = self._get_hosted_subvolume_section_profile(cut_z)
+            if profile is not None:
+                return profile
+
+            profile = self._get_base_opening_profile(base_z)
+            if profile is not None:
+                return profile
+
+        if shape and not shape.isNull():
+            profile = self._get_opening_section_profile(shape, cut_z)
+            if profile is not None:
+                return profile
+
+        return self._get_base_opening_profile(base_z)
+
+    def _get_host_plan_basis_from_endpoints(self):
+        """Return a stable host-wall basis anchored at the wall start point."""
+
+        hosts = getattr(self.Object, "Hosts", None) or []
+        host = hosts[0] if hosts else None
+        if not host:
+            return None
+
+        proxy = getattr(host, "Proxy", None)
+        if proxy and hasattr(proxy, "calc_endpoints"):
+            try:
+                endpoints = proxy.calc_endpoints(host)
+            except Exception:
+                endpoints = None
+            if endpoints and len(endpoints) == 2:
+                start = FreeCAD.Vector(endpoints[0])
+                end = FreeCAD.Vector(endpoints[1])
+                axis_u = end.sub(start)
+                axis_u.z = 0
+                if axis_u.Length > 1e-9:
+                    axis_u.normalize()
+                    axis_v = FreeCAD.Vector(-axis_u.y, axis_u.x, 0)
+                    origin = FreeCAD.Vector(start.x, start.y, 0)
+                    return origin, axis_u, axis_v
+
+        return self._get_host_plan_basis()
+
+    def _get_hosted_opening_plan_frame(self, shape, cut_z, base_z):
+        """Return one canonical host-wall frame for hosted opening plan geometry."""
+
+        source_profile = self._get_plan_symbol_source_profile(shape, cut_z, base_z)
+        if not source_profile:
+            return None
+
+        basis = self._get_host_plan_basis_from_endpoints()
+        if not basis:
+            return source_profile
+        origin, axis_u, axis_v = basis
+
+        source_center_u = (source_profile["umin"] + source_profile["umax"]) * 0.5
+        source_center_v = (source_profile["vmin"] + source_profile["vmax"]) * 0.5
+        source_center = (
+            source_profile["origin"]
+            .add(FreeCAD.Vector(source_profile["axis_u"]).multiply(source_center_u))
+            .add(FreeCAD.Vector(source_profile["axis_v"]).multiply(source_center_v))
+        )
+        center_delta = source_center.sub(origin)
+        center_u = center_delta.dot(axis_u)
+        center_v = center_delta.dot(axis_v)
+
+        half_width_u = max(source_profile["umax"] - source_profile["umin"], 0.0) * 0.5
+        half_width_v = max(source_profile["vmax"] - source_profile["vmin"], 0.0) * 0.5
+        umin = center_u - half_width_u
+        umax = center_u + half_width_u
+        source_vmin = center_v - half_width_v
+        source_vmax = center_v + half_width_v
+
+        host_v_bounds = self._get_host_plan_v_bounds(origin, axis_u, axis_v)
+        if host_v_bounds is not None:
+            vmin, vmax = host_v_bounds
+        else:
+            vmin = source_vmin
+            vmax = source_vmax
+
+        return {
+            "origin": origin,
+            "axis_u": axis_u,
+            "axis_v": axis_v,
+            "umin": umin,
+            "umax": umax,
+            "vmin": vmin,
+            "vmax": vmax,
+            "source_profile": source_profile,
+            "source_vmin": source_vmin,
+            "source_vmax": source_vmax,
+        }
+
+    def _get_plan_move_target(self):
+        obj = getattr(self, "Object", None)
+        if not obj:
+            return None, None
+        target = getattr(obj, "Base", None) or obj
+        placement = getattr(target, "Placement", None)
+        if placement is None:
+            return target, None
+        return target, FreeCAD.Placement(placement)
+
+    def get_plan_center_point(self):
+        """Return the current hosted-opening center point used by plan editing."""
+
+        if not hasattr(self, "Object"):
+            return None
+
+        shape = getattr(self.Object, "Shape", None)
+        cut_z, base_z = self._get_footprint_cut_context()
+        if cut_z is None:
+            return None
+
+        frame = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
+        if not frame:
+            return None
+
+        center_u = (frame["umin"] + frame["umax"]) * 0.5
+        center_v = (frame["vmin"] + frame["vmax"]) * 0.5
+        point = (
+            frame["origin"]
+            .add(FreeCAD.Vector(frame["axis_u"]).multiply(center_u))
+            .add(FreeCAD.Vector(frame["axis_v"]).multiply(center_v))
+        )
+        point.z = base_z
+        return point
+
     def _get_door_symbol_style(self):
         hinge_at_min = True
         swing_sign = -1.0
@@ -1405,6 +1558,28 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             )
         return points
 
+    def _clamp_symbol_polyline_u(self, polyline, origin, axis_u, axis_v, umin, umax):
+        """Clamp generated plan-symbol points to the opening span on axis_u."""
+
+        clamped = []
+        for point in polyline:
+            delta = FreeCAD.Vector(point).sub(origin)
+            u = min(max(delta.dot(axis_u), umin), umax)
+            v = delta.dot(axis_v)
+            clamped_point = origin.add(FreeCAD.Vector(axis_u).multiply(u)).add(
+                FreeCAD.Vector(axis_v).multiply(v)
+            )
+            clamped_point.z = point.z
+            clamped.append(clamped_point)
+        return clamped
+
+    def _clamp_symbol_polylines_u(self, polylines, origin, axis_u, axis_v, umin, umax):
+        return [
+            self._clamp_symbol_polyline_u(polyline, origin, axis_u, axis_v, umin, umax)
+            for polyline in polylines
+            if polyline
+        ]
+
     def _get_symbol_footprint_polylines(self, section_profile, base_z):
         if not section_profile:
             return []
@@ -1460,7 +1635,9 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
                 open_end.sub(hinge),
                 sweep_positive=(swing_sign > 0),
             )
-            return [closed_leaf, leaf, arc]
+            return self._clamp_symbol_polylines_u(
+                [closed_leaf, leaf, arc], origin, axis_u, axis_v, umin, umax
+            )
 
         center_u = (umin + umax) * 0.5
         offset = min(width_u * 0.2, 60.0)
@@ -1494,7 +1671,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             right.z = base_z
             polylines.append([left, right])
 
-        return polylines
+        return self._clamp_symbol_polylines_u(polylines, origin, axis_u, axis_v, umin, umax)
 
     def _collect_local_footprint_polylines(self):
         if not hasattr(self, "Object"):
@@ -1508,11 +1685,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         inverse_placement = self._get_footprint_inverse_placement()
         polylines = []
 
-        section_profile = None
-        if shape and not shape.isNull():
-            section_profile = self._get_opening_section_profile(shape, cut_z)
-        if section_profile is None:
-            section_profile = self._get_base_opening_profile(base_z)
+        section_profile = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
         for polyline_points in self._get_symbol_footprint_polylines(section_profile, base_z):
             polyline = self._points_to_local_footprint_polyline(
                 polyline_points, base_z, inverse_placement
@@ -1533,11 +1706,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         if cut_z is None:
             return []
 
-        section_profile = None
-        if shape and not shape.isNull():
-            section_profile = self._get_opening_section_profile(shape, cut_z)
-        if section_profile is None:
-            section_profile = self._get_base_opening_profile(base_z)
+        section_profile = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
         if not section_profile:
             return []
 
@@ -1616,11 +1785,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         if cut_z is None:
             return []
 
-        section_profile = None
-        if shape and not shape.isNull():
-            section_profile = self._get_opening_section_profile(shape, cut_z)
-        if section_profile is None:
-            section_profile = self._get_base_opening_profile(base_z)
+        section_profile = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
         if not section_profile:
             return []
 
@@ -1724,13 +1889,23 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         if cut_z is None:
             return None
 
-        section_profile = None
-        if shape and not shape.isNull():
-            section_profile = self._get_opening_section_profile(shape, cut_z)
-        if section_profile is None:
-            section_profile = self._get_base_opening_profile(base_z)
+        section_profile = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
         if not section_profile:
             return None
+
+        center_u = (section_profile["umin"] + section_profile["umax"]) * 0.5
+        center_v = (section_profile["vmin"] + section_profile["vmax"]) * 0.5
+        center_point = (
+            section_profile["origin"]
+            .add(FreeCAD.Vector(section_profile["axis_u"]).multiply(center_u))
+            .add(FreeCAD.Vector(section_profile["axis_v"]).multiply(center_v))
+        )
+        center_point.z = base_z
+
+        _target, placement = self._get_plan_move_target()
+        reference_offset = FreeCAD.Vector()
+        if placement is not None:
+            reference_offset = FreeCAD.Vector(placement.Base).sub(center_point)
 
         move_u_min = move_u_max = None
         opening_half_width_u = max(section_profile["umax"] - section_profile["umin"], 0.0) * 0.5
@@ -1759,6 +1934,8 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             "axis_v": FreeCAD.Vector(section_profile["axis_v"]),
             "base_z": base_z,
             "opening_half_width_u": opening_half_width_u,
+            "center_point": center_point,
+            "reference_offset": reference_offset,
             "move_u_min": move_u_min,
             "move_u_max": move_u_max,
         }
@@ -1819,25 +1996,22 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         if not context:
             return point
 
-        base = getattr(obj, "Base", None)
-        target = base if base else obj
-        placement = getattr(target, "Placement", None)
-        if placement is None:
+        center_point = context.get("center_point")
+        if center_point is None:
             return point
 
         origin = context["origin"]
         axis_u = context["axis_u"]
         axis_v = context["axis_v"]
-        current = FreeCAD.Vector(placement.Base)
         delta = point.sub(origin)
-        current_delta = current.sub(origin)
+        current_delta = FreeCAD.Vector(center_point).sub(origin)
         anchor_offset_u = self._get_plan_move_anchor_offset_u(anchor, context=context)
         target_u = delta.dot(axis_u) - anchor_offset_u
         current_v = current_delta.dot(axis_v)
         projected = origin.add(FreeCAD.Vector(axis_u).multiply(target_u)).add(
             FreeCAD.Vector(axis_v).multiply(current_v)
         )
-        projected.z = current.z
+        projected.z = center_point.z
         return self.clamp_point_to_host_span(projected, context=context)
 
     def move_along_host(self, point, anchor="center"):
@@ -1847,17 +2021,19 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         if not obj or point is None:
             return False
 
-        base = getattr(obj, "Base", None)
-        target = base if base else obj
-        placement = getattr(target, "Placement", None)
+        target, placement = self._get_plan_move_target()
         if placement is None:
             return False
-        placement = FreeCAD.Placement(placement)
-
-        new_base = self.project_point_to_host_axis(point, anchor=anchor)
-        if new_base is None:
+        context = self.get_plan_move_context()
+        if not context:
             return False
-        placement.Base = new_base
+
+        new_center = self.project_point_to_host_axis(point, anchor=anchor)
+        if new_center is None:
+            return False
+        placement.Base = FreeCAD.Vector(new_center).add(
+            context.get("reference_offset") or FreeCAD.Vector()
+        )
         target.Placement = placement
         self._touch_hosts()
         return True

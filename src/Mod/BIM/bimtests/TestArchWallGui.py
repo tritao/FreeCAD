@@ -743,6 +743,43 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertAlmostEqual(projected_left_u, center_u, delta=1e-6)
         self.assertAlmostEqual(projected_right_u, center_u, delta=1e-6)
 
+    def test_plan_edit_opening_overlay_stays_within_wall_span_at_limit(self):
+        """Hosted opening overlay should stay inside the host wall span at the move limit."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="BoundedSymbolDoor", width=900.0)
+        self.document.recompute()
+
+        proxy = door.ViewObject.Proxy
+        context = proxy.get_plan_move_context()
+        self.assertIsNotNone(context)
+
+        left_limit = context["origin"].add(
+            FreeCAD.Vector(context["axis_u"]).multiply(context["move_u_min"])
+        )
+        left_limit.z = context["base_z"]
+        proxy.move_along_host(left_limit)
+        self.document.recompute()
+
+        wall_start, wall_end = wall.Proxy.calc_endpoints(wall)
+        wall_start = FreeCAD.Vector(wall_start)
+        wall_end = FreeCAD.Vector(wall_end)
+        wall_axis_u = wall_end.sub(wall_start)
+        wall_length = wall_axis_u.Length
+        self.assertGreater(wall_length, 0.0)
+        wall_axis_u.normalize()
+
+        overlay_us = []
+        for polyline in proxy.get_plan_overlay_polylines():
+            for point in polyline:
+                overlay_us.append(FreeCAD.Vector(point).sub(wall_start).dot(wall_axis_u))
+
+        self.assertTrue(overlay_us)
+        self.assertGreaterEqual(min(overlay_us), -1e-6)
+        self.assertLessEqual(max(overlay_us), wall_length + 1e-6)
+
     def test_plan_edit_opening_move_tab_cycles_anchor(self):
         """Tab should cycle opening move anchors while the point-pick is active."""
 
@@ -1013,8 +1050,286 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
 
         self.assertEqual(session.current_tool, "Move Wall")
         self.assertIs(session.selected_wall, wall)
+
+    def test_plan_edit_wall_move_preview_shows_delta_readouts(self):
+        """Moving a wall should show horizontal and vertical temporary readouts."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        original_endpoints = wall.Proxy.calc_endpoints(wall)
+        session._edit_wall = wall
+        session._edit_endpoint = "Move"
+        session._edit_endpoints = original_endpoints
+
+        moved_points = [
+            original_endpoints[0].add(FreeCAD.Vector(500, 250, 0)),
+            original_endpoints[1].add(FreeCAD.Vector(500, 250, 0)),
+        ]
+
+        session._sync_wall_edit_preview(moved_points)
+
+        self.assertEqual(len(session._wall_edit_readout_trackers), 2)
+        self.assertTrue(
+            all(hasattr(tracker, "dimnode") for tracker in session._wall_edit_readout_trackers)
+        )
+        self.assertEqual(
+            sorted(
+                int(tracker.dimnode.datumtype.getValue())
+                for tracker in session._wall_edit_readout_trackers
+            ),
+            [2, 3],
+        )
+
+    def test_plan_edit_wall_stretch_preview_shows_length_readout(self):
+        """Stretching a wall endpoint should show one aligned temporary length readout."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        original_endpoints = wall.Proxy.calc_endpoints(wall)
+        session._edit_wall = wall
+        session._edit_endpoint = "End"
+        session._edit_endpoints = original_endpoints
+
+        stretched_points = [
+            original_endpoints[0],
+            original_endpoints[1].add(FreeCAD.Vector(800, 0, 0)),
+        ]
+
+        session._sync_wall_edit_preview(stretched_points)
+
+        self.assertEqual(len(session._wall_edit_readout_trackers), 1)
+        tracker = session._wall_edit_readout_trackers[0]
+        self.assertTrue(hasattr(tracker, "dimnode"))
+        self.assertEqual(int(tracker.dimnode.datumtype.getValue()), 1)
+
+    def test_plan_edit_wall_edit_refreshes_hosted_opening_footprints(self):
+        """Wall edits should refresh footprints for openings hosted by that wall."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+        door = self._make_hosted_door(wall, name="WallEditDoor")
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ), patch.object(session, "_refresh_opening_footprint_display") as refresh_opening:
+            session._start_wall_grip_edit(2)
+            new_midpoint = captured["last"].add(FreeCAD.Vector(400, 0, 0))
+            captured["callback"](new_midpoint, None)
+
+        refresh_opening.assert_any_call(door)
+
+    def test_plan_edit_wall_stretch_clamps_hosted_opening_inside_wall(self):
+        """Shortening a wall should move hosted openings back inside the valid span."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+        door = self._make_hosted_door(wall, name="ClampAfterStretchDoor", width=900.0)
+        self.document.recompute()
+
+        door_proxy = door.ViewObject.Proxy
+        move_context = door_proxy.get_plan_move_context()
+        rightmost = move_context["origin"].add(
+            FreeCAD.Vector(move_context["axis_u"]).multiply(move_context["move_u_max"])
+        )
+        rightmost.z = move_context["base_z"]
+        door_proxy.move_along_host(rightmost)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        original_endpoints = wall.Proxy.calc_endpoints(wall)
+        axis = original_endpoints[1].sub(original_endpoints[0]).normalize()
+        shortened_end = original_endpoints[0].add(axis.multiply(1600.0))
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ):
+            session._start_wall_grip_edit(1)
+            captured["callback"](shortened_end, None)
+
+        updated_context = door_proxy.get_plan_move_context()
+        current_center = door_proxy.get_plan_center_point()
+        self.assertIsNotNone(current_center)
+        current_center_u = (
+            FreeCAD.Vector(current_center)
+            .sub(updated_context["origin"])
+            .dot(updated_context["axis_u"])
+        )
+        self.assertAlmostEqual(current_center_u, updated_context["move_u_max"], delta=1e-6)
         self.assertIn("callback", captured)
         self.assertIn("movecallback", captured)
+
+    def test_plan_edit_wall_stretch_preserves_opening_edge_clearance(self):
+        """Stretching a wall endpoint should preserve existing opening edge clearance when possible."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+        door = self._make_hosted_door(wall, name="PreserveEdgeClearanceDoor", width=900.0)
+        self.document.recompute()
+
+        door_proxy = door.ViewObject.Proxy
+        move_context = door_proxy.get_plan_move_context()
+        target_center_u = 750.0
+        target_point = move_context["origin"].add(
+            FreeCAD.Vector(move_context["axis_u"]).multiply(target_center_u)
+        )
+        target_point.z = move_context["base_z"]
+        self.assertTrue(door_proxy.move_along_host(target_point))
+        self.document.recompute()
+
+        initial_context = door_proxy.get_plan_move_context()
+        initial_center = door_proxy.get_plan_center_point()
+        self.assertIsNotNone(initial_center)
+        initial_center_u = (
+            FreeCAD.Vector(initial_center)
+            .sub(initial_context["origin"])
+            .dot(initial_context["axis_u"])
+        )
+        initial_left_clearance = initial_center_u - initial_context["opening_half_width_u"]
+        self.assertAlmostEqual(initial_left_clearance, 300.0, delta=1e-6)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        original_endpoints = wall.Proxy.calc_endpoints(wall)
+        new_start = FreeCAD.Vector(original_endpoints[0]).add(FreeCAD.Vector(200.0, 0.0, 0.0))
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ):
+            session._start_wall_grip_edit(0)
+            captured["callback"](new_start, None)
+
+        wall_start, wall_end = wall.Proxy.calc_endpoints(wall)
+        wall_start = FreeCAD.Vector(wall_start)
+        wall_axis_u = FreeCAD.Vector(wall_end).sub(wall_start)
+        self.assertGreater(wall_axis_u.Length, 0.0)
+        wall_axis_u.normalize()
+
+        updated_context = door_proxy.get_plan_move_context()
+        updated_center = door_proxy.get_plan_center_point()
+        self.assertIsNotNone(updated_center)
+        updated_center_u = FreeCAD.Vector(updated_center).sub(wall_start).dot(wall_axis_u)
+        updated_left_clearance = updated_center_u - updated_context["opening_half_width_u"]
+        self.assertAlmostEqual(updated_left_clearance, initial_left_clearance, delta=1e-6)
+
+    def test_plan_edit_wall_stretch_keeps_opening_symbol_centered_on_slot(self):
+        """Hosted opening symbols should stay centered on the actual slot after wall resize."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+        door = self._make_hosted_door(wall, name="CenteredAfterStretchDoor", width=900.0)
+        self.document.recompute()
+
+        door_proxy = door.ViewObject.Proxy
+        move_context = door_proxy.get_plan_move_context()
+        rightmost = move_context["origin"].add(
+            FreeCAD.Vector(move_context["axis_u"]).multiply(move_context["move_u_max"])
+        )
+        rightmost.z = move_context["base_z"]
+        door_proxy.move_along_host(rightmost)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        original_endpoints = wall.Proxy.calc_endpoints(wall)
+        axis = original_endpoints[1].sub(original_endpoints[0]).normalize()
+        shortened_end = original_endpoints[0].add(axis.multiply(1600.0))
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ):
+            session._start_wall_grip_edit(1)
+            captured["callback"](shortened_end, None)
+
+        wall_start, wall_end = wall.Proxy.calc_endpoints(wall)
+        wall_start = FreeCAD.Vector(wall_start)
+        wall_end = FreeCAD.Vector(wall_end)
+        wall_axis_u = wall_end.sub(wall_start)
+        self.assertGreater(wall_axis_u.Length, 0.0)
+        wall_axis_u.normalize()
+
+        actual_center = door_proxy.get_plan_center_point()
+        self.assertIsNotNone(actual_center)
+        actual_center_u = FreeCAD.Vector(actual_center).sub(wall_start).dot(wall_axis_u)
+
+        overlay_polylines = door_proxy.get_plan_overlay_polylines()
+        self.assertTrue(overlay_polylines)
+        centerline = overlay_polylines[-1]
+        self.assertEqual(len(centerline), 2)
+        symbol_center = FreeCAD.Vector(centerline[0]).add(centerline[1]).multiply(0.5)
+        symbol_center_u = symbol_center.sub(wall_start).dot(wall_axis_u)
+
+        self.assertAlmostEqual(symbol_center_u, actual_center_u, delta=1e-6)
 
     def test_plan_edit_can_flip_selected_door_hinge(self):
         """Selected door handles should expose hinge flipping in Plan Edit."""
