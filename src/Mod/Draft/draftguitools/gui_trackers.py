@@ -1791,7 +1791,7 @@ class editableArchDimTracker:
         self.Distance = 0.0
         self.color = utils.get_rgba_tuple(params.get_param("snapcolor"))[:3]
         self.label = FreeCADGui.EditableDatumLabel(
-            self.view.getViewer(),
+            self.view,
             self._get_wp().get_placement(),
             self.color,
             auto_distance,
@@ -1803,6 +1803,13 @@ class editableArchDimTracker:
 
     def _get_wp(self):
         return self.working_plane or FreeCAD.DraftWorkingPlane
+
+    def _project_point(self, point):
+        plane = self._get_wp()
+        projected = plane.project_point(point)
+        projected_u = (projected - plane.position).dot(plane.u.normalize())
+        projected_v = (projected - plane.position).dot(plane.v.normalize())
+        return Vector(projected_u, projected_v, 0)
 
     def on(self):
         """Set the visibility to True."""
@@ -1846,7 +1853,7 @@ class editableArchDimTracker:
             label_type = "distance"
         self.label.setLabelType(label_type, "dimensioning")
 
-    def setString(self, text=None):
+    def setString(self, text=None, sync_spinbox=True):
         """Update the label text and placement from the current points."""
         del text
         plane = self._get_wp()
@@ -1876,31 +1883,30 @@ class editableArchDimTracker:
             self.label.setLabelStartAngle(
                 1 / 2 * self.Distance + 3 / 5 * self.size_pixel * len(text) / scale
             )
-        self.label.setSpinboxValue(self.Distance)
+        if sync_spinbox:
+            self.label.setSpinboxValue(self.Distance)
 
-    def p1(self, point=None):
+    def p1(self, point=None, sync_spinbox=True):
         """Set or get the first point of the dim."""
-        plane = self._get_wp()
-        if point:
-            p1_proj = plane.project_point(point)
-            p1_proj_u = (p1_proj - plane.position).dot(plane.u.normalize())
-            p1_proj_v = (p1_proj - plane.position).dot(plane.v.normalize())
-            self._p1 = Vector(p1_proj_u, p1_proj_v, 0)
-            self.setString()
+        if point is not None:
+            self._p1 = self._project_point(point)
+            self.setString(sync_spinbox=sync_spinbox)
         else:
             return self._p1
 
-    def p2(self, point=None):
+    def p2(self, point=None, sync_spinbox=True):
         """Set or get the second point of the dim."""
-        plane = self._get_wp()
-        if point:
-            p2_proj = plane.project_point(point)
-            p2_proj_u = (p2_proj - plane.position).dot(plane.u.normalize())
-            p2_proj_v = (p2_proj - plane.position).dot(plane.v.normalize())
-            self._p2 = Vector(p2_proj_u, p2_proj_v, 0)
-            self.setString()
+        if point is not None:
+            self._p2 = self._project_point(point)
+            self.setString(sync_spinbox=sync_spinbox)
         else:
             return self._p2
+
+    def updatePoints(self, p1, p2, sync_spinbox=True):
+        """Update both dimension endpoints and refresh the label."""
+        self._p1 = self._project_point(p1)
+        self._p2 = self._project_point(p2)
+        self.setString(sync_spinbox=sync_spinbox)
 
     def startEdit(self, value=None, event_filter=None, visible_to_mouse=False):
         """Start interactive editing of the current label."""
@@ -1911,6 +1917,22 @@ class editableArchDimTracker:
     def stopEdit(self):
         """Stop interactive editing."""
         self.label.stopEdit()
+
+    def isInEdit(self):
+        """Return whether the underlying label is currently being edited."""
+        return self.label.isInEdit()
+
+    def setValueChangedCallback(self, callback):
+        """Set the callback invoked when the edited value changes."""
+        self.label.setValueChangedCallback(callback)
+
+    def setEditingFinishedCallback(self, callback):
+        """Set the callback invoked when editing is accepted with Enter."""
+        self.label.setEditingFinishedCallback(callback)
+
+    def setEditingCanceledCallback(self, callback):
+        """Set the callback invoked when editing is canceled with Escape."""
+        self.label.setEditingCanceledCallback(callback)
 
 
 ## @}
