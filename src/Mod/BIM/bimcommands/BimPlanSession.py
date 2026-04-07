@@ -327,6 +327,7 @@ class PlanEditSession:
         self._preview_grip_trackers = []
         self._wall_edit_readout_trackers = []
         self._wall_edit_active_readout_tracker = None
+        self._wall_edit_active_readout_mode = None
         self._wall_edit_length_edit_queued = False
         self._rect_wall_start = None
         self._rect_wall_params = None
@@ -2242,12 +2243,20 @@ class PlanEditSession:
         self._update_wall_edit_preview_geometry(points)
         self._sync_wall_edit_readout(points)
 
+    def _is_wall_move_edit_active(self):
+        return bool(
+            self._edit_wall and self._edit_endpoint == "Move" and self.current_tool == "Move Wall"
+        )
+
     def _is_wall_stretch_edit_active(self):
         return bool(
             self._edit_wall
             and self._edit_endpoint in ("Start", "End")
             and self.current_tool in ("Stretch Start", "Stretch End")
         )
+
+    def _is_wall_readout_edit_active(self):
+        return bool(self._is_wall_move_edit_active() or self._is_wall_stretch_edit_active())
 
     def _clear_wall_edit_preview(self):
         if self._preview_line_tracker:
@@ -2272,6 +2281,69 @@ class PlanEditSession:
         self._preview_grip_trackers = []
         self._clear_wall_edit_readout()
 
+    def _get_wall_edit_readout_specs(self, points):
+        if not points or len(points) != 2 or not self._edit_endpoints:
+            return []
+
+        original_points = self._edit_endpoints
+        if self._edit_endpoint == "Move":
+            original_midpoint = (original_points[0] + original_points[1]) * 0.5
+            new_midpoint = (points[0] + points[1]) * 0.5
+            return [
+                (2, original_midpoint, new_midpoint),
+                (3, original_midpoint, new_midpoint),
+            ]
+
+        return [(1, points[0], points[1])]
+
+    def _get_default_wall_edit_readout_mode(self, specs):
+        modes = [mode for mode, _start, _end in specs]
+        if not modes:
+            return None
+        if self._is_wall_move_edit_active():
+            if self._wall_edit_active_readout_mode in modes:
+                return self._wall_edit_active_readout_mode
+            if 2 in modes:
+                return 2
+        if 1 in modes:
+            return 1
+        return modes[0]
+
+    def _bind_wall_edit_readout_callbacks(self, dim, mode):
+        if mode == 1:
+            dim.setValueChangedCallback(self._on_wall_stretch_length_changed)
+            dim.setEditingFinishedCallback(self._on_wall_stretch_length_finished)
+            if hasattr(dim, "setEditingCanceledCallback"):
+                dim.setEditingCanceledCallback(self._on_wall_stretch_length_canceled)
+            return
+
+        dim.setValueChangedCallback(
+            lambda value, delta_mode=mode: self._on_wall_move_delta_changed(delta_mode, value)
+        )
+        dim.setEditingFinishedCallback(
+            lambda value, delta_mode=mode: self._on_wall_move_delta_finished(delta_mode, value)
+        )
+        if hasattr(dim, "setEditingCanceledCallback"):
+            dim.setEditingCanceledCallback(
+                lambda value, delta_mode=mode: self._on_wall_move_delta_canceled(delta_mode, value)
+            )
+
+    def _update_wall_edit_readouts_in_place(self, points, active_mode=None):
+        specs = {
+            mode: (start, end) for mode, start, end in self._get_wall_edit_readout_specs(points)
+        }
+        for tracker in self._wall_edit_readout_trackers:
+            mode = getattr(tracker, "mode", None)
+            if mode not in specs:
+                continue
+            start, end = specs[mode]
+            if hasattr(tracker, "updatePoints"):
+                tracker.updatePoints(start, end, sync_spinbox=(mode != active_mode))
+            else:
+                tracker.p1(start)
+                tracker.p2(end)
+            tracker.on()
+
     def _sync_wall_edit_readout(self, points):
         self._clear_wall_edit_readout()
         if not points or len(points) != 2 or not self._edit_endpoints:
@@ -2282,21 +2354,13 @@ class PlanEditSession:
             return
 
         readout_color = (0.12, 0.38, 0.95)
-        original_points = self._edit_endpoints
-        dims = []
-        if self._edit_endpoint == "Move":
-            original_midpoint = (original_points[0] + original_points[1]) * 0.5
-            new_midpoint = (points[0] + points[1]) * 0.5
-            if abs(new_midpoint.x - original_midpoint.x) > 1e-6:
-                dims.append((2, original_midpoint, new_midpoint))
-            if abs(new_midpoint.y - original_midpoint.y) > 1e-6:
-                dims.append((3, original_midpoint, new_midpoint))
-        else:
-            dims.append((1, points[0], points[1]))
+        dims = self._get_wall_edit_readout_specs(points)
+        active_mode = self._get_default_wall_edit_readout_mode(dims)
+        self._wall_edit_active_readout_mode = active_mode
 
         for mode, start, end in dims:
             try:
-                if self._is_wall_stretch_edit_active():
+                if self._is_wall_readout_edit_active():
                     dim = DraftTrackers.editableArchDimTracker(mode=mode)
                 else:
                     dim = DraftTrackers.archDimTracker(mode=mode)
@@ -2315,11 +2379,12 @@ class PlanEditSession:
             dim.p1(start)
             dim.p2(end)
             dim.on()
-            if self._is_wall_stretch_edit_active() and hasattr(dim, "setValueChangedCallback"):
-                dim.setValueChangedCallback(self._on_wall_stretch_length_changed)
-                dim.setEditingFinishedCallback(self._on_wall_stretch_length_finished)
-                if hasattr(dim, "setEditingCanceledCallback"):
-                    dim.setEditingCanceledCallback(self._on_wall_stretch_length_canceled)
+            if self._is_wall_readout_edit_active() and hasattr(dim, "setValueChangedCallback"):
+                self._bind_wall_edit_readout_callbacks(dim, mode)
+                if mode == active_mode:
+                    self._wall_edit_active_readout_mode = mode
+                    self._wall_edit_active_readout_tracker = dim
+            if self._wall_edit_active_readout_tracker is None:
                 self._wall_edit_active_readout_tracker = dim
             self._wall_edit_readout_trackers.append(dim)
 
@@ -2327,11 +2392,54 @@ class PlanEditSession:
         self._finalize_trackers(self._wall_edit_readout_trackers)
         self._wall_edit_readout_trackers = []
         self._wall_edit_active_readout_tracker = None
+        self._wall_edit_active_readout_mode = None
         self._wall_edit_length_edit_queued = False
 
-    def _start_wall_stretch_length_edit(self):
+    def _get_wall_edit_readout_tracker(self, mode):
+        for tracker in self._wall_edit_readout_trackers:
+            if getattr(tracker, "mode", None) == mode:
+                return tracker
+        return None
+
+    def _cycle_wall_move_readout_mode(self):
+        if not self._is_wall_move_edit_active():
+            return False
+        modes = [
+            getattr(tracker, "mode", None)
+            for tracker in self._wall_edit_readout_trackers
+            if getattr(tracker, "mode", None) in (2, 3)
+        ]
+        modes = [mode for mode in modes if mode is not None]
+        if not modes:
+            return False
+        current_mode = (
+            self._wall_edit_active_readout_mode
+            if self._wall_edit_active_readout_mode in modes
+            else modes[0]
+        )
+        next_mode = modes[(modes.index(current_mode) + 1) % len(modes)]
+        self._wall_edit_active_readout_mode = next_mode
+        tracker = self._get_wall_edit_readout_tracker(next_mode)
+        if tracker is not None:
+            self._wall_edit_active_readout_tracker = tracker
+        return True
+
+    def _start_wall_readout_edit(self, cycle=False):
         tracker = self._wall_edit_active_readout_tracker
-        if not self._is_wall_stretch_edit_active() or tracker is None:
+        if not self._is_wall_readout_edit_active():
+            return False
+        if cycle and self._is_wall_move_edit_active():
+            if (
+                tracker is not None
+                and hasattr(tracker, "isInEdit")
+                and tracker.isInEdit()
+                and hasattr(tracker, "stopEdit")
+            ):
+                tracker.stopEdit()
+            if not self._cycle_wall_move_readout_mode():
+                return False
+            tracker = self._wall_edit_active_readout_tracker
+        if tracker is None:
             return False
         if not hasattr(tracker, "startEdit"):
             return False
@@ -2350,13 +2458,16 @@ class PlanEditSession:
             tracker.startEdit(tracker.Distance)
             return True
         QtCore.QTimer.singleShot(
-            0, lambda: self._start_wall_stretch_length_edit_now(tracker, tracker.Distance)
+            0, lambda: self._start_wall_readout_edit_now(tracker, tracker.Distance)
         )
         return True
 
-    def _start_wall_stretch_length_edit_now(self, tracker, value):
+    def _start_wall_stretch_length_edit(self):
+        return self._start_wall_readout_edit(cycle=False)
+
+    def _start_wall_readout_edit_now(self, tracker, value):
         self._wall_edit_length_edit_queued = False
-        if not self._is_wall_stretch_edit_active():
+        if not self._is_wall_readout_edit_active():
             return
         if tracker is None or tracker is not self._wall_edit_active_readout_tracker:
             return
@@ -2380,12 +2491,7 @@ class PlanEditSession:
             return
         self._preview_points = new_points
         self._update_wall_edit_preview_geometry(new_points)
-        if hasattr(tracker, "updatePoints"):
-            tracker.updatePoints(new_points[0], new_points[1], sync_spinbox=False)
-        else:
-            tracker.p1(new_points[0])
-            tracker.p2(new_points[1])
-        tracker.on()
+        self._update_wall_edit_readouts_in_place(new_points, active_mode=1)
 
     def _on_wall_stretch_length_finished(self, value):
         if not self._is_wall_stretch_edit_active():
@@ -2403,6 +2509,54 @@ class PlanEditSession:
         del value
         if not self._is_wall_stretch_edit_active():
             return
+        self._schedule_wall_edit_readout_cancel()
+
+    def _compute_wall_edit_points_from_move_delta(self, mode, value):
+        if not self._is_wall_move_edit_active() or not self._edit_endpoints:
+            return None
+        original_endpoints = self._edit_endpoints
+        original_midpoint = (original_endpoints[0] + original_endpoints[1]) * 0.5
+        preview_points = self._preview_points if self._preview_points else original_endpoints
+        current_midpoint = (preview_points[0] + preview_points[1]) * 0.5
+        target_midpoint = FreeCAD.Vector(current_midpoint)
+        if mode == 2:
+            target_midpoint.x = original_midpoint.x + float(value)
+        elif mode == 3:
+            target_midpoint.y = original_midpoint.y + float(value)
+        else:
+            return None
+        delta = target_midpoint.sub(original_midpoint)
+        return [original_endpoints[0].add(delta), original_endpoints[1].add(delta)]
+
+    def _on_wall_move_delta_changed(self, mode, value):
+        if not self._is_wall_move_edit_active():
+            return
+        new_points = self._compute_wall_edit_points_from_move_delta(mode, value)
+        if not new_points:
+            return
+        self._preview_points = new_points
+        self._update_wall_edit_preview_geometry(new_points)
+        self._update_wall_edit_readouts_in_place(new_points, active_mode=mode)
+
+    def _on_wall_move_delta_finished(self, mode, value):
+        if not self._is_wall_move_edit_active():
+            return
+        wall = self._edit_wall
+        endpoint = self._edit_endpoint
+        proxy = getattr(wall, "Proxy", None)
+        new_points = self._compute_wall_edit_points_from_move_delta(mode, value)
+        if not new_points or not proxy:
+            return
+        self._preview_points = new_points
+        self._commit_wall_edit_points(wall, endpoint, proxy, new_points)
+
+    def _on_wall_move_delta_canceled(self, mode, value):
+        del mode, value
+        if not self._is_wall_move_edit_active():
+            return
+        self._schedule_wall_edit_readout_cancel()
+
+    def _schedule_wall_edit_readout_cancel(self):
         preview_points = None
         if self._preview_points:
             preview_points = [FreeCAD.Vector(point) for point in self._preview_points]
@@ -2411,14 +2565,14 @@ class PlanEditSession:
         try:
             from PySide import QtCore
         except ImportError:
-            self._finish_wall_stretch_length_canceled(preview_points)
+            self._finish_wall_edit_readout_canceled(preview_points)
             return
         QtCore.QTimer.singleShot(
-            0, lambda pts=preview_points: self._finish_wall_stretch_length_canceled(pts)
+            0, lambda pts=preview_points: self._finish_wall_edit_readout_canceled(pts)
         )
 
-    def _finish_wall_stretch_length_canceled(self, preview_points):
-        if not self._is_wall_stretch_edit_active():
+    def _finish_wall_edit_readout_canceled(self, preview_points):
+        if not self._is_wall_readout_edit_active():
             return
         if preview_points:
             self._sync_wall_edit_preview(preview_points)
@@ -2643,17 +2797,26 @@ class PlanEditSession:
             return
         event = event_callback.getEvent()
         key = event.getKey()
-        if self.current_tool == "Move Opening" and key == coin.SoKeyboardEvent.TAB:
+        if self.current_tool == "Move Opening" and key == coin.SoKeyboardEvent.A:
             if self._cycle_opening_move_anchor():
                 self._refresh_opening_move_preview_from_raw_point()
                 self._refresh_task_panel_status()
             return
-        if self._is_wall_stretch_edit_active() and key in (
-            coin.SoKeyboardEvent.TAB,
+        if self._is_wall_move_edit_active() and key == coin.SoKeyboardEvent.TAB:
+            if self._start_wall_readout_edit(cycle=True):
+                if hasattr(event_callback, "setHandled"):
+                    event_callback.setHandled()
+            return
+        if self._is_wall_readout_edit_active() and key in (
             coin.SoKeyboardEvent.RETURN,
             coin.SoKeyboardEvent.ENTER,
         ):
-            if self._start_wall_stretch_length_edit():
+            if self._start_wall_readout_edit():
+                if hasattr(event_callback, "setHandled"):
+                    event_callback.setHandled()
+            return
+        if self._is_wall_stretch_edit_active() and key == coin.SoKeyboardEvent.TAB:
+            if self._start_wall_readout_edit():
                 if hasattr(event_callback, "setHandled"):
                     event_callback.setHandled()
             return
@@ -3134,7 +3297,7 @@ class PlanEditSession:
                 ),
                 self._make_input_hint(
                     translate("BIM_PlanEdit", "%1 cycle move anchor"),
-                    FreeCADGui.UserInput.KeyTab,
+                    FreeCADGui.UserInput.KeyA,
                 ),
                 self._make_input_hint(
                     translate("BIM_PlanEdit", "%1 cancel"),
@@ -3148,6 +3311,14 @@ class PlanEditSession:
                     FreeCADGui.UserInput.MouseLeft,
                 ),
                 self._make_input_hint(
+                    translate("BIM_PlanEdit", "%1 edit current offset"),
+                    FreeCADGui.UserInput.KeyReturn,
+                ),
+                self._make_input_hint(
+                    translate("BIM_PlanEdit", "%1 cycle X/Y offset"),
+                    FreeCADGui.UserInput.KeyTab,
+                ),
+                self._make_input_hint(
                     translate("BIM_PlanEdit", "%1 cancel"),
                     FreeCADGui.UserInput.KeyEscape,
                 ),
@@ -3157,6 +3328,10 @@ class PlanEditSession:
                 self._make_input_hint(
                     translate("BIM_PlanEdit", "%1 place endpoint"),
                     FreeCADGui.UserInput.MouseLeft,
+                ),
+                self._make_input_hint(
+                    translate("BIM_PlanEdit", "%1 edit length"),
+                    FreeCADGui.UserInput.KeyReturn,
                 ),
                 self._make_input_hint(
                     translate("BIM_PlanEdit", "%1 cancel"),
@@ -4310,11 +4485,17 @@ class _PlanEditDock:
                     owner
                     and owner.session
                     and event.type() == QtCore.QEvent.KeyPress
-                    and owner.session._is_wall_stretch_edit_active()
+                    and owner.session._is_wall_readout_edit_active()
                 ):
                     key = event.key()
-                    if key in (QtCore.Qt.Key_Tab, QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter):
-                        if owner.session._start_wall_stretch_length_edit():
+                    if key in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter):
+                        if owner.session._start_wall_readout_edit():
+                            event.accept()
+                            return True
+                    if key == QtCore.Qt.Key_Tab:
+                        if owner.session._start_wall_readout_edit(
+                            cycle=owner.session._is_wall_move_edit_active()
+                        ):
                             event.accept()
                             return True
                 return super().eventFilter(watched, event)

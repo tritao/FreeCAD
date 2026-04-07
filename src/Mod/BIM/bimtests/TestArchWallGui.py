@@ -785,8 +785,8 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertGreaterEqual(min(overlay_us), -1e-6)
         self.assertLessEqual(max(overlay_us), wall_length + 1e-6)
 
-    def test_plan_edit_opening_move_tab_cycles_anchor(self):
-        """Tab should cycle opening move anchors while the point-pick is active."""
+    def test_plan_edit_opening_move_a_cycles_anchor(self):
+        """A should cycle opening move anchors while the point-pick is active."""
 
         level = Arch.makeFloor(name="Level 0")
         wall = Arch.makeWall(length=3000, width=200, height=2500)
@@ -819,17 +819,17 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
             from pivy import coin
 
             session._on_key_pressed(
-                self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.TAB))
+                self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.A))
             )
             self.assertEqual(session._edit_opening_move_anchor, "left")
 
             session._on_key_pressed(
-                self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.TAB))
+                self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.A))
             )
             self.assertEqual(session._edit_opening_move_anchor, "right")
 
             session._on_key_pressed(
-                self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.TAB))
+                self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.A))
             )
             self.assertEqual(session._edit_opening_move_anchor, "center")
 
@@ -1314,6 +1314,77 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertIsNotNone(session._wall_edit_active_readout_tracker)
         self.assertTrue(session._wall_edit_active_readout_tracker.isInEdit())
 
+    def test_plan_edit_wall_move_enter_starts_offset_edit(self):
+        """Enter should activate in-view offset editing for a wall move preview."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ):
+            session._start_wall_grip_edit(2)
+
+        from pivy import coin
+
+        callback = self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.RETURN))
+        session._on_key_pressed(callback)
+
+        self.assertTrue(callback._handled)
+        self.assertEqual(len(session._wall_edit_readout_trackers), 2)
+        self.assertIsNotNone(session._wall_edit_active_readout_tracker)
+        self.assertEqual(session._wall_edit_active_readout_tracker.mode, 2)
+        self.assertTrue(session._wall_edit_active_readout_tracker.isInEdit())
+
+    def test_plan_edit_wall_move_tab_cycles_active_offset_axis(self):
+        """Tab should cycle the active in-view move offset between X and Y."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ):
+            session._start_wall_grip_edit(2)
+
+        from pivy import coin
+
+        callback = self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.TAB))
+        session._on_key_pressed(callback)
+
+        self.assertTrue(callback._handled)
+        self.assertIsNotNone(session._wall_edit_active_readout_tracker)
+        self.assertEqual(session._wall_edit_active_readout_tracker.mode, 3)
+        self.assertTrue(session._wall_edit_active_readout_tracker.isInEdit())
+
     def test_plan_edit_wall_stretch_length_edit_updates_preview(self):
         """Numeric wall stretch edits should drive the preview without rebuilding the label."""
 
@@ -1346,6 +1417,73 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertAlmostEqual(
             session._preview_points[1].x, original_endpoints[0].x + 4200.0, delta=1e-6
         )
+
+    def test_plan_edit_wall_move_offset_edit_updates_preview(self):
+        """Numeric wall move edits should drive the preview without rebuilding the labels."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        original_endpoints = wall.Proxy.calc_endpoints(wall)
+        session._edit_wall = wall
+        session._edit_endpoint = "Move"
+        session._edit_endpoints = original_endpoints
+        session.current_tool = "Move Wall"
+        session._sync_wall_edit_preview(list(original_endpoints))
+
+        tracker = session._wall_edit_active_readout_tracker
+        self.assertIsNotNone(tracker)
+        self.assertEqual(tracker.mode, 2)
+
+        session._on_wall_move_delta_changed(2, 500.0)
+
+        self.assertIs(session._wall_edit_active_readout_tracker, tracker)
+        self.assertAlmostEqual(
+            session._preview_points[0].x, original_endpoints[0].x + 500.0, delta=1e-6
+        )
+        self.assertAlmostEqual(
+            session._preview_points[1].x, original_endpoints[1].x + 500.0, delta=1e-6
+        )
+
+    def test_plan_edit_wall_move_offset_edit_commits_wall(self):
+        """Accepting a typed wall move offset should commit the translated wall."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        original_endpoints = wall.Proxy.calc_endpoints(wall)
+        session._edit_wall = wall
+        session._edit_endpoint = "Move"
+        session._edit_endpoints = original_endpoints
+        session.current_tool = "Move Wall"
+        session._sync_wall_edit_preview(list(original_endpoints))
+
+        session._on_wall_move_delta_finished(2, 500.0)
+        self.pump_gui_events()
+
+        endpoints = wall.Proxy.calc_endpoints(wall)
+        self.assertAlmostEqual(endpoints[0].x, original_endpoints[0].x + 500.0, delta=1e-6)
+        self.assertAlmostEqual(endpoints[1].x, original_endpoints[1].x + 500.0, delta=1e-6)
+        self.assertEqual(session.current_tool, "Select")
+        self.assertIs(session.selected_wall, wall)
 
     def test_plan_edit_wall_stretch_length_edit_commits_wall(self):
         """Accepting a typed wall stretch length should commit the resized wall."""
