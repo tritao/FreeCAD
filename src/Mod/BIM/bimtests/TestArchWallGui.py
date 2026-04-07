@@ -634,6 +634,203 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertEqual(len(session._opening_handle_trackers), 3)
 
+    def test_plan_edit_opening_move_uses_reduced_snap_profile(self):
+        """Opening move should use a constrained snap profile while point-picking."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="MoveDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        handle = session._get_selected_opening_edit_handles(door)[0]
+        captured = {}
+        pushed_modes = []
+        popped = []
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ), patch.object(
+            FreeCADGui.Snapper,
+            "push_snap_modes",
+            side_effect=lambda modes: pushed_modes.append(set(modes)),
+        ), patch.object(
+            FreeCADGui.Snapper, "pop_snap_modes", side_effect=lambda: popped.append(True)
+        ):
+            session._start_opening_handle_point_pick(door, 0, handle)
+
+            self.assertEqual(pushed_modes, [set(BimPlanSession._OPENING_MOVE_SNAP_SET)])
+            self.assertEqual(session.current_tool, "Move Opening")
+            self.assertIn("callback", captured)
+            self.assertIn("movecallback", captured)
+            self.assertIn("last", captured)
+
+            captured["callback"](handle.point, None)
+
+        self.assertEqual(len(popped), 1)
+        self.assertEqual(session.current_tool, "Select")
+
+    def test_plan_edit_opening_move_clamps_to_host_span(self):
+        """Opening move projection should stay within the valid host wall span."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="ClampedDoor", width=900.0)
+        self.document.recompute()
+
+        proxy = door.ViewObject.Proxy
+        context = proxy.get_plan_move_context()
+        self.assertIsNotNone(context)
+
+        origin = context["origin"]
+        axis_u = context["axis_u"]
+        far_before = origin.add(FreeCAD.Vector(axis_u).multiply(-100000))
+        far_after = origin.add(FreeCAD.Vector(axis_u).multiply(100000))
+
+        projected_before = proxy.project_point_to_host_axis(far_before)
+        projected_after = proxy.project_point_to_host_axis(far_after)
+
+        before_u = projected_before.sub(origin).dot(axis_u)
+        after_u = projected_after.sub(origin).dot(axis_u)
+
+        self.assertAlmostEqual(before_u, context["move_u_min"], delta=1e-6)
+        self.assertAlmostEqual(after_u, context["move_u_max"], delta=1e-6)
+
+    def test_plan_edit_opening_move_anchor_offsets_center_from_edge_alignment(self):
+        """Opening move anchors should offset the center from left/right jamb picks."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="AnchoredDoor", width=900.0)
+        self.document.recompute()
+
+        proxy = door.ViewObject.Proxy
+        context = proxy.get_plan_move_context()
+        self.assertIsNotNone(context)
+
+        origin = context["origin"]
+        axis_u = context["axis_u"]
+        center_u = (context["move_u_min"] + context["move_u_max"]) * 0.5
+        half_width = context["opening_half_width_u"]
+
+        left_edge_point = origin.add(FreeCAD.Vector(axis_u).multiply(center_u - half_width))
+        right_edge_point = origin.add(FreeCAD.Vector(axis_u).multiply(center_u + half_width))
+
+        projected_left = proxy.project_point_to_host_axis(left_edge_point, anchor="left")
+        projected_right = proxy.project_point_to_host_axis(right_edge_point, anchor="right")
+
+        projected_left_u = projected_left.sub(origin).dot(axis_u)
+        projected_right_u = projected_right.sub(origin).dot(axis_u)
+
+        self.assertAlmostEqual(projected_left_u, center_u, delta=1e-6)
+        self.assertAlmostEqual(projected_right_u, center_u, delta=1e-6)
+
+    def test_plan_edit_opening_move_tab_cycles_anchor(self):
+        """Tab should cycle opening move anchors while the point-pick is active."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="TabDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        handle = session._get_selected_opening_edit_handles(door)[0]
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", return_value=None), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ), patch.object(
+            session, "_refresh_opening_move_preview_from_raw_point", return_value=None
+        ) as refresh_preview:
+            session._start_opening_handle_point_pick(door, 0, handle)
+
+            from pivy import coin
+
+            session._on_key_pressed(
+                self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.TAB))
+            )
+            self.assertEqual(session._edit_opening_move_anchor, "left")
+
+            session._on_key_pressed(
+                self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.TAB))
+            )
+            self.assertEqual(session._edit_opening_move_anchor, "right")
+
+            session._on_key_pressed(
+                self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.TAB))
+            )
+            self.assertEqual(session._edit_opening_move_anchor, "center")
+
+            self.assertEqual(refresh_preview.call_count, 3)
+
+            session._cancel_opening_handle_point_pick()
+
+    def test_plan_edit_opening_move_updates_input_hints(self):
+        """Active opening move should publish placement/cancel/anchor hints."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="HintDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        handle = session._get_selected_opening_edit_handles(door)[0]
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", return_value=None), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ), patch.object(FreeCADGui.HintManager, "show") as show_hints:
+            session._start_opening_handle_point_pick(door, 0, handle)
+
+        self.assertTrue(show_hints.called)
+        hints = show_hints.call_args.args
+        self.assertEqual(len(hints), 3)
+        self.assertEqual(hints[0].message, "place opening")
+        self.assertEqual(hints[1].message, "cycle move anchor")
+        self.assertEqual(hints[2].message, "cancel")
+
     def test_plan_edit_hovered_wall_shows_preselection_overlay(self):
         """Walls should get a lightweight hover overlay before actual selection."""
 
@@ -846,6 +1043,68 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.pump_gui_events()
 
         self.assertNotEqual(original_parts, list(door.WindowParts))
+
+    def test_plan_edit_invalidates_selected_opening_overlay_when_base_changes(self):
+        """Selected opening overlays should be invalidated when the opening base changes."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="UndoDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        with patch.object(session, "_queue_plan_overlay_visual_refresh") as queue_refresh:
+            session.slotChangedObject(door.Base, "Placement")
+
+        queue_refresh.assert_called_once_with(
+            BimPlanSession._PLAN_VISUAL_SELECTED_OPENING,
+            BimPlanSession._PLAN_VISUAL_HOVERED_OPENING,
+        )
+
+    def test_plan_edit_invalidates_selected_opening_overlay_on_undo_document(self):
+        """Selected opening overlays should be invalidated on document-level undo notifications."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="UndoNotifyDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        with patch.object(session, "_queue_plan_overlay_visual_refresh") as queue_refresh:
+            session.slotUndoDocument(self.document)
+
+        queue_refresh.assert_called_once_with(
+            BimPlanSession._PLAN_VISUAL_SELECTED_OPENING,
+            BimPlanSession._PLAN_VISUAL_HOVERED_OPENING,
+            BimPlanSession._PLAN_VISUAL_HOVERED_WALL,
+            BimPlanSession._PLAN_VISUAL_WALL_GRIPS,
+        )
 
     def test_plan_edit_shows_grips_for_straight_base_wall(self):
         """Straight base-driven walls should get the same grip overlays as baseless walls."""

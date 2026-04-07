@@ -45,6 +45,29 @@ _PLAN_EDIT_SNAP_SET = {
     "Intersection",
     "WorkingPlane",
 }
+# Opening move is already constrained onto the host axis, so keep its snap
+# profile minimal. This avoids unrelated object snaps dragging the returned
+# point far away from the hovered location during Draft snap winner selection.
+_OPENING_MOVE_SNAP_SET = {
+    "Lock",
+    "WorkingPlane",
+}
+_OPENING_MOVE_ANCHORS = ("center", "left", "right")
+_OPENING_VISUAL_PROPERTIES = {
+    "Shape",
+    "Placement",
+    "Base",
+    "Hosts",
+    "WindowParts",
+    "IfcType",
+}
+_WALL_VISUAL_PROPERTIES = {"Shape", "Additions", "Subtractions", "Hosts"}
+_PLAN_VISUAL_HOVERED_WALL = "hovered_wall"
+_PLAN_VISUAL_HOVERED_OPENING = "hovered_opening"
+_PLAN_VISUAL_SELECTED_OPENING = "selected_opening"
+_PLAN_VISUAL_WALL_GRIPS = "wall_grips"
+_PLAN_VISUAL_WALL_EDIT_PREVIEW = "wall_edit_preview"
+_PLAN_VISUAL_ALL = "all"
 
 _active_session = None
 
@@ -267,7 +290,13 @@ class PlanEditSession:
         self._opening_hover_trackers = []
         self._opening_overlay_trackers = []
         self._opening_handle_trackers = []
+        self._selected_opening_hard_refresh_queued = False
+        self._opening_host_recompute_queued = False
+        self._opening_host_recompute_running = False
         self._opening_move_preview_trackers = []
+        self._opening_move_snap_profile_pushed = False
+        self._edit_opening_move_anchor = "center"
+        self._edit_opening_move_raw_point = None
         self._selection_observer_added = False
         self._document_observer_added = False
         self._pending_selected_wall_reset = False
@@ -292,6 +321,7 @@ class PlanEditSession:
         self._mouse_pressed_cb = None
         self._key_pressed_cb = None
         self._overlay_refresh_queued = False
+        self._dirty_plan_visuals = set()
         self._render_manager = None
         self._saved_camera = None
         self._saved_camera_type = None
@@ -361,6 +391,7 @@ class PlanEditSession:
         if self._tearing_down:
             return
         self._tearing_down = True
+        self._clear_input_hints()
         self._cancel_embedded_tool()
         self._cancel_rect_wall_tool(refresh=False)
         self._cancel_wall_edit(restore=False, refresh=False)
@@ -428,6 +459,7 @@ class PlanEditSession:
             self._cancel_rect_wall_tool(refresh=False)
             self._cancel_wall_edit(restore=not teardown, refresh=False)
             self._cancel_pending_edit()
+            self._clear_input_hints()
             self._clear_hovered_wall_overlay()
             self._clear_wall_grips()
             self._clear_hovered_opening_overlay()
@@ -813,6 +845,34 @@ class PlanEditSession:
             snapper.pop_snap_modes()
         except Exception:
             pass
+
+    def _push_opening_move_snap_profile(self):
+        snapper = getattr(FreeCADGui, "Snapper", None)
+        if (
+            self._opening_move_snap_profile_pushed
+            or not snapper
+            or not hasattr(snapper, "push_snap_modes")
+        ):
+            return
+        try:
+            snapper.push_snap_modes(_OPENING_MOVE_SNAP_SET)
+            self._opening_move_snap_profile_pushed = True
+        except Exception:
+            pass
+
+    def _pop_opening_move_snap_profile(self):
+        snapper = getattr(FreeCADGui, "Snapper", None)
+        if (
+            not self._opening_move_snap_profile_pushed
+            or not snapper
+            or not hasattr(snapper, "pop_snap_modes")
+        ):
+            return
+        try:
+            snapper.pop_snap_modes()
+        except Exception:
+            pass
+        self._opening_move_snap_profile_pushed = False
 
     def _capture_object_view_state(self):
         self._saved_object_view_state = {}
@@ -1376,8 +1436,11 @@ class PlanEditSession:
             self._embedded_host = None
             self._embedded_tool = None
             self._embedded_tool_name = None
+            self._edit_opening_move_anchor = "center"
+            self._edit_opening_move_raw_point = None
             return
         self._stop_snapper()
+        self._pop_opening_move_snap_profile()
         FreeCAD.activeDraftCommand = None
         self._wall_edit_modal_active = False
         self._restore_edit_wall_visibility()
@@ -1392,6 +1455,8 @@ class PlanEditSession:
         self._embedded_tool_name = None
         self._edit_opening = None
         self._edit_opening_handle_index = None
+        self._edit_opening_move_anchor = "center"
+        self._edit_opening_move_raw_point = None
         self._sync_wall_grips()
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
@@ -1911,6 +1976,9 @@ class PlanEditSession:
         self._refresh_task_panel_status()
 
     def _get_edit_node(self, mouse_pos):
+        opening_handle_index = self._pick_selected_opening_handle(mouse_pos)
+        if opening_handle_index is not None:
+            return ("opening_handle", self.selected_opening, opening_handle_index)
         if not self._render_manager:
             return None
         try:
@@ -1933,8 +2001,34 @@ class PlanEditSession:
             if hasattr(point, "subElementName") and "EditNode" in str(
                 point.subElementName.getValue()
             ):
-                return point
+                return ("edit_node", point)
         return None
+
+    def _pick_selected_opening_handle(self, mouse_pos, radius_px=10):
+        opening = self.selected_opening
+        if not self._is_hosted_opening_object(opening) or not self.view:
+            return None
+        try:
+            cursor_x = int(mouse_pos[0])
+            cursor_y = int(mouse_pos[1])
+        except Exception:
+            return None
+        best_index = None
+        best_distance_sq = None
+        for idx, point, _marker in self._get_selected_opening_handle_specs(opening):
+            try:
+                screen_x, screen_y = self.view.getPointOnScreen(point)
+            except Exception:
+                continue
+            dx = float(screen_x) - float(cursor_x)
+            dy = float(screen_y) - float(cursor_y)
+            distance_sq = dx * dx + dy * dy
+            if distance_sq > radius_px * radius_px:
+                continue
+            if best_distance_sq is None or distance_sq < best_distance_sq:
+                best_index = idx
+                best_distance_sq = distance_sq
+        return best_index
 
     def _on_mouse_pressed(self, event_callback):
         if self._tearing_down:
@@ -1959,21 +2053,30 @@ class PlanEditSession:
                 if self._activate_wall_target((pos[0], pos[1]), event_callback):
                     return
                 return
-            try:
-                doc = FreeCAD.getDocument(str(node.documentName.getValue()))
-                obj = doc.getObject(str(node.objectName.getValue()))
-                index = int(str(node.subElementName.getValue())[8:])
-            except Exception:
-                return
-            if self._is_hosted_opening_object(obj):
+            node_kind = node[0]
+            if node_kind == "opening_handle":
+                _kind, obj, index = node
                 self.selected_opening = obj
                 self.selected_wall = None
                 self._clear_wall_grips()
                 self._activate_opening_handle(obj, index)
             else:
-                if obj != self.selected_wall:
-                    self.selected_wall = obj
-                self._activate_wall_grip(index)
+                point = node[1]
+                try:
+                    doc = FreeCAD.getDocument(str(point.documentName.getValue()))
+                    obj = doc.getObject(str(point.objectName.getValue()))
+                    index = int(str(point.subElementName.getValue())[8:])
+                except Exception:
+                    return
+                if self._is_hosted_opening_object(obj):
+                    self.selected_opening = obj
+                    self.selected_wall = None
+                    self._clear_wall_grips()
+                    self._activate_opening_handle(obj, index)
+                else:
+                    if obj != self.selected_wall:
+                        self.selected_wall = obj
+                    self._activate_wall_grip(index)
             if hasattr(event_callback, "setHandled"):
                 try:
                     event_callback.setHandled()
@@ -2002,36 +2105,54 @@ class PlanEditSession:
             event_type_name = ""
         if event_type_name != "SoMouseWheelEvent":
             return
-        self._queue_plan_overlay_visual_refresh()
+        self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_ALL)
 
-    def _queue_plan_overlay_visual_refresh(self):
-        if self._overlay_refresh_queued or self._tearing_down:
+    def _queue_plan_overlay_visual_refresh(self, *visuals):
+        if self._tearing_down:
+            return
+        dirty = set(visuals) if visuals else {_PLAN_VISUAL_ALL}
+        self._dirty_plan_visuals.update(dirty)
+        if self._overlay_refresh_queued:
             return
         try:
             from PySide import QtCore
         except ImportError:
-            self._refresh_plan_overlay_visuals()
+            dirty = self._consume_dirty_plan_visuals()
+            self._refresh_plan_overlay_visuals(dirty)
             return
         self._overlay_refresh_queued = True
         QtCore.QTimer.singleShot(0, self._flush_plan_overlay_visual_refresh)
 
+    def _consume_dirty_plan_visuals(self):
+        dirty = set(self._dirty_plan_visuals)
+        self._dirty_plan_visuals.clear()
+        return dirty or {_PLAN_VISUAL_ALL}
+
     def _flush_plan_overlay_visual_refresh(self):
         self._overlay_refresh_queued = False
-        self._refresh_plan_overlay_visuals()
+        dirty = self._consume_dirty_plan_visuals()
+        self._refresh_plan_overlay_visuals(dirty)
 
-    def _refresh_plan_overlay_visuals(self):
+    def _refresh_plan_overlay_visuals(self, dirty=None):
         if self._tearing_down:
             return
+        dirty = set(dirty or {_PLAN_VISUAL_ALL})
+        refresh_all = _PLAN_VISUAL_ALL in dirty
         if self.current_tool == "Select":
-            self._sync_hovered_wall_overlay()
-            self._sync_hovered_opening_overlay()
-            if self.selected_wall:
+            if refresh_all or _PLAN_VISUAL_HOVERED_WALL in dirty:
+                self._sync_hovered_wall_overlay()
+            if refresh_all or _PLAN_VISUAL_HOVERED_OPENING in dirty:
+                self._sync_hovered_opening_overlay()
+            if self.selected_wall and (refresh_all or _PLAN_VISUAL_WALL_GRIPS in dirty):
                 self._sync_wall_grips()
-            if self.selected_opening:
-                self._sync_selected_opening_overlay()
-                self._sync_selected_opening_handles()
+            if self.selected_opening and (refresh_all or _PLAN_VISUAL_SELECTED_OPENING in dirty):
+                self._refresh_selected_opening_visuals()
             return
-        if self._edit_wall and self._preview_points:
+        if (
+            self._edit_wall
+            and self._preview_points
+            and (refresh_all or _PLAN_VISUAL_WALL_EDIT_PREVIEW in dirty)
+        ):
             self._sync_wall_edit_preview(self._preview_points)
 
     def _on_key_pressed(self, event_callback):
@@ -2042,7 +2163,13 @@ class PlanEditSession:
         except Exception:
             return
         event = event_callback.getEvent()
-        if event.getKey() != coin.SoKeyboardEvent.ESCAPE:
+        key = event.getKey()
+        if self.current_tool == "Move Opening" and key == coin.SoKeyboardEvent.TAB:
+            if self._cycle_opening_move_anchor():
+                self._refresh_opening_move_preview_from_raw_point()
+                self._refresh_task_panel_status()
+            return
+        if key != coin.SoKeyboardEvent.ESCAPE:
             return
         if self._edit_wall and self.current_tool != "Select":
             self._cancel_wall_edit_point_pick()
@@ -2091,40 +2218,149 @@ class PlanEditSession:
 
     # Document observer interface
 
+    def _is_opening_visual_dependency(self, opening, obj):
+        if not opening or not obj:
+            return False
+        if obj == opening:
+            return True
+        if obj == getattr(opening, "Base", None):
+            return True
+        return obj in (getattr(opening, "Hosts", None) or [])
+
+    def _refresh_selected_opening_visuals(self):
+        self._sync_selected_opening_overlay()
+        self._sync_selected_opening_handles()
+        self._request_view_redraw()
+
+    def _refresh_opening_footprint_display(self, opening):
+        if not self._is_hosted_opening_object(opening):
+            return
+        view_object = getattr(opening, "ViewObject", None)
+        proxy = getattr(view_object, "Proxy", None) if view_object else None
+        if not proxy:
+            return
+        try:
+            if hasattr(proxy, "ensureFootprintGroup"):
+                proxy.ensureFootprintGroup(view_object)
+            if hasattr(proxy, "updateFootprint"):
+                proxy.updateFootprint()
+            if hasattr(view_object, "update"):
+                view_object.update()
+        except Exception:
+            return
+        self._request_view_redraw()
+
+    def _refresh_wall_footprint_display(self, wall):
+        if not wall:
+            return
+        view_object = getattr(wall, "ViewObject", None)
+        proxy = getattr(view_object, "Proxy", None) if view_object else None
+        if not proxy:
+            return
+        try:
+            if hasattr(proxy, "ensureFootprintGroup"):
+                proxy.ensureFootprintGroup(view_object)
+            if hasattr(proxy, "updateFootprint"):
+                proxy.updateFootprint()
+            if hasattr(view_object, "update"):
+                view_object.update()
+        except Exception:
+            return
+        self._request_view_redraw()
+
+    def _refresh_opening_host_footprint_displays(self, opening):
+        if not self._is_hosted_opening_object(opening):
+            return
+        for host in getattr(opening, "Hosts", None) or []:
+            self._refresh_wall_footprint_display(host)
+
+    def _queue_recompute_opening_hosts(self, *openings):
+        if (
+            self._tearing_down
+            or self._opening_host_recompute_queued
+            or self._opening_host_recompute_running
+        ):
+            return
+        hosts = []
+        for opening in openings:
+            if not self._is_hosted_opening_object(opening):
+                continue
+            hosts.extend(getattr(opening, "Hosts", None) or [])
+        hosts = [host for host in dict.fromkeys(hosts) if host]
+        if not hosts:
+            return
+        self._opening_host_recompute_queued = True
+        self._flush_recompute_opening_hosts(hosts)
+
+    def _flush_recompute_opening_hosts(self, hosts):
+        self._opening_host_recompute_queued = False
+        if self._tearing_down or self._opening_host_recompute_running or not self.doc:
+            return
+        self._opening_host_recompute_running = True
+        try:
+            for host in hosts:
+                try:
+                    host.touch()
+                except Exception:
+                    continue
+            self.doc.recompute()
+        finally:
+            self._opening_host_recompute_running = False
+
+    def _queue_hard_refresh_selected_opening_visuals(self):
+        if self._tearing_down or self._selected_opening_hard_refresh_queued:
+            return
+        self._selected_opening_hard_refresh_queued = True
+        self._clear_selected_opening_overlay()
+        self._clear_selected_opening_handles()
+        self._request_view_redraw()
+        try:
+            from PySide import QtCore
+
+            QtCore.QTimer.singleShot(0, self._flush_hard_refresh_selected_opening_visuals)
+        except Exception:
+            self._flush_hard_refresh_selected_opening_visuals()
+
+    def _flush_hard_refresh_selected_opening_visuals(self):
+        self._selected_opening_hard_refresh_queued = False
+        if self._tearing_down or self.current_tool != "Select":
+            return
+        if not self._is_hosted_opening_object(self.selected_opening):
+            return
+        self._sync_selected_opening_overlay()
+        self._sync_selected_opening_handles()
+        self._request_view_redraw()
+
     def slotChangedObject(self, obj, prop):
         if self._tearing_down:
             return
         if self.current_tool != "Select":
             return
-        if obj == self.selected_opening and prop in {
-            "Shape",
-            "Placement",
-            "Base",
-            "Hosts",
-            "WindowParts",
-            "IfcType",
-        }:
-            self._sync_selected_opening_overlay()
-            self._sync_selected_opening_handles()
-            if obj == self.hovered_opening:
-                self._sync_hovered_opening_overlay()
+        if (
+            self._is_opening_visual_dependency(self.selected_opening, obj)
+            and prop in _OPENING_VISUAL_PROPERTIES
+        ):
+            self._refresh_opening_footprint_display(self.selected_opening)
+            self._refresh_opening_host_footprint_displays(self.selected_opening)
+            self._queue_plan_overlay_visual_refresh(
+                _PLAN_VISUAL_SELECTED_OPENING,
+                _PLAN_VISUAL_HOVERED_OPENING,
+            )
             return
-        if obj == self.hovered_opening and prop in {
-            "Shape",
-            "Placement",
-            "Base",
-            "Hosts",
-            "WindowParts",
-            "IfcType",
-        }:
-            self._sync_hovered_opening_overlay()
+        if (
+            self._is_opening_visual_dependency(self.hovered_opening, obj)
+            and prop in _OPENING_VISUAL_PROPERTIES
+        ):
+            self._refresh_opening_footprint_display(self.hovered_opening)
+            self._refresh_opening_host_footprint_displays(self.hovered_opening)
+            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_OPENING)
             return
-        if obj == self.hovered_wall and prop in {"Shape", "Additions", "Subtractions", "Hosts"}:
-            self._sync_hovered_wall_overlay()
+        if obj == self.hovered_wall and prop in _WALL_VISUAL_PROPERTIES:
+            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_WALL)
             return
         if obj != self.selected_wall:
             return
-        if prop not in {"Shape", "Additions", "Subtractions", "Hosts"}:
+        if prop not in _WALL_VISUAL_PROPERTIES:
             return
         self._schedule_selected_wall_reset(prop, obj)
 
@@ -2139,12 +2375,39 @@ class PlanEditSession:
             self._clear_hovered_opening_overlay()
         if obj == self.selected_opening:
             self.selected_opening = None
-            self._sync_selected_opening_overlay()
-            self._sync_selected_opening_handles()
+            self._refresh_selected_opening_visuals()
             return
         if obj != self.selected_wall:
             return
         self._schedule_selected_wall_reset("Deleted", obj)
+
+    def _invalidate_document_dependent_plan_visuals(self, recompute_opening_hosts=False):
+        if self.selected_opening:
+            self._refresh_opening_footprint_display(self.selected_opening)
+            self._refresh_opening_host_footprint_displays(self.selected_opening)
+            self._queue_hard_refresh_selected_opening_visuals()
+        if self.hovered_opening and self.hovered_opening != self.selected_opening:
+            self._refresh_opening_footprint_display(self.hovered_opening)
+            self._refresh_opening_host_footprint_displays(self.hovered_opening)
+        if recompute_opening_hosts:
+            self._queue_recompute_opening_hosts(self.selected_opening, self.hovered_opening)
+        self._queue_plan_overlay_visual_refresh(
+            _PLAN_VISUAL_HOVERED_OPENING,
+            _PLAN_VISUAL_HOVERED_WALL,
+            _PLAN_VISUAL_WALL_GRIPS,
+        )
+
+    def slotUndoDocument(self, doc):
+        del doc
+        self._invalidate_document_dependent_plan_visuals(recompute_opening_hosts=True)
+
+    def slotRedoDocument(self, doc):
+        del doc
+        self._invalidate_document_dependent_plan_visuals(recompute_opening_hosts=True)
+
+    def slotRecomputedDocument(self, doc):
+        del doc
+        self._invalidate_document_dependent_plan_visuals()
 
     def attach_task_panel(self, panel):
         if self.task_panel is panel:
@@ -2171,6 +2434,7 @@ class PlanEditSession:
     def _refresh_task_panel_status(self):
         if self._tearing_down:
             return
+        self._update_input_hints()
         panel = self.task_panel
         if not panel:
             return
@@ -2178,6 +2442,107 @@ class PlanEditSession:
             panel.refresh_from_session()
         except (AttributeError, RuntimeError):
             self.on_panel_closed(panel)
+
+    def _clear_input_hints(self):
+        hint_manager = getattr(FreeCADGui, "HintManager", None)
+        if not hint_manager or not hasattr(hint_manager, "hide"):
+            return
+        try:
+            hint_manager.hide()
+        except Exception:
+            pass
+
+    def _request_view_redraw(self):
+        if self._tearing_down:
+            return
+        if self.view and hasattr(self.view, "redraw"):
+            try:
+                self.view.redraw()
+                return
+            except Exception:
+                pass
+
+    def _make_input_hint(self, message, *sequences):
+        if not hasattr(FreeCADGui, "InputHint"):
+            return None
+        try:
+            return FreeCADGui.InputHint(message, *sequences)
+        except Exception:
+            return None
+
+    def _get_input_hints(self):
+        if self.current_tool == "Move Opening":
+            return [
+                self._make_input_hint(
+                    translate("BIM_PlanEdit", "%1 place opening"),
+                    FreeCADGui.UserInput.MouseLeft,
+                ),
+                self._make_input_hint(
+                    translate("BIM_PlanEdit", "%1 cycle move anchor"),
+                    FreeCADGui.UserInput.KeyTab,
+                ),
+                self._make_input_hint(
+                    translate("BIM_PlanEdit", "%1 cancel"),
+                    FreeCADGui.UserInput.KeyEscape,
+                ),
+            ]
+        if self.current_tool == "Move Wall":
+            return [
+                self._make_input_hint(
+                    translate("BIM_PlanEdit", "%1 place wall"),
+                    FreeCADGui.UserInput.MouseLeft,
+                ),
+                self._make_input_hint(
+                    translate("BIM_PlanEdit", "%1 cancel"),
+                    FreeCADGui.UserInput.KeyEscape,
+                ),
+            ]
+        if self.current_tool.startswith("Stretch "):
+            return [
+                self._make_input_hint(
+                    translate("BIM_PlanEdit", "%1 place endpoint"),
+                    FreeCADGui.UserInput.MouseLeft,
+                ),
+                self._make_input_hint(
+                    translate("BIM_PlanEdit", "%1 cancel"),
+                    FreeCADGui.UserInput.KeyEscape,
+                ),
+            ]
+        if self.current_tool == "Select" and self.selected_opening:
+            return [
+                self._make_input_hint(
+                    translate("BIM_PlanEdit", "%1 pick opening handle"),
+                    FreeCADGui.UserInput.MouseLeft,
+                )
+            ]
+        if self.current_tool == "Select" and self.selected_wall:
+            return [
+                self._make_input_hint(
+                    translate("BIM_PlanEdit", "%1 pick wall grip"),
+                    FreeCADGui.UserInput.MouseLeft,
+                )
+            ]
+        if self.current_tool == "Select":
+            return [
+                self._make_input_hint(
+                    translate("BIM_PlanEdit", "%1 select wall or opening"),
+                    FreeCADGui.UserInput.MouseLeft,
+                )
+            ]
+        return []
+
+    def _update_input_hints(self):
+        hint_manager = getattr(FreeCADGui, "HintManager", None)
+        if not hint_manager or not hasattr(hint_manager, "show"):
+            return
+        hints = [hint for hint in self._get_input_hints() if hint is not None]
+        if not hints:
+            self._clear_input_hints()
+            return
+        try:
+            hint_manager.show(*hints)
+        except Exception:
+            pass
 
     def _sync_wall_grips(self):
         self._clear_wall_grips()
@@ -2221,11 +2586,7 @@ class PlanEditSession:
         ]
 
     def _clear_wall_grips(self):
-        for tracker in self._grip_trackers:
-            try:
-                tracker.finalize()
-            except Exception:
-                pass
+        self._finalize_trackers(self._grip_trackers)
         self._grip_trackers = []
 
     def _get_wall_overlay_polylines(self, wall):
@@ -2263,6 +2624,18 @@ class PlanEditSession:
             return list(proxy.get_plan_overlay_polylines() or [])
         except Exception:
             return []
+
+    def _finalize_trackers(self, trackers):
+        for tracker in trackers:
+            try:
+                if hasattr(tracker, "off"):
+                    tracker.off()
+            except Exception:
+                pass
+            try:
+                tracker.finalize()
+            except Exception:
+                pass
 
     def _get_plan_target_at_position(self, mouse_pos):
         if not self.view or not mouse_pos:
@@ -2425,11 +2798,7 @@ class PlanEditSession:
         )
 
     def _clear_hovered_wall_overlay(self):
-        for tracker in self._wall_hover_trackers:
-            try:
-                tracker.finalize()
-            except Exception:
-                pass
+        self._finalize_trackers(self._wall_hover_trackers)
         self._wall_hover_trackers = []
 
     def _create_wall_overlay_trackers(self, wall, color, width, tracker_store):
@@ -2464,11 +2833,7 @@ class PlanEditSession:
         )
 
     def _clear_hovered_opening_overlay(self):
-        for tracker in self._opening_hover_trackers:
-            try:
-                tracker.finalize()
-            except Exception:
-                pass
+        self._finalize_trackers(self._opening_hover_trackers)
         self._opening_hover_trackers = []
 
     def _create_opening_overlay_trackers(self, opening, color, width, tracker_store):
@@ -2487,25 +2852,42 @@ class PlanEditSession:
                 tracker.on()
                 tracker_store.append(tracker)
 
+    def _get_opening_overlay_segments(self, opening):
+        segments = []
+        for polyline in self._get_opening_overlay_polylines(opening):
+            if len(polyline) < 2:
+                continue
+            for start, end in zip(polyline, polyline[1:]):
+                segments.append((start, end))
+        return segments
+
     def _sync_selected_opening_overlay(self):
-        self._clear_selected_opening_overlay()
-        if self.current_tool != "Select":
+        if self.current_tool != "Select" or not self._is_hosted_opening_object(
+            self.selected_opening
+        ):
+            self._clear_selected_opening_overlay()
             return
-        if not self._is_hosted_opening_object(self.selected_opening):
+        width = self._scaled_line_width(3)
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            self._clear_selected_opening_overlay()
             return
-        self._create_opening_overlay_trackers(
-            self.selected_opening,
-            color=(0.12, 0.38, 0.95),
-            width=self._scaled_line_width(3),
-            tracker_store=self._opening_overlay_trackers,
-        )
+        segments = self._get_opening_overlay_segments(self.selected_opening)
+        color = (0.12, 0.38, 0.95)
+        if len(self._opening_overlay_trackers) != len(segments):
+            self._clear_selected_opening_overlay()
+            for _start, _end in segments:
+                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                self._opening_overlay_trackers.append(tracker)
+        for tracker, (start, end) in zip(self._opening_overlay_trackers, segments):
+            tracker.setColor(color)
+            tracker.p1(start)
+            tracker.p2(end)
+            tracker.on()
 
     def _clear_selected_opening_overlay(self):
-        for tracker in self._opening_overlay_trackers:
-            try:
-                tracker.finalize()
-            except Exception:
-                pass
+        self._finalize_trackers(self._opening_overlay_trackers)
         self._opening_overlay_trackers = []
 
     def _get_selected_opening_edit_handles(self, opening):
@@ -2532,56 +2914,67 @@ class PlanEditSession:
         proxy = self._get_opening_view_proxy(opening, "project_point_to_host_axis")
         if not proxy:
             return point
-        return proxy.project_point_to_host_axis(point)
+        return proxy.project_point_to_host_axis(point, anchor=self._edit_opening_move_anchor)
+
+    def _get_opening_move_anchor_modes(self, opening):
+        proxy = self._get_opening_view_proxy(opening, "get_plan_move_anchor_modes")
+        if not proxy:
+            return _OPENING_MOVE_ANCHORS
+        modes = tuple(proxy.get_plan_move_anchor_modes() or ())
+        return modes or _OPENING_MOVE_ANCHORS
 
     def _execute_opening_handle(self, opening, handle_index, point=None):
         proxy = self._get_opening_view_proxy(opening, "execute_plan_edit_handle")
         if not proxy:
             return False
-        return bool(proxy.execute_plan_edit_handle(handle_index, point))
+        return bool(
+            proxy.execute_plan_edit_handle(
+                handle_index,
+                point,
+                anchor=self._edit_opening_move_anchor,
+            )
+        )
 
-    def _sync_selected_opening_handles(self):
-        self._clear_selected_opening_handles()
-        if self.current_tool != "Select":
-            return
-        if not self._is_hosted_opening_object(self.selected_opening):
-            return
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-            from draftutils import params
-        except ImportError:
-            return
+    def _get_selected_opening_handle_specs(self, opening):
+        from draftutils import params
 
+        handle_specs = []
         marker_size = self._scaled_marker_size(params.get_param_view("MarkerSize"))
         markers = {
             "move": FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size),
             "flip_hinge": FreeCADGui.getMarkerIndex("CIRCLE_FILLED", marker_size),
             "flip_opening": FreeCADGui.getMarkerIndex("CROSS", marker_size),
         }
-        handle_color = (0.12, 0.38, 0.95)
-        for idx, handle in enumerate(
-            self._get_selected_opening_edit_handles(self.selected_opening)
-        ):
-            role = handle.role
-            point = handle.point
-            if role not in markers or point is None:
+        for idx, handle in enumerate(self._get_selected_opening_edit_handles(opening)):
+            if handle.role not in markers or handle.point is None:
                 continue
+            handle_specs.append((idx, handle.point, markers[handle.role]))
+        return handle_specs
+
+    def _sync_selected_opening_handles(self):
+        if self.current_tool != "Select":
+            self._clear_selected_opening_handles()
+            return
+        if not self._is_hosted_opening_object(self.selected_opening):
+            self._clear_selected_opening_handles()
+            return
+        self._clear_selected_opening_handles()
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            return
+        for idx, point, marker in self._get_selected_opening_handle_specs(self.selected_opening):
             tracker = DraftTrackers.editTracker(
                 pos=point,
-                name=self.selected_opening.Name,
                 idx=idx,
-                marker=markers[role],
+                marker=marker,
+                inactive=True,
             )
-            tracker.setColor(handle_color)
             tracker.on()
             self._opening_handle_trackers.append(tracker)
 
     def _clear_selected_opening_handles(self):
-        for tracker in self._opening_handle_trackers:
-            try:
-                tracker.finalize()
-            except Exception:
-                pass
+        self._finalize_trackers(self._opening_handle_trackers)
         self._opening_handle_trackers = []
 
     def _get_opening_move_preview_state(self, opening, point):
@@ -2590,7 +2983,7 @@ class PlanEditSession:
         proxy = self._get_opening_view_proxy(opening, "get_plan_move_preview_state")
         if not proxy:
             return None
-        return proxy.get_plan_move_preview_state(point)
+        return proxy.get_plan_move_preview_state(point, anchor=self._edit_opening_move_anchor)
 
     def _sync_opening_move_preview(self, opening, point):
         self._clear_opening_move_preview()
@@ -2647,12 +3040,34 @@ class PlanEditSession:
         self._opening_move_preview_trackers.append(dim)
 
     def _clear_opening_move_preview(self):
-        for tracker in self._opening_move_preview_trackers:
-            try:
-                tracker.finalize()
-            except Exception:
-                pass
+        self._finalize_trackers(self._opening_move_preview_trackers)
         self._opening_move_preview_trackers = []
+
+    def _cycle_opening_move_anchor(self):
+        if self.current_tool != "Move Opening":
+            return False
+        anchor_modes = self._get_opening_move_anchor_modes(self._edit_opening)
+        try:
+            current_index = anchor_modes.index(self._edit_opening_move_anchor)
+        except ValueError:
+            current_index = 0
+        self._edit_opening_move_anchor = anchor_modes[(current_index + 1) % len(anchor_modes)]
+        return True
+
+    def _refresh_opening_move_preview_from_raw_point(self):
+        opening = self._edit_opening
+        handle_index = self._edit_opening_handle_index
+        if not opening or handle_index is None:
+            return
+        handles = self._get_selected_opening_edit_handles(opening)
+        if handle_index < 0 or handle_index >= len(handles):
+            return
+        handle = handles[handle_index]
+        raw_point = self._edit_opening_move_raw_point
+        if raw_point is None:
+            raw_point = handle.point
+        point = self._project_opening_handle_point(opening, handle, raw_point)
+        self._sync_opening_move_preview(opening, point)
 
     def _activate_opening_handle(self, opening, handle_index):
         try:
@@ -2686,11 +3101,14 @@ class PlanEditSession:
         self._set_hovered_opening(None)
         self._edit_opening = opening
         self._edit_opening_handle_index = handle_index
+        self._edit_opening_move_anchor = "center"
+        self._edit_opening_move_raw_point = FreeCAD.Vector(handle.point)
         self._clear_selected_opening_overlay()
         self._clear_selected_opening_handles()
         self._sync_opening_move_preview(opening, handle.point)
         self._refresh_task_panel_status()
         FreeCAD.activeDraftCommand = self
+        self._push_opening_move_snap_profile()
         FreeCADGui.Snapper.getPoint(
             last=handle.point,
             callback=self._finish_opening_handle_point_pick,
@@ -2710,6 +3128,7 @@ class PlanEditSession:
             self._clear_opening_move_preview()
             return
         handle = handles[handle_index]
+        self._edit_opening_move_raw_point = FreeCAD.Vector(point) if point is not None else None
         point = self._project_opening_handle_point(opening, handle, point)
         self._sync_opening_move_preview(opening, point)
 
@@ -2719,11 +3138,14 @@ class PlanEditSession:
         handle_index = self._edit_opening_handle_index
         self._edit_opening = None
         self._edit_opening_handle_index = None
+        self._pop_opening_move_snap_profile()
         FreeCAD.activeDraftCommand = None
         self._clear_opening_move_preview()
+        self._edit_opening_move_raw_point = None
 
         if point is None or not opening:
             self.current_tool = "Select"
+            self._edit_opening_move_anchor = "center"
             self._sync_selected_opening_overlay()
             self._sync_selected_opening_handles()
             self._refresh_task_panel_status()
@@ -2732,6 +3154,7 @@ class PlanEditSession:
         handles = self._get_selected_opening_edit_handles(opening)
         if handle_index is None or handle_index < 0 or handle_index >= len(handles):
             self.current_tool = "Select"
+            self._edit_opening_move_anchor = "center"
             self._refresh_task_panel_status()
             return
         handle = handles[handle_index]
@@ -2751,9 +3174,11 @@ class PlanEditSession:
                 self.doc.abortTransaction()
             except Exception:
                 pass
+            self._edit_opening_move_anchor = "center"
             self._restore_selected_opening(opening)
             return
 
+        self._edit_opening_move_anchor = "center"
         self._queue_restore_selected_opening(opening)
 
     def _cancel_opening_handle_point_pick(self):
@@ -2761,8 +3186,11 @@ class PlanEditSession:
         self._edit_opening = None
         self._edit_opening_handle_index = None
         self._stop_snapper()
+        self._pop_opening_move_snap_profile()
         FreeCAD.activeDraftCommand = None
         self._clear_opening_move_preview()
+        self._edit_opening_move_anchor = "center"
+        self._edit_opening_move_raw_point = None
         self.current_tool = "Select"
         if opening:
             self.selected_opening = opening
