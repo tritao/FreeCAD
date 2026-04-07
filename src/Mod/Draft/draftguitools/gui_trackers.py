@@ -1768,4 +1768,149 @@ class archDimTracker(Tracker):
             return Vector(self.pnts.getValues()[-1].getValue())
 
 
+class editableArchDimTracker:
+    """An editable dimension tracker backed by Gui.EditableDatumLabel."""
+
+    def __init__(
+        self,
+        p1=FreeCAD.Vector(0, 0, 0),
+        p2=FreeCAD.Vector(1, 0, 0),
+        mode=1,
+        auto_distance=False,
+        avoid_mouse_cursor=False,
+    ):
+        self.offset = 0.5
+        self.mode = mode
+        self.Visible = False
+        self.working_plane = None
+        self._p1 = FreeCAD.Vector()
+        self._p2 = FreeCAD.Vector()
+        self.view = gui_utils.get_3d_view()
+        self.camera = self.view.getCameraNode()
+        self.size_pixel = params.get_param_view("MarkerSize") * 2 * 96 / 72
+        self.Distance = 0.0
+        self.color = utils.get_rgba_tuple(params.get_param("snapcolor"))[:3]
+        self.label = FreeCADGui.EditableDatumLabel(
+            self.view.getViewer(),
+            self._get_wp().get_placement(),
+            self.color,
+            auto_distance,
+            avoid_mouse_cursor,
+        )
+        self.setMode(mode)
+        self.p1(p1)
+        self.p2(p2)
+
+    def _get_wp(self):
+        return self.working_plane or FreeCAD.DraftWorkingPlane
+
+    def on(self):
+        """Set the visibility to True."""
+        self.label.activate()
+        self.Visible = True
+
+    def off(self):
+        """Set the visibility to False."""
+        self.label.deactivate()
+        self.Visible = False
+
+    def finalize(self):
+        """Remove the editable label from the scene."""
+        if self.label:
+            self.label.deactivate()
+            self.label = None
+        self.Visible = False
+
+    def setColor(self, color=None):
+        """Set the color."""
+        if color is None:
+            self.color = utils.get_rgba_tuple(params.get_param("snapcolor"))[:3]
+        else:
+            self.color = color
+        self.label.setColor(self.color)
+
+    def setMode(self, mode=1):
+        """Set the mode.
+
+        0 = without lines (falls back to aligned)
+        1 = aligned (default)
+        2 = horizontal
+        3 = vertical.
+        """
+        self.mode = mode
+        if mode == 2:
+            label_type = "distancex"
+        elif mode == 3:
+            label_type = "distancey"
+        else:
+            label_type = "distance"
+        self.label.setLabelType(label_type, "dimensioning")
+
+    def setString(self, text=None):
+        """Update the label text and placement from the current points."""
+        del text
+        plane = self._get_wp()
+        p1 = self._p1
+        p2 = self._p2
+        self.label.setPlacement(plane.get_placement())
+        self.label.setPoints(p1, p2)
+        self.label.setLabelAutoDistanceReverse(False)
+        # Prevent the dim line from intersecting the curve near the cursor.
+        sign_dx = math.copysign(1, (p2.sub(p1)).x or 1)
+        sign_dy = math.copysign(1, (p2.sub(p1)).y or 1)
+        sign = sign_dx * sign_dy
+        if self.mode == 2:
+            self.Distance = abs((p2.sub(p1)).x)
+            self.label.setLabelDistance(sign * self.offset)
+        elif self.mode == 3:
+            self.Distance = abs((p2.sub(p1)).y)
+            self.label.setLabelDistance(-1 * sign * self.offset)
+        else:
+            self.Distance = (p2.sub(p1)).Length
+        text = FreeCAD.Units.Quantity(self.Distance, FreeCAD.Units.Length).UserString
+        volume = self.camera.getViewVolume()
+        scale = self.view.getSize()[1] / volume.getHeight()
+        if scale * self.Distance > self.size_pixel * len(text):
+            self.label.setLabelStartAngle(0)
+        else:
+            self.label.setLabelStartAngle(
+                1 / 2 * self.Distance + 3 / 5 * self.size_pixel * len(text) / scale
+            )
+        self.label.setSpinboxValue(self.Distance)
+
+    def p1(self, point=None):
+        """Set or get the first point of the dim."""
+        plane = self._get_wp()
+        if point:
+            p1_proj = plane.project_point(point)
+            p1_proj_u = (p1_proj - plane.position).dot(plane.u.normalize())
+            p1_proj_v = (p1_proj - plane.position).dot(plane.v.normalize())
+            self._p1 = Vector(p1_proj_u, p1_proj_v, 0)
+            self.setString()
+        else:
+            return self._p1
+
+    def p2(self, point=None):
+        """Set or get the second point of the dim."""
+        plane = self._get_wp()
+        if point:
+            p2_proj = plane.project_point(point)
+            p2_proj_u = (p2_proj - plane.position).dot(plane.u.normalize())
+            p2_proj_v = (p2_proj - plane.position).dot(plane.v.normalize())
+            self._p2 = Vector(p2_proj_u, p2_proj_v, 0)
+            self.setString()
+        else:
+            return self._p2
+
+    def startEdit(self, value=None, event_filter=None, visible_to_mouse=False):
+        """Start interactive editing of the current label."""
+        if value is None:
+            value = self.Distance
+        self.label.startEdit(value, event_filter, visible_to_mouse)
+
+    def stopEdit(self):
+        """Stop interactive editing."""
+        self.label.stopEdit()
+
+
 ## @}
