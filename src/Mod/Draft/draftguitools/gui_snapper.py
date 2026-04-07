@@ -1535,6 +1535,7 @@ class Snapper:
         hints=None,
         modifier_resolver=None,
         interaction_plane=None,
+        noTracker=False,
     ):
         """Get a 3D point from the screen.
 
@@ -1562,6 +1563,7 @@ class Snapper:
         can be passed as an extra taskbox.
         title is the title of the point task box mode is the dialog box
         you want (default is point, you can also use wire and line)
+        If noTracker is True, the default snap rubber-band line is suppressed.
 
         If getPoint() is invoked without any argument, only the existing
         callbacks are cleared for backward compatibility. Prefer
@@ -1615,7 +1617,13 @@ class Snapper:
                     ctrl, shift = modifier_resolver(ctrl, shift, alt)
                 except Exception:
                     pass
-            self.pt = Gui.Snapper.snap(mousepos, lastpoint=last, active=ctrl, constrain=shift)
+            self.pt = Gui.Snapper.snap(
+                mousepos,
+                lastpoint=last,
+                active=ctrl,
+                constrain=shift,
+                noTracker=noTracker,
+            )
             self.ui.displayPoint(self.pt, last, plane=self._get_wp(), mask=Gui.Snapper.affinity)
             if movecallback:
                 movecallback(self.pt, self.snapInfo)
