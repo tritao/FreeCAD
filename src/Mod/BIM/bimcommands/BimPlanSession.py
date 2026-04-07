@@ -1931,6 +1931,7 @@ class PlanEditSession:
             movecallback=self._update_wall_edit_point_pick,
             last=last,
             title=title,
+            noTracker=True,
         )
         self._queue_focus_plan_view()
 
@@ -2150,15 +2151,17 @@ class PlanEditSession:
             points[0].add(FreeCAD.Vector(perp).multiply(y_max)),
         ]
 
-    def _get_aligned_readout_offset_for_wall(self, wall):
+    def _get_readout_base_gap(self):
         from draftutils import params
 
-        width = getattr(getattr(wall, "Width", None), "Value", 0.0) if wall else 0.0
-        width = float(width or 0.0)
         units_per_pixel = self._get_plan_view_units_per_pixel() or 0.0
         text_height_pixels = float(params.get_param_view("MarkerSize") or 0.0) * 2.0 * 96.0 / 72.0
-        zoom_gap = text_height_pixels * units_per_pixel * 1.25
-        base_gap = max(width * 0.25, 100.0, zoom_gap)
+        return max(100.0, text_height_pixels * units_per_pixel * 1.25)
+
+    def _get_aligned_readout_offset_for_wall(self, wall):
+        width = getattr(getattr(wall, "Width", None), "Value", 0.0) if wall else 0.0
+        width = float(width or 0.0)
+        base_gap = max(width * 0.25, self._get_readout_base_gap())
         if width <= 0:
             return base_gap
         align = getattr(wall, "Align", "Center") if wall else "Center"
@@ -2169,6 +2172,8 @@ class PlanEditSession:
         return width * 0.5 + base_gap
 
     def _get_wall_edit_readout_offset(self, mode):
+        if mode in (2, 3):
+            return self._get_readout_base_gap()
         if mode != 1:
             return None
         return self._get_aligned_readout_offset_for_wall(self._edit_wall)
@@ -3774,6 +3779,7 @@ class PlanEditSession:
             callback=self._finish_opening_handle_point_pick,
             movecallback=self._update_opening_handle_point_pick,
             title=handle.title or translate("BIM_PlanEdit", "Pick new opening position"),
+            noTracker=True,
         )
         self._queue_focus_plan_view()
 

@@ -684,6 +684,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
             self.assertIn("callback", captured)
             self.assertIn("movecallback", captured)
             self.assertIn("last", captured)
+            self.assertTrue(captured.get("noTracker"))
 
             captured["callback"](handle.point, None)
 
@@ -983,6 +984,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertIn("callback", captured)
         self.assertIn("movecallback", captured)
         self.assertIn("last", captured)
+        self.assertTrue(captured.get("noTracker"))
 
         new_midpoint = captured["last"].add(FreeCAD.Vector(1000, 0, 0))
         captured["movecallback"](new_midpoint, None)
@@ -1127,6 +1129,15 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
                 for tracker in session._wall_edit_readout_trackers
             ),
             [2, 3],
+        )
+        self.assertTrue(
+            all(
+                tracker.offset == session._get_wall_edit_readout_offset(tracker.mode)
+                for tracker in session._wall_edit_readout_trackers
+            )
+        )
+        self.assertTrue(
+            all(tracker.offset >= 100.0 for tracker in session._wall_edit_readout_trackers)
         )
 
     def test_plan_edit_wall_stretch_preview_shows_length_readout(self):
