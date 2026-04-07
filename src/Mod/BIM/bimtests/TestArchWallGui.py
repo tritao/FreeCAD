@@ -1098,6 +1098,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         """Stretching a wall endpoint should show one aligned temporary length readout."""
 
         wall = Arch.makeWall(length=3000, width=200, height=2500)
+        wall.Align = "Center"
         self.document.recompute()
 
         session = BimPlanSession.start_session()
@@ -1127,6 +1128,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertTrue(hasattr(tracker, "label"))
         self.assertTrue(hasattr(tracker, "startEdit"))
         self.assertEqual(tracker.mode, 1)
+        self.assertGreater(tracker.offset, wall.Width.Value / 2.0)
 
     def test_plan_edit_wall_stretch_enter_starts_length_edit(self):
         """Enter should activate in-view length editing for a wall stretch preview."""
