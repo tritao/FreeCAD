@@ -1570,7 +1570,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
 
         return polylines
 
-    def get_plan_move_preview_state(self, point):
+    def get_plan_move_preview_state(self, point, anchor="center"):
         """Return visible preview geometry for moving the opening along its host."""
 
         if point is None:
@@ -1578,25 +1578,32 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
 
         handles = self.get_plan_edit_handles()
         move_handle = next((handle for handle in handles if handle.role == "move"), None)
-        projected = self.project_point_to_host_axis(point)
+        projected = self.project_point_to_host_axis(point, anchor=anchor)
         context = self.get_plan_move_context()
         if not move_handle or move_handle.point is None or projected is None or not context:
             return None
 
         axis_u = context["axis_u"]
+        anchor_offset_u = self._get_plan_move_anchor_offset_u(anchor, context=context)
         delta_vec = projected.sub(move_handle.point)
         delta = FreeCAD.Vector(axis_u).multiply(delta_vec.dot(axis_u))
         preview_point = FreeCAD.Vector(move_handle.point).add(delta)
+        anchor_offset = FreeCAD.Vector(axis_u).multiply(anchor_offset_u)
         polylines = []
         for polyline in self.get_plan_overlay_polylines():
             if len(polyline) < 2:
                 continue
             polylines.append([FreeCAD.Vector(point).add(delta) for point in polyline])
         return {
-            "guide_start": FreeCAD.Vector(move_handle.point),
-            "guide_end": preview_point,
+            "guide_start": FreeCAD.Vector(move_handle.point).add(anchor_offset),
+            "guide_end": FreeCAD.Vector(preview_point).add(anchor_offset),
             "polylines": polylines,
         }
+
+    def get_plan_move_anchor_modes(self):
+        """Return supported move anchors for plan editing."""
+
+        return ("center", "left", "right")
 
     def get_plan_edit_handles(self):
         """Return plan-edit handle specs for hosted openings."""
@@ -1688,7 +1695,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
 
         return handles
 
-    def execute_plan_edit_handle(self, handle_index, point=None):
+    def execute_plan_edit_handle(self, handle_index, point=None, anchor="center"):
         """Execute a previously advertised plan-edit handle."""
 
         handles = self.get_plan_edit_handles()
@@ -1697,7 +1704,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
 
         role = handles[handle_index].role
         if role == "move":
-            return self.move_along_host(point)
+            return self.move_along_host(point, anchor=anchor)
         if role == "flip_hinge":
             self.invertHinge()
             return True
@@ -1725,14 +1732,83 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         if not section_profile:
             return None
 
+        move_u_min = move_u_max = None
+        opening_half_width_u = max(section_profile["umax"] - section_profile["umin"], 0.0) * 0.5
+        host = next(iter(getattr(self.Object, "Hosts", None) or []), None)
+        if host and getattr(host, "Proxy", None) and hasattr(host.Proxy, "calc_endpoints"):
+            try:
+                endpoints = host.Proxy.calc_endpoints(host)
+            except Exception:
+                endpoints = None
+            if endpoints and len(endpoints) == 2:
+                origin = section_profile["origin"]
+                axis_u = section_profile["axis_u"]
+                endpoint_u = [FreeCAD.Vector(point).sub(origin).dot(axis_u) for point in endpoints]
+                host_u_min = min(endpoint_u)
+                host_u_max = max(endpoint_u)
+                move_u_min = host_u_min + opening_half_width_u
+                move_u_max = host_u_max - opening_half_width_u
+                if move_u_min > move_u_max:
+                    midpoint_u = (host_u_min + host_u_max) * 0.5
+                    move_u_min = midpoint_u
+                    move_u_max = midpoint_u
+
         return {
             "origin": FreeCAD.Vector(section_profile["origin"]),
             "axis_u": FreeCAD.Vector(section_profile["axis_u"]),
             "axis_v": FreeCAD.Vector(section_profile["axis_v"]),
             "base_z": base_z,
+            "opening_half_width_u": opening_half_width_u,
+            "move_u_min": move_u_min,
+            "move_u_max": move_u_max,
         }
 
-    def project_point_to_host_axis(self, point):
+    def clamp_point_to_host_span(self, point, context=None):
+        """Clamp a point on the move axis to the valid host span for this opening."""
+
+        obj = getattr(self, "Object", None)
+        if not obj or point is None:
+            return point
+
+        if context is None:
+            context = self.get_plan_move_context()
+        if not context:
+            return point
+
+        move_u_min = context.get("move_u_min")
+        move_u_max = context.get("move_u_max")
+        if move_u_min is None or move_u_max is None:
+            return point
+
+        origin = context["origin"]
+        axis_u = context["axis_u"]
+        axis_v = context["axis_v"]
+        delta = FreeCAD.Vector(point).sub(origin)
+        target_u = delta.dot(axis_u)
+        target_v = delta.dot(axis_v)
+        clamped_u = min(max(target_u, move_u_min), move_u_max)
+        clamped = origin.add(FreeCAD.Vector(axis_u).multiply(clamped_u)).add(
+            FreeCAD.Vector(axis_v).multiply(target_v)
+        )
+        clamped.z = point.z
+        return clamped
+
+    def _get_plan_move_anchor_offset_u(self, anchor="center", context=None):
+        """Return the axis-U offset for a named move anchor relative to the opening center."""
+
+        if context is None:
+            context = self.get_plan_move_context()
+        if not context:
+            return 0.0
+
+        half_width = float(context.get("opening_half_width_u") or 0.0)
+        if anchor == "left":
+            return -half_width
+        if anchor == "right":
+            return half_width
+        return 0.0
+
+    def project_point_to_host_axis(self, point, anchor="center"):
         """Project a picked plan point onto the hosted opening move axis."""
 
         obj = getattr(self, "Object", None)
@@ -1755,15 +1831,16 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         current = FreeCAD.Vector(placement.Base)
         delta = point.sub(origin)
         current_delta = current.sub(origin)
-        target_u = delta.dot(axis_u)
+        anchor_offset_u = self._get_plan_move_anchor_offset_u(anchor, context=context)
+        target_u = delta.dot(axis_u) - anchor_offset_u
         current_v = current_delta.dot(axis_v)
         projected = origin.add(FreeCAD.Vector(axis_u).multiply(target_u)).add(
             FreeCAD.Vector(axis_v).multiply(current_v)
         )
         projected.z = current.z
-        return projected
+        return self.clamp_point_to_host_span(projected, context=context)
 
-    def move_along_host(self, point):
+    def move_along_host(self, point, anchor="center"):
         """Move the opening base along the host wall axis."""
 
         obj = getattr(self, "Object", None)
@@ -1777,7 +1854,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             return False
         placement = FreeCAD.Placement(placement)
 
-        new_base = self.project_point_to_host_axis(point)
+        new_base = self.project_point_to_host_axis(point, anchor=anchor)
         if new_base is None:
             return False
         placement.Base = new_base

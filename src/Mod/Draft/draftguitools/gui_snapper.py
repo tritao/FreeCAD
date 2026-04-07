@@ -508,10 +508,30 @@ class Snapper:
         if not snaps:
             return None
 
+        # Seed the hovered object point as a passive candidate.
+        # Without this, edge/face snapping can end up with only explicit
+        # endpoint/midpoint/intersection candidates, which allows a far-away
+        # endpoint on the same object to win even though the cursor is
+        # hovering elsewhere on that edge/face.
+        if self.snapInfo:
+            try:
+                cursor_pt = App.Vector(self.snapInfo["x"], self.snapInfo["y"], self.snapInfo["z"])
+                cursor_wp = self.toWP(cursor_pt)
+                if not any(
+                    (snap and snap[0] is not None and snap[0].sub(cursor_pt).Length == 0)
+                    for snap in snaps
+                ):
+                    snaps.append([cursor_pt, "passive", cursor_wp])
+            except Exception:
+                cursor_pt = None
+        else:
+            cursor_pt = None
+
         # calculating the nearest snap point
         # a Near ("passive") snap point does not 'win' if a different snap point
         # is within snapRange of the cursor point (in screen coordinates)
-        cursor_pt = App.Vector(self.snapInfo["x"], self.snapInfo["y"], self.snapInfo["z"])
+        if cursor_pt is None:
+            cursor_pt = App.Vector(self.snapInfo["x"], self.snapInfo["y"], self.snapInfo["z"])
         shortest_all = shortest_not_near = 1000000000000000000
         winner_all = winner_not_near = None
         for snap in snaps:
@@ -855,9 +875,17 @@ class Snapper:
         """Return a list with a near snap location for a face."""
         if self.isEnabled("Near") and point:
             try:
-                np = shape.Surface.projectPoint(point, "NearestPoint")
+                # Use the trimmed face, not the underlying infinite surface.
+                # Projecting to shape.Surface can jump far away on planar faces
+                # because the nearest point is found on the unbounded support
+                # plane instead of inside the face boundaries.
+                dist = Part.Vertex(point).distToShape(shape)
+                np = dist[1][0][1]
             except Exception:
-                return []
+                try:
+                    np = shape.Surface.projectPoint(point, "NearestPoint")
+                except Exception:
+                    return []
             return [[np, "passive", self.toWP(np)]]
         else:
             return []
