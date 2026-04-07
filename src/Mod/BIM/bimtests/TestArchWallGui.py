@@ -112,9 +112,13 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
     class _FakeEventCallback:
         def __init__(self, event):
             self._event = event
+            self._handled = False
 
         def getEvent(self):
             return self._event
+
+        def setHandled(self):
+            self._handled = True
 
     def _make_hosted_door(self, wall, name="TestDoor", width=900.0, height=2100.0):
         sketch = self.document.addObject("Sketcher::SketchObject", name + "Sketch")
@@ -1109,6 +1113,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         session._edit_wall = wall
         session._edit_endpoint = "End"
         session._edit_endpoints = original_endpoints
+        session.current_tool = "Stretch End"
 
         stretched_points = [
             original_endpoints[0],
@@ -1119,8 +1124,109 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
 
         self.assertEqual(len(session._wall_edit_readout_trackers), 1)
         tracker = session._wall_edit_readout_trackers[0]
-        self.assertTrue(hasattr(tracker, "dimnode"))
-        self.assertEqual(int(tracker.dimnode.datumtype.getValue()), 1)
+        self.assertTrue(hasattr(tracker, "label"))
+        self.assertTrue(hasattr(tracker, "startEdit"))
+        self.assertEqual(tracker.mode, 1)
+
+    def test_plan_edit_wall_stretch_enter_starts_length_edit(self):
+        """Enter should activate in-view length editing for a wall stretch preview."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ):
+            session._start_wall_grip_edit(1)
+
+        from pivy import coin
+
+        callback = self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.RETURN))
+        session._on_key_pressed(callback)
+
+        self.assertTrue(callback._handled)
+        self.assertIsNotNone(session._wall_edit_active_readout_tracker)
+        self.assertTrue(session._wall_edit_active_readout_tracker.isInEdit())
+
+    def test_plan_edit_wall_stretch_length_edit_updates_preview(self):
+        """Numeric wall stretch edits should drive the preview without rebuilding the label."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        original_endpoints = wall.Proxy.calc_endpoints(wall)
+        session._edit_wall = wall
+        session._edit_endpoint = "End"
+        session._edit_endpoints = original_endpoints
+        session.current_tool = "Stretch End"
+        session._sync_wall_edit_preview(list(original_endpoints))
+
+        tracker = session._wall_edit_active_readout_tracker
+        self.assertIsNotNone(tracker)
+
+        session._on_wall_stretch_length_changed(4200.0)
+
+        self.assertIs(session._wall_edit_active_readout_tracker, tracker)
+        self.assertAlmostEqual(session._preview_points[0].x, original_endpoints[0].x, delta=1e-6)
+        self.assertAlmostEqual(
+            session._preview_points[1].x, original_endpoints[0].x + 4200.0, delta=1e-6
+        )
+
+    def test_plan_edit_wall_stretch_length_edit_commits_wall(self):
+        """Accepting a typed wall stretch length should commit the resized wall."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ):
+            session._start_wall_grip_edit(1)
+
+        session._on_wall_stretch_length_finished(4200.0)
+        self.pump_gui_events()
+
+        endpoints = wall.Proxy.calc_endpoints(wall)
+        self.assertAlmostEqual(endpoints[1].sub(endpoints[0]).Length, 4200.0, delta=1e-6)
+        self.assertEqual(session.current_tool, "Select")
+        self.assertIs(session.selected_wall, wall)
 
     def test_plan_edit_wall_edit_refreshes_hosted_opening_footprints(self):
         """Wall edits should refresh footprints for openings hosted by that wall."""
