@@ -310,6 +310,8 @@ class PlanEditSession:
         self._preview_rect_tracker = None
         self._preview_grip_trackers = []
         self._wall_edit_readout_trackers = []
+        self._wall_edit_active_readout_tracker = None
+        self._wall_edit_length_edit_queued = False
         self._rect_wall_start = None
         self._rect_wall_params = None
         self._rect_wall_preview_trackers = []
@@ -1506,6 +1508,7 @@ class PlanEditSession:
             self._edit_endpoints = None
             self._wall_edit_opening_clearances = {}
             self._preview_points = None
+            self._wall_edit_length_edit_queued = False
             self._ignore_selection_changes = False
             self._embedded_host = None
             self._embedded_tool = None
@@ -1524,6 +1527,7 @@ class PlanEditSession:
         self._edit_endpoints = None
         self._wall_edit_opening_clearances = {}
         self._preview_points = None
+        self._wall_edit_length_edit_queued = False
         self._ignore_selection_changes = False
         self._embedded_host = None
         self._embedded_tool = None
@@ -1540,11 +1544,38 @@ class PlanEditSession:
         snapper = getattr(FreeCADGui, "Snapper", None)
         if not snapper:
             return
+        toolbar = getattr(FreeCADGui, "draftToolBar", None)
+        if toolbar and hasattr(toolbar, "setPointFocusSuppressed"):
+            try:
+                toolbar.setPointFocusSuppressed(False)
+            except Exception:
+                pass
+        elif toolbar and hasattr(toolbar, "suppress_point_focus"):
+            try:
+                toolbar.suppress_point_focus = False
+            except Exception:
+                pass
         try:
             snapper.getPoint()
             snapper.off()
         except Exception:
             pass
+
+    def _set_draft_point_focus_suppressed(self, suppressed):
+        toolbar = getattr(FreeCADGui, "draftToolBar", None)
+        if not toolbar:
+            return
+        if hasattr(toolbar, "setPointFocusSuppressed"):
+            try:
+                toolbar.setPointFocusSuppressed(bool(suppressed))
+            except Exception:
+                pass
+            return
+        if hasattr(toolbar, "suppress_point_focus"):
+            try:
+                toolbar.suppress_point_focus = bool(suppressed)
+            except Exception:
+                pass
 
     def _has_active_rect_wall_tool(self):
         return self._rect_wall_start is not None or self.current_tool == "Rect Wall"
@@ -1785,7 +1816,12 @@ class PlanEditSession:
         self._clear_wall_grips()
         self._sync_wall_edit_preview(self._preview_points)
         self._refresh_task_panel_status()
+        self._resume_wall_edit_point_pick()
 
+    def _resume_wall_edit_point_pick(self):
+        if not self._is_wall_edit_modal_active():
+            return
+        mode = self._edit_endpoint
         title = {
             "Start": translate("BIM_PlanEdit", "Pick new start point"),
             "End": translate("BIM_PlanEdit", "Pick new end point"),
@@ -1799,12 +1835,14 @@ class PlanEditSession:
                 FreeCADGui.Snapper.setSelectMode(False)
             except Exception:
                 pass
+        self._set_draft_point_focus_suppressed(True)
         FreeCADGui.Snapper.getPoint(
             callback=self._finish_wall_edit,
             movecallback=self._update_wall_edit_point_pick,
             last=last,
             title=title,
         )
+        self._queue_focus_plan_view()
 
     def _snapshot_wall_hosted_opening_clearances(self, wall, endpoints):
         if not wall or not endpoints or len(endpoints) != 2:
@@ -1856,6 +1894,15 @@ class PlanEditSession:
             or not hasattr(proxy, "calc_endpoints")
             or not hasattr(proxy, "set_from_endpoints")
         ):
+            self.current_tool = "Select"
+            self._cancel_pending_edit()
+            self._refresh_task_panel_status()
+            return
+
+        self._commit_wall_edit_points(wall, endpoint, proxy, new_points)
+
+    def _commit_wall_edit_points(self, wall, endpoint, proxy, new_points):
+        if not wall or not endpoint or not proxy or not new_points:
             self.current_tool = "Select"
             self._cancel_pending_edit()
             self._refresh_task_panel_status()
@@ -1958,6 +2005,25 @@ class PlanEditSession:
         delta = point.sub(original_midpoint)
         return [original_endpoints[0].add(delta), original_endpoints[1].add(delta)]
 
+    def _compute_wall_edit_points_from_length(self, length):
+        endpoint = self._edit_endpoint
+        original_endpoints = self._edit_endpoints
+        if endpoint not in ("Start", "End") or not original_endpoints:
+            return None
+
+        length = max(float(length), _MIN_WALL_LENGTH)
+        axis = original_endpoints[1].sub(original_endpoints[0])
+        if axis.Length < _MIN_WALL_LENGTH:
+            return None
+        axis.normalize()
+
+        if endpoint == "Start":
+            end = original_endpoints[1]
+            return [end.sub(FreeCAD.Vector(axis).multiply(length)), end]
+
+        start = original_endpoints[0]
+        return [start, start.add(FreeCAD.Vector(axis).multiply(length))]
+
     def _get_preview_footprint(self, points, width=None, align=None):
         wall = self._edit_wall
         if not points or len(points) != 2:
@@ -1994,7 +2060,7 @@ class PlanEditSession:
             points[0].add(FreeCAD.Vector(perp).multiply(y_max)),
         ]
 
-    def _sync_wall_edit_preview(self, points):
+    def _update_wall_edit_preview_geometry(self, points):
         if not points or len(points) != 2:
             return
 
@@ -2050,7 +2116,16 @@ class PlanEditSession:
             tracker.set(position)
             tracker.on()
 
+    def _sync_wall_edit_preview(self, points):
+        self._update_wall_edit_preview_geometry(points)
         self._sync_wall_edit_readout(points)
+
+    def _is_wall_stretch_edit_active(self):
+        return bool(
+            self._edit_wall
+            and self._edit_endpoint in ("Start", "End")
+            and self.current_tool in ("Stretch Start", "Stretch End")
+        )
 
     def _clear_wall_edit_preview(self):
         if self._preview_line_tracker:
@@ -2099,21 +2174,130 @@ class PlanEditSession:
 
         for mode, start, end in dims:
             try:
-                dim = DraftTrackers.archDimTracker(mode=mode)
+                if self._is_wall_stretch_edit_active():
+                    dim = DraftTrackers.editableArchDimTracker(mode=mode)
+                else:
+                    dim = DraftTrackers.archDimTracker(mode=mode)
             except Exception:
                 continue
             try:
-                dim.dimnode.textColor.setValue(readout_color)
+                if hasattr(dim, "dimnode"):
+                    dim.dimnode.textColor.setValue(readout_color)
+                else:
+                    dim.setColor(readout_color)
             except Exception:
                 pass
             dim.p1(start)
             dim.p2(end)
             dim.on()
+            if self._is_wall_stretch_edit_active() and hasattr(dim, "setValueChangedCallback"):
+                dim.setValueChangedCallback(self._on_wall_stretch_length_changed)
+                dim.setEditingFinishedCallback(self._on_wall_stretch_length_finished)
+                if hasattr(dim, "setEditingCanceledCallback"):
+                    dim.setEditingCanceledCallback(self._on_wall_stretch_length_canceled)
+                self._wall_edit_active_readout_tracker = dim
             self._wall_edit_readout_trackers.append(dim)
 
     def _clear_wall_edit_readout(self):
         self._finalize_trackers(self._wall_edit_readout_trackers)
         self._wall_edit_readout_trackers = []
+        self._wall_edit_active_readout_tracker = None
+        self._wall_edit_length_edit_queued = False
+
+    def _start_wall_stretch_length_edit(self):
+        tracker = self._wall_edit_active_readout_tracker
+        if not self._is_wall_stretch_edit_active() or tracker is None:
+            return False
+        if not hasattr(tracker, "startEdit"):
+            return False
+        if hasattr(tracker, "isInEdit") and tracker.isInEdit():
+            if hasattr(tracker, "label"):
+                tracker.label.setFocusToSpinbox()
+            return True
+        if self._wall_edit_length_edit_queued:
+            return True
+        self._wall_edit_length_edit_queued = True
+        self._stop_snapper()
+        try:
+            from PySide import QtCore
+        except ImportError:
+            self._wall_edit_length_edit_queued = False
+            tracker.startEdit(tracker.Distance)
+            return True
+        QtCore.QTimer.singleShot(
+            0, lambda: self._start_wall_stretch_length_edit_now(tracker, tracker.Distance)
+        )
+        return True
+
+    def _start_wall_stretch_length_edit_now(self, tracker, value):
+        self._wall_edit_length_edit_queued = False
+        if not self._is_wall_stretch_edit_active():
+            return
+        if tracker is None or tracker is not self._wall_edit_active_readout_tracker:
+            return
+        if not hasattr(tracker, "startEdit"):
+            return
+        if hasattr(tracker, "isInEdit") and tracker.isInEdit():
+            if hasattr(tracker, "label"):
+                tracker.label.setFocusToSpinbox()
+            return
+        try:
+            tracker.startEdit(value)
+        except Exception:
+            return
+
+    def _on_wall_stretch_length_changed(self, value):
+        if not self._is_wall_stretch_edit_active():
+            return
+        new_points = self._compute_wall_edit_points_from_length(value)
+        tracker = self._wall_edit_active_readout_tracker
+        if not new_points or tracker is None:
+            return
+        self._preview_points = new_points
+        self._update_wall_edit_preview_geometry(new_points)
+        if hasattr(tracker, "updatePoints"):
+            tracker.updatePoints(new_points[0], new_points[1], sync_spinbox=False)
+        else:
+            tracker.p1(new_points[0])
+            tracker.p2(new_points[1])
+        tracker.on()
+
+    def _on_wall_stretch_length_finished(self, value):
+        if not self._is_wall_stretch_edit_active():
+            return
+        wall = self._edit_wall
+        endpoint = self._edit_endpoint
+        proxy = getattr(wall, "Proxy", None)
+        new_points = self._compute_wall_edit_points_from_length(value)
+        if not new_points or not proxy:
+            return
+        self._preview_points = new_points
+        self._commit_wall_edit_points(wall, endpoint, proxy, new_points)
+
+    def _on_wall_stretch_length_canceled(self, value):
+        del value
+        if not self._is_wall_stretch_edit_active():
+            return
+        preview_points = None
+        if self._preview_points:
+            preview_points = [FreeCAD.Vector(point) for point in self._preview_points]
+        elif self._edit_endpoints:
+            preview_points = [FreeCAD.Vector(point) for point in self._edit_endpoints]
+        try:
+            from PySide import QtCore
+        except ImportError:
+            self._finish_wall_stretch_length_canceled(preview_points)
+            return
+        QtCore.QTimer.singleShot(
+            0, lambda pts=preview_points: self._finish_wall_stretch_length_canceled(pts)
+        )
+
+    def _finish_wall_stretch_length_canceled(self, preview_points):
+        if not self._is_wall_stretch_edit_active():
+            return
+        if preview_points:
+            self._sync_wall_edit_preview(preview_points)
+        self._resume_wall_edit_point_pick()
 
     def _restore_edit_wall_visibility(self):
         wall = self._edit_wall
@@ -2133,6 +2317,11 @@ class PlanEditSession:
 
     def _update_wall_edit_point_pick(self, point=None, snap_info=None):
         del snap_info
+        if self._wall_edit_active_readout_tracker and hasattr(
+            self._wall_edit_active_readout_tracker, "isInEdit"
+        ):
+            if self._wall_edit_active_readout_tracker.isInEdit():
+                return
         self._update_wall_edit_preview(point)
 
     def _cancel_wall_edit_point_pick(self):
@@ -2333,6 +2522,15 @@ class PlanEditSession:
             if self._cycle_opening_move_anchor():
                 self._refresh_opening_move_preview_from_raw_point()
                 self._refresh_task_panel_status()
+            return
+        if self._is_wall_stretch_edit_active() and key in (
+            coin.SoKeyboardEvent.TAB,
+            coin.SoKeyboardEvent.RETURN,
+            coin.SoKeyboardEvent.ENTER,
+        ):
+            if self._start_wall_stretch_length_edit():
+                if hasattr(event_callback, "setHandled"):
+                    event_callback.setHandled()
             return
         if key != coin.SoKeyboardEvent.ESCAPE:
             return
@@ -2741,6 +2939,39 @@ class PlanEditSession:
             panel.refresh_from_session()
         except (AttributeError, RuntimeError):
             self.on_panel_closed(panel)
+
+    def _is_modal_plan_interaction_active(self):
+        return bool(self._is_wall_edit_modal_active() or self.current_tool == "Move Opening")
+
+    def _focus_plan_view(self):
+        if self._tearing_down or not self.view:
+            return
+        try:
+            widget = self.view.graphicsView()
+        except Exception:
+            widget = None
+        if widget is not None:
+            try:
+                widget.activateWindow()
+            except Exception:
+                pass
+            try:
+                widget.setFocus()
+            except Exception:
+                pass
+            return
+        try:
+            self.view.setFocus()
+        except Exception:
+            pass
+
+    def _queue_focus_plan_view(self):
+        try:
+            from PySide import QtCore
+        except Exception:
+            self._focus_plan_view()
+            return
+        QtCore.QTimer.singleShot(0, self._focus_plan_view)
 
     def _clear_input_hints(self):
         hint_manager = getattr(FreeCADGui, "HintManager", None)
@@ -3416,12 +3647,14 @@ class PlanEditSession:
         self._refresh_task_panel_status()
         FreeCAD.activeDraftCommand = self
         self._push_opening_move_snap_profile()
+        self._set_draft_point_focus_suppressed(True)
         FreeCADGui.Snapper.getPoint(
             last=handle.point,
             callback=self._finish_opening_handle_point_pick,
             movecallback=self._update_opening_handle_point_pick,
             title=handle.title or translate("BIM_PlanEdit", "Pick new opening position"),
         )
+        self._queue_focus_plan_view()
 
     def _update_opening_handle_point_pick(self, point=None, snap_info=None):
         del snap_info
@@ -3568,6 +3801,8 @@ class PlanEditDockWidget:
         self._storey_items = []
         self._closed = False
         self._params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit")
+        self._modal_focus_widgets = []
+        self._saved_focus_policies = {}
         self._dock = _PlanEditDock(self)
 
         self.form = self._dock
@@ -3647,8 +3882,40 @@ class PlanEditDockWidget:
         self.exit_button.setMinimumHeight(32)
         layout.addWidget(self.exit_button)
 
+        self._modal_focus_widgets = [
+            self.storey_combo,
+            self.select_button,
+            self.wall_button,
+            self.rect_wall_button,
+            self.move_button,
+            self.join_button,
+            self.reapply_button,
+            self.stretch_start_button,
+            self.stretch_end_button,
+            self.exit_button,
+        ]
+        for widget in self._modal_focus_widgets:
+            try:
+                self._saved_focus_policies[widget] = widget.focusPolicy()
+            except Exception:
+                pass
+
         container.setLayout(layout)
         self.form.setWidget(container)
+        self.form.install_plan_key_filter(
+            self.form,
+            container,
+            self.storey_combo,
+            self.select_button,
+            self.wall_button,
+            self.rect_wall_button,
+            self.move_button,
+            self.join_button,
+            self.reapply_button,
+            self.stretch_start_button,
+            self.stretch_end_button,
+            self.exit_button,
+        )
         FreeCADGui.getMainWindow().addDockWidget(QtCore.Qt.RightDockWidgetArea, self.form)
         self._apply_initial_placement(QtCore)
         QtCore.QMetaObject.connectSlotsByName(container)
@@ -3788,6 +4055,7 @@ class PlanEditDockWidget:
             storey_text = self.session.get_storey_label(self.session.active_storey)
             tool = self.session.current_tool
             selected = self.session.selected_wall
+            modal_active = self.session._is_modal_plan_interaction_active()
             if selected:
                 wall_state = translate("BIM_PlanEdit", "Selected wall: {label}").format(
                     label=selected.Label
@@ -3814,11 +4082,46 @@ class PlanEditDockWidget:
                 ).format(tool=tool, storey=storey_text, wall_state=wall_state)
             )
             stretch_enabled = self.session.is_selected_wall_endpoint_editable()
-            self.stretch_start_button.setEnabled(stretch_enabled)
-            self.stretch_end_button.setEnabled(stretch_enabled)
+            self._apply_modal_interaction_state(modal_active)
+            if not modal_active:
+                self.stretch_start_button.setEnabled(stretch_enabled)
+                self.stretch_end_button.setEnabled(stretch_enabled)
         except (AttributeError, RuntimeError):
             self.mark_closed()
             self.detach()
+
+    def _apply_modal_interaction_state(self, modal_active):
+        from PySide import QtCore
+
+        for widget in self._modal_focus_widgets:
+            if widget is None:
+                continue
+            try:
+                widget.setFocusPolicy(
+                    QtCore.Qt.NoFocus
+                    if modal_active
+                    else self._saved_focus_policies.get(widget, QtCore.Qt.StrongFocus)
+                )
+            except Exception:
+                pass
+
+        for widget in (
+            self.storey_combo,
+            self.select_button,
+            self.wall_button,
+            self.rect_wall_button,
+            self.move_button,
+            self.join_button,
+            self.reapply_button,
+            self.stretch_start_button,
+            self.stretch_end_button,
+        ):
+            if widget is None:
+                continue
+            try:
+                widget.setEnabled(not modal_active)
+            except Exception:
+                pass
 
     def on_storey_changed(self, index):
         if 0 <= index < len(self._storey_items):
@@ -3855,12 +4158,13 @@ class PlanEditDockWidget:
 
 class _PlanEditDock:
     def __new__(cls, owner):
-        from PySide import QtGui
+        from PySide import QtCore, QtGui
 
         class _DockWidget(QtGui.QDockWidget):
             def __init__(self, dock_owner):
                 super().__init__(FreeCADGui.getMainWindow())
                 self._plan_owner = dock_owner
+                self._key_filtered_widgets = []
 
             def closeEvent(self, event):
                 owner = self._plan_owner
@@ -3872,5 +4176,30 @@ class _PlanEditDock:
                         owner.session.on_panel_closed(owner)
                 super().closeEvent(event)
                 self._plan_owner = None
+
+            def eventFilter(self, watched, event):
+                owner = self._plan_owner
+                if (
+                    owner
+                    and owner.session
+                    and event.type() == QtCore.QEvent.KeyPress
+                    and owner.session._is_wall_stretch_edit_active()
+                ):
+                    key = event.key()
+                    if key in (QtCore.Qt.Key_Tab, QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter):
+                        if owner.session._start_wall_stretch_length_edit():
+                            event.accept()
+                            return True
+                return super().eventFilter(watched, event)
+
+            def install_plan_key_filter(self, *widgets):
+                for widget in widgets:
+                    if widget is None:
+                        continue
+                    try:
+                        widget.installEventFilter(self)
+                        self._key_filtered_widgets.append(widget)
+                    except Exception:
+                        pass
 
         return _DockWidget(owner)
