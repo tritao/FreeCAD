@@ -872,6 +872,41 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertEqual(hints[1].message, "cycle move anchor")
         self.assertEqual(hints[2].message, "cancel")
 
+    def test_plan_edit_opening_move_preview_offsets_readout_outside_host_wall(self):
+        """Opening move preview readout should sit outside the host wall footprint."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        wall.Align = "Center"
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="OpeningPreviewOffsetDoor")
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        proxy = door.Proxy
+        context = proxy.get_plan_move_context()
+        self.assertIsNotNone(context)
+
+        preview_point = context["origin"].add(
+            FreeCAD.Vector(context["axis_u"]).multiply(context["move_u_max"])
+        )
+        preview_point.z = context["base_z"]
+
+        session.current_tool = "Move Opening"
+        session._edit_opening_move_anchor = "center"
+        session._sync_opening_move_preview(door, preview_point)
+
+        dim_trackers = [
+            tracker
+            for tracker in session._opening_move_preview_trackers
+            if hasattr(tracker, "dimnode") and hasattr(tracker, "offset")
+        ]
+        self.assertEqual(len(dim_trackers), 1)
+        self.assertGreater(dim_trackers[0].offset, wall.Width.Value / 2.0)
+
     def test_plan_edit_hovered_wall_shows_preselection_overlay(self):
         """Walls should get a lightweight hover overlay before actual selection."""
 
@@ -1129,6 +1164,25 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertTrue(hasattr(tracker, "startEdit"))
         self.assertEqual(tracker.mode, 1)
         self.assertGreater(tracker.offset, wall.Width.Value / 2.0)
+
+    def test_plan_edit_readout_offset_grows_when_zoomed_out(self):
+        """Aligned readout offsets should grow when the same wall is viewed farther out."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        wall.Align = "Center"
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(session, "_get_plan_view_units_per_pixel", return_value=1.0):
+            close_offset = session._get_aligned_readout_offset_for_wall(wall)
+
+        with patch.object(session, "_get_plan_view_units_per_pixel", return_value=40.0):
+            far_offset = session._get_aligned_readout_offset_for_wall(wall)
+
+        self.assertGreater(far_offset, close_offset)
 
     def test_plan_edit_disables_locked_view_actions(self):
         """Plan Edit should disable and later restore standard view orientation actions."""

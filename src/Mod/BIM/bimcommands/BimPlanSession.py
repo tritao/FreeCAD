@@ -969,6 +969,18 @@ class PlanEditSession:
     def _scaled_marker_size(self, base_size):
         return max(4, int(round(base_size * self._get_plan_overlay_scale())))
 
+    def _get_plan_view_units_per_pixel(self):
+        height = self._get_plan_view_height()
+        if not height or height <= 0 or not self.view or not hasattr(self.view, "getSize"):
+            return None
+        try:
+            view_height = float(self.view.getSize()[1])
+        except Exception:
+            return None
+        if view_height <= 0:
+            return None
+        return height / view_height
+
     def _capture_background_state(self):
         params = _view_param_group()
         return {
@@ -2138,21 +2150,32 @@ class PlanEditSession:
             points[0].add(FreeCAD.Vector(perp).multiply(y_max)),
         ]
 
+    def _get_aligned_readout_offset_for_wall(self, wall):
+        from draftutils import params
+
+        width = getattr(getattr(wall, "Width", None), "Value", 0.0) if wall else 0.0
+        width = float(width or 0.0)
+        units_per_pixel = self._get_plan_view_units_per_pixel() or 0.0
+        text_height_pixels = float(params.get_param_view("MarkerSize") or 0.0) * 2.0 * 96.0 / 72.0
+        zoom_gap = text_height_pixels * units_per_pixel * 1.25
+        base_gap = max(width * 0.25, 100.0, zoom_gap)
+        if width <= 0:
+            return base_gap
+        align = getattr(wall, "Align", "Center") if wall else "Center"
+        if align == "Left":
+            return base_gap
+        if align == "Right":
+            return -(base_gap)
+        return width * 0.5 + base_gap
+
     def _get_wall_edit_readout_offset(self, mode):
         if mode != 1:
             return None
-        wall = self._edit_wall
-        width = getattr(getattr(wall, "Width", None), "Value", 0.0) if wall else 0.0
-        width = float(width or 0.0)
-        if width <= 0:
-            return 100.0
-        align = getattr(wall, "Align", "Center") if wall else "Center"
-        gap = max(width * 0.25, 100.0)
-        if align == "Left":
-            return gap
-        if align == "Right":
-            return -(gap)
-        return width * 0.5 + gap
+        return self._get_aligned_readout_offset_for_wall(self._edit_wall)
+
+    def _get_opening_move_readout_offset(self, opening):
+        host = next(iter(getattr(opening, "Hosts", None) or []), None) if opening else None
+        return self._get_aligned_readout_offset_for_wall(host)
 
     def _update_wall_edit_preview_geometry(self, points):
         if not points or len(points) != 2:
@@ -3669,6 +3692,7 @@ class PlanEditSession:
         except Exception:
             return
         dim.dimnode.textColor.setValue(preview_color)
+        dim.offset = self._get_opening_move_readout_offset(opening)
         dim.p1(guide_start)
         dim.p2(guide_end)
         dim.on()
