@@ -156,6 +156,8 @@ SET(bimcommands_SRCS
     bimcommands/BimNudge.py
     bimcommands/BimOffset.py
     bimcommands/BimPanel.py
+    bimcommands/BimPlanEdit.py
+    bimcommands/BimPlanSession.py
     bimcommands/BimPipe.py
     bimcommands/BimPreflight.py
     bimcommands/BimProfile.py
