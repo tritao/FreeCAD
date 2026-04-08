@@ -181,6 +181,8 @@ void EditableDatumLabel::startEdit(double val, QObject* eventFilteringObj, bool 
     spinBox->installEventFilter(this);
     spinBox->setAutoAdjustWidth(true);
     spinBox->setMaxExpectedDigits(16);
+    spinBox->setValue(Base::Quantity(val, Base::Unit::Length));
+    value = val;
 
     if (eventFilteringObj) {
         spinBox->installEventFilter(eventFilteringObj);
@@ -232,7 +234,7 @@ bool EditableDatumLabel::eventFilter(QObject* watched, QEvent* event)
         if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter
             || keyEvent->key() == Qt::Key_Tab) {
 
-            if (auto* spinBox = qobject_cast<QAbstractSpinBox*>(watched)) {
+            if (qobject_cast<QAbstractSpinBox*>(watched)) {
                 // if tab has been pressed and user did not type anything previously,
                 // then just cycle but don't lock anything, otherwise we lock the label
                 if (keyEvent->key() == Qt::Key_Tab && !this->isSet) {
@@ -304,17 +306,19 @@ double EditableDatumLabel::getValue() const
 
 void EditableDatumLabel::setSpinboxValue(double val, const Base::Unit& unit)
 {
+    value = val;
+
     if (!spinBox) {
-        Base::Console().developerWarning(
-            "EditableDatumLabel::setSpinboxValue",
-            "Spinbox doesn't exist in"
-        );
+        Base::Quantity quantity(val, unit);
+        double factor {};
+        std::string unitStr;
+        std::string valueStr = quantity.getUserString(factor, unitStr);
+        label->string = SbString(valueStr.c_str());
         return;
     }
 
     QSignalBlocker block(spinBox);
     spinBox->setValue(Base::Quantity(val, unit));
-    value = val;
     positionSpinbox();
 
     if (spinBox->hasFocus()) {
@@ -334,6 +338,17 @@ void EditableDatumLabel::setFocusToSpinbox()
     if (!spinBox->hasFocus()) {
         spinBox->setFocus();
         spinBox->selectNumber();
+    }
+}
+
+void EditableDatumLabel::clearSelection()
+{
+    if (!spinBox) {
+        return;
+    }
+
+    if (auto* edit = spinBox->findChild<QLineEdit*>()) {
+        edit->deselect();
     }
 }
 
@@ -520,6 +535,9 @@ void EditableDatumLabel::setLabelAutoDistanceReverse(bool val)
 
 void EditableDatumLabel::setSpinboxVisibleToMouse(bool val)
 {
+    if (!spinBox) {
+        return;
+    }
     spinBox->setAttribute(Qt::WA_TransparentForMouseEvents, !val);
 }
 
