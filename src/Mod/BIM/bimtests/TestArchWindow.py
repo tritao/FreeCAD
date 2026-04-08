@@ -29,6 +29,7 @@ import ArchWindow  # For ArchWindow._Window proxy class
 import Part
 import Draft
 import Sketcher
+from unittest.mock import patch
 
 
 class TestArchWindow(TestArchBase.TestArchBase):
@@ -692,6 +693,43 @@ class TestArchWindow(TestArchBase.TestArchBase):
             delta=1e-5,
             msg="The volume removed from the wall is incorrect.",
         )
+
+    def test_hosted_opening_plan_move_context_prefers_base_profile(self):
+        """Hosted opening plan geometry should avoid slicing the transient host cut volume."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500, name="PlanContextWall")
+        self.document.recompute()
+
+        door_width = 900.0
+        door_height = 2100.0
+        door_sketch = self._create_sketch_with_wires(
+            "PlanContextDoorSketch", [(0, 0, door_width, door_height)]
+        )
+        door_sketch.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+        self.document.recompute()
+
+        door = Arch.makeWindow(baseobj=door_sketch, name="PlanContextDoor")
+        door.Width = door_width
+        door.Height = door_height
+        door.HoleDepth = 0
+        door.IfcType = "Door"
+        door.WindowParts = ["DoorLeaf", "Solid panel", "Wire0,Edge1,Mode1", "40", "0"]
+        self.document.recompute()
+
+        Arch.addComponents(door, wall)
+        self.document.recompute()
+
+        with patch.object(
+            door.Proxy,
+            "_get_hosted_subvolume_section_profile",
+            side_effect=AssertionError("subvolume plan profile should not be needed"),
+        ):
+            context = door.Proxy.get_plan_move_context()
+
+        self.assertIsNotNone(context)
+        self.assertGreater(context["opening_half_width_u"], 0.0)
+        self.assertIsNotNone(context["move_u_min"])
+        self.assertIsNotNone(context["move_u_max"])
 
     def _create_sketch_with_wires(
         self, name: str, wire_definitions: list[tuple[float, float, float, float]]
