@@ -35,6 +35,8 @@
 #include "EditableDatumLabel.h"
 #include "EditableDatumLabelPy.h"
 #include "PythonWrapper.h"
+#include "View3DInventor.h"
+#include "View3DPy.h"
 #include "View3DViewerPy.h"
 
 
@@ -165,7 +167,7 @@ Py::Object functionToPyObject(EditableDatumLabel::Function function)
     return Py::String("positioning");
 }
 
-void invokeCallback(PyObject* callback, const Py::Tuple& args)
+void invokeCallback(PyObject* callback)
 {
     if (!callback) {
         return;
@@ -174,6 +176,24 @@ void invokeCallback(PyObject* callback, const Py::Tuple& args)
     Base::PyGILStateLocker lock;
     try {
         Py::Callable method(callback);
+        method.apply(Py::Tuple());
+    }
+    catch (const Py::Exception&) {
+        PyErr_Print();
+    }
+}
+
+void invokeCallback(PyObject* callback, double value)
+{
+    if (!callback) {
+        return;
+    }
+
+    Base::PyGILStateLocker lock;
+    try {
+        Py::Callable method(callback);
+        Py::Tuple args(1);
+        args.setItem(0, Py::Float(value));
         method.apply(args);
     }
     catch (const Py::Exception&) {
@@ -203,6 +223,8 @@ EditableDatumLabelPy::EditableDatumLabelPy(Py::PythonClassInstance* self, Py::Tu
     : Py::PythonClass<EditableDatumLabelPy>::PythonClass(self, args, kwds)
     , label(nullptr)
     , valueChangedCallback(nullptr)
+    , editingFinishedCallback(nullptr)
+    , editingCanceledCallback(nullptr)
     , parameterUnsetCallback(nullptr)
     , finishEditingCallback(nullptr)
 {
@@ -238,22 +260,38 @@ EditableDatumLabelPy::EditableDatumLabelPy(Py::PythonClassInstance* self, Py::Tu
     );
 
     QObject::connect(label, &EditableDatumLabel::valueChanged, label, [this](double value) {
-        Py::Tuple callbackArgs(1);
-        callbackArgs.setItem(0, Py::Float(value));
-        invokeCallback(this->valueChangedCallback, callbackArgs);
+        invokeCallback(this->valueChangedCallback, value);
+    });
+    QObject::connect(label, &EditableDatumLabel::editingFinished, label, [this](double value) {
+        invokeCallback(this->editingFinishedCallback, value);
+    });
+    QObject::connect(label, &EditableDatumLabel::editingCanceled, label, [this](double value) {
+        invokeCallback(this->editingCanceledCallback, value);
     });
     QObject::connect(label, &EditableDatumLabel::parameterUnset, label, [this]() {
-        invokeCallback(this->parameterUnsetCallback, Py::Tuple());
+        invokeCallback(this->parameterUnsetCallback);
     });
     QObject::connect(label, &EditableDatumLabel::finishEditingOnAllOVPs, label, [this]() {
-        invokeCallback(this->finishEditingCallback, Py::Tuple());
+        invokeCallback(this->finishEditingCallback);
     });
 }
 
 View3DInventorViewer* EditableDatumLabelPy::asViewer(PyObject* pyViewer)
 {
+    if (PyObject_TypeCheck(pyViewer, View3DInventorPy::type_object())) {
+        auto* viewPy = dynamic_cast<View3DInventorPy*>(Py::getPythonExtensionBase(pyViewer));
+        if (!viewPy) {
+            throw Py::RuntimeError("Cannot resolve View3DInventor Python wrapper");
+        }
+        auto* view = viewPy->getView3DInventorPtr();
+        if (!view || !view->getViewer()) {
+            throw Py::RuntimeError("Cannot use a deleted View3DInventor");
+        }
+        return view->getViewer();
+    }
+
     if (!PyObject_TypeCheck(pyViewer, View3DInventorViewerPy::type_object())) {
-        throw Py::TypeError("viewer must be a View3DInventorViewer");
+        throw Py::TypeError("viewer must be a View3DInventor or View3DInventorViewer");
     }
 
     auto* viewerPy = dynamic_cast<View3DInventorViewerPy*>(Py::getPythonExtensionBase(pyViewer));
@@ -272,6 +310,8 @@ EditableDatumLabelPy::~EditableDatumLabelPy()
     {
         Base::PyGILStateLocker lock;
         Py_XDECREF(valueChangedCallback);
+        Py_XDECREF(editingFinishedCallback);
+        Py_XDECREF(editingCanceledCallback);
         Py_XDECREF(parameterUnsetCallback);
         Py_XDECREF(finishEditingCallback);
     }
@@ -306,6 +346,8 @@ PYCXX_VARARGS_METHOD_DECL(EditableDatumLabelPy, resetLockedState)
 PYCXX_VARARGS_METHOD_DECL(EditableDatumLabelPy, updateGeometry)
 PYCXX_VARARGS_METHOD_DECL(EditableDatumLabelPy, getFunction)
 PYCXX_VARARGS_METHOD_DECL(EditableDatumLabelPy, setValueChangedCallback)
+PYCXX_VARARGS_METHOD_DECL(EditableDatumLabelPy, setEditingFinishedCallback)
+PYCXX_VARARGS_METHOD_DECL(EditableDatumLabelPy, setEditingCanceledCallback)
 PYCXX_VARARGS_METHOD_DECL(EditableDatumLabelPy, setParameterUnsetCallback)
 PYCXX_VARARGS_METHOD_DECL(EditableDatumLabelPy, setFinishEditingCallback)
 
@@ -364,6 +406,16 @@ void EditableDatumLabelPy::init_type()
         setValueChangedCallback,
         setValueChangedCallback,
         "setValueChangedCallback(callable_or_none)"
+    );
+    PYCXX_ADD_VARARGS_METHOD(
+        setEditingFinishedCallback,
+        setEditingFinishedCallback,
+        "setEditingFinishedCallback(callable_or_none)"
+    );
+    PYCXX_ADD_VARARGS_METHOD(
+        setEditingCanceledCallback,
+        setEditingCanceledCallback,
+        "setEditingCanceledCallback(callable_or_none)"
     );
     PYCXX_ADD_VARARGS_METHOD(
         setParameterUnsetCallback,
@@ -659,6 +711,26 @@ Py::Object EditableDatumLabelPy::setValueChangedCallback(const Py::Tuple& args)
         throw Py::Exception();
     }
     replaceCallback(valueChangedCallback, callback);
+    return Py::None();
+}
+
+Py::Object EditableDatumLabelPy::setEditingFinishedCallback(const Py::Tuple& args)
+{
+    PyObject* callback = Py_None;
+    if (!PyArg_ParseTuple(args.ptr(), "O", &callback)) {
+        throw Py::Exception();
+    }
+    replaceCallback(editingFinishedCallback, callback);
+    return Py::None();
+}
+
+Py::Object EditableDatumLabelPy::setEditingCanceledCallback(const Py::Tuple& args)
+{
+    PyObject* callback = Py_None;
+    if (!PyArg_ParseTuple(args.ptr(), "O", &callback)) {
+        throw Py::Exception();
+    }
+    replaceCallback(editingCanceledCallback, callback);
     return Py::None();
 }
 

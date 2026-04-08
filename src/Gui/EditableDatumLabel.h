@@ -108,6 +108,8 @@ public:
 
 Q_SIGNALS:
     void valueChanged(double val);
+    void editingFinished(double val);
+    void editingCanceled(double val);
     void parameterUnset();
     void finishEditingOnAllOVPs();  ///< Emitted when Ctrl+Enter is pressed to finish editing on all
                                     ///< visible OVPs
@@ -130,6 +132,7 @@ private:
     SbVec3f midpos;
 
     Function function;
+    double editStartValue;
 };
 
 }  // namespace Gui

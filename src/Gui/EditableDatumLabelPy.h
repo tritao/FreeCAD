@@ -67,6 +67,8 @@ public:
     Py::Object getFunction(const Py::Tuple&);
 
     Py::Object setValueChangedCallback(const Py::Tuple&);
+    Py::Object setEditingFinishedCallback(const Py::Tuple&);
+    Py::Object setEditingCanceledCallback(const Py::Tuple&);
     Py::Object setParameterUnsetCallback(const Py::Tuple&);
     Py::Object setFinishEditingCallback(const Py::Tuple&);
 
@@ -80,6 +82,8 @@ private:
 
     EditableDatumLabel* label;
     PyObject* valueChangedCallback;
+    PyObject* editingFinishedCallback;
+    PyObject* editingCanceledCallback;
     PyObject* parameterUnsetCallback;
     PyObject* finishEditingCallback;
 };
