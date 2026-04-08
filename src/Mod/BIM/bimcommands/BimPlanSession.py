@@ -68,6 +68,22 @@ _PLAN_VISUAL_SELECTED_OPENING = "selected_opening"
 _PLAN_VISUAL_WALL_GRIPS = "wall_grips"
 _PLAN_VISUAL_WALL_EDIT_PREVIEW = "wall_edit_preview"
 _PLAN_VISUAL_ALL = "all"
+_PLAN_VIEW_LOCKED_ACTIONS = (
+    "Std_ViewFront",
+    "Std_ViewTop",
+    "Std_ViewRight",
+    "Std_ViewRear",
+    "Std_ViewBottom",
+    "Std_ViewLeft",
+    "Std_ViewIsometric",
+    "Std_ViewDimetric",
+    "Std_ViewTrimetric",
+    "Std_ViewRotateLeft",
+    "Std_ViewRotateRight",
+    "Std_PerspectiveCamera",
+    "Std_ViewHome",
+    "Std_ViewRestoreCamera",
+)
 
 _active_session = None
 
@@ -332,6 +348,7 @@ class PlanEditSession:
         self._saved_background = None
         self._saved_navigation_style = None
         self._saved_navigation_state = {}
+        self._saved_view_action_state = {}
         self._saved_object_view_state = {}
         self._working_plane = None
         self._interaction_plane = None
@@ -430,6 +447,7 @@ class PlanEditSession:
         self.viewer = None
         self._saved_navigation_style = None
         self._saved_navigation_state = {}
+        self._saved_view_action_state = {}
         self.selected_wall = None
         self.selected_opening = None
         self.hovered_wall = None
@@ -459,6 +477,56 @@ class PlanEditSession:
         except (AttributeError, ReferenceError, RuntimeError):
             return None
 
+    def _get_main_window(self):
+        try:
+            return FreeCADGui.getMainWindow()
+        except Exception:
+            return None
+
+    def _find_main_window_action(self, command_name):
+        from PySide import QtGui
+
+        main_window = self._get_main_window()
+        if not main_window:
+            return None
+        try:
+            return main_window.findChild(QtGui.QAction, command_name)
+        except Exception:
+            return None
+
+    def _capture_view_action_state(self):
+        for command_name in _PLAN_VIEW_LOCKED_ACTIONS:
+            if command_name in self._saved_view_action_state:
+                continue
+            action = self._find_main_window_action(command_name)
+            if action is None:
+                continue
+            try:
+                self._saved_view_action_state[command_name] = bool(action.isEnabled())
+            except Exception:
+                pass
+
+    def _apply_locked_view_actions(self):
+        self._capture_view_action_state()
+        for command_name in _PLAN_VIEW_LOCKED_ACTIONS:
+            action = self._find_main_window_action(command_name)
+            if action is None:
+                continue
+            try:
+                action.setEnabled(False)
+            except Exception:
+                pass
+
+    def _restore_locked_view_actions(self):
+        for command_name, enabled in self._saved_view_action_state.items():
+            action = self._find_main_window_action(command_name)
+            if action is None:
+                continue
+            try:
+                action.setEnabled(bool(enabled))
+            except Exception:
+                pass
+
     def _capture_navigation_flag(self, target, getter_name, state_key):
         if state_key in self._saved_navigation_state:
             return
@@ -484,6 +552,7 @@ class PlanEditSession:
         if nav_style:
             self._saved_navigation_style = nav_style
         self._capture_navigation_flag(nav_style, "isRotationEnabled", "rotation_enabled")
+        self._capture_navigation_flag(nav_style, "isOrientationLocked", "orientation_locked")
         self._capture_navigation_flag(self.viewer, "isEnabledNaviCube", "navicube_enabled")
         self._capture_navigation_flag(self.view, "isCornerCrossVisible", "corner_cross_visible")
 
@@ -491,10 +560,12 @@ class PlanEditSession:
         self._capture_navigation_state()
         nav_style = self._saved_navigation_style or self._get_navigation_style()
         self._apply_navigation_flag(nav_style, "setRotationEnabled", "rotation_enabled", False)
+        self._apply_navigation_flag(nav_style, "setOrientationLocked", "orientation_locked", True)
         self._apply_navigation_flag(self.viewer, "setEnabledNaviCube", "navicube_enabled", False)
         self._apply_navigation_flag(
             self.view, "setCornerCrossVisible", "corner_cross_visible", False
         )
+        self._apply_locked_view_actions()
 
     def _restore_navigation_state(self):
         nav_style = self._saved_navigation_style or self._get_navigation_style()
@@ -503,6 +574,12 @@ class PlanEditSession:
             "setRotationEnabled",
             "rotation_enabled",
             self._saved_navigation_state.get("rotation_enabled"),
+        )
+        self._apply_navigation_flag(
+            nav_style,
+            "setOrientationLocked",
+            "orientation_locked",
+            self._saved_navigation_state.get("orientation_locked"),
         )
         self._apply_navigation_flag(
             self.viewer,
@@ -516,6 +593,7 @@ class PlanEditSession:
             "corner_cross_visible",
             self._saved_navigation_state.get("corner_cross_visible"),
         )
+        self._restore_locked_view_actions()
 
     def shutdown(self, close_dialog=True, teardown=False):
         global _active_session

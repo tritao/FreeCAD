@@ -1130,6 +1130,91 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertEqual(tracker.mode, 1)
         self.assertGreater(tracker.offset, wall.Width.Value / 2.0)
 
+    def test_plan_edit_disables_locked_view_actions(self):
+        """Plan Edit should disable and later restore standard view orientation actions."""
+
+        from PySide import QtGui
+
+        session = BimPlanSession()
+        main_window = QtGui.QWidget()
+
+        initially_enabled = QtGui.QAction(main_window)
+        initially_enabled.setObjectName("Std_ViewFront")
+        initially_enabled.setEnabled(True)
+
+        initially_disabled = QtGui.QAction(main_window)
+        initially_disabled.setObjectName("Std_PerspectiveCamera")
+        initially_disabled.setEnabled(False)
+
+        with patch.object(FreeCADGui, "getMainWindow", return_value=main_window):
+            session._apply_locked_view_actions()
+            self.assertFalse(initially_enabled.isEnabled())
+            self.assertFalse(initially_disabled.isEnabled())
+
+            session._restore_locked_view_actions()
+            self.assertTrue(initially_enabled.isEnabled())
+            self.assertFalse(initially_disabled.isEnabled())
+
+    def test_plan_edit_applies_orientation_lock_to_navigation_style(self):
+        """Plan Edit should lock and later restore view orientation at the navigation layer."""
+
+        class FakeNavigationStyle:
+            def __init__(self):
+                self.rotation_enabled = True
+                self.orientation_locked = False
+
+            def isRotationEnabled(self):
+                return self.rotation_enabled
+
+            def setRotationEnabled(self, enabled):
+                self.rotation_enabled = enabled
+
+            def isOrientationLocked(self):
+                return self.orientation_locked
+
+            def setOrientationLocked(self, enabled):
+                self.orientation_locked = enabled
+
+        class FakeViewer:
+            def __init__(self):
+                self.navicube_enabled = True
+
+            def isEnabledNaviCube(self):
+                return self.navicube_enabled
+
+            def setEnabledNaviCube(self, enabled):
+                self.navicube_enabled = enabled
+
+        class FakeView:
+            def __init__(self):
+                self.corner_cross_visible = True
+
+            def isCornerCrossVisible(self):
+                return self.corner_cross_visible
+
+            def setCornerCrossVisible(self, enabled):
+                self.corner_cross_visible = enabled
+
+        session = BimPlanSession()
+        nav_style = FakeNavigationStyle()
+        viewer = FakeViewer()
+        view = FakeView()
+        session.viewer = viewer
+        session.view = view
+
+        with patch.object(session, "_get_navigation_style", return_value=nav_style):
+            session._apply_plan_navigation_profile()
+            self.assertFalse(nav_style.rotation_enabled)
+            self.assertTrue(nav_style.orientation_locked)
+            self.assertFalse(viewer.navicube_enabled)
+            self.assertFalse(view.corner_cross_visible)
+
+            session._restore_navigation_state()
+            self.assertTrue(nav_style.rotation_enabled)
+            self.assertFalse(nav_style.orientation_locked)
+            self.assertTrue(viewer.navicube_enabled)
+            self.assertTrue(view.corner_cross_visible)
+
     def test_plan_edit_wall_stretch_enter_starts_length_edit(self):
         """Enter should activate in-view length editing for a wall stretch preview."""
 
