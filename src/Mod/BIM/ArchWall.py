@@ -995,8 +995,6 @@ class _Wall(ArchComponent.Component):
         generic Footprint display mode contract.
         """
 
-        import Part
-
         if context is None:
             context = self.getDefaultPlanContext(obj)
         shape = obj.Shape
@@ -1006,30 +1004,13 @@ class _Wall(ArchComponent.Component):
                 cut_z = context.cut_z
                 cut_z = max(bb.ZMin + 0.001, min(bb.ZMax - 0.001, cut_z))
                 target_z = context.target_z if context.target_z is not None else bb.ZMin
-                cut_plane = Part.makePlane(1, 1)
-                cut_plane.translate(FreeCAD.Vector(bb.Center.x, bb.Center.y, cut_z))
                 try:
-                    section_plane, _, _ = ArchCommands.getCutVolume(cut_plane, shape)
-                    if section_plane:
-                        section = shape.section(section_plane)
-                        if section and section.Edges:
-                            try:
-                                edge_groups = Part.sortEdges(section.Edges)
-                            except AttributeError:
-                                edge_groups = Part.__sortEdges__(section.Edges)
-                            faces = []
-                            for edges in edge_groups:
-                                wire = Part.Wire(edges)
-                                if not wire.isClosed():
-                                    continue
-                                face = Part.Face(wire)
-                                if face.Area <= 0:
-                                    continue
-                                face.translate(FreeCAD.Vector(0, 0, target_z - cut_z))
-                                faces.append(face)
-                            if faces:
-                                return faces
-                except Part.OCCError:
+                    faces = ArchComponent.get_horizontal_slice_faces(
+                        shape, cut_z, translate_z=target_z - cut_z
+                    )
+                    if faces:
+                        return faces
+                except Exception:
                     # Sectioning can fail on OCC edge cases; fall back to the
                     # wall's literal bottom faces below instead of breaking the
                     # footprint display mode.
