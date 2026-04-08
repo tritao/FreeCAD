@@ -1601,6 +1601,73 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertIn("callback", captured)
         self.assertIn("movecallback", captured)
 
+    def test_plan_edit_wall_stretch_preview_shows_repositioned_opening_overlay(self):
+        """Stretch preview should show hosted openings in their predicted post-resize position."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+        door = self._make_hosted_door(wall, name="PreviewStretchDoor", width=900.0)
+        self.document.recompute()
+
+        door_proxy = door.ViewObject.Proxy
+        move_context = door_proxy.get_plan_move_context()
+        rightmost = move_context["origin"].add(
+            FreeCAD.Vector(move_context["axis_u"]).multiply(move_context["move_u_max"])
+        )
+        rightmost.z = move_context["base_z"]
+        self.assertTrue(door_proxy.move_along_host(rightmost))
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        original_endpoints = wall.Proxy.calc_endpoints(wall)
+        session._edit_wall = wall
+        session._edit_endpoint = "End"
+        session._edit_endpoints = original_endpoints
+        session._wall_edit_opening_clearances = session._snapshot_wall_hosted_opening_clearances(
+            wall, original_endpoints
+        )
+        session.current_tool = "Stretch End"
+
+        axis = original_endpoints[1].sub(original_endpoints[0]).normalize()
+        shortened_points = [
+            original_endpoints[0],
+            original_endpoints[0].add(axis.multiply(1600.0)),
+        ]
+
+        layout = session._compute_wall_hosted_opening_layout(wall, shortened_points)
+        self.assertIsNotNone(layout)
+        item = next(candidate for candidate in layout if candidate["opening"] is door)
+        delta = FreeCAD.Vector(item["target_point"]).sub(item["current"])
+        self.assertGreater(delta.Length, 1e-6)
+
+        original_polylines = session._get_opening_overlay_polylines(door)
+        self.assertTrue(original_polylines)
+        first_polyline = next(polyline for polyline in original_polylines if len(polyline) >= 2)
+
+        session._sync_wall_edit_preview(shortened_points)
+
+        expected_segment_count = sum(
+            max(len(polyline) - 1, 0) for polyline in original_polylines if len(polyline) >= 2
+        )
+        self.assertEqual(
+            len(session._wall_edit_opening_preview_trackers),
+            expected_segment_count,
+        )
+
+        tracker = session._wall_edit_opening_preview_trackers[0]
+        expected_start = FreeCAD.Vector(first_polyline[0]).add(delta)
+        expected_end = FreeCAD.Vector(first_polyline[1]).add(delta)
+        self.assertLess(tracker.p1().distanceToPoint(expected_start), 1e-6)
+        self.assertLess(tracker.p2().distanceToPoint(expected_end), 1e-6)
+
     def test_plan_edit_wall_stretch_preserves_opening_edge_clearance(self):
         """Stretching a wall endpoint should preserve existing opening edge clearance when possible."""
 

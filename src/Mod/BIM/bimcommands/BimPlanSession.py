@@ -326,6 +326,7 @@ class PlanEditSession:
         self._preview_rect_tracker = None
         self._preview_grip_trackers = []
         self._wall_edit_readout_trackers = []
+        self._wall_edit_opening_preview_trackers = []
         self._wall_edit_active_readout_tracker = None
         self._wall_edit_active_readout_mode = None
         self._wall_edit_length_edit_queued = False
@@ -2242,6 +2243,7 @@ class PlanEditSession:
     def _sync_wall_edit_preview(self, points):
         self._update_wall_edit_preview_geometry(points)
         self._sync_wall_edit_readout(points)
+        self._sync_wall_hosted_opening_preview(points)
 
     def _is_wall_move_edit_active(self):
         return bool(
@@ -2280,6 +2282,64 @@ class PlanEditSession:
                 pass
         self._preview_grip_trackers = []
         self._clear_wall_edit_readout()
+        self._clear_wall_hosted_opening_preview()
+
+    def _get_wall_hosted_opening_preview_segments(self, wall, points):
+        if not wall or not points or len(points) != 2:
+            return []
+        if self._edit_endpoint not in ("Start", "End"):
+            return []
+
+        layout = self._compute_wall_hosted_opening_layout(wall, points)
+        if layout is None:
+            return []
+
+        segments = []
+        for item in layout:
+            delta = FreeCAD.Vector(item["target_point"]).sub(item["current"])
+            if delta.Length < 1e-6:
+                continue
+            for polyline in self._get_opening_overlay_polylines(item["opening"]):
+                if len(polyline) < 2:
+                    continue
+                translated = [FreeCAD.Vector(point).add(delta) for point in polyline]
+                segments.extend(zip(translated, translated[1:]))
+        return segments
+
+    def _sync_wall_hosted_opening_preview(self, points):
+        wall = self._edit_wall
+        if self.current_tool not in ("Stretch Start", "Stretch End") or not wall:
+            self._clear_wall_hosted_opening_preview()
+            return
+
+        segments = self._get_wall_hosted_opening_preview_segments(wall, points)
+        if not segments:
+            self._clear_wall_hosted_opening_preview()
+            return
+
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            self._clear_wall_hosted_opening_preview()
+            return
+
+        color = (0.12, 0.38, 0.95)
+        width = self._scaled_line_width(2)
+        if len(self._wall_edit_opening_preview_trackers) != len(segments):
+            self._clear_wall_hosted_opening_preview()
+            for _start, _end in segments:
+                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                self._wall_edit_opening_preview_trackers.append(tracker)
+
+        for tracker, (start, end) in zip(self._wall_edit_opening_preview_trackers, segments):
+            tracker.setColor(color)
+            tracker.p1(start)
+            tracker.p2(end)
+            tracker.on()
+
+    def _clear_wall_hosted_opening_preview(self):
+        self._finalize_trackers(self._wall_edit_opening_preview_trackers)
+        self._wall_edit_opening_preview_trackers = []
 
     def _get_wall_edit_readout_specs(self, points):
         if not points or len(points) != 2 or not self._edit_endpoints:
@@ -2492,6 +2552,7 @@ class PlanEditSession:
         self._preview_points = new_points
         self._update_wall_edit_preview_geometry(new_points)
         self._update_wall_edit_readouts_in_place(new_points, active_mode=1)
+        self._sync_wall_hosted_opening_preview(new_points)
 
     def _on_wall_stretch_length_finished(self, value):
         if not self._is_wall_stretch_edit_active():
@@ -2537,6 +2598,7 @@ class PlanEditSession:
         self._preview_points = new_points
         self._update_wall_edit_preview_geometry(new_points)
         self._update_wall_edit_readouts_in_place(new_points, active_mode=mode)
+        self._sync_wall_hosted_opening_preview(new_points)
 
     def _on_wall_move_delta_finished(self, mode, value):
         if not self._is_wall_move_edit_active():
@@ -2934,22 +2996,17 @@ class PlanEditSession:
         for opening in self._get_wall_hosted_openings(wall):
             self._refresh_opening_footprint_display(opening)
 
-    def _resolve_wall_hosted_opening_layout(self, wall):
-        wall_proxy = getattr(wall, "Proxy", None)
-        if not wall_proxy or not hasattr(wall_proxy, "calc_endpoints"):
-            return True
-        try:
-            endpoints = wall_proxy.calc_endpoints(wall)
-        except Exception:
-            return True
+    def _compute_wall_hosted_opening_layout(self, wall, endpoints):
+        if not wall:
+            return []
         if not endpoints or len(endpoints) != 2:
-            return True
+            return []
         wall_origin = FreeCAD.Vector(endpoints[0])
         wall_end = FreeCAD.Vector(endpoints[1])
         wall_axis_u = wall_end.sub(wall_origin)
         wall_length = wall_axis_u.Length
         if wall_length < 1e-9:
-            return False
+            return None
         wall_axis_u.normalize()
 
         openings = []
@@ -3002,7 +3059,7 @@ class PlanEditSession:
             openings.append(item)
 
         if not openings:
-            return True
+            return []
 
         openings.sort(key=lambda item: (item["desired_u"], getattr(item["opening"], "Name", "")))
 
@@ -3015,7 +3072,7 @@ class PlanEditSession:
                     left[index - 1] + openings[index - 1]["half_width"] + item["half_width"],
                 )
             if minimum > item["high"] + 1e-6:
-                return False
+                return None
             left.append(minimum)
 
         right = [0.0] * len(openings)
@@ -3029,7 +3086,7 @@ class PlanEditSession:
                     - openings[index + 1]["half_width"],
                 )
             if maximum < openings[index]["low"] - 1e-6:
-                return False
+                return None
             right[index] = maximum
 
         resolved = []
@@ -3041,13 +3098,36 @@ class PlanEditSession:
                     resolved[index - 1] + openings[index - 1]["half_width"] + item["half_width"],
                 )
             if center_u > right[index] + 1e-6:
-                return False
+                return None
             resolved.append(center_u)
 
+        layout = []
         for item, center_u in zip(openings, resolved):
             target_point = wall_origin.add(FreeCAD.Vector(wall_axis_u).multiply(center_u))
             target_point.z = item["current"].z
-            if not item["proxy"].move_along_host(target_point):
+            layout.append(
+                {
+                    **item,
+                    "target_center_u": center_u,
+                    "target_point": target_point,
+                }
+            )
+
+        return layout
+
+    def _resolve_wall_hosted_opening_layout(self, wall):
+        wall_proxy = getattr(wall, "Proxy", None)
+        if not wall_proxy or not hasattr(wall_proxy, "calc_endpoints"):
+            return True
+        try:
+            endpoints = wall_proxy.calc_endpoints(wall)
+        except Exception:
+            return True
+        layout = self._compute_wall_hosted_opening_layout(wall, endpoints)
+        if layout is None:
+            return False
+        for item in layout:
+            if not item["proxy"].move_along_host(item["target_point"]):
                 return False
 
         return True
