@@ -1202,6 +1202,14 @@ class ViewProviderBuildingPart:
         )
         menu.addAction(actionSetWorkingPlane)
 
+        actionPlanEdit = QtGui.QAction(
+            QtGui.QIcon(":/icons/Arch_Floor.svg"),
+            translate("Arch", "Plan Edit"),
+            menu,
+        )
+        QtCore.QObject.connect(actionPlanEdit, QtCore.SIGNAL("triggered()"), self.startPlanEdit)
+        menu.addAction(actionPlanEdit)
+
         actionWriteCamera = QtGui.QAction(
             QtGui.QIcon(":/icons/Draft_SelectPlane.svg"),
             translate("Arch", "Save Camera View"),
@@ -1253,6 +1261,14 @@ class ViewProviderBuildingPart:
             FreeCAD.Console.PrintMessage(
                 translate("Arch", f"Active working plane set to {self.Object.Label}") + "\n"
             )
+
+    def startPlanEdit(self):
+        if not hasattr(self, "Object"):
+            return
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.Object)
+        FreeCADGui.runCommand("BIM_PlanEdit")
 
     def writeCamera(self):
 
