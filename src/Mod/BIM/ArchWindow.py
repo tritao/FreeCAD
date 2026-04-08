@@ -112,7 +112,672 @@ class OpeningPlanEditHandle:
     transaction: str = ""
 
 
-class _Window(ArchComponent.Component):
+class _HostedOpeningPlanGeometry:
+    """Shared hosted-opening plan geometry helpers for proxies and view providers."""
+
+    def _get_footprint_cut_context(self):
+        host = None
+        hosts = getattr(self.Object, "Hosts", None) or []
+        if hosts:
+            host = hosts[0]
+
+        shape = getattr(self.Object, "Shape", None)
+        has_real_shape = bool(shape) and not shape.isNull()
+        if has_real_shape:
+            shape_bb = shape.BoundBox
+        else:
+            shape_bb = self._get_base_footprint_boundbox()
+            if shape_bb is None:
+                return None, None
+
+        cut_height = params.get_param_arch("FootprintCutHeight")
+        if cut_height is None:
+            cut_height = 1000.0
+
+        if host and hasattr(host, "Shape") and host.Shape and not host.Shape.isNull():
+            host_bb = host.Shape.BoundBox
+            base_z = host_bb.ZMin
+            cut_z = max(host_bb.ZMin + 0.001, min(host_bb.ZMax - 0.001, host_bb.ZMin + cut_height))
+            if not has_real_shape:
+                return cut_z, base_z
+        else:
+            bb = shape_bb
+            base_z = bb.ZMin
+            cut_z = max(bb.ZMin + 0.001, min(bb.ZMax - 0.001, bb.ZMin + cut_height))
+
+        if cut_z < shape_bb.ZMin - 0.001 or cut_z > shape_bb.ZMax + 0.001:
+            return None, None
+
+        return cut_z, base_z
+
+    def _get_base_global_point_lists(self):
+        base = getattr(self.Object, "Base", None)
+        if not base or not hasattr(base, "Shape") or not base.Shape:
+            return []
+
+        point_lists = []
+        for edge in getattr(base.Shape, "Edges", []) or []:
+            points = self._collect_edge_points(edge)
+            if len(points) < 2:
+                continue
+            point_lists.append(points)
+        return point_lists
+
+    def _get_base_footprint_boundbox(self):
+        point_lists = self._get_base_global_point_lists()
+        if not point_lists:
+            return None
+
+        xs = []
+        ys = []
+        zs = []
+        for points in point_lists:
+            for point in points:
+                xs.append(point.x)
+                ys.append(point.y)
+                zs.append(point.z)
+        if not xs:
+            return None
+
+        return FreeCAD.BoundBox(min(xs), min(ys), min(zs), max(xs), max(ys), max(zs))
+
+    def _collect_edge_points(self, edge):
+        points = edge.tessellate(1)
+        if isinstance(points, tuple):
+            points = points[0]
+        if len(points) < 2:
+            try:
+                points = edge.discretize(Deflection=1.0)
+            except Exception:
+                points = []
+        if len(points) < 2 and getattr(edge, "Vertexes", None):
+            points = [vertex.Point for vertex in edge.Vertexes]
+        return points
+
+    def _get_section_footprint_edges(self, shape, cut_z):
+        import Part
+
+        bbox = shape.BoundBox
+        size = max(bbox.XLength, bbox.YLength, bbox.ZLength, 1.0) + 1000.0
+        cut_plane = Part.makePlane(
+            size,
+            size,
+            FreeCAD.Vector(bbox.Center.x - (size * 0.5), bbox.Center.y - (size * 0.5), cut_z),
+        )
+        try:
+            section = shape.section(cut_plane)
+        except Part.OCCError:
+            return []
+        if section and section.Edges:
+            return list(section.Edges)
+        return []
+
+    def _get_host_plan_basis(self):
+        host = None
+        hosts = getattr(self.Object, "Hosts", None) or []
+        if hosts:
+            host = hosts[0]
+
+        origin = FreeCAD.Vector()
+        axis_u = FreeCAD.Vector(1, 0, 0)
+        axis_v = FreeCAD.Vector(0, 1, 0)
+
+        if host and getattr(host, "Placement", None):
+            origin = FreeCAD.Vector(host.Placement.Base)
+            axis_u = host.Placement.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
+            axis_v = host.Placement.Rotation.multVec(FreeCAD.Vector(0, 1, 0))
+
+        axis_u = FreeCAD.Vector(axis_u.x, axis_u.y, 0)
+        axis_v = FreeCAD.Vector(axis_v.x, axis_v.y, 0)
+
+        if DraftVecUtils.isNull(axis_u):
+            axis_u = FreeCAD.Vector(1, 0, 0)
+        else:
+            axis_u.normalize()
+
+        if DraftVecUtils.isNull(axis_v) or abs(axis_u.dot(axis_v)) > 0.9:
+            axis_v = FreeCAD.Vector(-axis_u.y, axis_u.x, 0)
+        else:
+            axis_v.normalize()
+
+        return origin, axis_u, axis_v
+
+    def _get_section_plan_basis(self, section_edges):
+        if not section_edges:
+            return None
+
+        longest_edge = None
+        longest_length = 0.0
+        for edge in section_edges:
+            points = self._collect_edge_points(edge)
+            if len(points) < 2:
+                continue
+            direction = FreeCAD.Vector(points[-1].sub(points[0]))
+            direction.z = 0
+            length = direction.Length
+            if length > longest_length:
+                longest_length = length
+                longest_edge = (points, direction)
+
+        if not longest_edge or longest_length <= 0.0:
+            return None
+
+        points, direction = longest_edge
+        axis_u = FreeCAD.Vector(direction)
+        axis_u.normalize()
+        axis_v = FreeCAD.Vector(-axis_u.y, axis_u.x, 0)
+        origin = FreeCAD.Vector(points[0].x, points[0].y, 0)
+        return origin, axis_u, axis_v
+
+    def _get_point_lists_plan_basis(self, point_lists):
+        if not point_lists:
+            return None
+
+        longest = None
+        longest_length = 0.0
+        for points in point_lists:
+            if len(points) < 2:
+                continue
+            for start, end in zip(points, points[1:]):
+                direction = end.sub(start)
+                direction.z = 0
+                length = direction.Length
+                if length > longest_length:
+                    longest_length = length
+                    longest = (start, direction)
+
+        if not longest or longest_length <= 0.0:
+            return None
+
+        start, direction = longest
+        axis_u = FreeCAD.Vector(direction)
+        axis_u.normalize()
+        axis_v = FreeCAD.Vector(-axis_u.y, axis_u.x, 0)
+        origin = FreeCAD.Vector(start.x, start.y, 0)
+        return origin, axis_u, axis_v
+
+    def _get_opening_section_profile(self, shape, cut_z):
+        edges = self._get_section_footprint_edges(shape, cut_z)
+        if not edges:
+            return None
+
+        points = []
+        for edge in edges:
+            points.extend(self._collect_edge_points(edge))
+        if len(points) < 2:
+            return None
+
+        basis = self._get_section_plan_basis(edges)
+        if basis is None:
+            basis = self._get_host_plan_basis()
+        origin, axis_u, axis_v = basis
+        u_values = []
+        v_values = []
+        for point in points:
+            delta = point.sub(origin)
+            u_values.append(delta.dot(axis_u))
+            v_values.append(delta.dot(axis_v))
+        if not u_values or not v_values:
+            return None
+
+        return {
+            "origin": origin,
+            "axis_u": axis_u,
+            "axis_v": axis_v,
+            "umin": min(u_values),
+            "umax": max(u_values),
+            "vmin": min(v_values),
+            "vmax": max(v_values),
+        }
+
+    def _get_host_plan_thickness(self):
+        hosts = getattr(self.Object, "Hosts", None) or []
+        host = hosts[0] if hosts else None
+        if not host:
+            return 120.0
+
+        width = getattr(host, "Width", None)
+        if width is not None:
+            try:
+                value = float(width.Value)
+            except Exception:
+                try:
+                    value = float(width)
+                except Exception:
+                    value = 0.0
+            if value > 0.0:
+                return value
+
+        override_width = getattr(host, "OverrideWidth", None)
+        if override_width:
+            try:
+                if isinstance(override_width, (list, tuple)):
+                    value = max(float(item) for item in override_width if float(item) > 0.0)
+                    if value > 0.0:
+                        return value
+                else:
+                    value = float(override_width)
+                    if value > 0.0:
+                        return value
+            except Exception:
+                pass
+
+        host_shape = getattr(host, "Shape", None)
+        if host_shape and not host_shape.isNull():
+            bb = host_shape.BoundBox
+            lengths = [length for length in (bb.XLength, bb.YLength) if length > 0.0]
+            if lengths:
+                return min(lengths)
+
+        return 120.0
+
+    def _get_host_plan_v_bounds(self, origin, axis_u, axis_v):
+        hosts = getattr(self.Object, "Hosts", None) or []
+        host = hosts[0] if hosts else None
+        if not host:
+            return None
+
+        proxy = getattr(host, "Proxy", None)
+        if not proxy or not hasattr(proxy, "getFootprint"):
+            return None
+
+        try:
+            faces = proxy.getFootprint(host)
+        except Exception:
+            return None
+        if not faces:
+            return None
+
+        v_values = []
+        for face in faces:
+            for wire in face.Wires:
+                for edge in wire.Edges:
+                    for point in self._collect_edge_points(edge):
+                        delta = point.sub(origin)
+                        v_values.append(delta.dot(axis_v))
+
+        if not v_values:
+            return None
+
+        return min(v_values), max(v_values)
+
+    def _get_base_opening_profile(self, base_z):
+        point_lists = self._get_base_global_point_lists()
+        if not point_lists:
+            return None
+
+        basis = self._get_point_lists_plan_basis(point_lists)
+        if basis is None:
+            basis = self._get_host_plan_basis()
+        origin, axis_u, axis_v = basis
+
+        points = []
+        for point_list in point_lists:
+            points.extend(point_list)
+        if len(points) < 2:
+            return None
+
+        u_values = []
+        v_values = []
+        for point in points:
+            delta = point.sub(origin)
+            u_values.append(delta.dot(axis_u))
+            v_values.append(delta.dot(axis_v))
+        if not u_values:
+            return None
+
+        v_center = 0.0
+        if v_values:
+            v_center = sum(v_values) / len(v_values)
+        half_thickness = self._get_host_plan_thickness() * 0.5
+
+        return {
+            "origin": origin,
+            "axis_u": axis_u,
+            "axis_v": axis_v,
+            "umin": min(u_values),
+            "umax": max(u_values),
+            "vmin": v_center - half_thickness,
+            "vmax": v_center + half_thickness,
+        }
+
+    def _get_hosted_subvolume_section_profile(self, cut_z):
+        """Return a hosted opening profile from the same subvolume used to cut the host."""
+
+        hosts = getattr(self.Object, "Hosts", None) or []
+        host = hosts[0] if hosts else None
+        if not host:
+            return None
+
+        object_proxy = getattr(self.Object, "Proxy", None)
+        if not object_proxy or not hasattr(object_proxy, "getSubVolume"):
+            return None
+
+        try:
+            subvolume = object_proxy.getSubVolume(self.Object, host=host)
+        except Exception:
+            subvolume = None
+        if not subvolume or subvolume.isNull():
+            return None
+
+        return self._get_opening_section_profile(subvolume, cut_z)
+
+    def _get_plan_symbol_source_profile(self, shape, cut_z, base_z):
+        """Return the raw opening profile used to size plan-edit symbols."""
+
+        hosts = getattr(self.Object, "Hosts", None) or []
+        if hosts:
+            profile = self._get_hosted_subvolume_section_profile(cut_z)
+            if profile is not None:
+                return profile
+
+            profile = self._get_base_opening_profile(base_z)
+            if profile is not None:
+                return profile
+
+        if shape and not shape.isNull():
+            profile = self._get_opening_section_profile(shape, cut_z)
+            if profile is not None:
+                return profile
+
+        return self._get_base_opening_profile(base_z)
+
+    def _get_host_plan_basis_from_endpoints(self):
+        """Return a stable host-wall basis anchored at the wall start point."""
+
+        hosts = getattr(self.Object, "Hosts", None) or []
+        host = hosts[0] if hosts else None
+        if not host:
+            return None
+
+        proxy = getattr(host, "Proxy", None)
+        if proxy and hasattr(proxy, "calc_endpoints"):
+            try:
+                endpoints = proxy.calc_endpoints(host)
+            except Exception:
+                endpoints = None
+            if endpoints and len(endpoints) == 2:
+                start = FreeCAD.Vector(endpoints[0])
+                end = FreeCAD.Vector(endpoints[1])
+                axis_u = end.sub(start)
+                axis_u.z = 0
+                if axis_u.Length > 1e-9:
+                    axis_u.normalize()
+                    axis_v = FreeCAD.Vector(-axis_u.y, axis_u.x, 0)
+                    origin = FreeCAD.Vector(start.x, start.y, 0)
+                    return origin, axis_u, axis_v
+
+        return self._get_host_plan_basis()
+
+    def _get_hosted_opening_plan_frame(self, shape, cut_z, base_z):
+        """Return one canonical host-wall frame for hosted opening plan geometry."""
+
+        source_profile = self._get_plan_symbol_source_profile(shape, cut_z, base_z)
+        if not source_profile:
+            return None
+
+        basis = self._get_host_plan_basis_from_endpoints()
+        if not basis:
+            return source_profile
+        origin, axis_u, axis_v = basis
+
+        source_center_u = (source_profile["umin"] + source_profile["umax"]) * 0.5
+        source_center_v = (source_profile["vmin"] + source_profile["vmax"]) * 0.5
+        source_center = (
+            source_profile["origin"]
+            .add(FreeCAD.Vector(source_profile["axis_u"]).multiply(source_center_u))
+            .add(FreeCAD.Vector(source_profile["axis_v"]).multiply(source_center_v))
+        )
+        center_delta = source_center.sub(origin)
+        center_u = center_delta.dot(axis_u)
+        center_v = center_delta.dot(axis_v)
+
+        half_width_u = max(source_profile["umax"] - source_profile["umin"], 0.0) * 0.5
+        half_width_v = max(source_profile["vmax"] - source_profile["vmin"], 0.0) * 0.5
+        umin = center_u - half_width_u
+        umax = center_u + half_width_u
+        source_vmin = center_v - half_width_v
+        source_vmax = center_v + half_width_v
+
+        host_v_bounds = self._get_host_plan_v_bounds(origin, axis_u, axis_v)
+        if host_v_bounds is not None:
+            vmin, vmax = host_v_bounds
+        else:
+            vmin = source_vmin
+            vmax = source_vmax
+
+        return {
+            "origin": origin,
+            "axis_u": axis_u,
+            "axis_v": axis_v,
+            "umin": umin,
+            "umax": umax,
+            "vmin": vmin,
+            "vmax": vmax,
+            "source_profile": source_profile,
+            "source_vmin": source_vmin,
+            "source_vmax": source_vmax,
+        }
+
+    def _get_plan_move_target(self):
+        obj = getattr(self, "Object", None)
+        if not obj:
+            return None, None
+        target = getattr(obj, "Base", None) or obj
+        placement = getattr(target, "Placement", None)
+        if placement is None:
+            return target, None
+        return target, FreeCAD.Placement(placement)
+
+    def get_plan_center_point(self):
+        """Return the current hosted-opening center point used by plan editing."""
+
+        if not hasattr(self, "Object"):
+            return None
+
+        shape = getattr(self.Object, "Shape", None)
+        cut_z, base_z = self._get_footprint_cut_context()
+        if cut_z is None:
+            return None
+
+        frame = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
+        if not frame:
+            return None
+
+        center_u = (frame["umin"] + frame["umax"]) * 0.5
+        center_v = (frame["vmin"] + frame["vmax"]) * 0.5
+        point = (
+            frame["origin"]
+            .add(FreeCAD.Vector(frame["axis_u"]).multiply(center_u))
+            .add(FreeCAD.Vector(frame["axis_v"]).multiply(center_v))
+        )
+        point.z = base_z
+        return point
+
+    def get_plan_move_anchor_modes(self):
+        """Return supported move anchors for plan editing."""
+
+        return ("center", "left", "right")
+
+    def get_plan_move_context(self):
+        """Return the host-aligned move context for plan editing."""
+
+        if not hasattr(self, "Object"):
+            return None
+
+        shape = getattr(self.Object, "Shape", None)
+        cut_z, base_z = self._get_footprint_cut_context()
+        if cut_z is None:
+            return None
+
+        section_profile = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
+        if not section_profile:
+            return None
+
+        center_u = (section_profile["umin"] + section_profile["umax"]) * 0.5
+        center_v = (section_profile["vmin"] + section_profile["vmax"]) * 0.5
+        center_point = (
+            section_profile["origin"]
+            .add(FreeCAD.Vector(section_profile["axis_u"]).multiply(center_u))
+            .add(FreeCAD.Vector(section_profile["axis_v"]).multiply(center_v))
+        )
+        center_point.z = base_z
+
+        _target, placement = self._get_plan_move_target()
+        reference_offset = FreeCAD.Vector()
+        if placement is not None:
+            reference_offset = FreeCAD.Vector(placement.Base).sub(center_point)
+
+        move_u_min = move_u_max = None
+        opening_half_width_u = max(section_profile["umax"] - section_profile["umin"], 0.0) * 0.5
+        host = next(iter(getattr(self.Object, "Hosts", None) or []), None)
+        if host and getattr(host, "Proxy", None) and hasattr(host.Proxy, "calc_endpoints"):
+            try:
+                endpoints = host.Proxy.calc_endpoints(host)
+            except Exception:
+                endpoints = None
+            if endpoints and len(endpoints) == 2:
+                origin = section_profile["origin"]
+                axis_u = section_profile["axis_u"]
+                endpoint_u = [FreeCAD.Vector(point).sub(origin).dot(axis_u) for point in endpoints]
+                host_u_min = min(endpoint_u)
+                host_u_max = max(endpoint_u)
+                move_u_min = host_u_min + opening_half_width_u
+                move_u_max = host_u_max - opening_half_width_u
+                if move_u_min > move_u_max:
+                    midpoint_u = (host_u_min + host_u_max) * 0.5
+                    move_u_min = midpoint_u
+                    move_u_max = midpoint_u
+
+        return {
+            "origin": FreeCAD.Vector(section_profile["origin"]),
+            "axis_u": FreeCAD.Vector(section_profile["axis_u"]),
+            "axis_v": FreeCAD.Vector(section_profile["axis_v"]),
+            "base_z": base_z,
+            "opening_half_width_u": opening_half_width_u,
+            "center_point": center_point,
+            "reference_offset": reference_offset,
+            "move_u_min": move_u_min,
+            "move_u_max": move_u_max,
+        }
+
+    def clamp_point_to_host_span(self, point, context=None):
+        """Clamp a point on the move axis to the valid host span for this opening."""
+
+        obj = getattr(self, "Object", None)
+        if not obj or point is None:
+            return point
+
+        if context is None:
+            context = self.get_plan_move_context()
+        if not context:
+            return point
+
+        move_u_min = context.get("move_u_min")
+        move_u_max = context.get("move_u_max")
+        if move_u_min is None or move_u_max is None:
+            return point
+
+        origin = context["origin"]
+        axis_u = context["axis_u"]
+        axis_v = context["axis_v"]
+        delta = FreeCAD.Vector(point).sub(origin)
+        target_u = delta.dot(axis_u)
+        target_v = delta.dot(axis_v)
+        clamped_u = min(max(target_u, move_u_min), move_u_max)
+        clamped = origin.add(FreeCAD.Vector(axis_u).multiply(clamped_u)).add(
+            FreeCAD.Vector(axis_v).multiply(target_v)
+        )
+        clamped.z = point.z
+        return clamped
+
+    def _get_plan_move_anchor_offset_u(self, anchor="center", context=None):
+        """Return the axis-U offset for a named move anchor relative to the opening center."""
+
+        if context is None:
+            context = self.get_plan_move_context()
+        if not context:
+            return 0.0
+
+        half_width = float(context.get("opening_half_width_u") or 0.0)
+        if anchor == "left":
+            return -half_width
+        if anchor == "right":
+            return half_width
+        return 0.0
+
+    def project_point_to_host_axis(self, point, anchor="center"):
+        """Project a picked plan point onto the hosted opening move axis."""
+
+        obj = getattr(self, "Object", None)
+        if not obj or point is None:
+            return point
+
+        context = self.get_plan_move_context()
+        if not context:
+            return point
+
+        center_point = context.get("center_point")
+        if center_point is None:
+            return point
+
+        origin = context["origin"]
+        axis_u = context["axis_u"]
+        axis_v = context["axis_v"]
+        delta = point.sub(origin)
+        current_delta = FreeCAD.Vector(center_point).sub(origin)
+        anchor_offset_u = self._get_plan_move_anchor_offset_u(anchor, context=context)
+        target_u = delta.dot(axis_u) - anchor_offset_u
+        current_v = current_delta.dot(axis_v)
+        projected = origin.add(FreeCAD.Vector(axis_u).multiply(target_u)).add(
+            FreeCAD.Vector(axis_v).multiply(current_v)
+        )
+        projected.z = center_point.z
+        return self.clamp_point_to_host_span(projected, context=context)
+
+    def move_along_host(self, point, anchor="center"):
+        """Move the opening base along the host wall axis."""
+
+        obj = getattr(self, "Object", None)
+        if not obj or point is None:
+            return False
+
+        target, placement = self._get_plan_move_target()
+        if placement is None:
+            return False
+        context = self.get_plan_move_context()
+        if not context:
+            return False
+
+        new_center = self.project_point_to_host_axis(point, anchor=anchor)
+        if new_center is None:
+            return False
+        placement.Base = FreeCAD.Vector(new_center).add(
+            context.get("reference_offset") or FreeCAD.Vector()
+        )
+        target.Placement = placement
+        self._touch_hosts()
+        return True
+
+    def _touch_hosts(self):
+        obj = getattr(self, "Object", None)
+        if not obj:
+            return
+        for host in set(getattr(obj, "Hosts", None) or []):
+            try:
+                host.touch()
+            except Exception:
+                pass
+
+
+class _HostedOpeningPlanGeometryHelper(_HostedOpeningPlanGeometry):
+    """Stateless helper exposing hosted-opening plan geometry for one object."""
+
+    def __init__(self, obj):
+        self.Object = obj
+
+
+class _Window(_HostedOpeningPlanGeometry, ArchComponent.Component):
     "The Window object"
 
     # Configure App::Link shadowing, so that linked windows can have independent Hosts properties
@@ -122,6 +787,7 @@ class _Window(ArchComponent.Component):
     def __init__(self, obj):
 
         ArchComponent.Component.__init__(self, obj)
+        self.Object = obj
         self.Type = "Window"
         self.setProperties(obj)
         obj.IfcType = "Window"
@@ -304,6 +970,7 @@ class _Window(ArchComponent.Component):
 
     def onDocumentRestored(self, obj):
 
+        self.Object = obj
         ArchComponent.Component.onDocumentRestored(self, obj)
         self.setProperties(obj, mode="ODR")
 
@@ -896,6 +1563,13 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
 
         ArchComponent.ViewProviderComponent.__init__(self, vobj)
 
+    def _get_plan_geometry(self, *attrs):
+        obj = getattr(self, "Object", None)
+        helper = _HostedOpeningPlanGeometryHelper(obj) if obj else None
+        if helper and all(hasattr(helper, attr) for attr in attrs):
+            return helper
+        return None
+
     def getIcon(self):
 
         import Arch_rc
@@ -932,42 +1606,6 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         sep.addChild(self.lset)
         return sep
 
-    def _get_footprint_cut_context(self):
-        host = None
-        hosts = getattr(self.Object, "Hosts", None) or []
-        if hosts:
-            host = hosts[0]
-
-        shape = getattr(self.Object, "Shape", None)
-        has_real_shape = bool(shape) and not shape.isNull()
-        shape_bb = None
-        if has_real_shape:
-            shape_bb = shape.BoundBox
-        else:
-            shape_bb = self._get_base_footprint_boundbox()
-            if shape_bb is None:
-                return None, None
-
-        cut_height = params.get_param_arch("FootprintCutHeight")
-        if cut_height is None:
-            cut_height = 1000.0
-
-        if host and hasattr(host, "Shape") and host.Shape and not host.Shape.isNull():
-            host_bb = host.Shape.BoundBox
-            base_z = host_bb.ZMin
-            cut_z = max(host_bb.ZMin + 0.001, min(host_bb.ZMax - 0.001, host_bb.ZMin + cut_height))
-            if not has_real_shape:
-                return cut_z, base_z
-        else:
-            bb = shape_bb
-            base_z = bb.ZMin
-            cut_z = max(bb.ZMin + 0.001, min(bb.ZMax - 0.001, bb.ZMin + cut_height))
-
-        if cut_z < shape_bb.ZMin - 0.001 or cut_z > shape_bb.ZMax + 0.001:
-            return None, None
-
-        return cut_z, base_z
-
     def _get_footprint_inverse_placement(self):
         if not hasattr(self, "Object"):
             return None
@@ -979,49 +1617,65 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
                 return None
         return None
 
-    def _get_base_global_point_lists(self):
-        base = getattr(self.Object, "Base", None)
-        if not base or not hasattr(base, "Shape") or not base.Shape:
-            return []
-
-        point_lists = []
-        for edge in getattr(base.Shape, "Edges", []) or []:
-            points = self._collect_edge_points(edge)
-            if len(points) < 2:
-                continue
-            point_lists.append(points)
-        return point_lists
-
-    def _get_base_footprint_boundbox(self):
-        point_lists = self._get_base_global_point_lists()
-        if not point_lists:
-            return None
-
-        xs = []
-        ys = []
-        zs = []
-        for points in point_lists:
-            for point in points:
-                xs.append(point.x)
-                ys.append(point.y)
-                zs.append(point.z)
-        if not xs:
-            return None
-
-        return FreeCAD.BoundBox(min(xs), min(ys), min(zs), max(xs), max(ys), max(zs))
+    def _get_footprint_cut_context(self):
+        helper = self._get_plan_geometry("_get_footprint_cut_context")
+        if not helper:
+            return None, None
+        return helper._get_footprint_cut_context()
 
     def _collect_edge_points(self, edge):
-        points = edge.tessellate(1)
-        if isinstance(points, tuple):
-            points = points[0]
-        if len(points) < 2:
-            try:
-                points = edge.discretize(Deflection=1.0)
-            except Exception:
-                points = []
-        if len(points) < 2 and getattr(edge, "Vertexes", None):
-            points = [vertex.Point for vertex in edge.Vertexes]
-        return points
+        helper = self._get_plan_geometry("_collect_edge_points")
+        if helper:
+            return helper._collect_edge_points(edge)
+        return []
+
+    def _get_host_plan_v_bounds(self, origin, axis_u, axis_v):
+        helper = self._get_plan_geometry("_get_host_plan_v_bounds")
+        if not helper:
+            return None
+        return helper._get_host_plan_v_bounds(origin, axis_u, axis_v)
+
+    def _get_hosted_opening_plan_frame(self, shape, cut_z, base_z):
+        helper = self._get_plan_geometry("_get_hosted_opening_plan_frame")
+        if not helper:
+            return None
+        return helper._get_hosted_opening_plan_frame(shape, cut_z, base_z)
+
+    def get_plan_center_point(self):
+        helper = self._get_plan_geometry("get_plan_center_point")
+        if not helper:
+            return None
+        return helper.get_plan_center_point()
+
+    def get_plan_move_anchor_modes(self):
+        helper = self._get_plan_geometry("get_plan_move_anchor_modes")
+        if not helper:
+            return ("center", "left", "right")
+        return helper.get_plan_move_anchor_modes()
+
+    def get_plan_move_context(self):
+        helper = self._get_plan_geometry("get_plan_move_context")
+        if not helper:
+            return None
+        return helper.get_plan_move_context()
+
+    def _get_plan_move_anchor_offset_u(self, anchor="center", context=None):
+        helper = self._get_plan_geometry("_get_plan_move_anchor_offset_u")
+        if not helper:
+            return 0.0
+        return helper._get_plan_move_anchor_offset_u(anchor=anchor, context=context)
+
+    def project_point_to_host_axis(self, point, anchor="center"):
+        helper = self._get_plan_geometry("project_point_to_host_axis")
+        if not helper:
+            return point
+        return helper.project_point_to_host_axis(point, anchor=anchor)
+
+    def move_along_host(self, point, anchor="center"):
+        helper = self._get_plan_geometry("move_along_host")
+        if not helper:
+            return False
+        return helper.move_along_host(point, anchor=anchor)
 
     def _points_to_local_footprint_polyline(self, points, base_z, inverse_placement):
         if len(points) < 2:
@@ -1038,391 +1692,6 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         return self._points_to_local_footprint_polyline(
             self._collect_edge_points(edge), base_z, inverse_placement
         )
-
-    def _get_section_footprint_edges(self, shape, cut_z):
-        return ArchComponent.get_horizontal_slice_edges(shape, cut_z)
-
-    def _get_host_plan_basis(self):
-        host = None
-        hosts = getattr(self.Object, "Hosts", None) or []
-        if hosts:
-            host = hosts[0]
-
-        origin = FreeCAD.Vector()
-        axis_u = FreeCAD.Vector(1, 0, 0)
-        axis_v = FreeCAD.Vector(0, 1, 0)
-
-        if host and getattr(host, "Placement", None):
-            origin = FreeCAD.Vector(host.Placement.Base)
-            axis_u = host.Placement.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
-            axis_v = host.Placement.Rotation.multVec(FreeCAD.Vector(0, 1, 0))
-
-        axis_u = FreeCAD.Vector(axis_u.x, axis_u.y, 0)
-        axis_v = FreeCAD.Vector(axis_v.x, axis_v.y, 0)
-
-        if DraftVecUtils.isNull(axis_u):
-            axis_u = FreeCAD.Vector(1, 0, 0)
-        else:
-            axis_u.normalize()
-
-        if DraftVecUtils.isNull(axis_v) or abs(axis_u.dot(axis_v)) > 0.9:
-            axis_v = FreeCAD.Vector(-axis_u.y, axis_u.x, 0)
-        else:
-            axis_v.normalize()
-
-        return origin, axis_u, axis_v
-
-    def _get_section_plan_basis(self, section_edges):
-        if not section_edges:
-            return None
-
-        longest_edge = None
-        longest_length = 0.0
-        for edge in section_edges:
-            points = self._collect_edge_points(edge)
-            if len(points) < 2:
-                continue
-            direction = FreeCAD.Vector(points[-1].sub(points[0]))
-            direction.z = 0
-            length = direction.Length
-            if length > longest_length:
-                longest_length = length
-                longest_edge = (points, direction)
-
-        if not longest_edge or longest_length <= 0.0:
-            return None
-
-        points, direction = longest_edge
-        axis_u = FreeCAD.Vector(direction)
-        axis_u.normalize()
-        axis_v = FreeCAD.Vector(-axis_u.y, axis_u.x, 0)
-        origin = FreeCAD.Vector(points[0].x, points[0].y, 0)
-        return origin, axis_u, axis_v
-
-    def _get_point_lists_plan_basis(self, point_lists):
-        if not point_lists:
-            return None
-
-        longest = None
-        longest_length = 0.0
-        for points in point_lists:
-            if len(points) < 2:
-                continue
-            for start, end in zip(points, points[1:]):
-                direction = end.sub(start)
-                direction.z = 0
-                length = direction.Length
-                if length > longest_length:
-                    longest_length = length
-                    longest = (start, direction)
-
-        if not longest or longest_length <= 0.0:
-            return None
-
-        start, direction = longest
-        axis_u = FreeCAD.Vector(direction)
-        axis_u.normalize()
-        axis_v = FreeCAD.Vector(-axis_u.y, axis_u.x, 0)
-        origin = FreeCAD.Vector(start.x, start.y, 0)
-        return origin, axis_u, axis_v
-
-    def _get_opening_section_profile(self, shape, cut_z):
-        edges = self._get_section_footprint_edges(shape, cut_z)
-        if not edges:
-            return None
-
-        points = []
-        for edge in edges:
-            points.extend(self._collect_edge_points(edge))
-        if len(points) < 2:
-            return None
-
-        basis = self._get_section_plan_basis(edges)
-        if basis is None:
-            basis = self._get_host_plan_basis()
-        origin, axis_u, axis_v = basis
-        u_values = []
-        v_values = []
-        for point in points:
-            delta = point.sub(origin)
-            u_values.append(delta.dot(axis_u))
-            v_values.append(delta.dot(axis_v))
-        if not u_values or not v_values:
-            return None
-
-        return {
-            "origin": origin,
-            "axis_u": axis_u,
-            "axis_v": axis_v,
-            "umin": min(u_values),
-            "umax": max(u_values),
-            "vmin": min(v_values),
-            "vmax": max(v_values),
-        }
-
-    def _get_host_plan_thickness(self):
-        hosts = getattr(self.Object, "Hosts", None) or []
-        host = hosts[0] if hosts else None
-        if not host:
-            return 120.0
-
-        width = getattr(host, "Width", None)
-        if width is not None:
-            try:
-                value = float(width.Value)
-            except Exception:
-                try:
-                    value = float(width)
-                except Exception:
-                    value = 0.0
-            if value > 0.0:
-                return value
-
-        override_width = getattr(host, "OverrideWidth", None)
-        if override_width:
-            try:
-                if isinstance(override_width, (list, tuple)):
-                    value = max(float(item) for item in override_width if float(item) > 0.0)
-                    if value > 0.0:
-                        return value
-                else:
-                    value = float(override_width)
-                    if value > 0.0:
-                        return value
-            except Exception:
-                pass
-
-        host_shape = getattr(host, "Shape", None)
-        if host_shape and not host_shape.isNull():
-            bb = host_shape.BoundBox
-            lengths = [length for length in (bb.XLength, bb.YLength) if length > 0.0]
-            if lengths:
-                return min(lengths)
-
-        return 120.0
-
-    def _get_host_plan_v_bounds(self, origin, axis_u, axis_v):
-        hosts = getattr(self.Object, "Hosts", None) or []
-        host = hosts[0] if hosts else None
-        if not host:
-            return None
-
-        proxy = getattr(host, "Proxy", None)
-        if not proxy or not hasattr(proxy, "getFootprint"):
-            return None
-
-        try:
-            faces = proxy.getFootprint(host)
-        except Exception:
-            return None
-        if not faces:
-            return None
-
-        v_values = []
-        for face in faces:
-            for wire in face.Wires:
-                for edge in wire.Edges:
-                    for point in self._collect_edge_points(edge):
-                        delta = point.sub(origin)
-                        v_values.append(delta.dot(axis_v))
-
-        if not v_values:
-            return None
-
-        return min(v_values), max(v_values)
-
-    def _get_base_opening_profile(self, base_z):
-        point_lists = self._get_base_global_point_lists()
-        if not point_lists:
-            return None
-
-        basis = self._get_point_lists_plan_basis(point_lists)
-        if basis is None:
-            basis = self._get_host_plan_basis()
-        origin, axis_u, axis_v = basis
-
-        points = []
-        for point_list in point_lists:
-            points.extend(point_list)
-        if len(points) < 2:
-            return None
-
-        u_values = []
-        v_values = []
-        for point in points:
-            delta = point.sub(origin)
-            u_values.append(delta.dot(axis_u))
-            v_values.append(delta.dot(axis_v))
-        if not u_values:
-            return None
-
-        v_center = 0.0
-        if v_values:
-            v_center = sum(v_values) / len(v_values)
-        half_thickness = self._get_host_plan_thickness() * 0.5
-
-        return {
-            "origin": origin,
-            "axis_u": axis_u,
-            "axis_v": axis_v,
-            "umin": min(u_values),
-            "umax": max(u_values),
-            "vmin": v_center - half_thickness,
-            "vmax": v_center + half_thickness,
-        }
-
-    def _get_hosted_subvolume_section_profile(self, cut_z):
-        """Return a hosted opening profile from the same subvolume used to cut the host."""
-
-        hosts = getattr(self.Object, "Hosts", None) or []
-        host = hosts[0] if hosts else None
-        if not host:
-            return None
-
-        object_proxy = getattr(self.Object, "Proxy", None)
-        if not object_proxy or not hasattr(object_proxy, "getSubVolume"):
-            return None
-
-        try:
-            subvolume = object_proxy.getSubVolume(self.Object, host=host)
-        except Exception:
-            subvolume = None
-        if not subvolume or subvolume.isNull():
-            return None
-
-        return self._get_opening_section_profile(subvolume, cut_z)
-
-    def _get_plan_symbol_source_profile(self, shape, cut_z, base_z):
-        """Return the raw opening profile used to size plan-edit symbols."""
-
-        hosts = getattr(self.Object, "Hosts", None) or []
-        if hosts:
-            profile = self._get_hosted_subvolume_section_profile(cut_z)
-            if profile is not None:
-                return profile
-
-            profile = self._get_base_opening_profile(base_z)
-            if profile is not None:
-                return profile
-
-        if shape and not shape.isNull():
-            profile = self._get_opening_section_profile(shape, cut_z)
-            if profile is not None:
-                return profile
-
-        return self._get_base_opening_profile(base_z)
-
-    def _get_host_plan_basis_from_endpoints(self):
-        """Return a stable host-wall basis anchored at the wall start point."""
-
-        hosts = getattr(self.Object, "Hosts", None) or []
-        host = hosts[0] if hosts else None
-        if not host:
-            return None
-
-        proxy = getattr(host, "Proxy", None)
-        if proxy and hasattr(proxy, "calc_endpoints"):
-            try:
-                endpoints = proxy.calc_endpoints(host)
-            except Exception:
-                endpoints = None
-            if endpoints and len(endpoints) == 2:
-                start = FreeCAD.Vector(endpoints[0])
-                end = FreeCAD.Vector(endpoints[1])
-                axis_u = end.sub(start)
-                axis_u.z = 0
-                if axis_u.Length > 1e-9:
-                    axis_u.normalize()
-                    axis_v = FreeCAD.Vector(-axis_u.y, axis_u.x, 0)
-                    origin = FreeCAD.Vector(start.x, start.y, 0)
-                    return origin, axis_u, axis_v
-
-        return self._get_host_plan_basis()
-
-    def _get_hosted_opening_plan_frame(self, shape, cut_z, base_z):
-        """Return one canonical host-wall frame for hosted opening plan geometry."""
-
-        source_profile = self._get_plan_symbol_source_profile(shape, cut_z, base_z)
-        if not source_profile:
-            return None
-
-        basis = self._get_host_plan_basis_from_endpoints()
-        if not basis:
-            return source_profile
-        origin, axis_u, axis_v = basis
-
-        source_center_u = (source_profile["umin"] + source_profile["umax"]) * 0.5
-        source_center_v = (source_profile["vmin"] + source_profile["vmax"]) * 0.5
-        source_center = (
-            source_profile["origin"]
-            .add(FreeCAD.Vector(source_profile["axis_u"]).multiply(source_center_u))
-            .add(FreeCAD.Vector(source_profile["axis_v"]).multiply(source_center_v))
-        )
-        center_delta = source_center.sub(origin)
-        center_u = center_delta.dot(axis_u)
-        center_v = center_delta.dot(axis_v)
-
-        half_width_u = max(source_profile["umax"] - source_profile["umin"], 0.0) * 0.5
-        half_width_v = max(source_profile["vmax"] - source_profile["vmin"], 0.0) * 0.5
-        umin = center_u - half_width_u
-        umax = center_u + half_width_u
-        source_vmin = center_v - half_width_v
-        source_vmax = center_v + half_width_v
-
-        host_v_bounds = self._get_host_plan_v_bounds(origin, axis_u, axis_v)
-        if host_v_bounds is not None:
-            vmin, vmax = host_v_bounds
-        else:
-            vmin = source_vmin
-            vmax = source_vmax
-
-        return {
-            "origin": origin,
-            "axis_u": axis_u,
-            "axis_v": axis_v,
-            "umin": umin,
-            "umax": umax,
-            "vmin": vmin,
-            "vmax": vmax,
-            "source_profile": source_profile,
-            "source_vmin": source_vmin,
-            "source_vmax": source_vmax,
-        }
-
-    def _get_plan_move_target(self):
-        obj = getattr(self, "Object", None)
-        if not obj:
-            return None, None
-        target = getattr(obj, "Base", None) or obj
-        placement = getattr(target, "Placement", None)
-        if placement is None:
-            return target, None
-        return target, FreeCAD.Placement(placement)
-
-    def get_plan_center_point(self):
-        """Return the current hosted-opening center point used by plan editing."""
-
-        if not hasattr(self, "Object"):
-            return None
-
-        shape = getattr(self.Object, "Shape", None)
-        cut_z, base_z = self._get_footprint_cut_context()
-        if cut_z is None:
-            return None
-
-        frame = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
-        if not frame:
-            return None
-
-        center_u = (frame["umin"] + frame["umax"]) * 0.5
-        center_v = (frame["vmin"] + frame["vmax"]) * 0.5
-        point = (
-            frame["origin"]
-            .add(FreeCAD.Vector(frame["axis_u"]).multiply(center_u))
-            .add(FreeCAD.Vector(frame["axis_v"]).multiply(center_v))
-        )
-        point.z = base_z
-        return point
 
     def _get_door_symbol_style(self):
         hinge_at_min = True
@@ -1769,11 +2038,6 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             "polylines": polylines,
         }
 
-    def get_plan_move_anchor_modes(self):
-        """Return supported move anchors for plan editing."""
-
-        return ("center", "left", "right")
-
     def get_plan_edit_handles(self):
         """Return plan-edit handle specs for hosted openings."""
 
@@ -1877,176 +2141,6 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             self.invertOpening()
             return True
         return False
-
-    def get_plan_move_context(self):
-        """Return the host-aligned move context for plan editing."""
-
-        if not hasattr(self, "Object"):
-            return None
-
-        shape = getattr(self.Object, "Shape", None)
-        cut_z, base_z = self._get_footprint_cut_context()
-        if cut_z is None:
-            return None
-
-        section_profile = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
-        if not section_profile:
-            return None
-
-        center_u = (section_profile["umin"] + section_profile["umax"]) * 0.5
-        center_v = (section_profile["vmin"] + section_profile["vmax"]) * 0.5
-        center_point = (
-            section_profile["origin"]
-            .add(FreeCAD.Vector(section_profile["axis_u"]).multiply(center_u))
-            .add(FreeCAD.Vector(section_profile["axis_v"]).multiply(center_v))
-        )
-        center_point.z = base_z
-
-        _target, placement = self._get_plan_move_target()
-        reference_offset = FreeCAD.Vector()
-        if placement is not None:
-            reference_offset = FreeCAD.Vector(placement.Base).sub(center_point)
-
-        move_u_min = move_u_max = None
-        opening_half_width_u = max(section_profile["umax"] - section_profile["umin"], 0.0) * 0.5
-        host = next(iter(getattr(self.Object, "Hosts", None) or []), None)
-        if host and getattr(host, "Proxy", None) and hasattr(host.Proxy, "calc_endpoints"):
-            try:
-                endpoints = host.Proxy.calc_endpoints(host)
-            except Exception:
-                endpoints = None
-            if endpoints and len(endpoints) == 2:
-                origin = section_profile["origin"]
-                axis_u = section_profile["axis_u"]
-                endpoint_u = [FreeCAD.Vector(point).sub(origin).dot(axis_u) for point in endpoints]
-                host_u_min = min(endpoint_u)
-                host_u_max = max(endpoint_u)
-                move_u_min = host_u_min + opening_half_width_u
-                move_u_max = host_u_max - opening_half_width_u
-                if move_u_min > move_u_max:
-                    midpoint_u = (host_u_min + host_u_max) * 0.5
-                    move_u_min = midpoint_u
-                    move_u_max = midpoint_u
-
-        return {
-            "origin": FreeCAD.Vector(section_profile["origin"]),
-            "axis_u": FreeCAD.Vector(section_profile["axis_u"]),
-            "axis_v": FreeCAD.Vector(section_profile["axis_v"]),
-            "base_z": base_z,
-            "opening_half_width_u": opening_half_width_u,
-            "center_point": center_point,
-            "reference_offset": reference_offset,
-            "move_u_min": move_u_min,
-            "move_u_max": move_u_max,
-        }
-
-    def clamp_point_to_host_span(self, point, context=None):
-        """Clamp a point on the move axis to the valid host span for this opening."""
-
-        obj = getattr(self, "Object", None)
-        if not obj or point is None:
-            return point
-
-        if context is None:
-            context = self.get_plan_move_context()
-        if not context:
-            return point
-
-        move_u_min = context.get("move_u_min")
-        move_u_max = context.get("move_u_max")
-        if move_u_min is None or move_u_max is None:
-            return point
-
-        origin = context["origin"]
-        axis_u = context["axis_u"]
-        axis_v = context["axis_v"]
-        delta = FreeCAD.Vector(point).sub(origin)
-        target_u = delta.dot(axis_u)
-        target_v = delta.dot(axis_v)
-        clamped_u = min(max(target_u, move_u_min), move_u_max)
-        clamped = origin.add(FreeCAD.Vector(axis_u).multiply(clamped_u)).add(
-            FreeCAD.Vector(axis_v).multiply(target_v)
-        )
-        clamped.z = point.z
-        return clamped
-
-    def _get_plan_move_anchor_offset_u(self, anchor="center", context=None):
-        """Return the axis-U offset for a named move anchor relative to the opening center."""
-
-        if context is None:
-            context = self.get_plan_move_context()
-        if not context:
-            return 0.0
-
-        half_width = float(context.get("opening_half_width_u") or 0.0)
-        if anchor == "left":
-            return -half_width
-        if anchor == "right":
-            return half_width
-        return 0.0
-
-    def project_point_to_host_axis(self, point, anchor="center"):
-        """Project a picked plan point onto the hosted opening move axis."""
-
-        obj = getattr(self, "Object", None)
-        if not obj or point is None:
-            return point
-
-        context = self.get_plan_move_context()
-        if not context:
-            return point
-
-        center_point = context.get("center_point")
-        if center_point is None:
-            return point
-
-        origin = context["origin"]
-        axis_u = context["axis_u"]
-        axis_v = context["axis_v"]
-        delta = point.sub(origin)
-        current_delta = FreeCAD.Vector(center_point).sub(origin)
-        anchor_offset_u = self._get_plan_move_anchor_offset_u(anchor, context=context)
-        target_u = delta.dot(axis_u) - anchor_offset_u
-        current_v = current_delta.dot(axis_v)
-        projected = origin.add(FreeCAD.Vector(axis_u).multiply(target_u)).add(
-            FreeCAD.Vector(axis_v).multiply(current_v)
-        )
-        projected.z = center_point.z
-        return self.clamp_point_to_host_span(projected, context=context)
-
-    def move_along_host(self, point, anchor="center"):
-        """Move the opening base along the host wall axis."""
-
-        obj = getattr(self, "Object", None)
-        if not obj or point is None:
-            return False
-
-        target, placement = self._get_plan_move_target()
-        if placement is None:
-            return False
-        context = self.get_plan_move_context()
-        if not context:
-            return False
-
-        new_center = self.project_point_to_host_axis(point, anchor=anchor)
-        if new_center is None:
-            return False
-        placement.Base = FreeCAD.Vector(new_center).add(
-            context.get("reference_offset") or FreeCAD.Vector()
-        )
-        target.Placement = placement
-        self._touch_hosts()
-        return True
-
-    def _touch_hosts(self):
-        obj = getattr(self, "Object", None)
-        if not obj:
-            return
-        for host in set(getattr(obj, "Hosts", None) or []):
-            try:
-                host.touch()
-            except Exception:
-                pass
 
     def updateFootprint(self):
         if not hasattr(self, "lcoords") or not hasattr(self, "lset"):
