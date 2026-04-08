@@ -260,6 +260,8 @@ class PlanEditSession:
         self.selected_wall = None
         self._grip_trackers = []
         self._selection_observer_added = False
+        self._document_observer_added = False
+        self._pending_selected_wall_reset = False
         self._edit_wall = None
         self._edit_endpoint = None
         self._edit_endpoints = None
@@ -316,6 +318,7 @@ class PlanEditSession:
         self._apply_plan_snap_profile()
         self._apply_storey_visibility()
         self._attach_selection_observer()
+        self._attach_document_observer()
         self._register_edit_callbacks()
         self._refresh_selected_wall()
 
@@ -350,6 +353,7 @@ class PlanEditSession:
         self._cancel_pending_edit()
         self._clear_wall_grips()
         self._detach_selection_observer()
+        self._detach_document_observer()
         self._unregister_edit_callbacks()
 
     def _document_is_alive(self):
@@ -401,6 +405,7 @@ class PlanEditSession:
             self._cancel_pending_edit()
             self._clear_wall_grips()
             self._detach_selection_observer()
+            self._detach_document_observer()
             self._unregister_edit_callbacks()
             if panel:
                 panel.mark_closed()
@@ -582,14 +587,27 @@ class PlanEditSession:
     def move_selected_wall(self):
         self._start_wall_edit("Move")
 
+    def is_selected_wall_endpoint_editable(self):
+        wall = self.selected_wall
+        if not wall:
+            return False
+        proxy = getattr(wall, "Proxy", None)
+        if not (hasattr(proxy, "calc_endpoints") and hasattr(proxy, "set_from_endpoints")):
+            return False
+        if not getattr(wall, "Base", None):
+            return True
+        try:
+            import Arch
+
+            return Arch.is_debasable(wall)
+        except Exception:
+            return False
+
     def is_selected_wall_baseless(self):
         wall = self.selected_wall
         if not wall:
             return False
-        if getattr(wall, "Base", None):
-            return False
-        proxy = getattr(wall, "Proxy", None)
-        return hasattr(proxy, "calc_endpoints") and hasattr(proxy, "set_from_endpoints")
+        return not getattr(wall, "Base", None) and self.is_selected_wall_endpoint_editable()
 
     def apply_plan_view(self, fit=True):
         import WorkingPlane
@@ -826,6 +844,28 @@ class PlanEditSession:
         except Exception:
             return False
 
+    def _is_plan_container_object(self, obj):
+        if not obj:
+            return False
+        if getattr(obj, "IfcType", "") in {"Site", "Building", "Building Storey"}:
+            return True
+        if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("App::DocumentObjectGroup"):
+            return True
+        if hasattr(obj, "hasExtension") and obj.hasExtension("App::GroupExtension"):
+            return True
+        try:
+            import Draft
+
+            return Draft.getType(obj) in {
+                "Site",
+                "Building",
+                "Floor",
+                "BuildingPart",
+                "Group",
+            }
+        except Exception:
+            return False
+
     def _is_plan_background_object(self, obj):
         if not obj:
             return False
@@ -837,6 +877,102 @@ class PlanEditSession:
             return Draft.getType(obj) == "Structure" and getattr(obj, "IfcType", "") == "Slab"
         except Exception:
             return False
+
+    def _is_component_addition_object(self, obj):
+        if not obj:
+            return False
+        for parent in getattr(obj, "InList", []) or []:
+            try:
+                if obj in getattr(parent, "Additions", []):
+                    return True
+            except Exception:
+                pass
+        return False
+
+    def _is_supported_plan_object(self, obj):
+        if not obj:
+            return False
+        if self._is_plan_container_object(obj) or self._is_plan_background_object(obj):
+            return True
+        try:
+            import Draft
+
+            obj_type = Draft.getType(obj)
+        except Exception:
+            obj_type = ""
+
+        if obj_type in {"Wall", "Window", "Space", "Axis", "AxisSystem"}:
+            return True
+
+        if getattr(obj, "IfcType", "") in {
+            "Wall",
+            "Window",
+            "Door",
+            "Space",
+            "Column",
+            "Grid",
+            "Stair",
+            "Curtain Wall",
+        }:
+            return True
+
+        return False
+
+    def _is_hosted_opening_object(self, obj):
+        if not obj:
+            return False
+        if not getattr(obj, "Hosts", None):
+            return False
+
+        if getattr(obj, "IfcType", "") in {"Window", "Door"}:
+            return True
+
+        try:
+            import Draft
+
+            return Draft.getType(obj) == "Window"
+        except Exception:
+            return False
+
+    def _get_supported_plan_visibility(self, obj, state):
+        if self._is_component_addition_object(obj):
+            return False
+        visibility = state.get("Visibility", True)
+        # Hosted openings are commonly hidden in the regular 3D workflow while
+        # their wall cuts carry the main visual meaning. In Plan Edit we want
+        # their committed footprint symbols to be visible whenever they are a
+        # supported plan object.
+        if self._is_hosted_opening_object(obj):
+            return True
+        return visibility
+
+    def _apply_background_object_selectability(self, obj, view_object):
+        if not view_object or not hasattr(view_object, "Selectable"):
+            return
+        if not (
+            self._is_plan_background_object(obj)
+            or self._is_plan_container_object(obj)
+            or self._is_hosted_opening_object(obj)
+        ):
+            return
+        try:
+            view_object.Selectable = False
+        except Exception:
+            pass
+
+    def _apply_hidden_object_state(self, view_object):
+        if not view_object:
+            return
+        if hasattr(view_object, "Visibility"):
+            try:
+                view_object.Visibility = False
+            except Exception:
+                pass
+        if hasattr(view_object, "Selectable"):
+            try:
+                view_object.Selectable = False
+            except Exception:
+                pass
 
     def _get_object_storeys(self, obj):
         if not obj:
@@ -862,6 +998,18 @@ class PlanEditSession:
 
         if active_storey_name is None:
             self._restore_object_view_state()
+            for obj in self.doc.Objects:
+                view_object = getattr(obj, "ViewObject", None)
+                state = self._saved_object_view_state.get(obj.Name, {})
+                if not self._is_supported_plan_object(obj):
+                    self._apply_hidden_object_state(view_object)
+                    continue
+                if view_object and hasattr(view_object, "Visibility"):
+                    try:
+                        view_object.Visibility = self._get_supported_plan_visibility(obj, state)
+                    except Exception:
+                        pass
+                self._apply_background_object_selectability(obj, view_object)
             return
 
         for obj in self.doc.Objects:
@@ -872,12 +1020,21 @@ class PlanEditSession:
 
             storeys = self._get_object_storeys(obj)
             if not storeys:
+                if not self._is_supported_plan_object(obj):
+                    self._apply_hidden_object_state(view_object)
+                    continue
                 for prop, value in state.items():
                     if hasattr(view_object, prop):
                         try:
                             setattr(view_object, prop, value)
                         except Exception:
                             pass
+                if hasattr(view_object, "Visibility"):
+                    try:
+                        view_object.Visibility = self._get_supported_plan_visibility(obj, state)
+                    except Exception:
+                        pass
+                self._apply_background_object_selectability(obj, view_object)
                 continue
 
             belongs_to_active = any(parent.Name == active_storey_name for parent in storeys)
@@ -888,16 +1045,20 @@ class PlanEditSession:
                             setattr(view_object, prop, value)
                         except Exception:
                             pass
-                if self._is_plan_background_object(obj) and hasattr(view_object, "Selectable"):
+                if not self._is_supported_plan_object(obj):
+                    self._apply_hidden_object_state(view_object)
+                    continue
+                if hasattr(view_object, "Visibility"):
                     try:
-                        view_object.Selectable = False
+                        view_object.Visibility = self._get_supported_plan_visibility(obj, state)
                     except Exception:
                         pass
+                self._apply_background_object_selectability(obj, view_object)
                 continue
 
             if hasattr(view_object, "Visibility"):
                 try:
-                    view_object.Visibility = state.get("Visibility", True)
+                    view_object.Visibility = self._get_supported_plan_visibility(obj, state)
                 except Exception:
                     pass
             if hasattr(view_object, "Transparency"):
@@ -929,6 +1090,72 @@ class PlanEditSession:
         if self._selection_observer_added:
             FreeCADGui.Selection.removeObserver(self)
             self._selection_observer_added = False
+
+    def _attach_document_observer(self):
+        if not self._document_observer_added:
+            FreeCAD.addDocumentObserver(self)
+            self._document_observer_added = True
+
+    def _detach_document_observer(self):
+        if self._document_observer_added:
+            try:
+                FreeCAD.removeDocumentObserver(self)
+            except Exception:
+                pass
+            self._document_observer_added = False
+
+    def _schedule_selected_wall_reset(self, reason, obj):
+        if self._pending_selected_wall_reset or self._tearing_down:
+            return
+        self._pending_selected_wall_reset = True
+        try:
+            from PySide import QtCore
+
+            QtCore.QTimer.singleShot(0, self._reset_selected_wall_after_change)
+        except Exception:
+            self._reset_selected_wall_after_change()
+
+    def _reset_selected_wall_after_change(self):
+        self._pending_selected_wall_reset = False
+        if self._tearing_down or self.current_tool != "Select":
+            return
+        wall = self.selected_wall
+        if not wall:
+            return
+        self._clear_wall_grips()
+        self.selected_wall = None
+        try:
+            self._ignore_selection_changes = True
+            FreeCADGui.Selection.clearSelection()
+        except Exception:
+            pass
+        finally:
+            self._ignore_selection_changes = False
+        self._refresh_task_panel_status()
+
+    def suspend_selected_wall_state(self, wall=None, clear_gui_selection=True):
+        """Drop current selected-wall UI state before another tool mutates the host wall."""
+
+        if self._tearing_down:
+            return
+        if wall is None:
+            wall = self.selected_wall
+        if wall is None:
+            return
+        if self.selected_wall != wall:
+            return
+        self._pending_selected_wall_reset = False
+        self._clear_wall_grips()
+        self.selected_wall = None
+        if clear_gui_selection:
+            try:
+                self._ignore_selection_changes = True
+                FreeCADGui.Selection.clearSelection()
+            except Exception:
+                pass
+            finally:
+                self._ignore_selection_changes = False
+        self._refresh_task_panel_status()
 
     def _register_edit_callbacks(self):
         try:
@@ -1259,11 +1486,11 @@ class PlanEditSession:
         self._cancel_embedded_tool("Wall")
 
     def _start_wall_edit(self, mode):
-        if not self.is_selected_wall_baseless():
+        if not self.is_selected_wall_endpoint_editable():
             FreeCAD.Console.PrintError(
                 translate(
                     "BIM_PlanEdit",
-                    "Select a baseless wall before using wall grips.\n",
+                    "Select a straight wall before using wall grips.\n",
                 )
             )
             return
@@ -1363,7 +1590,7 @@ class PlanEditSession:
         self._refresh_task_panel_status()
 
     def _begin_grip_drag(self, grip_index):
-        if grip_index not in (0, 1, 2) or not self.is_selected_wall_baseless():
+        if grip_index not in (0, 1, 2) or not self.is_selected_wall_endpoint_editable():
             return
 
         wall = self.selected_wall
@@ -1755,6 +1982,26 @@ class PlanEditSession:
         del doc
         self._refresh_selected_wall()
 
+    # Document observer interface
+
+    def slotChangedObject(self, obj, prop):
+        if self._tearing_down:
+            return
+        if self.current_tool != "Select":
+            return
+        if obj != self.selected_wall:
+            return
+        if prop not in {"Shape", "Additions", "Subtractions", "Hosts"}:
+            return
+        self._schedule_selected_wall_reset(prop, obj)
+
+    def slotDeletedObject(self, obj):
+        if self._tearing_down:
+            return
+        if obj != self.selected_wall:
+            return
+        self._schedule_selected_wall_reset("Deleted", obj)
+
     def attach_task_panel(self, panel):
         if self.task_panel is panel:
             return
@@ -1790,7 +2037,7 @@ class PlanEditSession:
 
     def _sync_wall_grips(self):
         self._clear_wall_grips()
-        if not self.is_selected_wall_baseless():
+        if not self.is_selected_wall_endpoint_editable():
             return
 
         try:
@@ -2067,8 +2314,13 @@ class PlanEditDockWidget:
                 wall_state = translate("BIM_PlanEdit", "Selected wall: {label}").format(
                     label=selected.Label
                 )
-                if self.session.is_selected_wall_baseless():
-                    wall_state += "\n" + translate("BIM_PlanEdit", "Wall mode: baseless")
+                if self.session.is_selected_wall_endpoint_editable():
+                    if self.session.is_selected_wall_baseless():
+                        wall_state += "\n" + translate("BIM_PlanEdit", "Wall mode: baseless")
+                    else:
+                        wall_state += "\n" + translate(
+                            "BIM_PlanEdit", "Wall mode: base-driven straight line"
+                        )
                     wall_state += "\n" + translate(
                         "BIM_PlanEdit",
                         "Grip editing: drag square grips to stretch, diamond grip to move",
@@ -2083,7 +2335,7 @@ class PlanEditDockWidget:
                     "Current tool: {tool}\nWorking plane: {storey}\nDisplay override: Footprint\n{wall_state}",
                 ).format(tool=tool, storey=storey_text, wall_state=wall_state)
             )
-            stretch_enabled = self.session.is_selected_wall_baseless()
+            stretch_enabled = self.session.is_selected_wall_endpoint_editable()
             self.stretch_start_button.setEnabled(stretch_enabled)
             self.stretch_end_button.setEnabled(stretch_enabled)
         except (AttributeError, RuntimeError):
