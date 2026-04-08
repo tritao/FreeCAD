@@ -1171,6 +1171,14 @@ class ViewProviderBuildingPart:
         )
         menu.addAction(actionSetWorkingPlane)
 
+        actionPlanEdit = QtGui.QAction(
+            QtGui.QIcon(":/icons/Arch_Floor.svg"),
+            translate("Arch", "Plan Edit"),
+            menu,
+        )
+        QtCore.QObject.connect(actionPlanEdit, QtCore.SIGNAL("triggered()"), self.startPlanEdit)
+        menu.addAction(actionPlanEdit)
+
         actionWriteCamera = QtGui.QAction(
             QtGui.QIcon(":/icons/Draft_SelectPlane.svg"),
             translate("Arch", "Write Camera Position"),
@@ -1239,6 +1247,14 @@ class ViewProviderBuildingPart:
             wp.align_to_selection()
             if autoclip:
                 vobj.CutView = True
+
+    def startPlanEdit(self):
+        if not hasattr(self, "Object"):
+            return
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.Object)
+        FreeCADGui.runCommand("BIM_PlanEdit")
 
     def writeCamera(self):
 
