@@ -51,6 +51,10 @@ class Arch_Wall:
     https://wiki.freecad.org/Arch_Wall
     """
 
+    def __init__(self):
+        self.tracker = None
+        self._reset_interactive_state()
+
     def GetResources(self):
         """Returns a dictionary with the visual aspects of the Arch Wall tool."""
 
@@ -68,6 +72,55 @@ class Arch_Wall:
 
         v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
         return v
+
+    def _reset_interactive_state(self):
+        self.points = []
+        self.existing = []
+        self.wp = None
+        self.Length = None
+        self._point_request_active = False
+
+    def _cancel_point_request(self):
+        if not self._point_request_active:
+            return
+
+        FreeCADGui.Snapper.cancelPointRequest()
+        self._point_request_active = False
+
+    def _teardown_interactive(self):
+
+        tracker = self.tracker
+        if tracker is not None:
+            tracker.off()
+            tracker.finalize()
+        self.tracker = None
+
+        if self.wp is not None:
+            self.wp._restore()
+
+        self._cancel_point_request()
+        FreeCADGui.Snapper.off()
+
+        gui_doc = FreeCADGui.ActiveDocument
+        if gui_doc and gui_doc.getInEdit() is not None:
+            gui_doc.resetEdit()
+
+        FreeCAD.activeDraftCommand = None
+        self._reset_interactive_state()
+
+    def cancel_interactive(self):
+        """Cancel the current interactive wall creation session."""
+        self._teardown_interactive()
+
+    def finish(self, cont=False, closed=False):
+        """Finish the interactive wall command.
+
+        The Draft task toolbar passes `cont` and `closed` to line-like commands.
+        Arch_Wall only needs a consistent teardown hook, so both arguments are
+        accepted for compatibility and intentionally ignored.
+        """
+        del cont, closed
+        self.cancel_interactive()
 
     def Activated(self):
         """Executed when Arch Wall is called.
@@ -101,7 +154,7 @@ class Arch_Wall:
             self.baseline_mode = WallBaselineMode.NONE
         self.AUTOJOIN = params.get_param_arch("autoJoinWalls")
         sel = FreeCADGui.Selection.getSelectionEx()
-        self.existing = []
+        self._reset_interactive_state()
         self.wp = None
 
         if sel:
@@ -146,6 +199,7 @@ class Arch_Wall:
             title=translate("Arch", "First Point of Wall"),
             hints=self.get_hints(),
         )
+        self._point_request_active = True
         FreeCADGui.draftToolBar.continueCmd.show()
 
     def get_hints(self):
@@ -178,18 +232,12 @@ class Arch_Wall:
         """
 
         import Draft
-        import ArchWall
-        from draftutils import gui_utils
 
-        if obj:
-            if Draft.getType(obj) == "Wall":
-                if not obj in self.existing:
-                    self.existing.append(obj)
+        self._point_request_active = False
+        if obj and Draft.getType(obj) == "Wall" and obj not in self.existing:
+            self.existing.append(obj)
         if point is None:
-            self.wp._restore()
-            FreeCAD.activeDraftCommand = None
-            FreeCADGui.Snapper.off()
-            self.tracker.finalize()
+            self.cancel_interactive()
             return
         self.points.append(point)
         if len(self.points) == 1:
@@ -205,6 +253,7 @@ class Arch_Wall:
                 mode="line",
                 hints=self.get_hints(),
             )
+            self._point_request_active = True
 
         elif len(self.points) == 2:
             self.create_wall()
@@ -399,10 +448,13 @@ class Arch_Wall:
         """Orchestrate wall creation according to the baseline mode."""
         from draftutils import params
 
+        tracker = self.tracker
+        if tracker is not None:
+            tracker.off()
+
         self.wp._restore()
         FreeCAD.activeDraftCommand = None
         FreeCADGui.Snapper.off()
-        self.tracker.off()
 
         p0 = self.wp.get_local_coords(self.points[0])
         p1 = self.wp.get_local_coords(self.points[1])
@@ -429,7 +481,10 @@ class Arch_Wall:
         # Finalization
         self.doc.commitTransaction()
         self.doc.recompute()
-        self.tracker.finalize()
+        if tracker is not None:
+            tracker.finalize()
+        self.tracker = None
+        self._reset_interactive_state()
         if FreeCADGui.draftToolBar.continueMode:
             self.Activated()
 
