@@ -467,11 +467,15 @@ class _HostedOpeningPlanGeometry:
 
         hosts = getattr(self.Object, "Hosts", None) or []
         if hosts:
-            profile = self._get_hosted_subvolume_section_profile(cut_z)
+            # Prefer the base profile for interactive plan geometry. It avoids
+            # rebuilding transient section topology from the host cut volume on
+            # every query while still preserving the opening width and host
+            # thickness through the host-aligned frame computed downstream.
+            profile = self._get_base_opening_profile(base_z)
             if profile is not None:
                 return profile
 
-            profile = self._get_base_opening_profile(base_z)
+            profile = self._get_hosted_subvolume_section_profile(cut_z)
             if profile is not None:
                 return profile
 
