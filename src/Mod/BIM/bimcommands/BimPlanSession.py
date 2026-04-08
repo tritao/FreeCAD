@@ -328,6 +328,8 @@ class PlanEditSession:
         self._saved_camera = None
         self._saved_camera_type = None
         self._saved_background = None
+        self._saved_navigation_style = None
+        self._saved_navigation_state = {}
         self._saved_object_view_state = {}
         self._working_plane = None
         self._interaction_plane = None
@@ -424,6 +426,8 @@ class PlanEditSession:
         self.gui_doc = None
         self.view = None
         self.viewer = None
+        self._saved_navigation_style = None
+        self._saved_navigation_state = {}
         self.selected_wall = None
         self.selected_opening = None
         self.hovered_wall = None
@@ -443,6 +447,73 @@ class PlanEditSession:
         self._embedded_host = None
         self._embedded_tool = None
         self._embedded_tool_name = None
+
+    def _get_navigation_style(self):
+        viewer = self.viewer
+        if not viewer or not hasattr(viewer, "getNavigationStyle"):
+            return None
+        try:
+            return viewer.getNavigationStyle()
+        except (AttributeError, ReferenceError, RuntimeError):
+            return None
+
+    def _capture_navigation_flag(self, target, getter_name, state_key):
+        if state_key in self._saved_navigation_state:
+            return
+        if not target or not hasattr(target, getter_name):
+            return
+        try:
+            self._saved_navigation_state[state_key] = bool(getattr(target, getter_name)())
+        except (AttributeError, ReferenceError, RuntimeError):
+            pass
+
+    def _apply_navigation_flag(self, target, setter_name, state_key, enabled):
+        if state_key not in self._saved_navigation_state:
+            return
+        if not target or not hasattr(target, setter_name):
+            return
+        try:
+            getattr(target, setter_name)(enabled)
+        except (AttributeError, ReferenceError, RuntimeError):
+            pass
+
+    def _capture_navigation_state(self):
+        nav_style = self._get_navigation_style()
+        if nav_style:
+            self._saved_navigation_style = nav_style
+        self._capture_navigation_flag(nav_style, "isRotationEnabled", "rotation_enabled")
+        self._capture_navigation_flag(self.viewer, "isEnabledNaviCube", "navicube_enabled")
+        self._capture_navigation_flag(self.view, "isCornerCrossVisible", "corner_cross_visible")
+
+    def _apply_plan_navigation_profile(self):
+        self._capture_navigation_state()
+        nav_style = self._saved_navigation_style or self._get_navigation_style()
+        self._apply_navigation_flag(nav_style, "setRotationEnabled", "rotation_enabled", False)
+        self._apply_navigation_flag(self.viewer, "setEnabledNaviCube", "navicube_enabled", False)
+        self._apply_navigation_flag(
+            self.view, "setCornerCrossVisible", "corner_cross_visible", False
+        )
+
+    def _restore_navigation_state(self):
+        nav_style = self._saved_navigation_style or self._get_navigation_style()
+        self._apply_navigation_flag(
+            nav_style,
+            "setRotationEnabled",
+            "rotation_enabled",
+            self._saved_navigation_state.get("rotation_enabled"),
+        )
+        self._apply_navigation_flag(
+            self.viewer,
+            "setEnabledNaviCube",
+            "navicube_enabled",
+            self._saved_navigation_state.get("navicube_enabled"),
+        )
+        self._apply_navigation_flag(
+            self.view,
+            "setCornerCrossVisible",
+            "corner_cross_visible",
+            self._saved_navigation_state.get("corner_cross_visible"),
+        )
 
     def shutdown(self, close_dialog=True, teardown=False):
         global _active_session
