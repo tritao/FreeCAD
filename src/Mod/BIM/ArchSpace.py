@@ -506,7 +506,8 @@ class _Space(ArchComponent.Component):
     def getArea(self, obj, notouch=False):
         "returns the horizontal area at the center of the space"
 
-        self.face = self.getFootprint(obj)
+        faces = self.getFootprint(obj)
+        self.face = faces[0] if faces else None
         if self.face:
             if not notouch:
                 if hasattr(obj, "PerimeterLength"):
@@ -517,13 +518,12 @@ class _Space(ArchComponent.Component):
             return 0
 
     def getFootprint(self, obj):
-        "returns a face that represents the footprint of this space at the center of mass"
+        "returns footprint faces for this space at the center of mass"
 
         import Part
-        import DraftGeomUtils
 
         if not hasattr(obj.Shape, "CenterOfMass"):
-            return None
+            return []
         try:
             pl = Part.makePlane(1, 1)
             pl.translate(obj.Shape.CenterOfMass)
@@ -537,9 +537,9 @@ class _Space(ArchComponent.Component):
             )
             dv = dv.sub(obj.Shape.CenterOfMass)
             w.translate(dv)
-            return Part.Face(w)
+            return [Part.Face(w)]
         except Part.OCCError:
-            return None
+            return []
 
 
 class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
@@ -707,21 +707,29 @@ class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
         self.onChanged(vobj, "FirstLine")
         self.onChanged(vobj, "LineSpacing")
         self.onChanged(vobj, "FontName")
-        self.Object = vobj.Object
-        # footprint mode
-        self.fmat = coin.SoMaterial()
+
+    def createFootprintGroup(self):
+        """Create the generic Footprint display mode node for spaces."""
+
+        from pivy import coin
+
         self.fcoords = coin.SoCoordinate3()
         self.fset = coin.SoIndexedFaceSet()
-        fhints = coin.SoShapeHints()
-        fhints.vertexOrdering = fhints.COUNTERCLOCKWISE
+        material = coin.SoMaterial()
+        material.diffuseColor.setValue(ArchCommands.getDefaultColor("Space"))
+        material.transparency.setValue(0.7)
+        shape_hints = coin.SoShapeHints()
+        shape_hints.vertexOrdering = coin.SoShapeHints.COUNTERCLOCKWISE
+
         sep = coin.SoSeparator()
-        sep.addChild(self.fmat)
+        sep.addChild(material)
         sep.addChild(self.fcoords)
-        sep.addChild(fhints)
+        sep.addChild(shape_hints)
         sep.addChild(self.fset)
-        vobj.RootNode.addChild(sep)
+        return sep
 
     def updateData(self, obj, prop):
+        ArchComponent.ViewProviderComponent.updateData(self, obj, prop)
 
         if prop in ["Shape", "Label", "Tag", "Area"]:
             self.onChanged(obj.ViewObject, "Text")
@@ -882,33 +890,6 @@ class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
         taskd = SpaceTaskPanel(vobj.Object)
         FreeCADGui.Control.showDialog(taskd)
         return True
-
-    def getDisplayModes(self, vobj):
-
-        modes = ArchComponent.ViewProviderComponent.getDisplayModes(self, vobj) + ["Footprint"]
-        return modes
-
-    def setDisplayMode(self, mode):
-
-        self.fset.coordIndex.deleteValues(0)
-        self.fcoords.point.deleteValues(0)
-        if mode == "Footprint":
-            if hasattr(self, "Object"):
-                face = self.Object.Proxy.getFootprint(self.Object)
-                if face:
-                    verts = []
-                    fdata = []
-                    idx = 0
-                    tri = face.tessellate(1)
-                    for v in tri[0]:
-                        verts.append([v.x, v.y, v.z])
-                    for f in tri[1]:
-                        fdata.extend([f[0] + idx, f[1] + idx, f[2] + idx, -1])
-                    idx += len(tri[0])
-                    self.fcoords.point.setValues(verts)
-                    self.fset.coordIndex.setValues(0, len(fdata), fdata)
-            return "Points"
-        return ArchComponent.ViewProviderComponent.setDisplayMode(self, mode)
 
 
 class SpaceTaskPanel(ArchComponent.ComponentOptionsTaskPanel):
