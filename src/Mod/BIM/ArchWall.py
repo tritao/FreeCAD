@@ -814,8 +814,6 @@ class _Wall(ArchComponent.Component):
             The faces that make up the wall footprint.
         """
 
-        import Part
-
         shape = obj.Shape
         if shape and (not shape.isNull()) and shape.Solids:
             bb = shape.BoundBox
@@ -824,30 +822,13 @@ class _Wall(ArchComponent.Component):
                 if cut_height is None:
                     cut_height = 1000.0
                 cut_z = max(bb.ZMin + 0.001, min(bb.ZMax - 0.001, bb.ZMin + cut_height))
-                cut_plane = Part.makePlane(1, 1)
-                cut_plane.translate(FreeCAD.Vector(bb.Center.x, bb.Center.y, cut_z))
                 try:
-                    section_plane, _, _ = ArchCommands.getCutVolume(cut_plane, shape)
-                    if section_plane:
-                        section = shape.section(section_plane)
-                        if section and section.Edges:
-                            try:
-                                edge_groups = Part.sortEdges(section.Edges)
-                            except AttributeError:
-                                edge_groups = Part.__sortEdges__(section.Edges)
-                            faces = []
-                            for edges in edge_groups:
-                                wire = Part.Wire(edges)
-                                if not wire.isClosed():
-                                    continue
-                                face = Part.Face(wire)
-                                if face.Area <= 0:
-                                    continue
-                                face.translate(FreeCAD.Vector(0, 0, bb.ZMin - cut_z))
-                                faces.append(face)
-                            if faces:
-                                return faces
-                except Part.OCCError:
+                    faces = ArchComponent.get_horizontal_slice_faces(
+                        shape, cut_z, translate_z=bb.ZMin - cut_z
+                    )
+                    if faces:
+                        return faces
+                except Exception:
                     pass
 
         faces = []

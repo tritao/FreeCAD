@@ -78,6 +78,54 @@ def _make_projected_horizontal_area_face(projected_faces):
     return fused_face.removeSplitter()
 
 
+def get_horizontal_slice_edges(shape, cut_z):
+    """Return transient section edges for a horizontal cut through ``shape``."""
+
+    if not shape or shape.isNull():
+        return []
+
+    try:
+        wires = shape.slice(FreeCAD.Vector(0, 0, 1), cut_z)
+    except Exception:
+        return []
+
+    edges = []
+    for wire in wires or []:
+        try:
+            edges.extend(list(wire.Edges))
+        except Exception:
+            continue
+    return edges
+
+
+def get_horizontal_slice_faces(shape, cut_z, translate_z=0.0):
+    """Return transient planar faces for a horizontal cut through ``shape``."""
+
+    import Part
+
+    section_edges = get_horizontal_slice_edges(shape, cut_z)
+    if not section_edges:
+        return []
+
+    try:
+        edge_groups = Part.sortEdges(section_edges)
+    except AttributeError:
+        edge_groups = Part.__sortEdges__(section_edges)
+
+    faces = []
+    for edges in edge_groups:
+        wire = Part.Wire(edges)
+        if not wire.isClosed():
+            continue
+        face = Part.Face(wire)
+        if face.Area <= 0:
+            continue
+        if translate_z:
+            face.translate(FreeCAD.Vector(0, 0, translate_z))
+        faces.append(face)
+    return faces
+
+
 def addToComponent(compobject, addobject, prop):
     """Add an object to a component's property.
 

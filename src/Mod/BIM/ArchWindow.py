@@ -1030,22 +1030,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         )
 
     def _get_section_footprint_edges(self, shape, cut_z):
-        import Part
-
-        bbox = shape.BoundBox
-        size = max(bbox.XLength, bbox.YLength, bbox.ZLength, 1.0) + 1000.0
-        cut_plane = Part.makePlane(
-            size,
-            size,
-            FreeCAD.Vector(bbox.Center.x - (size * 0.5), bbox.Center.y - (size * 0.5), cut_z),
-        )
-        try:
-            section = shape.section(cut_plane)
-        except Part.OCCError:
-            return []
-        if section and section.Edges:
-            return list(section.Edges)
-        return []
+        return ArchComponent.get_horizontal_slice_edges(shape, cut_z)
 
     def _get_host_plan_basis(self):
         host = None
