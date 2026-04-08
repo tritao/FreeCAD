@@ -404,7 +404,27 @@ class Arch_Window:
         "sets up a taskbox widget"
 
         from draftutils import params
-        from PySide import QtCore, QtGui, QtSvgWidgets
+        from PySide import QtCore, QtGui, QtSvg
+
+        class SvgWidget(QtGui.QLabel):
+            """Simple SVG preview widget for the preset taskbox."""
+
+            def __init__(self, path=None, parent=None):
+                super().__init__(parent)
+                self._renderer = QtSvg.QSvgRenderer(self)
+                self.setAlignment(QtCore.Qt.AlignCenter)
+                if path:
+                    self.load(path)
+
+            def load(self, path):
+                self._renderer.load(path)
+                self.update()
+
+            def paintEvent(self, event):
+                painter = QtGui.QPainter(self)
+                self._renderer.render(painter, self.rect())
+                painter.end()
+
         from ArchWindowPresets import WindowPresets
 
         w = QtGui.QWidget()
@@ -479,7 +499,7 @@ class Arch_Window:
         self.pic.hide()
 
         # SVG display
-        self.im = QtSvgWidgets.QSvgWidget(":/ui/ParametersWindowFixed.svg")
+        self.im = SvgWidget(":/ui/ParametersWindowFixed.svg")
         self.im.setMaximumWidth(200)
         self.im.setMinimumHeight(120)
         grid.addWidget(self.im, 4, 0, 1, 2)
