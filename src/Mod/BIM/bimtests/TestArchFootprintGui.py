@@ -33,6 +33,21 @@ from draftutils import params
 
 class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
 
+    def _get_line_polylines(self, proxy):
+        polylines = []
+        points = proxy.lcoords.point
+        counts = proxy.lset.numVertices
+        point_index = 0
+        for set_index in range(counts.getNum()):
+            count = counts[set_index]
+            polyline = []
+            for _ in range(count):
+                point = points[point_index]
+                polyline.append(FreeCAD.Vector(point[0], point[1], point[2]))
+                point_index += 1
+            polylines.append(polyline)
+        return polylines
+
     def _make_hosted_window(self, wall, name, x_start, z_start, width=800.0, height=1200.0):
         sketch = self.document.addObject("Sketcher::SketchObject", name + "Sketch")
         sketch.addGeometry(
@@ -181,7 +196,7 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.assertLess(max(abs(value) for value in ys), 500)
 
     def test_window_footprint_populates_for_cut_opening(self):
-        """Hosted windows crossing the cut plane should populate footprint symbol lines."""
+        """Hosted windows crossing the cut plane should populate an inset plan symbol."""
 
         previous_cut_height = params.get_param_arch("FootprintCutHeight")
         params.set_param_arch("FootprintCutHeight", 1000.0)
@@ -203,6 +218,30 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.assertTrue(hasattr(proxy, "lset"))
         self.assertGreater(proxy.lcoords.point.getNum(), 0)
         self.assertGreater(proxy.lset.numVertices.getNum(), 0)
+
+        polylines = self._get_line_polylines(proxy)
+        self.assertEqual(len(polylines), 3)
+        self.assertEqual(len(polylines[0]), 2)
+        self.assertEqual(len(polylines[1]), 2)
+        self.assertEqual(len(polylines[2]), 2)
+
+        cut_z, base_z = proxy._get_footprint_cut_context()
+        profile = proxy._get_opening_section_profile(window.Shape, cut_z)
+        self.assertIsNotNone(profile)
+        host_bounds = proxy._get_host_plan_v_bounds(
+            profile["origin"], profile["axis_u"], profile["axis_v"]
+        )
+        self.assertIsNotNone(host_bounds)
+        host_vmin, host_vmax = host_bounds
+        expected_inset = min((host_vmax - host_vmin) * 0.25, 30.0)
+
+        for polyline in polylines[:2]:
+            start_v = polyline[0].sub(profile["origin"]).dot(profile["axis_v"])
+            end_v = polyline[1].sub(profile["origin"]).dot(profile["axis_v"])
+            vmin = min(start_v, end_v)
+            vmax = max(start_v, end_v)
+            self.assertAlmostEqual(vmin - host_vmin, expected_inset, delta=1e-6)
+            self.assertAlmostEqual(host_vmax - vmax, expected_inset, delta=1e-6)
 
     def test_window_footprint_ignores_openings_above_cut_height(self):
         """Openings above the cut plane should not emit committed footprint symbols."""
@@ -229,7 +268,7 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.assertEqual(proxy.lset.numVertices.getNum(), 0)
 
     def test_door_footprint_populates_for_cut_opening(self):
-        """Hosted doors crossing the cut plane should populate committed footprint lines."""
+        """Hosted doors crossing the cut plane should populate a composed plan symbol."""
 
         previous_cut_height = params.get_param_arch("FootprintCutHeight")
         params.set_param_arch("FootprintCutHeight", 1000.0)
@@ -252,6 +291,34 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.assertTrue(hasattr(proxy, "lset"))
         self.assertGreater(proxy.lcoords.point.getNum(), 0)
         self.assertGreater(proxy.lset.numVertices.getNum(), 0)
+
+        polylines = self._get_line_polylines(proxy)
+        self.assertEqual(len(polylines), 3)
+        self.assertEqual(len(polylines[0]), 2, "Closed door leaf should be a single segment.")
+        self.assertEqual(len(polylines[1]), 2, "Open door leaf should be a single segment.")
+        self.assertGreater(len(polylines[2]), 2, "Door swing arc should be a polyline.")
+        self.assertTrue(
+            polylines[0][0].isEqual(polylines[1][0], 1e-6),
+            "Closed and open leaves should share the same hinge point.",
+        )
+        closed_leaf_length = polylines[0][0].distanceToPoint(polylines[0][1])
+        self.assertAlmostEqual(closed_leaf_length, 900.0, delta=1.0)
+
+        cut_z, base_z = proxy._get_footprint_cut_context()
+        profile = proxy._get_opening_section_profile(door.Shape, cut_z)
+        self.assertIsNotNone(profile)
+        host_bounds = proxy._get_host_plan_v_bounds(
+            profile["origin"], profile["axis_u"], profile["axis_v"]
+        )
+        self.assertIsNotNone(host_bounds)
+        host_vmin, host_vmax = host_bounds
+        hinge = polylines[0][0]
+        hinge_v = hinge.sub(profile["origin"]).dot(profile["axis_v"])
+        thickness = host_vmax - host_vmin
+        expected_inset = min(thickness * 0.25, 30.0)
+        self.assertGreater(hinge_v, host_vmin)
+        self.assertLess(hinge_v, host_vmax)
+        self.assertAlmostEqual(hinge_v - host_vmin, expected_inset, delta=1e-6)
 
     def test_legacy_opening_element_door_populates_for_cut_opening(self):
         """Legacy hosted openings with door-like WindowParts should still render as doors."""

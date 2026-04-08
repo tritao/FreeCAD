@@ -1191,6 +1191,36 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
 
         return 120.0
 
+    def _get_host_plan_v_bounds(self, origin, axis_u, axis_v):
+        hosts = getattr(self.Object, "Hosts", None) or []
+        host = hosts[0] if hosts else None
+        if not host:
+            return None
+
+        proxy = getattr(host, "Proxy", None)
+        if not proxy or not hasattr(proxy, "getFootprint"):
+            return None
+
+        try:
+            faces = proxy.getFootprint(host)
+        except Exception:
+            return None
+        if not faces:
+            return None
+
+        v_values = []
+        for face in faces:
+            for wire in face.Wires:
+                for edge in wire.Edges:
+                    for point in self._collect_edge_points(edge):
+                        delta = point.sub(origin)
+                        v_values.append(delta.dot(axis_v))
+
+        if not v_values:
+            return None
+
+        return min(v_values), max(v_values)
+
     def _get_base_opening_profile(self, base_z):
         point_lists = self._get_base_global_point_lists()
         if not point_lists:
@@ -1376,16 +1406,26 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         umax = section_profile["umax"]
         vmin = section_profile["vmin"]
         vmax = section_profile["vmax"]
+        host_v_bounds = self._get_host_plan_v_bounds(origin, axis_u, axis_v)
+        if host_v_bounds is not None:
+            vmin, vmax = host_v_bounds
         width_u = max(umax - umin, 0.0)
         width_v = max(vmax - vmin, 0.0)
         if width_u <= 0.0:
             return []
 
+        symbol_inset = min(width_v * 0.25, 30.0)
+        symbol_vmin = vmin + symbol_inset
+        symbol_vmax = vmax - symbol_inset
+        if symbol_vmax <= symbol_vmin:
+            symbol_vmin = vmin
+            symbol_vmax = vmax
+
         if self._get_effective_opening_kind() == "Door":
             hinge_at_min, swing_sign = self._get_door_symbol_style()
             hinge_u = umin if hinge_at_min else umax
             closed_u = umax if hinge_at_min else umin
-            hinge_v = vmin if swing_sign < 0 else vmax
+            hinge_v = symbol_vmin if swing_sign < 0 else symbol_vmax
             closed_v = hinge_v
             swing_v = hinge_v + (swing_sign * width_u)
 
@@ -1402,6 +1442,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             closed_end.z = base_z
             open_end.z = base_z
 
+            closed_leaf = [hinge, closed_end]
             leaf = [hinge, open_end]
             arc = self._make_arc_polyline(
                 hinge,
@@ -1409,7 +1450,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
                 open_end.sub(hinge),
                 sweep_positive=(swing_sign > 0),
             )
-            return [leaf, arc]
+            return [closed_leaf, leaf, arc]
 
         center_u = (umin + umax) * 0.5
         offset = min(width_u * 0.2, 60.0)
@@ -1421,18 +1462,18 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         polylines = []
         for delta_u in offsets:
             start = origin.add(FreeCAD.Vector(axis_u).multiply(center_u + delta_u)).add(
-                FreeCAD.Vector(axis_v).multiply(vmin)
+                FreeCAD.Vector(axis_v).multiply(symbol_vmin)
             )
             end = origin.add(FreeCAD.Vector(axis_u).multiply(center_u + delta_u)).add(
-                FreeCAD.Vector(axis_v).multiply(vmax)
+                FreeCAD.Vector(axis_v).multiply(symbol_vmax)
             )
             start.z = base_z
             end.z = base_z
             polylines.append([start, end])
 
-        if width_v > 0.0:
+        if symbol_vmax > symbol_vmin:
             jamb_span = min(width_u * 0.3, 120.0)
-            mid_v = (vmin + vmax) * 0.5
+            mid_v = (symbol_vmin + symbol_vmax) * 0.5
             left = origin.add(FreeCAD.Vector(axis_u).multiply(center_u - jamb_span)).add(
                 FreeCAD.Vector(axis_v).multiply(mid_v)
             )
@@ -1468,6 +1509,54 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             )
             if polyline:
                 polylines.append(polyline)
+
+        return polylines
+
+    def get_plan_overlay_polylines(self):
+        """Return global-space plan overlay polylines for selection highlighting."""
+
+        if not hasattr(self, "Object"):
+            return []
+
+        shape = getattr(self.Object, "Shape", None)
+        cut_z, base_z = self._get_footprint_cut_context()
+        if cut_z is None:
+            return []
+
+        section_profile = None
+        if shape and not shape.isNull():
+            section_profile = self._get_opening_section_profile(shape, cut_z)
+        if section_profile is None:
+            section_profile = self._get_base_opening_profile(base_z)
+        if not section_profile:
+            return []
+
+        polylines = list(self._get_symbol_footprint_polylines(section_profile, base_z))
+        host_v_bounds = self._get_host_plan_v_bounds(
+            section_profile["origin"],
+            section_profile["axis_u"],
+            section_profile["axis_v"],
+        )
+        if host_v_bounds is not None:
+            vmin, vmax = host_v_bounds
+        else:
+            vmin = section_profile["vmin"]
+            vmax = section_profile["vmax"]
+
+        if vmax > vmin:
+            mid_v = (vmin + vmax) * 0.5
+            origin = section_profile["origin"]
+            axis_u = section_profile["axis_u"]
+            axis_v = section_profile["axis_v"]
+            start = origin.add(FreeCAD.Vector(axis_u).multiply(section_profile["umin"])).add(
+                FreeCAD.Vector(axis_v).multiply(mid_v)
+            )
+            end = origin.add(FreeCAD.Vector(axis_u).multiply(section_profile["umax"])).add(
+                FreeCAD.Vector(axis_v).multiply(mid_v)
+            )
+            start.z = base_z
+            end.z = base_z
+            polylines.append([start, end])
 
         return polylines
 
