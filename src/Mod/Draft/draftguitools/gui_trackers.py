@@ -92,8 +92,13 @@ class Tracker:
         """Finish the command by removing the switch.
         Also called by ghostTracker.remove.
         """
-        ToDo.delay(self._removeSwitch, self.switch)
+        switch = self.switch
+        if switch is None:
+            self.Visible = False
+            return
+        ToDo.delay(self._removeSwitch, switch)
         self.switch = None
+        self.Visible = False
 
     def get_scene_graph(self):
         """Returns the current scenegraph or None if this is not a 3D view"""
@@ -131,11 +136,17 @@ class Tracker:
 
     def on(self):
         """Set the visibility to True."""
+        if self.switch is None:
+            self.Visible = False
+            return
         self.switch.whichChild = 0
         self.Visible = True
 
     def off(self):
         """Set the visibility to False."""
+        if self.switch is None:
+            self.Visible = False
+            return
         self.switch.whichChild = -1
         self.Visible = False
 
