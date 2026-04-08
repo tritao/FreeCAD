@@ -102,6 +102,31 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.assertAlmostEqual(plane.axis.y, 0.0, delta=1e-9)
         self.assertAlmostEqual(plane.axis.z, 1.0, delta=1e-9)
 
+    def _make_hosted_door(self, wall, name="TestDoor", width=900.0, height=2100.0):
+        sketch = self.document.addObject("Sketcher::SketchObject", name + "Sketch")
+        sketch.addGeometry(
+            [
+                Part.LineSegment(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(width, 0, 0)),
+                Part.LineSegment(FreeCAD.Vector(width, 0, 0), FreeCAD.Vector(width, height, 0)),
+                Part.LineSegment(FreeCAD.Vector(width, height, 0), FreeCAD.Vector(0, height, 0)),
+                Part.LineSegment(FreeCAD.Vector(0, height, 0), FreeCAD.Vector(0, 0, 0)),
+            ]
+        )
+        sketch.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+        self.document.recompute()
+
+        door = Arch.makeWindow(sketch, name=name)
+        door.Width = width
+        door.Height = height
+        door.HoleDepth = 0
+        door.IfcType = "Door"
+        door.WindowParts = ["DoorLeaf", "Solid panel", "Wire0,Edge1,Mode1", "40", "0"]
+        self.document.recompute()
+
+        Arch.addComponents(door, wall)
+        self.document.recompute()
+        return door
+
     def test_plan_edit_embedded_wall_uses_sane_top_plane(self):
         """Embedded wall creation in Plan Edit should start from a clean top plane."""
 
@@ -231,6 +256,27 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         finally:
             arch_params.SetBool("autoJoinWalls", original_autojoin)
 
+    def test_plan_edit_hides_joined_wall_additions(self):
+        """Joined child walls should stay hidden so their footprints do not overdraw the host."""
+
+        host = Arch.makeWall(length=3000, width=200, height=2500)
+        child = Arch.makeWall(length=3000, width=200, height=2500)
+        Arch.addComponents(child, host)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(host.ViewObject.Visibility)
+        self.assertFalse(
+            child.ViewObject.Visibility,
+            "Joined child walls should stay hidden in Plan Edit to avoid double rendering.",
+        )
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_keeps_slabs_visible_but_not_selectable(self):
         """Active-storey slabs should not block wall picking in Plan Edit."""
 
@@ -258,6 +304,279 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
             slab.ViewObject.Selectable,
             "Slabs should stay visible as background context but not intercept selection.",
         )
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_global_mode_keeps_slabs_not_selectable(self):
+        """Global plan mode should still treat slabs as non-selectable background."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+
+        rect = Draft.makeRectangle(6000, 6000)
+        slab = Arch.makeStructure(rect, height=200, name="TestSlab")
+        slab.IfcType = "Slab"
+
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertIsNone(session.active_storey)
+        self.assertTrue(wall.ViewObject.Selectable)
+        self.assertTrue(slab.ViewObject.Visibility)
+        self.assertFalse(
+            slab.ViewObject.Selectable,
+            "Slabs should stay unselectable even when Plan Edit is in Global XY mode.",
+        )
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_global_mode_hides_unsupported_objects(self):
+        """Global plan mode should hide unsupported objects instead of restoring them as-is."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        box = self.document.addObject("Part::Box", "TestBox")
+        box.Length = 600
+        box.Width = 600
+        box.Height = 600
+
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertIsNone(session.active_storey)
+        self.assertTrue(wall.ViewObject.Visibility)
+        self.assertTrue(wall.ViewObject.Selectable)
+        self.assertFalse(box.ViewObject.Visibility)
+        self.assertFalse(box.ViewObject.Selectable)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_hides_unsupported_active_storey_objects(self):
+        """Unsupported active-storey objects should not clutter Plan Edit."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        box = self.document.addObject("Part::Box", "TestBox")
+        box.Length = 600
+        box.Width = 600
+        box.Height = 600
+
+        level.addObject(wall)
+        level.addObject(box)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertTrue(wall.ViewObject.Visibility)
+        self.assertTrue(wall.ViewObject.Selectable)
+        self.assertFalse(
+            box.ViewObject.Visibility,
+            "Unsupported active-storey objects should be hidden in Plan Edit.",
+        )
+        self.assertFalse(box.ViewObject.Selectable)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_hides_unsupported_objects_outside_active_storey(self):
+        """Unsupported objects with no storey ancestry should also be hidden."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        box = self.document.addObject("Part::Box", "TestBox")
+        box.Length = 600
+        box.Width = 600
+        box.Height = 600
+
+        level.addObject(wall)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertTrue(wall.ViewObject.Visibility)
+        self.assertTrue(wall.ViewObject.Selectable)
+        self.assertFalse(
+            box.ViewObject.Visibility,
+            "Unsupported objects outside the active storey should be hidden in Plan Edit.",
+        )
+        self.assertFalse(box.ViewObject.Selectable)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_keeps_building_visible_but_not_selectable(self):
+        """Building containers should stay visible as context, but not intercept selection."""
+
+        building = Arch.makeBuilding(name="TestBuilding")
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+
+        building.addObject(level)
+        level.addObject(wall)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertTrue(building.ViewObject.Visibility)
+        self.assertFalse(building.ViewObject.Selectable)
+        self.assertTrue(wall.ViewObject.Visibility)
+        self.assertTrue(wall.ViewObject.Selectable)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_keeps_plain_groups_visible_but_not_selectable(self):
+        """Generic group containers should stay visible as context in Plan Edit."""
+
+        group = self.document.addObject("App::DocumentObjectGroup", "TestGroup")
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+
+        group.addObject(level)
+        level.addObject(wall)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertTrue(group.ViewObject.Visibility)
+        self.assertFalse(group.ViewObject.Selectable)
+        self.assertTrue(wall.ViewObject.Visibility)
+        self.assertTrue(wall.ViewObject.Selectable)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_forces_hosted_doors_visible(self):
+        """Hosted doors should become visible in Plan Edit even if the regular 3D view keeps them hidden."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall)
+        self.assertFalse(
+            door.ViewObject.Visibility,
+            "Hosted doors should start hidden in the normal Arch workflow for this regression.",
+        )
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertTrue(door.ViewObject.Visibility)
+        self.assertFalse(door.ViewObject.Selectable)
+        self.assertTrue(hasattr(door.ViewObject.Proxy, "lcoords"))
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_hosted_door_populates_footprint_lines(self):
+        """Hosted doors should have committed footprint line data while Plan Edit is active."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="PlanDoor")
+        self.assertFalse(door.ViewObject.Visibility)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        proxy = door.ViewObject.Proxy
+        self.assertTrue(door.ViewObject.Visibility)
+        self.assertFalse(door.ViewObject.Selectable)
+        self.assertTrue(hasattr(proxy, "lcoords"))
+        self.assertTrue(hasattr(proxy, "lset"))
+        self.assertGreater(proxy.lcoords.point.getNum(), 0)
+        self.assertGreater(proxy.lset.numVertices.getNum(), 0)
+
+    def test_plan_edit_shows_grips_for_straight_base_wall(self):
+        """Straight base-driven walls should get the same grip overlays as baseless walls."""
+
+        base = Draft.make_line(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(3000, 0, 0))
+        wall = Arch.makeWall(base, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        self.assertTrue(session.is_selected_wall_endpoint_editable())
+        self.assertEqual(len(session._grip_trackers), 3)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_clears_selected_wall_when_host_shape_changes(self):
+        """Selected wall grips should be cleared if a hosted opening changes the wall shape."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(wall)
+        self.pump_gui_events()
+        self.assertIs(session.selected_wall, wall)
+        self.assertGreater(len(session._grip_trackers), 0)
+
+        self._make_hosted_door(wall, name="ResetDoor")
+        self.pump_gui_events()
+
+        self.assertIsNone(session.selected_wall)
+        self.assertEqual(len(session._grip_trackers), 0)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
