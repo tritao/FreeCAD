@@ -691,6 +691,14 @@ OverlayAxisCrossState& overlayAxisCrossState()
     return state;
 }
 
+bool isViewerOrientationLocked(const Gui::View3DInventorViewer* viewer)
+{
+    if (!viewer) {
+        return false;
+    }
+    auto* navigation = viewer->navigationStyle();
+    return navigation && navigation->isOrientationLocked();
+}
 }  // namespace
 
 /*!
@@ -4029,6 +4037,9 @@ std::shared_ptr<NavigationAnimation> View3DInventorViewer::setCameraOrientation(
 
 void View3DInventorViewer::setCameraType(SoType type)
 {
+    if (isViewerOrientationLocked(this) && type.isDerivedFrom(SoPerspectiveCamera::getClassTypeId())) {
+        return;
+    }
     inherited::setCameraType(type);
 
     SoCamera* cam = this->getSoRenderManager()->getCamera();
@@ -4086,6 +4097,10 @@ bool View3DInventorViewer::applyCameraState(const SoCamera& sourceCamera)
     }
 
     if (sourceCamera.getTypeId() != targetCamera->getTypeId()) {
+        if (navigation && navigation->isOrientationLocked()
+            && sourceCamera.getTypeId().isDerivedFrom(SoPerspectiveCamera::getClassTypeId())) {
+            return false;
+        }
         setCameraType(sourceCamera.getTypeId());
         targetCamera = getCamera();
         if (!targetCamera) {
