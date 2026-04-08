@@ -499,7 +499,7 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
         self.pump_gui_events()
 
         self.assertTrue(door.ViewObject.Visibility)
-        self.assertFalse(door.ViewObject.Selectable)
+        self.assertTrue(door.ViewObject.Selectable)
         self.assertTrue(hasattr(door.ViewObject.Proxy, "lcoords"))
 
         session.shutdown(close_dialog=False)
@@ -525,11 +525,40 @@ class TestArchWallGui(TestArchBaseGui.TestArchBaseGui):
 
         proxy = door.ViewObject.Proxy
         self.assertTrue(door.ViewObject.Visibility)
-        self.assertFalse(door.ViewObject.Selectable)
+        self.assertTrue(door.ViewObject.Selectable)
         self.assertTrue(hasattr(proxy, "lcoords"))
         self.assertTrue(hasattr(proxy, "lset"))
         self.assertGreater(proxy.lcoords.point.getNum(), 0)
         self.assertGreater(proxy.lset.numVertices.getNum(), 0)
+
+    def test_plan_edit_selecting_hosted_door_does_not_enable_wall_grips(self):
+        """Hosted opening selection should not re-enter wall endpoint edit mode."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="SelectableDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(door.ViewObject.Selectable)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        self.assertIs(session.selected_opening, door)
+        self.assertIsNone(session.selected_wall)
+        self.assertEqual(len(session._grip_trackers), 0)
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
 
     def test_plan_edit_shows_grips_for_straight_base_wall(self):
         """Straight base-driven walls should get the same grip overlays as baseless walls."""
