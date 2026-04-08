@@ -816,7 +816,7 @@ class _Wall(ArchComponent.Component):
 
         import Part
 
-        shape = getattr(obj, "Shape", None)
+        shape = obj.Shape
         if shape and (not shape.isNull()) and shape.Solids:
             bb = shape.BoundBox
             if bb.ZLength > 0.001:

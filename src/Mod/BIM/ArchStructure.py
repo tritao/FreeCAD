@@ -921,7 +921,7 @@ class _Structure(ArchComponent.Component):
         if getattr(obj, "IfcType", "Beam") != "Slab":
             return []
 
-        shape = getattr(obj, "Shape", None)
+        shape = obj.Shape
         if not shape or shape.isNull():
             return []
 
@@ -1490,9 +1490,8 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
             del self.fcoords
         if hasattr(self, "fset"):
             del self.fset
-        if getattr(vobj, "DisplayMode", None) == "Footprint" and hasattr(vobj, "listDisplayModes"):
-            if "Flat Lines" in vobj.listDisplayModes():
-                vobj.DisplayMode = "Flat Lines"
+        if vobj.DisplayMode == "Footprint" and "Flat Lines" in vobj.listDisplayModes():
+            vobj.DisplayMode = "Flat Lines"
 
     def createFootprintGroup(self):
         """Set up a subtle filled footprint style for slabs."""

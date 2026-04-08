@@ -1690,39 +1690,32 @@ class ViewProviderComponent:
                             obj.ViewObject.DiffuseColor = obj.CloneOf.ViewObject.DiffuseColor
                             obj.ViewObject.update()
         if prop in ("Shape", "Placement"):
-            self.refreshFootprint(getattr(obj, "ViewObject", None))
+            self.refreshFootprint(obj.ViewObject)
         return
 
     def updateFootprint(self):
         self.fset.coordIndex.deleteValues(0)
         self.fcoords.point.deleteValues(0)
-        if hasattr(self, "Object"):
-            faces = self.Object.Proxy.getFootprint(self.Object)
-            if faces:
-                inverse_placement = None
-                placement = getattr(self.Object, "Placement", None)
-                if placement:
-                    try:
-                        inverse_placement = placement.inverse()
-                    except Exception:
-                        inverse_placement = None
-                verts = []
-                fdata = []
-                idx = 0
-                for face in faces:
-                    tri = face.tessellate(1)
-                    for v in tri[0]:
-                        # getFootprint() returns placed geometry. Store the
-                        # cached footprint node in object-local coordinates so
-                        # Placement changes do not double-transform it.
-                        if inverse_placement is not None:
-                            v = inverse_placement.multVec(v)
-                        verts.append([v.x, v.y, v.z])
-                    for f in tri[1]:
-                        fdata.extend([f[0] + idx, f[1] + idx, f[2] + idx, -1])
-                    idx += len(tri[0])
-                self.fcoords.point.setValues(verts)
-                self.fset.coordIndex.setValues(0, len(fdata), fdata)
+        faces = self.Object.Proxy.getFootprint(self.Object)
+        if faces:
+            inverse_placement = self.Object.Placement.inverse()
+            verts = []
+            fdata = []
+            idx = 0
+            for face in faces:
+                tri = face.tessellate(1)
+                for v in tri[0]:
+                    # getFootprint() returns placed geometry. Store the
+                    # cached footprint node in object-local coordinates so
+                    # Placement changes do not double-transform it.
+                    if inverse_placement is not None:
+                        v = inverse_placement.multVec(v)
+                    verts.append([v.x, v.y, v.z])
+                for f in tri[1]:
+                    fdata.extend([f[0] + idx, f[1] + idx, f[2] + idx, -1])
+                idx += len(tri[0])
+            self.fcoords.point.setValues(verts)
+            self.fset.coordIndex.setValues(0, len(fdata), fdata)
 
     def ensureFootprintGroup(self, vobj=None):
         """Ensure the generic Footprint display mode node exists.
@@ -1737,7 +1730,8 @@ class ViewProviderComponent:
         if not hasattr(self, "createFootprintGroup"):
             return None
         if vobj is None:
-            vobj = getattr(getattr(self, "Object", None), "ViewObject", None)
+            obj = getattr(self, "Object", None)
+            vobj = obj.ViewObject if obj else None
         if not vobj:
             return None
         try:
