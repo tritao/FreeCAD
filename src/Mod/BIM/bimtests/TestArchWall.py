@@ -559,6 +559,28 @@ class TestArchWall(TestArchBase.TestArchBase):
             msg="Placement.Rotation was not updated correctly.",
         )
 
+    def test_based_wall_stretch_api_debases_straight_wall(self):
+        """Straight line base walls should join the endpoint-editing API."""
+        self.printTestMessage("Checking based wall stretch API on straight base...")
+
+        import Draft
+
+        base = Draft.make_line(App.Vector(100, 200, 0), App.Vector(2100, 200, 0))
+        wall = Arch.makeWall(base, width=200, height=1500)
+        self.document.recompute()
+
+        endpoints = wall.Proxy.calc_endpoints(wall)
+        self.assertEqual(len(endpoints), 2)
+        self.assertTrue(endpoints[0].isEqual(App.Vector(100, 200, 0), 1e-6))
+        self.assertTrue(endpoints[1].isEqual(App.Vector(2100, 200, 0), 1e-6))
+
+        wall.Proxy.set_from_endpoints(wall, [App.Vector(0, 0, 0), App.Vector(4000, 0, 0)])
+        self.document.recompute()
+
+        self.assertIsNone(wall.Base, "Straight base wall should debase on first endpoint edit.")
+        self.assertAlmostEqual(wall.Length.Value, 4000.0, delta=1e-6)
+        self.assertTrue(wall.Placement.Base.isEqual(App.Vector(2000, 0, 0), 1e-6))
+
     def test_wall_makeblocks(self):
         """Test the 'MakeBlocks' feature for both based and baseless Arch Walls.
         This is a regression test for https://github.com/FreeCAD/FreeCAD/issues/26982,

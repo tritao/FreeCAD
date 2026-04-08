@@ -1510,7 +1510,13 @@ class _Wall(ArchComponent.Component):
         return None
 
     def calc_endpoints(self, obj):
-        """Returns the global start and end points of a baseless wall's centerline."""
+        """Returns the global start and end points of the wall centerline."""
+        import Arch
+
+        if getattr(obj, "Base", None) and Arch.is_debasable(obj):
+            base_edge = obj.Base.Shape.Edges[0]
+            return [base_edge.Vertexes[0].Point, base_edge.Vertexes[1].Point]
+
         # The wall's shape is centered, so its endpoints in local coordinates
         # are at (-Length/2, 0, 0) and (+Length/2, 0, 0).
         p1_local = FreeCAD.Vector(-obj.Length.Value / 2, 0, 0)
@@ -1523,9 +1529,23 @@ class _Wall(ArchComponent.Component):
         return [p1_global, p2_global]
 
     def set_from_endpoints(self, obj, pts):
-        """Sets the Length and Placement of a baseless wall from two global points."""
+        """Sets the wall from two global points.
+
+        Straight single-line base walls are automatically debased on first
+        endpoint edit so that Plan Edit and Draft stretch can use the same
+        endpoint-editing API for both old base-driven walls and new baseless
+        walls.
+        """
+        import Arch
+
         if len(pts) < 2:
             return
+
+        if getattr(obj, "Base", None):
+            if not Arch.is_debasable(obj):
+                return
+            if not Arch.debaseWall(obj):
+                return
 
         p1 = pts[0]
         p2 = pts[1]
@@ -1975,23 +1995,41 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
 
         from pivy import coin
 
-        tex = coin.SoTexture2()
-        image = Draft.loadTexture(Draft.svgpatterns()["simple"][1], 128)
-        if not image is None:
-            tex.image = image
-        texcoords = coin.SoTextureCoordinatePlane()
-        s = params.get_param_arch("patternScale")
-        texcoords.directionS.setValue(s, 0, 0)
-        texcoords.directionT.setValue(0, s, 0)
-
         self.fcoords = coin.SoCoordinate3()
         self.fset = coin.SoIndexedFaceSet()
+        self.lcoords = coin.SoCoordinate3()
+        self.lset = coin.SoLineSet()
+
+        fill_material = coin.SoMaterial()
+        fill_material.diffuseColor.setValue((0.84, 0.84, 0.82))
+        fill_material.transparency.setValue(0.2)
+        shape_hints = coin.SoShapeHints()
+        shape_hints.faceType = coin.SoShapeHints.UNKNOWN_FACE_TYPE
+
+        loffset = coin.SoPolygonOffset()
+        loffset.styles = coin.SoPolygonOffsetElement.LINES
+        loffset.factor = -1.0
+        loffset.units = -2.0
+        loffset.on = True
+        lstyle = coin.SoDrawStyle()
+        lstyle.lineWidth = 2
+        lmat = coin.SoBaseColor()
+        lmat.rgb = (0.15, 0.15, 0.15)
 
         sep = coin.SoSeparator()
-        sep.addChild(tex)
-        sep.addChild(texcoords)
-        sep.addChild(self.fcoords)
-        sep.addChild(self.fset)
+        fill_sep = coin.SoSeparator()
+        fill_sep.addChild(fill_material)
+        fill_sep.addChild(shape_hints)
+        fill_sep.addChild(self.fcoords)
+        fill_sep.addChild(self.fset)
+        line_sep = coin.SoSeparator()
+        line_sep.addChild(loffset)
+        line_sep.addChild(lmat)
+        line_sep.addChild(lstyle)
+        line_sep.addChild(self.lcoords)
+        line_sep.addChild(self.lset)
+        sep.addChild(fill_sep)
+        sep.addChild(line_sep)
 
         return sep
 
@@ -2064,6 +2102,49 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         if len(obj.ViewObject.DiffuseColor) > 1:
             # force-reset colors if changed
             obj.ViewObject.DiffuseColor = obj.ViewObject.DiffuseColor
+
+    def updateFootprint(self):
+        ArchComponent.ViewProviderComponent.updateFootprint(self)
+
+        if not hasattr(self, "lcoords") or not hasattr(self, "lset"):
+            return
+
+        self.lcoords.point.deleteValues(0)
+        self.lset.numVertices.deleteValues(0)
+
+        if not hasattr(self, "Object"):
+            return
+
+        faces = self.Object.Proxy.getFootprint(self.Object)
+        if not faces:
+            return
+
+        inverse_placement = None
+        placement = getattr(self.Object, "Placement", None)
+        if placement:
+            try:
+                inverse_placement = placement.inverse()
+            except Exception:
+                inverse_placement = None
+
+        line_verts = []
+        line_counts = []
+        for face in faces:
+            for wire in face.Wires:
+                for edge in wire.Edges:
+                    polyline = edge.tessellate(1)
+                    if len(polyline) < 2:
+                        continue
+                    start_idx = len(line_verts)
+                    for point in polyline:
+                        if inverse_placement is not None:
+                            point = inverse_placement.multVec(point)
+                        line_verts.append([point.x, point.y, point.z])
+                    line_counts.append(len(line_verts) - start_idx)
+
+        if line_verts:
+            self.lcoords.point.setValues(line_verts)
+            self.lset.numVertices.setValues(0, len(line_counts), line_counts)
 
     def getDisplayModes(self, vobj):
         """Define the display modes unique to the Arch Wall.
