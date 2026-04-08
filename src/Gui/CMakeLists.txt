@@ -1379,6 +1379,7 @@ SET(FreeCADGui_CPP_SRCS
     DocumentObserver.cpp
     DocumentObserverPython.cpp
     EditableDatumLabel.cpp
+    EditableDatumLabelPy.cpp
     ExpressionBinding.cpp
     ExpressionBindingPy.cpp
     GraphicsViewZoom.cpp
@@ -1421,6 +1422,7 @@ SET(FreeCADGui_SRCS
     DocumentObserver.h
     DocumentObserverPython.h
     EditableDatumLabel.h
+    EditableDatumLabelPy.h
     ExpressionBinding.h
     ExpressionBindingPy.h
     ExpressionCompleter.h

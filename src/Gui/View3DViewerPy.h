@@ -30,6 +30,7 @@ namespace Gui
 {
 
 class View3DInventorViewer;
+class EditableDatumLabelPy;
 
 /**
  * @brief Python interface for View3DInventorViewer
@@ -89,6 +90,7 @@ private:
     static PyObject* method_varargs_ext_handler(PyObject* _self, PyObject* _args);
 
 private:
+    friend class EditableDatumLabelPy;
     std::list<PyObject*> callbacks;
     View3DInventorViewer* _viewer;
     friend class View3DInventorViewer;

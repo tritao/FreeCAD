@@ -74,6 +74,7 @@
 #include "PreferencePages/DlgSettingsCacheDirectory.h"
 #include "DocumentPy.h"
 #include "DocumentRecovery.h"
+#include "EditableDatumLabelPy.h"
 #include "EditorView.h"
 #include "ExpressionBindingPy.h"
 #include "FileDialog.h"
@@ -573,6 +574,11 @@ Application::Application(bool GUIenabled)
         Base::Interpreter().addType(ExpressionBindingPy::type_object(),
                                     module,
                                     "ExpressionBinding");
+
+        EditableDatumLabelPy::init_type();
+        Base::Interpreter().addType(EditableDatumLabelPy::type_object(),
+                                    module,
+                                    "EditableDatumLabel");
 
         // insert Selection module
         static struct PyModuleDef SelectionModuleDef = {PyModuleDef_HEAD_INIT,
