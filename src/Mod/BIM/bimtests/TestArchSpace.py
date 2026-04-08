@@ -62,6 +62,22 @@ class TestArchSpace(TestArchBase.TestArchBase):
         s = Arch.makeSpace([b])
         self.assertTrue(s, "Arch Space failed")
 
+    def test_space_footprint_returns_face_list(self):
+        operation = "Checking Arch Space footprint contract..."
+        self.printTestMessage(operation)
+
+        base = App.ActiveDocument.addObject("Part::Feature", "SpaceBox")
+        base.Shape = Part.makeBox(1000, 500, 2000)
+        space = Arch.makeSpace([base])
+        App.ActiveDocument.recompute()
+
+        faces = space.Proxy.getFootprint(space)
+
+        self.assertIsInstance(faces, list)
+        self.assertEqual(len(faces), 1)
+        self.assertGreater(faces[0].Area, 0)
+        self.assertAlmostEqual(space.Proxy.getArea(space), faces[0].Area)
+
     def testSpaceBBox(self):
         operation = "Checking Arch Space bound box..."
         self.printTestMessage(operation)

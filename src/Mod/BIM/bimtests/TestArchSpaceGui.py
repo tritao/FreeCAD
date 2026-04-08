@@ -2,7 +2,7 @@
 
 # ***************************************************************************
 # *                                                                         *
-# *   Copyright (c) 2013 Yorik van Havre <yorik@uncreated.net>              *
+# *   Copyright (c) 2026 FreeCAD contributors                               *
 # *                                                                         *
 # *   This file is part of FreeCAD.                                         *
 # *                                                                         *
@@ -22,17 +22,27 @@
 # *                                                                         *
 # ***************************************************************************
 
-"""Import all Arch module unit tests in GUI mode."""
+"""GUI regressions for Arch Space footprint display."""
 
-from bimtests.TestArchImportersGui import TestArchImportersGui
-from bimtests.TestArchAxisGui import TestArchAxisGui
-from bimtests.TestArchBuildingPartGui import TestArchBuildingPartGui
-from bimtests.TestArchStairsGui import TestArchStairsGui
-from bimtests.TestArchFootprintGui import TestArchFootprintGui
-from bimtests.TestArchReportGui import TestArchReportGui
-from bimtests.TestArchSiteGui import TestArchSiteGui
-from bimtests.TestArchSpaceGui import TestArchSpaceGui
-from bimtests.TestArchStructureGui import TestArchStructureGui
-from bimtests.TestArchWallGui import TestArchWallGui
-from bimtests.TestWebGLExportGui import TestWebGLExportGui
-from bimtests.TestArchCoveringGui import TestArchCoveringGui
+import Arch
+import Part
+from bimtests import TestArchBaseGui
+
+
+class TestArchSpaceGui(TestArchBaseGui.TestArchBaseGui):
+
+    def test_space_populates_footprint_display_data(self):
+        """Spaces should expose footprint display data through the generic mode."""
+
+        base = self.document.addObject("Part::Feature", "GuiSpaceBox")
+        base.Shape = Part.makeBox(1000, 500, 2000)
+        space = Arch.makeSpace([base])
+        self.document.recompute()
+        self.pump_gui_events()
+
+        proxy = space.ViewObject.Proxy
+        self.assertIn("Footprint", space.ViewObject.listDisplayModes())
+        self.assertTrue(hasattr(proxy, "fcoords"))
+        self.assertTrue(hasattr(proxy, "fset"))
+        self.assertGreater(proxy.fcoords.point.getNum(), 0)
+        self.assertGreater(proxy.fset.coordIndex.getNum(), 0)
