@@ -25,6 +25,7 @@
 """GUI regressions for footprint display data."""
 
 import Arch
+import FreeCAD
 from bimtests import TestArchBaseGui
 
 
@@ -67,3 +68,26 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
 
         self.assertNotIn("Footprint", slab.ViewObject.listDisplayModes())
         self.assertNotEqual(slab.ViewObject.DisplayMode, "Footprint")
+
+    def test_wall_footprint_display_data_is_local_to_placement(self):
+        """Footprint display data should be stored in object-local coordinates."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        wall.Placement.Base = FreeCAD.Vector(1234, 5678, 0)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        points = wall.ViewObject.Proxy.fcoords.point
+        xs = []
+        ys = []
+        for idx in range(points.getNum()):
+            point = points[idx]
+            xs.append(point[0])
+            ys.append(point[1])
+
+        self.assertLess(min(xs), -1000)
+        self.assertGreater(max(xs), 1000)
+        self.assertLess(min(ys), 0)
+        self.assertGreater(max(ys), 0)
+        self.assertLess(max(abs(value) for value in xs), 5000)
+        self.assertLess(max(abs(value) for value in ys), 500)

@@ -1699,12 +1699,24 @@ class ViewProviderComponent:
         if hasattr(self, "Object"):
             faces = self.Object.Proxy.getFootprint(self.Object)
             if faces:
+                inverse_placement = None
+                placement = getattr(self.Object, "Placement", None)
+                if placement:
+                    try:
+                        inverse_placement = placement.inverse()
+                    except Exception:
+                        inverse_placement = None
                 verts = []
                 fdata = []
                 idx = 0
                 for face in faces:
                     tri = face.tessellate(1)
                     for v in tri[0]:
+                        # getFootprint() returns placed geometry. Store the
+                        # cached footprint node in object-local coordinates so
+                        # Placement changes do not double-transform it.
+                        if inverse_placement is not None:
+                            v = inverse_placement.multVec(v)
                         verts.append([v.x, v.y, v.z])
                     for f in tri[1]:
                         fdata.extend([f[0] + idx, f[1] + idx, f[2] + idx, -1])
