@@ -1,0 +1,1487 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+# ***************************************************************************
+# *                                                                         *
+# *   Copyright (c) 2026 FreeCAD Project Association                        *
+# *                                                                         *
+# *   This file is part of FreeCAD.                                         *
+# *                                                                         *
+# *   FreeCAD is free software: you can redistribute it and/or modify it    *
+# *   under the terms of the GNU Lesser General Public License as           *
+# *   published by the Free Software Foundation, either version 2.1 of the  *
+# *   License, or (at your option) any later version.                       *
+# *                                                                         *
+# *   FreeCAD is distributed in the hope that it will be useful, but        *
+# *   WITHOUT ANY WARRANTY; without even the implied warranty of            *
+# *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU      *
+# *   Lesser General Public License for more details.                       *
+# *                                                                         *
+# *   You should have received a copy of the GNU Lesser General Public      *
+# *   License along with FreeCAD. If not, see                               *
+# *   <https://www.gnu.org/licenses/>.                                      *
+# *                                                                         *
+# ***************************************************************************
+
+"""Session controller for BIM plan editing."""
+
+import FreeCAD
+import FreeCADGui
+
+QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
+translate = FreeCAD.Qt.translate
+
+_PLAN_PAPER_RGB = (0.9569, 0.9529, 0.9373)
+_DEFAULT_DOCK_AREA = 2
+
+_active_session = None
+
+
+def _view_param_group():
+    return FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View")
+
+
+def _unsigned_to_rgb(color):
+    return (
+        ((color >> 24) & 0xFF) / 255.0,
+        ((color >> 16) & 0xFF) / 255.0,
+        ((color >> 8) & 0xFF) / 255.0,
+    )
+
+
+def _mix_rgb(left, right, amount):
+    return tuple((1.0 - amount) * l + amount * r for l, r in zip(left, right))
+
+
+def _relative_luminance(color):
+    return 0.2126 * color[0] + 0.7152 * color[1] + 0.0722 * color[2]
+
+
+def _lift_for_plan_mode(color):
+    luminance = _relative_luminance(color)
+    if luminance < 0.25:
+        amount = 0.42
+    elif luminance < 0.55:
+        amount = 0.30
+    else:
+        amount = 0.18
+    return _mix_rgb(color, _PLAN_PAPER_RGB, amount)
+
+
+def _apply_viewer_background(viewer, state):
+    if not viewer or not state:
+        return
+
+    gradient_mode = "NONE"
+    if state.get("radial_gradient", False):
+        gradient_mode = "RADIAL"
+    elif state.get("gradient", False):
+        gradient_mode = "LINEAR"
+
+    viewer.setGradientBackground(gradient_mode)
+    viewer.setBackgroundColor(*state["background"])
+
+    if state.get("use_mid", False):
+        viewer.setGradientBackgroundColor(
+            state["background2"],
+            state["background3"],
+            state["background4"],
+        )
+    else:
+        viewer.setGradientBackgroundColor(state["background2"], state["background3"])
+
+
+def _make_plan_background_state(state):
+    if not state:
+        return None
+
+    return {
+        "gradient": state["gradient"],
+        "radial_gradient": state["radial_gradient"],
+        "use_mid": state["use_mid"],
+        "background": _lift_for_plan_mode(state["background"]),
+        "background2": _lift_for_plan_mode(state["background2"]),
+        "background3": _lift_for_plan_mode(state["background3"]),
+        "background4": _lift_for_plan_mode(state["background4"]),
+    }
+
+
+def get_active_session():
+    return _active_session
+
+
+def start_session():
+    global _active_session
+
+    if _active_session:
+        return _active_session
+
+    session = PlanEditSession()
+    if session.enter():
+        _active_session = session
+        return session
+    return None
+
+
+class PlanEditSession:
+    """Owns the viewer state and control dock for Plan Edit mode."""
+
+    def __init__(self):
+        from PySide import QtCore, QtGui
+
+        self.doc = FreeCAD.ActiveDocument
+        self.gui_doc = FreeCADGui.ActiveDocument
+        self.view = None
+        self.viewer = None
+        self.task_panel = None
+        self.current_tool = "Select"
+        self.storeys = []
+        self.active_storey = None
+        self.selected_wall = None
+        self._grip_trackers = []
+        self._selection_observer_added = False
+        self._edit_wall = None
+        self._edit_endpoint = None
+        self._edit_endpoints = None
+        self._preview_points = None
+        self._preview_line_tracker = None
+        self._preview_grip_trackers = []
+        self._edit_wall_visibility = None
+        self._dragging_grip = False
+        self._ignore_selection_changes = False
+        self._mouse_moved_cb = None
+        self._mouse_pressed_cb = None
+        self._key_pressed_cb = None
+        self._render_manager = None
+        self._saved_camera = None
+        self._saved_camera_type = None
+        self._saved_background = None
+        self._working_plane = None
+        self._tool_monitor = QtCore.QTimer()
+        self._tool_monitor.setInterval(150)
+        self._tool_monitor.timeout.connect(self._monitor_tools)
+        self._wall_tool_seen_active = False
+        self._wall_tool_pending_ticks = 0
+        self._finishing = False
+        self._tearing_down = False
+        app = QtGui.QApplication.instance()
+        if app:
+            app.aboutToQuit.connect(self.begin_teardown)
+
+    def enter(self):
+        if not self.doc or not self.gui_doc:
+            FreeCAD.Console.PrintError(
+                translate("BIM_PlanEdit", "An active document and 3D view are required.\n")
+            )
+            return False
+
+        self.view = self.gui_doc.ActiveView
+        if not self.view or not hasattr(self.view, "getViewer"):
+            FreeCAD.Console.PrintError(
+                translate("BIM_PlanEdit", "Plan Edit requires an active 3D Inventor view.\n")
+            )
+            return False
+
+        self.viewer = self.view.getViewer()
+        self._capture_state()
+
+        self.storeys = self.collect_storeys()
+        self.active_storey = self.find_initial_storey()
+        self.apply_plan_view()
+        self._attach_selection_observer()
+        self._register_edit_callbacks()
+        self._refresh_selected_wall()
+
+        panel = PlanEditDockWidget(self)
+        self.attach_task_panel(panel)
+        panel.refresh()
+        panel.show()
+        panel.raise_()
+        FreeCAD.Console.PrintMessage(
+            translate("BIM_PlanEdit", "Entered BIM Plan Edit mode.\n")
+        )
+        return True
+
+    def finish(self, cont=False, close_dialog=True, closed=False):
+        del cont, closed
+        if self._has_active_wall_edit():
+            self._cancel_wall_edit()
+            return True
+        return self.shutdown(close_dialog=close_dialog)
+
+    def begin_teardown(self):
+        if self._tearing_down:
+            return
+        self._tearing_down = True
+        self._cancel_wall_edit(restore=False, refresh=False)
+        self._cancel_pending_edit()
+        self._clear_wall_grips()
+        self._detach_selection_observer()
+        self._unregister_edit_callbacks()
+
+    def _discard_runtime_references(self):
+        self.doc = None
+        self.gui_doc = None
+        self.view = None
+        self.viewer = None
+        self.selected_wall = None
+        self._edit_wall = None
+        self._edit_endpoint = None
+        self._edit_endpoints = None
+        self._preview_points = None
+        self._edit_wall_visibility = None
+
+    def shutdown(self, close_dialog=True, teardown=False):
+        global _active_session
+
+        if self._finishing:
+            return True
+        self._finishing = True
+
+        try:
+            teardown = teardown or self._tearing_down
+            panel = self.task_panel
+            self.task_panel = None
+            self._cancel_wall_edit(restore=not teardown, refresh=False)
+            self._cancel_pending_edit()
+            self._clear_wall_grips()
+            self._detach_selection_observer()
+            self._unregister_edit_callbacks()
+            if panel:
+                panel.mark_closed()
+                if close_dialog and not teardown:
+                    panel.close()
+                else:
+                    panel.detach()
+            if teardown:
+                self._discard_runtime_references()
+            else:
+                self.restore_state()
+                if self.doc:
+                    try:
+                        self.doc.recompute()
+                    except ReferenceError:
+                        self.doc = None
+                    except RuntimeError:
+                        self.doc = None
+                FreeCAD.Console.PrintMessage(
+                    translate("BIM_PlanEdit", "Exited BIM Plan Edit mode.\n")
+                )
+        finally:
+            _active_session = None
+            self._finishing = False
+        return True
+
+    def collect_storeys(self):
+        import Draft
+
+        storeys = []
+        for obj in self.doc.Objects:
+            obj_type = Draft.getType(obj)
+            if obj_type == "Floor":
+                storeys.append(obj)
+            elif obj_type == "BuildingPart" and getattr(obj, "IfcType", "") == "Building Storey":
+                storeys.append(obj)
+
+        storeys.sort(key=lambda obj: self.get_storey_elevation(obj))
+        return storeys
+
+    def find_initial_storey(self):
+        import Draft
+
+        for obj in FreeCADGui.Selection.getSelection():
+            obj_type = Draft.getType(obj)
+            if obj_type == "Floor":
+                return obj
+            if obj_type == "BuildingPart" and getattr(obj, "IfcType", "") == "Building Storey":
+                return obj
+        if self.storeys:
+            return self.storeys[0]
+        return None
+
+    def get_storey_elevation(self, obj):
+        if hasattr(obj, "Placement"):
+            return obj.Placement.Base.z
+        return 0.0
+
+    def get_storey_label(self, obj):
+        if not obj:
+            return translate("BIM_PlanEdit", "Global XY (Z=0)")
+        elevation = FreeCAD.Units.Quantity(
+            self.get_storey_elevation(obj), FreeCAD.Units.Length
+        ).UserString
+        return f"{obj.Label} [{elevation}]"
+
+    def set_active_storey(self, storey):
+        self.active_storey = storey
+        self.apply_plan_view(fit=False)
+        self._refresh_task_panel_status()
+
+    def activate_select_tool(self):
+        self._cancel_wall_edit()
+
+    def activate_wall_tool(self):
+        self.current_tool = "Wall"
+        self._cancel_wall_edit()
+        self._cancel_pending_edit()
+        self._wall_tool_seen_active = False
+        self._wall_tool_pending_ticks = 0
+        self.selected_wall = None
+        self._clear_wall_grips()
+        try:
+            FreeCADGui.Selection.clearSelection()
+        except (ReferenceError, RuntimeError):
+            pass
+        self._refresh_task_panel_status()
+        FreeCADGui.runCommand("Arch_Wall")
+        self._tool_monitor.start()
+
+    def stretch_selected_wall(self, endpoint):
+        self._start_wall_edit(endpoint)
+
+    def move_selected_wall(self):
+        self._start_wall_edit("Move")
+
+    def is_selected_wall_baseless(self):
+        wall = self.selected_wall
+        if not wall:
+            return False
+        if getattr(wall, "Base", None):
+            return False
+        proxy = getattr(wall, "Proxy", None)
+        return hasattr(proxy, "calc_endpoints") and hasattr(proxy, "set_from_endpoints")
+
+    def apply_plan_view(self, fit=True):
+        import WorkingPlane
+
+        if self.view:
+            try:
+                self.view.setCameraType("Orthographic")
+                self.view.viewTop()
+            except RuntimeError:
+                self.view = None
+
+        if self.viewer:
+            try:
+                self.viewer.setOverrideMode("Footprint")
+                if self._saved_background:
+                    _apply_viewer_background(
+                        self.viewer,
+                        _make_plan_background_state(self._saved_background),
+                    )
+            except RuntimeError:
+                self.viewer = None
+
+        wp = WorkingPlane.get_working_plane(update=False)
+        offset = self.get_storey_elevation(self.active_storey) if self.active_storey else 0.0
+        wp.set_to_top(offset=offset)
+
+        if self.active_storey:
+            self._set_active_object(self.active_storey)
+
+        if fit and self.view:
+            try:
+                self.view.fitAll()
+            except RuntimeError:
+                self.view = None
+
+    def restore_state(self):
+        import WorkingPlane
+
+        if self.viewer:
+            try:
+                self.viewer.setOverrideMode("As Is")
+                if self._saved_background:
+                    _apply_viewer_background(self.viewer, self._saved_background)
+            except RuntimeError:
+                self.viewer = None
+
+        if self.view and self._saved_camera_type:
+            try:
+                self.view.setCameraType(self._saved_camera_type)
+            except RuntimeError:
+                self.view = None
+        if self.view and self._saved_camera:
+            try:
+                self.view.setCamera(self._saved_camera)
+            except RuntimeError:
+                self.view = None
+
+        wp = self._working_plane or WorkingPlane.get_working_plane(update=False)
+        if hasattr(wp, "restore"):
+            try:
+                wp.restore()
+                wp._update_all(_hist_add=False)
+            except RuntimeError:
+                pass
+
+    def _capture_state(self):
+        import WorkingPlane
+
+        if self.view and hasattr(self.view, "getCamera"):
+            self._saved_camera = self.view.getCamera()
+        if self.view and hasattr(self.view, "getCameraType"):
+            self._saved_camera_type = self.view.getCameraType()
+        self._saved_background = self._capture_background_state()
+
+        self._working_plane = WorkingPlane.get_working_plane(update=False)
+        if hasattr(self._working_plane, "save"):
+            self._working_plane.save()
+
+    def _capture_background_state(self):
+        params = _view_param_group()
+        return {
+            "gradient": params.GetBool("Gradient", True),
+            "radial_gradient": params.GetBool("RadialGradient", False),
+            "use_mid": params.GetBool("UseBackgroundColorMid", False),
+            "background": _unsigned_to_rgb(params.GetUnsigned("BackgroundColor", 3940932863)),
+            "background2": _unsigned_to_rgb(params.GetUnsigned("BackgroundColor2", 859006463)),
+            "background3": _unsigned_to_rgb(params.GetUnsigned("BackgroundColor3", 2880160255)),
+            "background4": _unsigned_to_rgb(params.GetUnsigned("BackgroundColor4", 1869583359)),
+        }
+
+    def _set_active_object(self, obj):
+        context = "Arch"
+        if getattr(obj, "IfcType", "") == "Building Storey":
+            context = "NativeIFC"
+        try:
+            self.view.setActiveObject(context, obj)
+        except Exception:
+            pass
+
+    def _attach_selection_observer(self):
+        if not self._selection_observer_added:
+            FreeCADGui.Selection.addObserver(self)
+            self._selection_observer_added = True
+
+    def _detach_selection_observer(self):
+        if self._selection_observer_added:
+            FreeCADGui.Selection.removeObserver(self)
+            self._selection_observer_added = False
+
+    def _register_edit_callbacks(self):
+        try:
+            from pivy import coin
+        except Exception:
+            return
+
+        if not self.view or not hasattr(self.view, "addEventCallbackPivy"):
+            return
+
+        try:
+            self._render_manager = self.view.getViewer().getSoRenderManager()
+            if self._key_pressed_cb is None:
+                self._key_pressed_cb = self.view.addEventCallbackPivy(
+                    coin.SoKeyboardEvent.getClassTypeId(), self._on_key_pressed
+                )
+            if self._mouse_moved_cb is None:
+                self._mouse_moved_cb = self.view.addEventCallbackPivy(
+                    coin.SoLocation2Event.getClassTypeId(), self._on_mouse_moved
+                )
+            if self._mouse_pressed_cb is None:
+                self._mouse_pressed_cb = self.view.addEventCallbackPivy(
+                    coin.SoMouseButtonEvent.getClassTypeId(), self._on_mouse_pressed
+                )
+        except RuntimeError:
+            self._render_manager = None
+
+    def _unregister_edit_callbacks(self):
+        try:
+            from pivy import coin
+        except Exception:
+            self._key_pressed_cb = None
+            self._mouse_moved_cb = None
+            self._mouse_pressed_cb = None
+            self._render_manager = None
+            return
+
+        if not self.view:
+            self._key_pressed_cb = None
+            self._mouse_moved_cb = None
+            self._mouse_pressed_cb = None
+            self._render_manager = None
+            return
+
+        try:
+            if self._key_pressed_cb:
+                self.view.removeEventCallbackSWIG(
+                    coin.SoKeyboardEvent.getClassTypeId(), self._key_pressed_cb
+                )
+            if self._mouse_moved_cb:
+                self.view.removeEventCallbackSWIG(
+                    coin.SoLocation2Event.getClassTypeId(), self._mouse_moved_cb
+                )
+            if self._mouse_pressed_cb:
+                self.view.removeEventCallbackSWIG(
+                    coin.SoMouseButtonEvent.getClassTypeId(), self._mouse_pressed_cb
+                )
+        except RuntimeError:
+            pass
+
+        self._key_pressed_cb = None
+        self._mouse_moved_cb = None
+        self._mouse_pressed_cb = None
+        self._render_manager = None
+
+    def _refresh_selected_wall(self):
+        if self._tearing_down:
+            return
+        if self._ignore_selection_changes:
+            return
+        import Draft
+
+        previous_wall = self.selected_wall
+        self.selected_wall = None
+        try:
+            selection = FreeCADGui.Selection.getSelection()
+        except (ReferenceError, RuntimeError):
+            return
+        if len(selection) == 1 and Draft.getType(selection[0]) == "Wall":
+            self.selected_wall = selection[0]
+        if previous_wall != self.selected_wall:
+            self._sync_wall_grips()
+        self._refresh_task_panel_status()
+
+    def _cancel_pending_edit(self):
+        if self._tearing_down:
+            self._tool_monitor.stop()
+            self._wall_tool_seen_active = False
+            self._wall_tool_pending_ticks = 0
+            self._restore_edit_wall_visibility()
+            self._clear_drag_preview()
+            self._edit_wall = None
+            self._edit_endpoint = None
+            self._edit_endpoints = None
+            self._preview_points = None
+            self._dragging_grip = False
+            self._ignore_selection_changes = False
+            return
+        self._stop_snapper()
+        FreeCAD.activeDraftCommand = None
+        self._restore_edit_wall_visibility()
+        self._clear_drag_preview()
+        self._edit_wall = None
+        self._edit_endpoint = None
+        self._edit_endpoints = None
+        self._preview_points = None
+        self._dragging_grip = False
+        self._ignore_selection_changes = False
+        self._sync_wall_grips()
+        self._tool_monitor.stop()
+        self._wall_tool_seen_active = False
+        self._wall_tool_pending_ticks = 0
+
+    def _stop_snapper(self):
+        snapper = getattr(FreeCADGui, "Snapper", None)
+        if not snapper:
+            return
+        try:
+            snapper.getPoint()
+            snapper.off()
+        except Exception:
+            pass
+
+    def _has_active_wall_edit(self):
+        return self._edit_wall is not None or self._dragging_grip or self._is_wall_command_active()
+
+    def _cancel_wall_edit(self, restore=True, refresh=True):
+        if not self._has_active_wall_edit():
+            if refresh:
+                self.current_tool = "Select"
+                self._refresh_task_panel_status()
+            return False
+
+        self._cancel_wall_subtool()
+
+        if restore and self._dragging_grip:
+            self._cancel_drag_edit()
+            return True
+
+        self.current_tool = "Select"
+        self._cancel_pending_edit()
+        if refresh:
+            self._refresh_task_panel_status()
+        return True
+
+    def _cancel_wall_subtool(self):
+        if self._tearing_down or not self._is_wall_command_active():
+            return
+
+        command = getattr(FreeCAD, "activeDraftCommand", None)
+        if command and hasattr(command, "cancel_interactive"):
+            try:
+                command.cancel_interactive()
+                return
+            except Exception:
+                pass
+
+        toolbar = getattr(FreeCADGui, "draftToolBar", None)
+        escaped = False
+        if toolbar:
+            try:
+                toolbar.escape()
+                escaped = True
+            except Exception:
+                pass
+
+        if FreeCADGui.ActiveDocument:
+            try:
+                FreeCADGui.ActiveDocument.resetEdit()
+            except Exception:
+                pass
+
+        if getattr(FreeCADGui, "Snapper", None):
+            try:
+                FreeCADGui.Snapper.off()
+            except Exception:
+                pass
+
+        if toolbar and (
+            not escaped
+            or getattr(toolbar, "isTaskOn", False)
+            or getattr(toolbar, "cancel", None)
+            or getattr(toolbar, "pointcallback", None)
+        ):
+            try:
+                toolbar.offUi()
+                toolbar.sourceCmd = None
+                toolbar.pointcallback = None
+                toolbar.cancel = None
+                toolbar.mask = None
+                toolbar.isTaskOn = False
+            except Exception:
+                pass
+
+        try:
+            FreeCADGui.Control.closeDialog()
+        except Exception:
+            pass
+
+        FreeCAD.activeDraftCommand = None
+
+    def _start_wall_edit(self, mode):
+        if not self.is_selected_wall_baseless():
+            FreeCAD.Console.PrintError(
+                translate(
+                    "BIM_PlanEdit",
+                    "Select a baseless wall before using wall grips.\n",
+                )
+            )
+            return
+
+        wall = self.selected_wall
+        proxy = getattr(wall, "Proxy", None)
+        if not proxy or not hasattr(proxy, "calc_endpoints") or not hasattr(proxy, "set_from_endpoints"):
+            return
+
+        endpoints = proxy.calc_endpoints(wall)
+        if len(endpoints) != 2:
+            return
+
+        self.current_tool = "Move Wall" if mode == "Move" else f"Stretch {mode}"
+        self._edit_wall = wall
+        self._edit_endpoint = mode
+        self._edit_endpoints = endpoints
+        self._clear_wall_grips()
+        self._refresh_task_panel_status()
+
+        title = {
+            "Start": translate("BIM_PlanEdit", "Pick new start point"),
+            "End": translate("BIM_PlanEdit", "Pick new end point"),
+            "Move": translate("BIM_PlanEdit", "Pick new wall midpoint"),
+        }.get(mode, translate("BIM_PlanEdit", "Pick wall point"))
+
+        FreeCAD.activeDraftCommand = self
+        FreeCADGui.Snapper.getPoint(
+            callback=self._finish_wall_edit,
+            title=title,
+        )
+
+    def _finish_wall_edit(self, point=None, obj=None):
+        del obj
+
+        wall = self._edit_wall
+        endpoint = self._edit_endpoint
+        original_endpoints = self._edit_endpoints
+        self._edit_wall = None
+        self._edit_endpoint = None
+        self._edit_endpoints = None
+        FreeCAD.activeDraftCommand = None
+
+        if point is None or not wall or not endpoint:
+            self.current_tool = "Select"
+            self._refresh_task_panel_status()
+            return
+
+        proxy = getattr(wall, "Proxy", None)
+        if not proxy or not hasattr(proxy, "calc_endpoints") or not hasattr(proxy, "set_from_endpoints"):
+            self.current_tool = "Select"
+            self._refresh_task_panel_status()
+            return
+
+        if not original_endpoints or len(original_endpoints) != 2:
+            self.current_tool = "Select"
+            self._refresh_task_panel_status()
+            return
+
+        if endpoint == "Start":
+            new_points = [point, original_endpoints[1]]
+            transaction_name = translate("BIM_PlanEdit", "Stretch Wall Endpoint")
+        elif endpoint == "End":
+            new_points = [original_endpoints[0], point]
+            transaction_name = translate("BIM_PlanEdit", "Stretch Wall Endpoint")
+        else:
+            original_midpoint = (original_endpoints[0] + original_endpoints[1]) * 0.5
+            delta = point.sub(original_midpoint)
+            new_points = [original_endpoints[0].add(delta), original_endpoints[1].add(delta)]
+            transaction_name = translate("BIM_PlanEdit", "Move Wall")
+
+        self.doc.openTransaction(transaction_name)
+        proxy.set_from_endpoints(wall, new_points)
+        self.doc.commitTransaction()
+        try:
+            self.doc.recompute()
+        except (ReferenceError, RuntimeError):
+            self.doc = None
+            self.current_tool = "Select"
+            return
+
+        try:
+            FreeCADGui.Selection.clearSelection()
+            FreeCADGui.Selection.addSelection(wall)
+        except (ReferenceError, RuntimeError):
+            pass
+        self.current_tool = "Select"
+        self._sync_wall_grips()
+        self._refresh_task_panel_status()
+
+    def _begin_grip_drag(self, grip_index):
+        if grip_index not in (0, 1, 2) or not self.is_selected_wall_baseless():
+            return
+
+        wall = self.selected_wall
+        proxy = getattr(wall, "Proxy", None)
+        if not proxy or not hasattr(proxy, "calc_endpoints"):
+            return
+
+        endpoints = proxy.calc_endpoints(wall)
+        if len(endpoints) != 2:
+            return
+
+        self._dragging_grip = True
+        self._ignore_selection_changes = True
+        self._edit_wall = wall
+        self._edit_endpoint = {0: "Start", 1: "End", 2: "Move"}[grip_index]
+        self._edit_endpoints = endpoints
+        self._preview_points = list(endpoints)
+        self.current_tool = "Move Wall" if grip_index == 2 else f"Stretch {self._edit_endpoint}"
+        self._edit_wall_visibility = None
+        try:
+            self._edit_wall_visibility = wall.ViewObject.Visibility
+            wall.ViewObject.Visibility = False
+        except Exception:
+            self._edit_wall_visibility = None
+        self._clear_wall_grips()
+        self._sync_drag_preview(self._preview_points)
+        FreeCAD.activeDraftCommand = self
+        if getattr(FreeCADGui, "Snapper", None):
+            try:
+                FreeCADGui.Snapper.setSelectMode(False)
+            except Exception:
+                pass
+        self._refresh_task_panel_status()
+
+    def _compute_drag_points(self, point):
+        endpoint = self._edit_endpoint
+        original_endpoints = self._edit_endpoints
+        if point is None or not endpoint or not original_endpoints:
+            return None
+
+        if endpoint == "Start":
+            return [point, original_endpoints[1]]
+        elif endpoint == "End":
+            return [original_endpoints[0], point]
+
+        original_midpoint = (original_endpoints[0] + original_endpoints[1]) * 0.5
+        delta = point.sub(original_midpoint)
+        return [original_endpoints[0].add(delta), original_endpoints[1].add(delta)]
+
+    def _sync_drag_preview(self, points):
+        if not points or len(points) != 2:
+            return
+
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+            from draftutils import params
+        except Exception:
+            return
+
+        if self._preview_line_tracker is None:
+            self._preview_line_tracker = DraftTrackers.lineTracker(ontop=True)
+            self._preview_line_tracker.on()
+        self._preview_line_tracker.p1(points[0])
+        self._preview_line_tracker.p2(points[1])
+
+        midpoint = (points[0] + points[1]) * 0.5
+        midpoint_marker = FreeCADGui.getMarkerIndex(
+            "DIAMOND_FILLED", params.get_param_view("MarkerSize")
+        )
+
+        grip_specs = (
+            (points[0], 0, None),
+            (points[1], 1, None),
+            (midpoint, 2, midpoint_marker),
+        )
+        if not self._preview_grip_trackers:
+            for position, idx, marker in grip_specs:
+                tracker = DraftTrackers.editTracker(
+                    pos=position,
+                    idx=idx,
+                    marker=marker,
+                    inactive=True,
+                )
+                tracker.on()
+                self._preview_grip_trackers.append(tracker)
+            return
+
+        for tracker, (position, _idx, _marker) in zip(self._preview_grip_trackers, grip_specs):
+            tracker.set(position)
+            tracker.on()
+
+    def _clear_drag_preview(self):
+        if self._preview_line_tracker:
+            try:
+                self._preview_line_tracker.finalize()
+            except Exception:
+                pass
+        self._preview_line_tracker = None
+
+        for tracker in self._preview_grip_trackers:
+            try:
+                tracker.finalize()
+            except Exception:
+                pass
+        self._preview_grip_trackers = []
+
+    def _restore_edit_wall_visibility(self):
+        wall = self._edit_wall
+        if wall is not None and self._edit_wall_visibility is not None:
+            try:
+                wall.ViewObject.Visibility = self._edit_wall_visibility
+            except Exception:
+                pass
+        self._edit_wall_visibility = None
+
+    def _update_dragged_wall(self, point):
+        new_points = self._compute_drag_points(point)
+        if not new_points:
+            return
+        self._preview_points = new_points
+        self._sync_drag_preview(new_points)
+
+    def _cancel_drag_edit(self):
+        self.current_tool = "Select"
+        self._cancel_pending_edit()
+        self._refresh_task_panel_status()
+
+    def _commit_drag_edit(self):
+        wall = self._edit_wall
+        endpoint = self._edit_endpoint
+        preview_points = self._preview_points
+        if not wall or not endpoint or not preview_points or len(preview_points) != 2:
+            self._cancel_pending_edit()
+            self.current_tool = "Select"
+            self._refresh_task_panel_status()
+            return
+
+        proxy = getattr(wall, "Proxy", None)
+        if not proxy or not hasattr(proxy, "set_from_endpoints"):
+            self._cancel_pending_edit()
+            self.current_tool = "Select"
+            self._refresh_task_panel_status()
+            return
+
+        if self.doc:
+            try:
+                transaction_name = (
+                    translate("BIM_PlanEdit", "Move Wall")
+                    if endpoint == "Move"
+                    else translate("BIM_PlanEdit", "Stretch Wall Endpoint")
+                )
+                self.doc.openTransaction(transaction_name)
+                proxy.set_from_endpoints(wall, preview_points)
+                self.doc.commitTransaction()
+                self.doc.recompute()
+            except Exception:
+                try:
+                    self.doc.abortTransaction()
+                except Exception:
+                    pass
+                self._cancel_pending_edit()
+                self.current_tool = "Select"
+                self._refresh_task_panel_status()
+                return
+
+        try:
+            FreeCADGui.Selection.clearSelection()
+            FreeCADGui.Selection.addSelection(wall)
+        except (ReferenceError, RuntimeError):
+            pass
+
+        self.current_tool = "Select"
+        self._cancel_pending_edit()
+        self.selected_wall = wall
+        self._sync_wall_grips()
+        self._refresh_task_panel_status()
+
+    def _get_edit_node(self, mouse_pos):
+        if not self._render_manager:
+            return None
+        try:
+            from pivy import coin
+        except Exception:
+            return None
+
+        ray_pick = coin.SoRayPickAction(self._render_manager.getViewportRegion())
+        ray_pick.setPoint(coin.SbVec2s(*mouse_pos))
+        ray_pick.setRadius(8)
+        ray_pick.setPickAll(True)
+        ray_pick.apply(self._render_manager.getSceneGraph())
+        picked_points = ray_pick.getPickedPointList()
+        if not picked_points:
+            return None
+
+        for picked_point in picked_points:
+            path = picked_point.getPath()
+            point = path.getNode(path.getLength() - 2)
+            if hasattr(point, "subElementName") and "EditNode" in str(point.subElementName.getValue()):
+                return point
+        return None
+
+    def _get_snapped_drag_point(self, event):
+        if not getattr(FreeCADGui, "Snapper", None):
+            return None
+
+        pos = event.getPosition().getValue()
+        constrain = bool(event.wasShiftDown())
+        reference = None
+        if self._edit_endpoints:
+            if self._edit_endpoint == "Move":
+                reference = (self._edit_endpoints[0] + self._edit_endpoints[1]) * 0.5
+            elif self._edit_endpoint == "Start":
+                reference = self._edit_endpoints[1]
+            else:
+                reference = self._edit_endpoints[0]
+        try:
+            return FreeCADGui.Snapper.snap((pos[0], pos[1]), reference, constrain=constrain)
+        except Exception:
+            return None
+
+    def _on_mouse_pressed(self, event_callback):
+        if self._tearing_down:
+            return
+        try:
+            from pivy import coin
+        except Exception:
+            return
+
+        event = event_callback.getEvent()
+        if event.getButton() != coin.SoMouseButtonEvent.BUTTON1:
+            return
+
+        if event.getState() == coin.SoMouseButtonEvent.DOWN:
+            if self._dragging_grip:
+                return
+            if self.current_tool != "Select":
+                return
+            pos = event.getPosition().getValue()
+            node = self._get_edit_node((pos[0], pos[1]))
+            if not node:
+                return
+            try:
+                doc = FreeCAD.getDocument(str(node.documentName.getValue()))
+                obj = doc.getObject(str(node.objectName.getValue()))
+                index = int(str(node.subElementName.getValue())[8:])
+            except Exception:
+                return
+            if obj != self.selected_wall:
+                self.selected_wall = obj
+            self._begin_grip_drag(index)
+        elif event.getState() == coin.SoMouseButtonEvent.UP and self._dragging_grip:
+            self._commit_drag_edit()
+
+    def _on_mouse_moved(self, event_callback):
+        if self._tearing_down or not self._dragging_grip:
+            return
+        event = event_callback.getEvent()
+        snapped_point = self._get_snapped_drag_point(event)
+        if snapped_point is None:
+            return
+        self._update_dragged_wall(snapped_point)
+
+    def _on_key_pressed(self, event_callback):
+        if self._tearing_down or not self._dragging_grip:
+            return
+        try:
+            from pivy import coin
+        except Exception:
+            return
+        event = event_callback.getEvent()
+        if event.getKey() == coin.SoKeyboardEvent.ESCAPE:
+            self._cancel_drag_edit()
+
+    # Selection observer interface
+
+    def addSelection(self, doc, obj, sub, point):
+        if self._tearing_down:
+            return
+        if self._ignore_selection_changes:
+            return
+        if sub in ("EditNode0", "EditNode1", "EditNode2"):
+            self.selected_wall = FreeCAD.getDocument(doc).getObject(obj)
+            self._clear_wall_grips()
+            edit_mode = {
+                "EditNode0": "Start",
+                "EditNode1": "End",
+                "EditNode2": "Move",
+            }[sub]
+            if edit_mode == "Move":
+                self.move_selected_wall()
+            else:
+                self.stretch_selected_wall(edit_mode)
+            return
+        del doc, obj, sub, point
+        self._refresh_selected_wall()
+
+    def removeSelection(self, doc, obj, sub):
+        if self._tearing_down:
+            return
+        if self._ignore_selection_changes:
+            return
+        del doc, obj, sub
+        self._refresh_selected_wall()
+
+    def setSelection(self, doc):
+        if self._tearing_down:
+            return
+        if self._ignore_selection_changes:
+            return
+        del doc
+        self._refresh_selected_wall()
+
+    def clearSelection(self, doc):
+        if self._tearing_down:
+            return
+        if self._ignore_selection_changes:
+            return
+        del doc
+        self._refresh_selected_wall()
+
+    def _monitor_tools(self):
+        if self._tearing_down:
+            self._tool_monitor.stop()
+            return
+        if self.current_tool != "Wall":
+            self._tool_monitor.stop()
+            self._wall_tool_seen_active = False
+            self._wall_tool_pending_ticks = 0
+            return
+
+        if self._is_wall_command_active():
+            self._wall_tool_seen_active = True
+            self._wall_tool_pending_ticks = 0
+            return
+
+        self._wall_tool_pending_ticks += 1
+
+        # Wait a few timer ticks so we don't revert before the wall command
+        # has actually started its interactive mode.
+        if not self._wall_tool_seen_active and self._wall_tool_pending_ticks < 10:
+            return
+
+        self.current_tool = "Select"
+        self._tool_monitor.stop()
+        self._wall_tool_seen_active = False
+        self._wall_tool_pending_ticks = 0
+        self._refresh_task_panel_status()
+
+    def _is_wall_command_active(self):
+        command = getattr(FreeCAD, "activeDraftCommand", None)
+        if command is None:
+            return False
+
+        feature_name = getattr(command, "featureName", "")
+        if feature_name == "Wall":
+            return True
+
+        return command.__class__.__name__ == "Arch_Wall"
+
+    def attach_task_panel(self, panel):
+        if self.task_panel is panel:
+            return
+        self.task_panel = panel
+
+    def detach_task_panel(self):
+        panel = self.task_panel
+        self.task_panel = None
+        if panel:
+            panel.mark_closed()
+            panel.detach()
+        return panel
+
+    def on_panel_closed(self, panel):
+        if self.task_panel is panel:
+            self.task_panel = None
+            if not self._finishing:
+                self.shutdown(close_dialog=False, teardown=self._tearing_down)
+            return
+        panel.mark_closed()
+        panel.detach()
+
+    def _refresh_task_panel_status(self):
+        if self._tearing_down:
+            return
+        panel = self.task_panel
+        if not panel:
+            return
+        try:
+            panel.refresh_from_session()
+        except (AttributeError, RuntimeError):
+            self.on_panel_closed(panel)
+
+    def _sync_wall_grips(self):
+        self._clear_wall_grips()
+        if not self.is_selected_wall_baseless():
+            return
+
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+            from draftutils import params
+        except Exception:
+            return
+
+        wall = self.selected_wall
+        proxy = getattr(wall, "Proxy", None)
+        if not proxy or not hasattr(proxy, "calc_endpoints"):
+            return
+
+        endpoints = proxy.calc_endpoints(wall)
+        if len(endpoints) != 2:
+            return
+
+        midpoint = (endpoints[0] + endpoints[1]) * 0.5
+        midpoint_marker = FreeCADGui.getMarkerIndex(
+            "DIAMOND_FILLED", params.get_param_view("MarkerSize")
+        )
+
+        self._grip_trackers = [
+            DraftTrackers.editTracker(pos=endpoints[0], name=wall.Name, idx=0),
+            DraftTrackers.editTracker(pos=endpoints[1], name=wall.Name, idx=1),
+            DraftTrackers.editTracker(
+                pos=midpoint,
+                name=wall.Name,
+                idx=2,
+                marker=midpoint_marker,
+            ),
+        ]
+
+    def _clear_wall_grips(self):
+        for tracker in self._grip_trackers:
+            try:
+                tracker.finalize()
+            except Exception:
+                pass
+        self._grip_trackers = []
+
+
+class PlanEditDockWidget:
+    """Compact modeless dock for Plan Edit mode."""
+
+    def __init__(self, session):
+        from PySide import QtCore, QtGui
+
+        self.session = session
+        self._storey_items = []
+        self._closed = False
+        self._params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit")
+        self._dock = _PlanEditDock(self)
+
+        self.form = self._dock
+        self.form.setWindowTitle(translate("BIM_PlanEdit", "Plan Edit"))
+        self.form.setObjectName("BIMPlanEditDock")
+        self.form.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
+        self.form.setAllowedAreas(
+            QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea
+        )
+        self.form.setFeatures(
+            QtGui.QDockWidget.DockWidgetClosable
+            | QtGui.QDockWidget.DockWidgetMovable
+            | QtGui.QDockWidget.DockWidgetFloatable
+        )
+
+        container = QtGui.QWidget()
+        layout = QtGui.QVBoxLayout(container)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+        container.setMinimumWidth(280)
+        container.setMaximumWidth(360)
+
+        intro = QtGui.QLabel(
+            translate(
+                "BIM_PlanEdit",
+                "Plan authoring mode for the active storey.",
+            )
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        storey_row = QtGui.QHBoxLayout()
+        storey_row.setSpacing(6)
+        storey_label = QtGui.QLabel(translate("BIM_PlanEdit", "Storey"))
+        self.storey_combo = QtGui.QComboBox()
+        self.storey_combo.currentIndexChanged.connect(self.on_storey_changed)
+        storey_row.addWidget(storey_label)
+        storey_row.addWidget(self.storey_combo, 1)
+        layout.addLayout(storey_row)
+
+        buttons = QtGui.QHBoxLayout()
+        buttons.setSpacing(6)
+        self.select_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Select"))
+        self.wall_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Wall"))
+        self.reapply_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Reapply View"))
+        self.select_button.clicked.connect(self.on_select_clicked)
+        self.wall_button.clicked.connect(self.on_wall_clicked)
+        self.reapply_button.clicked.connect(self.on_reapply_clicked)
+        buttons.addWidget(self.select_button)
+        buttons.addWidget(self.wall_button)
+        buttons.addWidget(self.reapply_button)
+        layout.addLayout(buttons)
+
+        stretch_buttons = QtGui.QHBoxLayout()
+        stretch_buttons.setSpacing(6)
+        self.stretch_start_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Stretch Start"))
+        self.stretch_end_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Stretch End"))
+        self.stretch_start_button.clicked.connect(self.on_stretch_start_clicked)
+        self.stretch_end_button.clicked.connect(self.on_stretch_end_clicked)
+        stretch_buttons.addWidget(self.stretch_start_button)
+        stretch_buttons.addWidget(self.stretch_end_button)
+        layout.addLayout(stretch_buttons)
+
+        self.status = QtGui.QLabel("")
+        self.status.setWordWrap(True)
+        layout.addWidget(self.status)
+
+        self.exit_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Exit Plan Edit"))
+        self.exit_button.clicked.connect(self.on_exit_clicked)
+        self.exit_button.setMinimumHeight(32)
+        layout.addWidget(self.exit_button)
+
+        container.setLayout(layout)
+        self.form.setWidget(container)
+        FreeCADGui.getMainWindow().addDockWidget(QtCore.Qt.RightDockWidgetArea, self.form)
+        self._apply_initial_placement(QtCore)
+        QtCore.QMetaObject.connectSlotsByName(container)
+
+    def show(self):
+        if self._closed or self.form is None:
+            return
+        self.form.show()
+
+    def raise_(self):
+        if self._closed or self.form is None:
+            return
+        self.form.raise_()
+
+    def activateWindow(self):
+        if self._closed or self.form is None:
+            return
+        self.form.activateWindow()
+
+    def mark_closed(self):
+        self._closed = True
+
+    def save_state(self):
+        if self.form is None:
+            return
+        try:
+            geometry = self.form.geometry()
+            self._params.SetBool("DockPlacementSaved", True)
+            self._params.SetBool("DockFloating", self.form.isFloating())
+            self._params.SetInt("DockX", geometry.x())
+            self._params.SetInt("DockY", geometry.y())
+            self._params.SetInt("DockWidth", geometry.width())
+            self._params.SetInt("DockHeight", geometry.height())
+            area = FreeCADGui.getMainWindow().dockWidgetArea(self.form)
+            self._params.SetInt("DockArea", getattr(area, "value", _DEFAULT_DOCK_AREA))
+        except RuntimeError:
+            pass
+        except Exception:
+            pass
+
+    def _apply_initial_placement(self, QtCore):
+        width = max(self._params.GetInt("DockWidth", 300), 280)
+        height = max(self._params.GetInt("DockHeight", 240), 220)
+
+        if self._params.GetBool("DockPlacementSaved", False):
+            area = self._params.GetInt("DockArea", _DEFAULT_DOCK_AREA)
+            try:
+                dock_area = getattr(QtCore.Qt, "DockWidgetArea", None)
+                if dock_area:
+                    dock_area = dock_area(area)
+                else:
+                    dock_area = QtCore.Qt.RightDockWidgetArea
+                FreeCADGui.getMainWindow().addDockWidget(dock_area, self.form)
+            except Exception:
+                pass
+            self.form.resize(width, height)
+            floating = self._params.GetBool("DockFloating", True)
+            self.form.setFloating(floating)
+            if floating:
+                self.form.move(
+                    self._params.GetInt("DockX", 0),
+                    self._params.GetInt("DockY", 0),
+                )
+            return
+
+        main_window = FreeCADGui.getMainWindow()
+        frame = main_window.frameGeometry()
+        margin = 32
+        self.form.resize(300, 240)
+        self.form.setFloating(True)
+        self.form.move(
+            frame.x() + max(frame.width() - 300 - margin, margin),
+            frame.y() + margin,
+        )
+
+    def detach(self):
+        form = self.form
+        self.form = None
+        self._dock = None
+        self.status = None
+        self.storey_combo = None
+        self.select_button = None
+        self.wall_button = None
+        self.reapply_button = None
+        self.stretch_start_button = None
+        self.stretch_end_button = None
+        self.exit_button = None
+        if form:
+            try:
+                form.setWidget(None)
+            except RuntimeError:
+                pass
+
+    def close(self):
+        if self.form is None:
+            return
+        self.mark_closed()
+        self.form.close()
+
+    def refresh(self):
+        if self._closed or self.form is None or self.storey_combo is None:
+            return
+        try:
+            self.storey_combo.blockSignals(True)
+            self.storey_combo.clear()
+            self._storey_items = [None] + list(self.session.storeys)
+            self.storey_combo.addItem(translate("BIM_PlanEdit", "Global XY (Z=0)"))
+            for storey in self.session.storeys:
+                self.storey_combo.addItem(self.session.get_storey_label(storey))
+
+            current = self.session.active_storey
+            try:
+                index = self._storey_items.index(current)
+            except ValueError:
+                index = 0
+            self.storey_combo.setCurrentIndex(index)
+            self.storey_combo.blockSignals(False)
+            self.refresh_from_session()
+        except (AttributeError, RuntimeError):
+            self.mark_closed()
+            self.detach()
+
+    def refresh_from_session(self):
+        if (
+            self._closed
+            or self.form is None
+            or self.status is None
+            or self.stretch_start_button is None
+            or self.stretch_end_button is None
+            or self.exit_button is None
+        ):
+            return
+        try:
+            storey_text = self.session.get_storey_label(self.session.active_storey)
+            tool = self.session.current_tool
+            selected = self.session.selected_wall
+            if selected:
+                wall_state = translate("BIM_PlanEdit", "Selected wall: {label}").format(
+                    label=selected.Label
+                )
+                if self.session.is_selected_wall_baseless():
+                    wall_state += "\n" + translate("BIM_PlanEdit", "Wall mode: baseless")
+                    wall_state += "\n" + translate(
+                        "BIM_PlanEdit",
+                        "Grip editing: drag square grips to stretch, diamond grip to move",
+                    )
+                else:
+                    wall_state += "\n" + translate("BIM_PlanEdit", "Wall mode: base-driven")
+            else:
+                wall_state = translate("BIM_PlanEdit", "Selected wall: none")
+            self.status.setText(
+                translate(
+                    "BIM_PlanEdit",
+                    "Current tool: {tool}\nWorking plane: {storey}\nDisplay override: Footprint\n{wall_state}",
+                ).format(tool=tool, storey=storey_text, wall_state=wall_state)
+            )
+            stretch_enabled = self.session.is_selected_wall_baseless()
+            self.stretch_start_button.setEnabled(stretch_enabled)
+            self.stretch_end_button.setEnabled(stretch_enabled)
+        except (AttributeError, RuntimeError):
+            self.mark_closed()
+            self.detach()
+
+    def on_storey_changed(self, index):
+        if 0 <= index < len(self._storey_items):
+            self.session.set_active_storey(self._storey_items[index])
+
+    def on_select_clicked(self):
+        self.session.activate_select_tool()
+
+    def on_wall_clicked(self):
+        self.session.activate_wall_tool()
+
+    def on_reapply_clicked(self):
+        self.session.apply_plan_view(fit=False)
+        self.refresh_from_session()
+
+    def on_stretch_start_clicked(self):
+        self.session.stretch_selected_wall("Start")
+
+    def on_stretch_end_clicked(self):
+        self.session.stretch_selected_wall("End")
+
+    def on_exit_clicked(self):
+        self.session.shutdown()
+
+
+class _PlanEditDock:
+    def __new__(cls, owner):
+        from PySide import QtGui
+
+        class _DockWidget(QtGui.QDockWidget):
+            def __init__(self, dock_owner):
+                super().__init__(FreeCADGui.getMainWindow())
+                self._plan_owner = dock_owner
+
+            def closeEvent(self, event):
+                owner = self._plan_owner
+                if owner and not owner._closed:
+                    if owner.session and not owner.session._tearing_down:
+                        owner.save_state()
+                    owner.mark_closed()
+                    if owner.session:
+                        owner.session.on_panel_closed(owner)
+                super().closeEvent(event)
+                self._plan_owner = None
+
+        return _DockWidget(owner)
