@@ -1691,6 +1691,7 @@ class ViewProviderComponent:
                             obj.ViewObject.update()
         if prop in ("Shape", "Placement"):
             self.refreshFootprint(obj.ViewObject)
+            self._refreshHostedFootprints(obj)
         return
 
     def updateFootprint(self):
@@ -1777,6 +1778,37 @@ class ViewProviderComponent:
                     return ":/icons/Arch_Component_Clone.svg"
         return ":/icons/Arch_Component_Tree.svg"
 
+    def _getHostedObjects(self, obj):
+        """Return objects hosted by ``obj`` or by its additions."""
+
+        hostedObjs = []
+        if hasattr(obj, "Proxy") and hasattr(obj.Proxy, "getHosts"):
+            hostedObjs.extend(obj.Proxy.getHosts(obj))
+        # Hosted openings can also belong to wall additions, so include those
+        # hosted objects when refreshing shared display data.
+        for addition in getattr(obj, "Additions", []):
+            if hasattr(addition, "Proxy") and hasattr(addition.Proxy, "getHosts"):
+                hostedObjs.extend(addition.Proxy.getHosts(addition))
+
+        uniqueHostedObjs = []
+        seen = set()
+        for hostedObj in hostedObjs:
+            key = getattr(hostedObj, "Name", None) or id(hostedObj)
+            if key in seen:
+                continue
+            seen.add(key)
+            uniqueHostedObjs.append(hostedObj)
+        return uniqueHostedObjs
+
+    def _refreshHostedFootprints(self, obj):
+        """Refresh derived footprint caches for objects hosted by ``obj``."""
+
+        for hostedObj in self._getHostedObjects(obj):
+            vobj = getattr(hostedObj, "ViewObject", None)
+            proxy = getattr(vobj, "Proxy", None) if vobj else None
+            if proxy and hasattr(proxy, "refreshFootprint"):
+                proxy.refreshFootprint(vobj)
+
     def onChanged(self, vobj, prop):
         """Method called when the view provider has a property changed.
 
@@ -1813,12 +1845,7 @@ class ViewProviderComponent:
         elif prop == "Visibility":
             # do nothing if object is an addition
             if not [parent for parent in obj.InList if obj in getattr(parent, "Additions", [])]:
-                hostedObjs = obj.Proxy.getHosts(obj)
-                # add objects hosted by additions
-                for addition in getattr(obj, "Additions", []):
-                    if hasattr(addition, "Proxy") and hasattr(addition.Proxy, "getHosts"):
-                        hostedObjs.extend(addition.Proxy.getHosts(addition))
-                for hostedObj in hostedObjs:
+                for hostedObj in self._getHostedObjects(obj):
                     if hasattr(hostedObj, "ViewObject"):
                         hostedObj.ViewObject.Visibility = vobj.Visibility
         return
