@@ -1748,7 +1748,7 @@ class PlanEditSession:
 
         snapshot = {}
         for opening in self._get_wall_hosted_openings(wall):
-            proxy = self._get_opening_view_proxy(
+            proxy = self._get_opening_plan_proxy(
                 opening, "get_plan_move_context", "get_plan_center_point"
             )
             if not proxy:
@@ -2397,7 +2397,7 @@ class PlanEditSession:
 
         openings = []
         for opening in self._get_wall_hosted_openings(wall):
-            proxy = self._get_opening_view_proxy(
+            proxy = self._get_opening_plan_proxy(
                 opening, "get_plan_move_context", "move_along_host", "get_plan_center_point"
             )
             if not proxy:
@@ -3124,6 +3124,14 @@ class PlanEditSession:
             return []
         return list(proxy.get_plan_edit_handles() or [])
 
+    def _get_opening_plan_proxy(self, opening, *attrs):
+        if not opening:
+            return None
+        proxy = getattr(opening, "Proxy", None)
+        if proxy and all(hasattr(proxy, attr) for attr in attrs):
+            return proxy
+        return self._get_opening_view_proxy(opening, *attrs)
+
     def _get_opening_view_proxy(self, opening, *attrs):
         if not opening:
             return None
@@ -3139,13 +3147,13 @@ class PlanEditSession:
     def _project_opening_handle_point(self, opening, handle, point):
         if point is None or not opening or getattr(handle, "role", None) != "move":
             return point
-        proxy = self._get_opening_view_proxy(opening, "project_point_to_host_axis")
+        proxy = self._get_opening_plan_proxy(opening, "project_point_to_host_axis")
         if not proxy:
             return point
         return proxy.project_point_to_host_axis(point, anchor=self._edit_opening_move_anchor)
 
     def _get_opening_move_anchor_modes(self, opening):
-        proxy = self._get_opening_view_proxy(opening, "get_plan_move_anchor_modes")
+        proxy = self._get_opening_plan_proxy(opening, "get_plan_move_anchor_modes")
         if not proxy:
             return _OPENING_MOVE_ANCHORS
         modes = tuple(proxy.get_plan_move_anchor_modes() or ())
