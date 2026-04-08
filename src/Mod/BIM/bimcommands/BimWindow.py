@@ -66,6 +66,7 @@ class Arch_Window:
         import Draft
         import WorkingPlane
         import draftguitools.gui_trackers as DraftTrackers
+        from bimcommands import BimPlanSession
 
         self.doc = FreeCAD.ActiveDocument
         self.sel = FreeCADGui.Selection.getSelection()
@@ -84,6 +85,17 @@ class Arch_Window:
         self.baseFace = None
         self.wparams = ["Width", "Height", "H1", "H2", "H3", "W1", "W2", "O1", "O2"]
         self.wp = None
+
+        # If Plan Edit currently has this wall selected, drop the wall-grip
+        # state before the window/door tool mutates the host wall shape.
+        session = BimPlanSession.get_active_session()
+        if session and self.sel:
+            try:
+                selected = session.selected_wall
+                if selected and self.sel[0] == selected:
+                    session.suspend_selected_wall_state(selected)
+            except Exception:
+                pass
 
         # autobuild mode
         if FreeCADGui.Selection.getSelectionEx():
