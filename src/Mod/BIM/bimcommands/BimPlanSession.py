@@ -258,7 +258,9 @@ class PlanEditSession:
         self.storeys = []
         self.active_storey = None
         self.selected_wall = None
+        self.selected_opening = None
         self._grip_trackers = []
+        self._opening_overlay_trackers = []
         self._selection_observer_added = False
         self._document_observer_added = False
         self._pending_selected_wall_reset = False
@@ -352,6 +354,7 @@ class PlanEditSession:
         self._cancel_wall_edit(restore=False, refresh=False)
         self._cancel_pending_edit()
         self._clear_wall_grips()
+        self._clear_selected_opening_overlay()
         self._detach_selection_observer()
         self._detach_document_observer()
         self._unregister_edit_callbacks()
@@ -373,6 +376,7 @@ class PlanEditSession:
         self.view = None
         self.viewer = None
         self.selected_wall = None
+        self.selected_opening = None
         self._edit_wall = None
         self._edit_endpoint = None
         self._edit_endpoints = None
@@ -404,6 +408,7 @@ class PlanEditSession:
             self._cancel_wall_edit(restore=not teardown, refresh=False)
             self._cancel_pending_edit()
             self._clear_wall_grips()
+            self._clear_selected_opening_overlay()
             self._detach_selection_observer()
             self._detach_document_observer()
             self._unregister_edit_callbacks()
@@ -949,11 +954,7 @@ class PlanEditSession:
     def _apply_background_object_selectability(self, obj, view_object):
         if not view_object or not hasattr(view_object, "Selectable"):
             return
-        if not (
-            self._is_plan_background_object(obj)
-            or self._is_plan_container_object(obj)
-            or self._is_hosted_opening_object(obj)
-        ):
+        if not (self._is_plan_background_object(obj) or self._is_plan_container_object(obj)):
             return
         try:
             view_object.Selectable = False
@@ -1229,15 +1230,23 @@ class PlanEditSession:
         import Draft
 
         previous_wall = self.selected_wall
+        previous_opening = self.selected_opening
         self.selected_wall = None
+        self.selected_opening = None
         try:
             selection = FreeCADGui.Selection.getSelection()
         except (ReferenceError, RuntimeError):
             return
-        if len(selection) == 1 and Draft.getType(selection[0]) == "Wall":
-            self.selected_wall = selection[0]
+        if self.current_tool == "Select" and len(selection) == 1:
+            selected = selection[0]
+            if Draft.getType(selected) == "Wall":
+                self.selected_wall = selected
+            elif self._is_hosted_opening_object(selected):
+                self.selected_opening = selected
         if previous_wall != self.selected_wall:
             self._sync_wall_grips()
+        if previous_opening != self.selected_opening or self.current_tool != "Select":
+            self._sync_selected_opening_overlay()
         self._refresh_task_panel_status()
 
     def _start_embedded_tool(self, tool_name, command, host_class=_PlanEditCommandHost):
@@ -1279,6 +1288,7 @@ class PlanEditSession:
         self._embedded_tool = None
         self._embedded_tool_name = None
         self._sync_wall_grips()
+        self._sync_selected_opening_overlay()
 
     def _stop_snapper(self):
         snapper = getattr(FreeCADGui, "Snapper", None)
@@ -1312,6 +1322,7 @@ class PlanEditSession:
         self.current_tool = "Select"
         if refresh:
             self._refresh_task_panel_status()
+        self._sync_selected_opening_overlay()
         return True
 
     def _get_rect_wall_corners(self, point):
@@ -1989,6 +2000,16 @@ class PlanEditSession:
             return
         if self.current_tool != "Select":
             return
+        if obj == self.selected_opening and prop in {
+            "Shape",
+            "Placement",
+            "Base",
+            "Hosts",
+            "WindowParts",
+            "IfcType",
+        }:
+            self._sync_selected_opening_overlay()
+            return
         if obj != self.selected_wall:
             return
         if prop not in {"Shape", "Additions", "Subtractions", "Hosts"}:
@@ -1997,6 +2018,10 @@ class PlanEditSession:
 
     def slotDeletedObject(self, obj):
         if self._tearing_down:
+            return
+        if obj == self.selected_opening:
+            self.selected_opening = None
+            self._sync_selected_opening_overlay()
             return
         if obj != self.selected_wall:
             return
@@ -2055,7 +2080,13 @@ class PlanEditSession:
         if len(endpoints) != 2:
             return
 
-        grip_start, grip_end, midpoint = self._get_visible_wall_grip_positions(wall, endpoints)
+        if hasattr(proxy, "calc_edit_grip_positions"):
+            grip_positions = proxy.calc_edit_grip_positions(wall)
+        else:
+            grip_positions = endpoints + [(endpoints[0] + endpoints[1]) * 0.5]
+        if len(grip_positions) != 3:
+            return
+        grip_start, grip_end, midpoint = grip_positions
         midpoint_marker = FreeCADGui.getMarkerIndex(
             "DIAMOND_FILLED", params.get_param_view("MarkerSize")
         )
@@ -2071,57 +2102,6 @@ class PlanEditSession:
             ),
         ]
 
-    def _get_visible_wall_grip_positions(self, wall, endpoints):
-        """Return grip positions shifted onto the visible wall body.
-
-        Endpoint editing still uses the wall trace, but for aligned/offset walls
-        the visible footprint can be shifted sideways. Grip markers should follow
-        that visible centerline so they sit on the wall the user sees.
-        """
-        import DraftVecUtils
-
-        start = FreeCAD.Vector(endpoints[0])
-        end = FreeCAD.Vector(endpoints[1])
-        midpoint = (start + end) * 0.5
-
-        axis = end.sub(start)
-        axis.z = 0
-        if DraftVecUtils.isNull(axis):
-            return start, end, midpoint
-
-        proxy = getattr(wall, "Proxy", None)
-        if not proxy or not hasattr(proxy, "getFootprint"):
-            return start, end, midpoint
-
-        try:
-            faces = proxy.getFootprint(wall)
-        except Exception:
-            return start, end, midpoint
-        if not faces:
-            return start, end, midpoint
-
-        area_sum = 0.0
-        center = FreeCAD.Vector()
-        for face in faces:
-            try:
-                weight = float(face.Area)
-                face_center = face.CenterOfMass
-            except Exception:
-                continue
-            center = center.add(face_center.multiply(weight))
-            area_sum += weight
-
-        if area_sum <= 0.0:
-            return start, end, midpoint
-
-        center.multiply(1.0 / area_sum)
-        shift = center.sub(midpoint)
-        axis.normalize()
-        shift = shift.sub(axis.multiply(shift.dot(axis)))
-        shift.z = 0
-
-        return start.add(shift), end.add(shift), midpoint.add(shift)
-
     def _clear_wall_grips(self):
         for tracker in self._grip_trackers:
             try:
@@ -2129,6 +2109,50 @@ class PlanEditSession:
             except Exception:
                 pass
         self._grip_trackers = []
+
+    def _get_selected_opening_overlay_polylines(self, opening):
+        if not opening:
+            return []
+        view_object = getattr(opening, "ViewObject", None)
+        proxy = getattr(view_object, "Proxy", None)
+        if not proxy:
+            return []
+        if not hasattr(proxy, "get_plan_overlay_polylines"):
+            return []
+        try:
+            return list(proxy.get_plan_overlay_polylines() or [])
+        except Exception:
+            return []
+
+    def _sync_selected_opening_overlay(self):
+        self._clear_selected_opening_overlay()
+        if self.current_tool != "Select":
+            return
+        if not self._is_hosted_opening_object(self.selected_opening):
+            return
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except Exception:
+            return
+
+        overlay_color = (0.12, 0.38, 0.95)
+        for polyline in self._get_selected_opening_overlay_polylines(self.selected_opening):
+            if len(polyline) < 2:
+                continue
+            for start, end in zip(polyline, polyline[1:]):
+                tracker = DraftTrackers.lineTracker(scolor=overlay_color, swidth=3, ontop=True)
+                tracker.p1(start)
+                tracker.p2(end)
+                tracker.on()
+                self._opening_overlay_trackers.append(tracker)
+
+    def _clear_selected_opening_overlay(self):
+        for tracker in self._opening_overlay_trackers:
+            try:
+                tracker.finalize()
+            except Exception:
+                pass
+        self._opening_overlay_trackers = []
 
 
 class PlanEditDockWidget:
