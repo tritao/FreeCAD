@@ -22,7 +22,12 @@
 # *                                                                         *
 # ***************************************************************************
 
-"""Shared helpers for BIM wall joint relations."""
+"""Solver and utility helpers for BIM wall joints.
+
+This module validates supported wall baselines, resolves joint roles and wall
+ends, computes the global cutting planes for each wall, and reports conflicts
+when multiple enabled joints claim the same wall end.
+"""
 
 import DraftGeomUtils
 import FreeCAD

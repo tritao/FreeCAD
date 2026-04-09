@@ -46,6 +46,14 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
     def _is_identity_placement(placement, tol=1e-9):
         return placement.Base.Length < tol and placement.Rotation.Angle < tol
 
+    def _assert_wall_trimmed(self, wall, initial_volume, msg):
+        self.assertTrue(wall.Shape.isValid(), f"{wall.Label} became invalid after the joint.")
+        self.assertLess(wall.Shape.Volume, initial_volume, msg)
+
+    def _assert_wall_unchanged(self, wall, initial_volume, msg):
+        self.assertTrue(wall.Shape.isValid(), f"{wall.Label} became invalid after the joint.")
+        self.assertAlmostEqual(wall.Shape.Volume, initial_volume, delta=1e-6, msg=msg)
+
     def test_make_wall_joint_miter_trims_wall_shapes(self):
         self.printTestMessage("Testing makeWallJoint creates a usable miter relation...")
 
@@ -73,6 +81,112 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
             self._is_identity_placement(wall1.EndingStart)
             and self._is_identity_placement(wall1.EndingEnd),
             "Manual wall endings should stay untouched when a relation drives the trim.",
+        )
+
+    def test_make_wall_joint_butt_trims_wall_shapes(self):
+        self.printTestMessage("Testing makeWallJoint creates a usable butt relation...")
+
+        wall1 = self._make_baseless_wall_between(App.Vector(-1000, 0, 0), App.Vector(0, 0, 0))
+        wall2 = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(0, 1000, 0))
+
+        joint = Arch.makeWallJoint(wall1, wall2, "Butt")
+        joint.ButtTrimmed = "WallB"
+        self.document.recompute()
+
+        self.assertEqual(joint.Status, "OK")
+        self.assertEqual(joint.ButtTrimmed, "WallB")
+        self.assertEqual(joint.ResolvedEndA, "End")
+        self.assertEqual(joint.ResolvedEndB, "Start")
+        self.assertFalse(
+            self._is_identity_placement(joint.ResolvedPlaneA),
+            "The butt relation should solve a cutting plane for the first wall.",
+        )
+        self.assertFalse(
+            self._is_identity_placement(joint.ResolvedPlaneB),
+            "The butt relation should solve a cutting plane for the second wall.",
+        )
+        self.assertTrue(wall1.Shape.isValid(), "First wall became invalid after the butt relation.")
+        self.assertTrue(
+            wall2.Shape.isValid(), "Second wall became invalid after the butt relation."
+        )
+
+    def test_make_wall_joint_miter_handles_oblique_walls(self):
+        self.printTestMessage("Testing miter joints on oblique straight walls...")
+
+        wall1 = self._make_baseless_wall_between(App.Vector(-1000, 0, 0), App.Vector(0, 0, 0))
+        wall2 = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(800, 600, 0))
+        initial_volume1 = wall1.Shape.Volume
+        initial_volume2 = wall2.Shape.Volume
+
+        joint = Arch.makeWallJoint(wall1, wall2, "Miter")
+        self.document.recompute()
+
+        self.assertEqual(joint.Status, "OK")
+        self.assertEqual(joint.ResolvedEndA, "End")
+        self.assertEqual(joint.ResolvedEndB, "Start")
+        self._assert_wall_trimmed(
+            wall1,
+            initial_volume1,
+            "Oblique miter joints should trim the first wall.",
+        )
+        self._assert_wall_trimmed(
+            wall2,
+            initial_volume2,
+            "Oblique miter joints should trim the second wall.",
+        )
+
+    def test_make_wall_joint_butt_handles_oblique_walls(self):
+        self.printTestMessage("Testing butt joints on oblique straight walls...")
+
+        wall1 = self._make_baseless_wall_between(App.Vector(-1000, 0, 0), App.Vector(0, 0, 0))
+        wall2 = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(800, 600, 0))
+        initial_volume1 = wall1.Shape.Volume
+        initial_volume2 = wall2.Shape.Volume
+
+        joint = Arch.makeWallJoint(wall1, wall2, "Butt")
+        joint.ButtTrimmed = "WallB"
+        self.document.recompute()
+
+        self.assertEqual(joint.Status, "OK")
+        self.assertEqual(joint.ResolvedEndA, "End")
+        self.assertEqual(joint.ResolvedEndB, "Start")
+        self._assert_wall_trimmed(
+            wall1,
+            initial_volume1,
+            "Oblique butt joints should trim the supporting wall.",
+        )
+        self._assert_wall_trimmed(
+            wall2,
+            initial_volume2,
+            "Oblique butt joints should trim the selected butt wall.",
+        )
+
+    def test_make_wall_joint_tee_handles_oblique_walls(self):
+        self.printTestMessage("Testing tee joints on oblique straight walls...")
+
+        stem_wall = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(400, 400, 0))
+        top_wall = self._make_baseless_wall_between(
+            App.Vector(-800, 400, 0), App.Vector(1200, 400, 0)
+        )
+        initial_stem_volume = stem_wall.Shape.Volume
+        initial_top_volume = top_wall.Shape.Volume
+
+        joint = Arch.makeWallJoint(stem_wall, top_wall, "Tee")
+        self.document.recompute()
+
+        self.assertEqual(joint.Status, "OK")
+        self.assertEqual(joint.TeeStem, "Auto")
+        self.assertEqual(joint.ResolvedEndA, "End")
+        self.assertEqual(joint.ResolvedEndB, "None")
+        self._assert_wall_trimmed(
+            stem_wall,
+            initial_stem_volume,
+            "Oblique tee joints should trim the stem wall.",
+        )
+        self._assert_wall_unchanged(
+            top_wall,
+            initial_top_volume,
+            "Oblique tee joints should leave the top wall volume unchanged.",
         )
 
     def test_wall_joint_updates_after_wall_move(self):
@@ -226,3 +340,44 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
         self.assertIsNone(conflicted.ConflictJointB)
         self.assertEqual(conflicted.ConflictMessageA, "")
         self.assertEqual(conflicted.ConflictMessageB, "")
+
+    def test_wall_joint_tee_stem_edit_updates_trimmed_wall_geometry(self):
+        self.printTestMessage("Testing tee stem edits update the trimmed wall geometry...")
+
+        wall1 = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(0, 1000, 0))
+        wall2 = self._make_baseless_wall_between(App.Vector(-1000, 0, 0), App.Vector(1000, 0, 0))
+        original_volume1 = wall1.Shape.Volume
+        original_volume2 = wall2.Shape.Volume
+
+        joint = Arch.makeWallJoint(wall1, wall2, "Tee")
+        joint.TeeStem = "WallA"
+        self.document.recompute()
+
+        self.assertEqual(joint.Status, "OK")
+        self._assert_wall_trimmed(
+            wall1,
+            original_volume1,
+            "The initial tee stem wall should be trimmed.",
+        )
+        self._assert_wall_unchanged(
+            wall2,
+            original_volume2,
+            "The top wall should remain untrimmed before flipping the tee stem.",
+        )
+
+        joint.TeeStem = "WallB"
+        self.document.recompute()
+
+        self.assertEqual(joint.Status, "OK")
+        self.assertEqual(joint.ResolvedEndA, "None")
+        self.assertNotEqual(joint.ResolvedEndB, "None")
+        self._assert_wall_unchanged(
+            wall1,
+            original_volume1,
+            "Changing TeeStem should restore the original wall when it stops being the stem.",
+        )
+        self._assert_wall_trimmed(
+            wall2,
+            original_volume2,
+            "Changing TeeStem should trim the newly selected stem wall.",
+        )

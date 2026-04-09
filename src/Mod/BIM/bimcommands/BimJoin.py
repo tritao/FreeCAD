@@ -4,9 +4,11 @@
 # * (License Header as in other BIM files)                                  *
 # ***************************************************************************
 
-"""
-BIM join command
-This command joins different objects that can be joined, currently only Walls
+"""GUI commands for BIM wall joints.
+
+These commands create, reuse, edit, and remove WallJoint relation objects.
+The relation object owns the join settings and solved trim planes; walls apply
+the derived trims during recompute.
 """
 
 import Arch

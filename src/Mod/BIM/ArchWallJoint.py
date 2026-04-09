@@ -22,7 +22,12 @@
 # *                                                                         *
 # ***************************************************************************
 
-"""BIM wall joint relation object."""
+"""Wall-joint relation object for BIM walls.
+
+A WallJoint stores the join settings between two walls, solves the active
+intersection and cutting planes during recompute, and exposes the resolved
+status, wall ends, and global trim planes for editing and inspection.
+"""
 
 import FreeCAD
 

@@ -2083,6 +2083,9 @@ class _Wall(ArchComponent.Component):
         joint_plane = joint_endings.get(end_name)
         source = getattr(obj, "TrimSource" + end_name, "Auto")
 
+        # Each wall end uses one active trim source. Auto prefers a valid
+        # joint-derived plane for that end and otherwise falls back to the
+        # manual ending. Manual and Joint force the source explicitly.
         if source == "Manual":
             return manual_plane, False
         if source == "Joint":
