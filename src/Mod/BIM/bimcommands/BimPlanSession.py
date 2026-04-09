@@ -2724,6 +2724,8 @@ class PlanEditSession:
                     return
                 if self._activate_wall_target((pos[0], pos[1]), event_callback):
                     return
+                if self.selected_opening is not None or self.selected_wall is not None:
+                    self._clear_plan_selection_state()
                 return
             node_kind = node[0]
             if node_kind == "opening_handle":
@@ -4137,6 +4139,17 @@ class PlanEditSession:
             self._restore_selected_opening(opening)
             return
         QtCore.QTimer.singleShot(0, lambda: self._restore_selected_opening(opening))
+
+    def _clear_plan_selection_state(self):
+        self.selected_wall = None
+        self.selected_opening = None
+        self._pending_selected_opening_intent = None
+        self._set_hovered_wall(None)
+        self._set_hovered_opening(None)
+        self._clear_wall_grips()
+        self._sync_selected_opening_overlay()
+        self._sync_selected_opening_handles()
+        self._refresh_task_panel_status()
 
     def _execute_selected_opening_handle(self, opening, handle_index, handle):
         try:

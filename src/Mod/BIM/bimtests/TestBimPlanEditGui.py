@@ -519,8 +519,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         with patch.object(
             session,
-            "_get_opening_target_at_position",
-            return_value=door,
+            "_get_plan_target_at_position",
+            return_value=("opening", door),
         ):
             activated = session._activate_opening_target((100, 100))
 
@@ -530,6 +530,85 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(len(session._grip_trackers), 0)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertEqual(len(session._opening_handle_trackers), 3)
+
+    def test_plan_edit_empty_canvas_click_clears_selected_opening(self):
+        """Empty canvas clicks should clear an internally selected opening."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="ClearRestoreDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        calls = []
+
+        def fake_single_shot(delay, callback):
+            calls.append((delay, callback))
+
+        with patch("PySide.QtCore.QTimer.singleShot", side_effect=fake_single_shot), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("opening", door),
+        ):
+            activated = session._activate_opening_target((100, 100))
+
+        self.assertTrue(activated)
+        self.assertIs(session.selected_opening, door)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], 0)
+        self.assertIs(session._pending_selected_opening_intent, door)
+
+        calls[0][1]()
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [door.Name])
+
+        FreeCADGui.Selection.clearSelection()
+        self.pump_gui_events()
+
+        self.assertEqual(FreeCADGui.Selection.getSelection(), [])
+        self.assertIs(session.selected_opening, door)
+        self.assertIsNone(session._pending_selected_opening_intent)
+
+        from pivy import coin
+
+        class _FakeMousePosition:
+            def __init__(self, x, y):
+                self._value = (x, y)
+
+            def getValue(self):
+                return self._value
+
+        class _FakeMouseEvent:
+            def __init__(self, x, y):
+                self._position = _FakeMousePosition(x, y)
+
+            def getButton(self):
+                return coin.SoMouseButtonEvent.BUTTON1
+
+            def getState(self):
+                return coin.SoMouseButtonEvent.DOWN
+
+            def getPosition(self):
+                return self._position
+
+        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=(None, None),
+        ):
+            session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+
+        self.assertIsNone(session.selected_opening)
+        self.assertIsNone(session._pending_selected_opening_intent)
+        self.assertEqual(len(session._opening_overlay_trackers), 0)
+        self.assertEqual(len(session._opening_handle_trackers), 0)
 
     def test_plan_edit_opening_move_uses_reduced_snap_profile(self):
         """Opening move should use a constrained snap profile while point-picking."""
