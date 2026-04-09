@@ -3368,78 +3368,87 @@ class PlanEditSession:
         except Exception:
             return None
 
-    def _get_input_hints(self):
-        if self.current_tool == "Move Opening":
-            return [
-                self._make_input_hint(
-                    translate("BIM_PlanEdit", "%1 place opening"),
-                    FreeCADGui.UserInput.MouseLeft,
-                ),
-                self._make_input_hint(
-                    translate("BIM_PlanEdit", "%1 cycle move anchor"),
-                    FreeCADGui.UserInput.KeyA,
-                ),
-                self._make_input_hint(
-                    translate("BIM_PlanEdit", "%1 cancel"),
-                    FreeCADGui.UserInput.KeyEscape,
-                ),
-            ]
-        if self.current_tool == "Move Wall":
-            return [
-                self._make_input_hint(
-                    translate("BIM_PlanEdit", "%1 place wall"),
-                    FreeCADGui.UserInput.MouseLeft,
-                ),
-                self._make_input_hint(
-                    translate("BIM_PlanEdit", "%1 edit current offset"),
-                    FreeCADGui.UserInput.KeyReturn,
-                ),
-                self._make_input_hint(
-                    translate("BIM_PlanEdit", "%1 cycle X/Y offset"),
-                    FreeCADGui.UserInput.KeyTab,
-                ),
-                self._make_input_hint(
-                    translate("BIM_PlanEdit", "%1 cancel"),
-                    FreeCADGui.UserInput.KeyEscape,
-                ),
-            ]
-        if self.current_tool.startswith("Stretch "):
-            return [
-                self._make_input_hint(
-                    translate("BIM_PlanEdit", "%1 place endpoint"),
-                    FreeCADGui.UserInput.MouseLeft,
-                ),
-                self._make_input_hint(
-                    translate("BIM_PlanEdit", "%1 edit length"),
-                    FreeCADGui.UserInput.KeyReturn,
-                ),
-                self._make_input_hint(
-                    translate("BIM_PlanEdit", "%1 cancel"),
-                    FreeCADGui.UserInput.KeyEscape,
-                ),
-            ]
-        if self.current_tool == "Select" and self.selected_opening:
-            return [
-                self._make_input_hint(
-                    translate("BIM_PlanEdit", "%1 pick opening handle"),
-                    FreeCADGui.UserInput.MouseLeft,
-                )
-            ]
-        if self.current_tool == "Select" and self.selected_wall:
-            return [
-                self._make_input_hint(
-                    translate("BIM_PlanEdit", "%1 pick wall grip"),
-                    FreeCADGui.UserInput.MouseLeft,
-                )
-            ]
+    def _get_input_hint_specs(self):
+        ui = FreeCADGui.UserInput
+
         if self.current_tool == "Select":
-            return [
-                self._make_input_hint(
-                    translate("BIM_PlanEdit", "%1 select wall or opening"),
-                    FreeCADGui.UserInput.MouseLeft,
+            if self.selected_opening:
+                return (
+                    (
+                        translate("BIM_PlanEdit", "%1 pick opening handle"),
+                        ui.MouseLeft,
+                    ),
                 )
-            ]
-        return []
+            if self.selected_wall:
+                return (
+                    (
+                        translate("BIM_PlanEdit", "%1 pick wall grip"),
+                        ui.MouseLeft,
+                    ),
+                )
+            return (
+                (
+                    translate("BIM_PlanEdit", "%1 select wall or opening"),
+                    ui.MouseLeft,
+                ),
+            )
+
+        if self.current_tool.startswith("Stretch "):
+            return (
+                (
+                    translate("BIM_PlanEdit", "%1 place endpoint"),
+                    ui.MouseLeft,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 edit length"),
+                    ui.KeyReturn,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 cancel"),
+                    ui.KeyEscape,
+                ),
+            )
+
+        return {
+            "Move Opening": (
+                (
+                    translate("BIM_PlanEdit", "%1 place opening"),
+                    ui.MouseLeft,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 cycle move anchor"),
+                    ui.KeyA,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 cancel"),
+                    ui.KeyEscape,
+                ),
+            ),
+            "Move Wall": (
+                (
+                    translate("BIM_PlanEdit", "%1 place wall"),
+                    ui.MouseLeft,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 edit current offset"),
+                    ui.KeyReturn,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 cycle X/Y offset"),
+                    ui.KeyTab,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 cancel"),
+                    ui.KeyEscape,
+                ),
+            ),
+        }.get(self.current_tool, ())
+
+    def _get_input_hints(self):
+        return [
+            self._make_input_hint(message, *sequences)
+            for message, *sequences in self._get_input_hint_specs()
+        ]
 
     def _update_input_hints(self):
         hint_manager = getattr(FreeCADGui, "HintManager", None)
@@ -4188,6 +4197,11 @@ class PlanEditDockWidget:
         self._dock = _PlanEditDock(self)
 
         self.form = self._dock
+        self._configure_form(QtCore, QtGui)
+        container = self._build_form_contents(QtGui)
+        self._install_form(container, QtCore)
+
+    def _configure_form(self, QtCore, QtGui):
         self.form.setWindowTitle(translate("BIM_PlanEdit", "Plan Edit"))
         self.form.setObjectName("BIMPlanEditDock")
         self.form.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
@@ -4198,6 +4212,7 @@ class PlanEditDockWidget:
             | QtGui.QDockWidget.DockWidgetFloatable
         )
 
+    def _build_form_contents(self, QtGui):
         container = QtGui.QWidget()
         layout = QtGui.QVBoxLayout(container)
         layout.setContentsMargins(10, 10, 10, 10)
@@ -4205,62 +4220,36 @@ class PlanEditDockWidget:
         container.setMinimumWidth(280)
         container.setMaximumWidth(360)
 
-        intro = QtGui.QLabel(
-            translate(
-                "BIM_PlanEdit",
-                "Plan authoring mode for the active storey.",
+        layout.addWidget(self._build_intro_label(QtGui))
+        layout.addLayout(self._build_storey_row(QtGui))
+        layout.addLayout(
+            self._build_button_row(
+                QtGui,
+                (
+                    ("select_button", "Select", self.on_select_clicked),
+                    ("wall_button", "Wall", self.on_wall_clicked),
+                    ("rect_wall_button", "Rect Wall", self.on_rect_wall_clicked),
+                    ("move_button", "Move", self.on_move_clicked),
+                    ("join_button", "Join", self.on_join_clicked),
+                    ("reapply_button", "Reapply View", self.on_reapply_clicked),
+                ),
             )
         )
-        intro.setWordWrap(True)
-        layout.addWidget(intro)
-
-        storey_row = QtGui.QHBoxLayout()
-        storey_row.setSpacing(6)
-        storey_label = QtGui.QLabel(translate("BIM_PlanEdit", "Storey"))
-        self.storey_combo = QtGui.QComboBox()
-        self.storey_combo.currentIndexChanged.connect(self.on_storey_changed)
-        storey_row.addWidget(storey_label)
-        storey_row.addWidget(self.storey_combo, 1)
-        layout.addLayout(storey_row)
-
-        buttons = QtGui.QHBoxLayout()
-        buttons.setSpacing(6)
-        self.select_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Select"))
-        self.wall_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Wall"))
-        self.rect_wall_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Rect Wall"))
-        self.move_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Move"))
-        self.join_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Join"))
-        self.reapply_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Reapply View"))
-        self.select_button.clicked.connect(self.on_select_clicked)
-        self.wall_button.clicked.connect(self.on_wall_clicked)
-        self.rect_wall_button.clicked.connect(self.on_rect_wall_clicked)
-        self.move_button.clicked.connect(self.on_move_clicked)
-        self.join_button.clicked.connect(self.on_join_clicked)
-        self.reapply_button.clicked.connect(self.on_reapply_clicked)
-        buttons.addWidget(self.select_button)
-        buttons.addWidget(self.wall_button)
-        buttons.addWidget(self.rect_wall_button)
-        buttons.addWidget(self.move_button)
-        buttons.addWidget(self.join_button)
-        buttons.addWidget(self.reapply_button)
-        layout.addLayout(buttons)
-
-        stretch_buttons = QtGui.QHBoxLayout()
-        stretch_buttons.setSpacing(6)
-        self.stretch_start_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Stretch Start"))
-        self.stretch_end_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Stretch End"))
-        self.stretch_start_button.clicked.connect(self.on_stretch_start_clicked)
-        self.stretch_end_button.clicked.connect(self.on_stretch_end_clicked)
-        stretch_buttons.addWidget(self.stretch_start_button)
-        stretch_buttons.addWidget(self.stretch_end_button)
-        layout.addLayout(stretch_buttons)
+        layout.addLayout(
+            self._build_button_row(
+                QtGui,
+                (
+                    ("stretch_start_button", "Stretch Start", self.on_stretch_start_clicked),
+                    ("stretch_end_button", "Stretch End", self.on_stretch_end_clicked),
+                ),
+            )
+        )
 
         self.status = QtGui.QLabel("")
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
 
-        self.exit_button = QtGui.QPushButton(translate("BIM_PlanEdit", "Exit Plan Edit"))
-        self.exit_button.clicked.connect(self.on_exit_clicked)
+        self.exit_button = self._make_button(QtGui, "Exit Plan Edit", self.on_exit_clicked)
         self.exit_button.setMinimumHeight(32)
         layout.addWidget(self.exit_button)
 
@@ -4276,27 +4265,58 @@ class PlanEditDockWidget:
             self.stretch_end_button,
             self.exit_button,
         ]
+        self._capture_focus_policies()
+
+        container.setLayout(layout)
+        return container
+
+    def _build_intro_label(self, QtGui):
+        intro = QtGui.QLabel(
+            translate(
+                "BIM_PlanEdit",
+                "Plan authoring mode for the active storey.",
+            )
+        )
+        intro.setWordWrap(True)
+        return intro
+
+    def _make_button(self, QtGui, label, handler):
+        button = QtGui.QPushButton(translate("BIM_PlanEdit", label))
+        button.clicked.connect(handler)
+        return button
+
+    def _build_storey_row(self, QtGui):
+        row = QtGui.QHBoxLayout()
+        row.setSpacing(6)
+        storey_label = QtGui.QLabel(translate("BIM_PlanEdit", "Storey"))
+        self.storey_combo = QtGui.QComboBox()
+        self.storey_combo.currentIndexChanged.connect(self.on_storey_changed)
+        row.addWidget(storey_label)
+        row.addWidget(self.storey_combo, 1)
+        return row
+
+    def _build_button_row(self, QtGui, specs):
+        row = QtGui.QHBoxLayout()
+        row.setSpacing(6)
+        for attr, label, handler in specs:
+            button = self._make_button(QtGui, label, handler)
+            setattr(self, attr, button)
+            row.addWidget(button)
+        return row
+
+    def _capture_focus_policies(self):
         for widget in self._modal_focus_widgets:
             try:
                 self._saved_focus_policies[widget] = widget.focusPolicy()
             except Exception:
                 pass
 
-        container.setLayout(layout)
+    def _install_form(self, container, QtCore):
         self.form.setWidget(container)
         self.form.install_plan_key_filter(
             self.form,
             container,
-            self.storey_combo,
-            self.select_button,
-            self.wall_button,
-            self.rect_wall_button,
-            self.move_button,
-            self.join_button,
-            self.reapply_button,
-            self.stretch_start_button,
-            self.stretch_end_button,
-            self.exit_button,
+            *self._modal_focus_widgets,
         )
         FreeCADGui.getMainWindow().addDockWidget(QtCore.Qt.RightDockWidgetArea, self.form)
         self._apply_initial_placement(QtCore)
