@@ -1650,15 +1650,17 @@ class Snapper:
                     accept()
 
         def accept():
+            point = self.pt
+            snap_info = dict(self.snapInfo) if isinstance(self.snapInfo, dict) else self.snapInfo
             self._teardown_point_request(hide_hints=bool(hints))
             if callback:
                 if len(inspect.getfullargspec(callback).args) > 1:
                     obj = None
-                    if self.snapInfo and ("Object" in self.snapInfo) and self.snapInfo["Object"]:
-                        obj = App.ActiveDocument.getObject(self.snapInfo["Object"])
-                    callback(self.pt, obj)
+                    if snap_info and ("Object" in snap_info) and snap_info["Object"]:
+                        obj = App.ActiveDocument.getObject(snap_info["Object"])
+                    callback(point, obj)
                 else:
-                    callback(self.pt)
+                    callback(point)
             self.pt = None
 
         def cancel():
