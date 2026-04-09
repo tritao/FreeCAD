@@ -1744,6 +1744,28 @@ def makeWall(
     return wall
 
 
+def makeWallJoint(wall_a=None, wall_b=None, joint_type="Miter", name=None):
+    """Create a wall joint relation object in the active document."""
+
+    joint = _initializeArchObject(
+        "App::FeaturePython",
+        baseClassName="_WallJoint",
+        internalName="WallJoint",
+        defaultLabel=name if name else translate("Arch", "Wall Joint"),
+        moduleName="ArchWallJoint",
+        viewProviderName="_ViewProviderWallJoint",
+    )
+    if not joint:
+        return None
+
+    joint.JointType = joint_type
+    if wall_a:
+        joint.WallA = wall_a
+    if wall_b:
+        joint.WallB = wall_b
+    return joint
+
+
 def joinWalls(walls, delete=False, deletebase=False):
     """Join the given list of walls into one sketch-based wall.
 

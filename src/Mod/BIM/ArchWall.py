@@ -50,6 +50,7 @@ import FreeCAD
 import ArchCommands
 import ArchComponent
 import ArchSketchObject
+import ArchWallJoinUtils
 import Draft
 import DraftVecUtils
 
@@ -431,6 +432,30 @@ class _Wall(ArchComponent.Component):
                     "a plane that cuts the end of the wall, at end position.",
                 ),
             )
+        if "TrimSourceStart" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyEnumeration",
+                "TrimSourceStart",
+                "Wall",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "Selects whether the start trim comes from a manual ending, an active joint, or automatically prefers a joint.",
+                ),
+            )
+            obj.TrimSourceStart = ["Auto", "Manual", "Joint"]
+            obj.TrimSourceStart = "Auto"
+        if "TrimSourceEnd" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyEnumeration",
+                "TrimSourceEnd",
+                "Wall",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "Selects whether the end trim comes from a manual ending, an active joint, or automatically prefers a joint.",
+                ),
+            )
+            obj.TrimSourceEnd = ["Auto", "Manual", "Joint"]
+            obj.TrimSourceEnd = "Auto"
         self.connectEdges = []
 
     def dumps(self):
@@ -819,8 +844,30 @@ class _Wall(ArchComponent.Component):
             if hasattr(obj, "ArchSketchPropertySet"):
                 obj.setEditorMode("ArchSketchPropertySet", ["ReadOnly"])
 
+        if prop in [
+            "Base",
+            "Placement",
+            "Length",
+            "Width",
+            "Height",
+            "Align",
+            "Offset",
+            "Face",
+            "ArchSketchEdges",
+            "ArchSketchPropertySet",
+        ]:
+            self._touch_wall_joints(obj)
+
         self.hideSubobjects(obj, prop)
         ArchComponent.Component.onChanged(self, obj, prop)
+
+    def _touch_wall_joints(self, obj):
+        touched = set()
+        for joint in ArchWallJoinUtils.iter_wall_joints(obj):
+            if joint.Name in touched:
+                continue
+            touched.add(joint.Name)
+            joint.touch()
 
     def getFootprint(self, obj):
         """Get the plan faces that represent this wall in footprint mode.
@@ -2002,35 +2049,69 @@ class _Wall(ArchComponent.Component):
 
         solid_to_trim = base_solid
         tool_size = base_solid.BoundBox.DiagonalLength * 2
-
-        is_start_null = obj.EndingStart.Base.Length < 1e-9 and obj.EndingStart.Rotation.Angle < 1e-9
-        if not is_start_null:
-            global_plane_placement = wall_placement.multiply(obj.EndingStart)
-            ref_point = obj.Proxy.calc_endpoints(obj)[1]
-
-            cutting_tool_global = self._create_cutting_tool_from_plane(
-                global_plane_placement, ref_point, tool_size
+        joint_endings = ArchWallJoinUtils.collect_wall_joint_endings(obj)
+        start_plane, start_is_global = self._resolve_ending_plane(obj, "Start", joint_endings)
+        if start_plane:
+            solid_to_trim = self._apply_cutting_plane(
+                obj,
+                solid_to_trim,
+                wall_placement,
+                start_plane,
+                obj.Proxy.calc_endpoints(obj)[1],
+                tool_size,
+                is_global=start_is_global,
             )
 
-            cutting_tool_local = cutting_tool_global.copy()
-            cutting_tool_local.transformShape(wall_placement.inverse().toMatrix())
-
-            solid_to_trim = solid_to_trim.common(cutting_tool_local)
-
-        is_end_null = obj.EndingEnd.Base.Length < 1e-9 and obj.EndingEnd.Rotation.Angle < 1e-9
-        if not is_end_null:
-            global_plane_placement = wall_placement.multiply(obj.EndingEnd)
-            ref_point = obj.Proxy.calc_endpoints(obj)[0]
-
-            cutting_tool_global = self._create_cutting_tool_from_plane(
-                global_plane_placement, ref_point, tool_size
+        end_plane, end_is_global = self._resolve_ending_plane(obj, "End", joint_endings)
+        if end_plane:
+            solid_to_trim = self._apply_cutting_plane(
+                obj,
+                solid_to_trim,
+                wall_placement,
+                end_plane,
+                obj.Proxy.calc_endpoints(obj)[0],
+                tool_size,
+                is_global=end_is_global,
             )
-
-            cutting_tool_local = cutting_tool_global.copy()
-            cutting_tool_local.transformShape(wall_placement.inverse().toMatrix())
-
-            solid_to_trim = solid_to_trim.common(cutting_tool_local)
         return solid_to_trim
+
+    def _resolve_ending_plane(self, obj, end_name, joint_endings):
+        manual_placement = getattr(obj, "Ending" + end_name)
+        manual_plane = None if self._is_null_placement(manual_placement) else manual_placement
+        joint_plane = joint_endings.get(end_name)
+        source = getattr(obj, "TrimSource" + end_name, "Auto")
+
+        if source == "Manual":
+            return manual_plane, False
+        if source == "Joint":
+            return joint_plane, True
+        if joint_plane:
+            return joint_plane, True
+        return manual_plane, False
+
+    def _apply_cutting_plane(
+        self,
+        _obj,
+        solid_to_trim,
+        wall_placement,
+        plane_placement,
+        ref_point,
+        tool_size,
+        is_global=False,
+    ):
+        global_plane_placement = (
+            plane_placement if is_global else wall_placement.multiply(plane_placement)
+        )
+        cutting_tool_global = self._create_cutting_tool_from_plane(
+            global_plane_placement, ref_point, tool_size
+        )
+        cutting_tool_local = cutting_tool_global.copy()
+        cutting_tool_local.transformShape(wall_placement.inverse().toMatrix())
+        return solid_to_trim.common(cutting_tool_local)
+
+    @staticmethod
+    def _is_null_placement(placement, tol=1e-9):
+        return placement.Base.Length < tol and placement.Rotation.Angle < tol
 
     def _create_cutting_tool_from_plane(self, cutting_placement, ref_point, tool_size):
         """

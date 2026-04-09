@@ -25,6 +25,7 @@
 """GUI tests for the ArchWall module."""
 
 import Arch
+import ArchWallJoinUtils
 import Draft
 import FreeCAD
 import FreeCADGui
@@ -469,8 +470,15 @@ class TestArchWallGui(ArchWallGuiTestCase):
     def _placements_match(left, right, tol=1e-9):
         return left.Base.isEqual(right.Base, tol) and left.Rotation.isSame(right.Rotation, tol)
 
-    def test_bim_join_miter_sets_endings_on_both_walls(self):
-        """Tests that the miter join writes ending placements for both walls."""
+    def _get_wall_joints(self):
+        return [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+
+    def test_bim_join_miter_creates_wall_joint(self):
+        """Tests that the miter join creates a wall-joint relation and trims the walls."""
         self.printTestMessage("Testing BIM miter join...")
 
         wall1 = self._make_baseless_wall_between(
@@ -484,28 +492,33 @@ class TestArchWallGui(ArchWallGuiTestCase):
 
         self._activate_join_command(BIM_Join_Miter(), wall1, wall2)
 
+        joints = self._get_wall_joints()
+        self.assertEqual(
+            len(joints), 1, "The miter join should create exactly one relation object."
+        )
+        joint = joints[0]
+
+        self.assertEqual(joint.JointType, "Miter")
+        self.assertEqual(joint.Status, "OK")
+        self.assertEqual(joint.WallA, wall1)
+        self.assertEqual(joint.WallB, wall2)
         self.assertFalse(
-            self._is_identity_placement(wall1.EndingEnd),
-            "The first wall should receive an ending at its joined end.",
+            self._is_identity_placement(joint.ResolvedPlaneA),
+            "The relation should solve a cutting plane for the first wall.",
         )
         self.assertTrue(
-            self._is_identity_placement(wall1.EndingStart),
-            "The untouched end of the first wall should remain unchanged.",
-        )
-        self.assertFalse(
-            self._is_identity_placement(wall2.EndingStart),
-            "The second wall should receive an ending at its joined end.",
-        )
-        self.assertTrue(
-            self._is_identity_placement(wall2.EndingEnd),
-            "The untouched end of the second wall should remain unchanged.",
+            self._is_identity_placement(wall1.EndingStart)
+            and self._is_identity_placement(wall1.EndingEnd)
+            and self._is_identity_placement(wall2.EndingStart)
+            and self._is_identity_placement(wall2.EndingEnd),
+            "Manual wall endings should remain untouched by the join command.",
         )
         self.assertTrue(wall1.Shape.isValid(), "First wall became invalid after miter join.")
         self.assertTrue(wall2.Shape.isValid(), "Second wall became invalid after miter join.")
         self.assertLess(wall1.Shape.Volume, initial_volume1)
         self.assertLess(wall2.Shape.Volume, initial_volume2)
 
-    def test_bim_join_miter_sets_endings_on_line_based_walls(self):
+    def test_bim_join_miter_creates_wall_joint_on_line_based_walls(self):
         """Tests that the miter join also works on line-based walls."""
         self.printTestMessage("Testing BIM miter join on line-based walls...")
 
@@ -520,29 +533,24 @@ class TestArchWallGui(ArchWallGuiTestCase):
 
         self._activate_join_command(BIM_Join_Miter(), wall1, wall2)
 
-        self.assertFalse(
-            self._is_identity_placement(wall1.EndingEnd),
-            "The first line-based wall should receive an ending at its joined end.",
-        )
+        joints = self._get_wall_joints()
+        self.assertEqual(len(joints), 1, "The line-based miter join should create one relation.")
+        self.assertEqual(joints[0].JointType, "Miter")
+        self.assertEqual(joints[0].Status, "OK")
         self.assertTrue(
-            self._is_identity_placement(wall1.EndingStart),
-            "The untouched end of the first line-based wall should remain unchanged.",
-        )
-        self.assertFalse(
-            self._is_identity_placement(wall2.EndingStart),
-            "The second line-based wall should receive an ending at its joined end.",
-        )
-        self.assertTrue(
-            self._is_identity_placement(wall2.EndingEnd),
-            "The untouched end of the second line-based wall should remain unchanged.",
+            self._is_identity_placement(wall1.EndingStart)
+            and self._is_identity_placement(wall1.EndingEnd)
+            and self._is_identity_placement(wall2.EndingStart)
+            and self._is_identity_placement(wall2.EndingEnd),
+            "Manual endings should stay clear on line-based joined walls.",
         )
         self.assertTrue(wall1.Shape.isValid(), "First line-based wall became invalid after join.")
         self.assertTrue(wall2.Shape.isValid(), "Second line-based wall became invalid after join.")
         self.assertLess(wall1.Shape.Volume, initial_volume1)
         self.assertLess(wall2.Shape.Volume, initial_volume2)
 
-    def test_bim_join_butt_sets_endings_on_both_walls(self):
-        """Tests that the butt join writes ending placements for both walls."""
+    def test_bim_join_butt_creates_wall_joint(self):
+        """Tests that the butt join creates a wall-joint relation with the expected role."""
         self.printTestMessage("Testing BIM butt join...")
 
         wall1 = self._make_baseless_wall_between(
@@ -554,21 +562,17 @@ class TestArchWallGui(ArchWallGuiTestCase):
 
         self._activate_join_command(BIM_Join_Butt(), wall1, wall2)
 
-        self.assertFalse(
-            self._is_identity_placement(wall1.EndingEnd),
-            "The first wall should receive a butt ending at its joined end.",
-        )
+        joints = self._get_wall_joints()
+        self.assertEqual(len(joints), 1)
+        self.assertEqual(joints[0].JointType, "Butt")
+        self.assertEqual(joints[0].ButtTrimmed, "WallB")
+        self.assertEqual(joints[0].Status, "OK")
         self.assertTrue(
-            self._is_identity_placement(wall1.EndingStart),
-            "The untouched end of the first wall should remain unchanged.",
-        )
-        self.assertFalse(
-            self._is_identity_placement(wall2.EndingStart),
-            "The second wall should receive a butt ending at its joined end.",
-        )
-        self.assertTrue(
-            self._is_identity_placement(wall2.EndingEnd),
-            "The untouched end of the second wall should remain unchanged.",
+            self._is_identity_placement(wall1.EndingStart)
+            and self._is_identity_placement(wall1.EndingEnd)
+            and self._is_identity_placement(wall2.EndingStart)
+            and self._is_identity_placement(wall2.EndingEnd),
+            "Manual endings should stay untouched when the butt relation drives the trim.",
         )
         self.assertTrue(wall1.Shape.isValid(), "First wall became invalid after butt join.")
         self.assertTrue(wall2.Shape.isValid(), "Second wall became invalid after butt join.")
@@ -588,21 +592,21 @@ class TestArchWallGui(ArchWallGuiTestCase):
 
         self._activate_join_command(BIM_Join_Tee(), stem_wall, top_wall)
 
-        self.assertFalse(
-            self._is_identity_placement(stem_wall.EndingStart),
-            "The stem wall should receive a tee ending at the joined end.",
-        )
+        joints = self._get_wall_joints()
+        self.assertEqual(len(joints), 1)
+        joint = joints[0]
+
+        self.assertEqual(joint.JointType, "Tee")
+        self.assertEqual(joint.Status, "OK")
+        self.assertEqual(joint.TeeStem, "WallA")
+        self.assertEqual(joint.ResolvedEndA, "Start")
+        self.assertEqual(joint.ResolvedEndB, "None")
         self.assertTrue(
-            self._is_identity_placement(stem_wall.EndingEnd),
-            "The untouched end of the stem wall should remain unchanged.",
-        )
-        self.assertTrue(
-            self._is_identity_placement(top_wall.EndingStart),
-            "The top wall should keep a clear start ending after a tee join.",
-        )
-        self.assertTrue(
-            self._is_identity_placement(top_wall.EndingEnd),
-            "The top wall should keep a clear end ending after a tee join.",
+            self._is_identity_placement(stem_wall.EndingStart)
+            and self._is_identity_placement(stem_wall.EndingEnd)
+            and self._is_identity_placement(top_wall.EndingStart)
+            and self._is_identity_placement(top_wall.EndingEnd),
+            "Manual endings should stay clear after a tee relation is created.",
         )
         self.assertTrue(stem_wall.Shape.isValid(), "Stem wall became invalid after tee join.")
         self.assertTrue(top_wall.Shape.isValid(), "Top wall became invalid after tee join.")
@@ -620,13 +624,13 @@ class TestArchWallGui(ArchWallGuiTestCase):
             FreeCAD.Vector(-1000, 0, 0), FreeCAD.Vector(1000, 0, 0)
         )
 
-        existing_baseline = existing_join_wall.Proxy.get_baseline(existing_join_wall)
-        top_baseline = top_wall.Proxy.get_baseline(top_wall)
-        butt_join = BIM_Join_Butt()
-        intersection, _, top_end_name = butt_join.find_best_intersection(
-            existing_baseline, top_baseline
+        existing_baseline = ArchWallJoinUtils.get_join_baseline(existing_join_wall)
+        top_baseline = ArchWallJoinUtils.get_join_baseline(top_wall)
+        intersection, _, top_end_name = ArchWallJoinUtils.find_best_intersection(
+            existing_baseline,
+            top_baseline,
         )
-        _, top_plane = butt_join.calculate_cutting_planes(
+        _, top_plane = ArchWallJoinUtils.calculate_butt_cutting_planes(
             existing_baseline,
             top_baseline,
             intersection,
@@ -655,10 +659,9 @@ class TestArchWallGui(ArchWallGuiTestCase):
 
         self._activate_join_command(BIM_Join_Tee(), stem_wall, top_wall)
 
-        self.assertFalse(
-            self._is_identity_placement(stem_wall.EndingStart),
-            "The tee join should still trim the stem wall.",
-        )
+        joints = self._get_wall_joints()
+        self.assertEqual(len(joints), 1)
+        self.assertEqual(joints[0].JointType, "Tee")
         self.assertTrue(
             self._placements_match(top_wall.EndingStart, preserved_start),
             "The top wall start ending should be preserved across the tee join.",
@@ -684,6 +687,9 @@ class TestArchWallGui(ArchWallGuiTestCase):
 
         self._activate_join_command(BIM_Join_Miter(), unsupported_wall, supported_wall)
 
+        self.assertEqual(
+            len(self._get_wall_joints()), 0, "Rejected joins should not create a relation."
+        )
         self.assertTrue(
             self._is_identity_placement(unsupported_wall.EndingStart)
             and self._is_identity_placement(unsupported_wall.EndingEnd),
@@ -708,6 +714,9 @@ class TestArchWallGui(ArchWallGuiTestCase):
 
         self._activate_join_command(BIM_Join_Miter(), unsupported_wall, supported_wall)
 
+        self.assertEqual(
+            len(self._get_wall_joints()), 0, "Rejected joins should not create a relation."
+        )
         self.assertTrue(
             self._is_identity_placement(unsupported_wall.EndingStart)
             and self._is_identity_placement(unsupported_wall.EndingEnd),
