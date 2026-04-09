@@ -1214,6 +1214,93 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIn(session._plan_relation_status_message, body)
         self.assertIn(session._plan_relation_status_message, session.task_panel.status.text())
 
+    def test_plan_edit_joined_wall_preview_uses_trimmed_footprint(self):
+        """Wall stretch preview should clip the footprint using active wall joins."""
+
+        source_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        target_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        target_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(3000, -1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        self.document.recompute()
+
+        from bimcommands.BimJoin import BIM_Join_Miter
+
+        joint = Arch.makeWallJoint(source_wall, target_wall, "Miter")
+        self.assertIsNotNone(joint)
+        self.assertTrue(BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall))
+        self.document.recompute()
+        self.assertEqual(joint.Status, "OK")
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session._edit_wall = source_wall
+        endpoints = source_wall.Proxy.calc_endpoints(source_wall)
+        plain = session._get_preview_footprint(endpoints)
+        polylines, warnings = session._get_preview_footprint_polylines(endpoints)
+
+        self.assertEqual(warnings, [])
+        self.assertEqual(len(polylines), 1)
+        closed_plain = [FreeCAD.Vector(point) for point in plain]
+        closed_plain.append(FreeCAD.Vector(plain[0]))
+        preview = polylines[0]
+        self.assertNotEqual(len(preview), 0)
+        self.assertFalse(
+            len(preview) == len(closed_plain)
+            and all(
+                preview_point.distanceToPoint(plain_point) < 1e-6
+                for preview_point, plain_point in zip(preview, closed_plain)
+            )
+        )
+
+    def test_plan_edit_joined_wall_preview_warns_before_invalid_resize_commit(self):
+        """Wall stretch preview should warn when a joined wall would become invalid."""
+
+        source_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        target_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        target_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(3000, -1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        self.document.recompute()
+
+        from bimcommands.BimJoin import BIM_Join_Miter
+
+        joint = Arch.makeWallJoint(source_wall, target_wall, "Miter")
+        self.assertIsNotNone(joint)
+        self.assertTrue(BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall))
+        self.document.recompute()
+        self.assertEqual(joint.Status, "OK")
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session._select_wall_for_plan_edit(source_wall)
+        original_endpoints = source_wall.Proxy.calc_endpoints(source_wall)
+        session._wall_edit_modal_active = True
+        session._edit_wall = source_wall
+        session._edit_endpoint = "End"
+        session._edit_endpoints = original_endpoints
+        session.current_tool = "Stretch End"
+
+        invalid_points = [
+            original_endpoints[0],
+            original_endpoints[0].add(FreeCAD.Vector(1000, 0, 0)),
+        ]
+        session._sync_wall_edit_preview(invalid_points)
+        self.pump_gui_events()
+
+        self.assertIsNotNone(session._plan_relation_status_message)
+        self.assertIn("Preview warning", session._plan_relation_status_message)
+        self.assertIn(joint.Label, session._plan_relation_status_message)
+        _title, body = session._get_status_chip_text()
+        self.assertIn(session._plan_relation_status_message, body)
+        self.assertIn(session._plan_relation_status_message, session.task_panel.status.text())
+
     def test_plan_edit_wall_grip_move_uses_point_pick_commit(self):
         """Wall grips should use click-move-click editing instead of hold-drag."""
 

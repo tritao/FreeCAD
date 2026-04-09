@@ -277,7 +277,7 @@ class PlanEditSession:
         self._wall_edit_opening_clearances = {}
         self._preview_points = None
         self._preview_line_tracker = None
-        self._preview_rect_tracker = None
+        self._preview_footprint_trackers = []
         self._preview_grip_trackers = []
         self._wall_edit_readout_trackers = []
         self._wall_edit_opening_preview_trackers = []
@@ -418,7 +418,7 @@ class PlanEditSession:
         self._edit_endpoint = None
         self._edit_endpoints = None
         self._preview_points = None
-        self._preview_rect_tracker = None
+        self._preview_footprint_trackers = []
         self._rect_wall_start = None
         self._rect_wall_params = None
         self._rect_wall_preview_trackers = []
@@ -1710,6 +1710,7 @@ class PlanEditSession:
             self._embedded_tool_name = None
             self._edit_opening_move_anchor = "center"
             self._edit_opening_move_raw_point = None
+            self._clear_plan_relation_status()
             return
         self._stop_snapper()
         self._pop_opening_move_snap_profile()
@@ -1731,6 +1732,7 @@ class PlanEditSession:
         self._edit_opening_handle_index = None
         self._edit_opening_move_anchor = "center"
         self._edit_opening_move_raw_point = None
+        self._clear_plan_relation_status()
         self._sync_wall_grips()
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
@@ -2340,6 +2342,211 @@ class PlanEditSession:
             points[0].add(FreeCAD.Vector(perp).multiply(y_max)),
         ]
 
+    def _make_preview_wall_adapter(self, wall, endpoints):
+        if not wall or not endpoints or len(endpoints) != 2:
+            return None
+
+        real_proxy = getattr(wall, "Proxy", None)
+        preview_points = [FreeCAD.Vector(point) for point in endpoints]
+
+        class _PreviewWallProxy:
+            def __init__(self, wrapped_proxy):
+                self._wrapped_proxy = wrapped_proxy
+                self.Type = getattr(wrapped_proxy, "Type", None)
+
+            def calc_endpoints(self, _obj):
+                return [FreeCAD.Vector(point) for point in preview_points]
+
+            def get_width(self, _obj, widths=False):
+                if self._wrapped_proxy and hasattr(self._wrapped_proxy, "get_width"):
+                    return self._wrapped_proxy.get_width(wall, widths=widths)
+                width = getattr(getattr(wall, "Width", None), "Value", getattr(wall, "Width", None))
+                return width
+
+            def get_layers(self, _obj):
+                if self._wrapped_proxy and hasattr(self._wrapped_proxy, "get_layers"):
+                    return self._wrapped_proxy.get_layers(wall)
+                return None
+
+        class _PreviewWall:
+            def __init__(self):
+                self._wall = wall
+                self.Proxy = _PreviewWallProxy(real_proxy)
+                self.Label = getattr(wall, "Label", getattr(wall, "Name", ""))
+                self.Name = getattr(wall, "Name", "")
+                self.Document = getattr(wall, "Document", None)
+                self.InList = getattr(wall, "InList", [])
+                self.Base = getattr(wall, "Base", None)
+                self.Width = getattr(wall, "Width", None)
+                self.Align = getattr(wall, "Align", "Center")
+
+            def __getattr__(self, attr):
+                return getattr(self._wall, attr)
+
+        return _PreviewWall()
+
+    def _solve_preview_wall_relation(self, relation, wall, preview_wall):
+        if not relation or not wall or not preview_wall:
+            return None
+
+        import ArchWallJoinUtils
+        import ArchWallJunctionUtils
+
+        if ArchWallJoinUtils.is_wall_joint(relation):
+            wall_a = preview_wall if getattr(relation, "WallA", None) == wall else relation.WallA
+            wall_b = preview_wall if getattr(relation, "WallB", None) == wall else relation.WallB
+            return ArchWallJoinUtils.solve_wall_joint_inputs(
+                wall_a,
+                wall_b,
+                getattr(relation, "JointType", "Miter"),
+                getattr(relation, "ButtTrimmed", "Auto"),
+                getattr(relation, "TeeStem", "Auto"),
+                getattr(relation, "EndA", "Auto"),
+                getattr(relation, "EndB", "Auto"),
+            )
+
+        if ArchWallJoinUtils.is_wall_junction(relation):
+            walls = [
+                preview_wall if linked_wall == wall else linked_wall
+                for linked_wall in list(getattr(relation, "Walls", []) or [])
+            ]
+            carrier_wall = (
+                preview_wall
+                if getattr(relation, "CarrierWall", None) == wall
+                else relation.CarrierWall
+            )
+            return ArchWallJunctionUtils.solve_wall_junction_inputs(
+                walls,
+                getattr(relation, "CarrierMode", "Auto"),
+                carrier_wall,
+            )
+
+        return None
+
+    def _collect_preview_wall_relation_data(self, wall, points):
+        if not wall or not points or len(points) != 2:
+            return {"Start": None, "End": None, "Conflicts": set()}, []
+
+        preview_wall = self._make_preview_wall_adapter(wall, points)
+        if not preview_wall:
+            return {"Start": None, "End": None, "Conflicts": set()}, []
+
+        import ArchWallJoinUtils
+
+        claims = {"Start": [], "End": []}
+        warnings = []
+        for relation in ArchWallJoinUtils.iter_wall_relations(wall):
+            solution = self._solve_preview_wall_relation(relation, wall, preview_wall)
+            if not solution:
+                continue
+            if not solution.is_ok():
+                warnings.append(
+                    (
+                        getattr(relation, "Label", getattr(relation, "Name", "")),
+                        getattr(solution, "status", "SolverError"),
+                        str(getattr(solution, "status_message", "") or "").strip(),
+                    )
+                )
+                continue
+            end_name, plane = ArchWallJoinUtils.get_trim_for_wall(solution, preview_wall)
+            if end_name and plane:
+                claims[end_name].append((relation, plane))
+
+        result = {"Start": None, "End": None, "Conflicts": set()}
+        for end_name, entries in claims.items():
+            if len(entries) == 1:
+                result[end_name] = entries[0][1]
+            elif len(entries) > 1:
+                result["Conflicts"].add(end_name)
+                warnings.append(
+                    (
+                        translate("BIM_PlanEdit", "{end_name} preview trims").format(
+                            end_name=end_name
+                        ),
+                        "Conflict",
+                        translate(
+                            "BIM_PlanEdit",
+                            "Multiple wall relations trim the same wall end in preview.",
+                        ),
+                    )
+                )
+        return result, warnings
+
+    @staticmethod
+    def _clip_preview_polygon_to_plane(polygon, plane_placement, ref_point, tol=1e-7):
+        if not polygon or len(polygon) < 3 or plane_placement is None or ref_point is None:
+            return polygon
+
+        plane_origin = FreeCAD.Vector(plane_placement.Base)
+        plane_normal = plane_placement.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
+        if plane_normal.Length <= tol:
+            return polygon
+        plane_normal.normalize()
+
+        ref_distance = plane_normal.dot(FreeCAD.Vector(ref_point).sub(plane_origin))
+
+        def signed_distance(point):
+            return plane_normal.dot(FreeCAD.Vector(point).sub(plane_origin))
+
+        def is_inside(distance):
+            if ref_distance >= 0:
+                return distance >= -tol
+            return distance <= tol
+
+        def intersect(prev_point, curr_point, prev_distance, curr_distance):
+            denom = prev_distance - curr_distance
+            if abs(denom) <= tol:
+                return FreeCAD.Vector(curr_point)
+            factor = prev_distance / denom
+            segment = FreeCAD.Vector(curr_point).sub(prev_point)
+            return FreeCAD.Vector(prev_point).add(segment.multiply(factor))
+
+        result = []
+        prev_point = FreeCAD.Vector(polygon[-1])
+        prev_distance = signed_distance(prev_point)
+        prev_inside = is_inside(prev_distance)
+        for current_point in polygon:
+            current_point = FreeCAD.Vector(current_point)
+            current_distance = signed_distance(current_point)
+            current_inside = is_inside(current_distance)
+            if current_inside:
+                if not prev_inside:
+                    result.append(
+                        intersect(prev_point, current_point, prev_distance, current_distance)
+                    )
+                result.append(current_point)
+            elif prev_inside:
+                result.append(intersect(prev_point, current_point, prev_distance, current_distance))
+            prev_point = current_point
+            prev_distance = current_distance
+            prev_inside = current_inside
+        return result
+
+    def _get_preview_footprint_polylines(self, points):
+        footprint = self._get_preview_footprint(points)
+        if not footprint or len(footprint) < 3:
+            return [], []
+
+        relation_endings, warnings = self._collect_preview_wall_relation_data(
+            self._edit_wall, points
+        )
+        polygon = [FreeCAD.Vector(point) for point in footprint]
+        for end_name in ("Start", "End"):
+            plane = relation_endings.get(end_name)
+            if plane is None or end_name in relation_endings.get("Conflicts", set()):
+                continue
+            ref_point = points[1] if end_name == "Start" else points[0]
+            polygon = self._clip_preview_polygon_to_plane(polygon, plane, ref_point)
+            if not polygon or len(polygon) < 3:
+                break
+
+        if not polygon or len(polygon) < 3:
+            return [], warnings
+
+        closed = list(polygon)
+        closed.append(FreeCAD.Vector(closed[0]))
+        return [closed], warnings
+
     def _get_readout_base_gap(self):
         from draftutils import params
 
@@ -2389,18 +2596,39 @@ class PlanEditSession:
         self._preview_line_tracker.p1(points[0])
         self._preview_line_tracker.p2(points[1])
 
-        footprint = self._get_preview_footprint(points)
-        if footprint:
-            if self._preview_rect_tracker is None:
-                self._preview_rect_tracker = DraftTrackers.rectangleTracker()
-                self._preview_rect_tracker.on()
-            axis = points[1].sub(points[0]).normalize()
-            rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), axis)
-            perp = rotation.multVec(FreeCAD.Vector(0, 1, 0))
-            self._preview_rect_tracker.setPlane(axis, perp)
-            self._preview_rect_tracker.setorigin(footprint[0])
-            self._preview_rect_tracker.update(footprint[2])
-            self._preview_rect_tracker.on()
+        previous_relation_status = self._plan_relation_status_message
+        polylines, relation_warnings = self._get_preview_footprint_polylines(points)
+        if relation_warnings:
+            label, status, _detail = relation_warnings[0]
+            self._plan_relation_status_message = translate(
+                "BIM_PlanEdit", "Preview warning: {label} ({status})"
+            ).format(label=label, status=status)
+        elif self._is_wall_edit_modal_active():
+            self._clear_plan_relation_status()
+
+        segments = []
+        for polyline in polylines:
+            if len(polyline) < 2:
+                continue
+            segments.extend(zip(polyline, polyline[1:]))
+
+        color = (0.22, 0.53, 0.98)
+        width = self._scaled_line_width(2)
+        if len(self._preview_footprint_trackers) != len(segments):
+            self._finalize_trackers(self._preview_footprint_trackers)
+            self._preview_footprint_trackers = []
+            for _start, _end in segments:
+                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                self._preview_footprint_trackers.append(tracker)
+
+        for tracker, (start, end) in zip(self._preview_footprint_trackers, segments):
+            tracker.setColor(color)
+            tracker.p1(start)
+            tracker.p2(end)
+            tracker.on()
+
+        if previous_relation_status != self._plan_relation_status_message:
+            self._refresh_task_panel_status()
 
         midpoint = (points[0] + points[1]) * 0.5
         marker_size = self._scaled_marker_size(params.get_param_view("MarkerSize"))
@@ -2455,12 +2683,8 @@ class PlanEditSession:
                 pass
         self._preview_line_tracker = None
 
-        if self._preview_rect_tracker:
-            try:
-                self._preview_rect_tracker.finalize()
-            except Exception:
-                pass
-        self._preview_rect_tracker = None
+        self._finalize_trackers(self._preview_footprint_trackers)
+        self._preview_footprint_trackers = []
 
         for tracker in self._preview_grip_trackers:
             try:
