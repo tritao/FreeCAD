@@ -44,7 +44,7 @@ else:
 
 
 class _WallJunction:
-    """Relation object that manages 3+ wall intersections through derived joints."""
+    """Relation object that manages direct trims across 3+ wall intersections."""
 
     def __init__(self, obj):
         obj.Proxy = self
@@ -113,6 +113,7 @@ class _WallJunction:
                 "MissingWall",
                 "UnsupportedBaseline",
                 "NoIntersection",
+                "Conflict",
                 "UnsupportedTopology",
                 "SolverError",
             ]
@@ -152,12 +153,45 @@ class _WallJunction:
                 ),
             )
             obj.setEditorMode("ResolvedBranchWalls", 1)
+        if "ConflictWalls" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyLinkList",
+                "ConflictWalls",
+                "Junction",
+                QT_TRANSLATE_NOOP(
+                    "App::Property", "The walls whose trimmed ends are blocked by older relations."
+                ),
+            )
+            obj.setEditorMode("ConflictWalls", 1)
+        if "ConflictRelationLabels" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyStringList",
+                "ConflictRelationLabels",
+                "Junction",
+                QT_TRANSLATE_NOOP(
+                    "App::Property", "The labels of the blocking relations for this wall junction."
+                ),
+            )
+            obj.setEditorMode("ConflictRelationLabels", 1)
+        if "ConflictMessages" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyStringList",
+                "ConflictMessages",
+                "Junction",
+                QT_TRANSLATE_NOOP(
+                    "App::Property", "Details about the blocking relation conflicts."
+                ),
+            )
+            obj.setEditorMode("ConflictMessages", 1)
         for prop in (
             "Status",
             "StatusMessage",
             "Intersection",
             "ResolvedCarrierWall",
             "ResolvedBranchWalls",
+            "ConflictWalls",
+            "ConflictRelationLabels",
+            "ConflictMessages",
         ):
             if prop in obj.PropertiesList:
                 obj.setPropertyStatus(prop, "Output")
@@ -194,7 +228,12 @@ class _WallJunction:
         obj.StatusMessage = solution.status_message
         obj.Intersection = solution.intersection
         obj.ResolvedCarrierWall = solution.carrier_wall
-        obj.ResolvedBranchWalls = solution.branch_walls if solution.is_ok() else []
+        obj.ResolvedBranchWalls = (
+            solution.branch_walls if solution.status in ("OK", "Conflict") else []
+        )
+        obj.ConflictWalls = list(solution.conflict_walls)
+        obj.ConflictRelationLabels = list(solution.conflict_relation_labels)
+        obj.ConflictMessages = list(solution.conflict_messages)
         self.updatePresentation(obj)
 
     def onDelete(self, obj, _args):

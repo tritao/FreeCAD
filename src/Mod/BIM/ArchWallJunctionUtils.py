@@ -50,6 +50,10 @@ class WallJunctionSolution:
     branch_walls: list = field(default_factory=list)
     walls: list = field(default_factory=list)
     trim_claims: list = field(default_factory=list)
+    conflicts: list = field(default_factory=list)
+    conflict_walls: list = field(default_factory=list)
+    conflict_relation_labels: list = field(default_factory=list)
+    conflict_messages: list = field(default_factory=list)
 
     def is_ok(self):
         return self.status == "OK"
@@ -70,17 +74,22 @@ class WallJunctionTrim:
     plane: FreeCAD.Placement
 
 
-def solve_wall_junction(junction):
+def solve_wall_junction(junction, include_conflicts=True):
     """Solves a wall junction relation and returns derived carrier/branch data."""
     if not junction:
         return WallJunctionSolution("MissingWall", "The wall junction object is missing.")
     if not getattr(junction, "Enabled", True):
         return WallJunctionSolution("Disabled", "The wall junction is disabled.")
-    return solve_wall_junction_inputs(
+    solution = solve_wall_junction_inputs(
         getattr(junction, "Walls", []),
         getattr(junction, "CarrierMode", "Auto"),
         getattr(junction, "CarrierWall", None),
     )
+    if include_conflicts and solution.is_ok():
+        conflicts = ArchWallJoinUtils.get_relation_conflicts(junction, solution)
+        if conflicts:
+            _apply_conflicts(solution, conflicts)
+    return solution
 
 
 def solve_wall_junction_inputs(walls, carrier_mode="Auto", carrier_wall=None):
@@ -240,3 +249,22 @@ def _unique_walls(walls):
         seen.add(wall.Name)
         unique.append(wall)
     return unique
+
+
+def _apply_conflicts(result, conflicts):
+    result.status = "Conflict"
+    result.conflicts = conflicts
+    unique_messages = []
+    conflict_labels = []
+    conflict_walls = []
+    for conflict in conflicts:
+        if conflict.wall_object and conflict.wall_object not in conflict_walls:
+            conflict_walls.append(conflict.wall_object)
+        if conflict.other_relation_label and conflict.other_relation_label not in conflict_labels:
+            conflict_labels.append(conflict.other_relation_label)
+        if conflict.message not in unique_messages:
+            unique_messages.append(conflict.message)
+    result.conflict_walls = conflict_walls
+    result.conflict_relation_labels = conflict_labels
+    result.conflict_messages = unique_messages
+    result.status_message = "Conflict: " + "; ".join(unique_messages)

@@ -151,3 +151,75 @@ class TestArchWallJunction(TestArchBase.TestArchBase):
 
         self.assertAlmostEqual(branch_up.Shape.Volume, branch_up_volume, delta=1e-6)
         self.assertAlmostEqual(branch_down.Shape.Volume, branch_down_volume, delta=1e-6)
+
+    def test_wall_junction_conflict_reports_blocking_joint(self):
+        self.printTestMessage("Testing wall junction conflict reporting against a wall joint...")
+
+        carrier_wall = self._make_baseless_wall_between(
+            App.Vector(-1000, 0, 0), App.Vector(1000, 0, 0)
+        )
+        branch_up = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(0, 1000, 0))
+        branch_down = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(0, -1000, 0))
+        branch_down_volume = branch_down.Shape.Volume
+
+        blocker = Arch.makeWallJoint(branch_up, carrier_wall, "Tee")
+        blocker.TeeStem = "WallA"
+        self.document.recompute()
+        self.assertEqual(blocker.Status, "OK")
+
+        junction = Arch.makeWallJunction(
+            [carrier_wall, branch_up, branch_down], carrier_wall=carrier_wall
+        )
+        self.document.recompute()
+
+        self.assertEqual(junction.Status, "Conflict")
+        self.assertEqual(junction.ResolvedCarrierWall, carrier_wall)
+        self.assertIn(branch_up, junction.ConflictWalls)
+        self.assertIn(blocker.Label, junction.ConflictRelationLabels)
+        self.assertTrue(any("Start" in message for message in junction.ConflictMessages))
+        self.assertTrue(any(blocker.Label in message for message in junction.ConflictMessages))
+        self.assertLess(
+            branch_down.Shape.Volume,
+            branch_down_volume,
+            "Uncontested branch walls should still receive the junction trim.",
+        )
+
+        self.document.removeObject(blocker.Name)
+        self.document.recompute()
+
+        self.assertEqual(junction.Status, "OK")
+        self.assertEqual(junction.ConflictRelationLabels, [])
+        self.assertEqual(junction.ConflictMessages, [])
+
+    def test_wall_junction_conflict_reports_blocking_junction(self):
+        self.printTestMessage(
+            "Testing wall junction conflict reporting against another junction..."
+        )
+
+        carrier_a = self._make_baseless_wall_between(
+            App.Vector(-1000, 0, 0), App.Vector(1000, 0, 0)
+        )
+        branch_up = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(0, 1000, 0))
+        branch_down = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(0, -1000, 0))
+
+        blocker = Arch.makeWallJunction([carrier_a, branch_up, branch_down], carrier_wall=carrier_a)
+        self.document.recompute()
+        self.assertEqual(blocker.Status, "OK")
+
+        carrier_b = self._make_baseless_wall_between(
+            App.Vector(-1000, -200, 0), App.Vector(1000, 200, 0)
+        )
+        branch_diag = self._make_baseless_wall_between(
+            App.Vector(0, 0, 0), App.Vector(700, -700, 0)
+        )
+
+        conflicted = Arch.makeWallJunction(
+            [carrier_b, branch_up, branch_diag], carrier_wall=carrier_b
+        )
+        self.document.recompute()
+
+        self.assertEqual(blocker.Status, "OK")
+        self.assertEqual(conflicted.Status, "Conflict")
+        self.assertIn(branch_up, conflicted.ConflictWalls)
+        self.assertIn(blocker.Label, conflicted.ConflictRelationLabels)
+        self.assertTrue(any(blocker.Label in message for message in conflicted.ConflictMessages))

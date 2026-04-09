@@ -38,15 +38,27 @@ import FreeCAD
 
 @dataclass
 class WallJointConflict:
-    """Structured description of a joint-end conflict."""
+    """Structured description of a relation-end conflict."""
 
     wall_key: str
     wall_object: object
     wall_end: str
-    other_joint: object
-    other_joint_type: str
-    other_joint_label: str
+    other_relation: object
+    other_relation_type: str
+    other_relation_label: str
     message: str
+
+    @property
+    def other_joint(self):
+        return self.other_relation
+
+    @property
+    def other_joint_type(self):
+        return self.other_relation_type
+
+    @property
+    def other_joint_label(self):
+        return self.other_relation_label
 
     def __getitem__(self, key):
         return getattr(self, key)
@@ -192,7 +204,9 @@ def solve_wall_relation(relation, include_conflicts=True):
     if is_wall_junction(relation):
         import ArchWallJunctionUtils
 
-        return ArchWallJunctionUtils.solve_wall_junction(relation)
+        return ArchWallJunctionUtils.solve_wall_junction(
+            relation, include_conflicts=include_conflicts
+        )
     return _status_result("SolverError", "Unsupported wall relation object.")
 
 
@@ -381,42 +395,48 @@ def solve_wall_joint_inputs(
 
 
 def get_joint_conflicts(joint, solution=None):
-    """Returns structured conflict entries for wall ends already trimmed by another joint."""
-    if not joint:
+    """Returns structured conflict entries for wall ends already trimmed by older relations."""
+    return get_relation_conflicts(joint, solution)
+
+
+def get_relation_conflicts(relation, solution=None):
+    """Returns structured conflict entries for wall ends already trimmed by older relations."""
+    if not relation:
         return []
     if solution is None:
-        solution = solve_wall_joint(joint, include_conflicts=False)
-    if not solution.is_ok():
+        solution = solve_wall_relation(relation, include_conflicts=False)
+    if not solution or not solution.is_ok():
         return []
 
     conflicts = []
-    for wall_key, wall_obj, end_name in (
-        ("A", solution.wall_a, solution.resolved_end_a),
-        ("B", solution.wall_b, solution.resolved_end_b),
-    ):
+    for wall_key, wall_obj, end_name in _iter_solution_trim_claims(solution):
         if not wall_obj or not end_name:
             continue
-        for other in iter_wall_joints(wall_obj):
-            if other == joint or not getattr(other, "Enabled", True):
+        for other in iter_wall_relations(wall_obj):
+            if other == relation or not getattr(other, "Enabled", True):
                 continue
-            other_solution = solve_wall_joint(other, include_conflicts=False)
-            if not other_solution.is_ok():
+            if not _relation_precedes(other, relation):
+                continue
+            other_solution = solve_wall_relation(other, include_conflicts=False)
+            if not other_solution or not other_solution.is_ok():
                 continue
             other_end_name, _other_plane = get_trim_for_wall(other_solution, wall_obj)
-            if other_end_name == end_name:
-                conflicts.append(
-                    WallJointConflict(
-                        wall_key=wall_key,
-                        wall_object=wall_obj,
-                        wall_end=end_name,
-                        other_joint=other,
-                        other_joint_type=getattr(other, "JointType", "WallJoint"),
-                        other_joint_label=getattr(other, "Label", getattr(other, "Name", "")),
-                        message=(
-                            f"{wall_obj.Label} {end_name} is already trimmed by joint {other.Label}."
-                        ),
-                    )
+            if other_end_name != end_name:
+                continue
+            conflicts.append(
+                WallJointConflict(
+                    wall_key=wall_key,
+                    wall_object=wall_obj,
+                    wall_end=end_name,
+                    other_relation=other,
+                    other_relation_type=_get_relation_type_name(other),
+                    other_relation_label=getattr(other, "Label", getattr(other, "Name", "")),
+                    message=(
+                        f"{wall_obj.Label} {end_name} is already trimmed by "
+                        f"{_get_relation_kind_name(other)} {other.Label}."
+                    ),
                 )
+            )
     return conflicts
 
 
@@ -577,6 +597,52 @@ def _apply_conflicts(result, conflicts):
         if conflict.message not in unique_messages:
             unique_messages.append(conflict.message)
     result.status_message = "Conflict: " + "; ".join(unique_messages)
+
+
+def _iter_solution_trim_claims(solution):
+    if isinstance(solution, WallJointSolution):
+        for wall_key, wall_obj, end_name in (
+            ("A", solution.wall_a, solution.resolved_end_a),
+            ("B", solution.wall_b, solution.resolved_end_b),
+        ):
+            if wall_obj and end_name:
+                yield wall_key, wall_obj, end_name
+        return
+
+    for trim in getattr(solution, "trim_claims", []):
+        wall = getattr(trim, "wall", None)
+        end_name = getattr(trim, "end_name", None)
+        if wall and end_name:
+            yield getattr(wall, "Name", ""), wall, end_name
+
+
+def _relation_precedes(left, right):
+    if not left or not right or left == right:
+        return False
+    if left.Document and left.Document == right.Document:
+        object_order = {
+            obj.Name: index for index, obj in enumerate(getattr(left.Document, "Objects", []))
+        }
+        return object_order.get(left.Name, float("inf")) < object_order.get(
+            right.Name, float("inf")
+        )
+    return False
+
+
+def _get_relation_kind_name(relation):
+    if is_wall_joint(relation):
+        return "joint"
+    if is_wall_junction(relation):
+        return "junction"
+    return "relation"
+
+
+def _get_relation_type_name(relation):
+    if is_wall_joint(relation):
+        return getattr(relation, "JointType", "WallJoint")
+    if is_wall_junction(relation):
+        return "WallJunction"
+    return getattr(getattr(relation, "Proxy", None), "Type", "Relation")
 
 
 def _get_section_face_offset_vector(path, section, towards_vector):
