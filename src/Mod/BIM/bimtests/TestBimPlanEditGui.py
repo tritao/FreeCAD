@@ -1173,6 +1173,28 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             self.assertTrue(viewer.navicube_enabled)
             self.assertTrue(view.corner_cross_visible)
 
+    def test_plan_edit_session_hides_navicube_and_restores_it_on_exit(self):
+        """Plan Edit should hide the live viewer NaviCube and restore it on exit."""
+
+        view = FreeCADGui.ActiveDocument.ActiveView
+        viewer = view.getViewer()
+
+        original_navicube = viewer.isEnabledNaviCube()
+        original_corner_cross = view.isCornerCrossVisible()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertFalse(viewer.isEnabledNaviCube())
+        self.assertFalse(view.isCornerCrossVisible())
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+        self.assertEqual(viewer.isEnabledNaviCube(), original_navicube)
+        self.assertEqual(view.isCornerCrossVisible(), original_corner_cross)
+
     def test_plan_edit_wall_stretch_enter_starts_length_edit(self):
         """Enter should activate in-view length editing for a wall stretch preview."""
 
