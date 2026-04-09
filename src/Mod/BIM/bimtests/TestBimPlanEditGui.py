@@ -1046,6 +1046,132 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertEqual(len(session._opening_handle_trackers), 3)
 
+    def test_plan_edit_join_mode_hover_tracks_candidate_wall(self):
+        """Join mode should keep a hovered candidate wall visible for joining."""
+
+        source_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        target_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        target_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session._select_wall_for_plan_edit(source_wall)
+        session.activate_join_tool()
+
+        self.assertEqual(session.current_tool, "Join")
+        self.assertIs(session.selected_wall, source_wall)
+        self.assertEqual(len(session._grip_trackers), 0)
+
+        with patch.object(
+            session.view,
+            "getObjectsInfo",
+            return_value=[
+                {"Document": self.document.Name, "Object": target_wall.Name, "Component": ""}
+            ],
+        ):
+            session._update_hovered_plan_target((100, 100))
+            session._refresh_plan_overlay_visuals()
+
+        self.assertIs(session.hovered_wall, target_wall)
+        self.assertIsNone(session.hovered_opening)
+        self.assertGreater(len(session._wall_hover_trackers), 0)
+        self.assertEqual(len(session._hovered_wall_opening_context_trackers), 0)
+
+    def test_plan_edit_join_mode_cancel_restores_selected_wall_grips(self):
+        """Canceling join mode should return to Select with the source wall active."""
+
+        source_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session._select_wall_for_plan_edit(source_wall)
+        self.assertEqual(len(session._grip_trackers), 3)
+
+        session.activate_join_tool()
+        self.assertEqual(session.current_tool, "Join")
+        self.assertEqual(len(session._grip_trackers), 0)
+
+        session._cancel_join_tool()
+
+        self.assertEqual(session.current_tool, "Select")
+        self.assertIs(session.selected_wall, source_wall)
+        self.assertIsNone(session.selected_opening)
+        self.assertEqual(len(session._grip_trackers), 3)
+
+    def test_plan_edit_join_mode_creates_wall_joint_from_clicked_candidate(self):
+        """Join mode should create a BIM wall joint from the selected and clicked walls."""
+
+        source_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        target_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        target_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session._select_wall_for_plan_edit(source_wall)
+        session.activate_join_tool()
+
+        from pivy import coin
+
+        class _FakeMousePosition:
+            def __init__(self, x, y):
+                self._value = (x, y)
+
+            def getValue(self):
+                return self._value
+
+        class _FakeMouseEvent:
+            def __init__(self, x, y):
+                self._position = _FakeMousePosition(x, y)
+
+            def getButton(self):
+                return coin.SoMouseButtonEvent.BUTTON1
+
+            def getState(self):
+                return coin.SoMouseButtonEvent.DOWN
+
+            def getPosition(self):
+                return self._position
+
+        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("wall", target_wall),
+        ):
+            session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        self.assertEqual(len(joints), 1)
+        joint = joints[0]
+        self.assertEqual(joint.JointType, "Miter")
+        self.assertEqual(joint.Status, "OK")
+        self.assertEqual({joint.WallA, joint.WallB}, {source_wall, target_wall})
+
+        self.assertEqual(session.current_tool, "Select")
+        self.assertIs(session.selected_wall, source_wall)
+        self.assertIsNone(session.selected_opening)
+        self.assertEqual(len(session._grip_trackers), 3)
+        self.assertEqual(len(session._wall_hover_trackers), 0)
+
     def test_plan_edit_wall_grip_move_uses_point_pick_commit(self):
         """Wall grips should use click-move-click editing instead of hold-drag."""
 
