@@ -2027,18 +2027,26 @@ class PlanEditSession:
             return
         self._start_wall_edit({0: "Start", 1: "End", 2: "Move"}[grip_index])
 
-    def _activate_wall_grip(self, grip_index):
+    def _activate_wall_grip(self, grip_index, wall=None):
+        if wall is None:
+            wall = self.selected_wall
         try:
             from PySide import QtCore
         except ImportError:
-            self._activate_wall_grip_now(grip_index)
+            self._activate_wall_grip_now(grip_index, wall)
             return
 
-        QtCore.QTimer.singleShot(0, lambda: self._activate_wall_grip_now(grip_index))
+        QtCore.QTimer.singleShot(
+            0,
+            lambda wall=wall, grip_index=grip_index: self._activate_wall_grip_now(grip_index, wall),
+        )
 
-    def _activate_wall_grip_now(self, grip_index):
-        if self._tearing_down or self.current_tool != "Select":
+    def _activate_wall_grip_now(self, grip_index, wall=None):
+        if self._tearing_down or self.current_tool != "Select" or not wall:
             return
+        self.selected_wall = wall
+        self.selected_opening = None
+        self._pending_selected_opening_intent = None
         self._start_wall_grip_edit(grip_index)
 
     def _get_wall_edit_reference_point(self):
@@ -2750,7 +2758,7 @@ class PlanEditSession:
                 else:
                     if obj != self.selected_wall:
                         self.selected_wall = obj
-                    self._activate_wall_grip(index)
+                    self._activate_wall_grip(index, wall=obj)
             if hasattr(event_callback, "setHandled"):
                 try:
                     event_callback.setHandled()
@@ -3991,6 +3999,10 @@ class PlanEditSession:
     def _activate_opening_handle_now(self, opening, handle_index):
         if self._tearing_down or not opening:
             return
+        self.selected_opening = opening
+        self.selected_wall = None
+        self._pending_selected_opening_intent = None
+        self._clear_wall_grips()
         handles = self._get_selected_opening_edit_handles(opening)
         if handle_index < 0 or handle_index >= len(handles):
             return

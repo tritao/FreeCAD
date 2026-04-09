@@ -1051,6 +1051,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(calls[0][0], 0)
         self.assertEqual(session.current_tool, "Select")
 
+        # Late selection clears from the click should not break the deferred grip activation.
+        session.selected_wall = None
+
         captured = {}
 
         def fake_get_point(**kwargs):
@@ -1063,6 +1066,62 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertEqual(session.current_tool, "Move Wall")
         self.assertIs(session.selected_wall, wall)
+
+    def test_plan_edit_opening_handle_activation_is_deferred(self):
+        """Deferred opening handle activation should survive late selection clears."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="DeferredDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        handle = session._get_selected_opening_edit_handles(door)[0]
+        calls = []
+
+        def fake_single_shot(delay, callback):
+            calls.append((delay, callback))
+
+        with patch("PySide.QtCore.QTimer.singleShot", side_effect=fake_single_shot):
+            session._activate_opening_handle(door, 0)
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], 0)
+        session.selected_opening = None
+
+        if handle.interaction == "point_pick":
+            captured = {}
+
+            def fake_get_point(**kwargs):
+                captured.update(kwargs)
+
+            with patch.object(
+                FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point
+            ), patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None):
+                calls[0][1]()
+
+            self.assertEqual(session.current_tool, "Move Opening")
+            self.assertIs(session.selected_opening, door)
+            self.assertIs(session._edit_opening, door)
+            self.assertIn("callback", captured)
+        else:
+            original_parts = list(door.WindowParts)
+            calls[0][1]()
+            self.assertIs(session.selected_opening, door)
+            self.assertNotEqual(original_parts, list(door.WindowParts))
 
     def test_plan_edit_wall_move_preview_shows_delta_readouts(self):
         """Moving a wall should show horizontal and vertical temporary readouts."""
