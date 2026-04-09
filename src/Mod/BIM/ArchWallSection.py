@@ -129,6 +129,18 @@ def get_section_thickness(section_or_wall):
     return float(section_or_wall)
 
 
+def get_section_extent_towards(section_or_wall, lateral_direction, world_direction):
+    """Returns the section extent on the side pointed to by the given world direction."""
+    section = coerce_wall_section(section_or_wall)
+    if not section or lateral_direction is None or world_direction is None:
+        return None
+    if lateral_direction.Length <= 1e-9 or world_direction.Length <= 1e-9:
+        return section.total_thickness / 2.0
+    if lateral_direction.dot(world_direction) >= 0:
+        return section.positive_extent
+    return section.negative_extent
+
+
 def _get_section_layer_thicknesses(wall):
     proxy = getattr(wall, "Proxy", None)
     if proxy and hasattr(proxy, "get_layers"):

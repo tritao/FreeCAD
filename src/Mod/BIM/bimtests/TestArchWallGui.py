@@ -563,6 +563,7 @@ class TestArchWallGui(ArchWallGuiTestCase):
 
         panel = ArchWallJoint.WallJointTaskPanel(candidate)
         panel._set_combo_value(panel.joint_type_combo, "JointType", "Tee")
+        panel._set_combo_value(panel.tee_stem_combo, "TeeStem", "WallA")
         panel._set_combo_value(panel.end_a_combo, "EndA", "Start")
         panel._refresh_preview()
 

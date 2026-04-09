@@ -449,28 +449,23 @@ def calculate_butt_cutting_planes(baseline1, baseline2, intersection, section1, 
     path2 = ArchWallPath.coerce_wall_path(baseline2)
     if not path1 or not path2:
         return None, None
-    width2 = ArchWallSection.get_section_thickness(section2)
-    if width2 is None:
+    offset_1 = _get_section_face_offset_vector(path2, section2, path1.center() - intersection)
+    offset_2 = _get_section_face_offset_vector(path1, section1, path2.center() - intersection)
+    if offset_1 is None or offset_2 is None:
         return None, None
 
     axis_x_2 = path1.direction()
     axis_y_2 = FreeCAD.Vector(0, 0, 1)
     axis_z_2 = axis_x_2.cross(axis_y_2).normalize()
     rotation_2 = FreeCAD.Rotation(axis_x_2, axis_y_2, axis_z_2, "ZXY")
-    plane2 = FreeCAD.Placement(intersection, rotation_2)
+    plane2 = FreeCAD.Placement(intersection.add(offset_2), rotation_2)
 
-    dir1 = path1.direction()
     dir2 = path2.direction()
-    offset_dir = path1.lateral_direction()
-    if offset_dir.dot(dir2) < 0:
-        offset_dir.multiply(-1)
-
-    offset_intersection = intersection.add(offset_dir * (width2 / 2.0))
     axis_x_1 = dir2
     axis_y_1 = FreeCAD.Vector(0, 0, 1)
     axis_z_1 = axis_x_1.cross(axis_y_1).normalize()
     rotation_1 = FreeCAD.Rotation(axis_x_1, axis_y_1, axis_z_1, "ZXY")
-    plane1 = FreeCAD.Placement(offset_intersection, rotation_1)
+    plane1 = FreeCAD.Placement(intersection.add(offset_1), rotation_1)
     return plane1, plane2
 
 
@@ -482,24 +477,22 @@ def calculate_tee_cutting_plane(
     top_path = ArchWallPath.coerce_wall_path(top_line, wall=top_wall)
     if not stem_path or not top_path:
         return None
-    top_width = ArchWallSection.get_section_thickness(top_section if top_section else top_wall)
-    if top_width is None:
+    top_section = top_section if top_section else top_wall
+    offset = _get_section_face_offset_vector(
+        top_path,
+        top_section,
+        stem_path.center() - intersection,
+    )
+    if offset is None:
         return None
 
     plane_normal = stem_path.direction()
     rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), plane_normal)
 
-    top_dir = top_path.direction()
-    offset_dir = top_path.lateral_direction()
-
-    center_stem = stem_path.center()
-    vec_to_stem = center_stem - intersection
-
-    if offset_dir.dot(vec_to_stem) < 0:
-        offset_dir.multiply(-1)
-
-    plane_position = intersection.add(offset_dir * (top_width / 2.0))
-    plane_position = plane_position.add(vec_to_stem.normalize() * 1e-6)
+    vec_to_stem = stem_path.center() - intersection
+    plane_position = intersection.add(offset)
+    if vec_to_stem.Length > 1e-9:
+        plane_position = plane_position.add(vec_to_stem.normalize() * 1e-6)
     return FreeCAD.Placement(plane_position, rotation)
 
 
@@ -548,3 +541,16 @@ def _apply_conflicts(result, conflicts):
         if conflict.message not in unique_messages:
             unique_messages.append(conflict.message)
     result.status_message = "Conflict: " + "; ".join(unique_messages)
+
+
+def _get_section_face_offset_vector(path, section, towards_vector):
+    """Returns a signed lateral offset from a wall centerline to the requested section face."""
+    if not path:
+        return None
+    lateral = path.lateral_direction()
+    extent = ArchWallSection.get_section_extent_towards(section, lateral, towards_vector)
+    if extent is None:
+        return None
+    if lateral.dot(towards_vector) < 0:
+        lateral = lateral * -1
+    return lateral * extent

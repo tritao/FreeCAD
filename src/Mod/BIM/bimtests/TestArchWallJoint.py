@@ -271,6 +271,145 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
             [(-300.0, -200.0), (-200.0, 0.0)],
         )
 
+    def test_get_wall_section_extent_towards_uses_side_extents(self):
+        self.printTestMessage("Testing wall section side extents...")
+
+        expectations = {
+            "Center": (150.0, 150.0),
+            "Left": (300.0, 0.0),
+            "Right": (0.0, 300.0),
+        }
+        for align, (positive_extent, negative_extent) in expectations.items():
+            with self.subTest(align=align):
+                wall = Arch.makeWall(length=2000, width=300, height=1500)
+                wall.Align = align
+                self.document.recompute()
+
+                section = ArchWallSection.get_wall_section(wall)
+                self.assertAlmostEqual(
+                    ArchWallSection.get_section_extent_towards(
+                        section, App.Vector(1, 0, 0), App.Vector(1, 0, 0)
+                    ),
+                    positive_extent,
+                )
+                self.assertAlmostEqual(
+                    ArchWallSection.get_section_extent_towards(
+                        section, App.Vector(1, 0, 0), App.Vector(-1, 0, 0)
+                    ),
+                    negative_extent,
+                )
+
+                self.document.removeObject(wall.Name)
+                self.document.recompute()
+
+    def test_make_wall_joint_butt_uses_support_section_side_extent(self):
+        self.printTestMessage("Testing butt joints use support wall section extents...")
+
+        expectations = {
+            "Center": 100.0,
+            "Left": 0.0,
+            "Right": 200.0,
+        }
+        for align, expected_y_min in expectations.items():
+            with self.subTest(align=align):
+                support_wall = self._make_baseless_wall_between(
+                    App.Vector(-1000, 0, 0), App.Vector(0, 0, 0), width=200
+                )
+                support_wall.Align = align
+                trimmed_wall = self._make_baseless_wall_between(
+                    App.Vector(0, 0, 0), App.Vector(0, 1000, 0), width=300
+                )
+                self.document.recompute()
+
+                joint = Arch.makeWallJoint(support_wall, trimmed_wall, "Butt")
+                joint.ButtTrimmed = "WallB"
+                self.document.recompute()
+
+                self.assertEqual(joint.Status, "OK")
+                self.assertAlmostEqual(
+                    trimmed_wall.Shape.BoundBox.YMin,
+                    expected_y_min,
+                    delta=1e-4,
+                    msg="The trimmed wall should start at the support wall face that it butts into.",
+                )
+
+                self.document.removeObject(joint.Name)
+                self.document.removeObject(trimmed_wall.Name)
+                self.document.removeObject(support_wall.Name)
+                self.document.recompute()
+
+    def test_make_wall_joint_butt_uses_trimmed_section_side_extent(self):
+        self.printTestMessage("Testing butt joints use trimmed wall section extents...")
+
+        expectations = {
+            "Center": -150.0,
+            "Left": 0.0,
+            "Right": -300.0,
+        }
+        for align, expected_x_max in expectations.items():
+            with self.subTest(align=align):
+                support_wall = self._make_baseless_wall_between(
+                    App.Vector(-1000, 0, 0), App.Vector(0, 0, 0), width=200
+                )
+                trimmed_wall = self._make_baseless_wall_between(
+                    App.Vector(0, 0, 0), App.Vector(0, 1000, 0), width=300
+                )
+                trimmed_wall.Align = align
+                self.document.recompute()
+
+                joint = Arch.makeWallJoint(support_wall, trimmed_wall, "Butt")
+                joint.ButtTrimmed = "WallB"
+                self.document.recompute()
+
+                self.assertEqual(joint.Status, "OK")
+                self.assertAlmostEqual(
+                    support_wall.Shape.BoundBox.XMax,
+                    expected_x_max,
+                    delta=1e-4,
+                    msg="The supporting wall should end at the face of the trimmed wall.",
+                )
+
+                self.document.removeObject(joint.Name)
+                self.document.removeObject(trimmed_wall.Name)
+                self.document.removeObject(support_wall.Name)
+                self.document.recompute()
+
+    def test_make_wall_joint_tee_uses_top_section_side_extent(self):
+        self.printTestMessage("Testing tee joints use top wall section extents...")
+
+        expectations = {
+            "Center": 150.0,
+            "Left": 0.0,
+            "Right": 300.0,
+        }
+        for align, expected_y_min in expectations.items():
+            with self.subTest(align=align):
+                stem_wall = self._make_baseless_wall_between(
+                    App.Vector(0, 0, 0), App.Vector(0, 1000, 0), width=200
+                )
+                top_wall = self._make_baseless_wall_between(
+                    App.Vector(-1000, 0, 0), App.Vector(1000, 0, 0), width=300
+                )
+                top_wall.Align = align
+                self.document.recompute()
+
+                joint = Arch.makeWallJoint(stem_wall, top_wall, "Tee")
+                joint.TeeStem = "WallA"
+                self.document.recompute()
+
+                self.assertEqual(joint.Status, "OK")
+                self.assertAlmostEqual(
+                    stem_wall.Shape.BoundBox.YMin,
+                    expected_y_min,
+                    delta=1e-4,
+                    msg="The tee stem should trim to the actual face of the top wall section.",
+                )
+
+                self.document.removeObject(joint.Name)
+                self.document.removeObject(top_wall.Name)
+                self.document.removeObject(stem_wall.Name)
+                self.document.recompute()
+
     def test_make_wall_joint_tee_on_sketch_based_walls(self):
         self.printTestMessage("Testing tee joints on one-edge sketch-based walls...")
 
