@@ -112,37 +112,37 @@ def is_wall_junction(obj):
     )
 
 
-def is_managed_wall_joint(obj):
-    """Returns True when the wall joint is owned by a wall junction."""
-    return bool(is_wall_joint(obj) and getattr(obj, "AutoManaged", False))
-
-
 def iter_wall_relations(wall):
     """Yields wall relations that reference the given wall."""
     if not wall:
         return
     for obj in wall.InList:
-        if is_wall_joint(obj) and is_managed_wall_joint(obj):
-            continue
         if is_wall_joint(obj) or is_wall_junction(obj):
             yield obj
 
 
-def iter_wall_joints(wall, include_managed=True):
+def get_relation_walls(relation):
+    """Returns the walls referenced by a wall relation object."""
+    if is_wall_joint(relation):
+        return [getattr(relation, "WallA", None), getattr(relation, "WallB", None)]
+    if is_wall_junction(relation):
+        return list(getattr(relation, "Walls", []))
+    return []
+
+
+def iter_wall_joints(wall):
     """Yields joint relations that reference the given wall."""
     if not wall:
         return
     for obj in wall.InList:
-        if is_wall_joint(obj) and (include_managed or not is_managed_wall_joint(obj)):
+        if is_wall_joint(obj):
             yield obj
 
 
-def find_existing_joint(doc, wall_a, wall_b, include_managed=False):
+def find_existing_joint(doc, wall_a, wall_b):
     """Finds an existing joint between two walls, regardless of link order."""
     for obj in doc.Objects:
         if not is_wall_joint(obj):
-            continue
-        if not include_managed and is_managed_wall_joint(obj):
             continue
         if {obj.WallA, obj.WallB} == {wall_a, wall_b}:
             return obj
@@ -183,6 +183,17 @@ def solve_wall_joint(joint, include_conflicts=True):
         getattr(joint, "EndB", "Auto"),
         include_conflicts=include_conflicts,
     )
+
+
+def solve_wall_relation(relation, include_conflicts=True):
+    """Solves a wall relation object and returns its trim solution."""
+    if is_wall_joint(relation):
+        return solve_wall_joint(relation, include_conflicts=include_conflicts)
+    if is_wall_junction(relation):
+        import ArchWallJunctionUtils
+
+        return ArchWallJunctionUtils.solve_wall_junction(relation)
+    return _status_result("SolverError", "Unsupported wall relation object.")
 
 
 def solve_wall_joint_settings(
@@ -414,18 +425,18 @@ def joint_has_conflict(joint, solution=None):
     return bool(get_joint_conflicts(joint, solution))
 
 
-def collect_wall_joint_endings(wall):
-    """Collects the unique joint-derived trim planes for the given wall."""
+def collect_wall_relation_endings(wall):
+    """Collects the unique relation-derived trim planes for the given wall."""
     claims = {"Start": [], "End": []}
-    for joint in iter_wall_joints(wall):
-        if not getattr(joint, "Enabled", True):
+    for relation in iter_wall_relations(wall):
+        if not getattr(relation, "Enabled", True):
             continue
-        solution = solve_wall_joint(joint, include_conflicts=False)
+        solution = solve_wall_relation(relation, include_conflicts=False)
         if not solution.is_ok():
             continue
         end_name, plane = get_trim_for_wall(solution, wall)
         if end_name and plane:
-            claims[end_name].append((joint, plane))
+            claims[end_name].append((relation, plane))
 
     result = {"Start": None, "End": None, "Conflicts": set()}
     for end_name, entries in claims.items():
@@ -434,6 +445,11 @@ def collect_wall_joint_endings(wall):
         elif len(entries) > 1:
             result["Conflicts"].add(end_name)
     return result
+
+
+def collect_wall_joint_endings(wall):
+    """Alias for relation-derived trim collection."""
+    return collect_wall_relation_endings(wall)
 
 
 def get_trim_for_wall(solution, wall):

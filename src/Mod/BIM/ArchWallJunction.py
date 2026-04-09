@@ -25,17 +25,15 @@
 """Wall-junction relation object for 3+ BIM walls.
 
 A WallJunction stores a cluster of walls around one shared carrier wall and
-keeps a set of managed tee joints in sync for the branch walls that terminate
-at the common junction point.
+solves the direct trim planes for the branch walls that terminate at the
+common junction point.
 """
 
 import FreeCAD
 
-import ArchWallJoinUtils
 import ArchWallJunctionUtils
 
 translate = FreeCAD.Qt.translate
-_DELETE_OBSERVERS = []
 
 if FreeCAD.GuiUp:
     from PySide.QtCore import QT_TRANSLATE_NOOP
@@ -52,7 +50,6 @@ class _WallJunction:
         obj.Proxy = self
         self.Type = "WallJunction"
         self._pre_change_walls = []
-        self._delete_observer = None
         self.setProperties(obj)
 
     def setProperties(self, obj):
@@ -145,22 +142,22 @@ class _WallJunction:
                 QT_TRANSLATE_NOOP("App::Property", "The resolved carrier wall of this junction."),
             )
             obj.setEditorMode("ResolvedCarrierWall", 1)
-        if "ManagedJoints" not in obj.PropertiesList:
+        if "ResolvedBranchWalls" not in obj.PropertiesList:
             obj.addProperty(
                 "App::PropertyLinkList",
-                "ManagedJoints",
+                "ResolvedBranchWalls",
                 "Junction",
                 QT_TRANSLATE_NOOP(
-                    "App::Property", "The hidden wall joints derived from this wall junction."
+                    "App::Property", "The resolved branch walls trimmed by this wall junction."
                 ),
             )
-            obj.setEditorMode("ManagedJoints", 1)
+            obj.setEditorMode("ResolvedBranchWalls", 1)
         for prop in (
             "Status",
             "StatusMessage",
             "Intersection",
             "ResolvedCarrierWall",
-            "ManagedJoints",
+            "ResolvedBranchWalls",
         ):
             if prop in obj.PropertiesList:
                 obj.setPropertyStatus(prop, "Output")
@@ -173,15 +170,11 @@ class _WallJunction:
     def loads(self, _state):
         self.Type = "WallJunction"
         self._pre_change_walls = []
-        self._delete_observer = None
 
     def onDocumentRestored(self, obj):
         self.Type = "WallJunction"
         self._pre_change_walls = []
-        self._delete_observer = None
         self.setProperties(obj)
-        self._ensure_delete_observer(obj)
-        self._sync_managed_joints(obj, create_missing=True)
         self.updatePresentation(obj, force_label=bool(getattr(obj, "AutoLabel", False)))
 
     def onBeforeChange(self, obj, prop):
@@ -189,29 +182,22 @@ class _WallJunction:
             self._pre_change_walls = list(getattr(obj, "Walls", []))
 
     def onChanged(self, obj, prop):
-        if "ManagedJoints" not in getattr(obj, "PropertiesList", []):
-            return
-        self._ensure_delete_observer(obj)
         if prop in ("Enabled", "Walls", "CarrierMode", "CarrierWall"):
             self._touch_walls(self._pre_change_walls + list(getattr(obj, "Walls", [])))
             self._pre_change_walls = []
-            if obj.Document and not getattr(obj.Document, "Recomputing", False):
-                self._sync_managed_joints(obj, create_missing=True)
         if prop in ("AutoLabel", "Walls", "CarrierMode", "CarrierWall"):
             self.updatePresentation(obj, force_label=(prop == "AutoLabel"))
 
     def execute(self, obj):
-        self._ensure_delete_observer(obj)
         solution = ArchWallJunctionUtils.solve_wall_junction(obj)
         obj.Status = solution.status
         obj.StatusMessage = solution.status_message
         obj.Intersection = solution.intersection
         obj.ResolvedCarrierWall = solution.carrier_wall
-        self._sync_managed_joints(obj, solution=solution, create_missing=False)
+        obj.ResolvedBranchWalls = solution.branch_walls if solution.is_ok() else []
         self.updatePresentation(obj)
 
     def onDelete(self, obj, _args):
-        self._disable_managed_joints(obj)
         self._touch_walls(list(getattr(obj, "Walls", [])))
         return True
 
@@ -236,125 +222,6 @@ class _WallJunction:
         if walls:
             return "Junction: " + ", ".join(walls)
         return translate("Arch", "Wall Junction")
-
-    def _sync_managed_joints(self, obj, solution=None, create_missing=True):
-        solution = solution if solution else ArchWallJunctionUtils.solve_wall_junction(obj)
-        doc = getattr(obj, "Document", None)
-        managed_joints = []
-        for joint in list(getattr(obj, "ManagedJoints", [])):
-            if not joint or not ArchWallJoinUtils.is_wall_joint(joint):
-                continue
-            if doc and not doc.getObject(joint.Name):
-                continue
-            managed_joints.append(joint)
-        desired_joints = []
-        if solution.is_ok():
-            carrier = solution.carrier_wall
-            for branch_wall in solution.branch_walls:
-                joint = self._find_managed_joint(managed_joints, obj, branch_wall, carrier)
-                if (joint is None) and create_missing:
-                    joint = self._create_managed_joint(obj, branch_wall, carrier)
-                    if joint:
-                        managed_joints.append(joint)
-                if not joint:
-                    continue
-                self._configure_managed_joint(obj, joint, branch_wall, carrier)
-                desired_joints.append(joint)
-
-        for joint in managed_joints:
-            if joint not in desired_joints:
-                if getattr(joint, "Enabled", True):
-                    joint.Enabled = False
-
-        if getattr(obj, "ManagedJoints", []) != managed_joints:
-            obj.ManagedJoints = managed_joints
-        if self._delete_observer:
-            self._delete_observer.joint_names = [joint.Name for joint in managed_joints if joint]
-
-    @staticmethod
-    def _find_managed_joint(managed_joints, junction, branch_wall, carrier_wall):
-        for joint in managed_joints:
-            if not ArchWallJoinUtils.is_wall_joint(joint):
-                continue
-            if {joint.WallA, joint.WallB} == {branch_wall, carrier_wall}:
-                return joint
-        return None
-
-    @staticmethod
-    def _create_managed_joint(junction, branch_wall, carrier_wall):
-        import Arch
-
-        if not junction.Document or getattr(junction.Document, "Recomputing", False):
-            return None
-        joint = Arch.makeWallJoint(branch_wall, carrier_wall, "Tee")
-        if not joint:
-            return None
-        joint.AutoManaged = True
-        joint.AutoLabel = False
-        joint.Label = f"{junction.Label}: {branch_wall.Label} -> {carrier_wall.Label}"
-        if FreeCAD.GuiUp and hasattr(joint, "ViewObject"):
-            joint.ViewObject.Visibility = False
-        return joint
-
-    @staticmethod
-    def _configure_managed_joint(junction, joint, branch_wall, carrier_wall):
-        label = f"{junction.Label}: {branch_wall.Label} -> {carrier_wall.Label}"
-        updates = {
-            "AutoManaged": True,
-            "WallA": branch_wall,
-            "WallB": carrier_wall,
-            "JointType": "Tee",
-            "TeeStem": "WallA",
-            "EndA": "Auto",
-            "EndB": "Auto",
-            "ButtTrimmed": "Auto",
-            "Enabled": bool(getattr(junction, "Enabled", True)),
-            "AutoLabel": False,
-            "Label": label,
-        }
-        for prop, value in updates.items():
-            if getattr(joint, prop) != value:
-                setattr(joint, prop, value)
-        if FreeCAD.GuiUp and hasattr(joint, "ViewObject"):
-            joint.ViewObject.Visibility = False
-
-    @staticmethod
-    def _disable_managed_joints(obj):
-        doc = getattr(obj, "Document", None)
-        if not doc:
-            return
-        for joint in list(getattr(obj, "ManagedJoints", [])):
-            if joint and doc.getObject(joint.Name):
-                if getattr(joint, "Enabled", True):
-                    joint.Enabled = False
-                if getattr(joint, "AutoManaged", False):
-                    joint.AutoManaged = False
-
-    def _ensure_delete_observer(self, obj):
-        doc = getattr(obj, "Document", None)
-        if not doc:
-            return
-        if self._delete_observer and (
-            self._delete_observer.doc_name != doc.Name
-            or self._delete_observer.junction_name != obj.Name
-        ):
-            try:
-                FreeCAD.removeDocumentObserver(self._delete_observer)
-            except Exception:
-                pass
-            if self._delete_observer in _DELETE_OBSERVERS:
-                _DELETE_OBSERVERS.remove(self._delete_observer)
-            self._delete_observer = None
-        if self._delete_observer:
-            return
-        observer = _ManagedJointDeleteObserver(
-            doc.Name,
-            obj.Name,
-            [joint.Name for joint in getattr(obj, "ManagedJoints", []) if joint],
-        )
-        _DELETE_OBSERVERS.append(observer)
-        FreeCAD.addDocumentObserver(observer)
-        self._delete_observer = observer
 
     @staticmethod
     def _touch_walls(walls):
@@ -395,37 +262,3 @@ class _ViewProviderWallJunction:
 
     def setDisplayMode(self, mode):
         return mode
-
-
-class _ManagedJointDeleteObserver:
-    """One-shot document observer that removes managed joints after junction deletion."""
-
-    def __init__(self, doc_name, junction_name, joint_names):
-        self.doc_name = doc_name
-        self.junction_name = junction_name
-        self.joint_names = list(joint_names)
-        self.armed = False
-
-    def slotDeletedObject(self, obj):
-        doc = getattr(obj, "Document", None)
-        if not doc or doc.Name != self.doc_name or obj.Name != self.junction_name:
-            return
-        self.armed = True
-
-    def slotCommitTransaction(self, doc):
-        self._flush_pending_deletions(doc)
-
-    def slotRecomputedDocument(self, doc):
-        self._flush_pending_deletions(doc)
-
-    def _flush_pending_deletions(self, doc):
-        if not self.armed or not doc or doc.Name != self.doc_name:
-            return
-        self.armed = False
-        FreeCAD.removeDocumentObserver(self)
-        if self in _DELETE_OBSERVERS:
-            _DELETE_OBSERVERS.remove(self)
-        for joint_name in self.joint_names:
-            managed_joint = doc.getObject(joint_name)
-            if managed_joint:
-                doc.removeObject(joint_name)

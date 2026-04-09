@@ -866,11 +866,17 @@ class _Wall(ArchComponent.Component):
         if obj.Document and getattr(obj.Document, "Recomputing", False):
             return
         touched = set()
+        touched_walls = {obj.Name}
         for relation in ArchWallJoinUtils.iter_wall_relations(obj):
             if relation.Name in touched:
                 continue
             touched.add(relation.Name)
             relation.touch()
+            for linked_wall in ArchWallJoinUtils.get_relation_walls(relation):
+                if not linked_wall or linked_wall.Name in touched_walls:
+                    continue
+                touched_walls.add(linked_wall.Name)
+                linked_wall.touch()
 
     def getFootprint(self, obj):
         """Get the plan faces that represent this wall in footprint mode.
@@ -2030,48 +2036,59 @@ class _Wall(ArchComponent.Component):
 
         solid_to_trim = base_solid
         tool_size = base_solid.BoundBox.DiagonalLength * 2
-        joint_endings = ArchWallJoinUtils.collect_wall_joint_endings(obj)
-        start_plane, start_is_global = self._resolve_ending_plane(obj, "Start", joint_endings)
-        if start_plane:
+        relation_endings = ArchWallJoinUtils.collect_wall_relation_endings(obj)
+        start_condition = self._resolve_end_condition(obj, "Start", relation_endings)
+        if start_condition:
             solid_to_trim = self._apply_cutting_plane(
                 obj,
                 solid_to_trim,
                 wall_placement,
-                start_plane,
+                start_condition.placement,
                 obj.Proxy.calc_endpoints(obj)[1],
                 tool_size,
-                is_global=start_is_global,
+                is_global=start_condition.is_global,
             )
 
-        end_plane, end_is_global = self._resolve_ending_plane(obj, "End", joint_endings)
-        if end_plane:
+        end_condition = self._resolve_end_condition(obj, "End", relation_endings)
+        if end_condition:
             solid_to_trim = self._apply_cutting_plane(
                 obj,
                 solid_to_trim,
                 wall_placement,
-                end_plane,
+                end_condition.placement,
                 obj.Proxy.calc_endpoints(obj)[0],
                 tool_size,
-                is_global=end_is_global,
+                is_global=end_condition.is_global,
             )
         return solid_to_trim
 
-    def _resolve_ending_plane(self, obj, end_name, joint_endings):
-        manual_placement = getattr(obj, "Ending" + end_name)
-        manual_plane = None if self._is_null_placement(manual_placement) else manual_placement
-        joint_plane = joint_endings.get(end_name)
-        source = getattr(obj, "TrimSource" + end_name, "Auto")
+    def _resolve_end_condition(self, obj, end_name, relation_endings):
+        stack = self._build_end_condition_stack(obj, end_name, relation_endings)
+        return stack.active_condition()
 
-        # Each wall end uses one active trim source. Auto prefers a valid
-        # joint-derived plane for that end and otherwise falls back to the
-        # manual ending. Manual and Joint force the source explicitly.
-        if source == "Manual":
-            return manual_plane, False
-        if source == "Joint":
-            return joint_plane, True
-        if joint_plane:
-            return joint_plane, True
-        return manual_plane, False
+    def _build_end_condition_stack(self, obj, end_name, relation_endings):
+        stack = ArchWallEndCondition.WallEndConditionStack(
+            end_name=end_name,
+            order=ArchWallEndCondition.normalize_end_condition_order(
+                getattr(obj, "EndConditionOrder" + end_name, [])
+            ),
+        )
+        manual_placement = getattr(obj, "Ending" + end_name)
+        stack.add(
+            ArchWallEndCondition.WallEndCondition(
+                source="Manual",
+                placement=manual_placement,
+                is_global=False,
+            )
+        )
+        stack.add(
+            ArchWallEndCondition.WallEndCondition(
+                source="Joint",
+                placement=relation_endings.get(end_name, FreeCAD.Placement()),
+                is_global=True,
+            )
+        )
+        return stack
 
     def _apply_cutting_plane(
         self,

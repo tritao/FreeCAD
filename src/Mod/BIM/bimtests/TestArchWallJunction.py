@@ -41,8 +41,8 @@ class TestArchWallJunction(TestArchBase.TestArchBase):
         self.document.recompute()
         return wall
 
-    def test_make_wall_junction_creates_managed_branch_joints(self):
-        self.printTestMessage("Testing makeWallJunction creates managed branch joints...")
+    def test_make_wall_junction_trims_branch_walls_directly(self):
+        self.printTestMessage("Testing makeWallJunction trims branch walls directly...")
 
         carrier_wall = self._make_baseless_wall_between(
             App.Vector(-1000, 0, 0), App.Vector(1000, 0, 0)
@@ -59,19 +59,22 @@ class TestArchWallJunction(TestArchBase.TestArchBase):
         self.assertIsNotNone(junction)
         self.assertEqual(junction.Status, "OK")
         self.assertEqual(junction.ResolvedCarrierWall, carrier_wall)
-        self.assertEqual(len(junction.ManagedJoints), 2)
+        self.assertEqual(
+            {wall.Name for wall in junction.ResolvedBranchWalls},
+            {branch_up.Name, branch_down.Name},
+        )
         self.assertAlmostEqual(junction.Intersection.x, 0.0, delta=1e-6)
         self.assertAlmostEqual(junction.Intersection.y, 0.0, delta=1e-6)
         self.assertAlmostEqual(carrier_wall.Shape.Volume, carrier_volume, delta=1e-6)
         self.assertLess(branch_up.Shape.Volume, branch_up_volume)
         self.assertLess(branch_down.Shape.Volume, branch_down_volume)
-
-        for joint in junction.ManagedJoints:
-            self.assertTrue(joint.AutoManaged)
-            self.assertEqual(joint.Status, "OK")
-            self.assertEqual(joint.JointType, "Tee")
-            self.assertEqual(joint.TeeStem, "WallA")
-            self.assertEqual(joint.WallB, carrier_wall)
+        self.assertFalse(
+            any(
+                getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+                for obj in self.document.Objects
+            ),
+            "Wall junctions should trim walls directly instead of synthesizing hidden wall joints.",
+        )
 
     def test_wall_junction_updates_when_cluster_breaks(self):
         self.printTestMessage(
@@ -83,6 +86,8 @@ class TestArchWallJunction(TestArchBase.TestArchBase):
         )
         branch_up = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(0, 1000, 0))
         branch_down = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(0, -1000, 0))
+        branch_up_volume = branch_up.Shape.Volume
+        branch_down_volume = branch_down.Shape.Volume
 
         junction = Arch.makeWallJunction([carrier_wall, branch_up, branch_down])
         self.document.recompute()
@@ -93,10 +98,8 @@ class TestArchWallJunction(TestArchBase.TestArchBase):
 
         self.assertNotEqual(junction.Status, "OK")
         self.assertIn(junction.Status, ("NoIntersection", "UnsupportedTopology"))
-        self.assertTrue(
-            all(not joint.Enabled for joint in junction.ManagedJoints),
-            "Managed joints should be disabled when the wall junction no longer solves.",
-        )
+        self.assertAlmostEqual(branch_up.Shape.Volume, branch_up_volume, delta=1e-6)
+        self.assertAlmostEqual(branch_down.Shape.Volume, branch_down_volume, delta=1e-6)
 
     def test_wall_junction_rejects_unsupported_cross_topology(self):
         self.printTestMessage("Testing wall junction rejects unsupported cross topology...")
@@ -114,12 +117,15 @@ class TestArchWallJunction(TestArchBase.TestArchBase):
 
         self.assertEqual(junction.Status, "UnsupportedTopology")
         self.assertFalse(
-            any(joint.Enabled for joint in junction.ManagedJoints),
-            "Unsupported junction topologies should not keep active managed joints.",
+            any(
+                getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+                for obj in self.document.Objects
+            ),
+            "Unsupported junction topologies should not create hidden wall joints.",
         )
 
-    def test_deleting_wall_junction_removes_managed_joints_and_restores_walls(self):
-        self.printTestMessage("Testing deleting a wall junction removes its managed joints...")
+    def test_deleting_wall_junction_restores_walls_without_child_relations(self):
+        self.printTestMessage("Testing deleting a wall junction restores the walls directly...")
 
         carrier_wall = self._make_baseless_wall_between(
             App.Vector(-1000, 0, 0), App.Vector(1000, 0, 0)
@@ -132,15 +138,16 @@ class TestArchWallJunction(TestArchBase.TestArchBase):
         junction = Arch.makeWallJunction([carrier_wall, branch_up, branch_down])
         self.document.recompute()
         self.assertEqual(junction.Status, "OK")
-        managed_joint_names = [joint.Name for joint in junction.ManagedJoints]
+        self.assertFalse(
+            any(
+                getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+                for obj in self.document.Objects
+            ),
+            "Wall junctions should not create hidden wall joints.",
+        )
 
         self.document.removeObject(junction.Name)
         self.document.recompute()
 
         self.assertAlmostEqual(branch_up.Shape.Volume, branch_up_volume, delta=1e-6)
         self.assertAlmostEqual(branch_down.Shape.Volume, branch_down_volume, delta=1e-6)
-        for joint_name in managed_joint_names:
-            self.assertIsNone(
-                self.document.getObject(joint_name),
-                "Deleting the wall junction should also remove its managed wall joints.",
-            )

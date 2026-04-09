@@ -24,10 +24,9 @@
 
 """Solver helpers for BIM wall junction relations.
 
-The current wall-junction model groups 3+ walls around one carrier wall and
-derives tee joints for the branch walls that terminate at the common
-intersection point. This is the first junction-level relation layer above the
-pairwise WallJoint model.
+The wall-junction model groups 3+ walls around one carrier wall and computes
+direct trim claims for the branch walls that terminate at the common
+intersection point.
 """
 
 from dataclasses import dataclass, field
@@ -50,9 +49,25 @@ class WallJunctionSolution:
     carrier_wall: object = None
     branch_walls: list = field(default_factory=list)
     walls: list = field(default_factory=list)
+    trim_claims: list = field(default_factory=list)
 
     def is_ok(self):
         return self.status == "OK"
+
+    def trim_for_wall(self, wall):
+        for trim in self.trim_claims:
+            if trim.wall == wall:
+                return trim.end_name, trim.plane
+        return None, None
+
+
+@dataclass
+class WallJunctionTrim:
+    """Resolved trim claim for one wall end in a junction relation."""
+
+    wall: object
+    end_name: str
+    plane: FreeCAD.Placement
 
 
 def solve_wall_junction(junction):
@@ -135,6 +150,14 @@ def solve_wall_junction_inputs(walls, carrier_mode="Auto", carrier_wall=None):
 
 
 def _solve_carrier_candidate(walls, paths, carrier_wall):
+    carrier_section = ArchWallJoinUtils.get_join_section(carrier_wall)
+    if not carrier_section:
+        return WallJunctionSolution(
+            "SolverError",
+            f"The wall junction could not determine the carrier section: {carrier_wall.Label}",
+            walls=walls,
+        )
+
     intersections = []
     for wall in walls:
         if wall == carrier_wall:
@@ -168,6 +191,7 @@ def _solve_carrier_candidate(walls, paths, carrier_wall):
         )
 
     branch_walls = []
+    trim_claims = []
     for wall in walls:
         if wall == carrier_wall:
             continue
@@ -179,6 +203,22 @@ def _solve_carrier_candidate(walls, paths, carrier_wall):
                 walls=walls,
             )
         branch_walls.append(wall)
+        end_name = paths[wall].nearest_end_name(common_point)
+        plane = ArchWallJoinUtils.calculate_tee_cutting_plane(
+            wall,
+            carrier_wall,
+            paths[wall],
+            paths[carrier_wall],
+            common_point,
+            top_section=carrier_section,
+        )
+        if not plane:
+            return WallJunctionSolution(
+                "SolverError",
+                f"The wall junction could not compute the trim plane for {wall.Label}.",
+                walls=walls,
+            )
+        trim_claims.append(WallJunctionTrim(wall=wall, end_name=end_name, plane=plane))
 
     return WallJunctionSolution(
         "OK",
@@ -187,6 +227,7 @@ def _solve_carrier_candidate(walls, paths, carrier_wall):
         carrier_wall=carrier_wall,
         branch_walls=branch_walls,
         walls=walls,
+        trim_claims=trim_claims,
     )
 
 
