@@ -1931,6 +1931,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         actual_center = door_proxy.get_plan_center_point()
         self.assertIsNotNone(actual_center)
         actual_center_u = FreeCAD.Vector(actual_center).sub(wall_start).dot(wall_axis_u)
+        actual_context = door_proxy.get_plan_move_context()
+        self.assertIsNotNone(actual_context)
 
         overlay_polylines = door_proxy.get_plan_overlay_polylines()
         self.assertTrue(overlay_polylines)
@@ -1940,6 +1942,23 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         symbol_center_u = symbol_center.sub(wall_start).dot(wall_axis_u)
 
         self.assertAlmostEqual(symbol_center_u, actual_center_u, delta=1e-6)
+
+        wall_faces = wall.Proxy.getFootprint(wall)
+        self.assertEqual(len(wall_faces), 2)
+
+        def get_u_bounds(face):
+            u_values = []
+            for wire in face.Wires:
+                for vertex in wire.Vertexes:
+                    u_values.append(vertex.Point.sub(wall_start).dot(wall_axis_u))
+            return min(u_values), max(u_values)
+
+        wall_bounds = sorted((get_u_bounds(face) for face in wall_faces), key=lambda item: item[0])
+        gap_center_u = (wall_bounds[0][1] + wall_bounds[1][0]) * 0.5
+        gap_width = wall_bounds[1][0] - wall_bounds[0][1]
+
+        self.assertAlmostEqual(gap_center_u, actual_center_u, delta=1e-6)
+        self.assertAlmostEqual(gap_width, actual_context["opening_half_width_u"] * 2.0, delta=1e-6)
 
     def test_plan_edit_can_flip_selected_door_hinge(self):
         """Selected door handles should expose hinge flipping in Plan Edit."""
