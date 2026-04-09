@@ -1172,6 +1172,48 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(len(session._grip_trackers), 3)
         self.assertEqual(len(session._wall_hover_trackers), 0)
 
+    def test_plan_edit_wall_resize_surfaces_invalid_relation_status(self):
+        """Wall resize should report invalidated wall relations after commit."""
+
+        source_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        target_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        target_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(3000, -1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        self.document.recompute()
+
+        from bimcommands.BimJoin import BIM_Join_Miter
+
+        joint = Arch.makeWallJoint(source_wall, target_wall, "Miter")
+        self.assertIsNotNone(joint)
+        self.assertTrue(BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall))
+        self.document.recompute()
+        self.assertEqual(joint.Status, "OK")
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session._select_wall_for_plan_edit(source_wall)
+        original_endpoints = source_wall.Proxy.calc_endpoints(source_wall)
+        new_points = [
+            original_endpoints[0],
+            original_endpoints[0].add(FreeCAD.Vector(1000, 0, 0)),
+        ]
+
+        session._commit_wall_edit_points(source_wall, "End", source_wall.Proxy, new_points)
+        self.pump_gui_events()
+
+        self.assertNotEqual(joint.Status, "OK")
+        self.assertIs(session.selected_wall, source_wall)
+        self.assertIsNotNone(session._plan_relation_status_message)
+        self.assertIn("Relation warning", session._plan_relation_status_message)
+        self.assertIn(joint.Label, session._plan_relation_status_message)
+        _title, body = session._get_status_chip_text()
+        self.assertIn(session._plan_relation_status_message, body)
+        self.assertIn(session._plan_relation_status_message, session.task_panel.status.text())
+
     def test_plan_edit_wall_grip_move_uses_point_pick_commit(self):
         """Wall grips should use click-move-click editing instead of hold-drag."""
 

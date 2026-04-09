@@ -245,6 +245,7 @@ class PlanEditSession:
         self.task_panel = None
         self._viewport_status_chip = None
         self.current_tool = "Select"
+        self._plan_relation_status_message = None
         self.storeys = []
         self.active_storey = None
         self.selected_wall = None
@@ -728,6 +729,7 @@ class PlanEditSession:
         self._cancel_rect_wall_tool(refresh=False)
         self._cancel_wall_edit()
         self._cancel_pending_edit()
+        self._clear_plan_relation_status()
         self.selected_wall = None
         self._clear_wall_grips()
         self._clear_selected_wall_opening_context_overlay()
@@ -741,6 +743,7 @@ class PlanEditSession:
         self._cancel_embedded_tool()
         self._cancel_wall_edit()
         self._cancel_pending_edit()
+        self._clear_plan_relation_status()
         self.selected_wall = None
         self._clear_wall_grips()
         self._clear_selected_wall_opening_context_overlay()
@@ -761,6 +764,7 @@ class PlanEditSession:
         self._cancel_rect_wall_tool(refresh=False)
         self._cancel_wall_edit()
         self._cancel_pending_edit()
+        self._clear_plan_relation_status()
         self._clear_wall_grips()
         self._start_embedded_tool("Move", gui_move.Move())
 
@@ -771,6 +775,7 @@ class PlanEditSession:
             self._cancel_embedded_tool()
         self._cancel_wall_edit()
         self._cancel_pending_edit()
+        self._clear_plan_relation_status()
         self._clear_wall_grips()
         self._set_hovered_opening(None)
         self._set_hovered_wall(None)
@@ -1407,6 +1412,50 @@ class PlanEditSession:
             return (kind, obj)
         return (None, None)
 
+    def _clear_plan_relation_status(self):
+        self._plan_relation_status_message = None
+
+    def _collect_wall_relation_warnings(self, wall):
+        if not wall:
+            return []
+        import ArchWallJoinUtils
+
+        warnings = []
+        seen = set()
+        for relation in ArchWallJoinUtils.iter_wall_relations(wall):
+            if not relation or relation.Name in seen or not getattr(relation, "Enabled", True):
+                continue
+            seen.add(relation.Name)
+            status = getattr(relation, "Status", "")
+            if status in ("", "OK", "Disabled"):
+                continue
+            label = getattr(relation, "Label", getattr(relation, "Name", ""))
+            detail = str(getattr(relation, "StatusMessage", "") or status).strip()
+            warnings.append((relation, label, status, detail))
+        return warnings
+
+    def _update_wall_relation_status(self, wall):
+        warnings = self._collect_wall_relation_warnings(wall)
+        if not warnings:
+            self._clear_plan_relation_status()
+            return
+
+        if len(warnings) == 1:
+            _relation, label, status, _detail = warnings[0]
+            summary = translate("BIM_PlanEdit", "Relation warning: {label} ({status})").format(
+                label=label,
+                status=status,
+            )
+        else:
+            summary = translate(
+                "BIM_PlanEdit", "Relation warnings: {count} relations need attention"
+            ).format(count=len(warnings))
+
+        self._plan_relation_status_message = summary
+        FreeCAD.Console.PrintWarning(summary + "\n")
+        for _relation, label, _status, detail in warnings:
+            FreeCAD.Console.PrintWarning(f"  - {label}: {detail}\n")
+
     def _set_selected_plan_target(self, kind=None, obj=None, pending_restore=False):
         if kind == "opening" and self._is_hosted_opening_object(obj):
             self.selected_wall = None
@@ -1419,6 +1468,7 @@ class PlanEditSession:
             self.selected_opening = None
             kind = None
             obj = None
+        self._clear_plan_relation_status()
         if pending_restore:
             self._set_pending_selected_plan_target(kind, obj)
         else:
@@ -2016,6 +2066,7 @@ class PlanEditSession:
         if len(endpoints) != 2:
             return
 
+        self._clear_plan_relation_status()
         self.current_tool = "Move Wall" if mode == "Move" else f"Stretch {mode}"
         self._set_hovered_wall(None)
         self._set_hovered_opening(None)
@@ -2162,7 +2213,6 @@ class PlanEditSession:
             self.current_tool = "Select"
             self._cancel_pending_edit()
             return
-
         self._refresh_wall_hosted_opening_footprints(wall)
         try:
             FreeCADGui.Selection.clearSelection()
@@ -2172,6 +2222,7 @@ class PlanEditSession:
         self.current_tool = "Select"
         self._cancel_pending_edit()
         self._set_selected_plan_target("wall", wall, pending_restore=True)
+        self._update_wall_relation_status(wall)
         self._sync_wall_grips()
         self._refresh_task_panel_status()
 
@@ -3609,6 +3660,8 @@ class PlanEditSession:
 
         hints = self._get_input_hint_specs()
         action = self._format_status_chip_action(hints[0][0]) if hints else ""
+        if self._plan_relation_status_message:
+            action = self._plan_relation_status_message
         if not action:
             action = translate("BIM_PlanEdit", "Work directly in the viewport")
         return title, "{}\n{}".format(context, action)
@@ -4837,6 +4890,11 @@ class PlanEditDockWidget:
                 selection_help = translate(
                     "BIM_PlanEdit",
                     "Select a wall or hosted opening in the viewport to edit it.",
+                )
+            if self.session._plan_relation_status_message:
+                selection_help = "{}\n{}".format(
+                    selection_help,
+                    self.session._plan_relation_status_message,
                 )
             self.status.setText(
                 translate(
