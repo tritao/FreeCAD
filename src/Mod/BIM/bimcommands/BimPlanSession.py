@@ -243,6 +243,7 @@ class PlanEditSession:
         self.view = None
         self.viewer = None
         self.task_panel = None
+        self._viewport_status_chip = None
         self.current_tool = "Select"
         self.storeys = []
         self.active_storey = None
@@ -367,6 +368,7 @@ class PlanEditSession:
         if self._tearing_down:
             return
         self._tearing_down = True
+        self._clear_viewport_status_chip()
         self._clear_input_hints()
         self._cancel_embedded_tool()
         self._cancel_rect_wall_tool(refresh=False)
@@ -396,6 +398,7 @@ class PlanEditSession:
             return False
 
     def _discard_runtime_references(self):
+        self._clear_viewport_status_chip()
         self.doc = None
         self.gui_doc = None
         self.view = None
@@ -605,6 +608,7 @@ class PlanEditSession:
             self._cancel_rect_wall_tool(refresh=False)
             self._cancel_wall_edit(restore=not teardown, refresh=False)
             self._cancel_pending_edit()
+            self._clear_viewport_status_chip()
             self._clear_input_hints()
             self._clear_hovered_wall_overlay()
             self._clear_hovered_wall_opening_context_overlay()
@@ -3368,6 +3372,7 @@ class PlanEditSession:
         if self._tearing_down:
             return
         self._update_input_hints()
+        self._refresh_viewport_status_chip()
         panel = self.task_panel
         if not panel:
             return
@@ -3408,6 +3413,116 @@ class PlanEditSession:
             self._focus_plan_view()
             return
         QtCore.QTimer.singleShot(0, self._focus_plan_view)
+
+    def _get_plan_view_widget(self):
+        if self._tearing_down or not self.view:
+            return None
+        try:
+            return self.view.graphicsView()
+        except Exception:
+            return None
+
+    def _format_status_chip_action(self, message):
+        if not message:
+            return ""
+        text = str(message)
+        if text.startswith("%1 "):
+            text = text[3:]
+        elif text.startswith("%1"):
+            text = text[2:]
+        text = text.strip()
+        if not text:
+            return ""
+        return text[0].upper() + text[1:]
+
+    def _get_status_chip_text(self):
+        title = translate("BIM_PlanEdit", "Plan Edit · {tool}").format(tool=self.current_tool)
+
+        if self.current_tool == "Move Opening":
+            context = (
+                translate("BIM_PlanEdit", "Opening: {label}").format(
+                    label=self.selected_opening.Label
+                )
+                if self.selected_opening
+                else translate("BIM_PlanEdit", "Opening move")
+            )
+            action = translate("BIM_PlanEdit", "Click target point")
+            return title, "{}\n{}".format(context, action)
+
+        if self.current_tool == "Move Wall":
+            context = (
+                translate("BIM_PlanEdit", "Wall: {label}").format(label=self.selected_wall.Label)
+                if self.selected_wall
+                else translate("BIM_PlanEdit", "Wall move")
+            )
+            action = translate("BIM_PlanEdit", "Click target point")
+            return title, "{}\n{}".format(context, action)
+
+        if self.current_tool.startswith("Stretch "):
+            context = (
+                translate("BIM_PlanEdit", "Wall: {label}").format(label=self.selected_wall.Label)
+                if self.selected_wall
+                else translate("BIM_PlanEdit", "Wall stretch")
+            )
+            action = translate("BIM_PlanEdit", "Click endpoint or press Enter to type a value")
+            return title, "{}\n{}".format(context, action)
+
+        if self.selected_opening:
+            context = translate("BIM_PlanEdit", "Opening: {label}").format(
+                label=self.selected_opening.Label
+            )
+        elif self.selected_wall:
+            context = translate("BIM_PlanEdit", "Wall: {label}").format(
+                label=self.selected_wall.Label
+            )
+        else:
+            context = translate("BIM_PlanEdit", "Storey: {label}").format(
+                label=self.get_storey_label(self.active_storey)
+            )
+
+        hints = self._get_input_hint_specs()
+        action = self._format_status_chip_action(hints[0][0]) if hints else ""
+        if not action:
+            action = translate("BIM_PlanEdit", "Work directly in the viewport")
+        return title, "{}\n{}".format(context, action)
+
+    def _ensure_viewport_status_chip(self):
+        widget = self._get_plan_view_widget()
+        if widget is None:
+            self._clear_viewport_status_chip()
+            return None
+        chip = self._viewport_status_chip
+        if chip is not None and getattr(chip, "host_widget", None) is widget:
+            return chip
+        self._clear_viewport_status_chip()
+        try:
+            chip = _PlanEditViewportStatusChip(self, widget)
+        except Exception:
+            return None
+        self._viewport_status_chip = chip
+        return chip
+
+    def _refresh_viewport_status_chip(self):
+        if self._tearing_down:
+            return
+        chip = self._ensure_viewport_status_chip()
+        if chip is None:
+            return
+        title, body = self._get_status_chip_text()
+        try:
+            chip.set_texts(title, body)
+        except Exception:
+            self._clear_viewport_status_chip()
+
+    def _clear_viewport_status_chip(self):
+        chip = self._viewport_status_chip
+        self._viewport_status_chip = None
+        if chip is None:
+            return
+        try:
+            chip.close_chip()
+        except Exception:
+            pass
 
     def _clear_input_hints(self):
         hint_manager = getattr(FreeCADGui, "HintManager", None)
@@ -4293,7 +4408,7 @@ class PlanEditSession:
 
 
 class PlanEditDockWidget:
-    """Compact modeless dock for Plan Edit mode."""
+    """Session dock for Plan Edit mode."""
 
     def __init__(self, session):
         from PySide import QtCore, QtGui
@@ -4345,15 +4460,6 @@ class PlanEditDockWidget:
                 ),
             )
         )
-        layout.addLayout(
-            self._build_button_row(
-                QtGui,
-                (
-                    ("stretch_start_button", "Stretch Start", self.on_stretch_start_clicked),
-                    ("stretch_end_button", "Stretch End", self.on_stretch_end_clicked),
-                ),
-            )
-        )
 
         self.status = QtGui.QLabel("")
         self.status.setWordWrap(True)
@@ -4371,8 +4477,6 @@ class PlanEditDockWidget:
             self.move_button,
             self.join_button,
             self.reapply_button,
-            self.stretch_start_button,
-            self.stretch_end_button,
             self.exit_button,
         ]
         self._capture_focus_policies()
@@ -4484,7 +4588,7 @@ class PlanEditDockWidget:
             except Exception:
                 pass
             self.form.resize(width, height)
-            floating = self._params.GetBool("DockFloating", True)
+            floating = self._params.GetBool("DockFloating", False)
             self.form.setFloating(floating)
             if floating:
                 self.form.move(
@@ -4493,15 +4597,8 @@ class PlanEditDockWidget:
                 )
             return
 
-        main_window = FreeCADGui.getMainWindow()
-        frame = main_window.frameGeometry()
-        margin = 32
         self.form.resize(300, 240)
-        self.form.setFloating(True)
-        self.form.move(
-            frame.x() + max(frame.width() - 300 - margin, margin),
-            frame.y() + margin,
-        )
+        self.form.setFloating(False)
 
     def detach(self):
         form = self.form
@@ -4515,8 +4612,6 @@ class PlanEditDockWidget:
         self.move_button = None
         self.join_button = None
         self.reapply_button = None
-        self.stretch_start_button = None
-        self.stretch_end_button = None
         self.exit_button = None
         if form:
             try:
@@ -4554,50 +4649,52 @@ class PlanEditDockWidget:
             self.detach()
 
     def refresh_from_session(self):
-        if (
-            self._closed
-            or self.form is None
-            or self.status is None
-            or self.stretch_start_button is None
-            or self.stretch_end_button is None
-            or self.exit_button is None
-        ):
+        if self._closed or self.form is None or self.status is None or self.exit_button is None:
             return
         try:
             storey_text = self.session.get_storey_label(self.session.active_storey)
             tool = self.session.current_tool
-            selected = self.session.selected_wall
             modal_active = self.session._is_modal_plan_interaction_active()
-            if selected:
-                wall_state = translate("BIM_PlanEdit", "Selected wall: {label}").format(
-                    label=selected.Label
+            if self.session.selected_opening:
+                selection_state = translate("BIM_PlanEdit", "Opening: {label}").format(
+                    label=self.session.selected_opening.Label
+                )
+                selection_help = translate(
+                    "BIM_PlanEdit",
+                    "Use in-view handles to move or flip the selected opening.",
+                )
+            elif self.session.selected_wall:
+                selection_state = translate("BIM_PlanEdit", "Wall: {label}").format(
+                    label=self.session.selected_wall.Label
                 )
                 if self.session.is_selected_wall_endpoint_editable():
-                    if self.session.is_selected_wall_baseless():
-                        wall_state += "\n" + translate("BIM_PlanEdit", "Wall mode: baseless")
-                    else:
-                        wall_state += "\n" + translate(
-                            "BIM_PlanEdit", "Wall mode: base-driven straight line"
-                        )
-                    wall_state += "\n" + translate(
+                    selection_help = translate(
                         "BIM_PlanEdit",
-                        "Grip editing: drag square grips to stretch, diamond grip to move",
+                        "Use wall grips in the viewport to stretch or move the selected wall.",
                     )
                 else:
-                    wall_state += "\n" + translate("BIM_PlanEdit", "Wall mode: base-driven")
+                    selection_help = translate(
+                        "BIM_PlanEdit",
+                        "This wall can be reviewed in plan, but grip editing is unavailable.",
+                    )
             else:
-                wall_state = translate("BIM_PlanEdit", "Selected wall: none")
+                selection_state = translate("BIM_PlanEdit", "Selection: none")
+                selection_help = translate(
+                    "BIM_PlanEdit",
+                    "Select a wall or hosted opening in the viewport to edit it.",
+                )
             self.status.setText(
                 translate(
                     "BIM_PlanEdit",
-                    "Current tool: {tool}\nWorking plane: {storey}\nDisplay override: Footprint\n{wall_state}",
-                ).format(tool=tool, storey=storey_text, wall_state=wall_state)
+                    "Mode: {tool}\nStorey: {storey}\nDisplay: Footprint\n{selection_state}\n{selection_help}",
+                ).format(
+                    tool=tool,
+                    storey=storey_text,
+                    selection_state=selection_state,
+                    selection_help=selection_help,
+                )
             )
-            stretch_enabled = self.session.is_selected_wall_endpoint_editable()
             self._apply_modal_interaction_state(modal_active)
-            if not modal_active:
-                self.stretch_start_button.setEnabled(stretch_enabled)
-                self.stretch_end_button.setEnabled(stretch_enabled)
         except (AttributeError, RuntimeError):
             self.mark_closed()
             self.detach()
@@ -4625,8 +4722,6 @@ class PlanEditDockWidget:
             self.move_button,
             self.join_button,
             self.reapply_button,
-            self.stretch_start_button,
-            self.stretch_end_button,
         ):
             if widget is None:
                 continue
@@ -4657,12 +4752,6 @@ class PlanEditDockWidget:
     def on_reapply_clicked(self):
         self.session.apply_plan_view(fit=False)
         self.refresh_from_session()
-
-    def on_stretch_start_clicked(self):
-        self.session.stretch_selected_wall("Start")
-
-    def on_stretch_end_clicked(self):
-        self.session.stretch_selected_wall("End")
 
     def on_exit_clicked(self):
         self.session.shutdown()
@@ -4721,3 +4810,92 @@ class _PlanEditDock:
                         pass
 
         return _DockWidget(owner)
+
+
+class _PlanEditViewportStatusChip:
+    def __new__(cls, session, host_widget):
+        from PySide import QtCore, QtGui
+
+        class _Chip(QtGui.QFrame):
+            def __init__(self, plan_session, parent_widget):
+                super().__init__(parent_widget)
+                self.session = plan_session
+                self.host_widget = parent_widget
+                self.setObjectName("BIMPlanEditViewportStatusChip")
+                self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
+                self.setFocusPolicy(QtCore.Qt.NoFocus)
+                self.setFrameShape(QtGui.QFrame.NoFrame)
+                self.setStyleSheet("""
+                    QFrame#BIMPlanEditViewportStatusChip {
+                        background: rgba(250, 250, 248, 230);
+                        border: 1px solid rgba(24, 40, 56, 60);
+                        border-radius: 10px;
+                    }
+                    QLabel#BIMPlanEditViewportStatusTitle {
+                        color: rgb(25, 32, 38);
+                        font-weight: 600;
+                    }
+                    QLabel#BIMPlanEditViewportStatusBody {
+                        color: rgb(60, 68, 76);
+                    }
+                    """)
+
+                layout = QtGui.QVBoxLayout(self)
+                layout.setContentsMargins(12, 10, 12, 10)
+                layout.setSpacing(2)
+
+                self.title_label = QtGui.QLabel(self)
+                self.title_label.setObjectName("BIMPlanEditViewportStatusTitle")
+                self.body_label = QtGui.QLabel(self)
+                self.body_label.setObjectName("BIMPlanEditViewportStatusBody")
+                self.body_label.setWordWrap(True)
+                self.body_label.setMaximumWidth(300)
+
+                layout.addWidget(self.title_label)
+                layout.addWidget(self.body_label)
+
+                try:
+                    self.host_widget.installEventFilter(self)
+                except Exception:
+                    pass
+
+            def set_texts(self, title, body):
+                self.title_label.setText(title)
+                self.body_label.setText(body)
+                self.adjustSize()
+                self._reposition()
+                self.show()
+                self.raise_()
+
+            def _reposition(self):
+                host = self.host_widget
+                if host is None:
+                    return
+                margin = 14
+                max_width = max(180, host.width() - (margin * 2))
+                self.setMaximumWidth(max_width)
+                self.body_label.setMaximumWidth(max_width - 24)
+                self.adjustSize()
+                self.move(margin, margin)
+
+            def eventFilter(self, watched, event):
+                if watched is self.host_widget and event.type() in (
+                    QtCore.QEvent.Resize,
+                    QtCore.QEvent.Move,
+                    QtCore.QEvent.Show,
+                ):
+                    self._reposition()
+                return QtGui.QFrame.eventFilter(self, watched, event)
+
+            def close_chip(self):
+                host = self.host_widget
+                if host is not None:
+                    try:
+                        host.removeEventFilter(self)
+                    except Exception:
+                        pass
+                self.host_widget = None
+                self.hide()
+                self.deleteLater()
+
+        return _Chip(session, host_widget)
