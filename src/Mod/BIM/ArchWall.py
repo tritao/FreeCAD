@@ -409,6 +409,28 @@ class _Wall(ArchComponent.Component):
             self.ArchSkPropSetPickedUuid = ""
         if not hasattr(self, "ArchSkPropSetListPrev"):
             self.ArchSkPropSetListPrev = []
+        if "EndingStart" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyPlacement",
+                "EndingStart",
+                "Wall",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "A placement, relative to the main wall placement, describing "
+                    "a plane that cuts the end of the wall, at start position.",
+                ),
+            )
+        if "EndingEnd" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyPlacement",
+                "EndingEnd",
+                "Wall",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "A placement, relative to the main wall placement, describing "
+                    "a plane that cuts the end of the wall, at end position.",
+                ),
+            )
         self.connectEdges = []
 
     def dumps(self):
@@ -629,6 +651,7 @@ class _Wall(ArchComponent.Component):
             # walls can be made of only a series of additions and have no base shape
             base = Part.Shape()
         base = self.processSubShapes(obj, base, pl)
+        base = self.process_endings(obj, base, pl)
         self.applyShape(obj, base, pl)
 
         # Check if there is base, and if width and height is provided or not
@@ -1939,6 +1962,90 @@ class _Wall(ArchComponent.Component):
         self.basewires = [[Part.LineSegment(p1, p2).toShape()]]
 
         return base_faces, placement
+
+    def get_baseline(self, obj):
+        """
+        Returns the wall baseline as a shape in global coordinates.
+        Handles both based and baseless walls.
+        """
+        import Part
+
+        if hasattr(obj, "Base") and obj.Base:
+            return obj.Base.Shape
+        if hasattr(obj, "Proxy") and hasattr(obj.Proxy, "calc_endpoints"):
+            endpoints = obj.Proxy.calc_endpoints(obj)
+            return Part.makeLine(endpoints[0], endpoints[1])
+        return None
+
+    def process_endings(self, obj, base_solid, wall_placement):
+        """
+        Trims the given wall solid using the EndingStart and EndingEnd planes.
+        """
+        if base_solid.isNull():
+            return base_solid
+
+        solid_to_trim = base_solid
+        tool_size = base_solid.BoundBox.DiagonalLength * 2
+
+        is_start_null = obj.EndingStart.Base.Length < 1e-9 and obj.EndingStart.Rotation.Angle < 1e-9
+        if not is_start_null:
+            print("\n--- Processing Start Ending ---")
+            global_plane_placement = wall_placement.multiply(obj.EndingStart)
+            ref_point = obj.Proxy.calc_endpoints(obj)[1]
+            print(f"  Ref Point (Global 'Keep' Side): {ref_point}")
+
+            cutting_tool_global = self._create_cutting_tool_from_plane(
+                global_plane_placement, ref_point, tool_size
+            )
+
+            cutting_tool_local = cutting_tool_global.copy()
+            cutting_tool_local.transformShape(wall_placement.inverse().toMatrix())
+
+            solid_to_trim = solid_to_trim.common(cutting_tool_local)
+            print(f"  'common' operation performed. Resulting volume: {solid_to_trim.Volume}")
+
+        is_end_null = obj.EndingEnd.Base.Length < 1e-9 and obj.EndingEnd.Rotation.Angle < 1e-9
+        if not is_end_null:
+            print("\n--- Processing End Ending ---")
+            global_plane_placement = wall_placement.multiply(obj.EndingEnd)
+            ref_point = obj.Proxy.calc_endpoints(obj)[0]
+
+            cutting_tool_global = self._create_cutting_tool_from_plane(
+                global_plane_placement, ref_point, tool_size
+            )
+
+            cutting_tool_local = cutting_tool_global.copy()
+            cutting_tool_local.transformShape(wall_placement.inverse().toMatrix())
+
+            solid_to_trim = solid_to_trim.common(cutting_tool_local)
+            print(f"  'common' operation performed. Resulting volume: {solid_to_trim.Volume}")
+
+        print("--- Finished process_endings ---\n")
+        return solid_to_trim
+
+    def _create_cutting_tool_from_plane(self, cutting_placement, ref_point, tool_size):
+        """
+        Creates a finite solid cutting tool from a placement.
+        """
+        import Part
+
+        print("--- Inside _create_cutting_tool_from_plane ---")
+
+        p1 = FreeCAD.Vector(-tool_size / 2, -tool_size / 2, 0)
+        p2 = FreeCAD.Vector(tool_size / 2, -tool_size / 2, 0)
+        p3 = FreeCAD.Vector(tool_size / 2, tool_size / 2, 0)
+        p4 = FreeCAD.Vector(-tool_size / 2, tool_size / 2, 0)
+        bounded_face = Part.Face(Part.makePolygon([p1, p2, p3, p4, p1]))
+        bounded_face.Placement = cutting_placement
+
+        print(f"  Tool Face Placement (Global): {bounded_face.Placement}")
+        print(f"  Reference Point (Global 'Keep' Side): {ref_point}")
+
+        cutting_tool = bounded_face.makeHalfSpace(ref_point)
+        print("  Called makeHalfSpace() on bounded face.")
+        print("---------------------------------------------")
+
+        return cutting_tool
 
 
 if FreeCAD.GuiUp:
