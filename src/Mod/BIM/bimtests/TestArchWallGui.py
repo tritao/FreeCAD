@@ -837,8 +837,8 @@ class TestArchWallGui(ArchWallGuiTestCase):
             existing_baseline,
             top_baseline,
             intersection,
-            existing_join_wall.Width.Value,
-            top_wall.Width.Value,
+            ArchWallJoinUtils.get_join_section(existing_join_wall),
+            ArchWallJoinUtils.get_join_section(top_wall),
         )
         relative_top_placement = top_wall.Placement.inverse().multiply(top_plane)
         setattr(top_wall, "Ending" + top_end_name, relative_top_placement)

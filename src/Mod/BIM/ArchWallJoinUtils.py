@@ -32,6 +32,7 @@ when multiple enabled joints claim the same wall end.
 from dataclasses import dataclass, field
 
 import ArchWallPath
+import ArchWallSection
 import FreeCAD
 
 
@@ -134,6 +135,11 @@ def get_join_path(wall):
     return ArchWallPath.get_wall_path(wall)
 
 
+def get_join_section(wall):
+    """Returns the normalized supported wall section used by the wall-joint solver."""
+    return ArchWallSection.get_wall_section(wall)
+
+
 def solve_wall_joint(joint, include_conflicts=True):
     """Solves a wall joint relation and returns derived trim data."""
     if not joint:
@@ -208,6 +214,8 @@ def solve_wall_joint_inputs(
 
     path_a = get_join_path(wall_a)
     path_b = get_join_path(wall_b)
+    section_a = get_join_section(wall_a)
+    section_b = get_join_section(wall_b)
     if not path_a:
         return _status_result(
             "UnsupportedBaseline",
@@ -219,6 +227,20 @@ def solve_wall_joint_inputs(
         return _status_result(
             "UnsupportedBaseline",
             f"The joint only supports walls with a single straight baseline: {wall_b.Label}",
+            wall_a=wall_a,
+            wall_b=wall_b,
+        )
+    if not section_a:
+        return _status_result(
+            "SolverError",
+            f"The joint could not determine the wall section: {wall_a.Label}",
+            wall_a=wall_a,
+            wall_b=wall_b,
+        )
+    if not section_b:
+        return _status_result(
+            "SolverError",
+            f"The joint could not determine the wall section: {wall_b.Label}",
             wall_a=wall_a,
             wall_b=wall_b,
         )
@@ -245,7 +267,7 @@ def solve_wall_joint_inputs(
     joint_type = _normalize_enum(joint_type, ("Miter", "Butt", "Tee"), "Miter")
     if joint_type == "Miter":
         plane_a, plane_b = calculate_miter_cutting_planes(
-            path_a, path_b, intersection, wall_a.Width.Value, wall_b.Width.Value
+            path_a, path_b, intersection, section_a, section_b
         )
         resolved_end_a = _resolve_end(auto_end_a, end_a)
         resolved_end_b = _resolve_end(auto_end_b, end_b)
@@ -263,11 +285,11 @@ def solve_wall_joint_inputs(
         butt_trimmed = _normalize_enum(butt_trimmed, ("Auto", "WallA", "WallB"), "Auto")
         if butt_trimmed in ("Auto", "WallB"):
             plane_a, plane_b = calculate_butt_cutting_planes(
-                path_a, path_b, intersection, wall_a.Width.Value, wall_b.Width.Value
+                path_a, path_b, intersection, section_a, section_b
             )
         else:
             plane_b, plane_a = calculate_butt_cutting_planes(
-                path_b, path_a, intersection, wall_b.Width.Value, wall_a.Width.Value
+                path_b, path_a, intersection, section_b, section_a
             )
         resolved_end_a = _resolve_end(auto_end_a, end_a)
         resolved_end_b = _resolve_end(auto_end_b, end_b)
@@ -293,7 +315,9 @@ def solve_wall_joint_inputs(
                 "resolved_end_a": resolved_end_a,
                 "resolved_end_b": None,
                 "plane_a": (
-                    calculate_tee_cutting_plane(wall_a, wall_b, path_a, path_b, intersection)
+                    calculate_tee_cutting_plane(
+                        wall_a, wall_b, path_a, path_b, intersection, top_section=section_b
+                    )
                     if resolved_end_a
                     else None
                 ),
@@ -309,7 +333,9 @@ def solve_wall_joint_inputs(
             "resolved_end_b": resolved_end_b,
             "plane_a": None,
             "plane_b": (
-                calculate_tee_cutting_plane(wall_b, wall_a, path_b, path_a, intersection)
+                calculate_tee_cutting_plane(
+                    wall_b, wall_a, path_b, path_a, intersection, top_section=section_a
+                )
                 if resolved_end_b
                 else None
             ),
@@ -397,7 +423,7 @@ def find_best_intersection(line1, line2):
     return ArchWallPath.find_path_intersection(line1, line2)
 
 
-def calculate_miter_cutting_planes(baseline1, baseline2, intersection, _width1, _width2):
+def calculate_miter_cutting_planes(baseline1, baseline2, intersection, _section1, _section2):
     """Calculates the cutting planes for a miter wall joint."""
     path1 = ArchWallPath.coerce_wall_path(baseline1)
     path2 = ArchWallPath.coerce_wall_path(baseline2)
@@ -417,11 +443,14 @@ def calculate_miter_cutting_planes(baseline1, baseline2, intersection, _width1, 
     return plane1, plane2
 
 
-def calculate_butt_cutting_planes(baseline1, baseline2, intersection, width1, width2):
+def calculate_butt_cutting_planes(baseline1, baseline2, intersection, section1, section2):
     """Calculates the cutting planes for a butt wall joint."""
     path1 = ArchWallPath.coerce_wall_path(baseline1)
     path2 = ArchWallPath.coerce_wall_path(baseline2)
     if not path1 or not path2:
+        return None, None
+    width2 = ArchWallSection.get_section_thickness(section2)
+    if width2 is None:
         return None, None
 
     axis_x_2 = path1.direction()
@@ -445,11 +474,16 @@ def calculate_butt_cutting_planes(baseline1, baseline2, intersection, width1, wi
     return plane1, plane2
 
 
-def calculate_tee_cutting_plane(stem_wall, top_wall, stem_line, top_line, intersection):
+def calculate_tee_cutting_plane(
+    stem_wall, top_wall, stem_line, top_line, intersection, top_section=None
+):
     """Calculates the cutting plane for the stem wall in a tee joint."""
     stem_path = ArchWallPath.coerce_wall_path(stem_line, wall=stem_wall)
     top_path = ArchWallPath.coerce_wall_path(top_line, wall=top_wall)
     if not stem_path or not top_path:
+        return None
+    top_width = ArchWallSection.get_section_thickness(top_section if top_section else top_wall)
+    if top_width is None:
         return None
 
     plane_normal = stem_path.direction()
@@ -464,7 +498,7 @@ def calculate_tee_cutting_plane(stem_wall, top_wall, stem_line, top_line, inters
     if offset_dir.dot(vec_to_stem) < 0:
         offset_dir.multiply(-1)
 
-    plane_position = intersection.add(offset_dir * (top_wall.Width.Value / 2.0))
+    plane_position = intersection.add(offset_dir * (top_width / 2.0))
     plane_position = plane_position.add(vec_to_stem.normalize() * 1e-6)
     return FreeCAD.Placement(plane_position, rotation)
 

@@ -27,6 +27,7 @@
 import Arch
 import ArchWallJoinUtils
 import ArchWallPath
+import ArchWallSection
 import Draft
 import FreeCAD as App
 import Part
@@ -226,6 +227,48 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
         self.assertIsNone(
             ArchWallPath.get_wall_path(wall),
             "Multi-edge based walls should be rejected by the join path adapter.",
+        )
+
+    def test_get_wall_section_for_centered_single_width_wall(self):
+        self.printTestMessage("Testing wall section normalization for single-width walls...")
+
+        wall = Arch.makeWall(length=2000, width=200, height=1500)
+        wall.Align = "Center"
+        self.document.recompute()
+
+        section = ArchWallSection.get_wall_section(wall)
+
+        self.assertIsNotNone(section, "A simple wall should produce a section adapter.")
+        self.assertEqual(section.total_thickness, 200)
+        self.assertAlmostEqual(section.positive_extent, 100.0)
+        self.assertAlmostEqual(section.negative_extent, 100.0)
+        self.assertEqual(len(section.layers), 1)
+        self.assertTrue(section.layers[0].visible)
+
+    def test_get_wall_section_for_layered_left_aligned_wall(self):
+        self.printTestMessage("Testing wall section normalization for layered walls...")
+
+        mat_a = Arch.makeMaterial()
+        mat_b = Arch.makeMaterial()
+        multi = Arch.makeMultiMaterial()
+        multi.Materials = [mat_a, mat_b]
+        multi.Thicknesses = [100, 200]
+
+        wall = Arch.makeWall(length=2000, width=300, height=1500)
+        wall.Align = "Left"
+        wall.Material = multi
+        self.document.recompute()
+
+        section = ArchWallSection.get_wall_section(wall)
+
+        self.assertIsNotNone(section, "A layered wall should produce a section adapter.")
+        self.assertEqual(section.total_thickness, 300)
+        self.assertAlmostEqual(section.positive_extent, 300.0)
+        self.assertAlmostEqual(section.negative_extent, 0.0)
+        self.assertEqual([layer.thickness for layer in section.layers], [100, 200])
+        self.assertEqual(
+            [(layer.y_min, layer.y_max) for layer in section.layers],
+            [(-300.0, -200.0), (-200.0, 0.0)],
         )
 
     def test_make_wall_joint_tee_on_sketch_based_walls(self):

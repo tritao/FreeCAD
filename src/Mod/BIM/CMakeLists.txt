@@ -23,6 +23,7 @@ SET(Arch_SRCS
     ArchProject.py
     ArchWall.py
     ArchWallPath.py
+    ArchWallSection.py
     ArchWallJoint.py
     ArchWallJoinUtils.py
     Arch.py
