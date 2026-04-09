@@ -105,19 +105,44 @@ def is_wall_joint(obj):
     return bool(obj and hasattr(obj, "Proxy") and getattr(obj.Proxy, "Type", None) == "WallJoint")
 
 
-def iter_wall_joints(wall):
+def is_wall_junction(obj):
+    """Returns True when the given object is a BIM wall junction."""
+    return bool(
+        obj and hasattr(obj, "Proxy") and getattr(obj.Proxy, "Type", None) == "WallJunction"
+    )
+
+
+def is_managed_wall_joint(obj):
+    """Returns True when the wall joint is owned by a wall junction."""
+    return bool(is_wall_joint(obj) and getattr(obj, "AutoManaged", False))
+
+
+def iter_wall_relations(wall):
+    """Yields wall relations that reference the given wall."""
+    if not wall:
+        return
+    for obj in wall.InList:
+        if is_wall_joint(obj) and is_managed_wall_joint(obj):
+            continue
+        if is_wall_joint(obj) or is_wall_junction(obj):
+            yield obj
+
+
+def iter_wall_joints(wall, include_managed=True):
     """Yields joint relations that reference the given wall."""
     if not wall:
         return
     for obj in wall.InList:
-        if is_wall_joint(obj):
+        if is_wall_joint(obj) and (include_managed or not is_managed_wall_joint(obj)):
             yield obj
 
 
-def find_existing_joint(doc, wall_a, wall_b):
+def find_existing_joint(doc, wall_a, wall_b, include_managed=False):
     """Finds an existing joint between two walls, regardless of link order."""
     for obj in doc.Objects:
         if not is_wall_joint(obj):
+            continue
+        if not include_managed and is_managed_wall_joint(obj):
             continue
         if {obj.WallA, obj.WallB} == {wall_a, wall_b}:
             return obj

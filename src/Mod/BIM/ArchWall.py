@@ -857,20 +857,20 @@ class _Wall(ArchComponent.Component):
             "ArchSketchEdges",
             "ArchSketchPropertySet",
         ]:
-            self._touch_wall_joints(obj)
+            self._touch_wall_relations(obj)
 
         self.hideSubobjects(obj, prop)
         ArchComponent.Component.onChanged(self, obj, prop)
 
-    def _touch_wall_joints(self, obj):
+    def _touch_wall_relations(self, obj):
         if obj.Document and getattr(obj.Document, "Recomputing", False):
             return
         touched = set()
-        for joint in ArchWallJoinUtils.iter_wall_joints(obj):
-            if joint.Name in touched:
+        for relation in ArchWallJoinUtils.iter_wall_relations(obj):
+            if relation.Name in touched:
                 continue
-            touched.add(joint.Name)
-            joint.touch()
+            touched.add(relation.Name)
+            relation.touch()
 
     def getFootprint(self, obj):
         """Get the plan faces that represent this wall in footprint mode.

@@ -26,6 +26,8 @@ SET(Arch_SRCS
     ArchWallSection.py
     ArchWallJoint.py
     ArchWallJoinUtils.py
+    ArchWallJunction.py
+    ArchWallJunctionUtils.py
     Arch.py
     ArchSite.py
     ArchStructure.py
@@ -246,6 +248,7 @@ SET(bimtests_SRCS
     bimtests/TestArchWall.py
     bimtests/ArchWallGuiTestUtils.py
     bimtests/TestArchWallJoint.py
+    bimtests/TestArchWallJunction.py
     bimtests/TestArchWallGui.py
     bimtests/TestBimPlanEditGui.py
     bimtests/TestArchMaterial.py

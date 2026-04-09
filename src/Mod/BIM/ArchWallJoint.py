@@ -84,6 +84,27 @@ class _WallJoint:
                 QT_TRANSLATE_NOOP("App::Property", "Enables or disables this wall joint."),
             )
             obj.Enabled = True
+        if "AutoManaged" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyBool",
+                "AutoManaged",
+                "Joint",
+                QT_TRANSLATE_NOOP(
+                    "App::Property", "Marks this wall joint as managed by a wall junction."
+                ),
+            )
+            obj.AutoManaged = False
+            obj.setEditorMode("AutoManaged", 2)
+        if "ManagedByJunction" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyLink",
+                "ManagedByJunction",
+                "Joint",
+                QT_TRANSLATE_NOOP(
+                    "App::Property", "The wall junction relation that owns this managed wall joint."
+                ),
+            )
+            obj.setEditorMode("ManagedByJunction", 2)
         if "WallA" not in obj.PropertiesList:
             obj.addProperty(
                 "App::PropertyLink",
