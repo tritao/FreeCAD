@@ -35,6 +35,7 @@ from bimtests.ArchWallGuiTestUtils import (
     MockTracker,
     current_arch_wall_class,
 )
+from bimcommands.BimJoin import BIM_Join_Butt, BIM_Join_Miter, BIM_Join_Tee
 from unittest.mock import patch
 
 
@@ -431,6 +432,296 @@ class TestArchWallGui(ArchWallGuiTestCase):
             if FreeCAD.activeDraftCommand is cmd:
                 FreeCAD.activeDraftCommand = None
 
+    def _make_baseless_wall_between(self, p1, p2, width=200.0, height=1500.0):
+        """Create a baseless wall between two global points."""
+        line_vector = p2.sub(p1)
+        wall = Arch.makeWall(length=line_vector.Length, width=width, height=height)
+        wall.Placement = FreeCAD.Placement(
+            (p1 + p2) * 0.5,
+            FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), line_vector.normalize()),
+        )
+        self.document.recompute()
+        return wall
+
+    def _make_line_based_wall_between(self, p1, p2, width=200.0, height=1500.0):
+        """Create a wall from a Draft line baseline."""
+        line = Draft.makeLine(p1, p2)
+        self.document.recompute()
+        wall = Arch.makeWall(line, width=width, height=height)
+        self.document.recompute()
+        return wall
+
+    def _activate_join_command(self, command, *walls):
+        """Select walls and run a join command."""
+        FreeCADGui.Selection.clearSelection()
+        for wall in walls:
+            FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        command.Activated()
+        self.pump_gui_events()
+        self.document.recompute()
+        FreeCADGui.Selection.clearSelection()
+
+    @staticmethod
+    def _is_identity_placement(placement, tol=1e-9):
+        return placement.Base.Length < tol and placement.Rotation.Angle < tol
+
+    @staticmethod
+    def _placements_match(left, right, tol=1e-9):
+        return left.Base.isEqual(right.Base, tol) and left.Rotation.isSame(right.Rotation, tol)
+
+    def test_bim_join_miter_sets_endings_on_both_walls(self):
+        """Tests that the miter join writes ending placements for both walls."""
+        self.printTestMessage("Testing BIM miter join...")
+
+        wall1 = self._make_baseless_wall_between(
+            FreeCAD.Vector(-1000, 0, 0), FreeCAD.Vector(0, 0, 0)
+        )
+        wall2 = self._make_baseless_wall_between(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 1000, 0)
+        )
+        initial_volume1 = wall1.Shape.Volume
+        initial_volume2 = wall2.Shape.Volume
+
+        self._activate_join_command(BIM_Join_Miter(), wall1, wall2)
+
+        self.assertFalse(
+            self._is_identity_placement(wall1.EndingEnd),
+            "The first wall should receive an ending at its joined end.",
+        )
+        self.assertTrue(
+            self._is_identity_placement(wall1.EndingStart),
+            "The untouched end of the first wall should remain unchanged.",
+        )
+        self.assertFalse(
+            self._is_identity_placement(wall2.EndingStart),
+            "The second wall should receive an ending at its joined end.",
+        )
+        self.assertTrue(
+            self._is_identity_placement(wall2.EndingEnd),
+            "The untouched end of the second wall should remain unchanged.",
+        )
+        self.assertTrue(wall1.Shape.isValid(), "First wall became invalid after miter join.")
+        self.assertTrue(wall2.Shape.isValid(), "Second wall became invalid after miter join.")
+        self.assertLess(wall1.Shape.Volume, initial_volume1)
+        self.assertLess(wall2.Shape.Volume, initial_volume2)
+
+    def test_bim_join_miter_sets_endings_on_line_based_walls(self):
+        """Tests that the miter join also works on line-based walls."""
+        self.printTestMessage("Testing BIM miter join on line-based walls...")
+
+        wall1 = self._make_line_based_wall_between(
+            FreeCAD.Vector(-1000, 0, 0), FreeCAD.Vector(0, 0, 0)
+        )
+        wall2 = self._make_line_based_wall_between(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 1000, 0)
+        )
+        initial_volume1 = wall1.Shape.Volume
+        initial_volume2 = wall2.Shape.Volume
+
+        self._activate_join_command(BIM_Join_Miter(), wall1, wall2)
+
+        self.assertFalse(
+            self._is_identity_placement(wall1.EndingEnd),
+            "The first line-based wall should receive an ending at its joined end.",
+        )
+        self.assertTrue(
+            self._is_identity_placement(wall1.EndingStart),
+            "The untouched end of the first line-based wall should remain unchanged.",
+        )
+        self.assertFalse(
+            self._is_identity_placement(wall2.EndingStart),
+            "The second line-based wall should receive an ending at its joined end.",
+        )
+        self.assertTrue(
+            self._is_identity_placement(wall2.EndingEnd),
+            "The untouched end of the second line-based wall should remain unchanged.",
+        )
+        self.assertTrue(wall1.Shape.isValid(), "First line-based wall became invalid after join.")
+        self.assertTrue(wall2.Shape.isValid(), "Second line-based wall became invalid after join.")
+        self.assertLess(wall1.Shape.Volume, initial_volume1)
+        self.assertLess(wall2.Shape.Volume, initial_volume2)
+
+    def test_bim_join_butt_sets_endings_on_both_walls(self):
+        """Tests that the butt join writes ending placements for both walls."""
+        self.printTestMessage("Testing BIM butt join...")
+
+        wall1 = self._make_baseless_wall_between(
+            FreeCAD.Vector(-1000, 0, 0), FreeCAD.Vector(0, 0, 0)
+        )
+        wall2 = self._make_baseless_wall_between(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 1000, 0)
+        )
+
+        self._activate_join_command(BIM_Join_Butt(), wall1, wall2)
+
+        self.assertFalse(
+            self._is_identity_placement(wall1.EndingEnd),
+            "The first wall should receive a butt ending at its joined end.",
+        )
+        self.assertTrue(
+            self._is_identity_placement(wall1.EndingStart),
+            "The untouched end of the first wall should remain unchanged.",
+        )
+        self.assertFalse(
+            self._is_identity_placement(wall2.EndingStart),
+            "The second wall should receive a butt ending at its joined end.",
+        )
+        self.assertTrue(
+            self._is_identity_placement(wall2.EndingEnd),
+            "The untouched end of the second wall should remain unchanged.",
+        )
+        self.assertTrue(wall1.Shape.isValid(), "First wall became invalid after butt join.")
+        self.assertTrue(wall2.Shape.isValid(), "Second wall became invalid after butt join.")
+
+    def test_bim_join_tee_trims_only_stem_wall(self):
+        """Tests that the tee join trims only the stem wall and leaves the top wall clear."""
+        self.printTestMessage("Testing BIM tee join...")
+
+        stem_wall = self._make_baseless_wall_between(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 1000, 0)
+        )
+        top_wall = self._make_baseless_wall_between(
+            FreeCAD.Vector(-1000, 0, 0), FreeCAD.Vector(1000, 0, 0)
+        )
+        initial_stem_volume = stem_wall.Shape.Volume
+        initial_top_volume = top_wall.Shape.Volume
+
+        self._activate_join_command(BIM_Join_Tee(), stem_wall, top_wall)
+
+        self.assertFalse(
+            self._is_identity_placement(stem_wall.EndingStart),
+            "The stem wall should receive a tee ending at the joined end.",
+        )
+        self.assertTrue(
+            self._is_identity_placement(stem_wall.EndingEnd),
+            "The untouched end of the stem wall should remain unchanged.",
+        )
+        self.assertTrue(
+            self._is_identity_placement(top_wall.EndingStart),
+            "The top wall should keep a clear start ending after a tee join.",
+        )
+        self.assertTrue(
+            self._is_identity_placement(top_wall.EndingEnd),
+            "The top wall should keep a clear end ending after a tee join.",
+        )
+        self.assertTrue(stem_wall.Shape.isValid(), "Stem wall became invalid after tee join.")
+        self.assertTrue(top_wall.Shape.isValid(), "Top wall became invalid after tee join.")
+        self.assertLess(stem_wall.Shape.Volume, initial_stem_volume)
+        self.assertAlmostEqual(top_wall.Shape.Volume, initial_top_volume, delta=1e-6)
+
+    def test_bim_join_tee_preserves_existing_top_wall_endings(self):
+        """Tests that a tee join does not clear pre-existing trims on the top wall."""
+        self.printTestMessage("Testing BIM tee join preserves top wall endings...")
+
+        existing_join_wall = self._make_line_based_wall_between(
+            FreeCAD.Vector(-1000, 0, 0), FreeCAD.Vector(-1000, -1000, 0)
+        )
+        top_wall = self._make_line_based_wall_between(
+            FreeCAD.Vector(-1000, 0, 0), FreeCAD.Vector(1000, 0, 0)
+        )
+
+        existing_baseline = existing_join_wall.Proxy.get_baseline(existing_join_wall)
+        top_baseline = top_wall.Proxy.get_baseline(top_wall)
+        butt_join = BIM_Join_Butt()
+        intersection, _, top_end_name = butt_join.find_best_intersection(
+            existing_baseline, top_baseline
+        )
+        _, top_plane = butt_join.calculate_cutting_planes(
+            existing_baseline,
+            top_baseline,
+            intersection,
+            existing_join_wall.Width.Value,
+            top_wall.Width.Value,
+        )
+        relative_top_placement = top_wall.Placement.inverse().multiply(top_plane)
+        setattr(top_wall, "Ending" + top_end_name, relative_top_placement)
+        self.document.removeObject(existing_join_wall.Name)
+        self.document.recompute()
+
+        self.assertFalse(
+            self._is_identity_placement(top_wall.EndingStart),
+            "Precondition failed: the top wall should already have a preserved ending.",
+        )
+
+        preserved_start = FreeCAD.Placement(
+            top_wall.EndingStart.Base, top_wall.EndingStart.Rotation
+        )
+        preserved_end = FreeCAD.Placement(top_wall.EndingEnd.Base, top_wall.EndingEnd.Rotation)
+        top_volume_before_tee = top_wall.Shape.Volume
+
+        stem_wall = self._make_line_based_wall_between(
+            FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 1000, 0)
+        )
+
+        self._activate_join_command(BIM_Join_Tee(), stem_wall, top_wall)
+
+        self.assertFalse(
+            self._is_identity_placement(stem_wall.EndingStart),
+            "The tee join should still trim the stem wall.",
+        )
+        self.assertTrue(
+            self._placements_match(top_wall.EndingStart, preserved_start),
+            "The top wall start ending should be preserved across the tee join.",
+        )
+        self.assertTrue(
+            self._placements_match(top_wall.EndingEnd, preserved_end),
+            "The top wall end ending should be preserved across the tee join.",
+        )
+        self.assertAlmostEqual(top_wall.Shape.Volume, top_volume_before_tee, delta=1e-6)
+
+    def test_bim_join_rejects_multi_segment_based_wall(self):
+        """Tests that join commands reject multi-segment based walls without modifying either wall."""
+        self.printTestMessage("Testing BIM join rejects multi-segment wall baselines...")
+
+        wire = Draft.makeWire(
+            [FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(1000, 0, 0), FreeCAD.Vector(1000, 1000, 0)]
+        )
+        self.document.recompute()
+        unsupported_wall = Arch.makeWall(wire, width=200, height=1500)
+        supported_wall = self._make_line_based_wall_between(
+            FreeCAD.Vector(1000, 0, 0), FreeCAD.Vector(1000, -1000, 0)
+        )
+
+        self._activate_join_command(BIM_Join_Miter(), unsupported_wall, supported_wall)
+
+        self.assertTrue(
+            self._is_identity_placement(unsupported_wall.EndingStart)
+            and self._is_identity_placement(unsupported_wall.EndingEnd),
+            "Unsupported multi-segment walls should not receive join trims.",
+        )
+        self.assertTrue(
+            self._is_identity_placement(supported_wall.EndingStart)
+            and self._is_identity_placement(supported_wall.EndingEnd),
+            "The supported wall should remain untouched when the other wall is rejected.",
+        )
+
+    def test_bim_join_rejects_curved_based_wall(self):
+        """Tests that join commands reject curved wall baselines without modifying either wall."""
+        self.printTestMessage("Testing BIM join rejects curved wall baselines...")
+
+        arc = Draft.make_circle(radius=1000, startangle=0, endangle=90)
+        self.document.recompute()
+        unsupported_wall = Arch.makeWall(arc, width=200, height=1500)
+        supported_wall = self._make_line_based_wall_between(
+            FreeCAD.Vector(1000, 0, 0), FreeCAD.Vector(1000, -1000, 0)
+        )
+
+        self._activate_join_command(BIM_Join_Miter(), unsupported_wall, supported_wall)
+
+        self.assertTrue(
+            self._is_identity_placement(unsupported_wall.EndingStart)
+            and self._is_identity_placement(unsupported_wall.EndingEnd),
+            "Unsupported curved walls should not receive join trims.",
+        )
+        self.assertTrue(
+            self._is_identity_placement(supported_wall.EndingStart)
+            and self._is_identity_placement(supported_wall.EndingEnd),
+            "The supported wall should remain untouched when the curved wall is rejected.",
+        )
+
+    # Section 1: Baseless wall joining
+
+    @patch("draftutils.params.get_param")
     def test_baseless_wall_autojoins_as_addition(self, mock_get_param):
         """Verify baseless wall becomes an 'Addition' when AUTOJOIN is on."""
         mock_get_param.side_effect = self._get_mock_side_effect(autoJoinWalls=True, WallBaseline=0)

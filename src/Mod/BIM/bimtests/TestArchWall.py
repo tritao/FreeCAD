@@ -581,6 +581,118 @@ class TestArchWall(TestArchBase.TestArchBase):
         self.assertAlmostEqual(wall.Length.Value, 4000.0, delta=1e-6)
         self.assertTrue(wall.Placement.Base.isEqual(App.Vector(2000, 0, 0), 1e-6))
 
+    def test_get_baseline_for_based_wall(self):
+        """Tests that get_baseline returns the base geometry for based walls."""
+        self.printTestMessage("Checking get_baseline for based walls...")
+
+        line = Draft.makeLine(App.Vector(100, 200, 0), App.Vector(2100, 200, 0))
+        self.document.recompute()
+        wall = Arch.makeWall(line, width=200, height=1500)
+        self.document.recompute()
+
+        baseline = wall.Proxy.get_baseline(wall)
+        self.assertIsNotNone(baseline, "Based wall baseline should not be None.")
+        self.assertEqual(len(baseline.Edges), 1, "Based wall baseline should contain one edge.")
+
+        expected_edge = line.Shape.Edges[0]
+        actual_edge = baseline.Edges[0]
+        self.assertTrue(
+            actual_edge.firstVertex().Point.isEqual(expected_edge.firstVertex().Point, 1e-6),
+            "Baseline start point does not match the base shape.",
+        )
+        self.assertTrue(
+            actual_edge.lastVertex().Point.isEqual(expected_edge.lastVertex().Point, 1e-6),
+            "Baseline end point does not match the base shape.",
+        )
+
+    def test_get_baseline_rejects_multi_edge_based_wall(self):
+        """Tests that get_baseline rejects multi-edge wall bases for joins."""
+        self.printTestMessage("Checking get_baseline rejects multi-edge bases...")
+
+        wire = Draft.makeWire(
+            [App.Vector(0, 0, 0), App.Vector(1000, 0, 0), App.Vector(1000, 1000, 0)]
+        )
+        self.document.recompute()
+        wall = Arch.makeWall(wire, width=200, height=1500)
+        self.document.recompute()
+
+        baseline = wall.Proxy.get_baseline(wall)
+        self.assertIsNone(
+            baseline, "Multi-edge wall bases should be rejected by the join baseline extractor."
+        )
+
+    def test_get_baseline_rejects_curved_based_wall(self):
+        """Tests that get_baseline rejects curved wall bases for joins."""
+        self.printTestMessage("Checking get_baseline rejects curved bases...")
+
+        arc = Draft.make_circle(radius=500, startangle=0, endangle=90)
+        self.document.recompute()
+        wall = Arch.makeWall(arc, width=200, height=1500)
+        self.document.recompute()
+
+        baseline = wall.Proxy.get_baseline(wall)
+        self.assertIsNone(
+            baseline, "Curved wall bases should be rejected by the join baseline extractor."
+        )
+
+    def test_get_baseline_for_baseless_wall(self):
+        """Tests that get_baseline derives a line from a baseless wall's endpoints."""
+        self.printTestMessage("Checking get_baseline for baseless walls...")
+
+        wall = Arch.makeWall(length=2000, width=200, height=1500)
+        wall.Placement = App.Placement(
+            App.Vector(1000, 1000, 0), App.Rotation(App.Vector(0, 0, 1), 30)
+        )
+        self.document.recompute()
+
+        baseline = wall.Proxy.get_baseline(wall)
+        endpoints = wall.Proxy.calc_endpoints(wall)
+
+        self.assertIsNotNone(baseline, "Baseless wall baseline should not be None.")
+        self.assertEqual(len(baseline.Edges), 1, "Baseless wall baseline should contain one edge.")
+        self.assertTrue(
+            baseline.Vertexes[0].Point.isEqual(endpoints[0], 1e-6),
+            "Baseline start point does not match the calculated endpoint.",
+        )
+        self.assertTrue(
+            baseline.Vertexes[-1].Point.isEqual(endpoints[1], 1e-6),
+            "Baseline end point does not match the calculated endpoint.",
+        )
+
+    def test_wall_ending_properties_trim_wall(self):
+        """Tests that EndingStart/EndingEnd placements trim and restore a wall shape."""
+        self.printTestMessage("Checking wall ending properties...")
+
+        wall = Arch.makeWall(length=2000, width=200, height=1000)
+        self.document.recompute()
+        initial_volume = wall.Shape.Volume
+        self.assertGreater(initial_volume, 0)
+
+        cut_position = App.Vector(1000, 0, 0)
+        rot_vertical = App.Rotation(App.Vector(0, 1, 0), 90)
+        rot_angle = App.Rotation(App.Vector(0, 0, 1), 45)
+        wall.EndingEnd = App.Placement(cut_position, rot_angle * rot_vertical)
+        self.document.recompute()
+
+        self.assertTrue(wall.Shape.isValid(), "Wall shape became invalid after trimming.")
+        self.assertLess(
+            wall.Shape.Volume, initial_volume, "Wall volume should decrease after trimming."
+        )
+        self.assertLess(
+            wall.Shape.BoundBox.XMax,
+            1000.01,
+            "Wall should be trimmed at the positive X end.",
+        )
+
+        wall.EndingEnd = App.Placement()
+        self.document.recompute()
+        self.assertAlmostEqual(
+            wall.Shape.Volume,
+            initial_volume,
+            delta=1e-6,
+            msg="Wall volume should return to its original value after resetting the ending.",
+        )
+
     def test_wall_makeblocks(self):
         """Test the 'MakeBlocks' feature for both based and baseless Arch Walls.
         This is a regression test for https://github.com/FreeCAD/FreeCAD/issues/26982,
