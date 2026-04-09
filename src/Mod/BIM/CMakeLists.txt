@@ -239,7 +239,9 @@ SET(bimtests_SRCS
     bimtests/test_roof_subtraction.brep
     bimtests/TestArchSpace.py
     bimtests/TestArchWall.py
+    bimtests/ArchWallGuiTestUtils.py
     bimtests/TestArchWallGui.py
+    bimtests/TestBimPlanEditGui.py
     bimtests/TestArchMaterial.py
     bimtests/TestArchPanel.py
     bimtests/TestArchWindow.py
