@@ -27,6 +27,7 @@
 import Arch
 import Draft
 import FreeCAD as App
+import Part
 
 from bimtests import TestArchBase
 
@@ -39,6 +40,13 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
             (p1 + p2) * 0.5,
             App.Rotation(App.Vector(1, 0, 0), line_vector.normalize()),
         )
+        self.document.recompute()
+        return wall
+
+    def _make_sketch_based_wall_between(self, p1, p2, width=200.0, height=1500.0):
+        sketch = self.document.addObject("Sketcher::SketchObject", "WallSketch")
+        sketch.addGeometry(Part.LineSegment(p1, p2))
+        wall = Arch.makeWall(sketch, width=width, height=height)
         self.document.recompute()
         return wall
 
@@ -108,6 +116,89 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
         self.assertTrue(wall1.Shape.isValid(), "First wall became invalid after the butt relation.")
         self.assertTrue(
             wall2.Shape.isValid(), "Second wall became invalid after the butt relation."
+        )
+
+    def test_make_wall_joint_miter_on_sketch_based_walls(self):
+        self.printTestMessage("Testing miter joints on one-edge sketch-based walls...")
+
+        wall1 = self._make_sketch_based_wall_between(App.Vector(-1000, 0, 0), App.Vector(0, 0, 0))
+        wall2 = self._make_sketch_based_wall_between(App.Vector(0, 0, 0), App.Vector(0, 1000, 0))
+        initial_volume1 = wall1.Shape.Volume
+        initial_volume2 = wall2.Shape.Volume
+
+        joint = Arch.makeWallJoint(wall1, wall2, "Miter")
+        self.document.recompute()
+
+        self.assertEqual(joint.Status, "OK")
+        self.assertEqual(joint.ResolvedEndA, "End")
+        self.assertEqual(joint.ResolvedEndB, "Start")
+        self._assert_wall_trimmed(
+            wall1,
+            initial_volume1,
+            "Sketch-based miter joints should trim the first wall.",
+        )
+        self._assert_wall_trimmed(
+            wall2,
+            initial_volume2,
+            "Sketch-based miter joints should trim the second wall.",
+        )
+
+    def test_make_wall_joint_butt_on_sketch_based_walls(self):
+        self.printTestMessage("Testing butt joints on one-edge sketch-based walls...")
+
+        wall1 = self._make_sketch_based_wall_between(App.Vector(-1000, 0, 0), App.Vector(0, 0, 0))
+        wall2 = self._make_sketch_based_wall_between(App.Vector(0, 0, 0), App.Vector(0, 1000, 0))
+
+        joint = Arch.makeWallJoint(wall1, wall2, "Butt")
+        joint.ButtTrimmed = "WallB"
+        self.document.recompute()
+
+        self.assertEqual(joint.Status, "OK")
+        self.assertEqual(joint.ResolvedEndA, "End")
+        self.assertEqual(joint.ResolvedEndB, "Start")
+        self.assertFalse(
+            self._is_identity_placement(joint.ResolvedPlaneA),
+            "Sketch-based butt joints should solve a cutting plane for the first wall.",
+        )
+        self.assertFalse(
+            self._is_identity_placement(joint.ResolvedPlaneB),
+            "Sketch-based butt joints should solve a cutting plane for the second wall.",
+        )
+        self.assertTrue(
+            wall1.Shape.isValid(), "First sketch-based wall became invalid after the butt relation."
+        )
+        self.assertTrue(
+            wall2.Shape.isValid(),
+            "Second sketch-based wall became invalid after the butt relation.",
+        )
+
+    def test_make_wall_joint_tee_on_sketch_based_walls(self):
+        self.printTestMessage("Testing tee joints on one-edge sketch-based walls...")
+
+        stem_wall = self._make_sketch_based_wall_between(
+            App.Vector(0, 0, 0), App.Vector(0, 1000, 0)
+        )
+        top_wall = self._make_sketch_based_wall_between(
+            App.Vector(-1000, 0, 0), App.Vector(1000, 0, 0)
+        )
+        initial_stem_volume = stem_wall.Shape.Volume
+        initial_top_volume = top_wall.Shape.Volume
+
+        joint = Arch.makeWallJoint(stem_wall, top_wall, "Tee")
+        self.document.recompute()
+
+        self.assertEqual(joint.Status, "OK")
+        self.assertEqual(joint.ResolvedEndA, "Start")
+        self.assertEqual(joint.ResolvedEndB, "None")
+        self._assert_wall_trimmed(
+            stem_wall,
+            initial_stem_volume,
+            "Sketch-based tee joints should trim the stem wall.",
+        )
+        self._assert_wall_unchanged(
+            top_wall,
+            initial_top_volume,
+            "Sketch-based tee joints should leave the top wall volume unchanged.",
         )
 
     def test_make_wall_joint_miter_handles_oblique_walls(self):
