@@ -720,6 +720,7 @@ class PlanEditSession:
         if self._has_active_rect_wall_tool():
             self._cancel_rect_wall_tool()
         self._cancel_wall_edit()
+        self._cancel_join_tool()
 
     def activate_wall_tool(self):
         from bimcommands import BimWall
@@ -764,40 +765,36 @@ class PlanEditSession:
         self._start_embedded_tool("Move", gui_move.Move())
 
     def activate_join_tool(self):
-        import Draft
-
         self._cancel_rect_wall_tool(refresh=False)
-        selection = []
-        try:
-            selection = FreeCADGui.Selection.getSelection()
-        except (ReferenceError, RuntimeError):
-            selection = []
-
-        if not selection:
-            FreeCAD.Console.PrintWarning(
-                translate("BIM_PlanEdit", "Select objects to join before using Join.\n")
-            )
-            return
 
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
         self._cancel_wall_edit()
         self._cancel_pending_edit()
         self._clear_wall_grips()
+        self._set_hovered_opening(None)
+        self._set_hovered_wall(None)
 
-        if all(Draft.getType(obj) == "Wall" for obj in selection):
-            from bimcommands import BimArchUtils
+        wall = self.selected_wall
+        if not self._is_plan_selectable_wall(wall):
+            selection = []
+            try:
+                selection = FreeCADGui.Selection.getSelection()
+            except (ReferenceError, RuntimeError):
+                selection = []
+            if len(selection) == 1 and self._is_plan_selectable_wall(selection[0]):
+                wall = selection[0]
 
-            self.current_tool = "Join"
-            self._refresh_task_panel_status()
-            BimArchUtils.Arch_MergeWalls().Activated()
-            self.current_tool = "Select"
-            self._refresh_selected_wall()
+        if not self._is_plan_selectable_wall(wall):
+            FreeCAD.Console.PrintWarning(
+                translate("BIM_PlanEdit", "Select a wall before using Join.\n")
+            )
             return
 
-        from draftguitools import gui_join
-
-        self._start_embedded_tool("Join", gui_join.Join())
+        self.current_tool = "Join"
+        self._set_selected_plan_target("wall", wall)
+        self._restore_gui_selection(wall)
+        self._refresh_task_panel_status()
 
     def stretch_selected_wall(self, endpoint):
         self._start_wall_edit(endpoint)
@@ -1586,6 +1583,21 @@ class PlanEditSession:
             self._sync_hovered_opening_overlay()
             self._refresh_task_panel_status()
             return
+        if self.current_tool == "Join":
+            self.selected_opening = None
+            if not self._is_plan_selectable_wall(self.selected_wall):
+                self.current_tool = "Select"
+                self.selected_wall = None
+            self._clear_wall_grips()
+            self._sync_selected_wall_opening_context_overlay()
+            self._sync_hovered_wall_overlay()
+            self._sync_hovered_wall_opening_context_overlay()
+            if previous_opening is not None:
+                self._sync_selected_opening_overlay()
+                self._sync_selected_opening_handles()
+            self._sync_hovered_opening_overlay()
+            self._refresh_task_panel_status()
+            return
         self.selected_wall = None
         self.selected_opening = None
         try:
@@ -1672,6 +1684,82 @@ class PlanEditSession:
         self._sync_wall_grips()
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
+
+    def _cancel_join_tool(self, refresh=True):
+        if self.current_tool != "Join":
+            return False
+        selected_wall = (
+            self.selected_wall if self._is_plan_selectable_wall(self.selected_wall) else None
+        )
+        self.current_tool = "Select"
+        self._set_hovered_wall(None)
+        self._set_hovered_opening(None)
+        if selected_wall:
+            self._select_wall_for_plan_edit(selected_wall)
+            return True
+        if refresh:
+            self._refresh_task_panel_status()
+        return True
+
+    def _restore_gui_selection(self, obj):
+        if not obj:
+            return
+        previous_ignore = self._ignore_selection_changes
+        self._ignore_selection_changes = True
+        try:
+            try:
+                FreeCADGui.Selection.clearSelection()
+                FreeCADGui.Selection.addSelection(obj)
+            except Exception:
+                pass
+        finally:
+            self._ignore_selection_changes = previous_ignore
+
+    def _apply_plan_wall_join(self, source_wall, target_wall):
+        if not self._is_plan_selectable_wall(source_wall):
+            return False
+        if not self._is_plan_selectable_wall(target_wall):
+            return False
+        if source_wall == target_wall:
+            return False
+
+        import Arch
+        import ArchWallJoinUtils
+        from bimcommands.BimJoin import BIM_Join_Miter
+
+        join_command = BIM_Join_Miter()
+        created = False
+        doc = getattr(source_wall, "Document", None) or self.doc
+        if doc is None:
+            return False
+
+        doc.openTransaction(translate("BIM_PlanEdit", "Join walls"))
+        try:
+            joint = ArchWallJoinUtils.find_existing_joint(doc, source_wall, target_wall)
+            if not joint:
+                joint = Arch.makeWallJoint(source_wall, target_wall, join_command.JointType)
+                created = True
+            if not joint:
+                raise RuntimeError("Unable to create wall joint")
+            if not join_command._configure_joint(joint, source_wall, target_wall):
+                raise RuntimeError("Unable to configure wall joint")
+            doc.commitTransaction()
+            doc.recompute()
+        except Exception:
+            try:
+                doc.abortTransaction()
+            except Exception:
+                pass
+            return False
+
+        if created or getattr(joint, "Status", "OK") != "OK":
+            join_command._report_joint_status(joint)
+        self.current_tool = "Select"
+        self._set_hovered_wall(None)
+        self._set_hovered_opening(None)
+        self._select_wall_for_plan_edit(source_wall)
+        self._restore_gui_selection(source_wall)
+        return True
 
     def _stop_snapper(self):
         snapper = getattr(FreeCADGui, "Snapper", None)
@@ -2786,6 +2874,21 @@ class PlanEditSession:
             return
 
         if event.getState() == coin.SoMouseButtonEvent.DOWN:
+            if self.current_tool == "Join":
+                pos = event.getPosition().getValue()
+                target_kind, target_wall = self._get_plan_target_at_position((pos[0], pos[1]))
+                if (
+                    target_kind == "wall"
+                    and self._is_plan_selectable_wall(target_wall)
+                    and target_wall != self.selected_wall
+                    and self._apply_plan_wall_join(self.selected_wall, target_wall)
+                ):
+                    if hasattr(event_callback, "setHandled"):
+                        try:
+                            event_callback.setHandled()
+                        except Exception:
+                            pass
+                return
             if self.current_tool != "Select":
                 return
             pos = event.getPosition().getValue()
@@ -2831,7 +2934,7 @@ class PlanEditSession:
     def _on_mouse_moved(self, event_callback):
         if self._tearing_down:
             return
-        if self.current_tool != "Select":
+        if self.current_tool not in ("Select", "Join"):
             self._set_hovered_wall(None)
             self._set_hovered_opening(None)
             return
@@ -2883,6 +2986,16 @@ class PlanEditSession:
             return
         dirty = set(dirty or {_PLAN_VISUAL_ALL})
         refresh_all = _PLAN_VISUAL_ALL in dirty
+        if self.current_tool == "Join":
+            if refresh_all or _PLAN_VISUAL_HOVERED_WALL in dirty:
+                self._sync_hovered_wall_overlay()
+            self._clear_hovered_wall_opening_context_overlay()
+            self._clear_hovered_opening_overlay()
+            self._clear_selected_opening_overlay()
+            self._clear_selected_opening_handles()
+            self._clear_selected_wall_opening_context_overlay()
+            self._clear_wall_grips()
+            return
         if self.current_tool == "Select":
             if refresh_all or _PLAN_VISUAL_HOVERED_WALL in dirty:
                 self._sync_hovered_wall_overlay()
@@ -2916,6 +3029,9 @@ class PlanEditSession:
             if self._cycle_opening_move_anchor():
                 self._refresh_opening_move_preview_from_raw_point()
                 self._refresh_task_panel_status()
+            return
+        if self.current_tool == "Join" and key == coin.SoKeyboardEvent.ESCAPE:
+            self._cancel_join_tool()
             return
         if self._is_wall_move_edit_active() and key == coin.SoKeyboardEvent.TAB:
             if self._start_wall_readout_edit(cycle=True):
@@ -3458,6 +3574,17 @@ class PlanEditSession:
             action = translate("BIM_PlanEdit", "Click target point")
             return title, "{}\n{}".format(context, action)
 
+        if self.current_tool == "Join":
+            context = (
+                translate("BIM_PlanEdit", "Source wall: {label}").format(
+                    label=self.selected_wall.Label
+                )
+                if self.selected_wall
+                else translate("BIM_PlanEdit", "Wall join")
+            )
+            action = translate("BIM_PlanEdit", "Click another wall to create a miter joint")
+            return title, "{}\n{}".format(context, action)
+
         if self.current_tool.startswith("Stretch "):
             context = (
                 translate("BIM_PlanEdit", "Wall: {label}").format(label=self.selected_wall.Label)
@@ -3573,6 +3700,18 @@ class PlanEditSession:
                 (
                     translate("BIM_PlanEdit", "%1 select wall or opening"),
                     ui.MouseLeft,
+                ),
+            )
+
+        if self.current_tool == "Join":
+            return (
+                (
+                    translate("BIM_PlanEdit", "%1 pick wall to join"),
+                    ui.MouseLeft,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 cancel"),
+                    ui.KeyEscape,
                 ),
             )
 
@@ -3778,6 +3917,14 @@ class PlanEditSession:
         return (None, None)
 
     def _update_hovered_plan_target(self, mouse_pos):
+        if self.current_tool == "Join":
+            target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
+            if target_kind == "wall" and target_obj != self.selected_wall:
+                self._set_hovered_wall(target_obj)
+            else:
+                self._set_hovered_wall(None)
+            self._set_hovered_opening(None)
+            return
         if self.current_tool != "Select":
             self._set_hovered_wall(None)
             self._set_hovered_opening(None)
@@ -3878,7 +4025,7 @@ class PlanEditSession:
 
     def _sync_hovered_wall_overlay(self):
         self._clear_hovered_wall_overlay()
-        if self.current_tool != "Select":
+        if self.current_tool not in ("Select", "Join"):
             return
         if not self.hovered_wall or self.hovered_wall == self.selected_wall:
             return
@@ -4655,7 +4802,15 @@ class PlanEditDockWidget:
             storey_text = self.session.get_storey_label(self.session.active_storey)
             tool = self.session.current_tool
             modal_active = self.session._is_modal_plan_interaction_active()
-            if self.session.selected_opening:
+            if tool == "Join" and self.session.selected_wall:
+                selection_state = translate("BIM_PlanEdit", "Source wall: {label}").format(
+                    label=self.session.selected_wall.Label
+                )
+                selection_help = translate(
+                    "BIM_PlanEdit",
+                    "Click another wall in the viewport to create a miter joint.",
+                )
+            elif self.session.selected_opening:
                 selection_state = translate("BIM_PlanEdit", "Opening: {label}").format(
                     label=self.session.selected_opening.Label
                 )
