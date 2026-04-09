@@ -323,19 +323,19 @@ class _WallJoint:
 
     def execute(self, obj):
         solution = ArchWallJoinUtils.solve_wall_joint(obj)
-        obj.Status = solution["status"]
-        obj.StatusMessage = solution["status_message"]
+        obj.Status = solution.status
+        obj.StatusMessage = solution.status_message
         obj.ConflictJointA = None
         obj.ConflictJointB = None
-        obj.ConflictJointLabelA = solution["conflict_joint_label_a"]
-        obj.ConflictJointLabelB = solution["conflict_joint_label_b"]
-        obj.ConflictMessageA = solution["conflict_message_a"]
-        obj.ConflictMessageB = solution["conflict_message_b"]
-        obj.Intersection = solution["intersection"]
-        obj.ResolvedEndA = solution["resolved_end_a"] if solution["resolved_end_a"] else "None"
-        obj.ResolvedEndB = solution["resolved_end_b"] if solution["resolved_end_b"] else "None"
-        obj.ResolvedPlaneA = solution["plane_a"] if solution["plane_a"] else FreeCAD.Placement()
-        obj.ResolvedPlaneB = solution["plane_b"] if solution["plane_b"] else FreeCAD.Placement()
+        obj.ConflictJointLabelA = solution.conflict_joint_label_a
+        obj.ConflictJointLabelB = solution.conflict_joint_label_b
+        obj.ConflictMessageA = solution.conflict_message_a
+        obj.ConflictMessageB = solution.conflict_message_b
+        obj.Intersection = solution.intersection
+        obj.ResolvedEndA = solution.resolved_end_a if solution.resolved_end_a else "None"
+        obj.ResolvedEndB = solution.resolved_end_b if solution.resolved_end_b else "None"
+        obj.ResolvedPlaneA = solution.plane_a if solution.plane_a else FreeCAD.Placement()
+        obj.ResolvedPlaneB = solution.plane_b if solution.plane_b else FreeCAD.Placement()
         self.updatePresentation(obj)
 
     def onDelete(self, obj, _args):
@@ -605,8 +605,8 @@ if FreeCAD.GuiUp:
                 values["EndA"],
                 values["EndB"],
             )
-            self.preview_status.setText(solution["status"])
-            self.preview_message.setText(solution["status_message"] or translate("BIM", "OK"))
+            self.preview_status.setText(solution.status)
+            self.preview_message.setText(solution.status_message or translate("BIM", "OK"))
 
         def _update_editor_state(self):
             joint_type = self._get_combo_value(self.joint_type_combo, "JointType")

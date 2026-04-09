@@ -25,6 +25,7 @@
 """App-level tests for BIM wall joint relations."""
 
 import Arch
+import ArchWallJoinUtils
 import ArchWallPath
 import Draft
 import FreeCAD as App
@@ -91,6 +92,22 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
             and self._is_identity_placement(wall1.EndingEnd),
             "Manual wall endings should stay untouched when a relation drives the trim.",
         )
+
+    def test_solve_wall_joint_inputs_returns_typed_solution(self):
+        self.printTestMessage("Testing typed wall joint solver output...")
+
+        wall1 = self._make_baseless_wall_between(App.Vector(-1000, 0, 0), App.Vector(0, 0, 0))
+        wall2 = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(0, 1000, 0))
+
+        solution = ArchWallJoinUtils.solve_wall_joint_inputs(wall1, wall2, "Miter")
+
+        self.assertIsInstance(solution, ArchWallJoinUtils.WallJointSolution)
+        self.assertTrue(solution.is_ok())
+        self.assertEqual(solution.status, "OK")
+        self.assertEqual(solution["status"], "OK")
+        end_name, plane = solution.trim_for_wall(wall1)
+        self.assertEqual(end_name, "End")
+        self.assertIsNotNone(plane)
 
     def test_make_wall_joint_butt_trims_wall_shapes(self):
         self.printTestMessage("Testing makeWallJoint creates a usable butt relation...")
@@ -447,6 +464,14 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
         self.assertEqual(conflicted.ConflictMessageB, "")
         self.assertIn("Conflict:", conflicted.StatusMessage)
         self.assertIn(blocker.Label, conflicted.StatusMessage)
+
+        conflicts = ArchWallJoinUtils.get_joint_conflicts(
+            conflicted, ArchWallJoinUtils.solve_wall_joint(conflicted, include_conflicts=False)
+        )
+        self.assertTrue(conflicts)
+        self.assertIsInstance(conflicts[0], ArchWallJoinUtils.WallJointConflict)
+        self.assertEqual(conflicts[0].other_joint_label, blocker.Label)
+        self.assertEqual(conflicts[0]["other_joint_label"], blocker.Label)
 
     def test_wall_joint_conflict_resolves_after_blocker_removed(self):
         self.printTestMessage("Testing wall joint conflict clears after blocker removal...")
