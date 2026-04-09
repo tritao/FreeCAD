@@ -50,6 +50,7 @@ import FreeCAD
 import ArchCommands
 import ArchComponent
 import ArchSketchObject
+import ArchWallEndCondition
 import ArchWallJoinUtils
 import ArchWallPath
 import Draft
@@ -433,30 +434,28 @@ class _Wall(ArchComponent.Component):
                     "a plane that cuts the end of the wall, at end position.",
                 ),
             )
-        if "TrimSourceStart" not in obj.PropertiesList:
+        if "EndConditionOrderStart" not in obj.PropertiesList:
             obj.addProperty(
-                "App::PropertyEnumeration",
-                "TrimSourceStart",
+                "App::PropertyStringList",
+                "EndConditionOrderStart",
                 "Wall",
                 QT_TRANSLATE_NOOP(
                     "App::Property",
-                    "Selects whether the start trim comes from a manual ending, an active joint, or automatically prefers a joint.",
+                    "Ordered trim providers for the start end of the wall. Valid entries are Relation and Manual.",
                 ),
             )
-            obj.TrimSourceStart = ["Auto", "Manual", "Joint"]
-            obj.TrimSourceStart = "Auto"
-        if "TrimSourceEnd" not in obj.PropertiesList:
+            obj.EndConditionOrderStart = list(ArchWallEndCondition.DEFAULT_END_CONDITION_ORDER)
+        if "EndConditionOrderEnd" not in obj.PropertiesList:
             obj.addProperty(
-                "App::PropertyEnumeration",
-                "TrimSourceEnd",
+                "App::PropertyStringList",
+                "EndConditionOrderEnd",
                 "Wall",
                 QT_TRANSLATE_NOOP(
                     "App::Property",
-                    "Selects whether the end trim comes from a manual ending, an active joint, or automatically prefers a joint.",
+                    "Ordered trim providers for the end end of the wall. Valid entries are Relation and Manual.",
                 ),
             )
-            obj.TrimSourceEnd = ["Auto", "Manual", "Joint"]
-            obj.TrimSourceEnd = "Auto"
+            obj.EndConditionOrderEnd = list(ArchWallEndCondition.DEFAULT_END_CONDITION_ORDER)
         self.connectEdges = []
 
     def dumps(self):
@@ -758,6 +757,17 @@ class _Wall(ArchComponent.Component):
         prop: string
             The name of the property that has changed.
         """
+
+        if prop in ("EndConditionOrderStart", "EndConditionOrderEnd") and not getattr(
+            self, "_normalizing_end_condition_order", False
+        ):
+            normalized = ArchWallEndCondition.normalize_end_condition_order(getattr(obj, prop))
+            if list(getattr(obj, prop)) != normalized:
+                self._normalizing_end_condition_order = True
+                try:
+                    setattr(obj, prop, normalized)
+                finally:
+                    self._normalizing_end_condition_order = False
 
         if prop == "Length":
             if (
@@ -2083,7 +2093,7 @@ class _Wall(ArchComponent.Component):
         )
         stack.add(
             ArchWallEndCondition.WallEndCondition(
-                source="Joint",
+                source="Relation",
                 placement=relation_endings.get(end_name, FreeCAD.Placement()),
                 is_global=True,
             )

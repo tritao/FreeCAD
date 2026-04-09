@@ -447,11 +447,6 @@ def collect_wall_relation_endings(wall):
     return result
 
 
-def collect_wall_joint_endings(wall):
-    """Alias for relation-derived trim collection."""
-    return collect_wall_relation_endings(wall)
-
-
 def get_trim_for_wall(solution, wall):
     """Returns the resolved end and plane for the requested wall."""
     if not solution:

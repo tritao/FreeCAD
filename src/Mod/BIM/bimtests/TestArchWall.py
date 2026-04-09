@@ -26,6 +26,7 @@
 
 import os
 import Arch
+import ArchWallEndCondition
 import Draft
 import Part
 import FreeCAD as App
@@ -689,6 +690,74 @@ class TestArchWall(TestArchBase.TestArchBase):
             initial_volume,
             delta=1e-6,
             msg="Wall volume should return to its original value after resetting the ending.",
+        )
+
+    def test_wall_end_condition_stack_orders_sources(self):
+        """Tests that the wall end-condition stack resolves conditions in the configured order."""
+        self.printTestMessage("Checking wall end-condition stack ordering...")
+
+        manual = ArchWallEndCondition.WallEndCondition(
+            source="Manual",
+            placement=App.Placement(App.Vector(100, 0, 0), App.Rotation()),
+        )
+        joint = ArchWallEndCondition.WallEndCondition(
+            source="Relation",
+            placement=App.Placement(App.Vector(200, 0, 0), App.Rotation()),
+            is_global=True,
+        )
+
+        stack = ArchWallEndCondition.WallEndConditionStack(
+            end_name="End",
+            order=["Manual", "Relation", "Manual", "Bogus"],
+        )
+        stack.add(joint)
+        stack.add(manual)
+
+        active = stack.active_condition()
+
+        self.assertEqual(
+            ArchWallEndCondition.normalize_end_condition_order(stack.order),
+            ["Manual", "Relation"],
+        )
+        self.assertIsNotNone(active)
+        self.assertEqual(active.source, "Manual")
+
+    def test_wall_end_condition_order_changes_active_trim(self):
+        """Tests that the ordered end-condition stack changes which trim drives the wall end."""
+        self.printTestMessage("Checking wall end-condition order on joined walls...")
+
+        support_wall = Arch.makeWall(length=2000, width=200, height=1000)
+        support_wall.Placement = App.Placement()
+        trimmed_wall = Arch.makeWall(length=1000, width=200, height=1000)
+        trimmed_wall.Placement = App.Placement(
+            App.Vector(1000, 500, 0),
+            App.Rotation(App.Vector(1, 0, 0), App.Vector(0, 1, 0)),
+        )
+        self.document.recompute()
+
+        joint = Arch.makeWallJoint(support_wall, trimmed_wall, "Butt")
+        joint.ButtTrimmed = "WallB"
+        support_wall.EndingEnd = App.Placement(
+            App.Vector(600, 0, 0), App.Rotation(App.Vector(0, 1, 0), 90)
+        )
+        self.document.recompute()
+
+        joint_first_xmax = support_wall.Shape.BoundBox.XMax
+        self.assertGreater(
+            joint_first_xmax,
+            800.0,
+            "The default end-condition order should keep the joint trim active ahead of the manual ending.",
+        )
+
+        support_wall.EndConditionOrderEnd = ["Manual", "Relation"]
+        self.document.recompute()
+
+        manual_first_xmax = support_wall.Shape.BoundBox.XMax
+        self.assertAlmostEqual(
+            manual_first_xmax,
+            600.0,
+            delta=1e-4,
+            msg="Putting the manual ending first in the end-condition order should make it drive the end trim.",
         )
 
     def test_wall_makeblocks(self):
