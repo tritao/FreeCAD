@@ -1108,6 +1108,41 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNone(session.selected_opening)
         self.assertEqual(len(session._grip_trackers), 3)
 
+    def test_plan_edit_join_mode_cycles_join_type_with_tab(self):
+        """Join mode should cycle the active join type and reflect it in the UI."""
+
+        source_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session._select_wall_for_plan_edit(source_wall)
+        session.activate_join_tool()
+
+        self.assertEqual(session.get_plan_join_type(), "Miter")
+        self.assertEqual(
+            session.task_panel.join_type_combo.currentIndex(),
+            session.task_panel.join_type_combo.findData("Miter"),
+        )
+
+        from pivy import coin
+
+        event_callback = self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.TAB))
+        session._on_key_pressed(event_callback)
+
+        self.assertEqual(session.get_plan_join_type(), "Butt")
+        self.assertEqual(
+            session.task_panel.join_type_combo.currentIndex(),
+            session.task_panel.join_type_combo.findData("Butt"),
+        )
+        self.assertTrue(event_callback._handled)
+        _title, body = session._get_status_chip_text()
+        self.assertIn("butt joint", body.lower())
+        self.assertIn("Join type: Butt", session.task_panel.status.text())
+
     def test_plan_edit_join_mode_creates_wall_joint_from_clicked_candidate(self):
         """Join mode should create a BIM wall joint from the selected and clicked walls."""
 
@@ -1171,6 +1206,72 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNone(session.selected_opening)
         self.assertEqual(len(session._grip_trackers), 3)
         self.assertEqual(len(session._wall_hover_trackers), 0)
+
+    def test_plan_edit_join_mode_uses_selected_join_type_from_dock(self):
+        """Join mode should create the join type currently selected in the dock."""
+
+        source_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        target_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        target_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        butt_index = session.task_panel.join_type_combo.findData("Butt")
+        self.assertGreaterEqual(butt_index, 0)
+        session.task_panel.join_type_combo.setCurrentIndex(butt_index)
+        self.pump_gui_events()
+
+        self.assertEqual(session.get_plan_join_type(), "Butt")
+
+        session._select_wall_for_plan_edit(source_wall)
+        session.activate_join_tool()
+
+        from pivy import coin
+
+        class _FakeMousePosition:
+            def __init__(self, x, y):
+                self._value = (x, y)
+
+            def getValue(self):
+                return self._value
+
+        class _FakeMouseEvent:
+            def __init__(self, x, y):
+                self._position = _FakeMousePosition(x, y)
+
+            def getButton(self):
+                return coin.SoMouseButtonEvent.BUTTON1
+
+            def getState(self):
+                return coin.SoMouseButtonEvent.DOWN
+
+            def getPosition(self):
+                return self._position
+
+        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("wall", target_wall),
+        ):
+            session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        self.assertEqual(len(joints), 1)
+        joint = joints[0]
+        self.assertEqual(joint.JointType, "Butt")
+        trimmed_wall = joint.WallA if joint.ButtTrimmed == "WallA" else joint.WallB
+        self.assertIs(trimmed_wall, target_wall)
+        self.assertEqual(joint.Status, "OK")
 
     def test_plan_edit_wall_resize_surfaces_invalid_relation_status(self):
         """Wall resize should report invalidated wall relations after commit."""
