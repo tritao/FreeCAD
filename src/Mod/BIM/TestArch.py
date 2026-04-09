@@ -27,6 +27,7 @@ from bimtests.TestArchRoof import TestArchRoof
 from bimtests.TestArchSpace import TestArchSpace
 from bimtests.TestArchWall import TestArchWall
 from bimtests.TestArchWallJoint import TestArchWallJoint
+from bimtests.TestArchWallJoinMatrix import TestArchWallJoinMatrix
 from bimtests.TestArchWallJunction import TestArchWallJunction
 from bimtests.TestArchBuildingPart import TestArchBuildingPart
 from bimtests.TestArchAxis import TestArchAxis
