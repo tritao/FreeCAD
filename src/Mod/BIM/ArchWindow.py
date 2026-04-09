@@ -760,18 +760,17 @@ class _HostedOpeningPlanGeometry:
             context.get("reference_offset") or FreeCAD.Vector()
         )
         target.Placement = placement
-        self._touch_hosts()
+        self._touch_hosts(moved_target=target)
         return True
 
-    def _touch_hosts(self):
+    def _touch_hosts(self, moved_target=None):
         obj = getattr(self, "Object", None)
         if not obj:
             return
+        if moved_target is not obj:
+            obj.touch()
         for host in set(getattr(obj, "Hosts", None) or []):
-            try:
-                host.touch()
-            except Exception:
-                pass
+            host.touch()
 
 
 class _HostedOpeningPlanGeometryHelper(_HostedOpeningPlanGeometry):
@@ -1549,9 +1548,15 @@ class _Window(_HostedOpeningPlanGeometry, ArchComponent.Component):
             v2 = v1.negative()
             v2 = Vector(v1).multiply(-2)
             f = f.extrude(v2)
+            target = obj
+            if not plac:
+                target, _placement = self._get_plan_move_target()
             if plac:
                 f.Placement = plac
-            else:
+            elif target is obj:
+                # When plan editing moves the Base object, the base wire shape is
+                # already in the correct global position. Reapplying obj.Placement
+                # here shifts the host cut away from the committed plan symbol.
                 f.Placement = obj.Placement
             return f
         return None
