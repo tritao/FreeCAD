@@ -53,6 +53,7 @@ _OPENING_MOVE_SNAP_SET = {
     "WorkingPlane",
 }
 _OPENING_MOVE_ANCHORS = ("center", "left", "right")
+_PLAN_JOIN_TYPES = ("Miter", "Butt", "Tee")
 _OPENING_VISUAL_PROPERTIES = {
     "Shape",
     "Placement",
@@ -245,6 +246,7 @@ class PlanEditSession:
         self.task_panel = None
         self._viewport_status_chip = None
         self.current_tool = "Select"
+        self._plan_join_type = "Miter"
         self._plan_relation_status_message = None
         self.storeys = []
         self.active_storey = None
@@ -800,6 +802,73 @@ class PlanEditSession:
         self._set_selected_plan_target("wall", wall)
         self._restore_gui_selection(wall)
         self._refresh_task_panel_status()
+
+    def get_plan_join_type(self):
+        return self._plan_join_type
+
+    def get_plan_join_types(self):
+        return _PLAN_JOIN_TYPES
+
+    def _normalize_plan_join_type(self, join_type):
+        if join_type in _PLAN_JOIN_TYPES:
+            return join_type
+        try:
+            join_type = str(join_type)
+        except Exception:
+            return "Miter"
+        if join_type in _PLAN_JOIN_TYPES:
+            return join_type
+        return "Miter"
+
+    def get_plan_join_type_label(self, join_type=None):
+        join_type = self._normalize_plan_join_type(join_type or self._plan_join_type)
+        return {
+            "Miter": translate("BIM_PlanEdit", "Miter"),
+            "Butt": translate("BIM_PlanEdit", "Butt"),
+            "Tee": translate("BIM_PlanEdit", "Tee"),
+        }[join_type]
+
+    def _get_plan_join_type_phrase(self, join_type=None):
+        join_type = self._normalize_plan_join_type(join_type or self._plan_join_type)
+        return {
+            "Miter": translate("BIM_PlanEdit", "miter"),
+            "Butt": translate("BIM_PlanEdit", "butt"),
+            "Tee": translate("BIM_PlanEdit", "tee"),
+        }[join_type]
+
+    def _get_plan_join_action_text(self, join_type=None):
+        return translate(
+            "BIM_PlanEdit", "Click another wall to create a {joint_type} joint"
+        ).format(joint_type=self._get_plan_join_type_phrase(join_type))
+
+    def set_plan_join_type(self, join_type, refresh=True):
+        join_type = self._normalize_plan_join_type(join_type)
+        if self._plan_join_type == join_type:
+            if refresh:
+                self._refresh_task_panel_status()
+            return False
+        self._plan_join_type = join_type
+        if refresh:
+            self._refresh_task_panel_status()
+        return True
+
+    def _cycle_plan_join_type(self):
+        try:
+            current_index = _PLAN_JOIN_TYPES.index(self._plan_join_type)
+        except ValueError:
+            current_index = 0
+        next_join_type = _PLAN_JOIN_TYPES[(current_index + 1) % len(_PLAN_JOIN_TYPES)]
+        self.set_plan_join_type(next_join_type)
+        return True
+
+    def _get_plan_join_command(self):
+        from bimcommands.BimJoin import BIM_Join_Butt, BIM_Join_Miter, BIM_Join_Tee
+
+        return {
+            "Miter": BIM_Join_Miter,
+            "Butt": BIM_Join_Butt,
+            "Tee": BIM_Join_Tee,
+        }.get(self._normalize_plan_join_type(self._plan_join_type), BIM_Join_Miter)()
 
     def stretch_selected_wall(self, endpoint):
         self._start_wall_edit(endpoint)
@@ -1777,9 +1846,8 @@ class PlanEditSession:
 
         import Arch
         import ArchWallJoinUtils
-        from bimcommands.BimJoin import BIM_Join_Miter
 
-        join_command = BIM_Join_Miter()
+        join_command = self._get_plan_join_command()
         created = False
         doc = getattr(source_wall, "Document", None) or self.doc
         if doc is None:
@@ -3305,6 +3373,10 @@ class PlanEditSession:
                 self._refresh_opening_move_preview_from_raw_point()
                 self._refresh_task_panel_status()
             return
+        if self.current_tool == "Join" and key == coin.SoKeyboardEvent.TAB:
+            if self._cycle_plan_join_type() and hasattr(event_callback, "setHandled"):
+                event_callback.setHandled()
+            return
         if self.current_tool == "Join" and key == coin.SoKeyboardEvent.ESCAPE:
             self._cancel_join_tool()
             return
@@ -3857,7 +3929,7 @@ class PlanEditSession:
                 if self.selected_wall
                 else translate("BIM_PlanEdit", "Wall join")
             )
-            action = translate("BIM_PlanEdit", "Click another wall to create a miter joint")
+            action = self._get_plan_join_action_text()
             return title, "{}\n{}".format(context, action)
 
         if self.current_tool.startswith("Stretch "):
@@ -3985,6 +4057,12 @@ class PlanEditSession:
                 (
                     translate("BIM_PlanEdit", "%1 pick wall to join"),
                     ui.MouseLeft,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 cycle join type ({joint_type})").format(
+                        joint_type=self.get_plan_join_type_label()
+                    ),
+                    ui.KeyTab,
                 ),
                 (
                     translate("BIM_PlanEdit", "%1 cancel"),
@@ -4884,6 +4962,7 @@ class PlanEditDockWidget:
                 ),
             )
         )
+        layout.addLayout(self._build_join_type_row(QtGui))
 
         self.status = QtGui.QLabel("")
         self.status.setWordWrap(True)
@@ -4895,6 +4974,7 @@ class PlanEditDockWidget:
 
         self._modal_focus_widgets = [
             self.storey_combo,
+            self.join_type_combo,
             self.select_button,
             self.wall_button,
             self.rect_wall_button,
@@ -4940,6 +5020,20 @@ class PlanEditDockWidget:
             button = self._make_button(QtGui, label, handler)
             setattr(self, attr, button)
             row.addWidget(button)
+        return row
+
+    def _build_join_type_row(self, QtGui):
+        row = QtGui.QHBoxLayout()
+        row.setSpacing(6)
+        join_type_label = QtGui.QLabel(translate("BIM_PlanEdit", "Join Type"))
+        self.join_type_combo = QtGui.QComboBox()
+        for join_type in self.session.get_plan_join_types():
+            self.join_type_combo.addItem(
+                self.session.get_plan_join_type_label(join_type), join_type
+            )
+        self.join_type_combo.currentIndexChanged.connect(self.on_join_type_changed)
+        row.addWidget(join_type_label)
+        row.addWidget(self.join_type_combo, 1)
         return row
 
     def _capture_focus_policies(self):
@@ -5035,6 +5129,7 @@ class PlanEditDockWidget:
         self.rect_wall_button = None
         self.move_button = None
         self.join_button = None
+        self.join_type_combo = None
         self.reapply_button = None
         self.exit_button = None
         if form:
@@ -5076,6 +5171,12 @@ class PlanEditDockWidget:
         if self._closed or self.form is None or self.status is None or self.exit_button is None:
             return
         try:
+            if self.join_type_combo is not None:
+                self.join_type_combo.blockSignals(True)
+                join_type_index = self.join_type_combo.findData(self.session.get_plan_join_type())
+                if join_type_index >= 0:
+                    self.join_type_combo.setCurrentIndex(join_type_index)
+                self.join_type_combo.blockSignals(False)
             storey_text = self.session.get_storey_label(self.session.active_storey)
             tool = self.session.current_tool
             modal_active = self.session._is_modal_plan_interaction_active()
@@ -5085,7 +5186,10 @@ class PlanEditDockWidget:
                 )
                 selection_help = translate(
                     "BIM_PlanEdit",
-                    "Click another wall in the viewport to create a miter joint.",
+                    "Join type: {joint_type}\n{action}",
+                ).format(
+                    joint_type=self.session.get_plan_join_type_label(),
+                    action=self.session._get_plan_join_action_text(),
                 )
             elif self.session.selected_opening:
                 selection_state = translate("BIM_PlanEdit", "Opening: {label}").format(
@@ -5158,6 +5262,7 @@ class PlanEditDockWidget:
             self.rect_wall_button,
             self.move_button,
             self.join_button,
+            self.join_type_combo,
             self.reapply_button,
         ):
             if widget is None:
@@ -5185,6 +5290,12 @@ class PlanEditDockWidget:
 
     def on_join_clicked(self):
         self.session.activate_join_tool()
+
+    def on_join_type_changed(self, index):
+        if self.join_type_combo is None or index < 0:
+            return
+        join_type = self.join_type_combo.itemData(index) or self.join_type_combo.itemText(index)
+        self.session.set_plan_join_type(join_type)
 
     def on_reapply_clicked(self):
         self.session.apply_plan_view(fit=False)
