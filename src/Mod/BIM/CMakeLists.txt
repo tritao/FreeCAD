@@ -253,6 +253,7 @@ SET(bimtests_SRCS
     bimtests/TestArchWallJunction.py
     bimtests/TestArchWallGui.py
     bimtests/TestBimPlanEditGui.py
+    bimtests/TestArchWallJoinWorkflowGui.py
     bimtests/TestArchMaterial.py
     bimtests/TestArchPanel.py
     bimtests/TestArchWindow.py

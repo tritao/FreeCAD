@@ -35,5 +35,6 @@ from bimtests.TestArchSiteGui import TestArchSiteGui
 from bimtests.TestArchSpaceGui import TestArchSpaceGui
 from bimtests.TestArchStructureGui import TestArchStructureGui
 from bimtests.TestArchWallGui import TestArchWallGui
+from bimtests.TestArchWallJoinWorkflowGui import TestArchWallJoinWorkflowGui
 from bimtests.TestWebGLExportGui import TestWebGLExportGui
 from bimtests.TestArchCoveringGui import TestArchCoveringGui
