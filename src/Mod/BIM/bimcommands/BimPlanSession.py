@@ -250,11 +250,13 @@ class PlanEditSession:
         self.selected_opening = None
         self.hovered_wall = None
         self.hovered_opening = None
-        self._pending_selected_opening_intent = None
+        self._pending_selected_plan_target = None
         self._grip_trackers = []
         self._wall_hover_trackers = []
+        self._hovered_wall_opening_context_trackers = []
         self._opening_hover_trackers = []
         self._opening_overlay_trackers = []
+        self._selected_wall_opening_context_trackers = []
         self._opening_handle_trackers = []
         self._selected_opening_hard_refresh_queued = False
         self._opening_host_recompute_queued = False
@@ -371,9 +373,11 @@ class PlanEditSession:
         self._cancel_wall_edit(restore=False, refresh=False)
         self._cancel_pending_edit()
         self._clear_hovered_wall_overlay()
+        self._clear_hovered_wall_opening_context_overlay()
         self._clear_wall_grips()
         self._clear_hovered_opening_overlay()
         self._clear_selected_opening_overlay()
+        self._clear_selected_wall_opening_context_overlay()
         self._clear_selected_opening_handles()
         self._clear_opening_move_preview()
         self._detach_selection_observer()
@@ -403,7 +407,7 @@ class PlanEditSession:
         self.selected_opening = None
         self.hovered_wall = None
         self.hovered_opening = None
-        self._pending_selected_opening_intent = None
+        self._pending_selected_plan_target = None
         self._edit_wall = None
         self._edit_opening = None
         self._edit_opening_handle_index = None
@@ -603,9 +607,11 @@ class PlanEditSession:
             self._cancel_pending_edit()
             self._clear_input_hints()
             self._clear_hovered_wall_overlay()
+            self._clear_hovered_wall_opening_context_overlay()
             self._clear_wall_grips()
             self._clear_hovered_opening_overlay()
             self._clear_selected_opening_overlay()
+            self._clear_selected_wall_opening_context_overlay()
             self._clear_selected_opening_handles()
             self._clear_opening_move_preview()
             self._detach_selection_observer()
@@ -689,6 +695,7 @@ class PlanEditSession:
         if command is not None:
             self._embedded_tool = command
         self.current_tool = tool_name
+        self._sync_selected_wall_opening_context_overlay()
         self._refresh_task_panel_status()
 
     def _on_embedded_command_finished(self, tool_name, command=None):
@@ -700,6 +707,7 @@ class PlanEditSession:
             self._embedded_tool_name = None
         if self.current_tool == tool_name:
             self.current_tool = "Select"
+            self._sync_selected_wall_opening_context_overlay()
             self._refresh_task_panel_status()
 
     def activate_select_tool(self):
@@ -717,6 +725,7 @@ class PlanEditSession:
         self._cancel_pending_edit()
         self.selected_wall = None
         self._clear_wall_grips()
+        self._clear_selected_wall_opening_context_overlay()
         try:
             FreeCADGui.Selection.clearSelection()
         except (ReferenceError, RuntimeError):
@@ -729,6 +738,7 @@ class PlanEditSession:
         self._cancel_pending_edit()
         self.selected_wall = None
         self._clear_wall_grips()
+        self._clear_selected_wall_opening_context_overlay()
         self._clear_rect_wall_preview()
         self._rect_wall_start = None
         self._rect_wall_params = self._get_wall_defaults()
@@ -1365,6 +1375,57 @@ class PlanEditSession:
                 pass
             self._document_observer_added = False
 
+    def _is_plan_selectable_wall(self, obj):
+        if not obj:
+            return False
+        try:
+            import Draft
+
+            return Draft.getType(obj) == "Wall"
+        except Exception:
+            return False
+
+    def _set_pending_selected_plan_target(self, kind=None, obj=None):
+        if kind == "opening" and self._is_hosted_opening_object(obj):
+            self._pending_selected_plan_target = ("opening", obj)
+            return
+        if kind == "wall" and self._is_plan_selectable_wall(obj):
+            self._pending_selected_plan_target = ("wall", obj)
+            return
+        self._pending_selected_plan_target = None
+
+    def _consume_pending_selected_plan_target(self):
+        pending_target = self._pending_selected_plan_target
+        self._pending_selected_plan_target = None
+        if not pending_target:
+            return (None, None)
+        kind, obj = pending_target
+        if kind == "opening" and self._is_hosted_opening_object(obj):
+            return (kind, obj)
+        if kind == "wall" and self._is_plan_selectable_wall(obj):
+            return (kind, obj)
+        return (None, None)
+
+    def _set_selected_plan_target(self, kind=None, obj=None, pending_restore=False):
+        if kind == "opening" and self._is_hosted_opening_object(obj):
+            self.selected_wall = None
+            self.selected_opening = obj
+        elif kind == "wall" and self._is_plan_selectable_wall(obj):
+            self.selected_wall = obj
+            self.selected_opening = None
+        else:
+            self.selected_wall = None
+            self.selected_opening = None
+            kind = None
+            obj = None
+        if pending_restore:
+            self._set_pending_selected_plan_target(kind, obj)
+        else:
+            self._set_pending_selected_plan_target()
+        if not self._tearing_down:
+            self._sync_selected_wall_opening_context_overlay()
+            self._sync_hovered_wall_opening_context_overlay()
+
     def _schedule_selected_wall_reset(self, reason, obj):
         if self._pending_selected_wall_reset or self._tearing_down:
             return
@@ -1506,7 +1567,6 @@ class PlanEditSession:
             return
         if self._ignore_selection_changes:
             return
-        import Draft
 
         previous_wall = self.selected_wall
         previous_opening = self.selected_opening
@@ -1530,24 +1590,24 @@ class PlanEditSession:
             return
         if self.current_tool == "Select" and len(selection) == 1:
             selected = selection[0]
-            if Draft.getType(selected) == "Wall":
+            if self._is_plan_selectable_wall(selected):
                 self.selected_wall = selected
-                self._pending_selected_opening_intent = None
             elif self._is_hosted_opening_object(selected):
                 self.selected_opening = selected
-                self._pending_selected_opening_intent = None
-            else:
-                self._pending_selected_opening_intent = None
-        elif (
-            self.current_tool == "Select"
-            and not selection
-            and self._is_hosted_opening_object(self._pending_selected_opening_intent)
-        ):
-            self.selected_opening = self._pending_selected_opening_intent
-            self._pending_selected_opening_intent = None
+            self._set_pending_selected_plan_target()
+        elif self.current_tool == "Select" and not selection:
+            pending_kind, pending_target = self._consume_pending_selected_plan_target()
+            if pending_kind == "opening":
+                self.selected_opening = pending_target
+            elif pending_kind == "wall":
+                self.selected_wall = pending_target
+        else:
+            self._set_pending_selected_plan_target()
         if previous_wall != self.selected_wall:
             self._sync_wall_grips()
+        self._sync_selected_wall_opening_context_overlay()
         self._sync_hovered_wall_overlay()
+        self._sync_hovered_wall_opening_context_overlay()
         if previous_opening != self.selected_opening or self.current_tool != "Select":
             self._sync_selected_opening_overlay()
             self._sync_selected_opening_handles()
@@ -1833,6 +1893,7 @@ class PlanEditSession:
 
         self.current_tool = "Select"
         self._cancel_pending_edit()
+        self._sync_selected_wall_opening_context_overlay()
         if refresh:
             self._refresh_task_panel_status()
         return True
@@ -1866,8 +1927,8 @@ class PlanEditSession:
         self.current_tool = "Move Wall" if mode == "Move" else f"Stretch {mode}"
         self._set_hovered_wall(None)
         self._set_hovered_opening(None)
-        self.selected_wall = wall
-        self.selected_opening = None
+        self._set_selected_plan_target("wall", wall)
+        self._clear_selected_wall_opening_context_overlay()
         self._wall_edit_modal_active = True
         self._edit_wall = wall
         self._edit_endpoint = mode
@@ -2018,7 +2079,7 @@ class PlanEditSession:
             pass
         self.current_tool = "Select"
         self._cancel_pending_edit()
-        self.selected_wall = wall
+        self._set_selected_plan_target("wall", wall, pending_restore=True)
         self._sync_wall_grips()
         self._refresh_task_panel_status()
 
@@ -2044,9 +2105,7 @@ class PlanEditSession:
     def _activate_wall_grip_now(self, grip_index, wall=None):
         if self._tearing_down or self.current_tool != "Select" or not wall:
             return
-        self.selected_wall = wall
-        self.selected_opening = None
-        self._pending_selected_opening_intent = None
+        self._set_selected_plan_target("wall", wall)
         self._start_wall_grip_edit(grip_index)
 
     def _get_wall_edit_reference_point(self):
@@ -2823,10 +2882,13 @@ class PlanEditSession:
         if self.current_tool == "Select":
             if refresh_all or _PLAN_VISUAL_HOVERED_WALL in dirty:
                 self._sync_hovered_wall_overlay()
+                self._sync_hovered_wall_opening_context_overlay()
             if refresh_all or _PLAN_VISUAL_HOVERED_OPENING in dirty:
                 self._sync_hovered_opening_overlay()
-            if self.selected_wall and (refresh_all or _PLAN_VISUAL_WALL_GRIPS in dirty):
-                self._sync_wall_grips()
+            if refresh_all or _PLAN_VISUAL_WALL_GRIPS in dirty:
+                if self.selected_wall:
+                    self._sync_wall_grips()
+                self._sync_selected_wall_opening_context_overlay()
             if self.selected_opening and (refresh_all or _PLAN_VISUAL_SELECTED_OPENING in dirty):
                 self._refresh_selected_opening_visuals()
             return
@@ -2930,6 +2992,7 @@ class PlanEditSession:
     def _refresh_selected_opening_visuals(self):
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
+        self._sync_selected_wall_opening_context_overlay()
         self._request_view_redraw()
 
     def _refresh_opening_footprint_display(self, opening):
@@ -3205,6 +3268,24 @@ class PlanEditSession:
             self._refresh_opening_footprint_display(self.hovered_opening)
             self._refresh_opening_host_footprint_displays(self.hovered_opening)
             self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_OPENING)
+            return
+        if (
+            self.hovered_wall
+            and obj in self._get_wall_hosted_openings(self.hovered_wall)
+            and prop in _OPENING_VISUAL_PROPERTIES
+        ):
+            self._refresh_opening_footprint_display(obj)
+            self._refresh_opening_host_footprint_displays(obj)
+            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_WALL)
+            return
+        if (
+            self.selected_wall
+            and obj in self._get_wall_hosted_openings(self.selected_wall)
+            and prop in _OPENING_VISUAL_PROPERTIES
+        ):
+            self._refresh_opening_footprint_display(obj)
+            self._refresh_opening_host_footprint_displays(obj)
+            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_WALL_GRIPS)
             return
         if obj == self.hovered_wall and prop in _WALL_VISUAL_PROPERTIES:
             self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_WALL)
@@ -3604,6 +3685,7 @@ class PlanEditSession:
             return
         self.hovered_wall = wall
         self._sync_hovered_wall_overlay()
+        self._sync_hovered_wall_opening_context_overlay()
 
     def _set_hovered_opening(self, opening):
         if opening == self.selected_opening:
@@ -3617,9 +3699,7 @@ class PlanEditSession:
         if not self._is_hosted_opening_object(opening):
             return False
         self.current_tool = "Select"
-        self.selected_wall = None
-        self.selected_opening = opening
-        self._pending_selected_opening_intent = opening if queue_restore else None
+        self._set_selected_plan_target("opening", opening, pending_restore=queue_restore)
         self._clear_wall_grips()
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
@@ -3628,22 +3708,13 @@ class PlanEditSession:
             self._queue_restore_selected_opening(opening)
         return True
 
-    def _select_wall_for_plan_edit(self, wall):
-        if not wall:
-            return False
-        try:
-            import Draft
-
-            if Draft.getType(wall) != "Wall":
-                return False
-        except Exception:
+    def _select_wall_for_plan_edit(self, wall, queue_restore=False):
+        if not self._is_plan_selectable_wall(wall):
             return False
 
         self.current_tool = "Select"
-        self.selected_opening = None
         self.hovered_opening = None
-        self.selected_wall = wall
-        self._pending_selected_opening_intent = None
+        self._set_selected_plan_target("wall", wall, pending_restore=queue_restore)
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
         self._sync_wall_grips()
@@ -3670,7 +3741,7 @@ class PlanEditSession:
         target_kind, wall = self._get_plan_target_at_position(mouse_pos)
         if target_kind != "wall":
             wall = None
-        if not self._select_wall_for_plan_edit(wall):
+        if not self._select_wall_for_plan_edit(wall, queue_restore=True):
             return False
         self._set_hovered_wall(None)
         previous_ignore = self._ignore_selection_changes
@@ -3706,6 +3777,28 @@ class PlanEditSession:
     def _clear_hovered_wall_overlay(self):
         self._finalize_trackers(self._wall_hover_trackers)
         self._wall_hover_trackers = []
+
+    def _sync_hovered_wall_opening_context_overlay(self):
+        self._clear_hovered_wall_opening_context_overlay()
+        if self.current_tool != "Select":
+            return
+        if not self.hovered_wall or self.hovered_wall == self.selected_wall:
+            return
+        if self.selected_wall or self.selected_opening:
+            return
+        color = (0.64, 0.70, 0.84)
+        width = self._scaled_line_width(1)
+        for opening in self._get_wall_hosted_openings(self.hovered_wall):
+            self._create_opening_overlay_trackers(
+                opening,
+                color=color,
+                width=width,
+                tracker_store=self._hovered_wall_opening_context_trackers,
+            )
+
+    def _clear_hovered_wall_opening_context_overlay(self):
+        self._finalize_trackers(self._hovered_wall_opening_context_trackers)
+        self._hovered_wall_opening_context_trackers = []
 
     def _create_wall_overlay_trackers(self, wall, color, width, tracker_store):
         try:
@@ -3795,6 +3888,24 @@ class PlanEditSession:
     def _clear_selected_opening_overlay(self):
         self._finalize_trackers(self._opening_overlay_trackers)
         self._opening_overlay_trackers = []
+
+    def _sync_selected_wall_opening_context_overlay(self):
+        self._clear_selected_wall_opening_context_overlay()
+        if self.current_tool != "Select" or not self.selected_wall or self.selected_opening:
+            return
+        color = (0.46, 0.58, 0.82)
+        width = self._scaled_line_width(2)
+        for opening in self._get_wall_hosted_openings(self.selected_wall):
+            self._create_opening_overlay_trackers(
+                opening,
+                color=color,
+                width=width,
+                tracker_store=self._selected_wall_opening_context_trackers,
+            )
+
+    def _clear_selected_wall_opening_context_overlay(self):
+        self._finalize_trackers(self._selected_wall_opening_context_trackers)
+        self._selected_wall_opening_context_trackers = []
 
     def _get_selected_opening_edit_handles(self, opening):
         proxy = self._get_opening_view_proxy(opening, "get_plan_edit_handles")
@@ -3999,9 +4110,7 @@ class PlanEditSession:
     def _activate_opening_handle_now(self, opening, handle_index):
         if self._tearing_down or not opening:
             return
-        self.selected_opening = opening
-        self.selected_wall = None
-        self._pending_selected_opening_intent = None
+        self._set_selected_plan_target("opening", opening)
         self._clear_wall_grips()
         handles = self._get_selected_opening_edit_handles(opening)
         if handle_index < 0 or handle_index >= len(handles):
@@ -4115,16 +4224,17 @@ class PlanEditSession:
         self._edit_opening_move_raw_point = None
         self.current_tool = "Select"
         if opening:
-            self.selected_opening = opening
+            self._set_selected_plan_target("opening", opening, pending_restore=True)
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
         self._refresh_task_panel_status()
 
     def _restore_selected_opening(self, opening):
         self.current_tool = "Select"
-        self.selected_opening = opening
-        if not opening:
-            self._pending_selected_opening_intent = None
+        if opening:
+            self._set_selected_plan_target("opening", opening, pending_restore=True)
+        else:
+            self._set_selected_plan_target()
         if not opening:
             self._sync_selected_opening_overlay()
             self._sync_selected_opening_handles()
@@ -4153,9 +4263,7 @@ class PlanEditSession:
         QtCore.QTimer.singleShot(0, lambda: self._restore_selected_opening(opening))
 
     def _clear_plan_selection_state(self):
-        self.selected_wall = None
-        self.selected_opening = None
-        self._pending_selected_opening_intent = None
+        self._set_selected_plan_target()
         self._set_hovered_wall(None)
         self._set_hovered_opening(None)
         self._clear_wall_grips()
@@ -4179,7 +4287,7 @@ class PlanEditSession:
             except Exception:
                 pass
             return
-        self.selected_opening = opening
+        self._set_selected_plan_target("opening", opening, pending_restore=True)
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
 

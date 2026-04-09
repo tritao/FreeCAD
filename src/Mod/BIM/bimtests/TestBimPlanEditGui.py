@@ -564,7 +564,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(session.selected_opening, door)
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][0], 0)
-        self.assertIs(session._pending_selected_opening_intent, door)
+        self.assertEqual(session._pending_selected_plan_target, ("opening", door))
 
         calls[0][1]()
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [door.Name])
@@ -574,7 +574,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertEqual(FreeCADGui.Selection.getSelection(), [])
         self.assertIs(session.selected_opening, door)
-        self.assertIsNone(session._pending_selected_opening_intent)
+        self.assertIsNone(session._pending_selected_plan_target)
 
         from pivy import coin
 
@@ -606,9 +606,70 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
 
         self.assertIsNone(session.selected_opening)
-        self.assertIsNone(session._pending_selected_opening_intent)
+        self.assertIsNone(session._pending_selected_plan_target)
         self.assertEqual(len(session._opening_overlay_trackers), 0)
         self.assertEqual(len(session._opening_handle_trackers), 0)
+
+    def test_plan_edit_empty_canvas_click_clears_selected_wall(self):
+        """Transient empty GUI selection should not immediately deselect a clicked wall."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("wall", wall),
+        ):
+            activated = session._activate_wall_target((100, 100))
+
+        self.assertTrue(activated)
+        self.assertIs(session.selected_wall, wall)
+        self.assertEqual(session._pending_selected_plan_target, ("wall", wall))
+
+        FreeCADGui.Selection.clearSelection()
+        self.pump_gui_events()
+
+        self.assertEqual(FreeCADGui.Selection.getSelection(), [])
+        self.assertIs(session.selected_wall, wall)
+        self.assertIsNone(session._pending_selected_plan_target)
+
+        from pivy import coin
+
+        class _FakeMousePosition:
+            def __init__(self, x, y):
+                self._value = (x, y)
+
+            def getValue(self):
+                return self._value
+
+        class _FakeMouseEvent:
+            def __init__(self, x, y):
+                self._position = _FakeMousePosition(x, y)
+
+            def getButton(self):
+                return coin.SoMouseButtonEvent.BUTTON1
+
+            def getState(self):
+                return coin.SoMouseButtonEvent.DOWN
+
+            def getPosition(self):
+                return self._position
+
+        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=(None, None),
+        ):
+            session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+
+        self.assertIsNone(session.selected_wall)
+        self.assertIsNone(session._pending_selected_plan_target)
+        self.assertEqual(len(session._grip_trackers), 0)
 
     def test_plan_edit_opening_move_uses_reduced_snap_profile(self):
         """Opening move should use a constrained snap profile while point-picking."""
@@ -902,6 +963,32 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertGreater(len(session._wall_hover_trackers), 0)
         self.assertEqual(len(session._grip_trackers), 0)
 
+    def test_plan_edit_hovered_wall_shows_hosted_opening_context(self):
+        """Hovering a wall should passively highlight its hosted openings."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+        self._make_hosted_door(wall, name="HoverWallContextDoor")
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(
+            session.view,
+            "getObjectsInfo",
+            return_value=[{"Document": self.document.Name, "Object": wall.Name, "Component": ""}],
+        ):
+            session._update_hovered_plan_target((100, 100))
+
+        self.assertIs(session.hovered_wall, wall)
+        self.assertIsNone(session.selected_wall)
+        self.assertIsNone(session.selected_opening)
+        self.assertGreater(len(session._wall_hover_trackers), 0)
+        self.assertGreater(len(session._hovered_wall_opening_context_trackers), 0)
+        self.assertEqual(len(session._opening_hover_trackers), 0)
+        self.assertEqual(len(session._opening_handle_trackers), 0)
+
     def test_plan_edit_clicking_hovered_wall_selects_it(self):
         """Clicking a hovered wall should promote it to selected wall state."""
 
@@ -924,6 +1011,40 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNone(session.selected_opening)
         self.assertEqual(len(session._wall_hover_trackers), 0)
         self.assertEqual(len(session._grip_trackers), 3)
+
+    def test_plan_edit_selected_wall_shows_hosted_opening_context(self):
+        """Selecting a wall should highlight hosted openings without selecting them."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+        door = self._make_hosted_door(wall, name="WallContextDoor")
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("wall", wall),
+        ):
+            activated = session._activate_wall_target((100, 100))
+
+        self.assertTrue(activated)
+        self.assertIs(session.selected_wall, wall)
+        self.assertIsNone(session.selected_opening)
+        self.assertEqual(len(session._grip_trackers), 3)
+        self.assertGreater(len(session._selected_wall_opening_context_trackers), 0)
+        self.assertEqual(len(session._opening_overlay_trackers), 0)
+        self.assertEqual(len(session._opening_handle_trackers), 0)
+
+        session._select_opening_for_plan_edit(door)
+
+        self.assertIsNone(session.selected_wall)
+        self.assertIs(session.selected_opening, door)
+        self.assertEqual(len(session._selected_wall_opening_context_trackers), 0)
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertEqual(len(session._opening_handle_trackers), 3)
 
     def test_plan_edit_wall_grip_move_uses_point_pick_commit(self):
         """Wall grips should use click-move-click editing instead of hold-drag."""
