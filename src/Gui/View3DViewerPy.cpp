@@ -136,10 +136,32 @@ void View3DInventorViewerPy::init_type()
         "setGradientBackground(str): sets the background gradient of the current viewer."
     );
     add_varargs_method(
+        "getGradientBackground",
+        &View3DInventorViewerPy::getGradientBackground,
+        "getGradientBackground() -> str: returns the current background gradient mode."
+    );
+    add_varargs_method(
         "setGradientBackgroundColor",
         &View3DInventorViewerPy::setGradientBackgroundColor,
         "setGradientBackgroundColor(tuple,tuple,[tuple]): sets the gradient colors of the current "
         "viewer."
+    );
+    add_varargs_method(
+        "getBackgroundColor",
+        &View3DInventorViewerPy::getBackgroundColor,
+        "getBackgroundColor() -> tuple[float, float, float]: returns the current background color."
+    );
+    add_varargs_method(
+        "setBackgroundAppearanceOverride",
+        &View3DInventorViewerPy::setBackgroundAppearanceOverride,
+        "setBackgroundAppearanceOverride(mode, background, fromColor, toColor, [midColor]): "
+        "temporarily overrides the viewer background appearance without changing the stored "
+        "preference state."
+    );
+    add_varargs_method(
+        "clearBackgroundAppearanceOverride",
+        &View3DInventorViewerPy::clearBackgroundAppearanceOverride,
+        "clearBackgroundAppearanceOverride(): clears a temporary viewer background override."
     );
     add_varargs_method(
         "setRedirectToSceneGraph",
@@ -173,6 +195,17 @@ void View3DInventorViewerPy::init_type()
         "isEnabledNaviCube",
         &View3DInventorViewerPy::isEnabledNaviCube,
         "isEnabledNaviCube() -> bool: check whether the navi cube is enabled."
+    );
+    add_varargs_method(
+        "setNaviCubeEnabledOverride",
+        &View3DInventorViewerPy::setNaviCubeEnabledOverride,
+        "setNaviCubeEnabledOverride(bool): temporarily overrides the viewer navi cube "
+        "visibility without changing the stored preference state."
+    );
+    add_varargs_method(
+        "clearNaviCubeEnabledOverride",
+        &View3DInventorViewerPy::clearNaviCubeEnabledOverride,
+        "clearNaviCubeEnabledOverride(): clears a temporary navi cube visibility override."
     );
     add_varargs_method(
         "setNaviCubeCorner",
@@ -589,6 +622,23 @@ Py::Object View3DInventorViewerPy::setGradientBackground(const Py::Tuple& args)
     }
 }
 
+Py::Object View3DInventorViewerPy::getGradientBackground(const Py::Tuple& args)
+{
+    if (!PyArg_ParseTuple(args.ptr(), "")) {
+        throw Py::Exception();
+    }
+
+    switch (_viewer->getGradientBackground()) {
+        case View3DInventorViewer::Background::LinearGradient:
+            return Py::String("LINEAR");
+        case View3DInventorViewer::Background::RadialGradient:
+            return Py::String("RADIAL");
+        case View3DInventorViewer::Background::NoGradient:
+        default:
+            return Py::String("NONE");
+    }
+}
+
 Py::Object View3DInventorViewerPy::setGradientBackgroundColor(const Py::Tuple& args)
 {
     PyObject* col1;
@@ -671,6 +721,118 @@ Py::Object View3DInventorViewerPy::setBackgroundColor(const Py::Tuple& args)
     }
 }
 
+Py::Object View3DInventorViewerPy::getBackgroundColor(const Py::Tuple& args)
+{
+    if (!PyArg_ParseTuple(args.ptr(), "")) {
+        throw Py::Exception();
+    }
+
+    const QColor color = _viewer->backgroundColor();
+    return Py::TupleN(Py::Float(color.redF()), Py::Float(color.greenF()), Py::Float(color.blueF()));
+}
+
+Py::Object View3DInventorViewerPy::setBackgroundAppearanceOverride(const Py::Tuple& args)
+{
+    const char* background;
+    PyObject* bgColorObj;
+    PyObject* col1;
+    PyObject* col2;
+    PyObject* col3 = nullptr;
+    if (!PyArg_ParseTuple(
+            args.ptr(),
+            "sO!O!O!|O!",
+            &background,
+            &PyTuple_Type,
+            &bgColorObj,
+            &PyTuple_Type,
+            &col1,
+            &PyTuple_Type,
+            &col2,
+            &PyTuple_Type,
+            &col3
+        )) {
+        throw Py::Exception();
+    }
+
+    auto tupleToColor = [](PyObject* col) {
+        SbColor color;
+        Py::Tuple tuple(col);
+        for (int i = 0; i < 3; i++) {
+            color[i] = static_cast<float>(Py::Float(tuple[i]));
+        }
+
+        return color;
+    };
+
+    auto tupleToQColor = [](PyObject* col) {
+        Py::Tuple tuple(col);
+        QColor color;
+        color.setRedF(static_cast<float>(Py::Float(tuple[0])));
+        color.setGreenF(static_cast<float>(Py::Float(tuple[1])));
+        color.setBlueF(static_cast<float>(Py::Float(tuple[2])));
+        return color;
+    };
+
+    try {
+        View3DInventorViewer::Background gradient = View3DInventorViewer::Background::NoGradient;
+        if (strcmp(background, "LINEAR") == 0) {
+            gradient = View3DInventorViewer::Background::LinearGradient;
+        }
+        else if (strcmp(background, "RADIAL") == 0) {
+            gradient = View3DInventorViewer::Background::RadialGradient;
+        }
+
+        QColor bgColor = tupleToQColor(bgColorObj);
+        SbColor fromColor = tupleToColor(col1);
+        SbColor toColor = tupleToColor(col2);
+        if (col3) {
+            _viewer->setBackgroundAppearanceOverride(
+                gradient,
+                bgColor,
+                fromColor,
+                toColor,
+                tupleToColor(col3)
+            );
+        }
+        else {
+            _viewer->setBackgroundAppearanceOverride(gradient, bgColor, fromColor, toColor);
+        }
+        _viewer->redraw();
+        return Py::None();
+    }
+    catch (const Base::Exception& e) {
+        throw Py::RuntimeError(e.what());
+    }
+    catch (const std::exception& e) {
+        throw Py::RuntimeError(e.what());
+    }
+    catch (...) {
+        throw Py::RuntimeError("Unknown C++ exception");
+    }
+}
+
+Py::Object View3DInventorViewerPy::clearBackgroundAppearanceOverride(const Py::Tuple& args)
+{
+    if (!PyArg_ParseTuple(args.ptr(), "")) {
+        throw Py::Exception();
+    }
+
+    try {
+        _viewer->clearBackgroundAppearanceOverride();
+        _viewer->redraw();
+        return Py::None();
+    }
+    catch (const Base::Exception& e) {
+        throw Py::RuntimeError(e.what());
+    }
+    catch (const std::exception& e) {
+        throw Py::RuntimeError(e.what());
+    }
+    catch (...) {
+        throw Py::RuntimeError("Unknown C++ exception");
+    }
+}
+
 Py::Object View3DInventorViewerPy::setRedirectToSceneGraph(const Py::Tuple& args)
 {
     PyObject* m = Py_False;
@@ -734,6 +896,25 @@ Py::Object View3DInventorViewerPy::isEnabledNaviCube(const Py::Tuple& args)
     }
     bool ok = _viewer->isEnabledNaviCube();
     return Py::Boolean(ok);
+}
+
+Py::Object View3DInventorViewerPy::setNaviCubeEnabledOverride(const Py::Tuple& args)
+{
+    PyObject* m = Py_False;
+    if (!PyArg_ParseTuple(args.ptr(), "O!", &PyBool_Type, &m)) {
+        throw Py::Exception();
+    }
+    _viewer->setNaviCubeEnabledOverride(Base::asBoolean(m));
+    return Py::None();
+}
+
+Py::Object View3DInventorViewerPy::clearNaviCubeEnabledOverride(const Py::Tuple& args)
+{
+    if (!PyArg_ParseTuple(args.ptr(), "")) {
+        throw Py::Exception();
+    }
+    _viewer->clearNaviCubeEnabledOverride();
+    return Py::None();
 }
 
 Py::Object View3DInventorViewerPy::setNaviCubeCorner(const Py::Tuple& args)

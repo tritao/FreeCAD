@@ -387,7 +387,12 @@ void View3DSettings::OnChange(ParameterGrp::SubjectType& rCaller, ParameterGrp::
             _viewer->setSpinningAnimationEnabled(rGrp.GetBool("UseSpinningAnimations", false));
         }
     }
-    else if (strcmp(Reason, "Gradient") == 0 || strcmp(Reason, "RadialGradient") == 0) {
+    else if (
+        strcmp(Reason, "Gradient") == 0 || strcmp(Reason, "RadialGradient") == 0
+        || strcmp(Reason, "BackgroundColor") == 0 || strcmp(Reason, "BackgroundColor2") == 0
+        || strcmp(Reason, "BackgroundColor3") == 0 || strcmp(Reason, "BackgroundColor4") == 0
+        || strcmp(Reason, "UseBackgroundColorMid") == 0
+    ) {
         View3DInventorViewer::Background background = View3DInventorViewer::Background::NoGradient;
         if (rGrp.GetBool("Gradient", true)) {
             background = View3DInventorViewer::Background::LinearGradient;
@@ -395,8 +400,44 @@ void View3DSettings::OnChange(ParameterGrp::SubjectType& rCaller, ParameterGrp::
         else if (rGrp.GetBool("RadialGradient", false)) {
             background = View3DInventorViewer::Background::RadialGradient;
         }
+        unsigned long col1 = rGrp.GetUnsigned("BackgroundColor", 3940932863UL);
+        unsigned long col2 = rGrp.GetUnsigned("BackgroundColor2", 859006463UL);   // default color
+                                                                                  // (dark blue)
+        unsigned long col3 = rGrp.GetUnsigned("BackgroundColor3", 2880160255UL);  // default color
+                                                                                  // (blue/grey)
+        unsigned long col4 = rGrp.GetUnsigned("BackgroundColor4", 1869583359UL);  // default color
+                                                                                  // (blue/grey)
+        float r1, g1, b1, r2, g2, b2, r3, g3, b3, r4, g4, b4;
+        r1 = ((col1 >> 24) & 0xff) / 255.0;
+        g1 = ((col1 >> 16) & 0xff) / 255.0;
+        b1 = ((col1 >> 8) & 0xff) / 255.0;
+        r2 = ((col2 >> 24) & 0xff) / 255.0;
+        g2 = ((col2 >> 16) & 0xff) / 255.0;
+        b2 = ((col2 >> 8) & 0xff) / 255.0;
+        r3 = ((col3 >> 24) & 0xff) / 255.0;
+        g3 = ((col3 >> 16) & 0xff) / 255.0;
+        b3 = ((col3 >> 8) & 0xff) / 255.0;
+        r4 = ((col4 >> 24) & 0xff) / 255.0;
+        g4 = ((col4 >> 16) & 0xff) / 255.0;
+        b4 = ((col4 >> 8) & 0xff) / 255.0;
         for (auto _viewer : _viewers) {
-            _viewer->setGradientBackground(background);
+            if (!rGrp.GetBool("UseBackgroundColorMid", false)) {
+                _viewer->setPreferredBackgroundAppearance(
+                    background,
+                    QColor::fromRgbF(r1, g1, b1),
+                    SbColor(r2, g2, b2),
+                    SbColor(r3, g3, b3)
+                );
+            }
+            else {
+                _viewer->setPreferredBackgroundAppearance(
+                    background,
+                    QColor::fromRgbF(r1, g1, b1),
+                    SbColor(r2, g2, b2),
+                    SbColor(r3, g3, b3),
+                    SbColor(r4, g4, b4)
+                );
+            }
         }
     }
     else if (strcmp(Reason, "ShowFPS") == 0) {
@@ -406,7 +447,7 @@ void View3DSettings::OnChange(ParameterGrp::SubjectType& rCaller, ParameterGrp::
     }
     else if (strcmp(Reason, "ShowNaviCube") == 0) {
         for (auto _viewer : _viewers) {
-            _viewer->setEnabledNaviCube(rGrp.GetBool("ShowNaviCube", true));
+            _viewer->setPreferredNaviCubeEnabled(rGrp.GetBool("ShowNaviCube", true));
         }
     }
     else if (
@@ -510,41 +551,6 @@ void View3DSettings::OnChange(ParameterGrp::SubjectType& rCaller, ParameterGrp::
                         SoGLRenderAction::NONSOLID_SEPARATE_BACKFACE_PASS
                     );
                 }
-            }
-        }
-    }
-    else {
-        unsigned long col1 = rGrp.GetUnsigned("BackgroundColor", 3940932863UL);
-        unsigned long col2 = rGrp.GetUnsigned("BackgroundColor2", 859006463UL);   // default color
-                                                                                  // (dark blue)
-        unsigned long col3 = rGrp.GetUnsigned("BackgroundColor3", 2880160255UL);  // default color
-                                                                                  // (blue/grey)
-        unsigned long col4 = rGrp.GetUnsigned("BackgroundColor4", 1869583359UL);  // default color
-                                                                                  // (blue/grey)
-        float r1, g1, b1, r2, g2, b2, r3, g3, b3, r4, g4, b4;
-        r1 = ((col1 >> 24) & 0xff) / 255.0;
-        g1 = ((col1 >> 16) & 0xff) / 255.0;
-        b1 = ((col1 >> 8) & 0xff) / 255.0;
-        r2 = ((col2 >> 24) & 0xff) / 255.0;
-        g2 = ((col2 >> 16) & 0xff) / 255.0;
-        b2 = ((col2 >> 8) & 0xff) / 255.0;
-        r3 = ((col3 >> 24) & 0xff) / 255.0;
-        g3 = ((col3 >> 16) & 0xff) / 255.0;
-        b3 = ((col3 >> 8) & 0xff) / 255.0;
-        r4 = ((col4 >> 24) & 0xff) / 255.0;
-        g4 = ((col4 >> 16) & 0xff) / 255.0;
-        b4 = ((col4 >> 8) & 0xff) / 255.0;
-        for (auto _viewer : _viewers) {
-            _viewer->setBackgroundColor(QColor::fromRgbF(r1, g1, b1));
-            if (!rGrp.GetBool("UseBackgroundColorMid", false)) {
-                _viewer->setGradientBackgroundColor(SbColor(r2, g2, b2), SbColor(r3, g3, b3));
-            }
-            else {
-                _viewer->setGradientBackgroundColor(
-                    SbColor(r2, g2, b2),
-                    SbColor(r3, g3, b3),
-                    SbColor(r4, g4, b4)
-                );
             }
         }
     }

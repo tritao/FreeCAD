@@ -88,56 +88,6 @@ _PLAN_VIEW_LOCKED_ACTIONS = (
 _active_session = None
 
 
-def _view_param_group():
-    return FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View")
-
-
-def _unsigned_to_rgb(color):
-    return (
-        ((color >> 24) & 0xFF) / 255.0,
-        ((color >> 16) & 0xFF) / 255.0,
-        ((color >> 8) & 0xFF) / 255.0,
-    )
-
-
-def _apply_viewer_background(viewer, state):
-    if not viewer or not state:
-        return
-
-    gradient_mode = "NONE"
-    if state.get("radial_gradient", False):
-        gradient_mode = "RADIAL"
-    elif state.get("gradient", False):
-        gradient_mode = "LINEAR"
-
-    viewer.setGradientBackground(gradient_mode)
-    viewer.setBackgroundColor(*state["background"])
-
-    if state.get("use_mid", False):
-        viewer.setGradientBackgroundColor(
-            state["background2"],
-            state["background3"],
-            state["background4"],
-        )
-    else:
-        viewer.setGradientBackgroundColor(state["background2"], state["background3"])
-
-
-def _make_plan_background_state(state):
-    if not state:
-        return None
-
-    return {
-        "gradient": False,
-        "radial_gradient": False,
-        "use_mid": False,
-        "background": _PLAN_PAPER_RGB,
-        "background2": _PLAN_PAPER_RGB,
-        "background3": _PLAN_PAPER_RGB,
-        "background4": _PLAN_PAPER_RGB,
-    }
-
-
 def _copy_plane(plane):
     import WorkingPlane
 
@@ -347,7 +297,6 @@ class PlanEditSession:
         self._render_manager = None
         self._saved_camera = None
         self._saved_camera_type = None
-        self._saved_background = None
         self._saved_navigation_style = None
         self._saved_navigation_state = {}
         self._saved_view_action_state = {}
@@ -555,15 +504,47 @@ class PlanEditSession:
             self._saved_navigation_style = nav_style
         self._capture_navigation_flag(nav_style, "isRotationEnabled", "rotation_enabled")
         self._capture_navigation_flag(nav_style, "isOrientationLocked", "orientation_locked")
-        self._capture_navigation_flag(self.viewer, "isEnabledNaviCube", "navicube_enabled")
+        if not (self.viewer and hasattr(self.viewer, "setNaviCubeEnabledOverride")):
+            self._capture_navigation_flag(self.viewer, "isEnabledNaviCube", "navicube_enabled")
         self._capture_navigation_flag(self.view, "isCornerCrossVisible", "corner_cross_visible")
+
+    def _apply_plan_background_override(self):
+        viewer = self.viewer
+        if not viewer or not hasattr(viewer, "setBackgroundAppearanceOverride"):
+            return
+        try:
+            viewer.setBackgroundAppearanceOverride(
+                "NONE",
+                _PLAN_PAPER_RGB,
+                _PLAN_PAPER_RGB,
+                _PLAN_PAPER_RGB,
+            )
+        except (AttributeError, ReferenceError, RuntimeError):
+            pass
+
+    def _clear_plan_background_override(self):
+        viewer = self.viewer
+        if not viewer or not hasattr(viewer, "clearBackgroundAppearanceOverride"):
+            return
+        try:
+            viewer.clearBackgroundAppearanceOverride()
+        except (AttributeError, ReferenceError, RuntimeError):
+            pass
 
     def _apply_plan_navigation_profile(self):
         self._capture_navigation_state()
         nav_style = self._saved_navigation_style or self._get_navigation_style()
         self._apply_navigation_flag(nav_style, "setRotationEnabled", "rotation_enabled", False)
         self._apply_navigation_flag(nav_style, "setOrientationLocked", "orientation_locked", True)
-        self._apply_navigation_flag(self.viewer, "setEnabledNaviCube", "navicube_enabled", False)
+        if self.viewer and hasattr(self.viewer, "setNaviCubeEnabledOverride"):
+            try:
+                self.viewer.setNaviCubeEnabledOverride(False)
+            except (AttributeError, ReferenceError, RuntimeError):
+                pass
+        else:
+            self._apply_navigation_flag(
+                self.viewer, "setEnabledNaviCube", "navicube_enabled", False
+            )
         self._apply_navigation_flag(
             self.view, "setCornerCrossVisible", "corner_cross_visible", False
         )
@@ -583,12 +564,18 @@ class PlanEditSession:
             "orientation_locked",
             self._saved_navigation_state.get("orientation_locked"),
         )
-        self._apply_navigation_flag(
-            self.viewer,
-            "setEnabledNaviCube",
-            "navicube_enabled",
-            self._saved_navigation_state.get("navicube_enabled"),
-        )
+        if self.viewer and hasattr(self.viewer, "clearNaviCubeEnabledOverride"):
+            try:
+                self.viewer.clearNaviCubeEnabledOverride()
+            except (AttributeError, ReferenceError, RuntimeError):
+                pass
+        else:
+            self._apply_navigation_flag(
+                self.viewer,
+                "setEnabledNaviCube",
+                "navicube_enabled",
+                self._saved_navigation_state.get("navicube_enabled"),
+            )
         self._apply_navigation_flag(
             self.view,
             "setCornerCrossVisible",
@@ -839,11 +826,7 @@ class PlanEditSession:
         if self.viewer:
             try:
                 self.viewer.setOverrideMode("Footprint")
-                if self._saved_background:
-                    _apply_viewer_background(
-                        self.viewer,
-                        _make_plan_background_state(self._saved_background),
-                    )
+                self._apply_plan_background_override()
             except RuntimeError:
                 self.viewer = None
 
@@ -881,8 +864,7 @@ class PlanEditSession:
         if self.viewer:
             try:
                 self.viewer.setOverrideMode("As Is")
-                if self._saved_background:
-                    _apply_viewer_background(self.viewer, self._saved_background)
+                self._clear_plan_background_override()
             except RuntimeError:
                 self.viewer = None
 
@@ -916,7 +898,6 @@ class PlanEditSession:
             self._saved_camera = self.view.getCamera()
         if self.view and hasattr(self.view, "getCameraType"):
             self._saved_camera_type = self.view.getCameraType()
-        self._saved_background = self._capture_background_state()
 
         self._working_plane = WorkingPlane.get_working_plane(update=False)
         if hasattr(self._working_plane, "save"):
@@ -990,18 +971,6 @@ class PlanEditSession:
         if view_height <= 0:
             return None
         return height / view_height
-
-    def _capture_background_state(self):
-        params = _view_param_group()
-        return {
-            "gradient": params.GetBool("Gradient", True),
-            "radial_gradient": params.GetBool("RadialGradient", False),
-            "use_mid": params.GetBool("UseBackgroundColorMid", False),
-            "background": _unsigned_to_rgb(params.GetUnsigned("BackgroundColor", 3940932863)),
-            "background2": _unsigned_to_rgb(params.GetUnsigned("BackgroundColor2", 859006463)),
-            "background3": _unsigned_to_rgb(params.GetUnsigned("BackgroundColor3", 2880160255)),
-            "background4": _unsigned_to_rgb(params.GetUnsigned("BackgroundColor4", 1869583359)),
-        }
 
     def _apply_plan_snap_profile(self):
         snapper = getattr(FreeCADGui, "Snapper", None)

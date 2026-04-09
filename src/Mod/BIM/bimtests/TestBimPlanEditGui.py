@@ -1136,12 +1136,19 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         class FakeViewer:
             def __init__(self):
                 self.navicube_enabled = True
+                self.navicube_override = None
 
             def isEnabledNaviCube(self):
                 return self.navicube_enabled
 
             def setEnabledNaviCube(self, enabled):
                 self.navicube_enabled = enabled
+
+            def setNaviCubeEnabledOverride(self, enabled):
+                self.navicube_override = enabled
+
+            def clearNaviCubeEnabledOverride(self):
+                self.navicube_override = None
 
         class FakeView:
             def __init__(self):
@@ -1164,14 +1171,45 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             session._apply_plan_navigation_profile()
             self.assertFalse(nav_style.rotation_enabled)
             self.assertTrue(nav_style.orientation_locked)
-            self.assertFalse(viewer.navicube_enabled)
+            self.assertFalse(viewer.navicube_override)
             self.assertFalse(view.corner_cross_visible)
 
             session._restore_navigation_state()
             self.assertTrue(nav_style.rotation_enabled)
             self.assertFalse(nav_style.orientation_locked)
-            self.assertTrue(viewer.navicube_enabled)
+            self.assertIsNone(viewer.navicube_override)
             self.assertTrue(view.corner_cross_visible)
+
+    def test_plan_edit_uses_viewer_background_override_api(self):
+        """Plan Edit should use the viewer override API for its paper background."""
+
+        class FakeViewer:
+            def __init__(self):
+                self.calls = []
+
+            def setBackgroundAppearanceOverride(self, mode, background, from_color, to_color):
+                self.calls.append(("set", mode, background, from_color, to_color))
+
+            def clearBackgroundAppearanceOverride(self):
+                self.calls.append(("clear",))
+
+        session = BimPlanSession()
+        session.viewer = FakeViewer()
+
+        session._apply_plan_background_override()
+        self.assertEqual(
+            session.viewer.calls[0],
+            (
+                "set",
+                "NONE",
+                BimPlanSession._PLAN_PAPER_RGB,
+                BimPlanSession._PLAN_PAPER_RGB,
+                BimPlanSession._PLAN_PAPER_RGB,
+            ),
+        )
+
+        session._clear_plan_background_override()
+        self.assertEqual(session.viewer.calls[1], ("clear",))
 
     def test_plan_edit_session_hides_navicube_and_restores_it_on_exit(self):
         """Plan Edit should hide the live viewer NaviCube and restore it on exit."""
@@ -1194,6 +1232,62 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertEqual(viewer.isEnabledNaviCube(), original_navicube)
         self.assertEqual(view.isCornerCrossVisible(), original_corner_cross)
+
+    def test_plan_edit_keeps_paper_background_when_view_preferences_change(self):
+        """Plan Edit should keep its paper override while view preferences change."""
+
+        def _pack_rgb(r, g, b):
+            return (r << 24) | (g << 16) | (b << 8) | 0xFF
+
+        def _rgb_tuple(color):
+            return tuple(round(component, 6) for component in color)
+
+        view = FreeCADGui.ActiveDocument.ActiveView
+        viewer = view.getViewer()
+        view_params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View")
+
+        original_show_navicube = view_params.GetBool("ShowNaviCube", True)
+        original_background = view_params.GetUnsigned("BackgroundColor", 3940932863)
+
+        updated_show_navicube = not original_show_navicube
+        updated_background = _pack_rgb(12, 34, 56)
+        updated_background_rgb = _rgb_tuple((12 / 255.0, 34 / 255.0, 56 / 255.0))
+
+        session = None
+        try:
+            session = BimPlanSession.start_session()
+            self.assertIsNotNone(session)
+            self.pump_gui_events()
+
+            self.assertEqual(viewer.getGradientBackground(), "NONE")
+            self.assertEqual(
+                _rgb_tuple(viewer.getBackgroundColor()), _rgb_tuple(BimPlanSession._PLAN_PAPER_RGB)
+            )
+            self.assertFalse(viewer.isEnabledNaviCube())
+
+            view_params.SetBool("ShowNaviCube", updated_show_navicube)
+            view_params.SetUnsigned("BackgroundColor", updated_background)
+            self.pump_gui_events()
+
+            self.assertEqual(viewer.getGradientBackground(), "NONE")
+            self.assertEqual(
+                _rgb_tuple(viewer.getBackgroundColor()), _rgb_tuple(BimPlanSession._PLAN_PAPER_RGB)
+            )
+            self.assertFalse(viewer.isEnabledNaviCube())
+
+            session.shutdown(close_dialog=False)
+            session = None
+            self.pump_gui_events()
+
+            self.assertEqual(viewer.isEnabledNaviCube(), updated_show_navicube)
+            self.assertEqual(_rgb_tuple(viewer.getBackgroundColor()), updated_background_rgb)
+        finally:
+            if session is not None:
+                session.shutdown(close_dialog=False)
+                self.pump_gui_events()
+            view_params.SetBool("ShowNaviCube", original_show_navicube)
+            view_params.SetUnsigned("BackgroundColor", original_background)
+            self.pump_gui_events()
 
     def test_plan_edit_wall_stretch_enter_starts_length_edit(self):
         """Enter should activate in-view length editing for a wall stretch preview."""
