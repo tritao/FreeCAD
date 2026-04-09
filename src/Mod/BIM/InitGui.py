@@ -404,7 +404,13 @@ class BIMWorkbench(Workbench):
         class BIM_JoinTools:
             def GetCommands(self):
                 # This method tells FreeCAD which commands belong to this group
-                return ["BIM_Join_Miter", "BIM_Join_Butt", "BIM_Join_Tee"]
+                return [
+                    "BIM_Join_Miter",
+                    "BIM_Join_Butt",
+                    "BIM_Join_Tee",
+                    "BIM_EditWallJoint",
+                    "BIM_Unjoin",
+                ]
 
             def GetResources(self):
                 # This method defines the appearance of the main button

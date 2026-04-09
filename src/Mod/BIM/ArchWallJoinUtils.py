@@ -70,20 +70,43 @@ def solve_wall_joint(joint, include_conflicts=True):
             "Disabled", "The joint is disabled.", wall_a=joint.WallA, wall_b=joint.WallB
         )
 
-    result = solve_wall_joint_inputs(
-        joint.WallA,
-        joint.WallB,
+    return solve_wall_joint_settings(
+        joint,
         getattr(joint, "JointType", "Miter"),
         getattr(joint, "ButtTrimmed", "Auto"),
         getattr(joint, "TeeStem", "Auto"),
         getattr(joint, "EndA", "Auto"),
         getattr(joint, "EndB", "Auto"),
+        include_conflicts=include_conflicts,
     )
-    if include_conflicts and result["status"] == "OK" and joint_has_conflict(joint, result):
-        result["status"] = "Conflict"
-        result["status_message"] = (
-            "Another enabled wall joint already trims one of the same wall ends."
-        )
+
+
+def solve_wall_joint_settings(
+    joint,
+    joint_type,
+    butt_trimmed="Auto",
+    tee_stem="Auto",
+    end_a="Auto",
+    end_b="Auto",
+    include_conflicts=True,
+):
+    """Solves a wall joint from explicit settings, optionally including conflict checks."""
+    if not joint:
+        return _status_result("MissingWall", "The joint object is missing.")
+
+    result = solve_wall_joint_inputs(
+        joint.WallA,
+        joint.WallB,
+        joint_type,
+        butt_trimmed,
+        tee_stem,
+        end_a,
+        end_b,
+    )
+    if include_conflicts and result["status"] == "OK":
+        conflicts = get_joint_conflicts(joint, result)
+        if conflicts:
+            _apply_conflicts(result, conflicts)
     return result
 
 
@@ -224,31 +247,49 @@ def solve_wall_joint_inputs(
     return result
 
 
-def joint_has_conflict(joint, solution=None):
-    """Returns True when another enabled joint trims one of the same wall ends."""
+def get_joint_conflicts(joint, solution=None):
+    """Returns structured conflict entries for wall ends already trimmed by another joint."""
     if not joint:
-        return False
+        return []
     if solution is None:
         solution = solve_wall_joint(joint, include_conflicts=False)
     if solution["status"] != "OK":
-        return False
+        return []
 
-    for wall, end_name in (
-        (solution["wall_a"], solution["resolved_end_a"]),
-        (solution["wall_b"], solution["resolved_end_b"]),
+    conflicts = []
+    for wall_key, wall_obj, end_name in (
+        ("A", solution["wall_a"], solution["resolved_end_a"]),
+        ("B", solution["wall_b"], solution["resolved_end_b"]),
     ):
-        if not wall or not end_name:
+        if not wall_obj or not end_name:
             continue
-        for other in iter_wall_joints(wall):
+        for other in iter_wall_joints(wall_obj):
             if other == joint or not getattr(other, "Enabled", True):
                 continue
             other_solution = solve_wall_joint(other, include_conflicts=False)
             if other_solution["status"] != "OK":
                 continue
-            other_end_name, _other_plane = get_trim_for_wall(other_solution, wall)
+            other_end_name, _other_plane = get_trim_for_wall(other_solution, wall_obj)
             if other_end_name == end_name:
-                return True
-    return False
+                conflicts.append(
+                    {
+                        "wall_key": wall_key,
+                        "wall_object": wall_obj,
+                        "wall_end": end_name,
+                        "other_joint": other,
+                        "other_joint_type": getattr(other, "JointType", "WallJoint"),
+                        "other_joint_label": getattr(other, "Label", getattr(other, "Name", "")),
+                        "message": (
+                            f"{wall_obj.Label} {end_name} is already trimmed by joint {other.Label}."
+                        ),
+                    }
+                )
+    return conflicts
+
+
+def joint_has_conflict(joint, solution=None):
+    """Returns True when another enabled joint trims one of the same wall ends."""
+    return bool(get_joint_conflicts(joint, solution))
 
 
 def collect_wall_joint_endings(wall):
@@ -427,4 +468,30 @@ def _status_result(status, message, wall_a=None, wall_b=None):
         "plane_b": None,
         "wall_a": wall_a,
         "wall_b": wall_b,
+        "conflicts": [],
+        "conflict_joint_a": None,
+        "conflict_joint_b": None,
+        "conflict_joint_label_a": "",
+        "conflict_joint_label_b": "",
+        "conflict_message_a": "",
+        "conflict_message_b": "",
     }
+
+
+def _apply_conflicts(result, conflicts):
+    result["status"] = "Conflict"
+    result["conflicts"] = conflicts
+    unique_messages = []
+    for conflict in conflicts:
+        wall_key = conflict["wall_key"]
+        if wall_key == "A" and result["conflict_joint_a"] is None:
+            result["conflict_joint_a"] = conflict["other_joint"]
+            result["conflict_joint_label_a"] = conflict["other_joint_label"]
+            result["conflict_message_a"] = conflict["message"]
+        elif wall_key == "B" and result["conflict_joint_b"] is None:
+            result["conflict_joint_b"] = conflict["other_joint"]
+            result["conflict_joint_label_b"] = conflict["other_joint_label"]
+            result["conflict_message_b"] = conflict["message"]
+        if conflict["message"] not in unique_messages:
+            unique_messages.append(conflict["message"])
+    result["status_message"] = "Conflict: " + "; ".join(unique_messages)

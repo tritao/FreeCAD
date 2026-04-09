@@ -28,9 +28,14 @@ import FreeCAD
 
 import ArchWallJoinUtils
 
+translate = FreeCAD.Qt.translate
+
 if FreeCAD.GuiUp:
+    import FreeCADGui
+    from PySide import QtCore, QtGui
     from PySide.QtCore import QT_TRANSLATE_NOOP
 else:
+    FreeCADGui = None
 
     def QT_TRANSLATE_NOOP(ctxt, txt):
         return txt
@@ -46,6 +51,17 @@ class _WallJoint:
         self.setProperties(obj)
 
     def setProperties(self, obj):
+        if "AutoLabel" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyBool",
+                "AutoLabel",
+                "Joint",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "Automatically updates the label of this wall joint from its type and linked walls.",
+                ),
+            )
+            obj.AutoLabel = True
         if "JointType" not in obj.PropertiesList:
             obj.addProperty(
                 "App::PropertyEnumeration",
@@ -143,6 +159,64 @@ class _WallJoint:
                 QT_TRANSLATE_NOOP("App::Property", "A detailed message about the joint status."),
             )
             obj.setEditorMode("StatusMessage", 1)
+        if "ConflictJointA" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyLink",
+                "ConflictJointA",
+                "Joint",
+                QT_TRANSLATE_NOOP("App::Property", "Deprecated blocker link for WallA conflicts."),
+            )
+            obj.setEditorMode("ConflictJointA", 2)
+        if "ConflictJointB" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyLink",
+                "ConflictJointB",
+                "Joint",
+                QT_TRANSLATE_NOOP("App::Property", "Deprecated blocker link for WallB conflicts."),
+            )
+            obj.setEditorMode("ConflictJointB", 2)
+        if "ConflictJointLabelA" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyString",
+                "ConflictJointLabelA",
+                "Joint",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "The label of the blocking wall joint that conflicts with WallA.",
+                ),
+            )
+            obj.setEditorMode("ConflictJointLabelA", 1)
+        if "ConflictJointLabelB" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyString",
+                "ConflictJointLabelB",
+                "Joint",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "The label of the blocking wall joint that conflicts with WallB.",
+                ),
+            )
+            obj.setEditorMode("ConflictJointLabelB", 1)
+        if "ConflictMessageA" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyString",
+                "ConflictMessageA",
+                "Joint",
+                QT_TRANSLATE_NOOP(
+                    "App::Property", "Details about the wall-joint conflict on WallA."
+                ),
+            )
+            obj.setEditorMode("ConflictMessageA", 1)
+        if "ConflictMessageB" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyString",
+                "ConflictMessageB",
+                "Joint",
+                QT_TRANSLATE_NOOP(
+                    "App::Property", "Details about the wall-joint conflict on WallB."
+                ),
+            )
+            obj.setEditorMode("ConflictMessageB", 1)
         if "Intersection" not in obj.PropertiesList:
             obj.addProperty(
                 "App::PropertyVector",
@@ -187,6 +261,25 @@ class _WallJoint:
                 QT_TRANSLATE_NOOP("App::Property", "The resolved global cutting plane for WallB."),
             )
             obj.setEditorMode("ResolvedPlaneB", 1)
+        for prop in (
+            "Status",
+            "StatusMessage",
+            "ConflictJointA",
+            "ConflictJointB",
+            "ConflictJointLabelA",
+            "ConflictJointLabelB",
+            "ConflictMessageA",
+            "ConflictMessageB",
+            "Intersection",
+            "ResolvedEndA",
+            "ResolvedEndB",
+            "ResolvedPlaneA",
+            "ResolvedPlaneB",
+        ):
+            if prop in obj.PropertiesList:
+                obj.setPropertyStatus(prop, "Output")
+                obj.setPropertyStatus(prop, "NoRecompute")
+        self._update_editor_modes(obj)
 
     def dumps(self):
         return self.Type
@@ -199,6 +292,7 @@ class _WallJoint:
         self.Type = "WallJoint"
         self._pre_change_walls = []
         self.setProperties(obj)
+        self.updatePresentation(obj, force_label=bool(getattr(obj, "AutoLabel", False)))
 
     def onBeforeChange(self, obj, prop):
         if prop in ("WallA", "WallB"):
@@ -219,20 +313,55 @@ class _WallJoint:
                 self._pre_change_walls + [getattr(obj, "WallA", None), getattr(obj, "WallB", None)]
             )
             self._pre_change_walls = []
+        if prop in ("AutoLabel", "JointType", "WallA", "WallB"):
+            self.updatePresentation(obj, force_label=(prop == "AutoLabel"))
 
     def execute(self, obj):
         solution = ArchWallJoinUtils.solve_wall_joint(obj)
         obj.Status = solution["status"]
         obj.StatusMessage = solution["status_message"]
+        obj.ConflictJointA = None
+        obj.ConflictJointB = None
+        obj.ConflictJointLabelA = solution["conflict_joint_label_a"]
+        obj.ConflictJointLabelB = solution["conflict_joint_label_b"]
+        obj.ConflictMessageA = solution["conflict_message_a"]
+        obj.ConflictMessageB = solution["conflict_message_b"]
         obj.Intersection = solution["intersection"]
         obj.ResolvedEndA = solution["resolved_end_a"] if solution["resolved_end_a"] else "None"
         obj.ResolvedEndB = solution["resolved_end_b"] if solution["resolved_end_b"] else "None"
         obj.ResolvedPlaneA = solution["plane_a"] if solution["plane_a"] else FreeCAD.Placement()
         obj.ResolvedPlaneB = solution["plane_b"] if solution["plane_b"] else FreeCAD.Placement()
+        self.updatePresentation(obj)
 
     def onDelete(self, obj, _args):
         self._touch_walls([obj.WallA, obj.WallB])
         return True
+
+    def updatePresentation(self, obj, force_label=False):
+        self._update_editor_modes(obj)
+        self._update_label(obj, force=force_label)
+
+    @staticmethod
+    def _update_editor_modes(obj):
+        joint_type = getattr(obj, "JointType", "Miter")
+        if hasattr(obj, "ButtTrimmed"):
+            obj.setEditorMode("ButtTrimmed", 0 if joint_type == "Butt" else 2)
+        if hasattr(obj, "TeeStem"):
+            obj.setEditorMode("TeeStem", 0 if joint_type == "Tee" else 2)
+
+    def _update_label(self, obj, force=False):
+        if not force and not getattr(obj, "AutoLabel", False):
+            return
+        obj.Label = self._get_auto_label(obj)
+
+    @staticmethod
+    def _get_auto_label(obj):
+        joint_type = getattr(obj, "JointType", "Miter")
+        wall_a = getattr(obj, "WallA", None)
+        wall_b = getattr(obj, "WallB", None)
+        if wall_a and wall_b:
+            return f"{joint_type}: {wall_a.Label} <-> {wall_b.Label}"
+        return f"{joint_type} {translate('Arch', 'Wall Joint')}"
 
     @staticmethod
     def _touch_walls(walls):
@@ -263,3 +392,292 @@ class _ViewProviderWallJoint:
     def getIcon(self):
         joint_type = getattr(self.Object, "JointType", "Miter")
         return f":/icons/BIM_Join_{joint_type}.svg"
+
+    def setEdit(self, vobj, mode):
+        if not FreeCAD.GuiUp or mode != 0:
+            return None
+
+        self.taskd = WallJointTaskPanel(vobj.Object)
+        FreeCADGui.Control.showDialog(self.taskd)
+        self.taskd.joint_type_combo.setFocus()
+        return True
+
+    def unsetEdit(self, _vobj, mode):
+        if not FreeCAD.GuiUp or mode != 0:
+            return None
+
+        FreeCADGui.Control.closeDialog()
+        return True
+
+    def doubleClicked(self, _vobj):
+        if not FreeCAD.GuiUp:
+            return False
+        FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+        return True
+
+    def setupContextMenu(self, _vobj, menu):
+        if not FreeCAD.GuiUp or FreeCADGui.activeWorkbench().name() != "BIMWorkbench":
+            return
+        action_edit = QtGui.QAction(translate("BIM", "Edit Joint"), menu)
+        action_edit.triggered.connect(self.edit)
+        menu.addAction(action_edit)
+
+    def edit(self):
+        if FreeCAD.GuiUp:
+            FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+
+
+if FreeCAD.GuiUp:
+
+    class WallJointTaskPanel:
+        """Task panel for editing a wall joint relation."""
+
+        def __init__(self, obj):
+            self.obj = obj
+            self._combo_values = {}
+            self.form = QtGui.QWidget()
+            self.form.setWindowTitle(translate("BIM", "Edit Wall Joint"))
+
+            layout = QtGui.QVBoxLayout(self.form)
+
+            summary = QtGui.QLabel(
+                translate("BIM", "Adjust the joint type, roles, and trimmed ends before applying."),
+                self.form,
+            )
+            summary.setWordWrap(True)
+            layout.addWidget(summary)
+
+            wall_summary = QtGui.QLabel(
+                self._get_wall_summary_text(),
+                self.form,
+            )
+            wall_summary.setWordWrap(True)
+            layout.addWidget(wall_summary)
+
+            self.form_layout = QtGui.QFormLayout()
+            layout.addLayout(self.form_layout)
+
+            self.joint_type_combo = QtGui.QComboBox(self.form)
+            self._add_combo_row(
+                "JointType",
+                translate("BIM", "Joint type"),
+                self.joint_type_combo,
+            )
+            self._set_combo_items(
+                self.joint_type_combo,
+                "JointType",
+                [("Miter", "Miter"), ("Butt", "Butt"), ("Tee", "Tee")],
+            )
+
+            self.end_a_combo = QtGui.QComboBox(self.form)
+            self._add_combo_row(
+                "EndA",
+                self._get_end_label("A"),
+                self.end_a_combo,
+            )
+            self._set_combo_items(
+                self.end_a_combo,
+                "EndA",
+                [("Auto", "Auto"), ("Start", "Start"), ("End", "End"), ("None", "None")],
+            )
+
+            self.end_b_combo = QtGui.QComboBox(self.form)
+            self._add_combo_row(
+                "EndB",
+                self._get_end_label("B"),
+                self.end_b_combo,
+            )
+            self._set_combo_items(
+                self.end_b_combo,
+                "EndB",
+                [("Auto", "Auto"), ("Start", "Start"), ("End", "End"), ("None", "None")],
+            )
+
+            self.butt_trimmed_combo = QtGui.QComboBox(self.form)
+            self._add_combo_row(
+                "ButtTrimmed",
+                translate("BIM", "Trimmed wall"),
+                self.butt_trimmed_combo,
+            )
+            self._set_combo_items(
+                self.butt_trimmed_combo,
+                "ButtTrimmed",
+                [
+                    ("Auto", translate("BIM", "Auto")),
+                    ("WallA", self._get_wall_choice_label("A")),
+                    ("WallB", self._get_wall_choice_label("B")),
+                ],
+            )
+
+            self.tee_stem_combo = QtGui.QComboBox(self.form)
+            self._add_combo_row(
+                "TeeStem",
+                translate("BIM", "Stem wall"),
+                self.tee_stem_combo,
+            )
+            self._set_combo_items(
+                self.tee_stem_combo,
+                "TeeStem",
+                [
+                    ("Auto", translate("BIM", "Auto")),
+                    ("WallA", self._get_wall_choice_label("A")),
+                    ("WallB", self._get_wall_choice_label("B")),
+                ],
+            )
+
+            status_group = QtGui.QGroupBox(translate("BIM", "Preview"), self.form)
+            status_layout = QtGui.QFormLayout(status_group)
+            self.preview_status = QtGui.QLabel(status_group)
+            self.preview_status.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+            status_layout.addRow(translate("BIM", "Status"), self.preview_status)
+            self.preview_message = QtGui.QLabel(status_group)
+            self.preview_message.setWordWrap(True)
+            self.preview_message.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+            status_layout.addRow(translate("BIM", "Message"), self.preview_message)
+            layout.addWidget(status_group)
+
+            self._connect_preview_updates()
+            self._load_from_object()
+            self._refresh_preview()
+
+        def getStandardButtons(self):
+            return QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel
+
+        def accept(self):
+            values = self._current_values()
+            changed = [prop for prop, value in values.items() if getattr(self.obj, prop) != value]
+            if not changed:
+                self._reset_edit_mode()
+                return True
+
+            doc = self.obj.Document
+            doc.openTransaction(translate("BIM", "Edit wall joint"))
+            try:
+                for prop, value in values.items():
+                    setattr(self.obj, prop, value)
+                doc.commitTransaction()
+            except Exception:
+                doc.abortTransaction()
+                raise
+            doc.recompute()
+            self._reset_edit_mode()
+            return True
+
+        def reject(self):
+            self._reset_edit_mode()
+            return True
+
+        def _connect_preview_updates(self):
+            for combo in (
+                self.joint_type_combo,
+                self.end_a_combo,
+                self.end_b_combo,
+                self.butt_trimmed_combo,
+                self.tee_stem_combo,
+            ):
+                combo.currentIndexChanged.connect(self._refresh_preview)
+
+        def _load_from_object(self):
+            self._set_combo_value(self.joint_type_combo, "JointType", self.obj.JointType)
+            self._set_combo_value(self.end_a_combo, "EndA", self.obj.EndA)
+            self._set_combo_value(self.end_b_combo, "EndB", self.obj.EndB)
+            self._set_combo_value(
+                self.butt_trimmed_combo, "ButtTrimmed", getattr(self.obj, "ButtTrimmed", "Auto")
+            )
+            self._set_combo_value(
+                self.tee_stem_combo, "TeeStem", getattr(self.obj, "TeeStem", "Auto")
+            )
+            self._update_editor_state()
+
+        def _refresh_preview(self):
+            self._update_editor_state()
+            values = self._current_values()
+            solution = ArchWallJoinUtils.solve_wall_joint_settings(
+                self.obj,
+                values["JointType"],
+                values["ButtTrimmed"],
+                values["TeeStem"],
+                values["EndA"],
+                values["EndB"],
+            )
+            self.preview_status.setText(solution["status"])
+            self.preview_message.setText(solution["status_message"] or translate("BIM", "OK"))
+
+        def _update_editor_state(self):
+            joint_type = self._get_combo_value(self.joint_type_combo, "JointType")
+            butt_enabled = joint_type == "Butt"
+            tee_enabled = joint_type == "Tee"
+            self._set_row_visible("ButtTrimmed", butt_enabled)
+            self._set_row_visible("TeeStem", tee_enabled)
+
+        def _current_values(self):
+            return {
+                "JointType": self._get_combo_value(self.joint_type_combo, "JointType"),
+                "EndA": self._get_combo_value(self.end_a_combo, "EndA"),
+                "EndB": self._get_combo_value(self.end_b_combo, "EndB"),
+                "ButtTrimmed": self._get_combo_value(self.butt_trimmed_combo, "ButtTrimmed"),
+                "TeeStem": self._get_combo_value(self.tee_stem_combo, "TeeStem"),
+            }
+
+        def _add_combo_row(self, key, label_text, widget):
+            label = QtGui.QLabel(label_text, self.form)
+            self.form_layout.addRow(label, widget)
+            self._combo_values[key] = {"label": label, "values": []}
+
+        def _set_combo_items(self, combo, key, items):
+            combo.clear()
+            self._combo_values[key]["values"] = [value for value, _label in items]
+            for _value, label in items:
+                combo.addItem(label)
+
+        def _set_combo_value(self, combo, key, value):
+            values = self._combo_values[key]["values"]
+            try:
+                index = values.index(value)
+            except ValueError:
+                index = 0
+            combo.setCurrentIndex(index)
+
+        def _get_combo_value(self, combo, key):
+            values = self._combo_values[key]["values"]
+            index = combo.currentIndex()
+            if index < 0 or index >= len(values):
+                return values[0]
+            return values[index]
+
+        def _set_row_visible(self, key, visible):
+            self._combo_values[key]["label"].setVisible(visible)
+            combo = getattr(self, self._combo_attr_name(key))
+            combo.setVisible(visible)
+
+        @staticmethod
+        def _combo_attr_name(key):
+            return {
+                "JointType": "joint_type_combo",
+                "EndA": "end_a_combo",
+                "EndB": "end_b_combo",
+                "ButtTrimmed": "butt_trimmed_combo",
+                "TeeStem": "tee_stem_combo",
+            }[key]
+
+        def _get_wall_summary_text(self):
+            wall_a = getattr(self.obj, "WallA", None)
+            wall_b = getattr(self.obj, "WallB", None)
+            label_a = wall_a.Label if wall_a else translate("BIM", "Unassigned")
+            label_b = wall_b.Label if wall_b else translate("BIM", "Unassigned")
+            return translate("BIM", "WallA: {0}\nWallB: {1}").format(label_a, label_b)
+
+        def _get_end_label(self, wall_key):
+            wall = getattr(self.obj, "Wall" + wall_key, None)
+            label = wall.Label if wall else translate("BIM", "Unassigned")
+            return translate("BIM", "Trimmed end ({0})").format(label)
+
+        def _get_wall_choice_label(self, wall_key):
+            wall = getattr(self.obj, "Wall" + wall_key, None)
+            label = wall.Label if wall else translate("BIM", "Unassigned")
+            return f"Wall{wall_key} ({label})"
+
+        @staticmethod
+        def _reset_edit_mode():
+            if FreeCADGui.ActiveDocument and FreeCADGui.ActiveDocument.getInEdit():
+                FreeCADGui.ActiveDocument.resetEdit()

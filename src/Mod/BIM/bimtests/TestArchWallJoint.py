@@ -151,3 +151,78 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
 
         self.assertEqual(joint.Status, "UnsupportedBaseline")
         self.assertIn("single straight baseline", joint.StatusMessage)
+
+    def test_make_wall_joint_auto_label_and_custom_name(self):
+        self.printTestMessage("Testing wall joint labels...")
+
+        wall1 = self._make_baseless_wall_between(App.Vector(-1000, 0, 0), App.Vector(0, 0, 0))
+        wall2 = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(0, 1000, 0))
+
+        joint = Arch.makeWallJoint(wall1, wall2, "Miter")
+        self.document.recompute()
+
+        self.assertTrue(joint.AutoLabel)
+        self.assertEqual(joint.Label, f"Miter: {wall1.Label} <-> {wall2.Label}")
+
+        joint.JointType = "Butt"
+        self.document.recompute()
+        self.assertEqual(joint.Label, f"Butt: {wall1.Label} <-> {wall2.Label}")
+
+        named_joint = Arch.makeWallJoint(wall1, wall2, "Tee", name="Custom Joint")
+        self.document.recompute()
+
+        self.assertFalse(named_joint.AutoLabel)
+        self.assertEqual(named_joint.Label, "Custom Joint")
+
+        named_joint.JointType = "Miter"
+        self.document.recompute()
+        self.assertEqual(named_joint.Label, "Custom Joint")
+
+    def test_wall_joint_conflict_reports_blocking_relation(self):
+        self.printTestMessage("Testing wall joint conflict reporting...")
+
+        wall1 = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(2000, 0, 0))
+        wall2 = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(0, 1000, 0))
+        wall3 = self._make_baseless_wall_between(App.Vector(100, 0, 0), App.Vector(100, 1000, 0))
+
+        blocker = Arch.makeWallJoint(wall1, wall2, "Miter")
+        self.document.recompute()
+        self.assertEqual(blocker.Status, "OK")
+
+        conflicted = Arch.makeWallJoint(wall1, wall3, "Miter")
+        self.document.recompute()
+
+        self.assertEqual(conflicted.Status, "Conflict")
+        self.assertEqual(conflicted.ResolvedEndA, "Start")
+        self.assertEqual(conflicted.ConflictJointLabelA, blocker.Label)
+        self.assertEqual(conflicted.ConflictJointLabelB, "")
+        self.assertIsNone(conflicted.ConflictJointA)
+        self.assertIsNone(conflicted.ConflictJointB)
+        self.assertIn("Start", conflicted.ConflictMessageA)
+        self.assertIn(blocker.Label, conflicted.ConflictMessageA)
+        self.assertEqual(conflicted.ConflictMessageB, "")
+        self.assertIn("Conflict:", conflicted.StatusMessage)
+        self.assertIn(blocker.Label, conflicted.StatusMessage)
+
+    def test_wall_joint_conflict_resolves_after_blocker_removed(self):
+        self.printTestMessage("Testing wall joint conflict clears after blocker removal...")
+
+        wall1 = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(2000, 0, 0))
+        wall2 = self._make_baseless_wall_between(App.Vector(0, 0, 0), App.Vector(0, 1000, 0))
+        wall3 = self._make_baseless_wall_between(App.Vector(100, 0, 0), App.Vector(100, 1000, 0))
+
+        blocker = Arch.makeWallJoint(wall1, wall2, "Miter")
+        conflicted = Arch.makeWallJoint(wall1, wall3, "Miter")
+        self.document.recompute()
+        self.assertEqual(conflicted.Status, "Conflict")
+
+        self.document.removeObject(blocker.Name)
+        self.document.recompute()
+
+        self.assertEqual(conflicted.Status, "OK")
+        self.assertEqual(conflicted.ConflictJointLabelA, "")
+        self.assertEqual(conflicted.ConflictJointLabelB, "")
+        self.assertIsNone(conflicted.ConflictJointA)
+        self.assertIsNone(conflicted.ConflictJointB)
+        self.assertEqual(conflicted.ConflictMessageA, "")
+        self.assertEqual(conflicted.ConflictMessageB, "")

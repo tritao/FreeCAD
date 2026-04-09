@@ -862,6 +862,8 @@ class _Wall(ArchComponent.Component):
         ArchComponent.Component.onChanged(self, obj, prop)
 
     def _touch_wall_joints(self, obj):
+        if obj.Document and getattr(obj.Document, "Recomputing", False):
+            return
         touched = set()
         for joint in ArchWallJoinUtils.iter_wall_joints(obj):
             if joint.Name in touched:

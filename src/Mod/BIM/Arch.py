@@ -1763,6 +1763,11 @@ def makeWallJoint(wall_a=None, wall_b=None, joint_type="Miter", name=None):
         joint.WallA = wall_a
     if wall_b:
         joint.WallB = wall_b
+    if name:
+        joint.AutoLabel = False
+        joint.Label = name
+    elif hasattr(joint, "Proxy") and hasattr(joint.Proxy, "updatePresentation"):
+        joint.Proxy.updatePresentation(joint, force_label=True)
     return joint
 
 

@@ -59,6 +59,7 @@ class BIM_Join:
             return
         doc.commitTransaction()
         doc.recompute()
+        self._report_joint_status(joint)
 
     def _report_unsupported_baseline(self, obj):
         FreeCAD.Console.PrintError(self.SupportedBaselines + f": {obj.Label}\n")
@@ -105,6 +106,21 @@ class BIM_Join:
 
     def configure_joint(self, _joint, _wall1, _wall2, _baseline1, _baseline2, _intersection):
         return True
+
+    @staticmethod
+    def _report_joint_status(joint):
+        if not joint or getattr(joint, "Status", "OK") == "OK":
+            return
+        message = joint.StatusMessage or translate("BIM", "The wall joint could not be solved.")
+        FreeCAD.Console.PrintError(message + "\n")
+        if getattr(joint, "Status", "") == "Conflict":
+            FreeCAD.Console.PrintMessage(
+                translate(
+                    "BIM",
+                    "Use Unjoin on the blocking relation, or edit the new joint's end or role properties.",
+                )
+                + "\n"
+            )
 
 
 class BIM_Join_Miter(BIM_Join):
@@ -162,7 +178,92 @@ class BIM_Join_Butt(BIM_Join):
         return True
 
 
+class BIM_Unjoin:
+    """The BIM_Unjoin command removes wall-joint relations."""
+
+    def IsActive(self):
+        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        return v
+
+    def Activated(self):
+        sel = FreeCADGui.Selection.getSelection()
+        joints = self._get_selected_joints(sel)
+        if not joints:
+            return
+
+        doc = joints[0].Document
+        doc.openTransaction(translate("BIM", "Unjoin objects"))
+        for joint in joints:
+            doc.removeObject(joint.Name)
+        doc.commitTransaction()
+        doc.recompute()
+
+    @staticmethod
+    def _get_selected_joints(sel):
+        if sel and all(ArchWallJoinUtils.is_wall_joint(obj) for obj in sel):
+            return list(sel)
+
+        if len(sel) == 2:
+            joint = ArchWallJoinUtils.find_existing_joint(sel[0].Document, sel[0], sel[1])
+            if joint:
+                return [joint]
+            FreeCAD.Console.PrintError(
+                translate("BIM", "The selected objects are not joined by a wall joint.") + "\n"
+            )
+            return []
+
+        FreeCAD.Console.PrintError(
+            translate(
+                "BIM",
+                "The BIM Unjoin command needs selected wall joint objects or 2 joined walls.",
+            )
+            + "\n"
+        )
+        return []
+
+    def GetResources(self):
+        return {
+            "Pixmap": "Arch_Remove",
+            "MenuText": QT_TRANSLATE_NOOP("BIM_Unjoin", "Unjoin"),
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "BIM_Unjoin",
+                "Removes the selected wall joint, or the wall joint between two selected walls.",
+            ),
+        }
+
+
+class BIM_EditWallJoint:
+    """The BIM_EditWallJoint command opens a task panel to edit a selected joint."""
+
+    def IsActive(self):
+        sel = FreeCADGui.Selection.getSelection()
+        v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        return v and len(sel) == 1 and ArchWallJoinUtils.is_wall_joint(sel[0])
+
+    def Activated(self):
+        sel = FreeCADGui.Selection.getSelection()
+        if len(sel) != 1 or not ArchWallJoinUtils.is_wall_joint(sel[0]):
+            FreeCAD.Console.PrintError(
+                translate("BIM", "The BIM Edit Wall Joint command needs 1 wall joint selected.")
+                + "\n"
+            )
+            return
+        FreeCADGui.ActiveDocument.setEdit(sel[0].Name, 0)
+
+    def GetResources(self):
+        return {
+            "Pixmap": "BIM_IfcProperties",
+            "MenuText": QT_TRANSLATE_NOOP("BIM_EditWallJoint", "Edit wall joint"),
+            "ToolTip": QT_TRANSLATE_NOOP(
+                "BIM_EditWallJoint",
+                "Opens a task panel to edit the selected wall joint relation.",
+            ),
+        }
+
+
 # Register the commands with FreeCAD's GUI
 FreeCADGui.addCommand("BIM_Join_Miter", BIM_Join_Miter())
 FreeCADGui.addCommand("BIM_Join_Tee", BIM_Join_Tee())
 FreeCADGui.addCommand("BIM_Join_Butt", BIM_Join_Butt())
+FreeCADGui.addCommand("BIM_Unjoin", BIM_Unjoin())
+FreeCADGui.addCommand("BIM_EditWallJoint", BIM_EditWallJoint())
