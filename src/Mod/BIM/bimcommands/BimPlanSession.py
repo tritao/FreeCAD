@@ -861,6 +861,10 @@ class PlanEditSession:
         if self.active_storey:
             self._set_active_object(self.active_storey)
 
+        # Keep the live view decorations and navigation model constrained every
+        # time the session reapplies the plan view, not just in helper tests.
+        self._apply_plan_navigation_profile()
+
         if fit and self.view:
             try:
                 self.view.fitAll()
@@ -900,6 +904,10 @@ class PlanEditSession:
                 wp._update_all(_hist_add=False)
             except RuntimeError:
                 pass
+
+        # Restore the viewer/navigation decorations after the plan override is
+        # fully unwound so the normal 3D state comes back coherently.
+        self._restore_navigation_state()
 
     def _capture_state(self):
         import WorkingPlane
