@@ -29,7 +29,7 @@ ends, computes the global cutting planes for each wall, and reports conflicts
 when multiple enabled joints claim the same wall end.
 """
 
-import DraftGeomUtils
+import ArchWallPath
 import FreeCAD
 
 
@@ -59,11 +59,13 @@ def find_existing_joint(doc, wall_a, wall_b):
 
 def get_join_baseline(wall):
     """Returns the supported straight baseline edge for a wall join."""
-    if not (wall and hasattr(wall, "Proxy") and hasattr(wall.Proxy, "get_baseline")):
-        return None
+    path = get_join_path(wall)
+    return path.edge if path else None
 
-    baseline = wall.Proxy.get_baseline(wall)
-    return _get_single_straight_edge(baseline)
+
+def get_join_path(wall):
+    """Returns the normalized supported path used by the wall-joint solver."""
+    return ArchWallPath.get_wall_path(wall)
 
 
 def solve_wall_joint(joint, include_conflicts=True):
@@ -138,16 +140,16 @@ def solve_wall_joint_inputs(
             wall_b=wall_b,
         )
 
-    baseline_a = get_join_baseline(wall_a)
-    baseline_b = get_join_baseline(wall_b)
-    if not baseline_a:
+    path_a = get_join_path(wall_a)
+    path_b = get_join_path(wall_b)
+    if not path_a:
         return _status_result(
             "UnsupportedBaseline",
             f"The joint only supports walls with a single straight baseline: {wall_a.Label}",
             wall_a=wall_a,
             wall_b=wall_b,
         )
-    if not baseline_b:
+    if not path_b:
         return _status_result(
             "UnsupportedBaseline",
             f"The joint only supports walls with a single straight baseline: {wall_b.Label}",
@@ -155,7 +157,7 @@ def solve_wall_joint_inputs(
             wall_b=wall_b,
         )
 
-    intersection, auto_end_a, auto_end_b = find_best_intersection(baseline_a, baseline_b)
+    intersection, auto_end_a, auto_end_b = find_best_intersection(path_a, path_b)
     if not intersection:
         return _status_result(
             "NoIntersection",
@@ -177,7 +179,7 @@ def solve_wall_joint_inputs(
     joint_type = _normalize_enum(joint_type, ("Miter", "Butt", "Tee"), "Miter")
     if joint_type == "Miter":
         plane_a, plane_b = calculate_miter_cutting_planes(
-            baseline_a, baseline_b, intersection, wall_a.Width.Value, wall_b.Width.Value
+            path_a, path_b, intersection, wall_a.Width.Value, wall_b.Width.Value
         )
         resolved_end_a = _resolve_end(auto_end_a, end_a)
         resolved_end_b = _resolve_end(auto_end_b, end_b)
@@ -195,11 +197,11 @@ def solve_wall_joint_inputs(
         butt_trimmed = _normalize_enum(butt_trimmed, ("Auto", "WallA", "WallB"), "Auto")
         if butt_trimmed in ("Auto", "WallB"):
             plane_a, plane_b = calculate_butt_cutting_planes(
-                baseline_a, baseline_b, intersection, wall_a.Width.Value, wall_b.Width.Value
+                path_a, path_b, intersection, wall_a.Width.Value, wall_b.Width.Value
             )
         else:
             plane_b, plane_a = calculate_butt_cutting_planes(
-                baseline_b, baseline_a, intersection, wall_b.Width.Value, wall_a.Width.Value
+                path_b, path_a, intersection, wall_b.Width.Value, wall_a.Width.Value
             )
         resolved_end_a = _resolve_end(auto_end_a, end_a)
         resolved_end_b = _resolve_end(auto_end_b, end_b)
@@ -214,7 +216,7 @@ def solve_wall_joint_inputs(
         return result
 
     tee_stem = _normalize_enum(tee_stem, ("Auto", "WallA", "WallB"), "Auto")
-    auto_stem = get_auto_tee_stem_role(baseline_a, baseline_b, intersection)
+    auto_stem = get_auto_tee_stem_role(path_a, path_b, intersection)
     if tee_stem == "Auto":
         tee_stem = auto_stem
 
@@ -225,9 +227,7 @@ def solve_wall_joint_inputs(
                 "resolved_end_a": resolved_end_a,
                 "resolved_end_b": None,
                 "plane_a": (
-                    calculate_tee_cutting_plane(
-                        wall_a, wall_b, baseline_a, baseline_b, intersection
-                    )
+                    calculate_tee_cutting_plane(wall_a, wall_b, path_a, path_b, intersection)
                     if resolved_end_a
                     else None
                 ),
@@ -243,7 +243,7 @@ def solve_wall_joint_inputs(
             "resolved_end_b": resolved_end_b,
             "plane_a": None,
             "plane_b": (
-                calculate_tee_cutting_plane(wall_b, wall_a, baseline_b, baseline_a, intersection)
+                calculate_tee_cutting_plane(wall_b, wall_a, path_b, path_a, intersection)
                 if resolved_end_b
                 else None
             ),
@@ -332,43 +332,20 @@ def get_trim_for_wall(solution, wall):
 
 def find_best_intersection(line1, line2):
     """Finds the intersection point of two baselines and the closest end on each line."""
-    edge1 = _get_single_straight_edge(line1)
-    edge2 = _get_single_straight_edge(line2)
-    if not edge1 or not edge2:
-        return None, None, None
-
-    intersections = DraftGeomUtils.findIntersection(edge1, edge2, infinite1=True, infinite2=True)
-    if not intersections:
-        return None, None, None
-
-    intersection_point = intersections[0]
-    dist_start1 = intersection_point.distanceToPoint(edge1.Vertexes[0].Point)
-    dist_end1 = intersection_point.distanceToPoint(edge1.Vertexes[-1].Point)
-    end_name1 = "Start" if dist_start1 < dist_end1 else "End"
-
-    dist_start2 = intersection_point.distanceToPoint(edge2.Vertexes[0].Point)
-    dist_end2 = intersection_point.distanceToPoint(edge2.Vertexes[-1].Point)
-    end_name2 = "Start" if dist_start2 < dist_end2 else "End"
-
-    return intersection_point, end_name1, end_name2
+    return ArchWallPath.find_path_intersection(line1, line2)
 
 
 def calculate_miter_cutting_planes(baseline1, baseline2, intersection, _width1, _width2):
     """Calculates the cutting planes for a miter wall joint."""
-    dir1 = baseline1.Vertexes[-1].Point.sub(baseline1.Vertexes[0].Point)
-    if intersection.distanceToPoint(baseline1.Vertexes[0].Point) > intersection.distanceToPoint(
-        baseline1.Vertexes[-1].Point
-    ):
-        dir1.multiply(-1)
+    path1 = ArchWallPath.coerce_wall_path(baseline1)
+    path2 = ArchWallPath.coerce_wall_path(baseline2)
+    if not path1 or not path2:
+        return None, None
 
-    dir2 = baseline2.Vertexes[-1].Point.sub(baseline2.Vertexes[0].Point)
-    if intersection.distanceToPoint(baseline2.Vertexes[0].Point) > intersection.distanceToPoint(
-        baseline2.Vertexes[-1].Point
-    ):
-        dir2.multiply(-1)
-
-    bisector_normal = (dir1.normalize() + dir2.normalize()).normalize()
-    axis_x = dir1.normalize()
+    dir1 = path1.tangent_towards(intersection)
+    dir2 = path2.tangent_towards(intersection)
+    bisector_normal = (dir1 + dir2).normalize()
+    axis_x = dir1
     axis_y = FreeCAD.Vector(0, 0, 1)
     axis_z = bisector_normal.cross(axis_y).normalize()
     rotation = FreeCAD.Rotation(axis_x, axis_y, axis_z, "ZXY")
@@ -380,15 +357,20 @@ def calculate_miter_cutting_planes(baseline1, baseline2, intersection, _width1, 
 
 def calculate_butt_cutting_planes(baseline1, baseline2, intersection, width1, width2):
     """Calculates the cutting planes for a butt wall joint."""
-    axis_x_2 = DraftGeomUtils.vec(baseline1)
+    path1 = ArchWallPath.coerce_wall_path(baseline1)
+    path2 = ArchWallPath.coerce_wall_path(baseline2)
+    if not path1 or not path2:
+        return None, None
+
+    axis_x_2 = path1.direction()
     axis_y_2 = FreeCAD.Vector(0, 0, 1)
     axis_z_2 = axis_x_2.cross(axis_y_2).normalize()
     rotation_2 = FreeCAD.Rotation(axis_x_2, axis_y_2, axis_z_2, "ZXY")
     plane2 = FreeCAD.Placement(intersection, rotation_2)
 
-    dir1 = DraftGeomUtils.vec(baseline1).normalize()
-    dir2 = DraftGeomUtils.vec(baseline2).normalize()
-    offset_dir = dir1.cross(FreeCAD.Vector(0, 0, 1))
+    dir1 = path1.direction()
+    dir2 = path2.direction()
+    offset_dir = path1.lateral_direction()
     if offset_dir.dot(dir2) < 0:
         offset_dir.multiply(-1)
 
@@ -403,13 +385,18 @@ def calculate_butt_cutting_planes(baseline1, baseline2, intersection, width1, wi
 
 def calculate_tee_cutting_plane(stem_wall, top_wall, stem_line, top_line, intersection):
     """Calculates the cutting plane for the stem wall in a tee joint."""
-    plane_normal = DraftGeomUtils.vec(stem_line).normalize()
+    stem_path = ArchWallPath.coerce_wall_path(stem_line, wall=stem_wall)
+    top_path = ArchWallPath.coerce_wall_path(top_line, wall=top_wall)
+    if not stem_path or not top_path:
+        return None
+
+    plane_normal = stem_path.direction()
     rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), plane_normal)
 
-    top_dir = DraftGeomUtils.vec(top_line).normalize()
-    offset_dir = top_dir.cross(FreeCAD.Vector(0, 0, 1))
+    top_dir = top_path.direction()
+    offset_dir = top_path.lateral_direction()
 
-    center_stem = (stem_line.Vertexes[0].Point + stem_line.Vertexes[-1].Point) / 2
+    center_stem = stem_path.center()
     vec_to_stem = center_stem - intersection
 
     if offset_dir.dot(vec_to_stem) < 0:
@@ -421,32 +408,14 @@ def calculate_tee_cutting_plane(stem_wall, top_wall, stem_line, top_line, inters
 
 
 def get_auto_tee_stem_role(baseline_a, baseline_b, intersection):
-    dist_to_end_a = min(
-        intersection.distanceToPoint(baseline_a.Vertexes[0].Point),
-        intersection.distanceToPoint(baseline_a.Vertexes[-1].Point),
-    )
-    dist_to_end_b = min(
-        intersection.distanceToPoint(baseline_b.Vertexes[0].Point),
-        intersection.distanceToPoint(baseline_b.Vertexes[-1].Point),
-    )
+    path_a = ArchWallPath.coerce_wall_path(baseline_a)
+    path_b = ArchWallPath.coerce_wall_path(baseline_b)
+    if not path_a or not path_b:
+        return "WallB"
+
+    dist_to_end_a = path_a.nearest_end_distance(intersection)
+    dist_to_end_b = path_b.nearest_end_distance(intersection)
     return "WallA" if dist_to_end_a < dist_to_end_b else "WallB"
-
-
-def _get_single_straight_edge(shape_or_edge):
-    if not shape_or_edge:
-        return None
-
-    edges = getattr(shape_or_edge, "Edges", None)
-    if edges is None and hasattr(shape_or_edge, "Curve") and hasattr(shape_or_edge, "Vertexes"):
-        edges = [shape_or_edge]
-    if not edges or len(edges) != 1:
-        return None
-
-    edge = edges[0]
-    curve = getattr(edge, "Curve", None)
-    if getattr(curve, "TypeId", "") != "Part::GeomLine":
-        return None
-    return edge
 
 
 def _normalize_enum(value, allowed, default):

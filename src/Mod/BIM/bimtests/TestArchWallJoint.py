@@ -25,6 +25,7 @@
 """App-level tests for BIM wall joint relations."""
 
 import Arch
+import ArchWallPath
 import Draft
 import FreeCAD as App
 import Part
@@ -170,6 +171,44 @@ class TestArchWallJoint(TestArchBase.TestArchBase):
         self.assertTrue(
             wall2.Shape.isValid(),
             "Second sketch-based wall became invalid after the butt relation.",
+        )
+
+    def test_get_wall_path_uses_global_endpoints_for_based_walls(self):
+        self.printTestMessage("Testing wall path normalization for based walls...")
+
+        wall = self._make_sketch_based_wall_between(App.Vector(0, 0, 0), App.Vector(1000, 0, 0))
+        wall.Placement = App.Placement(
+            App.Vector(250, 125, 0),
+            App.Rotation(App.Vector(0, 0, 1), 35),
+        )
+        self.document.recompute()
+
+        path = ArchWallPath.get_wall_path(wall)
+        endpoints = wall.Proxy.calc_endpoints(wall)
+
+        self.assertIsNotNone(path, "A one-edge based wall should produce a join path.")
+        self.assertTrue(
+            path.start_point.isEqual(endpoints[0], 1e-6),
+            "The path start point should match the wall's global start endpoint.",
+        )
+        self.assertTrue(
+            path.end_point.isEqual(endpoints[1], 1e-6),
+            "The path end point should match the wall's global end endpoint.",
+        )
+
+    def test_get_wall_path_rejects_unsupported_based_walls(self):
+        self.printTestMessage("Testing wall path rejection for unsupported based walls...")
+
+        wire = Draft.makeWire(
+            [App.Vector(0, 0, 0), App.Vector(1000, 0, 0), App.Vector(1000, 1000, 0)]
+        )
+        self.document.recompute()
+        wall = Arch.makeWall(wire, width=200, height=1500)
+        self.document.recompute()
+
+        self.assertIsNone(
+            ArchWallPath.get_wall_path(wall),
+            "Multi-edge based walls should be rejected by the join path adapter.",
         )
 
     def test_make_wall_joint_tee_on_sketch_based_walls(self):

@@ -563,9 +563,7 @@ class TestArchWall(TestArchBase.TestArchBase):
         """Straight line base walls should join the endpoint-editing API."""
         self.printTestMessage("Checking based wall stretch API on straight base...")
 
-        import Draft
-
-        base = Draft.make_line(App.Vector(100, 200, 0), App.Vector(2100, 200, 0))
+        base = Draft.makeLine(App.Vector(100, 200, 0), App.Vector(2100, 200, 0))
         wall = Arch.makeWall(base, width=200, height=1500)
         self.document.recompute()
 

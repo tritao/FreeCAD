@@ -51,6 +51,7 @@ import ArchCommands
 import ArchComponent
 import ArchSketchObject
 import ArchWallJoinUtils
+import ArchWallPath
 import Draft
 import DraftVecUtils
 
@@ -2012,35 +2013,13 @@ class _Wall(ArchComponent.Component):
 
         return base_faces, placement
 
-    def _get_supported_join_baseline(self, shape):
-        """Returns the single straight edge that can be used as a join baseline."""
-        if not shape or shape.isNull():
-            return None
-
-        edges = getattr(shape, "Edges", [])
-        if len(edges) != 1:
-            return None
-
-        edge = edges[0]
-        curve = getattr(edge, "Curve", None)
-        if getattr(curve, "TypeId", "") != "Part::GeomLine":
-            return None
-
-        return edge
-
     def get_baseline(self, obj):
         """
         Returns the wall baseline as a shape in global coordinates.
         Handles both based and baseless walls.
         """
-        import Part
-
-        if hasattr(obj, "Base") and obj.Base and hasattr(obj.Base, "Shape"):
-            return self._get_supported_join_baseline(obj.Base.Shape)
-        if hasattr(obj, "Proxy") and hasattr(obj.Proxy, "calc_endpoints"):
-            endpoints = obj.Proxy.calc_endpoints(obj)
-            return self._get_supported_join_baseline(Part.makeLine(endpoints[0], endpoints[1]))
-        return None
+        path = ArchWallPath.get_wall_path(obj)
+        return path.edge if path else None
 
     def process_endings(self, obj, base_solid, wall_placement):
         """
