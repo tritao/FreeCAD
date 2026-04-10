@@ -21,6 +21,8 @@
  *                                                                         *
  **************************************************************************/
 
+#include <array>
+#include <clocale>
 #include <filesystem>
 #include <boost/version.hpp>
 #include <boost/tokenizer.hpp>
@@ -31,16 +33,22 @@
 #include <QRegularExpression>
 #include <QRegularExpressionMatch>
 #include <QSettings>
+#include <unicode/locid.h>
 
 #include <LibraryVersions.h>
 
 #include <Base/Console.h>
 #include <Base/Exception.h>
 #include <Base/Interpreter.h>
+#include <Base/Tools.h>
 
 #include "Application.h"
 #include "Metadata.h"
 #include "ProgramInformation.h"
+
+#ifdef FC_OS_WIN32
+#include <windows.h>
+#endif
 
 using namespace App;
 namespace fs = std::filesystem;
@@ -52,6 +60,117 @@ std::ostream& operator<<(std::ostream& os, const QString& str)
     os << str.toStdString();
     return os;
 }
+
+QString territoryToString(const QLocale& locale)
+{
+#if QT_VERSION < QT_VERSION_CHECK(6, 6, 0)
+    return QLocale::countryToString(locale.country());
+#else
+    return QLocale::territoryToString(locale.territory());
+#endif
+}
+
+QString describeSeparator(const QString& separator)
+{
+    if (separator.isEmpty()) {
+        return QStringLiteral("<empty>");
+    }
+
+    QString value = separator;
+    if (separator == QStringLiteral(" ")) {
+        value = QStringLiteral("<space>");
+    }
+    else if (separator == QString(QChar(0x00A0))) {
+        value = QStringLiteral("<nbsp>");
+    }
+    else if (separator == QString(QChar(0x202F))) {
+        value = QStringLiteral("<nnbsp>");
+    }
+
+    QString codepoints;
+    for (const auto ch : separator) {
+        if (!codepoints.isEmpty()) {
+            codepoints += QLatin1Char(' ');
+        }
+        codepoints += QStringLiteral("U+%1")
+                          .arg(static_cast<uint>(ch.unicode()), 4, 16, QLatin1Char('0'))
+                          .toUpper();
+    }
+
+    return QStringLiteral("%1 (%2)").arg(value, codepoints);
+}
+
+QString formatQtLocale(const QLocale& locale)
+{
+    return QStringLiteral("%1/%2 (name=%3, bcp47=%4, decimal=%5, group=%6)")
+        .arg(QLocale::languageToString(locale.language()),
+             territoryToString(locale),
+             locale.name(),
+             locale.bcp47Name(),
+             describeSeparator(locale.decimalPoint()),
+             describeSeparator(locale.groupSeparator()));
+}
+
+QString getCLocaleName(const int category)
+{
+    if (const char* localeName = setlocale(category, nullptr)) {
+        return QString::fromLocal8Bit(localeName);
+    }
+
+    return QStringLiteral("<null>");
+}
+
+QString getEnvValue(const QProcessEnvironment& env, const QString& name)
+{
+    return env.contains(name) ? env.value(name) : QStringLiteral("<unset>");
+}
+
+QString getIcuDefaultLocale()
+{
+    const auto locale = icu::Locale::getDefault();
+    return QString::fromLatin1(locale.getName());
+}
+
+#ifdef FC_OS_WIN32
+QString getWindowsLocaleName(int (WINAPI* localeFn)(LPWSTR, int))
+{
+    std::array<wchar_t, LOCALE_NAME_MAX_LENGTH> buffer {};
+    const int written = localeFn(buffer.data(), static_cast<int>(buffer.size()));
+    if (written <= 0) {
+        return QStringLiteral("<unavailable>");
+    }
+
+    return QString::fromWCharArray(buffer.data());
+}
+
+QString getWindowsLocaleName(const LCID localeId)
+{
+    std::array<wchar_t, LOCALE_NAME_MAX_LENGTH> buffer {};
+    const int written = LCIDToLocaleName(localeId, buffer.data(), static_cast<int>(buffer.size()), 0);
+    if (written <= 0) {
+        return QStringLiteral("<unavailable>");
+    }
+
+    return QString::fromWCharArray(buffer.data());
+}
+
+QString getWindowsLocaleNameFromLangId(const LANGID languageId)
+{
+    return getWindowsLocaleName(MAKELCID(languageId, SORT_DEFAULT));
+}
+
+QString getWindowsLocaleInfo(PCWSTR localeName, const LCTYPE localeType)
+{
+    std::array<wchar_t, 32> buffer {};
+    const int written
+        = GetLocaleInfoEx(localeName, localeType, buffer.data(), static_cast<int>(buffer.size()));
+    if (written <= 0) {
+        return QStringLiteral("<unavailable>");
+    }
+
+    return QString::fromWCharArray(buffer.data());
+}
+#endif
 
 }
 
@@ -308,25 +427,68 @@ void ProgramInformation::getIfcInfo(std::stringstream& str)
 
 void ProgramInformation::getLocale(std::stringstream& str)
 {
-    QLocale loc;
-    str << "Locale: " << QLocale::languageToString(loc.language()) << "/"
-#if QT_VERSION < QT_VERSION_CHECK(6, 6, 0)
-        << QLocale::countryToString(loc.country())
-#else
-        << QLocale::territoryToString(loc.territory())
-#endif
-        << " (" << loc.name() << ")";
-    if (loc != QLocale::system()) {
-        loc = QLocale::system();
-        str << " [ OS: " << QLocale::languageToString(loc.language()) << "/"
-#if QT_VERSION < QT_VERSION_CHECK(6, 6, 0)
-            << QLocale::countryToString(loc.country())
-#else
-            << QLocale::territoryToString(loc.territory())
-#endif
-            << " (" << loc.name() << ") ]";
+    const QLocale currentLocale;
+    const QLocale systemLocale = QLocale::system();
+
+    str << "Locale: " << QLocale::languageToString(currentLocale.language()) << "/"
+        << territoryToString(currentLocale) << " (" << currentLocale.name() << ")";
+    if (currentLocale != systemLocale) {
+        str << " [ OS: " << QLocale::languageToString(systemLocale.language()) << "/"
+            << territoryToString(systemLocale) << " (" << systemLocale.name() << ") ]";
     }
     str << "\n";
+
+    const auto processEnv = QProcessEnvironment::systemEnvironment();
+
+    str << "Locale diagnostics:\n";
+    str << "  Qt current/default locale: " << formatQtLocale(currentLocale) << '\n';
+    str << "  Qt system locale: " << formatQtLocale(systemLocale) << '\n';
+    str << "  ICU default locale: " << getIcuDefaultLocale() << '\n';
+    str << "  Stored OS numeric locale: "
+        << QString::fromStdString(Base::Tools::getOperatingSystemNumericLocale()) << '\n';
+    str << "  C locale LC_ALL: " << getCLocaleName(LC_ALL) << '\n';
+    str << "  C locale LC_CTYPE: " << getCLocaleName(LC_CTYPE) << '\n';
+    str << "  C locale LC_NUMERIC: " << getCLocaleName(LC_NUMERIC) << '\n';
+    str << "  C locale LC_TIME: " << getCLocaleName(LC_TIME) << '\n';
+    str << "  C locale LC_MONETARY: " << getCLocaleName(LC_MONETARY) << '\n';
+
+    for (const auto& envName : std::array {
+             QStringLiteral("LANG"),
+             QStringLiteral("LANGUAGE"),
+             QStringLiteral("LC_ALL"),
+             QStringLiteral("LC_CTYPE"),
+             QStringLiteral("LC_NUMERIC"),
+             QStringLiteral("LC_TIME"),
+             QStringLiteral("MSYSTEM"),
+             QStringLiteral("MSYSTEM_PREFIX"),
+             QStringLiteral("MSYS2_PATH_TYPE"),
+             QStringLiteral("MINGW_PREFIX"),
+             QStringLiteral("PYTHONHOME"),
+             QStringLiteral("FC_PYTHONHOME"),
+         }) {
+        str << "  Env " << envName << ": " << getEnvValue(processEnv, envName) << '\n';
+    }
+
+#ifdef FC_OS_WIN32
+    str << "  Win user default locale: " << getWindowsLocaleName(GetUserDefaultLocaleName) << '\n';
+    str << "  Win system default locale: " << getWindowsLocaleName(GetSystemDefaultLocaleName)
+        << '\n';
+    str << "  Win thread locale: " << getWindowsLocaleName(GetThreadLocale()) << '\n';
+    str << "  Win user decimal separator: "
+        << getWindowsLocaleInfo(LOCALE_NAME_USER_DEFAULT, LOCALE_SDECIMAL) << '\n';
+    str << "  Win user group separator: "
+        << getWindowsLocaleInfo(LOCALE_NAME_USER_DEFAULT, LOCALE_STHOUSAND) << '\n';
+    str << "  Win system decimal separator: "
+        << getWindowsLocaleInfo(LOCALE_NAME_SYSTEM_DEFAULT, LOCALE_SDECIMAL) << '\n';
+    str << "  Win system group separator: "
+        << getWindowsLocaleInfo(LOCALE_NAME_SYSTEM_DEFAULT, LOCALE_STHOUSAND) << '\n';
+    str << "  Win user UI language: "
+        << getWindowsLocaleNameFromLangId(GetUserDefaultUILanguage()) << '\n';
+    str << "  Win system UI language: "
+        << getWindowsLocaleNameFromLangId(GetSystemDefaultUILanguage()) << '\n';
+    str << "  Win thread UI language: "
+        << getWindowsLocaleNameFromLangId(GetThreadUILanguage()) << '\n';
+#endif
 }
 
 void ProgramInformation::getVerboseAddOnsInfo(
