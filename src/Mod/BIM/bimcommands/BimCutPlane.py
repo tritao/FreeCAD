@@ -75,7 +75,7 @@ class Arch_CutPlane:
             )
             return
         panel = CutPlaneTaskPanel()
-        FreeCADGui.Control.showDialog(panel)
+        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
 
 
 class CutPlaneTaskPanel:

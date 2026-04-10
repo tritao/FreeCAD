@@ -71,7 +71,7 @@ class VPPostGlyphFilter:
         taskd = task_post_glyphfilter._TaskPanel(vobj)
 
         # show it
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
 
         return True
 

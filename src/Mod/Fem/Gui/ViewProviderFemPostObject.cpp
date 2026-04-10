@@ -911,14 +911,20 @@ bool ViewProviderFemPostObject::setEdit(int ModNum)
 
         // start the edit dialog
         if (postDlg) {
-            Gui::Control().showDialog(postDlg);
+            Gui::Control().showDialog(
+                postDlg,
+                Gui::Application::Instance->activeDocument()->getDocument()
+            );
         }
         else {
             postDlg = new TaskDlgPost(this);
             setupTaskDialog(postDlg);
             postDlg->connectSlots();
             postDlg->processCollapsedWidgets();
-            Gui::Control().showDialog(postDlg);
+            Gui::Control().showDialog(
+                postDlg,
+                Gui::Application::Instance->activeDocument()->getDocument()
+            );
         }
 
         return true;

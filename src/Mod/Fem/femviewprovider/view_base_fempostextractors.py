@@ -86,7 +86,7 @@ class VPPostExtractor:
         taskd = task_post_extractor._ExtractorTaskPanel(vobj.Object)
 
         # show it
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
 
         return True
 

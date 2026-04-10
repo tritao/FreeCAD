@@ -25,6 +25,8 @@
 
 #include <Gui/BitmapFactory.h>
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 
 #include "TaskDlgPathCompound.h"
 
@@ -39,7 +41,7 @@ bool ViewProviderPathCompound::setEdit(int ModNum)
 {
     Q_UNUSED(ModNum);
     Gui::TaskView::TaskDialog* dlg = new TaskDlgPathCompound(this);
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
     return true;
 }
 

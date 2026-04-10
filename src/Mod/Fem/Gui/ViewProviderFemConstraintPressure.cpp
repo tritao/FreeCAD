@@ -29,6 +29,8 @@
 
 #include "Mod/Fem/App/FemConstraintPressure.h"
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 
 #include "TaskFemConstraintPressure.h"
 #include "ViewProviderFemConstraintPressure.h"
@@ -53,7 +55,10 @@ bool ViewProviderFemConstraintPressure::setEdit(int ModNum)
         Gui::Control().closeDialog();
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(new TaskDlgFemConstraintPressure(this));
+        Gui::Control().showDialog(
+            new TaskDlgFemConstraintPressure(this),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
 
         return true;
     }

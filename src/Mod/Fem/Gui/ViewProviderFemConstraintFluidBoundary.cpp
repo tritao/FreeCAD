@@ -30,6 +30,8 @@
 
 
 #include "Gui/Control.h"
+#include "Gui/Document.h"
+#include "Gui/Application.h"
 #include <Mod/Fem/App/FemConstraintFluidBoundary.h>
 
 #include "FemGuiTools.h"
@@ -55,7 +57,10 @@ bool ViewProviderFemConstraintFluidBoundary::setEdit(int ModNum)
         Gui::Control().closeDialog();
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(new TaskDlgFemConstraintFluidBoundary(this));
+        Gui::Control().showDialog(
+            new TaskDlgFemConstraintFluidBoundary(this),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
 
         return true;
     }

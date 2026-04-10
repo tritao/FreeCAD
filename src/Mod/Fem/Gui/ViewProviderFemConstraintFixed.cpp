@@ -22,6 +22,8 @@
  ***************************************************************************/
 
 #include "Gui/Control.h"
+#include "Gui/Document.h"
+#include "Gui/Application.h"
 #include <Mod/Fem/App/FemConstraintFixed.h>
 
 #include "TaskFemConstraintFixed.h"
@@ -47,7 +49,10 @@ bool ViewProviderFemConstraintFixed::setEdit(int ModNum)
         Gui::Control().closeDialog();
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(new TaskDlgFemConstraintFixed(this));
+        Gui::Control().showDialog(
+            new TaskDlgFemConstraintFixed(this),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
 
         return true;
     }

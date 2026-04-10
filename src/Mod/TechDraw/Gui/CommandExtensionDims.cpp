@@ -39,6 +39,7 @@
 # include <Base/Tools.h>
 # include <Gui/Action.h>
 # include <Gui/Application.h>
+# include <Gui/Document.h>
 # include <Gui/BitmapFactory.h>
 # include <Gui/Command.h>
 # include <Gui/Control.h>
@@ -2276,7 +2277,7 @@ void CmdTechDrawExtensionCustomizeFormat::activated(int iMsg)
     auto object = selected[0].getObject();
     if (object->isDerivedFrom<TechDraw::DrawViewDimension>() ||
         object->isDerivedFrom<TechDraw::DrawViewBalloon>())
-        Gui::Control().showDialog(new TaskDlgCustomizeFormat(object));
+        Gui::Control().showDialog(new TaskDlgCustomizeFormat(object), Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdTechDrawExtensionCustomizeFormat::isActive()

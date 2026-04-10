@@ -214,7 +214,6 @@ private:
     QString currentWorkbenchLabel() const;
     QString currentDocumentLabel() const;
     QString currentSelectionLabel() const;
-    void slotActiveDocument(const Gui::Document&);
     void slotActiveDocument(const App::Document&);
     void slotInEdit(const Gui::ViewProviderDocumentObject&);
     void slotResetEdit(const Gui::ViewProviderDocumentObject&);

@@ -71,7 +71,7 @@ class ViewProviderDraftHatch:
         self.taskd.form.Scale.setValue(vobj.Object.Scale)
         self.taskd.form.Rotation.setValue(vobj.Object.Rotation)
         self.taskd.form.Translate.setChecked(vobj.Object.Translate)
-        Gui.Control.showDialog(self.taskd)
+        Gui.Control.showDialog(self.taskd, Gui.ActiveDocument)
         return True
 
     def unsetEdit(self, vobj, mode):

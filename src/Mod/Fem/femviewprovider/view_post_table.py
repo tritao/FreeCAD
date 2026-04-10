@@ -246,7 +246,7 @@ class VPPostTable(view_base_fempostvisualization.VPPostVisualization):
         taskd = task_post_table._TaskPanel(vobj)
 
         # show it
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
 
         return True
 

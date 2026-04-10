@@ -1571,7 +1571,7 @@ class _ViewProviderSite:
             return None
 
         taskd = SiteTaskPanel(vobj)
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True
 
     def unsetEdit(self, vobj, mode):

@@ -105,7 +105,7 @@ class VPBaseFemObject:
                     obj.ViewObject.hide()
         # show task panel
         task = TaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(task)
+        FreeCADGui.Control.showDialog(task, FreeCADGui.ActiveDocument)
         return True
 
     def unsetEdit(self, vobj, mode=0):

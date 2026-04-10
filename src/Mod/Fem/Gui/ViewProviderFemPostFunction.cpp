@@ -167,13 +167,19 @@ bool ViewProviderFemPostFunction::setEdit(int ModNum)
 
         // start the edit dialog
         if (postDlg) {
-            Gui::Control().showDialog(postDlg);
+            Gui::Control().showDialog(
+                postDlg,
+                Gui::Application::Instance->activeDocument()->getDocument()
+            );
         }
         else {
             postDlg = new TaskDlgPost(this);
             auto panel = new TaskPostFunction(this);
             postDlg->addTaskBox(panel->windowIcon().pixmap(32), panel);
-            Gui::Control().showDialog(postDlg);
+            Gui::Control().showDialog(
+                postDlg,
+                Gui::Application::Instance->activeDocument()->getDocument()
+            );
         }
 
         return true;

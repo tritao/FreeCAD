@@ -59,7 +59,7 @@ class VPMeshNetgen(view_base_femobject.VPBaseFemObject):
         self.ViewObject.show()
         # show task panel
         taskd = task_mesh_netgen._TaskPanel(self.Object)
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True
 
     def doubleClicked(self, vobj):

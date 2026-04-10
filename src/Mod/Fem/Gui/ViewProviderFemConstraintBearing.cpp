@@ -28,6 +28,8 @@
 
 
 #include "Gui/Control.h"
+#include "Gui/Document.h"
+#include "Gui/Application.h"
 #include "FemGuiTools.h"
 #include "TaskFemConstraintBearing.h"
 #include "ViewProviderFemConstraintBearing.h"
@@ -53,7 +55,10 @@ bool ViewProviderFemConstraintBearing::setEdit(int ModNum)
         Gui::Control().closeDialog();
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(new TaskDlgFemConstraintBearing(this));
+        Gui::Control().showDialog(
+            new TaskDlgFemConstraintBearing(this),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
 
         return true;
     }

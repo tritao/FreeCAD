@@ -62,7 +62,7 @@ class ViewProviderTube:
 
     def setEdit(self, viewObject, mode):
         if mode == 0:
-            FreeCADGui.Control.showDialog(TaskTubeUI(viewObject))
+            FreeCADGui.Control.showDialog(TaskTubeUI(viewObject), FreeCADGui.ActiveDocument)
             return True
 
     def unsetEdit(self, viewObject, mode):

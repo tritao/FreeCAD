@@ -25,6 +25,8 @@
 
 
 #include "Gui/Control.h"
+#include "Gui/Document.h"
+#include "Gui/Application.h"
 #include <Mod/Fem/App/FemConstraintRigidBody.h>
 
 #include "TaskFemConstraintRigidBody.h"
@@ -51,7 +53,10 @@ bool ViewProviderFemConstraintRigidBody::setEdit(int ModNum)
         Gui::Control().closeDialog();
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(new TaskDlgFemConstraintRigidBody(this));
+        Gui::Control().showDialog(
+            new TaskDlgFemConstraintRigidBody(this),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
 
         return true;
     }

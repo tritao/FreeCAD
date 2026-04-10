@@ -58,7 +58,7 @@ class ViewProxy(equationbase.BaseViewProxy):
 
     def setEdit(self, vobj, mode=0):
         task = _TaskPanel(vobj.Object)
-        Gui.Control.showDialog(task)
+        Gui.Control.showDialog(task, Gui.ActiveDocument)
 
     def unsetEdit(self, vobj, mode=0):
         Gui.Control.closeDialog()

@@ -1738,7 +1738,7 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
             return None
 
         taskd = StructureTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True
 
 
