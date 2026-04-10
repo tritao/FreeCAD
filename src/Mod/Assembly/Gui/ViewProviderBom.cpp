@@ -59,7 +59,9 @@ bool ViewProviderBom::doubleClicked()
                                 "obj = App.getDocument('"
         + doc_name + "').getObject('" + obj_name
         + "')\n"
-          "Gui.Control.showDialog(CommandCreateBom.TaskAssemblyCreateBom(obj))";
+          "Gui.Control.showDialog(CommandCreateBom.TaskAssemblyCreateBom(obj), "
+          "Gui.getDocument('"
+        + doc_name + "'))";
 
     Gui::Command::runCommand(Gui::Command::App, pythonCommand.c_str());
 

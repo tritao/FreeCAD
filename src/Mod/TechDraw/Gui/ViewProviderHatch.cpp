@@ -29,6 +29,7 @@
 #include <App/DocumentObject.h>
 #include <Base/UnitsApi.h>
 #include <Gui/Application.h>
+#include <Gui/Document.h>
 #include <Gui/Control.h>
 
 #include <Mod/TechDraw/App/DrawHatch.h>
@@ -82,7 +83,7 @@ bool ViewProviderHatch::setEdit(int ModNum)
 
     // clear the selection (convenience)
     Gui::Selection().clearSelection();
-    Gui::Control().showDialog(new TaskDlgHatch(this));
+    Gui::Control().showDialog(new TaskDlgHatch(this), Gui::Application::Instance->activeDocument()->getDocument());
     return true;
 }
 

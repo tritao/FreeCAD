@@ -35,7 +35,8 @@
 namespace App
 {
 class DocumentObject;
-}
+class Document;
+}  // namespace App
 
 namespace Gui
 {
@@ -123,14 +124,10 @@ public:
         return autoCloseDeletedDocument;
     }
 
-    const std::string& getDocumentName() const
-    {
-        return documentName;
-    }
-    void setDocumentName(const std::string& doc)
-    {
-        documentName = doc;
-    }
+    App::Document* getDocument() const;
+    void setDocument(App::Document* doc);
+    const std::string& getDocumentName() const;
+    void setDocumentName(const std::string& doc);
 
     /// Defines whether a task dialog must be closed if the associated view
     /// is deleted.

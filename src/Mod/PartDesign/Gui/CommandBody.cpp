@@ -359,7 +359,15 @@ void CmdPartDesignBody::activated(int iMsg)
                     if (!dlg) {
                         Gui::Selection().clearSelection();
                         Gui::Control().showDialog(
-                            new PartDesignGui::TaskDlgFeaturePick(planes, status, accepter, worker, true, quitter)
+                            new PartDesignGui::TaskDlgFeaturePick(
+                                planes,
+                                status,
+                                accepter,
+                                worker,
+                                true,
+                                quitter
+                            ),
+                            Gui::Application::Instance->activeDocument()->getDocument()
                         );
                     }
                 }

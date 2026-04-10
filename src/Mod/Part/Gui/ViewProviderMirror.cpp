@@ -316,7 +316,10 @@ bool ViewProviderFillet::setEdit(int ModNum)
             return false;
         }
         Part::Fillet* fillet = getObject<Part::Fillet>();
-        Gui::Control().showDialog(new PartGui::TaskFilletEdges(fillet));
+        Gui::Control().showDialog(
+            new PartGui::TaskFilletEdges(fillet),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
         return true;
     }
     else {
@@ -437,7 +440,10 @@ bool ViewProviderChamfer::setEdit(int ModNum)
             return false;
         }
         Part::Chamfer* chamfer = getObject<Part::Chamfer>();
-        Gui::Control().showDialog(new PartGui::TaskChamferEdges(chamfer));
+        Gui::Control().showDialog(
+            new PartGui::TaskChamferEdges(chamfer),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
         return true;
     }
     else {

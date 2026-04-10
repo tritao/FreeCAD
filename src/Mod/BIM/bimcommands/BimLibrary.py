@@ -104,7 +104,7 @@ class BIM_Library:
                 pr.SetString("destination", addondir.replace("\\", "/"))
                 libok = True
         panel = BIM_Library_TaskPanel(offlinemode=libok)
-        task = FreeCADGui.Control.showDialog(panel)
+        task = FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
         task.setDocumentName(panel.mainDocName)
         task.setAutoCloseOnDeletedDocument(True)
 
@@ -548,12 +548,20 @@ class BIM_Library_TaskPanel:
             FreeCAD.closeDocument(self.previewDocName)
         FreeCAD.ActiveDocument.recompute()
 
-    def insert(self, index=None):
+    def _get_main_document(self):
 
-        # check if the main document is open
         try:
-            FreeCAD.setActiveDocument(self.mainDocName)
-        except:
+            gui_doc = getattr(FreeCADGui, "ActiveDocument", None)
+            if gui_doc and getattr(gui_doc, "Document", None):
+                doc = gui_doc.Document
+                if doc.Name != self.previewDocName:
+                    self.mainDocName = doc.Name
+                    return doc
+        except Exception:
+            pass
+        try:
+            return FreeCAD.getDocument(self.mainDocName)
+        except Exception:
             FreeCAD.Console.PrintError(
                 translate(
                     "BIM",
@@ -561,7 +569,15 @@ class BIM_Library_TaskPanel:
                 )
                 + "\n"
             )
+            return None
+
+    def insert(self, index=None):
+
+        # check if the main document is open
+        doc = self._get_main_document()
+        if not doc:
             return
+        FreeCAD.setActiveDocument(doc.Name)
         if not index:
             index = self.form.tree.selectedIndexes()
             if not index:

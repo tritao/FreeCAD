@@ -880,7 +880,7 @@ class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
             return None
 
         taskd = SpaceTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True
 
     def getDisplayModes(self, vobj):

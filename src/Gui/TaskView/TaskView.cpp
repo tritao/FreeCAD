@@ -32,6 +32,8 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include <unordered_map>
+
 #include <FCConfig.h>
 
 #include <App/Document.h>
@@ -54,6 +56,27 @@
 
 using namespace Gui::TaskView;
 namespace sp = std::placeholders;
+
+namespace
+{
+std::unordered_map<Gui::TaskView::TaskView*, Gui::TaskView::Connection>& activeDocumentConnections()
+{
+    static std::unordered_map<Gui::TaskView::TaskView*, Gui::TaskView::Connection> connections;
+    return connections;
+}
+
+void disconnectActiveDocumentConnection(Gui::TaskView::TaskView* taskView)
+{
+    auto& connections = activeDocumentConnections();
+    auto it = connections.find(taskView);
+    if (it == connections.end()) {
+        return;
+    }
+
+    it->second.disconnect();
+    connections.erase(it);
+}
+}  // namespace
 
 
 //**************************************************************************
@@ -284,8 +307,17 @@ TaskView::TaskView(QWidget* parent)
     Gui::Selection().Attach(this);
 
     // NOLINTBEGIN
-    connectApplicationActiveDocument = App::GetApplication().signalActiveDocument.connect(
-        std::bind(&Gui::TaskView::TaskView::slotActiveDocument, this, sp::_1)
+    activeDocumentConnections().insert_or_assign(
+        this,
+        Gui::Application::Instance->signalActiveDocument.connect(
+            std::bind(
+                static_cast<void (Gui::TaskView::TaskView::*)(const Gui::Document&)>(
+                    &Gui::TaskView::TaskView::slotActiveDocument
+                ),
+                this,
+                sp::_1
+            )
+        )
     );
     connectApplicationDeleteDocument = App::GetApplication().signalDeleteDocument.connect(
         std::bind(&Gui::TaskView::TaskView::slotDeletedDocument, this, sp::_1)
@@ -318,7 +350,7 @@ TaskView::TaskView(QWidget* parent)
 }
 TaskView::~TaskView()
 {
-    connectApplicationActiveDocument.disconnect();
+    disconnectActiveDocumentConnection(this);
     connectApplicationDeleteDocument.disconnect();
     connectApplicationClosedView.disconnect();
     connectApplicationUndoDocument.disconnect();
@@ -494,6 +526,11 @@ void TaskView::slotActiveDocument(const App::Document& doc)
         QTimer::singleShot(100, this, &TaskView::updateWatcher);
     }
 }
+
+void TaskView::slotActiveDocument(const Gui::Document& doc)
+{
+    slotActiveDocument(*doc.getDocument());
+}
 void TaskView::slotInEdit(const Gui::ViewProviderDocumentObject& vp)
 {
     App::Document* doc = vp.getDocument()->getDocument();
@@ -634,6 +671,7 @@ bool TaskView::showDialog(TaskDialog* dlg, App::Document* doc)
 
     // set as active Dialog
     outInfo.ActiveDialog = dlg;
+    outInfo.ActiveDialog->setDocument(doc);
     outInfo.ActiveDialog->open();
 
     // clang-format off

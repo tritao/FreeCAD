@@ -33,6 +33,8 @@
 #include <App/DocumentObject.h>
 #include <Gui/ActionFunction.h>
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 #include <Gui/MainWindow.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/ViewProviderDocumentObject.h>
@@ -104,7 +106,8 @@ bool ViewProviderBalloon::setEdit(int ModNum)
     Gui::Selection().clearSelection();
     auto qgivBalloon(dynamic_cast<QGIViewBalloon*>(getQView()));
     if (qgivBalloon) {
-        Gui::Control().showDialog(new TaskDlgBalloon(qgivBalloon, this));
+        Gui::Control().showDialog(new TaskDlgBalloon(qgivBalloon, this),
+                                  Gui::Application::Instance->activeDocument()->getDocument());
     }
     return true;
 }

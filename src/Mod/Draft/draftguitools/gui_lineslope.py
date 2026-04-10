@@ -123,7 +123,7 @@ class LineSlope(gui_base.GuiCommandNeedsSelection):
         # when we press the "OK" button.
         # Then we must show the container widget.
         taskwidget.accept = self.accept
-        Gui.Control.showDialog(taskwidget)
+        Gui.Control.showDialog(taskwidget, Gui.ActiveDocument)
 
     def accept(self):
         """Execute when clicking the OK button or pressing Enter key.

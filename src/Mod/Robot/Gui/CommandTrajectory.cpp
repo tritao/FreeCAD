@@ -392,7 +392,8 @@ void CmdRobotEdge2Trac::activated(int)
        App::Property *prop = &(dynamic_cast<Robot::Edge2TracObject *>(obj)->Source);
 
        Gui::TaskView::TaskDialog* dlg = new TaskDlgEdge2Trac(dynamic_cast<Robot::Edge2TracObject
-       *>(obj)); Gui::Control().showDialog(dlg);*/
+       *>(obj)); Gui::Control().showDialog(dlg,
+       Gui::Application::Instance->activeDocument()->getDocument());*/
 
 
     Gui::SelectionFilter ObjectFilter("SELECT Robot::Edge2TracObject COUNT 1");

@@ -643,7 +643,7 @@ class _ViewProviderPanel(ArchComponent.ViewProviderComponent):
     def setEdit(self, vobj, mode):
         if mode != 0:
             return None
-        FreeCADGui.Control.showDialog(PanelTaskPanel(vobj.Object))
+        FreeCADGui.Control.showDialog(PanelTaskPanel(vobj.Object), FreeCADGui.ActiveDocument)
         return True
 
 
@@ -1325,7 +1325,7 @@ class ViewProviderPanelSheet(Draft.ViewProviderDraft):
 
         taskd = SheetTaskPanel(vobj.Object)
         taskd.update()
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True
 
     def unsetEdit(self, vobj, mode):

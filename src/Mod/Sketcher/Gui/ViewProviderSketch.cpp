@@ -3622,7 +3622,7 @@ bool ViewProviderSketch::setEdit(int ModNum)
         box.setDefaultButton(QMessageBox::Yes);
         switch (box.exec()) {
             case QMessageBox::Yes:
-                Gui::Control().showDialog(new TaskSketcherValidation(getSketchObject()));
+                Gui::Control().showDialog(new TaskSketcherValidation(getSketchObject()), Gui::Application::Instance->activeDocument()->getDocument());
                 break;
             default:
                 break;
@@ -3710,7 +3710,7 @@ bool ViewProviderSketch::setEdit(int ModNum)
 
     connectionToolWidget = sketchDlg->registerToolWidgetChanged(std::bind(&SketcherGui::ViewProviderSketch::slotToolWidgetChanged, this, sp::_1));
 
-    Gui::Control().showDialog(sketchDlg);
+    Gui::Control().showDialog(sketchDlg, Gui::Application::Instance->activeDocument()->getDocument());
 
     // This call to the solver is needed to initialize the DoF and solve time controls
     // The false parameter indicates that the geometry of the SketchObject shall not be updateData

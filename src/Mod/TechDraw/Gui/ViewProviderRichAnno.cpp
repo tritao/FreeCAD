@@ -24,6 +24,8 @@
 
 #include <App/DocumentObject.h>
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 #include <Gui/Selection/Selection.h>
 
 #include <Mod/TechDraw/App/DrawRichAnno.h>
@@ -81,7 +83,7 @@ bool ViewProviderRichAnno::setEdit(int ModNum)
 
     // clear the selection (convenience)
     Gui::Selection().clearSelection();
-    Gui::Control().showDialog(new TaskDlgRichAnno(this));
+    Gui::Control().showDialog(new TaskDlgRichAnno(this), Gui::Application::Instance->activeDocument()->getDocument());
     return true;
 }
 

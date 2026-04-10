@@ -155,7 +155,8 @@ bool ViewProviderDimension::setEdit(int ModNum)
     Gui::Selection().clearSelection();
     auto qgivDimension(dynamic_cast<QGIViewDimension*>(getQView()));
     if (qgivDimension) {
-        Gui::Control().showDialog(new TaskDlgDimension(qgivDimension, this));
+        Gui::Control().showDialog(new TaskDlgDimension(qgivDimension, this),
+                                  getViewObject()->getDocument());
     }
     return true;
 }

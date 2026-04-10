@@ -92,7 +92,7 @@ class CommandInsertLink:
             return
         view = Gui.activeDocument().activeView()
         self.panel = TaskAssemblyInsertLink(assembly, view)
-        Gui.Control.showDialog(self.panel)
+        Gui.Control.showDialog(self.panel, Gui.ActiveDocument)
 
 
 class InsertLinkObserver:

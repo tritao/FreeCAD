@@ -229,7 +229,7 @@ void CmdPartPrimitives::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
     PartGui::TaskPrimitives* dlg = new PartGui::TaskPrimitives();
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdPartPrimitives::isActive()
@@ -1413,7 +1413,7 @@ void CmdPartBoolean::activated(int iMsg)
     if (!dlg) {
         dlg = new PartGui::TaskBooleanOperation();
     }
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdPartBoolean::isActive()
@@ -1441,7 +1441,10 @@ CmdPartExtrude::CmdPartExtrude()
 void CmdPartExtrude::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new PartGui::TaskExtrusion());
+    Gui::Control().showDialog(
+        new PartGui::TaskExtrusion(),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
 }
 
 bool CmdPartExtrude::isActive()
@@ -1470,7 +1473,10 @@ void CmdPartScale::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    Gui::Control().showDialog(new PartGui::TaskScale());
+    Gui::Control().showDialog(
+        new PartGui::TaskScale(),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
 }
 
 bool CmdPartScale::isActive()
@@ -1557,7 +1563,10 @@ CmdPartRevolve::CmdPartRevolve()
 void CmdPartRevolve::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new PartGui::TaskRevolution());
+    Gui::Control().showDialog(
+        new PartGui::TaskRevolution(),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
 }
 
 bool CmdPartRevolve::isActive()
@@ -1585,7 +1594,10 @@ CmdPartFillet::CmdPartFillet()
 void CmdPartFillet::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new PartGui::TaskFilletEdges(nullptr));
+    Gui::Control().showDialog(
+        new PartGui::TaskFilletEdges(nullptr),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
 }
 
 bool CmdPartFillet::isActive()
@@ -1613,7 +1625,10 @@ CmdPartChamfer::CmdPartChamfer()
 void CmdPartChamfer::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new PartGui::TaskChamferEdges(nullptr));
+    Gui::Control().showDialog(
+        new PartGui::TaskChamferEdges(nullptr),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
 }
 
 bool CmdPartChamfer::isActive()
@@ -1641,7 +1656,10 @@ CmdPartMirror::CmdPartMirror()
 void CmdPartMirror::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new PartGui::TaskMirroring());
+    Gui::Control().showDialog(
+        new PartGui::TaskMirroring(),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
 }
 
 bool CmdPartMirror::isActive()
@@ -1678,7 +1696,7 @@ void CmdPartCrossSections::activated(int iMsg)
         }
         dlg = new PartGui::TaskCrossSections(bbox);
     }
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdPartCrossSections::isActive()
@@ -1709,7 +1727,10 @@ CmdPartBuilder::CmdPartBuilder()
 void CmdPartBuilder::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new PartGui::TaskShapeBuilder());
+    Gui::Control().showDialog(
+        new PartGui::TaskShapeBuilder(),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
 }
 
 bool CmdPartBuilder::isActive()
@@ -1738,7 +1759,10 @@ CmdPartLoft::CmdPartLoft()
 void CmdPartLoft::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new PartGui::TaskLoft());
+    Gui::Control().showDialog(
+        new PartGui::TaskLoft(),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
 }
 
 bool CmdPartLoft::isActive()
@@ -1767,7 +1791,10 @@ CmdPartSweep::CmdPartSweep()
 void CmdPartSweep::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new PartGui::TaskSweep());
+    Gui::Control().showDialog(
+        new PartGui::TaskSweep(),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
 }
 
 bool CmdPartSweep::isActive()
@@ -2326,7 +2353,7 @@ void CmdCheckGeometry::activated(int iMsg)
     if (!dlg) {
         dlg = new PartGui::TaskCheckGeometryDialog();
     }
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdCheckGeometry::isActive()
@@ -2436,7 +2463,7 @@ void CmdPartProjectionOnSurface::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
     auto dlg = new PartGui::TaskProjectOnSurface(getDocument(nullptr));
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdPartProjectionOnSurface::isActive()

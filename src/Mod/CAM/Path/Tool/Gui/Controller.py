@@ -96,7 +96,7 @@ class ViewProvider:
                 vobj = self.vobj
             FreeCADGui.Control.closeDialog()
             taskd = TaskPanel(vobj.Object)
-            FreeCADGui.Control.showDialog(taskd)
+            FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
             taskd.setupUi()
 
             FreeCAD.ActiveDocument.recompute()

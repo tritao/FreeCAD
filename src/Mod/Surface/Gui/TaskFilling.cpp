@@ -83,10 +83,10 @@ bool ViewProviderFilling::setEdit(int ModNum)
             if (tDlg) {
                 tDlg->setEditedObject(obj);
             }
-            Gui::Control().showDialog(dlg);
+            Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
         }
         else {
-            Gui::Control().showDialog(new TaskFilling(this, obj));
+            Gui::Control().showDialog(new TaskFilling(this, obj), obj->getDocument());
         }
         return true;
     }

@@ -700,7 +700,9 @@ void ViewProviderAssembly::doubleClickedIn3dView()
                           "obj = App.getDocument('"
             + doc_name + "').getObject('" + obj_name
             + "')\n"
-              "Gui.Control.showDialog(JointObject.TaskAssemblyCreateJoint(0, obj))";
+              "Gui.Control.showDialog(JointObject.TaskAssemblyCreateJoint(0, obj), "
+              "Gui.getDocument('"
+            + doc_name + "'))";
 
         Gui::Command::runCommand(Gui::Command::App, cmd.c_str());
     }

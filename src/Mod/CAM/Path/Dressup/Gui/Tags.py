@@ -488,7 +488,7 @@ class PathDressupTagViewProvider:
     def setupTaskPanel(self, panel):
         self.panel = panel
         FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(panel)
+        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
         panel.setupUi()
         FreeCADGui.Selection.addSelectionGate(self)
         FreeCADGui.Selection.addObserver(self)

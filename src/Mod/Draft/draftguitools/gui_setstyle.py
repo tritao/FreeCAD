@@ -72,7 +72,7 @@ class Draft_SetStyle:
 
     def Activated(self):
 
-        Gui.Control.showDialog(Draft_SetStyle_TaskPanel())
+        Gui.Control.showDialog(Draft_SetStyle_TaskPanel(), Gui.ActiveDocument)
 
 
 class Draft_SetStyle_TaskPanel:

@@ -802,7 +802,7 @@ class ViewProviderReport:
             if FreeCAD.GuiUp:
                 panel = ReportTaskPanel(vobj.Object)
                 try:
-                    FreeCADGui.Control.showDialog(panel)
+                    FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
                 except RuntimeError as e:
                     # Avoid raising into the caller (e.g., double click handler)
                     FreeCAD.Console.PrintError(f"Could not open Report editor: {e}\n")
@@ -848,7 +848,7 @@ class ViewProviderReport:
 class ReportTaskPanel:
     """Multi-statement task panel for editing a Report.
 
-    Exposes `self.form` as a QWidget so it works with FreeCADGui.Control.showDialog(panel).
+    Exposes `self.form` as a QWidget so it works with FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument).
     Implements accept() and reject() to save or discard changes.
     """
 

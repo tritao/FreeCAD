@@ -52,7 +52,8 @@ class Draft_Hatch(gui_base.GuiCommandNeedsSelection):
 
         if FreeCADGui.Selection.getSelection():
             task = FreeCADGui.Control.showDialog(
-                Draft_Hatch_TaskPanel(FreeCADGui.Selection.getSelection()[0])
+                Draft_Hatch_TaskPanel(FreeCADGui.Selection.getSelection()[0]),
+                FreeCADGui.ActiveDocument,
             )
             task.setDocumentName(FreeCADGui.ActiveDocument.Document.Name)
             task.setAutoCloseOnDeletedDocument(True)

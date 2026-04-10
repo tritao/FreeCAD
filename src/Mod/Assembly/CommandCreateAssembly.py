@@ -164,7 +164,7 @@ class CommandActivateAssembly:
         elif len(assemblies) > 1:
             # If there are multiple, show a task panel to let the user choose
             self.task_panel = ActivateAssemblyTaskPanel(assemblies)
-            Gui.Control.showDialog(self.task_panel)
+            Gui.Control.showDialog(self.task_panel, Gui.ActiveDocument)
 
 
 if App.GuiUp:

@@ -855,7 +855,7 @@ void CmdSketcherValidateSketch::activated(int iMsg)
     }
 
     Sketcher::SketchObject* Obj = static_cast<Sketcher::SketchObject*>(selection[0].getObject());
-    Gui::Control().showDialog(new TaskSketcherValidation(Obj));
+    Gui::Control().showDialog(new TaskSketcherValidation(Obj), Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdSketcherValidateSketch::isActive()

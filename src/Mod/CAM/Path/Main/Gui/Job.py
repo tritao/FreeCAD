@@ -246,7 +246,7 @@ class ViewProvider:
     def openTaskPanel(self, activate=None):
         self.taskPanel = TaskPanel(self.vobj, self.deleteObjectsOnReject())
         FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(self.taskPanel)
+        FreeCADGui.Control.showDialog(self.taskPanel, FreeCADGui.ActiveDocument)
         self.taskPanel.setupUi(activate)
         self.showOriginAxis(True)
         self.deleteOnReject = False

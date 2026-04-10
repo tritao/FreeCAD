@@ -66,7 +66,7 @@ void ControlPy::init_type()
         "showDialog",
         &ControlPy::showDialog,
         "show the given dialog in the task panel\n"
-        "showDialog(dialog)\n"
+        "showDialog(dialog[, doc])\n"
         "--\n"
         "if a task is already active a RuntimeError is raised"
     );

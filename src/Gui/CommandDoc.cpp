@@ -44,6 +44,7 @@
 
 #include "Action.h"
 #include "Application.h"
+#include "Document.h"
 #include "BitmapFactory.h"
 #include "Command.h"
 #include "Control.h"
@@ -1741,12 +1742,14 @@ StdCmdTransform::StdCmdTransform()
 void StdCmdTransform::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new Gui::Dialog::TaskTransform());
+    if (auto* doc = getDocument()) {
+        Gui::Control().showDialog(new Gui::Dialog::TaskTransform(), doc);
+    }
 }
 
 bool StdCmdTransform::isActive()
 {
-    return (Gui::Control().activeDialog() == nullptr);
+    return (hasActiveDocument() && !Gui::Control().activeDialog(getDocument()));
 }
 
 //===========================================================================

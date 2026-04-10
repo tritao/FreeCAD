@@ -955,12 +955,12 @@ class _ViewProviderRoof(ArchComponent.ViewProviderComponent):
             taskd = ArchComponent.ComponentTaskPanel()
             taskd.obj = self.Object
             taskd.update()
-            FreeCADGui.Control.showDialog(taskd)
+            FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         else:
             taskd = _RoofTaskPanel()
             taskd.obj = self.Object
             taskd.update()
-            FreeCADGui.Control.showDialog(taskd)
+            FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True
 
 

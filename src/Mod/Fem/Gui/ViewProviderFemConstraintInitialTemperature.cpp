@@ -26,6 +26,8 @@
 
 #include "Mod/Fem/App/FemConstraintInitialTemperature.h"
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 
 #include "TaskFemConstraintInitialTemperature.h"
 #include "ViewProviderFemConstraintInitialTemperature.h"
@@ -49,7 +51,10 @@ bool ViewProviderFemConstraintInitialTemperature::setEdit(int ModNum)
         Gui::Control().closeDialog();
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(new TaskDlgFemConstraintInitialTemperature(this));
+        Gui::Control().showDialog(
+            new TaskDlgFemConstraintInitialTemperature(this),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
 
         return true;
     }

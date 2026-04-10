@@ -282,7 +282,7 @@ void CmdRobotSimulate::activated(int)
     }
 
     Gui::TaskView::TaskDialog* dlg = new TaskDlgSimulate(pcRobotObject, pcTrajectoryObject);
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdRobotSimulate::isActive()

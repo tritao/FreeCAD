@@ -1207,7 +1207,7 @@ class ViewProviderJoint:
             vobj.Document.setEdit(assembly)
 
         panel = TaskAssemblyCreateJoint(0, vobj.Object)
-        dialog = Gui.Control.showDialog(panel)
+        dialog = Gui.Control.showDialog(panel, Gui.ActiveDocument)
         if dialog is not None:
             dialog.setAutoCloseOnTransactionChange(True)
             dialog.setAutoCloseOnDeletedDocument(True)

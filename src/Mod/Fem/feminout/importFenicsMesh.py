@@ -181,7 +181,7 @@ def export(objectslist, fileString, group_values_dict_nogui=None):
                 # if there are groups found, make task panel available if GuiUp
                 if FreeCAD.GuiUp == 1:
                     panel = WriteXDMFTaskPanel(obj, fileString)
-                    FreeCADGui.Control.showDialog(panel)
+                    FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
                 else:
                     # create default dict if groupdict_nogui is not None
                     if group_values_dict_nogui is None:

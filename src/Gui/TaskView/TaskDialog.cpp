@@ -25,6 +25,7 @@
 #include <QMessageBox>
 
 
+#include <App/Application.h>
 #include <App/Document.h>
 #include <Gui/Application.h>
 #include <Gui/Document.h>
@@ -87,6 +88,29 @@ QWidget* TaskDialog::addTaskBoxWithoutHeader(QWidget* widget)
 const std::vector<QWidget*>& TaskDialog::getDialogContent() const
 {
     return Content;
+}
+
+App::Document* TaskDialog::getDocument() const
+{
+    if (documentName.empty()) {
+        return nullptr;
+    }
+    return App::GetApplication().getDocument(documentName.c_str());
+}
+
+void TaskDialog::setDocument(App::Document* doc)
+{
+    documentName = doc ? doc->getName() : std::string();
+}
+
+const std::string& TaskDialog::getDocumentName() const
+{
+    return documentName;
+}
+
+void TaskDialog::setDocumentName(const std::string& doc)
+{
+    documentName = doc;
 }
 
 bool TaskDialog::canClose() const

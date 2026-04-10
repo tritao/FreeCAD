@@ -93,7 +93,7 @@ class CommandCreateSimulation:
             return
 
         self.panel = TaskAssemblyCreateSimulation()
-        dialog = Gui.Control.showDialog(self.panel)
+        dialog = Gui.Control.showDialog(self.panel, Gui.ActiveDocument)
         if dialog is not None:
             dialog.setAutoCloseOnDeletedDocument(True)
             dialog.setDocumentName(App.ActiveDocument.Name)
@@ -273,7 +273,7 @@ class ViewProviderSimulation:
             Gui.ActiveDocument.setEdit(assembly)
 
         panel = TaskAssemblyCreateSimulation(vpDoc.Object)
-        dialog = Gui.Control.showDialog(panel)
+        dialog = Gui.Control.showDialog(panel, Gui.ActiveDocument)
         if dialog is not None:
             dialog.setAutoCloseOnDeletedDocument(True)
             dialog.setDocumentName(App.ActiveDocument.Name)

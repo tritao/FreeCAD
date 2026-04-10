@@ -230,7 +230,7 @@ class ViewProvider(object):
         """setupTaskPanel(panel) ... internal function to start the editor."""
         self.panel = panel
         FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(panel)
+        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
         panel.setupUi()
         job = self.Object.Proxy.getJob(self.Object)
         if job:

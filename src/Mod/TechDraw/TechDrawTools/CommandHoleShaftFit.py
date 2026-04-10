@@ -61,7 +61,7 @@ class CommandHoleShaftFit:
         # if sel and sel[0].Object.TypeId == 'TechDraw::DrawViewDimension':
         if sel[0].Object.TypeId == "TechDraw::DrawViewDimension":
             self.ui = TechDrawTools.TaskHoleShaftFit(sel)
-            Gui.Control.showDialog(self.ui)
+            Gui.Control.showDialog(self.ui, Gui.ActiveDocument)
         else:
             msgBox = QtGui.QMessageBox()
             msgTitle = translate(

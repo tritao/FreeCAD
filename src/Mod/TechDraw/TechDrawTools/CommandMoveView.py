@@ -73,7 +73,7 @@ class CommandMoveView:
         self.ui  = TechDrawTools.TaskMoveView()
 
         self.ui.setValues(viewName, fromPageName, toPageName)
-        Gui.Control.showDialog(self.ui)
+        Gui.Control.showDialog(self.ui, Gui.ActiveDocument)
 
     def IsActive(self):
         """Return True when the command should be active or False when it should be disabled (greyed)."""

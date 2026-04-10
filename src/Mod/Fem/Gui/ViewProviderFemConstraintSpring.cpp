@@ -23,6 +23,8 @@
 
 #include "Mod/Fem/App/FemConstraintSpring.h"
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 
 #include "TaskFemConstraintSpring.h"
 #include "ViewProviderFemConstraintSpring.h"
@@ -47,7 +49,10 @@ bool ViewProviderFemConstraintSpring::setEdit(int ModNum)
         Gui::Control().closeDialog();
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(new TaskDlgFemConstraintSpring(this));
+        Gui::Control().showDialog(
+            new TaskDlgFemConstraintSpring(this),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
 
         return true;
     }

@@ -2143,7 +2143,7 @@ void CmdTechDrawDimensionRepair::activated(int iMsg)
         dim = static_cast<TechDraw::DrawViewDimension*>(dimObjs.at(0));
     }
 
-    Gui::Control().showDialog(new TaskDlgDimReference(dim));
+    Gui::Control().showDialog(new TaskDlgDimReference(dim), Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdTechDrawDimensionRepair::isActive(void)

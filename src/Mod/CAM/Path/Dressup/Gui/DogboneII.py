@@ -282,7 +282,7 @@ class ViewProviderDressup(object):
     def setEdit(self, vobj, mode=0):
         FreeCADGui.Control.closeDialog()
         panel = TaskPanel(self, vobj.Object)
-        FreeCADGui.Control.showDialog(panel)
+        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
         panel.setupUi()
         return True
 
