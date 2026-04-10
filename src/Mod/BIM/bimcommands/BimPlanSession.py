@@ -257,6 +257,7 @@ class PlanEditSession:
         self._pending_selected_plan_target = None
         self._grip_trackers = []
         self._wall_hover_trackers = []
+        self._junction_node_trackers = []
         self._hovered_wall_opening_context_trackers = []
         self._opening_hover_trackers = []
         self._opening_overlay_trackers = []
@@ -378,6 +379,7 @@ class PlanEditSession:
         self._cancel_wall_edit(restore=False, refresh=False)
         self._cancel_pending_edit()
         self._clear_hovered_wall_overlay()
+        self._clear_junction_node_overlays()
         self._clear_hovered_wall_opening_context_overlay()
         self._clear_wall_grips()
         self._clear_hovered_opening_overlay()
@@ -420,6 +422,7 @@ class PlanEditSession:
         self._edit_endpoint = None
         self._edit_endpoints = None
         self._preview_points = None
+        self._junction_node_trackers = []
         self._preview_footprint_trackers = []
         self._rect_wall_start = None
         self._rect_wall_params = None
@@ -614,6 +617,7 @@ class PlanEditSession:
             self._clear_viewport_status_chip()
             self._clear_input_hints()
             self._clear_hovered_wall_overlay()
+            self._clear_junction_node_overlays()
             self._clear_hovered_wall_opening_context_overlay()
             self._clear_wall_grips()
             self._clear_hovered_opening_overlay()
@@ -980,6 +984,116 @@ class PlanEditSession:
             )
             return False
         return True
+
+    @staticmethod
+    def _iter_unique_wall_sets(source_wall, target_wall, extra_walls):
+        import itertools
+
+        base = [source_wall, target_wall]
+        extras = sorted(
+            [wall for wall in extra_walls if wall not in base],
+            key=lambda wall: getattr(wall, "Name", ""),
+        )
+        seen = set()
+        for size in range(len(extras), 0, -1):
+            for combo in itertools.combinations(extras, size):
+                walls = base + list(combo)
+                signature = tuple(sorted(getattr(wall, "Name", "") for wall in walls if wall))
+                if signature in seen:
+                    continue
+                seen.add(signature)
+                yield walls
+
+    def _find_plan_junction_promotion(self, source_wall, target_wall):
+        import ArchWallJoinUtils
+        import ArchWallJunctionUtils
+
+        if not self._is_plan_selectable_wall(source_wall):
+            return None
+        if not self._is_plan_selectable_wall(target_wall):
+            return None
+
+        candidate_walls = {
+            getattr(source_wall, "Name", ""): source_wall,
+            getattr(target_wall, "Name", ""): target_wall,
+        }
+        candidate_relations = []
+        seen_relations = set()
+        for wall in (source_wall, target_wall):
+            for relation in ArchWallJoinUtils.iter_wall_relations(wall):
+                relation_name = getattr(relation, "Name", None)
+                if not relation_name or relation_name in seen_relations:
+                    continue
+                seen_relations.add(relation_name)
+                candidate_relations.append(relation)
+                for linked_wall in ArchWallJoinUtils.get_relation_walls(relation):
+                    if self._is_plan_selectable_wall(linked_wall):
+                        candidate_walls[getattr(linked_wall, "Name", "")] = linked_wall
+
+        if len(candidate_walls) < 3:
+            return None
+
+        extra_walls = [
+            wall
+            for name, wall in candidate_walls.items()
+            if wall not in (source_wall, target_wall) and name
+        ]
+        for walls in self._iter_unique_wall_sets(source_wall, target_wall, extra_walls):
+            solution = ArchWallJunctionUtils.solve_wall_junction_inputs(walls)
+            if solution.is_ok():
+                return walls, solution, candidate_relations
+        return None
+
+    @staticmethod
+    def _find_reusable_plan_junction(candidate_relations, walls):
+        wall_names = {getattr(wall, "Name", "") for wall in walls if wall}
+        best_relation = None
+        best_overlap = 0
+        for relation in candidate_relations:
+            if getattr(getattr(relation, "Proxy", None), "Type", None) != "WallJunction":
+                continue
+            relation_names = {
+                getattr(wall, "Name", "")
+                for wall in list(getattr(relation, "Walls", []) or [])
+                if wall
+            }
+            overlap = len(wall_names.intersection(relation_names))
+            if overlap > best_overlap:
+                best_relation = relation
+                best_overlap = overlap
+        return best_relation if best_overlap >= 2 else None
+
+    def _apply_plan_wall_junction_promotion(self, doc, source_wall, target_wall):
+        import Arch
+        import ArchWallJoinUtils
+
+        promotion = self._find_plan_junction_promotion(source_wall, target_wall)
+        if not promotion:
+            return None
+
+        walls, solution, candidate_relations = promotion
+        wall_names = {getattr(wall, "Name", "") for wall in walls if wall}
+        junction = self._find_reusable_plan_junction(candidate_relations, walls)
+
+        for relation in candidate_relations:
+            if not ArchWallJoinUtils.is_wall_joint(relation):
+                continue
+            relation_walls = {
+                getattr(wall, "Name", "")
+                for wall in ArchWallJoinUtils.get_relation_walls(relation)
+                if wall
+            }
+            if relation_walls and relation_walls.issubset(wall_names):
+                doc.removeObject(relation.Name)
+
+        if junction:
+            junction.Walls = list(walls)
+            junction.CarrierMode = "Explicit"
+            junction.CarrierWall = solution.carrier_wall
+            junction.Enabled = True
+            return junction
+
+        return Arch.makeWallJunction(list(walls), carrier_wall=solution.carrier_wall)
 
     def stretch_selected_wall(self, endpoint):
         self._start_wall_edit(endpoint)
@@ -1654,6 +1768,7 @@ class PlanEditSession:
         else:
             self._set_pending_selected_plan_target()
         if not self._tearing_down:
+            self._sync_junction_node_overlays()
             self._sync_selected_wall_opening_context_overlay()
             self._sync_hovered_wall_opening_context_overlay()
 
@@ -1966,14 +2081,16 @@ class PlanEditSession:
 
         doc.openTransaction(translate("BIM_PlanEdit", "Join walls"))
         try:
-            joint = ArchWallJoinUtils.find_existing_joint(doc, source_wall, target_wall)
-            if not joint:
-                joint = Arch.makeWallJoint(source_wall, target_wall, join_command.JointType)
-                created = True
-            if not joint:
-                raise RuntimeError("Unable to create wall joint")
-            if not join_command._configure_joint(joint, source_wall, target_wall):
-                raise RuntimeError("Unable to configure wall joint")
+            relation = self._apply_plan_wall_junction_promotion(doc, source_wall, target_wall)
+            if relation is None:
+                relation = ArchWallJoinUtils.find_existing_joint(doc, source_wall, target_wall)
+                if not relation:
+                    relation = Arch.makeWallJoint(source_wall, target_wall, join_command.JointType)
+                    created = True
+                if not relation:
+                    raise RuntimeError("Unable to create wall joint")
+                if not join_command._configure_joint(relation, source_wall, target_wall):
+                    raise RuntimeError("Unable to configure wall joint")
             doc.commitTransaction()
             doc.recompute()
         except Exception:
@@ -1983,8 +2100,13 @@ class PlanEditSession:
                 pass
             return False
 
-        if created or getattr(joint, "Status", "OK") != "OK":
-            join_command._report_joint_status(joint)
+        if getattr(getattr(relation, "Proxy", None), "Type", None) == "WallJoint":
+            if created or getattr(relation, "Status", "OK") != "OK":
+                join_command._report_joint_status(relation)
+        elif getattr(relation, "Status", "OK") != "OK":
+            message = str(getattr(relation, "StatusMessage", "") or getattr(relation, "Status", ""))
+            if message:
+                FreeCAD.Console.PrintWarning(message + "\n")
         self.current_tool = "Select"
         self._set_hovered_wall(None)
         self._set_hovered_opening(None)
@@ -3443,6 +3565,7 @@ class PlanEditSession:
         if self.current_tool == "Join":
             if refresh_all or _PLAN_VISUAL_HOVERED_WALL in dirty:
                 self._sync_hovered_wall_overlay()
+            self._sync_junction_node_overlays()
             self._clear_hovered_wall_opening_context_overlay()
             self._clear_hovered_opening_overlay()
             self._clear_selected_opening_overlay()
@@ -3451,6 +3574,7 @@ class PlanEditSession:
             self._clear_wall_grips()
             return
         if self.current_tool == "Select":
+            self._sync_junction_node_overlays()
             if refresh_all or _PLAN_VISUAL_HOVERED_WALL in dirty:
                 self._sync_hovered_wall_overlay()
                 self._sync_hovered_wall_opening_context_overlay()
@@ -4432,6 +4556,7 @@ class PlanEditSession:
         if self.hovered_wall == wall:
             return
         self.hovered_wall = wall
+        self._sync_junction_node_overlays()
         self._sync_hovered_wall_overlay()
         self._sync_hovered_wall_opening_context_overlay()
         if self.current_tool == "Join":
@@ -4527,6 +4652,74 @@ class PlanEditSession:
     def _clear_hovered_wall_overlay(self):
         self._finalize_trackers(self._wall_hover_trackers)
         self._wall_hover_trackers = []
+
+    def _get_plan_context_junctions(self):
+        if self.current_tool not in ("Select", "Join"):
+            return []
+
+        import ArchWallJoinUtils
+
+        junctions = []
+        seen = set()
+        for wall in (self.selected_wall, self.hovered_wall):
+            if not self._is_plan_selectable_wall(wall):
+                continue
+            for relation in ArchWallJoinUtils.iter_wall_relations(wall):
+                if not ArchWallJoinUtils.is_wall_junction(relation):
+                    continue
+                relation_name = getattr(relation, "Name", None)
+                if not relation_name or relation_name in seen:
+                    continue
+                seen.add(relation_name)
+                if getattr(relation, "Status", "") not in ("OK", "Conflict"):
+                    continue
+                junctions.append(relation)
+        return junctions
+
+    def _create_junction_node_trackers(self, junction, color, width, tracker_store):
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            return
+
+        intersection = getattr(junction, "Intersection", None)
+        if intersection is None:
+            return
+        units_per_pixel = self._get_plan_view_units_per_pixel() or 1.0
+        half_size = max(units_per_pixel * 8.0, 20.0)
+        center = FreeCAD.Vector(intersection)
+        offsets = (
+            (FreeCAD.Vector(-half_size, -half_size, 0), FreeCAD.Vector(half_size, half_size, 0)),
+            (FreeCAD.Vector(-half_size, half_size, 0), FreeCAD.Vector(half_size, -half_size, 0)),
+        )
+        for start_offset, end_offset in offsets:
+            tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+            tracker.p1(center.add(start_offset))
+            tracker.p2(center.add(end_offset))
+            tracker.on()
+            tracker_store.append(tracker)
+
+    def _sync_junction_node_overlays(self):
+        self._clear_junction_node_overlays()
+        for junction in self._get_plan_context_junctions():
+            if self.selected_wall and self.selected_wall in (
+                getattr(junction, "Walls", None) or []
+            ):
+                color = (0.92, 0.58, 0.12)
+                width = self._scaled_line_width(2)
+            else:
+                color = (0.82, 0.70, 0.32)
+                width = self._scaled_line_width(1)
+            self._create_junction_node_trackers(
+                junction,
+                color=color,
+                width=width,
+                tracker_store=self._junction_node_trackers,
+            )
+
+    def _clear_junction_node_overlays(self):
+        self._finalize_trackers(self._junction_node_trackers)
+        self._junction_node_trackers = []
 
     def _sync_hovered_wall_opening_context_overlay(self):
         self._clear_hovered_wall_opening_context_overlay()

@@ -1389,6 +1389,113 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIn("Candidate wall", body)
         self.assertIn("create a miter joint", body.lower())
 
+    def test_plan_edit_selected_wall_shows_junction_node_overlay(self):
+        """Selecting a wall in a wall junction should show the junction node overlay."""
+
+        carrier_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        carrier_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        branch_up = Arch.makeWall(length=1500, width=200, height=2500)
+        branch_up.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 750, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        branch_down = Arch.makeWall(length=1500, width=200, height=2500)
+        branch_down.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, -750, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        self.document.recompute()
+
+        junction = Arch.makeWallJunction([carrier_wall, branch_up, branch_down])
+        self.document.recompute()
+        self.assertEqual(junction.Status, "OK")
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session._select_wall_for_plan_edit(carrier_wall)
+
+        self.assertGreater(len(session._junction_node_trackers), 0)
+
+    def test_plan_edit_join_promotes_wall_pair_to_junction(self):
+        """Joining a third compatible wall should promote the cluster to a wall junction."""
+
+        carrier_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        carrier_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        branch_up = Arch.makeWall(length=1500, width=200, height=2500)
+        branch_up.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 750, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        branch_down = Arch.makeWall(length=1500, width=200, height=2500)
+        branch_down.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, -750, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        self.document.recompute()
+
+        from bimcommands.BimJoin import BIM_Join_Tee
+
+        joint = Arch.makeWallJoint(branch_up, carrier_wall, "Tee")
+        self.assertIsNotNone(joint)
+        self.assertTrue(BIM_Join_Tee()._configure_joint(joint, branch_up, carrier_wall))
+        self.document.recompute()
+        self.assertEqual(joint.Status, "OK")
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session._select_wall_for_plan_edit(carrier_wall)
+        session.activate_join_tool()
+
+        from pivy import coin
+
+        class _FakeMousePosition:
+            def __init__(self, x, y):
+                self._value = (x, y)
+
+            def getValue(self):
+                return self._value
+
+        class _FakeMouseEvent:
+            def __init__(self, x, y):
+                self._position = _FakeMousePosition(x, y)
+
+            def getButton(self):
+                return coin.SoMouseButtonEvent.BUTTON1
+
+            def getState(self):
+                return coin.SoMouseButtonEvent.DOWN
+
+            def getPosition(self):
+                return self._position
+
+        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("wall", branch_down),
+        ):
+            session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        junctions = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJunction"
+        ]
+        self.assertEqual(len(joints), 0)
+        self.assertEqual(len(junctions), 1)
+        junction = junctions[0]
+        self.assertEqual(junction.Status, "OK")
+        self.assertEqual(
+            {wall.Name for wall in junction.Walls},
+            {carrier_wall.Name, branch_up.Name, branch_down.Name},
+        )
+        self.assertIs(session.selected_wall, carrier_wall)
+        self.assertGreater(len(session._junction_node_trackers), 0)
+
     def test_plan_edit_wall_resize_surfaces_invalid_relation_status(self):
         """Wall resize should report invalidated wall relations after commit."""
 
