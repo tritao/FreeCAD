@@ -870,6 +870,117 @@ class PlanEditSession:
             "Tee": BIM_Join_Tee,
         }.get(self._normalize_plan_join_type(self._plan_join_type), BIM_Join_Miter)()
 
+    def _get_plan_join_candidate_wall(self):
+        if self.current_tool != "Join":
+            return None
+        wall = self.hovered_wall
+        if not self._is_plan_selectable_wall(wall) or wall == self.selected_wall:
+            return None
+        return wall
+
+    def _get_plan_candidate_joint(self, target_wall=None):
+        import ArchWallJoinUtils
+
+        source_wall = self.selected_wall
+        target_wall = target_wall or self._get_plan_join_candidate_wall()
+        if not self._is_plan_selectable_wall(source_wall):
+            return None
+        if not self._is_plan_selectable_wall(target_wall):
+            return None
+        doc = getattr(source_wall, "Document", None) or self.doc
+        if doc is None:
+            return None
+        return ArchWallJoinUtils.find_existing_joint(doc, source_wall, target_wall)
+
+    def _get_plan_join_candidate_state(self):
+        target_wall = self._get_plan_join_candidate_wall()
+        if not target_wall:
+            return None, None, ""
+
+        joint = self._get_plan_candidate_joint(target_wall)
+        if not joint:
+            return (
+                target_wall,
+                None,
+                translate("BIM_PlanEdit", "Candidate wall: {label}").format(
+                    label=target_wall.Label
+                ),
+            )
+
+        summary = translate("BIM_PlanEdit", "Existing joint with {label}: {joint_type}").format(
+            label=target_wall.Label,
+            joint_type=self.get_plan_join_type_label(getattr(joint, "JointType", "Miter")),
+        )
+        status = getattr(joint, "Status", "")
+        if status not in ("", "OK"):
+            summary = translate("BIM_PlanEdit", "{summary} ({status})").format(
+                summary=summary,
+                status=status,
+            )
+        return target_wall, joint, summary
+
+    def _get_plan_join_mode_action_text(self, target_wall=None, joint=None):
+        target_wall = target_wall or self._get_plan_join_candidate_wall()
+        joint = joint or self._get_plan_candidate_joint(target_wall)
+        if joint:
+            current_type = self._normalize_plan_join_type(getattr(joint, "JointType", "Miter"))
+            if current_type == self._plan_join_type:
+                return translate(
+                    "BIM_PlanEdit",
+                    "Press Delete to unjoin this pair, or Tab to choose a different joint type",
+                )
+            return translate(
+                "BIM_PlanEdit",
+                "Click wall to change it to a {joint_type} joint",
+            ).format(joint_type=self._get_plan_join_type_phrase())
+        if target_wall:
+            return self._get_plan_join_action_text()
+        return translate(
+            "BIM_PlanEdit",
+            "Hover another wall, then click to create a {joint_type} joint",
+        ).format(joint_type=self._get_plan_join_type_phrase())
+
+    def _unjoin_plan_wall_pair(self, source_wall, target_wall):
+        import ArchWallJoinUtils
+
+        if not self._is_plan_selectable_wall(source_wall):
+            return False
+        if not self._is_plan_selectable_wall(target_wall):
+            return False
+
+        doc = getattr(source_wall, "Document", None) or self.doc
+        if doc is None:
+            return False
+        joint = ArchWallJoinUtils.find_existing_joint(doc, source_wall, target_wall)
+        if not joint:
+            return False
+
+        doc.openTransaction(translate("BIM_PlanEdit", "Unjoin walls"))
+        try:
+            doc.removeObject(joint.Name)
+            doc.commitTransaction()
+            doc.recompute()
+        except Exception:
+            try:
+                doc.abortTransaction()
+            except Exception:
+                pass
+            return False
+
+        self._clear_plan_relation_status()
+        self._refresh_task_panel_status()
+        return True
+
+    def _unjoin_current_plan_wall_pair(self):
+        source_wall = self.selected_wall
+        target_wall = self._get_plan_join_candidate_wall()
+        if not self._unjoin_plan_wall_pair(source_wall, target_wall):
+            FreeCAD.Console.PrintWarning(
+                translate("BIM_PlanEdit", "Hover a joined wall pair before using Unjoin.\n")
+            )
+            return False
+        return True
+
     def stretch_selected_wall(self, endpoint):
         self._start_wall_edit(endpoint)
 
@@ -3377,6 +3488,13 @@ class PlanEditSession:
             if self._cycle_plan_join_type() and hasattr(event_callback, "setHandled"):
                 event_callback.setHandled()
             return
+        if self.current_tool == "Join" and key in (
+            getattr(coin.SoKeyboardEvent, "DELETE", None),
+            getattr(coin.SoKeyboardEvent, "BACKSPACE", None),
+        ):
+            if self._unjoin_current_plan_wall_pair() and hasattr(event_callback, "setHandled"):
+                event_callback.setHandled()
+            return
         if self.current_tool == "Join" and key == coin.SoKeyboardEvent.ESCAPE:
             self._cancel_join_tool()
             return
@@ -3922,6 +4040,7 @@ class PlanEditSession:
             return title, "{}\n{}".format(context, action)
 
         if self.current_tool == "Join":
+            target_wall, joint, detail = self._get_plan_join_candidate_state()
             context = (
                 translate("BIM_PlanEdit", "Source wall: {label}").format(
                     label=self.selected_wall.Label
@@ -3929,7 +4048,9 @@ class PlanEditSession:
                 if self.selected_wall
                 else translate("BIM_PlanEdit", "Wall join")
             )
-            action = self._get_plan_join_action_text()
+            action = self._get_plan_join_mode_action_text(target_wall, joint)
+            if detail:
+                return title, "{}\n{}\n{}".format(context, detail, action)
             return title, "{}\n{}".format(context, action)
 
         if self.current_tool.startswith("Stretch "):
@@ -4053,7 +4174,7 @@ class PlanEditSession:
             )
 
         if self.current_tool == "Join":
-            return (
+            hints = [
                 (
                     translate("BIM_PlanEdit", "%1 pick wall to join"),
                     ui.MouseLeft,
@@ -4064,11 +4185,21 @@ class PlanEditSession:
                     ),
                     ui.KeyTab,
                 ),
+            ]
+            if self._get_plan_candidate_joint() is not None:
+                hints.append(
+                    (
+                        translate("BIM_PlanEdit", "%1 unjoin pair"),
+                        ui.KeyDelete,
+                    )
+                )
+            hints.append(
                 (
                     translate("BIM_PlanEdit", "%1 cancel"),
                     ui.KeyEscape,
-                ),
+                )
             )
+            return tuple(hints)
 
         if self.current_tool.startswith("Stretch "):
             return (
@@ -4303,6 +4434,8 @@ class PlanEditSession:
         self.hovered_wall = wall
         self._sync_hovered_wall_overlay()
         self._sync_hovered_wall_opening_context_overlay()
+        if self.current_tool == "Join":
+            self._refresh_task_panel_status()
 
     def _set_hovered_opening(self, opening):
         if opening == self.selected_opening:
@@ -4975,6 +5108,7 @@ class PlanEditDockWidget:
         self._modal_focus_widgets = [
             self.storey_combo,
             self.join_type_combo,
+            self.unjoin_button,
             self.select_button,
             self.wall_button,
             self.rect_wall_button,
@@ -5032,8 +5166,10 @@ class PlanEditDockWidget:
                 self.session.get_plan_join_type_label(join_type), join_type
             )
         self.join_type_combo.currentIndexChanged.connect(self.on_join_type_changed)
+        self.unjoin_button = self._make_button(QtGui, "Unjoin", self.on_unjoin_clicked)
         row.addWidget(join_type_label)
         row.addWidget(self.join_type_combo, 1)
+        row.addWidget(self.unjoin_button)
         return row
 
     def _capture_focus_policies(self):
@@ -5130,6 +5266,7 @@ class PlanEditDockWidget:
         self.move_button = None
         self.join_button = None
         self.join_type_combo = None
+        self.unjoin_button = None
         self.reapply_button = None
         self.exit_button = None
         if form:
@@ -5181,15 +5318,17 @@ class PlanEditDockWidget:
             tool = self.session.current_tool
             modal_active = self.session._is_modal_plan_interaction_active()
             if tool == "Join" and self.session.selected_wall:
+                target_wall, joint, detail = self.session._get_plan_join_candidate_state()
                 selection_state = translate("BIM_PlanEdit", "Source wall: {label}").format(
                     label=self.session.selected_wall.Label
                 )
                 selection_help = translate(
                     "BIM_PlanEdit",
-                    "Join type: {joint_type}\n{action}",
+                    "Join type: {joint_type}\n{pair_state}\n{action}",
                 ).format(
                     joint_type=self.session.get_plan_join_type_label(),
-                    action=self.session._get_plan_join_action_text(),
+                    pair_state=detail or translate("BIM_PlanEdit", "Candidate wall: none"),
+                    action=self.session._get_plan_join_mode_action_text(target_wall, joint),
                 )
             elif self.session.selected_opening:
                 selection_state = translate("BIM_PlanEdit", "Opening: {label}").format(
@@ -5263,12 +5402,22 @@ class PlanEditDockWidget:
             self.move_button,
             self.join_button,
             self.join_type_combo,
+            self.unjoin_button,
             self.reapply_button,
         ):
             if widget is None:
                 continue
             try:
                 widget.setEnabled(not modal_active)
+            except Exception:
+                pass
+        if self.unjoin_button is not None:
+            try:
+                self.unjoin_button.setEnabled(
+                    not modal_active
+                    and self.session.current_tool == "Join"
+                    and self.session._get_plan_candidate_joint() is not None
+                )
             except Exception:
                 pass
 
@@ -5296,6 +5445,9 @@ class PlanEditDockWidget:
             return
         join_type = self.join_type_combo.itemData(index) or self.join_type_combo.itemText(index)
         self.session.set_plan_join_type(join_type)
+
+    def on_unjoin_clicked(self):
+        self.session._unjoin_current_plan_wall_pair()
 
     def on_reapply_clicked(self):
         self.session.apply_plan_view(fit=False)
