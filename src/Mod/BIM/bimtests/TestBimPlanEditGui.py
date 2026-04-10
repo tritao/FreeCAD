@@ -1273,6 +1273,122 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(trimmed_wall, target_wall)
         self.assertEqual(joint.Status, "OK")
 
+    def test_plan_edit_join_mode_updates_existing_joint_for_hovered_pair(self):
+        """Join mode should surface and update an existing wall joint for the hovered pair."""
+
+        source_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        target_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        target_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        self.document.recompute()
+
+        from bimcommands.BimJoin import BIM_Join_Miter
+
+        joint = Arch.makeWallJoint(source_wall, target_wall, "Miter")
+        self.assertIsNotNone(joint)
+        self.assertTrue(BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall))
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session._select_wall_for_plan_edit(source_wall)
+        session.set_plan_join_type("Butt")
+        session.activate_join_tool()
+        session._set_hovered_wall(target_wall)
+
+        self.assertTrue(session.task_panel.unjoin_button.isEnabled())
+        _title, body = session._get_status_chip_text()
+        self.assertIn("Existing joint", body)
+        self.assertIn("change it to a butt joint", body.lower())
+        self.assertIn("Existing joint", session.task_panel.status.text())
+
+        from pivy import coin
+
+        class _FakeMousePosition:
+            def __init__(self, x, y):
+                self._value = (x, y)
+
+            def getValue(self):
+                return self._value
+
+        class _FakeMouseEvent:
+            def __init__(self, x, y):
+                self._position = _FakeMousePosition(x, y)
+
+            def getButton(self):
+                return coin.SoMouseButtonEvent.BUTTON1
+
+            def getState(self):
+                return coin.SoMouseButtonEvent.DOWN
+
+            def getPosition(self):
+                return self._position
+
+        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("wall", target_wall),
+        ):
+            session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        self.assertEqual(len(joints), 1)
+        self.assertIs(joints[0], joint)
+        self.assertEqual(joint.JointType, "Butt")
+        self.assertEqual(session.current_tool, "Select")
+
+    def test_plan_edit_join_mode_unjoins_hovered_pair(self):
+        """Join mode should remove the existing joint for the hovered wall pair."""
+
+        source_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        source_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Rotation())
+        target_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        target_wall.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        self.document.recompute()
+
+        from bimcommands.BimJoin import BIM_Join_Miter
+
+        joint = Arch.makeWallJoint(source_wall, target_wall, "Miter")
+        self.assertIsNotNone(joint)
+        self.assertTrue(BIM_Join_Miter()._configure_joint(joint, source_wall, target_wall))
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session._select_wall_for_plan_edit(source_wall)
+        session.activate_join_tool()
+        session._set_hovered_wall(target_wall)
+
+        self.assertTrue(session.task_panel.unjoin_button.isEnabled())
+        self.assertTrue(session._unjoin_current_plan_wall_pair())
+        self.pump_gui_events()
+
+        joints = [
+            obj
+            for obj in self.document.Objects
+            if getattr(getattr(obj, "Proxy", None), "Type", None) == "WallJoint"
+        ]
+        self.assertEqual(len(joints), 0)
+        self.assertEqual(session.current_tool, "Join")
+        self.assertIs(session.selected_wall, source_wall)
+        self.assertIs(session.hovered_wall, target_wall)
+        self.assertFalse(session.task_panel.unjoin_button.isEnabled())
+        _title, body = session._get_status_chip_text()
+        self.assertIn("Candidate wall", body)
+        self.assertIn("create a miter joint", body.lower())
+
     def test_plan_edit_wall_resize_surfaces_invalid_relation_status(self):
         """Wall resize should report invalidated wall relations after commit."""
 
