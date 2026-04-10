@@ -182,7 +182,7 @@ class CamoticsSimulation(QtCore.QObject):
 
     def Activate(self):
         self.taskForm = CAMoticsUI(self)
-        FreeCADGui.Control.showDialog(self.taskForm)
+        FreeCADGui.Control.showDialog(self.taskForm, FreeCADGui.ActiveDocument)
         self.job = FreeCADGui.Selection.getSelectionEx()[0].Object
         self.SIM.set_metric()
         self.SIM.set_resolution("high")

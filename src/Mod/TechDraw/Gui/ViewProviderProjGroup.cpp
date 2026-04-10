@@ -31,6 +31,8 @@
 
 #include <App/DocumentObject.h>
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 #include <Gui/MainWindow.h>
 #include <Gui/Selection/Selection.h>
 
@@ -79,9 +81,10 @@ bool ViewProviderProjGroup::setEdit(int ModNum)
     // start the edit dialog
     if (projDlg) {
         projDlg->setCreateMode(false);
-        Gui::Control().showDialog(projDlg);
+        Gui::Control().showDialog(projDlg, Gui::Application::Instance->activeDocument()->getDocument());
     } else {
-        Gui::Control().showDialog(new TaskDlgProjGroup(getObject(), false));
+        Gui::Control().showDialog(new TaskDlgProjGroup(getObject(), false),
+                                  getObject()->getDocument());
     }
 
     return true;
@@ -269,5 +272,4 @@ void ViewProviderProjGroup::onChangeAutoDistribute()
         secondary->updateView(false);
     }
 }
-
 

@@ -538,7 +538,7 @@ void CmdTechDrawView::activated(int iMsg)
     commitCommand();
 
     // create the rest of the desired views
-    Gui::Control().showDialog(new TaskDlgProjGroup(dvp, true));
+    Gui::Control().showDialog(new TaskDlgProjGroup(dvp, true), getDocument());
 }
 
 bool CmdTechDrawView::isActive() { return DrawGuiUtil::needPage(this); }
@@ -719,7 +719,7 @@ void CmdTechDrawActiveView::activated(int iMsg)
         return;
     }
     std::string PageName = page->getNameInDocument();
-    Gui::Control().showDialog(new TaskDlgActiveView(page));
+    Gui::Control().showDialog(new TaskDlgActiveView(page), Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdTechDrawActiveView::isActive() { return DrawGuiUtil::needPage(this, true); }
@@ -873,7 +873,7 @@ void execSimpleSection(Gui::Command* cmd)
     }
 
     TechDraw::DrawViewPart* dvp = static_cast<TechDraw::DrawViewPart*>(*baseObj.begin());
-    Gui::Control().showDialog(new TaskDlgSectionView(dvp));
+    Gui::Control().showDialog(new TaskDlgSectionView(dvp), Gui::Application::Instance->activeDocument()->getDocument());
 
     cmd->updateActive();//ok here since dialog doesn't call doc.recompute()
     cmd->commitCommand();
@@ -1002,7 +1002,8 @@ void execComplexSection(Gui::Command* cmd)
     }
 
     Gui::Control().showDialog(
-        new TaskDlgComplexSection(page, baseView, shapes, xShapes, profileObject, profileSubs));
+        new TaskDlgComplexSection(page, baseView, shapes, xShapes, profileObject, profileSubs),
+        page->getDocument());
 }
 
 //===========================================================================
@@ -1035,7 +1036,7 @@ void CmdTechDrawDetailView::activated(int iMsg)
     }
     TechDraw::DrawViewPart* dvp = static_cast<TechDraw::DrawViewPart*>(*(baseObj.begin()));
 
-    Gui::Control().showDialog(new TaskDlgDetail(dvp));
+    Gui::Control().showDialog(new TaskDlgDetail(dvp), Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool CmdTechDrawDetailView::isActive()
@@ -1178,7 +1179,7 @@ void CmdTechDrawProjectionGroup::activated(int iMsg)
     updateActive();
 
     // create the rest of the desired views
-    Gui::Control().showDialog(new TaskDlgProjGroup(multiView, true));
+    Gui::Control().showDialog(new TaskDlgProjGroup(multiView, true), getDocument());
 }
 
 bool CmdTechDrawProjectionGroup::isActive()
@@ -1942,7 +1943,7 @@ void CmdTechDrawProjectShape::activated(int iMsg)
     Q_UNUSED(iMsg);
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (!dlg) {
-        Gui::Control().showDialog(new TaskDlgProjection());
+        Gui::Control().showDialog(new TaskDlgProjection(), Gui::Application::Instance->activeDocument()->getDocument());
     }
 }
 

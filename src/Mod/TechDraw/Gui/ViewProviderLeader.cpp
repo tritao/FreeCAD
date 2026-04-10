@@ -29,6 +29,7 @@
 
 #include <App/DocumentObject.h>
 #include <Gui/Application.h>
+#include <Gui/Document.h>
 #include <Gui/Control.h>
 #include <Gui/MainWindow.h>
 #include <Gui/Selection/Selection.h>
@@ -87,7 +88,7 @@ bool ViewProviderLeader::setEdit(int ModNum)
         return false;
     }
     Gui::Selection().clearSelection();
-    Gui::Control().showDialog(new TaskDlgLeaderLine(this));
+    Gui::Control().showDialog(new TaskDlgLeaderLine(this), Gui::Application::Instance->activeDocument()->getDocument());
     return true;
 }
 

@@ -2471,7 +2471,7 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
             return None
         taskd = WallTaskPanel(vobj.Object)
         taskd.update()
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True
 
     def setupContextMenu(self, vobj, menu):

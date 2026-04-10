@@ -46,6 +46,6 @@ class VPSolverElmer(view_base_femobject.VPBaseFemObject):
 
     def setEdit(self, vobj, mode=0):
         task = task_solver_elmer._TaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(task)
+        FreeCADGui.Control.showDialog(task, FreeCADGui.ActiveDocument)
 
         return True

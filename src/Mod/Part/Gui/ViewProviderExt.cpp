@@ -78,6 +78,8 @@
 
 #include <Gui/BitmapFactory.h>
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 #include <Gui/Selection/SoFCSelectionAction.h>
 #include <Gui/Selection/SoFCUnifiedSelection.h>
 #include <Gui/ViewParams.h>
@@ -999,12 +1001,15 @@ bool ViewProviderPartExt::changeFaceAppearances()
 {
     Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
     if (dlg) {
-        Gui::Control().showDialog(dlg);
+        Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
         return false;
     }
 
     Gui::Selection().clearSelection();
-    Gui::Control().showDialog(new TaskFaceAppearances(this));
+    Gui::Control().showDialog(
+        new TaskFaceAppearances(this),
+        Gui::Application::Instance->activeDocument()->getDocument()
+    );
     return true;
 }
 

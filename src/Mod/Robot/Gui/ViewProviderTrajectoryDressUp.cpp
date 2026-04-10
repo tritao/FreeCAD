@@ -24,6 +24,8 @@
 
 
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 #include <Mod/Robot/Gui/TaskDlgTrajectoryDressUp.h>
 
 #include "ViewProviderTrajectoryDressUp.h"
@@ -48,7 +50,7 @@ bool ViewProviderTrajectoryDressUp::setEdit(int)
     Gui::TaskView::TaskDialog* dlg = new TaskDlgTrajectoryDressUp(
         getObject<Robot::TrajectoryDressUpObject>()
     );
-    Gui::Control().showDialog(dlg);
+    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
     return true;
 }
 

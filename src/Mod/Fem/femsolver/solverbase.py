@@ -97,7 +97,7 @@ class ViewProxy:
             QtGui.QMessageBox.critical(Gui.getMainWindow(), "Can't open Task Panel", error_message)
             return False
         task = solver_taskpanel.ControlTaskPanel(machine)
-        Gui.Control.showDialog(task)
+        Gui.Control.showDialog(task, Gui.ActiveDocument)
         return True
 
     def unsetEdit(self, vobj, mode=0):

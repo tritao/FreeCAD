@@ -44,6 +44,7 @@ namespace Gui
 {
 class MDIView;
 class ControlSingleton;
+class Document;
 class ViewProviderDocumentObject;
 namespace DockWnd
 {
@@ -219,6 +220,7 @@ private:
     void adjustMinimumSizeHint();
     void saveCurrentWidth();
     void tryRestoreWidth();
+    void slotActiveDocument(const Gui::Document&);
     void slotActiveDocument(const App::Document&);
     void slotInEdit(const Gui::ViewProviderDocumentObject&);
     void slotResetEdit(const Gui::ViewProviderDocumentObject&);
@@ -254,7 +256,6 @@ protected:
     ParameterGrp::handle hGrp;
     bool showTaskWatcher = false;
 
-    Connection connectApplicationActiveDocument;
     Connection connectApplicationDeleteDocument;
     Connection connectApplicationClosedView;
     Connection connectApplicationUndoDocument;

@@ -852,7 +852,7 @@ class DraftToolBar:
     # ---------------------------------------------------------------------------
 
     def _show_dialog(self, panel):
-        task = FreeCADGui.Control.showDialog(panel)
+        task = FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
         task.setDocumentName(FreeCADGui.ActiveDocument.Document.Name)
         task.setAutoCloseOnDeletedDocument(True)
 

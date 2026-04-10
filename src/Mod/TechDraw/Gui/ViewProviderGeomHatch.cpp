@@ -78,9 +78,10 @@ bool ViewProviderGeomHatch::setEdit(int ModNum)
     // start the edit dialog
     if (projDlg) {
         projDlg->setCreateMode(false);
-        Gui::Control().showDialog(projDlg);
+        Gui::Control().showDialog(projDlg, Gui::Application::Instance->activeDocument()->getDocument());
     } else {
-        Gui::Control().showDialog(new TaskDlgGeomHatch(getViewObject(), this, false));
+        Gui::Control().showDialog(new TaskDlgGeomHatch(getViewObject(), this, false),
+                                  getViewObject()->getDocument());
     }
 
     return true;

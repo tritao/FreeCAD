@@ -30,6 +30,8 @@
 #include <App/DocumentObject.h>
 #include <Base/Parameter.h>
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 #include <Gui/Selection/Selection.h>
 
 #include <Mod/TechDraw/App/DrawComplexSection.h>
@@ -145,10 +147,10 @@ bool ViewProviderViewSection::setEdit(int ModNum)
 
     auto dcs = dynamic_cast<TechDraw::DrawComplexSection*>(getViewObject());
     if (dcs) {
-        Gui::Control().showDialog(new TaskDlgComplexSection(dcs));
+        Gui::Control().showDialog(new TaskDlgComplexSection(dcs), Gui::Application::Instance->activeDocument()->getDocument());
         return true;
     }
-    Gui::Control().showDialog(new TaskDlgSectionView(getViewObject()));
+    Gui::Control().showDialog(new TaskDlgSectionView(getViewObject()), Gui::Application::Instance->activeDocument()->getDocument());
     return true;
 }
 

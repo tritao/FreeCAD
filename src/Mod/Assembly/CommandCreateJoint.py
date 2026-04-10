@@ -56,7 +56,7 @@ def activateJoint(index):
 
     Gui.addModule("JointObject")  # NOLINT
     Gui.doCommand(f"panel = JointObject.TaskAssemblyCreateJoint({index})")
-    Gui.doCommandGui("dialog = Gui.Control.showDialog(panel)")
+    Gui.doCommandGui("dialog = Gui.Control.showDialog(panel, Gui.ActiveDocument)")
     dialog = Gui.doCommandEval("dialog")
     if dialog is not None:
         dialog.setAutoCloseOnTransactionChange(True)

@@ -67,8 +67,10 @@ class Arch_Space:
             FreeCAD.ActiveDocument.commitTransaction()
             FreeCAD.ActiveDocument.recompute()
         else:
-            FreeCAD.Console.PrintMessage(translate("Arch", "Select a base object") + "\n")
-            FreeCADGui.Control.showDialog(ArchComponent.SelectionTaskPanel())
+            FreeCAD.Console.PrintMessage(translate("Arch", "Please select a base object") + "\n")
+            FreeCADGui.Control.showDialog(
+                ArchComponent.SelectionTaskPanel(), FreeCADGui.ActiveDocument
+            )
             FreeCAD.ArchObserver = ArchComponent.ArchSelectionObserver(nextCommand="Arch_Space")
             FreeCADGui.Selection.addObserver(FreeCAD.ArchObserver)
 

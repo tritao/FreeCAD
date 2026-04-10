@@ -27,6 +27,8 @@
 #include "TaskFemConstraintContact.h"
 #include "ViewProviderFemConstraintContact.h"
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 
 
 using namespace FemGui;
@@ -48,7 +50,10 @@ bool ViewProviderFemConstraintContact::setEdit(int ModNum)
         Gui::Control().closeDialog();
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(new TaskDlgFemConstraintContact(this));
+        Gui::Control().showDialog(
+            new TaskDlgFemConstraintContact(this),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
 
         return true;
     }

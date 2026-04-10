@@ -583,6 +583,16 @@ class BIMWorkbench(Workbench):
         self.appendMenu(t11, self.utils + ifctools)
         self.appendMenu([t11, t12], nudge)
 
+        try:
+            from Materia.Commands.WorkbenchLayout import append_workbench_layout
+        except ImportError:
+            pass
+        except Exception as err:
+            FreeCAD.Console.PrintWarning(
+                f"Unable to load Materia layout into BIM workbench: {err}\n"
+            )
+        else:
+            append_workbench_layout(self, FreeCADGui, prefix="Materia")
         # workaround for issue #26539 and #27984:
         # create tool lists without grouped commands for TaskWatcher
         # https://github.com/FreeCAD/FreeCAD/issues/26539

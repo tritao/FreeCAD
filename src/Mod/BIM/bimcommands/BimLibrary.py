@@ -104,7 +104,7 @@ class BIM_Library:
                 pr.SetString("destination", addondir.replace("\\", "/"))
                 libok = True
         panel = BIM_Library_TaskPanel(offlinemode=libok)
-        task = FreeCADGui.Control.showDialog(panel)
+        task = FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
         task.setDocumentName(panel.mainDocName)
         task.setAutoCloseOnDeletedDocument(True)
 
@@ -553,7 +553,7 @@ class BIM_Library_TaskPanel:
         # check if the main document is open
         try:
             FreeCAD.setActiveDocument(self.mainDocName)
-        except:
+        except Exception:
             FreeCAD.Console.PrintError(
                 translate(
                     "BIM",

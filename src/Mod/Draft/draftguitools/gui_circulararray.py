@@ -81,7 +81,7 @@ class CircularArray(gui_base.GuiCommandBase):
         # of the interface, to be able to call a function from within it.
         self.ui.source_command = self
         Gui.Snapper.setPointConstraintProvider(self.ui)
-        task = Gui.Control.showDialog(self.ui)
+        task = Gui.Control.showDialog(self.ui, Gui.ActiveDocument)
         task.setDocumentName(Gui.ActiveDocument.Document.Name)
         task.setAutoCloseOnDeletedDocument(True)
 

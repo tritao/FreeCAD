@@ -391,7 +391,7 @@ class Arch_Nest:
     def Activated(self):
 
         FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(NestTaskPanel())
+        FreeCADGui.Control.showDialog(NestTaskPanel(), FreeCADGui.ActiveDocument)
 
 
 class NestTaskPanel:

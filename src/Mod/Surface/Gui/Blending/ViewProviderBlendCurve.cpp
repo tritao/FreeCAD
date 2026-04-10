@@ -29,6 +29,8 @@
 #include <Gui/ActionFunction.h>
 #include <Gui/BitmapFactory.h>
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 
 PROPERTY_SOURCE(SurfaceGui::ViewProviderBlendCurve, PartGui::ViewProviderSpline)
 
@@ -59,7 +61,7 @@ bool ViewProviderBlendCurve::setEdit(int ModNum)
             return false;
         }
         auto dlg = new TaskBlendCurve(this);
-        Gui::Control().showDialog(dlg);
+        Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
         return true;
     }
 

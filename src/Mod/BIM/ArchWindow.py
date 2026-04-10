@@ -2369,7 +2369,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         if self.Object.Base:
             self.Object.Base.ViewObject.show()
         taskd.update()
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True
 
     def unsetEdit(self, vobj, mode):

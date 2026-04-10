@@ -73,7 +73,7 @@ class CommandCreateView:
         Gui.addModule("CommandCreateView")  # NOLINT
         Gui.doCommand("panel = CommandCreateView.TaskAssemblyCreateView()")
         self.panel = Gui.doCommandEval("panel")
-        Gui.doCommandGui("dialog = Gui.Control.showDialog(panel)")
+        Gui.doCommandGui("dialog = Gui.Control.showDialog(panel, Gui.ActiveDocument)")
         dialog = Gui.doCommandEval("dialog")
         if dialog is not None:
             dialog.setAutoCloseOnDeletedDocument(True)
@@ -333,7 +333,7 @@ class ViewProviderExplodedView:
             Gui.ActiveDocument.setEdit(assembly)
 
         panel = TaskAssemblyCreateView(vobj.Object)
-        dialog = Gui.Control.showDialog(panel)
+        dialog = Gui.Control.showDialog(panel, Gui.ActiveDocument)
         if dialog is not None:
             dialog.setAutoCloseOnDeletedDocument(True)
             dialog.setDocumentName(App.ActiveDocument.Name)

@@ -46,7 +46,7 @@ class BIM_Convert:
     def Activated(self):
         sel = FreeCADGui.Selection.getSelection()
         if sel:
-            FreeCADGui.Control.showDialog(BIM_Convert_TaskPanel(sel))
+            FreeCADGui.Control.showDialog(BIM_Convert_TaskPanel(sel), FreeCADGui.ActiveDocument)
 
 
 class BIM_Convert_TaskPanel:

@@ -26,6 +26,7 @@
 #include <App/Application.h>
 #include <App/Document.h>
 #include <Gui/Application.h>
+#include <Gui/Document.h>
 #include <Gui/Command.h>
 #include <Gui/Control.h>
 #include <Gui/MainWindow.h>
@@ -61,7 +62,7 @@ void StdCmdMeasure::activated(int iMsg)
 
     MeasureGui::TaskMeasure* task = new MeasureGui::TaskMeasure();
     task->setDocumentName(this->getDocument()->getName());
-    Gui::Control().showDialog(task);
+    Gui::Control().showDialog(task, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool StdCmdMeasure::isActive()
@@ -107,7 +108,7 @@ void StdCmdMassProperties::activated(int iMsg)
 
     MassPropertiesGui::TaskMassProperties* task = new MassPropertiesGui::TaskMassProperties();
     task->setDocumentName(this->getDocument()->getName());
-    Gui::Control().showDialog(task);
+    Gui::Control().showDialog(task, Gui::Application::Instance->activeDocument()->getDocument());
 }
 
 bool StdCmdMassProperties::isActive()

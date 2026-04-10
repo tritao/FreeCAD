@@ -25,6 +25,8 @@
 
 #include "Mod/Fem/App/FemConstraintHeatflux.h"
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 
 #include "TaskFemConstraintHeatflux.h"
 #include "ViewProviderFemConstraintHeatflux.h"
@@ -49,7 +51,10 @@ bool ViewProviderFemConstraintHeatflux::setEdit(int ModNum)
         Gui::Control().closeDialog();
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(new TaskDlgFemConstraintHeatflux(this));
+        Gui::Control().showDialog(
+            new TaskDlgFemConstraintHeatflux(this),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
 
         return true;
     }

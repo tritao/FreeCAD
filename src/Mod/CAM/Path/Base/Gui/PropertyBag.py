@@ -77,7 +77,7 @@ class ViewProvider(object):
         Path.Log.track()
         taskPanel = TaskPanel(vobj)
         FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(taskPanel)
+        FreeCADGui.Control.showDialog(taskPanel, FreeCADGui.ActiveDocument)
         taskPanel.setupUi()
         return True
 

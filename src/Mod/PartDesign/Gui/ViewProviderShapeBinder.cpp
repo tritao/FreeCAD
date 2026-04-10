@@ -113,10 +113,16 @@ bool ViewProviderShapeBinder::setEdit(int ModNum)
         // start the edit dialog
         // another pad left open its task panel
         if (sbDlg) {
-            Gui::Control().showDialog(sbDlg);
+            Gui::Control().showDialog(
+                sbDlg,
+                Gui::Application::Instance->activeDocument()->getDocument()
+            );
         }
         else {
-            Gui::Control().showDialog(new TaskDlgShapeBinder(this, ModNum == 1));
+            Gui::Control().showDialog(
+                new TaskDlgShapeBinder(this, ModNum == 1),
+                Gui::Application::Instance->activeDocument()->getDocument()
+            );
         }
 
         return true;

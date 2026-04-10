@@ -76,7 +76,7 @@ def editAttachment(
             callback_Cancel=callback_Cancel,
             callback_Apply=callback_Apply,
         )
-        Gui.Control.showDialog(taskd)
+        Gui.Control.showDialog(taskd, Gui.ActiveDocument)
     except TaskAttachmentEditor.CancelError:
         pass
 

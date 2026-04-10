@@ -1686,7 +1686,7 @@ class ViewProviderDressup:
         elif mode == 0:
             FreeCADGui.Control.closeDialog()
             panel = TaskDressupLeadInOut(vobj.Object, self)
-            FreeCADGui.Control.showDialog(panel)
+            FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
         return True
 
     def unsetEdit(self, vobj, mode=0):

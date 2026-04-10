@@ -34,6 +34,8 @@
 #include <App/DocumentObject.h>
 #include <Base/Parameter.h>
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 #include <Gui/MainWindow.h>
 #include <Gui/Selection/Selection.h>
 
@@ -296,7 +298,8 @@ bool ViewProviderViewPart::setEdit(int ModNum)
         return setDetailEdit(ModNum, dvd);
     }
     auto* view = getObject<TechDraw::DrawView>();
-    Gui::Control().showDialog(new TaskDlgProjGroup(view, false));
+    Gui::Control().showDialog(new TaskDlgProjGroup(view, false),
+                              Gui::Application::Instance->activeDocument()->getDocument());
 
     return true;
 }
@@ -305,7 +308,7 @@ bool ViewProviderViewPart::setDetailEdit(int ModNum, DrawViewDetail* dvd)
 {
     Q_UNUSED(ModNum);
 
-    Gui::Control().showDialog(new TaskDlgDetail(dvd));
+    Gui::Control().showDialog(new TaskDlgDetail(dvd), Gui::Application::Instance->activeDocument()->getDocument());
     Gui::Selection().clearSelection();
     Gui::Selection().addSelection(dvd->getDocument()->getName(),
                                   dvd->getNameInDocument());

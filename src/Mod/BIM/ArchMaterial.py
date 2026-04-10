@@ -453,7 +453,7 @@ class _ViewProviderArchMaterial:
             return None
 
         self.taskd = _ArchMaterialTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(self.taskd)
+        FreeCADGui.Control.showDialog(self.taskd, FreeCADGui.ActiveDocument)
         self.taskd.form.FieldName.setFocus()
         self.taskd.form.FieldName.selectAll()
         return True
@@ -778,7 +778,7 @@ class _ViewProviderArchMultiMaterial:
             return None
 
         taskd = _ArchMultiMaterialTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True
 
     def unsetEdit(self, vobj, mode):

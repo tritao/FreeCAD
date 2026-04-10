@@ -47,7 +47,7 @@ class BIM_Windows:
         return v
 
     def Activated(self):
-        FreeCADGui.Control.showDialog(BIM_Windows_TaskPanel())
+        FreeCADGui.Control.showDialog(BIM_Windows_TaskPanel(), FreeCADGui.ActiveDocument)
 
 
 class BIM_Windows_TaskPanel:

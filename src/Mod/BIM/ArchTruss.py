@@ -441,5 +441,5 @@ class ViewProviderTruss(ArchComponent.ViewProviderComponent):
             return None
 
         taskd = TrussTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd)
+        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
         return True

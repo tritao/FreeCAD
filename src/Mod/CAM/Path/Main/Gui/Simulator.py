@@ -102,7 +102,7 @@ class PathSimulation:
         self._populateJobSelection(form)
         form.comboJobs.currentIndexChanged.connect(self.onJobChange)
         self.onJobChange()
-        FreeCADGui.Control.showDialog(self.taskForm)
+        FreeCADGui.Control.showDialog(self.taskForm, FreeCADGui.ActiveDocument)
         self.disableAnim = False
         self.isVoxel = True
         self.firstDrill = True

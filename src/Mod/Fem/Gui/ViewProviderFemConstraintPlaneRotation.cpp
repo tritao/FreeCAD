@@ -25,6 +25,8 @@
 
 #include "Mod/Fem/App/FemConstraintPlaneRotation.h"
 #include <Gui/Control.h>
+#include <Gui/Document.h>
+#include <Gui/Application.h>
 
 #include "TaskFemConstraintPlaneRotation.h"
 #include "ViewProviderFemConstraintPlaneRotation.h"
@@ -51,7 +53,10 @@ bool ViewProviderFemConstraintPlaneRotation::setEdit(int ModNum)
         Gui::Control().closeDialog();
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(new TaskDlgFemConstraintPlaneRotation(this));
+        Gui::Control().showDialog(
+            new TaskDlgFemConstraintPlaneRotation(this),
+            Gui::Application::Instance->activeDocument()->getDocument()
+        );
 
         return true;
     }

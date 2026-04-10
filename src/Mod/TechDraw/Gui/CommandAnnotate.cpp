@@ -26,6 +26,7 @@
 #include <App/DocumentObject.h>
 #include <Gui/Action.h>
 #include <Gui/Application.h>
+#include <Gui/Document.h>
 #include <Gui/BitmapFactory.h>
 #include <Gui/Command.h>
 #include <Gui/Control.h>
@@ -123,7 +124,8 @@ void CmdTechDrawLeaderLine::activated(int iMsg)
     }
 
     Gui::Control().showDialog(new TechDrawGui::TaskDlgLeaderLine(baseFeat,
-                                                                 page));
+                                                                 page),
+                              getDocument());
     updateActive();
     Gui::Selection().clearSelection();
 }
@@ -175,7 +177,8 @@ void CmdTechDrawRichTextAnnotation::activated(int iMsg)
     }
 
     Gui::Control().showDialog(new TaskDlgRichAnno(baseFeat,
-                                                  page));
+                                                  page),
+                              getDocument());
     updateActive();
     Gui::Selection().clearSelection();
 }
@@ -318,7 +321,8 @@ void execCosmeticVertex(Gui::Command* cmd)
     baseFeat =  dynamic_cast<TechDraw::DrawViewPart*>((*shapes.begin()));
 
     Gui::Control().showDialog(new TaskDlgCosVertex(baseFeat,
-                                                   page));
+                                                   page),
+                              page->getDocument());
 }
 
 void execMidpoints(Gui::Command* cmd)
@@ -422,7 +426,8 @@ void CmdTechDrawCosmeticVertex::activated(int iMsg)
     }
 
     Gui::Control().showDialog(new TaskDlgCosVertex(baseFeat,
-                                                   page));
+                                                   page),
+                              getDocument());
     updateActive();
     Gui::Selection().clearSelection();
 }
@@ -757,7 +762,8 @@ void execCenterLine(Gui::Command* cmd)
         Gui::Control().showDialog(new TaskDlgCenterLine(baseFeat,
                                                         page,
                                                         faceNames,
-                                                        false));
+                                                        false),
+                                  page->getDocument());
     } else if (edgeNames.empty()) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
                              QObject::tr("No CenterLine in selection"));
@@ -772,7 +778,8 @@ void execCenterLine(Gui::Command* cmd)
         Gui::Control().showDialog(new TaskDlgCenterLine(baseFeat,
                                                         page,
                                                         edgeNames.front(),
-                                                        true));
+                                                        true),
+                                  page->getDocument());
     }
 }
 
@@ -832,7 +839,8 @@ void exec2LineCenterLine(Gui::Command* cmd)
         Gui::Control().showDialog(new TaskDlgCenterLine(dvp,
                                                         page,
                                                         selectedEdges,
-                                                        false));
+                                                        false),
+                                  page->getDocument());
     } else if (selectedEdges.size() == 1) {
         TechDraw::CenterLine* cl = dvp->getCenterLineBySelection(selectedEdges.front());
         if (!cl) {
@@ -843,7 +851,8 @@ void exec2LineCenterLine(Gui::Command* cmd)
         Gui::Control().showDialog(new TaskDlgCenterLine(dvp,
                                                 page,
                                                 selectedEdges.front(),
-                                                true));
+                                                true),
+                                  page->getDocument());
     } else {  //not create, not edit, what is this???
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
                              QObject::tr("Selection not understood"));
@@ -944,7 +953,8 @@ void exec2PointCenterLine(Gui::Command* cmd)
         Gui::Control().showDialog(new TaskDlgCenterLine(baseFeat,
                                                         page,
                                                         vertexNames,
-                                                        false));
+                                                        false),
+                                  page->getDocument());
     } else if (!edgeNames.empty() && (edgeNames.size() == 1)) {
         TechDraw::CenterLine* cl = baseFeat->getCenterLineBySelection(edgeNames.front());
         if (!cl) {
@@ -956,7 +966,8 @@ void exec2PointCenterLine(Gui::Command* cmd)
         Gui::Control().showDialog(new TaskDlgCenterLine(baseFeat,
                                                         page,
                                                         edgeNames.front(),
-                                                        false));
+                                                        false),
+                                  page->getDocument());
     } else if (vertexNames.empty()) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Wrong selection"),
                              QObject::tr("Select 2 vertices or 1 centerline"));
@@ -1075,7 +1086,8 @@ void execLine2Points(Gui::Command* cmd)
         }
 
         Gui::Control().showDialog(new TaskDlgCosmeticLine(baseFeat,
-                                                          edgeNames.front()));
+                                                          edgeNames.front()),
+                                  page->getDocument());
         return;
     }
 
@@ -1112,7 +1124,8 @@ void execLine2Points(Gui::Command* cmd)
 
     Gui::Control().showDialog(new TaskDlgCosmeticLine(baseFeat,
                                                       points,
-                                                      is3d));
+                                                      is3d),
+                              page->getDocument());
 }
 
 //===========================================================================
@@ -1303,7 +1316,8 @@ void CmdTechDrawDecorateLine::activated(int iMsg)
     }
 
     Gui::Control().showDialog(new TaskDlgLineDecor(baseFeat,
-                                                   edgeNames));
+                                                   edgeNames),
+                              getDocument());
     updateActive();
     Gui::Selection().clearSelection();
 }
@@ -1428,10 +1442,10 @@ void CmdTechDrawWeldSymbol::activated(int iMsg)
     }
     if (!leaders.empty()) {
         leadFeat = static_cast<TechDraw::DrawLeaderLine*> (leaders.front());
-        Gui::Control().showDialog(new TaskDlgWeldingSymbol(leadFeat));
+        Gui::Control().showDialog(new TaskDlgWeldingSymbol(leadFeat), Gui::Application::Instance->activeDocument()->getDocument());
     } else if (!welds.empty()) {
         weldFeat = static_cast<TechDraw::DrawWeldSymbol*> (welds.front());
-        Gui::Control().showDialog(new TaskDlgWeldingSymbol(weldFeat));
+        Gui::Control().showDialog(new TaskDlgWeldingSymbol(weldFeat), Gui::Application::Instance->activeDocument()->getDocument());
     }
     updateActive();
     Gui::Selection().clearSelection();
@@ -1496,7 +1510,7 @@ void CmdTechDrawSurfaceFinishSymbols::activated(int iMsg)
         }
     }
 
-    Gui::Control().showDialog(new TechDrawGui::TaskDlgSurfaceFinishSymbols(ownerName));
+    Gui::Control().showDialog(new TechDrawGui::TaskDlgSurfaceFinishSymbols(ownerName), Gui::Application::Instance->activeDocument()->getDocument());
 
     updateActive();
     Gui::Selection().clearSelection();
@@ -1531,4 +1545,3 @@ void CreateTechDrawCommandsAnnotate()
     rcCmdMgr.addCommand(new CmdTechDrawWeldSymbol());
     rcCmdMgr.addCommand(new CmdTechDrawSurfaceFinishSymbols());
 }
-

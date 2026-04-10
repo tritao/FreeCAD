@@ -403,7 +403,7 @@ class _ViewProviderWallJoint:
             return None
 
         self.taskd = WallJointTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(self.taskd)
+        FreeCADGui.Control.showDialog(self.taskd, FreeCADGui.ActiveDocument)
         self.taskd.joint_type_combo.setFocus()
         return True
 

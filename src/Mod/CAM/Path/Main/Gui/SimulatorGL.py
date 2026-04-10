@@ -227,7 +227,7 @@ class CAMSimulation:
         form.comboJobs.currentIndexChanged.connect(self.onJobChange)
         self.onJobChange()
         form.listOperations.itemChanged.connect(self.onOperationItemChange)
-        FreeCADGui.Control.showDialog(self.taskForm)
+        FreeCADGui.Control.showDialog(self.taskForm, FreeCADGui.ActiveDocument)
         self.disableAnim = False
         self.firstDrill = True
         self.millSim = CAMSimulator.PathSim()
