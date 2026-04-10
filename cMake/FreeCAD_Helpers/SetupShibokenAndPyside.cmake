@@ -178,6 +178,25 @@ macro(SetupShibokenAndPyside)
 endmacro()
 
 
+function(_freecad_collect_qrc_dependencies out_var qrc_file)
+  set(_qrc_dependencies)
+  if(EXISTS "${qrc_file}")
+    file(READ "${qrc_file}" _qrc_contents)
+    string(REGEX MATCHALL "<file[^>]*>[^<]+</file>" _qrc_entries "${_qrc_contents}")
+    get_filename_component(_qrc_dir "${qrc_file}" DIRECTORY)
+    foreach(_qrc_entry IN LISTS _qrc_entries)
+      string(REGEX REPLACE ".*<file[^>]*>([^<]+)</file>.*" "\\1" _qrc_path "${_qrc_entry}")
+      if(NOT IS_ABSOLUTE "${_qrc_path}")
+        set(_qrc_path "${_qrc_dir}/${_qrc_path}")
+      endif()
+      get_filename_component(_qrc_path "${_qrc_path}" ABSOLUTE)
+      list(APPEND _qrc_dependencies "${_qrc_path}")
+    endforeach()
+    list(REMOVE_DUPLICATES _qrc_dependencies)
+  endif()
+  set(${out_var} "${_qrc_dependencies}" PARENT_SCOPE)
+endfunction()
+
 macro(PYSIDE_WRAP_RC outfiles)
   if(NOT PYSIDE_RCC_EXECUTABLE)
     message(FATAL_ERROR "Qt rcc is required for generating ${ARGN}")
@@ -186,6 +205,7 @@ macro(PYSIDE_WRAP_RC outfiles)
     get_filename_component(outfile ${it} NAME_WE)
     get_filename_component(infile ${it} ABSOLUTE)
     set(outfile "${CMAKE_CURRENT_BINARY_DIR}/${outfile}_rc.py")
+    _freecad_collect_qrc_dependencies(_qrc_depends "${infile}")
     #ADD_CUSTOM_TARGET(${it} ALL
     #  DEPENDS ${outfile}
     #)
@@ -193,6 +213,7 @@ macro(PYSIDE_WRAP_RC outfiles)
         add_custom_command(OUTPUT ${outfile}
           COMMAND ${PYSIDE_RCC_EXECUTABLE} ${RCCOPTIONS} ${infile} -o ${outfile}
           MAIN_DEPENDENCY ${infile}
+          DEPENDS ${_qrc_depends}
         )
     else()
         # Especially on Open Build Service we don't want changing date like
@@ -204,6 +225,7 @@ macro(PYSIDE_WRAP_RC outfiles)
           # anymore with Qt5 RCC, so commenting it out for now...
           #COMMAND sed "/^# /d" "${outfile}" >"${outfile}.tmp" && mv "${outfile}.tmp" "${outfile}"
           MAIN_DEPENDENCY "${infile}"
+          DEPENDS ${_qrc_depends}
         )
     endif()
     list(APPEND ${outfiles} ${outfile})
