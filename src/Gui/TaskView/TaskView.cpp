@@ -511,15 +511,7 @@ QSize TaskView::minimumSizeHint() const
 
 void TaskView::slotActiveDocument(const App::Document& doc)
 {
-    auto foundTaskInfo = std::ranges::find(taskInfos, &doc, &TaskInfo::Document);
-    if (foundTaskInfo != taskInfos.end()) {
-        setShownTaskInfo((foundTaskInfo - taskInfos.begin()));
-    }
-    else {
-        setShownTaskInfo(-1);
-    }
-
-    if (foundTaskInfo == taskInfos.end()) {
+    if (!syncShownTaskInfo(&doc)) {
         // at this point, active object of the active view returns None.
         // which is a problem if shouldShow of a watcher rely on the presence
         // of an active object (example Assembly).
@@ -689,7 +681,7 @@ bool TaskView::showDialog(TaskDialog* dlg, App::Document* doc)
     // This will hide whatever was shown in the taskview
     taskInfos.push_back(outInfo);
     addWidget(outInfo.taskPanel);
-    setShownTaskInfo(taskInfos.size() - 1);
+    syncShownTaskInfo(doc);
 
     saveCurrentWidth();
     getMainWindow()->updateActions();
@@ -737,6 +729,7 @@ void TaskView::removeDialog(std::vector<TaskInfo>::iterator infoIt)
     // put the watcher back in control
     removeTaskWatcher();
     addTaskWatcher();
+    syncShownTaskInfoToActiveDocument();
 
     if (remove) {
         remove->ActiveDialog->closed();
@@ -880,11 +873,7 @@ void TaskView::addTaskWatcher()
     }
 
     TaskWatcherPanel->actionPanel->setScheme(QSint::ActionPanelScheme::defaultScheme());
-    // Don't hide active task dialog when switching workbenches
-    // Only switch to watcher panel if there's no active task dialog
-    if (!currentTaskInfo()) {
-        setShownTaskInfo(-1);
-    }
+    syncShownTaskInfoToActiveDocument();
 }
 
 void TaskView::saveCurrentWidth()
@@ -914,6 +903,31 @@ bool TaskView::shouldRestoreWidth() const
 {
     return restoreWidth;
 }
+
+std::optional<int> TaskView::taskInfoIndex(const App::Document* doc) const
+{
+    auto foundTaskInfo =
+        std::ranges::find_if(taskInfos, [doc](const TaskInfo& info) { return info.Document == doc; });
+    if (foundTaskInfo == taskInfos.end()) {
+        return std::nullopt;
+    }
+
+    return static_cast<int>(foundTaskInfo - taskInfos.begin());
+}
+
+bool TaskView::syncShownTaskInfo(const App::Document* doc)
+{
+    auto index = taskInfoIndex(doc);
+    setShownTaskInfo(index.value_or(-1));
+    return index.has_value();
+}
+
+bool TaskView::syncShownTaskInfoToActiveDocument()
+{
+    auto* guiDoc = Gui::Application::Instance->activeDocument();
+    return syncShownTaskInfo(guiDoc ? guiDoc->getDocument() : nullptr);
+}
+
 std::optional<TaskInfo> TaskView::currentTaskInfo() const
 {
     // Index 0 is taskWatcher's panel
@@ -931,7 +945,8 @@ void TaskView::setShownTaskInfo(int index)
 {
     int stackedIndex = 0;
     int initIndex = currentIndex();
-    if (index < 0 || index >= taskInfos.size()) {
+    int taskCount = static_cast<int>(taskInfos.size());
+    if (index < 0 || index >= taskCount) {
         updateWatcher();
         stackedIndex = 0;  // Show task watcher
     }
