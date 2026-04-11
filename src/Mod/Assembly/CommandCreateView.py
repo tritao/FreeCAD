@@ -70,14 +70,13 @@ class CommandCreateView:
         if not assembly:
             return
 
+        doc_name = assembly.Document.Name
         Gui.addModule("CommandCreateView")  # NOLINT
+        Gui.addModule("UtilsAssembly")  # NOLINT
         Gui.doCommand("panel = CommandCreateView.TaskAssemblyCreateView()")
-        self.panel = Gui.doCommandEval("panel")
-        Gui.doCommandGui("dialog = Gui.Control.showDialog(panel, Gui.ActiveDocument)")
-        dialog = Gui.doCommandEval("dialog")
-        if dialog is not None:
-            dialog.setAutoCloseOnDeletedDocument(True)
-            dialog.setDocumentName(App.ActiveDocument.Name)
+        Gui.doCommandGui(
+            f'dialog = UtilsAssembly.showTaskDialog(panel, App.getDocument("{doc_name}"))'
+        )
 
 
 ######### Exploded View Object ###########
@@ -330,13 +329,10 @@ class ViewProviderExplodedView:
             return False
 
         if UtilsAssembly.activeAssembly() != assembly:
-            Gui.ActiveDocument.setEdit(assembly)
+            UtilsAssembly.guiDocumentOf(assembly.Document).setEdit(assembly)
 
         panel = TaskAssemblyCreateView(vobj.Object)
-        dialog = Gui.Control.showDialog(panel, Gui.ActiveDocument)
-        if dialog is not None:
-            dialog.setAutoCloseOnDeletedDocument(True)
-            dialog.setDocumentName(App.ActiveDocument.Name)
+        UtilsAssembly.showTaskDialog(panel, assembly.Document)
 
         return True
 
@@ -591,21 +587,27 @@ class TaskAssemblyCreateView(QtCore.QObject):
         self.form = Gui.PySideUic.loadUi(":/panels/TaskAssemblyCreateView.ui")
         self.form.stepList.installEventFilter(self)
         self.form.stepList.itemClicked.connect(self.onItemClicked)
-
-        view = Gui.activeDocument().activeView()
+        self.cbFin = None
+        self.cbMov = None
+        self.callbackMove = None
+        self.callbackClick = None
+        self.callbackKey = None
 
         self.assembly = UtilsAssembly.activeAssembly()
+        self.doc = self.assembly.Document
+        self.gui_doc = UtilsAssembly.guiDocumentOf(self.doc)
+        self.view = self.gui_doc.activeView()
         self.assembly.ViewObject.EnableMovement = False
         self.com, self.size = UtilsAssembly.getComAndSize(self.assembly)
         self.asmDragger = self.assembly.ViewObject.getDragger()
-        self.cbFin = view.addDraggerCallback(
+        self.cbFin = self.view.addDraggerCallback(
             self.asmDragger, "addFinishCallback", self.draggerFinished
         )
-        self.cbMov = view.addDraggerCallback(
+        self.cbMov = self.view.addDraggerCallback(
             self.asmDragger, "addMotionCallback", self.draggerMoved
         )
 
-        Gui.Selection.clearSelection()
+        Gui.Selection.clearSelection(self.doc.Name)
 
         self.form.btnAlignDragger.setMenu(QMenu(self.form.btnAlignDragger))
         actionAlignTo = self.form.btnAlignDragger.menu().addAction("Align to...")
@@ -627,7 +629,7 @@ class TaskAssemblyCreateView(QtCore.QObject):
         self.initialPlcs = UtilsAssembly.saveAssemblyPartsPlacements(self.assembly)
 
         if viewObj:
-            Gui.ActiveDocument.openCommand("Edit Exploded View")
+            self.gui_doc.openCommand("Edit Exploded View")
 
             self.viewObj = viewObj
             for move in self.viewObj.Group:
@@ -635,7 +637,7 @@ class TaskAssemblyCreateView(QtCore.QObject):
             self.onMovesChanged()
 
         else:
-            Gui.ActiveDocument.openCommand("Create Exploded View")
+            self.gui_doc.openCommand("Create Exploded View")
             self.createExplodedViewObject()
 
         Gui.Selection.addSelectionGate(
@@ -644,9 +646,9 @@ class TaskAssemblyCreateView(QtCore.QObject):
         Gui.Selection.addObserver(self, Gui.Selection.ResolveMode.NoResolve)
 
         self.viewObj.Proxy.setMovesChangedCallback(self.onMovesChanged)
-        self.callbackMove = view.addEventCallback("SoLocation2Event", self.moveMouse)
-        self.callbackClick = view.addEventCallback("SoMouseButtonEvent", self.clickMouse)
-        self.callbackKey = view.addEventCallback("SoKeyboardEvent", self.KeyboardEvent)
+        self.callbackMove = self.view.addEventCallback("SoLocation2Event", self.moveMouse)
+        self.callbackClick = self.view.addEventCallback("SoMouseButtonEvent", self.clickMouse)
+        self.callbackKey = self.view.addEventCallback("SoKeyboardEvent", self.KeyboardEvent)
 
         self.selectingFeature = False
         self.form.LabelAlignDragger.setVisible(False)
@@ -669,7 +671,7 @@ class TaskAssemblyCreateView(QtCore.QObject):
             more = UtilsAssembly.generatePropertySettings(move)
             commands = commands + more
         Gui.doCommand(commands[:-1])  # Don't use the last \n
-        Gui.ActiveDocument.commitCommand()
+        self.gui_doc.commitCommand()
 
         self.viewObj.purgeTouched()
 
@@ -677,32 +679,48 @@ class TaskAssemblyCreateView(QtCore.QObject):
 
     def reject(self):
         self.deactivate()
-        Gui.ActiveDocument.abortCommand()
-        App.activeDocument().recompute()
+        self.gui_doc.abortCommand()
+        self.doc.recompute()
         return True
 
     def deactivate(self):
         pref = Preferences.preferences()
         pref.SetBool("PartsAsSingleSolid", self.form.CheckBox_PartsAsSingleSolid.isChecked())
 
-        view = Gui.activeDocument().activeView()
-        view.removeDraggerCallback(self.asmDragger, "addFinishCallback", self.cbFin)
-        view.removeDraggerCallback(self.asmDragger, "addMotionCallback", self.cbMov)
+        try:
+            if self.cbFin is not None:
+                self.view.removeDraggerCallback(self.asmDragger, "addFinishCallback", self.cbFin)
+            if self.cbMov is not None:
+                self.view.removeDraggerCallback(self.asmDragger, "addMotionCallback", self.cbMov)
+        except RuntimeError:
+            # the view has been deleted already
+            pass
+        self.cbFin = None
+        self.cbMov = None
 
         self.assembly.ViewObject.DraggerVisibility = False
         self.assembly.ViewObject.EnableMovement = True
 
         Gui.Selection.removeSelectionGate()
         Gui.Selection.removeObserver(self)
-        Gui.Selection.clearSelection()
+        Gui.Selection.clearSelection(self.doc.Name)
 
         self.viewObj.Proxy.setMovesChangedCallback(None)
-        view.removeEventCallback("SoLocation2Event", self.callbackMove)
-        view.removeEventCallback("SoMouseButtonEvent", self.callbackClick)
-        view.removeEventCallback("SoKeyboardEvent", self.callbackKey)
+        try:
+            if self.callbackMove is not None:
+                self.view.removeEventCallback("SoLocation2Event", self.callbackMove)
+            if self.callbackClick is not None:
+                self.view.removeEventCallback("SoMouseButtonEvent", self.callbackClick)
+            if self.callbackKey is not None:
+                self.view.removeEventCallback("SoKeyboardEvent", self.callbackKey)
+        except RuntimeError:
+            # the view has been deleted already
+            pass
+        self.callbackMove = None
+        self.callbackClick = None
+        self.callbackKey = None
 
-        if Gui.Control.activeDialog():
-            Gui.Control.closeDialog()
+        UtilsAssembly.closeTaskDialog(self.doc)
 
     def setDragger(self):
         if self.blockSetDragger:
@@ -712,7 +730,7 @@ class TaskAssemblyCreateView(QtCore.QObject):
         self.selectedRefs = []
         self.selectedObjs = []
         self.selectedObjsInitPlc = []
-        selection = Gui.Selection.getSelectionEx("*", 0)
+        selection = Gui.Selection.getSelectionEx(self.doc.Name, 0)
         if not selection:
             self.enableDragger(False)
             return
@@ -722,7 +740,7 @@ class TaskAssemblyCreateView(QtCore.QObject):
 
             if not sel.SubElementNames:
                 # no subnames, so its a root assembly itself that is selected.
-                Gui.Selection.removeSelection(sel.Object)
+                Gui.Selection.removeSelection(sel.Object.Document.Name, sel.Object.Name, "")
                 continue
 
             for sub_name in sel.SubElementNames:
@@ -738,7 +756,7 @@ class TaskAssemblyCreateView(QtCore.QObject):
 
                 # Only objects within the assembly, not the assembly and not elements.
                 if obj is None or moving_part is None or obj == self.assembly or element_name != "":
-                    Gui.Selection.removeSelection(sel.Object, sub_name)
+                    Gui.Selection.removeSelection(sel.Object.Document.Name, sel.Object.Name, sub_name)
                     continue
 
                 partAsSolid = self.form.CheckBox_PartsAsSingleSolid.isChecked()
@@ -786,7 +804,7 @@ class TaskAssemblyCreateView(QtCore.QObject):
             self.form.stepList.addItem(move.Name)
 
     def onItemClicked(self, item):
-        Gui.Selection.clearSelection()
+        Gui.Selection.clearSelection(self.doc.Name)
         Gui.Selection.addSelection(self.viewObj.Document.Name, item.text(), "")
         # we give back the focus to the item as addSelection gave the focus to the 3dview
         self.form.stepList.setCurrentItem(item)
@@ -799,7 +817,7 @@ class TaskAssemblyCreateView(QtCore.QObject):
         assemblyParts = UtilsAssembly.getMovablePartsWithin(self.assembly, partsAsSolid)
         self.blockSetDragger = True
         for part in assemblyParts:
-            Gui.Selection.addSelection(part, "")
+            Gui.Selection.addSelection(part.Document.Name, part.Name, "")
         self.blockSetDragger = False
         self.setDragger()
 
@@ -853,7 +871,7 @@ class TaskAssemblyCreateView(QtCore.QObject):
 
         Gui.addModule("UtilsAssembly")
         commands = (
-            f'assembly = App.ActiveDocument.getObject("{self.assembly.Name}")\n'
+            f'assembly = App.getDocument("{self.doc.Name}").getObject("{self.assembly.Name}")\n'
             "view_group = UtilsAssembly.getViewGroup(assembly)\n"
             'viewObj = view_group.newObject("App::FeaturePython", "Exploded View")\n'
             "CommandCreateView.ExplodedView(viewObj)"
@@ -869,7 +887,7 @@ class TaskAssemblyCreateView(QtCore.QObject):
             moveType_index = 1  # 1 = type_index of "Radial"
 
         commands = (
-            f'assembly = App.ActiveDocument.getObject("{self.assembly.Name}")\n'
+            f'assembly = App.getDocument("{self.doc.Name}").getObject("{self.assembly.Name}")\n'
             'currentStep = assembly.newObject("App::FeaturePython", "Move")\n'
             f"CommandCreateView.ExplodedViewStep(currentStep, {moveType_index})"
         )
@@ -898,10 +916,10 @@ class TaskAssemblyCreateView(QtCore.QObject):
         for obj, init_plc in zip(self.selectedObjs, self.selectedObjsInitPlc):
             obj.Placement = init_plc
 
-        Gui.doCommand(f'App.ActiveDocument.removeObject("{self.currentStep.Name}")')
+        Gui.doCommand(f'App.getDocument("{self.doc.Name}").removeObject("{self.currentStep.Name}")')
         self.currentStep = None
 
-        Gui.Selection.clearSelection()
+        Gui.Selection.clearSelection(self.doc.Name)
 
     def draggerMoved(self, event):
         if self.blockDraggerMove:
@@ -926,7 +944,7 @@ class TaskAssemblyCreateView(QtCore.QObject):
         self.currentStep = None
 
         if isRadial:
-            Gui.Selection.clearSelection()
+            Gui.Selection.clearSelection(self.doc.Name)
             return
 
         # Reset the initial placements
@@ -939,8 +957,7 @@ class TaskAssemblyCreateView(QtCore.QObject):
         if not self.selectingFeature:
             return
 
-        view = Gui.activeDocument().activeView()
-        cursor_info = view.getObjectInfo(view.getCursorPos())
+        cursor_info = self.view.getObjectInfo(self.view.getCursorPos())
 
         if not cursor_info or not self.presel_ref:
             self.assembly.ViewObject.DraggerVisibility = False
@@ -1036,9 +1053,9 @@ class TaskAssemblyCreateView(QtCore.QObject):
                 # When selecting, we do not want to select an element, but only the containing part.
                 Gui.Selection.removeSelection(doc_name, obj_name, sub_name)
                 if Gui.Selection.isSelected(part, ""):
-                    Gui.Selection.removeSelection(part, "")
+                    Gui.Selection.removeSelection(part.Document.Name, part.Name, "")
                 else:
-                    Gui.Selection.addSelection(part, "")
+                    Gui.Selection.addSelection(part.Document.Name, part.Name, "")
             else:
                 self.setDragger()
                 pass

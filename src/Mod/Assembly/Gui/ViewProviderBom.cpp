@@ -56,11 +56,12 @@ bool ViewProviderBom::doubleClicked()
     std::string doc_name = getObject()->getDocument()->getName();
 
     std::string pythonCommand = "import CommandCreateBom\n"
+                                "import UtilsAssembly\n"
                                 "obj = App.getDocument('"
         + doc_name + "').getObject('" + obj_name
         + "')\n"
-          "Gui.Control.showDialog(CommandCreateBom.TaskAssemblyCreateBom(obj), "
-          "Gui.getDocument('"
+          "UtilsAssembly.showTaskDialog(CommandCreateBom.TaskAssemblyCreateBom(obj), "
+          "App.getDocument('"
         + doc_name + "'))";
 
     Gui::Command::runCommand(Gui::Command::App, pythonCommand.c_str());

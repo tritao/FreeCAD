@@ -82,10 +82,7 @@ class CommandCreateBom:
 
     def Activated(self):
         self.panel = TaskAssemblyCreateBom()
-        dialog = Gui.Control.showDialog(self.panel, Gui.ActiveDocument)
-        if dialog is not None:
-            dialog.setAutoCloseOnDeletedDocument(True)
-            dialog.setDocumentName(App.ActiveDocument.Name)
+        UtilsAssembly.showTaskDialog(self.panel, self.panel.doc)
 
 
 ######### Create Exploded View Task ###########
@@ -94,6 +91,8 @@ class TaskAssemblyCreateBom(QtCore.QObject):
         super().__init__()
 
         self.form = Gui.PySideUic.loadUi(":/panels/TaskAssemblyCreateBom.ui")
+        self.doc = bomObj.Document if bomObj else App.ActiveDocument
+        self.gui_doc = UtilsAssembly.guiDocumentOf(self.doc)
 
         # Set the QListWidget properties to support drag and drop
         self.form.columnList.setEditTriggers(
@@ -115,7 +114,7 @@ class TaskAssemblyCreateBom(QtCore.QObject):
         pref = Preferences.preferences()
 
         if bomObj:
-            Gui.ActiveDocument.openCommand("Edit Bill Of Materials")
+            self.gui_doc.openCommand("Edit Bill Of Materials")
 
             for name in bomObj.columnsNames:
                 if name in ColumnNames:
@@ -126,7 +125,7 @@ class TaskAssemblyCreateBom(QtCore.QObject):
 
             self.bomObj = bomObj
         else:
-            Gui.ActiveDocument.openCommand("Create Bill Of Materials")
+            self.gui_doc.openCommand("Create Bill Of Materials")
 
             # Add the columns
             for name in TranslatedColumnNames:
@@ -152,7 +151,7 @@ class TaskAssemblyCreateBom(QtCore.QObject):
 
     def accept(self):
         self.deactivate()
-        Gui.ActiveDocument.commitCommand()
+        self.gui_doc.commitCommand()
 
         self.bomObj.recompute()
 
@@ -162,7 +161,7 @@ class TaskAssemblyCreateBom(QtCore.QObject):
 
     def reject(self):
         self.deactivate()
-        Gui.ActiveDocument.abortCommand()
+        self.gui_doc.abortCommand()
         return True
 
     def deactivate(self):
@@ -171,8 +170,7 @@ class TaskAssemblyCreateBom(QtCore.QObject):
         pref.SetBool("BOMDetailParts", self.form.CheckBox_detailParts.isChecked())
         pref.SetBool("BOMDetailSubAssemblies", self.form.CheckBox_detailSubAssemblies.isChecked())
 
-        if Gui.Control.activeDialog():
-            Gui.Control.closeDialog()
+        UtilsAssembly.closeTaskDialog(self.doc)
 
     def onIncludeSolids(self, val):
         self.bomObj.onlyParts = val
@@ -323,7 +321,10 @@ class TaskAssemblyCreateBom(QtCore.QObject):
                 'bomObj = bom_group.newObject("Assembly::BomObject", "Bill of Materials")'
             )
         else:
-            commands = 'bomObj = App.activeDocument().addObject("Assembly::BomObject", "Bill of Materials")'
+            commands = (
+                f'bomObj = App.getDocument("{self.doc.Name}").addObject('
+                '"Assembly::BomObject", "Bill of Materials")'
+            )
         Gui.doCommand(commands)
         self.bomObj = Gui.doCommandEval("bomObj")
 

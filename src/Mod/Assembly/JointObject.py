@@ -1192,7 +1192,7 @@ class ViewProviderJoint:
         return None
 
     def doubleClicked(self, vobj):
-        App.ActiveDocument.abortTransaction()  # Close the auto-transaction
+        vobj.Object.Document.abortTransaction()  # Close the auto-transaction
 
         task = Gui.Control.activeTaskDialog()
         if task:
@@ -1204,14 +1204,12 @@ class ViewProviderJoint:
             return False
 
         if UtilsAssembly.activeAssembly() != assembly:
-            vobj.Document.setEdit(assembly)
+            UtilsAssembly.guiDocumentOf(assembly.Document).setEdit(assembly)
 
         panel = TaskAssemblyCreateJoint(0, vobj.Object)
-        dialog = Gui.Control.showDialog(panel, Gui.ActiveDocument)
+        dialog = UtilsAssembly.showTaskDialog(panel, assembly.Document)
         if dialog is not None:
             dialog.setAutoCloseOnTransactionChange(True)
-            dialog.setAutoCloseOnDeletedDocument(True)
-            dialog.setDocumentName(App.ActiveDocument.Name)
 
         return True
 
@@ -1536,11 +1534,11 @@ class TaskAssemblyCreateJoint(QtCore.QObject):
         self.jForm.jointType.currentIndexChanged.connect(self.onJointTypeChanged)
 
         if jointObj:
-            Gui.Selection.clearSelection()
+            Gui.Selection.clearSelection(self.doc.Name)
             self.creating = False
             self.joint = jointObj
             self.jointName = jointObj.Label
-            Gui.ActiveDocument.openCommand("Edit " + self.jointName + " Joint")
+            self.gui_doc.openCommand("Edit " + self.jointName + " Joint")
 
             self.updateTaskboxFromJoint()
             self.visibilityBackup = self.joint.Visibility
@@ -1550,9 +1548,9 @@ class TaskAssemblyCreateJoint(QtCore.QObject):
             self.creating = True
             self.jointName = self.jForm.jointType.currentText().replace(" ", "")
             if self.activeType == "Part":
-                Gui.ActiveDocument.openCommand("Transform")
+                self.gui_doc.openCommand("Transform")
             else:
-                Gui.ActiveDocument.openCommand("Create " + self.jointName + " Joint")
+                self.gui_doc.openCommand("Create " + self.jointName + " Joint")
 
             self.refs = []
             self.presel_ref = None
@@ -1612,6 +1610,8 @@ class TaskAssemblyCreateJoint(QtCore.QObject):
         Gui.Selection.addObserver(self, Gui.Selection.ResolveMode.NoResolve)
         Gui.Selection.setSelectionStyle(Gui.Selection.SelectionStyle.GreedySelection)
 
+        self.callbackMove = None
+        self.callbackKey = None
         self.callbackMove = self.view.addEventCallback("SoLocation2Event", self.moveMouse)
         self.callbackKey = self.view.addEventCallback("SoKeyboardEvent", self.KeyboardEvent)
 
@@ -1640,17 +1640,29 @@ class TaskAssemblyCreateJoint(QtCore.QObject):
 
         self.assembly.recompute(True)
 
-        Gui.ActiveDocument.commitCommand()
+        self.gui_doc.commitCommand()
         return True
 
     def reject(self):
         self.deactivate()
-        Gui.ActiveDocument.abortCommand()
+        self.gui_doc.abortCommand()
         self.assembly.recompute(True)
         return True
 
     def autoClosedOnTransactionChange(self):
         self.reject()
+
+    def _remove_view_callbacks(self):
+        try:
+            if self.callbackMove is not None:
+                self.view.removeEventCallback("SoLocation2Event", self.callbackMove)
+            if self.callbackKey is not None:
+                self.view.removeEventCallback("SoKeyboardEvent", self.callbackKey)
+        except RuntimeError:
+            # the view has been deleted already
+            pass
+        self.callbackMove = None
+        self.callbackKey = None
 
     def autoClosedOnDeletedDocument(self):
         global activeTask
@@ -1658,7 +1670,11 @@ class TaskAssemblyCreateJoint(QtCore.QObject):
         Gui.Selection.removeSelectionGate()
         Gui.Selection.removeObserver(self)
         Gui.Selection.setSelectionStyle(Gui.Selection.SelectionStyle.NormalSelection)
-        App.ActiveDocument.abortTransaction()
+        Gui.Selection.clearSelection(self.doc.Name)
+        self._remove_view_callbacks()
+        if self.doc.Name in App.listDocuments():
+            UtilsAssembly.setJointsPickableState(self.doc, True)
+            self.doc.abortTransaction()
 
     def deactivate(self):
         global activeTask
@@ -1672,15 +1688,13 @@ class TaskAssemblyCreateJoint(QtCore.QObject):
         Gui.Selection.removeSelectionGate()
         Gui.Selection.removeObserver(self)
         Gui.Selection.setSelectionStyle(Gui.Selection.SelectionStyle.NormalSelection)
-        Gui.Selection.clearSelection()
-        self.view.removeEventCallback("SoLocation2Event", self.callbackMove)
-        self.view.removeEventCallback("SoKeyboardEvent", self.callbackKey)
+        Gui.Selection.clearSelection(self.doc.Name)
+        self._remove_view_callbacks()
         UtilsAssembly.setJointsPickableState(self.doc, True)
-        if Gui.Control.activeDialog():
-            Gui.Control.closeDialog()
+        UtilsAssembly.closeTaskDialog(self.doc)
 
     def handleInitialSelection(self):
-        selection = Gui.Selection.getSelectionEx("*", 0)
+        selection = Gui.Selection.getSelectionEx(self.doc.Name, 0)
         if not selection:
             return
         for sel in selection:
@@ -1689,7 +1703,7 @@ class TaskAssemblyCreateJoint(QtCore.QObject):
 
             if not sel.SubElementNames:
                 # no subnames, so its a root assembly itself that is selected.
-                Gui.Selection.removeSelection(sel.Object)
+                Gui.Selection.removeSelection(sel.Object.Document.Name, sel.Object.Name, "")
                 continue
 
             for sub_name in sel.SubElementNames:
@@ -1707,13 +1721,13 @@ class TaskAssemblyCreateJoint(QtCore.QObject):
 
                 # Only objects within the assembly.
                 if moving_part is None:
-                    Gui.Selection.removeSelection(sel.Object, sub_name)
+                    Gui.Selection.removeSelection(sel.Object.Document.Name, sel.Object.Name, sub_name)
                     continue
 
                 if len(self.refs) == 1 and moving_part == self.getMovingPart(self.refs[0]):
                     # do not select several feature of the same object.
                     self.refs.clear()
-                    Gui.Selection.clearSelection()
+                    Gui.Selection.clearSelection(self.doc.Name)
                     return
 
                 self.refs.append(ref)
@@ -1721,7 +1735,7 @@ class TaskAssemblyCreateJoint(QtCore.QObject):
         # do not accept initial selection if we don't have 2 selected features
         if len(self.refs) != 2:
             self.refs.clear()
-            Gui.Selection.clearSelection()
+            Gui.Selection.clearSelection(self.doc.Name)
         else:
             self.updateJoint()
 
@@ -2080,7 +2094,7 @@ class TaskAssemblyCreateJoint(QtCore.QObject):
             if row < len(self.refs):
                 ref = self.refs[row]
                 sub = UtilsAssembly.addTipNameToSub(ref)
-                Gui.Selection.removeSelection(ref[0], sub)
+                Gui.Selection.removeSelection(ref[0].Document.Name, ref[0].Name, sub)
             else:
                 print(f"Row {row} is out of bounds for refs (length: {len(self.refs)})")
 

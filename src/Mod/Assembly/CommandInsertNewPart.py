@@ -88,10 +88,7 @@ class CommandInsertNewPart:
                 return
 
         panel = TaskAssemblyNewPart()
-        dialog = Gui.Control.showDialog(panel, Gui.ActiveDocument)
-        if dialog is not None:
-            dialog.setAutoCloseOnDeletedDocument(True)
-            dialog.setDocumentName(App.ActiveDocument.Name)
+        UtilsAssembly.showTaskDialog(panel, doc)
 
 
 class TaskAssemblyNewPart(JointObject.TaskAssemblyCreateJoint):
@@ -189,7 +186,7 @@ class TaskAssemblyNewPart(JointObject.TaskAssemblyCreateJoint):
         mw = Gui.getMainWindow()
         trees = mw.findChildren(QtGui.QTreeWidget)
 
-        Gui.Selection.addSelection(link)
+        Gui.Selection.addSelection(link.Document.Name, link.Name, "")
         for tree in trees:
             for item in tree.selectedItems():
                 tree.expandItem(item)
@@ -208,7 +205,7 @@ class TaskAssemblyNewPart(JointObject.TaskAssemblyCreateJoint):
 
         self.createPart()
 
-        Gui.ActiveDocument.commitCommand()
+        self.gui_doc.commitCommand()
 
         return True
 

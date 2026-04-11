@@ -51,6 +51,48 @@ def activePartOrAssembly():
     return doc.ActiveView.getActiveObject("part")
 
 
+def documentOf(document=None):
+    if document is None:
+        return App.ActiveDocument
+
+    if hasattr(document, "Document"):
+        return document.Document
+
+    return document
+
+
+def guiDocumentOf(document=None):
+    doc = documentOf(document)
+    if doc is None:
+        return Gui.ActiveDocument
+
+    try:
+        return Gui.getDocument(doc.Name)
+    except Exception:
+        return None
+
+
+def showTaskDialog(panel, document=None):
+    doc = documentOf(document)
+    gui_doc = guiDocumentOf(doc)
+    dialog = Gui.Control.showDialog(panel, gui_doc)
+    if dialog is not None and doc is not None:
+        dialog.setAutoCloseOnDeletedDocument(True)
+        dialog.setDocumentName(doc.Name)
+    return dialog
+
+
+def closeTaskDialog(document=None):
+    gui_doc = guiDocumentOf(document)
+    if gui_doc is not None and Gui.Control.activeDialog(gui_doc):
+        Gui.Control.closeDialog(gui_doc)
+
+
+def taskDialogActive(document=None):
+    gui_doc = guiDocumentOf(document)
+    return bool(gui_doc is not None and Gui.Control.activeDialog(gui_doc))
+
+
 def activeAssembly():
     active_assembly = activePartOrAssembly()
     if active_assembly is not None and active_assembly.isDerivedFrom("Assembly::AssemblyObject"):
@@ -70,7 +112,7 @@ def activePart():
 
 
 def isAssemblyCommandActive():
-    return activeAssembly() is not None and not Gui.Control.activeDialog()
+    return activeAssembly() is not None and not taskDialogActive()
 
 
 def isDocTemporary(doc):
@@ -1377,8 +1419,11 @@ def getParentPlacementIfNeeded(part):
 
 def generatePropertySettings(documentObject):
     commands = []
+    doc_name = documentObject.Document.Name
     if hasattr(documentObject, "Name"):
-        commands.append(f'obj = App.ActiveDocument.getObject("{documentObject.Name}")')
+        commands.append(
+            f'obj = App.getDocument("{doc_name}").getObject("{documentObject.Name}")'
+        )
     for propertyName in documentObject.PropertiesList:
         propertyValue = documentObject.getPropertyByName(propertyName)
         propertyType = documentObject.getTypeIdOfProperty(propertyName)
@@ -1397,8 +1442,9 @@ def generatePropertySettings(documentObject):
                 f"App.Rotation(*{[round(n,5) for n in propertyValue.Rotation.getYawPitchRoll()]}))"
             )
         elif propertyType == "App::PropertyXLinkSubHidden":
+            target_doc_name = propertyValue[0].Document.Name
             commands.append(
-                f'obj.{propertyName} = [App.ActiveDocument.getObject("{propertyValue[0].Name}"), {propertyValue[1]}]'
+                f'obj.{propertyName} = [App.getDocument("{target_doc_name}").getObject("{propertyValue[0].Name}"), {propertyValue[1]}]'
             )
         else:
             # print("Not processing properties of type ", propertyType)

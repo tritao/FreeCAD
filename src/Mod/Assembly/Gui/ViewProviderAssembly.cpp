@@ -453,7 +453,7 @@ bool ViewProviderAssembly::keyPressed(bool pressed, int key)
 {
     if (key == SoKeyboardEvent::ESCAPE) {
         if (isInEditMode()) {
-            if (Gui::Control().activeDialog(nullptr)) {
+            if (Gui::Control().activeDialog(getDocument()->getDocument())) {
                 return true;
             }
 
@@ -697,12 +697,17 @@ void ViewProviderAssembly::doubleClickedIn3dView()
         std::string doc_name = joint->getDocument()->getName();
 
         std::string cmd = "import JointObject\n"
+                          "import UtilsAssembly\n"
                           "obj = App.getDocument('"
             + doc_name + "').getObject('" + obj_name
             + "')\n"
-              "Gui.Control.showDialog(JointObject.TaskAssemblyCreateJoint(0, obj), "
-              "Gui.getDocument('"
-            + doc_name + "'))";
+              "dialog = UtilsAssembly.showTaskDialog("
+              "JointObject.TaskAssemblyCreateJoint(0, obj), "
+              "App.getDocument('"
+            + doc_name
+            + "'))\n"
+              "if dialog is not None:\n"
+              "    dialog.setAutoCloseOnTransactionChange(True)";
 
         Gui::Command::runCommand(Gui::Command::App, cmd.c_str());
     }

@@ -93,10 +93,7 @@ class CommandCreateSimulation:
             return
 
         self.panel = TaskAssemblyCreateSimulation()
-        dialog = Gui.Control.showDialog(self.panel, Gui.ActiveDocument)
-        if dialog is not None:
-            dialog.setAutoCloseOnDeletedDocument(True)
-            dialog.setDocumentName(App.ActiveDocument.Name)
+        UtilsAssembly.showTaskDialog(self.panel, assembly.Document)
 
 
 ######### Simulation Object ###########
@@ -270,13 +267,10 @@ class ViewProviderSimulation:
             return False
 
         if UtilsAssembly.activeAssembly() != assembly:
-            Gui.ActiveDocument.setEdit(assembly)
+            UtilsAssembly.guiDocumentOf(assembly.Document).setEdit(assembly)
 
         panel = TaskAssemblyCreateSimulation(vpDoc.Object)
-        dialog = Gui.Control.showDialog(panel, Gui.ActiveDocument)
-        if dialog is not None:
-            dialog.setAutoCloseOnDeletedDocument(True)
-            dialog.setDocumentName(App.ActiveDocument.Name)
+        UtilsAssembly.showTaskDialog(panel, assembly.Document)
 
         return True
 
@@ -450,7 +444,7 @@ class ViewProviderMotion:
             return None
 
         if UtilsAssembly.activeAssembly() != assembly:
-            Gui.ActiveDocument.setEdit(assembly)
+            UtilsAssembly.guiDocumentOf(assembly.Document).setEdit(assembly)
 
         return assembly
 
@@ -777,7 +771,6 @@ SLOPE defines the steepness of the transition between 0 and H1 and H2 to 0 about
 class TaskAssemblyCreateSimulation(QtCore.QObject):
     def __init__(self, simFeaturePy=None):
         super().__init__()
-        Gui.Selection.clearSelection()
 
         self.assembly = UtilsAssembly.activeAssembly()
 
@@ -785,6 +778,7 @@ class TaskAssemblyCreateSimulation(QtCore.QObject):
 
         self.doc = self.assembly.Document
         self.gui_doc = Gui.getDocument(self.doc)
+        Gui.Selection.clearSelection(self.doc.Name)
 
         self.view = self.gui_doc.activeView()
 
@@ -828,10 +822,10 @@ class TaskAssemblyCreateSimulation(QtCore.QObject):
 
         if simFeaturePy:
             self.simFeaturePy = simFeaturePy
-            Gui.ActiveDocument.openCommand("Edit " + simFeaturePy.Label + " Simulation")
+            self.gui_doc.openCommand("Edit " + simFeaturePy.Label + " Simulation")
             self.onMotionsChanged()
         else:
-            Gui.ActiveDocument.openCommand("Create Simulation")
+            self.gui_doc.openCommand("Create Simulation")
             self.createSimulationObject()
 
         self.setUiInitialValues()
@@ -867,19 +861,18 @@ class TaskAssemblyCreateSimulation(QtCore.QObject):
     def accept(self):
         self.deactivate()
         UtilsAssembly.restoreAssemblyPartsPlacements(self.assembly, self.initialPlcs)
-        Gui.ActiveDocument.commitCommand()
+        self.gui_doc.commitCommand()
         return True
 
     def reject(self):
         self.deactivate()
-        Gui.ActiveDocument.abortCommand()
+        self.gui_doc.abortCommand()
         return True
 
     def deactivate(self):
         self.animationTimer.stop()
         self.simFeaturePy.Proxy.setMotionsChangedCallback(None)
-        if Gui.Control.activeDialog():
-            Gui.Control.closeDialog()
+        UtilsAssembly.closeTaskDialog(self.doc)
 
     def onTimeStartChanged(self, quantity):
         self.simFeaturePy.aTimeStart = self.form.TimeStartSpinBox.property("rawValue")
@@ -1058,7 +1051,7 @@ class TaskAssemblyCreateSimulation(QtCore.QObject):
             return  # User cancelled
 
         # Get parameters
-        view = Gui.ActiveDocument.ActiveView
+        view = self.view
         width, height = view.getSize()
         # Ensure dimensions are even, as required by many video codecs
         if width % 2 != 0:

@@ -56,7 +56,7 @@ class CommandCreateAssembly:
         }
 
     def IsActive(self):
-        if Gui.Control.activeDialog():
+        if Gui.Control.activeDialog(Gui.ActiveDocument):
             return False
 
         if Preferences.preferences().GetBool("EnforceOneAssemblyRule", True):
@@ -68,7 +68,9 @@ class CommandCreateAssembly:
         return App.ActiveDocument is not None
 
     def Activated(self):
-        Gui.ActiveDocument.openCommand("New assembly")
+        doc = App.ActiveDocument
+        gui_doc = UtilsAssembly.guiDocumentOf(doc)
+        gui_doc.openCommand("New assembly")
 
         activeAssembly = UtilsAssembly.activeAssembly()
         Gui.addModule("UtilsAssembly")
@@ -79,7 +81,7 @@ class CommandCreateAssembly:
             )
         else:
             commands = (
-                'assembly = App.ActiveDocument.addObject("Assembly::AssemblyObject", "Assembly")\n'
+                f'assembly = App.getDocument("{doc.Name}").addObject("Assembly::AssemblyObject", "Assembly")\n'
             )
 
         commands = commands + 'assembly.Type = "Assembly"\n'
@@ -87,16 +89,18 @@ class CommandCreateAssembly:
 
         Gui.doCommand(commands)
         if not activeAssembly:
-            Gui.doCommandGui("Gui.ActiveDocument.setEdit(assembly)")
+            Gui.doCommandGui(f'Gui.getDocument("{doc.Name}").setEdit(assembly)')
 
-        Gui.ActiveDocument.commitCommand()
+        gui_doc.commitCommand()
 
 
 class ActivateAssemblyTaskPanel:
     """A basic TaskPanel to select an assembly to activate."""
 
-    def __init__(self, assemblies):
+    def __init__(self, assemblies, document):
         self.assemblies = assemblies
+        self.document = document
+        self.gui_doc = UtilsAssembly.guiDocumentOf(document)
         self.form = QtWidgets.QWidget()
         self.form.setWindowTitle(translate("Assembly_ActivateAssembly", "Activate Assembly"))
 
@@ -116,8 +120,8 @@ class ActivateAssemblyTaskPanel:
     def accept(self):
         """Called when the user clicks OK."""
         selected_name = self.combo.currentData()
-        if selected_name:
-            Gui.doCommand(f"Gui.ActiveDocument.setEdit('{selected_name}')")
+        if selected_name and self.gui_doc is not None:
+            self.gui_doc.setEdit(selected_name)
         return True
 
     def reject(self):
@@ -140,7 +144,7 @@ class CommandActivateAssembly:
         }
 
     def IsActive(self):
-        if Gui.Control.activeDialog() or App.ActiveDocument is None:
+        if Gui.Control.activeDialog(Gui.ActiveDocument) or App.ActiveDocument is None:
             return False
 
         # Command is only active if no assembly is currently active
@@ -160,11 +164,13 @@ class CommandActivateAssembly:
 
         if len(assemblies) == 1:
             # If there's only one, activate it directly without showing a dialog
-            Gui.doCommand(f"Gui.ActiveDocument.setEdit('{assemblies[0].Name}')")
+            gui_doc = UtilsAssembly.guiDocumentOf(doc)
+            if gui_doc is not None:
+                gui_doc.setEdit(assemblies[0].Name)
         elif len(assemblies) > 1:
             # If there are multiple, show a task panel to let the user choose
-            self.task_panel = ActivateAssemblyTaskPanel(assemblies)
-            Gui.Control.showDialog(self.task_panel, Gui.ActiveDocument)
+            self.task_panel = ActivateAssemblyTaskPanel(assemblies, doc)
+            UtilsAssembly.showTaskDialog(self.task_panel, doc)
 
 
 if App.GuiUp:

@@ -54,14 +54,17 @@ def activateJoint(index):
     if JointObject.activeTask:
         JointObject.activeTask.reject()
 
+    doc_name = App.ActiveDocument.Name
     Gui.addModule("JointObject")  # NOLINT
+    Gui.addModule("UtilsAssembly")  # NOLINT
     Gui.doCommand(f"panel = JointObject.TaskAssemblyCreateJoint({index})")
-    Gui.doCommandGui("dialog = Gui.Control.showDialog(panel, Gui.ActiveDocument)")
-    dialog = Gui.doCommandEval("dialog")
-    if dialog is not None:
-        dialog.setAutoCloseOnTransactionChange(True)
-        dialog.setAutoCloseOnDeletedDocument(True)
-        dialog.setDocumentName(App.ActiveDocument.Name)
+    Gui.doCommandGui(
+        f'dialog = UtilsAssembly.showTaskDialog(panel, App.getDocument("{doc_name}"))'
+    )
+    Gui.doCommandGui(
+        "if dialog is not None:\n"
+        "    dialog.setAutoCloseOnTransactionChange(True)"
+    )
 
 
 class CommandCreateJointFixed:
@@ -401,15 +404,20 @@ class CommandGroupGearBelt:
         return isCreateJointActive()
 
 
-def createGroundedJoint(obj):
-    if not UtilsAssembly.activeAssembly():
+def createGroundedJoint(obj, assembly=None):
+    if assembly is None:
+        assembly = UtilsAssembly.activeAssembly()
+
+    if not assembly:
         return
 
+    doc_name = assembly.Document.Name
     Gui.addModule("UtilsAssembly")
     Gui.addModule("JointObject")
     commands = (
-        f'obj = App.ActiveDocument.getObject("{obj.Name}")\n'
-        "assembly = UtilsAssembly.activeAssembly()\n"
+        f'doc = App.getDocument("{doc_name}")\n'
+        f'obj = doc.getObject("{obj.Name}")\n'
+        f'assembly = doc.getObject("{assembly.Name}")\n'
         "joint_group = UtilsAssembly.getJointGroup(assembly)\n"
         'ground = joint_group.newObject("App::FeaturePython", "GroundedJoint")\n'
         "JointObject.GroundedJoint(ground, obj)"
@@ -451,11 +459,11 @@ class CommandToggleGrounded:
 
         joint_group = UtilsAssembly.getJointGroup(assembly)
 
-        selection = Gui.Selection.getSelectionEx("*", 0)
+        selection = Gui.Selection.getSelectionEx(assembly.Document.Name, 0)
         if not selection:
             return
 
-        App.ActiveDocument.openTransaction("Toggle grounded")
+        assembly.Document.openTransaction("Toggle grounded")
         for sel in selection:
             # If you select 2 solids (bodies for example) within an assembly.
             # There'll be a single sel but 2 SubElementNames.
@@ -466,7 +474,7 @@ class CommandToggleGrounded:
                     obj = resolved[0]
                     if hasattr(obj, "ObjectToGround"):
                         commands = (
-                            "doc = App.ActiveDocument\n"
+                            f'doc = App.getDocument("{assembly.Document.Name}")\n'
                             f'doc.removeObject("{obj.Name}")\n'
                             "doc.recompute()\n"
                         )
@@ -488,7 +496,7 @@ class CommandToggleGrounded:
                 for joint in joint_group.Group:
                     if hasattr(joint, "ObjectToGround") and joint.ObjectToGround == moving_part:
                         commands = (
-                            "doc = App.ActiveDocument\n"
+                            f'doc = App.getDocument("{assembly.Document.Name}")\n'
                             f'doc.removeObject("{joint.Name}")\n'
                             "doc.recompute()\n"
                         )
@@ -499,8 +507,8 @@ class CommandToggleGrounded:
                     continue
 
                 # Create groundedJoint.
-                createGroundedJoint(moving_part)
-        App.ActiveDocument.commitTransaction()
+                createGroundedJoint(moving_part, assembly)
+        assembly.Document.commitTransaction()
 
 
 if App.GuiUp:

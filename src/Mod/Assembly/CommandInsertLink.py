@@ -90,9 +90,10 @@ class CommandInsertLink:
         assembly = UtilsAssembly.activeAssembly()
         if not assembly:
             return
-        view = Gui.activeDocument().activeView()
+        gui_doc = UtilsAssembly.guiDocumentOf(assembly.Document)
+        view = gui_doc.activeView()
         self.panel = TaskAssemblyInsertLink(assembly, view)
-        Gui.Control.showDialog(self.panel, Gui.ActiveDocument)
+        UtilsAssembly.showTaskDialog(self.panel, assembly.Document)
 
 
 class InsertLinkObserver:
@@ -109,7 +110,8 @@ class TaskAssemblyInsertLink(QtCore.QObject):
 
         self.assembly = assembly
         self.view = view
-        self.doc = App.ActiveDocument
+        self.doc = assembly.Document
+        self.gui_doc = UtilsAssembly.guiDocumentOf(self.doc)
         self.showHidden = False
 
         self.form = Gui.PySideUic.loadUi(":/panels/TaskAssemblyInsertLink.ui")
@@ -139,7 +141,7 @@ class TaskAssemblyInsertLink(QtCore.QObject):
 
         self.buildPartList()
 
-        Gui.ActiveDocument.openCommand("Insert Component")
+        self.gui_doc.openCommand("Insert Component")
 
         # Listen for external deletions to keep the list in sync
         self.docObserver = InsertLinkObserver(self.onObjectDeleted)
@@ -149,7 +151,8 @@ class TaskAssemblyInsertLink(QtCore.QObject):
         self.deactivated()
 
         Gui.addModule("UtilsAssembly")
-        commands = "assembly = UtilsAssembly.activeAssembly()\n"
+        Gui.addModule("CommandCreateJoint")
+        commands = f'assembly = App.getDocument("{self.doc.Name}").getObject("{self.assembly.Name}")\n'
         for insertionItem in self.insertionStack:
             object = insertionItem["addedObject"]
             translation = insertionItem["translation"]
@@ -164,7 +167,7 @@ class TaskAssemblyInsertLink(QtCore.QObject):
 
             commands = commands + (
                 f'item = assembly.newObject("App::Link", "{object.Name}")\n'
-                f'item.LinkedObject = App.ActiveDocument.getObject("{object.LinkedObject.Name}")\n'
+                f'item.LinkedObject = App.getDocument("{object.LinkedObject.Document.Name}").getObject("{object.LinkedObject.Name}")\n'
                 f'item.Label = "{object.Label}"\n'
             )
 
@@ -179,17 +182,17 @@ class TaskAssemblyInsertLink(QtCore.QObject):
         if self.groundedObj:
             commands = (
                 commands
-                + f'CommandCreateJoint.createGroundedJoint(App.ActiveDocument.getObject("{self.groundedObj.Name}"))\n'
+                + f'CommandCreateJoint.createGroundedJoint(App.getDocument("{self.doc.Name}").getObject("{self.groundedObj.Name}"), App.getDocument("{self.doc.Name}").getObject("{self.assembly.Name}"))\n'
             )
 
         Gui.doCommandSkip(commands[:-1])  # Get rid of last \n
-        Gui.ActiveDocument.commitCommand()
+        self.gui_doc.commitCommand()
         return True
 
     def reject(self):
         self.deactivated()
 
-        Gui.ActiveDocument.abortCommand()
+        self.gui_doc.abortCommand()
         return True
 
     def deactivated(self):
@@ -200,7 +203,7 @@ class TaskAssemblyInsertLink(QtCore.QObject):
         pref = Preferences.preferences()
         pref.SetBool("InsertShowOnlyParts", self.form.CheckBox_ShowOnlyParts.isChecked())
         pref.SetBool("InsertRigidSubAssemblies", self.form.CheckBox_RigidSubAsm.isChecked())
-        Gui.Selection.clearSelection()
+        Gui.Selection.clearSelection(self.doc.Name)
 
     def buildPartList(self):
         self.form.partList.clear()
@@ -376,7 +379,7 @@ class TaskAssemblyInsertLink(QtCore.QObject):
 
                 msgBox.exec_()
 
-                if not (msgBox.clickedButton() == saveButton and Gui.ActiveDocument.saveAs()):
+                if not (msgBox.clickedButton() == saveButton and self.gui_doc.saveAs()):
                     return
 
             # check that the selectedPart document is saved.
@@ -457,7 +460,7 @@ class TaskAssemblyInsertLink(QtCore.QObject):
             addedObject.Rigid = self.form.CheckBox_RigidSubAsm.isChecked()
 
         # highlight the link
-        Gui.Selection.clearSelection()
+        Gui.Selection.clearSelection(self.doc.Name)
         Gui.Selection.addSelection(self.doc.Name, addedObject.Name, "")
 
         item.setSelected(False)
@@ -538,7 +541,9 @@ class TaskAssemblyInsertLink(QtCore.QObject):
                     targetObj = candidate
 
             self.groundedObj = targetObj
-            self.groundedJoint = CommandCreateJoint.createGroundedJoint(self.groundedObj)
+            self.groundedJoint = CommandCreateJoint.createGroundedJoint(
+                self.groundedObj, self.assembly
+            )
 
     def increment_counter(self, item):
         text = item.text(0)
