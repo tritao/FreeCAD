@@ -91,6 +91,7 @@ class Snapper:
 
     def __init__(self):
         self.activeview = None
+        self.view = None
         self.toolbar = None
         self.lastObj = []
         self.lastObjSubelements = []
@@ -1294,10 +1295,11 @@ class Snapper:
             if toolbar:
                 toolbar.hide()
 
-    def _clear_point_callbacks(self):
+    def _clear_point_callbacks(self, view=None):
         """Remove the current point-picking callbacks, if any."""
         had_callbacks = bool(self.callbackClick or self.callbackMove)
-        view = getattr(self, "view", None) or gui_utils.get_3d_view()
+        if view is None:
+            view = self.view or gui_utils.get_3d_view()
 
         try:
             if view and self.callbackClick:
@@ -1322,14 +1324,23 @@ class Snapper:
         """Finish the current point-picking request and restore the Draft UI."""
         self._clear_point_callbacks()
         self.off()
-        self.pt = None
         toolbar = getattr(Gui, "draftToolBar", None)
         if toolbar:
             toolbar.offUi()
 
+    def _dispatch_point_callback(self, callback, point, obj=None):
+        """Invoke a point-picking callback with the expected argument shape."""
+        if not callback:
+            return
+        if len(inspect.getfullargspec(callback).args) > 1:
+            callback(point, obj)
+        else:
+            callback(point)
+
     def cancelPointRequest(self):
         """Cancel the current point-picking request and restore the Draft UI."""
         self._teardown_point_request()
+        self.pt = None
 
     def setSelectMode(self, mode):
         """Set the snapper into select mode (hides snapping temporarily)."""
@@ -1465,24 +1476,21 @@ class Snapper:
         callbacks are cleared for backward compatibility. Prefer
         cancelPointRequest() for explicit teardown.
         """
-        if (
-            last is None
-            and callback is None
-            and movecallback is None
-            and extradlg is None
-            and title is None
-            and mode == "point"
-        ):
+        no_point_request_args = all(
+            arg is None for arg in (last, callback, movecallback, extradlg, title)
+        )
+        if mode == "point" and no_point_request_args:
             self._clear_point_callbacks()
             return
 
         self.pt = None
         self.holdPoints = []
         self.ui = Gui.draftToolBar
-        self.view = gui_utils.get_3d_view()
+        previous_view = self.view
 
         # remove any previous leftover callbacks
-        self._clear_point_callbacks()
+        self._clear_point_callbacks(view=previous_view)
+        self.view = gui_utils.get_3d_view()
 
         def move(event_cb):
             if not self.ui.mouse:
@@ -1518,24 +1526,18 @@ class Snapper:
                     accept()
 
         def accept():
+            point = self.pt
             self._teardown_point_request()
-            if callback:
-                if len(inspect.getfullargspec(callback).args) > 1:
-                    obj = None
-                    if self.snapInfo and ("Object" in self.snapInfo) and self.snapInfo["Object"]:
-                        obj = App.ActiveDocument.getObject(self.snapInfo["Object"])
-                    callback(self.pt, obj)
-                else:
-                    callback(self.pt)
+            obj = None
+            if self.snapInfo and ("Object" in self.snapInfo) and self.snapInfo["Object"]:
+                obj = App.ActiveDocument.getObject(self.snapInfo["Object"])
+            self._dispatch_point_callback(callback, point, obj)
             self.pt = None
 
         def cancel():
             self._teardown_point_request()
-            if callback:
-                if len(inspect.getfullargspec(callback).args) > 1:
-                    callback(None, None)
-                else:
-                    callback(None)
+            self._dispatch_point_callback(callback, None, None)
+            self.pt = None
 
         # adding callback functions
         if mode == "line":

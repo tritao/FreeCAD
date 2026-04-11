@@ -423,10 +423,6 @@ class Arch_Wall:
         p0 = self.wp.get_local_coords(self.points[0])
         p1 = self.wp.get_local_coords(self.points[1])
 
-        if self.tracker is not None:
-            self.tracker.off()
-        FreeCAD.activeDraftCommand = None
-
         self.doc.openTransaction(translate("Arch", "Create Wall"))
 
         # Ensure baseline_mode is initialized (some tests call create_wall()
