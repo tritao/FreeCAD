@@ -56,6 +56,14 @@ class ShapeString(gui_base.GuiCommandBase):
     def __init__(self):
         super().__init__(name="ShapeString")
 
+    def _get_gui_document(self):
+        if not self.doc:
+            return None
+        try:
+            return Gui.getDocument(self.doc.Name)
+        except Exception:
+            return None
+
     def GetResources(self):
         """Set icon, menu and tooltip."""
 
@@ -73,8 +81,9 @@ class ShapeString(gui_base.GuiCommandBase):
         self.ui = task_shapestring.ShapeStringTaskPanelCmd(self)
         self.call = self.view.addEventCallback("SoEvent", self.ui.action)
         _toolmsg(translate("draft", "Pick ShapeString location point"))
-        task = Gui.Control.showDialog(self.ui, Gui.ActiveDocument)
-        task.setDocumentName(Gui.ActiveDocument.Document.Name)
+        gui_doc = self._get_gui_document()
+        task = Gui.Control.showDialog(self.ui, gui_doc)
+        task.setDocumentName(self.doc.Name)
         task.setAutoCloseOnDeletedDocument(True)
         self.ui.update_hints()
 
@@ -86,8 +95,9 @@ class ShapeString(gui_base.GuiCommandBase):
             # the view has been deleted already
             pass
         self.call = None
-        if Gui.Control.activeDialog():
-            Gui.Control.closeDialog()
+        gui_doc = self._get_gui_document()
+        if gui_doc and Gui.Control.activeDialog(gui_doc):
+            Gui.Control.closeDialog(gui_doc)
         super().finish()
 
 

@@ -43,6 +43,12 @@ class ViewProviderFacebinder(ViewProviderDraft):
     def getIcon(self):
         return ":/icons/Draft_Facebinder_Provider.svg"
 
+    def _get_gui_document(self):
+        try:
+            return Gui.getDocument(self.Object.Document.Name)
+        except Exception:
+            return None
+
     def setEdit(self, vobj, mode):
         if mode != 0:
             return None
@@ -52,7 +58,10 @@ class ViewProviderFacebinder(ViewProviderDraft):
         taskd = DraftGui.FacebinderTaskPanel()
         taskd.obj = vobj.Object
         taskd.update()
-        Gui.Control.showDialog(taskd, Gui.ActiveDocument)
+        gui_doc = self._get_gui_document()
+        task = Gui.Control.showDialog(taskd, gui_doc)
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         return True
 
     def unsetEdit(self, vobj, mode):

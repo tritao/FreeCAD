@@ -72,13 +72,20 @@ class Draft_SetStyle:
 
     def Activated(self):
 
-        Gui.Control.showDialog(Draft_SetStyle_TaskPanel(), Gui.ActiveDocument)
+        panel = Draft_SetStyle_TaskPanel(App.ActiveDocument)
+        gui_doc = panel.get_gui_document()
+        task = Gui.Control.showDialog(panel, gui_doc)
+        if task is not None and panel.doc is not None:
+            task.setDocumentName(panel.doc.Name)
+            task.setAutoCloseOnDeletedDocument(True)
 
 
 class Draft_SetStyle_TaskPanel:
     """The task panel for the Draft_SetStyle command"""
 
-    def __init__(self):
+    def __init__(self, document=None):
+
+        self.doc = document
 
         self.form = Gui.PySideUic.loadUi(":/ui/TaskPanel_SetStyle.ui")
         self.form.setWindowIcon(
@@ -158,6 +165,14 @@ class Draft_SetStyle_TaskPanel:
         self.form.comboPresets.currentIndexChanged.connect(self.onLoadStyle)
 
         self.loadDefaults()
+
+    def get_gui_document(self):
+        if self.doc is None:
+            return Gui.ActiveDocument
+        try:
+            return Gui.getDocument(self.doc.Name)
+        except Exception:
+            return None
 
     def loadDefaults(self):
 
@@ -332,7 +347,9 @@ class Draft_SetStyle_TaskPanel:
 
     def reject(self):
 
-        Gui.Control.closeDialog()
+        gui_doc = self.get_gui_document()
+        if gui_doc is not None:
+            Gui.Control.closeDialog(gui_doc)
 
     def accept(self):
 
@@ -395,13 +412,15 @@ class Draft_SetStyle_TaskPanel:
 
     def onApplyStyle(self):
 
-        for obj in Gui.Selection.getSelection():
+        selection = Gui.Selection.getSelection(self.doc.Name) if self.doc else Gui.Selection.getSelection()
+        for obj in selection:
             self.apply_style_to_obj(obj)
 
     def onApplyAnnot(self):
 
-        if App.ActiveDocument is not None:  # Command can be called without a document.
-            objs = App.ActiveDocument.Objects
+        doc = self.doc or App.ActiveDocument
+        if doc is not None:  # Command can be called without a document.
+            objs = doc.Objects
             typs = [
                 "Dimension",
                 "LinearDimension",

@@ -51,7 +51,9 @@ True if Draft_rc.__name__ else False
 class ShapeStringTaskPanel:
     """Base class for Draft_ShapeString task panel."""
 
-    def __init__(self, point=None, size=None, string="", font=""):
+    def __init__(self, point=None, size=None, string="", font="", document_name=None):
+
+        self.document_name = document_name
 
         self.form = Gui.PySideUic.loadUi(":/ui/TaskShapeString.ui")
         self.form.setWindowTitle(translate("draft", "ShapeString"))
@@ -138,6 +140,22 @@ class ShapeStringTaskPanel:
     def quote_string(string):
         return repr(string)
 
+    def _get_document(self):
+        if self.document_name:
+            if self.document_name in App.listDocuments():
+                return App.getDocument(self.document_name)
+            return None
+        return App.ActiveDocument
+
+    def _get_gui_document(self):
+        doc = self._get_document()
+        if not doc:
+            return None
+        try:
+            return Gui.getDocument(doc.Name)
+        except Exception:
+            return None
+
     def platform_win_dialog(self, flag):
         """Handle the type of dialog depending on the platform."""
         ParamGroup = App.ParamGet("User parameter:BaseApp/Preferences/Dialog")
@@ -219,8 +237,8 @@ class ShapeStringTaskPanelCmd(ShapeStringTaskPanel):
     """Task panel for Draft_ShapeString."""
 
     def __init__(self, sourceCmd):
-        super().__init__()
         self.sourceCmd = sourceCmd
+        super().__init__(document_name=sourceCmd.doc.Name if sourceCmd.doc else None)
 
     def accept(self):
         """Execute when clicking the OK button."""
@@ -230,13 +248,19 @@ class ShapeStringTaskPanelCmd(ShapeStringTaskPanel):
 
     def create_object(self):
         """Create object in the current document."""
+        doc = self._get_document()
+        if not doc:
+            return
+        doc_name = doc.Name
+        rotation_q = self.wp.get_placement().Rotation.Q
         Gui.addModule("Draft")
         Gui.addModule("WorkingPlane")
         cmd = "Draft.make_shapestring("
         cmd += "String=" + self.quote_string(self.text) + ", "
         cmd += "FontFile=" + self.quote_string(self.font_file) + ", "
         cmd += "Size=" + str(self.height) + ", "
-        cmd += "Tracking=0.0"
+        cmd += "Tracking=0.0, "
+        cmd += "doc=FreeCAD.getDocument(" + repr(doc_name) + ")"
         cmd += ")"
         self.sourceCmd.commit(
             translate("draft", "Create ShapeString"),
@@ -244,10 +268,10 @@ class ShapeStringTaskPanelCmd(ShapeStringTaskPanel):
                 "ss = " + cmd,
                 "pl = FreeCAD.Placement()",
                 "pl.Base = " + toString(self.point),
-                "pl.Rotation = WorkingPlane.get_working_plane().get_placement().Rotation",
+                f"pl.Rotation = FreeCAD.Rotation(*{rotation_q!r})",
                 "ss.Placement = pl",
                 "Draft.autogroup(ss)",
-                "FreeCAD.ActiveDocument.recompute()",
+                f"FreeCAD.getDocument({doc_name!r}).recompute()",
             ],
         )
 
@@ -265,28 +289,45 @@ class ShapeStringTaskPanelEdit(ShapeStringTaskPanel):
 
         self.obj = vobj.Object
         super().__init__(
-            self.obj.Placement.Base, self.obj.Size.Value, self.obj.String, self.obj.FontFile
+            self.obj.Placement.Base,
+            self.obj.Size.Value,
+            self.obj.String,
+            self.obj.FontFile,
+            document_name=self.obj.Document.Name,
         )
         self.pointPicked = True
-        self.call = Gui.activeView().addEventCallback("SoEvent", self.action)
+        gui_doc = self._get_gui_document()
+        self.view = gui_doc.ActiveView if gui_doc else Gui.activeView()
+        self.call = self.view.addEventCallback("SoEvent", self.action) if self.view else None
 
     def accept(self):
 
-        Gui.doCommand("ss = FreeCAD.ActiveDocument.getObject(" + repr(self.obj.Name) + ")")
+        doc = self._get_document()
+        if not doc:
+            return True
+        doc_name = doc.Name
+        Gui.doCommand("ss = FreeCAD.getDocument(" + repr(doc_name) + ").getObject(" + repr(self.obj.Name) + ")")
         Gui.doCommand("ss.String=" + self.quote_string(self.text))
         Gui.doCommand("ss.FontFile=" + self.quote_string(self.font_file))
         Gui.doCommand("ss.Size=" + str(self.height))
         Gui.doCommand("ss.Placement.Base=" + toString(self.point))
-        Gui.doCommand("FreeCAD.ActiveDocument.recompute()")
+        Gui.doCommand("FreeCAD.getDocument(" + repr(doc_name) + ").recompute()")
 
         self.reject()
         return True
 
     def finish(self):
-
-        Gui.activeView().removeEventCallback("SoEvent", self.call)
+        try:
+            if self.call:
+                self.view.removeEventCallback("SoEvent", self.call)
+        except RuntimeError:
+            # the view has been deleted already
+            pass
+        self.call = None
         Gui.Snapper.off()
-        Gui.Control.closeDialog()
+        gui_doc = self._get_gui_document()
+        if gui_doc:
+            Gui.Control.closeDialog(gui_doc)
         return None
 
     def reject(self):

@@ -68,6 +68,12 @@ class ViewProviderDraftAnnotation(object):
         self.Object = vobj.Object
         vobj.Proxy = self
 
+    def _get_gui_document(self):
+        try:
+            return Gui.getDocument(self.Object.Document.Name)
+        except Exception:
+            return None
+
     def set_properties(self, vobj):
         """Set the properties only if they don't already exist."""
         properties = vobj.PropertiesList
@@ -268,7 +274,9 @@ class ViewProviderDraftAnnotation(object):
 
         if hasattr(App, "activeDraftCommand") and App.activeDraftCommand:
             App.activeDraftCommand.finish()
-        Gui.Control.closeDialog()
+        gui_doc = self._get_gui_document()
+        if gui_doc is not None:
+            Gui.Control.closeDialog(gui_doc)
         if hasattr(self, "wb_before_edit"):
             Gui.activateWorkbench(self.wb_before_edit.name())
             delattr(self, "wb_before_edit")
@@ -286,7 +294,9 @@ class ViewProviderDraftAnnotation(object):
         menu.addAction(action_edit)
 
     def edit(self):
-        Gui.ActiveDocument.setEdit(self.Object, 0)
+        gui_doc = self._get_gui_document()
+        if gui_doc is not None:
+            gui_doc.setEdit(self.Object, 0)
 
     def getIcon(self):
         """Return the path to the icon used by the view provider."""

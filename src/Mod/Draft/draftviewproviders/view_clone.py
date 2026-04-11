@@ -49,6 +49,12 @@ class ViewProviderClone:
         self.Object = vobj.Object
         return
 
+    def _get_gui_document(self):
+        try:
+            return Gui.getDocument(self.Object.Document.Name)
+        except Exception:
+            return None
+
     def getIcon(self):
         return ":/icons/Draft_Clone.svg"
 
@@ -57,7 +63,10 @@ class ViewProviderClone:
             return None
 
         self.task = task_scale.ScaleTaskPanelEdit(self.Object)
-        Gui.Control.showDialog(self.task, Gui.ActiveDocument)
+        gui_doc = self._get_gui_document()
+        task = Gui.Control.showDialog(self.task, gui_doc)
+        task.setDocumentName(self.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         return True
 
     def unsetEdit(self, vobj, mode):
@@ -73,7 +82,9 @@ class ViewProviderClone:
         menu.addAction(action_edit)
 
     def edit(self):
-        Gui.ActiveDocument.setEdit(self.Object, 0)
+        gui_doc = self._get_gui_document()
+        if gui_doc is not None:
+            gui_doc.setEdit(self.Object, 0)
 
     def dumps(self):
         return None

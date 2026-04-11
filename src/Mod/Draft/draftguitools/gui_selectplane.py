@@ -38,6 +38,7 @@ import Part
 import WorkingPlane
 
 from FreeCAD import Units
+from draftguitools import gui_tool_utils
 from drafttaskpanels import task_selectplane
 from draftutils import gui_utils
 from draftutils import params
@@ -72,12 +73,11 @@ class Draft_SelectPlane:
 
     def Activated(self):
         """Execute when the command is called."""
-        # Finish active Draft command if any
-        if App.activeDraftCommand is not None:
-            App.activeDraftCommand.finish()
-
+        gui_tool_utils.finish_active_draft_command()
         App.activeDraftCommand = self
         self.call = None
+        self.doc = App.ActiveDocument
+        self.gui_doc = Gui.getDocument(self.doc.Name) if self.doc else Gui.ActiveDocument
 
         # Set variables
         self.wp = WorkingPlane.get_working_plane()
@@ -155,7 +155,7 @@ class Draft_SelectPlane:
             return
 
         # Execute the actual task panel delayed to catch possible active Draft command
-        todo.delay(Gui.Control.showDialog, self.taskd)
+        todo.delay(self._show_task_panel, None)
         todo.delay(form.setFocus, None)
         _toolmsg(
             translate(
@@ -168,7 +168,8 @@ class Draft_SelectPlane:
     def finish(self):
         """Execute when the command is terminated."""
         App.activeDraftCommand = None
-        Gui.Control.closeDialog()
+        if self.gui_doc:
+            Gui.Control.closeDialog(self.gui_doc)
         if hasattr(Gui, "Snapper"):
             Gui.Snapper.off()
         # Terminate coin callbacks
@@ -179,6 +180,12 @@ class Draft_SelectPlane:
                 # The view has been deleted already
                 pass
             self.call = None
+
+    def _show_task_panel(self, _arg):
+        task = Gui.Control.showDialog(self.taskd, self.gui_doc)
+        if task and self.doc:
+            task.setDocumentName(self.doc.Name)
+            task.setAutoCloseOnDeletedDocument(True)
 
     def reject(self):
         """Execute when clicking the Cancel button."""

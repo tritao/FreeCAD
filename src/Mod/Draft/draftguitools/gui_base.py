@@ -36,6 +36,7 @@ from PySide import QtCore
 
 import FreeCAD as App
 import FreeCADGui as Gui
+from draftguitools import gui_tool_utils
 from draftguitools import gui_trackers as trackers
 from draftutils import gui_utils
 from draftutils import params
@@ -167,6 +168,7 @@ class GuiCommandBase:
             self.finish()
             return
 
+        gui_tool_utils.finish_active_draft_command()
         App.activeDraftCommand = self
         self.view = gui_utils.get_3d_view()
 

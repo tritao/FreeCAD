@@ -39,7 +39,7 @@ if App.GuiUp:
     from draftviewproviders.view_shapestring import ViewProviderShapeString
 
 
-def make_shapestring(String, FontFile, Size=100, Tracking=0):
+def make_shapestring(String, FontFile, Size=100, Tracking=0, doc=None):
     """ShapeString(Text,FontFile,[Height],[Track])
 
     Turns a text string into a Compound Shape
@@ -50,11 +50,12 @@ def make_shapestring(String, FontFile, Size=100, Tracking=0):
         Major radius of the ellipse.
 
     """
-    if not App.ActiveDocument:
+    doc = doc or App.ActiveDocument
+    if not doc:
         App.Console.PrintError("No active document. Aborting\n")
         return
 
-    obj = App.ActiveDocument.addObject("Part::Part2DObjectPython", "ShapeString")
+    obj = doc.addObject("Part::Part2DObjectPython", "ShapeString")
     ShapeString(obj)
     obj.String = String
     obj.FontFile = FontFile

@@ -57,6 +57,12 @@ class ViewProviderDraftHatch:
         self.Object = vobj.Object
         return
 
+    def _get_gui_document(self):
+        try:
+            return Gui.getDocument(self.Object.Document.Name)
+        except Exception:
+            return None
+
     def setEdit(self, vobj, mode):
         # EditMode 1 and 2 are handled by the Part::FeaturePython code.
         # EditMode 3 (Color) does not make sense for hatches (which do not
@@ -71,7 +77,10 @@ class ViewProviderDraftHatch:
         taskd.form.Scale.setValue(vobj.Object.Scale)
         taskd.form.Rotation.setValue(vobj.Object.Rotation)
         taskd.form.Translate.setChecked(vobj.Object.Translate)
-        Gui.Control.showDialog(taskd, Gui.ActiveDocument)
+        gui_doc = self._get_gui_document()
+        task = Gui.Control.showDialog(taskd, gui_doc)
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         return True
 
     def unsetEdit(self, vobj, mode):
@@ -99,7 +108,11 @@ class ViewProviderDraftHatch:
         # Part::FeaturePython context menu. See view_base.py.
 
     def edit(self):
-        Gui.ActiveDocument.setEdit(self.Object, 0)
+        gui_doc = self._get_gui_document()
+        if gui_doc is not None:
+            gui_doc.setEdit(self.Object, 0)
 
     def transform(self):
-        Gui.ActiveDocument.setEdit(self.Object, 1)
+        gui_doc = self._get_gui_document()
+        if gui_doc is not None:
+            gui_doc.setEdit(self.Object, 1)

@@ -137,6 +137,15 @@ def format_unit(exp, unit="mm"):
 formatUnit = format_unit
 
 
+def finish_active_draft_command():
+    """Finish the current interactive Draft command, if any."""
+    active_command = getattr(App, "activeDraftCommand", None)
+    if active_command is None:
+        return False
+    active_command.finish()
+    return True
+
+
 def select_object(arg):
     """Handle the selection of objects depending on buttons pressed.
 

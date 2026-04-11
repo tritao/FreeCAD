@@ -247,9 +247,10 @@ class TaskPanelCircularArray:
         # of this class, the GuiCommand.
         # This is needed to schedule geometry manipulation
         # that would crash Coin3D if done in the event callback.
+        doc_name = self.source_command.doc.Name
         _cmd = "Draft.make_circular_array"
         _cmd += "("
-        _cmd += "App.ActiveDocument." + sel_obj.Name + ", "
+        _cmd += "App.getDocument(" + repr(doc_name) + ").getObject(" + repr(sel_obj.Name) + "), "
         _cmd += "r_distance=" + str(self.r_distance) + ", "
         _cmd += "tan_distance=" + str(self.tan_distance) + ", "
         _cmd += "number=" + str(self.number) + ", "
@@ -265,7 +266,7 @@ class TaskPanelCircularArray:
             "_obj_ = " + _cmd,
             "_obj_.Fuse = " + str(self.fuse),
             "Draft.autogroup(_obj_)",
-            "App.ActiveDocument.recompute()",
+            "App.getDocument(" + repr(doc_name) + ").recompute()",
         ]
 
         # We commit the command list through the parent command
@@ -458,8 +459,9 @@ class TaskPanelCircularArray:
         the delayed functions, and perform cleanup.
         """
         # App.ActiveDocument.commitTransaction()
-        if Gui.ActiveDocument is not None:
-            Gui.ActiveDocument.resetEdit()
+        gui_doc = self.source_command._get_gui_document()
+        if gui_doc is not None:
+            gui_doc.resetEdit()
         # Runs the parent command to complete the call
         self.source_command.completed()
 

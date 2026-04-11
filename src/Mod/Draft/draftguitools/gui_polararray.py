@@ -52,6 +52,14 @@ class PolarArray(gui_base.GuiCommandBase):
         self.ui = None
         self.point = App.Vector()
 
+    def _get_gui_document(self):
+        if not self.doc:
+            return None
+        try:
+            return Gui.getDocument(self.doc.Name)
+        except Exception:
+            return None
+
     def GetResources(self):
         """Set icon, menu and tooltip."""
         return {
@@ -79,8 +87,9 @@ class PolarArray(gui_base.GuiCommandBase):
         # The calling class (this one) is saved in the object
         # of the interface, to be able to call a function from within it.
         self.ui.source_command = self
-        task = Gui.Control.showDialog(self.ui, Gui.ActiveDocument)
-        task.setDocumentName(Gui.ActiveDocument.Document.Name)
+        gui_doc = self._get_gui_document()
+        task = Gui.Control.showDialog(self.ui, gui_doc)
+        task.setDocumentName(self.doc.Name)
         task.setAutoCloseOnDeletedDocument(True)
 
     def move(self, event_cb):
@@ -130,8 +139,9 @@ class PolarArray(gui_base.GuiCommandBase):
             pass
         self.callback_move = None
         self.callback_click = None
-        if Gui.Control.activeDialog():
-            Gui.Control.closeDialog()
+        gui_doc = self._get_gui_document()
+        if gui_doc and Gui.Control.activeDialog(gui_doc):
+            Gui.Control.closeDialog(gui_doc)
         self.finish()
 
 

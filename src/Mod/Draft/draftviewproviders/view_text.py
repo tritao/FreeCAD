@@ -178,7 +178,9 @@ class ViewProviderText(ViewProviderDraftAnnotation):
             import DraftGui
         self.text = ""
         Gui.draftToolBar.sourceCmd = self
-        Gui.draftToolBar.taskUi(title=translate("draft", "Text"), icon="Draft_Text")
+        Gui.draftToolBar.taskUi(
+            title=translate("draft", "Text"), icon="Draft_Text", document=self.Object.Document
+        )
         Gui.draftToolBar.textUi()
         Gui.draftToolBar.continueCmd.hide()
         Gui.draftToolBar.textValue.setPlainText("\n".join(self.Object.Text))
@@ -194,8 +196,17 @@ class ViewProviderText(ViewProviderDraftAnnotation):
             if not txt[-1]:
                 txt.pop()
             string = "[" + ", ".join(repr(l) for l in txt) + "]"
-            Gui.doCommand("FreeCAD.ActiveDocument." + self.Object.Name + ".Text = " + string)
-            App.ActiveDocument.recompute()
+            doc_name = self.Object.Document.Name
+            cmd = (
+                "FreeCAD.getDocument("
+                + repr(doc_name)
+                + ").getObject("
+                + repr(self.Object.Name)
+                + ").Text = "
+                + string
+            )
+            Gui.doCommand(cmd)
+            self.Object.Document.recompute()
             self.finish()
 
     def finish(self, cont=False):

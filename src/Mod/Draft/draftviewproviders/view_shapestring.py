@@ -51,7 +51,10 @@ class ViewProviderShapeString(ViewProviderDraft):
             self.wb_before_edit = Gui.activeWorkbench()
             Gui.activateWorkbench("DraftWorkbench")
         self.task = ShapeStringTaskPanelEdit(vobj)
-        Gui.Control.showDialog(self.task, Gui.ActiveDocument)
+        gui_doc = Gui.getDocument(vobj.Object.Document.Name)
+        task = Gui.Control.showDialog(self.task, gui_doc)
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         return True
 
     def unsetEdit(self, vobj, mode):

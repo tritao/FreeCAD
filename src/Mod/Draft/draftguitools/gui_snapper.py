@@ -93,6 +93,7 @@ class Snapper:
         self.activeview = None
         self.view = None
         self.toolbar = None
+        self.documentName = None
         self.lastObj = []
         self.lastObjSubelements = []
         self.radius = 0
@@ -177,6 +178,13 @@ class Snapper:
         # the mouse
         # See: https://github.com/FreeCAD/FreeCAD/issues/24013
         return WorkingPlane.get_working_plane(update=False)
+
+    def _get_document(self):
+        if self.documentName:
+            if self.documentName in App.listDocuments():
+                return App.getDocument(self.documentName)
+            return None
+        return App.ActiveDocument
 
     def init_active_snaps(self):
         """
@@ -367,7 +375,8 @@ class Snapper:
             subname = self.snapInfo["SubName"]
             obj = parent.getSubObject(subname, retType=1)
         else:
-            obj = App.ActiveDocument.getObject(self.snapInfo["Object"])
+            doc = self._get_document()
+            obj = doc.getObject(self.snapInfo["Object"]) if doc else None
             parent = obj
             subname = self.snapInfo["Component"]
 
@@ -615,7 +624,8 @@ class Snapper:
 
         for o in self.lastObj:
             if self.isEnabled("Extension") or self.isEnabled("Parallel"):
-                ob = App.ActiveDocument.getObject(o)
+                doc = self._get_document()
+                ob = doc.getObject(o) if doc else None
                 if not ob:
                     continue
                 if not ob.isDerivedFrom("Part::Feature"):
@@ -1057,7 +1067,8 @@ class Snapper:
         if self.isEnabled("Intersection"):
             # get the stored objects to calculate intersections
             for obj_name, sub_name in zip(self.lastObj, self.lastObjSubelements):
-                obj = App.ActiveDocument.getObject(obj_name)
+                doc = self._get_document()
+                obj = doc.getObject(obj_name) if doc else None
                 if obj and (obj.isDerivedFrom("Part::Feature") or utils.get_type(obj) == "Axis"):
                     # obj sub is face, shape is edge:
                     if "Face" in sub_name and shape.ShapeType == "Edge":
@@ -1328,15 +1339,6 @@ class Snapper:
         if toolbar:
             toolbar.offUi()
 
-    def _dispatch_point_callback(self, callback, point, obj=None):
-        """Invoke a point-picking callback with the expected argument shape."""
-        if not callback:
-            return
-        if len(inspect.getfullargspec(callback).args) > 1:
-            callback(point, obj)
-        else:
-            callback(point)
-
     def cancelPointRequest(self):
         """Cancel the current point-picking request and restore the Draft UI."""
         self._teardown_point_request()
@@ -1476,10 +1478,14 @@ class Snapper:
         callbacks are cleared for backward compatibility. Prefer
         cancelPointRequest() for explicit teardown.
         """
-        no_point_request_args = all(
-            arg is None for arg in (last, callback, movecallback, extradlg, title)
-        )
-        if mode == "point" and no_point_request_args:
+        if (
+            last is None
+            and callback is None
+            and movecallback is None
+            and extradlg is None
+            and title is None
+            and mode == "point"
+        ):
             self._clear_point_callbacks()
             return
 
@@ -1487,6 +1493,7 @@ class Snapper:
         self.holdPoints = []
         self.ui = Gui.draftToolBar
         previous_view = self.view
+        self.documentName = App.ActiveDocument.Name if App.ActiveDocument else None
 
         # remove any previous leftover callbacks
         self._clear_point_callbacks(view=previous_view)
@@ -1528,15 +1535,24 @@ class Snapper:
         def accept():
             point = self.pt
             self._teardown_point_request()
-            obj = None
-            if self.snapInfo and ("Object" in self.snapInfo) and self.snapInfo["Object"]:
-                obj = App.ActiveDocument.getObject(self.snapInfo["Object"])
-            self._dispatch_point_callback(callback, point, obj)
+            if callback:
+                if len(inspect.getfullargspec(callback).args) > 1:
+                    obj = None
+                    if self.snapInfo and ("Object" in self.snapInfo) and self.snapInfo["Object"]:
+                        doc = self._get_document()
+                        obj = doc.getObject(self.snapInfo["Object"]) if doc else None
+                    callback(point, obj)
+                else:
+                    callback(point)
             self.pt = None
 
         def cancel():
             self._teardown_point_request()
-            self._dispatch_point_callback(callback, None, None)
+            if callback:
+                if len(inspect.getfullargspec(callback).args) > 1:
+                    callback(None, None)
+                else:
+                    callback(None)
             self.pt = None
 
         # adding callback functions

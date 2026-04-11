@@ -63,6 +63,14 @@ class Scale(gui_base_original.Modifier):
     This tool scales the selected objects from a base point.
     """
 
+    def _get_gui_document(self):
+        if not self.doc:
+            return None
+        try:
+            return Gui.getDocument(self.doc.Name)
+        except Exception:
+            return None
+
     def GetResources(self):
         """Set icon, menu and tooltip."""
         return {
@@ -84,7 +92,7 @@ class Scale(gui_base_original.Modifier):
 
     def get_object_selection(self):
         """Get object selection and proceed if successful."""
-        if Gui.Selection.getSelection():
+        if Gui.Selection.getSelection(self.doc.Name):
             return self.proceed()
         self.ui.selectUi(on_close_call=self.finish)
         _msg(translate("draft", "Select an object to scale"))
@@ -94,8 +102,8 @@ class Scale(gui_base_original.Modifier):
         """Proceed with execution of the command after selection."""
         if self.call:
             self.view.removeEventCallback("SoEvent", self.call)
-        self.selection = Gui.Selection.getSelectionEx("", 0)
-        Gui.doCommand('selection = FreeCADGui.Selection.getSelectionEx("", 0)')
+        self.selection = Gui.Selection.getSelectionEx(self.doc.Name, 0)
+        Gui.doCommand("selection = FreeCADGui.Selection.getSelectionEx(" + repr(self.doc.Name) + ", 0)")
         self.refs = []
         self.ui.pointUi(title=translate("draft", self.featureName), icon="Draft_Scale")
         self.ui.isRelative.hide()
@@ -229,9 +237,15 @@ class Scale(gui_base_original.Modifier):
         cmd += "copy=" + str(self.task.isCopy.isChecked()) + ", "
         cmd += "clone=" + str(self.task.isClone.isChecked()) + ", "
         cmd += "subelements=" + str(self.task.isSubelementMode.isChecked()) + ")"
-        cmd_list = [cmd, "FreeCAD.ActiveDocument.recompute()"]
+        cmd_list = [cmd, "FreeCAD.getDocument(" + repr(self.doc.Name) + ").recompute()"]
         self.commit(cmd_name, cmd_list)
         self.finish()
+
+    def _show_task_panel(self):
+        gui_doc = self._get_gui_document()
+        task = Gui.Control.showDialog(self.task, gui_doc)
+        task.setDocumentName(self.doc.Name)
+        task.setAutoCloseOnDeletedDocument(True)
 
     def numericInput(self, numx, numy, numz):
         """Validate the entry fields in the user interface.
@@ -249,7 +263,7 @@ class Scale(gui_base_original.Modifier):
                 self.view.removeEventCallback("SoEvent", self.call)
             self.task = task_scale.ScaleTaskPanel()
             self.task.sourceCmd = self
-            todo.ToDo.delay(Gui.Control.showDialog, self.task)
+            todo.ToDo.delay(self._show_task_panel, None)
             todo.ToDo.delay(self.task.xValue.selectAll, None)
             todo.ToDo.delay(self.task.xValue.setFocus, None)
             for ghost in self.ghosts:

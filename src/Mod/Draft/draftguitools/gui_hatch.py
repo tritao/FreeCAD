@@ -51,11 +51,13 @@ class Draft_Hatch(gui_base.GuiCommandNeedsSelection):
         import FreeCADGui
 
         if FreeCADGui.Selection.getSelection():
+            baseobj = FreeCADGui.Selection.getSelection()[0]
+            gui_doc = FreeCADGui.getDocument(baseobj.Document.Name)
             task = FreeCADGui.Control.showDialog(
-                Draft_Hatch_TaskPanel(FreeCADGui.Selection.getSelection()[0]),
-                FreeCADGui.ActiveDocument,
+                Draft_Hatch_TaskPanel(baseobj),
+                gui_doc,
             )
-            task.setDocumentName(FreeCADGui.ActiveDocument.Document.Name)
+            task.setDocumentName(baseobj.Document.Name)
             task.setAutoCloseOnDeletedDocument(True)
         else:
             FreeCAD.Console.PrintError(
@@ -84,10 +86,28 @@ class Draft_Hatch_TaskPanel:
         self.form.Translate.setChecked(params.get_param("HatchPatternTranslate"))
         todo.delay(self.form.setFocus, None)  # Make sure using Esc works.
 
+    def _get_document(self):
+        return self.baseobj.Document if self.baseobj else None
+
+    def _get_gui_document(self):
+        import FreeCADGui
+
+        doc = self._get_document()
+        if not doc:
+            return None
+        try:
+            return FreeCADGui.getDocument(doc.Name)
+        except Exception:
+            return None
+
     def accept(self):
 
         import FreeCADGui
 
+        doc = self._get_document()
+        if not doc:
+            return True
+        doc_name = doc.Name
         params.set_param("HatchPatternFile", self.form.File.property("fileName"))
         params.set_param("HatchPatternName", self.form.Pattern.currentText())
         params.set_param("HatchPatternScale", self.form.Scale.value())
@@ -95,7 +115,7 @@ class Draft_Hatch_TaskPanel:
         params.set_param("HatchPatternTranslate", self.form.Translate.isChecked())
         if hasattr(self.baseobj, "File") and hasattr(self.baseobj, "Pattern"):
             # modify existing hatch object
-            o = 'FreeCAD.ActiveDocument.getObject("' + self.baseobj.Name + '")'
+            o = f'FreeCAD.getDocument({doc_name!r}).getObject({self.baseobj.Name!r})'
             FreeCADGui.doCommand(o + ".File=" + repr(self.form.File.property("fileName")))
             FreeCADGui.doCommand(o + ".Pattern=" + repr(self.form.Pattern.currentText()))
             FreeCADGui.doCommand(o + ".Scale=" + str(self.form.Scale.value()))
@@ -103,27 +123,32 @@ class Draft_Hatch_TaskPanel:
             FreeCADGui.doCommand(o + ".Translate=" + str(self.form.Translate.isChecked()))
         else:
             # create new hatch object
-            FreeCAD.ActiveDocument.openTransaction("Create Hatch")
+            doc.openTransaction("Create Hatch")
             FreeCADGui.addModule("Draft")
             cmd = "Draft.make_hatch("
-            cmd += 'baseobject=FreeCAD.ActiveDocument.getObject("' + self.baseobj.Name
+            cmd += 'baseobject=FreeCAD.getDocument(' + repr(doc_name) + ').getObject("' + self.baseobj.Name
             cmd += '"),filename=' + repr(self.form.File.property("fileName"))
             cmd += ",pattern=" + repr(self.form.Pattern.currentText())
             cmd += ",scale=" + str(self.form.Scale.value())
             cmd += ",rotation=" + str(self.form.Rotation.value())
             cmd += ",translate=" + str(self.form.Translate.isChecked()) + ")"
             FreeCADGui.doCommand(cmd)
-            FreeCAD.ActiveDocument.commitTransaction()
-        FreeCADGui.doCommand("FreeCAD.ActiveDocument.recompute()")
+            doc.commitTransaction()
+        FreeCADGui.doCommand(f"FreeCAD.getDocument({doc_name!r}).recompute()")
         self.reject()
 
     def reject(self):
 
         import FreeCADGui
 
-        FreeCADGui.Control.closeDialog()
-        FreeCADGui.ActiveDocument.resetEdit()
-        FreeCAD.ActiveDocument.recompute()
+        gui_doc = self._get_gui_document()
+        if gui_doc:
+            FreeCADGui.Control.closeDialog(gui_doc)
+            gui_doc.resetEdit()
+
+        doc = self._get_document()
+        if doc:
+            doc.recompute()
 
     def onFileChanged(self, filename):
 

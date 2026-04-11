@@ -117,6 +117,22 @@ class ScaleTaskPanel:
             QtCore.QObject.connect(self.isClone, QtCore.SIGNAL("toggled(bool)"), self.setClone)
             QtCore.QObject.connect(self.pickrefButton, QtCore.SIGNAL("clicked()"), self.pickRef)
 
+    def _get_document(self):
+        if self.sourceCmd and self.sourceCmd.doc:
+            return self.sourceCmd.doc
+        if hasattr(self, "obj") and self.obj and self.obj.Document:
+            return self.obj.Document
+        return None
+
+    def _get_gui_document(self):
+        doc = self._get_document()
+        if not doc:
+            return None
+        try:
+            return Gui.getDocument(doc.Name)
+        except Exception:
+            return None
+
     def setValue(self, val=None):
         """Set the value of the scale factors."""
         if self.lock.isChecked():
@@ -184,14 +200,18 @@ class ScaleTaskPanel:
         """Execute when clicking the OK button."""
         if self.sourceCmd:
             self.sourceCmd.scale()
-        Gui.ActiveDocument.resetEdit()
+        gui_doc = self._get_gui_document()
+        if gui_doc is not None:
+            gui_doc.resetEdit()
         return True
 
     def reject(self):
         """Execute when clicking the Cancel button."""
         if self.sourceCmd:
             self.sourceCmd.finish()
-        Gui.ActiveDocument.resetEdit()
+        gui_doc = self._get_gui_document()
+        if gui_doc is not None:
+            gui_doc.resetEdit()
         return True
 
 
@@ -201,7 +221,7 @@ class ScaleTaskPanelEdit(ScaleTaskPanel):
     def __init__(self, obj):
         super().__init__()
         self.ghost = None
-        self.selection = Gui.Selection.getSelectionEx("", 0)
+        self.selection = Gui.Selection.getSelectionEx(obj.Document.Name, 0)
         self.obj = obj
         self.obj_x, self.obj_y, self.obj_z = self.obj.Scale
         self.form.setWindowTitle(translate("Draft", "Edit Scale"))
@@ -253,22 +273,30 @@ class ScaleTaskPanelEdit(ScaleTaskPanel):
     def accept(self):
         """Execute when clicking the OK button."""
         self.obj.Scale = (self.xValue.value(), self.yValue.value(), self.zValue.value())
-        App.ActiveDocument.recompute()
+        doc = self._get_document()
+        if doc is not None:
+            doc.recompute()
         if self.ghost is not None:
             self.ghost.finalize()
-        Gui.ActiveDocument.resetEdit()
+        gui_doc = self._get_gui_document()
+        if gui_doc is not None:
+            gui_doc.resetEdit()
         return True
 
     def reject(self):
         """Execute when clicking the Cancel button."""
         if self.ghost is not None:
             self.ghost.finalize()
-        Gui.ActiveDocument.resetEdit()
+        gui_doc = self._get_gui_document()
+        if gui_doc is not None:
+            gui_doc.resetEdit()
         return True
 
     def finish(self):
         """Called by unsetEdit in view_clone.py."""
-        Gui.Control.closeDialog()
+        gui_doc = self._get_gui_document()
+        if gui_doc is not None:
+            Gui.Control.closeDialog(gui_doc)
         return None
 
 

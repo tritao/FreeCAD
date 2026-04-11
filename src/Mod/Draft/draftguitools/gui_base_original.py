@@ -102,8 +102,8 @@ class DraftTool:
             That is, first we run `Draft_SubelementHighlight`
             then we can use `Draft_Move` while setting `is_subtool` to `True`.
         """
-        if App.activeDraftCommand and not is_subtool:
-            App.activeDraftCommand.finish()
+        if not is_subtool:
+            gui_tool_utils.finish_active_draft_command()
         App.activeDraftCommand = self
 
         # The Part module is first initialized when using any Gui Command

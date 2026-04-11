@@ -103,6 +103,12 @@ class ViewProviderDraft(object):
         # This class is assigned to the Proxy attribute
         vobj.Proxy = self
 
+    def _get_gui_document(self):
+        try:
+            return Gui.getDocument(self.Object.Document.Name)
+        except Exception:
+            return None
+
     def _set_properties(self, vobj):
         """Set the properties of objects if they don't exist."""
         if not hasattr(vobj, "Pattern"):
@@ -443,7 +449,9 @@ class ViewProviderDraft(object):
         ):
             if hasattr(App, "activeDraftCommand") and App.activeDraftCommand:
                 App.activeDraftCommand.finish()
-            Gui.Control.closeDialog()
+            gui_doc = self._get_gui_document()
+            if gui_doc is not None:
+                Gui.Control.closeDialog(gui_doc)
             if hasattr(self, "wb_before_edit"):
                 Gui.activateWorkbench(self.wb_before_edit.name())
                 delattr(self, "wb_before_edit")
@@ -508,10 +516,14 @@ class ViewProviderDraft(object):
             return True
 
     def edit(self):
-        Gui.ActiveDocument.setEdit(self.Object, 0)
+        gui_doc = self._get_gui_document()
+        if gui_doc is not None:
+            gui_doc.setEdit(self.Object, 0)
 
     def transform(self):
-        Gui.ActiveDocument.setEdit(self.Object, 1)
+        gui_doc = self._get_gui_document()
+        if gui_doc is not None:
+            gui_doc.setEdit(self.Object, 1)
 
     def getIcon(self):
         """Return the path to the icon used by the view provider.

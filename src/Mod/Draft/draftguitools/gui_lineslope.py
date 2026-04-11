@@ -62,6 +62,14 @@ class LineSlope(gui_base.GuiCommandNeedsSelection):
     def __init__(self):
         super().__init__(name=translate("draft", "Change Slope"))
 
+    def _get_gui_document(self):
+        if not self.doc:
+            return None
+        try:
+            return Gui.getDocument(self.doc.Name)
+        except Exception:
+            return None
+
     def GetResources(self):
         """Set icon, menu and tooltip."""
 
@@ -123,7 +131,10 @@ class LineSlope(gui_base.GuiCommandNeedsSelection):
         # when we press the "OK" button.
         # Then we must show the container widget.
         taskwidget.accept = self.accept
-        Gui.Control.showDialog(taskwidget, Gui.ActiveDocument)
+        gui_doc = self._get_gui_document()
+        task = Gui.Control.showDialog(taskwidget, gui_doc)
+        task.setDocumentName(self.doc.Name)
+        task.setAutoCloseOnDeletedDocument(True)
 
     def accept(self):
         """Execute when clicking the OK button or pressing Enter key.
@@ -135,7 +146,7 @@ class LineSlope(gui_base.GuiCommandNeedsSelection):
         if hasattr(self, "spinbox"):
             pc = self.spinbox.value()
             self.doc.openTransaction("Change slope")
-            for obj in Gui.Selection.getSelection():
+            for obj in Gui.Selection.getSelection(self.doc.Name):
                 if utils.get_type(obj) == "Wire":
                     if len(obj.Points) > 1:
                         lp = None
@@ -150,7 +161,9 @@ class LineSlope(gui_base.GuiCommandNeedsSelection):
                             np.append(lp)
                         obj.Points = np
             self.doc.commitTransaction()
-        Gui.Control.closeDialog()
+        gui_doc = self._get_gui_document()
+        if gui_doc is not None:
+            Gui.Control.closeDialog(gui_doc)
         self.doc.recompute()
 
 
