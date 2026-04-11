@@ -141,6 +141,7 @@
 #include "ViewProviderVarSet.h"
 #include "WaitCursor.h"
 #include "Workbench.h"
+#include "WorkbenchContextPolicy.h"
 #include "WorkbenchManager.h"
 #include "WorkbenchManipulator.h"
 #include "WidgetFactory.h"
@@ -1348,8 +1349,13 @@ void Application::slotActiveDocument(const App::Document& Doc)
                 Py::Module("FreeCADGui").setAttr(std::string("ActiveDocument"), Py::None());
             }
         }
-        if (!d->activeDocument->workbench().empty()) {
-            activateWorkbench(d->activeDocument->workbench().c_str());
+        if (getWorkbenchContextPolicy() == WorkbenchContextPolicy::Document) {
+            if (!d->activeDocument->workbench().empty()) {
+                activateWorkbench(d->activeDocument->workbench().c_str());
+            }
+            else if (auto wb = WorkbenchManager::instance()->active()) {
+                d->activeDocument->setWorkbench(wb->name());
+            }
         }
 
         // Update the application to show the unit change
@@ -2005,9 +2011,6 @@ bool Application::activateWorkbench(const char* name)
                     ->SetASCII("LastModule", nameWb.c_str());
             }
             newWb->activated();
-        }
-        if (activeDocument()) {
-            activeDocument()->setWorkbench(name);
         }
     }
     catch (Py::Exception&) {

@@ -114,6 +114,7 @@
 #include "Utilities.h"
 #include "Tree.h"
 #include "WaitCursor.h"
+#include "WorkbenchContextPolicy.h"
 #include "WorkbenchManager.h"
 #include "Workbench.h"
 
@@ -1160,15 +1161,20 @@ void MainWindow::activatePreviousWindow()
 
 void MainWindow::activateWorkbench(const QString& name)
 {
-    // remember workbench by tab (if enabled)
-
-    const ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath(
-        "User parameter:BaseApp/Preferences/View"
-    );
-    const bool saveWB = hGrp->GetBool("SaveWBbyTab", false);
     MDIView* view = activeWindow();
-    if (view && saveWB) {
-        view->setProperty("ownWB", name);
+    switch (getWorkbenchContextPolicy()) {
+        case WorkbenchContextPolicy::View:
+            if (view) {
+                view->setProperty("ownWB", name);
+            }
+            break;
+        case WorkbenchContextPolicy::Document:
+            if (auto doc = Application::Instance->activeDocument()) {
+                doc->setWorkbench(name.toStdString());
+            }
+            break;
+        case WorkbenchContextPolicy::Global:
+            break;
     }
 
     // emit this signal
@@ -1575,20 +1581,13 @@ void MainWindow::setActiveWindow(MDIView* view)
     d->activeView = view;
     Application::Instance->viewActivated(view);
 
-    // activate/remember workbench by tab (if enabled)
-
-    const ParameterGrp::handle hGrp = App::GetApplication().GetParameterGroupByPath(
-        "User parameter:BaseApp/Preferences/View"
-    );
-    const bool saveWB = hGrp->GetBool("SaveWBbyTab", false);
-    if (saveWB) {
+    if (getWorkbenchContextPolicy() == WorkbenchContextPolicy::View) {
         const QString currWb = view->property("ownWB").toString();
         if (!currWb.isEmpty()) {
             this->activateWorkbench(currWb);
         }
-        else {
-            const std::string name = WorkbenchManager::instance()->active()->name();
-            view->setProperty("ownWB", QString::fromStdString(name));
+        else if (auto wb = WorkbenchManager::instance()->active()) {
+            view->setProperty("ownWB", QString::fromStdString(wb->name()));
         }
     }
 

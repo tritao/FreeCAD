@@ -295,7 +295,8 @@ public Q_SLOTS:
      */
     void activatePreviousWindow();
     /**
-     * Just emits the workbenchActivated() signal to notify all receivers.
+     * Persists the active workbench according to the current context policy and
+     * emits workbenchActivated() to notify receivers.
      */
     void activateWorkbench(const QString&);
     /**
