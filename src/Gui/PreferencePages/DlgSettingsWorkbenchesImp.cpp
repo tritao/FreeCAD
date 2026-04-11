@@ -31,6 +31,7 @@
 
 #include <Gui/Application.h>
 #include <Gui/Workbench.h>
+#include <Gui/WorkbenchContextPolicy.h>
 #include <Gui/WorkbenchManager.h>
 
 #include "DlgSettingsWorkbenchesImp.h"
@@ -284,7 +285,6 @@ DlgSettingsWorkbenchesImp::DlgSettingsWorkbenchesImp(QWidget* parent)
         this,
         &DlgSettingsWorkbenchesImp::onStartWbChanged
     );
-    connect(ui->CheckBox_WbByTab, &QCheckBox::toggled, this, &DlgSettingsWorkbenchesImp::onWbByTabToggled);
 }
 
 /**
@@ -359,12 +359,13 @@ void DlgSettingsWorkbenchesImp::saveSettings()
         .GetParameterGroupByPath("User parameter:BaseApp/Preferences/General")
         ->SetASCII("AutoloadModule", startWbName.toLatin1());
 
-    ui->CheckBox_WbByTab->onSave();
+    saveWorkbenchContextPolicy();
 }
 
 void DlgSettingsWorkbenchesImp::loadSettings()
 {
     loadWorkbenchSelector();
+    loadWorkbenchContextPolicy();
 
     // There are two different "autoload" settings: the first, in FreeCAD since 2004,
     // controls the module the user sees first when starting FreeCAD, and defaults to the Start workbench
@@ -390,11 +391,6 @@ void DlgSettingsWorkbenchesImp::loadSettings()
 
     // We set the startup setting after building the list so that we can put only the enabled wb.
     setStartWorkbenchComboItems();
-
-    {
-        QSignalBlocker sigblk(ui->CheckBox_WbByTab);
-        ui->CheckBox_WbByTab->onRestore();
-    }
 }
 
 void DlgSettingsWorkbenchesImp::resetSettingsToDefaults()
@@ -417,13 +413,11 @@ void DlgSettingsWorkbenchesImp::resetSettingsToDefaults()
     );
     hGrp->RemoveASCII("WSPosition");
 
+    resetWorkbenchContextPolicy();
+
     // finally reset all the parameters associated to Gui::Pref* widgets
     PreferencePage::resetSettingsToDefaults();
-
-    hGrp = App::GetApplication().GetParameterGroupByPath("User parameter:BaseApp/Preferences/View");
-    if (ui->CheckBox_WbByTab->isChecked() != hGrp->GetBool("SaveWBbyTab", 0)) {
-        requireRestart();
-    }
+    loadWorkbenchContextPolicy();
 }
 
 /**
@@ -549,11 +543,51 @@ void DlgSettingsWorkbenchesImp::changeEvent(QEvent* e)
 {
     if (e->type() == QEvent::LanguageChange) {
         ui->retranslateUi(this);
+        translateWorkbenchContextPolicy();
         translateWorkbenchSelector();
     }
     else {
         QWidget::changeEvent(e);
     }
+}
+
+void DlgSettingsWorkbenchesImp::saveWorkbenchContextPolicy()
+{
+    const auto policy = static_cast<Gui::WorkbenchContextPolicy>(
+        ui->WorkbenchContextCombo->currentData().toInt()
+    );
+    Gui::setWorkbenchContextPolicy(policy);
+}
+
+void DlgSettingsWorkbenchesImp::loadWorkbenchContextPolicy()
+{
+    QSignalBlocker sigblk(ui->WorkbenchContextCombo);
+    ui->WorkbenchContextCombo->clear();
+    ui->WorkbenchContextCombo->addItem(
+        tr("Application-wide"),
+        static_cast<int>(Gui::WorkbenchContextPolicy::Global)
+    );
+    ui->WorkbenchContextCombo->addItem(
+        tr("Document"),
+        static_cast<int>(Gui::WorkbenchContextPolicy::Document)
+    );
+    ui->WorkbenchContextCombo->addItem(tr("Tab"), static_cast<int>(Gui::WorkbenchContextPolicy::View));
+
+    const int index = ui->WorkbenchContextCombo->findData(
+        static_cast<int>(Gui::getWorkbenchContextPolicy())
+    );
+    ui->WorkbenchContextCombo->setCurrentIndex(
+        index >= 0
+            ? index
+            : ui->WorkbenchContextCombo->findData(static_cast<int>(Gui::DefaultWorkbenchContextPolicy))
+    );
+}
+
+void DlgSettingsWorkbenchesImp::translateWorkbenchContextPolicy()
+{
+    ui->WorkbenchContextCombo->setItemText(0, tr("Application-wide"));
+    ui->WorkbenchContextCombo->setItemText(1, tr("Document"));
+    ui->WorkbenchContextCombo->setItemText(2, tr("Tab"));
 }
 
 void DlgSettingsWorkbenchesImp::saveWorkbenchSelector()
@@ -710,12 +744,6 @@ void DlgSettingsWorkbenchesImp::onStartWbChanged(int index)
             wbItem->setStartupWb(wbItem->objectName() == wbName);
         }
     }
-}
-
-void DlgSettingsWorkbenchesImp::onWbByTabToggled(bool val)
-{
-    Q_UNUSED(val);
-    requireRestart();
 }
 
 void DlgSettingsWorkbenchesImp::sortEnabledWorkbenches()
