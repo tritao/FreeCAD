@@ -103,7 +103,7 @@ class TestGuiDocument(unittest.TestCase):
         self.assertEqual(FreeCADGui.ActiveDocument.Document.Name, self.doc.Name)
         self.assertTrue(FreeCADGui.Control.activeDialog(gui_doc_1))
         self.assertTrue(FreeCADGui.Control.activeDialog(gui_doc_2))
-        self.assertTrue(FreeCADGui.Control.activeDialog())
+        self.assertTrue(FreeCADGui.Control.activeDialog(FreeCADGui.ActiveDocument))
 
         FreeCADGui.Control.closeDialog(gui_doc_1)
         self.pump_gui_events()
@@ -112,6 +112,6 @@ class TestGuiDocument(unittest.TestCase):
         self.assertEqual(FreeCADGui.ActiveDocument.Document.Name, self.doc.Name)
         self.assertFalse(FreeCADGui.Control.activeDialog(gui_doc_1))
         self.assertTrue(FreeCADGui.Control.activeDialog(gui_doc_2))
-        self.assertFalse(FreeCADGui.Control.activeDialog())
+        self.assertFalse(FreeCADGui.Control.activeDialog(FreeCADGui.ActiveDocument))
 
         self.close_task_dialog("TestDoc2")

@@ -26,6 +26,8 @@
 #include <QDockWidget>
 #include <QPointer>
 
+#include <set>
+
 #include <App/Application.h>
 #include <App/Document.h>
 #include <Gui/Application.h>
@@ -61,6 +63,21 @@ App::Document* dialogDocument(Gui::TaskView::TaskDialog* dlg)
     }
 
     return App::GetApplication().getDocument(dlg->getDocumentName().c_str());
+}
+
+void warnImplicitTaskDialogDocument(const char* method)
+{
+    if (!Gui::Application::Instance->activeDocument()) {
+        return;
+    }
+
+    static std::set<std::string> warnedMethods;
+    if (!warnedMethods.insert(method).second) {
+        return;
+    }
+
+    qWarning() << method
+               << "without an explicit document is deprecated; pass the owning document instead";
 }
 }  // namespace
 
@@ -233,6 +250,9 @@ void ControlSingleton::showDialog(Gui::TaskView::TaskDialog* dlg, App::Document*
 
 Gui::TaskView::TaskDialog* ControlSingleton::activeDialog(App::Document* attachedTo) const
 {
+    if (!attachedTo) {
+        warnImplicitTaskDialogDocument("ControlSingleton::activeDialog");
+    }
     attachedTo = docOrDefault(attachedTo);
     if (!attachedTo) {
         return nullptr;
@@ -248,6 +268,9 @@ Gui::TaskView::TaskDialog* ControlSingleton::activeDialog(App::Document* attache
 
 void ControlSingleton::accept(App::Document* attachedTo)
 {
+    if (!attachedTo) {
+        warnImplicitTaskDialogDocument("ControlSingleton::accept");
+    }
     attachedTo = docOrDefault(attachedTo);
     if (!attachedTo) {
         qWarning() << "ControlSingleton::accept: Cannot accept dialog of nullptr document";
@@ -263,6 +286,9 @@ void ControlSingleton::accept(App::Document* attachedTo)
 
 void ControlSingleton::reject(App::Document* attachedTo)
 {
+    if (!attachedTo) {
+        warnImplicitTaskDialogDocument("ControlSingleton::reject");
+    }
     attachedTo = docOrDefault(attachedTo);
     if (!attachedTo) {
         qWarning() << "ControlSingleton::reject: Cannot reject dialog of nullptr document";
@@ -279,6 +305,9 @@ void ControlSingleton::reject(App::Document* attachedTo)
 
 void ControlSingleton::closeDialog(App::Document* attachedTo)
 {
+    if (!attachedTo) {
+        warnImplicitTaskDialogDocument("ControlSingleton::closeDialog");
+    }
     attachedTo = docOrDefault(attachedTo);
     if (!attachedTo) {
         qWarning() << "ControlSingleton::closeDialog: Cannot close dialog of nullptr document";
@@ -309,6 +338,9 @@ void ControlSingleton::closedDialog(App::Document* attachedTo)
 
 bool ControlSingleton::isAllowedAlterDocument(App::Document* attachedTo) const
 {
+    if (!attachedTo) {
+        warnImplicitTaskDialogDocument("ControlSingleton::isAllowedAlterDocument");
+    }
     attachedTo = docOrDefault(attachedTo);
     if (!attachedTo) {
         return true;
@@ -323,6 +355,9 @@ bool ControlSingleton::isAllowedAlterDocument(App::Document* attachedTo) const
 
 bool ControlSingleton::isAllowedAlterView(App::Document* attachedTo) const
 {
+    if (!attachedTo) {
+        warnImplicitTaskDialogDocument("ControlSingleton::isAllowedAlterView");
+    }
     attachedTo = docOrDefault(attachedTo);
     if (!attachedTo) {
         return true;
@@ -337,6 +372,9 @@ bool ControlSingleton::isAllowedAlterView(App::Document* attachedTo) const
 
 bool ControlSingleton::isAllowedAlterSelection(App::Document* attachedTo) const
 {
+    if (!attachedTo) {
+        warnImplicitTaskDialogDocument("ControlSingleton::isAllowedAlterSelection");
+    }
     attachedTo = docOrDefault(attachedTo);
     if (!attachedTo) {
         return true;

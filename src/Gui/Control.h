@@ -63,9 +63,11 @@ public:
      *  These methods are used to control the TaskDialog stuff.
      */
     //@{
-    /// This method starts a task dialog in the task view
-    /// The dialog is relative to a specific document
+    /// This method starts a task dialog in the task view.
+    /// The dialog is relative to a specific document. Passing nullptr falls
+    /// back to the active document for compatibility but is deprecated.
     void showDialog(Gui::TaskView::TaskDialog* dlg, App::Document* attachTo = nullptr);
+    /// Passing nullptr falls back to the active document for compatibility but is deprecated.
     Gui::TaskView::TaskDialog* activeDialog(App::Document* attachedTo = nullptr) const;
     // void closeDialog();
     //@}
@@ -81,22 +83,28 @@ public:
     /*!
       If a task dialog is open then it indicates whether this task dialog allows other commands to
       modify the document while it is open. If no task dialog is open true is returned.
+      Passing nullptr falls back to the active document for compatibility but is deprecated.
      */
     bool isAllowedAlterDocument(App::Document* attachedTo = nullptr) const;
     /*!
       If a task dialog is open then it indicates whether this task dialog allows other commands to
       modify the 3d view while it is open. If no task dialog is open true is returned.
+      Passing nullptr falls back to the active document for compatibility but is deprecated.
      */
     bool isAllowedAlterView(App::Document* attachedTo = nullptr) const;
     /*!
       If a task dialog is open then it indicates whether this task dialog allows other commands to
       modify the selection while it is open. If no task dialog is open true is returned.
+      Passing nullptr falls back to the active document for compatibility but is deprecated.
      */
     bool isAllowedAlterSelection(App::Document* attachedTo = nullptr) const;
 
 public Q_SLOTS:
+    /// Passing nullptr falls back to the active document for compatibility but is deprecated.
     void accept(App::Document* attachedTo = nullptr);
+    /// Passing nullptr falls back to the active document for compatibility but is deprecated.
     void reject(App::Document* attachedTo = nullptr);
+    /// Passing nullptr falls back to the active document for compatibility but is deprecated.
     void closeDialog(App::Document* attachedTo = nullptr);
 
     /// raises the task view panel

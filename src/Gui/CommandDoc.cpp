@@ -1974,8 +1974,12 @@ void StdCmdEdit::activated(int iMsg)
 
 bool StdCmdEdit::isActive()
 {
-    return (!Selection().getCompleteSelection().empty())
-        || (Gui::Control().activeDialog() != nullptr);
+    if (!Selection().getCompleteSelection().empty()) {
+        return true;
+    }
+
+    auto* document = getDocument();
+    return document && (Gui::Control().activeDialog(document) != nullptr);
 }
 
 //===========================================================================

@@ -68,25 +68,32 @@ void ControlPy::init_type()
         "show the given dialog in the task panel\n"
         "showDialog(dialog[, doc])\n"
         "--\n"
-        "if a task is already active a RuntimeError is raised"
+        "if a task is already active a RuntimeError is raised\n"
+        "omitting doc falls back to the active document for compatibility but is deprecated"
     );
     add_varargs_method(
         "activeDialog",
         &ControlPy::activeDialog,
         "check if a dialog is active in the task panel\n"
-        "activeDialog() --> bool"
+        "activeDialog([doc]) --> bool\n"
+        "--\n"
+        "omitting doc falls back to the active document for compatibility but is deprecated"
     );
     add_varargs_method(
         "activeTaskDialog",
         &ControlPy::activeTaskDialog,
         "return the active task dialog if there is one\n"
-        "activeTaskDialog() --> TaskDialog or None"
+        "activeTaskDialog([doc]) --> TaskDialog or None\n"
+        "--\n"
+        "omitting doc falls back to the active document for compatibility but is deprecated"
     );
     add_varargs_method(
         "closeDialog",
         &ControlPy::closeDialog,
         "close the active dialog\n"
-        "closeDialog()"
+        "closeDialog([doc])\n"
+        "--\n"
+        "omitting doc falls back to the active document for compatibility but is deprecated"
     );
     add_varargs_method(
         "addTaskWatcher",
@@ -104,19 +111,25 @@ void ControlPy::init_type()
         "isAllowedAlterDocument",
         &ControlPy::isAllowedAlterDocument,
         "return the permission to alter the current Document\n"
-        "isAllowedAlterDocument() --> bool"
+        "isAllowedAlterDocument([doc]) --> bool\n"
+        "--\n"
+        "omitting doc falls back to the active document for compatibility but is deprecated"
     );
     add_varargs_method(
         "isAllowedAlterView",
         &ControlPy::isAllowedAlterView,
         "return the permission to alter the current View\n"
-        "isAllowedAlterView() --> bool"
+        "isAllowedAlterView([doc]) --> bool\n"
+        "--\n"
+        "omitting doc falls back to the active document for compatibility but is deprecated"
     );
     add_varargs_method(
         "isAllowedAlterSelection",
         &ControlPy::isAllowedAlterSelection,
         "return the permission to alter the current Selection\n"
-        "isAllowedAlterSelection() --> bool"
+        "isAllowedAlterSelection([doc]) --> bool\n"
+        "--\n"
+        "omitting doc falls back to the active document for compatibility but is deprecated"
     );
     add_varargs_method(
         "showTaskView",
@@ -153,11 +166,14 @@ Py::Object ControlPy::showDialog(const Py::Tuple& args)
         ? static_cast<Gui::DocumentPy*>(docPy)->getDocumentPtr()->getDocument()
         : nullptr;
 
-    Gui::TaskView::TaskDialog* act = Gui::Control().activeDialog(doc);
-    if (act) {
-        throw Py::RuntimeError("Active task dialog found");
-    }
     auto dlg = new TaskDialogPython(Py::Object(arg0));
+    if (doc) {
+        Gui::TaskView::TaskDialog* act = Gui::Control().activeDialog(doc);
+        if (act) {
+            delete dlg;
+            throw Py::RuntimeError("Active task dialog found");
+        }
+    }
     Gui::Control().showDialog(dlg, doc);
     return (Py::asObject(new TaskDialogPy(dlg)));
 }

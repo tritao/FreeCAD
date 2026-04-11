@@ -2388,7 +2388,8 @@ bool StdCmdToggleNavigation::isActive()
     // This happens because 'Esc' is also used to close the task dialog.
     // Add also new method 'isRedirectToSceneGraphEnabled' to explicitly
     // check if this is allowed.
-    if (Gui::Control().activeDialog()) {
+    if (auto* guiDoc = Gui::Application::Instance->activeDocument();
+        guiDoc && Gui::Control().activeDialog(guiDoc->getDocument())) {
         return false;
     }
     Gui::MDIView* view = Gui::getMainWindow()->activeWindow();
@@ -3499,7 +3500,9 @@ void StdCmdTextureMapping::activated(int iMsg)
 bool StdCmdTextureMapping::isActive()
 {
     Gui::MDIView* view = getMainWindow()->activeWindow();
-    return view && view->isDerivedFrom<Gui::View3DInventor>() && (!(Gui::Control().activeDialog()));
+    auto* guiDoc = Gui::Application::Instance->activeDocument();
+    return view && view->isDerivedFrom<Gui::View3DInventor>()
+        && !(guiDoc && Gui::Control().activeDialog(guiDoc->getDocument()));
 }
 
 DEF_STD_CMD(StdCmdDemoMode)
