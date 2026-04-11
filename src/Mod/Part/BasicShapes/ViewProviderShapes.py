@@ -62,12 +62,14 @@ class ViewProviderTube:
 
     def setEdit(self, viewObject, mode):
         if mode == 0:
-            FreeCADGui.Control.showDialog(TaskTubeUI(viewObject), FreeCADGui.ActiveDocument)
+            task = FreeCADGui.Control.showDialog(TaskTubeUI(viewObject), viewObject.Document)
+            task.setDocumentName(viewObject.Object.Document.Name)
+            task.setAutoCloseOnDeletedDocument(True)
             return True
 
     def unsetEdit(self, viewObject, mode):
         if mode == 0:
-            FreeCADGui.Control.closeDialog()
+            FreeCADGui.Control.closeDialog(viewObject.Document)
             return True
 
     def getIcon(self):

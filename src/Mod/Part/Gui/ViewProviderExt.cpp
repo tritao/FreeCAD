@@ -1012,16 +1012,17 @@ void ViewProviderPartExt::setupContextMenu(QMenu* menu, QObject* receiver, const
 
 bool ViewProviderPartExt::changeFaceAppearances()
 {
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    auto* document = getDocument()->getDocument();
+    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(document);
     if (dlg) {
-        Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+        Gui::Control().showDialog(dlg, document);
         return false;
     }
 
     Gui::Selection().clearSelection();
     Gui::Control().showDialog(
         new TaskFaceAppearances(this),
-        Gui::Application::Instance->activeDocument()->getDocument()
+        document
     );
     return true;
 }

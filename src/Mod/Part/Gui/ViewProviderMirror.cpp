@@ -312,13 +312,14 @@ void ViewProviderFillet::setupContextMenu(QMenu* menu, QObject* receiver, const 
 bool ViewProviderFillet::setEdit(int ModNum)
 {
     if (ModNum == ViewProvider::Default) {
-        if (Gui::Control().activeDialog()) {
+        auto* document = getDocument()->getDocument();
+        if (Gui::Control().activeDialog(document)) {
             return false;
         }
         Part::Fillet* fillet = getObject<Part::Fillet>();
         Gui::Control().showDialog(
             new PartGui::TaskFilletEdges(fillet),
-            Gui::Application::Instance->activeDocument()->getDocument()
+            document
         );
         return true;
     }
@@ -436,13 +437,14 @@ void ViewProviderChamfer::setupContextMenu(QMenu* menu, QObject* receiver, const
 bool ViewProviderChamfer::setEdit(int ModNum)
 {
     if (ModNum == ViewProvider::Default) {
-        if (Gui::Control().activeDialog()) {
+        auto* document = getDocument()->getDocument();
+        if (Gui::Control().activeDialog(document)) {
             return false;
         }
         Part::Chamfer* chamfer = getObject<Part::Chamfer>();
         Gui::Control().showDialog(
             new PartGui::TaskChamferEdges(chamfer),
-            Gui::Application::Instance->activeDocument()->getDocument()
+            document
         );
         return true;
     }
@@ -617,7 +619,7 @@ void ViewProviderOffset::unsetEdit(int ModNum)
 {
     if (ModNum == ViewProvider::Default) {
         // when pressing ESC make sure to close the dialog
-        Gui::Control().closeDialog(nullptr);
+        Gui::Control().closeDialog(getDocument()->getDocument());
     }
     else {
         PartGui::ViewProviderPart::unsetEdit(ModNum);

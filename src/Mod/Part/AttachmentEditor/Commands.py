@@ -76,7 +76,10 @@ def editAttachment(
             callback_Cancel=callback_Cancel,
             callback_Apply=callback_Apply,
         )
-        Gui.Control.showDialog(taskd, Gui.ActiveDocument)
+        gui_doc = Gui.getDocument(feature.Document.Name)
+        task = Gui.Control.showDialog(taskd, gui_doc)
+        task.setDocumentName(feature.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
     except TaskAttachmentEditor.CancelError:
         pass
 

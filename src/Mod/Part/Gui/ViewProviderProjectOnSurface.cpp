@@ -60,14 +60,15 @@ void ViewProviderProjectOnSurface::setupContextMenu(QMenu* menu, QObject* receiv
 bool ViewProviderProjectOnSurface::setEdit(int ModNum)
 {
     if (ModNum == ViewProvider::Default) {
-        if (Gui::Control().activeDialog()) {
+        auto* document = getDocument()->getDocument();
+        if (Gui::Control().activeDialog(document)) {
             return false;
         }
 
         if (auto feature = getObject<Part::ProjectOnSurface>()) {
             Gui::Control().showDialog(
                 new TaskProjectOnSurface(feature),
-                Gui::Application::Instance->activeDocument()->getDocument()
+                document
             );
             return true;
         }

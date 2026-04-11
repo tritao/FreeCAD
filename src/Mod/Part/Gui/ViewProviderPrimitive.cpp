@@ -64,13 +64,14 @@ void ViewProviderPrimitive::setupContextMenu(QMenu* menu, QObject* receiver, con
 bool ViewProviderPrimitive::setEdit(int ModNum)
 {
     if (ModNum == ViewProvider::Default) {
-        if (Gui::Control().activeDialog()) {
+        auto* document = getDocument()->getDocument();
+        if (Gui::Control().activeDialog(document)) {
             return false;
         }
         PartGui::TaskPrimitivesEdit* dlg = new PartGui::TaskPrimitivesEdit(
             getObject<Part::Primitive>()
         );
-        Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+        Gui::Control().showDialog(dlg, document);
         return true;
     }
     else {

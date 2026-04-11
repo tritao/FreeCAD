@@ -412,7 +412,7 @@ class AttachmentEditorTaskPanel(FrozenClass):
         if self.create_transaction:
             self.obj.Document.commitTransaction()
         self.cleanUp()
-        Gui.Control.closeDialog()
+        Gui.Control.closeDialog(Gui.getDocument(self.obj.Document.Name))
         if self.callback_OK:
             self.callback_OK()
 
@@ -420,7 +420,7 @@ class AttachmentEditorTaskPanel(FrozenClass):
         if self.create_transaction:
             self.obj.Document.abortTransaction()
         self.cleanUp()
-        Gui.Control.closeDialog()
+        Gui.Control.closeDialog(Gui.getDocument(self.obj.Document.Name))
         if self.callback_Cancel:
             self.callback_Cancel()
 
