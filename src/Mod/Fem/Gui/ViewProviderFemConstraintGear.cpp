@@ -56,13 +56,11 @@ ViewProviderFemConstraintGear::~ViewProviderFemConstraintGear() = default;
 bool ViewProviderFemConstraintGear::setEdit(int ModNum)
 {
     if (ModNum == ViewProvider::Default) {
-        Gui::Control().closeDialog();
+        auto* document = getDocument()->getDocument();
+        Gui::Control().closeDialog(document);
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(
-            new TaskDlgFemConstraintGear(this),
-            Gui::Application::Instance->activeDocument()->getDocument()
-        );
+        Gui::Control().showDialog(new TaskDlgFemConstraintGear(this), document);
 
         return true;
     }

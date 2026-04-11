@@ -246,7 +246,9 @@ class VPPostTable(view_base_fempostvisualization.VPPostVisualization):
         taskd = task_post_table._TaskPanel(vobj)
 
         # show it
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        task = FreeCADGui.Control.showDialog(taskd, vobj.Document)
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
 
         return True
 

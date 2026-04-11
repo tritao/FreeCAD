@@ -132,7 +132,9 @@ if FreeCAD.GuiUp:
                 self.fem_mesh_obj, self.fileString, group_values_dict=group_values_dict
             )
 
-            FreeCADGui.Control.closeDialog()
+            FreeCADGui.Control.closeDialog(
+                FreeCADGui.getDocument(self.fem_mesh_obj.Document)
+            )
 
 
 def open(filename):
@@ -181,7 +183,12 @@ def export(objectslist, fileString, group_values_dict_nogui=None):
                 # if there are groups found, make task panel available if GuiUp
                 if FreeCAD.GuiUp == 1:
                     panel = WriteXDMFTaskPanel(obj, fileString)
-                    FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
+                    task = FreeCADGui.Control.showDialog(
+                        panel,
+                        FreeCADGui.getDocument(obj.Document),
+                    )
+                    task.setDocumentName(obj.Document.Name)
+                    task.setAutoCloseOnDeletedDocument(True)
                 else:
                     # create default dict if groupdict_nogui is not None
                     if group_values_dict_nogui is None:

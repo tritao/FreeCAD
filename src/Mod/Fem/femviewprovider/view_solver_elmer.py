@@ -46,6 +46,8 @@ class VPSolverElmer(view_base_femobject.VPBaseFemObject):
 
     def setEdit(self, vobj, mode=0):
         task = task_solver_elmer._TaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(task, FreeCADGui.ActiveDocument)
+        task_dialog = FreeCADGui.Control.showDialog(task, vobj.Document)
+        task_dialog.setDocumentName(vobj.Object.Document.Name)
+        task_dialog.setAutoCloseOnDeletedDocument(True)
 
         return True

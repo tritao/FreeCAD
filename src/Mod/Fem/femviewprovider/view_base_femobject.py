@@ -105,11 +105,13 @@ class VPBaseFemObject:
                     obj.ViewObject.hide()
         # show task panel
         task = TaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(task, FreeCADGui.ActiveDocument)
+        task_dialog = FreeCADGui.Control.showDialog(task, vobj.Document)
+        task_dialog.setDocumentName(vobj.Object.Document.Name)
+        task_dialog.setAutoCloseOnDeletedDocument(True)
         return True
 
     def unsetEdit(self, vobj, mode=0):
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(vobj.Document)
         return True
 
     def doubleClicked(self, vobj):

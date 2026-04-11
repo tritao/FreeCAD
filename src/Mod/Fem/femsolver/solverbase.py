@@ -97,15 +97,17 @@ class ViewProxy:
             QtGui.QMessageBox.critical(Gui.getMainWindow(), "Can't open Task Panel", error_message)
             return False
         task = solver_taskpanel.ControlTaskPanel(machine)
-        Gui.Control.showDialog(task, Gui.ActiveDocument)
+        task_dialog = Gui.Control.showDialog(task, vobj.Document)
+        task_dialog.setDocumentName(vobj.Object.Document.Name)
+        task_dialog.setAutoCloseOnDeletedDocument(True)
         return True
 
     def unsetEdit(self, vobj, mode=0):
-        Gui.Control.closeDialog()
+        Gui.Control.closeDialog(vobj.Document)
 
     def doubleClicked(self, vobj):
-        if Gui.Control.activeDialog():
-            Gui.Control.closeDialog()
+        if Gui.Control.activeDialog(vobj.Document):
+            Gui.Control.closeDialog(vobj.Document)
         vobj.Document.setEdit(vobj.Object.Name)
         return True
 

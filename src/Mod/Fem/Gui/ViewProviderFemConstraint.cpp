@@ -295,7 +295,7 @@ void ViewProviderFemConstraint::unsetEdit(int ModNum)
     Gui::Selection().clearSelection();
     if (ModNum == ViewProvider::Default) {
         // when pressing ESC make sure to close the dialog
-        Gui::Control().closeDialog();
+        Gui::Control().closeDialog(getDocument()->getDocument());
     }
     else {
         ViewProviderGeometryObject::unsetEdit(ModNum);

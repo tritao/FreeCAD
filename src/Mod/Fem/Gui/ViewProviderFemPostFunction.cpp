@@ -144,8 +144,9 @@ std::vector<std::string> ViewProviderFemPostFunction::getDisplayModes() const
 bool ViewProviderFemPostFunction::setEdit(int ModNum)
 {
     if (ModNum == ViewProvider::Default || ModNum == 1) {
+        auto* document = getDocument()->getDocument();
 
-        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(document);
         TaskDlgPost* postDlg = qobject_cast<TaskDlgPost*>(dlg);
         if (postDlg && postDlg->getView() != this) {
             postDlg = nullptr;  // another pad left open its task panel
@@ -158,7 +159,7 @@ bool ViewProviderFemPostFunction::setEdit(int ModNum)
             msgBox.setDefaultButton(QMessageBox::Yes);
             int ret = msgBox.exec();
             if (ret == QMessageBox::Yes) {
-                Gui::Control().reject();
+                Gui::Control().reject(document);
             }
             else {
                 return false;
@@ -167,19 +168,13 @@ bool ViewProviderFemPostFunction::setEdit(int ModNum)
 
         // start the edit dialog
         if (postDlg) {
-            Gui::Control().showDialog(
-                postDlg,
-                Gui::Application::Instance->activeDocument()->getDocument()
-            );
+            Gui::Control().showDialog(postDlg, document);
         }
         else {
             postDlg = new TaskDlgPost(this);
             auto panel = new TaskPostFunction(this);
             postDlg->addTaskBox(panel->windowIcon().pixmap(32), panel);
-            Gui::Control().showDialog(
-                postDlg,
-                Gui::Application::Instance->activeDocument()->getDocument()
-            );
+            Gui::Control().showDialog(postDlg, document);
         }
 
         return true;
@@ -193,7 +188,7 @@ void ViewProviderFemPostFunction::unsetEdit(int ModNum)
 {
     if (ModNum == ViewProvider::Default) {
         // when pressing ESC make sure to close the dialog
-        Gui::Control().closeDialog();
+        Gui::Control().closeDialog(getDocument()->getDocument());
     }
     else {
         ViewProviderDocumentObject::unsetEdit(ModNum);

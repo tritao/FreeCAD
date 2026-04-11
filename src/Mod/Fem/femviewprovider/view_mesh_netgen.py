@@ -59,13 +59,15 @@ class VPMeshNetgen(view_base_femobject.VPBaseFemObject):
         self.ViewObject.show()
         # show task panel
         taskd = task_mesh_netgen._TaskPanel(self.Object)
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        task = FreeCADGui.Control.showDialog(taskd, vobj.Document)
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         return True
 
     def doubleClicked(self, vobj):
         # Group meshing is only active on active analysis
         # we should make sure the analysis the mesh belongs too is active
-        gui_doc = FreeCADGui.getDocument(vobj.Object.Document)
+        gui_doc = FreeCADGui.getDocument(vobj.Object.Document.Name)
         if not gui_doc.getInEdit():
             # may be go the other way around and just activate the
             # analysis the user has doubleClicked on ?!
@@ -79,7 +81,7 @@ class VPMeshNetgen(view_base_femobject.VPBaseFemObject):
                     break
             if found_an_analysis:
                 if FemGui.getActiveAnalysis() is not None:
-                    if FemGui.getActiveAnalysis().Document is FreeCAD.ActiveDocument:
+                    if FemGui.getActiveAnalysis().Document is self.Object.Document:
                         if self.Object in FemGui.getActiveAnalysis().Group:
                             if not gui_doc.getInEdit():
                                 gui_doc.setEdit(vobj.Object.Name)
@@ -114,10 +116,12 @@ class VPMeshNetgen(view_base_femobject.VPBaseFemObject):
                                 )
                                 gui_doc.setEdit(vobj.Object.Name)
                     else:
-                        FreeCAD.Console.PrintError("Active analysis is not in active document.\n")
+                        FreeCAD.Console.PrintError(
+                            "Active analysis is not in the mesh object's document.\n"
+                        )
                 else:
                     FreeCAD.Console.PrintLog(
-                        "No active analysis in active document, "
+                        "No active analysis in the mesh object's document, "
                         "we are going to have a look if the Netgen FEM mesh object "
                         "belongs to a non active analysis.\n"
                     )

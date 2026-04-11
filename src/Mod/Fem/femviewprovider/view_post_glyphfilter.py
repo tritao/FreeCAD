@@ -71,12 +71,14 @@ class VPPostGlyphFilter:
         taskd = task_post_glyphfilter._TaskPanel(vobj)
 
         # show it
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        task = FreeCADGui.Control.showDialog(taskd, vobj.Document)
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
 
         return True
 
     def unsetEdit(self, vobj, mode):
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(vobj.Document)
         return True
 
     def dumps(self):

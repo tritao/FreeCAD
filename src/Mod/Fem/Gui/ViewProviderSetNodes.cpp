@@ -36,18 +36,30 @@ PROPERTY_SOURCE(FemGui::ViewProviderSetNodes, Gui::ViewProviderGeometryObject)
 
 bool ViewProviderSetNodes::doubleClicked()
 {
+    auto* document = getDocument()->getDocument();
+    if (Gui::Control().activeDialog(document)) {
+        return false;
+    }
+
     Gui::TaskView::TaskDialog* dlg = new TaskDlgCreateNodeSet(getObject<Fem::FemSetNodesObject>());
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, document);
     return true;
 }
 
 
 bool ViewProviderSetNodes::setEdit(int)
 {
+    auto* document = getDocument()->getDocument();
+    if (Gui::Control().activeDialog(document)) {
+        return false;
+    }
+
     Gui::TaskView::TaskDialog* dlg = new TaskDlgCreateNodeSet(getObject<Fem::FemSetNodesObject>());
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, document);
     return true;
 }
 
 void ViewProviderSetNodes::unsetEdit(int)
-{}
+{
+    Gui::Control().closeDialog(getDocument()->getDocument());
+}

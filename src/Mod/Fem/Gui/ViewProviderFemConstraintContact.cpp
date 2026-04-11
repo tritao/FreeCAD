@@ -47,13 +47,11 @@ ViewProviderFemConstraintContact::~ViewProviderFemConstraintContact() = default;
 bool ViewProviderFemConstraintContact::setEdit(int ModNum)
 {
     if (ModNum == ViewProvider::Default) {
-        Gui::Control().closeDialog();
+        auto* document = getDocument()->getDocument();
+        Gui::Control().closeDialog(document);
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(
-            new TaskDlgFemConstraintContact(this),
-            Gui::Application::Instance->activeDocument()->getDocument()
-        );
+        Gui::Control().showDialog(new TaskDlgFemConstraintContact(this), document);
 
         return true;
     }

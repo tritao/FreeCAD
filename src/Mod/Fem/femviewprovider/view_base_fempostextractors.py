@@ -86,12 +86,14 @@ class VPPostExtractor:
         taskd = task_post_extractor._ExtractorTaskPanel(vobj.Object)
 
         # show it
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        task = FreeCADGui.Control.showDialog(taskd, vobj.Document)
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
 
         return True
 
     def unsetEdit(self, vobj, mode=0):
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(vobj.Document)
         return True
 
     def doubleClicked(self, vobj):
@@ -99,7 +101,7 @@ class VPPostExtractor:
 
         # check if another VP is in edit mode and close it then
         if guidoc.getInEdit():
-            FreeCADGui.Control.closeDialog()
+            FreeCADGui.Control.closeDialog(guidoc)
             guidoc.resetEdit()
 
         guidoc.setEdit(vobj.Object.Name)

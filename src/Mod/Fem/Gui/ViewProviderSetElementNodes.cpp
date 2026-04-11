@@ -37,10 +37,15 @@ PROPERTY_SOURCE(FemGui::ViewProviderSetElementNodes, Gui::ViewProviderGeometryOb
 
 bool ViewProviderSetElementNodes::doubleClicked()
 {
+    auto* document = getDocument()->getDocument();
+    if (Gui::Control().activeDialog(document)) {
+        return false;
+    }
+
     Gui::TaskView::TaskDialog* dlg = new TaskDlgCreateElementSet(
         getObject<Fem::FemSetElementNodesObject>()
     );
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, document);
     return true;
 }
 
@@ -52,4 +57,6 @@ bool ViewProviderSetElementNodes::setEdit(int)
 }
 
 void ViewProviderSetElementNodes::unsetEdit(int)
-{}
+{
+    Gui::Control().closeDialog(getDocument()->getDocument());
+}

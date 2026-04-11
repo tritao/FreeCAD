@@ -69,7 +69,7 @@ class VPPostVisualization:
 
         # check if another VP is in edit mode and close it then
         if guidoc.getInEdit():
-            FreeCADGui.Control.closeDialog()
+            FreeCADGui.Control.closeDialog(guidoc)
             guidoc.resetEdit()
 
         # open task dialog
@@ -81,7 +81,7 @@ class VPPostVisualization:
         return True
 
     def unsetEdit(self, vobj, mode=0):
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(vobj.Document)
         return True
 
     def updateData(self, obj, prop):

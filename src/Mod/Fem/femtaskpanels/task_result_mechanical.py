@@ -807,8 +807,9 @@ class _TaskPanel:
         plt.close()
         # if the tasks panel is called from Command obj is not in edit mode
         # thus reset edit does not close the dialog, maybe don't call but set in edit instead
-        FreeCADGui.Control.closeDialog()
-        FreeCADGui.ActiveDocument.resetEdit()
+        gui_doc = FreeCADGui.getDocument(self.result_obj.Document)
+        FreeCADGui.Control.closeDialog(gui_doc)
+        gui_doc.resetEdit()
         if len(self.animateText) > 0:
             for a in self.animateText:
                 a.hide()

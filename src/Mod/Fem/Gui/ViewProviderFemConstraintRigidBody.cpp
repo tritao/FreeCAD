@@ -50,13 +50,11 @@ ViewProviderFemConstraintRigidBody::~ViewProviderFemConstraintRigidBody() = defa
 bool ViewProviderFemConstraintRigidBody::setEdit(int ModNum)
 {
     if (ModNum == ViewProvider::Default) {
-        Gui::Control().closeDialog();
+        auto* document = getDocument()->getDocument();
+        Gui::Control().closeDialog(document);
         // clear the selection (convenience)
         Gui::Selection().clearSelection();
-        Gui::Control().showDialog(
-            new TaskDlgFemConstraintRigidBody(this),
-            Gui::Application::Instance->activeDocument()->getDocument()
-        );
+        Gui::Control().showDialog(new TaskDlgFemConstraintRigidBody(this), document);
 
         return true;
     }
