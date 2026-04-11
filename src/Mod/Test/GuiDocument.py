@@ -29,6 +29,22 @@ from PySide import QtCore, QtGui
 # ---------------------------------------------------------------------------
 
 
+class DummyTaskPanel:
+    def __init__(self, title):
+        self.form = QtGui.QWidget()
+        self.form.setWindowTitle(title)
+        self.accepted = 0
+        self.rejected = 0
+
+    def accept(self):
+        self.accepted += 1
+        return True
+
+    def reject(self):
+        self.rejected += 1
+        return True
+
+
 class TestGuiDocument(unittest.TestCase):
     def setUp(self):
         # Create a new document
@@ -37,7 +53,8 @@ class TestGuiDocument(unittest.TestCase):
     def tearDown(self):
         self.close_task_dialog("TestDoc")
         # Close the document
-        FreeCAD.closeDocument("TestDoc")
+        if "TestDoc" in FreeCAD.listDocuments():
+            FreeCAD.closeDocument("TestDoc")
 
     def pump_gui_events(self, timeout_ms=50):
         loop = QtCore.QEventLoop()
@@ -52,6 +69,13 @@ class TestGuiDocument(unittest.TestCase):
         if gui_doc:
             FreeCADGui.Control.closeDialog(gui_doc)
             self.pump_gui_events()
+
+    def show_task_dialog(self, doc_name, title):
+        gui_doc = FreeCADGui.getDocument(doc_name)
+        panel = DummyTaskPanel(title)
+        task = FreeCADGui.Control.showDialog(panel, gui_doc)
+        self.pump_gui_events()
+        return gui_doc, panel, task
 
     def testGetTreeRootObject(self):
         # Create objects at the root level
@@ -73,11 +97,6 @@ class TestGuiDocument(unittest.TestCase):
         self.assertEqual(set(root_objects), set(expected_root_objects))
 
     def testCloseDocumentTaskDialogDoesNotSwitchActiveDocument(self):
-        class DummyTaskPanel:
-            def __init__(self, title):
-                self.form = QtGui.QWidget()
-                self.form.setWindowTitle(title)
-
         second_doc = FreeCAD.newDocument("TestDoc2")
         self.addCleanup(lambda: self.close_task_dialog("TestDoc2"))
         self.addCleanup(
@@ -86,15 +105,8 @@ class TestGuiDocument(unittest.TestCase):
             else None
         )
 
-        gui_doc_1 = FreeCADGui.getDocument(self.doc.Name)
-        first_panel = DummyTaskPanel("Doc 1 Task")
-        FreeCADGui.Control.showDialog(first_panel, gui_doc_1)
-        self.pump_gui_events()
-
-        gui_doc_2 = FreeCADGui.getDocument(second_doc.Name)
-        second_panel = DummyTaskPanel("Doc 2 Task")
-        FreeCADGui.Control.showDialog(second_panel, gui_doc_2)
-        self.pump_gui_events()
+        gui_doc_1, _first_panel, _first_task = self.show_task_dialog(self.doc.Name, "Doc 1 Task")
+        gui_doc_2, _second_panel, _second_task = self.show_task_dialog(second_doc.Name, "Doc 2 Task")
 
         FreeCAD.setActiveDocument(self.doc.Name)
         self.pump_gui_events()
@@ -115,3 +127,67 @@ class TestGuiDocument(unittest.TestCase):
         self.assertFalse(FreeCADGui.Control.activeDialog(FreeCADGui.ActiveDocument))
 
         self.close_task_dialog("TestDoc2")
+
+    def testAcceptRejectTaskDialogStayScopedToOwnerDocument(self):
+        second_doc = FreeCAD.newDocument("TestDoc2")
+        self.addCleanup(lambda: self.close_task_dialog("TestDoc2"))
+        self.addCleanup(
+            lambda: FreeCAD.closeDocument("TestDoc2")
+            if "TestDoc2" in FreeCAD.listDocuments()
+            else None
+        )
+
+        gui_doc_1, first_panel, first_task = self.show_task_dialog(self.doc.Name, "Doc 1 Task")
+        gui_doc_2, second_panel, second_task = self.show_task_dialog(second_doc.Name, "Doc 2 Task")
+
+        first_task.reject()
+        self.pump_gui_events()
+
+        self.assertEqual(first_panel.accepted, 0)
+        self.assertEqual(first_panel.rejected, 1)
+        self.assertEqual(second_panel.accepted, 0)
+        self.assertEqual(second_panel.rejected, 0)
+        self.assertFalse(FreeCADGui.Control.activeDialog(gui_doc_1))
+        self.assertTrue(FreeCADGui.Control.activeDialog(gui_doc_2))
+
+        second_task.accept()
+        self.pump_gui_events()
+
+        self.assertEqual(second_panel.accepted, 1)
+        self.assertEqual(second_panel.rejected, 0)
+        self.assertFalse(FreeCADGui.Control.activeDialog(gui_doc_2))
+
+    def testCloseDocumentAutoClosesOnlyOwnedTaskDialog(self):
+        first_doc_name = self.doc.Name
+        second_doc = FreeCAD.newDocument("TestDoc2")
+        self.addCleanup(lambda: self.close_task_dialog("TestDoc2"))
+        self.addCleanup(
+            lambda: FreeCAD.closeDocument("TestDoc2")
+            if "TestDoc2" in FreeCAD.listDocuments()
+            else None
+        )
+
+        gui_doc_1, _first_panel, first_task = self.show_task_dialog(first_doc_name, "Doc 1 Task")
+        first_task.setDocumentName(first_doc_name)
+        first_task.setAutoCloseOnDeletedDocument(True)
+
+        gui_doc_2, _second_panel, second_task = self.show_task_dialog(second_doc.Name, "Doc 2 Task")
+        second_task.setDocumentName(second_doc.Name)
+        second_task.setAutoCloseOnDeletedDocument(True)
+
+        FreeCAD.setActiveDocument(second_doc.Name)
+        self.pump_gui_events()
+
+        self.assertEqual(FreeCAD.ActiveDocument.Name, second_doc.Name)
+        self.assertEqual(FreeCADGui.ActiveDocument.Document.Name, second_doc.Name)
+        self.assertTrue(FreeCADGui.Control.activeDialog(gui_doc_1))
+        self.assertTrue(FreeCADGui.Control.activeDialog(gui_doc_2))
+
+        FreeCAD.closeDocument(first_doc_name)
+        self.pump_gui_events()
+
+        self.assertNotIn(first_doc_name, FreeCAD.listDocuments())
+        self.assertEqual(FreeCAD.ActiveDocument.Name, second_doc.Name)
+        self.assertEqual(FreeCADGui.ActiveDocument.Document.Name, second_doc.Name)
+        self.assertTrue(FreeCADGui.Control.activeDialog(gui_doc_2))
+        self.assertTrue(FreeCADGui.Control.activeDialog(FreeCADGui.ActiveDocument))
