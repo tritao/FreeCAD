@@ -102,27 +102,29 @@ class TaskPanel(object):
     def __init__(self, viewProvider, obj):
         self.viewProvider = viewProvider
         self.obj = obj
+        self.doc = obj.Document
         self.form = FreeCADGui.PySideUic.loadUi(":/panels/DogboneEdit.ui")
         self.s = None
-        FreeCAD.ActiveDocument.openTransaction("Edit Dogbone Dress-up")
+        self.doc.openTransaction("Edit Dogbone Dress-up")
         # self.height = 10 ???
         self.markers = []
 
     def reject(self):
-        FreeCAD.ActiveDocument.abortTransaction()
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.abortTransaction()
+        FreeCADGui.Control.closeDialog(self.obj.ViewObject.Document)
+        self.doc.recompute()
         FreeCADGui.Selection.removeObserver(self.s)
         self.cleanup()
 
     def accept(self):
         self.getFields()
-        FreeCAD.ActiveDocument.commitTransaction()
-        FreeCADGui.ActiveDocument.resetEdit()
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.commitTransaction()
+        gui_doc = self.obj.ViewObject.Document
+        gui_doc.resetEdit()
+        FreeCADGui.Control.closeDialog(gui_doc)
+        self.doc.recompute()
         FreeCADGui.Selection.removeObserver(self.s)
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.recompute()
         self.cleanup()
 
     def cleanup(self):
@@ -194,7 +196,7 @@ class TaskPanel(object):
     def updateModel(self):
         self.getFields()
         self.updateUI()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.recompute()
 
     def setupCombo(self, combo, text, items):
         if items and len(items) > 0:
@@ -249,7 +251,13 @@ class SelObserver(object):
         PST.clear()
 
     def addSelection(self, doc, obj, sub, pnt):
-        FreeCADGui.doCommand("Gui.Selection.addSelection(FreeCAD.ActiveDocument." + obj + ")")
+        FreeCADGui.doCommand(
+            "Gui.Selection.addSelection(App.getDocument("
+            + repr(doc)
+            + ").getObject("
+            + repr(obj)
+            + "))"
+        )
         FreeCADGui.updateGui()
 
 
@@ -280,9 +288,11 @@ class ViewProviderDressup(object):
         return [self.obj.Base]
 
     def setEdit(self, vobj, mode=0):
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(vobj.Document)
         panel = TaskPanel(self, vobj.Object)
-        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
+        task = FreeCADGui.Control.showDialog(panel, vobj.Document)
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         panel.setupUi()
         return True
 
@@ -295,7 +305,7 @@ class ViewProviderDressup(object):
     def onDelete(self, arg1=None, arg2=None):
         """this makes sure that the base operation is added back to the project and visible"""
         if arg1.Object and arg1.Object.Base:
-            FreeCADGui.ActiveDocument.getObject(arg1.Object.Base.Name).Visibility = True
+            arg1.Object.Base.ViewObject.Visibility = True
             job = PathUtils.findParentJob(arg1.Object)
             if job:
                 job.Proxy.addOperation(arg1.Object.Base, arg1.Object)
@@ -343,15 +353,21 @@ class CommandDressupDogboneII(object):
         op = PathDressup.selection(verbose=True)
         if not op:
             return
+        doc = op.Document
+        doc_name = doc.Name
 
         # everything ok!
-        FreeCAD.ActiveDocument.openTransaction("Create Dogbone Dress-up")
+        doc.openTransaction("Create Dogbone Dress-up")
         FreeCADGui.addModule("Path.Dressup.Gui.DogboneII")
         FreeCADGui.doCommand(
-            "Path.Dressup.Gui.DogboneII.Create(FreeCAD.ActiveDocument.%s)" % op.Name
+            "Path.Dressup.Gui.DogboneII.Create(FreeCAD.getDocument("
+            + repr(doc_name)
+            + ").getObject("
+            + repr(op.Name)
+            + "))"
         )
         # FreeCAD.ActiveDocument.commitTransaction()  # Final `commitTransaction()` called via TaskPanel.accept()
-        FreeCAD.ActiveDocument.recompute()
+        doc.recompute()
 
 
 if FreeCAD.GuiUp:

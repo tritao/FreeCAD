@@ -55,11 +55,11 @@ class CAMSimTaskUi:
 
     def accept(self):
         self.parent.accept()
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(self.parent.gui_doc)
 
     def reject(self):
         self.parent.cancel()
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(self.parent.gui_doc)
 
 
 def TSError(msg):
@@ -78,6 +78,8 @@ class PathSimulation:
         self.accuracy = 0.1
         self.resetSimulation = False
         self.jobs = []
+        self.doc = None
+        self.gui_doc = None
 
     def Connect(self, but, sig):
         QtCore.QObject.connect(but, QtCore.SIGNAL("clicked()"), sig)
@@ -86,7 +88,8 @@ class PathSimulation:
         if self.numCommands > 0:
             self.taskForm.form.progressBar.setValue(self.iprogress * 100 / self.numCommands)
 
-    def Activate(self):
+    def Activate(self, document=None):
+        self.doc = document if document is not None else FreeCAD.ActiveDocument
         self.initdone = False
         self.taskForm = CAMSimTaskUi(self)
         form = self.taskForm.form
@@ -102,7 +105,11 @@ class PathSimulation:
         self._populateJobSelection(form)
         form.comboJobs.currentIndexChanged.connect(self.onJobChange)
         self.onJobChange()
-        FreeCADGui.Control.showDialog(self.taskForm, FreeCADGui.ActiveDocument)
+        self.gui_doc = FreeCADGui.getDocument(self.doc.Name) if self.doc else FreeCADGui.ActiveDocument
+        task = FreeCADGui.Control.showDialog(self.taskForm, self.gui_doc)
+        if task is not None and self.doc is not None:
+            task.setDocumentName(self.doc.Name)
+            task.setAutoCloseOnDeletedDocument(True)
         self.disableAnim = False
         self.isVoxel = True
         self.firstDrill = True
@@ -116,16 +123,16 @@ class PathSimulation:
         jobName = ""
         jIdx = 0
         # Get list of Job objects in active document
-        jobList = FreeCAD.ActiveDocument.findObjects("Path::FeaturePython", "Job.*")
+        jobList = self.doc.findObjects("Path::FeaturePython", "Job.*")
         jCnt = len(jobList)
 
         # Check if user has selected a specific job for simulation
-        guiSelection = FreeCADGui.Selection.getSelectionEx()
+        guiSelection = FreeCADGui.Selection.getSelectionEx(self.doc.Name, 0)
         if guiSelection:  #  Identify job selected by user
             sel = guiSelection[0]
             if hasattr(sel.Object, "Proxy") and isinstance(sel.Object.Proxy, PathJob.ObjectJob):
                 jobName = sel.Object.Name
-                FreeCADGui.Selection.clearSelection()
+                FreeCADGui.Selection.clearSelection(self.doc.Name)
 
         # populate the job selection combobox
         form.comboJobs.blockSignals(True)
@@ -207,23 +214,23 @@ class PathSimulation:
         self.skipStep = False
         self.initialPos = Vector(0, 0, self.job.Stock.Shape.BoundBox.ZMax)
         # Add cut tool
-        self.cutTool = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "CutTool")
+        self.cutTool = self.doc.addObject("Part::FeaturePython", "CutTool")
         self.cutTool.ViewObject.Proxy = 0
         self.cutTool.ViewObject.hide()
 
         # Add cut material
         if self.isVoxel:
-            self.cutMaterial = FreeCAD.ActiveDocument.addObject(
+            self.cutMaterial = self.doc.addObject(
                 "Mesh::FeaturePython", "CutMaterial"
             )
-            self.cutMaterialIn = FreeCAD.ActiveDocument.addObject(
+            self.cutMaterialIn = self.doc.addObject(
                 "Mesh::FeaturePython", "CutMaterialIn"
             )
             self.cutMaterialIn.ViewObject.Proxy = 0
             self.cutMaterialIn.ViewObject.show()
             self.cutMaterialIn.ViewObject.ShapeColor = (1.0, 0.85, 0.45, 0.0)
         else:
-            self.cutMaterial = FreeCAD.ActiveDocument.addObject(
+            self.cutMaterial = self.doc.addObject(
                 "Part::FeaturePython", "CutMaterial"
             )
             self.cutMaterial.Shape = self.job.Stock.Shape
@@ -233,13 +240,13 @@ class PathSimulation:
 
         # Add cut path solid for debug
         if self.debug:
-            self.cutSolid = FreeCAD.ActiveDocument.addObject("Part::FeaturePython", "CutDebug")
+            self.cutSolid = self.doc.addObject("Part::FeaturePython", "CutDebug")
             self.cutSolid.ViewObject.Proxy = 0
             self.cutSolid.ViewObject.hide()
 
         self.SetupSimulation()
         self.resetSimulation = True
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.recompute()
 
     def PerformCutBoolean(self):
         if self.resetSimulation:
@@ -586,7 +593,7 @@ class PathSimulation:
     def RemoveTool(self):
         if self.cutTool is None:
             return
-        FreeCAD.ActiveDocument.removeObject(self.cutTool.Name)
+        self.doc.removeObject(self.cutTool.Name)
         self.cutTool = None
 
     def RemoveInnerMaterial(self):
@@ -596,12 +603,12 @@ class PathSimulation:
                 mesh.addMesh(self.cutMaterial.Mesh)
                 mesh.addMesh(self.cutMaterialIn.Mesh)
                 self.cutMaterial.Mesh = mesh
-            FreeCAD.ActiveDocument.removeObject(self.cutMaterialIn.Name)
+            self.doc.removeObject(self.cutMaterialIn.Name)
             self.cutMaterialIn = None
 
     def RemoveMaterial(self):
         if self.cutMaterial is not None:
-            FreeCAD.ActiveDocument.removeObject(self.cutMaterial.Name)
+            self.doc.removeObject(self.cutMaterial.Name)
             self.cutMaterial = None
         self.RemoveInnerMaterial()
 
@@ -634,7 +641,7 @@ class CommandPathSimulate:
 
     def Activated(self):
         pathSimulation = PathSimulation()
-        pathSimulation.Activate()
+        pathSimulation.Activate(FreeCAD.ActiveDocument)
 
 
 if FreeCAD.GuiUp:

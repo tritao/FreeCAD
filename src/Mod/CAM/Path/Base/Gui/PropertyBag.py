@@ -76,13 +76,15 @@ class ViewProvider(object):
     def setEdit(self, vobj, mode=0):
         Path.Log.track()
         taskPanel = TaskPanel(vobj)
-        FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(taskPanel, FreeCADGui.ActiveDocument)
+        FreeCADGui.Control.closeDialog(vobj.Document)
+        task = FreeCADGui.Control.showDialog(taskPanel, vobj.Document)
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         taskPanel.setupUi()
         return True
 
     def unsetEdit(self, vobj, mode):
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(vobj.Document)
         return
 
     def claimChildren(self):
@@ -227,14 +229,16 @@ class TaskPanel(object):
     TableHeaders = ["Property", "Value"]
 
     def __init__(self, vobj):
+        self.vobj = vobj
         self.obj = vobj.Object
+        self.doc = self.obj.Document
         self.props = sorted(self.obj.Proxy.getCustomProperties())
         self.form = FreeCADGui.PySideUic.loadUi(":panels/PropertyBag.ui")
 
         # initialized later
         self.model = None
         self.delegate = None
-        FreeCAD.ActiveDocument.openTransaction("Edit PropertyBag")
+        self.doc.openTransaction("Edit PropertyBag")
 
     def updateData(self, topLeft, bottomRight):
         pass
@@ -290,15 +294,15 @@ class TaskPanel(object):
         self.propertySelected([])
 
     def accept(self):
-        FreeCAD.ActiveDocument.commitTransaction()
-        FreeCADGui.ActiveDocument.resetEdit()
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.commitTransaction()
+        self.vobj.Document.resetEdit()
+        FreeCADGui.Control.closeDialog(self.vobj.Document)
+        self.doc.recompute()
 
     def reject(self):
-        FreeCAD.ActiveDocument.abortTransaction()
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.abortTransaction()
+        FreeCADGui.Control.closeDialog(self.vobj.Document)
+        self.doc.recompute()
 
     def propertySelected(self, selection):
         Path.Log.track()
@@ -406,10 +410,11 @@ class TaskPanel(object):
             self.model.removeRow(row)
 
 
-def Create(name="PropertyBag"):
+def Create(name="PropertyBag", document=None):
     """Create(name = 'PropertyBag') ... creates a new setup sheet"""
-    FreeCAD.ActiveDocument.openTransaction("Create PropertyBag")
-    pcont = PathPropertyBag.Create(name)
+    doc = document if document is not None else FreeCAD.ActiveDocument
+    doc.openTransaction("Create PropertyBag")
+    pcont = PathPropertyBag.Create(name, document=doc)
     PathIconViewProvider.Attach(pcont.ViewObject, name)
     return pcont
 

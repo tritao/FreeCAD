@@ -444,11 +444,13 @@ def Create(
     toolNumber=1,
     assignViewProvider=True,
     assignTool=True,
+    document=None,
 ):
 
     Path.Log.track(name, tool, toolNumber, assignViewProvider, assignTool)
+    doc = document if document is not None else FreeCAD.ActiveDocument
 
-    obj = FreeCAD.ActiveDocument.addObject("Path::FeaturePython", name)
+    obj = doc.addObject("Path::FeaturePython", name)
     obj.Label = name
     obj.Proxy = ToolController(obj, assignTool)
 
@@ -462,7 +464,7 @@ def Create(
             # Create a default endmill tool bit and attach it to a new DocumentObject
             toolbit = ToolBit.from_shape_id("endmill.fcstd")
             Path.Log.info(f"Controller.Create: Created toolbit with ID: {toolbit.id}")
-            tool = toolbit.attach_to_doc(doc=FreeCAD.ActiveDocument)
+            tool = toolbit.attach_to_doc(doc=doc)
             if tool.ViewObject:
                 tool.ViewObject.Visibility = False
         obj.Tool = tool

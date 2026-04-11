@@ -53,13 +53,14 @@ class PathDressupTagTaskPanel:
 
     def __init__(self, obj, viewProvider, jvoVisibility=None):
         self.obj = obj
+        self.doc = obj.Document
         self.obj.Proxy.obj = obj
         self.viewProvider = viewProvider
         self.form = FreeCADGui.PySideUic.loadUi(":/panels/HoldingTagsEdit.ui")
         self.getPoint = PathGetPoint.TaskPanel(self.form.removeEditAddGroup, True)
         self.jvo = PathUtils.findParentJob(obj).ViewObject
         if jvoVisibility is None:
-            FreeCAD.ActiveDocument.openTransaction("Edit HoldingTags Dress-up")
+            self.doc.openTransaction("Edit HoldingTags Dress-up")
             self.jvoVisible = self.jvo.isVisible()
             if self.jvoVisible:
                 self.jvo.hide()
@@ -91,26 +92,27 @@ class PathDressupTagTaskPanel:
         self.getPoint.buttonBox = buttonBox
 
     def abort(self):
-        FreeCAD.ActiveDocument.abortTransaction()
+        self.doc.abortTransaction()
         self.cleanup(False)
 
     def reject(self):
-        FreeCAD.ActiveDocument.abortTransaction()
+        self.doc.abortTransaction()
         self.cleanup(True)
 
     def accept(self):
-        FreeCAD.ActiveDocument.commitTransaction()
+        self.doc.commitTransaction()
         self.cleanup(True)
         if self.isDirty:
             self.getFields()
-            FreeCAD.ActiveDocument.recompute()
+            self.doc.recompute()
 
     def cleanup(self, gui):
         self.viewProvider.clearTaskPanel()
         if gui:
-            FreeCADGui.ActiveDocument.resetEdit()
-            FreeCADGui.Control.closeDialog()
-            FreeCAD.ActiveDocument.recompute()
+            gui_doc = self.obj.ViewObject.Document
+            gui_doc.resetEdit()
+            FreeCADGui.Control.closeDialog(gui_doc)
+            self.doc.recompute()
             if self.jvoVisible:
                 self.jvo.show()
 
@@ -195,7 +197,7 @@ class PathDressupTagTaskPanel:
 
     def copyNewTags(self):
         sel = self.form.cbSource.currentText()
-        tags = [o for o in FreeCAD.ActiveDocument.Objects if sel == o.Label]
+        tags = [o for o in self.doc.Objects if sel == o.Label]
         if 1 == len(tags):
             if not self.obj.Proxy.copyTags(self.obj, tags[0]):
                 self.obj.Proxy.execute(self.obj)
@@ -301,7 +303,7 @@ class PathDressupTagTaskPanel:
 
         enableCopy = False
         for tags in sorted(
-            [o.Label for o in FreeCAD.ActiveDocument.Objects if "DressupTag" in o.Name]
+            [o.Label for o in self.doc.Objects if "DressupTag" in o.Name]
         ):
             if tags != self.obj.Label:
                 enableCopy = True
@@ -487,8 +489,10 @@ class PathDressupTagViewProvider:
 
     def setupTaskPanel(self, panel):
         self.panel = panel
-        FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
+        FreeCADGui.Control.closeDialog(self.vobj.Document)
+        task = FreeCADGui.Control.showDialog(panel, self.vobj.Document)
+        task.setDocumentName(self.vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         panel.setupUi()
         FreeCADGui.Selection.addSelectionGate(self)
         FreeCADGui.Selection.addObserver(self)
@@ -542,10 +546,11 @@ def Create(baseObject, name="DressupTag"):
     Create(basePath, name = 'DressupTag') ... create tag dressup object for the given base path.
     Use this command only iff the UI is up - for batch processing see PathDressupTag.Create
     """
-    FreeCAD.ActiveDocument.openTransaction("Create a Tag dressup")
+    doc = baseObject.Document
+    doc.openTransaction("Create a Tag dressup")
     obj = PathDressupTag.Create(baseObject, name)
     obj.ViewObject.Proxy = PathDressupTagViewProvider(obj.ViewObject)
-    FreeCAD.ActiveDocument.commitTransaction()
+    doc.commitTransaction()
     obj.ViewObject.Document.setEdit(obj.ViewObject, 0)
     return obj
 
@@ -568,13 +573,21 @@ class CommandPathDressupTag:
         op = PathDressup.selection(verbose=True)
         if not op:
             return
+        doc = op.Document
+        doc_name = doc.Name
 
         # everything ok!
-        FreeCAD.ActiveDocument.openTransaction("Create Tag Dress-up")
+        doc.openTransaction("Create Tag Dress-up")
         FreeCADGui.addModule("Path.Dressup.Gui.Tags")
-        FreeCADGui.doCommand("Path.Dressup.Gui.Tags.Create(App.ActiveDocument.%s)" % op.Name)
+        FreeCADGui.doCommand(
+            "Path.Dressup.Gui.Tags.Create(FreeCAD.getDocument("
+            + repr(doc_name)
+            + ").getObject("
+            + repr(op.Name)
+            + "))"
+        )
         # FreeCAD.ActiveDocument.commitTransaction()  # Final `commitTransaction()` called via TaskPanel.accept()
-        FreeCAD.ActiveDocument.recompute()
+        doc.recompute()
 
 
 if FreeCAD.GuiUp:

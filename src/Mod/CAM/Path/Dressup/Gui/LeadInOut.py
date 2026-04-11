@@ -1571,9 +1571,11 @@ class ViewProviderDressup:
         return [self.obj.Base]
 
     def setEdit(self, vobj, mode=0):
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(vobj.Document)
         panel = TaskDressupLeadInOut(vobj.Object, self)
-        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
+        task = FreeCADGui.Control.showDialog(panel, vobj.Document)
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         return True
 
     def unsetEdit(self, vobj, mode=0):
@@ -1584,7 +1586,7 @@ class ViewProviderDressup:
         """this makes sure that the base operation is added back to the project and visible"""
         Path.Log.debug("Deleting Dressup")
         if arg1.Object and arg1.Object.Base:
-            FreeCADGui.ActiveDocument.getObject(arg1.Object.Base.Name).Visibility = True
+            arg1.Object.Base.ViewObject.Visibility = True
             job = PathUtils.findParentJob(self.obj)
             if job:
                 job.Proxy.addOperation(arg1.Object.Base, arg1.Object)
@@ -1637,24 +1639,36 @@ class CommandPathDressupLeadInOut:
         op = PathDressup.selection(verbose=True)
         if not op:
             return
+        doc = op.Document
+        doc_name = doc.Name
 
         # everything ok!
-        App.ActiveDocument.openTransaction("Create LeadInOut Dressup")
+        doc.openTransaction("Create LeadInOut Dressup")
         FreeCADGui.addModule("Path.Dressup.Gui.LeadInOut")
         FreeCADGui.addModule("PathScripts.PathUtils")
         FreeCADGui.doCommand(
-            'obj = FreeCAD.ActiveDocument.addObject("Path::FeaturePython", "LeadInOutDressup")'
+            'obj = FreeCAD.getDocument('
+            + repr(doc_name)
+            + ').addObject("Path::FeaturePython", "LeadInOutDressup")'
         )
         FreeCADGui.doCommand("dbo = Path.Dressup.Gui.LeadInOut.ObjectDressup(obj)")
-        FreeCADGui.doCommand("base = FreeCAD.ActiveDocument." + op.Name)
+        FreeCADGui.doCommand(
+            "base = FreeCAD.getDocument("
+            + repr(doc_name)
+            + ").getObject("
+            + repr(op.Name)
+            + ")"
+        )
         FreeCADGui.doCommand("job = PathScripts.PathUtils.findParentJob(base)")
         FreeCADGui.doCommand("obj.Base = base")
         FreeCADGui.doCommand("job.Proxy.addOperation(obj, base)")
         FreeCADGui.doCommand("dbo.setup(obj)")
         FreeCADGui.doCommand("Path.Dressup.Gui.LeadInOut.ViewProviderDressup(obj.ViewObject)")
-        FreeCADGui.doCommand("Gui.ActiveDocument.getObject(base.Name).Visibility = False")
-        App.ActiveDocument.commitTransaction()
-        App.ActiveDocument.recompute()
+        FreeCADGui.doCommand(
+            "Gui.getDocument(" + repr(doc_name) + ").getObject(base.Name).Visibility = False"
+        )
+        doc.commitTransaction()
+        doc.recompute()
 
 
 if App.GuiUp:

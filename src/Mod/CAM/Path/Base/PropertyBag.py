@@ -176,8 +176,9 @@ class PropertyBag(object):
             setattr(self.obj, self.CustomPropertyGroups, customGroups)
 
 
-def Create(name="PropertyBag"):
-    obj = FreeCAD.ActiveDocument.addObject("App::FeaturePython", name)
+def Create(name="PropertyBag", document=None):
+    doc = document if document is not None else FreeCAD.ActiveDocument
+    obj = doc.addObject("App::FeaturePython", name)
     obj.Proxy = PropertyBag(obj)
     return obj
 

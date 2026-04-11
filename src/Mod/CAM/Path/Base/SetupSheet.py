@@ -396,8 +396,9 @@ class SetupSheet:
             obj.CoolantMode = self.DefaultCoolantModes
 
 
-def Create(name="SetupSheet"):
-    obj = FreeCAD.ActiveDocument.addObject("App::FeaturePython", name)
+def Create(name="SetupSheet", document=None):
+    doc = document if document is not None else FreeCAD.ActiveDocument
+    obj = doc.addObject("App::FeaturePython", name)
     obj.Proxy = SetupSheet(obj)
     return obj
 

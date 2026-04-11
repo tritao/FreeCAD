@@ -79,13 +79,15 @@ class ViewProvider:
     def setEdit(self, vobj, mode=0):
         Path.Log.track()
         taskPanel = TaskPanel(vobj)
-        FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(taskPanel, FreeCADGui.ActiveDocument)
+        FreeCADGui.Control.closeDialog(vobj.Document)
+        task = FreeCADGui.Control.showDialog(taskPanel, vobj.Document)
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         taskPanel.setupUi()
         return True
 
     def unsetEdit(self, vobj, mode):
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(vobj.Document)
         return
 
     def claimChildren(self):
@@ -257,7 +259,7 @@ class OpsDefaultEditor:
         self.getFields()
         self.updateUI()
         if recomp:
-            FreeCAD.ActiveDocument.recompute()
+            self.obj.Document.recompute()
 
     def setFields(self):
         self.updateUI()
@@ -333,7 +335,7 @@ class GlobalEditor(object):
         self.getFields()
         self.updateUI()
         if recomp:
-            FreeCAD.ActiveDocument.recompute()
+            self.obj.Document.recompute()
 
     def setFields(self):
         self.updateUI()
@@ -361,28 +363,29 @@ class TaskPanel:
     def __init__(self, vobj):
         self.vobj = vobj
         self.obj = vobj.Object
+        self.doc = self.obj.Document
         Path.Log.track(self.obj.Label)
         self.globalForm = FreeCADGui.PySideUic.loadUi(":/panels/SetupGlobal.ui")
         self.globalEditor = GlobalEditor(self.obj, self.globalForm)
         self.opsEditor = OpsDefaultEditor(self.obj, None)
         self.form = [op.form for op in self.opsEditor.ops] + [self.globalForm]
-        FreeCAD.ActiveDocument.openTransaction("Edit SetupSheet")
+        self.doc.openTransaction("Edit SetupSheet")
 
     def reject(self):
         self.globalEditor.reject()
         self.opsEditor.reject()
-        FreeCAD.ActiveDocument.abortTransaction()
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.abortTransaction()
+        FreeCADGui.Control.closeDialog(self.vobj.Document)
+        self.doc.recompute()
 
     def accept(self):
         self.globalEditor.accept()
         self.opsEditor.accept()
 
-        FreeCAD.ActiveDocument.commitTransaction()
-        FreeCADGui.ActiveDocument.resetEdit()
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.commitTransaction()
+        self.vobj.Document.resetEdit()
+        FreeCADGui.Control.closeDialog(self.vobj.Document)
+        self.doc.recompute()
 
     def getFields(self):
         self.globalEditor.getFields()
@@ -395,7 +398,7 @@ class TaskPanel:
     def updateModel(self):
         self.globalEditor.updateModel(False)
         self.opsEditor.updateModel(False)
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.recompute()
 
     def setFields(self):
         self.globalEditor.setFields()
@@ -406,10 +409,11 @@ class TaskPanel:
         self.opsEditor.setupUi()
 
 
-def Create(name="SetupSheet"):
+def Create(name="SetupSheet", document=None):
     """Create(name='SetupSheet') ... creates a new setup sheet"""
-    FreeCAD.ActiveDocument.openTransaction("Create Job")
-    ssheet = PathSetupSheet.Create(name)
+    doc = document if document is not None else FreeCAD.ActiveDocument
+    doc.openTransaction("Create Job")
+    ssheet = PathSetupSheet.Create(name, document=doc)
     PathIconViewProvider.Attach(ssheet, name)
     return ssheet
 

@@ -29,8 +29,9 @@ class SimpleEditPanel:
 
     def __init__(self, obj, view):
         self.obj = obj
+        self.doc = getattr(obj, "Document", FreeCAD.ActiveDocument)
         self.viewProvider = view
-        FreeCAD.ActiveDocument.openTransaction(self._transaction_name)
+        self.doc.openTransaction(self._transaction_name)
         self.form = FreeCADGui.PySideUic.loadUi(self._ui_file)
         self._fc = {}
         self.setupUi()
@@ -104,36 +105,38 @@ class SimpleEditPanel:
         # callback for standard buttons
         if button == QtGui.QDialogButtonBox.Apply:
             self.updateModel()
-            FreeCAD.ActiveDocument.recompute()
+            self.doc.recompute()
         if button == QtGui.QDialogButtonBox.Cancel:
             self.abort()
 
     def abort(self):
-        FreeCAD.ActiveDocument.abortTransaction()
+        self.doc.abortTransaction()
         self.cleanup(True)
 
     def reject(self):
-        FreeCAD.ActiveDocument.abortTransaction()
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.abortTransaction()
+        gui_doc = self.obj.ViewObject.Document
+        FreeCADGui.Control.closeDialog(gui_doc)
+        self.doc.recompute()
 
     def accept(self):
         self.getFields()
-        FreeCAD.ActiveDocument.commitTransaction()
-        FreeCADGui.ActiveDocument.resetEdit()
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.commitTransaction()
+        gui_doc = self.obj.ViewObject.Document
+        gui_doc.resetEdit()
+        FreeCADGui.Control.closeDialog(gui_doc)
+        self.doc.recompute()
 
     def cleanup(self, gui):
         self.viewProvider.clearTaskPanel()
         if gui:
-            FreeCADGui.Control.closeDialog()
-            FreeCAD.ActiveDocument.recompute()
+            FreeCADGui.Control.closeDialog(self.obj.ViewObject.Document)
+            self.doc.recompute()
 
     def updateModel(self):
         self.getFields()
         self.obj.Proxy.execute(self.obj)
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.recompute()
 
     def open(self):
         pass

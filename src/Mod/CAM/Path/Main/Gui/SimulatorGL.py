@@ -76,7 +76,7 @@ class CAMSimTaskUi:
     def reject(self):
         """User Pressed the Close button"""
         self.parent.cancel()
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(self.parent.gui_doc)
 
 
 def TSError(msg):
@@ -98,6 +98,7 @@ class CAMSimulation:
         self.jobs = []
         self.initdone = False
         self.taskForm = None
+        self.gui_doc = None
         self.disableAnim = False
         self.firstDrill = True
         self.millSim = None
@@ -108,6 +109,7 @@ class CAMSimulation:
         self.busy = False
         self.operations = []
         self.baseShape = None
+        self.doc = None
 
     def Connect(self, but, sig):
         """Connect task panel buttons"""
@@ -210,8 +212,9 @@ class CAMSimulation:
 
         return profile
 
-    def Activate(self):
+    def Activate(self, document=None):
         """Invoke the simulator task panel"""
+        self.doc = document if document is not None else FreeCAD.ActiveDocument
         self.initdone = False
         self.taskForm = CAMSimTaskUi(self)
         form = self.taskForm.form
@@ -222,7 +225,11 @@ class CAMSimulation:
         form.comboJobs.currentIndexChanged.connect(self.onJobChange)
         self.onJobChange()
         form.listOperations.itemChanged.connect(self.onOperationItemChange)
-        FreeCADGui.Control.showDialog(self.taskForm, FreeCADGui.ActiveDocument)
+        self.gui_doc = FreeCADGui.getDocument(self.doc.Name) if self.doc else FreeCADGui.ActiveDocument
+        task = FreeCADGui.Control.showDialog(self.taskForm, self.gui_doc)
+        if task is not None and self.doc is not None:
+            task.setDocumentName(self.doc.Name)
+            task.setAutoCloseOnDeletedDocument(True)
         self.disableAnim = False
         self.firstDrill = True
         self.millSim = CAMSimulator.PathSim()
@@ -236,16 +243,16 @@ class CAMSimulation:
         jobName = ""
         jIdx = 0
         # Get list of Job objects in active document
-        jobList = FreeCAD.ActiveDocument.findObjects("Path::FeaturePython", "Job.*")
+        jobList = self.doc.findObjects("Path::FeaturePython", "Job.*")
         jCnt = len(jobList)
 
         # Check if user has selected a specific job for simulation
-        guiSelection = FreeCADGui.Selection.getSelectionEx()
+        guiSelection = FreeCADGui.Selection.getSelectionEx(self.doc.Name, 0)
         if guiSelection:  #  Identify job selected by user
             sel = guiSelection[0]
             if hasattr(sel.Object, "Proxy") and isinstance(sel.Object.Proxy, PathJob.ObjectJob):
                 jobName = sel.Object.Name
-                FreeCADGui.Selection.clearSelection()
+                FreeCADGui.Selection.clearSelection(self.doc.Name)
 
         # populate the job selection combobox
         form.comboJobs.blockSignals(True)
@@ -362,7 +369,7 @@ class CommandCAMSimulate:
     def Activated(self):
         """Activate the simulation"""
         CamSimulation = CAMSimulation()
-        CamSimulation.Activate()
+        CamSimulation.Activate(FreeCAD.ActiveDocument)
 
 
 if FreeCAD.GuiUp:

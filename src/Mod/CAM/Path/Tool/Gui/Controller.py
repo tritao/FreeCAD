@@ -94,12 +94,14 @@ class ViewProvider:
         if 0 == mode:
             if vobj is None:
                 vobj = self.vobj
-            FreeCADGui.Control.closeDialog()
+            FreeCADGui.Control.closeDialog(vobj.Document)
             taskd = TaskPanel(vobj.Object)
-            FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+            task = FreeCADGui.Control.showDialog(taskd, vobj.Document)
+            task.setDocumentName(vobj.Object.Document.Name)
+            task.setAutoCloseOnDeletedDocument(True)
             taskd.setupUi()
 
-            FreeCAD.ActiveDocument.recompute()
+            vobj.Object.Document.recompute()
 
             return True
         return False
@@ -184,9 +186,9 @@ class CommandPathToolController(object):
             toolNr = max([tc.ToolNumber for tc in job.Tools.Group]) + 1
 
         # Create the new tool controller with the tool.
-        tc = Create("TC: {}".format(tool.Label), tool, toolNr)
+        tc = Create("TC: {}".format(tool.Label), tool, toolNr, document=job.Document)
         job.Proxy.addToolController(tc)
-        FreeCAD.ActiveDocument.recompute()
+        job.Document.recompute()
 
 
 class BlockScrollWheel(QtCore.QObject):
@@ -358,21 +360,23 @@ class TaskPanel:
         self.updating = False
         self.toolrep = None
         self.obj = obj
+        self.doc = obj.Document
 
     def accept(self):
         self.getFields()
 
-        FreeCADGui.ActiveDocument.resetEdit()
-        FreeCADGui.Control.closeDialog()
+        gui_doc = self.obj.ViewObject.Document
+        gui_doc.resetEdit()
+        FreeCADGui.Control.closeDialog(gui_doc)
         if self.toolrep:
-            FreeCAD.ActiveDocument.removeObject(self.toolrep.Name)
-        FreeCAD.ActiveDocument.recompute()
+            self.doc.removeObject(self.toolrep.Name)
+        self.doc.recompute()
 
     def reject(self):
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(self.obj.ViewObject.Document)
         if self.toolrep:
-            FreeCAD.ActiveDocument.removeObject(self.toolrep.Name)
-        FreeCAD.ActiveDocument.recompute()
+            self.doc.removeObject(self.toolrep.Name)
+        self.doc.recompute()
 
     def getFields(self):
         self.editor.updateToolController()
@@ -394,12 +398,12 @@ class TaskPanel:
 
     def resetObject(self, remove=None):
         "transfers the values from the widget to the object"
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.recompute()
 
     def setupUi(self):
         if self.editor.editor:
             t = Part.makeCylinder(1, 1)
-            self.toolrep = FreeCAD.ActiveDocument.addObject("Part::Feature", "tool")
+            self.toolrep = self.doc.addObject("Part::Feature", "tool")
             self.toolrep.Shape = t
 
         self.setFields()

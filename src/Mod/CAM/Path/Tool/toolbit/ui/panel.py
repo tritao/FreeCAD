@@ -42,7 +42,7 @@ class TaskPanel:
     def reject(self):
         FreeCAD.ActiveDocument.abortTransaction()
         self.editor.reject()
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(self.vobj.Document)
         if self.deleteOnReject:
             FreeCAD.ActiveDocument.openTransaction("Uncreate ToolBit")
             self.editor.reject()
@@ -54,8 +54,8 @@ class TaskPanel:
         self.editor.accept()
 
         FreeCAD.ActiveDocument.commitTransaction()
-        FreeCADGui.ActiveDocument.resetEdit()
-        FreeCADGui.Control.closeDialog()
+        self.vobj.Document.resetEdit()
+        FreeCADGui.Control.closeDialog(self.vobj.Document)
         FreeCAD.ActiveDocument.recompute()
 
     def updateUI(self):

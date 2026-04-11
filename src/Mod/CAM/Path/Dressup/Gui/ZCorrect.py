@@ -220,9 +220,10 @@ class ObjectDressup:
 class TaskPanel:
     def __init__(self, obj):
         self.obj = obj
+        self.doc = obj.Document
         self.form = FreeCADGui.PySideUic.loadUi(":/panels/ZCorrectEdit.ui")
-        FreeCAD.ActiveDocument.openTransaction("Edit Z Correction Dress-up")
-        self.interpshape = FreeCAD.ActiveDocument.addObject("Part::Feature", "InterpolationSurface")
+        self.doc.openTransaction("Edit Z Correction Dress-up")
+        self.interpshape = self.doc.addObject("Part::Feature", "InterpolationSurface")
         self.interpshape.Shape = obj.interpSurface
         self.interpshape.ViewObject.Transparency = 60
         self.interpshape.ViewObject.ShapeColor = (1.00000, 1.00000, 0.01961)
@@ -231,27 +232,28 @@ class TaskPanel:
         self.interpshape.Placement.Base.z = stock.Shape.BoundBox.ZMax
 
     def reject(self):
-        FreeCAD.ActiveDocument.abortTransaction()
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.abortTransaction()
+        FreeCADGui.Control.closeDialog(self.obj.ViewObject.Document)
+        self.doc.recompute()
 
     def accept(self):
         self.getFields()
-        FreeCAD.ActiveDocument.commitTransaction()
-        FreeCAD.ActiveDocument.removeObject(self.interpshape.Name)
-        FreeCADGui.ActiveDocument.resetEdit()
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.recompute()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.commitTransaction()
+        self.doc.removeObject(self.interpshape.Name)
+        gui_doc = self.obj.ViewObject.Document
+        gui_doc.resetEdit()
+        FreeCADGui.Control.closeDialog(gui_doc)
+        self.doc.recompute()
+        self.doc.recompute()
 
     def getFields(self):
         self.obj.Proxy.execute(self.obj)
 
     def updateUI(self):
         if Path.Log.getLevel(LOG_MODULE) == Path.Log.Level.DEBUG:
-            for obj in FreeCAD.ActiveDocument.Objects:
+            for obj in self.doc.Objects:
                 if obj.Name.startswith("Shape"):
-                    FreeCAD.ActiveDocument.removeObject(obj.Name)
+                    self.doc.removeObject(obj.Name)
             print("object name %s" % self.obj.Name)
             if hasattr(self.obj.Proxy, "shapes"):
                 Path.Log.info("showing shapes attribute")
@@ -264,7 +266,7 @@ class TaskPanel:
     def updateModel(self):
         self.getFields()
         self.updateUI()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.recompute()
 
     def setFields(self):
         self.form.ProbePointFileName.setText(self.obj.probefile)
@@ -312,9 +314,11 @@ class ViewProviderDressup:
         return [self.obj.Base]
 
     def setEdit(self, vobj, mode=0):
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(vobj.Document)
         panel = TaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
+        task = FreeCADGui.Control.showDialog(panel, vobj.Document)
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         panel.setupUi()
         return True
 
@@ -326,7 +330,7 @@ class ViewProviderDressup:
 
     def onDelete(self, arg1=None, arg2=None):
         """this makes sure that the base operation is added back to the project and visible"""
-        FreeCADGui.ActiveDocument.getObject(arg1.Object.Base.Name).Visibility = True
+        arg1.Object.Base.ViewObject.Visibility = True
         job = PathUtils.findParentJob(arg1.Object)
         job.Proxy.addOperation(arg1.Object.Base)
         arg1.Object.Base = None
@@ -358,22 +362,36 @@ class CommandPathDressup:
         op = PathDressup.selection(verbose=True)
         if not op:
             return
+        doc = op.Document
+        doc_name = doc.Name
 
         # everything ok!
-        FreeCAD.ActiveDocument.openTransaction("Create Dress-up")
+        doc.openTransaction("Create Dress-up")
         FreeCADGui.addModule("Path.Dressup.Gui.ZCorrect")
         FreeCADGui.addModule("PathScripts.PathUtils")
         FreeCADGui.doCommand(
-            'obj = FreeCAD.ActiveDocument.addObject("Path::FeaturePython", "ZCorrectDressup")'
+            'obj = FreeCAD.getDocument('
+            + repr(doc_name)
+            + ').addObject("Path::FeaturePython", "ZCorrectDressup")'
         )
         FreeCADGui.doCommand("Path.Dressup.Gui.ZCorrect.ObjectDressup(obj)")
-        FreeCADGui.doCommand("obj.Base = FreeCAD.ActiveDocument." + op.Name)
+        FreeCADGui.doCommand(
+            "obj.Base = FreeCAD.getDocument("
+            + repr(doc_name)
+            + ").getObject("
+            + repr(op.Name)
+            + ")"
+        )
         FreeCADGui.doCommand("Path.Dressup.Gui.ZCorrect.ViewProviderDressup(obj.ViewObject)")
         FreeCADGui.doCommand("PathScripts.PathUtils.addToJob(obj)")
-        FreeCADGui.doCommand("Gui.ActiveDocument.getObject(obj.Base.Name).Visibility = False")
+        FreeCADGui.doCommand(
+            "Gui.getDocument("
+            + repr(doc_name)
+            + ").getObject(obj.Base.Name).Visibility = False"
+        )
         FreeCADGui.doCommand("obj.ViewObject.Document.setEdit(obj.ViewObject, 0)")
         # FreeCAD.ActiveDocument.commitTransaction()  # Final `commitTransaction()` called via TaskPanel.accept()
-        FreeCAD.ActiveDocument.recompute()
+        doc.recompute()
 
 
 if FreeCAD.GuiUp:

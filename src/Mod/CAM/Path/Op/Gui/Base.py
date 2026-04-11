@@ -229,8 +229,10 @@ class ViewProvider(object):
     def setupTaskPanel(self, panel):
         """setupTaskPanel(panel) ... internal function to start the editor."""
         self.panel = panel
-        FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
+        FreeCADGui.Control.closeDialog(self.vobj.Document)
+        task = FreeCADGui.Control.showDialog(panel, self.vobj.Document)
+        task.setDocumentName(self.vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         panel.setupUi()
         job = self.Object.Proxy.getJob(self.Object)
         if job:
@@ -345,7 +347,10 @@ class ViewProvider(object):
                 if sub and sub.startswith("Face"):
                     try:
                         # Get the face object
-                        selected_obj = FreeCAD.ActiveDocument.getObject(obj)
+                        selected_doc = (
+                            FreeCAD.getDocument(doc) if doc in FreeCAD.listDocuments() else None
+                        )
+                        selected_obj = selected_doc.getObject(obj) if selected_doc else None
                         if selected_obj and hasattr(selected_obj, "Shape"):
                             # Get the face
                             face = selected_obj.Shape.getElement(sub)
@@ -368,10 +373,10 @@ class ViewProvider(object):
                             # MapMode: "FlatFace" aligns Z-axis with face normal
                             self.operation.AttachmentSupport = (obj, (sub,))
                             self.operation.MapMode = "FlatFace"
-                            FreeCAD.ActiveDocument.recompute()
+                            self.operation.Document.recompute()
 
                             FreeCAD.Console.PrintMessage(
-                                f"Attached {self.operation.Label} to {obj.Label}.{sub}\n"
+                                f"Attached {self.operation.Label} to {selected_obj.Label}.{sub}\n"
                             )
 
                             # Deactivate and remove observer
@@ -928,7 +933,7 @@ class TaskPanelBaseGeometryPage(TaskPanelPage):
 
     def importBaseGeometry(self):
         opLabel = str(self.form.geometryImportList.currentText())
-        ops = FreeCAD.ActiveDocument.getObjectsByLabel(opLabel)
+        ops = self.obj.Document.getObjectsByLabel(opLabel)
         if len(ops) > 1:
             msg = translate("PathOp", "Multiple operations are labeled as")
             msg += " {}\n".format(opLabel)
@@ -1035,7 +1040,7 @@ class TaskPanelBaseLocationPage(TaskPanelPage):
                 deletedRows.append(row)
                 self.formLoc.baseList.removeRow(row)
         self.updateLocations()
-        FreeCAD.ActiveDocument.recompute()
+        self.obj.Document.recompute()
 
     def updateLocations(self):
         Path.Log.track()
@@ -1055,7 +1060,7 @@ class TaskPanelBaseLocationPage(TaskPanelPage):
             locations = self.obj.Locations
             locations.append(point)
             self.obj.Locations = locations
-            FreeCAD.ActiveDocument.recompute()
+            self.obj.Document.recompute()
 
     def editLocation(self):
         selected = self.formLoc.baseList.selectedItems()
@@ -1072,7 +1077,7 @@ class TaskPanelBaseLocationPage(TaskPanelPage):
             self.formLoc.baseList.item(self.editRow, 0).setData(self.DataLocation, point.x)
             self.formLoc.baseList.item(self.editRow, 1).setData(self.DataLocation, point.y)
             self.updateLocations()
-            FreeCAD.ActiveDocument.recompute()
+            self.obj.Document.recompute()
 
     def itemActivated(self):
         if self.formLoc.baseList.selectedItems():
@@ -1344,8 +1349,9 @@ class TaskPanel(object):
 
     def __init__(self, obj, deleteOnReject, opPage, selectionFactory):
         Path.Log.track(obj.Label, deleteOnReject, opPage, selectionFactory)
-        FreeCAD.ActiveDocument.openTransaction(translate("PathOp", "AreaOp Operation"))
         self.obj = obj
+        self.doc = obj.Document
+        self.doc.openTransaction(translate("PathOp", "AreaOp Operation"))
         self.deleteOnReject = deleteOnReject
         self.featurePages = []
         self.parent = None
@@ -1462,21 +1468,21 @@ class TaskPanel(object):
         self.preCleanup()
         if self.isDirty():
             self.panelGetFields()
-        FreeCAD.ActiveDocument.commitTransaction()
+        self.doc.commitTransaction()
         self.cleanup(resetEdit)
 
     def reject(self, resetEdit=True):
         """reject() ... callback invoked when user presses the task panel Cancel button."""
         self.preCleanup()
-        FreeCAD.ActiveDocument.abortTransaction()
+        self.doc.abortTransaction()
         if self.deleteOnReject:
-            FreeCAD.ActiveDocument.openTransaction(translate("PathOp", "Uncreate AreaOp Operation"))
+            self.doc.openTransaction(translate("PathOp", "Uncreate AreaOp Operation"))
             try:
                 PathUtil.clearExpressionEngine(self.obj)
-                FreeCAD.ActiveDocument.removeObject(self.obj.Name)
+                self.doc.removeObject(self.obj.Name)
             except Exception as ee:
                 Path.Log.debug("{}\n".format(ee))
-            FreeCAD.ActiveDocument.commitTransaction()
+            self.doc.commitTransaction()
         self.cleanup(resetEdit)
         return True
 
@@ -1491,10 +1497,11 @@ class TaskPanel(object):
     def cleanup(self, resetEdit):
         """cleanup() ... implements common cleanup tasks."""
         self.panelCleanup()
-        FreeCADGui.Control.closeDialog()
+        gui_doc = self.obj.ViewObject.Document
+        FreeCADGui.Control.closeDialog(gui_doc)
         if resetEdit:
-            FreeCADGui.ActiveDocument.resetEdit()
-        FreeCAD.ActiveDocument.recompute()
+            gui_doc.resetEdit()
+        self.doc.recompute()
 
     def pageDirtyChanged(self, page):
         """pageDirtyChanged(page) ... internal callback"""
@@ -1505,7 +1512,7 @@ class TaskPanel(object):
         if button == QtGui.QDialogButtonBox.Apply:
             self.panelGetFields()
             self.setClean()
-            FreeCAD.ActiveDocument.recompute()
+            self.doc.recompute()
 
     def modifyStandardButtons(self, buttonBox):
         """modifyStandarButtons(buttonBox) ... callback in case the task panel buttons need to be modified."""
@@ -1643,16 +1650,17 @@ def Create(res):
     res is an instance of CommandResources. It is not expected that the user invokes
     this function directly, but calls the Activated() function of the Command object
     that is created in each operations Gui implementation."""
-    FreeCAD.ActiveDocument.openTransaction("Create %s" % res.name)
+    doc = res.job.Document if res.job is not None else FreeCAD.ActiveDocument
+    doc.openTransaction("Create %s" % res.name)
     if res.job is None:
-        FreeCAD.ActiveDocument.abortTransaction()
+        doc.abortTransaction()
         raise ValueError("No job selected. Operation creation aborted.")
     try:
         obj = res.objFactory(res.name, obj=None, parentJob=res.job)
         if obj.Proxy:
             obj.ViewObject.Proxy = ViewProvider(obj.ViewObject, res)
             obj.ViewObject.Visibility = True
-            FreeCAD.ActiveDocument.commitTransaction()
+            doc.commitTransaction()
 
             obj.ViewObject.Document.setEdit(obj.ViewObject, 0)
             return obj
@@ -1664,8 +1672,8 @@ def Create(res):
     except PathOp.PathNoTCException:
         Path.Log.warning(translate("PathOp", "No tool controller, aborting op creation"))
 
-    FreeCAD.ActiveDocument.abortTransaction()
-    FreeCAD.ActiveDocument.recompute()
+    doc.abortTransaction()
+    doc.recompute()
     return None
 
 

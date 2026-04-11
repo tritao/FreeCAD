@@ -79,17 +79,28 @@ def _OpenCloseResourceEditor(obj, vobj, edit):
 
 
 @contextmanager
-def selectionEx():
-    sel = FreeCADGui.Selection.getSelectionEx()
+def selectionEx(document=None):
+    if hasattr(document, "Document"):
+        document = document.Document
+    doc_name = getattr(document, "Name", "")
+    sel = (
+        FreeCADGui.Selection.getSelectionEx(doc_name, 0)
+        if doc_name
+        else FreeCADGui.Selection.getSelectionEx()
+    )
     try:
         yield sel
     finally:
-        FreeCADGui.Selection.clearSelection()
+        if doc_name:
+            FreeCADGui.Selection.clearSelection(doc_name)
+        else:
+            FreeCADGui.Selection.clearSelection()
         for s in sel:
             if s.SubElementNames:
-                FreeCADGui.Selection.addSelection(s.Object, s.SubElementNames)
+                for sub in s.SubElementNames:
+                    FreeCADGui.Selection.addSelection(s.Object.Document.Name, s.Object.Name, sub)
             else:
-                FreeCADGui.Selection.addSelection(s.Object)
+                FreeCADGui.Selection.addSelection(s.Object.Document.Name, s.Object.Name)
 
 
 class ViewProvider:
@@ -245,8 +256,10 @@ class ViewProvider:
 
     def openTaskPanel(self, activate=None):
         self.taskPanel = TaskPanel(self.vobj, self.deleteObjectsOnReject())
-        FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(self.taskPanel, FreeCADGui.ActiveDocument)
+        FreeCADGui.Control.closeDialog(self.vobj.Document)
+        task = FreeCADGui.Control.showDialog(self.taskPanel, self.vobj.Document)
+        task.setDocumentName(self.vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         self.taskPanel.setupUi(activate)
         self.showOriginAxis(True)
         self.deleteOnReject = False
@@ -745,10 +758,11 @@ class TaskPanel:
     DataProperty = QtCore.Qt.ItemDataRole.UserRole + 1
 
     def __init__(self, vobj, deleteOnReject):
-        FreeCAD.ActiveDocument.openTransaction("Edit Job")
         self.vobj = vobj
         self.vproxy = vobj.Proxy
         self.obj = vobj.Object
+        self.doc = self.obj.Document
+        self.doc.openTransaction("Edit Job")
         self.deleteOnReject = deleteOnReject
         self.form = FreeCADGui.PySideUic.loadUi(":/panels/PathEdit.ui")
         self.template = PathJobDlg.JobTemplateExport(self.obj, self.form.jobBox.widget(1))
@@ -849,7 +863,7 @@ class TaskPanel:
         self.getFields()
         self.setupGlobal.accept()
         self.setupOps.accept()
-        FreeCAD.ActiveDocument.commitTransaction()
+        self.doc.commitTransaction()
         self.cleanup(resetEdit)
 
     def reject(self, resetEdit=True):
@@ -857,28 +871,28 @@ class TaskPanel:
         self.preCleanup()
         self.setupGlobal.reject()
         self.setupOps.reject()
-        FreeCAD.ActiveDocument.abortTransaction()
-        if self.deleteOnReject and FreeCAD.ActiveDocument.getObject(self.name):
+        self.doc.abortTransaction()
+        if self.deleteOnReject and self.doc.getObject(self.name):
             Path.Log.info("Uncreate Job")
-            FreeCAD.ActiveDocument.openTransaction("Uncreate Job")
+            self.doc.openTransaction("Uncreate Job")
             if self.obj.ViewObject.Proxy.onDelete(self.obj.ViewObject, None):
-                FreeCAD.ActiveDocument.removeObject(self.obj.Name)
-            FreeCAD.ActiveDocument.commitTransaction()
+                self.doc.removeObject(self.obj.Name)
+            self.doc.commitTransaction()
         else:
             Path.Log.track(
                 self.name,
                 self.deleteOnReject,
-                FreeCAD.ActiveDocument.getObject(self.name),
+                self.doc.getObject(self.name),
             )
         self.cleanup(resetEdit)
         return True
 
     def cleanup(self, resetEdit):
         Path.Log.track()
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(self.vobj.Document)
         if resetEdit:
-            FreeCADGui.ActiveDocument.resetEdit()
-        FreeCAD.ActiveDocument.recompute()
+            self.vobj.Document.resetEdit()
+        self.doc.recompute()
 
     def updateTooltips(self):
         if (
@@ -1092,7 +1106,7 @@ class TaskPanel:
                 and hasattr(obj.ViewObject.Proxy, "onDelete")
             ):
                 obj.ViewObject.Proxy.onDelete(obj.ViewObject, None)
-            FreeCAD.ActiveDocument.removeObject(obj.Name)
+            self.doc.removeObject(obj.Name)
         self.setFields()
 
     def operationDelete(self):
@@ -1158,7 +1172,7 @@ class TaskPanel:
 
         # Add each selected tool
         for toolbit in toolbits:
-            toolbit.attach_to_doc(FreeCAD.ActiveDocument)
+            toolbit.attach_to_doc(self.doc)
 
             # Get tool number: use library number if available, otherwise auto-increment
             toolbit_uri = str(toolbit.get_uri())
@@ -1171,7 +1185,7 @@ class TaskPanel:
             )
             self.obj.Proxy.addToolController(tc)
 
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.recompute()
         self.updateToolController()
 
     def toolControllerDelete(self):
@@ -1251,7 +1265,7 @@ class TaskPanel:
 
         selObject = None
         selFeature = None
-        with selectionEx() as selection:
+        with selectionEx(self.doc) as selection:
             for sel in selection:
                 selObject = sel.Object
                 for feature in sel.SubElementNames:
@@ -1295,17 +1309,21 @@ class TaskPanel:
                         Path.Log.track(sub.ShapeType)
 
         if selObject and selFeature:
-            FreeCADGui.Selection.clearSelection()
-            FreeCADGui.Selection.addSelection(selObject, selFeature)
+            FreeCADGui.Selection.clearSelection(self.doc.Name)
+            FreeCADGui.Selection.addSelection(selObject.Document.Name, selObject.Name, selFeature)
 
     def restoreSelection(self, selection):
-        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.clearSelection(self.doc.Name)
         for sel in selection:
-            FreeCADGui.Selection.addSelection(sel.Object, sel.SubElementNames)
+            if sel.SubElementNames:
+                for sub in sel.SubElementNames:
+                    FreeCADGui.Selection.addSelection(sel.Object.Document.Name, sel.Object.Name, sub)
+            else:
+                FreeCADGui.Selection.addSelection(sel.Object.Document.Name, sel.Object.Name)
 
     def modelSet0(self, axis):
         Path.Log.track(axis)
-        with selectionEx() as selection:
+        with selectionEx(self.doc) as selection:
             for sel in selection:
                 selObject = sel.Object
                 Path.Log.track(selObject.Label)
@@ -1331,14 +1349,14 @@ class TaskPanel:
 
     def modelMove(self, axis):
         scale = self.form.modelMoveValue.value()
-        with selectionEx() as selection:
+        with selectionEx(self.doc) as selection:
             for sel in selection:
                 offset = axis * scale
                 Draft.move(sel.Object, offset)
 
     def modelRotate(self, axis):
         angle = self.form.modelRotateValue.value()
-        with selectionEx() as selection:
+        with selectionEx(self.doc) as selection:
             if self.form.modelRotateCompound.isChecked() and len(selection) > 1:
                 bb = PathStock.shapeBoundBox([sel.Object for sel in selection])
                 for sel in selection:
@@ -1357,15 +1375,15 @@ class TaskPanel:
         if obj != self.obj.Stock and self.obj.Stock:
             Draft.move(self.obj.Stock, by)
 
-        placement = FreeCADGui.ActiveDocument.ActiveView.viewPosition()
+        placement = self.vobj.Document.ActiveView.viewPosition()
         placement.Base = placement.Base + by
-        FreeCADGui.ActiveDocument.ActiveView.viewPosition(placement, 0)
+        self.vobj.Document.ActiveView.viewPosition(placement, 0)
 
     def alignMoveToOrigin(self):
         selObject = None
         selFeature = None
         p = None
-        for sel in FreeCADGui.Selection.getSelectionEx():
+        for sel in FreeCADGui.Selection.getSelectionEx(self.doc.Name, 0):
             selObject = sel.Object
             for feature in sel.SubElementNames:
                 selFeature = feature
@@ -1381,8 +1399,8 @@ class TaskPanel:
                     Draft.move(sel.Object, p)
 
         if selObject and selFeature:
-            FreeCADGui.Selection.clearSelection()
-            FreeCADGui.Selection.addSelection(selObject, selFeature)
+            FreeCADGui.Selection.clearSelection(self.doc.Name)
+            FreeCADGui.Selection.addSelection(selObject.Document.Name, selObject.Name, selFeature)
         return (selObject, p)
 
     def updateStockEditor(self, index, force=False):
@@ -1452,14 +1470,14 @@ class TaskPanel:
 
     def alignCenterInStock(self):
         bbs = self.obj.Stock.Shape.BoundBox
-        for sel in FreeCADGui.Selection.getSelectionEx():
+        for sel in FreeCADGui.Selection.getSelectionEx(self.doc.Name, 0):
             bbb = sel.Object.Shape.BoundBox
             by = bbs.Center - bbb.Center
             Draft.move(sel.Object, by)
 
     def alignCenterInStockXY(self):
         bbs = self.obj.Stock.Shape.BoundBox
-        for sel in FreeCADGui.Selection.getSelectionEx():
+        for sel in FreeCADGui.Selection.getSelectionEx(self.doc.Name, 0):
             bbb = sel.Object.Shape.BoundBox
             by = bbs.Center - bbb.Center
             by.z = 0
@@ -1487,10 +1505,10 @@ class TaskPanel:
 
     def updateSelection(self):
         # Remove Job object if present in Selection: source of phantom paths
-        if self.obj in FreeCADGui.Selection.getSelection():
+        if self.obj in FreeCADGui.Selection.getSelection(self.doc.Name):
             FreeCADGui.Selection.removeSelection(self.obj)
 
-        sel = FreeCADGui.Selection.getSelectionEx()
+        sel = FreeCADGui.Selection.getSelectionEx(self.doc.Name, 0)
 
         self.form.setOrigin.setEnabled(False)
         self.form.moveToOrigin.setEnabled(False)

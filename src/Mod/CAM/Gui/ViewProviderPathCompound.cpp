@@ -40,8 +40,13 @@ PROPERTY_SOURCE(PathGui::ViewProviderPathCompound, PathGui::ViewProviderPath)
 bool ViewProviderPathCompound::setEdit(int ModNum)
 {
     Q_UNUSED(ModNum);
+    auto* document = getDocument()->getDocument();
+    if (Gui::Control().activeDialog(document)) {
+        return false;
+    }
+
     Gui::TaskView::TaskDialog* dlg = new TaskDlgPathCompound(this);
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, document);
     return true;
 }
 
@@ -49,7 +54,7 @@ void ViewProviderPathCompound::unsetEdit(int ModNum)
 {
     Q_UNUSED(ModNum);
     // when pressing ESC make sure to close the dialog
-    Gui::Control().closeDialog();
+    Gui::Control().closeDialog(getDocument()->getDocument());
 }
 
 std::vector<App::DocumentObject*> ViewProviderPathCompound::claimChildren() const

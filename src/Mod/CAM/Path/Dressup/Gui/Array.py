@@ -72,21 +72,30 @@ class CommandPathDressupArray:
         op = PathDressup.selection(verbose=True)
         if not op:
             return
+        doc = op.Document
+        doc_name = doc.Name
 
         # everything ok!
-        FreeCAD.ActiveDocument.openTransaction("Create Path Array Dress-up")
+        doc.openTransaction("Create Path Array Dress-up")
         FreeCADGui.addModule("Path.Dressup.Gui.Array")
-        FreeCADGui.doCommand("Path.Dressup.Gui.Array.Create(App.ActiveDocument.%s)" % op.Name)
+        FreeCADGui.doCommand(
+            "Path.Dressup.Gui.Array.Create(FreeCAD.getDocument("
+            + repr(doc_name)
+            + ").getObject("
+            + repr(op.Name)
+            + "))"
+        )
         # FreeCAD.ActiveDocument.commitTransaction()  # Final `commitTransaction()` called via TaskPanel.accept()
-        FreeCAD.ActiveDocument.recompute()
+        doc.recompute()
 
 
 def Create(base, name="DressupPathArray"):
-    FreeCAD.ActiveDocument.openTransaction("Create an Array dressup")
+    doc = base.Document
+    doc.openTransaction("Create an Array dressup")
     obj = DressupArray.Create(base, name)
     obj.ViewObject.Proxy = DressupArrayViewProvider(obj.ViewObject)
     obj.Base.ViewObject.Visibility = False
-    FreeCAD.ActiveDocument.commitTransaction()
+    doc.commitTransaction()
     return obj
 
 

@@ -487,24 +487,26 @@ class ObjectDressup:
 class TaskPanel:
     def __init__(self, obj):
         self.obj = obj
+        self.doc = obj.Document
         self.form = FreeCADGui.PySideUic.loadUi(":/panels/DragKnifeEdit.ui")
         self.filterAngle = PathGuiUtil.QuantitySpinBox(self.form.filterAngle, obj, "filterAngle")
         self.offsetDistance = PathGuiUtil.QuantitySpinBox(self.form.offsetDistance, obj, "offset")
         self.pivotHeight = PathGuiUtil.QuantitySpinBox(self.form.pivotHeight, obj, "pivotheight")
 
-        FreeCAD.ActiveDocument.openTransaction("Edit Dragknife Dress-up")
+        self.doc.openTransaction("Edit Dragknife Dress-up")
 
     def reject(self):
-        FreeCAD.ActiveDocument.abortTransaction()
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.abortTransaction()
+        FreeCADGui.Control.closeDialog(self.obj.ViewObject.Document)
+        self.doc.recompute()
 
     def accept(self):
         self.getFields()
-        FreeCAD.ActiveDocument.commitTransaction()
-        FreeCADGui.ActiveDocument.resetEdit()
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.commitTransaction()
+        gui_doc = self.obj.ViewObject.Document
+        gui_doc.resetEdit()
+        FreeCADGui.Control.closeDialog(gui_doc)
+        self.doc.recompute()
 
     def getFields(self):
         self.filterAngle.updateProperty()
@@ -521,7 +523,7 @@ class TaskPanel:
 
     def updateModel(self):
         self.getFields()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.recompute()
 
     def setFields(self):
         self.updateUI()
@@ -554,9 +556,11 @@ class ViewProviderDressup:
         return False
 
     def setEdit(self, vobj, mode=0):
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(vobj.Document)
         panel = TaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
+        task = FreeCADGui.Control.showDialog(panel, vobj.Document)
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         panel.setupUi()
         return True
 
@@ -571,7 +575,7 @@ class ViewProviderDressup:
 
     def onDelete(self, arg1=None, arg2=None):
         if arg1.Object and arg1.Object.Base:
-            FreeCADGui.ActiveDocument.getObject(arg1.Object.Base.Name).Visibility = True
+            arg1.Object.Base.ViewObject.Visibility = True
             job = PathUtils.findParentJob(arg1.Object.Base)
             if job:
                 job.Proxy.addOperation(arg1.Object.Base, arg1.Object)
@@ -604,30 +608,42 @@ class CommandDressupDragknife:
         op = PathDressup.selection(verbose=True)
         if not op:
             return
+        doc = op.Document
+        doc_name = doc.Name
 
         # everything ok!
-        FreeCAD.ActiveDocument.openTransaction("Create Dress-up")
+        doc.openTransaction("Create Dress-up")
         FreeCADGui.addModule("Path.Dressup.Gui.Dragknife")
         FreeCADGui.addModule("PathScripts.PathUtils")
         FreeCADGui.doCommand(
-            'obj = FreeCAD.ActiveDocument.addObject("Path::FeaturePython","DragknifeDressup")'
+            'obj = FreeCAD.getDocument('
+            + repr(doc_name)
+            + ').addObject("Path::FeaturePython","DragknifeDressup")'
         )
         FreeCADGui.doCommand("Path.Dressup.Gui.Dragknife.ObjectDressup(obj)")
-        FreeCADGui.doCommand("base = FreeCAD.ActiveDocument." + op.Name)
+        FreeCADGui.doCommand(
+            "base = FreeCAD.getDocument("
+            + repr(doc_name)
+            + ").getObject("
+            + repr(op.Name)
+            + ")"
+        )
         FreeCADGui.doCommand("job = PathScripts.PathUtils.findParentJob(base)")
         FreeCADGui.doCommand("obj.Base = base")
         FreeCADGui.doCommand("job.Proxy.addOperation(obj, base)")
         FreeCADGui.doCommand(
             "obj.ViewObject.Proxy = Path.Dressup.Gui.Dragknife.ViewProviderDressup(obj.ViewObject)"
         )
-        FreeCADGui.doCommand("Gui.ActiveDocument.getObject(base.Name).Visibility = False")
+        FreeCADGui.doCommand(
+            "Gui.getDocument(" + repr(doc_name) + ").getObject(base.Name).Visibility = False"
+        )
         FreeCADGui.doCommand("obj.filterAngle = 20")
         FreeCADGui.doCommand("obj.offset = 2")
         FreeCADGui.doCommand("obj.pivotheight = 4")
         FreeCADGui.doCommand("obj.ViewObject.Document.setEdit(obj.ViewObject, 0)")
 
         # FreeCAD.ActiveDocument.commitTransaction()  # Final `commitTransaction()` called via TaskPanel.accept()
-        FreeCAD.ActiveDocument.recompute()
+        doc.recompute()
 
 
 if FreeCAD.GuiUp:

@@ -43,6 +43,7 @@ translate = FreeCAD.Qt.translate
 class TaskPanel(object):
     def __init__(self, obj, viewProvider):
         self.obj = obj
+        self.doc = obj.Document
         self.viewProvider = viewProvider
         self.form = FreeCADGui.PySideUic.loadUi(":/panels/DressupPathBoundary.ui")
         if obj.Stock:
@@ -80,28 +81,29 @@ class TaskPanel(object):
         # callback for standard buttons
         if button == QtGui.QDialogButtonBox.Apply:
             self.updateDressup()
-            FreeCAD.ActiveDocument.recompute()
+            self.doc.recompute()
 
     def abort(self):
-        FreeCAD.ActiveDocument.abortTransaction()
+        self.doc.abortTransaction()
         self.cleanup(False)
 
     def reject(self):
-        FreeCAD.ActiveDocument.abortTransaction()
+        self.doc.abortTransaction()
         self.cleanup(True)
 
     def accept(self):
         if self.isDirty:
             self.updateDressup()
-        FreeCAD.ActiveDocument.commitTransaction()
+        self.doc.commitTransaction()
         self.cleanup(True)
 
     def cleanup(self, gui):
         self.viewProvider.clearTaskPanel()
         if gui:
-            FreeCADGui.ActiveDocument.resetEdit()
-            FreeCADGui.Control.closeDialog()
-            FreeCAD.ActiveDocument.recompute()
+            gui_doc = self.obj.ViewObject.Document
+            gui_doc.resetEdit()
+            FreeCADGui.Control.closeDialog(gui_doc)
+            self.doc.recompute()
             if self.obj.Stock:
                 self.obj.Stock.ViewObject.Visibility = self.visibilityBoundary
 
@@ -235,8 +237,10 @@ class DressupPathBoundaryViewProvider(object):
 
     def setupTaskPanel(self, panel):
         self.panel = panel
-        FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
+        FreeCADGui.Control.closeDialog(self.vobj.Document)
+        task = FreeCADGui.Control.showDialog(panel, self.vobj.Document)
+        task.setDocumentName(self.vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         panel.setupUi()
 
     def clearTaskPanel(self):
@@ -250,12 +254,13 @@ class DressupPathBoundaryViewProvider(object):
 
 
 def Create(base, name="DressupPathBoundary"):
-    FreeCAD.ActiveDocument.openTransaction("Create a Boundary dressup")
+    doc = base.Document
+    doc.openTransaction("Create a Boundary dressup")
     obj = PathDressupPathBoundary.Create(base, name)
     obj.ViewObject.Proxy = DressupPathBoundaryViewProvider(obj.ViewObject)
     obj.Base.ViewObject.Visibility = False
     obj.Stock.ViewObject.Visibility = False
-    FreeCAD.ActiveDocument.commitTransaction()
+    doc.commitTransaction()
     obj.ViewObject.Document.setEdit(obj.ViewObject, 0)
     return obj
 
@@ -288,13 +293,21 @@ class CommandPathDressupPathBoundary:
         op = PathDressup.selection(verbose=True)
         if not op:
             return
+        doc = op.Document
+        doc_name = doc.Name
 
         # everything ok!
-        FreeCAD.ActiveDocument.openTransaction("Create Path Boundary Dress-up")
+        doc.openTransaction("Create Path Boundary Dress-up")
         FreeCADGui.addModule("Path.Dressup.Gui.Boundary")
-        FreeCADGui.doCommand("Path.Dressup.Gui.Boundary.Create(App.ActiveDocument.%s)" % op.Name)
+        FreeCADGui.doCommand(
+            "Path.Dressup.Gui.Boundary.Create(FreeCAD.getDocument("
+            + repr(doc_name)
+            + ").getObject("
+            + repr(op.Name)
+            + "))"
+        )
         # FreeCAD.ActiveDocument.commitTransaction()  # Final `commitTransaction()` called via TaskPanel.accept()
-        FreeCAD.ActiveDocument.recompute()
+        doc.recompute()
 
 
 if FreeCAD.GuiUp:

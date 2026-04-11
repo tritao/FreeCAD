@@ -76,8 +76,10 @@ class ViewProvider(object):
     def _openTaskPanel(self, vobj, deleteOnReject):
         Path.Log.track()
         self.panel = TaskPanel(vobj, deleteOnReject)
-        FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(self.panel, FreeCADGui.ActiveDocument)
+        FreeCADGui.Control.closeDialog(vobj.Document)
+        task = FreeCADGui.Control.showDialog(self.panel, vobj.Document)
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         self.panel.setupUi()
 
     def setCreate(self, vobj):
@@ -89,7 +91,7 @@ class ViewProvider(object):
         return True
 
     def unsetEdit(self, vobj, mode):
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(vobj.Document)
         self.panel = None
         return
 

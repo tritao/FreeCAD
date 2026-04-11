@@ -102,13 +102,13 @@ class CAMoticsUI:
 
     def accept(self):
         self.simulation.accept()
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(self.simulation.gui_doc)
 
     def reject(self):
         self.simulation.cancel()
         if self.simulation.simmesh is not None:
-            FreeCAD.ActiveDocument.removeObject(self.simulation.simmesh.Name)
-        FreeCADGui.Control.closeDialog()
+            self.simulation.doc.removeObject(self.simulation.simmesh.Name)
+        FreeCADGui.Control.closeDialog(self.simulation.gui_doc)
 
     def setRunTime(self, duration):
         self.form.timeSlider.setMinimum(0)
@@ -159,6 +159,9 @@ class CamoticsSimulation(QtCore.QObject):
         super().__init__()  # needed for QT signals
         lock = Lock()
         Thread(target=self.worker, daemon=True, args=(lock,)).start()
+        self.doc = None
+        self.gui_doc = None
+        self.job = None
 
     def callback(self, status, progress):
         self.q.put({"TYPE": "PROGRESS", "VALUE": progress})
@@ -171,7 +174,7 @@ class CamoticsSimulation(QtCore.QObject):
         """takes a binary stl and adds a Mesh to the current document"""
 
         if self.simmesh is None:
-            self.simmesh = FreeCAD.ActiveDocument.addObject("Mesh::Feature", "Camotics")
+            self.simmesh = self.doc.addObject("Mesh::Feature", "Camotics")
         buffer = io.BytesIO()
         buffer.write(surface)
         buffer.seek(0)
@@ -180,10 +183,20 @@ class CamoticsSimulation(QtCore.QObject):
         self.simmesh.Mesh = mesh
         # Mesh.show(mesh)
 
-    def Activate(self):
+    def Activate(self, job=None):
+        self.job = job
+        self.doc = job.Document if job is not None else FreeCAD.ActiveDocument
         self.taskForm = CAMoticsUI(self)
-        FreeCADGui.Control.showDialog(self.taskForm, FreeCADGui.ActiveDocument)
-        self.job = FreeCADGui.Selection.getSelectionEx()[0].Object
+        self.gui_doc = FreeCADGui.getDocument(self.doc.Name) if self.doc else FreeCADGui.ActiveDocument
+        task = FreeCADGui.Control.showDialog(self.taskForm, self.gui_doc)
+        if task is not None and self.doc is not None:
+            task.setDocumentName(self.doc.Name)
+            task.setAutoCloseOnDeletedDocument(True)
+        if self.job is None:
+            selection = FreeCADGui.Selection.getSelectionEx(self.doc.Name, 0)
+            self.job = selection[0].Object if selection else None
+        if self.job is None:
+            return
         self.SIM.set_metric()
         self.SIM.set_resolution("high")
 
@@ -329,7 +342,7 @@ class CommandCamoticsSimulate:
 
     def Activated(self):
         pathSimulation = CamoticsSimulation()
-        pathSimulation.Activate()
+        pathSimulation.Activate(FreeCADGui.Selection.getSelectionEx()[0].Object)
 
 
 if FreeCAD.GuiUp:

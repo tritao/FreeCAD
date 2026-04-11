@@ -717,7 +717,7 @@ class ViewProviderDressup:
         """this makes sure that the base operation is added back to the project and visible"""
         Path.Log.debug("Deleting Dressup")
         if arg1.Object and arg1.Object.Base:
-            FreeCADGui.ActiveDocument.getObject(arg1.Object.Base.Name).Visibility = True
+            arg1.Object.Base.ViewObject.Visibility = True
             job = PathUtils.findParentJob(self.obj)
             if job:
                 job.Proxy.addOperation(arg1.Object.Base, arg1.Object)
@@ -756,24 +756,36 @@ class CommandPathDressupRampEntry:
         op = PathDressup.selection(verbose=True)
         if not op:
             return
+        doc = op.Document
+        doc_name = doc.Name
 
         # everything ok!
-        FreeCAD.ActiveDocument.openTransaction("Create RampEntry Dress-up")
+        doc.openTransaction("Create RampEntry Dress-up")
         FreeCADGui.addModule("Path.Dressup.Gui.RampEntry")
         FreeCADGui.addModule("PathScripts.PathUtils")
         FreeCADGui.doCommand(
-            'obj = FreeCAD.ActiveDocument.addObject("Path::FeaturePython", "RampEntryDressup")'
+            'obj = FreeCAD.getDocument('
+            + repr(doc_name)
+            + ').addObject("Path::FeaturePython", "RampEntryDressup")'
         )
         FreeCADGui.doCommand("dbo = Path.Dressup.Gui.RampEntry.ObjectDressup(obj)")
-        FreeCADGui.doCommand("base = FreeCAD.ActiveDocument." + op.Name)
+        FreeCADGui.doCommand(
+            "base = FreeCAD.getDocument("
+            + repr(doc_name)
+            + ").getObject("
+            + repr(op.Name)
+            + ")"
+        )
         FreeCADGui.doCommand("job = PathScripts.PathUtils.findParentJob(base)")
         FreeCADGui.doCommand("obj.Base = base")
         FreeCADGui.doCommand("job.Proxy.addOperation(obj, base)")
         FreeCADGui.doCommand("Path.Dressup.Gui.RampEntry.ViewProviderDressup(obj.ViewObject)")
-        FreeCADGui.doCommand("Gui.ActiveDocument.getObject(base.Name).Visibility = False")
+        FreeCADGui.doCommand(
+            "Gui.getDocument(" + repr(doc_name) + ").getObject(base.Name).Visibility = False"
+        )
         FreeCADGui.doCommand("dbo.setup(obj)")
         # FreeCAD.ActiveDocument.commitTransaction()  # Final `commitTransaction()` called via TaskPanel.accept()
-        FreeCAD.ActiveDocument.recompute()
+        doc.recompute()
 
 
 if FreeCAD.GuiUp:
