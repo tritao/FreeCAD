@@ -250,7 +250,8 @@ bool ViewProviderDatum::setEdit(int ModNum)
         // When double-clicking on the item for this datum feature the
         // object unsets and sets its edit mode without closing
         // the task panel
-        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+        auto* document = getDocument()->getDocument();
+        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(document);
         TaskDlgDatumParameters* datumDlg = qobject_cast<TaskDlgDatumParameters*>(dlg);
         if (datumDlg && datumDlg->getViewProvider() != this) {
             datumDlg = nullptr;  // another datum feature left open its task panel
@@ -263,7 +264,7 @@ bool ViewProviderDatum::setEdit(int ModNum)
             msgBox.setDefaultButton(QMessageBox::Yes);
             int ret = msgBox.exec();
             if (ret == QMessageBox::Yes) {
-                Gui::Control().closeDialog();
+                Gui::Control().closeDialog(document);
             }
             else {
                 return false;
@@ -279,13 +280,13 @@ bool ViewProviderDatum::setEdit(int ModNum)
         if (datumDlg) {
             Gui::Control().showDialog(
                 datumDlg,
-                Gui::Application::Instance->activeDocument()->getDocument()
+                document
             );
         }
         else {
             Gui::Control().showDialog(
                 new TaskDlgDatumParameters(this),
-                Gui::Application::Instance->activeDocument()->getDocument()
+                document
             );
         }
 
@@ -336,7 +337,7 @@ void ViewProviderDatum::unsetEdit(int ModNum)
 
     if (ModNum == ViewProvider::Default) {
         // when pressing ESC make sure to close the dialog
-        Gui::Control().closeDialog();
+        Gui::Control().closeDialog(getDocument()->getDocument());
     }
     else {
         Gui::ViewProviderGeometryObject::unsetEdit(ModNum);

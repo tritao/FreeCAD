@@ -90,7 +90,8 @@ bool ViewProviderShapeBinder::setEdit(int ModNum)
         // When double-clicking on the item for this pad the
         // object unsets and sets its edit mode without closing
         // the task panel
-        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+        auto* document = getDocument()->getDocument();
+        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(document);
         TaskDlgShapeBinder* sbDlg = qobject_cast<TaskDlgShapeBinder*>(dlg);
         if (dlg && !sbDlg) {
             QMessageBox msgBox(Gui::getMainWindow());
@@ -100,7 +101,7 @@ bool ViewProviderShapeBinder::setEdit(int ModNum)
             msgBox.setDefaultButton(QMessageBox::Yes);
             int ret = msgBox.exec();
             if (ret == QMessageBox::Yes) {
-                Gui::Control().reject();
+                Gui::Control().reject(document);
             }
             else {
                 return false;
@@ -115,13 +116,13 @@ bool ViewProviderShapeBinder::setEdit(int ModNum)
         if (sbDlg) {
             Gui::Control().showDialog(
                 sbDlg,
-                Gui::Application::Instance->activeDocument()->getDocument()
+                document
             );
         }
         else {
             Gui::Control().showDialog(
                 new TaskDlgShapeBinder(this, ModNum == 1),
-                Gui::Application::Instance->activeDocument()->getDocument()
+                document
             );
         }
 

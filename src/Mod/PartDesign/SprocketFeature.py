@@ -35,18 +35,24 @@ __author__ = "Adam Spontarelli"
 __url__ = "https://www.freecad.org"
 
 
-def makeSprocket(name):
+def makeSprocket(name, document_name=None):
     """
     makeSprocket(name): makes a Sprocket
     """
-    obj = FreeCAD.ActiveDocument.addObject("Part::Part2DObjectPython", name)
+    doc = FreeCAD.getDocument(document_name) if document_name else FreeCAD.ActiveDocument
+    if doc is None:
+        return None
+
+    obj = doc.addObject("Part::Part2DObjectPython", name)
     Sprocket(obj)
     if FreeCAD.GuiUp:
         ViewProviderSprocket(obj.ViewObject)
     # FreeCAD.ActiveDocument.recompute()
     if FreeCAD.GuiUp:
-        body = FreeCADGui.ActiveDocument.ActiveView.getActiveObject("pdbody")
-        part = FreeCADGui.ActiveDocument.ActiveView.getActiveObject("part")
+        gui_doc = FreeCADGui.getDocument(doc.Name)
+        active_view = gui_doc.activeView() if gui_doc else None
+        body = active_view.getActiveObject("pdbody") if active_view else None
+        part = active_view.getActiveObject("part") if active_view else None
         if body:
             body.Group = body.Group + [obj]
         elif part:
@@ -70,11 +76,20 @@ class CommandSprocket:
         }
 
     def Activated(self):
-
-        FreeCAD.ActiveDocument.openTransaction("Create Sprocket")
+        doc = FreeCAD.ActiveDocument
+        doc_name = doc.Name
+        doc.openTransaction("Create Sprocket")
         FreeCADGui.addModule("SprocketFeature")
-        FreeCADGui.doCommand("SprocketFeature.makeSprocket('Sprocket')")
-        FreeCADGui.doCommand("Gui.activeDocument().setEdit(App.ActiveDocument.ActiveObject.Name,0)")
+        FreeCADGui.doCommand(
+            "SprocketFeature.makeSprocket(" + repr("Sprocket") + ", " + repr(doc_name) + ")"
+        )
+        FreeCADGui.doCommand(
+            "Gui.getDocument("
+            + repr(doc_name)
+            + ").setEdit(FreeCAD.getDocument("
+            + repr(doc_name)
+            + ").ActiveObject.Name,0)"
+        )
 
     def IsActive(self):
         if FreeCAD.ActiveDocument:
@@ -200,11 +215,13 @@ class ViewProviderSprocket:
         taskd = SprocketTaskPanel(self.Object, mode)
         taskd.obj = vobj.Object
         taskd.update()
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        task = FreeCADGui.Control.showDialog(taskd, FreeCADGui.getDocument(vobj.Object.Document.Name))
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         return True
 
     def unsetEdit(self, vobj, mode):
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(FreeCADGui.getDocument(vobj.Object.Document.Name))
         return
 
     def dumps(self):
@@ -257,7 +274,26 @@ class SprocketTaskPanel:
 
         if mode == 0:  # fresh created
             self.obj.Proxy.execute(self.obj)  # calculate once
-            FreeCAD.Gui.SendMsgToActiveView("ViewFit")
+            self._fit_view()
+
+    def _get_document(self):
+        return self.obj.Document if self.obj else None
+
+    def _get_gui_document(self):
+        doc = self._get_document()
+        if not doc:
+            return None
+        try:
+            return FreeCADGui.getDocument(doc.Name)
+        except Exception:
+            return None
+
+    def _fit_view(self):
+        gui_doc = self._get_gui_document()
+        if gui_doc:
+            view = gui_doc.activeView()
+            if view:
+                view.fitAll()
 
     def transferTo(self):
         """
@@ -282,7 +318,7 @@ class SprocketTaskPanel:
     def pitchChanged(self, value):
         self.obj.Pitch = value
         self.obj.Proxy.execute(self.obj)
-        FreeCAD.Gui.SendMsgToActiveView("ViewFit")
+        self._fit_view()
 
     def sprocketReferenceChanged(self, size):
         self.obj.Pitch = str(Sprocket.SprocketReferenceRollerTable[size][0]) + " in"
@@ -293,7 +329,7 @@ class SprocketTaskPanel:
         self.form.Quantity_RollerDiameter.setText(self.obj.RollerDiameter.UserString)
         self.form.Quantity_Thickness.setText(self.obj.Thickness.UserString)
         self.obj.Proxy.execute(self.obj)
-        FreeCAD.Gui.SendMsgToActiveView("ViewFit")
+        self._fit_view()
 
     def rollerDiameterChanged(self, value):
         self.obj.RollerDiameter = value
@@ -302,7 +338,7 @@ class SprocketTaskPanel:
     def numTeethChanged(self, value):
         self.obj.NumberOfTeeth = value
         self.obj.Proxy.execute(self.obj)
-        FreeCAD.Gui.SendMsgToActiveView("ViewFit")
+        self._fit_view()
 
     def thicknessChanged(self, value):
         self.obj.Thickness = str(value)
@@ -322,12 +358,21 @@ class SprocketTaskPanel:
         self.transferFrom()
 
     def accept(self):
+        doc = self._get_document()
+        gui_doc = self._get_gui_document()
         self.transferTo()
-        FreeCAD.ActiveDocument.recompute()
-        FreeCADGui.ActiveDocument.resetEdit()
+        if doc:
+            doc.recompute()
+        if gui_doc:
+            gui_doc.resetEdit()
 
     def reject(self):
-        FreeCAD.ActiveDocument.removeObject(self.obj.Name)
-        FreeCAD.ActiveDocument.recompute()
-        FreeCADGui.ActiveDocument.resetEdit()
-        FreeCAD.ActiveDocument.abortTransaction()
+        doc = self._get_document()
+        gui_doc = self._get_gui_document()
+        if doc:
+            doc.removeObject(self.obj.Name)
+            doc.recompute()
+        if gui_doc:
+            gui_doc.resetEdit()
+        if doc:
+            doc.abortTransaction()

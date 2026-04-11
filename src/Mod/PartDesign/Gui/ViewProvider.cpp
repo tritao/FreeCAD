@@ -126,7 +126,8 @@ bool ViewProvider::setEdit(int ModNum)
         // When double-clicking on the item for this feature the
         // object unsets and sets its edit mode without closing
         // the task panel
-        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+        auto* document = getDocument()->getDocument();
+        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(document);
         TaskDlgFeatureParameters* featureDlg = qobject_cast<TaskDlgFeatureParameters*>(dlg);
         // NOTE: if the dialog is not partDesigan dialog the featureDlg will be NULL
         if (featureDlg && featureDlg->getViewObject() != this) {
@@ -140,7 +141,7 @@ bool ViewProvider::setEdit(int ModNum)
             msgBox.setDefaultButton(QMessageBox::Yes);
 
             if (msgBox.exec() == QMessageBox::Yes) {
-                Gui::Control().reject();
+                Gui::Control().reject(document);
             }
             else {
                 return false;
@@ -174,7 +175,7 @@ bool ViewProvider::setEdit(int ModNum)
 
         Gui::Control().showDialog(
             featureDlg,
-            Gui::Application::Instance->activeDocument()->getDocument()
+            document
         );
         return true;
     }
@@ -206,7 +207,7 @@ void ViewProvider::unsetEdit(int ModNum)
 
     if (ModNum == ViewProvider::Default) {
         // when pressing ESC make sure to close the dialog
-        Gui::Control().closeDialog();
+        Gui::Control().closeDialog(getDocument()->getDocument());
     }
     else {
         PartGui::ViewProviderPart::unsetEdit(ModNum);

@@ -53,6 +53,7 @@ class TaskWizardShaft:
             featureWindow = cw.subWindowList()[-1]
         else:
             featureWindow = cw.activeSubWindow()
+        self.document_name = self.doc.Name if self.doc else None
 
         # Buttons for diagram display
         buttonLayout = QtGui.QGridLayout()
@@ -192,6 +193,7 @@ class TaskWizardShaft:
         return QtGui.QDialogButtonBox.Ok
 
     def accept(self):
+        _unregister_wizard_dialog(self.document_name)
         if self.table:
             del self.table
         if self.shaft:
@@ -199,6 +201,12 @@ class TaskWizardShaft:
         if self.form:
             del self.form
         return True
+
+    def reject(self):
+        return self.accept()
+
+    def __del__(self):
+        _unregister_wizard_dialog(self.document_name)
 
     def isAllowedAlterDocument(self):
         return False
@@ -210,14 +218,37 @@ class TaskWizardShaft:
 # Also it seems to be impossible to access the active dialog from Python, so Gui::Command::runCommand() is not an option either
 # Note: Another way would be to create a hidden widget in the Shaft Wizard dialog and write some data to it, triggering a slot
 # in the python code
-WizardShaftDlg = None
+WizardShaftDialogs = {}
+
+
+def _register_wizard_dialog(dialog):
+    if dialog and getattr(dialog, "document_name", None):
+        WizardShaftDialogs[dialog.document_name] = dialog
+
+
+def _unregister_wizard_dialog(document_name):
+    if document_name:
+        WizardShaftDialogs.pop(document_name, None)
+
+
+def _active_wizard_dialog():
+    doc = FreeCAD.ActiveDocument
+    if doc is None:
+        return None
+    return WizardShaftDialogs.get(doc.Name)
 
 
 class WizardShaftGui:
     def Activated(self):
-        global WizardShaftDlg
-        WizardShaftDlg = TaskWizardShaft(FreeCAD.ActiveDocument)
-        FreeCADGui.Control.showDialog(WizardShaftDlg, FreeCADGui.ActiveDocument)
+        doc = FreeCAD.ActiveDocument
+        dialog = TaskWizardShaft(doc)
+        gui_doc = FreeCADGui.getDocument(dialog.doc.Name)
+        if gui_doc and FreeCADGui.Control.activeDialog(gui_doc):
+            FreeCADGui.Control.closeDialog(gui_doc)
+        _register_wizard_dialog(dialog)
+        task = FreeCADGui.Control.showDialog(dialog, gui_doc)
+        task.setDocumentName(dialog.doc.Name)
+        task.setAutoCloseOnDeletedDocument(True)
 
     def GetResources(self):
         IconPath = FreeCAD.ConfigGet("AppHomePath") + "Mod/PartDesign/WizardShaft/WizardShaft.svg"
@@ -230,20 +261,15 @@ class WizardShaftGui:
     def IsActive(self):
         return FreeCAD.ActiveDocument is not None
 
-    def __del__(self):
-        global WizardShaftDlg
-        WizardShaftDlg = None
-
 
 class WizardShaftGuiCallback:
     def Activated(self):
-        global WizardShaftDlg
-        if WizardShaftDlg is not None and WizardShaftDlg.table is not None:
-            WizardShaftDlg.table.finishEditConstraint()
+        dialog = _active_wizard_dialog()
+        if dialog is not None and dialog.table is not None:
+            dialog.table.finishEditConstraint()
 
     def isActive(self):
-        global WizardShaftDlg
-        return WizardShaftDlg is not None
+        return _active_wizard_dialog() is not None
 
     def GetResources(self):
         IconPath = FreeCAD.ConfigGet("AppHomePath") + "Mod/PartDesign/WizardShaft/WizardShaft.svg"

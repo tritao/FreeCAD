@@ -47,6 +47,15 @@ class ShaftFeature:
         self.totalLength = 0  # total length of all segments
         self.lastRadius = 0  # radius of last segment (required for adding segments)
 
+    def _fit_view(self):
+        try:
+            gui_doc = self.Gui.getDocument(self.Doc.Name)
+        except Exception:
+            return
+        view = gui_doc.activeView() if gui_doc else None
+        if view:
+            view.fitAll()
+
     def addSegment(self, length, diameter, innerdiameter):
         "Add a segment at the end of the shaft"
         # Find constraint indices of vertical line constraint, horizontal line constraint
@@ -152,7 +161,7 @@ class ShaftFeature:
         else:
             self.Doc.recompute()
         # FIXME: Will give a warning in the console if the active window is not the feature
-        self.Gui.SendMsgToActiveView("ViewFit")
+        self._fit_view()
 
     def updateSegment(self, segment, oldLength, length, diameter, innerdiameter):
         constrRadius = 4 + segment * 6
@@ -170,4 +179,4 @@ class ShaftFeature:
         self.sketch.setDatum(constrInnerRadius, innerdiameter / 2)
         # Update feature
         self.Doc.recompute()
-        self.Gui.SendMsgToActiveView("ViewFit")
+        self._fit_view()

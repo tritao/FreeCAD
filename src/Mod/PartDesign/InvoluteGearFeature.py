@@ -36,16 +36,22 @@ __author__ = "Juergen Riegel"
 __url__ = "https://www.freecad.org"
 
 
-def makeInvoluteGear(name):
+def makeInvoluteGear(name, document_name=None):
     """makeInvoluteGear(name): makes an InvoluteGear"""
-    obj = FreeCAD.ActiveDocument.addObject("Part::Part2DObjectPython", name)
+    doc = FreeCAD.getDocument(document_name) if document_name else FreeCAD.ActiveDocument
+    if doc is None:
+        return None
+
+    obj = doc.addObject("Part::Part2DObjectPython", name)
     _InvoluteGear(obj)
     if FreeCAD.GuiUp:
         _ViewProviderInvoluteGear(obj.ViewObject)
     # FreeCAD.ActiveDocument.recompute()
     if FreeCAD.GuiUp:
-        body = FreeCADGui.ActiveDocument.ActiveView.getActiveObject("pdbody")
-        part = FreeCADGui.ActiveDocument.ActiveView.getActiveObject("part")
+        gui_doc = FreeCADGui.getDocument(doc.Name)
+        active_view = gui_doc.activeView() if gui_doc else None
+        body = active_view.getActiveObject("pdbody") if active_view else None
+        part = active_view.getActiveObject("part") if active_view else None
         if body:
             body.Group = body.Group + [obj]
         elif part:
@@ -67,10 +73,24 @@ class CommandInvoluteGear:
         }
 
     def Activated(self):
-        FreeCAD.ActiveDocument.openTransaction("Create involute gear")
+        doc = FreeCAD.ActiveDocument
+        doc_name = doc.Name
+        doc.openTransaction("Create involute gear")
         FreeCADGui.addModule("InvoluteGearFeature")
-        FreeCADGui.doCommand("InvoluteGearFeature.makeInvoluteGear('InvoluteGear')")
-        FreeCADGui.doCommand("Gui.activeDocument().setEdit(App.ActiveDocument.ActiveObject.Name,0)")
+        FreeCADGui.doCommand(
+            "InvoluteGearFeature.makeInvoluteGear("
+            + repr("InvoluteGear")
+            + ", "
+            + repr(doc_name)
+            + ")"
+        )
+        FreeCADGui.doCommand(
+            "Gui.getDocument("
+            + repr(doc_name)
+            + ").setEdit(FreeCAD.getDocument("
+            + repr(doc_name)
+            + ").ActiveObject.Name,0)"
+        )
 
     def IsActive(self):
         if FreeCAD.ActiveDocument:
@@ -213,11 +233,13 @@ class _ViewProviderInvoluteGear:
         taskd = _InvoluteGearTaskPanel(self.Object, mode)
         taskd.obj = vobj.Object
         taskd.update()
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        task = FreeCADGui.Control.showDialog(taskd, FreeCADGui.getDocument(vobj.Object.Document.Name))
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         return True
 
     def unsetEdit(self, vobj, mode):
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(FreeCADGui.getDocument(vobj.Object.Document.Name))
         return
 
     def dumps(self):
@@ -237,6 +259,9 @@ class _InvoluteGearTaskPanel:
         self.form.setWindowIcon(QtGui.QIcon(":/icons/PartDesign_InternalExternalGear.svg"))
         self.assignToolTipsFromPropertyDocs()
 
+        def fit_view():
+            self._fit_view()
+
         def assignValue(property_name, fitView=False):
             """Returns a function that takes a single value and assigns it to the given property"""
 
@@ -244,7 +269,7 @@ class _InvoluteGearTaskPanel:
                 setattr(self.obj, property_name, value)
                 self.obj.Proxy.execute(self.obj)
                 if fitView:
-                    FreeCAD.Gui.SendMsgToActiveView("ViewFit")
+                    fit_view()
 
             return assigner
 
@@ -281,7 +306,26 @@ class _InvoluteGearTaskPanel:
 
         if mode == 0:  # fresh created
             self.obj.Proxy.execute(self.obj)  # calculate once
-            FreeCAD.Gui.SendMsgToActiveView("ViewFit")
+            self._fit_view()
+
+    def _get_document(self):
+        return self.obj.Document if self.obj else None
+
+    def _get_gui_document(self):
+        doc = self._get_document()
+        if not doc:
+            return None
+        try:
+            return FreeCADGui.getDocument(doc.Name)
+        except Exception:
+            return None
+
+    def _fit_view(self):
+        gui_doc = self._get_gui_document()
+        if gui_doc:
+            view = gui_doc.activeView()
+            if view:
+                view.fitAll()
 
     def assignToolTipsFromPropertyDocs(self):
         def assign(property_name, *widgets):
@@ -354,10 +398,18 @@ class _InvoluteGearTaskPanel:
         self.transferFrom()
 
     def accept(self):
+        doc = self._get_document()
+        gui_doc = self._get_gui_document()
         self.transferTo()
-        FreeCAD.ActiveDocument.recompute()
-        FreeCADGui.ActiveDocument.resetEdit()
+        if doc:
+            doc.recompute()
+        if gui_doc:
+            gui_doc.resetEdit()
 
     def reject(self):
-        FreeCADGui.ActiveDocument.resetEdit()
-        FreeCAD.ActiveDocument.abortTransaction()
+        doc = self._get_document()
+        gui_doc = self._get_gui_document()
+        if gui_doc:
+            gui_doc.resetEdit()
+        if doc:
+            doc.abortTransaction()

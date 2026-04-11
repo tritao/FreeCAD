@@ -355,7 +355,7 @@ void CmdPartDesignBody::activated(int iMsg)
                     };
 
                     // Show dialog and let user pick plane
-                    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+                    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(getDocument());
                     if (!dlg) {
                         Gui::Selection().clearSelection();
                         Gui::Control().showDialog(
@@ -367,7 +367,7 @@ void CmdPartDesignBody::activated(int iMsg)
                                 true,
                                 quitter
                             ),
-                            Gui::Application::Instance->activeDocument()->getDocument()
+                            getDocument()
                         );
                     }
                 }

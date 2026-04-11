@@ -718,7 +718,7 @@ private:
                     true,
                     rejectFunction
                 ),
-                Gui::Application::Instance->activeDocument()->getDocument()
+                guidocument->getDocument()
             );
         }
     }
@@ -737,7 +737,7 @@ private:
             msgBox.setDefaultButton(QMessageBox::Yes);
             int ret = msgBox.exec();
             if (ret == QMessageBox::Yes) {
-                Gui::Control().closeDialog();
+                Gui::Control().closeDialog(appdocument);
             }
             else {
                 throw RejectException();
@@ -745,7 +745,7 @@ private:
         }
 
         if (dlg) {
-            Gui::Control().closeDialog();
+            Gui::Control().closeDialog(appdocument);
         }
     }
 

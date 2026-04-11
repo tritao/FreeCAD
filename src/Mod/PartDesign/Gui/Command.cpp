@@ -1134,7 +1134,7 @@ void prepareProfileBased(
     // available or multiple free ones are available
     if (bNoSketchWasSelected && (freeSketches != 1)) {
 
-        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(cmd->getDocument());
         PartDesignGui::TaskDlgFeaturePick* pickDlg
             = qobject_cast<PartDesignGui::TaskDlgFeaturePick*>(dlg);
         if (dlg && !pickDlg) {
@@ -1145,7 +1145,7 @@ void prepareProfileBased(
             msgBox.setDefaultButton(QMessageBox::Yes);
             int ret = msgBox.exec();
             if (ret == QMessageBox::Yes) {
-                Gui::Control().closeDialog();
+                Gui::Control().closeDialog(cmd->getDocument());
             }
             else {
                 return;
@@ -1153,7 +1153,7 @@ void prepareProfileBased(
         }
 
         if (dlg) {
-            Gui::Control().closeDialog();
+            Gui::Control().closeDialog(cmd->getDocument());
         }
 
         Gui::Selection().clearSelection();
@@ -2666,7 +2666,9 @@ public:
 
     bool isActive() override
     {
-        return (hasActiveDocument() && !Gui::Control().activeDialog());
+        auto* activeDoc = Gui::Application::Instance->activeDocument();
+        return (hasActiveDocument()
+                && !(activeDoc && Gui::Control().activeDialog(activeDoc->getDocument())));
     }
 };
 
@@ -2701,7 +2703,9 @@ public:
 
     bool isActive() override
     {
-        return (hasActiveDocument() && !Gui::Control().activeDialog());
+        auto* activeDoc = Gui::Application::Instance->activeDocument();
+        return (hasActiveDocument()
+                && !(activeDoc && Gui::Control().activeDialog(activeDoc->getDocument())));
     }
 };
 

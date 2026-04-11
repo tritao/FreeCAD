@@ -33,6 +33,7 @@
 #include <Gui/BitmapFactory.h>
 #include <Gui/Command.h>
 #include <Gui/Control.h>
+#include <Gui/Document.h>
 #include <Gui/MainWindow.h>
 #include <Mod/PartDesign/App/Body.h>
 #include <Mod/PartDesign/App/FeaturePrimitive.h>
@@ -272,7 +273,9 @@ void CmdPrimtiveCompAdditive::languageChange()
 
 bool CmdPrimtiveCompAdditive::isActive()
 {
-    return (hasActiveDocument() && !Gui::Control().activeDialog());
+    auto* activeDoc = Gui::Application::Instance->activeDocument();
+    return (hasActiveDocument()
+            && !(activeDoc && Gui::Control().activeDialog(activeDoc->getDocument())));
 }
 
 DEF_STD_CMD_ACL(CmdPrimtiveCompSubtractive)
@@ -457,7 +460,9 @@ void CmdPrimtiveCompSubtractive::languageChange()
 
 bool CmdPrimtiveCompSubtractive::isActive()
 {
-    return (hasActiveDocument() && !Gui::Control().activeDialog());
+    auto* activeDoc = Gui::Application::Instance->activeDocument();
+    return (hasActiveDocument()
+            && !(activeDoc && Gui::Control().activeDialog(activeDoc->getDocument())));
 }
 
 //===========================================================================
