@@ -30,6 +30,7 @@ import re
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 
 def _parse_vector(text):
@@ -56,10 +57,17 @@ class BIM_ProjectManager:
 
     def Activated(self):
 
+        document = FreeCAD.ActiveDocument
+        document_name = getattr(document, "Name", "")
+
         # only raise the dialog if it is already open
         if getattr(self, "form", None):
-            self.form.raise_()
-            return
+            if getattr(self, "documentName", None) == document_name:
+                self.form.raise_()
+                return
+            self.reject()
+
+        self.documentName = document_name
 
         import FreeCADGui
         import ArchBuildingPart
@@ -89,8 +97,8 @@ class BIM_ProjectManager:
         self.fillPresets()
 
         # Detect existing objects
-        sel = FreeCADGui.Selection.getSelection()
-        doc = FreeCAD.ActiveDocument
+        sel = self._get_selection()
+        doc = self._get_document()
         if doc:
             if len(sel) == 1:
                 if hasattr(sel[0], "Proxy") and hasattr(sel[0].Proxy, "ifcfile"):
@@ -156,10 +164,25 @@ class BIM_ProjectManager:
         # show dialog
         self.form.show()
 
+    def _get_document(self):
+        if not getattr(self, "documentName", None):
+            return None
+        try:
+            return FreeCAD.getDocument(self.documentName)
+        except Exception:
+            return None
+
+    def _get_selection(self):
+        document = self._get_document()
+        if document is None:
+            return []
+        return FreeCADGui.Selection.getSelection(document.Name)
+
     def reject(self):
 
         self.form.hide()
         del self.form
+        self.documentName = ""
         return True
 
     def accept(self):
@@ -191,7 +214,7 @@ class BIM_ProjectManager:
         color = self.form.lineColor.property("color").getRgbF()[:3]
 
         # Document creation
-        doc = FreeCAD.ActiveDocument
+        doc = self._get_document()
         if self.form.groupNewProject.isChecked():
             if (
                 self.form.radioNative1.isChecked()
@@ -199,8 +222,11 @@ class BIM_ProjectManager:
                 or (self.form.radioNative2.isChecked() and doc is None)
             ):
                 doc = FreeCAD.newDocument()
+                self.documentName = doc.Name
                 if self.form.projectName.text():
                     doc.Label = self.form.projectName.text()
+        if doc is None:
+            return self.reject()
         if doc:
             FreeCAD.setActiveDocument(doc.Name)
 
@@ -220,7 +246,7 @@ class BIM_ProjectManager:
             from draftguitools import gui_trackers
 
             pts = gui_trackers.gridTracker.get_human_figure(None)
-            human = FreeCAD.ActiveDocument.addObject("Part::Feature", "Human")
+            human = doc.addObject("Part::Feature", "Human")
             human.Shape = Part.makePolygon(pts)
             human.Placement.move(FreeCAD.Vector(500, 500, 0))
 
@@ -401,7 +427,7 @@ class BIM_ProjectManager:
                         self.building.addObject(lev)
                     h += levelHeight
                     for group in groups:
-                        levGroup = FreeCAD.ActiveDocument.addObject("App::DocumentObjectGroup")
+                        levGroup = doc.addObject("App::DocumentObjectGroup")
                         levGroup.Label = group
                         if self.project:
                             from nativeifc import ifc_tools
@@ -409,13 +435,15 @@ class BIM_ProjectManager:
                             ifc_tools.aggregate(levGroup, lev)
                         else:
                             lev.addObject(levGroup)
-        FreeCAD.ActiveDocument.recompute()
+        doc.recompute()
         # fit zoom
         if outline:
-            FreeCADGui.Selection.clearSelection()
-            FreeCADGui.Selection.addSelection(outline)
-            FreeCADGui.SendMsgToActiveView("ViewSelection")
-            FreeCADGui.Selection.clearSelection()
+            FreeCADGui.Selection.clearSelection(doc.Name)
+            FreeCADGui.Selection.addSelection(doc.Name, outline.Name)
+            view = BimArchUtils.activeViewOf(doc)
+            if view and hasattr(view, "viewSelection"):
+                view.viewSelection()
+            FreeCADGui.Selection.clearSelection(doc.Name)
         # aggregate layout group
         if self.building and grp:
             if hasattr(self.building, "IfcClass"):
@@ -423,7 +451,7 @@ class BIM_ProjectManager:
 
                 ifc_tools.aggregate(grp, self.building)
         self.form.hide()
-        FreeCAD.ActiveDocument.recompute()
+        doc.recompute()
         if hasattr(FreeCADGui, "Snapper"):
             FreeCADGui.Snapper.show()
         if self.form.radioNative3.isChecked():
@@ -586,9 +614,10 @@ class BIM_ProjectManager:
 
         import WorkingPlane
 
-        d = FreeCAD.ActiveDocument
+        d = self._get_document()
         if not d:
             d = FreeCAD.newDocument()
+            self.documentName = d.Name
 
         # build list of useful settings to store
         wp = WorkingPlane.get_working_plane()
@@ -687,8 +716,8 @@ class BIM_ProjectManager:
         )
         if filename:
             filename = filename[0]
-            if FreeCAD.ActiveDocument:
-                d = FreeCAD.ActiveDocument
+            d = self._get_document()
+            if d:
                 td = FreeCAD.openDocument(filename, True)  # hidden
                 tname = td.Name
                 values = td.Meta
@@ -697,6 +726,7 @@ class BIM_ProjectManager:
                 FreeCADGui.ActiveDocument = FreeCADGui.getDocument(d.Name)  # fix b/c hidden doc
             else:
                 d = FreeCAD.openDocument(filename)
+                self.documentName = d.Name
                 FreeCAD.ActiveDocument = d
                 values = d.Meta
             bimunit = 0

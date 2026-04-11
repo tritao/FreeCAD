@@ -53,6 +53,7 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
+    from bimcommands import BimArchUtils
     import draftguitools.gui_trackers as DraftTrackers
     from draftutils.translate import translate
 else:
@@ -1062,13 +1063,14 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
 
         taskd = _ArchWindowTaskPanel()
         taskd.obj = self.Object
+        FreeCADGui.Selection.clearSelection(self.Object.Document.Name)
         self.sets = [vobj.DisplayMode, vobj.Transparency]
         vobj.DisplayMode = "Shaded"
         vobj.Transparency = 80
         if self.Object.Base:
             self.Object.Base.ViewObject.show()
         taskd.update()
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(taskd, self.Object)
         return True
 
     def unsetEdit(self, vobj, mode):
@@ -1080,7 +1082,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         vobj.DiffuseColor = vobj.DiffuseColor  # reset face colors
         if self.Object.Base:
             self.Object.Base.ViewObject.hide()
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(self.Object)
         return True
 
     def setupContextMenu(self, vobj, menu):
@@ -1169,7 +1171,7 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
                 nparts.append(",".join(new_tokens))
             if nparts != self.Object.WindowParts:
                 self.Object.WindowParts = nparts
-                FreeCAD.ActiveDocument.recompute()
+                self.Object.Document.recompute()
             else:
                 FreeCAD.Console.PrintWarning(
                     translate("Arch", "This window has no defined opening") + "\n"
@@ -1352,8 +1354,6 @@ class _ArchWindowTaskPanel:
         QtCore.QObject.connect(self.field6, QtCore.SIGNAL("clicked()"), self.addEdge)
         self.update()
 
-        FreeCADGui.Selection.clearSelection()
-
     def isAllowedAlterSelection(self):
 
         return True
@@ -1373,7 +1373,7 @@ class _ArchWindowTaskPanel:
 
     def select(self, wid, col):
 
-        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.clearSelection(self.obj.Document.Name)
         ws = ""
         for it in self.wiretree.selectedItems():
             if ws:
@@ -1387,14 +1387,16 @@ class _ArchWindowTaskPanel:
                         for i in range(len(self.obj.Base.Shape.Edges)):
                             if e.hashCode() == self.obj.Base.Shape.Edges[i].hashCode():
                                 FreeCADGui.Selection.addSelection(
-                                    self.obj.Base, "Edge" + str(i + 1)
+                                    self.obj.Base.Document.Name,
+                                    self.obj.Base.Name,
+                                    "Edge" + str(i + 1),
                                 )
         self.field3.setText(ws)
 
     def selectHole(self):
         "takes a selected edge to determine current Hole Wire"
 
-        s = FreeCADGui.Selection.getSelectionEx()
+        s = BimArchUtils.selectionExOf(self.obj)
         if s and self.obj:
             if s[0].SubElementNames:
                 if "Edge" in s[0].SubElementNames[0]:
@@ -1678,7 +1680,7 @@ class _ArchWindowTaskPanel:
 
     def addEdge(self):
 
-        for sel in FreeCADGui.Selection.getSelectionEx():
+        for sel in BimArchUtils.selectionExOf(self.obj):
             for sub in sel.SubElementNames:
                 if "Edge" in sub:
                     self.field6.setText(sub)
@@ -1686,8 +1688,8 @@ class _ArchWindowTaskPanel:
 
     def reject(self):
 
-        FreeCAD.ActiveDocument.recompute()
-        FreeCADGui.ActiveDocument.resetEdit()
+        self.obj.Document.recompute()
+        BimArchUtils.resetEdit(self.obj)
         return True
 
     def retranslateUi(self, TaskPanel):

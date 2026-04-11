@@ -28,6 +28,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -52,8 +53,11 @@ class Arch_CutPlane:
     def Activated(self):
         import ArchCutPlane
 
+        document = FreeCAD.ActiveDocument
+        if document is None:
+            return
         baseObj, baseShp, cutterShp = ArchCutPlane._getShapes(
-            FreeCADGui.Selection.getSelectionEx("", 0)
+            FreeCADGui.Selection.getSelectionEx(document.Name, 0)
         )
         if baseObj is None:
             FreeCAD.Console.PrintError(
@@ -74,20 +78,21 @@ class Arch_CutPlane:
                 translate("Arch", "The second object does not define a plane") + "\n"
             )
             return
-        panel = CutPlaneTaskPanel()
-        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
+        panel = CutPlaneTaskPanel(document)
+        BimArchUtils.showTaskDialog(panel, panel.doc)
 
 
 class CutPlaneTaskPanel:
-    def __init__(self):
+    def __init__(self, doc=None):
         import ArchCutPlane
         from PySide import QtCore, QtGui
 
+        self.doc = doc or FreeCAD.ActiveDocument
         _, self.base, self.cutter = ArchCutPlane._getShapes(
-            FreeCADGui.Selection.getSelectionEx("", 0)
+            FreeCADGui.Selection.getSelectionEx(self.doc.Name, 0)
         )
 
-        self.previewObj = FreeCAD.ActiveDocument.addObject("Part::Feature", "PreviewCutVolume")
+        self.previewObj = self.doc.addObject("Part::Feature", "PreviewCutVolume")
         self.previewObj.ViewObject.ShapeColor = (1.00, 0.00, 0.00)
         self.previewObj.ViewObject.Transparency = 75
 
@@ -112,18 +117,20 @@ class CutPlaneTaskPanel:
         return False
 
     def accept(self):
-        FreeCAD.ActiveDocument.removeObject(self.previewObj.Name)
+        self.doc.removeObject(self.previewObj.Name)
         side = self.combobox.currentIndex()
-        FreeCAD.ActiveDocument.openTransaction(translate("Arch", "Cutting"))
+        self.doc.openTransaction(translate("Arch", "Cutting"))
         FreeCADGui.addModule("ArchCutPlane")
-        FreeCADGui.doCommand("sels = FreeCADGui.Selection.getSelectionEx('', 0)")
+        FreeCADGui.doCommand(
+            "sels = FreeCADGui.Selection.getSelectionEx(" + repr(self.doc.Name) + ", 0)"
+        )
         FreeCADGui.doCommand("ArchCutPlane.cutComponentwithPlane(sels, side=" + str(side) + ")")
-        FreeCAD.ActiveDocument.commitTransaction()
-        FreeCAD.ActiveDocument.recompute()
+        self.doc.commitTransaction()
+        self.doc.recompute()
         return True
 
     def reject(self):
-        FreeCAD.ActiveDocument.removeObject(self.previewObj.Name)
+        self.doc.removeObject(self.previewObj.Name)
         FreeCAD.Console.PrintMessage("Cancel Cut Plane\n")
         return True
 

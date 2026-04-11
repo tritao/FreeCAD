@@ -2080,7 +2080,9 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
             return None
         taskd = WallTaskPanel(vobj.Object)
         taskd.update()
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        task = FreeCADGui.Control.showDialog(taskd, FreeCADGui.getDocument(vobj.Object.Document.Name))
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         return True
 
     def setupContextMenu(self, vobj, menu):

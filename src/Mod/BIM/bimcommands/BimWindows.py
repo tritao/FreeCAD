@@ -26,6 +26,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -47,7 +48,8 @@ class BIM_Windows:
         return v
 
     def Activated(self):
-        FreeCADGui.Control.showDialog(BIM_Windows_TaskPanel(), FreeCADGui.ActiveDocument)
+        panel = BIM_Windows_TaskPanel()
+        BimArchUtils.showTaskDialog(panel, panel.doc)
 
 
 class BIM_Windows_TaskPanel:
@@ -55,6 +57,7 @@ class BIM_Windows_TaskPanel:
     def __init__(self):
         from PySide import QtGui
 
+        self.doc = FreeCAD.ActiveDocument
         self.form = FreeCADGui.PySideUic.loadUi(":/ui/dialogWindows.ui")
         self.form.setWindowIcon(QtGui.QIcon(":/icons/BIM_Windows.svg"))
         self.form.groupMode.currentIndexChanged.connect(self.update)
@@ -75,8 +78,8 @@ class BIM_Windows_TaskPanel:
         return QtGui.QDialogButtonBox.Close
 
     def reject(self):
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.recompute()
+        BimArchUtils.closeTaskDialog(self.doc)
+        self.doc.recompute()
 
     def update(self, index=None):
         import Draft
@@ -84,7 +87,7 @@ class BIM_Windows_TaskPanel:
         from PySide import QtGui
 
         self.form.windows.clear()
-        windows = [o for o in FreeCAD.ActiveDocument.Objects if Draft.getType(o) == "Window"]
+        windows = [o for o in self.doc.Objects if Draft.getType(o) == "Window"]
         if self.form.groupMode.currentIndex() == 0:
             for window in windows:
                 s1 = window.Label
@@ -148,7 +151,7 @@ class BIM_Windows_TaskPanel:
 
         if len(self.form.windows.selectedItems()) == 1:
             # don't change the contents if we have more than one floor selected
-            window = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
+            window = self.doc.getObject(item.toolTip(0))
             if window:
                 self.form.windowLabel.setText(window.Label)
                 self.form.windowDescription.setText(window.Description)
@@ -158,25 +161,27 @@ class BIM_Windows_TaskPanel:
                 if window.Material:
                     self.form.windowMaterial.setText(window.Material.Label)
         # select objects
-        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.clearSelection(self.doc.Name)
         for item in self.form.windows.selectedItems():
-            o = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
+            o = self.doc.getObject(item.toolTip(0))
             if o:
-                FreeCADGui.Selection.addSelection(o)
+                FreeCADGui.Selection.addSelection(self.doc.Name, o.Name)
 
     def showWindow(self, item, column):
 
-        window = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
+        window = self.doc.getObject(item.toolTip(0))
         if window:
-            FreeCADGui.Selection.clearSelection()
-            FreeCADGui.Selection.addSelection(window)
-            FreeCADGui.SendMsgToActiveView("ViewSelection")
+            FreeCADGui.Selection.clearSelection(self.doc.Name)
+            FreeCADGui.Selection.addSelection(self.doc.Name, window.Name)
+            view = BimArchUtils.activeViewOf(self.doc)
+            if view and hasattr(view, "viewSelection"):
+                view.viewSelection()
 
     def setWidth(self):
         val = FreeCAD.Units.Quantity(self.form.windowWidth.text()).Value
         if val:
             for it in self.form.windows.selectedItems():
-                window = FreeCAD.ActiveDocument.getObject(it.toolTip(0))
+                window = self.doc.getObject(it.toolTip(0))
                 if window:
                     window.Width = val
             self.update()
@@ -185,7 +190,7 @@ class BIM_Windows_TaskPanel:
         val = FreeCAD.Units.Quantity(self.form.windowHeight.text()).Value
         if val:
             for it in self.form.windows.selectedItems():
-                window = FreeCAD.ActiveDocument.getObject(it.toolTip(0))
+                window = self.doc.getObject(it.toolTip(0))
                 if window:
                     window.Height = val
             self.update()
@@ -194,21 +199,21 @@ class BIM_Windows_TaskPanel:
         val = self.form.windowLabel.text()
         if val:
             for it in self.form.windows.selectedItems():
-                window = FreeCAD.ActiveDocument.getObject(it.toolTip(0))
+                window = self.doc.getObject(it.toolTip(0))
                 if window:
                     window.Label = val
             self.update()
 
     def setTag(self):
         for it in self.form.windows.selectedItems():
-            window = FreeCAD.ActiveDocument.getObject(it.toolTip(0))
+            window = self.doc.getObject(it.toolTip(0))
             if window:
                 window.Tag = self.form.windowTag.text()
         self.update()
 
     def setDescription(self):
         for it in self.form.windows.selectedItems():
-            window = FreeCAD.ActiveDocument.getObject(it.toolTip(0))
+            window = self.doc.getObject(it.toolTip(0))
             if window:
                 window.Description = self.form.windowDescription.text()
         self.update()
@@ -221,7 +226,7 @@ class BIM_Windows_TaskPanel:
         form = FreeCADGui.PySideUic.loadUi(":/ui/dialogMaterialChooser.ui")
         mw = FreeCADGui.getMainWindow()
         form.move(mw.frameGeometry().topLeft() + mw.rect().center() - form.rect().center())
-        materials = [o for o in FreeCAD.ActiveDocument.Objects if Draft.getType(o) == "Material"]
+        materials = [o for o in self.doc.Objects if Draft.getType(o) == "Material"]
         it = QtGui.QListWidgetItem(translate("BIM", "None"))
         it.setIcon(QtGui.QIcon(":/icons/button_invalid.svg"))
         it.setToolTip("__None__")
@@ -238,9 +243,9 @@ class BIM_Windows_TaskPanel:
             if sel:
                 sel = sel[0]
                 if sel.toolTip() != "__None__":
-                    mat = FreeCAD.ActiveDocument.getObject(str(sel.toolTip()))
+                    mat = self.doc.getObject(str(sel.toolTip()))
                 for it in self.form.windows.selectedItems():
-                    window = FreeCAD.ActiveDocument.getObject(it.toolTip(0))
+                    window = self.doc.getObject(it.toolTip(0))
                     if window:
                         if mat:
                             window.Material = mat

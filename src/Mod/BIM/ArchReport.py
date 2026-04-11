@@ -10,6 +10,7 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtWidgets, QtGui
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 
     # Create an alias for the Slot decorator for use within the GUI-only classes.
@@ -802,7 +803,7 @@ class ViewProviderReport:
             if FreeCAD.GuiUp:
                 panel = ReportTaskPanel(vobj.Object)
                 try:
-                    FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
+                    BimArchUtils.showTaskDialog(panel, vobj.Object)
                 except RuntimeError as e:
                     # Avoid raising into the caller (e.g., double click handler)
                     FreeCAD.Console.PrintError(f"Could not open Report editor: {e}\n")
@@ -848,7 +849,7 @@ class ViewProviderReport:
 class ReportTaskPanel:
     """Multi-statement task panel for editing a Report.
 
-    Exposes `self.form` as a QWidget so it works with FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument).
+    Exposes `self.form` as a QWidget so it works with document-owned task dialogs.
     Implements accept() and reject() to save or discard changes.
     """
 
@@ -2130,16 +2131,16 @@ class ReportTaskPanel:
 
         # Trigger a recompute to run the report and mark the document as modified.
         # This will now run the final, correct pipeline.
-        FreeCAD.ActiveDocument.recompute()
+        self.obj.Document.recompute()
 
         # Quality of life: open the target spreadsheet to show the results.
         spreadsheet = self.obj.Target
         if spreadsheet:
-            FreeCADGui.ActiveDocument.setEdit(spreadsheet.Name, 0)
+            BimArchUtils.editObject(spreadsheet, 0)
 
         # Close the task panel.
         try:
-            FreeCADGui.Control.closeDialog()
+            BimArchUtils.closeTaskDialog(self.obj)
         except Exception as e:
             FreeCAD.Console.PrintLog(f"Could not close Report Task Panel: {e}\n")
         self._set_dirty(False)
@@ -2152,7 +2153,7 @@ class ReportTaskPanel:
         self._set_dirty(False)
         # Close the task panel when GUI is available
         try:
-            FreeCADGui.Control.closeDialog()
+            BimArchUtils.closeTaskDialog(self.obj)
         except Exception as e:
             # This is a defensive catch. If closing the dialog fails for any reason
             # (e.g., it was already closed), we log the error but do not crash.

@@ -26,6 +26,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -53,15 +54,16 @@ class Arch_Roof:
     def Activated(self):
         import ArchComponent
 
+        doc = FreeCAD.ActiveDocument
         sel = FreeCADGui.Selection.getSelectionEx()
         if sel:
             sel = sel[0]
             obj = sel.Object
-            FreeCADGui.Control.closeDialog()
+            BimArchUtils.closeTaskDialog(doc)
             if sel.HasSubObjects:
                 if "Face" in sel.SubElementNames[0]:
                     i = int(sel.SubElementNames[0][4:])
-                    FreeCAD.ActiveDocument.openTransaction(translate("Arch", "Create Roof"))
+                    doc.openTransaction(translate("Arch", "Create Roof"))
                     FreeCADGui.addModule("Arch")
                     FreeCADGui.doCommand(
                         "obj = Arch.makeRoof(FreeCAD.ActiveDocument."
@@ -72,28 +74,26 @@ class Arch_Roof:
                     )
                     FreeCADGui.addModule("Draft")
                     FreeCADGui.doCommand("Draft.autogroup(obj)")
-                    FreeCAD.ActiveDocument.commitTransaction()
-                    FreeCAD.ActiveDocument.recompute()
+                    doc.commitTransaction()
+                    doc.recompute()
                     return
             if hasattr(obj, "Shape"):
                 if obj.Shape.Wires:
-                    FreeCAD.ActiveDocument.openTransaction(translate("Arch", "Create Roof"))
+                    doc.openTransaction(translate("Arch", "Create Roof"))
                     FreeCADGui.addModule("Arch")
                     FreeCADGui.doCommand(
                         "obj = Arch.makeRoof(FreeCAD.ActiveDocument." + obj.Name + ")"
                     )
                     FreeCADGui.addModule("Draft")
                     FreeCADGui.doCommand("Draft.autogroup(obj)")
-                    FreeCAD.ActiveDocument.commitTransaction()
-                    FreeCAD.ActiveDocument.recompute()
+                    doc.commitTransaction()
+                    doc.recompute()
                     return
             else:
                 FreeCAD.Console.PrintMessage(translate("Arch", "Unable to create a roof"))
         else:
             FreeCAD.Console.PrintMessage(translate("Arch", "Please select a base object") + "\n")
-            FreeCADGui.Control.showDialog(
-                ArchComponent.SelectionTaskPanel(), FreeCADGui.ActiveDocument
-            )
+            BimArchUtils.showTaskDialog(ArchComponent.SelectionTaskPanel(), doc)
             FreeCAD.ArchObserver = ArchComponent.ArchSelectionObserver(nextCommand="Arch_Roof")
             FreeCADGui.Selection.addObserver(FreeCAD.ArchObserver)
 

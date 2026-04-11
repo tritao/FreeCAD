@@ -51,7 +51,7 @@ class TestArchReportGui(TestArchBaseGui):
         # This method is automatically called after EACH test function.
         if self.panel:
             # If a panel was created, ensure it is closed.
-            FreeCADGui.Control.closeDialog()
+            FreeCADGui.Control.closeDialog(Gui.ActiveDocument)
             self.panel = None  # Clear the reference
         super().tearDown()
 

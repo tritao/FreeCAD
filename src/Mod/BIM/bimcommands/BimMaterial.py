@@ -26,6 +26,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -71,15 +72,23 @@ class BIM_Material:
 
     def Activated(self):
 
+        document = FreeCAD.ActiveDocument
+        if document is None:
+            return
+
         # only raise the dialog if it is already open
         if getattr(self, "dlg", None):
-            self.dlg.raise_()
-            return
+            if getattr(self, "documentName", None) == document.Name:
+                self.dlg.raise_()
+                return
+            self.onReject()
+
+        self.documentName = document.Name
 
         self.dlg = QtGui.QDialog()
         self.dlg.objects = [
             obj
-            for obj in FreeCADGui.Selection.getSelection()
+            for obj in FreeCADGui.Selection.getSelection(document.Name)
             if hasattr(obj, "Material") or hasattr(obj, "StepId")
         ]
         w = PARAMS.GetInt("BimMaterialDialogWidth", 230)
@@ -195,6 +204,33 @@ class BIM_Material:
             self.onReject()
             FreeCADGui.runCommand("Arch_Material")
 
+    def _get_document(self):
+        if not getattr(self, "documentName", None):
+            return None
+        try:
+            return FreeCAD.getDocument(self.documentName)
+        except Exception:
+            return None
+
+    def _get_object(self, name):
+        document = self._get_document()
+        if document is None:
+            return None
+        return document.getObject(name)
+
+    def _run_in_document(self, callback):
+        document = self._get_document()
+        if document is None:
+            return None
+        previous = getattr(FreeCAD.ActiveDocument, "Name", "")
+        if previous != document.Name:
+            FreeCAD.setActiveDocument(document.Name)
+        try:
+            return callback(document)
+        finally:
+            if previous and previous != document.Name and previous in FreeCAD.listDocuments():
+                FreeCAD.setActiveDocument(previous)
+
     def onRightClick(self, pos):
         parentPosition = self.dlg.matList.mapToGlobal(QtCore.QPoint(0, 0))
         self.contextMenu.move(parentPosition + pos)
@@ -202,6 +238,9 @@ class BIM_Material:
 
     def onMergeDupes(self):
         if self.dlg:
+            document = self._get_document()
+            if document is None:
+                return self.onReject()
             todelete = []
             first = True
             for mat in self.dlg.materials:
@@ -227,7 +266,7 @@ class BIM_Material:
                                     + "\n"
                                 )
                                 if first:
-                                    FreeCAD.ActiveDocument.openTransaction("Merge materials")
+                                    document.openTransaction("Merge materials")
                                     first = False
                                 setattr(par, prop, orig)
                     todelete.append(mat)
@@ -237,9 +276,9 @@ class BIM_Material:
                         translate("BIM", "Merging duplicate material") + " " + tod.Label + "\n"
                     )
                     if first:
-                        FreeCAD.ActiveDocument.openTransaction("Merge materials")
+                        document.openTransaction("Merge materials")
                         first = False
-                    FreeCAD.ActiveDocument.removeObject(tod.Name)
+                    document.removeObject(tod.Name)
                 elif (len(tod.InList) == 1) and (
                     tod.InList[0].isDerivedFrom("App::DocumentObjectGroup")
                 ):
@@ -247,9 +286,9 @@ class BIM_Material:
                         translate("BIM", "Merging duplicate material") + " " + tod.Label + "\n"
                     )
                     if first:
-                        FreeCAD.ActiveDocument.openTransaction("Merge materials")
+                        document.openTransaction("Merge materials")
                         first = False
-                    FreeCAD.ActiveDocument.removeObject(tod.Name)
+                    document.removeObject(tod.Name)
                 else:
                     FreeCAD.Console.PrintMessage(
                         translate("BIM", "Unable to delete material")
@@ -260,17 +299,20 @@ class BIM_Material:
                         + "\n"
                     )
             if not first:
-                FreeCAD.ActiveDocument.commitTransaction()
-                FreeCAD.ActiveDocument.recompute()
+                document.commitTransaction()
+                document.recompute()
                 self.rescan(rebuild=True)
 
     def onDeleteUnused(self):
         first = True
         if self.dlg:
+            document = self._get_document()
+            if document is None:
+                return self.onReject()
             for i in range(self.dlg.matList.count()):
                 item = self.dlg.matList.item(i)
                 if item:
-                    obj = FreeCAD.ActiveDocument.getObject(item.toolTip())
+                    obj = document.getObject(item.toolTip())
                     if obj:
                         parents = [
                             parent
@@ -281,29 +323,31 @@ class BIM_Material:
                             name = obj.Name
                             label = obj.Label
                             if first:
-                                FreeCAD.ActiveDocument.openTransaction("Delete materials")
+                                document.openTransaction("Delete materials")
                                 first = False
                             FreeCAD.Console.PrintMessage(
                                 translate("BIM", "Deleting unused material") + " " + label + "\n"
                             )
-                            FreeCAD.ActiveDocument.removeObject(name)
+                            document.removeObject(name)
         if not first:
-            FreeCAD.ActiveDocument.commitTransaction()
-            FreeCAD.ActiveDocument.recompute()
+            document.commitTransaction()
+            document.recompute()
             self.rescan(rebuild=True)
 
     def onDuplicate(self):
         if self.dlg:
             item = self.dlg.matList.currentItem()
             if item:
-                oldmat = FreeCAD.ActiveDocument.getObject(item.toolTip())
+                oldmat = self._get_object(item.toolTip())
                 if oldmat:
                     import Arch
 
-                    newmat = Arch.makeMaterial()
+                    newmat = self._run_in_document(lambda document: Arch.makeMaterial())
+                    if newmat is None:
+                        return self.onReject()
                     newmat.Label = item.text()
                     newmat.Material = oldmat.Material
-                    FreeCAD.ActiveDocument.recompute()
+                    newmat.Document.recompute()
                     i = QtGui.QListWidgetItem(
                         self.createIcon(newmat), newmat.Label, self.dlg.matList
                     )
@@ -319,16 +363,19 @@ class BIM_Material:
                 self.dlg.matList.editItem(item)
 
     def onEndRename(self, item):
-        obj = FreeCAD.ActiveDocument.getObject(item.toolTip())
+        obj = self._get_object(item.toolTip())
         if obj:
             if obj.Label != item.text():
                 obj.Label = item.text()
 
     def onMergeTo(self):
         if self.dlg:
+            document = self._get_document()
+            if document is None:
+                return self.onReject()
             item = self.dlg.matList.currentItem()
             if item:
-                oldmat = FreeCAD.ActiveDocument.getObject(item.toolTip())
+                oldmat = document.getObject(item.toolTip())
                 # load dialog
                 form = FreeCADGui.PySideUic.loadUi(":/ui/dialogListWidget.ui")
                 # center the dialog over FreeCAD window
@@ -345,7 +392,7 @@ class BIM_Material:
                 if result:
                     mergeto = form.listWidget.currentItem()
                     if mergeto:
-                        mergemat = FreeCAD.ActiveDocument.getObject(mergeto.toolTip())
+                        mergemat = document.getObject(mergeto.toolTip())
                         if oldmat and mergemat:
                             parents = [
                                 parent
@@ -353,21 +400,24 @@ class BIM_Material:
                                 if (hasattr(parent, "Material") and (parent.Material == oldmat))
                             ]
                             name = oldmat.Name
-                            FreeCAD.ActiveDocument.openTransaction("Merge material")
+                            document.openTransaction("Merge material")
                             for parent in parents:
                                 parent.Material = mergemat
-                            FreeCAD.ActiveDocument.removeObject(name)
-                            FreeCAD.ActiveDocument.commitTransaction()
-                            FreeCAD.ActiveDocument.recompute()
+                            document.removeObject(name)
+                            document.commitTransaction()
+                            document.recompute()
                             self.rescan()
                 else:
                     return
 
     def onDelete(self):
         if self.dlg:
+            document = self._get_document()
+            if document is None:
+                return self.onReject()
             item = self.dlg.matList.currentItem()
             if item:
-                obj = FreeCAD.ActiveDocument.getObject(item.toolTip())
+                obj = document.getObject(item.toolTip())
                 if obj:
                     parents = [
                         parent
@@ -385,28 +435,39 @@ class BIM_Material:
                     else:
                         self.dlg.matList.takeItem(self.dlg.matList.currentRow())
                         name = obj.Name
-                        FreeCAD.ActiveDocument.openTransaction("Delete material")
-                        FreeCAD.ActiveDocument.removeObject(name)
-                        FreeCAD.ActiveDocument.commitTransaction()
-                        FreeCAD.ActiveDocument.recompute()
+                        document.openTransaction("Delete material")
+                        document.removeObject(name)
+                        document.commitTransaction()
+                        document.recompute()
                         self.rescan()
 
     def onCreate(self):
+        document = self._get_document()
         self.onReject()
+        if document is None:
+            return
+        FreeCAD.setActiveDocument(document.Name)
         FreeCADGui.runCommand("Arch_Material")
 
     def onMulti(self):
+        document = self._get_document()
         self.onReject()
+        if document is None:
+            return
+        FreeCAD.setActiveDocument(document.Name)
         FreeCADGui.runCommand("Arch_MultiMaterial")
 
     def onAccept(self, item=None):
         if self.dlg:
+            document = self._get_document()
+            if document is None:
+                return self.onReject()
             item = self.dlg.matList.currentItem()
             if item and self.dlg.objects:
-                mat = FreeCAD.ActiveDocument.getObject(item.toolTip())
+                mat = document.getObject(item.toolTip())
                 if mat:
                     if self.dlg.objects:
-                        FreeCAD.ActiveDocument.openTransaction("Change material")
+                        document.openTransaction("Change material")
                         for obj in self.dlg.objects:
                             if hasattr(obj, "StepId"):
                                 from nativeifc import ifc_materials
@@ -414,8 +475,8 @@ class BIM_Material:
                                 ifc_materials.set_material(mat, obj)
                             else:
                                 obj.Material = mat
-                        FreeCAD.ActiveDocument.commitTransaction()
-                        FreeCAD.ActiveDocument.recompute()
+                        document.commitTransaction()
+                        document.recompute()
             p = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM")
             p.SetInt("BimMaterialDialogWidth", self.dlg.width())
             p.SetInt("BimMaterialDialogHeight", self.dlg.height())
@@ -428,6 +489,7 @@ class BIM_Material:
         if self.dlg:
             self.dlg.hide()
             self.dlg = None
+        self.documentName = ""
 
     def onUpArrow(self):
         if self.dlg:
@@ -464,8 +526,11 @@ class BIM_Material:
         from PySide import QtCore, QtGui
 
         if self.dlg:
+            document = self._get_document()
+            if document is None:
+                return self.onReject()
             self.dlg.materials = []
-            for o in FreeCAD.ActiveDocument.Objects:
+            for o in document.Objects:
                 if o.isDerivedFrom("App::MaterialObjectPython") or (
                     (o.TypeId == "App::FeaturePython") and hasattr(o, "Materials")
                 ):
@@ -539,19 +604,26 @@ class Arch_Material:
 
     def Activated(self):
 
-        sel = FreeCADGui.Selection.getSelection()
-        FreeCAD.ActiveDocument.openTransaction(translate("Arch", "Create material"))
+        doc = FreeCAD.ActiveDocument
+        if doc is None:
+            return
+        sel = FreeCADGui.Selection.getSelection(doc.Name)
+        doc.openTransaction(translate("Arch", "Create material"))
         FreeCADGui.addModule("Arch")
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(doc)
         FreeCADGui.doCommand("mat = Arch.makeMaterial()")
         for obj in sel:
             if hasattr(obj, "Material") and hasattr(obj, "MoveWithHost"):  # 'isComponent' check
                 FreeCADGui.doCommand(
-                    'FreeCAD.ActiveDocument.getObject("' + obj.Name + '").Material = mat'
+                    'FreeCAD.getDocument("'
+                    + doc.Name
+                    + '").getObject("'
+                    + obj.Name
+                    + '").Material = mat'
                 )
         FreeCADGui.doCommandGui("mat.ViewObject.Document.setEdit(mat.ViewObject, 0)")
-        FreeCAD.ActiveDocument.commitTransaction()
-        FreeCAD.ActiveDocument.recompute()
+        doc.commitTransaction()
+        doc.recompute()
 
     def IsActive(self):
         v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
@@ -572,18 +644,27 @@ class Arch_MultiMaterial:
 
     def Activated(self):
 
-        sel = FreeCADGui.Selection.getSelection()
-        FreeCAD.ActiveDocument.openTransaction(translate("Arch", "Create multi-material"))
+        doc = FreeCAD.ActiveDocument
+        if doc is None:
+            return
+        sel = FreeCADGui.Selection.getSelection(doc.Name)
+        doc.openTransaction(translate("Arch", "Create multi-material"))
         FreeCADGui.addModule("Arch")
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(doc)
         FreeCADGui.doCommand("mat = Arch.makeMultiMaterial()")
         for obj in sel:
             if hasattr(obj, "Material"):
                 if not obj.isDerivedFrom("App::MaterialObject"):
-                    FreeCADGui.doCommand("FreeCAD.ActiveDocument." + obj.Name + ".Material = mat")
+                    FreeCADGui.doCommand(
+                        'FreeCAD.getDocument("'
+                        + doc.Name
+                        + '").getObject("'
+                        + obj.Name
+                        + '").Material = mat'
+                    )
         FreeCADGui.doCommandGui("mat.ViewObject.Document.setEdit(mat.ViewObject, 0)")
-        FreeCAD.ActiveDocument.commitTransaction()
-        FreeCAD.ActiveDocument.recompute()
+        doc.commitTransaction()
+        doc.recompute()
 
     def IsActive(self):
         v = hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")

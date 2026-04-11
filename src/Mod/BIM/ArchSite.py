@@ -54,6 +54,7 @@ if FreeCAD.GuiUp:
     from PySide import QtGui, QtCore
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
     # \cond
@@ -1570,14 +1571,14 @@ class _ViewProviderSite:
             return None
 
         taskd = SiteTaskPanel(vobj)
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(taskd, vobj.Object)
         return True
 
     def unsetEdit(self, vobj, mode):
         if mode == 1 or mode == 2:
             return None
 
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(vobj.Object)
         return True
 
     def setupContextMenu(self, vobj, menu):
@@ -1614,13 +1615,13 @@ class _ViewProviderSite:
         return True
 
     def edit(self):
-        FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+        BimArchUtils.editObject(self.Object, 0)
 
     def toggleSubcomponents(self):
         FreeCADGui.runCommand("Arch_ToggleSubs")
 
     def transform(self):
-        FreeCADGui.ActiveDocument.setEdit(self.Object, 1)
+        BimArchUtils.editObject(self.Object, 1)
 
     def attach(self, vobj):
         """Adds the solar diagram and compass to the coin scenegraph, but does
@@ -1939,15 +1940,17 @@ class _ViewProviderSite:
 
         if hasattr(self, "trueNorthRotation") and self.trueNorthRotation is not None:
             return
-        if not FreeCADGui.ActiveDocument.ActiveView:
-            return
-        if not hasattr(FreeCADGui.ActiveDocument.ActiveView, "getSceneGraph"):
+        view = BimArchUtils.activeViewOf(self.Object)
+        if view is None:
             return
 
         from pivy import coin
 
         self.trueNorthRotation = coin.SoTransform()
-        sg = FreeCADGui.ActiveDocument.ActiveView.getSceneGraph()
+        sg = BimArchUtils.sceneGraphOf(self.Object)
+        if sg is None:
+            self.trueNorthRotation = None
+            return
         sg.insertChild(self.trueNorthRotation, 0)
         self.updateTrueNorthRotation()
 
@@ -1957,12 +1960,9 @@ class _ViewProviderSite:
             return
         if self.trueNorthRotation is None:
             return
-        if not FreeCADGui.ActiveDocument.ActiveView:
+        sg = BimArchUtils.sceneGraphOf(self.Object)
+        if sg is None:
             return
-        if not hasattr(FreeCADGui.ActiveDocument.ActiveView, "getSceneGraph"):
-            return
-
-        sg = FreeCADGui.ActiveDocument.ActiveView.getSceneGraph()
         sg.removeChild(self.trueNorthRotation)
         self.trueNorthRotation = None
 

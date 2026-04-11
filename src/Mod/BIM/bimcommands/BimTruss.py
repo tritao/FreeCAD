@@ -26,6 +26,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -53,16 +54,20 @@ class Arch_Truss:
         return v
 
     def Activated(self):
+        from draftguitools import gui_tool_utils
 
+        gui_tool_utils.finish_active_draft_command()
         self.doc = FreeCAD.ActiveDocument
-        sel = FreeCADGui.Selection.getSelection()
+        if self.doc is None:
+            return
+        sel = BimArchUtils.selectionOf(self.doc)
         if len(sel) > 1:
             FreeCAD.Console.PrintError(
                 translate("Arch", "Select only one base object or none") + "\n"
             )
         elif len(sel) == 1:
             # build on selection
-            basename = "FreeCAD.ActiveDocument." + FreeCADGui.Selection.getSelection()[0].Name
+            basename = "FreeCAD.ActiveDocument." + sel[0].Name
             self.createTruss(basename)
         else:
             # interactive line drawing
@@ -74,6 +79,12 @@ class Arch_Truss:
             if hasattr(FreeCADGui, "Snapper"):
                 FreeCADGui.Snapper.getPoint(callback=self.getPoint)
 
+    def finish(self, cont=False):
+        if FreeCAD.activeDraftCommand is self:
+            FreeCAD.activeDraftCommand = None
+        if hasattr(FreeCADGui, "Snapper"):
+            FreeCADGui.Snapper.off()
+
     def getPoint(self, point=None, obj=None):
         """Callback for clicks during interactive mode"""
 
@@ -81,6 +92,8 @@ class Arch_Truss:
             # cancelled
             FreeCAD.activeDraftCommand = None
             FreeCADGui.Snapper.off()
+            return
+        if not BimArchUtils.documentIsActive(self.doc):
             return
         self.points.append(point)
         if len(self.points) == 1:
@@ -93,20 +106,23 @@ class Arch_Truss:
     def createTruss(self, basename=""):
         """Creates the truss"""
 
-        FreeCADGui.Control.closeDialog()
-        self.doc.openTransaction(translate("Arch", "Create Truss"))
-        FreeCADGui.addModule("Draft")
-        FreeCADGui.addModule("Arch")
-        if not basename:
-            if self.points:
+        def create_truss(document):
+            BimArchUtils.closeTaskDialog(document)
+            document.openTransaction(translate("Arch", "Create Truss"))
+            FreeCADGui.addModule("Draft")
+            FreeCADGui.addModule("Arch")
+            target = basename
+            if not target and self.points:
                 cmd = "base = Draft.makeLine(FreeCAD."
                 cmd += str(self.points[0]) + ",FreeCAD." + str(self.points[1]) + ")"
                 FreeCADGui.doCommand(cmd)
-                basename = "base"
-        FreeCADGui.doCommand("obj = Arch.makeTruss(" + basename + ")")
-        FreeCADGui.doCommand("Draft.autogroup(obj)")
-        self.doc.commitTransaction()
-        self.doc.recompute()
+                target = "base"
+            FreeCADGui.doCommand("obj = Arch.makeTruss(" + target + ")")
+            FreeCADGui.doCommand("Draft.autogroup(obj)")
+            document.commitTransaction()
+            document.recompute()
+
+        BimArchUtils.runInDocument(self.doc, create_truss)
 
 
 FreeCADGui.addCommand("Arch_Truss", Arch_Truss())

@@ -26,6 +26,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 
@@ -46,7 +47,7 @@ class BIM_Convert:
     def Activated(self):
         sel = FreeCADGui.Selection.getSelection()
         if sel:
-            FreeCADGui.Control.showDialog(BIM_Convert_TaskPanel(sel), FreeCADGui.ActiveDocument)
+            BimArchUtils.showTaskDialog(BIM_Convert_TaskPanel(sel), sel[0].Document)
 
 
 class BIM_Convert_TaskPanel:
@@ -54,6 +55,7 @@ class BIM_Convert_TaskPanel:
     def __init__(self, objs):
         from PySide import QtGui
 
+        self.doc = objs[0].Document
         self.types = [
             "Wall",
             "Structure",
@@ -85,15 +87,15 @@ class BIM_Convert_TaskPanel:
         if i:
             import Arch
 
-            FreeCAD.ActiveDocument.openTransaction("Convert to BIM")
+            self.doc.openTransaction("Convert to BIM")
             for o in self.objs:
                 getattr(Arch, "make" + i.toolTip())(o)
-            FreeCAD.ActiveDocument.commitTransaction()
-            FreeCAD.ActiveDocument.recompute()
+            self.doc.commitTransaction()
+            self.doc.recompute()
         if idx:
             from draftutils import todo
 
-            todo.ToDo.delay(FreeCADGui.Control.closeDialog, None)
+            todo.ToDo.delay(BimArchUtils.closeTaskDialog, self.doc)
         return True
 
 

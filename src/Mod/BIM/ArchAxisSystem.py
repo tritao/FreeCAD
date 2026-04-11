@@ -42,6 +42,7 @@ if FreeCAD.GuiUp:
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
     import Draft
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
     # \cond
@@ -202,14 +203,14 @@ class _ViewProviderAxisSystem:
             return None
 
         taskd = AxisSystemTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(taskd, vobj.Object)
         return True
 
     def unsetEdit(self, vobj, mode):
         if mode != 0:
             return None
 
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(vobj.Object)
         return True
 
     def doubleClicked(self, vobj):
@@ -224,7 +225,7 @@ class _ViewProviderAxisSystem:
         menu.addAction(actionEdit)
 
     def edit(self):
-        FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+        BimArchUtils.editObject(self.Object, 0)
 
     def dumps(self):
 
@@ -307,7 +308,7 @@ class AxisSystemTaskPanel:
     def addElement(self):
 
         if self.obj:
-            for o in FreeCADGui.Selection.getSelection():
+            for o in BimArchUtils.selectionOf(self.obj):
                 if not (o in self.obj.Axes) and (o != self.obj):
                     g = self.obj.Axes
                     g.append(o)
@@ -319,7 +320,7 @@ class AxisSystemTaskPanel:
         if self.obj:
             it = self.tree.currentItem()
             if it:
-                o = FreeCAD.ActiveDocument.getObject(str(it.toolTip(0)))
+                o = self.obj.Document.getObject(str(it.toolTip(0)))
                 if o in self.obj.Axes:
                     g = self.obj.Axes
                     g.remove(o)
@@ -328,8 +329,8 @@ class AxisSystemTaskPanel:
 
     def accept(self):
 
-        FreeCAD.ActiveDocument.recompute()
-        FreeCADGui.ActiveDocument.resetEdit()
+        self.obj.Document.recompute()
+        BimArchUtils.resetEdit(self.obj)
         return True
 
     def retranslateUi(self, TaskPanel):

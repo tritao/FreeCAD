@@ -66,6 +66,7 @@ if FreeCAD.GuiUp:
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
     import ArchPrecast
+    from bimcommands import BimArchUtils
     import draftguitools.gui_trackers as DraftTrackers
     from draftutils.translate import translate
 else:
@@ -230,14 +231,18 @@ class _CommandStructure:
         self.Length = params.get_param_arch(prefix + "Length")
 
     def Activated(self):
+        from draftguitools import gui_tool_utils
 
+        gui_tool_utils.finish_active_draft_command()
         self.doc = FreeCAD.ActiveDocument
+        if self.doc is None:
+            return
         self._loadDimensions()
         self.Profile = None
         self.bpoint = None
         self.precastvalues = None
         self.wp = None
-        sel = FreeCADGui.Selection.getSelection()
+        sel = BimArchUtils.selectionOf(self.doc)
         if sel:
             st = Draft.getObjectsOfType(sel, "Structure")
             ax = Draft.getObjectsOfType(sel, "Axis")
@@ -245,16 +250,19 @@ class _CommandStructure:
                 FreeCADGui.runCommand("Arch_StructuralSystem")
                 return
             elif not (ax) and not (st):
-                self.doc.openTransaction(translate("Arch", "Create Structure"))
-                FreeCADGui.addModule("Arch")
-                for obj in sel:
-                    FreeCADGui.doCommand(
-                        "obj = Arch.makeStructure(FreeCAD.ActiveDocument." + obj.Name + ")"
-                    )
-                    FreeCADGui.addModule("Draft")
-                    FreeCADGui.doCommand("Draft.autogroup(obj)")
-                self.doc.commitTransaction()
-                self.doc.recompute()
+                def create_structures(document):
+                    document.openTransaction(translate("Arch", "Create Structure"))
+                    FreeCADGui.addModule("Arch")
+                    for obj in sel:
+                        FreeCADGui.doCommand(
+                            "obj = Arch.makeStructure(FreeCAD.ActiveDocument." + obj.Name + ")"
+                        )
+                        FreeCADGui.addModule("Draft")
+                        FreeCADGui.doCommand("Draft.autogroup(obj)")
+                    document.commitTransaction()
+                    document.recompute()
+
+                BimArchUtils.runInDocument(self.doc, create_structures)
                 return
 
         # interactive mode
@@ -284,9 +292,20 @@ class _CommandStructure:
         )
         FreeCADGui.draftToolBar.continueCmd.show()
 
+    def finish(self, cont=False):
+        if FreeCAD.activeDraftCommand is self:
+            FreeCAD.activeDraftCommand = None
+        if hasattr(FreeCADGui, "Snapper"):
+            FreeCADGui.Snapper.off()
+        tracker = getattr(self, "tracker", None)
+        if tracker is not None:
+            tracker.finalize()
+
     def getPoint(self, point=None, obj=None):
         "this function is called by the snapper when it has a 3D point"
 
+        if not BimArchUtils.documentIsActive(self.doc):
+            return
         self.mode = StructureMode.BEAM if self.modeb.isChecked() else StructureMode.COLUMN
         if point is None:
             FreeCAD.activeDraftCommand = None
@@ -513,7 +532,9 @@ class _CommandStructure:
     def update(self, point, info):
         "this function is called by the Snapper when the mouse is moved"
 
-        if FreeCADGui.Control.activeDialog():
+        if not BimArchUtils.documentIsActive(self.doc):
+            return
+        if BimArchUtils.taskDialogActive(self.doc):
             try:  # try to update latest precast values - fails if dialog has been destroyed already
                 self.precastvalues = self.precast.getValues()
             except Exception:
@@ -1564,7 +1585,7 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
             return None
 
         taskd = StructureTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(taskd, vobj.Object)
         return True
 
 
@@ -1667,7 +1688,7 @@ class StructureTaskPanel(ArchComponent.ComponentOptionsTaskPanel):
 
     def editNodes(self):
 
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(self.Object)
         FreeCADGui.runCommand("Draft_Edit")
 
     def resetNodes(self):
@@ -1794,22 +1815,23 @@ class StructureTaskPanel(ArchComponent.ComponentOptionsTaskPanel):
             self.nodevis = None
         else:
             self.nodevis = []
-            for obj in FreeCAD.ActiveDocument.Objects:
+            for obj in self.Object.Document.Objects:
                 if hasattr(obj.ViewObject, "ShowNodes"):
                     self.nodevis.append([obj, obj.ViewObject.ShowNodes])
                     obj.ViewObject.ShowNodes = True
 
     def setSelectionFromTool(self):
-        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.clearSelection(self.Object.Document.Name)
         if hasattr(self.Object, "Tool"):
             tool = self.Object.Tool
             if hasattr(tool, "Shape") and tool.Shape:
-                FreeCADGui.Selection.addSelection(tool)
+                FreeCADGui.Selection.addSelection(tool.Document.Name, tool.Name)
             else:
                 if not isinstance(tool, list):
                     tool = [tool]
                 for o, subs in tool:
-                    FreeCADGui.Selection.addSelection(o, subs)
+                    for sub in subs:
+                        FreeCADGui.Selection.addSelection(o.Document.Name, o.Name, sub)
         QtCore.QObject.disconnect(
             self.selectToolButton, QtCore.SIGNAL("clicked()"), self.setSelectionFromTool
         )
@@ -1820,7 +1842,7 @@ class StructureTaskPanel(ArchComponent.ComponentOptionsTaskPanel):
 
     def setToolFromSelection(self):
         objectList = []
-        selEx = FreeCADGui.Selection.getSelectionEx()
+        selEx = BimArchUtils.selectionExOf(self.Object)
         for selExi in selEx:
             if len(selExi.SubElementNames) == 0:
                 # Add entirely selected objects

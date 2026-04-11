@@ -50,6 +50,7 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
     # \cond
@@ -643,7 +644,7 @@ class _ViewProviderPanel(ArchComponent.ViewProviderComponent):
     def setEdit(self, vobj, mode):
         if mode != 0:
             return None
-        FreeCADGui.Control.showDialog(PanelTaskPanel(vobj.Object), FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(PanelTaskPanel(vobj.Object), vobj.Object)
         return True
 
 
@@ -1325,14 +1326,14 @@ class ViewProviderPanelSheet(Draft.ViewProviderDraft):
 
         taskd = SheetTaskPanel(vobj.Object)
         taskd.update()
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(taskd, vobj.Object)
         return True
 
     def unsetEdit(self, vobj, mode):
         if mode == 1 or mode == 2:
             return None
 
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(vobj.Object)
         return True
 
     def attach(self, vobj):
@@ -1429,5 +1430,5 @@ class SheetTaskPanel(ArchComponent.ComponentTaskPanel):
 
     def editNodes(self):
 
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(self.obj)
         FreeCADGui.runCommand("Draft_Edit")

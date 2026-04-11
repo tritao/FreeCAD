@@ -49,6 +49,7 @@ from draftutils import utils
 if FreeCAD.GuiUp:
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
     import draftutils.units as units
 else:
@@ -1045,12 +1046,8 @@ class ViewProviderBuildingPart:
                         ):
                             setattr(child.ViewObject, prop[8:], getattr(vobj, prop))
         elif prop in ["CutView", "CutMargin"]:
-            if (
-                hasattr(vobj, "CutView")
-                and FreeCADGui.ActiveDocument.ActiveView
-                and hasattr(FreeCADGui.ActiveDocument.ActiveView, "getSceneGraph")
-            ):
-                sg = FreeCADGui.ActiveDocument.ActiveView.getSceneGraph()
+            sg = BimArchUtils.sceneGraphOf(vobj.Object)
+            if hasattr(vobj, "CutView") and sg is not None:
                 if vobj.CutView:
                     from pivy import coin
 
@@ -1114,8 +1111,8 @@ class ViewProviderBuildingPart:
 
     def onDelete(self, vobj, subelements):
 
-        if self.clip:
-            sg = FreeCADGui.ActiveDocument.ActiveView.getSceneGraph()
+        sg = BimArchUtils.sceneGraphOf(vobj.Object)
+        if self.clip and sg is not None:
             sg.removeChild(self.clip)
             self.clip = None
         for o in Draft.get_group_contents(vobj.Object.Group, walls=True):
@@ -1154,7 +1151,8 @@ class ViewProviderBuildingPart:
             menuTxt = translate("Arch", "Active")
             actionActivate = QtGui.QAction(menuTxt, menu)
             actionActivate.setCheckable(True)
-            if FreeCADGui.ActiveDocument.ActiveView.getActiveObject("Arch") == self.Object:
+            view = BimArchUtils.activeViewOf(self.Object)
+            if view and view.getActiveObject("Arch") == self.Object:
                 actionActivate.setChecked(True)
             else:
                 actionActivate.setChecked(False)
@@ -1219,7 +1217,7 @@ class ViewProviderBuildingPart:
                 if prev_data:
                     prev_label = prev_data.get("label", "").rstrip("*")
                     prev_obj = None
-                    for obj in FreeCAD.ActiveDocument.Objects:
+                    for obj in self.Object.Document.Objects:
                         if hasattr(obj, "Label") and obj.Label == prev_label:
                             prev_obj = obj
                             break
@@ -1230,8 +1228,10 @@ class ViewProviderBuildingPart:
                         obj_type = Draft.getType(prev_obj)
                         if obj_type == "IfcBuildingStorey":
                             context = "NativeIFC"
-                        FreeCADGui.ActiveDocument.ActiveView.setActiveObject(context, prev_obj)
-                        print(f"Set active object to: {prev_obj.Label} (context: {context})")
+                        view = BimArchUtils.activeViewOf(self.Object)
+                        if view:
+                            view.setActiveObject(context, prev_obj)
+                            print(f"Set active object to: {prev_obj.Label} (context: {context})")
 
             if autoclip:
                 vobj.CutView = False
@@ -1245,7 +1245,10 @@ class ViewProviderBuildingPart:
         if hasattr(self, "Object"):
             from pivy import coin
 
-            n = FreeCADGui.ActiveDocument.ActiveView.getCameraNode()
+            view = BimArchUtils.activeViewOf(self.Object)
+            if view is None:
+                return
+            n = view.getCameraNode()
             FreeCAD.Console.PrintMessage(
                 QT_TRANSLATE_NOOP("Draft", "Writing camera position") + "\n"
             )

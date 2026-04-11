@@ -54,10 +54,18 @@ class BIM_IfcProperties:
 
     def Activated(self):
 
+        document = FreeCAD.ActiveDocument
+        if document is None:
+            return
+
         # only raise the dialog if it is already open
         if getattr(self, "form", None):
-            self.form.raise_()
-            return
+            if getattr(self, "documentName", None) == document.Name:
+                self.form.raise_()
+                return
+            self.reject()
+
+        self.documentName = document.Name
 
         from PySide import QtGui
 
@@ -163,15 +171,32 @@ class BIM_IfcProperties:
         self.update()
         self.form.show()
 
+    def _get_document(self):
+        if not getattr(self, "documentName", None):
+            return None
+        try:
+            return FreeCAD.getDocument(self.documentName)
+        except Exception:
+            return None
+
+    def _get_selection(self):
+        document = self._get_document()
+        if document is None:
+            return []
+        return FreeCADGui.Selection.getSelection(document.Name)
+
     def rebuildObjectsList(self):
 
         # build objects list and fill search terms
         objectslist = {}
         searchterms = [""]
+        document = self._get_document()
+        if document is None:
+            return objectslist, searchterms
         if self.form.onlySelected.isChecked():
-            objects = FreeCADGui.Selection.getSelection()
+            objects = self._get_selection()
         else:
-            objects = FreeCAD.ActiveDocument.Objects
+            objects = document.Objects
         for obj in objects:
             role = self.getRole(obj)
             if role:
@@ -200,6 +225,8 @@ class BIM_IfcProperties:
     def update(self, index=None):
         "updates the tree widgets in all tabs"
 
+        if self._get_document() is None:
+            return self.reject()
         self.model.clear()
         self.model.setHorizontalHeaderLabels(
             [
@@ -248,10 +275,13 @@ class BIM_IfcProperties:
     def updateByType(self):
         from PySide import QtGui
 
+        document = self._get_document()
+        if document is None:
+            return
         groups = {}
         for name, role in self.objectslist.items():
             role = role[0]
-            obj = FreeCAD.ActiveDocument.getObject(name)
+            obj = document.getObject(name)
             if obj:
                 if (not self.form.onlyVisible.isChecked()) or obj.ViewObject.isVisible():
                     groups.setdefault(role, []).append(name)
@@ -261,7 +291,7 @@ class BIM_IfcProperties:
             top = QtGui.QStandardItem(s1)
             self.model.appendRow([top, QtGui.QStandardItem(), QtGui.QStandardItem()])
             for name in groups[group]:
-                obj = FreeCAD.ActiveDocument.getObject(name)
+                obj = document.getObject(name)
                 if obj:
                     it1 = QtGui.QStandardItem(obj.Label)
                     icon = obj.ViewObject.Icon
@@ -280,6 +310,9 @@ class BIM_IfcProperties:
     def updateByTree(self):
         from PySide import QtGui
 
+        document = self._get_document()
+        if document is None:
+            return
         # order by hierarchy
         def istop(obj):
             for parent in obj.InListRecursive:
@@ -290,7 +323,7 @@ class BIM_IfcProperties:
         rel = []
         deps = []
         for name in self.objectslist.keys():
-            obj = FreeCAD.ActiveDocument.getObject(name)
+            obj = document.getObject(name)
             if obj:
                 if istop(obj):
                     rel.append(obj)
@@ -338,9 +371,12 @@ class BIM_IfcProperties:
     def updateDefault(self):
         from PySide import QtGui
 
+        document = self._get_document()
+        if document is None:
+            return
         for name, role in self.objectslist.items():
             role = role[0]
-            obj = FreeCAD.ActiveDocument.getObject(name)
+            obj = document.getObject(name)
             if obj:
                 if (not self.form.onlyVisible.isChecked()) or obj.ViewObject.isVisible():
                     it1 = QtGui.QStandardItem(obj.Label)
@@ -362,6 +398,9 @@ class BIM_IfcProperties:
                     self.form.tree.setFirstColumnSpanned(i, idx, True)
 
     def accept(self):
+        document = self._get_document()
+        if document is None:
+            return self.reject()
         PARAMS.SetInt("BimIfcPropertiesDialogWidth", self.form.width())
         PARAMS.SetInt("BimIfcPropertiesDialogHeight", self.form.height())
         self.form.hide()
@@ -369,7 +408,7 @@ class BIM_IfcProperties:
         # print(self.objectslist)
         changed = False
         for key, values in self.objectslist.items():
-            obj = FreeCAD.ActiveDocument.getObject(key)
+            obj = document.getObject(key)
             if obj:
                 if hasattr(obj, "IfcProperties"):
                     if not isinstance(obj.IfcProperties, dict):
@@ -388,7 +427,7 @@ class BIM_IfcProperties:
                     props = {}
                 if values[1] != props:
                     if not changed:
-                        FreeCAD.ActiveDocument.openTransaction("Change properties")
+                        document.openTransaction("Change properties")
                         changed = True
                     if hasattr(obj, "IfcClass"):
                         print("props:", props)
@@ -415,13 +454,14 @@ class BIM_IfcProperties:
                     if hasattr(obj, "IfcProperties"):
                         obj.IfcProperties = values[1]
         if changed:
-            FreeCAD.ActiveDocument.commitTransaction()
-            FreeCAD.ActiveDocument.recompute()
+            document.commitTransaction()
+            document.recompute()
         return self.reject()
 
     def reject(self):
         self.form.hide()
         del self.form
+        self.documentName = ""
         return True
 
     def getNativeIfcProperties(self, obj):

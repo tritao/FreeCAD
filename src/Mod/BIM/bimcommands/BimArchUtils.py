@@ -33,6 +33,109 @@ translate = FreeCAD.Qt.translate
 PARAMS = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM")
 
 
+def documentOf(document=None):
+    if document is None:
+        return FreeCAD.ActiveDocument
+
+    if hasattr(document, "Document"):
+        return document.Document
+
+    return document
+
+
+def guiDocumentOf(document=None):
+    doc = documentOf(document)
+    if doc is None:
+        return getattr(FreeCADGui, "ActiveDocument", None)
+
+    try:
+        return FreeCADGui.getDocument(doc.Name)
+    except Exception:
+        return None
+
+
+def activeViewOf(document=None):
+    gui_doc = guiDocumentOf(document)
+    if gui_doc is None:
+        return getattr(getattr(FreeCADGui, "ActiveDocument", None), "ActiveView", None)
+    return getattr(gui_doc, "ActiveView", None)
+
+
+def sceneGraphOf(document=None):
+    view = activeViewOf(document)
+    if view is not None and hasattr(view, "getSceneGraph"):
+        return view.getSceneGraph()
+    return None
+
+
+def selectionOf(document=None):
+    doc = documentOf(document)
+    if doc is None:
+        return FreeCADGui.Selection.getSelection()
+    return FreeCADGui.Selection.getSelection(doc.Name)
+
+
+def selectionExOf(document=None, resolve=0):
+    doc = documentOf(document)
+    if doc is None:
+        return FreeCADGui.Selection.getSelectionEx("", resolve)
+    return FreeCADGui.Selection.getSelectionEx(doc.Name, resolve)
+
+
+def documentIsActive(document=None):
+    doc = documentOf(document)
+    return bool(doc is not None and getattr(FreeCAD.ActiveDocument, "Name", "") == doc.Name)
+
+
+def runInDocument(document, callback):
+    doc = documentOf(document)
+    if doc is None:
+        return None
+
+    previous = getattr(FreeCAD.ActiveDocument, "Name", "")
+    if previous != doc.Name:
+        FreeCAD.setActiveDocument(doc.Name)
+    try:
+        return callback(doc)
+    finally:
+        if previous and previous != doc.Name and previous in FreeCAD.listDocuments():
+            FreeCAD.setActiveDocument(previous)
+
+
+def showTaskDialog(panel, document=None):
+    doc = documentOf(document)
+    gui_doc = guiDocumentOf(doc)
+    task = FreeCADGui.Control.showDialog(panel, gui_doc)
+    if task is not None and doc is not None:
+        task.setDocumentName(doc.Name)
+        task.setAutoCloseOnDeletedDocument(True)
+    return task
+
+
+def closeTaskDialog(document=None):
+    gui_doc = guiDocumentOf(document)
+    if gui_doc is not None and FreeCADGui.Control.activeDialog(gui_doc):
+        FreeCADGui.Control.closeDialog(gui_doc)
+
+
+def taskDialogActive(document=None):
+    gui_doc = guiDocumentOf(document)
+    return bool(gui_doc is not None and FreeCADGui.Control.activeDialog(gui_doc))
+
+
+def resetEdit(document=None):
+    gui_doc = guiDocumentOf(document)
+    if gui_doc is not None:
+        gui_doc.resetEdit()
+
+
+def editObject(obj, mode=0):
+    gui_doc = guiDocumentOf(obj)
+    if gui_doc is not None:
+        return gui_doc.setEdit(obj, mode)
+    return False
+
+
 class Arch_Add:
     "the Arch Add command definition"
 
@@ -409,7 +512,7 @@ class Arch_Component:
             FreeCAD.ActiveDocument.openTransaction(translate("Arch", "Create Component"))
             FreeCADGui.addModule("Arch")
             FreeCADGui.addModule("Draft")
-            FreeCADGui.Control.closeDialog()
+            closeTaskDialog()
             for o in sel:
                 FreeCADGui.doCommand(
                     "obj = Arch.makeComponent(FreeCAD.ActiveDocument." + o.Name + ")"
@@ -442,7 +545,7 @@ class Arch_CloneComponent:
             FreeCAD.ActiveDocument.openTransaction(translate("Arch", "Create Component"))
             FreeCADGui.addModule("Arch")
             FreeCADGui.addModule("Draft")
-            FreeCADGui.Control.closeDialog()
+            closeTaskDialog()
             for o in sel:
                 FreeCADGui.doCommand(
                     "obj = Arch.cloneComponent(FreeCAD.ActiveDocument." + o.Name + ")"
@@ -475,7 +578,7 @@ class Arch_IfcSpreadsheet:
             translate("Arch", "Create IFC properties spreadsheet")
         )
         FreeCADGui.addModule("Arch")
-        FreeCADGui.Control.closeDialog()
+        closeTaskDialog()
         if sel:
             for o in sel:
                 FreeCADGui.doCommand(

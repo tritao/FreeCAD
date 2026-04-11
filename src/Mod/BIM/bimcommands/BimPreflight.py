@@ -31,6 +31,7 @@ import sys
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -74,7 +75,8 @@ class BIM_Preflight:
 
     def Activated(self):
         FreeCADGui.BIMPreflightDone = False
-        FreeCADGui.Control.showDialog(BIM_Preflight_TaskPanel(), FreeCADGui.ActiveDocument)
+        panel = BIM_Preflight_TaskPanel()
+        BimArchUtils.showTaskDialog(panel, panel.doc)
 
 
 class BIM_Preflight_TaskPanel:
@@ -82,6 +84,7 @@ class BIM_Preflight_TaskPanel:
     def __init__(self):
         from PySide import QtGui
 
+        self.doc = FreeCAD.ActiveDocument
         self.results = {}  # to store the result message
         self.culprits = {}  # to store objects to highlight
         self.rform = None  # to store the results dialog
@@ -152,8 +155,8 @@ class BIM_Preflight_TaskPanel:
         from PySide import QtGui
 
         QtGui.QApplication.restoreOverrideCursor()
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.recompute()
+        BimArchUtils.closeTaskDialog(self.doc)
+        self.doc.recompute()
 
     def passed(self, test):
         "sets the button as passed"
@@ -189,9 +192,10 @@ class BIM_Preflight_TaskPanel:
 
         if (test in self.results) and self.results[test]:
             if (test in self.culprits) and self.culprits[test]:
-                FreeCADGui.Selection.clearSelection()
+                FreeCADGui.Selection.clearSelection(self.doc.Name)
                 for c in self.culprits[test]:
-                    FreeCADGui.Selection.addSelection(c)
+                    if getattr(c, "Document", None) == self.doc:
+                        FreeCADGui.Selection.addSelection(self.doc.Name, c.Name)
             if not self.rform:
                 self.rform = FreeCADGui.PySideUic.loadUi(":/ui/dialogPreflightResults.ui")
                 # center the dialog over FreeCAD window
@@ -227,11 +231,11 @@ class BIM_Preflight_TaskPanel:
 
         objs = []
         if self.form.getAll.isChecked():
-            objs = FreeCAD.ActiveDocument.Objects
+            objs = self.doc.Objects
         elif self.form.getVisible.isChecked():
-            objs = [o for o in FreeCAD.ActiveDocument.Objects if o.ViewObject.Visibility == True]
+            objs = [o for o in self.doc.Objects if o.ViewObject.Visibility == True]
         else:
-            objs = FreeCADGui.Selection.getSelection()
+            objs = FreeCADGui.Selection.getSelection(self.doc.Name)
         # clean objects list of unwanted types
         objs = Draft.get_group_contents(objs, walls=True, addgroups=True)
         objs = [
@@ -1051,7 +1055,7 @@ class BIM_Preflight_TaskPanel:
             if edges:
                 import Part
 
-                result = FreeCAD.ActiveDocument.addObject("Part::Feature", "TinyLinesResult")
+                result = self.doc.addObject("Part::Feature", "TinyLinesResult")
                 result.Shape = Part.makeCompound(edges)
                 result.ViewObject.LineWidth = 5
                 self.culprits[test] = [result]

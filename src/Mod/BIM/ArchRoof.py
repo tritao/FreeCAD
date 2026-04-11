@@ -49,6 +49,7 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui, QtWidgets
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
     # \cond
@@ -955,12 +956,12 @@ class _ViewProviderRoof(ArchComponent.ViewProviderComponent):
             taskd = ArchComponent.ComponentTaskPanel()
             taskd.obj = self.Object
             taskd.update()
-            FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+            BimArchUtils.showTaskDialog(taskd, self.Object)
         else:
             taskd = _RoofTaskPanel()
             taskd.obj = self.Object
             taskd.update()
-            FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+            BimArchUtils.showTaskDialog(taskd, self.Object)
         return True
 
 
@@ -1056,12 +1057,12 @@ class _RoofTaskPanel:
             case _:
                 return
         self.obj.touch()
-        FreeCAD.ActiveDocument.recompute()
+        self.obj.Document.recompute()
         self.update()
 
     def reject(self):
-        FreeCAD.ActiveDocument.recompute()
-        FreeCADGui.ActiveDocument.resetEdit()
+        self.obj.Document.recompute()
+        BimArchUtils.resetEdit(self.obj)
         return True
 
     def retranslateUi(self, TaskPanel):

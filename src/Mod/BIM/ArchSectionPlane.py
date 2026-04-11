@@ -51,6 +51,7 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
     # \cond
@@ -1420,12 +1421,8 @@ class _ViewProviderSectionPlane:
         elif prop == "LineWidth":
             self.drawstyle.lineWidth = vobj.LineWidth
         elif prop in ["CutView", "CutMargin"]:
-            if (
-                hasattr(vobj, "CutView")
-                and FreeCADGui.ActiveDocument.ActiveView
-                and hasattr(FreeCADGui.ActiveDocument.ActiveView, "getSceneGraph")
-            ):
-                sg = FreeCADGui.ActiveDocument.ActiveView.getSceneGraph()
+            sg = BimArchUtils.sceneGraphOf(vobj.Object)
+            if hasattr(vobj, "CutView") and sg is not None:
                 if vobj.CutView:
                     if self.clip:
                         sg.removeChild(self.clip)
@@ -1491,14 +1488,14 @@ class _ViewProviderSectionPlane:
         taskd = SectionPlaneTaskPanel()
         taskd.obj = vobj.Object
         taskd.update()
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(taskd, vobj.Object)
         return True
 
     def unsetEdit(self, vobj, mode):
         if mode != 0:
             return None
 
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(vobj.Object)
         return True
 
     def doubleClicked(self, vobj):
@@ -1520,7 +1517,7 @@ class _ViewProviderSectionPlane:
         menu.addAction(actionToggleCutview)
 
     def edit(self):
-        FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+        BimArchUtils.editObject(self.Object, 0)
 
     def toggleCutview(self, vobj):
         vobj.CutView = not vobj.CutView
@@ -1642,7 +1639,7 @@ class SectionPlaneTaskPanel:
     def addElement(self):
         if self.obj:
             added = False
-            for o in FreeCADGui.Selection.getSelection():
+            for o in BimArchUtils.selectionOf(self.obj):
                 if o != self.obj:
                     ArchComponent.addToComponent(self.obj, o, "Objects")
                     added = True
@@ -1657,7 +1654,7 @@ class SectionPlaneTaskPanel:
         if self.obj:
             it = self.tree.currentItem()
             if it:
-                comp = FreeCAD.ActiveDocument.getObject(str(it.toolTip(0)))
+                comp = self.obj.Document.getObject(str(it.toolTip(0)))
                 ArchComponent.removeFromComponent(self.obj, comp)
             self.update()
 
@@ -1721,13 +1718,13 @@ class SectionPlaneTaskPanel:
             self.delButton.setEnabled(False)
 
     def accept(self):
-        FreeCAD.ActiveDocument.recompute()
-        FreeCADGui.ActiveDocument.resetEdit()
+        self.obj.Document.recompute()
+        BimArchUtils.resetEdit(self.obj)
         return True
 
     def reject(self):
-        FreeCAD.ActiveDocument.recompute()
-        FreeCADGui.ActiveDocument.resetEdit()
+        self.obj.Document.recompute()
+        BimArchUtils.resetEdit(self.obj)
         return True
 
     def toggleCutView(self, checked):

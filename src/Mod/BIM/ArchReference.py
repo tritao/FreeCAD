@@ -47,6 +47,7 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
     # \cond
@@ -699,14 +700,14 @@ class ViewProviderArchReference:
             return None
 
         taskd = ArchReferenceTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(taskd, vobj.Object)
         return True
 
     def unsetEdit(self, vobj, mode):
         if mode != 0:
             return None
 
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(vobj.Object)
         return True
 
     def setupContextMenu(self, vobj, menu):
@@ -732,7 +733,7 @@ class ViewProviderArchReference:
 
     def edit(self):
 
-        FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+        BimArchUtils.editObject(self.Object, 0)
 
     def onReload(self):
         "reloads the reference object"
@@ -740,7 +741,7 @@ class ViewProviderArchReference:
         if hasattr(self, "Object") and self.Object:
             self.Object.Proxy.reload = True
             self.Object.touch()
-            FreeCAD.ActiveDocument.recompute()
+            self.Object.Document.recompute()
 
     def onOpen(self):
         "opens the reference file"
@@ -953,7 +954,7 @@ class ArchReferenceTaskPanel:
         if self.filename:
             if self.filename != self.obj.File:
                 self.obj.File = self.filename
-                FreeCAD.ActiveDocument.recompute()
+                self.obj.Document.recompute()
         if self.partCombo.currentText():
             i = self.partCombo.currentIndex()
             if i >= 1:
@@ -961,16 +962,16 @@ class ArchReferenceTaskPanel:
                     self.obj.Part = self.partCombo.itemData(i)
             else:
                 self.obj.Part = ""
-            QtCore.QTimer.singleShot(0, FreeCAD.ActiveDocument.recompute)
+            QtCore.QTimer.singleShot(0, self.obj.Document.recompute)
         if self.filename and self.obj.Label == "External Reference":
             self.obj.Label = os.path.basename(self.filename)
-        FreeCADGui.ActiveDocument.resetEdit()
+        BimArchUtils.resetEdit(self.obj)
         return True
 
     def reject(self):
 
-        FreeCAD.ActiveDocument.recompute()
-        FreeCADGui.ActiveDocument.resetEdit()
+        self.obj.Document.recompute()
+        BimArchUtils.resetEdit(self.obj)
         return True
 
     def chooseFile(self):
@@ -1014,5 +1015,5 @@ class ArchReferenceTaskPanel:
                 FreeCAD.openDocument(self.obj.File)
             else:
                 FreeCAD.loadFile(self.obj.File)
-            FreeCADGui.Control.closeDialog()
-            FreeCADGui.ActiveDocument.resetEdit()
+            BimArchUtils.closeTaskDialog(self.obj)
+            BimArchUtils.resetEdit(self.obj)

@@ -26,6 +26,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -52,13 +53,14 @@ class Arch_Reference:
 
     def Activated(self):
 
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.openTransaction(translate("Arch", "Create external reference"))
+        doc = FreeCAD.ActiveDocument
+        BimArchUtils.closeTaskDialog(doc)
+        doc.openTransaction(translate("Arch", "Create external reference"))
         FreeCADGui.addModule("Arch")
         FreeCADGui.addModule("Draft")
         FreeCADGui.doCommand("obj = Arch.makeReference()")
         FreeCADGui.doCommand("Draft.autogroup(obj)")
-        FreeCAD.ActiveDocument.commitTransaction()
+        doc.commitTransaction()
         FreeCADGui.doCommand("obj.ViewObject.Document.setEdit(obj.ViewObject, 0)")
 
 

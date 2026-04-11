@@ -26,6 +26,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -69,35 +70,43 @@ class Arch_Panel:
 
         import WorkingPlane
         import Draft
+        from draftguitools import gui_tool_utils
         import draftguitools.gui_trackers as DraftTrackers
         from draftutils import params
 
+        gui_tool_utils.finish_active_draft_command()
         self.doc = FreeCAD.ActiveDocument
+        if self.doc is None:
+            return
         self.Length = params.get_param_arch("PanelLength")
         self.Width = params.get_param_arch("PanelWidth")
         self.Thickness = params.get_param_arch("PanelThickness")
         self.Profile = None
         self.featureName = "Panel"
         self.rotated = False
-        sel = FreeCADGui.Selection.getSelection()
+        sel = BimArchUtils.selectionOf(self.doc)
         if sel:
             if len(sel) == 1:
                 if Draft.getType(sel[0]) == "Panel":
                     return
-            self.doc.openTransaction(str(translate("Arch", "Create Panel")))
-            FreeCADGui.addModule("Arch")
-            FreeCADGui.addModule("Draft")
-            for obj in sel:
-                FreeCADGui.doCommand(
-                    "obj = Arch.makePanel(FreeCAD.ActiveDocument."
-                    + obj.Name
-                    + ",thickness="
-                    + str(self.Thickness)
-                    + ")"
-                )
-                FreeCADGui.doCommand("Draft.autogroup(obj)")
-            self.doc.commitTransaction()
-            self.doc.recompute()
+
+            def create_panels(document):
+                document.openTransaction(str(translate("Arch", "Create Panel")))
+                FreeCADGui.addModule("Arch")
+                FreeCADGui.addModule("Draft")
+                for obj in sel:
+                    FreeCADGui.doCommand(
+                        "obj = Arch.makePanel(FreeCAD.ActiveDocument."
+                        + obj.Name
+                        + ",thickness="
+                        + str(self.Thickness)
+                        + ")"
+                    )
+                    FreeCADGui.doCommand("Draft.autogroup(obj)")
+                document.commitTransaction()
+                document.recompute()
+
+            BimArchUtils.runInDocument(self.doc, create_panels)
             return
 
         # interactive mode
@@ -115,50 +124,67 @@ class Arch_Panel:
         )
         FreeCADGui.draftToolBar.continueCmd.show()
 
+    def finish(self, cont=False):
+        if FreeCAD.activeDraftCommand is self:
+            FreeCAD.activeDraftCommand = None
+        if hasattr(FreeCADGui, "Snapper"):
+            FreeCADGui.Snapper.off()
+        tracker = getattr(self, "tracker", None)
+        if tracker is not None:
+            tracker.finalize()
+
     def getPoint(self, point=None, obj=None):
         "this function is called by the snapper when it has a 3D point"
 
         import DraftVecUtils
 
+        if point is None:
+            FreeCAD.activeDraftCommand = None
+            FreeCADGui.Snapper.off()
+            self.tracker.finalize()
+            return
+        if not BimArchUtils.documentIsActive(self.doc):
+            return
         FreeCAD.activeDraftCommand = None
         FreeCADGui.Snapper.off()
         self.tracker.finalize()
-        if point is None:
-            return
-        self.doc.openTransaction(translate("Arch", "Create Panel"))
-        FreeCADGui.addModule("Arch")
-        if self.Profile:
-            pr = Presets[self.Profile]
-            FreeCADGui.doCommand(
-                "p = Arch.makeProfile("
-                + str(pr[2])
-                + ","
-                + str(pr[3])
-                + ","
-                + str(pr[4])
-                + ","
-                + str(pr[5])
-                + ")"
-            )
-            FreeCADGui.doCommand("s = Arch.makePanel(p,thickness=" + str(self.Thickness) + ")")
-            # FreeCADGui.doCommand('s.Placement.Rotation = FreeCAD.Rotation(-0.5,0.5,-0.5,0.5)')
-        else:
-            FreeCADGui.doCommand(
-                "s = Arch.makePanel(length="
-                + str(self.Length)
-                + ",width="
-                + str(self.Width)
-                + ",thickness="
-                + str(self.Thickness)
-                + ")"
-            )
-        FreeCADGui.doCommand("s.Placement.Base = " + DraftVecUtils.toString(point))
-        if self.rotated:
-            FreeCADGui.doCommand(
-                "s.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1.00,0.00,0.00),90.00)"
-            )
-        self.doc.commitTransaction()
-        self.doc.recompute()
+
+        def create_panel(document):
+            document.openTransaction(translate("Arch", "Create Panel"))
+            FreeCADGui.addModule("Arch")
+            if self.Profile:
+                pr = Presets[self.Profile]
+                FreeCADGui.doCommand(
+                    "p = Arch.makeProfile("
+                    + str(pr[2])
+                    + ","
+                    + str(pr[3])
+                    + ","
+                    + str(pr[4])
+                    + ","
+                    + str(pr[5])
+                    + ")"
+                )
+                FreeCADGui.doCommand("s = Arch.makePanel(p,thickness=" + str(self.Thickness) + ")")
+            else:
+                FreeCADGui.doCommand(
+                    "s = Arch.makePanel(length="
+                    + str(self.Length)
+                    + ",width="
+                    + str(self.Width)
+                    + ",thickness="
+                    + str(self.Thickness)
+                    + ")"
+                )
+            FreeCADGui.doCommand("s.Placement.Base = " + DraftVecUtils.toString(point))
+            if self.rotated:
+                FreeCADGui.doCommand(
+                    "s.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1.00,0.00,0.00),90.00)"
+                )
+            document.commitTransaction()
+            document.recompute()
+
+        BimArchUtils.runInDocument(self.doc, create_panel)
         from PySide import QtCore
 
         QtCore.QTimer.singleShot(100, self.check_continueMode)
@@ -227,7 +253,7 @@ class Arch_Panel:
     def update(self, point, info):
         "this function is called by the Snapper when the mouse is moved"
 
-        if FreeCADGui.Control.activeDialog():
+        if BimArchUtils.documentIsActive(self.doc) and BimArchUtils.taskDialogActive(self.doc):
             self.tracker.pos(point)
             if self.rotated:
                 self.tracker.width(self.Thickness)
@@ -370,17 +396,19 @@ class Arch_Nest:
 
     def Activated(self):
 
-        FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(NestTaskPanel(), FreeCADGui.ActiveDocument)
+        doc = FreeCAD.ActiveDocument
+        BimArchUtils.closeTaskDialog(doc)
+        BimArchUtils.showTaskDialog(NestTaskPanel(doc), doc)
 
 
 class NestTaskPanel:
     """The TaskPanel for Arch Nest"""
 
-    def __init__(self, obj=None):
+    def __init__(self, doc=None):
 
         import ArchNesting
 
+        self.doc = doc or FreeCAD.ActiveDocument
         self.form = FreeCADGui.PySideUic.loadUi(":/ui/ArchNest.ui")
         self.form.progressBar.hide()
         self.form.ButtonPreview.setEnabled(False)
@@ -396,6 +424,11 @@ class NestTaskPanel:
         self.nester = None
         self.temps = []
 
+    def _get_selection(self):
+        if self.doc is None:
+            return []
+        return FreeCADGui.Selection.getSelection(self.doc.Name)
+
     def reject(self):
 
         self.stop()
@@ -407,23 +440,23 @@ class NestTaskPanel:
         self.stop()
         self.clearTemps()
         if self.nester:
-            FreeCAD.ActiveDocument.openTransaction("Nesting")
+            self.doc.openTransaction("Nesting")
             self.nester.apply()
-            FreeCAD.ActiveDocument.commitTransaction()
+            self.doc.commitTransaction()
         return True
 
     def clearTemps(self):
 
         for t in self.temps:
-            if FreeCAD.ActiveDocument.getObject(t.Name):
-                FreeCAD.ActiveDocument.removeObject(t.Name)
+            if self.doc.getObject(t.Name):
+                self.doc.removeObject(t.Name)
         self.temps = []
 
     def getContainer(self):
 
         import Draft
 
-        s = FreeCADGui.Selection.getSelection()
+        s = self._get_selection()
         if len(s) == 1:
             if hasattr(s[0], "Shape"):
                 if len(s[0].Shape.Faces) == 1:
@@ -440,7 +473,7 @@ class NestTaskPanel:
 
     def getShapes(self):
 
-        s = FreeCADGui.Selection.getSelection()
+        s = self._get_selection()
         for o in s:
             if hasattr(o, "Shape"):
                 if not o in self.shapes:
@@ -467,7 +500,7 @@ class NestTaskPanel:
     def removeShapes(self):
 
         for i in self.form.Shapes.selectedItems():
-            o = FreeCAD.ActiveDocument.getObject(i.toolTip())
+            o = self.doc.getObject(i.toolTip())
             if o:
                 if o in self.shapes:
                     self.shapes.remove(o)

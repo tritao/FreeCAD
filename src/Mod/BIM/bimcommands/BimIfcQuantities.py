@@ -82,17 +82,25 @@ class BIM_IfcQuantities:
 
     def Activated(self):
 
+        document = FreeCAD.ActiveDocument
+        if document is None:
+            return
+
         # only raise the dialog if it is already open
         if getattr(self, "form", None):
-            self.form.raise_()
-            return
+            if getattr(self, "documentName", None) == document.Name:
+                self.form.raise_()
+                return
+            self.reject()
+
+        self.documentName = document.Name
 
         from PySide import QtGui
 
         # build objects list
         self.objectslist = {}
         self.ifcqtolist = {}
-        for obj in FreeCAD.ActiveDocument.Objects:
+        for obj in document.Objects:
             role = self.getRole(obj)
             if role:
                 self.objectslist[obj.Name] = role
@@ -142,6 +150,20 @@ class BIM_IfcQuantities:
 
         self.update()
         self.form.show()
+
+    def _get_document(self):
+        if not getattr(self, "documentName", None):
+            return None
+        try:
+            return FreeCAD.getDocument(self.documentName)
+        except Exception:
+            return None
+
+    def _get_selection(self):
+        document = self._get_document()
+        if document is None:
+            return []
+        return FreeCADGui.Selection.getSelection(document.Name)
 
     def getArray(self, obj):
         "returns a count number if this object needs to be duplicated"
@@ -194,9 +216,10 @@ class BIM_IfcQuantities:
         index = self.form.comboQto.currentIndex()
         if index <= 0:
             return
-        if len(FreeCADGui.Selection.getSelection()) != 1:
+        selection = self._get_selection()
+        if len(selection) != 1:
             return
-        obj = FreeCADGui.Selection.getSelection()[0]
+        obj = selection[0]
         qto = list(self.qtodefs.keys())[index - 1]
         self.ifcqtolist.setdefault(obj.Name, []).append(qto)
         self.update_line(obj.Name, qto)
@@ -241,6 +264,10 @@ class BIM_IfcQuantities:
         from PySide import QtCore, QtGui
         import Draft
 
+        document = self._get_document()
+        if document is None:
+            return self.reject()
+
         # quantities tab
 
         self.qmodel.clear()
@@ -261,7 +288,7 @@ class BIM_IfcQuantities:
                 if "+array" in name:
                     name = name.split("+array")[0]
                     suffix = " (duplicate)"
-                obj = FreeCAD.ActiveDocument.getObject(name)
+                obj = document.getObject(name)
                 if obj:
                     if (not self.form.onlyVisible.isChecked()) or obj.ViewObject.isVisible():
                         if obj.isDerivedFrom("Part::Feature") and not (
@@ -340,7 +367,10 @@ class BIM_IfcQuantities:
         i = self.get_row(name)
         if i == -1:
             return
-        obj = FreeCAD.ActiveDocument.getObject(name)
+        document = self._get_document()
+        if document is None:
+            return
+        obj = document.getObject(name)
         qto_val = self.qtodefs[qto]
         for j, p in enumerate(QPROPS):
             it = self.qmodel.item(i, j + 1)
@@ -378,22 +408,25 @@ class BIM_IfcQuantities:
     def accept(self):
         """OK pressed"""
 
+        document = self._get_document()
+        if document is None:
+            return self.reject()
         PARAMS.SetInt("BimIfcQuantitiesDialogWidth", self.form.width())
         PARAMS.SetInt("BimIfcQuantitiesDialogHeight", self.form.height())
         self.form.hide()
         changed = False
         if self.ifcqtolist:
             if not changed:
-                FreeCAD.ActiveDocument.openTransaction("Change quantities")
+                document.openTransaction("Change quantities")
             changed = True
             for key, val in self.ifcqtolist.items():
-                obj = FreeCAD.ActiveDocument.getObject(key)
+                obj = document.getObject(key)
                 if obj:
                     for qto in val:
                         self.apply_qto(obj, qto)
         for row in range(self.qmodel.rowCount()):
             name = self.qmodel.item(row, 0).toolTip()
-            obj = FreeCAD.ActiveDocument.getObject(name)
+            obj = document.getObject(name)
             if obj:
                 for i in range(len(QPROPS)):
                     item = self.qmodel.item(row, i + 1)
@@ -404,7 +437,7 @@ class BIM_IfcQuantities:
                             if getattr(obj, QPROPS[i]).getUserPreferred()[0] != val:
                                 setattr(obj, QPROPS[i], val)
                                 if not changed:
-                                    FreeCAD.ActiveDocument.openTransaction("Change quantities")
+                                    document.openTransaction("Change quantities")
                                 changed = True
                     d = None
                     if hasattr(obj, "IfcAttributes"):
@@ -421,7 +454,7 @@ class BIM_IfcQuantities:
                                 d["Export" + QPROPS[i]] = "True"
                                 setattr(obj, att, d)
                                 if not changed:
-                                    FreeCAD.ActiveDocument.openTransaction("Change quantities")
+                                    document.openTransaction("Change quantities")
                                 changed = True
                         else:
                             if "Export" + QPROPS[i] in d:
@@ -429,7 +462,7 @@ class BIM_IfcQuantities:
                                     d["Export" + QPROPS[i]] = "False"
                                     setattr(obj, att, d)
                                     if not changed:
-                                        FreeCAD.ActiveDocument.openTransaction("Change quantities")
+                                        document.openTransaction("Change quantities")
                                     changed = True
                     elif "StepId" not in obj.PropertiesList:
                         FreeCAD.Console.PrintError(
@@ -440,14 +473,15 @@ class BIM_IfcQuantities:
                         )
 
         if changed:
-            FreeCAD.ActiveDocument.commitTransaction()
-            FreeCAD.ActiveDocument.recompute()
+            document.commitTransaction()
+            document.recompute()
 
         return self.reject()
 
     def reject(self):
         self.form.hide()
         del self.form
+        self.documentName = ""
         return True
 
     def setChecked(self, id1, id2):
@@ -478,13 +512,16 @@ class BIM_IfcQuantities:
 
     def onClickTree(self, index=None):
 
-        FreeCADGui.Selection.clearSelection()
+        document = self._get_document()
+        if document is None:
+            return
+        FreeCADGui.Selection.clearSelection(document.Name)
         sel = self.form.quantities.selectedIndexes()
         for index in sel:
             if index.column() == 0:
-                obj = FreeCAD.ActiveDocument.getObject(self.qmodel.itemFromIndex(index).toolTip())
+                obj = document.getObject(self.qmodel.itemFromIndex(index).toolTip())
                 if obj:
-                    FreeCADGui.Selection.addSelection(obj)
+                    FreeCADGui.Selection.addSelection(document.Name, obj.Name)
 
 
 FreeCADGui.addCommand("BIM_IfcQuantities", BIM_IfcQuantities())

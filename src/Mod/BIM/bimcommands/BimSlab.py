@@ -26,6 +26,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -50,10 +51,14 @@ class BIM_Slab:
         return v
 
     def Activated(self):
-        import DraftTools
+        from draftguitools import gui_tool_utils
 
         self.removeCallback()
-        sel = FreeCADGui.Selection.getSelection()
+        gui_tool_utils.finish_active_draft_command()
+        self.doc = FreeCAD.ActiveDocument
+        if self.doc is None:
+            return
+        sel = BimArchUtils.selectionOf(self.doc)
         if sel:
             self.proceed()
         else:
@@ -61,24 +66,38 @@ class BIM_Slab:
                 FreeCADGui.draftToolBar.selectUi()
             FreeCAD.Console.PrintMessage(translate("BIM", "Select a planar object") + "\n")
             FreeCAD.activeDraftCommand = self
-            self.view = FreeCADGui.ActiveDocument.ActiveView
-            self.callback = self.view.addEventCallback("SoEvent", DraftTools.selectObject)
+            self.view = BimArchUtils.activeViewOf(self.doc)
+            if self.view is not None:
+                self.callback = self.view.addEventCallback("SoEvent", self._selectObject)
 
     def proceed(self):
         self.removeCallback()
-        sel = FreeCADGui.Selection.getSelection()
+        sel = BimArchUtils.selectionOf(self.doc)
         if len(sel) == 1:
-            FreeCADGui.addModule("Arch")
-            FreeCAD.ActiveDocument.openTransaction("Create Slab")
-            FreeCADGui.doCommand(
-                "s = Arch.makeStructure(FreeCAD.ActiveDocument." + sel[0].Name + ",height=200)"
-            )
-            FreeCADGui.doCommand("s.Label = " + repr(translate("BIM", "Slab")))
-            FreeCADGui.doCommand('s.IfcType = "Slab"')
-            FreeCADGui.doCommand("s.Normal = FreeCAD.Vector(0,0,-1)")
-            FreeCAD.ActiveDocument.commitTransaction()
-            FreeCAD.ActiveDocument.recompute()
+
+            def create_slab(document):
+                FreeCADGui.addModule("Arch")
+                document.openTransaction("Create Slab")
+                FreeCADGui.doCommand(
+                    "s = Arch.makeStructure(FreeCAD.ActiveDocument."
+                    + sel[0].Name
+                    + ",height=200)"
+                )
+                FreeCADGui.doCommand("s.Label = " + repr(translate("BIM", "Slab")))
+                FreeCADGui.doCommand('s.IfcType = "Slab"')
+                FreeCADGui.doCommand("s.Normal = FreeCAD.Vector(0,0,-1)")
+                document.commitTransaction()
+                document.recompute()
+
+            BimArchUtils.runInDocument(self.doc, create_slab)
         self.finish()
+
+    def _selectObject(self, arg):
+        if arg["Type"] == "SoKeyboardEvent":
+            if arg["Key"] == "ESCAPE":
+                self.finish()
+        elif not arg["CtrlDown"] and FreeCADGui.Selection.hasSelection(self.doc.Name):
+            self.proceed()
 
     def removeCallback(self):
         if self.callback:
@@ -88,7 +107,9 @@ class BIM_Slab:
                 pass
             self.callback = None
 
-    def finish(self):
+    def finish(self, cont=False):
+        if FreeCAD.activeDraftCommand is self:
+            FreeCAD.activeDraftCommand = None
         self.removeCallback()
         if hasattr(FreeCADGui, "draftToolBar"):
             FreeCADGui.draftToolBar.offUi()

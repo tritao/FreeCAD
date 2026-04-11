@@ -27,6 +27,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -46,9 +47,7 @@ class BIM_Reorder:
             obj = FreeCADGui.Selection.getSelection()[0]
             if hasattr(obj, "Group"):
                 if obj.getTypeIdOfProperty("Group") == "App::PropertyLinkList":
-                    FreeCADGui.Control.showDialog(
-                        BIM_Reorder_TaskPanel(obj), FreeCADGui.ActiveDocument
-                    )
+                    BimArchUtils.showTaskDialog(BIM_Reorder_TaskPanel(obj), obj)
                     return
         FreeCAD.Console.PrintError(
             translate("BIM", "You must choose a group object before using this command") + "\n"
@@ -61,6 +60,7 @@ class BIM_Reorder_TaskPanel:
         from PySide import QtGui
 
         self.obj = obj
+        self.doc = obj.Document
         self.form = FreeCADGui.PySideUic.loadUi(":/ui/dialogReorder.ui")
         self.form.setWindowIcon(QtGui.QIcon(":/icons/BIM_Reorder.svg"))
         self.form.pushButton.clicked.connect(self.form.listWidget.sortItems)
@@ -74,16 +74,16 @@ class BIM_Reorder_TaskPanel:
         names = [
             self.form.listWidget.item(i).toolTip() for i in range(self.form.listWidget.count())
         ]
-        group = [FreeCAD.ActiveDocument.getObject(n) for n in names]
-        FreeCAD.ActiveDocument.openTransaction("Reorder children")
+        group = [self.doc.getObject(n) for n in names]
+        self.doc.openTransaction("Reorder children")
         self.obj.Group = group
-        FreeCAD.ActiveDocument.commitTransaction()
-        FreeCADGui.doCommand("FreeCAD.ActiveDocument.recompute()")
+        self.doc.commitTransaction()
+        self.doc.recompute()
         return self.reject()
 
     def reject(self):
-        FreeCADGui.Control.closeDialog()
-        FreeCAD.ActiveDocument.recompute()
+        BimArchUtils.closeTaskDialog(self.doc)
+        self.doc.recompute()
         return True
 
 

@@ -49,6 +49,7 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
     # \cond
@@ -808,14 +809,14 @@ class _ViewProviderAxis:
         taskd = _AxisTaskPanel()
         taskd.obj = vobj.Object
         taskd.update()
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(taskd, vobj.Object)
         return True
 
     def unsetEdit(self, vobj, mode):
         if mode == 1 or mode == 2:
             return None
 
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(vobj.Object)
         return True
 
     def setupContextMenu(self, vobj, menu):
@@ -840,10 +841,10 @@ class _ViewProviderAxis:
         return True
 
     def edit(self):
-        FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+        BimArchUtils.editObject(self.Object, 0)
 
     def transform(self):
-        FreeCADGui.ActiveDocument.setEdit(self.Object, 1)
+        BimArchUtils.editObject(self.Object, 1)
 
     def dumps(self):
 
@@ -977,12 +978,12 @@ class _AxisTaskPanel:
         self.obj.Angles = a
         self.obj.Labels = l
         self.obj.touch()
-        FreeCAD.ActiveDocument.recompute()
+        self.obj.Document.recompute()
 
     def reject(self):
 
-        FreeCAD.ActiveDocument.recompute()
-        FreeCADGui.ActiveDocument.resetEdit()
+        self.obj.Document.recompute()
+        BimArchUtils.resetEdit(self.obj)
         return True
 
     def retranslateUi(self, TaskPanel):

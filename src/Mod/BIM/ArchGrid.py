@@ -41,6 +41,7 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
     # \cond
@@ -368,14 +369,14 @@ class ViewProviderArchGrid:
             return None
 
         taskd = ArchGridTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(taskd, vobj.Object)
         return True
 
     def unsetEdit(self, vobj, mode):
         if mode != 0:
             return None
 
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(vobj.Object)
         return True
 
     def setupContextMenu(self, vobj, menu):
@@ -386,7 +387,7 @@ class ViewProviderArchGrid:
         menu.addAction(actionEdit)
 
     def edit(self):
-        FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+        BimArchUtils.editObject(self.Object, 0)
 
     def dumps(self):
 
@@ -657,11 +658,11 @@ class ArchGridTaskPanel:
             for i in range(self.table.columnCount())
         ]
         self.obj.Spans = [str(s)[1:-1] for s in self.spans]
-        FreeCAD.ActiveDocument.recompute()
-        FreeCADGui.ActiveDocument.resetEdit()
+        self.obj.Document.recompute()
+        BimArchUtils.resetEdit(self.obj)
         return True
 
     def reject(self):
 
-        FreeCADGui.ActiveDocument.resetEdit()
+        BimArchUtils.resetEdit(self.obj)
         return True

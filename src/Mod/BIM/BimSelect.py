@@ -111,14 +111,65 @@ class CyclicObjectSelector:
 
 
 class Setup:
+    def __init__(self):
+        self.callbacks = {}
+
+    def _document_name(self, doc):
+        document = getattr(doc, "Document", doc)
+        return getattr(document, "Name", None)
+
+    def _remove_callbacks(self, key):
+        from pivy import coin
+
+        callback_data = self.callbacks.pop(key, None)
+        if not callback_data:
+            return
+
+        view = callback_data["view"]
+        try:
+            view.removeEventCallbackPivy(
+                coin.SoMouseButtonEvent.getClassTypeId(), callback_data["mouse"]
+            )
+            view.removeEventCallbackPivy(
+                coin.SoKeyboardEvent.getClassTypeId(), callback_data["keyboard"]
+            )
+        except RuntimeError:
+            # the view has been deleted already
+            pass
+
     def slotActivateDocument(self, doc):
         from pivy import coin
 
+        key = self._document_name(doc)
+        view = getattr(doc, "ActiveView", None)
+        if not key:
+            return
+        callback_data = self.callbacks.get(key)
+        if callback_data and callback_data["view"] is view:
+            return
+        if callback_data:
+            self._remove_callbacks(key)
+
         cos = CyclicObjectSelector()
-        if doc and doc.ActiveView and hasattr(doc.ActiveView, "getSceneGraph"):
-            self.callback = doc.ActiveView.addEventCallbackPivy(
+        if doc and view and hasattr(view, "getSceneGraph"):
+            mouse_callback = view.addEventCallbackPivy(
                 coin.SoMouseButtonEvent.getClassTypeId(), cos.selectObject
             )
-            self.callback = doc.ActiveView.addEventCallbackPivy(
+            keyboard_callback = view.addEventCallbackPivy(
                 coin.SoKeyboardEvent.getClassTypeId(), cos.cycleSelectableObjects
             )
+            self.callbacks[key] = {
+                "view": view,
+                "selector": cos,
+                "mouse": mouse_callback,
+                "keyboard": keyboard_callback,
+            }
+
+    def slotDeletedDocument(self, doc):
+        key = self._document_name(doc)
+        if key:
+            self._remove_callbacks(key)
+
+    def cleanup(self):
+        for key in list(self.callbacks):
+            self._remove_callbacks(key)

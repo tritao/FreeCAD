@@ -55,6 +55,14 @@ if FreeCAD.GuiUp:
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
     from draftutils.translate import translate
+
+    def _get_gui_document(doc):
+        if not doc:
+            return None
+        try:
+            return FreeCADGui.getDocument(doc.Name)
+        except Exception:
+            return None
 else:
     # \cond
     def translate(ctxt, txt):
@@ -1893,14 +1901,16 @@ class ViewProviderComponent:
         taskd = ComponentTaskPanel()
         taskd.obj = self.Object
         taskd.update()
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        task = FreeCADGui.Control.showDialog(taskd, _get_gui_document(vobj.Document))
+        task.setDocumentName(vobj.Object.Document.Name)
+        task.setAutoCloseOnDeletedDocument(True)
         return True
 
     def unsetEdit(self, vobj, mode):
         if mode != 0:
             return None
 
-        FreeCADGui.Control.closeDialog()
+        FreeCADGui.Control.closeDialog(_get_gui_document(vobj.Document))
         return True
 
     def setupContextMenu(self, vobj, menu):
@@ -1939,7 +1949,9 @@ class ViewProviderComponent:
         menu.addAction(actionToggleSubcomponents)
 
     def edit(self):
-        FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+        gui_doc = _get_gui_document(self.Object.Document)
+        if gui_doc:
+            gui_doc.setEdit(self.Object, 0)
 
     def toggleSubcomponents(self):
         FreeCADGui.runCommand("Arch_ToggleSubs")
@@ -2071,8 +2083,10 @@ class ArchSelectionObserver:
                     FreeCADGui.Selection.removeObserver(FreeCAD.ArchObserver)
                     del FreeCAD.ArchObserver
                 if self.nextCommand:
-                    FreeCADGui.Selection.clearSelection()
-                    FreeCADGui.Selection.addSelection(self.watched)
+                    FreeCADGui.Selection.clearSelection(self.watched.Document.Name)
+                    FreeCADGui.Selection.addSelection(
+                        self.watched.Document.Name, self.watched.Name
+                    )
                     FreeCADGui.runCommand(self.nextCommand)
 
 
@@ -2194,7 +2208,15 @@ class ComponentTaskPanel:
         )
         self.update()
 
-        self.doc = FreeCAD.ActiveDocument
+        self.doc = None
+
+    def getDocument(self):
+        if self.obj and getattr(self.obj, "Document", None):
+            return self.obj.Document
+        return self.doc or FreeCAD.ActiveDocument
+
+    def getGuiDocument(self):
+        return _get_gui_document(self.getDocument())
 
     def isAllowedAlterSelection(self):
         """Indicate whether this task dialog allows other commands to modify
@@ -2249,7 +2271,8 @@ class ComponentTaskPanel:
         if not wid.parent():
             self.delButton.setEnabled(False)
             if self.obj:
-                sel = FreeCADGui.Selection.getSelection()
+                doc = self.getDocument()
+                sel = FreeCADGui.Selection.getSelection(doc.Name) if doc else []
                 if sel:
                     if not (self.obj in sel):
                         self.addButton.setEnabled(True)
@@ -2332,9 +2355,11 @@ class ComponentTaskPanel:
         """
         it = self.tree.currentItem()
         if it:
+            doc = self.getDocument()
+            selection = FreeCADGui.Selection.getSelection(doc.Name) if doc else []
             for prop in self.attribs:
                 if it.text(0) == getattr(self, "tree" + prop).text(0):
-                    for o in FreeCADGui.Selection.getSelection():
+                    for o in selection:
                         addToComponent(self.obj, o, prop)
                     self.obj.recompute()
                     self.update()
@@ -2349,7 +2374,10 @@ class ComponentTaskPanel:
         if not element_selected:
             return
 
-        element_to_remove = FreeCAD.ActiveDocument.getObject(str(element_selected.toolTip(0)))
+        doc = self.getDocument()
+        element_to_remove = doc.getObject(str(element_selected.toolTip(0))) if doc else None
+        if not element_to_remove:
+            return
 
         # Call the polymorphic handler on the object's proxy.
         # This is generic and works for any Arch object.
@@ -2369,8 +2397,12 @@ class ComponentTaskPanel:
 
         The transaction is implicitly committed by the C++ layer during resetEdit.
         """
-        FreeCAD.ActiveDocument.recompute()
-        FreeCADGui.ActiveDocument.resetEdit()
+        doc = self.getDocument()
+        gui_doc = self.getGuiDocument()
+        if doc:
+            doc.recompute()
+        if gui_doc:
+            gui_doc.resetEdit()
         return True
 
     def reject(self):
@@ -2378,8 +2410,12 @@ class ComponentTaskPanel:
         Aborts the edit session. An explicit abort is required to prevent the C++ layer from
         committing changes during resetEdit.
         """
-        self.doc.abortTransaction()
-        FreeCADGui.ActiveDocument.resetEdit()
+        doc = self.getDocument()
+        gui_doc = self.getGuiDocument()
+        if doc:
+            doc.abortTransaction()
+        if gui_doc:
+            gui_doc.resetEdit()
         return True
 
     def editObject(self, wid, col):
@@ -2398,7 +2434,8 @@ class ComponentTaskPanel:
         """
 
         if wid.parent():
-            obj = FreeCAD.ActiveDocument.getObject(str(wid.toolTip(0)))
+            doc = self.getDocument()
+            obj = doc.getObject(str(wid.toolTip(0))) if doc else None
             if obj:
                 self.obj.ViewObject.Transparency = 80
                 self.obj.ViewObject.Selectable = False
@@ -2408,7 +2445,9 @@ class ComponentTaskPanel:
                     FreeCADGui.activateWorkbench("SketcherWorkbench")
                 FreeCAD.ArchObserver = ArchSelectionObserver(self.obj, obj)
                 FreeCADGui.Selection.addObserver(FreeCAD.ArchObserver)
-                FreeCADGui.ActiveDocument.setEdit(obj.Name, 0)
+                gui_doc = self.getGuiDocument()
+                if gui_doc:
+                    gui_doc.setEdit(obj.Name, 0)
 
     def retranslateUi(self, TaskPanel):
         """Add the text of the task panel, in translated form."""
@@ -2741,8 +2780,8 @@ class ComponentTaskPanel:
         in the IFC editor. It relies on the presence of the BIM module.
         """
 
-        FreeCADGui.Selection.clearSelection()
-        FreeCADGui.Selection.addSelection(self.obj)
+        FreeCADGui.Selection.clearSelection(self.obj.Document.Name)
+        FreeCADGui.Selection.addSelection(self.obj.Document.Name, self.obj.Name)
         FreeCADGui.runCommand("BIM_Classification")
 
 

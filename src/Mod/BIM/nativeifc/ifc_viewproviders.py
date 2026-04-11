@@ -26,6 +26,7 @@
 import FreeCAD
 import FreeCADGui
 import ArchBuildingPart
+from bimcommands import BimArchUtils
 
 translate = FreeCAD.Qt.translate
 
@@ -100,7 +101,8 @@ class ifc_vp_object:
         # IFC actions
         actions = []
         if element.is_a("IfcSpatialElement"):
-            if FreeCADGui.ActiveDocument.ActiveView.getActiveObject("NativeIFC") == vobj.Object:
+            view = BimArchUtils.activeViewOf(vobj.Object)
+            if view and view.getActiveObject("NativeIFC") == vobj.Object:
                 t = translate("BIM", "Deactivate Container")
             else:
                 t = translate("BIM", "Make Active Container")
@@ -338,10 +340,13 @@ class ifc_vp_object:
     def activate(self):
         """Marks this container as active"""
 
-        if FreeCADGui.ActiveDocument.ActiveView.getActiveObject("NativeIFC") == self.Object:
-            FreeCADGui.ActiveDocument.ActiveView.setActiveObject("NativeIFC", None)
+        view = BimArchUtils.activeViewOf(self.Object)
+        if view is None:
+            return
+        if view.getActiveObject("NativeIFC") == self.Object:
+            view.setActiveObject("NativeIFC", None)
         else:
-            FreeCADGui.ActiveDocument.ActiveView.setActiveObject("NativeIFC", self.Object)
+            view.setActiveObject("NativeIFC", self.Object)
 
     def createGroup(self):
         """Creates a group under this object"""

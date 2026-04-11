@@ -57,6 +57,7 @@ from typing import Optional
 
 if FreeCAD.GuiUp:
     import FreeCADGui
+    from bimcommands import BimArchUtils
 
     FreeCADGui.updateLocale()
 
@@ -2434,7 +2435,7 @@ def makeReport(name=None):
 
     if FreeCAD.GuiUp:
         # Automatically open the task panel for the new report
-        FreeCADGui.ActiveDocument.setEdit(report_obj.Name, 0)
+        BimArchUtils.editObject(report_obj, 0)
 
     return report_obj
 

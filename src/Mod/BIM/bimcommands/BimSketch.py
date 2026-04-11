@@ -26,6 +26,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 
@@ -67,7 +68,7 @@ class BIM_Sketch:
                 sk.ViewObject.GridSize = Units.Quantity(params.get_param("gridSpacing"))
                 sk.ViewObject.ShowGrid = True
 
-        FreeCADGui.ActiveDocument.setEdit(sk.Name)
+        BimArchUtils.editObject(sk)
         FreeCADGui.activateWorkbench("SketcherWorkbench")
 
 

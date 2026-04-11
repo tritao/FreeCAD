@@ -30,6 +30,7 @@ import ArchIFC
 if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
     import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
 
@@ -47,14 +48,14 @@ class IfcContextView:
         if mode == 1 or mode == 2:
             return None
 
-        FreeCADGui.Control.showDialog(IfcContextUI(vobj.Object), FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(IfcContextUI(vobj.Object), vobj.Object)
         return True
 
     def unsetEdit(self, vobj, mode):
         if mode == 1 or mode == 2:
             return None
 
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(vobj.Object)
         return True
 
     def setupContextMenu(self, vobj, menu):
@@ -79,10 +80,10 @@ class IfcContextView:
         return True
 
     def edit(self):
-        FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+        BimArchUtils.editObject(self.Object, 0)
 
     def transform(self):
-        FreeCADGui.ActiveDocument.setEdit(self.Object, 1)
+        BimArchUtils.editObject(self.Object, 1)
 
     def dumps(self):
         return None
@@ -114,11 +115,11 @@ class IfcContextUI:
         ArchIFC.IfcRoot.setObjIfcComplexAttributeValue(
             self, self.object, "RepresentationContexts", data
         )
-        FreeCADGui.ActiveDocument.resetEdit()
+        BimArchUtils.resetEdit(self.object)
         return True
 
     def reject(self):
-        FreeCADGui.ActiveDocument.resetEdit()
+        BimArchUtils.resetEdit(self.object)
         return True
 
     def createBaseLayout(self):

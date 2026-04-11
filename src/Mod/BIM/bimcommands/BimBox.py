@@ -27,6 +27,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -48,10 +49,14 @@ class BIM_Box:
 
     def Activated(self):
         import WorkingPlane
+        from draftguitools import gui_tool_utils
         import draftguitools.gui_trackers as DraftTrackers
 
+        gui_tool_utils.finish_active_draft_command()
         FreeCAD.activeDraftCommand = self  # register as a Draft command for auto grid on/off
         self.doc = FreeCAD.ActiveDocument
+        if self.doc is None:
+            return
         self.wp = WorkingPlane.get_working_plane()
         # here we will store our points
         self.points = []
@@ -70,10 +75,15 @@ class BIM_Box:
                 extradlg=self.taskbox(),
             )
 
+    def finish(self, cont=False):
+        self._finish()
+
     def MoveCallback(self, point, snapinfo):
         import DraftGeomUtils
         import DraftVecUtils
 
+        if not BimArchUtils.documentIsActive(self.doc):
+            return
         self.currentpoint = point
         if len(self.points) == 1:
             # we have the base point already
@@ -118,6 +128,8 @@ class BIM_Box:
         if not point:
             # cancelled
             self._finish()
+            return
+        if not BimArchUtils.documentIsActive(self.doc):
             return
 
         if len(self.points) == 0:
@@ -291,10 +303,14 @@ class BIM_Box:
         self.doc.recompute()
 
     def _finish(self):
-        self.wp._restore()
-        FreeCAD.activeDraftCommand = None
-        FreeCADGui.Snapper.off()
-        for c in self.cubetracker:
+        wp = getattr(self, "wp", None)
+        if wp is not None:
+            wp._restore()
+        if FreeCAD.activeDraftCommand is self:
+            FreeCAD.activeDraftCommand = None
+        if hasattr(FreeCADGui, "Snapper"):
+            FreeCADGui.Snapper.off()
+        for c in getattr(self, "cubetracker", []):
             c.finalize()
 
 

@@ -42,6 +42,7 @@ if FreeCAD.GuiUp:
     from PySide import QtGui
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
     # \cond
@@ -239,5 +240,5 @@ class _ViewProviderEquipment(ArchComponent.ViewProviderComponent):
             return None
 
         taskd = EquipmentTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(taskd, vobj.Object)
         return True

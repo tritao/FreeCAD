@@ -32,6 +32,7 @@ import tempfile
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -103,19 +104,18 @@ class BIM_Library:
                 # save file paths with forward slashes even on windows
                 pr.SetString("destination", addondir.replace("\\", "/"))
                 libok = True
-        panel = BIM_Library_TaskPanel(offlinemode=libok)
-        task = FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
-        task.setDocumentName(panel.mainDocName)
-        task.setAutoCloseOnDeletedDocument(True)
+        panel = BIM_Library_TaskPanel(FreeCAD.ActiveDocument, offlinemode=libok)
+        BimArchUtils.showTaskDialog(panel, FreeCAD.ActiveDocument)
 
 
 class BIM_Library_TaskPanel:
 
-    def __init__(self, offlinemode=False):
+    def __init__(self, document=None, offlinemode=False):
 
         from PySide import QtGui
 
-        self.mainDocName = FreeCAD.Gui.ActiveDocument.Document.Name
+        doc = BimArchUtils.documentOf(document)
+        self.mainDocName = doc.Name if doc else ""
         self.previewDocName = "Viewer"
 
         self.linked = False
@@ -301,8 +301,11 @@ class BIM_Library_TaskPanel:
 
         # check if the main document is open
         try:
+            main_doc = self._get_main_document()
+            if main_doc is None:
+                return
             # check if the working document is saved
-            if FreeCAD.getDocument(self.mainDocName).FileName == "":
+            if main_doc.FileName == "":
                 FreeCAD.Console.PrintWarning(
                     translate("BIM", "Save the working file before linking.") + "\n"
                 )
@@ -316,26 +319,18 @@ class BIM_Library_TaskPanel:
                 BIM_Library_TaskPanel.addtolibrary(self)
                 # link a document if it has been previously saved
                 if self.fileDialog[0] != "":
-                    FreeCADGui.Selection.clearSelection()
-                    # link only root objects
-                    for obj in FreeCAD.ActiveDocument.RootObjects:
-                        FreeCADGui.Selection.addSelection(obj)
-                    objects = FreeCADGui.Selection.getSelection()
+                    preview_doc = self._get_preview_document() or FreeCAD.ActiveDocument
+                    if preview_doc is None:
+                        return self.linked
+                    objects = list(preview_doc.RootObjects)
                     # tries to create a link for each object in the selection
                     for obj in objects:
                         try:
-                            link = (
-                                FreeCAD.getDocument(self.mainDocName)
-                                .addObject("App::Link", "Link")
-                                .setLink(obj)
-                            )
-                            # FreeCAD.getDocument(self.mainDocName).getObject('Link').Label=FreeCAD.ActiveDocument.ActiveObject.Label
-                            FreeCAD.getDocument(self.mainDocName).getObject(
-                                link
-                            ).Label = FreeCAD.ActiveDocument.ActiveObject.Label
+                            link = main_doc.addObject("App::Link", "Link").setLink(obj)
+                            main_doc.getObject(link).Label = obj.Label
                         except:
                             pass
-                    FreeCAD.setActiveDocument(self.mainDocName)
+                    FreeCAD.setActiveDocument(main_doc.Name)
                     self.librarypath = FreeCAD.ParamGet(
                         "User parameter:Plugins/parts_library"
                     ).GetString("destination", "")
@@ -354,6 +349,9 @@ class BIM_Library_TaskPanel:
         import Mesh
         import Part
 
+        doc = self._get_preview_document() or FreeCAD.ActiveDocument
+        if doc is None:
+            return ""
         self.fileDialog = QtGui.QFileDialog.getSaveFileName(None, "Save As", self.librarypath)
         # print(self.fileDialog[0])
         # check if file saving has been canceled and save .fcstd, .step and .stl copies
@@ -361,10 +359,10 @@ class BIM_Library_TaskPanel:
             # remove the file extension from the file path
             fileName = os.path.splitext(self.fileDialog[0])[0]
             FCfilename = fileName + ".fcstd"
-            FreeCAD.ActiveDocument.saveAs(FCfilename)
+            doc.saveAs(FCfilename)
             if self.stepCB.isChecked() or self.stlCB.isChecked():
                 toexport = []
-                objs = FreeCAD.ActiveDocument.Objects
+                objs = doc.Objects
                 for obj in objs:
                     if obj.ViewObject.Visibility == True:
                         toexport.append(obj)
@@ -543,22 +541,19 @@ class BIM_Library_TaskPanel:
 
         if hasattr(self, "box") and self.box:
             self.box.off()
-        FreeCADGui.Control.closeDialog()
+        main_doc = self._get_main_document()
+        BimArchUtils.closeTaskDialog(main_doc)
         if self.previewDocName in FreeCAD.listDocuments():
             FreeCAD.closeDocument(self.previewDocName)
-        FreeCAD.ActiveDocument.recompute()
+        if main_doc is not None:
+            main_doc.recompute()
 
     def _get_main_document(self):
 
-        try:
+        if not self.mainDocName:
             gui_doc = getattr(FreeCADGui, "ActiveDocument", None)
             if gui_doc and getattr(gui_doc, "Document", None):
-                doc = gui_doc.Document
-                if doc.Name != self.previewDocName:
-                    self.mainDocName = doc.Name
-                    return doc
-        except Exception:
-            pass
+                self.mainDocName = gui_doc.Document.Name
         try:
             return FreeCAD.getDocument(self.mainDocName)
         except Exception:
@@ -571,12 +566,20 @@ class BIM_Library_TaskPanel:
             )
             return None
 
+    def _get_preview_document(self):
+
+        try:
+            return FreeCAD.getDocument(self.previewDocName)
+        except Exception:
+            return None
+
     def insert(self, index=None):
 
         # check if the main document is open
         doc = self._get_main_document()
         if not doc:
             return
+        gui_doc = BimArchUtils.guiDocumentOf(doc)
         FreeCAD.setActiveDocument(doc.Name)
         if not index:
             index = self.form.tree.selectedIndexes()
@@ -589,13 +592,15 @@ class BIM_Library_TaskPanel:
             path = self.filemodel.itemFromIndex(index).toolTip()
         if path.startswith(":github"):
             path = self.download(RAWURL + "/" + path[7:])
-        before = FreeCAD.ActiveDocument.Objects
+        before = doc.Objects
         self.name = os.path.splitext(os.path.basename(path))[0]
         ext = os.path.splitext(path.lower())[1]
         if ext in [".stp", ".step", ".brp", ".brep"]:
-            self.place(path)
+            return self.place(path)
         elif ext == ".fcstd":
-            FreeCADGui.ActiveDocument.mergeProject(path)
+            if gui_doc is None:
+                return
+            gui_doc.mergeProject(path)
             from draftutils import todo
 
             todo.ToDo.delay(self.reject, None)
@@ -603,7 +608,7 @@ class BIM_Library_TaskPanel:
             from importers import importIFC
 
             importIFC.ZOOMOUT = False
-            importIFC.insert(path, FreeCAD.ActiveDocument.Name)
+            importIFC.insert(path, doc.Name)
             from draftutils import todo
 
             todo.ToDo.delay(self.reject, None)
@@ -624,15 +629,17 @@ class BIM_Library_TaskPanel:
                         + "\n"
                     )
                 else:
-                    path = CadExchangerIO.insert(path, FreeCAD.ActiveDocument.Name, returnpath=True)
-                    self.place(path)
+                    path = CadExchangerIO.insert(path, doc.Name, returnpath=True)
+                    return self.place(path)
             else:
-                path = importerIL.insert(path, FreeCAD.ActiveDocument.Name)
-        FreeCADGui.Selection.clearSelection()
-        for o in FreeCAD.ActiveDocument.Objects:
+                path = importerIL.insert(path, doc.Name)
+        FreeCADGui.Selection.clearSelection(doc.Name)
+        for o in doc.Objects:
             if not o in before:
-                FreeCADGui.Selection.addSelection(o)
-        FreeCADGui.SendMsgToActiveView("ViewSelection")
+                FreeCADGui.Selection.addSelection(doc.Name, o.Name)
+        view = BimArchUtils.activeViewOf(doc)
+        if view and hasattr(view, "viewSelection"):
+            view.viewSelection()
 
     def download(self, url):
 
@@ -661,6 +668,9 @@ class BIM_Library_TaskPanel:
         import Part
         import WorkingPlane
 
+        doc = self._get_main_document()
+        if doc is None:
+            return
         self.shape = Part.read(path)
         if hasattr(FreeCADGui, "Snapper"):
             try:
@@ -681,7 +691,7 @@ class BIM_Library_TaskPanel:
                 extradlg=self.origin,
             )
         else:
-            Part.show(self.shape)
+            BimArchUtils.runInDocument(doc, lambda document: Part.show(self.shape))
 
     def makeOriginWidget(self):
 
@@ -722,18 +732,27 @@ class BIM_Library_TaskPanel:
 
     def mouseMove(self, point, info):
 
+        doc = self._get_main_document()
+        if doc is None or not BimArchUtils.documentIsActive(doc):
+            return
         self.box.move(point.add(self.getDelta()))
 
     def mouseClick(self, point, info):
 
-        if point:
-            import Arch
+        doc = self._get_main_document()
+        if point and doc and BimArchUtils.documentIsActive(doc):
 
-            self.box.off()
-            self.shape.translate(point.add(self.getDelta()))
-            obj = Arch.makeEquipment()
-            obj.Shape = self.shape
-            obj.Label = self.name
+            def create_equipment(document):
+                import Arch
+
+                self.box.off()
+                self.shape.translate(point.add(self.getDelta()))
+                obj = Arch.makeEquipment()
+                obj.Shape = self.shape
+                obj.Label = self.name
+                document.recompute()
+
+            BimArchUtils.runInDocument(doc, create_equipment)
         self.reject()
 
     def getDelta(self):
@@ -910,7 +929,9 @@ class BIM_Library_TaskPanel:
         if self.previewOn == True:
             self.previewDocName = "Viewer"
             self.doc = FreeCAD.newDocument(self.previewDocName)
-            FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
+            view = BimArchUtils.activeViewOf(self.doc)
+            if view is not None:
+                view.viewIsometric()
             return self.previewDocName
 
     def onCheckThumbnail(self, state):

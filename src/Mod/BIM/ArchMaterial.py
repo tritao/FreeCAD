@@ -43,6 +43,7 @@ if FreeCAD.GuiUp:
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
     import Arch_rc  # Needed for access to icons # lgtm [py/unused_import]
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
     # \cond
@@ -442,7 +443,7 @@ class _ViewProviderArchMaterial:
     def onChanged(self, vobj, prop):
         if prop == "Material":
             if "Father" in vobj.Object.Material:
-                for o in FreeCAD.ActiveDocument.Objects:
+                for o in vobj.Object.Document.Objects:
                     if o.isDerivedFrom("App::MaterialObject"):
                         if o.Label == vobj.Object.Material["Father"]:
                             o.touch()
@@ -452,7 +453,7 @@ class _ViewProviderArchMaterial:
             return None
 
         self.taskd = _ArchMaterialTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(self.taskd, FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(self.taskd, vobj.Object)
         self.taskd.form.FieldName.setFocus()
         self.taskd.form.FieldName.selectAll()
         return True
@@ -461,7 +462,7 @@ class _ViewProviderArchMaterial:
         if mode != 0:
             return None
 
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(vobj.Object)
         return True
 
     def setupContextMenu(self, vobj, menu):
@@ -472,7 +473,7 @@ class _ViewProviderArchMaterial:
         menu.addAction(actionEdit)
 
     def edit(self):
-        FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+        BimArchUtils.editObject(self.Object, 0)
 
     def setTaskValue(self, widgetname, value):
         if hasattr(self, "taskd"):
@@ -564,7 +565,7 @@ class _ArchMaterialTaskPanel:
             father = None
         found = False
         self.form.comboFather.addItem("None")
-        for o in FreeCAD.ActiveDocument.Objects:
+        for o in self.obj.Document.Objects:
             if o.isDerivedFrom("App::MaterialObject"):
                 if o != self.obj:
                     self.form.comboFather.addItem(o.Label)
@@ -610,12 +611,12 @@ class _ArchMaterialTaskPanel:
             if hasattr(self.obj, "Material"):
                 self.obj.Material = self.material
                 self.obj.Label = self.material["Name"]
-        FreeCAD.ActiveDocument.recompute()
-        FreeCADGui.ActiveDocument.resetEdit()
+        self.obj.Document.recompute()
+        BimArchUtils.resetEdit(self.obj)
         return True
 
     def reject(self):
-        FreeCADGui.ActiveDocument.resetEdit()
+        BimArchUtils.resetEdit(self.obj)
         return True
 
     def chooseMat(self, card):
@@ -689,7 +690,7 @@ class _ArchMaterialTaskPanel:
     def fillExistingCombo(self):
         "fills the existing materials combo"
         self.existingmaterials = []
-        for obj in FreeCAD.ActiveDocument.Objects:
+        for obj in self.obj.Document.Objects:
             if obj.isDerivedFrom("App::MaterialObject"):
                 if obj != self.obj:
                     self.existingmaterials.append(obj)
@@ -712,7 +713,7 @@ class _ArchMaterialTaskPanel:
                 QtGui.QDesktopServices.openUrl(self.material["ProductURL"])
 
     def getCode(self):
-        FreeCADGui.Selection.addSelection(self.obj)
+        FreeCADGui.Selection.addSelection(self.obj.Document.Name, self.obj.Name)
         FreeCADGui.runCommand("BIM_Classification")
 
 
@@ -777,14 +778,14 @@ class _ViewProviderArchMultiMaterial:
             return None
 
         taskd = _ArchMultiMaterialTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(taskd, vobj.Object)
         return True
 
     def unsetEdit(self, vobj, mode):
         if mode != 0:
             return None
 
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(vobj.Object)
         return True
 
     def doubleClicked(self, vobj):
@@ -799,7 +800,7 @@ class _ViewProviderArchMultiMaterial:
         menu.addAction(actionEdit)
 
     def edit(self):
-        FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+        BimArchUtils.editObject(self.Object, 0)
 
     def dumps(self):
         return None
@@ -815,9 +816,10 @@ if FreeCAD.GuiUp:
 
     class MultiMaterialDelegate(QtGui.QStyledItemDelegate):
 
-        def __init__(self, parent=None, *args):
+        def __init__(self, document=None, parent=None, *args):
             self.mats = []
-            for obj in FreeCAD.ActiveDocument.Objects:
+            doc = BimArchUtils.documentOf(document)
+            for obj in doc.Objects:
                 if obj.isDerivedFrom("App::MaterialObject"):
                     self.mats.append(obj)
             QtGui.QStyledItemDelegate.__init__(self, parent, *args)
@@ -884,7 +886,7 @@ class _ArchMultiMaterialTaskPanel:
         self.form.tree.setRootIsDecorated(False)  # remove 1st column's extra left margin
         self.form.tree.setModel(self.model)
         self.form.tree.setUniformRowHeights(True)
-        self.form.tree.setItemDelegate(MultiMaterialDelegate())
+        self.form.tree.setItemDelegate(MultiMaterialDelegate(obj.Document))
         self.form.chooseCombo.currentIndexChanged.connect(self.fromExisting)
         self.form.addButton.pressed.connect(self.addLayer)
         self.form.upButton.pressed.connect(self.upLayer)
@@ -926,7 +928,7 @@ class _ArchMultiMaterialTaskPanel:
         import Draft
 
         self.existingmaterials = []
-        for obj in FreeCAD.ActiveDocument.Objects:
+        for obj in self.obj.Document.Objects:
             if Draft.getType(obj) == "MultiMaterial":
                 if obj != self.obj:
                     self.existingmaterials.append(obj)
@@ -1003,7 +1005,7 @@ class _ArchMultiMaterialTaskPanel:
         params.set_param_arch("MultiMaterialColumnWidth1", self.form.tree.columnWidth(1))
         if self.obj:
             mats = []
-            for m in FreeCAD.ActiveDocument.Objects:
+            for m in self.obj.Document.Objects:
                 if m.isDerivedFrom("App::MaterialObject"):
                     mats.append(m)
             names = []
@@ -1034,10 +1036,10 @@ class _ArchMultiMaterialTaskPanel:
             self.obj.Thicknesses = thicknesses
             if self.form.nameField.text():
                 self.obj.Label = self.form.nameField.text()
-        FreeCAD.ActiveDocument.recompute()
-        FreeCADGui.ActiveDocument.resetEdit()
+        self.obj.Document.recompute()
+        BimArchUtils.resetEdit(self.obj)
         return True
 
     def reject(self):
-        FreeCADGui.ActiveDocument.resetEdit()
+        BimArchUtils.resetEdit(self.obj)
         return True

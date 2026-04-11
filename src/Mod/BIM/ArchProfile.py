@@ -46,6 +46,7 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
     # \cond
@@ -627,14 +628,14 @@ class ViewProviderProfile(Draft._ViewProviderDraft):
             return None
 
         taskd = ProfileTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(taskd, vobj.Object)
         return True
 
     def unsetEdit(self, vobj, mode):
         if mode == 1 or mode == 2:
             return None
 
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(vobj.Object)
         return True
 
 
@@ -752,13 +753,13 @@ class ProfileTaskPanel:
             else:
                 print("Profile not supported")
 
-            FreeCAD.ActiveDocument.recompute()
-            FreeCADGui.ActiveDocument.resetEdit()
+            self.obj.Document.recompute()
+            BimArchUtils.resetEdit(self.obj)
         return True
 
     def reject(self):
 
-        FreeCADGui.ActiveDocument.resetEdit()
+        BimArchUtils.resetEdit(self.obj)
         return True
 
     def retranslateUi(self, TaskPanel):

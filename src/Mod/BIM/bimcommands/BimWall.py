@@ -77,29 +77,38 @@ class Arch_Wall:
         self.points = []
         self.existing = []
         self.Length = None
+        self._point_request_active = False
+
+    def _cancel_point_request(self):
+        if not self._point_request_active:
+            return
+
+        FreeCADGui.Snapper.cancelPointRequest()
+        self._point_request_active = False
+
+    def _get_gui_document(self):
+        if not self.doc:
+            return None
+        try:
+            return FreeCADGui.getDocument(self.doc.Name)
+        except Exception:
+            return None
 
     def _teardown_interactive(self):
-        """Tear down the interactive wall session.
 
-        Order matters: the active Draft command must be cleared before snapper
-        teardown so Draft can fully restore command-owned UI state.
-        """
         tracker = self.tracker
-        self.tracker = None
         if tracker is not None:
             tracker.off()
             tracker.finalize()
+        self.tracker = None
 
-        FreeCAD.activeDraftCommand = None
+        self._cancel_point_request()
 
-        snapper = getattr(FreeCADGui, "Snapper", None)
-        if snapper is not None:
-            snapper.cancelPointRequest()
-
-        gui_doc = FreeCADGui.ActiveDocument
+        gui_doc = self._get_gui_document()
         if gui_doc and gui_doc.getInEdit() is not None:
             gui_doc.resetEdit()
 
+        FreeCAD.activeDraftCommand = None
         self._reset_interactive_state()
 
     def cancel_interactive(self):
@@ -127,7 +136,10 @@ class Arch_Wall:
         import Draft
         import WorkingPlane
         from draftutils import params
+        from draftguitools import gui_tool_utils
         import draftguitools.gui_trackers as DraftTrackers
+
+        gui_tool_utils.finish_active_draft_command()
 
         self.doc = FreeCAD.ActiveDocument
         self.Align = ["Center", "Left", "Right"][params.get_param_arch("WallAlignment")]
@@ -190,6 +202,7 @@ class Arch_Wall:
             extradlg=self.taskbox(),
             title=translate("Arch", "First Point of Wall"),
         )
+        self._point_request_active = True
         FreeCADGui.draftToolBar.continueCmd.show()
 
     def getPoint(self, point=None, obj=None):
@@ -208,6 +221,7 @@ class Arch_Wall:
 
         import Draft
 
+        self._point_request_active = False
         if obj and Draft.getType(obj) == "Wall" and obj not in self.existing:
             self.existing.append(obj)
         if point is None:
@@ -226,6 +240,7 @@ class Arch_Wall:
                 title=translate("Arch", "Next point"),
                 mode="line",
             )
+            self._point_request_active = True
 
         elif len(self.points) == 2:
             self.create_wall()
@@ -423,6 +438,12 @@ class Arch_Wall:
         p0 = self.wp.get_local_coords(self.points[0])
         p1 = self.wp.get_local_coords(self.points[1])
 
+        tracker = self.tracker
+        if tracker is not None:
+            tracker.off()
+        FreeCAD.activeDraftCommand = None
+        FreeCADGui.Snapper.off()
+
         self.doc.openTransaction(translate("Arch", "Create Wall"))
 
         # Ensure baseline_mode is initialized (some tests call create_wall()
@@ -445,11 +466,11 @@ class Arch_Wall:
         # Finalization
         self.doc.commitTransaction()
         self.doc.recompute()
-        continue_mode = bool(
-            getattr(FreeCADGui, "draftToolBar", None) and FreeCADGui.draftToolBar.continueMode
-        )
-        self._teardown_interactive()
-        if continue_mode:
+        if tracker is not None:
+            tracker.finalize()
+        self.tracker = None
+        self._reset_interactive_state()
+        if FreeCADGui.draftToolBar.continueMode:
             self.Activated()
 
     def update(self, point, info):
@@ -469,7 +490,8 @@ class Arch_Wall:
 
         import DraftVecUtils
 
-        if FreeCADGui.Control.activeDialog():
+        gui_doc = self._get_gui_document()
+        if gui_doc and FreeCADGui.Control.activeDialog(gui_doc):
             b = self.points[0]
             n = self.wp.axis
             bv = point.sub(b)

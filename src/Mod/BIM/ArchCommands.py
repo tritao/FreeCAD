@@ -45,6 +45,7 @@ from draftutils.groups import is_group
 if FreeCAD.GuiUp:
     from PySide import QtGui, QtCore
     import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
     # \cond
@@ -1080,25 +1081,28 @@ def survey(callback=False):
     Clicking on no object (on an empty area) resets the count."""
     if not callback:
         if hasattr(FreeCAD, "SurveyObserver"):
+            doc = FreeCAD.SurveyObserver.doc
             for label in FreeCAD.SurveyObserver.labels:
-                FreeCAD.ActiveDocument.removeObject(label)
+                doc.removeObject(label)
             FreeCADGui.Selection.removeObserver(FreeCAD.SurveyObserver)
             del FreeCAD.SurveyObserver
-            FreeCADGui.Control.closeDialog()
+            BimArchUtils.closeTaskDialog(doc)
             if hasattr(FreeCAD, "SurveyDialog"):
                 del FreeCAD.SurveyDialog
         else:
-            FreeCAD.SurveyObserver = _SurveyObserver(callback=survey)
+            doc = FreeCAD.ActiveDocument
+            FreeCAD.SurveyObserver = _SurveyObserver(callback=survey, doc=doc)
             FreeCADGui.Selection.addObserver(FreeCAD.SurveyObserver)
-            FreeCAD.SurveyDialog = SurveyTaskPanel()
-            FreeCADGui.Control.showDialog(FreeCAD.SurveyDialog, FreeCADGui.ActiveDocument)
+            FreeCAD.SurveyDialog = SurveyTaskPanel(doc)
+            BimArchUtils.showTaskDialog(FreeCAD.SurveyDialog, doc)
     else:
         sel = FreeCADGui.Selection.getSelectionEx()
         if hasattr(FreeCAD, "SurveyObserver"):
+            doc = FreeCAD.SurveyObserver.doc
             if not sel:
                 if FreeCAD.SurveyObserver.labels:
                     for label in FreeCAD.SurveyObserver.labels:
-                        FreeCAD.ActiveDocument.removeObject(label)
+                        doc.removeObject(label)
                     tl = FreeCAD.SurveyObserver.totalLength
                     ta = FreeCAD.SurveyObserver.totalArea
                     FreeCAD.SurveyObserver.labels = []
@@ -1114,7 +1118,7 @@ def survey(callback=False):
                     else:
                         FreeCADGui.Selection.removeObserver(FreeCAD.SurveyObserver)
                         del FreeCAD.SurveyObserver
-                        FreeCADGui.Control.closeDialog()
+                        BimArchUtils.closeTaskDialog(doc)
                         if hasattr(FreeCAD, "SurveyDialog"):
                             del FreeCAD.SurveyDialog
             else:
@@ -1138,9 +1142,7 @@ def survey(callback=False):
                             u = FreeCAD.Units.Quantity()
                             if not o.HasSubObjects:
                                 # entire object
-                                anno = FreeCAD.ActiveDocument.addObject(
-                                    "App::AnnotationLabel", "surveyLabel"
-                                )
+                                anno = doc.addObject("App::AnnotationLabel", "surveyLabel")
                                 if hasattr(o.Object.Shape, "CenterOfMass"):
                                     anno.BasePosition = o.Object.Shape.CenterOfMass
                                 else:
@@ -1191,9 +1193,7 @@ def survey(callback=False):
                                 # single element(s)
                                 for el in o.SubElementNames:
                                     e = getattr(o.Object.Shape, el)
-                                    anno = FreeCAD.ActiveDocument.addObject(
-                                        "App::AnnotationLabel", "surveyLabel"
-                                    )
+                                    anno = doc.addObject("App::AnnotationLabel", "surveyLabel")
                                     if "Vertex" in el:
                                         anno.BasePosition = e.Point
                                     else:
@@ -1288,8 +1288,9 @@ def survey(callback=False):
 class _SurveyObserver:
     "an observer for the survey() function"
 
-    def __init__(self, callback):
+    def __init__(self, callback, doc):
         self.callback = callback
+        self.doc = doc
         self.selection = []
         self.labels = []
         self.totalLength = 0
@@ -1312,7 +1313,8 @@ class _SurveyObserver:
 class SurveyTaskPanel:
     "A task panel for the survey tool"
 
-    def __init__(self):
+    def __init__(self, doc):
+        self.doc = doc
         self.form = QtGui.QWidget()
         self.form.setWindowIcon(QtGui.QIcon(":/icons/Arch_Survey.svg"))
         layout = QtGui.QVBoxLayout(self.form)
@@ -1374,7 +1376,7 @@ class SurveyTaskPanel:
     def reject(self):
         if hasattr(FreeCAD, "SurveyObserver"):
             for label in FreeCAD.SurveyObserver.labels:
-                FreeCAD.ActiveDocument.removeObject(label)
+                FreeCAD.SurveyObserver.doc.removeObject(label)
             FreeCADGui.Selection.removeObserver(FreeCAD.SurveyObserver)
             del FreeCAD.SurveyObserver
         return True

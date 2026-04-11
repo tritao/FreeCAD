@@ -26,6 +26,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -53,9 +54,13 @@ class Arch_Profile:
     def Activated(self):
 
         import ArchProfile
+        from draftguitools import gui_tool_utils
 
+        gui_tool_utils.finish_active_draft_command()
         FreeCAD.activeDraftCommand = self  # register as a Draft command for auto grid on/off
         self.doc = FreeCAD.ActiveDocument
+        if self.doc is None:
+            return
         self.Profile = None
         self.Categories = []
         self.Presets = ArchProfile.readPresets()
@@ -67,6 +72,12 @@ class Arch_Profile:
             extradlg=[self.taskbox()],
             title=translate("Arch", "Create Profile"),
         )
+
+    def finish(self, cont=False):
+        if FreeCAD.activeDraftCommand is self:
+            FreeCAD.activeDraftCommand = None
+        if hasattr(FreeCADGui, "Snapper"):
+            FreeCADGui.Snapper.off()
 
     def taskbox(self):
         "sets up a taskbox widget"
@@ -126,23 +137,31 @@ class Arch_Profile:
     def getPoint(self, point=None, obj=None):
         "this function is called by the snapper when it has a 3D point"
 
-        FreeCAD.activeDraftCommand = None
-        FreeCADGui.Snapper.off()
         if not point:
+            FreeCAD.activeDraftCommand = None
+            FreeCADGui.Snapper.off()
+            return
+        if not BimArchUtils.documentIsActive(self.doc):
             return
         if not self.Profile:
             return
+        FreeCAD.activeDraftCommand = None
+        FreeCADGui.Snapper.off()
         pt = "FreeCAD.Vector(" + str(point.x) + "," + str(point.y) + "," + str(point.z) + ")"
-        self.doc.openTransaction(translate("Arch", "Create Profile"))
-        FreeCADGui.addModule("Arch")
-        FreeCADGui.doCommand("p = Arch.makeProfile(" + str(self.Profile) + ")")
-        FreeCADGui.addModule("WorkingPlane")
-        FreeCADGui.doCommand("p.Placement = WorkingPlane.get_working_plane().get_placement()")
-        FreeCADGui.doCommand("p.Placement.Base = " + pt)
-        FreeCADGui.addModule("Draft")
-        FreeCADGui.doCommand("Draft.autogroup(p)")
-        self.doc.commitTransaction()
-        self.doc.recompute()
+
+        def create_profile(document):
+            document.openTransaction(translate("Arch", "Create Profile"))
+            FreeCADGui.addModule("Arch")
+            FreeCADGui.doCommand("p = Arch.makeProfile(" + str(self.Profile) + ")")
+            FreeCADGui.addModule("WorkingPlane")
+            FreeCADGui.doCommand("p.Placement = WorkingPlane.get_working_plane().get_placement()")
+            FreeCADGui.doCommand("p.Placement.Base = " + pt)
+            FreeCADGui.addModule("Draft")
+            FreeCADGui.doCommand("Draft.autogroup(p)")
+            document.commitTransaction()
+            document.recompute()
+
+        BimArchUtils.runInDocument(self.doc, create_profile)
 
     def setCategory(self, i):
 

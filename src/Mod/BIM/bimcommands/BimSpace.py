@@ -26,6 +26,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -56,21 +57,20 @@ class Arch_Space:
 
         import ArchComponent
 
-        FreeCAD.ActiveDocument.openTransaction(translate("Arch", "Create Space"))
+        doc = FreeCAD.ActiveDocument
+        doc.openTransaction(translate("Arch", "Create Space"))
         FreeCADGui.addModule("Arch")
         sel = FreeCADGui.Selection.getSelection()
         if sel:
-            FreeCADGui.Control.closeDialog()
+            BimArchUtils.closeTaskDialog(doc)
             FreeCADGui.doCommand("obj = Arch.makeSpace(FreeCADGui.Selection.getSelectionEx())")
             FreeCADGui.addModule("Draft")
             FreeCADGui.doCommand("Draft.autogroup(obj)")
-            FreeCAD.ActiveDocument.commitTransaction()
-            FreeCAD.ActiveDocument.recompute()
+            doc.commitTransaction()
+            doc.recompute()
         else:
             FreeCAD.Console.PrintMessage(translate("Arch", "Please select a base object") + "\n")
-            FreeCADGui.Control.showDialog(
-                ArchComponent.SelectionTaskPanel(), FreeCADGui.ActiveDocument
-            )
+            BimArchUtils.showTaskDialog(ArchComponent.SelectionTaskPanel(), doc)
             FreeCAD.ArchObserver = ArchComponent.ArchSelectionObserver(nextCommand="Arch_Space")
             FreeCADGui.Selection.addObserver(FreeCAD.ArchObserver)
 

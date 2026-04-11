@@ -26,6 +26,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -49,14 +50,22 @@ class BIM_IfcElements:
 
     def Activated(self):
 
+        document = FreeCAD.ActiveDocument
+        if document is None:
+            return
+
         # only raise the dialog if it is already open
         if getattr(self, "form", None):
-            self.form.raise_()
-            return
+            if getattr(self, "documentName", None) == document.Name:
+                self.form.raise_()
+                return
+            self.reject()
 
         import Draft
         from PySide import QtGui
 
+        self.documentName = document.Name
+        self.doc = document
         # build objects list
         self.objectslist = {}
         try:
@@ -67,7 +76,7 @@ class BIM_IfcElements:
             import ArchComponent
 
             self.ifctypes = ArchComponent.IfcRoles
-        for obj in FreeCAD.ActiveDocument.Objects:
+        for obj in self.doc.Objects:
             mat = ""
             role = self.getRole(obj)
             if role:
@@ -83,7 +92,7 @@ class BIM_IfcElements:
         self.model = QtGui.QStandardItemModel()
         self.form.tree.setModel(self.model)
         self.form.tree.setUniformRowHeights(True)
-        self.form.tree.setItemDelegate(IfcElementsDelegate(dialog=self))
+        self.form.tree.setItemDelegate(IfcElementsDelegate(dialog=self, doc=self.doc))
         self.form.globalMode.addItems([" "] + self.ifctypes)
         self.form.groupMode.setItemIcon(2, QtGui.QIcon(":/icons/Arch_Material.svg"))
         self.form.groupMode.setItemIcon(3, QtGui.QIcon(":/icons/Document.svg"))
@@ -91,7 +100,7 @@ class BIM_IfcElements:
         self.form.globalMaterial.addItem(translate("BIM", "Create new material"))
         self.form.globalMaterial.addItem(translate("BIM", "Create new multi-material"))
         self.materials = []
-        for o in FreeCAD.ActiveDocument.Objects:
+        for o in self.doc.Objects:
             if o.isDerivedFrom("App::MaterialObject") or (Draft.getType(o) == "MultiMaterial"):
                 self.materials.append(o.Name)
                 self.form.globalMaterial.addItem(o.Label, QtGui.QIcon(":/icons/Arch_Material.svg"))
@@ -114,6 +123,27 @@ class BIM_IfcElements:
 
         self.update()
         self.form.show()
+
+    def _get_document(self):
+        if not getattr(self, "documentName", None):
+            return None
+        try:
+            return FreeCAD.getDocument(self.documentName)
+        except Exception:
+            return None
+
+    def _run_in_document(self, callback):
+        document = self._get_document()
+        if document is None:
+            return None
+        previous = getattr(FreeCAD.ActiveDocument, "Name", "")
+        if previous != document.Name:
+            FreeCAD.setActiveDocument(document.Name)
+        try:
+            return callback(document)
+        finally:
+            if previous and previous != document.Name and previous in FreeCAD.listDocuments():
+                FreeCAD.setActiveDocument(previous)
 
     def update(self, index=None):
         "updates the tree widgets in all tabs"
@@ -163,7 +193,7 @@ class BIM_IfcElements:
         for name, rolemat in self.objectslist.items():
             role = rolemat[0]
             mat = rolemat[1]
-            obj = FreeCAD.ActiveDocument.getObject(name)
+            obj = self.doc.getObject(name)
             if obj:
                 if (not self.form.onlyVisible.isChecked()) or obj.ViewObject.isVisible():
                     groups.setdefault(role, []).append([name, mat])
@@ -172,7 +202,7 @@ class BIM_IfcElements:
             top = QtGui.QStandardItem(s1)
             self.model.appendRow([top, QtGui.QStandardItem(), QtGui.QStandardItem()])
             for name, mat in groups[group]:
-                obj = FreeCAD.ActiveDocument.getObject(name)
+                obj = self.doc.getObject(name)
                 if obj:
                     it1 = QtGui.QStandardItem(obj.Label)
                     it1.setIcon(getIcon(obj))
@@ -182,7 +212,7 @@ class BIM_IfcElements:
                         it2.setIcon(QtGui.QIcon(":/icons/edit-edit.svg"))
                     matlabel = ""
                     if mat:
-                        matobj = FreeCAD.ActiveDocument.getObject(mat)
+                        matobj = self.doc.getObject(mat)
                         if matobj:
                             matlabel = matobj.Label
                     it3 = QtGui.QStandardItem(matlabel)
@@ -204,7 +234,7 @@ class BIM_IfcElements:
             mat = rolemat[1]
             if not mat:
                 mat = "Undefined"
-            obj = FreeCAD.ActiveDocument.getObject(name)
+            obj = self.doc.getObject(name)
             if obj:
                 if (not self.form.onlyVisible.isChecked()) or obj.ViewObject.isVisible():
                     groups.setdefault(mat, []).append([name, role])
@@ -212,14 +242,14 @@ class BIM_IfcElements:
         for group in groups.keys():
             grlabel = "Undefined"
             if group != "Undefined":
-                matobj = FreeCAD.ActiveDocument.getObject(group)
+                matobj = self.doc.getObject(group)
                 if matobj:
                     grlabel = matobj.Label
             s1 = grlabel + " (" + str(len(groups[group])) + ")"
             top = QtGui.QStandardItem(s1)
             self.model.appendRow([top, QtGui.QStandardItem(), QtGui.QStandardItem()])
             for name, role in groups[group]:
-                obj = FreeCAD.ActiveDocument.getObject(name)
+                obj = self.doc.getObject(name)
                 if obj:
                     it1 = QtGui.QStandardItem(obj.Label)
                     it1.setIcon(getIcon(obj))
@@ -230,7 +260,7 @@ class BIM_IfcElements:
                     mat = ""
                     matlabel = ""
                     if group != "Undefined":
-                        matobj = FreeCAD.ActiveDocument.getObject(group)
+                        matobj = self.doc.getObject(group)
                         if matobj:
                             matlabel = matobj.Label
                             mat = matobj.Name
@@ -257,7 +287,7 @@ class BIM_IfcElements:
         rel = []
         deps = []
         for name in self.objectslist.keys():
-            obj = FreeCAD.ActiveDocument.getObject(name)
+            obj = self.doc.getObject(name)
             if obj:
                 if istop(obj):
                     rel.append(obj)
@@ -292,7 +322,7 @@ class BIM_IfcElements:
                     it2.setIcon(QtGui.QIcon(":/icons/edit-edit.svg"))
                 matlabel = ""
                 if mat:
-                    matobj = FreeCAD.ActiveDocument.getObject(mat)
+                    matobj = self.doc.getObject(mat)
                     if matobj:
                         matlabel = matobj.Label
                 else:
@@ -321,7 +351,7 @@ class BIM_IfcElements:
         for name, rolemat in self.objectslist.items():
             role = rolemat[0]
             mat = rolemat[1]
-            obj = FreeCAD.ActiveDocument.getObject(name)
+            obj = self.doc.getObject(name)
             if obj:
                 if (not self.form.onlyVisible.isChecked()) or obj.ViewObject.isVisible():
                     it1 = QtGui.QStandardItem(obj.Label)
@@ -332,7 +362,7 @@ class BIM_IfcElements:
                         it2.setIcon(QtGui.QIcon(":/icons/edit-edit.svg"))
                     matlabel = ""
                     if mat:
-                        matobj = FreeCAD.ActiveDocument.getObject(mat)
+                        matobj = self.doc.getObject(mat)
                         if matobj:
                             matlabel = matobj.Label
                     else:
@@ -362,15 +392,19 @@ class BIM_IfcElements:
             return None
 
     def onClickTree(self, index=None):
-        FreeCADGui.Selection.clearSelection()
+        document = self._get_document()
+        if document is None:
+            return
+
+        FreeCADGui.Selection.clearSelection(document.Name)
         sel = self.form.tree.selectedIndexes()
         mode = None
         mat = None
         for index in sel:
             if index.column() == 0:
-                obj = FreeCAD.ActiveDocument.getObject(self.model.itemFromIndex(index).toolTip())
+                obj = document.getObject(self.model.itemFromIndex(index).toolTip())
                 if obj:
-                    FreeCADGui.Selection.addSelection(obj)
+                    FreeCADGui.Selection.addSelection(document.Name, obj.Name)
 
         for index in sel:
             if index.column() == 1:
@@ -384,7 +418,7 @@ class BIM_IfcElements:
         for index in sel:
             if index.column() == 2:
                 item = self.model.itemFromIndex(index)
-                m = FreeCAD.ActiveDocument.getObject(item.toolTip())
+                m = self.doc.getObject(item.toolTip())
                 if mat:
                     if m != mat:
                         mat = None
@@ -417,10 +451,10 @@ class BIM_IfcElements:
     def onMaterialChanged(self, index=-1):
         changed = False
         if index == 1:
-            FreeCADGui.runCommand("Arch_Material")
+            self._run_in_document(lambda document: FreeCADGui.runCommand("Arch_Material"))
             QtCore.QTimer.singleShot(1000, self.checkMatChanged)
         elif index == 2:
-            FreeCADGui.runCommand("Arch_MultiMaterial")
+            self._run_in_document(lambda document: FreeCADGui.runCommand("Arch_MultiMaterial"))
             QtCore.QTimer.singleShot(1000, self.checkMatChanged)
         elif index >= 3:
             mat = self.materials[index - 3]
@@ -428,7 +462,7 @@ class BIM_IfcElements:
             for index in sel:
                 if index.column() == 2:
                     if mat:
-                        mobj = FreeCAD.ActiveDocument.getObject(mat)
+                        mobj = self.doc.getObject(mat)
                         if mobj:
                             item = self.model.itemFromIndex(index)
                             if item.toolTip() != mat:
@@ -444,12 +478,16 @@ class BIM_IfcElements:
 
         if getattr(self, "form", None) is None:
             return
-        if FreeCADGui.Control.activeDialog():
+        document = self._get_document()
+        if document is None:
+            return self.reject()
+        self.doc = document
+        if BimArchUtils.taskDialogActive(self.doc):
             QtCore.QTimer.singleShot(500, self.checkMatChanged)
             return
         mats = [
             o.Name
-            for o in FreeCAD.ActiveDocument.Objects
+            for o in self.doc.Objects
             if (o.isDerivedFrom("App::MaterialObject") or (Draft.getType(o) == "MultiMaterial"))
         ]
         if len(mats) != len(self.materials):
@@ -460,7 +498,7 @@ class BIM_IfcElements:
             self.form.globalMaterial.addItem(translate("BIM", "Create new material"))
             self.form.globalMaterial.addItem(translate("BIM", "Create new multi-material"))
             for m in self.materials:
-                o = FreeCAD.ActiveDocument.getObject(m)
+                o = self.doc.getObject(m)
                 if o:
                     self.form.globalMaterial.addItem(
                         o.Label, QtGui.QIcon(":/icons/Arch_Material.svg")
@@ -470,7 +508,7 @@ class BIM_IfcElements:
             for index in sel:
                 if index.column() == 2:
                     for mat in newmats:
-                        mobj = FreeCAD.ActiveDocument.getObject(mat)
+                        mobj = self.doc.getObject(mat)
                         if mobj:
                             item = self.model.itemFromIndex(index)
                             if item.toolTip() != mat:
@@ -482,6 +520,11 @@ class BIM_IfcElements:
 
     def accept(self):
         # get current state of tree
+
+        document = self._get_document()
+        if document is None:
+            return self.reject()
+        self.doc = document
 
         self.form.hide()
         for row in range(self.model.rowCount()):
@@ -502,40 +545,42 @@ class BIM_IfcElements:
         for name, rolemat in self.objectslist.items():
             role = rolemat[0]
             mat = rolemat[1]
-            obj = FreeCAD.ActiveDocument.getObject(name)
+            obj = self.doc.getObject(name)
             if obj:
                 if hasattr(obj, "IfcRole") and (obj.IfcRole != role):
                     if not changed:
-                        FreeCAD.ActiveDocument.openTransaction("Change IFC role")
+                        self.doc.openTransaction("Change IFC role")
                         changed = True
                     obj.IfcRole = role
                 elif hasattr(obj, "IfcType") and (obj.IfcType != role):
                     if not changed:
-                        FreeCAD.ActiveDocument.openTransaction("Change IFC type")
+                        self.doc.openTransaction("Change IFC type")
                         changed = True
                     obj.IfcType = role
                 if mat and hasattr(obj, "Material"):
-                    mobj = FreeCAD.ActiveDocument.getObject(mat)
+                    mobj = self.doc.getObject(mat)
                     if mobj:
                         if obj.Material:
                             if obj.Material.Name != mat:
                                 if not changed:
-                                    FreeCAD.ActiveDocument.openTransaction("Change material")
+                                    self.doc.openTransaction("Change material")
                                     changed = True
                                 obj.Material = mobj
                         else:
                             if not changed:
-                                FreeCAD.ActiveDocument.openTransaction("Change material")
+                                self.doc.openTransaction("Change material")
                                 changed = True
                             obj.Material = mobj
         if changed:
-            FreeCAD.ActiveDocument.commitTransaction()
-            FreeCAD.ActiveDocument.recompute()
+            self.doc.commitTransaction()
+            self.doc.recompute()
         return self.reject()
 
     def reject(self):
         self.form.hide()
         del self.form
+        self.documentName = ""
+        self.doc = None
         return True
 
 
@@ -543,7 +588,7 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
 
     class IfcElementsDelegate(QtGui.QStyledItemDelegate):
-        def __init__(self, parent=None, dialog=None, *args):
+        def __init__(self, parent=None, dialog=None, doc=None, *args):
             import Arch_rc
 
             try:
@@ -554,9 +599,10 @@ if FreeCAD.GuiUp:
                 import ArchComponent
 
                 self.roles = ArchComponent.IfcRoles
+            self.doc = doc
             self.mats = []
             self.matlabels = []
-            for o in FreeCAD.ActiveDocument.Objects:
+            for o in self.doc.Objects:
                 if o.isDerivedFrom("App::MaterialObject"):
                     self.mats.append(o.Name)
                     self.matlabels.append(o.Label)
@@ -616,7 +662,7 @@ if FreeCAD.GuiUp:
             else:
                 model.setData(index, editor.text())
                 item = model.itemFromIndex(index)
-                obj = FreeCAD.ActiveDocument.getObject(item.toolTip())
+                obj = self.doc.getObject(item.toolTip())
                 if obj:
                     obj.Label = editor.text()
             self.dialog.update()

@@ -45,6 +45,8 @@ from draftutils import params
 
 if FreeCAD.GuiUp:
     from PySide.QtCore import QT_TRANSLATE_NOOP
+    import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
     # \cond
@@ -961,8 +963,6 @@ class _ViewProviderPrecast(ArchComponent.ViewProviderComponent):
         if mode != 0:
             return None
 
-        import FreeCADGui
-
         taskd = ArchComponent.ComponentTaskPanel()
         taskd.obj = self.Object
         taskd.update()
@@ -971,19 +971,17 @@ class _ViewProviderPrecast(ArchComponent.ViewProviderComponent):
             self.dentd.form.show()
             self.dentd.fillDents(self.Object.Dents)
             taskd.form = [taskd.form, self.dentd.form]
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(taskd, self.Object)
         return True
 
     def unsetEdit(self, vobj, mode):
         if mode != 0:
             return None
 
-        import FreeCADGui
-
         if hasattr(self, "dentd"):
             self.Object.Dents = self.dentd.getValues()
             del self.dentd
-        FreeCADGui.Control.closeDialog()
+        BimArchUtils.closeTaskDialog(self.Object)
         return True
 
 

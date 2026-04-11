@@ -53,10 +53,18 @@ class BIM_Classification:
 
     def Activated(self):
 
+        document = FreeCAD.ActiveDocument
+        if document is None:
+            return
+
         # only raise the dialog if it is already open
         if getattr(self, "form", None):
-            self.form.raise_()
-            return
+            if getattr(self, "documentName", None) == document.Name:
+                self.form.raise_()
+                return
+            self.reject()
+
+        self.documentName = document.Name
 
         import Draft
         from PySide import QtCore, QtGui
@@ -100,8 +108,9 @@ class BIM_Classification:
         )
 
         # hide materials list if we are editing a particular object
-        if len(FreeCADGui.Selection.getSelection()) == 1:
-            self.isEditing = FreeCADGui.Selection.getSelection()[0]
+        selection = FreeCADGui.Selection.getSelection(document.Name)
+        if len(selection) == 1:
+            self.isEditing = selection[0]
             pl = self.isEditing.PropertiesList
             if ("StandardCode" in pl) or ("IfcClass" in pl):
                 self.form.groupMaterials.hide()
@@ -122,7 +131,7 @@ class BIM_Classification:
         self.objectslist = {}
         self.matlist = {}
         self.labellist = {}
-        for obj in FreeCAD.ActiveDocument.Objects:
+        for obj in document.Objects:
             if "StandardCode" in obj.PropertiesList:
                 if Draft.getType(obj) in ["Material", "MultiMaterial"]:
                     self.matlist[obj.Name] = obj.StandardCode
@@ -194,8 +203,25 @@ class BIM_Classification:
 
         self.form.search.setFocus()
 
+    def _get_document(self):
+        if not getattr(self, "documentName", None):
+            return None
+        try:
+            return FreeCAD.getDocument(self.documentName)
+        except Exception:
+            return None
+
+    def _get_selection(self):
+        document = self._get_document()
+        if document is None:
+            return []
+        return FreeCADGui.Selection.getSelection(document.Name)
+
     def updateObjects(self, idx=None):
         # store current state of tree into self.objectslist before redrawing
+
+        if self._get_document() is None:
+            return self.reject()
 
         for row in range(self.form.treeObjects.topLevelItemCount()):
             child = self.form.treeObjects.topLevelItem(row)
@@ -237,9 +263,12 @@ class BIM_Classification:
         from PySide import QtCore, QtGui
         import Draft
 
+        document = self._get_document()
+        if document is None:
+            return
         groups = {}
         for name in self.objectslist.keys():
-            obj = FreeCAD.ActiveDocument.getObject(name)
+            obj = document.getObject(name)
             if obj and hasattr(obj, "IfcType"):
                 groups.setdefault(obj.IfcType, []).append(name)
             elif obj and hasattr(obj, "IfcRole"):
@@ -254,7 +283,7 @@ class BIM_Classification:
             mit = QtGui.QTreeWidgetItem([group, ""])
             self.form.treeObjects.addTopLevelItem(mit)
             for name in groups[group]:
-                obj = FreeCAD.ActiveDocument.getObject(name)
+                obj = document.getObject(name)
                 if obj:
                     if (
                         (not self.form.onlyVisible.isChecked())
@@ -272,10 +301,13 @@ class BIM_Classification:
     def updateByMaterial(self):
         from PySide import QtCore, QtGui
 
+        document = self._get_document()
+        if document is None:
+            return
         groups = {}
         claimed = []
         for name in self.matlist.keys():
-            mat = FreeCAD.ActiveDocument.getObject(name)
+            mat = document.getObject(name)
             if mat:
                 children = [par.Name for par in mat.InList if par.Name in self.objectslist.keys()]
                 groups[name] = children
@@ -283,7 +315,7 @@ class BIM_Classification:
         groups["Undefined"] = [o for o in self.objectslist.keys() if not o in claimed]
 
         for group in groups.keys():
-            matobj = FreeCAD.ActiveDocument.getObject(group)
+            matobj = document.getObject(group)
             if matobj:
                 mit = QtGui.QTreeWidgetItem([self.labellist[group], self.matlist[group]])
                 mit.setIcon(0, self.getIcon(matobj))
@@ -292,7 +324,7 @@ class BIM_Classification:
                 mit = QtGui.QTreeWidgetItem(["Undefined", ""])
             self.form.treeObjects.addTopLevelItem(mit)
             for name in groups[group]:
-                obj = FreeCAD.ActiveDocument.getObject(name)
+                obj = document.getObject(name)
                 if obj:
                     if (not self.form.onlyVisible.isChecked()) or obj.ViewObject.isVisible():
                         it = QtGui.QTreeWidgetItem([self.labellist[name], self.objectslist[name]])
@@ -306,6 +338,9 @@ class BIM_Classification:
     def updateByTree(self):
         from PySide import QtGui
 
+        document = self._get_document()
+        if document is None:
+            return
         # order by hierarchy
         def istop(obj):
             for parent in obj.InList:
@@ -316,7 +351,7 @@ class BIM_Classification:
         rel = []
         deps = []
         for name in self.objectslist.keys():
-            obj = FreeCAD.ActiveDocument.getObject(name)
+            obj = document.getObject(name)
             if obj:
                 if istop(obj):
                     rel.append(obj)
@@ -339,7 +374,7 @@ class BIM_Classification:
         mit = QtGui.QTreeWidgetItem(["Materials", ""])
         self.form.treeObjects.addTopLevelItem(mit)
         for name, code in self.matlist.items():
-            obj = FreeCAD.ActiveDocument.getObject(name)
+            obj = document.getObject(name)
             if obj:
                 it = QtGui.QTreeWidgetItem([self.labellist[name], code])
                 it.setIcon(0, self.getIcon(obj))
@@ -351,7 +386,7 @@ class BIM_Classification:
             if (not self.form.onlyVisible.isChecked()) or obj.ViewObject.isVisible():
                 it = QtGui.QTreeWidgetItem([self.labellist[obj.Name], code])
                 it.setIcon(0, self.getIcon(obj))
-                it.setToolTip(0, name)
+                it.setToolTip(0, obj.Name)
                 ok = False
                 for par in obj.InListRecursive:
                     if par.Name in done:
@@ -369,10 +404,14 @@ class BIM_Classification:
         from PySide import QtGui
         import Draft
 
+        selection = self._get_selection()
+        document = self._get_document()
+        if document is None:
+            return
         d = self.objectslist.copy()
         d.update(self.matlist)
         for name, code in d.items():
-            obj = FreeCAD.ActiveDocument.getObject(name)
+            obj = document.getObject(name)
             if obj:
                 if (
                     (not self.form.onlyVisible.isChecked())
@@ -383,7 +422,7 @@ class BIM_Classification:
                     it.setIcon(0, self.getIcon(obj))
                     it.setToolTip(0, name)
                     self.form.treeObjects.addTopLevelItem(it)
-                    if obj in FreeCADGui.Selection.getSelection():
+                    if obj in selection:
                         self.form.treeObjects.setCurrentItem(it)
 
     def updateClasses(self, search=""):
@@ -560,6 +599,9 @@ class BIM_Classification:
                     m.setText(0, c)
 
     def accept(self):
+        document = self._get_document()
+        if document is None:
+            return self.reject()
         if not self.isEditing:
             changed = False
             for row in range(self.form.treeObjects.topLevelItemCount()):
@@ -570,14 +612,12 @@ class BIM_Classification:
                     code = item.text(1)
                     label = item.text(0)
                     if item.toolTip(0):
-                        obj = FreeCAD.ActiveDocument.getObject(item.toolTip(0))
+                        obj = document.getObject(item.toolTip(0))
                         if obj:
                             if hasattr(obj, "StandardCode"):
                                 if code != obj.StandardCode:
                                     if not changed:
-                                        FreeCAD.ActiveDocument.openTransaction(
-                                            "Change standard codes"
-                                        )
+                                        document.openTransaction("Change standard codes")
                                         changed = True
                                     obj.StandardCode = code
                             elif hasattr(obj, "IfcClass"):
@@ -587,19 +627,17 @@ class BIM_Classification:
                                     )
                                 if code != obj.Classification:
                                     if not changed:
-                                        FreeCAD.ActiveDocument.openTransaction(
-                                            "Change standard codes"
-                                        )
+                                        document.openTransaction("Change standard codes")
                                         changed = True
                                     obj.Classification = code
                             if label != obj.Label:
                                 if not changed:
-                                    FreeCAD.ActiveDocument.openTransaction("Change standard codes")
+                                    document.openTransaction("Change standard codes")
                                     changed = True
                                 obj.Label = label
             if changed:
-                FreeCAD.ActiveDocument.commitTransaction()
-                FreeCAD.ActiveDocument.recompute()
+                document.commitTransaction()
+                document.recompute()
         else:
             # Close the form if user has pressed Enter and did not
             # select anything
@@ -609,7 +647,7 @@ class BIM_Classification:
             code = self.form.treeClass.selectedItems()[0].text(0)
             pl = self.isEditing.PropertiesList
             if ("StandardCode" in pl) or ("IfcClass" in pl):
-                FreeCAD.ActiveDocument.openTransaction("Change standard codes")
+                document.openTransaction("Change standard codes")
                 if self.form.checkPrefix.isChecked():
                     code = self.form.comboSystem.currentText() + " " + code
                 if "StandardCode" in pl:
@@ -624,8 +662,8 @@ class BIM_Classification:
                     self.isEditing.ViewObject.Proxy, "setTaskValue"
                 ):
                     self.isEditing.ViewObject.Proxy.setTaskValue("FieldCode", code)
-                FreeCAD.ActiveDocument.commitTransaction()
-                FreeCAD.ActiveDocument.recompute()
+                document.commitTransaction()
+                document.recompute()
         p = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM")
         p.SetInt("BimClassificationDialogWidth", self.form.width())
         p.SetInt("BimClassificationDialogHeight", self.form.height())
@@ -634,6 +672,7 @@ class BIM_Classification:
     def reject(self):
         self.form.hide()
         del self.form
+        self.documentName = ""
         return True
 
     def onUpArrow(self):

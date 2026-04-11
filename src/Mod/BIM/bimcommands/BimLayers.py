@@ -28,6 +28,7 @@ import ast
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -66,10 +67,18 @@ class BIM_Layers:
 
     def Activated(self):
 
+        document = FreeCAD.ActiveDocument
+        if document is None:
+            return
+
         # only raise the dialog if it is already open
         if getattr(self, "dialog", None):
-            self.dialog.raise_()
-            return
+            if getattr(self, "documentName", None) == document.Name:
+                self.dialog.raise_()
+                return
+            self.reject()
+
+        self.documentName = document.Name
 
         from PySide import QtGui
 
@@ -137,12 +146,39 @@ class BIM_Layers:
         # rock 'n roll!!!
         self.dialog.show()
 
+    def _get_document(self):
+        if not getattr(self, "documentName", None):
+            return None
+        try:
+            return FreeCAD.getDocument(self.documentName)
+        except Exception:
+            return None
+
+    def _get_active_view(self):
+        return BimArchUtils.activeViewOf(self._get_document())
+
+    def _make_layer(self, label):
+        import Draft
+
+        document = self._get_document()
+        if document is None:
+            return None
+
+        previous = getattr(FreeCAD.ActiveDocument, "Name", "")
+        if previous != document.Name:
+            FreeCAD.setActiveDocument(document.Name)
+        try:
+            return Draft.make_layer(label)
+        finally:
+            if previous and previous != document.Name and previous in FreeCAD.listDocuments():
+                FreeCAD.setActiveDocument(previous)
+
     def accept(self):
         "when OK button is pressed"
 
-        import Draft
-
-        doc = FreeCAD.ActiveDocument
+        doc = self._get_document()
+        if doc is None:
+            return self.reject()
         changed = False
 
         # delete layers
@@ -171,7 +207,9 @@ class BIM_Layers:
                     doc.openTransaction("Layers change")
                     changed = True
                 if self.model.item(row, 1).icon().isNull():
-                    obj = Draft.make_layer(self.model.item(row, 1).text())
+                    obj = self._make_layer(self.model.item(row, 1).text())
+                    if obj is None:
+                        continue
                     # By default BIM layers should not swallow their children otherwise
                     # they will disappear from the tree root
                     obj.ViewObject.addProperty(
@@ -180,9 +218,9 @@ class BIM_Layers:
                     obj.ViewObject.HideChildren = True
                 else:
                     from nativeifc import ifc_tools
-                    import FreeCADGui
 
-                    active = FreeCADGui.ActiveDocument.ActiveView.getActiveObject("NativeIFC")
+                    view = self._get_active_view()
+                    active = view.getActiveObject("NativeIFC") if view else None
                     project = None
                     if active:
                         project = ifc_tools.get_project(active)
@@ -296,6 +334,7 @@ class BIM_Layers:
 
         # wipe to let FreeCAD know the dialog has been closed
         del self.dialog
+        self.documentName = ""
 
         return True
 
@@ -303,6 +342,10 @@ class BIM_Layers:
         "rebuild the model from document contents"
 
         import Draft
+
+        doc = self._get_document()
+        if doc is None:
+            return self.reject()
 
         self.model.clear()
 
@@ -324,7 +367,7 @@ class BIM_Layers:
         self.dialog.tree.setColumnWidth(1, 128)  # name column
 
         # populate
-        objs = [obj for obj in FreeCAD.ActiveDocument.Objects if Draft.getType(obj) == "Layer"]
+        objs = [obj for obj in doc.Objects if Draft.getType(obj) == "Layer"]
         objs.sort(key=lambda o: o.Label)
         for obj in objs:
             self.addItem(obj)
@@ -352,7 +395,8 @@ class BIM_Layers:
         transparencyItem.setData(0, QtCore.Qt.DisplayRole)
         linePrintColorItem = QtGui.QStandardItem()
         linePrintColorItem.setData(self.getPref("DefaultPrintColor", 0), QtCore.Qt.UserRole)
-        if FreeCADGui.ActiveDocument.ActiveView.getActiveObject("NativeIFC"):
+        view = self._get_active_view()
+        if view and view.getActiveObject("NativeIFC"):
             nameItem.setIcon(self.ifcicon)
 
         # populate with object data
@@ -461,11 +505,15 @@ class BIM_Layers:
 
         from PySide import QtGui
 
+        doc = self._get_document()
+        if doc is None:
+            return
+
         for index in self.dialog.tree.selectedIndexes():
             if index.column() == 1:
                 name = self.model.itemFromIndex(index).toolTip()
                 if name:
-                    obj = FreeCAD.ActiveDocument.getObject(name)
+                    obj = doc.getObject(name)
                     if obj:
                         if hasattr(obj, "StepId"):
                             return
@@ -478,13 +526,17 @@ class BIM_Layers:
     def onAssign(self):
         "attributes selected objects to a selected layer"
 
+        doc = self._get_document()
+        if doc is None:
+            return
+
         for index in self.dialog.tree.selectedIndexes():
             if index.column() == 1:
                 name = self.model.itemFromIndex(index).toolTip()
                 if name:
-                    target = FreeCAD.ActiveDocument.getObject(name)
+                    target = doc.getObject(name)
                     if target:
-                        selected = FreeCADGui.Selection.getSelection()
+                        selected = FreeCADGui.Selection.getSelection(doc.Name)
                         if selected:
                             self.assignList.setdefault(target.Name, [])
                             for i in selected:

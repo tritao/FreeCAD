@@ -47,6 +47,7 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
     # \cond
@@ -880,7 +881,7 @@ class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
             return None
 
         taskd = SpaceTaskPanel(vobj.Object)
-        FreeCADGui.Control.showDialog(taskd, FreeCADGui.ActiveDocument)
+        BimArchUtils.showTaskDialog(taskd, vobj.Object)
         return True
 
     def getDisplayModes(self, vobj):
@@ -980,8 +981,9 @@ class SpaceTaskPanel(ArchComponent.ComponentOptionsTaskPanel):
 
     def addBoundary(self):
         if self.obj:
-            if FreeCADGui.Selection.getSelectionEx():
-                self.obj.Proxy.addSubobjects(self.obj, FreeCADGui.Selection.getSelectionEx())
+            selection = BimArchUtils.selectionExOf(self.obj)
+            if selection:
+                self.obj.Proxy.addSubobjects(self.obj, selection)
                 self.updateBoundaries()
 
     def delBoundary(self):

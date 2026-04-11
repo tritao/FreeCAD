@@ -42,6 +42,7 @@ if FreeCAD.GuiUp:
     from PySide import QtCore, QtGui
     from PySide.QtCore import QT_TRANSLATE_NOOP
     import FreeCADGui
+    from bimcommands import BimArchUtils
     from draftutils.translate import translate
 else:
     # \cond
@@ -777,7 +778,7 @@ class _ViewProviderArchSchedule:
         menu.addAction(actionToggleSpreadsheet)
 
     def edit(self):
-        FreeCADGui.ActiveDocument.setEdit(self.Object, 0)
+        BimArchUtils.editObject(self.Object, 0)
 
     def toggleSpreadsheet(self):
         self.Object.CreateSpreadsheet = not self.Object.CreateSpreadsheet
@@ -1057,14 +1058,14 @@ class ArchScheduleTaskPanel:
         # commit values
         self.writeValues()
         self.form.hide()
-        FreeCADGui.ActiveDocument.resetEdit()
+        BimArchUtils.resetEdit(self.obj)
         return True
 
     def reject(self):
         """Close dialog without saving"""
 
         self.form.hide()
-        FreeCADGui.ActiveDocument.resetEdit()
+        BimArchUtils.resetEdit(self.obj)
         return True
 
     def writeValues(self):
@@ -1074,6 +1075,7 @@ class ArchScheduleTaskPanel:
             import Arch
 
             self.obj = Arch.makeSchedule()
+        doc = self.obj.Document
         lists = [[], [], [], [], []]
         for i in range(self.form.list.rowCount()):
             for j in range(5):
@@ -1082,7 +1084,7 @@ class ArchScheduleTaskPanel:
                     lists[j].append(cell.text())
                 else:
                     lists[j].append("")
-        FreeCAD.ActiveDocument.openTransaction("Edited Schedule")
+        doc.openTransaction("Edited Schedule")
         self.obj.Operation = lists[0]
         self.obj.Value = lists[1]
         self.obj.Unit = lists[2]
@@ -1092,5 +1094,5 @@ class ArchScheduleTaskPanel:
         self.obj.DetailedResults = self.form.checkDetailed.isChecked()
         self.obj.CreateSpreadsheet = self.form.checkSpreadsheet.isChecked()
         self.obj.AutoUpdate = self.form.checkAutoUpdate.isChecked()
-        FreeCAD.ActiveDocument.commitTransaction()
-        FreeCAD.ActiveDocument.recompute()
+        doc.commitTransaction()
+        doc.recompute()

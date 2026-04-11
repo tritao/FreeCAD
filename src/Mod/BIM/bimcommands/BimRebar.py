@@ -26,6 +26,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -57,6 +58,7 @@ class Arch_Rebar:
 
         import ArchComponent
 
+        doc = FreeCAD.ActiveDocument
         sel = FreeCADGui.Selection.getSelectionEx()
         if sel:
             obj = sel[0].Object
@@ -67,9 +69,7 @@ class Arch_Rebar:
                     if hasattr(sk, "Shape"):
                         if len(sk.Shape.Wires) == 1:
                             # we have a structure and a wire: create the rebar now
-                            FreeCAD.ActiveDocument.openTransaction(
-                                translate("Arch", "Create Rebar")
-                            )
+                            doc.openTransaction(translate("Arch", "Create Rebar"))
                             FreeCADGui.addModule("Arch")
                             FreeCADGui.doCommand(
                                 "Arch.makeRebar(FreeCAD.ActiveDocument."
@@ -78,8 +78,8 @@ class Arch_Rebar:
                                 + sk.Name
                                 + ")"
                             )
-                            FreeCAD.ActiveDocument.commitTransaction()
-                            FreeCAD.ActiveDocument.recompute()
+                            doc.commitTransaction()
+                            doc.recompute()
                             return
                 else:
                     # we have only a structure: open the sketcher
@@ -87,7 +87,7 @@ class Arch_Rebar:
                     FreeCADGui.runCommand("Sketcher_NewSketch")
                     FreeCAD.ArchObserver = ArchComponent.ArchSelectionObserver(
                         obj,
-                        FreeCAD.ActiveDocument.Objects[-1],
+                        doc.Objects[-1],
                         hide=False,
                         nextCommand="Arch_Rebar",
                     )
@@ -103,20 +103,20 @@ class Arch_Rebar:
                                 support = (
                                     "FreeCAD.ActiveDocument." + obj.AttachmentSupport[0][0].Name
                                 )
-                    FreeCAD.ActiveDocument.openTransaction(translate("Arch", "Create Rebar"))
+                    doc.openTransaction(translate("Arch", "Create Rebar"))
                     FreeCADGui.addModule("Arch")
                     FreeCADGui.doCommand(
                         "Arch.makeRebar(" + support + ",FreeCAD.ActiveDocument." + obj.Name + ")"
                     )
-                    FreeCAD.ActiveDocument.commitTransaction()
-                    FreeCAD.ActiveDocument.recompute()
+                    doc.commitTransaction()
+                    doc.recompute()
                     return
 
         FreeCAD.Console.PrintMessage(
             translate("Arch", "Select a base face on a structural object") + "\n"
         )
-        FreeCADGui.Control.closeDialog()
-        FreeCADGui.Control.showDialog(ArchComponent.SelectionTaskPanel(), FreeCADGui.ActiveDocument)
+        BimArchUtils.closeTaskDialog(doc)
+        BimArchUtils.showTaskDialog(ArchComponent.SelectionTaskPanel(), doc)
         FreeCAD.ArchObserver = ArchComponent.ArchSelectionObserver(nextCommand="Arch_Rebar")
         FreeCADGui.Selection.addObserver(FreeCAD.ArchObserver)
 

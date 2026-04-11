@@ -724,6 +724,7 @@ class BIMWorkbench(Workbench):
         PARAMS = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM")
 
         if hasattr(self, "BimSelectObserver"):
+            self.BimSelectObserver.cleanup()
             FreeCADGui.removeDocumentObserver(self.BimSelectObserver)
             del self.BimSelectObserver
 

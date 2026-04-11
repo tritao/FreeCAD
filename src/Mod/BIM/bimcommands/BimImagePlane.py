@@ -26,6 +26,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimcommands import BimArchUtils
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -45,9 +46,13 @@ class BIM_ImagePlane:
 
     def Activated(self):
         from PySide import QtGui
+        from draftguitools import gui_tool_utils
         import draftguitools.gui_trackers as DraftTrackers
 
+        gui_tool_utils.finish_active_draft_command()
         self.doc = FreeCAD.ActiveDocument
+        if self.doc is None:
+            return
         self.tracker = DraftTrackers.rectangleTracker()
         self.basepoint = None
         self.opposite = None
@@ -67,9 +72,20 @@ class BIM_ImagePlane:
                     callback=self.PointCallback, movecallback=self.MoveCallback
                 )
 
+    def finish(self, cont=False):
+        if FreeCAD.activeDraftCommand is self:
+            FreeCAD.activeDraftCommand = None
+        if hasattr(FreeCADGui, "Snapper"):
+            FreeCADGui.Snapper.off()
+        tracker = getattr(self, "tracker", None)
+        if tracker is not None:
+            tracker.off()
+
     def MoveCallback(self, point, snapinfo):
         import DraftVecUtils
 
+        if not BimArchUtils.documentIsActive(self.doc):
+            return
         if point and self.basepoint and (point != self.basepoint):
             chord = point.sub(self.basepoint)
             length = DraftVecUtils.project(chord, self.tracker.u).Length
@@ -92,6 +108,8 @@ class BIM_ImagePlane:
             FreeCAD.activeDraftCommand = None
             FreeCADGui.Snapper.off()
             self.tracker.off()
+            return
+        if not BimArchUtils.documentIsActive(self.doc):
             return
         elif not self.basepoint:
             # this is our first clicked point, nothing to do just yet
