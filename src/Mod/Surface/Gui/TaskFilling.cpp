@@ -74,8 +74,9 @@ bool ViewProviderFilling::setEdit(int ModNum)
         // the task panel
 
         Surface::Filling* obj = this->getObject<Surface::Filling>();
+        App::Document* document = obj->getDocument();
 
-        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(document);
 
         // start the edit dialog
         if (dlg) {
@@ -83,10 +84,10 @@ bool ViewProviderFilling::setEdit(int ModNum)
             if (tDlg) {
                 tDlg->setEditedObject(obj);
             }
-            Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+            Gui::Control().showDialog(dlg, document);
         }
         else {
-            Gui::Control().showDialog(new TaskFilling(this, obj), obj->getDocument());
+            Gui::Control().showDialog(new TaskFilling(this, obj), document);
         }
         return true;
     }

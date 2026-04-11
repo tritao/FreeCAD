@@ -71,8 +71,9 @@ bool ViewProviderGeomFillSurface::setEdit(int ModNum)
         // the task panel
 
         Surface::GeomFillSurface* obj = this->getObject<Surface::GeomFillSurface>();
+        App::Document* document = obj->getDocument();
 
-        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(document);
 
         // start the edit dialog
         if (dlg) {
@@ -80,10 +81,10 @@ bool ViewProviderGeomFillSurface::setEdit(int ModNum)
             if (tDlg) {
                 tDlg->setEditedObject(obj);
             }
-            Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+            Gui::Control().showDialog(dlg, document);
         }
         else {
-            Gui::Control().showDialog(new TaskGeomFillSurface(this, obj), obj->getDocument());
+            Gui::Control().showDialog(new TaskGeomFillSurface(this, obj), document);
         }
         return true;
     }
@@ -95,8 +96,9 @@ bool ViewProviderGeomFillSurface::setEdit(int ModNum)
 void ViewProviderGeomFillSurface::unsetEdit(int ModNum)
 {
     if (ModNum == ViewProvider::Default) {
+        App::Document* document = getObject<Surface::GeomFillSurface>()->getDocument();
         // when pressing ESC make sure to close the dialog
-        QTimer::singleShot(0, [] { Gui::Control().closeDialog(); });
+        QTimer::singleShot(0, [document] { Gui::Control().closeDialog(document); });
     }
     else {
         PartGui::ViewProviderSpline::unsetEdit(ModNum);

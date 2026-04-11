@@ -571,7 +571,7 @@ void CmdMeshFromPartShape::activated(int)
 
 bool CmdMeshFromPartShape::isActive()
 {
-    return (hasActiveDocument() && !Gui::Control().activeDialog());
+    return (hasActiveDocument() && !Gui::Control().activeDialog(getDocument()));
 }
 
 //--------------------------------------------------------------------------------------
@@ -1012,7 +1012,8 @@ void CmdMeshCrossSections::activated(int)
 
 bool CmdMeshCrossSections::isActive()
 {
-    return (Gui::Selection().countObjectsOfType<Mesh::Feature>() > 0 && !Gui::Control().activeDialog());
+    return (Gui::Selection().countObjectsOfType<Mesh::Feature>() > 0
+            && !Gui::Control().activeDialog(getDocument()));
 }
 
 //--------------------------------------------------------------------------------------
@@ -1187,12 +1188,17 @@ CmdMeshRemoveComponents::CmdMeshRemoveComponents()
 
 void CmdMeshRemoveComponents::activated(int)
 {
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    App::Document* doc = getDocument();
+    if (!doc) {
+        return;
+    }
+
+    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(doc);
     if (!dlg) {
         dlg = new MeshGui::TaskRemoveComponents();
         dlg->setButtonPosition(Gui::TaskView::TaskDialog::South);
     }
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, doc);
 }
 
 bool CmdMeshRemoveComponents::isActive()
@@ -1210,7 +1216,7 @@ bool CmdMeshRemoveComponents::isActive()
             return false;
         }
     }
-    if (Gui::Control().activeDialog()) {
+    if (Gui::Control().activeDialog(doc)) {
         return false;
     }
 
@@ -1235,15 +1241,21 @@ CmdMeshRemeshGmsh::CmdMeshRemeshGmsh()
 
 void CmdMeshRemeshGmsh::activated(int)
 {
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    std::vector<Mesh::Feature*> mesh = getSelection().getObjectsOfType<Mesh::Feature>();
+    if (mesh.size() != 1) {
+        return;
+    }
+
+    App::Document* doc = getDocument();
+    if (!doc) {
+        return;
+    }
+
+    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(doc);
     if (!dlg) {
-        std::vector<Mesh::Feature*> mesh = getSelection().getObjectsOfType<Mesh::Feature>();
-        if (mesh.size() != 1) {
-            return;
-        }
         dlg = new MeshGui::TaskRemeshGmsh(mesh.front());
     }
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, doc);
 }
 
 bool CmdMeshRemeshGmsh::isActive()
@@ -1361,15 +1373,17 @@ CmdMeshSmoothing::CmdMeshSmoothing()
 
 void CmdMeshSmoothing::activated(int)
 {
-    Gui::Control().showDialog(
-        new MeshGui::TaskSmoothing(),
-        Gui::Application::Instance->activeDocument()->getDocument()
-    );
+    App::Document* doc = getDocument();
+    if (!doc) {
+        return;
+    }
+
+    Gui::Control().showDialog(new MeshGui::TaskSmoothing(), doc);
 }
 
 bool CmdMeshSmoothing::isActive()
 {
-    if (Gui::Control().activeDialog()) {
+    if (Gui::Control().activeDialog(getDocument())) {
         return false;
     }
     return getSelection().countObjectsOfType<Mesh::Feature>() > 0;
@@ -1393,16 +1407,18 @@ CmdMeshDecimating::CmdMeshDecimating()
 
 void CmdMeshDecimating::activated(int)
 {
-    Gui::Control().showDialog(
-        new MeshGui::TaskDecimating(),
-        Gui::Application::Instance->activeDocument()->getDocument()
-    );
+    App::Document* doc = getDocument();
+    if (!doc) {
+        return;
+    }
+
+    Gui::Control().showDialog(new MeshGui::TaskDecimating(), doc);
 }
 
 bool CmdMeshDecimating::isActive()
 {
 #if 1
-    if (Gui::Control().activeDialog()) {
+    if (Gui::Control().activeDialog(getDocument())) {
         return false;
     }
 #endif
@@ -1699,17 +1715,26 @@ void CmdMeshSegmentation::activated(int)
     std::vector<App::DocumentObject*> objs = Gui::Selection().getObjectsOfType(
         Mesh::Feature::getClassTypeId()
     );
+    if (objs.empty()) {
+        return;
+    }
+
+    App::Document* doc = getDocument();
+    if (!doc) {
+        return;
+    }
+
     Mesh::Feature* mesh = static_cast<Mesh::Feature*>(objs.front());
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(doc);
     if (!dlg) {
         dlg = new MeshGui::TaskSegmentation(mesh);
     }
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, doc);
 }
 
 bool CmdMeshSegmentation::isActive()
 {
-    if (Gui::Control().activeDialog()) {
+    if (Gui::Control().activeDialog(getDocument())) {
         return false;
     }
     return Gui::Selection().countObjectsOfType<Mesh::Feature>() == 1;
@@ -1736,17 +1761,26 @@ void CmdMeshSegmentationBestFit::activated(int)
     std::vector<App::DocumentObject*> objs = Gui::Selection().getObjectsOfType(
         Mesh::Feature::getClassTypeId()
     );
+    if (objs.empty()) {
+        return;
+    }
+
+    App::Document* doc = getDocument();
+    if (!doc) {
+        return;
+    }
+
     Mesh::Feature* mesh = static_cast<Mesh::Feature*>(objs.front());
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(doc);
     if (!dlg) {
         dlg = new MeshGui::TaskSegmentationBestFit(mesh);
     }
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, doc);
 }
 
 bool CmdMeshSegmentationBestFit::isActive()
 {
-    if (Gui::Control().activeDialog()) {
+    if (Gui::Control().activeDialog(getDocument())) {
         return false;
     }
     return Gui::Selection().countObjectsOfType<Mesh::Feature>() == 1;

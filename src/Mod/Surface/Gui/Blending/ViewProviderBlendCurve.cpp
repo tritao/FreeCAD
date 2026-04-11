@@ -57,11 +57,12 @@ void ViewProviderBlendCurve::setupContextMenu(QMenu* menu, QObject* receiver, co
 bool ViewProviderBlendCurve::setEdit(int ModNum)
 {
     if (ModNum == ViewProvider::Default) {
-        if (Gui::Control().activeDialog()) {
+        auto* document = getDocument()->getDocument();
+        if (Gui::Control().activeDialog(document)) {
             return false;
         }
         auto dlg = new TaskBlendCurve(this);
-        Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+        Gui::Control().showDialog(dlg, document);
         return true;
     }
 
@@ -71,7 +72,7 @@ bool ViewProviderBlendCurve::setEdit(int ModNum)
 void ViewProviderBlendCurve::unsetEdit(int ModNum)
 {
     if (ModNum == ViewProvider::Default) {
-        Gui::Control().closeDialog();
+        Gui::Control().closeDialog(getDocument()->getDocument());
     }
     else {
         ViewProviderSpline::unsetEdit(ModNum);

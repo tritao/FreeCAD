@@ -48,17 +48,22 @@ PROPERTY_SOURCE(RobotGui::ViewProviderTrajectoryCompound, RobotGui::ViewProvider
 
 bool ViewProviderTrajectoryCompound::setEdit(int)
 {
+    auto* document = getDocument()->getDocument();
+    if (Gui::Control().activeDialog(document)) {
+        return false;
+    }
+
     Gui::TaskView::TaskDialog* dlg = new TaskDlgTrajectoryCompound(
         getObject<Robot::TrajectoryCompound>()
     );
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, document);
     return true;
 }
 
 void ViewProviderTrajectoryCompound::unsetEdit(int)
 {
     // when pressing ESC make sure to close the dialog
-    Gui::Control().closeDialog();
+    Gui::Control().closeDialog(getDocument()->getDocument());
 }
 
 std::vector<App::DocumentObject*> ViewProviderTrajectoryCompound::claimChildren() const

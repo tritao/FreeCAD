@@ -70,8 +70,9 @@ bool ViewProviderSections::setEdit(int ModNum)
         // the task panel
 
         Surface::Sections* obj = this->getObject<Surface::Sections>();
+        App::Document* document = obj->getDocument();
 
-        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+        Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(document);
 
         // start the edit dialog
         if (dlg) {
@@ -79,10 +80,10 @@ bool ViewProviderSections::setEdit(int ModNum)
             if (tDlg) {
                 tDlg->setEditedObject(obj);
             }
-            Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+            Gui::Control().showDialog(dlg, document);
         }
         else {
-            Gui::Control().showDialog(new TaskSections(this, obj), obj->getDocument());
+            Gui::Control().showDialog(new TaskSections(this, obj), document);
         }
         return true;
     }
@@ -94,8 +95,9 @@ bool ViewProviderSections::setEdit(int ModNum)
 void ViewProviderSections::unsetEdit(int ModNum)
 {
     if (ModNum == ViewProvider::Default) {
+        App::Document* document = getObject<Surface::Sections>()->getDocument();
         // when pressing ESC make sure to close the dialog
-        QTimer::singleShot(0, [] { Gui::Control().closeDialog(nullptr); });
+        QTimer::singleShot(0, [document] { Gui::Control().closeDialog(document); });
     }
     else {
         PartGui::ViewProviderSpline::unsetEdit(ModNum);

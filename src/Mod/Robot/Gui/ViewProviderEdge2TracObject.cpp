@@ -38,18 +38,30 @@ PROPERTY_SOURCE(RobotGui::ViewProviderEdge2TracObject, RobotGui::ViewProviderTra
 
 bool ViewProviderEdge2TracObject::doubleClicked()
 {
+    auto* document = getDocument()->getDocument();
+    if (Gui::Control().activeDialog(document)) {
+        return false;
+    }
+
     Gui::TaskView::TaskDialog* dlg = new TaskDlgEdge2Trac(getObject<Robot::Edge2TracObject>());
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, document);
     return true;
 }
 
 
 bool ViewProviderEdge2TracObject::setEdit(int)
 {
+    auto* document = getDocument()->getDocument();
+    if (Gui::Control().activeDialog(document)) {
+        return false;
+    }
+
     Gui::TaskView::TaskDialog* dlg = new TaskDlgEdge2Trac(getObject<Robot::Edge2TracObject>());
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, document);
     return true;
 }
 
 void ViewProviderEdge2TracObject::unsetEdit(int)
-{}
+{
+    Gui::Control().closeDialog(getDocument()->getDocument());
+}

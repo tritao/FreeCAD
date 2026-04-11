@@ -34,6 +34,7 @@
 #include <App/Part.h>
 #include <Base/UnitsApi.h>
 #include <Gui/Application.h>
+#include <Gui/Document.h>
 #include <Gui/MainWindow.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Control.h>
@@ -107,7 +108,7 @@ void QuickMeasure::tryMeasureSelection()
 {
     Gui::Document* doc = Gui::Application::Instance->activeDocument();
     measurement->clear();
-    if (doc && Gui::Control().activeDialog(nullptr) == nullptr) {
+    if (doc && Gui::Control().activeDialog(doc->getDocument()) == nullptr) {
         // we (still) have a doc and are not in a tool dialog where the user needs to click on stuff
         addSelectionToMeasurement();
     }

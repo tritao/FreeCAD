@@ -117,7 +117,7 @@ bool StdCmdMassProperties::isActive()
     if (!doc) {
         return false;
     }
-    return Gui::Control().activeDialog() == nullptr;
+    return Gui::Control().activeDialog(doc) == nullptr;
 }
 
 void CreateMassPropertiesCommands()

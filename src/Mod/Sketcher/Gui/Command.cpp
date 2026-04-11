@@ -855,14 +855,24 @@ void CmdSketcherValidateSketch::activated(int iMsg)
     }
 
     Sketcher::SketchObject* Obj = static_cast<Sketcher::SketchObject*>(selection[0].getObject());
-    Gui::Control().showDialog(new TaskSketcherValidation(Obj), Gui::Application::Instance->activeDocument()->getDocument());
+    App::Document* doc = Obj->getDocument();
+    if (!doc) {
+        return;
+    }
+
+    Gui::Control().showDialog(new TaskSketcherValidation(Obj), doc);
 }
 
 bool CmdSketcherValidateSketch::isActive()
 {
-    if (Gui::Control().activeDialog())
+    std::vector<Gui::SelectionObject> selection =
+        getSelection().getSelectionEx(nullptr, Sketcher::SketchObject::getClassTypeId());
+    if (selection.size() != 1) {
         return false;
-    return Gui::Selection().countObjectsOfType<Sketcher::SketchObject>() == 1;
+    }
+
+    App::Document* doc = selection[0].getObject()->getDocument();
+    return doc && !Gui::Control().activeDialog(doc);
 }
 
 DEF_STD_CMD_A(CmdSketcherMirrorSketch)

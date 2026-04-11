@@ -65,15 +65,17 @@ CmdMeshPartMesher::CmdMeshPartMesher()
 
 void CmdMeshPartMesher::activated(int)
 {
-    Gui::Control().showDialog(
-        new MeshPartGui::TaskTessellation(),
-        Gui::Application::Instance->activeDocument()->getDocument()
-    );
+    App::Document* doc = getDocument();
+    if (!doc) {
+        return;
+    }
+
+    Gui::Control().showDialog(new MeshPartGui::TaskTessellation(), doc);
 }
 
 bool CmdMeshPartMesher::isActive()
 {
-    return (hasActiveDocument() && !Gui::Control().activeDialog());
+    return (hasActiveDocument() && !Gui::Control().activeDialog(getDocument()));
 }
 
 //--------------------------------------------------------------------------------------
@@ -287,7 +289,12 @@ CmdMeshPartCrossSections::CmdMeshPartCrossSections()
 void CmdMeshPartCrossSections::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    App::Document* doc = getDocument();
+    if (!doc) {
+        return;
+    }
+
+    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(doc);
     if (!dlg) {
         std::vector<App::DocumentObject*> obj = Gui::Selection().getObjectsOfType(
             Mesh::Feature::getClassTypeId()
@@ -298,12 +305,13 @@ void CmdMeshPartCrossSections::activated(int iMsg)
         }
         dlg = new MeshPartGui::TaskCrossSections(bbox);
     }
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, doc);
 }
 
 bool CmdMeshPartCrossSections::isActive()
 {
-    return (Gui::Selection().countObjectsOfType<Mesh::Feature>() > 0 && !Gui::Control().activeDialog());
+    return (Gui::Selection().countObjectsOfType<Mesh::Feature>() > 0
+            && !Gui::Control().activeDialog(getDocument()));
 }
 
 DEF_STD_CMD_A(CmdMeshPartCurveOnMesh)
@@ -336,7 +344,7 @@ void CmdMeshPartCurveOnMesh::activated(int)
 
 bool CmdMeshPartCurveOnMesh::isActive()
 {
-    if (Gui::Control().activeDialog()) {
+    if (Gui::Control().activeDialog(getDocument())) {
         return false;
     }
 

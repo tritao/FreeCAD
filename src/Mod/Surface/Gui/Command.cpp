@@ -198,12 +198,12 @@ void CmdSurfaceCurveOnMesh::activated(int)
 
 bool CmdSurfaceCurveOnMesh::isActive()
 {
-    if (Gui::Control().activeDialog()) {
+    App::Document* doc = App::GetApplication().getActiveDocument();
+    if (!doc || Gui::Control().activeDialog(doc)) {
         return false;
     }
 
     // Check for the selected mesh feature (all Mesh types)
-    App::Document* doc = App::GetApplication().getActiveDocument();
     // Use string based check to avoid linking to Mesh module
     return doc && doc->countObjectsOfType("Mesh::Feature") > 0;
 }

@@ -383,7 +383,7 @@ bool TaskMassProperties::accept()
 bool TaskMassProperties::reject()
 {
     removeTemporaryObjects();
-    Gui::Control().closeDialog();
+    Gui::Control().closeDialog(getDocument());
     return true;
 }
 

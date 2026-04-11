@@ -47,17 +47,22 @@ PROPERTY_SOURCE(RobotGui::ViewProviderTrajectoryDressUp, RobotGui::ViewProviderT
 
 bool ViewProviderTrajectoryDressUp::setEdit(int)
 {
+    auto* document = getDocument()->getDocument();
+    if (Gui::Control().activeDialog(document)) {
+        return false;
+    }
+
     Gui::TaskView::TaskDialog* dlg = new TaskDlgTrajectoryDressUp(
         getObject<Robot::TrajectoryDressUpObject>()
     );
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, document);
     return true;
 }
 
 void ViewProviderTrajectoryDressUp::unsetEdit(int)
 {
     // when pressing ESC make sure to close the dialog
-    Gui::Control().closeDialog();
+    Gui::Control().closeDialog(getDocument()->getDocument());
 }
 
 std::vector<App::DocumentObject*> ViewProviderTrajectoryDressUp::claimChildren() const

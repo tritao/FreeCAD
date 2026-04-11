@@ -85,16 +85,18 @@ void CmdApproxCurve::activated(int)
         return;
     }
 
+    App::Document* doc = obj.front()->getDocument();
+    if (!doc) {
+        return;
+    }
+
     objT = obj.front();
-    Gui::Control().showDialog(
-        new ReenGui::TaskFitBSplineCurve(objT),
-        Gui::Application::Instance->activeDocument()->getDocument()
-    );
+    Gui::Control().showDialog(new ReenGui::TaskFitBSplineCurve(objT), doc);
 }
 
 bool CmdApproxCurve::isActive()
 {
-    return (hasActiveDocument() && !Gui::Control().activeDialog());
+    return (hasActiveDocument() && !Gui::Control().activeDialog(getDocument()));
 }
 
 DEF_STD_CMD_A(CmdApproxSurface)
@@ -127,16 +129,18 @@ void CmdApproxSurface::activated(int)
         return;
     }
 
+    App::Document* doc = obj.front()->getDocument();
+    if (!doc) {
+        return;
+    }
+
     objT = obj.front();
-    Gui::Control().showDialog(
-        new ReenGui::TaskFitBSplineSurface(objT),
-        Gui::Application::Instance->activeDocument()->getDocument()
-    );
+    Gui::Control().showDialog(new ReenGui::TaskFitBSplineSurface(objT), doc);
 }
 
 bool CmdApproxSurface::isActive()
 {
-    return (hasActiveDocument() && !Gui::Control().activeDialog());
+    return (hasActiveDocument() && !Gui::Control().activeDialog(getDocument()));
 }
 
 DEF_STD_CMD_A(CmdApproxPlane)
@@ -433,17 +437,27 @@ CmdSegmentation::CmdSegmentation()
 void CmdSegmentation::activated(int)
 {
     std::vector<Mesh::Feature*> objs = Gui::Selection().getObjectsOfType<Mesh::Feature>();
+    if (objs.empty()) {
+        return;
+    }
+
     Mesh::Feature* mesh = static_cast<Mesh::Feature*>(objs.front());
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    App::Document* doc = mesh->getDocument();
+    if (!doc) {
+        return;
+    }
+
+    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(doc);
     if (!dlg) {
         dlg = new ReverseEngineeringGui::TaskSegmentation(mesh);
     }
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, doc);
 }
 
 bool CmdSegmentation::isActive()
 {
-    if (Gui::Control().activeDialog()) {
+    App::Document* doc = getDocument();
+    if (!doc || Gui::Control().activeDialog(doc)) {
         return false;
     }
     return Gui::Selection().countObjectsOfType<Mesh::Feature>() == 1;
@@ -464,19 +478,21 @@ CmdSegmentationManual::CmdSegmentationManual()
 
 void CmdSegmentationManual::activated(int)
 {
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    App::Document* doc = getDocument();
+    if (!doc) {
+        return;
+    }
+
+    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(doc);
     if (!dlg) {
         dlg = new ReverseEngineeringGui::TaskSegmentationManual();
     }
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, doc);
 }
 
 bool CmdSegmentationManual::isActive()
 {
-    if (Gui::Control().activeDialog()) {
-        return false;
-    }
-    return hasActiveDocument();
+    return (hasActiveDocument() && !Gui::Control().activeDialog(getDocument()));
 }
 
 DEF_STD_CMD_A(CmdSegmentationFromComponents)
@@ -622,16 +638,18 @@ void CmdPoissonReconstruction::activated(int)
         return;
     }
 
+    App::Document* doc = obj.front()->getDocument();
+    if (!doc) {
+        return;
+    }
+
     objT = obj.front();
-    Gui::Control().showDialog(
-        new ReenGui::TaskPoisson(objT),
-        Gui::Application::Instance->activeDocument()->getDocument()
-    );
+    Gui::Control().showDialog(new ReenGui::TaskPoisson(objT), doc);
 }
 
 bool CmdPoissonReconstruction::isActive()
 {
-    return (hasActiveDocument() && !Gui::Control().activeDialog());
+    return (hasActiveDocument() && !Gui::Control().activeDialog(getDocument()));
 }
 
 DEF_STD_CMD_A(CmdViewTriangulation)

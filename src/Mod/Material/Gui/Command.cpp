@@ -99,12 +99,17 @@ StdCmdSetAppearance::StdCmdSetAppearance()
 void StdCmdSetAppearance::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new MatGui::TaskDisplayProperties(), Gui::Application::Instance->activeDocument()->getDocument());
+    App::Document* doc = getDocument();
+    if (!doc) {
+        return;
+    }
+    Gui::Control().showDialog(new MatGui::TaskDisplayProperties(), doc);
 }
 
 bool StdCmdSetAppearance::isActive()
 {
-    return (Gui::Control().activeDialog() == nullptr) && (Gui::Selection().size() != 0);
+    App::Document* doc = getDocument();
+    return doc && (Gui::Control().activeDialog(doc) == nullptr) && (Gui::Selection().size() != 0);
 }
 
 //===========================================================================
@@ -128,12 +133,17 @@ StdCmdSetMaterial::StdCmdSetMaterial()
 void StdCmdSetMaterial::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new MatGui::TaskMaterial(), Gui::Application::Instance->activeDocument()->getDocument());
+    App::Document* doc = getDocument();
+    if (!doc) {
+        return;
+    }
+    Gui::Control().showDialog(new MatGui::TaskMaterial(), doc);
 }
 
 bool StdCmdSetMaterial::isActive()
 {
-    return (Gui::Control().activeDialog() == nullptr) && (Gui::Selection().size() != 0);
+    App::Document* doc = getDocument();
+    return doc && (Gui::Control().activeDialog(doc) == nullptr) && (Gui::Selection().size() != 0);
 }
 
 //===========================================================================
@@ -155,12 +165,17 @@ CmdInspectAppearance::CmdInspectAppearance()
 void CmdInspectAppearance::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new MatGui::TaskInspectAppearance(), Gui::Application::Instance->activeDocument()->getDocument());
+    App::Document* doc = getDocument();
+    if (!doc) {
+        return;
+    }
+    Gui::Control().showDialog(new MatGui::TaskInspectAppearance(), doc);
 }
 
 bool CmdInspectAppearance::isActive()
 {
-    return (Gui::Control().activeDialog() == nullptr);
+    App::Document* doc = getDocument();
+    return doc && (Gui::Control().activeDialog(doc) == nullptr);
 }
 
 //===========================================================================
@@ -182,12 +197,17 @@ CmdInspectMaterial::CmdInspectMaterial()
 void CmdInspectMaterial::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new MatGui::TaskInspectMaterial(), Gui::Application::Instance->activeDocument()->getDocument());
+    App::Document* doc = getDocument();
+    if (!doc) {
+        return;
+    }
+    Gui::Control().showDialog(new MatGui::TaskInspectMaterial(), doc);
 }
 
 bool CmdInspectMaterial::isActive()
 {
-    return (Gui::Control().activeDialog() == nullptr);
+    App::Document* doc = getDocument();
+    return doc && (Gui::Control().activeDialog(doc) == nullptr);
 }
 
 //===========================================================================
@@ -211,8 +231,12 @@ CmdMigrateToExternal::CmdMigrateToExternal()
 void CmdMigrateToExternal::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
+    App::Document* doc = getDocument();
+    if (!doc) {
+        return;
+    }
     MatGui::TaskMigrateExternal* dlg = new MatGui::TaskMigrateExternal();
-    Gui::Control().showDialog(dlg, Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(dlg, doc);
 }
 
 bool CmdMigrateToExternal::isActive()

@@ -188,7 +188,10 @@ void Tessellation::gmshProcessed()
 {
     bool doClose = !ui->checkBoxDontQuit->isChecked();
     if (doClose) {
-        Gui::Control().reject();
+        const QByteArray documentName = document.toUtf8();
+        if (App::Document* doc = App::GetApplication().getDocument(documentName.constData())) {
+            Gui::Control().reject(doc);
+        }
     }
 }
 
