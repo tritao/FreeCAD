@@ -712,7 +712,7 @@ void TaskComplexSection::failNoObject()
     QString qbaseName = QString::fromStdString(m_saveBaseName);
     QString msg = tr("Can not continue. Object * %1 or %2 not found.").arg(qsectionName, qbaseName);
     QMessageBox::critical(Gui::getMainWindow(), QObject::tr("Operation Failed"), msg);
-    Gui::Control().closeDialog();
+    Gui::Control().closeDialog(m_doc);
 }
 
 bool TaskComplexSection::isBaseValid()

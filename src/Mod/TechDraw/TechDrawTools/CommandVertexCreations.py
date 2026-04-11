@@ -87,7 +87,7 @@ class CommandAddOffsetVertex:
             view = Utils.getSelView()
             vertexes = Utils.getSelVertexes()
             self.ui = TechDrawTools.TaskAddOffsetVertex(view, vertexes[0])
-            Gui.Control.showDialog(self.ui, Gui.ActiveDocument)
+            Utils.showTaskDialog(self.ui, view.Document)
 
     def IsActive(self):
         """Return True when the command should be active or False when it should be disabled (greyed)."""

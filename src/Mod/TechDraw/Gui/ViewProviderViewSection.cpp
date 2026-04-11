@@ -139,7 +139,8 @@ bool ViewProviderViewSection::setEdit(int ModNum)
     if (ModNum != ViewProvider::Default ) {
         return ViewProviderDrawingView::setEdit(ModNum);
     }
-    if (Gui::Control().activeDialog())  {         //TaskPanel already open!
+    auto* document = getViewObject()->getDocument();
+    if (Gui::Control().activeDialog(document))  {         //TaskPanel already open!
         return false;
     }
     // clear the selection (convenience)
@@ -147,10 +148,10 @@ bool ViewProviderViewSection::setEdit(int ModNum)
 
     auto dcs = dynamic_cast<TechDraw::DrawComplexSection*>(getViewObject());
     if (dcs) {
-        Gui::Control().showDialog(new TaskDlgComplexSection(dcs), Gui::Application::Instance->activeDocument()->getDocument());
+        Gui::Control().showDialog(new TaskDlgComplexSection(dcs), document);
         return true;
     }
-    Gui::Control().showDialog(new TaskDlgSectionView(getViewObject()), Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(new TaskDlgSectionView(getViewObject()), document);
     return true;
 }
 

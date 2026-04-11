@@ -33,13 +33,14 @@ import FreeCAD as App
 import FreeCADGui as Gui
 
 from TechDrawTools import TDToolsMovers
+import TechDrawTools.TDToolsUtil as TDToolsUtil
 
 import os
 
 translate = App.Qt.translate
 
 class TaskMoveView:
-    def __init__(self):
+    def __init__(self, document=None):
         import os
         self._uiPath = App.getHomePath()
         self._uiPath = os.path.join(self._uiPath, "Mod/TechDraw/TechDrawTools/Gui/TaskMoveView.ui")
@@ -54,23 +55,24 @@ class TaskMoveView:
         self.viewName = ""
         self.fromPageName = ""
         self.toPageName   = ""
+        self.doc = TDToolsUtil.documentOf(document)
 
         self.dialogOpen = False
 
-        App.ActiveDocument.openTransaction("Move view")
+        self.doc.openTransaction("Move view")
 
     def accept(self):
 #        print ("Accept")
-        App.ActiveDocument.commitTransaction()
-        view = App.ActiveDocument.getObject(self.viewName)
-        fromPage = App.ActiveDocument.getObject(self.fromPageName)
-        toPage = App.ActiveDocument.getObject(self.toPageName)
+        self.doc.commitTransaction()
+        view = self.doc.getObject(self.viewName)
+        fromPage = self.doc.getObject(self.fromPageName)
+        toPage = self.doc.getObject(self.toPageName)
         TDToolsMovers.moveView(view, fromPage, toPage)
         return True
 
     def reject(self):
 #        print ("Reject")
-        App.ActiveDocument.abortTransaction()
+        self.doc.abortTransaction()
         return True
 
     def pickView(self):
@@ -84,7 +86,7 @@ class TaskMoveView:
         dlg.lPrompt.setText(translate("TechDraw_MoveView", "Select view to move from list."))
         dlg.setWindowTitle(translate("TechDraw_MoveView", "Select View"))
 
-        views = [x for x in App.ActiveDocument.Objects if x.isDerivedFrom("TechDraw::DrawView")]
+        views = [x for x in self.doc.Objects if x.isDerivedFrom("TechDraw::DrawView")]
         for v in views:
             s = v.Label + " / " + v.Name
             item = QtGui.QListWidgetItem(s, dlg.lwPages)
@@ -107,7 +109,7 @@ class TaskMoveView:
         dlg.lPrompt.setText(translate("TechDraw_MoveView", "Select from page."))
         dlg.setWindowTitle(translate("TechDraw_MoveView", "Select Page"))
 
-        pages = [x for x in App.ActiveDocument.Objects if x.isDerivedFrom("TechDraw::DrawPage")]
+        pages = [x for x in self.doc.Objects if x.isDerivedFrom("TechDraw::DrawPage")]
         for p in pages:
             s = p.Label + " / " + p.Label
             item = QtGui.QListWidgetItem(s, dlg.lwPages)
@@ -130,7 +132,7 @@ class TaskMoveView:
         dlg.lPrompt.setText(translate("TechDraw_MoveView", "Select to page."))
         dlg.setWindowTitle(translate("TechDraw_MoveView", "Select Page"))
 
-        pages = [x for x in App.ActiveDocument.Objects if x.isDerivedFrom("TechDraw::DrawPage")]
+        pages = [x for x in self.doc.Objects if x.isDerivedFrom("TechDraw::DrawPage")]
         for p in pages:
             s = p.Label + " / " + p.Name
             item = QtGui.QListWidgetItem(s, dlg.lwPages)
@@ -149,4 +151,3 @@ class TaskMoveView:
         self.form.leFromPage.setText(fromPageName)
         self.toPageName = toPageName
         self.form.leToPage.setText(toPageName)
-

@@ -58,6 +58,7 @@
 #include <Mod/TechDraw/App/LineGenerator.h>
 #include <Mod/TechDraw/App/LineGroup.h>
 
+#include "CommandHelpers.h"
 #include "DrawGuiUtil.h"
 #include "QGSPage.h"
 #include "TaskCosmeticCircle.h"
@@ -69,6 +70,7 @@
 
 using namespace TechDrawGui;
 using namespace TechDraw;
+using namespace CommandHelpers;
 using DU = DrawUtil;
 
 
@@ -285,7 +287,7 @@ CmdTechDrawExtensionCircleCenterLinesGroup::CmdTechDrawExtensionCircleCenterLine
 
 void CmdTechDrawExtensionCircleCenterLinesGroup::activated(int iMsg)
 {
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again."));
@@ -588,7 +590,7 @@ CmdTechDrawExtensionThreadsGroup::CmdTechDrawExtensionThreadsGroup()
 void CmdTechDrawExtensionThreadsGroup::activated(int iMsg)
 {
     //    Base::Console().message("CMD::TechDrawExtensionThreadsGroup - activated(%d)\n", iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again."));
@@ -718,7 +720,7 @@ CmdTechDrawExtensionSelectLineAttributes::CmdTechDrawExtensionSelectLineAttribut
 void CmdTechDrawExtensionSelectLineAttributes::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::Control().showDialog(new TaskDlgSelectLineAttributes(), Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(new TaskDlgSelectLineAttributes(), getDocument());
 }
 
 bool CmdTechDrawExtensionSelectLineAttributes::isActive()
@@ -986,7 +988,7 @@ void CmdTechDrawCosmeticCircle::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task In Progress"),
             QObject::tr("Close active task dialog and try again."));
@@ -1211,7 +1213,7 @@ CmdTechDrawExtensionDrawCirclesGroup::CmdTechDrawExtensionDrawCirclesGroup()
 void CmdTechDrawExtensionDrawCirclesGroup::activated(int iMsg)
 {
     //    Base::Console().message("CMD::ExtensionDrawCirclesGroup - activated(%d)\n", iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again."));
@@ -1456,7 +1458,7 @@ CmdTechDrawExtensionLinePPGroup::CmdTechDrawExtensionLinePPGroup()
 void CmdTechDrawExtensionLinePPGroup::activated(int iMsg)
 {
     //    Base::Console().message("CMD::ExtensionLinePPGroup - activated(%d)\n", iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again."));
@@ -1749,7 +1751,7 @@ CmdTechDrawExtendShortenLineGroup::CmdTechDrawExtendShortenLineGroup()
 void CmdTechDrawExtendShortenLineGroup::activated(int iMsg)
 {
     // Base::Console().message("CMD::ExtendShortenLineGroup - activated(%d)\n", iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again."));

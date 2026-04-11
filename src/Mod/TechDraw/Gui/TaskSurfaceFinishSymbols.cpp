@@ -83,19 +83,20 @@ std::string SvgString::finish()
 // TaskSurfaceFinishSymbols
 //===========================================================================
 
-TaskSurfaceFinishSymbols::TaskSurfaceFinishSymbols(const std::string &ownerName) :
+TaskSurfaceFinishSymbols::TaskSurfaceFinishSymbols(App::Document* document,
+                                                   const std::string &ownerName) :
+    owner(nullptr),
     currentIcon(nullptr),
     ui(new Ui_TaskSurfaceFinishSymbols)
 {
-    App::Document *doc = App::GetApplication().getActiveDocument();
-    if (doc) {
-        owner = doc->getObject(ownerName.c_str());
+    if (document) {
+        owner = document->getObject(ownerName.c_str());
         std::string subName;
         if (!owner) {
             size_t dot = ownerName.rfind('.');
             if (dot != std::string::npos) {
                 subName = ownerName.substr(dot + 1);
-                owner = doc->getObject(ownerName.substr(0, dot).c_str());
+                owner = document->getObject(ownerName.substr(0, dot).c_str());
             }
         }
 
@@ -398,7 +399,10 @@ bool TaskSurfaceFinishSymbols::accept()
 // Slot: dialog finished using OK
 {
     int tid = Gui::Command::openActiveDocumentCommand(QT_TRANSLATE_NOOP("Command", "Surface Finish Symbols"));
-    App::Document *doc = Application::Instance->activeDocument()->getDocument();
+    App::Document *doc = owner ? owner->getDocument() : nullptr;
+    if (!doc) {
+        return false;
+    }
     auto* surfaceSymbol = doc->addObject<TechDraw::DrawViewSymbol>("SurfaceSymbol");
     surfaceSymbol->Symbol.setValue(completeSymbol());
     surfaceSymbol->Rotation.setValue(ui->leAngle->text().toDouble());
@@ -434,10 +438,11 @@ bool TaskSurfaceFinishSymbols::reject()
 // TaskDlgSurfaceFinishSymbols//
 //===========================================================================
 
-TaskDlgSurfaceFinishSymbols::TaskDlgSurfaceFinishSymbols(const std::string &ownerName)
+TaskDlgSurfaceFinishSymbols::TaskDlgSurfaceFinishSymbols(App::Document* document,
+                                                         const std::string &ownerName)
     : TaskDialog()
 {
-    widget  = new TaskSurfaceFinishSymbols(ownerName);
+    widget  = new TaskSurfaceFinishSymbols(document, ownerName);
     taskbox = new Gui::TaskView::TaskBox(Gui::BitmapFactory().pixmap("actions/TechDraw_SurfaceFinishSymbols"),
                                              widget->windowTitle(), true, nullptr);
     taskbox->groupLayout()->addWidget(widget);

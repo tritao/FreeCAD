@@ -29,6 +29,7 @@ __date__ = "2023/12/04"
 import FreeCAD as App
 import FreeCADGui as Gui
 import TechDraw
+import TechDrawTools.TDToolsUtil as TDToolsUtil
 
 from functools import partial
 
@@ -45,8 +46,9 @@ class TaskAddOffsetVertex():
         self.form.setWindowTitle(translate("TechDraw_AddOffsetVertex", "Offset Vertex"))
         self.view = view
         self.vertex = vertex
+        self.doc = view.Document
 
-        App.ActiveDocument.openTransaction("Add offset vertex")
+        self.doc.openTransaction("Add offset vertex")
 
     def accept(self):
         '''slot: OK pressed'''
@@ -60,9 +62,9 @@ class TaskAddOffsetVertex():
                                                 # point.  it is an unscaled, unrotated,
                                                 # uninverted relative value.
         self.view.makeCosmeticVertex(point+offset)
-        Gui.Control.closeDialog()
-        App.ActiveDocument.commitTransaction()
+        TDToolsUtil.closeTaskDialog(self.doc)
+        self.doc.commitTransaction()
 
     def reject(self):
-        App.ActiveDocument.abortTransaction()
+        self.doc.abortTransaction()
         return True

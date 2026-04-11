@@ -280,7 +280,8 @@ bool ViewProviderViewPart::setEdit(int ModNum)
         return ViewProviderDrawingView::setEdit(ModNum);
     }
 
-    if (Gui::Control().activeDialog())  {         //TaskPanel already open!
+    auto* document = getViewObject()->getDocument();
+    if (Gui::Control().activeDialog(document))  {         //TaskPanel already open!
         return false;
     }
 
@@ -298,7 +299,7 @@ bool ViewProviderViewPart::setEdit(int ModNum)
     }
     auto* view = getObject<TechDraw::DrawView>();
     Gui::Control().showDialog(new TaskDlgProjGroup(view, false),
-                              Gui::Application::Instance->activeDocument()->getDocument());
+                              document);
 
     return true;
 }
@@ -307,7 +308,7 @@ bool ViewProviderViewPart::setDetailEdit(int ModNum, DrawViewDetail* dvd)
 {
     Q_UNUSED(ModNum);
 
-    Gui::Control().showDialog(new TaskDlgDetail(dvd), Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(new TaskDlgDetail(dvd), dvd->getDocument());
     Gui::Selection().clearSelection();
     Gui::Selection().addSelection(dvd->getDocument()->getName(),
                                   dvd->getNameInDocument());
@@ -373,7 +374,7 @@ bool ViewProviderViewPart::onDelete(const std::vector<std::string> & subNames)
 
     // this code should be in a ViewProviderDetail if we had one.  Since we do not, we have to deal
     // with a derived class here in the parent
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog(getViewObject()->getDocument());
     auto* dlgDetail = dynamic_cast<TaskDlgDetail*>(dlg);
     if (dlgDetail) {
         std::string dlgDetailTarget = dlgDetail->getDetailName();   //new method

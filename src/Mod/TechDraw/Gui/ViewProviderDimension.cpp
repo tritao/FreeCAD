@@ -148,7 +148,8 @@ bool ViewProviderDimension::setEdit(int ModNum)
     if (ModNum != ViewProvider::Default) {
         return ViewProviderDrawingView::setEdit(ModNum);
     }
-    if (Gui::Control().activeDialog()) { // if TaskPanel already open
+    auto* document = getViewObject()->getDocument();
+    if (Gui::Control().activeDialog(document)) { // if TaskPanel already open
         return false;
     }
     // clear the selection (convenience)
@@ -156,7 +157,7 @@ bool ViewProviderDimension::setEdit(int ModNum)
     auto qgivDimension(dynamic_cast<QGIViewDimension*>(getQView()));
     if (qgivDimension) {
         Gui::Control().showDialog(new TaskDlgDimension(qgivDimension, this),
-                                  getViewObject()->getDocument());
+                                  document);
     }
     return true;
 }
@@ -316,7 +317,7 @@ bool ViewProviderDimension::canDelete(App::DocumentObject *obj) const
 bool ViewProviderDimension::onDelete(const std::vector<std::string> & parms)
 {
     Q_UNUSED(parms)
-    auto dlg = Gui::Control().activeDialog();
+    auto dlg = Gui::Control().activeDialog(getViewObject()->getDocument());
     auto ourDlg = qobject_cast<TaskDlgDimension*>(dlg);
     if (ourDlg)  {
         QString bodyMessage;

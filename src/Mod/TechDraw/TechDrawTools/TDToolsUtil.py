@@ -27,6 +27,43 @@ from PySide.QtCore import QT_TRANSLATE_NOOP
 from PySide import QtGui
 from PySide.QtGui import QMessageBox
 
+def documentOf(document=None):
+    if document is None:
+        return App.ActiveDocument
+
+    if hasattr(document, "Document"):
+        return document.Document
+
+    return document
+
+
+def guiDocumentOf(document=None):
+    doc = documentOf(document)
+    if doc is None:
+        return Gui.ActiveDocument
+
+    try:
+        return Gui.getDocument(doc.Name)
+    except Exception:
+        return None
+
+
+def showTaskDialog(panel, document=None):
+    doc = documentOf(document)
+    gui_doc = guiDocumentOf(doc)
+    dialog = Gui.Control.showDialog(panel, gui_doc)
+    if dialog is not None and doc is not None:
+        dialog.setDocumentName(doc.Name)
+        dialog.setAutoCloseOnDeletedDocument(True)
+    return dialog
+
+
+def closeTaskDialog(document=None):
+    gui_doc = guiDocumentOf(document)
+    if gui_doc is not None and Gui.Control.activeDialog(gui_doc):
+        Gui.Control.closeDialog(gui_doc)
+
+
 def havePage():
     objs = App.ActiveDocument.Objects
     for o in objs:

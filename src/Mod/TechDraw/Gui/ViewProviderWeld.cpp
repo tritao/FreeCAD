@@ -98,12 +98,13 @@ bool ViewProviderWeld::setEdit(int ModNum)
     if (ModNum != ViewProvider::Default ) {
         return ViewProviderDrawingView::setEdit(ModNum);
     }
-    if (Gui::Control().activeDialog())  {         //TaskPanel already open!
+    auto* document = getFeature()->getDocument();
+    if (Gui::Control().activeDialog(document))  {         //TaskPanel already open!
         return false;
     }
     // clear the selection (convenience)
     Gui::Selection().clearSelection();
-    Gui::Control().showDialog(new TaskDlgWeldingSymbol(getFeature()), Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(new TaskDlgWeldingSymbol(getFeature()), document);
     return true;
 }
 

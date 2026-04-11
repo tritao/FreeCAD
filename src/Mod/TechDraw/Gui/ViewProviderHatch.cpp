@@ -77,13 +77,14 @@ bool ViewProviderHatch::setEdit(int ModNum)
     if (ModNum != ViewProvider::Default) {
         return Gui::ViewProviderDocumentObject::setEdit(ModNum);
     }
-    if (Gui::Control().activeDialog()) {
+    auto* document = getViewObject()->getDocument();
+    if (Gui::Control().activeDialog(document)) {
         return false; //TaskPanel already open!
     }
 
     // clear the selection (convenience)
     Gui::Selection().clearSelection();
-    Gui::Control().showDialog(new TaskDlgHatch(this), Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(new TaskDlgHatch(this), document);
     return true;
 }
 

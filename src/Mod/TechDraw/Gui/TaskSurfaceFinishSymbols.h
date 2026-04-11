@@ -32,6 +32,7 @@ class QLineEdit;
 class QGraphicsScene;
 
 namespace App {
+class Document;
 class DocumentObject;
 }
 
@@ -77,7 +78,7 @@ class TaskSurfaceFinishSymbols : public QWidget
     Q_OBJECT
 
 public:
-    explicit TaskSurfaceFinishSymbols(const std::string &ownerName);
+    TaskSurfaceFinishSymbols(App::Document* document, const std::string &ownerName);
     ~TaskSurfaceFinishSymbols() override = default;
 
     virtual bool accept();
@@ -127,7 +128,7 @@ class TaskDlgSurfaceFinishSymbols : public Gui::TaskView::TaskDialog
     Q_OBJECT
 
 public:
-    explicit TaskDlgSurfaceFinishSymbols(const std::string &ownerName);
+    TaskDlgSurfaceFinishSymbols(App::Document* document, const std::string &ownerName);
     ~TaskDlgSurfaceFinishSymbols() override;
 
     /// is called the TaskView when the dialog is opened

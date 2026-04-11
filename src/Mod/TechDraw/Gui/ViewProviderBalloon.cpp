@@ -99,7 +99,8 @@ bool ViewProviderBalloon::setEdit(int ModNum)
     if (ModNum != ViewProvider::Default ) {
         return ViewProviderDrawingView::setEdit(ModNum);
     }
-    if (Gui::Control().activeDialog())  {
+    auto* document = getViewObject()->getDocument();
+    if (Gui::Control().activeDialog(document))  {
         return false;
     }
     // clear the selection (convenience)
@@ -107,7 +108,7 @@ bool ViewProviderBalloon::setEdit(int ModNum)
     auto qgivBalloon(dynamic_cast<QGIViewBalloon*>(getQView()));
     if (qgivBalloon) {
         Gui::Control().showDialog(new TaskDlgBalloon(qgivBalloon, this),
-                                  Gui::Application::Instance->activeDocument()->getDocument());
+                                  document);
     }
     return true;
 }
@@ -181,7 +182,7 @@ bool ViewProviderBalloon::onDelete(const std::vector<std::string> & parms)
 {
     Q_UNUSED(parms)
 //    Base::Console().message("VPB::onDelete() - parms: %d\n", parms.size());
-    if (Gui::Control().activeDialog())  {
+    if (Gui::Control().activeDialog(getViewObject()->getDocument()))  {
         // TODO: make this selective so only a dialog involving this vp's
         // feature is blocked.  As is, this will prevent deletion during any
         // task dialog.

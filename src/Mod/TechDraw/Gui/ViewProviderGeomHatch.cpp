@@ -67,7 +67,8 @@ ViewProviderGeomHatch::~ViewProviderGeomHatch()
 bool ViewProviderGeomHatch::setEdit(int ModNum)
 {
     Q_UNUSED(ModNum);
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    auto* document = getViewObject()->getDocument();
+    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog(document);
     TaskDlgGeomHatch *projDlg = qobject_cast<TaskDlgGeomHatch *>(dlg);
     if (projDlg && (projDlg->getViewProvider() != this))
         projDlg = nullptr; // somebody left task panel open
@@ -78,10 +79,10 @@ bool ViewProviderGeomHatch::setEdit(int ModNum)
     // start the edit dialog
     if (projDlg) {
         projDlg->setCreateMode(false);
-        Gui::Control().showDialog(projDlg, Gui::Application::Instance->activeDocument()->getDocument());
+        Gui::Control().showDialog(projDlg, document);
     } else {
         Gui::Control().showDialog(new TaskDlgGeomHatch(getViewObject(), this, false),
-                                  getViewObject()->getDocument());
+                                  document);
     }
 
     return true;

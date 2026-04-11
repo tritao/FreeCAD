@@ -453,7 +453,10 @@ void TaskWeldingSymbol::getTileFeats()
 TechDraw::DrawWeldSymbol* TaskWeldingSymbol::createWeldingSymbol()
 {
 //    Base::Console().message("TWS::createWeldingSymbol()\n");
-    App::Document *doc = Application::Instance->activeDocument()->getDocument();
+    App::Document *doc = m_leadFeat ? m_leadFeat->getDocument() : nullptr;
+    if (!doc) {
+        throw Base::RuntimeError("TaskWeldingSymbol - no owning document");
+    }
     auto weldSymbol = doc->addObject<TechDraw::DrawWeldSymbol>("WeldSymbol");
     if (!weldSymbol) {
         throw Base::RuntimeError("TaskWeldingSymbol - new symbol object not found");

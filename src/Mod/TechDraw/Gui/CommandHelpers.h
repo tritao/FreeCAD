@@ -33,11 +33,15 @@
 #include <Base/Vector3D.h>
 
 namespace App {
+class Document;
 class DocumentObject;
 }
 
 namespace Gui {
 class Command;
+namespace TaskView {
+class TaskDialog;
+}
 }
 
 namespace TechDraw {
@@ -50,6 +54,8 @@ class DrawViewPart;
 namespace CommandHelpers {
 TechDraw::DrawView* firstViewInSelection(Gui::Command* cmd);
 TechDraw::DrawView* firstNonSpreadsheetInSelection(Gui::Command* cmd);
+Gui::TaskView::TaskDialog* activeTaskDialog(Gui::Command* cmd);
+bool hasActiveTaskDialog(Gui::Command* cmd);
 
 std::vector<std::string> getSelectedSubElements(Gui::Command* cmd,
                                                 TechDraw::DrawViewPart* &dvp,

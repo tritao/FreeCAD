@@ -83,12 +83,13 @@ bool ViewProviderLeader::setEdit(int ModNum)
         return ViewProviderDrawingView::setEdit(ModNum);
     }
 
-    if (Gui::Control().activeDialog()) {
+    auto* document = getViewObject()->getDocument();
+    if (Gui::Control().activeDialog(document)) {
          // a TaskPanel is already open!
         return false;
     }
     Gui::Selection().clearSelection();
-    Gui::Control().showDialog(new TaskDlgLeaderLine(this), Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(new TaskDlgLeaderLine(this), document);
     return true;
 }
 

@@ -96,7 +96,7 @@ void CmdTechDrawLeaderLine::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
@@ -158,7 +158,7 @@ CmdTechDrawRichTextAnnotation::CmdTechDrawRichTextAnnotation()
 void CmdTechDrawRichTextAnnotation::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
@@ -211,7 +211,7 @@ CmdTechDrawCosmeticVertexGroup::CmdTechDrawCosmeticVertexGroup()
 void CmdTechDrawCosmeticVertexGroup::activated(int iMsg)
 {
 //    Base::Console().message("CMD::CosmeticVertexGroup - activated(%d)\n", iMsg);
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
@@ -398,7 +398,7 @@ CmdTechDrawCosmeticVertex::CmdTechDrawCosmeticVertex()
 void CmdTechDrawCosmeticVertex::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
@@ -460,7 +460,7 @@ CmdTechDrawMidpoints::CmdTechDrawMidpoints()
 void CmdTechDrawMidpoints::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
@@ -499,7 +499,7 @@ CmdTechDrawQuadrants::CmdTechDrawQuadrants()
 void CmdTechDrawQuadrants::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
@@ -588,7 +588,7 @@ CmdTechDrawCenterLineGroup::CmdTechDrawCenterLineGroup()
 void CmdTechDrawCenterLineGroup::activated(int iMsg)
 {
 //    Base::Console().message("CMD::CenterLineGroup - activated(%d)\n", iMsg);
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
@@ -692,7 +692,7 @@ void CmdTechDrawFaceCenterLine::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
@@ -805,7 +805,7 @@ void CmdTechDraw2LineCenterLine::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
@@ -882,7 +882,7 @@ void CmdTechDraw2PointCenterLine::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
@@ -997,7 +997,7 @@ void CmdTechDraw2PointCosmeticLine::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
@@ -1149,7 +1149,7 @@ CmdTechDrawCosmeticEraser::CmdTechDrawCosmeticEraser()
 void CmdTechDrawCosmeticEraser::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
@@ -1268,7 +1268,7 @@ void CmdTechDrawDecorateLine::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
@@ -1350,7 +1350,7 @@ CmdTechDrawShowAll::CmdTechDrawShowAll()
 void CmdTechDrawShowAll::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
@@ -1416,7 +1416,7 @@ void CmdTechDrawWeldSymbol::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close active task dialog and try again"));
@@ -1442,10 +1442,10 @@ void CmdTechDrawWeldSymbol::activated(int iMsg)
     }
     if (!leaders.empty()) {
         leadFeat = static_cast<TechDraw::DrawLeaderLine*> (leaders.front());
-        Gui::Control().showDialog(new TaskDlgWeldingSymbol(leadFeat), Gui::Application::Instance->activeDocument()->getDocument());
+        Gui::Control().showDialog(new TaskDlgWeldingSymbol(leadFeat), leadFeat->getDocument());
     } else if (!welds.empty()) {
         weldFeat = static_cast<TechDraw::DrawWeldSymbol*> (welds.front());
-        Gui::Control().showDialog(new TaskDlgWeldingSymbol(weldFeat), Gui::Application::Instance->activeDocument()->getDocument());
+        Gui::Control().showDialog(new TaskDlgWeldingSymbol(weldFeat), weldFeat->getDocument());
     }
     updateActive();
     Gui::Selection().clearSelection();
@@ -1481,6 +1481,7 @@ void CmdTechDrawSurfaceFinishSymbols::activated(int iMsg)
     Q_UNUSED(iMsg);
 
     std::string ownerName;
+    App::Document* ownerDocument = nullptr;
     std::vector<Gui::SelectionObject> selection = this->getSelection().getSelectionEx();
     if (selection.empty())
     {
@@ -1490,6 +1491,7 @@ void CmdTechDrawSurfaceFinishSymbols::activated(int iMsg)
         }
 
         ownerName = page->getNameInDocument();
+        ownerDocument = page->getDocument();
     }
     else {
         auto objFeat = dynamic_cast<TechDraw::DrawView *>(selection.front().getObject());
@@ -1502,6 +1504,7 @@ void CmdTechDrawSurfaceFinishSymbols::activated(int iMsg)
         }
 
         ownerName = objFeat->getNameInDocument();
+        ownerDocument = objFeat->getDocument();
 
         const std::vector<std::string> &subNames = selection.front().getSubNames();
         if (!subNames.empty()) {
@@ -1510,7 +1513,8 @@ void CmdTechDrawSurfaceFinishSymbols::activated(int iMsg)
         }
     }
 
-    Gui::Control().showDialog(new TechDrawGui::TaskDlgSurfaceFinishSymbols(ownerName), Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(new TechDrawGui::TaskDlgSurfaceFinishSymbols(ownerDocument, ownerName),
+                              ownerDocument);
 
     updateActive();
     Gui::Selection().clearSelection();

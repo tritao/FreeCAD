@@ -66,10 +66,11 @@ ViewProviderProjGroup::ViewProviderProjGroup()
 bool ViewProviderProjGroup::setEdit(int ModNum)
 {
     Q_UNUSED(ModNum);
+    auto* document = getObject()->getDocument();
     // When double-clicking on the item for this sketch the
     // object unsets and sets its edit mode without closing
     // the task panel
-    auto* dlg = Gui::Control().activeDialog();
+    auto* dlg = Gui::Control().activeDialog(document);
     auto* projDlg = qobject_cast<TaskDlgProjGroup *>(dlg);
     if (projDlg && projDlg->getViewProvider() != this) {
         projDlg = nullptr; // another sketch left open its task panel
@@ -81,10 +82,10 @@ bool ViewProviderProjGroup::setEdit(int ModNum)
     // start the edit dialog
     if (projDlg) {
         projDlg->setCreateMode(false);
-        Gui::Control().showDialog(projDlg, Gui::Application::Instance->activeDocument()->getDocument());
+        Gui::Control().showDialog(projDlg, document);
     } else {
         Gui::Control().showDialog(new TaskDlgProjGroup(getObject(), false),
-                                  getObject()->getDocument());
+                                  document);
     }
 
     return true;

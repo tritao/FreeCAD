@@ -71,10 +71,11 @@ class CommandShareView:
         if len(pages) > 1:
             toPageName = pages[1].Name
 
-        self.ui  = TechDrawTools.TaskShareView()
+        doc = TechDrawTools.documentOf(views[0] if views else pages[0] if pages else None)
+        self.ui  = TechDrawTools.TaskShareView(doc)
 
         self.ui.setValues(vName, fromPageName, toPageName)
-        Gui.Control.showDialog(self.ui, Gui.ActiveDocument)
+        TechDrawTools.showTaskDialog(self.ui, doc)
 
     def IsActive(self):
         """Return True when the command should be active or False when it should be disabled (greyed)."""
@@ -87,4 +88,3 @@ class CommandShareView:
 #
 # The command must be "registered" with a unique name by calling its class.
 Gui.addCommand('TechDraw_ShareView', CommandShareView())
-

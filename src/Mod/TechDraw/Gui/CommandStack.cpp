@@ -37,12 +37,14 @@
 #include <Mod/TechDraw/App/DrawPage.h>
 #include <Mod/TechDraw/App/DrawView.h>
 
+#include "CommandHelpers.h"
 #include "DrawGuiUtil.h"
 #include "ViewProviderDrawingView.h"
 
 
 using namespace TechDrawGui;
 using namespace TechDraw;
+using namespace CommandHelpers;
 
 void execStackTop(Gui::Command* cmd);
 void execStackBottom(Gui::Command* cmd);
@@ -68,7 +70,7 @@ CmdTechDrawStackGroup::CmdTechDrawStackGroup()
 
 void CmdTechDrawStackGroup::activated(int iMsg)
 {
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close the active task dialog and try again."));
@@ -184,7 +186,7 @@ void CmdTechDrawStackTop::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close the active task dialog and try again."));
@@ -244,7 +246,7 @@ void CmdTechDrawStackBottom::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close the active task dialog and try again."));
@@ -304,7 +306,7 @@ void CmdTechDrawStackUp::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
             QObject::tr("Close the active task dialog and try again."));
@@ -364,7 +366,7 @@ void CmdTechDrawStackDown::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    Gui::TaskView::TaskDialog *dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog *dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task In Progress"),
             QObject::tr("Close active task dialog and try again."));

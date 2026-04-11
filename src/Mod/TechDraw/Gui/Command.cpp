@@ -87,12 +87,12 @@ void getSelectedShapes(Gui::Command* cmd,
                       App::DocumentObject* faceObj,
                       std::string& faceName);
 
-std::pair<App::DocumentObject*, std::string> faceFromSelection();
 std::pair<Base::Vector3d, Base::Vector3d> viewDirection();
 
 class Vertex;
 using namespace TechDrawGui;
 using namespace TechDraw;
+using namespace CommandHelpers;
 using DU = DrawUtil;
 
 //===========================================================================
@@ -712,7 +712,7 @@ void CmdTechDrawActiveView::activated(int iMsg)
         return;
     }
     std::string PageName = page->getNameInDocument();
-    Gui::Control().showDialog(new TaskDlgActiveView(page), Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(new TaskDlgActiveView(page), page->getDocument());
 }
 
 bool CmdTechDrawActiveView::isActive() { return DrawGuiUtil::needPage(this, true); }
@@ -736,7 +736,7 @@ CmdTechDrawSectionGroup::CmdTechDrawSectionGroup() : Command("TechDraw_SectionGr
 void CmdTechDrawSectionGroup::activated(int iMsg)
 {
     //    Base::Console().message("CMD::SectionGrp - activated(%d)\n", iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again"));
@@ -829,7 +829,7 @@ CmdTechDrawSectionView::CmdTechDrawSectionView() : Command("TechDraw_SectionView
 void CmdTechDrawSectionView::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again"));
@@ -845,7 +845,7 @@ bool CmdTechDrawSectionView::isActive()
     bool haveView = DrawGuiUtil::needView(this);
     bool taskInProgress = false;
     if (havePage) {
-        taskInProgress = Gui::Control().activeDialog();
+        taskInProgress = activeTaskDialog(this);
     }
     return (havePage && haveView && !taskInProgress);
 }
@@ -866,7 +866,7 @@ void execSimpleSection(Gui::Command* cmd)
     }
 
     TechDraw::DrawViewPart* dvp = static_cast<TechDraw::DrawViewPart*>(*baseObj.begin());
-    Gui::Control().showDialog(new TaskDlgSectionView(dvp), Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(new TaskDlgSectionView(dvp), dvp->getDocument());
 
     cmd->updateActive();//ok here since dialog doesn't call doc.recompute()
     cmd->commitCommand();
@@ -892,7 +892,7 @@ CmdTechDrawComplexSection::CmdTechDrawComplexSection() : Command("TechDraw_Compl
 void CmdTechDrawComplexSection::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(), QObject::tr("Task in progress"),
                              QObject::tr("Close active task dialog and try again"));
@@ -1029,7 +1029,7 @@ void CmdTechDrawDetailView::activated(int iMsg)
     }
     TechDraw::DrawViewPart* dvp = static_cast<TechDraw::DrawViewPart*>(*(baseObj.begin()));
 
-    Gui::Control().showDialog(new TaskDlgDetail(dvp), Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(new TaskDlgDetail(dvp), dvp->getDocument());
 }
 
 bool CmdTechDrawDetailView::isActive()
@@ -1038,7 +1038,7 @@ bool CmdTechDrawDetailView::isActive()
     bool haveView = DrawGuiUtil::needView(this);
     bool taskInProgress = false;
     if (havePage) {
-        taskInProgress = Gui::Control().activeDialog();
+        taskInProgress = activeTaskDialog(this);
     }
     return (havePage && haveView && !taskInProgress);
 }
@@ -1179,7 +1179,7 @@ bool CmdTechDrawProjectionGroup::isActive()
     bool havePage = DrawGuiUtil::needPage(this);
     bool taskInProgress = false;
     if (havePage) {
-        taskInProgress = Gui::Control().activeDialog();
+        taskInProgress = activeTaskDialog(this);
     }
     return (havePage && !taskInProgress);
 }
@@ -1325,7 +1325,7 @@ bool CmdTechDrawBalloon::isActive()
 {
     bool havePage = DrawGuiUtil::needPage(this);
     bool haveView = DrawGuiUtil::needView(this, false);
-    bool taskInProgress = Gui::Control().activeDialog();
+    bool taskInProgress = activeTaskDialog(this);
     return (havePage && haveView && !taskInProgress);
 }
 
@@ -1927,9 +1927,9 @@ CmdTechDrawProjectShape::CmdTechDrawProjectShape() : Command("TechDraw_ProjectSh
 void CmdTechDrawProjectShape::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (!dlg) {
-        Gui::Control().showDialog(new TaskDlgProjection(), Gui::Application::Instance->activeDocument()->getDocument());
+        Gui::Control().showDialog(new TaskDlgProjection(), getDocument());
     }
 }
 

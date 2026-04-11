@@ -30,6 +30,7 @@
 #include <App/Link.h>
 
 #include <Gui/Command.h>
+#include <Gui/Control.h>
 #include <Gui/MainWindow.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionObject.h>
@@ -65,6 +66,17 @@ TechDraw::DrawView* CommandHelpers::firstViewInSelection(Gui::Command* cmd)
         }
     }
     return baseView;
+}
+
+Gui::TaskView::TaskDialog* CommandHelpers::activeTaskDialog(Gui::Command* cmd)
+{
+    auto* document = cmd ? cmd->getDocument() : nullptr;
+    return document ? Gui::Control().activeDialog(document) : nullptr;
+}
+
+bool CommandHelpers::hasActiveTaskDialog(Gui::Command* cmd)
+{
+    return activeTaskDialog(cmd) != nullptr;
 }
 
 std::vector<std::string> CommandHelpers::getSelectedSubElements(Gui::Command* cmd,

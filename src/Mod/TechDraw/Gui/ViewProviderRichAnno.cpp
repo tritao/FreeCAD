@@ -77,13 +77,14 @@ bool ViewProviderRichAnno::setEdit(int ModNum)
     if (ModNum != Gui::ViewProvider::Default) {
         return Gui::ViewProviderDocumentObject::setEdit(ModNum);
     }
-    if (Gui::Control().activeDialog()) {
+    auto* document = getViewObject()->getDocument();
+    if (Gui::Control().activeDialog(document)) {
         return false;  // TaskPanel already open!
     }
 
     // clear the selection (convenience)
     Gui::Selection().clearSelection();
-    Gui::Control().showDialog(new TaskDlgRichAnno(this), Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(new TaskDlgRichAnno(this), document);
     return true;
 }
 
@@ -224,12 +225,13 @@ bool ViewProviderRichAnno::onDelete(const std::vector<std::string>& subs)
     Q_UNUSED(subs);
 
     // Check if there is an active dialog
-    if (Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog()) {
+    auto* document = getViewObject()->getDocument();
+    if (Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog(document)) {
         // Check if the active dialog is our RichAnno dialog
         if (auto* richAnnoDlg = dynamic_cast<TaskDlgRichAnno*>(dlg)) {
             // Check if the dialog is for THIS specific view provider
             if (richAnnoDlg->isFor(this)) {
-                Gui::Control().closeDialog();  // Close the dialog gracefully
+                Gui::Control().closeDialog(document);  // Close the dialog gracefully
             }
         }
     }

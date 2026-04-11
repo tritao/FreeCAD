@@ -59,6 +59,7 @@
 #include <Mod/TechDraw/App/Preferences.h>
 
 #include "CommandExtensionDims.h"
+#include "CommandHelpers.h"
 #include "DimensionValidators.h"
 #include "DrawGuiUtil.h"
 #include "QGIDatumLabel.h"
@@ -75,6 +76,7 @@
 
 using namespace TechDrawGui;
 using namespace TechDraw;
+using namespace CommandHelpers;
 using namespace std;
 using DimensionType = TechDraw::DrawViewDimension::DimensionType;
 using DimensionGeometry = TechDraw::DimensionGeometry;
@@ -1493,7 +1495,7 @@ CmdTechDrawRadiusDimension::CmdTechDrawRadiusDimension()
 void CmdTechDrawRadiusDimension::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(),
                              QObject::tr("Task in progress"),
@@ -1541,7 +1543,7 @@ CmdTechDrawDiameterDimension::CmdTechDrawDiameterDimension()
 void CmdTechDrawDiameterDimension::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(),
                              QObject::tr("Task in progress"),
@@ -1589,7 +1591,7 @@ CmdTechDrawLengthDimension::CmdTechDrawLengthDimension()
 void CmdTechDrawLengthDimension::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(),
                              QObject::tr("Task in progress"),
@@ -1637,7 +1639,7 @@ CmdTechDrawHorizontalDimension::CmdTechDrawHorizontalDimension()
 void CmdTechDrawHorizontalDimension::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(),
                              QObject::tr("Task in progress"),
@@ -1685,7 +1687,7 @@ CmdTechDrawVerticalDimension::CmdTechDrawVerticalDimension()
 void CmdTechDrawVerticalDimension::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(),
                              QObject::tr("Task in progress"),
@@ -1732,7 +1734,7 @@ CmdTechDrawAngleDimension::CmdTechDrawAngleDimension()
 void CmdTechDrawAngleDimension::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(),
                              QObject::tr("Task in progress"),
@@ -1779,7 +1781,7 @@ CmdTechDraw3PtAngleDimension::CmdTechDraw3PtAngleDimension()
 void CmdTechDraw3PtAngleDimension::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(),
                              QObject::tr("Task in progress"),
@@ -1826,7 +1828,7 @@ CmdTechDrawAreaDimension::CmdTechDrawAreaDimension()
 void CmdTechDrawAreaDimension::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(),
                              QObject::tr("Task in progress"),
@@ -1873,7 +1875,7 @@ CmdTechDrawExtentGroup::CmdTechDrawExtentGroup()
 
 void CmdTechDrawExtentGroup::activated(int iMsg)
 {
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(),
                              QObject::tr("Task in progress"),
@@ -1969,7 +1971,7 @@ void CmdTechDrawHorizontalExtentDimension::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(),
                              QObject::tr("Task in progress"),
@@ -2094,7 +2096,7 @@ void CmdTechDrawVerticalExtentDimension::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
 
-    Gui::TaskView::TaskDialog* dlg = Gui::Control().activeDialog();
+    Gui::TaskView::TaskDialog* dlg = activeTaskDialog(this);
     if (dlg) {
         QMessageBox::warning(Gui::getMainWindow(),
                              QObject::tr("Task in progress"),
@@ -2143,7 +2145,7 @@ void CmdTechDrawDimensionRepair::activated(int iMsg)
         dim = static_cast<TechDraw::DrawViewDimension*>(dimObjs.at(0));
     }
 
-    Gui::Control().showDialog(new TaskDlgDimReference(dim), Gui::Application::Instance->activeDocument()->getDocument());
+    Gui::Control().showDialog(new TaskDlgDimReference(dim), dim->getDocument());
 }
 
 bool CmdTechDrawDimensionRepair::isActive(void)
@@ -2152,7 +2154,7 @@ bool CmdTechDrawDimensionRepair::isActive(void)
     bool haveView = DrawGuiUtil::needView(this);
     bool taskInProgress = false;
     if (havePage) {
-        taskInProgress = Gui::Control().activeDialog();
+        taskInProgress = activeTaskDialog(this);
     }
     return (havePage && haveView && !taskInProgress);
 }

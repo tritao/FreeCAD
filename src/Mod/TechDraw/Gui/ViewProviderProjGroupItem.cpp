@@ -115,7 +115,7 @@ bool ViewProviderProjGroupItem::setEdit(int ModNum)
 void ViewProviderProjGroupItem::unsetEdit(int ModNum)
 {
     Q_UNUSED(ModNum);
-    Gui::Control().closeDialog();
+    Gui::Control().closeDialog(getObject()->getDocument());
 }
 
 bool ViewProviderProjGroupItem::doubleClicked()

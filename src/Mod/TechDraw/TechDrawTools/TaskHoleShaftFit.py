@@ -28,6 +28,7 @@ __date__ = "2023/02/07"
 
 import FreeCAD as App
 import FreeCADGui as Gui
+import TechDrawTools.TDToolsUtil as TDToolsUtil
 
 from functools import partial
 
@@ -94,8 +95,9 @@ class TaskHoleShaftFit:
         self.form.rbHoleBase.clicked.connect(partial(self.on_HoleShaftChanged, True))
         self.form.rbShaftBase.clicked.connect(partial(self.on_HoleShaftChanged, False))
         self.form.cbField.currentIndexChanged.connect(self.on_FieldChanged)
+        self.doc = sel[0].Object.Document
 
-        App.ActiveDocument.openTransaction("Add hole or shaft fit")
+        self.doc.openTransaction("Add hole or shaft fit")
 
     def setHoleFields(self):
         """set hole fields in the combo box"""
@@ -169,11 +171,11 @@ class TaskHoleShaftFit:
             dim.FormatSpecUnderTolerance = "(+%-0.6w)"
         else:
             dim.FormatSpecUnderTolerance = "( %-0.6w)"
-        Gui.Control.closeDialog()
-        App.ActiveDocument.commitTransaction()
+        TDToolsUtil.closeTaskDialog(self.doc)
+        self.doc.commitTransaction()
 
     def reject(self):
-        App.ActiveDocument.abortTransaction()
+        self.doc.abortTransaction()
         return True
 
 

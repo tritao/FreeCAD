@@ -107,7 +107,7 @@ void QGIEdge::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event)
         std::vector<std::string> edgeName(1, DrawUtil::makeGeomName("Edge", getProjIndex()));
 
         Gui::Control().showDialog(new TaskDlgLineDecor(baseFeat, edgeName),
-                                  Gui::Application::Instance->activeDocument()->getDocument());
+                                  baseFeat->getDocument());
     }
 }
 

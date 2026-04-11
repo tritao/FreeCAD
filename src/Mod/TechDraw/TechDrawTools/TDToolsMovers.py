@@ -36,7 +36,8 @@ def simpleViewMove(view, fromPage, toPage, copy):
     for d in deps:
         toPage.addView(d)
 
-    App.ActiveDocument.recompute()  #update views & dependents if necessary
+    doc = view.Document or fromPage.Document or toPage.Document
+    doc.recompute()  #update views & dependents if necessary
     return
 
 #move a section view, its Base View and all its dependents (items, dimensions, balloons, etc) of both from fromPage to toPage
@@ -69,4 +70,3 @@ def moveView(view, fromPage, toPage, copy=False):
         sectionViewMove(view, fromPage, toPage, copy)
     elif view.isDerivedFrom("TechDraw::DrawView"):
         simpleViewMove(view, fromPage, toPage, copy)
-

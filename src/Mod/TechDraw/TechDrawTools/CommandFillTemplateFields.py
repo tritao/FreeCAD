@@ -56,15 +56,16 @@ class CommandFillTemplateFields:
 
     def Activated(self):
         """Run the following code when the command is activated (button press)."""
-        TechDrawTools.TaskFillTemplateFields()
+        TechDrawTools.TaskFillTemplateFields(App.ActiveDocument)
 
     def IsActive(self):
         """Return True when the command should be active
         or False when it should be disabled (greyed)."""
-        if App.ActiveDocument:
-            objs = App.ActiveDocument.findObjects(Type="TechDraw::DrawPage")
+        doc = App.ActiveDocument
+        if doc:
+            objs = doc.findObjects(Type="TechDraw::DrawPage")
             if not objs:
-                return false
+                return False
 
             for obj in objs:
                 file_path = (
@@ -93,11 +94,10 @@ class CommandFillTemplateFields:
                             and obj.Views != []
                         ):
                             return True
-            return false
+            return False
 
 
 
 #
 # The command must be "registered" with a unique name by calling its class.
 Gui.addCommand("TechDraw_FillTemplateFields", CommandFillTemplateFields())
-
