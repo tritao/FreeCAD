@@ -41,6 +41,38 @@ else:
 
 translate = FreeCAD.Qt.translate
 
+
+def _document_of(document=None):
+    if document is None:
+        return FreeCAD.ActiveDocument
+
+    if hasattr(document, "Document"):
+        return document.Document
+
+    return document
+
+
+def _gui_document_of(document=None):
+    doc = _document_of(document)
+    if doc is None:
+        return FreeCADGui.ActiveDocument
+
+    try:
+        return FreeCADGui.getDocument(doc.Name)
+    except Exception:
+        return None
+
+
+def _show_task_dialog(panel, document=None):
+    doc = _document_of(document)
+    gui_doc = _gui_document_of(doc)
+    task = FreeCADGui.Control.showDialog(panel, gui_doc)
+    if task is not None and doc is not None:
+        task.setDocumentName(doc.Name)
+        task.setAutoCloseOnDeletedDocument(True)
+    return task
+
+
 class ExplodeGroup:
     "Ungroup Objects"
     def IsActive(self):
@@ -372,8 +404,9 @@ class AddSCADWidget(QtGui.QWidget):
         self.setWindowTitle(translate('OpenSCAD','Add OpenSCAD Element'))
 
 class AddSCADTask:
-    def __init__(self):
+    def __init__(self, document=None):
         self.form = AddSCADWidget()
+        self.doc = _document_of(document)
         self.form.buttonadd.clicked.connect(self.addelement)
         self.form.buttonload.clicked.connect(self.loadelement)
         self.form.buttonsave.clicked.connect(self.saveelement)
@@ -399,7 +432,8 @@ class AddSCADTask:
         extension= 'stl' if asmesh else 'csg'
         try:
             tmpfilename=OpenSCADUtils.callopenscadstring(scadstr,extension)
-            doc=FreeCAD.activeDocument() or FreeCAD.newDocument()
+            doc = self.doc or FreeCAD.newDocument()
+            self.doc = doc
             if asmesh:
                 import Mesh
                 Mesh.insert(tmpfilename,doc.Name)
@@ -417,7 +451,7 @@ class AddSCADTask:
 
     def refreshelement(self):
         self.form.textMsg.setPlainText('')
-        doc=FreeCAD.activeDocument()
+        doc = self.doc
         if doc :
             for obj in doc.Objects :
                 doc.removeObject(obj.Name)
@@ -488,8 +522,9 @@ class OpenSCADMeshBooleanWidget(QtGui.QWidget):
         self.rb_minkowski.setText(translate('OpenSCAD','Minkowski sum'))
 
 class OpenSCADMeshBooleanTask:
-    def __init__(self):
+    def __init__(self, document=None):
         self.form = OpenSCADMeshBooleanWidget()
+        self.doc = _document_of(document)
         self.form.buttonadd.clicked.connect(self.doboolean)
 
     def getStandardButtons(self):
@@ -511,20 +546,26 @@ class OpenSCADMeshBooleanTask:
         elif self.form.rb_hull.isChecked():       opname = 'hull'
         elif self.form.rb_minkowski.isChecked():  opname = 'minkowski'
         else: opname = 'union'
-        newmesh,objsused = meshoponobjs(opname,FreeCADGui.Selection.getSelection())
+        selection = (
+            FreeCADGui.Selection.getSelection(self.doc.Name)
+            if self.doc is not None
+            else FreeCADGui.Selection.getSelection()
+        )
+        newmesh,objsused = meshoponobjs(opname,selection)
         if len(objsused) > 0:
-            newmeshobj = FreeCAD.activeDocument().addObject('Mesh::Feature',opname) #create a Feature for the result
+            newmeshobj = self.doc.addObject('Mesh::Feature',opname) #create a Feature for the result
             newmeshobj.Mesh = newmesh #assign the result to the new Feature
             for obj in objsused:
                 obj.ViewObject.hide() #hide the selected Features
 
 class AddOpenSCADElement:
     def IsActive(self):
-        return not FreeCADGui.Control.activeDialog()
+        gui_doc = FreeCADGui.ActiveDocument
+        return bool(gui_doc) and not FreeCADGui.Control.activeDialog(gui_doc)
 
     def Activated(self):
-        panel = AddSCADTask()
-        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
+        panel = AddSCADTask(FreeCAD.ActiveDocument)
+        _show_task_dialog(panel, FreeCAD.ActiveDocument)
 
     def GetResources(self):
         return {'Pixmap'  : 'OpenSCAD_AddOpenSCADElement',
@@ -534,12 +575,13 @@ class AddOpenSCADElement:
 
 class OpenSCADMeshBoolean:
     def IsActive(self):
-        return not FreeCADGui.Control.activeDialog() and \
+        gui_doc = FreeCADGui.ActiveDocument
+        return bool(gui_doc) and not FreeCADGui.Control.activeDialog(gui_doc) and \
             len(FreeCADGui.Selection.getSelection()) >= 1
 
     def Activated(self):
-        panel = OpenSCADMeshBooleanTask()
-        FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
+        panel = OpenSCADMeshBooleanTask(FreeCAD.ActiveDocument)
+        _show_task_dialog(panel, FreeCAD.ActiveDocument)
 
     def GetResources(self):
         return {'Pixmap'  : 'OpenSCAD_MeshBooleans',
