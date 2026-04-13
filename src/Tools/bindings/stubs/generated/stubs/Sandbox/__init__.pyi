@@ -1,0 +1,16 @@
+# This is a generated inventory skeleton. Refine signatures before publishing.
+from __future__ import annotations
+from typing import Any
+
+def DocumentProtector(*args: Any) -> Any: ...
+def DocumentObjectProtector(*args: Any) -> Any: ...
+
+# Generated public type stubs from PyCXX binding method tables.
+from typing import Any
+
+class _DocumentObjectProtector:
+    def purgeTouched(self, *args: Any) -> Any: ...
+
+class _DocumentProtector:
+    def addObject(self, *args: Any) -> Any: ...
+    def recompute(self, *args: Any) -> Any: ...
