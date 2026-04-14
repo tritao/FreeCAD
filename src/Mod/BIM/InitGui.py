@@ -125,6 +125,7 @@ class BIMWorkbench(Workbench):
             "Arch_Fence",
             "Arch_Truss",
             "Arch_Equipment",
+            "BIM_Library",
             "Arch_Rebar",
             "BIM_GenericTools",
         ]
@@ -362,7 +363,6 @@ class BIMWorkbench(Workbench):
                     "BIM_Box",
                     "BIM_Builder",
                     "Draft_Facebinder",
-                    "BIM_Library",
                     "Arch_Component",
                     "Arch_Reference",
                 )
