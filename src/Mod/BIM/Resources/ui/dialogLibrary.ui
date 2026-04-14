@@ -51,10 +51,10 @@
      <item>
       <widget class="QCheckBox" name="checkOnline">
        <property name="toolTip">
-        <string>Shows the online catalog instead of the local library.</string>
+        <string>Shows the online catalog instead of local libraries.</string>
        </property>
        <property name="text">
-        <string>Online catalog</string>
+        <string>Online mode</string>
        </property>
       </widget>
      </item>
