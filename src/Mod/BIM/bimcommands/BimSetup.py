@@ -114,19 +114,10 @@ class BIM_Setup:
         else:
             ifcok = True
         libok = False
-        librarypath = FreeCAD.ParamGet("User parameter:Plugins/parts_library").GetString(
-            "destination", ""
-        )
-        if librarypath and os.path.exists(librarypath):
+        import BimLibrarySources
+
+        if BimLibrarySources.resolve_library_root_paths():
             libok = True
-        else:
-            # check if the library is at the standard addon location
-            librarypath = os.path.join(FreeCAD.getUserAppDataDir(), "Mod", "parts_library")
-            if os.path.exists(librarypath):
-                FreeCAD.ParamGet("User parameter:Plugins/parts_library").SetString(
-                    "destination", librarypath
-                )
-                libok = True
         if not libok:
             m.append("parts_library")
         if m:

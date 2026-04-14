@@ -61,6 +61,7 @@ SET(Arch_SRCS
     ArchTruss.py
     ArchCurtainWall.py
     ArchSketchObject.py
+    BimLibrarySources.py
     BimSelect.py
     BimStatus.py
     TestArch.py
@@ -250,6 +251,7 @@ SET(bimtests_SRCS
     bimtests/TestArchWallJunction.py
     bimtests/TestArchWallJunctionMatrix.py
     bimtests/TestArchWallGui.py
+    bimtests/TestBimLibraryGui.py
     bimtests/TestBimPlanEditGui.py
     bimtests/TestArchWallJoinWorkflowGui.py
     bimtests/TestArchMaterial.py

@@ -454,9 +454,9 @@ class Arch_Window:
         # paths in librarypresets need to be double escaped "\\\\", so let's
         # use forward slashes instead...
         self.librarypresets = []
-        librarypath = FreeCAD.ParamGet("User parameter:Plugins/parts_library").GetString(
-            "destination", ""
-        )
+        import BimLibrarySources
+
+        librarypath = BimLibrarySources.resolve_library_root()
         # librarypath should have only forward slashes already, but let's use replace() anyway just to be sure:
         librarypath = librarypath.replace("\\", "/") + "/Architectural Parts"
         presetdir = FreeCAD.getUserAppDataDir().replace("\\", "/") + "/Arch"
