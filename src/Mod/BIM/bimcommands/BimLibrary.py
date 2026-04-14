@@ -73,6 +73,11 @@ REFRESH_INTERVAL = 3600  # Min seconds between allowing a new API calls (3600 = 
 SYMBOL_DEFINITIONS_GROUP = "_SymbolDefinitions"
 SYMBOL_LIBRARY_GROUP = "Library"
 ASSET_MANIFEST = "asset.json"
+PREVIEW_MODE_2D = "2d"
+PREVIEW_MODE_3D = "3d"
+PREVIEW_IMAGE_SIZE = 256
+PREVIEW_IMAGE_PADDING = 18
+PREVIEW_3D_DIRECTION = FreeCAD.Vector(1.0, -1.0, 0.85)
 
 
 # TODO as https://github.com/yorikvanhavre/BIM_Workbench/pull/77
@@ -435,6 +440,17 @@ class BIM_Library_TaskPanel:
         preview_index = self.form.verticalLayout.indexOf(self.form.framePreview)
         self.form.verticalLayout.insertWidget(preview_index + 1, self.form.previewDetails)
         self.form.previewDetails.hide()
+        self.form.comboPreviewMode = QtGui.QComboBox(self.form)
+        self.form.comboPreviewMode.setObjectName("comboPreviewMode")
+        self.form.comboPreviewMode.addItem(translate("BIM", "2D"), PREVIEW_MODE_2D)
+        self.form.comboPreviewMode.addItem(translate("BIM", "3D"), PREVIEW_MODE_3D)
+        self.form.comboPreviewMode.setToolTip(
+            translate(
+                "BIM",
+                "Choose whether local asset previews are generated from 2D plan geometry or 3D model geometry.",
+            )
+        )
+        self.form.horizontalLayout_5.insertWidget(1, self.form.comboPreviewMode)
         self._update_library_root_status()
         self._tree_item_kind_role = QtCore.Qt.UserRole + 1
         self._tree_item_loaded_role = QtCore.Qt.UserRole + 2
@@ -551,6 +567,8 @@ class BIM_Library_TaskPanel:
             self.form.framePreview.hide()
             self.form.buttonPreview.setText(translate("BIM", "Preview") + " ▸")
         self.form.buttonPreview.clicked.connect(self.onButtonPreview)
+        self._set_preview_mode(PARAMS.GetString("LibraryPreviewMode", PREVIEW_MODE_3D))
+        self.form.comboPreviewMode.currentIndexChanged.connect(self.onPreviewModeChanged)
 
         # update the tree
         self.onCheckOnline()
@@ -581,6 +599,35 @@ class BIM_Library_TaskPanel:
         self._update_library_mode_status(online_mode)
         if search_text:
             self.setSearchModel(search_text)
+
+    def _coerce_preview_mode(self, mode):
+
+        mode = str(mode or PREVIEW_MODE_3D).strip().lower()
+        if mode in {PREVIEW_MODE_2D, PREVIEW_MODE_3D}:
+            return mode
+        return PREVIEW_MODE_3D
+
+    def _set_preview_mode(self, mode):
+
+        mode = self._coerce_preview_mode(mode)
+        index = self.form.comboPreviewMode.findData(mode)
+        if index < 0:
+            index = self.form.comboPreviewMode.findData(PREVIEW_MODE_3D)
+        self.form.comboPreviewMode.setCurrentIndex(max(index, 0))
+
+    def _get_selected_preview_mode(self):
+
+        return self._coerce_preview_mode(self.form.comboPreviewMode.currentData())
+
+    def _get_effective_preview_mode(self):
+
+        return self._get_selected_preview_mode()
+
+    def onPreviewModeChanged(self, _index=None):
+
+        mode = self._get_selected_preview_mode()
+        PARAMS.SetString("LibraryPreviewMode", mode)
+        self._refresh_current_preview()
 
     def _apply_configured_library_root_entries(self, entries, online_mode=None):
 
@@ -838,17 +885,40 @@ class BIM_Library_TaskPanel:
             return
         self.link(index)
 
-    def onItemSelected(self, selected, deselected):
-        """Generates and displays needed previews"""
+    def _get_current_tree_index(self):
+
+        current_index = self.form.tree.currentIndex()
+        if current_index and current_index.isValid():
+            return current_index
+        selection_model = self.form.tree.selectionModel()
+        if not selection_model:
+            return None
+        indexes = selection_model.selectedRows()
+        if indexes:
+            return indexes[0]
+        return None
+
+    def _get_current_tree_raw_path(self):
+
+        index = self._get_current_tree_index()
+        if not index:
+            return ""
+        item = self.filemodel.itemFromIndex(index)
+        if not item:
+            return ""
+        return item.toolTip()
+
+    def _refresh_current_preview(self):
+
+        raw_path = self._get_current_tree_raw_path()
+        if raw_path:
+            self._update_preview_for_raw_path(raw_path)
+
+    def _update_preview_for_raw_path(self, raw_path):
 
         from PySide import QtGui
 
-        if not selected:
-            return
-        index = selected[0].indexes()[0]
-        raw_path = self.filemodel.itemFromIndex(index).toolTip()
         metadata = self._get_preview_metadata(raw_path)
-        path = self._resolve_asset_path(raw_path)
         thumb = self.getThumbnail(raw_path)
         if thumb:
             px = QtGui.QPixmap(thumb)
@@ -859,6 +929,15 @@ class BIM_Library_TaskPanel:
             "" if not px.isNull() else translate("BIM", "No preview available")
         )
         self._update_preview_details(metadata)
+
+    def onItemSelected(self, selected, deselected):
+        """Generates and displays needed previews"""
+
+        if not selected:
+            return
+        index = selected[0].indexes()[0]
+        raw_path = self.filemodel.itemFromIndex(index).toolTip()
+        self._update_preview_for_raw_path(raw_path)
 
         if False:
             # TO BE REFACTORED
@@ -2119,12 +2198,13 @@ class BIM_Library_TaskPanel:
 
         return list(BimAssetSemantics.get_object_plan_shapes(obj))
 
-    def _build_definition_preview_shape(self, definition_roots):
+    def _build_definition_preview_shape(self, definition_roots, prefer_plan_symbols=None):
 
         import Part
 
         shapes = []
-        prefer_plan_symbols = self._should_prefer_plan_symbol_preview()
+        if prefer_plan_symbols is None:
+            prefer_plan_symbols = self._should_prefer_plan_symbol_preview()
         for obj in definition_roots:
             if prefer_plan_symbols:
                 object_shapes = self._get_object_plan_preview_shapes(obj)
@@ -2137,6 +2217,366 @@ class BIM_Library_TaskPanel:
         if len(shapes) == 1:
             return shapes[0]
         return Part.makeCompound(shapes)
+
+    def _get_preview_cache_path(self, filepath, preview_mode):
+
+        import hashlib
+
+        cache_key = "{}::{}".format(
+            str(filepath or "").replace("\\", "/"),
+            self._coerce_preview_mode(preview_mode),
+        )
+        filename = hashlib.md5(cache_key.encode()).hexdigest() + ".png"
+        return os.path.join(THUMBNAILSPATH, filename)
+
+    def _get_preview_source_paths(self, filepath, preview_mode):
+
+        preview_mode = self._coerce_preview_mode(preview_mode)
+        sources = []
+        manifest_path = self._get_asset_manifest_path(filepath)
+        if manifest_path and os.path.isfile(manifest_path):
+            sources.append(manifest_path)
+            asset_descriptor = self._build_asset_descriptor(manifest_path)
+            if preview_mode == PREVIEW_MODE_2D and asset_descriptor["plan_path"]:
+                sources.append(asset_descriptor["plan_path"])
+            if asset_descriptor["model_path"]:
+                sources.append(asset_descriptor["model_path"])
+        else:
+            path = self._resolve_asset_path(filepath)
+            if path:
+                sources.append(path)
+
+        normalized = []
+        seen = set()
+        for source in sources:
+            normalized_source = os.path.normpath(source)
+            if (
+                not normalized_source
+                or normalized_source in seen
+                or not os.path.isfile(normalized_source)
+            ):
+                continue
+            seen.add(normalized_source)
+            normalized.append(normalized_source)
+        return normalized
+
+    def _is_preview_cache_current(self, cache_path, source_paths):
+
+        if not os.path.isfile(cache_path):
+            return False
+        try:
+            cache_mtime = os.path.getmtime(cache_path)
+        except OSError:
+            return False
+        for source_path in source_paths:
+            try:
+                if os.path.getmtime(source_path) > cache_mtime:
+                    return False
+            except OSError:
+                return False
+        return True
+
+    def _get_active_document_name(self):
+
+        return getattr(getattr(FreeCAD, "ActiveDocument", None), "Name", "")
+
+    def _restore_active_document(self, doc_name):
+
+        if not doc_name:
+            return
+        try:
+            doc = FreeCAD.getDocument(doc_name)
+        except Exception:
+            return
+        try:
+            FreeCAD.setActiveDocument(doc.Name)
+        except Exception:
+            pass
+        if not FreeCAD.GuiUp:
+            return
+        try:
+            gui_doc = FreeCADGui.getDocument(doc.Name)
+            if gui_doc:
+                FreeCADGui.ActiveDocument = gui_doc
+        except Exception:
+            pass
+
+    def _open_hidden_preview_document(self, path):
+
+        try:
+            return FreeCAD.openDocument(path, hidden=True)
+        except TypeError:
+            return FreeCAD.openDocument(path, True)
+
+    def _build_preview_shape_from_document(
+        self,
+        doc,
+        asset_label,
+        root_name=None,
+        allow_helper_objects=False,
+        prefer_plan_symbols=False,
+    ):
+
+        if not doc:
+            return None
+        try:
+            doc.recompute()
+        except Exception:
+            pass
+        root_objects = self._choose_fcstd_definition_roots(
+            list(getattr(doc, "Objects", []) or []),
+            asset_label,
+            root_name=root_name,
+            allow_helper_objects=allow_helper_objects,
+        )
+        if not root_objects:
+            return None
+        return self._build_definition_preview_shape(
+            root_objects,
+            prefer_plan_symbols=prefer_plan_symbols,
+        )
+
+    def _build_preview_shape_from_source_path(
+        self,
+        path,
+        asset_label,
+        root_name=None,
+        allow_helper_objects=False,
+        prefer_plan_symbols=False,
+    ):
+
+        import Part
+
+        if not path or path.startswith(":github") or not os.path.isfile(path):
+            return None
+        ext = os.path.splitext(path)[1].lower()
+        if ext == ".fcstd":
+            previous_doc_name = self._get_active_document_name()
+            preview_doc = None
+            try:
+                preview_doc = self._open_hidden_preview_document(path)
+                return self._build_preview_shape_from_document(
+                    preview_doc,
+                    asset_label,
+                    root_name=root_name,
+                    allow_helper_objects=allow_helper_objects,
+                    prefer_plan_symbols=prefer_plan_symbols,
+                )
+            except Exception:
+                return None
+            finally:
+                if preview_doc and preview_doc.Name in FreeCAD.listDocuments():
+                    FreeCAD.closeDocument(preview_doc.Name)
+                self._restore_active_document(previous_doc_name)
+        if ext in {".stp", ".step", ".brp", ".brep"}:
+            try:
+                shape = Part.read(path)
+            except Exception:
+                return None
+            if shape and not shape.isNull():
+                return shape
+        return None
+
+    def _build_generated_preview_shape(self, filepath, preview_mode):
+
+        preview_mode = self._coerce_preview_mode(preview_mode)
+        manifest_path = self._get_asset_manifest_path(filepath)
+        if manifest_path:
+            asset_descriptor = self._build_asset_descriptor(manifest_path)
+            if preview_mode == PREVIEW_MODE_2D:
+                plan_path = asset_descriptor["plan_path"]
+                if plan_path and os.path.isfile(plan_path):
+                    return self._build_preview_shape_from_source_path(
+                        plan_path,
+                        asset_descriptor["label"],
+                        root_name=asset_descriptor["plan_root"],
+                        allow_helper_objects=True,
+                        prefer_plan_symbols=False,
+                    )
+                return self._build_preview_shape_from_source_path(
+                    asset_descriptor["model_path"],
+                    asset_descriptor["label"],
+                    root_name=asset_descriptor["model_root"],
+                    allow_helper_objects=False,
+                    prefer_plan_symbols=True,
+                )
+            return self._build_preview_shape_from_source_path(
+                asset_descriptor["model_path"],
+                asset_descriptor["label"],
+                root_name=asset_descriptor["model_root"],
+                allow_helper_objects=False,
+                prefer_plan_symbols=False,
+            )
+
+        resolved_path = self._resolve_asset_path(filepath)
+        label = os.path.splitext(os.path.basename(resolved_path))[0]
+        return self._build_preview_shape_from_source_path(
+            resolved_path,
+            label,
+            prefer_plan_symbols=(preview_mode == PREVIEW_MODE_2D),
+        )
+
+    def _collect_preview_edge_points(self, shape):
+
+        def coerce_point(point):
+
+            if isinstance(point, FreeCAD.Vector):
+                return FreeCAD.Vector(point.x, point.y, point.z)
+            if hasattr(point, "x") and hasattr(point, "y") and hasattr(point, "z"):
+                try:
+                    return FreeCAD.Vector(point.x, point.y, point.z)
+                except Exception:
+                    return None
+            if isinstance(point, (list, tuple)) and len(point) >= 3:
+                try:
+                    return FreeCAD.Vector(point[0], point[1], point[2])
+                except Exception:
+                    return None
+            return None
+
+        polylines = []
+        for edge in getattr(shape, "Edges", []) or []:
+            try:
+                points = edge.discretize(Deflection=1.0)
+            except Exception:
+                points = []
+            if not points:
+                try:
+                    points = edge.tessellate(1)
+                except Exception:
+                    points = []
+            if isinstance(points, tuple) and points:
+                points = points[0]
+            if not points:
+                points = [vertex.Point for vertex in getattr(edge, "Vertexes", [])]
+            converted = [coerce_point(point) for point in points]
+            converted = [point for point in converted if point is not None]
+            if len(converted) >= 2:
+                polylines.append(converted)
+        return polylines
+
+    def _get_preview_projection_axes(self, preview_mode):
+
+        if preview_mode == PREVIEW_MODE_2D:
+            return FreeCAD.Vector(1.0, 0.0, 0.0), FreeCAD.Vector(0.0, 1.0, 0.0)
+
+        direction = FreeCAD.Vector(
+            PREVIEW_3D_DIRECTION.x,
+            PREVIEW_3D_DIRECTION.y,
+            PREVIEW_3D_DIRECTION.z,
+        )
+        if direction.Length < 1e-9:
+            direction = FreeCAD.Vector(1.0, -1.0, 1.0)
+        direction.normalize()
+
+        up_axis = FreeCAD.Vector(0.0, 0.0, 1.0)
+        x_axis = up_axis.cross(direction)
+        if x_axis.Length < 1e-9:
+            up_axis = FreeCAD.Vector(0.0, 1.0, 0.0)
+            x_axis = up_axis.cross(direction)
+        if x_axis.Length < 1e-9:
+            return FreeCAD.Vector(1.0, 0.0, 0.0), FreeCAD.Vector(0.0, 1.0, 0.0)
+
+        x_axis.normalize()
+        y_axis = direction.cross(x_axis)
+        if y_axis.Length < 1e-9:
+            return FreeCAD.Vector(1.0, 0.0, 0.0), FreeCAD.Vector(0.0, 1.0, 0.0)
+        y_axis.normalize()
+        return x_axis, y_axis
+
+    def _render_generated_preview_image(self, shape, preview_mode):
+
+        from PySide import QtCore, QtGui
+
+        polylines = self._collect_preview_edge_points(shape)
+        if not polylines:
+            return None
+
+        x_axis, y_axis = self._get_preview_projection_axes(preview_mode)
+        projected = []
+        min_x = None
+        min_y = None
+        max_x = None
+        max_y = None
+
+        for polyline in polylines:
+            projected_polyline = []
+            for point in polyline:
+                x_coord = point.dot(x_axis)
+                y_coord = point.dot(y_axis)
+                projected_polyline.append((x_coord, y_coord))
+                min_x = x_coord if min_x is None else min(min_x, x_coord)
+                min_y = y_coord if min_y is None else min(min_y, y_coord)
+                max_x = x_coord if max_x is None else max(max_x, x_coord)
+                max_y = y_coord if max_y is None else max(max_y, y_coord)
+            if len(projected_polyline) >= 2:
+                projected.append(projected_polyline)
+
+        if not projected or min_x is None or min_y is None or max_x is None or max_y is None:
+            return None
+
+        width = max(max_x - min_x, 1.0)
+        height = max(max_y - min_y, 1.0)
+        available = PREVIEW_IMAGE_SIZE - (2 * PREVIEW_IMAGE_PADDING)
+        if available <= 0:
+            return None
+        scale = min(float(available) / width, float(available) / height)
+        x_offset = (PREVIEW_IMAGE_SIZE - (width * scale)) / 2.0
+        y_offset = (PREVIEW_IMAGE_SIZE - (height * scale)) / 2.0
+
+        image = QtGui.QImage(
+            PREVIEW_IMAGE_SIZE,
+            PREVIEW_IMAGE_SIZE,
+            QtGui.QImage.Format_ARGB32_Premultiplied,
+        )
+        image.fill(QtGui.QColor("#fbfbfb"))
+
+        painter = QtGui.QPainter(image)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
+        painter.setRenderHint(QtGui.QPainter.TextAntialiasing, True)
+        painter.setPen(QtGui.QPen(QtGui.QColor("#e4e4e4"), 1.0))
+        painter.drawRect(0, 0, PREVIEW_IMAGE_SIZE - 1, PREVIEW_IMAGE_SIZE - 1)
+
+        pen = QtGui.QPen(QtGui.QColor("#222222"))
+        pen.setWidthF(1.6 if preview_mode == PREVIEW_MODE_2D else 1.35)
+        pen.setCapStyle(QtCore.Qt.RoundCap)
+        pen.setJoinStyle(QtCore.Qt.RoundJoin)
+        painter.setPen(pen)
+        painter.setBrush(QtCore.Qt.NoBrush)
+
+        for polyline in projected:
+            polygon = QtGui.QPolygonF()
+            for x_coord, y_coord in polyline:
+                px = x_offset + ((x_coord - min_x) * scale)
+                py = PREVIEW_IMAGE_SIZE - (y_offset + ((y_coord - min_y) * scale))
+                polygon.append(QtCore.QPointF(px, py))
+            if polygon.size() == 2 and polygon[0] == polygon[1]:
+                painter.drawPoint(polygon[0])
+            else:
+                painter.drawPolyline(polygon)
+
+        painter.end()
+        return image
+
+    def _get_generated_preview_path(self, filepath, preview_mode):
+
+        preview_mode = self._coerce_preview_mode(preview_mode)
+        cache_path = self._get_preview_cache_path(filepath, preview_mode)
+        source_paths = self._get_preview_source_paths(filepath, preview_mode)
+        if self._is_preview_cache_current(cache_path, source_paths):
+            return cache_path
+
+        shape = self._build_generated_preview_shape(filepath, preview_mode)
+        if not shape or shape.isNull():
+            return None
+        image = self._render_generated_preview_image(shape, preview_mode)
+        if image is None or image.isNull():
+            return None
+
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        if image.save(cache_path):
+            return cache_path
+        return None
 
     def _next_instance_label(self, doc, base_label):
 
@@ -2565,6 +3005,13 @@ class BIM_Library_TaskPanel:
             asset_thumb = self._get_asset_thumbnail_path(manifest_path)
             if asset_thumb:
                 return asset_thumb
+        generated_thumb = self._get_generated_preview_path(
+            filepath,
+            self._get_effective_preview_mode(),
+        )
+        if generated_thumb:
+            return generated_thumb
+        if manifest_path:
             filepath = self._get_asset_model_path(manifest_path)
         if filepath.startswith(":github"):
             filepath = RAWURL + filepath[7:]
