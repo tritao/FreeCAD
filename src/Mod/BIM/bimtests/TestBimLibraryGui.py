@@ -60,6 +60,53 @@ class TestBimLibraryGui(TestArchBaseGui):
             )
         return manifest_path
 
+    def _write_preview_asset_bundle(
+        self, root, label="Preview Bed", asset_id="furniture.bed.preview"
+    ):
+        model_path = os.path.join(root, "bed.fcstd")
+        plan_path = os.path.join(root, "bed-plan.fcstd")
+        manifest_path = os.path.join(root, "asset.json")
+
+        model_doc = FreeCAD.newDocument("PreviewModel")
+        model = model_doc.addObject("Part::Box", "DoubleBed")
+        model.Length = 1400
+        model.Width = 1950
+        model.Height = 600
+        model_doc.recompute()
+        model_doc.saveAs(model_path)
+        FreeCAD.closeDocument(model_doc.Name)
+
+        plan_doc = FreeCAD.newDocument("PreviewPlan")
+        plan = plan_doc.addObject("Part::Feature", "BedPlan")
+        plan.Shape = Part.makeCompound(
+            [
+                Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(1400, 0, 0)),
+                Part.makeLine(FreeCAD.Vector(1400, 0, 0), FreeCAD.Vector(1400, 1950, 0)),
+                Part.makeLine(FreeCAD.Vector(1400, 1950, 0), FreeCAD.Vector(0, 1950, 0)),
+                Part.makeLine(FreeCAD.Vector(0, 1950, 0), FreeCAD.Vector(0, 0, 0)),
+            ]
+        )
+        plan.Placement.Base = FreeCAD.Vector(125.0, 958.85, 0)
+        plan_doc.recompute()
+        plan_doc.saveAs(plan_path)
+        FreeCAD.closeDocument(plan_doc.Name)
+
+        with open(manifest_path, "w", encoding="utf-8") as handle:
+            json.dump(
+                {
+                    "id": asset_id,
+                    "label": label,
+                    "kind": "equipment",
+                    "representations": {
+                        "model3d": {"file": "bed.fcstd", "root": "DoubleBed"},
+                        "plan2d": {"file": "bed-plan.fcstd", "root": "BedPlan"},
+                    },
+                },
+                handle,
+            )
+
+        return manifest_path
+
     def _count_coin_nodes(self, node, coin_class):
         if not node:
             return 0
@@ -302,6 +349,34 @@ class TestBimLibraryGui(TestArchBaseGui):
         self.assertAlmostEqual(expected_bb.YMin, preview_shape.BoundBox.YMin, delta=1e-6)
         self.assertAlmostEqual(expected_bb.XMax, preview_shape.BoundBox.XMax, delta=1e-6)
         self.assertAlmostEqual(expected_bb.YMax, preview_shape.BoundBox.YMax, delta=1e-6)
+
+    def test_generated_preview_fallback_supports_distinct_2d_and_3d_modes(self):
+        """Generated local previews should produce distinct cached 2D and 3D images."""
+
+        panel = BimLibrary.BIM_Library_TaskPanel.__new__(BimLibrary.BIM_Library_TaskPanel)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = self._write_preview_asset_bundle(tmpdir)
+
+            preview_2d = panel._get_generated_preview_path(
+                manifest_path, BimLibrary.PREVIEW_MODE_2D
+            )
+            preview_3d = panel._get_generated_preview_path(
+                manifest_path, BimLibrary.PREVIEW_MODE_3D
+            )
+
+            self.assertTrue(preview_2d)
+            self.assertTrue(preview_3d)
+            self.assertTrue(os.path.isfile(preview_2d))
+            self.assertTrue(os.path.isfile(preview_3d))
+            self.assertNotEqual(preview_2d, preview_3d)
+
+            with open(preview_2d, "rb") as handle:
+                image_2d = handle.read()
+            with open(preview_3d, "rb") as handle:
+                image_3d = handle.read()
+
+            self.assertNotEqual(image_2d, image_3d)
 
     def test_configured_library_roots_migrate_legacy_destination(self):
         """Legacy single-root settings should migrate to the multi-root preference."""
