@@ -80,6 +80,29 @@ namespace sp = std::placeholders;
 namespace Gui
 {
 
+namespace
+{
+bool shouldReapplyOverrideMode(const std::string& overrideMode, const std::string* modeType)
+{
+    if (overrideMode.empty() || overrideMode == "As Is") {
+        return false;
+    }
+    if (!modeType) {
+        return true;
+    }
+    if (overrideMode == *modeType) {
+        return true;
+    }
+    if (overrideMode == "No Shading") {
+        return (*modeType == "Flat Lines");
+    }
+    if (overrideMode == "Hidden Line") {
+        return (*modeType == "Shaded");
+    }
+    return false;
+}
+}  // namespace
+
 // Pimpl class
 struct DocumentP
 {
@@ -2054,6 +2077,8 @@ void Document::slotFinishRestoreDocument(const App::Document& doc)
         }
     }
 
+    reapplyViewOverrides();
+
     // reset modified flag
     setModified(doc.testStatus(App::Document::LinkStampChanged));
 }
@@ -2633,6 +2658,48 @@ std::list<MDIView*> Document::getMDIViewsOfType(const Base::Type& typeId, bool i
     }
 
     return views;
+}
+
+void Document::reapplyViewOverrides()
+{
+    auto views = getMDIViewsOfType(View3DInventor::getClassTypeId());
+    for (auto* mdiView : views) {
+        auto* view3D = dynamic_cast<View3DInventor*>(mdiView);
+        if (!view3D) {
+            continue;
+        }
+        auto* viewer = view3D->getViewer();
+        if (!viewer) {
+            continue;
+        }
+        std::string overrideMode = viewer->getOverrideMode();
+        if (!shouldReapplyOverrideMode(overrideMode, nullptr)) {
+            continue;
+        }
+        viewer->updateOverrideMode("As Is");
+        viewer->setOverrideMode(overrideMode);
+    }
+}
+
+void Document::reapplyViewOverrides(const std::string& modeType)
+{
+    auto views = getMDIViewsOfType(View3DInventor::getClassTypeId());
+    for (auto* mdiView : views) {
+        auto* view3D = dynamic_cast<View3DInventor*>(mdiView);
+        if (!view3D) {
+            continue;
+        }
+        auto* viewer = view3D->getViewer();
+        if (!viewer) {
+            continue;
+        }
+        std::string overrideMode = viewer->getOverrideMode();
+        if (!shouldReapplyOverrideMode(overrideMode, &modeType)) {
+            continue;
+        }
+        viewer->updateOverrideMode("As Is");
+        viewer->setOverrideMode(overrideMode);
+    }
 }
 
 /// send messages to the active view
