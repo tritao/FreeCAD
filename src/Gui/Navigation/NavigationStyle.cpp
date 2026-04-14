@@ -62,6 +62,20 @@
 
 using namespace Gui;
 
+namespace
+{
+bool rotationsMatch(const SbRotation& lhs, const SbRotation& rhs, float epsilon = 1e-6F)
+{
+    float l0, l1, l2, l3;
+    float r0, r1, r2, r3;
+    lhs.getValue(l0, l1, l2, l3);
+    rhs.getValue(r0, r1, r2, r3);
+    // Quaternions q and -q encode the same orientation, so SbRotation::equals() is too strict here.
+    const float dot = l0 * r0 + l1 * r1 + l2 * r2 + l3 * r3;
+    return std::fabs(dot) >= 1.0F - epsilon / 2.0F;
+}
+}  // namespace
+
 class FCSphereSheetProjector: public SbSphereSheetProjector
 {
     using inherited = SbSphereSheetProjector;
@@ -323,6 +337,8 @@ NavigationStyle& NavigationStyle::operator=(const NavigationStyle& ns)
     this->menuenabled = ns.menuenabled;
     this->animationEnabled = ns.animationEnabled;
     this->spinningAnimationEnabled = ns.spinningAnimationEnabled;
+    this->rotationEnabled = ns.rotationEnabled;
+    this->orientationLocked = ns.orientationLocked;
     static_cast<FCSphereSheetProjector*>(this->spinprojector)
         ->setOrbitStyle(static_cast<FCSphereSheetProjector*>(ns.spinprojector)->getOrbitStyle());
     return *this;
@@ -343,6 +359,7 @@ void NavigationStyle::initialize()
     this->animationEnabled = true;
     this->spinningAnimationEnabled = false;
     this->rotationEnabled = true;
+    this->orientationLocked = false;
     this->spinsamplecounter = 0;
     this->spinincrement = SbRotation::identity();
     this->rotationCenterFound = false;
@@ -524,6 +541,13 @@ std::shared_ptr<NavigationAnimation> NavigationStyle::setCameraOrientation(
     if (!camera) {
         return {};
     }
+    if (!canChangeCameraOrientation(
+            camera->orientation.getValue(),
+            orientation,
+            OrientationChangeSource::Programmatic
+        )) {
+        return {};
+    }
 
     animator->stop();
 
@@ -550,7 +574,7 @@ std::shared_ptr<NavigationAnimation> NavigationStyle::setCameraOrientation(
     const SbVec3f rotationCenterDistanceCam = camera->focalDistance.getValue() * SbVec3f(0, 0, 1);
 
     // Set to the given orientation
-    camera->orientation = orientation;
+    setCameraOrientationValue(camera, orientation, OrientationChangeSource::Programmatic);
 
     // Distance from rotation center to new camera position in global coordinate system
     SbVec3f newRotationCenterDistance;
@@ -702,9 +726,13 @@ void NavigationStyle::findBoundingSphere()
 /** Rotate the camera by the given amount, then reposition it so we're still pointing at the same
  * focal point
  */
-void NavigationStyle::reorientCamera(SoCamera* camera, const SbRotation& rotation)
+void NavigationStyle::reorientCamera(
+    SoCamera* camera,
+    const SbRotation& rotation,
+    const OrientationChangeSource source
+)
 {
-    reorientCamera(camera, rotation, viewer->getFocalPoint());
+    reorientCamera(camera, rotation, viewer->getFocalPoint(), source);
 }
 
 /** Rotate the camera by the given amount, then reposition it so the rotation center stays in the
@@ -713,22 +741,29 @@ void NavigationStyle::reorientCamera(SoCamera* camera, const SbRotation& rotatio
 void NavigationStyle::reorientCamera(
     SoCamera* camera,
     const SbRotation& rotation,
-    const SbVec3f& rotationCenter
+    const SbVec3f& rotationCenter,
+    const OrientationChangeSource source
 )
 {
     if (!camera) {
         return;
     }
 
+    const SbRotation currentOrientation = camera->orientation.getValue();
+    const SbRotation targetOrientation = rotation * currentOrientation;
+    if (!canChangeCameraOrientation(currentOrientation, targetOrientation, source)) {
+        return;
+    }
+
     // Distance from rotation center to camera position in camera coordinate system
     SbVec3f rotationCenterDistanceCam;
-    camera->orientation.getValue().inverse().multVec(
+    currentOrientation.inverse().multVec(
         camera->position.getValue() - rotationCenter,
         rotationCenterDistanceCam
     );
 
     // Set new orientation value by accumulating the new rotation
-    camera->orientation = rotation * camera->orientation.getValue();
+    camera->orientation = targetOrientation;
 
     // Distance from rotation center to new camera position in global coordinate system
     SbVec3f newRotationCenterDistance;
@@ -1028,6 +1063,10 @@ void NavigationStyle::doScale(SoCamera* cam, float factor)
 }
 void NavigationStyle::doRotate(SoCamera* camera, float angle, const SbVec2f& pos)
 {
+    if (!isRotationEnabled()) {
+        return;
+    }
+
     SbBool zoomAtCur = this->zoomAtCursor;
     if (zoomAtCur) {
         const SbViewportRegion& vp = viewer->getSoRenderManager()->getViewportRegion();
@@ -1043,7 +1082,7 @@ void NavigationStyle::doRotate(SoCamera* camera, float angle, const SbVec2f& pos
     rotcam.multVec(SbVec3f(0, 0, -1), vdir);
     // rotate
     SbRotation drot(vdir, angle);
-    camera->orientation.setValue(rotcam * drot);
+    setCameraOrientationValue(camera, rotcam * drot, OrientationChangeSource::Interactive);
 
     if (zoomAtCur) {
         const SbViewportRegion& vp = viewer->getSoRenderManager()->getViewportRegion();
@@ -1206,6 +1245,10 @@ void NavigationStyle::spinInternal(const SbVec2f& pointerpos, const SbVec2f& las
  */
 void NavigationStyle::spin_simplified(SbVec2f curpos, SbVec2f prevpos)
 {
+    if (!isRotationEnabled()) {
+        return;
+    }
+
     assert(this->spinprojector);
 
     if (getOrbitStyle() == FreeTurntable) {
@@ -1493,6 +1536,54 @@ SbBool NavigationStyle::isRotationEnabled() const
 void NavigationStyle::setRotationEnabled(const SbBool enable)
 {
     rotationEnabled = enable;
+    if (!enable && isSpinning()) {
+        stopAnimating();
+    }
+}
+
+SbBool NavigationStyle::canChangeCameraOrientation(
+    const SbRotation& current,
+    const SbRotation& target,
+    const OrientationChangeSource source
+) const
+{
+    if (rotationsMatch(current, target)) {
+        return true;
+    }
+    if (isOrientationLocked()) {
+        return false;
+    }
+    if (source == OrientationChangeSource::Interactive && !isRotationEnabled()) {
+        return false;
+    }
+    return true;
+}
+
+SbBool NavigationStyle::setCameraOrientationValue(
+    SoCamera* camera,
+    const SbRotation& orientation,
+    const OrientationChangeSource source
+) const
+{
+    if (!camera) {
+        return false;
+    }
+    if (!canChangeCameraOrientation(camera->orientation.getValue(), orientation, source)) {
+        return false;
+    }
+
+    camera->orientation = orientation;
+    return true;
+}
+
+SbBool NavigationStyle::isOrientationLocked() const
+{
+    return orientationLocked;
+}
+
+void NavigationStyle::setOrientationLocked(const SbBool enable)
+{
+    orientationLocked = enable;
 }
 
 void NavigationStyle::startAnimating(const std::shared_ptr<NavigationAnimation>& animation, bool wait) const
@@ -2055,15 +2146,19 @@ SbBool NavigationStyle::processMotionEvent(const SoMotion3Event* const ev)
         useMotionRotationCenter = true;
     }
 
-    SbRotation newRotation(camera->orientation.getValue());
-    if (isRotationEnabled()) {
-        newRotation = ev->getRotation() * newRotation;
+    const SbRotation currentRotation(camera->orientation.getValue());
+    SbRotation newRotation(currentRotation);
+    const SbRotation requestedRotation(ev->getRotation() * currentRotation);
+    if (
+        canChangeCameraOrientation(currentRotation, requestedRotation, OrientationChangeSource::Interactive)
+    ) {
+        newRotation = requestedRotation;
     }
     SbVec3f newPosition, newDirection;
     if (useMotionRotationCenter) {
         // Reposition the camera so the rotation center stays in the same place
         SbVec3f rotationCenterDistanceCam;
-        camera->orientation.getValue().inverse().multVec(
+        currentRotation.inverse().multVec(
             camera->position.getValue() - motionRotationCenter,
             rotationCenterDistanceCam
         );
@@ -2081,7 +2176,7 @@ SbBool NavigationStyle::processMotionEvent(const SoMotion3Event* const ev)
     SbVec3f finalPosition = newPosition + (dir * translationFactor);
 
     camera->enableNotify(false);
-    camera->orientation.setValue(newRotation);
+    setCameraOrientationValue(camera, newRotation, OrientationChangeSource::Interactive);
     camera->position = finalPosition;
     camera->enableNotify(true);
     camera->touch();
