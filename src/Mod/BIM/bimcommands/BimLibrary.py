@@ -175,23 +175,31 @@ class BIM_Library:
     def Activated(self):
 
         self.librarypath, self.librarysource = resolve_library_root_info()
+        target_gui_doc = getattr(FreeCADGui, "ActiveDocument", None)
+        target_doc_name = ""
+        if target_gui_doc and getattr(target_gui_doc, "Document", None):
+            target_doc_name = target_gui_doc.Document.Name
         panel = BIM_Library_TaskPanel(
             offlinemode=bool(self.librarypath),
             librarypath=self.librarypath,
             librarysource=self.librarysource,
+            target_doc_name=target_doc_name,
         )
-        task = FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
+        task = FreeCADGui.Control.showDialog(panel, target_gui_doc)
         task.setDocumentName(panel.mainDocName)
         task.setAutoCloseOnDeletedDocument(True)
 
 
 class BIM_Library_TaskPanel:
 
-    def __init__(self, offlinemode=False, librarypath="", librarysource=""):
+    def __init__(self, offlinemode=False, librarypath="", librarysource="", target_doc_name=""):
 
         from PySide import QtCore, QtGui
 
-        self.mainDocName = FreeCAD.Gui.ActiveDocument.Document.Name
+        if target_doc_name:
+            self.mainDocName = target_doc_name
+        else:
+            self.mainDocName = FreeCAD.Gui.ActiveDocument.Document.Name
         self.previewDocName = "Viewer"
 
         self.linked = False
@@ -629,12 +637,9 @@ class BIM_Library_TaskPanel:
 
     def link(self, index=None):
 
-        from draftutils import todo
-
         doc = self._get_main_document()
         if not doc:
             return
-        FreeCAD.setActiveDocument(doc.Name)
         path = self._resolve_index_path(index)
         if not path:
             return
@@ -670,7 +675,7 @@ class BIM_Library_TaskPanel:
         self._add_instances_to_active_container(links)
         doc.recompute()
         self._select_inserted_objects(links)
-        todo.ToDo.delay(self.reject, None)
+        self._clear_pending_insert_state()
 
     def addtolibrary(self):
         # DISABLED
@@ -1220,13 +1225,29 @@ class BIM_Library_TaskPanel:
 
     def reject(self):
 
-        if hasattr(self, "box") and self.box:
-            self.box.off()
-        self.instance_definition_roots = []
+        self._clear_pending_insert_state()
         FreeCADGui.Control.closeDialog()
         if self.previewDocName in FreeCAD.listDocuments():
             FreeCAD.closeDocument(self.previewDocName)
-        FreeCAD.ActiveDocument.recompute()
+        doc = self._get_main_document()
+        if doc:
+            doc.recompute()
+
+    def _clear_pending_insert_state(self):
+
+        if hasattr(self, "box") and self.box:
+            self.box.off()
+            self.box = None
+        if hasattr(self, "origin") and self.origin:
+            try:
+                self.origin.hide()
+                self.origin.deleteLater()
+            except Exception:
+                pass
+            self.origin = None
+        self.instance_definition_roots = []
+        if hasattr(self, "shape"):
+            self.shape = None
 
     def _resolve_index_path(self, index=None):
 
@@ -1253,6 +1274,44 @@ class BIM_Library_TaskPanel:
                 + "\n"
             )
             return None
+
+    def _get_main_gui_document(self):
+
+        doc = self._get_main_document()
+        if not doc:
+            return None
+        try:
+            return FreeCADGui.getDocument(doc.Name)
+        except Exception:
+            return None
+
+    def _activate_target_document(self):
+
+        doc = self._get_main_document()
+        if not doc:
+            return None
+        try:
+            FreeCAD.setActiveDocument(doc.Name)
+        except Exception:
+            pass
+        try:
+            gui_doc = FreeCADGui.getDocument(doc.Name)
+            if gui_doc:
+                FreeCADGui.ActiveDocument = gui_doc
+        except Exception:
+            pass
+        return doc
+
+    def _merge_project_into_main_document(self, path):
+
+        gui_doc = self._get_main_gui_document()
+        if not gui_doc:
+            return False
+        try:
+            gui_doc.mergeProject(path)
+            return True
+        except Exception:
+            return False
 
     def _ensure_library_metadata(self, obj, source_path, role="instance"):
 
@@ -1580,7 +1639,8 @@ class BIM_Library_TaskPanel:
     def _create_auxiliary_symbol_roots(self, doc, asset_group, path, asset_label, root_name=None):
 
         before = {obj.Name for obj in doc.Objects}
-        FreeCADGui.ActiveDocument.mergeProject(path)
+        if not self._merge_project_into_main_document(path):
+            return []
         added_objects = [obj for obj in doc.Objects if obj.Name not in before]
         root_objects = self._choose_fcstd_definition_roots(
             added_objects,
@@ -1604,7 +1664,8 @@ class BIM_Library_TaskPanel:
     def _create_fcstd_symbol_definitions(self, doc, asset_group, asset_descriptor):
 
         before = {obj.Name for obj in doc.Objects}
-        FreeCADGui.ActiveDocument.mergeProject(asset_descriptor["model_path"])
+        if not self._merge_project_into_main_document(asset_descriptor["model_path"]):
+            return []
         added_objects = [obj for obj in doc.Objects if obj.Name not in before]
         root_objects = self._choose_fcstd_definition_roots(
             added_objects,
@@ -1688,12 +1749,35 @@ class BIM_Library_TaskPanel:
             shapes.extend(self._get_object_preview_shapes(child))
         return shapes
 
+    def _should_prefer_plan_symbol_preview(self):
+
+        try:
+            from bimcommands import BimPlanSession
+
+            session = BimPlanSession.get_active_session()
+        except Exception:
+            session = None
+        return bool(session and not getattr(session, "_tearing_down", False))
+
+    def _get_object_plan_preview_shapes(self, obj):
+
+        shapes = []
+        for plan_obj in getattr(obj, "PlanSymbols", []) or []:
+            shapes.extend(self._get_object_preview_shapes(plan_obj))
+        return shapes
+
     def _build_definition_preview_shape(self, definition_roots):
 
         import Part
 
         shapes = []
+        prefer_plan_symbols = self._should_prefer_plan_symbol_preview()
         for obj in definition_roots:
+            if prefer_plan_symbols:
+                object_shapes = self._get_object_plan_preview_shapes(obj)
+                if object_shapes:
+                    shapes.extend(object_shapes)
+                    continue
             shapes.extend(self._get_object_preview_shapes(obj))
         if not shapes:
             return None
@@ -1720,7 +1804,7 @@ class BIM_Library_TaskPanel:
 
     def _get_active_container(self):
 
-        selection = FreeCADGui.Selection.getSelection()
+        selection = FreeCADGui.Selection.getSelection(self.mainDocName)
         for obj in selection:
             if hasattr(obj, "addObject") and not getattr(obj, "IsLibraryDefinition", False):
                 return obj
@@ -1737,40 +1821,36 @@ class BIM_Library_TaskPanel:
             except Exception:
                 pass
 
-    def _select_inserted_objects(self, objects):
+    def _select_inserted_objects(self, objects, fit_view=False):
 
-        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.clearSelection(self.mainDocName)
         for obj in objects:
-            FreeCADGui.Selection.addSelection(obj)
-        FreeCADGui.SendMsgToActiveView("ViewSelection")
+            FreeCADGui.Selection.addSelection(self.mainDocName, obj.Name)
+        if fit_view:
+            FreeCADGui.SendMsgToActiveView("ViewSelection")
 
     def insert(self, index=None):
 
         doc = self._get_main_document()
         if not doc:
             return
-        FreeCAD.setActiveDocument(doc.Name)
         path = self._resolve_index_path(index)
         if not path:
             return
-        before = list(FreeCAD.ActiveDocument.Objects)
+        before = list(doc.Objects)
         self.name = self._build_asset_descriptor(path)["label"]
         ext = os.path.splitext(path.lower())[1]
         if ext in [".stp", ".step", ".brp", ".brep"]:
             self.place(path)
         elif ext == ".fcstd":
-            FreeCADGui.ActiveDocument.mergeProject(path)
-            from draftutils import todo
-
-            todo.ToDo.delay(self.reject, None)
+            self._merge_project_into_main_document(path)
+            self._clear_pending_insert_state()
         elif ext == ".ifc":
             from importers import importIFC
 
             importIFC.ZOOMOUT = False
-            importIFC.insert(path, FreeCAD.ActiveDocument.Name)
-            from draftutils import todo
-
-            todo.ToDo.delay(self.reject, None)
+            importIFC.insert(path, doc.Name)
+            self._clear_pending_insert_state()
         elif ext in [".sat", ".sab"]:
             try:
                 # InventorLoader addon
@@ -1788,15 +1868,15 @@ class BIM_Library_TaskPanel:
                         + "\n"
                     )
                 else:
-                    path = CadExchangerIO.insert(path, FreeCAD.ActiveDocument.Name, returnpath=True)
+                    path = CadExchangerIO.insert(path, doc.Name, returnpath=True)
                     self.place(path)
             else:
-                path = importerIL.insert(path, FreeCAD.ActiveDocument.Name)
-        FreeCADGui.Selection.clearSelection()
-        for o in FreeCAD.ActiveDocument.Objects:
-            if not o in before:
-                FreeCADGui.Selection.addSelection(o)
-        FreeCADGui.SendMsgToActiveView("ViewSelection")
+                path = importerIL.insert(path, doc.Name)
+        inserted = []
+        for o in doc.Objects:
+            if o not in before:
+                inserted.append(o)
+        self._select_inserted_objects(inserted)
 
     def download(self, url):
 
@@ -1825,6 +1905,7 @@ class BIM_Library_TaskPanel:
         import Part
         import WorkingPlane
 
+        self._activate_target_document()
         self.shape = shape
         if hasattr(FreeCADGui, "Snapper"):
             try:
@@ -1915,10 +1996,8 @@ class BIM_Library_TaskPanel:
         if point:
             import Arch
 
-            self.box.off()
             doc = self._get_main_document()
             if doc and self.instance_definition_roots:
-                FreeCAD.setActiveDocument(doc.Name)
                 links = []
                 placement = FreeCAD.Placement(point.add(self.getDelta()), FreeCAD.Rotation())
                 for definition_obj in self.instance_definition_roots:
@@ -1930,11 +2009,15 @@ class BIM_Library_TaskPanel:
                 doc.recompute()
                 self._select_inserted_objects(links)
             else:
+                doc = self._activate_target_document()
+                if not doc:
+                    self._clear_pending_insert_state()
+                    return
                 self.shape.translate(point.add(self.getDelta()))
                 obj = Arch.makeEquipment()
                 obj.Shape = self.shape
                 obj.Label = self.name
-        self.reject()
+        self._clear_pending_insert_state()
 
     def getDelta(self):
 
