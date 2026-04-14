@@ -32,6 +32,7 @@ import os
 import sys
 import tempfile
 
+import BimLibrarySources
 import FreeCAD
 import FreeCADGui
 
@@ -71,7 +72,6 @@ REFRESH_INTERVAL = 3600  # Min seconds between allowing a new API calls (3600 = 
 SYMBOL_DEFINITIONS_GROUP = "_SymbolDefinitions"
 SYMBOL_LIBRARY_GROUP = "Library"
 ASSET_MANIFEST = "asset.json"
-LIBRARY_MARKER_FILES = (".freecad-library", "library.json")
 
 
 # TODO as https://github.com/yorikvanhavre/BIM_Workbench/pull/77
@@ -86,22 +86,6 @@ LIBRARY_MARKER_FILES = (".freecad-library", "library.json")
 # column width, so if the task column is smaller than the image, it gets smaller
 # to fit the space. I don't remember exactly how to do that, but it should be
 # findable in QDesigner
-
-
-def _normalize_library_root(path):
-
-    if not path:
-        return ""
-    return os.path.normpath(path).replace("\\", "/")
-
-
-def _get_configured_library_root():
-
-    pr = FreeCAD.ParamGet("User parameter:Plugins/parts_library")
-    path = pr.GetString("destination", "")
-    if path and os.path.exists(path):
-        return _normalize_library_root(path)
-    return ""
 
 
 def _normalize_asset_kind(kind):
@@ -144,63 +128,224 @@ def _coerce_asset_vector(value):
     return None
 
 
-def _iter_module_search_roots():
+def _normalize_library_root_entries(entries):
 
-    seen = set()
-    additional_paths = FreeCAD.ConfigGet("AdditionalModulePaths") or ""
-    for raw_path in additional_paths.split(";"):
-        raw_path = raw_path.strip()
-        if not raw_path:
-            continue
-        path = _normalize_library_root(raw_path)
-        if path and path not in seen and os.path.isdir(path):
-            seen.add(path)
-            yield path
-
-    for raw_path in sys.path:
-        if not raw_path:
-            continue
-        path = _normalize_library_root(raw_path)
-        if path and path not in seen and os.path.isdir(path):
-            seen.add(path)
-            yield path
+    return BimLibrarySources.coerce_library_roots(entries)
 
 
-def _find_marked_library_root(module_root):
+def resolve_library_root_entries():
 
-    candidates = [
-        module_root,
-        os.path.join(module_root, "Library"),
-    ]
-    for candidate in candidates:
-        if not os.path.isdir(candidate):
-            continue
-        for marker in LIBRARY_MARKER_FILES:
-            if os.path.isfile(os.path.join(candidate, marker)):
-                return _normalize_library_root(candidate)
-    return ""
+    return BimLibrarySources.resolve_library_roots()
 
 
 def resolve_library_root_info():
 
-    configured = _get_configured_library_root()
-    if configured:
-        return configured, "configured"
-
-    for module_root in _iter_module_search_roots():
-        discovered = _find_marked_library_root(module_root)
-        if discovered:
-            return discovered, "module_marker"
-
-    addondir = os.path.join(FreeCAD.getUserAppDataDir(), "Mod", "parts_library")
-    if os.path.exists(addondir):
-        return _normalize_library_root(addondir), "legacy_fallback"
-    return "", "none"
+    return BimLibrarySources.resolve_library_root_info()
 
 
 def resolve_library_root():
 
-    return resolve_library_root_info()[0]
+    return BimLibrarySources.resolve_library_root()
+
+
+def resolve_library_roots():
+
+    return BimLibrarySources.resolve_library_root_paths()
+
+
+def get_configured_library_roots():
+
+    return BimLibrarySources.get_configured_library_roots()
+
+
+def get_configured_library_root_entries():
+
+    return BimLibrarySources.get_configured_library_root_entries()
+
+
+class BIM_LibraryRootManagerDialog:
+    """Dialog used to manage configured local library roots."""
+
+    def __init__(self, parent=None, configured_roots=None):
+
+        from PySide import QtCore, QtGui
+
+        self._qtcore = QtCore
+        self._qtgui = QtGui
+        self.dialog = QtGui.QDialog(parent)
+        self.dialog.setWindowTitle(translate("BIM", "Manage local libraries"))
+        self.dialog.resize(560, 360)
+
+        layout = QtGui.QVBoxLayout(self.dialog)
+
+        intro = QtGui.QLabel(
+            translate(
+                "BIM",
+                "Configured libraries are searched before discovered module libraries. "
+                "The first enabled configured root has the highest priority.",
+            ),
+            self.dialog,
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        body_layout = QtGui.QHBoxLayout()
+        self.listWidget = QtGui.QListWidget(self.dialog)
+        self.listWidget.setAlternatingRowColors(True)
+        self.listWidget.setSelectionMode(QtGui.QAbstractItemView.SingleSelection)
+        self.listWidget.currentRowChanged.connect(self._update_buttons)
+        self.listWidget.itemChanged.connect(lambda *_args: self._update_buttons())
+        body_layout.addWidget(self.listWidget, 1)
+
+        controls_layout = QtGui.QVBoxLayout()
+        self.buttonAdd = QtGui.QPushButton(translate("BIM", "Add folder..."), self.dialog)
+        self.buttonRemove = QtGui.QPushButton(translate("BIM", "Remove"), self.dialog)
+        self.buttonMoveUp = QtGui.QPushButton(translate("BIM", "Move up"), self.dialog)
+        self.buttonMoveDown = QtGui.QPushButton(translate("BIM", "Move down"), self.dialog)
+        self.buttonAdd.clicked.connect(self.onAddFolder)
+        self.buttonRemove.clicked.connect(self.onRemoveSelected)
+        self.buttonMoveUp.clicked.connect(lambda: self._move_current_item(-1))
+        self.buttonMoveDown.clicked.connect(lambda: self._move_current_item(1))
+        controls_layout.addWidget(self.buttonAdd)
+        controls_layout.addWidget(self.buttonRemove)
+        controls_layout.addWidget(self.buttonMoveUp)
+        controls_layout.addWidget(self.buttonMoveDown)
+        controls_layout.addStretch(1)
+        body_layout.addLayout(controls_layout)
+        layout.addLayout(body_layout)
+
+        hint = QtGui.QLabel(
+            translate(
+                "BIM",
+                "Checked entries are enabled. Unchecked entries stay configured but are skipped.",
+            ),
+            self.dialog,
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #666;")
+        layout.addWidget(hint)
+
+        self.buttonBox = QtGui.QDialogButtonBox(
+            QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel,
+            self.dialog,
+        )
+        self.buttonBox.accepted.connect(self.dialog.accept)
+        self.buttonBox.rejected.connect(self.dialog.reject)
+        layout.addWidget(self.buttonBox)
+
+        for entry in configured_roots or []:
+            self.addConfiguredRoot(entry)
+
+        if self.listWidget.count():
+            self.listWidget.setCurrentRow(0)
+        self._update_buttons()
+
+    def exec_(self):
+
+        return self.dialog.exec_()
+
+    def _format_item_text(self, path):
+
+        label = BimLibrarySources.get_library_root_label(path)
+        if not os.path.isdir(path):
+            label = "{} [{}]".format(label, translate("BIM", "Missing"))
+        return "{}\n{}".format(label, path)
+
+    def _create_item(self, path, enabled=True):
+
+        item = self._qtgui.QListWidgetItem(self._format_item_text(path))
+        item.setFlags(
+            item.flags()
+            | self._qtcore.Qt.ItemIsEnabled
+            | self._qtcore.Qt.ItemIsSelectable
+            | self._qtcore.Qt.ItemIsUserCheckable
+        )
+        item.setData(self._qtcore.Qt.UserRole, path)
+        item.setToolTip(path)
+        item.setCheckState(self._qtcore.Qt.Checked if enabled else self._qtcore.Qt.Unchecked)
+        return item
+
+    def addConfiguredRoot(self, entry):
+
+        path = BimLibrarySources.normalize_library_root(getattr(entry, "path", entry))
+        if not path:
+            return False
+        enabled = bool(getattr(entry, "enabled", True))
+        for row in range(self.listWidget.count()):
+            item = self.listWidget.item(row)
+            if item.data(self._qtcore.Qt.UserRole) == path:
+                item.setCheckState(
+                    self._qtcore.Qt.Checked if enabled else self._qtcore.Qt.Unchecked
+                )
+                self.listWidget.setCurrentRow(row)
+                self._update_buttons()
+                return False
+
+        item = self._create_item(path, enabled)
+        self.listWidget.addItem(item)
+        self.listWidget.setCurrentItem(item)
+        self._update_buttons()
+        return True
+
+    def onAddFolder(self):
+
+        path = self._qtgui.QFileDialog.getExistingDirectory(
+            self.dialog,
+            translate("BIM", "Add library folder"),
+            "",
+            self._qtgui.QFileDialog.ShowDirsOnly,
+        )
+        if path:
+            self.addConfiguredRoot(path)
+
+    def onRemoveSelected(self):
+
+        row = self.listWidget.currentRow()
+        if row < 0:
+            return
+        item = self.listWidget.takeItem(row)
+        del item
+        if self.listWidget.count():
+            self.listWidget.setCurrentRow(min(row, self.listWidget.count() - 1))
+        self._update_buttons()
+
+    def _move_current_item(self, offset):
+
+        row = self.listWidget.currentRow()
+        if row < 0:
+            return
+        target_row = row + offset
+        if target_row < 0 or target_row >= self.listWidget.count():
+            return
+        item = self.listWidget.takeItem(row)
+        self.listWidget.insertItem(target_row, item)
+        self.listWidget.setCurrentRow(target_row)
+        self._update_buttons()
+
+    def _update_buttons(self, *_args):
+
+        row = self.listWidget.currentRow()
+        count = self.listWidget.count()
+        has_selection = row >= 0
+        self.buttonRemove.setEnabled(has_selection)
+        self.buttonMoveUp.setEnabled(has_selection and row > 0)
+        self.buttonMoveDown.setEnabled(has_selection and row < (count - 1))
+
+    def getConfiguredRoots(self):
+
+        entries = []
+        for row in range(self.listWidget.count()):
+            item = self.listWidget.item(row)
+            path = BimLibrarySources.normalize_library_root(item.data(self._qtcore.Qt.UserRole))
+            if not path:
+                continue
+            entries.append(
+                BimLibrarySources.ConfiguredLibraryRoot(
+                    path,
+                    item.checkState() == self._qtcore.Qt.Checked,
+                )
+            )
+        return entries
 
 
 class BIM_Library:
@@ -214,15 +359,20 @@ class BIM_Library:
 
     def Activated(self):
 
-        self.librarypath, self.librarysource = resolve_library_root_info()
+        self.libraryroots = resolve_library_root_entries()
+        self.librarypath = self.libraryroots[0].path if self.libraryroots else ""
+        self.librarysource = (
+            self.libraryroots[0].source
+            if self.libraryroots
+            else BimLibrarySources.LIBRARY_SOURCE_NONE
+        )
         target_gui_doc = getattr(FreeCADGui, "ActiveDocument", None)
         target_doc_name = ""
         if target_gui_doc and getattr(target_gui_doc, "Document", None):
             target_doc_name = target_gui_doc.Document.Name
         panel = BIM_Library_TaskPanel(
-            offlinemode=bool(self.librarypath),
-            librarypath=self.librarypath,
-            librarysource=self.librarysource,
+            offlinemode=bool(self.libraryroots),
+            libraryroots=self.libraryroots,
             target_doc_name=target_doc_name,
         )
         task = FreeCADGui.Control.showDialog(panel, target_gui_doc)
@@ -232,7 +382,14 @@ class BIM_Library:
 
 class BIM_Library_TaskPanel:
 
-    def __init__(self, offlinemode=False, librarypath="", librarysource="", target_doc_name=""):
+    def __init__(
+        self,
+        offlinemode=False,
+        librarypath="",
+        librarysource="",
+        target_doc_name="",
+        libraryroots=None,
+    ):
 
         from PySide import QtCore, QtGui
 
@@ -247,16 +404,23 @@ class BIM_Library_TaskPanel:
         self._local_search_index = None
         self._local_search_index_root = None
 
-        resolved_path, resolved_source = resolve_library_root_info()
-        self.librarypath = librarypath or resolved_path
-        if librarysource:
-            self.librarysource = librarysource
-        elif self.librarypath == resolved_path:
-            self.librarysource = resolved_source
-        elif self.librarypath:
-            self.librarysource = "provided"
+        resolved_roots = resolve_library_root_entries()
+        if libraryroots is not None:
+            initial_roots = _normalize_library_root_entries(libraryroots)
+        elif isinstance(librarypath, (list, tuple)):
+            initial_roots = _normalize_library_root_entries(librarypath)
+        elif librarypath:
+            initial_roots = _normalize_library_root_entries(
+                [
+                    {
+                        "path": librarypath,
+                        "source": librarysource or BimLibrarySources.LIBRARY_SOURCE_PROVIDED,
+                    }
+                ]
+            )
         else:
-            self.librarysource = "none"
+            initial_roots = resolved_roots
+        self._set_library_roots(initial_roots)
         self.form = FreeCADGui.PySideUic.loadUi(":/ui/dialogLibrary.ui")
         self.form.setWindowIcon(QtGui.QIcon(":/icons/BIM_Library.svg"))
         self.form.labelLibraryRootStatus = QtGui.QLabel(self.form)
@@ -265,11 +429,26 @@ class BIM_Library_TaskPanel:
         self.form.labelLibraryRootStatus.setTextFormat(QtCore.Qt.RichText)
         self.form.labelLibraryRootStatus.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
         self.form.verticalLayout.insertWidget(0, self.form.labelLibraryRootStatus)
+        self.form.buttonManageLibraries = QtGui.QPushButton(self.form)
+        self.form.buttonManageLibraries.setObjectName("buttonManageLibraries")
+        self.form.buttonManageLibraries.setText(translate("BIM", "Manage libraries..."))
+        self.form.buttonManageLibraries.setToolTip(
+            translate(
+                "BIM",
+                "Add, remove, reorder, or disable configured local libraries.",
+            )
+        )
+        self.form.buttonManageLibraries.setFlat(True)
+        self.form.buttonManageLibraries.setAutoDefault(False)
+        self.form.buttonManageLibraries.clicked.connect(self.onManageLibraries)
+        self.form.verticalLayout.insertWidget(
+            1, self.form.buttonManageLibraries, 0, QtCore.Qt.AlignRight
+        )
         self.form.labelLibraryModeStatus = QtGui.QLabel(self.form)
         self.form.labelLibraryModeStatus.setObjectName("labelLibraryModeStatus")
         self.form.labelLibraryModeStatus.setWordWrap(True)
         self.form.labelLibraryModeStatus.hide()
-        self.form.verticalLayout.insertWidget(1, self.form.labelLibraryModeStatus)
+        self.form.verticalLayout.insertWidget(2, self.form.labelLibraryModeStatus)
         self.form.previewDetails = QtGui.QFrame(self.form)
         self.form.previewDetails.setObjectName("previewDetails")
         self.form.previewDetailsLayout = QtGui.QVBoxLayout(self.form.previewDetails)
@@ -374,18 +553,18 @@ class BIM_Library_TaskPanel:
 
         # retrieve preferences
         self.form.checkOnline.toggled.connect(self.onCheckOnline)
-        self.form.checkOnline.setText(translate("BIM", "Online catalog"))
+        self.form.checkOnline.setText(translate("BIM", "Online mode"))
         self.form.checkOnline.setToolTip(
             translate(
                 "BIM",
-                "Shows the online catalog instead of the local library. When enabled, local assets are hidden from the tree.",
+                "Shows the online catalog instead of local libraries. When enabled, local assets are hidden from the tree.",
             )
         )
         mode_chosen = PARAMS.GetBool("LibraryModeChosen", False)
         initial_online = PARAMS.GetBool("LibraryOnline", not offlinemode)
         if not mode_chosen:
-            initial_online = False if self.librarypath else True
-        if not self.librarypath:
+            initial_online = False if self.libraryroots else True
+        if not self.libraryroots:
             initial_online = True
         self.form.checkOnline.setChecked(initial_online)
         self.form.checkFCStdOnly.toggled.connect(self.onCheckFCStdOnly)
@@ -415,42 +594,134 @@ class BIM_Library_TaskPanel:
         # update the tree
         self.onCheckOnline()
 
-    def _get_library_source_label(self):
+    def _set_library_roots(self, libraryroots):
 
+        self.libraryroots = _normalize_library_root_entries(libraryroots)
+        self.librarypaths = [entry.path for entry in self.libraryroots]
+        self.librarypath = self.librarypaths[0] if self.librarypaths else ""
+        self.librarysource = (
+            self.libraryroots[0].source
+            if self.libraryroots
+            else BimLibrarySources.LIBRARY_SOURCE_NONE
+        )
+
+    def _refresh_library_browser(self, online_mode=None):
+
+        self._invalidate_local_search_index()
+        self._update_library_root_status()
+
+        if online_mode is None:
+            online_mode = self.form.checkOnline.isChecked()
+        search_text = self.form.searchBox.text().strip()
+        if online_mode:
+            self.setOnlineModel()
+        else:
+            self.setFileModel()
+        self._update_library_mode_status(online_mode)
+        if search_text:
+            self.setSearchModel(search_text)
+
+    def _apply_configured_library_root_entries(self, entries, online_mode=None):
+
+        BimLibrarySources.set_configured_library_root_entries(entries)
+        self._set_library_roots(resolve_library_root_entries())
+        self._refresh_library_browser(online_mode)
+
+    def onManageLibraries(self):
+
+        dialog = BIM_LibraryRootManagerDialog(
+            self.form,
+            get_configured_library_root_entries(),
+        )
+        if dialog.exec_() == dialog._qtgui.QDialog.Accepted:
+            self._apply_configured_library_root_entries(
+                dialog.getConfiguredRoots(),
+                self.form.checkOnline.isChecked(),
+            )
+
+    def _get_library_source_label(self, source=None):
+
+        source = source or self.librarysource
         labels = {
-            "configured": translate("BIM", "Configured"),
-            "module_marker": translate("BIM", "Module"),
-            "legacy_fallback": translate("BIM", "Legacy"),
-            "provided": translate("BIM", "Custom"),
-            "none": translate("BIM", "Not found"),
+            BimLibrarySources.LIBRARY_SOURCE_CONFIGURED: translate("BIM", "Configured"),
+            BimLibrarySources.LIBRARY_SOURCE_MODULE: translate("BIM", "Module"),
+            BimLibrarySources.LIBRARY_SOURCE_LEGACY: translate("BIM", "Legacy"),
+            BimLibrarySources.LIBRARY_SOURCE_PROVIDED: translate("BIM", "Custom"),
+            BimLibrarySources.LIBRARY_SOURCE_NONE: translate("BIM", "Not found"),
         }
-        return labels.get(self.librarysource, self.librarysource or translate("BIM", "Unknown"))
+        return labels.get(source, source or translate("BIM", "Unknown"))
 
-    def _get_library_display_path(self):
+    def _format_status_badge(self, text):
 
-        if not self.librarypath:
+        return (
+            '<span style="color:#555; background:#f0f0f0; '
+            'border:1px solid #d8d8d8; border-radius:6px; padding:1px 6px;">{}</span>'
+        ).format(html.escape(text))
+
+    def _get_matching_library_root(self, filepath):
+
+        filepath = BimLibrarySources.normalize_library_root(filepath)
+        matches = [root for root in self.librarypaths if filepath.startswith(root)]
+        if not matches:
             return ""
-        parts = [part for part in self.librarypath.replace("\\", "/").split("/") if part]
-        if len(parts) >= 2:
-            return "/".join(parts[-2:])
-        if parts:
-            return parts[-1]
-        return self.librarypath
+        return max(matches, key=len)
+
+    def _get_library_root_label(self, entry):
+
+        return BimLibrarySources.get_library_root_label(entry)
+
+    def _get_library_root_tree_label(self, entry):
+
+        label = self._get_library_root_label(entry)
+        source_label = self._get_library_source_label(getattr(entry, "source", None))
+        if label and source_label:
+            return "{} [{}]".format(label, source_label)
+        return label or source_label
+
+    def _get_local_library_summary(self):
+
+        count = len(self.libraryroots)
+        if count == 1:
+            return self._get_library_root_tree_label(self.libraryroots[0])
+        if count > 1:
+            return translate("BIM", "{} local libraries").format(count)
+        return ""
+
+    def _get_library_root_tooltip(self):
+
+        return "\n\n".join(
+            "{}\n{}".format(
+                self._get_library_root_tree_label(entry),
+                entry.path,
+            )
+            for entry in self.libraryroots
+        )
+
+    def _get_local_library_root_signature(self):
+
+        return tuple(self.librarypaths)
 
     def _update_library_root_status(self):
 
-        if self.librarypath:
-            path_text = self._get_library_display_path()
-            tooltip = self.librarypath
-            text = (
-                "<b>{}</b> · {} "
-                '<span style="color:#555; background:#f0f0f0; '
-                'border:1px solid #d8d8d8; border-radius:6px; padding:1px 6px;">{}</span>'
-            ).format(
-                html.escape(translate("BIM", "Local Library")),
-                html.escape(path_text),
-                html.escape(self._get_library_source_label()),
-            )
+        if self.libraryroots:
+            count = len(self.libraryroots)
+            is_single = count == 1
+            summary = self._get_local_library_summary()
+            tooltip = self._get_library_root_tooltip()
+            title = translate("BIM", "Local library") if is_single else summary
+            text = "<b>{}</b>".format(html.escape(title))
+            if is_single and summary:
+                text += " · {}".format(html.escape(summary))
+            elif count > 1:
+                source_labels = []
+                for entry in self.libraryroots:
+                    source_label = self._get_library_source_label(entry.source)
+                    if source_label not in source_labels:
+                        source_labels.append(source_label)
+                if source_labels:
+                    text += " {}".format(
+                        " ".join(self._format_status_badge(label) for label in source_labels)
+                    )
         else:
             tooltip = translate(
                 "BIM",
@@ -463,17 +734,17 @@ class BIM_Library_TaskPanel:
     def _update_library_mode_status(self, online_mode):
 
         label = self.form.labelLibraryModeStatus
-        if online_mode and self.librarypath:
+        if online_mode and self.libraryroots:
             label.setText(
                 translate(
                     "BIM",
                     "Showing online catalog. Local library content is hidden in this mode.",
                 )
             )
-            label.setToolTip(self.librarypath)
+            label.setToolTip(self._get_library_root_tooltip())
             label.show()
             return
-        if (not online_mode) and (not self.librarypath):
+        if (not online_mode) and (not self.libraryroots):
             label.setText(
                 translate(
                     "BIM",
@@ -563,7 +834,23 @@ class BIM_Library_TaskPanel:
     def _populate_local_root_model(self):
 
         self.filemodel.clear()
-        self._populate_local_folder_item(self.filemodel, self.librarypath)
+        if not self.libraryroots:
+            return
+        if len(self.libraryroots) == 1:
+            self._populate_local_folder_item(self.filemodel, self.librarypath)
+            return
+
+        used_labels = {}
+        for entry in self.libraryroots:
+            label = self._make_unique_entry_label(
+                used_labels,
+                self._get_library_root_tree_label(entry),
+                self._get_library_root_label(entry) or os.path.basename(entry.path),
+            )
+            used_labels[label] = entry.path
+            root_item = self._create_tree_folder_item(label, entry.path)
+            self.filemodel.appendRow(root_item)
+            self._populate_local_folder_item(root_item, entry.path)
 
     def onTreeExpanded(self, index):
 
@@ -778,7 +1065,9 @@ class BIM_Library_TaskPanel:
             for entry in self._get_local_search_index():
                 if query not in entry["search_text"]:
                     continue
-                add_line(entry["label"], entry["path"], entry["search_text"])
+                add_line(
+                    entry.get("display_label", entry["label"]), entry["path"], entry["search_text"]
+                )
         self.modelmode = 0
 
     def getFilters(self):
@@ -1184,7 +1473,7 @@ class BIM_Library_TaskPanel:
                 tokens.append(str(value))
         return " ".join(tokens).lower()
 
-    def _append_local_search_entries(self, entries, folder):
+    def _append_local_search_entries(self, entries, folder, root_path, root_label):
 
         try:
             names = sorted(os.listdir(folder))
@@ -1197,13 +1486,19 @@ class BIM_Library_TaskPanel:
                 if os.path.isfile(manifest_path):
                     manifest = self._load_asset_manifest(manifest_path)
                     label = self._get_asset_label(manifest_path)
-                    relative_path = os.path.relpath(manifest_path, self.librarypath)
+                    relative_path = os.path.relpath(manifest_path, root_path)
                     entries.append(
                         {
                             "label": label,
+                            "display_label": (
+                                "{} ({})".format(label, root_label)
+                                if len(self.libraryroots) > 1
+                                else label
+                            ),
                             "path": manifest_path,
                             "search_text": self._build_local_search_text(
                                 label,
+                                root_label,
                                 manifest.get("id"),
                                 manifest.get("category"),
                                 manifest.get("tags", []),
@@ -1212,17 +1507,21 @@ class BIM_Library_TaskPanel:
                         }
                     )
                     continue
-                self._append_local_search_entries(entries, path)
+                self._append_local_search_entries(entries, path, root_path, root_label)
                 continue
             if not (os.path.isfile(path) and self._is_library_file_candidate(name)):
                 continue
-            relative_path = os.path.relpath(path, self.librarypath)
+            relative_path = os.path.relpath(path, root_path)
             entries.append(
                 {
                     "label": name,
+                    "display_label": (
+                        "{} ({})".format(name, root_label) if len(self.libraryroots) > 1 else name
+                    ),
                     "path": path,
                     "search_text": self._build_local_search_text(
                         name,
+                        root_label,
                         relative_path.replace(os.sep, " "),
                     ),
                 }
@@ -1230,13 +1529,20 @@ class BIM_Library_TaskPanel:
 
     def _get_local_search_index(self):
 
-        if not self.librarypath:
+        if not self.libraryroots:
             return []
-        if self._local_search_index is None or self._local_search_index_root != self.librarypath:
+        signature = self._get_local_library_root_signature()
+        if self._local_search_index is None or self._local_search_index_root != signature:
             entries = []
-            self._append_local_search_entries(entries, self.librarypath)
+            for entry in self.libraryroots:
+                self._append_local_search_entries(
+                    entries,
+                    entry.path,
+                    entry.path,
+                    self._get_library_root_label(entry),
+                )
             self._local_search_index = entries
-            self._local_search_index_root = self.librarypath
+            self._local_search_index_root = signature
         return self._local_search_index
 
     def _build_local_library_tree(self, folder):
@@ -1278,7 +1584,21 @@ class BIM_Library_TaskPanel:
                     paths.append(value)
             return labels, paths
 
-        tree = self._build_local_library_tree(self.librarypath)
+        if not self.libraryroots:
+            tree = {}
+        elif len(self.libraryroots) == 1:
+            tree = self._build_local_library_tree(self.librarypath)
+        else:
+            tree = {}
+            for entry in self.libraryroots:
+                label = self._make_unique_entry_label(
+                    tree,
+                    self._get_library_root_tree_label(entry),
+                    self._get_library_root_label(entry) or os.path.basename(entry.path),
+                )
+                subtree = self._build_local_library_tree(entry.path)
+                if subtree:
+                    tree[label] = subtree
         if structured:
             return flatten(tree)
         return tree
@@ -2532,9 +2852,10 @@ class BIM_Library_TaskPanel:
         import urllib.parse
 
         filepath = self._resolve_asset_path(filepath)
-        if filepath.startswith(self.librarypath):
+        library_root = self._get_matching_library_root(filepath)
+        if library_root:
             # strip local part od the path
-            filepath = filepath[len(self.librarypath) :]
+            filepath = filepath[len(library_root) :]
         if filepath.startswith(RAWURL):
             filepath = filepath[len(RAWURL) :]
         filepath = filepath.replace("\\", "/")
