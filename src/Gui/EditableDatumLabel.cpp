@@ -207,34 +207,45 @@ void EditableDatumLabel::startEdit(double val, QObject* eventFilteringObj, bool 
         setFocusToSpinbox();
     });
 
-    const auto validateAndFinish = [this]() {
-        // this event can be fired after spinBox was already disposed
-        // in such case we need to skip processing that event
-        if (!spinBox) {
-            return;
-        }
-
-        if (!spinBox->hasValidInput()) {
-            // unset parameters in DrawSketchController, this is needed in a case
-            // when user removes values we reset state of the OVP
-            Q_EMIT this->parameterUnset();
-            return;
-        }
-
-        value = spinBox->rawValue();
-
-        isSet = true;
-
-        if (this->hasFinishedEditing) {
-            this->setLockedAppearance(true);
-        }
-
-        Q_EMIT this->valueChanged(value);
-    };
-
-    connect(spinBox, qOverload<double>(&QuantitySpinBox::valueChanged), this, validateAndFinish);
+    connect(
+        spinBox,
+        qOverload<double>(&QuantitySpinBox::valueChanged),
+        this,
+        &EditableDatumLabel::handleSpinBoxValueChanged
+    );
     if (auto* edit = spinBox->findChild<QLineEdit*>()) {
         connect(edit, &QLineEdit::textChanged, this, &EditableDatumLabel::updateGeometry);
+    }
+}
+
+bool EditableDatumLabel::syncValueFromSpinBox(bool emitParameterUnset)
+{
+    if (!spinBox) {
+        return false;
+    }
+
+    if (!spinBox->hasValidInput()) {
+        if (emitParameterUnset) {
+            setLockedAppearance(false);
+            Q_EMIT parameterUnset();
+        }
+        return false;
+    }
+
+    value = spinBox->rawValue();
+    isSet = true;
+
+    if (hasFinishedEditing) {
+        setLockedAppearance(true);
+    }
+
+    return true;
+}
+
+void EditableDatumLabel::handleSpinBoxValueChanged()
+{
+    if (syncValueFromSpinBox()) {
+        Q_EMIT valueChanged(value);
     }
 }
 
@@ -262,7 +273,7 @@ bool EditableDatumLabel::eventFilter(QObject* watched, QEvent* event)
                 // then just cycle but don't lock anything, otherwise we lock the label
                 if (keyEvent->key() == Qt::Key_Tab && !this->isSet) {
                     if (!this->spinBox->hasValidInput()) {
-                        Q_EMIT this->spinBox->valueChanged(this->value);
+                        syncValueFromSpinBox();
                         return true;
                     }
                     return false;
@@ -274,10 +285,15 @@ bool EditableDatumLabel::eventFilter(QObject* watched, QEvent* event)
                     return true;
                 }
                 else {
-                    // regular enter
+                    // regular enter or tab with edited input accepts the current value.
                     this->hasFinishedEditing = true;
-                    Q_EMIT this->spinBox->valueChanged(this->value);
-                    Q_EMIT this->editingFinished(this->value);
+
+                    if (!syncValueFromSpinBox()) {
+                        return true;
+                    }
+
+                    const double finishedValue = value;
+                    Q_EMIT this->editingFinished(finishedValue);
                     return true;
                 }
             }
