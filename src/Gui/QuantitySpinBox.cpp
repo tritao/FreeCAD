@@ -139,22 +139,35 @@ public:
         const App::ObjectIdentifier& path
     ) const
     {
-        App::ObjectIdentifier pathtmp = path;
-        try {
-            QString copy = str;
-            copy.remove(locale.groupSeparator());
-
-            // Expression parser
+        auto tryParse = [&](const QString& input) {
             std::shared_ptr<Expression> expr(
-                ExpressionParser::parse(path.getDocumentObject(), copy.toUtf8().constData())
+                ExpressionParser::parse(path.getDocumentObject(), input.toUtf8().constData())
             );
-            if (expr) {
+            if (!expr) {
+                return false;
+            }
 
-                std::unique_ptr<Expression> res(expr->eval());
-                NumberExpression* n = freecad_cast<NumberExpression*>(res.get());
-                if (n) {
-                    result = n->getQuantity();
-                    value = result.getValue();
+            std::unique_ptr<Expression> res(expr->eval());
+            NumberExpression* n = freecad_cast<NumberExpression*>(res.get());
+            if (!n) {
+                return false;
+            }
+
+            result = n->getQuantity();
+            value = result.getValue();
+            return true;
+        };
+
+        try {
+            if (tryParse(str)) {
+                return true;
+            }
+
+            const QString groupSeparator = locale.groupSeparator();
+            if (!groupSeparator.isNull() && str.contains(groupSeparator)) {
+                QString copy = str;
+                copy.remove(groupSeparator);
+                if (copy != str && tryParse(copy)) {
                     return true;
                 }
             }
