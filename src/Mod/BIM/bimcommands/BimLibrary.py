@@ -32,6 +32,7 @@ import os
 import sys
 import tempfile
 
+import BimAssetSemantics
 import BimLibrarySources
 import FreeCAD
 import FreeCADGui
@@ -86,46 +87,6 @@ ASSET_MANIFEST = "asset.json"
 # column width, so if the task column is smaller than the image, it gets smaller
 # to fit the space. I don't remember exactly how to do that, but it should be
 # findable in QDesigner
-
-
-def _normalize_asset_kind(kind):
-
-    key = "".join(char.lower() for char in str(kind or "") if char.isalnum())
-    if key in {"equipment", "furniture", "furnishingelement", "furnishing"}:
-        return "equipment"
-    return key
-
-
-def _coerce_asset_vector(value):
-
-    if isinstance(value, FreeCAD.Vector):
-        return FreeCAD.Vector(value.x, value.y, value.z)
-    if isinstance(value, dict):
-        try:
-            return FreeCAD.Vector(
-                float(value.get("x", 0.0)),
-                float(value.get("y", 0.0)),
-                float(value.get("z", 0.0)),
-            )
-        except Exception:
-            return None
-    if isinstance(value, (list, tuple)) and len(value) >= 2:
-        try:
-            return FreeCAD.Vector(
-                float(value[0]),
-                float(value[1]),
-                float(value[2]) if len(value) > 2 else 0.0,
-            )
-        except Exception:
-            return None
-    if isinstance(value, str):
-        try:
-            parts = [float(part.strip()) for part in value.split(",")]
-        except Exception:
-            return None
-        if len(parts) >= 2:
-            return FreeCAD.Vector(parts[0], parts[1], parts[2] if len(parts) > 2 else 0.0)
-    return None
 
 
 def _normalize_library_root_entries(entries):
@@ -1291,122 +1252,43 @@ class BIM_Library_TaskPanel:
 
     def _get_asset_manifest_path(self, path):
 
-        if not path:
-            return None
-        if os.path.basename(path).lower() == ASSET_MANIFEST and os.path.isfile(path):
-            return path
-        candidate = os.path.join(os.path.dirname(path), ASSET_MANIFEST)
-        if os.path.isfile(candidate):
-            return candidate
-        return None
+        return BimAssetSemantics.get_asset_manifest_path(path, asset_manifest=ASSET_MANIFEST)
 
     def _get_asset_representation_data(self, manifest, primary_key, aliases=()):
 
-        representations = manifest.get("representations", {})
-        for key in (primary_key,) + tuple(aliases):
-            if key in representations:
-                return representations[key]
-        for key in (primary_key,) + tuple(aliases):
-            if key in manifest:
-                return manifest[key]
-        return None
+        return BimAssetSemantics.get_asset_representation_data(
+            manifest, primary_key, aliases=aliases
+        )
 
     def _get_asset_representation_path(self, manifest_path, representation):
 
-        if isinstance(representation, str):
-            relpath = representation
-        elif isinstance(representation, dict):
-            relpath = representation.get("file") or representation.get("path")
-        else:
-            relpath = None
-        if not relpath:
-            return None
-        return os.path.normpath(os.path.join(os.path.dirname(manifest_path), relpath))
+        return BimAssetSemantics.get_asset_representation_path(manifest_path, representation)
 
     def _get_asset_representation_root_name(self, representation):
 
-        if isinstance(representation, dict):
-            return representation.get("root") or representation.get("object")
-        return None
+        return BimAssetSemantics.get_asset_representation_root_name(representation)
 
     def _get_asset_plan_contract(self, manifest, plan_representation=None):
 
-        plan_data = manifest.get("plan", {})
-        if not isinstance(plan_data, dict):
-            plan_data = {}
-        rep_data = plan_representation if isinstance(plan_representation, dict) else {}
-
-        anchor = _coerce_asset_vector(
-            rep_data.get("anchor")
-            or rep_data.get("insertion")
-            or plan_data.get("anchor")
-            or plan_data.get("insertion")
-        )
-        facing = _coerce_asset_vector(
-            rep_data.get("facing")
-            or rep_data.get("forward")
-            or plan_data.get("facing")
-            or plan_data.get("forward")
-        )
-        return anchor, facing
+        return BimAssetSemantics.get_asset_plan_contract(manifest, plan_representation)
 
     def _get_asset_kind(self, manifest):
 
-        kind = _normalize_asset_kind(manifest.get("kind") or manifest.get("type"))
-        if kind:
-            return kind
-
-        category = str(manifest.get("category", "") or "").strip().lower()
-        if category.startswith("furniture/"):
-            return "equipment"
-
-        tags = manifest.get("tags", [])
-        if isinstance(tags, (list, tuple, set)):
-            normalized_tags = {_normalize_asset_kind(tag) for tag in tags}
-            if "equipment" in normalized_tags:
-                return "equipment"
-            if "furniture" in normalized_tags:
-                return "equipment"
-
-        return ""
+        return BimAssetSemantics.get_asset_kind(manifest)
 
     def _build_asset_descriptor(self, path):
 
-        manifest_path = self._get_asset_manifest_path(path)
-        if not manifest_path:
-            label = os.path.splitext(os.path.basename(path))[0]
-            return {
-                "label": label,
-                "source_path": self.cleanPath(path),
-                "kind": "",
-                "model_path": path,
-                "model_root": None,
-                "plan_path": None,
-                "plan_root": None,
-                "plan_anchor": None,
-                "plan_facing": None,
-            }
-
-        manifest = self._load_asset_manifest(manifest_path)
-        model_data = self._get_asset_representation_data(manifest, "model3d", aliases=("model",))
-        plan_data = self._get_asset_representation_data(
-            manifest,
-            "plan2d",
-            aliases=("plan", "symbol2d", "footprint"),
+        return BimAssetSemantics.build_asset_descriptor(
+            path,
+            clean_path=self.cleanPath,
+            load_manifest=self._load_asset_manifest,
+            get_asset_label=self._get_asset_label,
+            asset_manifest=ASSET_MANIFEST,
         )
-        plan_anchor, plan_facing = self._get_asset_plan_contract(manifest, plan_data)
-        model_path = self._get_asset_representation_path(manifest_path, model_data) or path
-        return {
-            "label": self._get_asset_label(manifest_path),
-            "source_path": manifest.get("id") or self.cleanPath(manifest_path),
-            "kind": self._get_asset_kind(manifest),
-            "model_path": model_path,
-            "model_root": self._get_asset_representation_root_name(model_data),
-            "plan_path": self._get_asset_representation_path(manifest_path, plan_data),
-            "plan_root": self._get_asset_representation_root_name(plan_data),
-            "plan_anchor": plan_anchor,
-            "plan_facing": plan_facing,
-        }
+
+    def _get_asset_provider(self, asset_descriptor):
+
+        return BimAssetSemantics.get_provider(asset_descriptor)
 
     def _get_asset_model_path(self, manifest_path):
 
@@ -2034,138 +1916,33 @@ class BIM_Library_TaskPanel:
 
     def _ensure_equipment_plan_symbol_property(self, obj):
 
-        if self._get_symbol_object_type(obj) != "Equipment":
-            return False
-        if "PlanSymbols" not in obj.PropertiesList:
-            obj.addProperty(
-                "App::PropertyLinkList",
-                "PlanSymbols",
-                "Equipment",
-                QT_TRANSLATE_NOOP(
-                    "App::Property", "Optional authored 2D plan symbol objects for this equipment"
-                ),
-            )
-        return True
+        return BimAssetSemantics.ensure_equipment_plan_symbol_property(obj)
 
     def _attach_plan_symbol_roots(self, definition_roots, plan_roots):
 
-        changed = False
-        if not plan_roots:
-            return changed
-        for definition_obj in definition_roots:
-            if not self._ensure_equipment_plan_symbol_property(definition_obj):
-                continue
-            plan_symbols = [plan_root for plan_root in plan_roots if plan_root != definition_obj]
-            current_symbols = list(getattr(definition_obj, "PlanSymbols", []) or [])
-            if current_symbols == plan_symbols:
-                continue
-            definition_obj.PlanSymbols = plan_symbols
-            changed = True
-        return changed
+        return BimAssetSemantics.attach_plan_symbol_roots(definition_roots, plan_roots)
 
     def _apply_asset_plan_contract(self, definition_obj, asset_descriptor):
 
-        if not definition_obj or asset_descriptor.get("kind") != "equipment":
-            return False
-        anchor = asset_descriptor.get("plan_anchor")
-        facing = asset_descriptor.get("plan_facing")
-        if anchor is None and facing is None:
-            return False
-        try:
-            import ArchEquipment
-
-            return bool(
-                ArchEquipment.apply_plan_contract(definition_obj, anchor=anchor, facing=facing)
-            )
-        except Exception:
-            return False
+        return BimAssetSemantics.apply_asset_plan_contract(definition_obj, asset_descriptor)
 
     def _apply_asset_plan_contract_to_roots(self, definition_roots, asset_descriptor):
 
-        changed = False
-        for definition_obj in definition_roots or []:
-            changed = self._apply_asset_plan_contract(definition_obj, asset_descriptor) or changed
-        return changed
+        return BimAssetSemantics.apply_asset_plan_contract_to_roots(
+            definition_roots, asset_descriptor
+        )
 
     def _normalize_definition_roots(self, doc, asset_group, asset_descriptor, root_objects):
 
-        if asset_descriptor.get("kind") != "equipment":
-            return root_objects
-        if not root_objects:
-            return root_objects
-
-        import Arch
-
-        self._ensure_active_document(doc)
-        normalized_roots = []
-        source_path = getattr(asset_group, "LibrarySourcePath", "")
-        multiple_roots = len(root_objects) > 1
-
-        for root_obj in root_objects:
-            if self._get_symbol_object_type(root_obj) == "Equipment":
-                self._apply_asset_plan_contract(root_obj, asset_descriptor)
-                normalized_roots.append(root_obj)
-                continue
-
-            self._ensure_library_metadata(root_obj, source_path, role="source")
-            self._remove_from_parent_groups(root_obj, keep={asset_group})
-            try:
-                if root_obj not in (getattr(asset_group, "Group", []) or []):
-                    asset_group.addObject(root_obj)
-            except Exception:
-                pass
-            self._set_definition_view_state(root_obj)
-
-            if multiple_roots:
-                component_label = getattr(root_obj, "Label", None) or getattr(root_obj, "Name", "")
-                equipment_label = "{} {}".format(asset_descriptor["label"], component_label).strip()
-            else:
-                equipment_label = asset_descriptor["label"]
-
-            equipment = Arch.makeEquipment(root_obj, name=equipment_label)
-            self._ensure_library_metadata(equipment, source_path, role="instance")
-            self._apply_asset_plan_contract(equipment, asset_descriptor)
-            self._remove_from_parent_groups(equipment, keep={asset_group})
-            try:
-                if equipment not in (getattr(asset_group, "Group", []) or []):
-                    asset_group.addObject(equipment)
-            except Exception:
-                pass
-            self._set_definition_view_state(equipment)
-            self._retarget_definition_links(doc, root_obj, equipment)
-            normalized_roots.append(equipment)
-
-        return normalized_roots
+        return BimAssetSemantics.normalize_definition_roots(
+            self, doc, asset_group, asset_descriptor, root_objects
+        )
 
     def _create_shape_symbol_definitions(self, doc, asset_group, asset_descriptor):
 
-        import Arch
-        import Part
-
-        self._ensure_active_document(doc)
-        obj = Arch.makeEquipment()
-        obj.Shape = Part.read(asset_descriptor["model_path"])
-        obj.Label = asset_descriptor["label"]
-        self._ensure_library_metadata(
-            obj, getattr(asset_group, "LibrarySourcePath", ""), role="instance"
+        return BimAssetSemantics.create_shape_symbol_definitions(
+            self, doc, asset_group, asset_descriptor
         )
-        self._apply_asset_plan_contract(obj, asset_descriptor)
-        self._remove_from_parent_groups(obj)
-        asset_group.addObject(obj)
-        self._set_definition_view_state(obj)
-        if asset_descriptor["plan_path"] and asset_descriptor["plan_path"].lower().endswith(
-            ".fcstd"
-        ):
-            plan_roots = self._create_auxiliary_symbol_roots(
-                doc,
-                asset_group,
-                asset_descriptor["plan_path"],
-                asset_descriptor["label"],
-                asset_descriptor["plan_root"],
-            )
-            self._attach_plan_symbol_roots([obj], plan_roots)
-        doc.recompute()
-        return [obj]
 
     def _create_auxiliary_symbol_roots(self, doc, asset_group, path, asset_label, root_name=None):
 
@@ -2340,19 +2117,7 @@ class BIM_Library_TaskPanel:
 
     def _get_object_plan_preview_shapes(self, obj):
 
-        try:
-            import ArchEquipment
-
-            shapes = list(ArchEquipment.get_plan_representation_shapes(obj))
-            if shapes:
-                return shapes
-        except Exception:
-            pass
-
-        shapes = []
-        for plan_obj in getattr(obj, "PlanSymbols", []) or []:
-            shapes.extend(self._get_object_preview_shapes(plan_obj))
-        return shapes
+        return list(BimAssetSemantics.get_object_plan_shapes(obj))
 
     def _build_definition_preview_shape(self, definition_roots):
 
@@ -2385,10 +2150,7 @@ class BIM_Library_TaskPanel:
 
     def _create_symbol_link(self, doc, definition_obj):
 
-        link = doc.addObject("App::Link", "Link")
-        link.setLink(definition_obj)
-        link.Label = self._next_instance_label(doc, definition_obj.Label)
-        return link
+        return BimAssetSemantics.create_instance(self, doc, definition_obj)
 
     def _get_active_container(self):
 
@@ -2612,12 +2374,7 @@ class BIM_Library_TaskPanel:
         definition_roots = list(getattr(self, "instance_definition_roots", []) or [])
         if not definition_roots:
             return FreeCAD.Vector()
-        try:
-            import ArchEquipment
-
-            return ArchEquipment.get_plan_anchor(definition_roots[0])
-        except Exception:
-            return FreeCAD.Vector()
+        return BimAssetSemantics.get_object_plan_anchor(definition_roots[0])
 
     def getDelta(self):
 

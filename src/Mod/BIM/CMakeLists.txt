@@ -61,6 +61,7 @@ SET(Arch_SRCS
     ArchTruss.py
     ArchCurtainWall.py
     ArchSketchObject.py
+    BimAssetSemantics.py
     BimLibrarySources.py
     BimSelect.py
     BimStatus.py
