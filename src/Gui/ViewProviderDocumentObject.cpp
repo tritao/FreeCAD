@@ -21,6 +21,8 @@
  ***************************************************************************/
 
 
+#include <algorithm>
+
 #include <QAction>
 #include <QMenu>
 #include <Inventor/SoFullPath.h>
@@ -375,29 +377,7 @@ void ViewProviderDocumentObject::attach(App::DocumentObject* pcObj)
         pcObj->Visibility.setValue(Visibility.getValue());
     }
 
-    // Retrieve the supported display modes of the view provider
-    aDisplayModesArray = this->getDisplayModes();
-
-    if (aDisplayModesArray.empty()) {
-        aDisplayModesArray.emplace_back("");
-    }
-
-    // We must collect the const char* of the strings and give it to PropertyEnumeration,
-    // but we are still responsible for them, i.e. the property class must not delete the literals.
-    // for (auto it = aDisplayModesArray.begin(); it != aDisplayModesArray.end(); ++it) {
-    for (const auto& it : aDisplayModesArray) {
-        aDisplayEnumsArray.push_back(it.c_str());
-    }
-    aDisplayEnumsArray.push_back(nullptr);  // null termination
-    DisplayMode.setEnums(&(aDisplayEnumsArray[0]));
-
-    if (!isRestoring()) {
-        // set the active mode
-        const char* defmode = this->getDefaultDisplayMode();
-        if (defmode) {
-            DisplayMode.setValue(defmode);
-        }
-    }
+    refreshDisplayModes();
 
     // attach the extensions
     auto vector = getExtensionsDerivedFromType<Gui::ViewProviderExtension>();
@@ -411,6 +391,44 @@ void ViewProviderDocumentObject::reattach(App::DocumentObject* pcObj)
     auto vector = getExtensionsDerivedFromType<Gui::ViewProviderExtension>();
     for (Gui::ViewProviderExtension* ext : vector) {
         ext->extensionReattach(pcObj);
+    }
+}
+
+void ViewProviderDocumentObject::refreshDisplayModes(bool preserveCurrent)
+{
+    std::string currentMode;
+    if (preserveCurrent && DisplayMode.isValid()) {
+        currentMode = DisplayMode.getValueAsString();
+    }
+
+    // Retrieve the supported display modes of the view provider.
+    aDisplayModesArray = this->getDisplayModes();
+    if (aDisplayModesArray.empty()) {
+        aDisplayModesArray.emplace_back("");
+    }
+
+    // We must collect the const char* of the strings and give it to PropertyEnumeration,
+    // but we are still responsible for them, i.e. the property class must not delete the literals.
+    aDisplayEnumsArray.clear();
+    for (const auto& it : aDisplayModesArray) {
+        aDisplayEnumsArray.push_back(it.c_str());
+    }
+    aDisplayEnumsArray.push_back(nullptr);  // null termination
+    DisplayMode.setEnums(&(aDisplayEnumsArray[0]));
+
+    if (preserveCurrent && !currentMode.empty()) {
+        auto it = std::find(aDisplayModesArray.begin(), aDisplayModesArray.end(), currentMode);
+        if (it != aDisplayModesArray.end()) {
+            DisplayMode.setValue(currentMode.c_str());
+            return;
+        }
+    }
+
+    if (!isRestoring()) {
+        const char* defmode = this->getDefaultDisplayMode();
+        if (defmode) {
+            DisplayMode.setValue(defmode);
+        }
     }
 }
 

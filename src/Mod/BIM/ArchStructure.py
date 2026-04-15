@@ -1492,6 +1492,8 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
             del self.fset
         if vobj.DisplayMode == "Footprint" and "Flat Lines" in vobj.listDisplayModes():
             vobj.DisplayMode = "Flat Lines"
+        if hasattr(vobj, "refreshDisplayModes"):
+            vobj.refreshDisplayModes()
 
     def createFootprintGroup(self):
         """Set up a subtle filled footprint style for slabs."""
@@ -1626,6 +1628,8 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
                 if IfcType == "Slab":
                     obj.ViewObject.NodeType = "Area"
                     self.refreshFootprint(obj.ViewObject)
+                    if hasattr(obj.ViewObject, "refreshDisplayModes"):
+                        obj.ViewObject.refreshDisplayModes()
                 else:
                     obj.ViewObject.NodeType = "Linear"
                     self._drop_footprint_group(obj.ViewObject)

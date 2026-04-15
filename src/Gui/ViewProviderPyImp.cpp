@@ -38,6 +38,7 @@
 #include <App/DocumentObject.h>
 
 #include "PythonWrapper.h"
+#include "ViewProviderDocumentObject.h"
 #include "SoFCDB.h"
 #include "SoFullPathHelper.h"
 
@@ -440,6 +441,25 @@ PyObject* ViewProviderPy::listDisplayModes(PyObject* args)
         }
 
         return pyList;
+    }
+    PY_CATCH;
+}
+
+PyObject* ViewProviderPy::refreshDisplayModes(PyObject* args)
+{
+    if (!PyArg_ParseTuple(args, "")) {
+        return nullptr;
+    }
+
+    PY_TRY
+    {
+        auto* viewProvider = dynamic_cast<ViewProviderDocumentObject*>(getViewProviderPtr());
+        if (!viewProvider) {
+            PyErr_SetString(PyExc_RuntimeError, "View provider does not support display modes");
+            return nullptr;
+        }
+        viewProvider->refreshDisplayModes(true);
+        Py_Return;
     }
     PY_CATCH;
 }

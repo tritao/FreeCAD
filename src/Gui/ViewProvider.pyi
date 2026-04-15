@@ -186,6 +186,12 @@ class ViewProvider(ExtensionContainer):
         """
         ...
 
+    def refreshDisplayModes(self) -> None:
+        """
+        Rebuild the DisplayMode enumeration from the currently supported modes.
+        """
+        ...
+
     def toString(self) -> str:
         """
         Return a string representation of the Inventor node.
