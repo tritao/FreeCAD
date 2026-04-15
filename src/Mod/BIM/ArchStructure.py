@@ -1507,6 +1507,8 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
             self.fset.coordIndex.deleteValues(0)
         if vobj.DisplayMode == "Footprint" and "Flat Lines" in vobj.listDisplayModes():
             vobj.DisplayMode = "Flat Lines"
+        if hasattr(vobj, "refreshDisplayModes"):
+            vobj.refreshDisplayModes()
 
     def _sync_display_mode_enums(self, vobj):
         """Refresh the DisplayMode enumeration from the currently exposed modes.
@@ -1661,6 +1663,8 @@ class _ViewProviderStructure(ArchComponent.ViewProviderComponent):
                     obj.ViewObject.NodeType = "Area"
                     self.refreshFootprint(obj.ViewObject)
                     self._sync_display_mode_enums(obj.ViewObject)
+                    if hasattr(obj.ViewObject, "refreshDisplayModes"):
+                        obj.ViewObject.refreshDisplayModes()
                 else:
                     obj.ViewObject.NodeType = "Linear"
                     self._drop_footprint_group(obj.ViewObject)
