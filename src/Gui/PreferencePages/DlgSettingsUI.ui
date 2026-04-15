@@ -509,13 +509,13 @@
    <item>
     <widget class="QGroupBox" name="groupBox_4">
      <property name="title">
-      <string>Suggested Actions</string>
+      <string>Contextual Actions</string>
      </property>
      <layout class="QGridLayout" name="gridLayout_3">
       <item row="0" column="0">
        <widget class="Gui::PrefCheckBox" name="showTaskWatcherCheckBox">
         <property name="text">
-         <string>Suggest actions in the task view based on the selection</string>
+         <string>Show contextual actions in the task view</string>
         </property>
         <property name="checked">
          <bool>true</bool>

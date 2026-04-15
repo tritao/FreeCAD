@@ -26,9 +26,13 @@
 #include <QApplication>
 #include <QCursor>
 #include <QDockWidget>
+#include <QFrame>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPointer>
 #include <QPushButton>
+#include <QRegularExpression>
+#include <QStringList>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -43,6 +47,7 @@
 #include <Gui/MainWindow.h>
 #include <Gui/ViewProviderDocumentObject.h>
 #include <Gui/OverlayManager.h>
+#include <Gui/WorkbenchManager.h>
 
 #include "TaskView.h"
 #include "TaskDialog.h"
@@ -75,6 +80,19 @@ void disconnectActiveDocumentConnection(Gui::TaskView::TaskView* taskView)
 
     it->second.disconnect();
     connections.erase(it);
+}
+
+QString formatWorkbenchLabel(const std::string& name)
+{
+    QString label = QString::fromStdString(name);
+    if (label.isEmpty()) {
+        return QObject::tr("Current Workbench");
+    }
+
+    label.remove(QRegularExpression(QStringLiteral("Workbench$")));
+    label.replace(QRegularExpression(QStringLiteral("([A-Z]+)([A-Z][a-z])")), QStringLiteral("\\1 \\2"));
+    label.replace(QRegularExpression(QStringLiteral("([a-z0-9])([A-Z])")), QStringLiteral("\\1 \\2"));
+    return label.trimmed();
 }
 }  // namespace
 
@@ -304,6 +322,47 @@ TaskView::TaskView(QWidget* parent)
     TaskWatcherPanel = new TaskPanel(this);
     addWidget(TaskWatcherPanel);
 
+    watcherContextPanel = new QFrame(TaskWatcherPanel);
+    watcherContextPanel->setObjectName(QStringLiteral("TaskWatcherContextPanel"));
+    watcherContextPanel->setFrameShape(QFrame::StyledPanel);
+    auto* watcherContextLayout = new QVBoxLayout(watcherContextPanel);
+    watcherContextLayout->setContentsMargins(12, 10, 12, 10);
+    watcherContextLayout->setSpacing(4);
+
+    watcherTitleLabel = new QLabel(watcherContextPanel);
+    QFont titleFont = watcherTitleLabel->font();
+    titleFont.setBold(true);
+    titleFont.setPointSizeF(titleFont.pointSizeF() + 1.0);
+    watcherTitleLabel->setFont(titleFont);
+
+    watcherStateLabel = new QLabel(watcherContextPanel);
+    watcherStateLabel->setWordWrap(true);
+
+    watcherHintLabel = new QLabel(watcherContextPanel);
+    watcherHintLabel->setWordWrap(true);
+
+    watcherContextLayout->addWidget(watcherTitleLabel);
+    watcherContextLayout->addWidget(watcherStateLabel);
+    watcherContextLayout->addWidget(watcherHintLabel);
+    TaskWatcherPanel->contextualPanelsLayout->addWidget(watcherContextPanel);
+
+    watcherEmptyState = new QFrame(TaskWatcherPanel->actionPanel);
+    watcherEmptyState->setObjectName(QStringLiteral("TaskWatcherEmptyState"));
+    auto* watcherEmptyLayout = new QVBoxLayout(watcherEmptyState);
+    watcherEmptyLayout->setContentsMargins(12, 12, 12, 12);
+    watcherEmptyLayout->setSpacing(4);
+
+    watcherEmptyTitleLabel = new QLabel(watcherEmptyState);
+    watcherEmptyTitleLabel->setFont(titleFont);
+
+    watcherEmptyBodyLabel = new QLabel(watcherEmptyState);
+    watcherEmptyBodyLabel->setWordWrap(true);
+
+    watcherEmptyLayout->addWidget(watcherEmptyTitleLabel);
+    watcherEmptyLayout->addWidget(watcherEmptyBodyLabel);
+    TaskWatcherPanel->actionPanel->addWidget(watcherEmptyState);
+    watcherEmptyState->hide();
+
     Gui::Selection().Attach(this);
 
     // NOLINTBEGIN
@@ -511,6 +570,90 @@ QSize TaskView::minimumSizeHint() const
 
     ms.setWidth(ms.width() + spacing);
     return ms;
+}
+
+QString TaskView::currentWorkbenchLabel() const
+{
+    return formatWorkbenchLabel(Gui::WorkbenchManager::instance()->activeName());
+}
+
+QString TaskView::currentDocumentLabel() const
+{
+    if (auto* doc = App::GetApplication().getActiveDocument()) {
+        return QString::fromUtf8(doc->getName());
+    }
+    return tr("No active document");
+}
+
+QString TaskView::currentSelectionLabel() const
+{
+    const int selectionCount = static_cast<int>(Gui::Selection().size());
+    if (selectionCount == 0) {
+        return tr("Nothing selected");
+    }
+    return tr("%n item(s) selected", "", selectionCount);
+}
+
+void TaskView::updateWatcherContext(int visibleSections)
+{
+    watcherTitleLabel->setText(tr("%1 Actions").arg(currentWorkbenchLabel()));
+
+    QStringList details;
+    details << currentDocumentLabel() << currentSelectionLabel();
+    if (visibleSections > 0) {
+        details << tr("%n section(s) shown", "", visibleSections);
+    }
+    watcherStateLabel->setText(details.join(QStringLiteral("  •  ")));
+
+    if (!App::GetApplication().getActiveDocument()) {
+        watcherHintLabel->setText(
+            tr("Create or open a document to see contextual actions for the active workbench.")
+        );
+    }
+    else if (visibleSections > 0) {
+        watcherHintLabel->setText(
+            tr("Actions update with the current workbench, active document, and selection.")
+        );
+    }
+    else if (Gui::Selection().size() == 0) {
+        watcherHintLabel
+            ->setText(tr("No actions match the current context yet. Select objects or start a command from the toolbar."));
+    }
+    else {
+        watcherHintLabel->setText(
+            tr("No actions match the current selection. Try a different selection or start a "
+               "command from the toolbar.")
+        );
+    }
+}
+
+void TaskView::updateWatcherEmptyState(int visibleSections)
+{
+    const bool showEmptyState = visibleSections == 0;
+    watcherEmptyState->setVisible(showEmptyState);
+    if (!showEmptyState) {
+        return;
+    }
+
+    if (!App::GetApplication().getActiveDocument()) {
+        watcherEmptyTitleLabel->setText(tr("No Active Document"));
+        watcherEmptyBodyLabel
+            ->setText(tr("Open an existing document or create a new one to populate this panel with contextual actions."));
+    }
+    else if (Gui::Selection().size() == 0) {
+        watcherEmptyTitleLabel->setText(tr("No Contextual Actions Yet"));
+        watcherEmptyBodyLabel->setText(
+            tr("This workbench does not expose a starter action for the current state. Select "
+               "geometry or use a toolbar or menu command to begin a task.")
+        );
+    }
+    else {
+        watcherEmptyTitleLabel->setText(tr("No Matching Actions"));
+        watcherEmptyBodyLabel->setText(
+            tr("The current selection does not match any contextual action group. Adjust the "
+               "selection or start a command directly.")
+        );
+    }
 }
 
 void TaskView::slotActiveDocument(const App::Document& doc)
@@ -798,9 +941,12 @@ void TaskView::setShowTaskWatcher(bool show)
 
     showTaskWatcher = show;
     if (show) {
+        watcherContextPanel->show();
         addTaskWatcher();
     }
     else {
+        watcherContextPanel->hide();
+        watcherEmptyState->hide();
         clearTaskWatcher();
     }
 }
@@ -835,6 +981,7 @@ void TaskView::updateWatcher()
         fw = fw->parentWidget();
     }
 
+    int visibleSections = 0;
     // add all widgets for all watcher to the task view
     for (const auto& it : ActiveWatcher) {
         bool match = it->shouldShow();
@@ -842,12 +989,16 @@ void TaskView::updateWatcher()
         for (auto& it2 : cont) {
             if (match) {
                 it2->show();
+                ++visibleSections;
             }
             else {
                 it2->hide();
             }
         }
     }
+
+    updateWatcherContext(visibleSections);
+    updateWatcherEmptyState(visibleSections);
 
     // In case the previous widget that had the focus is still visible
     // give it the focus back.
