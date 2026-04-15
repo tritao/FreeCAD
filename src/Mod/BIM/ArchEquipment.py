@@ -67,6 +67,174 @@ if FreeCAD.GuiUp:
             super().__init__(obj, property_definitions)
 
 
+def _copy_plan_vector(value, default=None):
+    if isinstance(value, FreeCAD.Vector):
+        return FreeCAD.Vector(value.x, value.y, value.z)
+    if value is None:
+        return FreeCAD.Vector(default) if default is not None else None
+    try:
+        return FreeCAD.Vector(value[0], value[1], value[2] if len(value) > 2 else 0.0)
+    except Exception:
+        return FreeCAD.Vector(default) if default is not None else None
+
+
+def ensure_plan_contract_properties(obj):
+    """Ensure authored plan anchor/facing properties exist on an equipment object."""
+
+    if not obj:
+        return False
+    changed = False
+    pl = getattr(obj, "PropertiesList", []) or []
+    if "PlanAnchor" not in pl:
+        obj.addProperty(
+            "App::PropertyVector",
+            "PlanAnchor",
+            "Equipment",
+            QT_TRANSLATE_NOOP(
+                "App::Property",
+                "Optional authored local insertion anchor for plan placement and editing",
+            ),
+        )
+        obj.PlanAnchor = FreeCAD.Vector(0, 0, 0)
+        changed = True
+    if "PlanFacing" not in pl:
+        obj.addProperty(
+            "App::PropertyVector",
+            "PlanFacing",
+            "Equipment",
+            QT_TRANSLATE_NOOP(
+                "App::Property",
+                "Optional authored local forward direction used for plan rotation semantics",
+            ),
+        )
+        obj.PlanFacing = FreeCAD.Vector(1, 0, 0)
+        changed = True
+    return changed
+
+
+def get_plan_anchor(obj):
+    """Return the authored local plan anchor for an equipment object."""
+
+    anchor = _copy_plan_vector(getattr(obj, "PlanAnchor", None), default=FreeCAD.Vector(0, 0, 0))
+    if anchor is None:
+        return FreeCAD.Vector(0, 0, 0)
+    return anchor
+
+
+def get_plan_facing(obj):
+    """Return the authored local plan facing vector for an equipment object."""
+
+    facing = _copy_plan_vector(getattr(obj, "PlanFacing", None), default=FreeCAD.Vector(1, 0, 0))
+    if facing is None:
+        facing = FreeCAD.Vector(1, 0, 0)
+    facing.z = 0
+    if DraftVecUtils.isNull(facing):
+        return FreeCAD.Vector(1, 0, 0)
+    facing.normalize()
+    return facing
+
+
+def apply_plan_contract(obj, anchor=None, facing=None):
+    """Apply authored plan anchor/facing metadata to an equipment object."""
+
+    if not obj:
+        return False
+    ensure_plan_contract_properties(obj)
+    changed = False
+
+    if anchor is not None:
+        anchor_vec = _copy_plan_vector(anchor, default=FreeCAD.Vector(0, 0, 0))
+        current_anchor = get_plan_anchor(obj)
+        if current_anchor.distanceToPoint(anchor_vec) > 1e-9:
+            obj.PlanAnchor = anchor_vec
+            changed = True
+
+    if facing is not None:
+        facing_vec = _copy_plan_vector(facing, default=FreeCAD.Vector(1, 0, 0))
+        facing_vec.z = 0
+        if DraftVecUtils.isNull(facing_vec):
+            facing_vec = FreeCAD.Vector(1, 0, 0)
+        else:
+            facing_vec.normalize()
+        current_facing = get_plan_facing(obj)
+        if current_facing.distanceToPoint(facing_vec) > 1e-9:
+            obj.PlanFacing = facing_vec
+            changed = True
+
+    return changed
+
+
+def _copy_plan_shape_with_local_placement(shape, placement=None):
+    if not shape or shape.isNull():
+        return None
+    copied_shape = shape.copy()
+    if placement is None:
+        return copied_shape
+    try:
+        copied_shape.Placement = placement.multiply(copied_shape.Placement)
+    except Exception:
+        pass
+    return copied_shape
+
+
+def get_plan_representation_shapes(obj):
+    """Return authored plan-symbol shapes in the owning object's local coordinates.
+
+    The returned shapes are suitable for any consumer that needs the authored
+    2D representation of an equipment asset in a stable local frame: footprint
+    extraction, plan-edit overlays, or BIM Library preview ghosts.
+    """
+
+    base_z = None
+    base_shape = getattr(obj, "Shape", None)
+    if base_shape and not base_shape.isNull():
+        base_z = base_shape.BoundBox.ZMin
+
+    shapes = []
+    for plan_obj in getattr(obj, "PlanSymbols", []) or []:
+        shape = _copy_plan_shape_with_local_placement(
+            getattr(plan_obj, "Shape", None),
+            getattr(plan_obj, "Placement", None),
+        )
+        if not shape or shape.isNull():
+            continue
+        if base_z is not None and abs(shape.BoundBox.ZMin - base_z) > 0.001:
+            shape.translate(FreeCAD.Vector(0, 0, base_z - shape.BoundBox.ZMin))
+        shapes.append(shape)
+    return shapes
+
+
+def get_plan_representation_footprint_faces(obj):
+    """Return footprint faces reconstructed from authored plan-symbol geometry."""
+
+    import Part
+
+    symbol_faces = []
+    had_symbol_geometry = False
+
+    for shape in get_plan_representation_shapes(obj):
+        if shape.Faces:
+            symbol_faces.extend(shape.Faces)
+            had_symbol_geometry = True
+            continue
+
+        wires = list(getattr(shape, "Wires", []) or [])
+        if wires or getattr(shape, "Edges", None):
+            had_symbol_geometry = True
+
+        for wire in wires:
+            try:
+                if not wire.isClosed():
+                    continue
+                face = Part.Face(wire)
+            except Exception:
+                continue
+            if face and not face.isNull():
+                symbol_faces.append(face)
+
+    return symbol_faces, had_symbol_geometry
+
+
 class _Equipment(ArchComponent.Component):
     "The Equipment object"
 
@@ -141,6 +309,7 @@ class _Equipment(ArchComponent.Component):
                 ),
                 locked=True,
             )
+        ensure_plan_contract_properties(obj)
         obj.setEditorMode("VerticalArea", 2)
         obj.setEditorMode("HorizontalArea", 2)
         obj.setEditorMode("PerimeterLength", 2)
@@ -158,6 +327,12 @@ class _Equipment(ArchComponent.Component):
 
         self.hideSubobjects(obj, prop)
         ArchComponent.Component.onChanged(self, obj, prop)
+
+    def get_plan_anchor(self, obj):
+        return get_plan_anchor(obj)
+
+    def get_plan_facing(self, obj):
+        return get_plan_facing(obj)
 
     def execute(self, obj):
 
@@ -200,23 +375,18 @@ class _Equipment(ArchComponent.Component):
         return
 
     def _iter_plan_symbol_shapes(self, obj):
-        base_z = None
-        if hasattr(obj, "Shape") and obj.Shape and not obj.Shape.isNull():
-            base_z = obj.Shape.BoundBox.ZMin
-        for plan_obj in getattr(obj, "PlanSymbols", []) or []:
-            shape = getattr(plan_obj, "Shape", None)
-            if not shape or shape.isNull():
-                continue
-            shape = shape.copy()
-            placement = getattr(plan_obj, "Placement", None)
-            if placement:
-                try:
-                    shape.Placement = placement.multiply(shape.Placement)
-                except Exception:
-                    pass
-            if base_z is not None and abs(shape.BoundBox.ZMin - base_z) > 0.001:
-                shape.translate(FreeCAD.Vector(0, 0, base_z - shape.BoundBox.ZMin))
+        for shape in get_plan_representation_shapes(obj):
             yield shape
+
+    def _collect_plan_symbol_footprint_faces(self, obj):
+        """Build footprint faces from authored plan symbols when possible.
+
+        Plan symbols are often authored as simple wire geometry. When closed
+        wires are available, turn them into faces so the generic footprint fill
+        path can use the authored symbol instead of slicing the 3D model.
+        """
+
+        return get_plan_representation_footprint_faces(obj)
 
     def getFootprint(self, obj):
         """Return plan footprint faces for shape-based equipment.
@@ -229,12 +399,12 @@ class _Equipment(ArchComponent.Component):
 
         from draftutils import params
 
-        symbol_faces = []
-        for shape in self._iter_plan_symbol_shapes(obj):
-            if shape.Faces:
-                symbol_faces.extend(shape.Faces)
+        symbol_faces, had_symbol_geometry = get_plan_representation_footprint_faces(obj)
         if symbol_faces:
             return symbol_faces
+        if had_symbol_geometry:
+            # Keep authored 2D symbols authoritative even when they are line-only.
+            return []
 
         shape = getattr(obj, "Shape", None)
         if not shape or shape.isNull():
@@ -317,7 +487,7 @@ class _ViewProviderEquipment(ArchComponent.ViewProviderComponent):
         loffset.units = -2.0
         loffset.on = True
         lstyle = coin.SoDrawStyle()
-        lstyle.lineWidth = 1.5
+        lstyle.lineWidth = 1.0
         lmat = coin.SoBaseColor()
         lmat.rgb = line_color
 
@@ -406,7 +576,7 @@ class _ViewProviderEquipment(ArchComponent.ViewProviderComponent):
         if polylines:
             return polylines
 
-        symbol_shapes = list(self.Object.Proxy._iter_plan_symbol_shapes(self.Object))
+        symbol_shapes = list(get_plan_representation_shapes(self.Object))
         edge_shapes = symbol_shapes
         if not edge_shapes and shape and not shape.isNull():
             edge_shapes = [shape]
@@ -431,6 +601,10 @@ class _ViewProviderEquipment(ArchComponent.ViewProviderComponent):
                 self.coords.point.setValues([[p.x, p.y, p.z] for p in obj.SnapPoints])
             else:
                 self.coords.point.deleteValues(0)
+        elif prop == "PlanSymbols":
+            self.refreshFootprint(obj.ViewObject)
+            if hasattr(obj.ViewObject, "update"):
+                obj.ViewObject.update()
 
     def updateFootprint(self):
         ArchComponent.ViewProviderComponent.updateFootprint(self)
