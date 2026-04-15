@@ -1430,6 +1430,15 @@ class AreaCalculator:
         for prop in ["VerticalArea", "HorizontalArea", "PerimeterLength"]:
             setattr(self.obj, prop, 0)
 
+    def _get_projected_edges(self, face, direction):
+        """Return the visible projected edges for a face."""
+        import TechDraw
+
+        projection = TechDraw.project(face, direction)
+        if not projection:
+            raise RuntimeError("TechDraw.project returned no shapes")
+        return projection[0].Edges
+
     def isFaceVertical(self, face, face_index=None):
         """Determine if a face is vertical.
 
@@ -1455,7 +1464,6 @@ class AreaCalculator:
         """
         import Part
         import DraftGeomUtils
-        import TechDraw
 
         face_name = f" Face{face_index}" if face_index is not None else ""
 
@@ -1471,15 +1479,19 @@ class AreaCalculator:
             projectedArea = 0  # dummy value, idem
         else:
             try:
-                edges = TechDraw.project(face, FreeCAD.Vector(0, 0, 1))[0].Edges
+                edges = self._get_projected_edges(face, FreeCAD.Vector(0, 0, 1))
                 wires = DraftGeomUtils.findWires(edges)
                 if len(wires) == 1 and not wires[0].isClosed():
                     projectedArea = 0
                 else:
                     projectedArea = Part.Face(wires).Area
-            except Part.OCCError:
+            except Exception as err:
                 FreeCAD.Console.PrintWarning(
-                    translate("Arch", f"Could not project face{face_name} from {self.obj.Label}\n")
+                    translate(
+                        "Arch",
+                        f"Could not project face{face_name} from {self.obj.Label} "
+                        f"({type(err).__name__}: {err})\n",
+                    )
                 )
                 return False
 
@@ -1569,79 +1581,74 @@ class AreaCalculator:
             old_allow_crazy_edge = param_grp.GetBool("allowCrazyEdge")
         param_grp.SetBool("allowCrazyEdge", True)
 
-        direction = FreeCAD.Vector(0, 0, 1)
-        projectedFaces = []
-        for face in horizontalAreaFaces:
-            try:
-                if face.findPlane() is None:
-                    if len(face.Wires) > 1:
-                        # Non-planar faces with holes are not handled properly
-                        FreeCAD.Console.PrintWarning(
-                            translate(
-                                "Arch",
-                                f"Error computing areas for {self.obj.Label}: unable to project "
-                                "non-planar faces with holes. Area values will be reset to 0.\n",
+        try:
+            direction = FreeCAD.Vector(0, 0, 1)
+            projectedFaces = []
+            for face in horizontalAreaFaces:
+                try:
+                    if face.findPlane() is None:
+                        if len(face.Wires) > 1:
+                            # Non-planar faces with holes are not handled properly
+                            FreeCAD.Console.PrintWarning(
+                                translate(
+                                    "Arch",
+                                    f"Error computing areas for {self.obj.Label}: unable to "
+                                    "project non-planar faces with holes. Area values will be "
+                                    "reset to 0.\n",
+                                )
                             )
+                            self.resetAreas()
+                            return
+                        wire = TechDraw.findShapeOutline(face, 1, direction)
+                        projectedFace = Part.makeFace([wire], "Part::FaceMakerSimple")
+                    else:
+                        edges = self._get_projected_edges(face, direction)
+                        wires = DraftGeomUtils.findWires(edges)
+                        # Using "Part::FaceMakerCheese" as the face can have holes
+                        projectedFace = Part.makeFace(wires, "Part::FaceMakerCheese")
+                    # Part.show(projectedFace)
+                    projectedFaces.append(projectedFace)
+                except Exception as err:
+                    FreeCAD.Console.PrintWarning(
+                        translate(
+                            "Arch",
+                            f"Error computing areas for {self.obj.Label}: unable to project or "
+                            f"make a horizontal face ({type(err).__name__}: {err}). "
+                            "Area values will be reset to 0.\n",
                         )
-                        self.resetAreas()
-                        return
-                    wire = TechDraw.findShapeOutline(face, 1, direction)
-                    projectedFace = Part.makeFace(
-                        [wire],
-                        "Part::FaceMakerSimple",
-                        noElementMap=True,
                     )
-                else:
-                    edges = TechDraw.project(face, direction)[0].Edges
-                    wires = DraftGeomUtils.findWires(edges)
-                    # Using "Part::FaceMakerCheese" as the face can have holes
-                    projectedFace = Part.makeFace(
-                        wires,
-                        "Part::FaceMakerCheese",
-                        noElementMap=True,
+                    self.resetAreas()
+                    return
+
+            fusedFace = None
+            if projectedFaces:
+                try:
+                    fusedFace = _make_projected_horizontal_area_face(projectedFaces)
+                except Exception as err:
+                    FreeCAD.Console.PrintWarning(
+                        translate(
+                            "Arch",
+                            f"Error computing areas for {self.obj.Label}: unable to combine "
+                            f"projected horizontal faces ({type(err).__name__}: {err}). "
+                            "Area values will be reset to 0.\n",
+                        )
                     )
-                # Part.show(projectedFace)
-                projectedFaces.append(projectedFace)
-            except Part.OCCError:
-                FreeCAD.Console.PrintWarning(
-                    translate(
-                        "Arch",
-                        f"Error computing areas for {self.obj.Label}: unable to project or "
-                        f"make face with normal {face.normalAt(0, 0)}. "
-                        "Area values will be reset to 0.\n",
-                    )
-                )
-                self.resetAreas()
-                return
+                    self.resetAreas()
+                    return
 
-        if old_allow_crazy_edge is None:
-            param_grp.RemBool("allowCrazyEdge")
-        else:
-            param_grp.SetBool("allowCrazyEdge", old_allow_crazy_edge)
+            if fusedFace:
+                if self.obj.HorizontalArea.Value != fusedFace.Area:
+                    self.obj.HorizontalArea = fusedFace.Area
 
-        fusedFace = None
-        if projectedFaces:
-            try:
-                fusedFace = _make_projected_horizontal_area_face(projectedFaces)
-            except Part.OCCError:
-                FreeCAD.Console.PrintWarning(
-                    translate(
-                        "Arch",
-                        f"Error computing areas for {self.obj.Label}: unable to combine "
-                        "projected horizontal faces. Area values will be reset to 0.\n",
-                    )
-                )
-                self.resetAreas()
-                return
-
-        if fusedFace:
-            if self.obj.HorizontalArea.Value != fusedFace.Area:
-                self.obj.HorizontalArea = fusedFace.Area
-
-            if hasattr(self.obj, "PerimeterLength") and len(fusedFace.Faces) == 1:
-                perimeterLength = fusedFace.Faces[0].OuterWire.Length
-                if self.obj.PerimeterLength.Value != perimeterLength:
-                    self.obj.PerimeterLength = perimeterLength
+                if hasattr(self.obj, "PerimeterLength") and len(fusedFace.Faces) == 1:
+                    perimeterLength = fusedFace.Faces[0].OuterWire.Length
+                    if self.obj.PerimeterLength.Value != perimeterLength:
+                        self.obj.PerimeterLength = perimeterLength
+        finally:
+            if old_allow_crazy_edge is None:
+                param_grp.RemBool("allowCrazyEdge")
+            else:
+                param_grp.SetBool("allowCrazyEdge", old_allow_crazy_edge)
 
 
 class ViewProviderComponent:
