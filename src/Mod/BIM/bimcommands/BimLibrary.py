@@ -824,15 +824,6 @@ class BIM_Library_TaskPanel:
             return self._get_library_root_tree_text(self.libraryroots[0])
         return ""
 
-    def _get_local_library_source_badges(self):
-
-        source_labels = []
-        for entry in self.libraryroots:
-            source_label = self._get_library_source_label(entry.source)
-            if source_label not in source_labels:
-                source_labels.append(source_label)
-        return source_labels
-
     def _get_library_root_tooltip(self):
 
         return "\n\n".join(
@@ -859,7 +850,6 @@ class BIM_Library_TaskPanel:
             summary = self._get_local_library_summary()
             tooltip = self._get_library_root_tooltip()
             detail = self._get_local_library_detail_summary()
-            badges = self._get_local_library_source_badges()
             text = "<b>{}</b>".format(html.escape(summary))
         else:
             tooltip = translate(
@@ -867,18 +857,15 @@ class BIM_Library_TaskPanel:
                 "Set a library folder explicitly or mount a marked module library root.",
             )
             detail = ""
-            badges = []
             text = "<b>{}</b>".format(html.escape(translate("BIM", "No local library detected")))
         self.form.labelLibraryRootStatus.setText(text)
         self.form.labelLibraryRootStatus.setToolTip(tooltip)
         self.form.labelLibraryRootSummary.setText(detail)
         self.form.labelLibraryRootSummary.setToolTip(tooltip)
         self.form.labelLibraryRootSummary.setVisible(bool(detail))
-        self.form.labelLibraryRootSources.setText(
-            " ".join(self._format_status_badge(label) for label in badges)
-        )
         self.form.labelLibraryRootSources.setToolTip(tooltip)
-        self.form.labelLibraryRootSources.setVisible(bool(badges))
+        self.form.labelLibraryRootSources.clear()
+        self.form.labelLibraryRootSources.hide()
 
     def _update_library_mode_status(self, online_mode):
 
