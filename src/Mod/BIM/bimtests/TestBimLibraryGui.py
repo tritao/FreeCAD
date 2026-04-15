@@ -598,8 +598,8 @@ class TestBimLibraryGui(TestArchBaseGui):
                 self.assertEqual("Online", panel.form.checkOnline.text())
                 self.assertIn("2 local libraries", panel.form.labelLibraryRootStatus.text())
                 self.assertTrue(panel.form.labelLibraryRootSummary.isHidden())
-                self.assertIn("Configured", panel.form.labelLibraryRootSources.text())
-                self.assertIn("Module", panel.form.labelLibraryRootSources.text())
+                self.assertTrue(panel.form.labelLibraryRootSources.isHidden())
+                self.assertEqual("", panel.form.labelLibraryRootSources.text())
                 self.assertNotIn(
                     root_a.replace("\\", "/"), panel.form.labelLibraryRootStatus.text()
                 )
@@ -729,7 +729,7 @@ class TestBimLibraryGui(TestArchBaseGui):
                     self.assertEqual(root_b.replace("\\", "/"), panel.librarypath)
                     self.assertEqual(root_b.replace("\\", "/"), panel.librarypaths[0])
                     self.assertNotIn(root_a.replace("\\", "/"), panel.librarypaths)
-                    self.assertIn("Configured", panel.form.labelLibraryRootSources.text())
+                    self.assertTrue(panel.form.labelLibraryRootSources.isHidden())
                     self.assertIn(
                         "Team Library · Configured",
                         panel.form.labelLibraryRootStatus.toolTip(),
