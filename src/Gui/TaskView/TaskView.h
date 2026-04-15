@@ -34,6 +34,10 @@
 #include <Gui/Selection/Selection.h>
 #include "TaskWatcher.h"
 
+class QFrame;
+class QLabel;
+class QString;
+
 
 namespace App
 {
@@ -205,6 +209,12 @@ private:
     void adjustMinimumSizeHint();
     void saveCurrentWidth();
     void tryRestoreWidth();
+    void updateWatcherContext(int visibleSections);
+    void updateWatcherEmptyState(int visibleSections);
+    QString currentWorkbenchLabel() const;
+    QString currentDocumentLabel() const;
+    QString currentSelectionLabel() const;
+    void slotActiveDocument(const Gui::Document&);
     void slotActiveDocument(const App::Document&);
     void slotInEdit(const Gui::ViewProviderDocumentObject&);
     void slotResetEdit(const Gui::ViewProviderDocumentObject&);
@@ -232,6 +242,13 @@ protected:
 
     std::vector<TaskWatcher*> ActiveWatcher;
     TaskPanel* TaskWatcherPanel;
+    QFrame* watcherContextPanel {nullptr};
+    QLabel* watcherTitleLabel {nullptr};
+    QLabel* watcherStateLabel {nullptr};
+    QLabel* watcherHintLabel {nullptr};
+    QWidget* watcherEmptyState {nullptr};
+    QLabel* watcherEmptyTitleLabel {nullptr};
+    QLabel* watcherEmptyBodyLabel {nullptr};
 
     // First index of the stack is reserved to the active watcher
     std::vector<TaskInfo> taskInfos;
