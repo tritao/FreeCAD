@@ -24,6 +24,8 @@
 
 """Session controller for BIM plan editing."""
 
+import math
+
 import FreeCAD
 import FreeCADGui
 from draftguitools import gui_base
@@ -63,9 +65,18 @@ _OPENING_VISUAL_PROPERTIES = {
     "IfcType",
 }
 _WALL_VISUAL_PROPERTIES = {"Shape", "Additions", "Subtractions", "Hosts"}
+_SYMBOL_VISUAL_PROPERTIES = {
+    "Shape",
+    "Placement",
+    "Base",
+    "PlanSymbols",
+    "LinkedObject",
+}
 _PLAN_VISUAL_HOVERED_WALL = "hovered_wall"
 _PLAN_VISUAL_HOVERED_OPENING = "hovered_opening"
+_PLAN_VISUAL_HOVERED_SYMBOL = "hovered_symbol"
 _PLAN_VISUAL_SELECTED_OPENING = "selected_opening"
+_PLAN_VISUAL_SELECTED_SYMBOL = "selected_symbol"
 _PLAN_VISUAL_WALL_GRIPS = "wall_grips"
 _PLAN_VISUAL_WALL_EDIT_PREVIEW = "wall_edit_preview"
 _PLAN_VISUAL_ALL = "all"
@@ -252,26 +263,34 @@ class PlanEditSession:
         self.active_storey = None
         self.selected_wall = None
         self.selected_opening = None
+        self.selected_symbol = None
         self.hovered_wall = None
         self.hovered_opening = None
+        self.hovered_symbol = None
         self._pending_selected_plan_target = None
         self._grip_trackers = []
         self._wall_hover_trackers = []
         self._junction_node_trackers = []
         self._hovered_wall_opening_context_trackers = []
         self._opening_hover_trackers = []
+        self._symbol_hover_trackers = []
         self._opening_overlay_trackers = []
+        self._symbol_overlay_trackers = []
         self._selected_wall_opening_context_trackers = []
         self._opening_handle_trackers = []
+        self._symbol_handle_trackers = []
         self._selected_opening_hard_refresh_queued = False
         self._opening_host_recompute_queued = False
         self._opening_host_recompute_running = False
         self._opening_move_preview_trackers = []
+        self._symbol_edit_preview_trackers = []
         self._opening_move_snap_profile_pushed = False
         self._edit_opening_move_anchor = "center"
         self._edit_opening_move_raw_point = None
         self._selection_observer_added = False
         self._document_observer_added = False
+        self._pending_created_plan_objects = {}
+        self._created_plan_objects_flush_queued = False
         self._pending_selected_wall_reset = False
         self._wall_edit_modal_active = False
         self._edit_wall = None
@@ -293,6 +312,10 @@ class PlanEditSession:
         self._edit_wall_visibility = None
         self._edit_opening = None
         self._edit_opening_handle_index = None
+        self._edit_symbol = None
+        self._edit_symbol_handle_role = None
+        self._edit_symbol_start_placement = None
+        self._edit_symbol_reference_point = None
         self._ignore_selection_changes = False
         self._mouse_moved_cb = None
         self._mouse_wheel_cb = None
@@ -315,6 +338,9 @@ class PlanEditSession:
         self._embedded_tool_name = None
         self._finishing = False
         self._tearing_down = False
+        self._plan_edit_params = FreeCAD.ParamGet(
+            "User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit"
+        )
         app = QtGui.QApplication.instance()
         if app:
             app.aboutToQuit.connect(self.begin_teardown)
@@ -357,6 +383,9 @@ class PlanEditSession:
 
     def finish(self, cont=False, close_dialog=True, closed=False):
         del cont, closed
+        if self.current_tool in ("Move Symbol", "Rotate Symbol"):
+            self._cancel_symbol_handle_point_pick()
+            return True
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
             return True
@@ -378,15 +407,21 @@ class PlanEditSession:
         self._cancel_rect_wall_tool(refresh=False)
         self._cancel_wall_edit(restore=False, refresh=False)
         self._cancel_pending_edit()
+        if self.current_tool in ("Move Symbol", "Rotate Symbol"):
+            self._cancel_symbol_handle_point_pick()
         self._clear_hovered_wall_overlay()
         self._clear_junction_node_overlays()
         self._clear_hovered_wall_opening_context_overlay()
         self._clear_wall_grips()
         self._clear_hovered_opening_overlay()
+        self._clear_hovered_symbol_overlay()
         self._clear_selected_opening_overlay()
+        self._clear_selected_symbol_overlay()
         self._clear_selected_wall_opening_context_overlay()
         self._clear_selected_opening_handles()
+        self._clear_selected_symbol_handles()
         self._clear_opening_move_preview()
+        self._clear_symbol_edit_preview()
         self._detach_selection_observer()
         self._detach_document_observer()
         self._unregister_edit_callbacks()
@@ -413,12 +448,18 @@ class PlanEditSession:
         self._saved_view_action_state = {}
         self.selected_wall = None
         self.selected_opening = None
+        self.selected_symbol = None
         self.hovered_wall = None
         self.hovered_opening = None
+        self.hovered_symbol = None
         self._pending_selected_plan_target = None
         self._edit_wall = None
         self._edit_opening = None
         self._edit_opening_handle_index = None
+        self._edit_symbol = None
+        self._edit_symbol_handle_role = None
+        self._edit_symbol_start_placement = None
+        self._edit_symbol_reference_point = None
         self._edit_endpoint = None
         self._edit_endpoints = None
         self._preview_points = None
@@ -614,6 +655,8 @@ class PlanEditSession:
             self._cancel_rect_wall_tool(refresh=False)
             self._cancel_wall_edit(restore=not teardown, refresh=False)
             self._cancel_pending_edit()
+            if self.current_tool in ("Move Symbol", "Rotate Symbol"):
+                self._cancel_symbol_handle_point_pick()
             self._clear_viewport_status_chip()
             self._clear_input_hints()
             self._clear_hovered_wall_overlay()
@@ -621,10 +664,14 @@ class PlanEditSession:
             self._clear_hovered_wall_opening_context_overlay()
             self._clear_wall_grips()
             self._clear_hovered_opening_overlay()
+            self._clear_hovered_symbol_overlay()
             self._clear_selected_opening_overlay()
+            self._clear_selected_symbol_overlay()
             self._clear_selected_wall_opening_context_overlay()
             self._clear_selected_opening_handles()
+            self._clear_selected_symbol_handles()
             self._clear_opening_move_preview()
+            self._clear_symbol_edit_preview()
             self._detach_selection_observer()
             self._detach_document_observer()
             self._unregister_edit_callbacks()
@@ -722,6 +769,9 @@ class PlanEditSession:
             self._refresh_task_panel_status()
 
     def activate_select_tool(self):
+        if self.current_tool in ("Move Symbol", "Rotate Symbol"):
+            self._cancel_symbol_handle_point_pick()
+            return
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
         if self._has_active_rect_wall_tool():
@@ -1379,6 +1429,35 @@ class PlanEditSession:
         self._add_object_to_active_storey(obj)
         self._register_object_view_state(obj)
         self._apply_storey_visibility()
+        self._refresh_plan_object_footprint_display(obj)
+        self._request_view_redraw()
+
+    def _get_plan_semantic_object(self, obj):
+        current = obj
+        seen = set()
+        while current:
+            name = getattr(current, "Name", None)
+            if name in seen:
+                break
+            if name:
+                seen.add(name)
+            if getattr(current, "TypeId", "") != "App::Link":
+                break
+            linked = getattr(current, "LinkedObject", None)
+            if linked is None and hasattr(current, "getLinkedObject"):
+                try:
+                    linked = current.getLinkedObject(True)
+                except TypeError:
+                    try:
+                        linked = current.getLinkedObject()
+                    except Exception:
+                        linked = None
+                except Exception:
+                    linked = None
+            if not linked or linked == current:
+                break
+            current = linked
+        return current or obj
 
     def _restore_object_view_state(self):
         if not self.doc or not self._saved_object_view_state:
@@ -1444,6 +1523,7 @@ class PlanEditSession:
     def _is_plan_background_object(self, obj):
         if not obj:
             return False
+        obj = self._get_plan_semantic_object(obj)
         if getattr(obj, "IfcType", "") == "Slab":
             return True
         try:
@@ -1452,6 +1532,40 @@ class PlanEditSession:
             return Draft.getType(obj) == "Structure" and getattr(obj, "IfcType", "") == "Slab"
         except Exception:
             return False
+
+    def _is_plan_equipment_object(self, obj):
+        if not obj:
+            return False
+        obj = self._get_plan_semantic_object(obj)
+        try:
+            import Draft
+
+            if Draft.getType(obj) == "Equipment":
+                return True
+        except Exception:
+            pass
+        proxy = getattr(obj, "Proxy", None)
+        return getattr(proxy, "Type", None) == "Equipment"
+
+    def _is_plan_symbol_instance(self, obj):
+        if not obj:
+            return False
+        if getattr(obj, "TypeId", "") != "App::Link":
+            return False
+        if self._is_hidden_library_definition_object(obj):
+            return False
+        return self._is_plan_equipment_object(obj)
+
+    def _is_plan_context_only_object(self, obj):
+        if not obj:
+            return False
+        if self._is_plan_symbol_instance(obj):
+            return False
+        return (
+            self._is_plan_container_object(obj)
+            or self._is_plan_background_object(obj)
+            or self._is_plan_equipment_object(obj)
+        )
 
     def _is_component_addition_object(self, obj):
         if not obj:
@@ -1467,19 +1581,22 @@ class PlanEditSession:
     def _is_supported_plan_object(self, obj):
         if not obj:
             return False
-        if self._is_plan_container_object(obj) or self._is_plan_background_object(obj):
+        if self._is_plan_symbol_instance(obj):
             return True
+        if self._is_plan_context_only_object(obj):
+            return True
+        semantic_obj = self._get_plan_semantic_object(obj)
         try:
             import Draft
 
-            obj_type = Draft.getType(obj)
+            obj_type = Draft.getType(semantic_obj)
         except Exception:
             obj_type = ""
 
         if obj_type in {"Wall", "Window", "Space", "Axis", "AxisSystem"}:
             return True
 
-        if getattr(obj, "IfcType", "") in {
+        if getattr(semantic_obj, "IfcType", "") in {
             "Wall",
             "Window",
             "Door",
@@ -1496,16 +1613,17 @@ class PlanEditSession:
     def _is_hosted_opening_object(self, obj):
         if not obj:
             return False
-        if not getattr(obj, "Hosts", None):
+        semantic_obj = self._get_plan_semantic_object(obj)
+        if not getattr(semantic_obj, "Hosts", None):
             return False
 
-        if getattr(obj, "IfcType", "") in {"Window", "Door"}:
+        if getattr(semantic_obj, "IfcType", "") in {"Window", "Door"}:
             return True
 
         try:
             import Draft
 
-            return Draft.getType(obj) == "Window"
+            return Draft.getType(semantic_obj) == "Window"
         except Exception:
             return False
 
@@ -1521,10 +1639,10 @@ class PlanEditSession:
             return True
         return visibility
 
-    def _apply_background_object_selectability(self, obj, view_object):
+    def _apply_context_object_selectability(self, obj, view_object):
         if not view_object or not hasattr(view_object, "Selectable"):
             return
-        if not (self._is_plan_background_object(obj) or self._is_plan_container_object(obj)):
+        if not self._is_plan_context_only_object(obj):
             return
         try:
             view_object.Selectable = False
@@ -1580,7 +1698,7 @@ class PlanEditSession:
                         view_object.Visibility = self._get_supported_plan_visibility(obj, state)
                     except Exception:
                         pass
-                self._apply_background_object_selectability(obj, view_object)
+                self._apply_context_object_selectability(obj, view_object)
             return
 
         for obj in self.doc.Objects:
@@ -1605,7 +1723,7 @@ class PlanEditSession:
                         view_object.Visibility = self._get_supported_plan_visibility(obj, state)
                     except Exception:
                         pass
-                self._apply_background_object_selectability(obj, view_object)
+                self._apply_context_object_selectability(obj, view_object)
                 continue
 
             belongs_to_active = any(parent.Name == active_storey_name for parent in storeys)
@@ -1624,7 +1742,7 @@ class PlanEditSession:
                         view_object.Visibility = self._get_supported_plan_visibility(obj, state)
                     except Exception:
                         pass
-                self._apply_background_object_selectability(obj, view_object)
+                self._apply_context_object_selectability(obj, view_object)
                 continue
 
             if hasattr(view_object, "Visibility"):
@@ -1678,6 +1796,7 @@ class PlanEditSession:
     def _is_plan_selectable_wall(self, obj):
         if not obj:
             return False
+        obj = self._get_plan_semantic_object(obj)
         try:
             import Draft
 
@@ -1685,9 +1804,73 @@ class PlanEditSession:
         except Exception:
             return False
 
+    def _get_plan_target_kind_for_object(self, obj):
+        if self._is_hosted_opening_object(obj):
+            return "opening"
+        if self._is_plan_symbol_instance(obj):
+            return "symbol"
+        if self._is_plan_selectable_wall(obj):
+            return "wall"
+        return None
+
+    def _has_direct_true_property(self, obj, prop_name):
+        if not obj:
+            return False
+        try:
+            if prop_name not in (getattr(obj, "PropertiesList", []) or []):
+                return False
+            return bool(getattr(obj, prop_name))
+        except Exception:
+            return False
+
+    def _is_hidden_library_definition_object(self, obj):
+        if not obj:
+            return False
+        if self._has_direct_true_property(obj, "IsLibraryDefinition"):
+            return True
+        for parent in getattr(obj, "InListRecursive", []) or getattr(obj, "InList", []):
+            if self._has_direct_true_property(parent, "IsLibraryDefinition"):
+                return True
+        return False
+
+    def _should_register_created_plan_object(self, obj):
+        if self._tearing_down or not obj or not self.doc:
+            return False
+        if getattr(obj, "Document", None) != self.doc:
+            return False
+        if self._is_hidden_library_definition_object(obj):
+            return False
+        return self._is_supported_plan_object(obj)
+
+    def _queue_created_plan_object(self, obj):
+        if not obj or not getattr(obj, "Name", None):
+            return
+        self._pending_created_plan_objects[obj.Name] = obj
+        if self._created_plan_objects_flush_queued:
+            return
+        self._created_plan_objects_flush_queued = True
+        try:
+            from PySide import QtCore
+
+            QtCore.QTimer.singleShot(0, self._flush_created_plan_objects)
+        except Exception:
+            self._flush_created_plan_objects()
+
+    def _flush_created_plan_objects(self):
+        self._created_plan_objects_flush_queued = False
+        pending = list(self._pending_created_plan_objects.values())
+        self._pending_created_plan_objects.clear()
+        for obj in pending:
+            if not self._should_register_created_plan_object(obj):
+                continue
+            self._register_plan_object(obj)
+
     def _set_pending_selected_plan_target(self, kind=None, obj=None):
         if kind == "opening" and self._is_hosted_opening_object(obj):
             self._pending_selected_plan_target = ("opening", obj)
+            return
+        if kind == "symbol" and self._is_plan_symbol_instance(obj):
+            self._pending_selected_plan_target = ("symbol", obj)
             return
         if kind == "wall" and self._is_plan_selectable_wall(obj):
             self._pending_selected_plan_target = ("wall", obj)
@@ -1701,6 +1884,8 @@ class PlanEditSession:
             return (None, None)
         kind, obj = pending_target
         if kind == "opening" and self._is_hosted_opening_object(obj):
+            return (kind, obj)
+        if kind == "symbol" and self._is_plan_symbol_instance(obj):
             return (kind, obj)
         if kind == "wall" and self._is_plan_selectable_wall(obj):
             return (kind, obj)
@@ -1754,12 +1939,19 @@ class PlanEditSession:
         if kind == "opening" and self._is_hosted_opening_object(obj):
             self.selected_wall = None
             self.selected_opening = obj
+            self.selected_symbol = None
+        elif kind == "symbol" and self._is_plan_symbol_instance(obj):
+            self.selected_wall = None
+            self.selected_opening = None
+            self.selected_symbol = obj
         elif kind == "wall" and self._is_plan_selectable_wall(obj):
             self.selected_wall = obj
             self.selected_opening = None
+            self.selected_symbol = None
         else:
             self.selected_wall = None
             self.selected_opening = None
+            self.selected_symbol = None
             kind = None
             obj = None
         self._clear_plan_relation_status()
@@ -1771,6 +1963,7 @@ class PlanEditSession:
             self._sync_junction_node_overlays()
             self._sync_selected_wall_opening_context_overlay()
             self._sync_hovered_wall_opening_context_overlay()
+            self._sync_hovered_symbol_overlay()
 
     def _schedule_selected_wall_reset(self, reason, obj):
         if self._pending_selected_wall_reset or self._tearing_down:
@@ -1908,7 +2101,7 @@ class PlanEditSession:
         self._mouse_pressed_cb = None
         self._render_manager = None
 
-    def _refresh_selected_wall(self):
+    def _refresh_selected_plan_target(self):
         if self._tearing_down:
             return
         if self._ignore_selection_changes:
@@ -1916,20 +2109,27 @@ class PlanEditSession:
 
         previous_wall = self.selected_wall
         previous_opening = self.selected_opening
+        previous_symbol = self.selected_symbol
         if self._is_wall_edit_modal_active():
             self.selected_wall = self._edit_wall
             self.selected_opening = None
+            self.selected_symbol = None
             if previous_wall != self.selected_wall:
                 self._sync_wall_grips()
             self._sync_hovered_wall_overlay()
             if previous_opening is not None or self.current_tool != "Select":
                 self._sync_selected_opening_overlay()
                 self._sync_selected_opening_handles()
+            if previous_symbol is not None or self.current_tool != "Select":
+                self._sync_selected_symbol_overlay()
+                self._sync_selected_symbol_handles()
+            self._sync_hovered_symbol_overlay()
             self._sync_hovered_opening_overlay()
             self._refresh_task_panel_status()
             return
         if self.current_tool == "Join":
             self.selected_opening = None
+            self.selected_symbol = None
             if not self._is_plan_selectable_wall(self.selected_wall):
                 self.current_tool = "Select"
                 self.selected_wall = None
@@ -1940,26 +2140,36 @@ class PlanEditSession:
             if previous_opening is not None:
                 self._sync_selected_opening_overlay()
                 self._sync_selected_opening_handles()
+            if previous_symbol is not None:
+                self._sync_selected_symbol_overlay()
+                self._sync_selected_symbol_handles()
+            self._sync_hovered_symbol_overlay()
             self._sync_hovered_opening_overlay()
             self._refresh_task_panel_status()
             return
         self.selected_wall = None
         self.selected_opening = None
+        self.selected_symbol = None
         try:
             selection = FreeCADGui.Selection.getSelection()
         except (ReferenceError, RuntimeError):
             return
         if self.current_tool == "Select" and len(selection) == 1:
             selected = selection[0]
-            if self._is_plan_selectable_wall(selected):
+            target_kind = self._get_plan_target_kind_for_object(selected)
+            if target_kind == "wall":
                 self.selected_wall = selected
-            elif self._is_hosted_opening_object(selected):
+            elif target_kind == "opening":
                 self.selected_opening = selected
+            elif target_kind == "symbol":
+                self.selected_symbol = selected
             self._set_pending_selected_plan_target()
         elif self.current_tool == "Select" and not selection:
             pending_kind, pending_target = self._consume_pending_selected_plan_target()
             if pending_kind == "opening":
                 self.selected_opening = pending_target
+            elif pending_kind == "symbol":
+                self.selected_symbol = pending_target
             elif pending_kind == "wall":
                 self.selected_wall = pending_target
         else:
@@ -1972,8 +2182,15 @@ class PlanEditSession:
         if previous_opening != self.selected_opening or self.current_tool != "Select":
             self._sync_selected_opening_overlay()
             self._sync_selected_opening_handles()
+        if previous_symbol != self.selected_symbol or self.current_tool != "Select":
+            self._sync_selected_symbol_overlay()
+            self._sync_selected_symbol_handles()
+        self._sync_hovered_symbol_overlay()
         self._sync_hovered_opening_overlay()
         self._refresh_task_panel_status()
+
+    def _refresh_selected_wall(self):
+        self._refresh_selected_plan_target()
 
     def _start_embedded_tool(self, tool_name, command, host_class=_PlanEditCommandHost):
         self.current_tool = tool_name
@@ -3383,6 +3600,9 @@ class PlanEditSession:
         self._refresh_task_panel_status()
 
     def _get_edit_node(self, mouse_pos):
+        symbol_handle_role = self._pick_selected_symbol_handle(mouse_pos)
+        if symbol_handle_role is not None:
+            return ("symbol_handle", self.selected_symbol, symbol_handle_role)
         opening_handle_index = self._pick_selected_opening_handle(mouse_pos)
         if opening_handle_index is not None:
             return ("opening_handle", self.selected_opening, opening_handle_index)
@@ -3472,9 +3692,15 @@ class PlanEditSession:
             if not node:
                 if self._activate_opening_target((pos[0], pos[1]), event_callback):
                     return
+                if self._activate_symbol_target((pos[0], pos[1]), event_callback):
+                    return
                 if self._activate_wall_target((pos[0], pos[1]), event_callback):
                     return
-                if self.selected_opening is not None or self.selected_wall is not None:
+                if (
+                    self.selected_opening is not None
+                    or self.selected_symbol is not None
+                    or self.selected_wall is not None
+                ):
                     self._clear_plan_selection_state()
                 return
             node_kind = node[0]
@@ -3482,8 +3708,16 @@ class PlanEditSession:
                 _kind, obj, index = node
                 self.selected_opening = obj
                 self.selected_wall = None
+                self.selected_symbol = None
                 self._clear_wall_grips()
                 self._activate_opening_handle(obj, index)
+            elif node_kind == "symbol_handle":
+                _kind, obj, role = node
+                self.selected_symbol = obj
+                self.selected_wall = None
+                self.selected_opening = None
+                self._clear_wall_grips()
+                self._activate_symbol_handle(obj, role)
             else:
                 point = node[1]
                 try:
@@ -3495,11 +3729,14 @@ class PlanEditSession:
                 if self._is_hosted_opening_object(obj):
                     self.selected_opening = obj
                     self.selected_wall = None
+                    self.selected_symbol = None
                     self._clear_wall_grips()
                     self._activate_opening_handle(obj, index)
                 else:
                     if obj != self.selected_wall:
                         self.selected_wall = obj
+                    self.selected_opening = None
+                    self.selected_symbol = None
                     self._activate_wall_grip(index, wall=obj)
             if hasattr(event_callback, "setHandled"):
                 try:
@@ -3568,8 +3805,11 @@ class PlanEditSession:
             self._sync_junction_node_overlays()
             self._clear_hovered_wall_opening_context_overlay()
             self._clear_hovered_opening_overlay()
+            self._clear_hovered_symbol_overlay()
             self._clear_selected_opening_overlay()
+            self._clear_selected_symbol_overlay()
             self._clear_selected_opening_handles()
+            self._clear_selected_symbol_handles()
             self._clear_selected_wall_opening_context_overlay()
             self._clear_wall_grips()
             return
@@ -3580,12 +3820,16 @@ class PlanEditSession:
                 self._sync_hovered_wall_opening_context_overlay()
             if refresh_all or _PLAN_VISUAL_HOVERED_OPENING in dirty:
                 self._sync_hovered_opening_overlay()
+            if refresh_all or _PLAN_VISUAL_HOVERED_SYMBOL in dirty:
+                self._sync_hovered_symbol_overlay()
             if refresh_all or _PLAN_VISUAL_WALL_GRIPS in dirty:
                 if self.selected_wall:
                     self._sync_wall_grips()
                 self._sync_selected_wall_opening_context_overlay()
             if self.selected_opening and (refresh_all or _PLAN_VISUAL_SELECTED_OPENING in dirty):
                 self._refresh_selected_opening_visuals()
+            if self.selected_symbol and (refresh_all or _PLAN_VISUAL_SELECTED_SYMBOL in dirty):
+                self._refresh_selected_symbol_visuals()
             return
         if (
             self._edit_wall
@@ -3607,6 +3851,12 @@ class PlanEditSession:
             if self._cycle_opening_move_anchor():
                 self._refresh_opening_move_preview_from_raw_point()
                 self._refresh_task_panel_status()
+            return
+        if (
+            self.current_tool in ("Move Symbol", "Rotate Symbol")
+            and key == coin.SoKeyboardEvent.ESCAPE
+        ):
+            self._cancel_symbol_handle_point_pick()
             return
         if self.current_tool == "Join" and key == coin.SoKeyboardEvent.TAB:
             if self._cycle_plan_join_type() and hasattr(event_callback, "setHandled"):
@@ -3647,6 +3897,9 @@ class PlanEditSession:
             return
         if self.current_tool == "Move Opening":
             self._cancel_opening_handle_point_pick()
+            return
+        if self.current_tool in ("Move Symbol", "Rotate Symbol"):
+            self._cancel_symbol_handle_point_pick()
             return
         if self._has_active_rect_wall_tool():
             self._cancel_rect_wall_tool()
@@ -3704,12 +3957,26 @@ class PlanEditSession:
         self._sync_selected_wall_opening_context_overlay()
         self._request_view_redraw()
 
-    def _refresh_opening_footprint_display(self, opening):
-        if not self._is_hosted_opening_object(opening):
+    def _is_symbol_visual_dependency(self, symbol, obj):
+        if not self._is_plan_symbol_instance(symbol) or not obj:
+            return False
+        if obj == symbol:
+            return True
+        semantic_obj = self._get_plan_semantic_object(symbol)
+        if obj == semantic_obj:
+            return True
+        if obj == getattr(semantic_obj, "Base", None):
+            return True
+        return obj in (getattr(semantic_obj, "PlanSymbols", None) or [])
+
+    def _refresh_plan_object_footprint_display(self, obj):
+        if not self._is_supported_plan_object(obj):
             return
-        view_object = getattr(opening, "ViewObject", None)
+        view_object = getattr(obj, "ViewObject", None)
         proxy = getattr(view_object, "Proxy", None) if view_object else None
         if not proxy:
+            return
+        if not hasattr(proxy, "ensureFootprintGroup") and not hasattr(proxy, "updateFootprint"):
             return
         try:
             if hasattr(proxy, "ensureFootprintGroup"):
@@ -3722,23 +3989,15 @@ class PlanEditSession:
             return
         self._request_view_redraw()
 
+    def _refresh_opening_footprint_display(self, opening):
+        if not self._is_hosted_opening_object(opening):
+            return
+        self._refresh_plan_object_footprint_display(opening)
+
     def _refresh_wall_footprint_display(self, wall):
         if not wall:
             return
-        view_object = getattr(wall, "ViewObject", None)
-        proxy = getattr(view_object, "Proxy", None) if view_object else None
-        if not proxy:
-            return
-        try:
-            if hasattr(proxy, "ensureFootprintGroup"):
-                proxy.ensureFootprintGroup(view_object)
-            if hasattr(proxy, "updateFootprint"):
-                proxy.updateFootprint()
-            if hasattr(view_object, "update"):
-                view_object.update()
-        except Exception:
-            return
-        self._request_view_redraw()
+        self._refresh_plan_object_footprint_display(wall)
 
     def _get_wall_hosted_openings(self, wall):
         if not wall or not self.doc:
@@ -3954,10 +4213,29 @@ class PlanEditSession:
         self._sync_selected_opening_handles()
         self._request_view_redraw()
 
+    def slotCreatedObject(self, obj):
+        if self._tearing_down:
+            return
+        self._queue_created_plan_object(obj)
+
     def slotChangedObject(self, obj, prop):
         if self._tearing_down:
             return
         if self.current_tool != "Select":
+            return
+        if (
+            self._is_symbol_visual_dependency(self.selected_symbol, obj)
+            and prop in _SYMBOL_VISUAL_PROPERTIES
+        ):
+            self._refresh_plan_object_footprint_display(self.selected_symbol)
+            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_SYMBOL)
+            return
+        if (
+            self._is_symbol_visual_dependency(self.hovered_symbol, obj)
+            and prop in _SYMBOL_VISUAL_PROPERTIES
+        ):
+            self._refresh_plan_object_footprint_display(self.hovered_symbol)
+            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_SYMBOL)
             return
         if (
             self._is_opening_visual_dependency(self.selected_opening, obj)
@@ -4015,15 +4293,26 @@ class PlanEditSession:
         if obj == self.hovered_opening:
             self.hovered_opening = None
             self._clear_hovered_opening_overlay()
+        if obj == self.hovered_symbol:
+            self.hovered_symbol = None
+            self._clear_hovered_symbol_overlay()
         if obj == self.selected_opening:
             self.selected_opening = None
             self._refresh_selected_opening_visuals()
+            return
+        if obj == self.selected_symbol:
+            self.selected_symbol = None
+            self._refresh_selected_symbol_visuals()
             return
         if obj != self.selected_wall:
             return
         self._schedule_selected_wall_reset("Deleted", obj)
 
     def _invalidate_document_dependent_plan_visuals(self, recompute_opening_hosts=False):
+        if self.selected_symbol:
+            self._refresh_plan_object_footprint_display(self.selected_symbol)
+        if self.hovered_symbol and self.hovered_symbol != self.selected_symbol:
+            self._refresh_plan_object_footprint_display(self.hovered_symbol)
         if self.selected_opening:
             self._refresh_opening_footprint_display(self.selected_opening)
             self._refresh_opening_host_footprint_displays(self.selected_opening)
@@ -4034,6 +4323,8 @@ class PlanEditSession:
         if recompute_opening_hosts:
             self._queue_recompute_opening_hosts(self.selected_opening, self.hovered_opening)
         self._queue_plan_overlay_visual_refresh(
+            _PLAN_VISUAL_SELECTED_SYMBOL,
+            _PLAN_VISUAL_HOVERED_SYMBOL,
             _PLAN_VISUAL_HOVERED_OPENING,
             _PLAN_VISUAL_HOVERED_WALL,
             _PLAN_VISUAL_WALL_GRIPS,
@@ -4087,7 +4378,10 @@ class PlanEditSession:
             self.on_panel_closed(panel)
 
     def _is_modal_plan_interaction_active(self):
-        return bool(self._is_wall_edit_modal_active() or self.current_tool == "Move Opening")
+        return bool(
+            self._is_wall_edit_modal_active()
+            or self.current_tool in ("Move Opening", "Move Symbol", "Rotate Symbol")
+        )
 
     def _focus_plan_view(self):
         if self._tearing_down or not self.view:
@@ -4154,6 +4448,33 @@ class PlanEditSession:
             action = translate("BIM_PlanEdit", "Click target point")
             return title, "{}\n{}".format(context, action)
 
+        if self.current_tool == "Move Symbol":
+            context = (
+                translate("BIM_PlanEdit", "Symbol: {label}").format(
+                    label=self.selected_symbol.Label
+                )
+                if self.selected_symbol
+                else translate("BIM_PlanEdit", "Symbol move")
+            )
+            action = translate("BIM_PlanEdit", "Click target point")
+            return title, "{}\n{}".format(context, action)
+
+        if self.current_tool == "Rotate Symbol":
+            context = (
+                translate("BIM_PlanEdit", "Symbol: {label}").format(
+                    label=self.selected_symbol.Label
+                )
+                if self.selected_symbol
+                else translate("BIM_PlanEdit", "Symbol rotation")
+            )
+            if self._symbol_rotation_snap_enabled():
+                action = translate(
+                    "BIM_PlanEdit", "Click target angle ({snap} snap, Shift = free)"
+                ).format(snap=self._format_symbol_rotation_snap_label())
+            else:
+                action = translate("BIM_PlanEdit", "Click target angle")
+            return title, "{}\n{}".format(context, action)
+
         if self.current_tool == "Move Wall":
             context = (
                 translate("BIM_PlanEdit", "Wall: {label}").format(label=self.selected_wall.Label)
@@ -4189,6 +4510,10 @@ class PlanEditSession:
         if self.selected_opening:
             context = translate("BIM_PlanEdit", "Opening: {label}").format(
                 label=self.selected_opening.Label
+            )
+        elif self.selected_symbol:
+            context = translate("BIM_PlanEdit", "Symbol: {label}").format(
+                label=self.selected_symbol.Label
             )
         elif self.selected_wall:
             context = translate("BIM_PlanEdit", "Wall: {label}").format(
@@ -4283,6 +4608,13 @@ class PlanEditSession:
                         ui.MouseLeft,
                     ),
                 )
+            if self.selected_symbol:
+                return (
+                    (
+                        translate("BIM_PlanEdit", "%1 pick symbol handle"),
+                        ui.MouseLeft,
+                    ),
+                )
             if self.selected_wall:
                 return (
                     (
@@ -4292,7 +4624,7 @@ class PlanEditSession:
                 )
             return (
                 (
-                    translate("BIM_PlanEdit", "%1 select wall or opening"),
+                    translate("BIM_PlanEdit", "%1 select wall, opening, or symbol"),
                     ui.MouseLeft,
                 ),
             )
@@ -4350,6 +4682,26 @@ class PlanEditSession:
                 (
                     translate("BIM_PlanEdit", "%1 cycle move anchor"),
                     ui.KeyA,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 cancel"),
+                    ui.KeyEscape,
+                ),
+            ),
+            "Move Symbol": (
+                (
+                    translate("BIM_PlanEdit", "%1 place symbol"),
+                    ui.MouseLeft,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 cancel"),
+                    ui.KeyEscape,
+                ),
+            ),
+            "Rotate Symbol": (
+                (
+                    translate("BIM_PlanEdit", "%1 place rotation"),
+                    ui.MouseLeft,
                 ),
                 (
                     translate("BIM_PlanEdit", "%1 cancel"),
@@ -4499,6 +4851,7 @@ class PlanEditSession:
             return (None, None)
 
         wall_candidate = None
+        symbol_candidate = None
         for info in infos:
             if not info:
                 continue
@@ -4513,15 +4866,15 @@ class PlanEditSession:
             if not doc:
                 continue
             obj = doc.getObject(str(obj_name))
-            if self._is_hosted_opening_object(obj):
+            target_kind = self._get_plan_target_kind_for_object(obj)
+            if target_kind == "opening":
                 return ("opening", obj)
-            try:
-                import Draft
-
-                if wall_candidate is None and Draft.getType(obj) == "Wall":
-                    wall_candidate = obj
-            except Exception:
-                pass
+            if target_kind == "symbol" and symbol_candidate is None:
+                symbol_candidate = obj
+            elif target_kind == "wall" and wall_candidate is None:
+                wall_candidate = obj
+        if symbol_candidate is not None:
+            return ("symbol", symbol_candidate)
         if wall_candidate is not None:
             return ("wall", wall_candidate)
         return (None, None)
@@ -4534,21 +4887,30 @@ class PlanEditSession:
             else:
                 self._set_hovered_wall(None)
             self._set_hovered_opening(None)
+            self._set_hovered_symbol(None)
             return
         if self.current_tool != "Select":
             self._set_hovered_wall(None)
             self._set_hovered_opening(None)
+            self._set_hovered_symbol(None)
             return
         target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
         if target_kind == "opening":
             self._set_hovered_wall(None)
             self._set_hovered_opening(target_obj)
+            self._set_hovered_symbol(None)
+        elif target_kind == "symbol":
+            self._set_hovered_wall(None)
+            self._set_hovered_opening(None)
+            self._set_hovered_symbol(target_obj)
         elif target_kind == "wall":
             self._set_hovered_opening(None)
+            self._set_hovered_symbol(None)
             self._set_hovered_wall(target_obj)
         else:
             self._set_hovered_wall(None)
             self._set_hovered_opening(None)
+            self._set_hovered_symbol(None)
 
     def _set_hovered_wall(self, wall):
         if wall == self.selected_wall:
@@ -4570,6 +4932,14 @@ class PlanEditSession:
         self.hovered_opening = opening
         self._sync_hovered_opening_overlay()
 
+    def _set_hovered_symbol(self, symbol):
+        if symbol == self.selected_symbol:
+            symbol = None
+        if self.hovered_symbol == symbol:
+            return
+        self.hovered_symbol = symbol
+        self._sync_hovered_symbol_overlay()
+
     def _select_opening_for_plan_edit(self, opening, queue_restore=False):
         if not self._is_hosted_opening_object(opening):
             return False
@@ -4578,9 +4948,26 @@ class PlanEditSession:
         self._clear_wall_grips()
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
+        self._sync_selected_symbol_overlay()
+        self._sync_selected_symbol_handles()
         self._refresh_task_panel_status()
         if queue_restore:
             self._queue_restore_selected_opening(opening)
+        return True
+
+    def _select_symbol_for_plan_edit(self, symbol, queue_restore=False):
+        if not self._is_plan_symbol_instance(symbol):
+            return False
+        self.current_tool = "Select"
+        self._set_selected_plan_target("symbol", symbol, pending_restore=queue_restore)
+        self._clear_wall_grips()
+        self._sync_selected_opening_overlay()
+        self._sync_selected_opening_handles()
+        self._sync_selected_symbol_overlay()
+        self._sync_selected_symbol_handles()
+        self._refresh_task_panel_status()
+        if queue_restore:
+            self._queue_restore_selected_symbol(symbol)
         return True
 
     def _select_wall_for_plan_edit(self, wall, queue_restore=False):
@@ -4589,9 +4976,12 @@ class PlanEditSession:
 
         self.current_tool = "Select"
         self.hovered_opening = None
+        self.hovered_symbol = None
         self._set_selected_plan_target("wall", wall, pending_restore=queue_restore)
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
+        self._sync_selected_symbol_overlay()
+        self._sync_selected_symbol_handles()
         self._sync_wall_grips()
         self._refresh_task_panel_status()
         return True
@@ -4604,7 +4994,23 @@ class PlanEditSession:
             return False
         self._set_hovered_wall(None)
         self._set_hovered_opening(None)
+        self._set_hovered_symbol(None)
         self._select_opening_for_plan_edit(opening, queue_restore=True)
+        if event_callback and hasattr(event_callback, "setHandled"):
+            try:
+                event_callback.setHandled()
+            except Exception:
+                pass
+        return True
+
+    def _activate_symbol_target(self, mouse_pos, event_callback=None):
+        target_kind, symbol = self._get_plan_target_at_position(mouse_pos)
+        if target_kind != "symbol":
+            symbol = None
+        if not self._select_symbol_for_plan_edit(symbol, queue_restore=True):
+            return False
+        self._set_hovered_wall(None)
+        self._set_hovered_opening(None)
         if event_callback and hasattr(event_callback, "setHandled"):
             try:
                 event_callback.setHandled()
@@ -4619,6 +5025,7 @@ class PlanEditSession:
         if not self._select_wall_for_plan_edit(wall, queue_restore=True):
             return False
         self._set_hovered_wall(None)
+        self._set_hovered_symbol(None)
         previous_ignore = self._ignore_selection_changes
         self._ignore_selection_changes = True
         try:
@@ -4849,6 +5256,714 @@ class PlanEditSession:
     def _clear_selected_wall_opening_context_overlay(self):
         self._finalize_trackers(self._selected_wall_opening_context_trackers)
         self._selected_wall_opening_context_trackers = []
+
+    def _copy_placement(self, placement):
+        if placement is None:
+            return FreeCAD.Placement()
+        try:
+            return placement.copy()
+        except Exception:
+            return FreeCAD.Placement(placement)
+
+    def _get_plan_object_global_placement(self, obj):
+        if not obj:
+            return FreeCAD.Placement()
+        if hasattr(obj, "getGlobalPlacement"):
+            try:
+                placement = obj.getGlobalPlacement()
+                if placement is not None:
+                    return placement
+            except Exception:
+                pass
+        return getattr(obj, "Placement", FreeCAD.Placement())
+
+    def _get_symbol_global_placement(self, symbol, placement=None):
+        current_global = self._get_plan_object_global_placement(symbol)
+        if placement is None:
+            return current_global
+        current_local = getattr(symbol, "Placement", None)
+        if current_local is None:
+            return placement
+        try:
+            parent_global = current_global.multiply(current_local.inverse())
+            return parent_global.multiply(placement)
+        except Exception:
+            return placement
+
+    def _get_symbol_parent_global_placement(self, symbol, placement=None):
+        placement = placement or getattr(symbol, "Placement", None)
+        current_global = self._get_plan_object_global_placement(symbol)
+        if placement is None:
+            return current_global
+        try:
+            return current_global.multiply(placement.inverse())
+        except Exception:
+            return FreeCAD.Placement()
+
+    def _get_symbol_plan_proxy(self, symbol, *attrs):
+        semantic_obj = self._get_plan_semantic_object(symbol)
+        view_object = getattr(semantic_obj, "ViewObject", None)
+        proxy = getattr(view_object, "Proxy", None) if view_object else None
+        if not proxy:
+            return None
+        for attr in attrs:
+            if not hasattr(proxy, attr):
+                return None
+        return proxy
+
+    def _get_symbol_semantic_proxy(self, symbol, *attrs):
+        semantic_obj = self._get_plan_semantic_object(symbol)
+        proxy = getattr(semantic_obj, "Proxy", None)
+        if not proxy:
+            return None
+        for attr in attrs:
+            if not hasattr(proxy, attr):
+                return None
+        return proxy
+
+    def _get_symbol_overlay_polylines(self, symbol, placement=None):
+        if not self._is_plan_symbol_instance(symbol):
+            return []
+        proxy = self._get_symbol_plan_proxy(symbol, "_collect_local_footprint_polylines")
+        if not proxy:
+            return []
+        try:
+            local_polylines = list(proxy._collect_local_footprint_polylines() or [])
+        except Exception:
+            return []
+
+        placement = self._get_symbol_global_placement(symbol, placement=placement)
+        polylines = []
+        for polyline in local_polylines:
+            points = []
+            for point in polyline:
+                if isinstance(point, FreeCAD.Vector):
+                    local_point = FreeCAD.Vector(point)
+                else:
+                    try:
+                        z_value = point[2] if len(point) > 2 else 0.0
+                        local_point = FreeCAD.Vector(point[0], point[1], z_value)
+                    except Exception:
+                        continue
+                try:
+                    points.append(placement.multVec(local_point))
+                except Exception:
+                    continue
+            if len(points) >= 2:
+                polylines.append(points)
+        return polylines
+
+    def _get_symbol_overlay_segments(self, symbol, placement=None):
+        segments = []
+        for polyline in self._get_symbol_overlay_polylines(symbol, placement=placement):
+            if len(polyline) < 2:
+                continue
+            for start, end in zip(polyline, polyline[1:]):
+                segments.append((start, end))
+        return segments
+
+    def _refresh_selected_symbol_visuals(self):
+        self._sync_selected_symbol_overlay()
+        self._sync_selected_symbol_handles()
+        self._request_view_redraw()
+
+    def _create_symbol_overlay_trackers(self, symbol, color, width, tracker_store, placement=None):
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            return
+
+        for polyline in self._get_symbol_overlay_polylines(symbol, placement=placement):
+            if len(polyline) < 2:
+                continue
+            for start, end in zip(polyline, polyline[1:]):
+                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                tracker.p1(start)
+                tracker.p2(end)
+                tracker.on()
+                tracker_store.append(tracker)
+
+    def _sync_hovered_symbol_overlay(self):
+        self._clear_hovered_symbol_overlay()
+        if self.current_tool != "Select":
+            return
+        if not self._is_plan_symbol_instance(self.hovered_symbol):
+            return
+        if self.hovered_symbol == self.selected_symbol:
+            return
+        self._create_symbol_overlay_trackers(
+            self.hovered_symbol,
+            color=(0.38, 0.62, 0.96),
+            width=self._scaled_line_width(2),
+            tracker_store=self._symbol_hover_trackers,
+        )
+
+    def _clear_hovered_symbol_overlay(self):
+        self._finalize_trackers(self._symbol_hover_trackers)
+        self._symbol_hover_trackers = []
+
+    def _sync_selected_symbol_overlay(self):
+        if self.current_tool != "Select" or not self._is_plan_symbol_instance(self.selected_symbol):
+            self._clear_selected_symbol_overlay()
+            return
+        width = self._scaled_line_width(3)
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            self._clear_selected_symbol_overlay()
+            return
+        segments = self._get_symbol_overlay_segments(self.selected_symbol)
+        color = (0.12, 0.38, 0.95)
+        if len(self._symbol_overlay_trackers) != len(segments):
+            self._clear_selected_symbol_overlay()
+            for _start, _end in segments:
+                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                self._symbol_overlay_trackers.append(tracker)
+        for tracker, (start, end) in zip(self._symbol_overlay_trackers, segments):
+            tracker.setColor(color)
+            tracker.p1(start)
+            tracker.p2(end)
+            tracker.on()
+
+    def _clear_selected_symbol_overlay(self):
+        self._finalize_trackers(self._symbol_overlay_trackers)
+        self._symbol_overlay_trackers = []
+
+    def _get_symbol_local_anchor(self, symbol):
+        semantic_obj = self._get_plan_semantic_object(symbol)
+        proxy = self._get_symbol_semantic_proxy(symbol, "get_plan_anchor")
+        if proxy:
+            try:
+                return FreeCAD.Vector(proxy.get_plan_anchor(semantic_obj))
+            except Exception:
+                pass
+        try:
+            import ArchEquipment
+
+            return ArchEquipment.get_plan_anchor(semantic_obj)
+        except Exception:
+            return FreeCAD.Vector()
+
+    def _get_symbol_local_facing(self, symbol):
+        semantic_obj = self._get_plan_semantic_object(symbol)
+        proxy = self._get_symbol_semantic_proxy(symbol, "get_plan_facing")
+        if proxy:
+            try:
+                facing = FreeCAD.Vector(proxy.get_plan_facing(semantic_obj))
+            except Exception:
+                facing = None
+        else:
+            facing = None
+        if facing is None:
+            try:
+                import ArchEquipment
+
+                facing = ArchEquipment.get_plan_facing(semantic_obj)
+            except Exception:
+                facing = FreeCAD.Vector(1, 0, 0)
+        facing = FreeCAD.Vector(facing.x, facing.y, 0)
+        if facing.Length < 0.001:
+            return FreeCAD.Vector(1, 0, 0)
+        facing.normalize()
+        return facing
+
+    def _get_symbol_anchor_point(self, symbol, placement=None):
+        placement = self._get_symbol_global_placement(symbol, placement=placement)
+        anchor = self._get_symbol_local_anchor(symbol)
+        try:
+            return placement.multVec(anchor)
+        except Exception:
+            base = getattr(placement, "Base", None)
+            if base is None:
+                return FreeCAD.Vector()
+            return FreeCAD.Vector(base.x, base.y, base.z)
+
+    def _get_symbol_facing_vector(self, symbol, placement=None):
+        placement = self._get_symbol_global_placement(symbol, placement=placement)
+        facing = self._get_symbol_local_facing(symbol)
+        try:
+            facing = placement.Rotation.multVec(facing)
+        except Exception:
+            pass
+        facing = FreeCAD.Vector(facing.x, facing.y, 0)
+        if facing.Length < 0.001:
+            return FreeCAD.Vector()
+        facing.normalize()
+        return facing
+
+    def _symbol_rotation_snap_enabled(self):
+        params = getattr(self, "_plan_edit_params", None)
+        if not params:
+            return True
+        try:
+            return params.GetBool("SymbolRotateAngleSnap", True)
+        except Exception:
+            return True
+
+    def _get_symbol_rotation_snap_increment_degrees(self):
+        params = getattr(self, "_plan_edit_params", None)
+        if not params:
+            return 15.0
+        try:
+            increment = float(params.GetFloat("SymbolRotateAngleIncrement", 15.0))
+        except Exception:
+            increment = 15.0
+        if increment <= 0.001:
+            return 15.0
+        return min(increment, 180.0)
+
+    def _get_symbol_rotation_snap_step_radians(self):
+        return math.radians(self._get_symbol_rotation_snap_increment_degrees())
+
+    def _format_symbol_rotation_snap_label(self):
+        increment = self._get_symbol_rotation_snap_increment_degrees()
+        rounded = round(increment)
+        if abs(increment - rounded) < 1e-9:
+            return "{}°".format(int(rounded))
+        return "{}°".format(("{:.3f}".format(increment)).rstrip("0").rstrip("."))
+
+    def _symbol_rotation_free_angle_override_active(self):
+        try:
+            from PySide import QtCore, QtGui
+
+            modifiers = QtGui.QApplication.keyboardModifiers()
+            return bool(modifiers & QtCore.Qt.ShiftModifier)
+        except Exception:
+            return False
+
+    def _resolve_symbol_handle_target_point(self, symbol, handle_role, point, placement=None):
+        if point is None:
+            return None
+        if isinstance(point, FreeCAD.Vector):
+            target_point = FreeCAD.Vector(point.x, point.y, point.z)
+        else:
+            try:
+                z_value = point[2] if len(point) > 2 else 0.0
+                target_point = FreeCAD.Vector(point[0], point[1], z_value)
+            except Exception:
+                return None
+        if handle_role != "rotate":
+            return target_point
+        if not self._symbol_rotation_snap_enabled():
+            return target_point
+        if self._symbol_rotation_free_angle_override_active():
+            return target_point
+
+        snap_step = self._get_symbol_rotation_snap_step_radians()
+        if snap_step <= 1e-9:
+            return target_point
+
+        anchor = self._get_symbol_anchor_point(symbol, placement=placement)
+        vector = FreeCAD.Vector(target_point.x - anchor.x, target_point.y - anchor.y, 0)
+        radius = math.hypot(vector.x, vector.y)
+        if radius < 0.001:
+            return target_point
+
+        snapped_angle = round(math.atan2(vector.y, vector.x) / snap_step) * snap_step
+        return FreeCAD.Vector(
+            anchor.x + radius * math.cos(snapped_angle),
+            anchor.y + radius * math.sin(snapped_angle),
+            anchor.z,
+        )
+
+    def _get_symbol_handle_radius(self, symbol, placement=None):
+        placement = placement or self._get_plan_object_global_placement(symbol)
+        anchor = self._get_symbol_anchor_point(symbol, placement=placement)
+        radius = 0.0
+        for polyline in self._get_symbol_overlay_polylines(symbol, placement=placement):
+            for point in polyline:
+                radius = max(
+                    radius,
+                    math.hypot(float(point.x) - float(anchor.x), float(point.y) - float(anchor.y)),
+                )
+        units_per_pixel = self._get_plan_view_units_per_pixel() or 10.0
+        return max(radius * 1.2, 28.0 * units_per_pixel, 300.0)
+
+    def _get_selected_symbol_handle_specs(self, symbol):
+        from draftutils import params
+
+        if not self._is_plan_symbol_instance(symbol):
+            return []
+
+        placement = self._get_plan_object_global_placement(symbol)
+        anchor = self._get_symbol_anchor_point(symbol, placement=placement)
+        radius = self._get_symbol_handle_radius(symbol, placement=placement)
+        rotate_direction = self._get_symbol_facing_vector(symbol, placement=placement)
+        if rotate_direction.Length < 0.001:
+            rotate_direction = FreeCAD.Vector(1, 0, 0)
+        rotate_offset = rotate_direction.multiply(radius)
+        marker_size = self._scaled_marker_size(params.get_param_view("MarkerSize"))
+        return [
+            (
+                "move",
+                anchor,
+                FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size),
+            ),
+            (
+                "rotate",
+                anchor.add(rotate_offset),
+                FreeCADGui.getMarkerIndex("CIRCLE_FILLED", marker_size),
+            ),
+        ]
+
+    def _sync_selected_symbol_handles(self):
+        if self.current_tool != "Select":
+            self._clear_selected_symbol_handles()
+            return
+        if not self._is_plan_symbol_instance(self.selected_symbol):
+            self._clear_selected_symbol_handles()
+            return
+        self._clear_selected_symbol_handles()
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            return
+        for idx, (_role, point, marker) in enumerate(
+            self._get_selected_symbol_handle_specs(self.selected_symbol)
+        ):
+            tracker = DraftTrackers.editTracker(
+                pos=point,
+                idx=idx,
+                marker=marker,
+                inactive=True,
+            )
+            tracker.on()
+            self._symbol_handle_trackers.append(tracker)
+
+    def _clear_selected_symbol_handles(self):
+        self._finalize_trackers(self._symbol_handle_trackers)
+        self._symbol_handle_trackers = []
+
+    def _pick_selected_symbol_handle(self, mouse_pos, radius_px=10):
+        symbol = self.selected_symbol
+        if not self._is_plan_symbol_instance(symbol) or not self.view:
+            return None
+        try:
+            cursor_x = int(mouse_pos[0])
+            cursor_y = int(mouse_pos[1])
+        except Exception:
+            return None
+        best_role = None
+        best_distance_sq = None
+        for role, point, _marker in self._get_selected_symbol_handle_specs(symbol):
+            try:
+                screen_x, screen_y = self.view.getPointOnScreen(point)
+            except Exception:
+                continue
+            dx = float(screen_x) - float(cursor_x)
+            dy = float(screen_y) - float(cursor_y)
+            distance_sq = dx * dx + dy * dy
+            if distance_sq > radius_px * radius_px:
+                continue
+            if best_distance_sq is None or distance_sq < best_distance_sq:
+                best_role = role
+                best_distance_sq = distance_sq
+        return best_role
+
+    def _sync_symbol_edit_preview(self, symbol, placement, guide_start=None, guide_end=None):
+        self._clear_symbol_edit_preview()
+        if self.current_tool not in ("Move Symbol", "Rotate Symbol"):
+            return
+        if not self._is_plan_symbol_instance(symbol) or placement is None:
+            return
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            return
+
+        preview_color = (0.12, 0.38, 0.95)
+        self._create_symbol_overlay_trackers(
+            symbol,
+            color=preview_color,
+            width=self._scaled_line_width(3),
+            tracker_store=self._symbol_edit_preview_trackers,
+            placement=placement,
+        )
+        if guide_start is None or guide_end is None:
+            return
+        guide = DraftTrackers.lineTracker(
+            dotted=True,
+            scolor=preview_color,
+            swidth=self._scaled_line_width(1),
+            ontop=True,
+        )
+        guide.p1(guide_start)
+        guide.p2(guide_end)
+        guide.on()
+        self._symbol_edit_preview_trackers.append(guide)
+
+    def _clear_symbol_edit_preview(self):
+        self._finalize_trackers(self._symbol_edit_preview_trackers)
+        self._symbol_edit_preview_trackers = []
+
+    def _get_symbol_handle_placement(self, symbol, handle_role, point):
+        if not self._is_plan_symbol_instance(symbol) or point is None or not handle_role:
+            return None
+        start_placement = self._edit_symbol_start_placement
+        if start_placement is None:
+            start_placement = self._copy_placement(getattr(symbol, "Placement", None))
+        point = self._resolve_symbol_handle_target_point(
+            symbol, handle_role, point, placement=start_placement
+        )
+        if point is None:
+            return None
+        placement = self._copy_placement(start_placement)
+        parent_global = self._get_symbol_parent_global_placement(symbol, placement=start_placement)
+        anchor_global = self._get_symbol_anchor_point(symbol, placement=start_placement)
+        local_anchor = self._get_symbol_local_anchor(symbol)
+        if handle_role == "move":
+            point_global = FreeCAD.Vector(point.x, point.y, anchor_global.z)
+            try:
+                anchor_parent = parent_global.inverse().multVec(point_global)
+                placement.Base = anchor_parent.sub(placement.Rotation.multVec(local_anchor))
+            except Exception:
+                placement.Base = FreeCAD.Vector(
+                    point.x - local_anchor.x,
+                    point.y - local_anchor.y,
+                    start_placement.Base.z,
+                )
+            return placement
+        if handle_role != "rotate":
+            return None
+
+        anchor = FreeCAD.Vector(anchor_global.x, anchor_global.y, anchor_global.z)
+        reference_point = self._edit_symbol_reference_point
+        if reference_point is None:
+            specs = dict(
+                (role, handle_point)
+                for role, handle_point, _marker in self._get_selected_symbol_handle_specs(symbol)
+            )
+            reference_point = specs.get("rotate")
+        if reference_point is None:
+            return None
+
+        reference_vector = FreeCAD.Vector(
+            reference_point.x - anchor.x,
+            reference_point.y - anchor.y,
+            0,
+        )
+        new_vector = FreeCAD.Vector(point.x - anchor.x, point.y - anchor.y, 0)
+        if reference_vector.Length < 0.001 or new_vector.Length < 0.001:
+            return None
+
+        reference_angle = math.atan2(reference_vector.y, reference_vector.x)
+        target_angle = math.atan2(new_vector.y, new_vector.x)
+        delta_rotation = FreeCAD.Rotation(
+            FreeCAD.Vector(0, 0, 1), math.degrees(target_angle - reference_angle)
+        )
+        current_global = self._get_symbol_global_placement(symbol, placement=start_placement)
+        try:
+            global_rotation = delta_rotation.multiply(current_global.Rotation)
+            placement.Rotation = parent_global.Rotation.inverse().multiply(global_rotation)
+        except Exception:
+            placement.Rotation = delta_rotation.multiply(start_placement.Rotation)
+        try:
+            anchor_parent = parent_global.inverse().multVec(anchor)
+            placement.Base = anchor_parent.sub(placement.Rotation.multVec(local_anchor))
+        except Exception:
+            placement.Base = FreeCAD.Vector(
+                anchor.x - local_anchor.x,
+                anchor.y - local_anchor.y,
+                start_placement.Base.z,
+            )
+        return placement
+
+    def _activate_symbol_handle(self, symbol, handle_role):
+        try:
+            from PySide import QtCore
+        except ImportError:
+            self._activate_symbol_handle_now(symbol, handle_role)
+            return
+
+        QtCore.QTimer.singleShot(
+            0,
+            lambda: self._activate_symbol_handle_now(symbol, handle_role),
+        )
+
+    def _activate_symbol_handle_now(self, symbol, handle_role):
+        if self._tearing_down or not self._is_plan_symbol_instance(symbol):
+            return
+        if handle_role not in {"move", "rotate"}:
+            return
+        self._set_selected_plan_target("symbol", symbol)
+        self._clear_wall_grips()
+        self._start_symbol_handle_point_pick(symbol, handle_role)
+
+    def _start_symbol_handle_point_pick(self, symbol, handle_role):
+        if not self._is_plan_symbol_instance(symbol):
+            return
+        handle_points = {
+            role: point for role, point, _marker in self._get_selected_symbol_handle_specs(symbol)
+        }
+        start_point = handle_points.get(handle_role)
+        if start_point is None:
+            return
+        self.current_tool = "Move Symbol" if handle_role == "move" else "Rotate Symbol"
+        self._set_hovered_wall(None)
+        self._set_hovered_opening(None)
+        self._set_hovered_symbol(None)
+        self._edit_symbol = symbol
+        self._edit_symbol_handle_role = handle_role
+        self._edit_symbol_start_placement = self._copy_placement(getattr(symbol, "Placement", None))
+        self._edit_symbol_reference_point = FreeCAD.Vector(start_point)
+        self._clear_selected_symbol_overlay()
+        self._clear_selected_symbol_handles()
+        anchor = self._get_symbol_anchor_point(symbol, placement=self._edit_symbol_start_placement)
+        self._sync_symbol_edit_preview(
+            symbol,
+            self._edit_symbol_start_placement,
+            guide_start=anchor,
+            guide_end=start_point,
+        )
+        self._refresh_task_panel_status()
+        FreeCAD.activeDraftCommand = self
+        self._set_draft_point_focus_suppressed(True)
+        FreeCADGui.Snapper.getPoint(
+            last=start_point,
+            callback=self._finish_symbol_handle_point_pick,
+            movecallback=self._update_symbol_handle_point_pick,
+            title=(
+                translate("BIM_PlanEdit", "Pick new symbol position")
+                if handle_role == "move"
+                else translate("BIM_PlanEdit", "Pick new symbol rotation")
+            ),
+            noTracker=True,
+        )
+        self._queue_focus_plan_view()
+
+    def _update_symbol_handle_point_pick(self, point=None, snap_info=None):
+        del snap_info
+        symbol = self._edit_symbol
+        handle_role = self._edit_symbol_handle_role
+        if not symbol or not handle_role:
+            self._clear_symbol_edit_preview()
+            return
+        target_point = self._resolve_symbol_handle_target_point(
+            symbol, handle_role, point, placement=self._edit_symbol_start_placement
+        )
+        if target_point is None:
+            self._clear_symbol_edit_preview()
+            return
+        placement = self._get_symbol_handle_placement(symbol, handle_role, point)
+        if placement is None:
+            self._clear_symbol_edit_preview()
+            return
+        guide_start = self._get_symbol_anchor_point(
+            symbol, placement=self._edit_symbol_start_placement
+        )
+        guide_end = (
+            self._get_symbol_anchor_point(symbol, placement=placement)
+            if handle_role == "move"
+            else target_point
+        )
+        self._sync_symbol_edit_preview(
+            symbol, placement, guide_start=guide_start, guide_end=guide_end
+        )
+
+    def _finish_symbol_handle_point_pick(self, point=None, obj=None):
+        del obj
+        symbol = self._edit_symbol
+        handle_role = self._edit_symbol_handle_role
+        start_placement = self._edit_symbol_start_placement
+        reference_point = self._edit_symbol_reference_point
+        self._edit_symbol = None
+        self._edit_symbol_handle_role = None
+        self._edit_symbol_start_placement = None
+        self._edit_symbol_reference_point = None
+        FreeCAD.activeDraftCommand = None
+        self._clear_symbol_edit_preview()
+
+        if point is None or not symbol or not handle_role:
+            self.current_tool = "Select"
+            self._restore_selected_symbol(symbol)
+            return
+
+        self._edit_symbol_start_placement = start_placement
+        self._edit_symbol_reference_point = reference_point
+        placement = self._get_symbol_handle_placement(symbol, handle_role, point)
+        self._edit_symbol_start_placement = None
+        self._edit_symbol_reference_point = None
+        if placement is None:
+            self.current_tool = "Select"
+            self._restore_selected_symbol(symbol)
+            return
+
+        try:
+            self.doc.openTransaction(
+                translate(
+                    "BIM_PlanEdit",
+                    "Move Symbol" if handle_role == "move" else "Rotate Symbol",
+                )
+            )
+            symbol.Placement = placement
+            self.doc.commitTransaction()
+            self.doc.recompute()
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+            self.current_tool = "Select"
+            self._restore_selected_symbol(symbol)
+            return
+
+        self.current_tool = "Select"
+        self._queue_restore_selected_symbol(symbol)
+
+    def _cancel_symbol_handle_point_pick(self):
+        symbol = self._edit_symbol
+        self._edit_symbol = None
+        self._edit_symbol_handle_role = None
+        self._edit_symbol_start_placement = None
+        self._edit_symbol_reference_point = None
+        self._stop_snapper()
+        FreeCAD.activeDraftCommand = None
+        self._clear_symbol_edit_preview()
+        self.current_tool = "Select"
+        if symbol:
+            self._set_selected_plan_target("symbol", symbol, pending_restore=True)
+        self._sync_selected_opening_overlay()
+        self._sync_selected_opening_handles()
+        self._sync_selected_symbol_overlay()
+        self._sync_selected_symbol_handles()
+        self._refresh_task_panel_status()
+
+    def _restore_selected_symbol(self, symbol):
+        self.current_tool = "Select"
+        if symbol:
+            self._set_selected_plan_target("symbol", symbol, pending_restore=True)
+        else:
+            self._set_selected_plan_target()
+        if not symbol:
+            self._sync_selected_opening_overlay()
+            self._sync_selected_opening_handles()
+            self._sync_selected_symbol_overlay()
+            self._sync_selected_symbol_handles()
+            self._refresh_task_panel_status()
+            return
+        previous_ignore = self._ignore_selection_changes
+        self._ignore_selection_changes = True
+        try:
+            try:
+                FreeCADGui.Selection.clearSelection()
+                FreeCADGui.Selection.addSelection(symbol)
+            except Exception:
+                pass
+        finally:
+            self._ignore_selection_changes = previous_ignore
+        self._sync_selected_opening_overlay()
+        self._sync_selected_opening_handles()
+        self._sync_selected_symbol_overlay()
+        self._sync_selected_symbol_handles()
+        self._refresh_task_panel_status()
+
+    def _queue_restore_selected_symbol(self, symbol):
+        try:
+            from PySide import QtCore
+        except ImportError:
+            self._restore_selected_symbol(symbol)
+            return
+        QtCore.QTimer.singleShot(0, lambda: self._restore_selected_symbol(symbol))
 
     def _get_selected_opening_edit_handles(self, opening):
         proxy = self._get_opening_view_proxy(opening, "get_plan_edit_handles")
@@ -5209,9 +6324,12 @@ class PlanEditSession:
         self._set_selected_plan_target()
         self._set_hovered_wall(None)
         self._set_hovered_opening(None)
+        self._set_hovered_symbol(None)
         self._clear_wall_grips()
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
+        self._sync_selected_symbol_overlay()
+        self._sync_selected_symbol_handles()
         self._refresh_task_panel_status()
 
     def _execute_selected_opening_handle(self, opening, handle_index, handle):
@@ -5531,6 +6649,26 @@ class PlanEditDockWidget:
                     "BIM_PlanEdit",
                     "Use in-view handles to move or flip the selected opening.",
                 )
+            elif self.session.selected_symbol:
+                selection_state = translate("BIM_PlanEdit", "Symbol: {label}").format(
+                    label=self.session.selected_symbol.Label
+                )
+                if self.session.current_tool == "Rotate Symbol":
+                    if self.session._symbol_rotation_snap_enabled():
+                        selection_help = translate(
+                            "BIM_PlanEdit",
+                            "Use in-view handles to rotate the selected symbol instance. Rotation snaps to {snap} by default; hold Shift for free angle.",
+                        ).format(snap=self.session._format_symbol_rotation_snap_label())
+                    else:
+                        selection_help = translate(
+                            "BIM_PlanEdit",
+                            "Use in-view handles to rotate the selected symbol instance.",
+                        )
+                else:
+                    selection_help = translate(
+                        "BIM_PlanEdit",
+                        "Use in-view handles to move or rotate the selected symbol instance.",
+                    )
             elif self.session.selected_wall:
                 selection_state = translate("BIM_PlanEdit", "Wall: {label}").format(
                     label=self.session.selected_wall.Label
@@ -5549,7 +6687,7 @@ class PlanEditDockWidget:
                 selection_state = translate("BIM_PlanEdit", "Selection: none")
                 selection_help = translate(
                     "BIM_PlanEdit",
-                    "Select a wall or hosted opening in the viewport to edit it.",
+                    "Select a wall, hosted opening, or symbol instance in the viewport to edit it.",
                 )
             if self.session._plan_relation_status_message:
                 selection_help = "{}\n{}".format(
