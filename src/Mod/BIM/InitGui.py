@@ -593,33 +593,449 @@ class BIMWorkbench(Workbench):
             )
         else:
             append_workbench_layout(self, FreeCADGui, prefix="Materia")
-        # workaround for issue #26539 and #27984:
-        # create tool lists without grouped commands for TaskWatcher
-        # https://github.com/FreeCAD/FreeCAD/issues/26539
-        # https://github.com/FreeCAD/FreeCAD/issues/27984
-        chk = (
-            ("Arch_RebarTools", RebarGroupCommand),
-            ("BIM_ArcTools", BIM_ArcTools),
-            ("BIM_ArrayTools", BIM_ArrayTools),
-            ("BIM_AxisTools", BIM_AxisTools),
-            ("BIM_BooleanTools", BIM_BooleanTools),
-            ("BIM_CloneTools", BIM_CloneTools),
-            ("BIM_Create2DViews", BIM_Create2DViews),
-            ("BIM_GenericTools", BIM_GenericTools),
-            ("BIM_IfcManageTools", BIM_IfcManageTools),
-            ("BIM_OffsetTools", BIM_OffsetTools),
-            ("BIM_ReportTools", BIM_ReportTools),
-            ("BIM_SplineTools", BIM_SplineTools),
+
+        self.taskwatcher_setup = [
+            "BIM_Setup",
+            "BIM_ProjectManager",
+            "Arch_Site",
+            "Arch_Building",
+            "Arch_Level",
+            "BIM_Views",
+        ]
+        self.taskwatcher_plan = [
+            "BIM_PlanEdit",
+            "BIM_Sketch",
+            "Draft_Line",
+            "Draft_Wire",
+            "Draft_Rectangle",
+            "Draft_Circle",
+            "BIM_Text",
+        ]
+        self.taskwatcher_elements = [
+            "Arch_Wall",
+            "BIM_Slab",
+            "BIM_Column",
+            "BIM_Beam",
+            "BIM_Door",
+            "Arch_Window",
+            "Arch_Stairs",
+            "BIM_Library",
+        ]
+        self.taskwatcher_container = [
+            "Arch_Level",
+            "BIM_PlanEdit",
+            "BIM_Views",
+            "Arch_SectionPlane",
+            "BIM_DrawingView",
+            "BIM_Shape2DView",
+        ]
+        self.taskwatcher_2d_modify = [
+            "BIM_Offset2D",
+            "Draft_Trimex",
+            "Draft_Join",
+            "Draft_Split",
+            "Draft_Stretch",
+            "Draft_Draft2Sketch",
+        ]
+        self.taskwatcher_wall_modify = [
+            "Arch_Add",
+            "Arch_Remove",
+            "BIM_Join_Miter",
+            "BIM_Join_Butt",
+            "BIM_Join_Tee",
+            "BIM_EditWallJoint",
+            "BIM_Unjoin",
+        ]
+        self.taskwatcher_transform = [
+            "Draft_Move",
+            "Draft_Rotate",
+            "Draft_Mirror",
+            "BIM_Clone",
+            "BIM_LinkMake",
+            "Draft_OrthoArray",
+            "BIM_Extrude",
+        ]
+        self.taskwatcher_boolean = [
+            "BIM_Compound",
+            "BIM_Fuse",
+            "BIM_Cut",
+            "BIM_Common",
+        ]
+        self.taskwatcher_ifc = [
+            "BIM_IfcElements",
+            "BIM_IfcQuantities",
+            "BIM_IfcProperties",
+            "BIM_Classification",
+            "BIM_Preflight",
+        ]
+
+    def _has_scene_view(self):
+        try:
+            return hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        except Exception:
+            return False
+
+    def _selection(self):
+        try:
+            return list(FreeCADGui.Selection.getSelection())
+        except Exception:
+            return []
+
+    def _normalize_type_token(self, value):
+        if not value:
+            return ""
+        return "".join(ch for ch in str(value).lower() if ch.isalnum())
+
+    def _object_type_tokens(self, obj):
+        if obj is None:
+            return set()
+
+        tokens = set()
+
+        def add(value):
+            token = self._normalize_type_token(value)
+            if token and token != "undefined":
+                tokens.add(token)
+
+        try:
+            import Draft
+
+            add(Draft.getType(obj))
+        except Exception:
+            pass
+
+        add(getattr(obj, "IfcType", None))
+        add(getattr(getattr(obj, "Proxy", None), "Type", None))
+
+        type_id = getattr(obj, "TypeId", "")
+        if type_id:
+            add(type_id)
+            for part in str(type_id).split("::"):
+                add(part)
+
+        return tokens
+
+    def _object_label(self, obj):
+        return getattr(obj, "Label", getattr(obj, "Name", "Unnamed object"))
+
+    def _active_bim_context(self):
+        view = getattr(FreeCADGui.ActiveDocument, "ActiveView", None)
+        if view is None:
+            return None
+
+        for name in ("NativeIFC", "Arch"):
+            try:
+                active = view.getActiveObject(name)
+            except Exception:
+                active = None
+            if active is not None:
+                return active
+        return None
+
+    def _is_project_container(self, obj):
+        tokens = self._object_type_tokens(obj)
+        return bool(
+            tokens
+            & {
+                "project",
+                "site",
+                "building",
+                "buildingpart",
+                "buildingstorey",
+                "floor",
+                "workingplaneproxy",
+                "ifcproject",
+                "ifcsite",
+                "ifcbuilding",
+                "ifcbuildingstorey",
+            }
         )
-        for attr in ("draftingtools", "annotationtools", "bimtools", "modify"):
-            lst = getattr(self, attr)
-            for itm in chk:
-                if not itm[0] in lst:
-                    continue
-                idx = lst.index(itm[0])
-                cmds = list(itm[1].GetCommands(itm[1]))
-                lst = lst[:idx] + cmds + lst[idx + 1 :]
-            setattr(self, attr, lst)
+
+    def _is_wall_like(self, obj):
+        tokens = self._object_type_tokens(obj)
+        return bool(tokens & {"wall", "curtainwall", "ifcwall", "ifccurtainwall"})
+
+    def _is_2d_like(self, obj):
+        tokens = self._object_type_tokens(obj)
+        if self._is_project_container(obj):
+            return False
+        return bool(
+            tokens
+            & {
+                "sketch",
+                "sketchobject",
+                "line",
+                "wire",
+                "rectangle",
+                "circle",
+                "ellipse",
+                "polygon",
+                "bspline",
+                "bezcurve",
+                "cubicbezcurve",
+                "point",
+                "dimension",
+                "lineardimension",
+                "text",
+                "annotation",
+                "label",
+                "axis",
+                "axissystem",
+                "grid",
+                "sectionplane",
+                "shape2dview",
+                "drawingview",
+                "facebinder",
+                "hatch",
+            }
+        )
+
+    def _is_model_object(self, obj):
+        if obj is None or self._is_project_container(obj) or self._is_2d_like(obj):
+            return False
+
+        tokens = self._object_type_tokens(obj)
+        if hasattr(obj, "Shape"):
+            return True
+
+        return bool(
+            tokens
+            & {
+                "wall",
+                "curtainwall",
+                "slab",
+                "beam",
+                "column",
+                "door",
+                "window",
+                "stairs",
+                "roof",
+                "panel",
+                "frame",
+                "fence",
+                "truss",
+                "equipment",
+                "space",
+                "component",
+                "reference",
+                "pipe",
+                "pipeconnector",
+                "rebar",
+                "partfeature",
+                "feature",
+            }
+        )
+
+    def _has_project_structure(self):
+        doc = FreeCAD.ActiveDocument
+        if doc is None:
+            return False
+
+        for obj in getattr(doc, "Objects", []):
+            tokens = self._object_type_tokens(obj)
+            if tokens & {
+                "project",
+                "site",
+                "building",
+                "buildingpart",
+                "buildingstorey",
+                "floor",
+                "ifcproject",
+                "ifcsite",
+                "ifcbuilding",
+                "ifcbuildingstorey",
+            }:
+                return True
+        return False
+
+    def _selection_is_containers(self, selection):
+        return bool(selection) and all(self._is_project_container(obj) for obj in selection)
+
+    def _selection_is_2d(self, selection):
+        return bool(selection) and all(self._is_2d_like(obj) for obj in selection)
+
+    def _selection_has_wall_like(self, selection):
+        return any(self._is_wall_like(obj) for obj in selection)
+
+    def _selection_has_model_objects(self, selection):
+        return any(self._is_model_object(obj) for obj in selection)
+
+    def _selection_has_ifc_data(self, selection):
+        for obj in selection:
+            if hasattr(obj, "IfcType") or hasattr(obj, "IfcClass"):
+                return True
+        return False
+
+    def _selection_label(self, selection, singular, plural=None):
+        if not selection:
+            return "Nothing selected"
+        if len(selection) == 1:
+            return "{} selected".format(self._object_label(selection[0]))
+        return "{} {} selected".format(len(selection), plural or singular + "s")
+
+    def _taskwatcher_context(self):
+        selection = self._selection()
+        active_context = self._active_bim_context()
+
+        if not selection:
+            if not self._has_project_structure():
+                return (
+                    "No project structure yet",
+                    "Start with site, building, and level setup before placing elements.",
+                )
+            if active_context and self._is_project_container(active_context):
+                return (
+                    "Active container: {}".format(self._object_label(active_context)),
+                    "Plan, section, and view tools stay focused on the active BIM container.",
+                )
+            return (
+                "Ready to create",
+                "Use plan tools for 2D layout or building tools for BIM elements.",
+            )
+
+        if self._selection_is_containers(selection):
+            return (
+                self._selection_label(selection, "container"),
+                "Container selection prioritizes levels, sections, and drawing views.",
+            )
+        if self._selection_has_wall_like(selection):
+            return (
+                self._selection_label(selection, "host object"),
+                "Host editing exposes add/remove and wall joint commands first.",
+            )
+        if self._selection_is_2d(selection):
+            return (
+                self._selection_label(selection, "2D object"),
+                "Stay in plan editing tools until the geometry becomes a BIM element.",
+            )
+        if self._selection_has_model_objects(selection):
+            return (
+                self._selection_label(selection, "model object"),
+                "Transform, clone, and boolean tools are prioritized for object editing.",
+            )
+
+        return (
+            self._selection_label(selection, "object"),
+            "Contextual BIM actions adapt to the current selection.",
+        )
+
+    def setTaskWatchers(self):
+        from PySide import QtGui
+
+        translate = FreeCAD.Qt.translate
+        workbench = self
+        FreeCADGui.Control.clearTaskWatcher()
+
+        def scene_ready():
+            return (FreeCAD.ActiveDocument is not None) and workbench._has_scene_view()
+
+        context_card = QtGui.QFrame()
+        context_card.setObjectName("BimTaskWatcherContext")
+        context_card.setFrameShape(QtGui.QFrame.StyledPanel)
+        context_layout = QtGui.QVBoxLayout(context_card)
+        context_layout.setContentsMargins(12, 12, 12, 12)
+        context_layout.setSpacing(4)
+
+        context_title = QtGui.QLabel(translate("BIM", "BIM Context"))
+        context_title.setObjectName("BimTaskWatcherContextTitle")
+        title_font = context_title.font()
+        title_font.setBold(True)
+        context_title.setFont(title_font)
+
+        context_state = QtGui.QLabel()
+        context_state.setObjectName("BimTaskWatcherContextState")
+        context_state.setWordWrap(True)
+
+        context_hint = QtGui.QLabel()
+        context_hint.setObjectName("BimTaskWatcherContextHint")
+        context_hint.setWordWrap(True)
+
+        context_layout.addWidget(context_title)
+        context_layout.addWidget(context_state)
+        context_layout.addWidget(context_hint)
+
+        class BimWatcher:
+            def __init__(self, commands, title, condition):
+                self.commands = commands
+                self.title = title
+                self._condition = condition
+
+            def shouldShow(self):
+                return scene_ready() and self._condition()
+
+        class BimContextWatcher:
+            def __init__(self):
+                self.widgets = [context_card]
+
+            def shouldShow(self):
+                if not scene_ready():
+                    return False
+
+                state, hint = workbench._taskwatcher_context()
+                context_state.setText(state)
+                context_hint.setText(hint)
+                return True
+
+        watchers = [
+            BimContextWatcher(),
+            BimWatcher(
+                self.taskwatcher_setup,
+                translate("BIM", "Project Setup"),
+                lambda: (not workbench._selection()) and (not workbench._has_project_structure()),
+            ),
+            BimWatcher(
+                self.taskwatcher_plan,
+                translate("BIM", "Draft / Plan"),
+                lambda: not workbench._selection(),
+            ),
+            BimWatcher(
+                self.taskwatcher_elements,
+                translate("BIM", "Building Elements"),
+                lambda: not workbench._selection(),
+            ),
+            BimWatcher(
+                self.taskwatcher_container,
+                translate("BIM", "Container / Views"),
+                lambda: (
+                    workbench._selection_is_containers(workbench._selection())
+                    or (
+                        not workbench._selection()
+                        and workbench._active_bim_context() is not None
+                        and workbench._is_project_container(workbench._active_bim_context())
+                    )
+                ),
+            ),
+            BimWatcher(
+                self.taskwatcher_2d_modify,
+                translate("BIM", "2D Editing"),
+                lambda: workbench._selection_is_2d(workbench._selection()),
+            ),
+            BimWatcher(
+                self.taskwatcher_wall_modify,
+                translate("BIM", "Wall / Host Editing"),
+                lambda: workbench._selection_has_wall_like(workbench._selection()),
+            ),
+            BimWatcher(
+                self.taskwatcher_transform,
+                translate("BIM", "Transform / Copy"),
+                lambda: workbench._selection_has_model_objects(workbench._selection()),
+            ),
+            BimWatcher(
+                self.taskwatcher_boolean,
+                translate("BIM", "Booleans / Composition"),
+                lambda: len(
+                    [obj for obj in workbench._selection() if workbench._is_model_object(obj)]
+                )
+                >= 2,
+            ),
+            BimWatcher(
+                self.taskwatcher_ifc,
+                translate("BIM", "IFC Data"),
+                lambda: workbench._selection_has_ifc_data(workbench._selection()),
+            ),
+        ]
+
+        FreeCADGui.Control.addTaskWatcher(watchers)
 
     def loadPreferences(self):
         """Set up preferences pages"""
@@ -686,30 +1102,7 @@ class BIMWorkbench(Workbench):
             todo.ToDo.delay(FreeCADGui.runCommand, "BIM_Welcome")
         todo.ToDo.delay(BimStatus.setStatusIcons, True)
         FreeCADGui.Control.clearTaskWatcher()
-
-        class BimWatcher:
-            def __init__(self, cmds, name, invert=False):
-                self.commands = cmds
-                self.title = name
-                self.invert = invert
-
-            def shouldShow(self):
-                if self.invert:
-                    return (FreeCAD.ActiveDocument != None) and (
-                        FreeCADGui.Selection.getSelection() != []
-                    )
-                else:
-                    return (FreeCAD.ActiveDocument != None) and (
-                        not FreeCADGui.Selection.getSelection()
-                    )
-
-        FreeCADGui.Control.addTaskWatcher(
-            [
-                BimWatcher(self.draftingtools + self.annotationtools, "2D Geometry"),
-                BimWatcher(self.bimtools, "3D/BIM Geometry"),
-                BimWatcher(self.modify, "Modify", invert=True),
-            ]
-        )
+        self.setTaskWatchers()
 
         # restore views widget if needed
         if PARAMS.GetBool("RestoreBimViews", True):
