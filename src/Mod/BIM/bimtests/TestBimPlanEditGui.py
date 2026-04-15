@@ -1270,9 +1270,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertTrue(show_hints.called)
         hints = show_hints.call_args.args
         self.assertEqual(len(hints), 3)
-        self.assertEqual(hints[0].message, "place opening")
-        self.assertEqual(hints[1].message, "cycle move anchor")
-        self.assertEqual(hints[2].message, "cancel")
+        self.assertEqual(hints[0].message, "%1 place opening")
+        self.assertEqual(hints[1].message, "%1 cycle move anchor")
+        self.assertEqual(hints[2].message, "%1 cancel")
 
     def test_plan_edit_opening_move_preview_offsets_readout_outside_host_wall(self):
         """Opening move preview readout should sit outside the host wall footprint."""

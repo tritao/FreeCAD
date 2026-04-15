@@ -4617,8 +4617,13 @@ class PlanEditSession:
     def _make_input_hint(self, message, *sequences):
         if not hasattr(FreeCADGui, "InputHint"):
             return None
+        if message is None:
+            return None
+        raw_message = str(message)
+        if not raw_message.strip():
+            return None
         try:
-            return FreeCADGui.InputHint(message, *sequences)
+            return FreeCADGui.InputHint(raw_message, *sequences)
         except Exception:
             return None
 
