@@ -28,6 +28,7 @@ import Arch
 import Draft
 import FreeCAD
 import FreeCADGui
+import math
 import Part
 from bimcommands import BimPlanSession
 from bimtests.ArchWallGuiTestUtils import (
@@ -39,6 +40,41 @@ from unittest.mock import patch
 
 
 class TestBimPlanEditGui(ArchWallGuiTestCase):
+    def _make_plan_symbol_link(self, anchor=None, facing=None):
+        level = Arch.makeFloor(name="Level 0")
+        box = self.document.addObject("Part::Box", "PlanSymbolBox")
+        box.Length = 1400
+        box.Width = 1950
+        box.Height = 600
+        equipment = Arch.makeEquipment(box)
+        if anchor is not None:
+            equipment.PlanAnchor = FreeCAD.Vector(anchor)
+        if facing is not None:
+            equipment.PlanFacing = FreeCAD.Vector(facing)
+
+        plan = self.document.addObject("Part::Feature", "PlanSymbol2D")
+        plan.Shape = Part.makeCompound(
+            [
+                Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(1400, 0, 0)),
+                Part.makeLine(FreeCAD.Vector(1400, 0, 0), FreeCAD.Vector(1400, 1950, 0)),
+                Part.makeLine(FreeCAD.Vector(1400, 1950, 0), FreeCAD.Vector(0, 1950, 0)),
+                Part.makeLine(FreeCAD.Vector(0, 1950, 0), FreeCAD.Vector(0, 0, 0)),
+            ]
+        )
+        equipment.PlanSymbols = [plan]
+
+        link = self.document.addObject("App::Link", "PlanSymbolLink")
+        link.setLink(equipment)
+        if hasattr(link, "LinkTransform"):
+            link.LinkTransform = True
+        link.Label = "Double Bed 001"
+        link.Placement.Base = FreeCAD.Vector(1000, 800, 0)
+        level.addObject(link)
+
+        self.document.recompute()
+        self.pump_gui_events()
+        return level, equipment, link
+
     def test_plan_edit_embedded_wall_uses_sane_top_plane(self):
         """Embedded wall creation in Plan Edit should start from a clean top plane."""
 
@@ -313,6 +349,267 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertFalse(equipment.ViewObject.Selectable)
         self.assertGreater(equipment.ViewObject.Proxy.lcoords.point.getNum(), 0)
         self.assertGreater(equipment.ViewObject.Proxy.lset.numVertices.getNum(), 0)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_linked_symbol_instances_are_selectable_with_handles(self):
+        """Linked equipment instances should be editable plan targets, not passive context."""
+
+        level, _equipment, link = self._make_plan_symbol_link()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session._refresh_plan_object_footprint_display(link)
+        self.pump_gui_events()
+
+        self.assertTrue(link.ViewObject.Visibility)
+        self.assertTrue(link.ViewObject.Selectable)
+        self.assertTrue(session._is_plan_symbol_instance(link))
+
+        self.assertTrue(session._select_symbol_for_plan_edit(link))
+        self.pump_gui_events()
+
+        self.assertIs(link, session.selected_symbol)
+        self.assertEqual(
+            {"move", "rotate"},
+            {role for role, _point, _marker in session._get_selected_symbol_handle_specs(link)},
+        )
+        self.assertEqual(2, len(session._symbol_handle_trackers))
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_symbol_handles_commit_link_placement(self):
+        """Move/rotate symbol handles should update only the instance placement."""
+
+        level, equipment, link = self._make_plan_symbol_link()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session._refresh_plan_object_footprint_display(link)
+        self.assertTrue(session._select_symbol_for_plan_edit(link))
+        self.pump_gui_events()
+
+        handle_points = {
+            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+        }
+
+        session.current_tool = "Move Symbol"
+        session._edit_symbol = link
+        session._edit_symbol_handle_role = "move"
+        session._edit_symbol_start_placement = link.Placement.copy()
+        session._edit_symbol_reference_point = handle_points["move"]
+        session._finish_symbol_handle_point_pick(FreeCAD.Vector(2400, 1600, 0))
+        self.pump_gui_events()
+
+        self.assertAlmostEqual(2400.0, link.Placement.Base.x, delta=1e-6)
+        self.assertAlmostEqual(1600.0, link.Placement.Base.y, delta=1e-6)
+        self.assertIs(session.selected_symbol, link)
+
+        handle_points = {
+            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+        }
+        anchor = FreeCAD.Vector(link.Placement.Base)
+
+        session.current_tool = "Rotate Symbol"
+        session._edit_symbol = link
+        session._edit_symbol_handle_role = "rotate"
+        session._edit_symbol_start_placement = link.Placement.copy()
+        session._edit_symbol_reference_point = handle_points["rotate"]
+        session._finish_symbol_handle_point_pick(FreeCAD.Vector(anchor.x, anchor.y + 1000, 0))
+        self.pump_gui_events()
+
+        axis = link.Placement.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
+        self.assertAlmostEqual(0.0, axis.x, delta=1e-3)
+        self.assertGreater(axis.y, 0.99)
+        self.assertIs(session.selected_symbol, link)
+        self.assertIs(equipment, link.LinkedObject)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_symbol_handles_honor_authored_anchor_and_facing(self):
+        """Symbol handle positions and edits should use authored local plan metadata."""
+
+        level, equipment, link = self._make_plan_symbol_link(
+            anchor=FreeCAD.Vector(700, 975, 0),
+            facing=FreeCAD.Vector(0, 1, 0),
+        )
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session._refresh_plan_object_footprint_display(link)
+        self.assertTrue(session._select_symbol_for_plan_edit(link))
+        self.pump_gui_events()
+
+        handle_points = {
+            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+        }
+        expected_anchor = link.Placement.multVec(equipment.PlanAnchor)
+        self.assertAlmostEqual(expected_anchor.x, handle_points["move"].x, delta=1e-6)
+        self.assertAlmostEqual(expected_anchor.y, handle_points["move"].y, delta=1e-6)
+
+        rotate_offset = handle_points["rotate"].sub(handle_points["move"])
+        rotate_offset.z = 0
+        rotate_offset.normalize()
+        self.assertAlmostEqual(0.0, rotate_offset.x, delta=1e-3)
+        self.assertGreater(rotate_offset.y, 0.99)
+
+        target_anchor = FreeCAD.Vector(3200, 2400, 0)
+        session.current_tool = "Move Symbol"
+        session._edit_symbol = link
+        session._edit_symbol_handle_role = "move"
+        session._edit_symbol_start_placement = link.Placement.copy()
+        session._edit_symbol_reference_point = handle_points["move"]
+        session._finish_symbol_handle_point_pick(target_anchor)
+        self.pump_gui_events()
+
+        self.assertAlmostEqual(2500.0, link.Placement.Base.x, delta=1e-6)
+        self.assertAlmostEqual(1425.0, link.Placement.Base.y, delta=1e-6)
+        moved_anchor = link.Placement.multVec(equipment.PlanAnchor)
+        self.assertAlmostEqual(target_anchor.x, moved_anchor.x, delta=1e-6)
+        self.assertAlmostEqual(target_anchor.y, moved_anchor.y, delta=1e-6)
+
+        handle_points = {
+            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+        }
+        anchor = link.Placement.multVec(equipment.PlanAnchor)
+        session.current_tool = "Rotate Symbol"
+        session._edit_symbol = link
+        session._edit_symbol_handle_role = "rotate"
+        session._edit_symbol_start_placement = link.Placement.copy()
+        session._edit_symbol_reference_point = handle_points["rotate"]
+        session._finish_symbol_handle_point_pick(FreeCAD.Vector(anchor.x + 1000, anchor.y, 0))
+        self.pump_gui_events()
+
+        rotated_anchor = link.Placement.multVec(equipment.PlanAnchor)
+        self.assertAlmostEqual(anchor.x, rotated_anchor.x, delta=1e-6)
+        self.assertAlmostEqual(anchor.y, rotated_anchor.y, delta=1e-6)
+        facing = link.Placement.Rotation.multVec(equipment.PlanFacing)
+        facing.z = 0
+        facing.normalize()
+        self.assertGreater(facing.x, 0.99)
+        self.assertAlmostEqual(0.0, facing.y, delta=1e-3)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_symbol_rotation_snaps_to_angle_increment(self):
+        """Symbol rotation should snap to the configured angular increment by default."""
+
+        level, equipment, link = self._make_plan_symbol_link()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session._refresh_plan_object_footprint_display(link)
+        self.assertTrue(session._select_symbol_for_plan_edit(link))
+        self.pump_gui_events()
+
+        handle_points = {
+            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+        }
+        anchor = session._get_symbol_anchor_point(link)
+        target_angle = math.radians(10.0)
+        raw_point = FreeCAD.Vector(
+            anchor.x + 1000.0 * math.cos(target_angle),
+            anchor.y + 1000.0 * math.sin(target_angle),
+            anchor.z,
+        )
+
+        session.current_tool = "Rotate Symbol"
+        session._edit_symbol = link
+        session._edit_symbol_handle_role = "rotate"
+        session._edit_symbol_start_placement = link.Placement.copy()
+        session._edit_symbol_reference_point = handle_points["rotate"]
+        with patch.object(
+            session, "_symbol_rotation_snap_enabled", return_value=True
+        ), patch.object(
+            session, "_get_symbol_rotation_snap_increment_degrees", return_value=15.0
+        ), patch.object(
+            session, "_symbol_rotation_free_angle_override_active", return_value=False
+        ):
+            session._finish_symbol_handle_point_pick(raw_point)
+        self.pump_gui_events()
+
+        facing = link.Placement.Rotation.multVec(equipment.PlanFacing)
+        angle = math.degrees(math.atan2(facing.y, facing.x))
+        self.assertAlmostEqual(15.0, angle, delta=1e-3)
+        rotated_anchor = session._get_symbol_anchor_point(link)
+        self.assertAlmostEqual(anchor.x, rotated_anchor.x, delta=1e-6)
+        self.assertAlmostEqual(anchor.y, rotated_anchor.y, delta=1e-6)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_symbol_rotation_shift_override_skips_snap(self):
+        """Holding the free-angle override should bypass symbol rotation snapping."""
+
+        level, equipment, link = self._make_plan_symbol_link()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session._refresh_plan_object_footprint_display(link)
+        self.assertTrue(session._select_symbol_for_plan_edit(link))
+        self.pump_gui_events()
+
+        handle_points = {
+            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+        }
+        anchor = session._get_symbol_anchor_point(link)
+        target_angle = math.radians(10.0)
+        raw_point = FreeCAD.Vector(
+            anchor.x + 1000.0 * math.cos(target_angle),
+            anchor.y + 1000.0 * math.sin(target_angle),
+            anchor.z,
+        )
+
+        session.current_tool = "Rotate Symbol"
+        session._edit_symbol = link
+        session._edit_symbol_handle_role = "rotate"
+        session._edit_symbol_start_placement = link.Placement.copy()
+        session._edit_symbol_reference_point = handle_points["rotate"]
+        with patch.object(
+            session, "_symbol_rotation_snap_enabled", return_value=True
+        ), patch.object(
+            session, "_get_symbol_rotation_snap_increment_degrees", return_value=15.0
+        ), patch.object(
+            session, "_symbol_rotation_free_angle_override_active", return_value=True
+        ):
+            session._finish_symbol_handle_point_pick(raw_point)
+        self.pump_gui_events()
+
+        facing = link.Placement.Rotation.multVec(equipment.PlanFacing)
+        angle = math.degrees(math.atan2(facing.y, facing.x))
+        self.assertAlmostEqual(10.0, angle, delta=1e-3)
+        rotated_anchor = session._get_symbol_anchor_point(link)
+        self.assertAlmostEqual(anchor.x, rotated_anchor.x, delta=1e-6)
+        self.assertAlmostEqual(anchor.y, rotated_anchor.y, delta=1e-6)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -632,11 +929,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertTrue(activated)
         self.assertIs(session.selected_opening, door)
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0][0], 0)
+        restore_calls = [call for call in calls if getattr(call[1], "__name__", "") == "<lambda>"]
+        self.assertEqual(len(restore_calls), 1)
+        self.assertEqual(restore_calls[0][0], 0)
         self.assertEqual(session._pending_selected_plan_target, ("opening", door))
 
-        calls[0][1]()
+        restore_calls[0][1]()
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [door.Name])
 
         FreeCADGui.Selection.clearSelection()
