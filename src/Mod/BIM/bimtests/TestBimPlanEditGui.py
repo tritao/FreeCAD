@@ -28,6 +28,7 @@ import Arch
 import Draft
 import FreeCAD
 import FreeCADGui
+import Part
 from bimcommands import BimPlanSession
 from bimtests.ArchWallGuiTestUtils import (
     ArchWallGuiTestCase,
@@ -243,6 +244,75 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             slab.ViewObject.Selectable,
             "Slabs should stay unselectable even when Plan Edit is in Global XY mode.",
         )
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_keeps_equipment_visible_but_not_selectable(self):
+        """Equipment should appear in plan as passive context without stealing picks."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        box = self.document.addObject("Part::Box", "PlanEquipmentBox")
+        box.Length = 800
+        box.Width = 600
+        box.Height = 900
+        equipment = Arch.makeEquipment(box)
+
+        level.addObject(wall)
+        level.addObject(equipment)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertTrue(wall.ViewObject.Visibility)
+        self.assertTrue(wall.ViewObject.Selectable)
+        self.assertTrue(equipment.ViewObject.Visibility)
+        self.assertFalse(
+            equipment.ViewObject.Selectable,
+            "Equipment should stay visible as context but not intercept wall editing picks.",
+        )
+        self.assertIn("Footprint", equipment.ViewObject.listDisplayModes())
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_keeps_symbolic_equipment_visible_but_not_selectable(self):
+        """Symbolic edge-only equipment should also appear as passive plan context."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        base = self.document.addObject("Part::Feature", "PlanEquipmentSymbol")
+        base.Shape = Part.makeCompound(
+            [
+                Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(600, 0, 0)),
+                Part.makeLine(FreeCAD.Vector(600, 0, 0), FreeCAD.Vector(600, 400, 0)),
+                Part.makeLine(FreeCAD.Vector(600, 400, 0), FreeCAD.Vector(0, 400, 0)),
+                Part.makeLine(FreeCAD.Vector(0, 400, 0), FreeCAD.Vector(0, 0, 0)),
+            ]
+        )
+        equipment = Arch.makeEquipment(base)
+
+        level.addObject(wall)
+        level.addObject(equipment)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        self.assertTrue(equipment.ViewObject.Visibility)
+        self.assertFalse(equipment.ViewObject.Selectable)
+        self.assertGreater(equipment.ViewObject.Proxy.lcoords.point.getNum(), 0)
+        self.assertGreater(equipment.ViewObject.Proxy.lset.numVertices.getNum(), 0)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()

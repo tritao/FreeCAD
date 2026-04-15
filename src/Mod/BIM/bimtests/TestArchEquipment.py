@@ -24,6 +24,7 @@
 
 import Arch
 import FreeCAD as App
+import Part
 from bimtests import TestArchBase
 
 
@@ -43,3 +44,44 @@ class TestArchEquipment(TestArchBase.TestArchBase):
         box.Height = 600
         equip = Arch.makeEquipment(box)
         self.assertTrue(equip, "Arch Equipment failed")
+
+    def test_equipment_get_footprint_uses_plan_slice_and_flattens_to_base(self):
+        box = self.document.addObject("Part::Box", "Box")
+        box.Length = 500
+        box.Width = 2000
+        box.Height = 1200
+
+        equip = Arch.makeEquipment(box)
+        self.document.recompute()
+
+        faces = equip.Proxy.getFootprint(equip)
+        self.assertEqual(1, len(faces))
+        self.assertAlmostEqual(500 * 2000, faces[0].Area, delta=0.1)
+        self.assertAlmostEqual(
+            equip.Shape.BoundBox.ZMin,
+            faces[0].BoundBox.ZMin,
+            delta=0.001,
+        )
+        self.assertAlmostEqual(
+            equip.Shape.BoundBox.ZMin,
+            faces[0].BoundBox.ZMax,
+            delta=0.001,
+        )
+
+    def test_equipment_get_footprint_prefers_authored_plan_symbols(self):
+        box = self.document.addObject("Part::Box", "Box")
+        box.Length = 500
+        box.Width = 2000
+        box.Height = 1200
+
+        plan = self.document.addObject("Part::Feature", "PlanSymbol")
+        plan.Shape = Part.makePlane(900, 450, App.Vector(0, 0, 0))
+
+        equip = Arch.makeEquipment(box)
+        equip.PlanSymbols = [plan]
+        self.document.recompute()
+
+        faces = equip.Proxy.getFootprint(equip)
+        self.assertEqual(1, len(faces))
+        self.assertAlmostEqual(900 * 450, faces[0].Area, delta=0.1)
+        self.assertAlmostEqual(equip.Shape.BoundBox.ZMin, faces[0].BoundBox.ZMin, delta=0.001)

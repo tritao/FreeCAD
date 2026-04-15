@@ -243,6 +243,67 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
             self.assertAlmostEqual(vmin - host_vmin, expected_inset, delta=1e-6)
             self.assertAlmostEqual(host_vmax - vmax, expected_inset, delta=1e-6)
 
+    def test_symbolic_equipment_populates_line_footprint_display_data(self):
+        """Edge-only equipment should populate line footprint data in plan mode."""
+
+        base = self.document.addObject("Part::Feature", "EquipmentSymbol")
+        base.Shape = Part.makeCompound(
+            [
+                Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(600, 0, 0)),
+                Part.makeLine(FreeCAD.Vector(600, 0, 0), FreeCAD.Vector(600, 400, 0)),
+                Part.makeLine(FreeCAD.Vector(600, 400, 0), FreeCAD.Vector(0, 400, 0)),
+                Part.makeLine(FreeCAD.Vector(0, 400, 0), FreeCAD.Vector(0, 0, 0)),
+                Part.makeLine(FreeCAD.Vector(300, 0, 0), FreeCAD.Vector(300, 400, 0)),
+            ]
+        )
+
+        equipment = Arch.makeEquipment(base)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        proxy = equipment.ViewObject.Proxy
+        self.assertIn("Footprint", equipment.ViewObject.listDisplayModes())
+        self.assertTrue(hasattr(proxy, "lcoords"))
+        self.assertTrue(hasattr(proxy, "lset"))
+        self.assertGreater(proxy.lcoords.point.getNum(), 0)
+        self.assertGreater(proxy.lset.numVertices.getNum(), 0)
+
+    def test_equipment_plan_symbols_drive_line_footprint_display_data(self):
+        """Authored 2D plan symbols should override generated equipment line footprints."""
+
+        box = self.document.addObject("Part::Box", "EquipmentBox")
+        box.Length = 800
+        box.Width = 500
+        box.Height = 900
+
+        plan = self.document.addObject("Part::Feature", "EquipmentPlan")
+        plan.Shape = Part.makeCompound(
+            [
+                Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(1000, 0, 0)),
+                Part.makeLine(FreeCAD.Vector(1000, 0, 0), FreeCAD.Vector(1000, 700, 0)),
+                Part.makeLine(FreeCAD.Vector(1000, 700, 0), FreeCAD.Vector(0, 700, 0)),
+                Part.makeLine(FreeCAD.Vector(0, 700, 0), FreeCAD.Vector(0, 0, 0)),
+            ]
+        )
+
+        equipment = Arch.makeEquipment(box)
+        equipment.PlanSymbols = [plan]
+        self.document.recompute()
+        self.pump_gui_events()
+
+        proxy = equipment.ViewObject.Proxy
+        self.assertGreater(proxy.lcoords.point.getNum(), 0)
+        self.assertGreater(proxy.lset.numVertices.getNum(), 0)
+
+        polylines = self._get_line_polylines(proxy)
+        points = [point for polyline in polylines for point in polyline]
+        xs = [point.x for point in points]
+        ys = [point.y for point in points]
+        self.assertAlmostEqual(0.0, min(xs), delta=1e-6)
+        self.assertAlmostEqual(1000.0, max(xs), delta=1e-6)
+        self.assertAlmostEqual(0.0, min(ys), delta=1e-6)
+        self.assertAlmostEqual(700.0, max(ys), delta=1e-6)
+
     def test_window_footprint_ignores_openings_above_cut_height(self):
         """Openings above the cut plane should not emit committed footprint symbols."""
 
