@@ -73,6 +73,7 @@ REFRESH_INTERVAL = 3600  # Min seconds between allowing a new API calls (3600 = 
 SYMBOL_DEFINITIONS_GROUP = "_SymbolDefinitions"
 SYMBOL_LIBRARY_GROUP = "Library"
 ASSET_MANIFEST = "asset.json"
+PREVIEW_MODE_AUTO = "auto"
 PREVIEW_MODE_2D = "2d"
 PREVIEW_MODE_3D = "3d"
 PREVIEW_IMAGE_SIZE = 256
@@ -359,6 +360,7 @@ class BIM_Library_TaskPanel:
 
         from PySide import QtCore, QtGui
 
+        self._qtcore = QtCore
         if target_doc_name:
             self.mainDocName = target_doc_name
         else:
@@ -369,6 +371,7 @@ class BIM_Library_TaskPanel:
         self.instance_definition_roots = []
         self._local_search_index = None
         self._local_search_index_root = None
+        self._auto_preview_mode_state = None
 
         resolved_roots = resolve_library_root_entries()
         if libraryroots is not None:
@@ -442,15 +445,19 @@ class BIM_Library_TaskPanel:
         self.form.previewDetails.hide()
         self.form.comboPreviewMode = QtGui.QComboBox(self.form)
         self.form.comboPreviewMode.setObjectName("comboPreviewMode")
+        self.form.comboPreviewMode.addItem(translate("BIM", "Auto"), PREVIEW_MODE_AUTO)
         self.form.comboPreviewMode.addItem(translate("BIM", "2D"), PREVIEW_MODE_2D)
         self.form.comboPreviewMode.addItem(translate("BIM", "3D"), PREVIEW_MODE_3D)
         self.form.comboPreviewMode.setToolTip(
             translate(
                 "BIM",
-                "Choose whether local asset previews are generated from 2D plan geometry or 3D model geometry.",
+                "Choose how local asset previews are generated. Auto uses 2D in Plan Edit and 3D otherwise.",
             )
         )
         self.form.horizontalLayout_5.insertWidget(1, self.form.comboPreviewMode)
+        self.previewModeTimer = QtCore.QTimer(self.form)
+        self.previewModeTimer.setInterval(750)
+        self.previewModeTimer.timeout.connect(self._refresh_preview_mode_if_needed)
         self._update_library_root_status()
         self._tree_item_kind_role = QtCore.Qt.UserRole + 1
         self._tree_item_loaded_role = QtCore.Qt.UserRole + 2
@@ -567,8 +574,9 @@ class BIM_Library_TaskPanel:
             self.form.framePreview.hide()
             self.form.buttonPreview.setText(translate("BIM", "Preview") + " ▸")
         self.form.buttonPreview.clicked.connect(self.onButtonPreview)
-        self._set_preview_mode(PARAMS.GetString("LibraryPreviewMode", PREVIEW_MODE_3D))
+        self._set_preview_mode(PARAMS.GetString("LibraryPreviewMode", PREVIEW_MODE_AUTO))
         self.form.comboPreviewMode.currentIndexChanged.connect(self.onPreviewModeChanged)
+        self._update_preview_mode_watch()
 
         # update the tree
         self.onCheckOnline()
@@ -602,17 +610,17 @@ class BIM_Library_TaskPanel:
 
     def _coerce_preview_mode(self, mode):
 
-        mode = str(mode or PREVIEW_MODE_3D).strip().lower()
-        if mode in {PREVIEW_MODE_2D, PREVIEW_MODE_3D}:
+        mode = str(mode or PREVIEW_MODE_AUTO).strip().lower()
+        if mode in {PREVIEW_MODE_AUTO, PREVIEW_MODE_2D, PREVIEW_MODE_3D}:
             return mode
-        return PREVIEW_MODE_3D
+        return PREVIEW_MODE_AUTO
 
     def _set_preview_mode(self, mode):
 
         mode = self._coerce_preview_mode(mode)
         index = self.form.comboPreviewMode.findData(mode)
         if index < 0:
-            index = self.form.comboPreviewMode.findData(PREVIEW_MODE_3D)
+            index = self.form.comboPreviewMode.findData(PREVIEW_MODE_AUTO)
         self.form.comboPreviewMode.setCurrentIndex(max(index, 0))
 
     def _get_selected_preview_mode(self):
@@ -621,12 +629,48 @@ class BIM_Library_TaskPanel:
 
     def _get_effective_preview_mode(self):
 
-        return self._get_selected_preview_mode()
+        mode = self._get_selected_preview_mode()
+        if mode != PREVIEW_MODE_AUTO:
+            return mode
+        if self._should_prefer_plan_symbol_preview():
+            return PREVIEW_MODE_2D
+        return PREVIEW_MODE_3D
+
+    def _update_preview_mode_watch(self):
+
+        effective_mode = self._get_effective_preview_mode()
+        can_watch = False
+        try:
+            current_thread = self._qtcore.QThread.currentThread()
+            can_watch = bool(current_thread and current_thread.eventDispatcher())
+        except Exception:
+            can_watch = False
+        if self._get_selected_preview_mode() == PREVIEW_MODE_AUTO:
+            self._auto_preview_mode_state = effective_mode
+            if can_watch and not self.previewModeTimer.isActive():
+                self.previewModeTimer.start()
+            if not can_watch:
+                self.previewModeTimer.stop()
+            return
+        self._auto_preview_mode_state = effective_mode
+        self.previewModeTimer.stop()
+
+    def _refresh_preview_mode_if_needed(self):
+
+        if self._get_selected_preview_mode() != PREVIEW_MODE_AUTO:
+            self.previewModeTimer.stop()
+            return
+        effective_mode = self._get_effective_preview_mode()
+        if effective_mode == self._auto_preview_mode_state:
+            return
+        self._auto_preview_mode_state = effective_mode
+        self._refresh_current_preview()
 
     def onPreviewModeChanged(self, _index=None):
 
         mode = self._get_selected_preview_mode()
         PARAMS.SetString("LibraryPreviewMode", mode)
+        self._update_preview_mode_watch()
         self._refresh_current_preview()
 
     def _apply_configured_library_root_entries(self, entries, online_mode=None):
@@ -1595,6 +1639,7 @@ class BIM_Library_TaskPanel:
     def reject(self):
 
         self._clear_pending_insert_state()
+        self.previewModeTimer.stop()
         FreeCADGui.Control.closeDialog()
         if self.previewDocName in FreeCAD.listDocuments():
             FreeCAD.closeDocument(self.previewDocName)
