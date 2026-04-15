@@ -2157,16 +2157,47 @@ class PlanEditSession:
             selection = FreeCADGui.Selection.getSelection()
         except (ReferenceError, RuntimeError):
             return
-        if self.current_tool == "Select" and len(selection) == 1:
-            selected = selection[0]
-            target_kind = self._get_plan_target_kind_for_object(selected)
-            if target_kind == "wall":
-                self.selected_wall = selected
-            elif target_kind == "opening":
-                self.selected_opening = selected
-            elif target_kind == "symbol":
-                self.selected_symbol = selected
-            self._set_pending_selected_plan_target()
+        if self.current_tool == "Select" and selection:
+            selected_targets = []
+            for selected in selection:
+                target_kind = self._get_plan_target_kind_for_object(selected)
+                if target_kind:
+                    selected_targets.append((target_kind, selected))
+
+            matched_target = None
+            pending_kind, pending_target = self._pending_selected_plan_target or (None, None)
+            if pending_target is not None:
+                for target_kind, selected in selected_targets:
+                    if selected == pending_target and target_kind == pending_kind:
+                        matched_target = (target_kind, selected)
+                        break
+            if matched_target is None:
+                for preferred_kind in ("opening", "symbol", "wall"):
+                    matched_target = next(
+                        (
+                            (target_kind, selected)
+                            for target_kind, selected in selected_targets
+                            if target_kind == preferred_kind
+                        ),
+                        None,
+                    )
+                    if matched_target is not None:
+                        break
+
+            if matched_target is not None:
+                target_kind, selected = matched_target
+                if target_kind == "wall":
+                    self.selected_wall = selected
+                elif target_kind == "opening":
+                    self.selected_opening = selected
+                elif target_kind == "symbol":
+                    self.selected_symbol = selected
+                if len(selection) == 1:
+                    self._set_pending_selected_plan_target()
+                else:
+                    self._set_pending_selected_plan_target(target_kind, selected)
+            else:
+                self._set_pending_selected_plan_target()
         elif self.current_tool == "Select" and not selection:
             pending_kind, pending_target = self._consume_pending_selected_plan_target()
             if pending_kind == "opening":
@@ -2897,7 +2928,9 @@ class PlanEditSession:
                 self.Name = getattr(wall, "Name", "")
                 self.Document = getattr(wall, "Document", None)
                 self.InList = getattr(wall, "InList", [])
-                self.Base = getattr(wall, "Base", None)
+                # Force solver helpers to read the transient preview endpoints
+                # instead of the original baseline object.
+                self.Base = None
                 self.Width = getattr(wall, "Width", None)
                 self.Align = getattr(wall, "Align", "Center")
 
@@ -6298,6 +6331,8 @@ class PlanEditSession:
             return
 
         self._edit_opening_move_anchor = "center"
+        self.current_tool = "Select"
+        self._refresh_task_panel_status()
         self._queue_restore_selected_opening(opening)
 
     def _cancel_opening_handle_point_pick(self):

@@ -1644,6 +1644,12 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             return None
         return helper._get_host_plan_v_bounds(origin, axis_u, axis_v)
 
+    def _get_opening_section_profile(self, shape, cut_z):
+        helper = self._get_plan_geometry("_get_opening_section_profile")
+        if not helper:
+            return None
+        return helper._get_opening_section_profile(shape, cut_z)
+
     def _get_hosted_opening_plan_frame(self, shape, cut_z, base_z):
         helper = self._get_plan_geometry("_get_hosted_opening_plan_frame")
         if not helper:
