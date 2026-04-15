@@ -378,6 +378,50 @@ class TestBimLibraryGui(TestArchBaseGui):
 
             self.assertNotEqual(image_2d, image_3d)
 
+    def test_auto_preview_mode_switches_with_plan_edit_session(self):
+        """Auto preview mode should prefer 2D previews while Plan Edit is active."""
+
+        previous_preview_mode = BimLibrary.PARAMS.GetString("LibraryPreviewMode", "")
+        session = None
+
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                manifest_path = self._write_preview_asset_bundle(tmpdir)
+                panel = BimLibrary.BIM_Library_TaskPanel(target_doc_name=self.document.Name)
+                self.pump_gui_events()
+
+                try:
+                    panel._set_preview_mode(BimLibrary.PREVIEW_MODE_AUTO)
+                    self.pump_gui_events()
+
+                    preview_3d = panel.getThumbnail(manifest_path)
+                    self.assertTrue(preview_3d)
+                    self.assertTrue(os.path.isfile(preview_3d))
+                    self.assertEqual(
+                        BimLibrary.PREVIEW_MODE_3D, panel._get_effective_preview_mode()
+                    )
+
+                    session = BimPlanSession.start_session()
+                    self.assertIsNotNone(session)
+                    self.pump_gui_events()
+
+                    panel._refresh_preview_mode_if_needed()
+                    preview_2d = panel.getThumbnail(manifest_path)
+
+                    self.assertTrue(preview_2d)
+                    self.assertTrue(os.path.isfile(preview_2d))
+                    self.assertEqual(
+                        BimLibrary.PREVIEW_MODE_2D, panel._get_effective_preview_mode()
+                    )
+                    self.assertNotEqual(preview_3d, preview_2d)
+                finally:
+                    panel.reject()
+        finally:
+            if session:
+                session.shutdown(close_dialog=False)
+                self.pump_gui_events()
+            BimLibrary.PARAMS.SetString("LibraryPreviewMode", previous_preview_mode)
+
     def test_configured_library_roots_migrate_legacy_destination(self):
         """Legacy single-root settings should migrate to the multi-root preference."""
 
