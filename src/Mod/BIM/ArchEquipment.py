@@ -131,6 +131,16 @@ class _Equipment(ArchComponent.Component):
                 ),
                 locked=True,
             )
+        if not "PlanSymbols" in pl:
+            obj.addProperty(
+                "App::PropertyLinkList",
+                "PlanSymbols",
+                "Equipment",
+                QT_TRANSLATE_NOOP(
+                    "App::Property", "Optional authored 2D plan symbol objects for this equipment"
+                ),
+                locked=True,
+            )
         obj.setEditorMode("VerticalArea", 2)
         obj.setEditorMode("HorizontalArea", 2)
         obj.setEditorMode("PerimeterLength", 2)
@@ -189,6 +199,68 @@ class _Equipment(ArchComponent.Component):
     def computeAreas(self, obj):
         return
 
+    def _iter_plan_symbol_shapes(self, obj):
+        base_z = None
+        if hasattr(obj, "Shape") and obj.Shape and not obj.Shape.isNull():
+            base_z = obj.Shape.BoundBox.ZMin
+        for plan_obj in getattr(obj, "PlanSymbols", []) or []:
+            shape = getattr(plan_obj, "Shape", None)
+            if not shape or shape.isNull():
+                continue
+            shape = shape.copy()
+            placement = getattr(plan_obj, "Placement", None)
+            if placement:
+                try:
+                    shape.Placement = placement.multiply(shape.Placement)
+                except Exception:
+                    pass
+            if base_z is not None and abs(shape.BoundBox.ZMin - base_z) > 0.001:
+                shape.translate(FreeCAD.Vector(0, 0, base_z - shape.BoundBox.ZMin))
+            yield shape
+
+    def getFootprint(self, obj):
+        """Return plan footprint faces for shape-based equipment.
+
+        Prefer a horizontal slice through the equipment at the standard plan
+        cut height. Shorter equipment is sliced just below its top and then
+        flattened to its base elevation so low furniture still appears in plan.
+        If no slice can be built, fall back to literal bottom faces.
+        """
+
+        from draftutils import params
+
+        symbol_faces = []
+        for shape in self._iter_plan_symbol_shapes(obj):
+            if shape.Faces:
+                symbol_faces.extend(shape.Faces)
+        if symbol_faces:
+            return symbol_faces
+
+        shape = getattr(obj, "Shape", None)
+        if not shape or shape.isNull():
+            return []
+
+        if shape.Solids or shape.Faces:
+            bb = shape.BoundBox
+            if bb.ZLength > 0.001:
+                cut_height = params.get_param_arch("FootprintCutHeight")
+                if cut_height is None:
+                    cut_height = 1000.0
+                cut_z = max(bb.ZMin + 0.001, min(bb.ZMax - 0.001, bb.ZMin + cut_height))
+                faces = ArchComponent.get_horizontal_slice_faces(
+                    shape, cut_z, translate_z=bb.ZMin - cut_z
+                )
+                if faces:
+                    return faces
+
+        faces = []
+        if shape:
+            for face in shape.Faces:
+                if face.normalAt(0, 0).getAngle(FreeCAD.Vector(0, 0, -1)) < 0.01:
+                    if abs(face.CenterOfMass.z - shape.BoundBox.ZMin) < 0.001:
+                        faces.append(face)
+        return faces
+
 
 class _ViewProviderEquipment(ArchComponent.ViewProviderComponent):
     "A View Provider for the Equipment object"
@@ -223,16 +295,167 @@ class _ViewProviderEquipment(ArchComponent.ViewProviderComponent):
         rn.addChild(sep)
         ArchComponent.ViewProviderComponent.attach(self, vobj)
 
+    def createFootprintGroup(self):
+        """Create a mixed fill/line footprint style for equipment."""
+
+        from pivy import coin
+
+        base_color = getattr(self.Object.ViewObject, "ShapeColor", (0.7, 0.7, 0.7))
+        fill_color = tuple((component + 2.0) / 3.0 for component in base_color[:3])
+        line_color = tuple(max(component * 0.35, 0.15) for component in base_color[:3])
+
+        self.fcoords = coin.SoCoordinate3()
+        self.fset = coin.SoIndexedFaceSet()
+        self.lcoords = coin.SoCoordinate3()
+        self.lset = coin.SoLineSet()
+        shape_hints = coin.SoShapeHints()
+        shape_hints.faceType = coin.SoShapeHints.UNKNOWN_FACE_TYPE
+
+        loffset = coin.SoPolygonOffset()
+        loffset.styles = coin.SoPolygonOffsetElement.LINES
+        loffset.factor = -1.0
+        loffset.units = -2.0
+        loffset.on = True
+        lstyle = coin.SoDrawStyle()
+        lstyle.lineWidth = 1.5
+        lmat = coin.SoBaseColor()
+        lmat.rgb = line_color
+
+        sep = coin.SoSeparator()
+        sep.addChild(
+            ArchComponent.ViewProviderComponent.buildFootprintFillSeparator(
+                self,
+                fill_color,
+                0.65,
+                self.fcoords,
+                self.fset,
+                shape_hints=shape_hints,
+            )
+        )
+        line_sep = coin.SoSeparator()
+        line_sep.addChild(loffset)
+        line_sep.addChild(lmat)
+        line_sep.addChild(lstyle)
+        line_sep.addChild(self.lcoords)
+        line_sep.addChild(self.lset)
+        sep.addChild(line_sep)
+        return sep
+
+    def _get_footprint_inverse_placement(self):
+        if not hasattr(self, "Object"):
+            return None
+        placement = getattr(self.Object, "Placement", None)
+        if placement:
+            try:
+                return placement.inverse()
+            except Exception:
+                return None
+        return None
+
+    def _collect_edge_points(self, edge):
+        points = edge.tessellate(1)
+        if points and all(isinstance(point, FreeCAD.Vector) for point in points):
+            return points
+
+        try:
+            points = edge.discretize(Deflection=1.0)
+        except Exception:
+            points = []
+        if points:
+            return [
+                point if isinstance(point, FreeCAD.Vector) else FreeCAD.Vector(point)
+                for point in points
+            ]
+
+        return [vertex.Point for vertex in edge.Vertexes]
+
+    def _points_to_local_footprint_polyline(self, points, base_z, inverse_placement):
+        if len(points) < 2:
+            return None
+        local_points = []
+        for point in points:
+            point = FreeCAD.Vector(point.x, point.y, base_z)
+            if inverse_placement is not None:
+                point = inverse_placement.multVec(point)
+            local_points.append([point.x, point.y, point.z])
+        return local_points
+
+    def _collect_local_footprint_polylines(self):
+        if not hasattr(self, "Object"):
+            return []
+
+        inverse_placement = self._get_footprint_inverse_placement()
+        shape = getattr(self.Object, "Shape", None)
+        base_z = shape.BoundBox.ZMin if shape and not shape.isNull() else 0.0
+        polylines = []
+        faces = self.Object.Proxy.getFootprint(self.Object) or []
+
+        for face in faces:
+            for wire in face.Wires:
+                points = [vertex.Point for vertex in wire.Vertexes]
+                if len(points) < 2:
+                    continue
+                if points[0].distanceToPoint(points[-1]) > 0.001:
+                    points.append(points[0])
+                polyline = self._points_to_local_footprint_polyline(
+                    points, base_z, inverse_placement
+                )
+                if polyline:
+                    polylines.append(polyline)
+
+        if polylines:
+            return polylines
+
+        symbol_shapes = list(self.Object.Proxy._iter_plan_symbol_shapes(self.Object))
+        edge_shapes = symbol_shapes
+        if not edge_shapes and shape and not shape.isNull():
+            edge_shapes = [shape]
+
+        for edge_shape in edge_shapes:
+            for edge in getattr(edge_shape, "Edges", []) or []:
+                polyline = self._points_to_local_footprint_polyline(
+                    self._collect_edge_points(edge),
+                    base_z,
+                    inverse_placement,
+                )
+                if polyline:
+                    polylines.append(polyline)
+        return polylines
+
     def updateData(self, obj, prop):
 
+        ArchComponent.ViewProviderComponent.updateData(self, obj, prop)
         if prop == "SnapPoints":
             if obj.SnapPoints:
                 self.coords.point.setNum(len(obj.SnapPoints))
                 self.coords.point.setValues([[p.x, p.y, p.z] for p in obj.SnapPoints])
             else:
                 self.coords.point.deleteValues(0)
-        else:
-            ArchComponent.ViewProviderComponent.updateData(self, obj, prop)
+
+    def updateFootprint(self):
+        ArchComponent.ViewProviderComponent.updateFootprint(self)
+
+        if not hasattr(self, "lcoords") or not hasattr(self, "lset"):
+            return
+
+        self.lcoords.point.deleteValues(0)
+        self.lset.numVertices.deleteValues(0)
+
+        polylines = self._collect_local_footprint_polylines()
+        if not polylines:
+            return
+
+        verts = []
+        counts = []
+        for polyline in polylines:
+            if len(polyline) < 2:
+                continue
+            verts.extend(polyline)
+            counts.append(len(polyline))
+
+        if verts:
+            self.lcoords.point.setValues(verts)
+            self.lset.numVertices.setValues(0, len(counts), counts)
 
     def setEdit(self, vobj, mode):
         if mode != 0:
