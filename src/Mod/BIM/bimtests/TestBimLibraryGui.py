@@ -593,10 +593,13 @@ class TestBimLibraryGui(TestArchBaseGui):
                 self.assertEqual(2, panel.filemodel.rowCount())
                 self.assertEqual(root_a.replace("\\", "/"), panel.filemodel.item(0).toolTip())
                 self.assertEqual(root_b.replace("\\", "/"), panel.filemodel.item(1).toolTip())
-                self.assertEqual("Parts Library [Configured]", panel.filemodel.item(0).text())
-                self.assertEqual("Team Library [Module]", panel.filemodel.item(1).text())
-                self.assertEqual("Online mode", panel.form.checkOnline.text())
+                self.assertEqual("Parts Library · 1", panel.filemodel.item(0).text())
+                self.assertEqual("Team Library · 1", panel.filemodel.item(1).text())
+                self.assertEqual("Online", panel.form.checkOnline.text())
                 self.assertIn("2 local libraries", panel.form.labelLibraryRootStatus.text())
+                self.assertTrue(panel.form.labelLibraryRootSummary.isHidden())
+                self.assertIn("Configured", panel.form.labelLibraryRootSources.text())
+                self.assertIn("Module", panel.form.labelLibraryRootSources.text())
                 self.assertNotIn(
                     root_a.replace("\\", "/"), panel.form.labelLibraryRootStatus.text()
                 )
@@ -605,6 +608,12 @@ class TestBimLibraryGui(TestArchBaseGui):
                 )
                 self.assertEqual("Parts Library", panel.libraryroots[0].label)
                 self.assertEqual("Team Library", panel.libraryroots[1].label)
+                self.assertTrue(panel.form.tree.isExpanded(panel.filemodel.index(0, 0)))
+                self.assertTrue(panel.form.tree.isExpanded(panel.filemodel.index(1, 0)))
+                self.assertEqual(
+                    "Select an asset to preview and insert",
+                    panel.form.framePreview.text(),
+                )
 
                 search_entries = panel._get_local_search_index()
                 self.assertEqual(
@@ -630,6 +639,31 @@ class TestBimLibraryGui(TestArchBaseGui):
                 self.assertNotIn(root_b.replace("\\", "/"), cleaned_path)
             finally:
                 panel.reject()
+
+    def test_local_library_panel_restores_root_expansion_after_search(self):
+        """The local tree should default-expand library roots and preserve collapsed roots."""
+
+        with tempfile.TemporaryDirectory() as root_a, tempfile.TemporaryDirectory() as root_b:
+            panel = BimLibrary.BIM_Library_TaskPanel.__new__(BimLibrary.BIM_Library_TaskPanel)
+            panel.libraryroots = [
+                BimLibrarySources.LibraryRoot(root_a, BimLibrarySources.LIBRARY_SOURCE_CONFIGURED),
+                BimLibrarySources.LibraryRoot(root_b, BimLibrarySources.LIBRARY_SOURCE_MODULE),
+            ]
+            panel._expanded_tree_paths = set()
+
+            self.assertEqual(
+                {root_a.replace("\\", "/"), root_b.replace("\\", "/")},
+                panel._get_tree_expansion_restore_paths(),
+            )
+
+            panel._remember_tree_expansion_state(root_a, True)
+            panel._remember_tree_expansion_state(root_b, True)
+            panel._remember_tree_expansion_state(root_a, False)
+
+            self.assertEqual(
+                {root_b.replace("\\", "/")},
+                panel._get_tree_expansion_restore_paths(),
+            )
 
     def test_library_panel_refreshes_after_configured_root_changes(self):
         """Saving configured root changes should refresh the active panel immediately."""
@@ -695,9 +729,9 @@ class TestBimLibraryGui(TestArchBaseGui):
                     self.assertEqual(root_b.replace("\\", "/"), panel.librarypath)
                     self.assertEqual(root_b.replace("\\", "/"), panel.librarypaths[0])
                     self.assertNotIn(root_a.replace("\\", "/"), panel.librarypaths)
-                    self.assertIn("Configured", panel.form.labelLibraryRootStatus.text())
+                    self.assertIn("Configured", panel.form.labelLibraryRootSources.text())
                     self.assertIn(
-                        "Team Library [Configured]",
+                        "Team Library · Configured",
                         panel.form.labelLibraryRootStatus.toolTip(),
                     )
                     search_paths = {

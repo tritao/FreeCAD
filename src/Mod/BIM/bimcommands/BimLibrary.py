@@ -371,7 +371,10 @@ class BIM_Library_TaskPanel:
         self.instance_definition_roots = []
         self._local_search_index = None
         self._local_search_index_root = None
+        self._local_root_asset_counts = {}
+        self._local_root_asset_counts_signature = None
         self._auto_preview_mode_state = None
+        self._expanded_tree_paths = set()
 
         resolved_roots = resolve_library_root_entries()
         if libraryroots is not None:
@@ -392,32 +395,57 @@ class BIM_Library_TaskPanel:
         self._set_library_roots(initial_roots)
         self.form = FreeCADGui.PySideUic.loadUi(":/ui/dialogLibrary.ui")
         self.form.setWindowIcon(QtGui.QIcon(":/icons/BIM_Library.svg"))
-        self.form.labelLibraryRootStatus = QtGui.QLabel(self.form)
+        self.form.libraryHeader = QtGui.QFrame(self.form)
+        self.form.libraryHeader.setObjectName("libraryHeader")
+        self.form.libraryHeaderLayout = QtGui.QVBoxLayout(self.form.libraryHeader)
+        self.form.libraryHeaderLayout.setContentsMargins(0, 0, 0, 0)
+        self.form.libraryHeaderLayout.setSpacing(2)
+        self.form.libraryHeaderTopLayout = QtGui.QHBoxLayout()
+        self.form.libraryHeaderTopLayout.setContentsMargins(0, 0, 0, 0)
+        self.form.libraryHeaderTopLayout.setSpacing(4)
+        self.form.labelLibraryRootStatus = QtGui.QLabel(self.form.libraryHeader)
         self.form.labelLibraryRootStatus.setObjectName("labelLibraryRootStatus")
-        self.form.labelLibraryRootStatus.setWordWrap(True)
+        self.form.labelLibraryRootStatus.setWordWrap(False)
         self.form.labelLibraryRootStatus.setTextFormat(QtCore.Qt.RichText)
-        self.form.labelLibraryRootStatus.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
-        self.form.verticalLayout.insertWidget(0, self.form.labelLibraryRootStatus)
-        self.form.buttonManageLibraries = QtGui.QPushButton(self.form)
+        self.form.libraryHeaderTopLayout.addWidget(self.form.labelLibraryRootStatus, 1)
+        self.form.buttonManageLibraries = QtGui.QToolButton(self.form.libraryHeader)
         self.form.buttonManageLibraries.setObjectName("buttonManageLibraries")
-        self.form.buttonManageLibraries.setText(translate("BIM", "Manage libraries..."))
+        self.form.buttonManageLibraries.setAutoRaise(True)
+        self.form.buttonManageLibraries.setText("")
+        self.form.buttonManageLibraries.setIcon(
+            QtGui.QIcon.fromTheme(
+                "preferences-system",
+                QtGui.QIcon(":/icons/preferences-general.svg"),
+            )
+        )
         self.form.buttonManageLibraries.setToolTip(
             translate(
                 "BIM",
                 "Add, remove, reorder, or disable configured local libraries.",
             )
         )
-        self.form.buttonManageLibraries.setFlat(True)
-        self.form.buttonManageLibraries.setAutoDefault(False)
         self.form.buttonManageLibraries.clicked.connect(self.onManageLibraries)
-        self.form.verticalLayout.insertWidget(
-            1, self.form.buttonManageLibraries, 0, QtCore.Qt.AlignRight
+        self.form.libraryHeaderTopLayout.addWidget(
+            self.form.buttonManageLibraries, 0, QtCore.Qt.AlignTop
         )
+        self.form.libraryHeaderLayout.addLayout(self.form.libraryHeaderTopLayout)
+        self.form.labelLibraryRootSummary = QtGui.QLabel(self.form.libraryHeader)
+        self.form.labelLibraryRootSummary.setObjectName("labelLibraryRootSummary")
+        self.form.labelLibraryRootSummary.setWordWrap(True)
+        self.form.labelLibraryRootSummary.setStyleSheet("color: #666;")
+        self.form.libraryHeaderLayout.addWidget(self.form.labelLibraryRootSummary)
+        self.form.labelLibraryRootSources = QtGui.QLabel(self.form.libraryHeader)
+        self.form.labelLibraryRootSources.setObjectName("labelLibraryRootSources")
+        self.form.labelLibraryRootSources.setWordWrap(True)
+        self.form.labelLibraryRootSources.setTextFormat(QtCore.Qt.RichText)
+        self.form.libraryHeaderLayout.addWidget(self.form.labelLibraryRootSources)
+        self.form.verticalLayout.insertWidget(0, self.form.libraryHeader)
         self.form.labelLibraryModeStatus = QtGui.QLabel(self.form)
         self.form.labelLibraryModeStatus.setObjectName("labelLibraryModeStatus")
         self.form.labelLibraryModeStatus.setWordWrap(True)
         self.form.labelLibraryModeStatus.hide()
-        self.form.verticalLayout.insertWidget(2, self.form.labelLibraryModeStatus)
+        self.form.labelLibraryModeStatus.setStyleSheet("color: #666;")
+        self.form.verticalLayout.insertWidget(1, self.form.labelLibraryModeStatus)
         self.form.previewDetails = QtGui.QFrame(self.form)
         self.form.previewDetails.setObjectName("previewDetails")
         self.form.previewDetailsLayout = QtGui.QVBoxLayout(self.form.previewDetails)
@@ -446,8 +474,8 @@ class BIM_Library_TaskPanel:
         self.form.comboPreviewMode = QtGui.QComboBox(self.form)
         self.form.comboPreviewMode.setObjectName("comboPreviewMode")
         self.form.comboPreviewMode.addItem(translate("BIM", "Auto"), PREVIEW_MODE_AUTO)
-        self.form.comboPreviewMode.addItem(translate("BIM", "2D"), PREVIEW_MODE_2D)
-        self.form.comboPreviewMode.addItem(translate("BIM", "3D"), PREVIEW_MODE_3D)
+        self.form.comboPreviewMode.addItem(translate("BIM", "2D plan"), PREVIEW_MODE_2D)
+        self.form.comboPreviewMode.addItem(translate("BIM", "3D model"), PREVIEW_MODE_3D)
         self.form.comboPreviewMode.setToolTip(
             translate(
                 "BIM",
@@ -493,6 +521,7 @@ class BIM_Library_TaskPanel:
         self.modelmode = 0
         self._set_tree_model(self.filemodel)
         self.form.tree.expanded.connect(self.onTreeExpanded)
+        self.form.tree.collapsed.connect(self.onTreeCollapsed)
         self.form.tree.doubleClicked.connect(self.onTreeDoubleClicked)
 
         # Don't show columns for size, file type, and last modified
@@ -504,11 +533,16 @@ class BIM_Library_TaskPanel:
         self.form.tree.hideColumn(2)
         self.form.tree.hideColumn(3)
         self.form.searchBox.textChanged.connect(self.onSearch)
+        self.form.label_2.hide()
         self.form.searchBox.setPlaceholderText(translate("BIM", "Search local assets"))
+        try:
+            self.form.searchBox.setClearButtonEnabled(True)
+        except Exception:
+            pass
         self.form.comboSearch.setToolTip(translate("BIM", "Search external asset websites"))
-        self.form.comboSearch.setMinimumContentsLength(10)
+        self.form.comboSearch.setMinimumContentsLength(6)
         self.form.comboSearch.setSizeAdjustPolicy(QtGui.QComboBox.AdjustToContents)
-        self.form.comboSearch.setMaximumWidth(140)
+        self.form.comboSearch.setMaximumWidth(110)
 
         # external search
         sites = {
@@ -530,14 +564,14 @@ class BIM_Library_TaskPanel:
                 "https://grabcad.com/library?softwares=step-slash-iges&query=",
             ],
         }
-        self.form.comboSearch.setItemText(0, translate("BIM", "Search Web"))
+        self.form.comboSearch.setItemText(0, translate("BIM", "Web"))
         for k, v in sites.items():
             self.form.comboSearch.addItem(QtGui.QIcon(":/icons/" + v[0]), k, v[1])
         self.form.comboSearch.currentIndexChanged.connect(self.onExternalSearch)
 
         # retrieve preferences
         self.form.checkOnline.toggled.connect(self.onCheckOnline)
-        self.form.checkOnline.setText(translate("BIM", "Online mode"))
+        self.form.checkOnline.setText(translate("BIM", "Online"))
         self.form.checkOnline.setToolTip(
             translate(
                 "BIM",
@@ -552,7 +586,7 @@ class BIM_Library_TaskPanel:
             initial_online = True
         self.form.checkOnline.setChecked(initial_online)
         self.form.checkFCStdOnly.toggled.connect(self.onCheckFCStdOnly)
-        self.form.checkFCStdOnly.setText(translate("BIM", "Alternative formats"))
+        self.form.checkFCStdOnly.setText(translate("BIM", "Other formats"))
         self.form.checkFCStdOnly.setToolTip(
             translate(
                 "BIM",
@@ -577,6 +611,7 @@ class BIM_Library_TaskPanel:
         self._set_preview_mode(PARAMS.GetString("LibraryPreviewMode", PREVIEW_MODE_AUTO))
         self.form.comboPreviewMode.currentIndexChanged.connect(self.onPreviewModeChanged)
         self._update_preview_mode_watch()
+        self._set_empty_preview_state()
 
         # update the tree
         self.onCheckOnline()
@@ -591,6 +626,48 @@ class BIM_Library_TaskPanel:
             if self.libraryroots
             else BimLibrarySources.LIBRARY_SOURCE_NONE
         )
+
+    def _get_asset_count_label(self, count):
+
+        if count == 1:
+            return translate("BIM", "1 asset")
+        return translate("BIM", "{} assets").format(count)
+
+    def _count_browsable_assets(self, folder):
+
+        try:
+            names = os.listdir(folder)
+        except OSError:
+            return 0
+
+        count = 0
+        for name in names:
+            if name.startswith("."):
+                continue
+            path = os.path.join(folder, name)
+            if os.path.isdir(path):
+                if os.path.isfile(os.path.join(path, ASSET_MANIFEST)):
+                    count += 1
+                else:
+                    count += self._count_browsable_assets(path)
+                continue
+            if os.path.isfile(path) and self._is_library_file_candidate(name):
+                count += 1
+        return count
+
+    def _get_local_library_root_asset_counts(self):
+
+        signature = self._get_local_library_root_signature()
+        if self._local_root_asset_counts_signature != signature:
+            self._local_root_asset_counts = {
+                entry.path: self._count_browsable_assets(entry.path) for entry in self.libraryroots
+            }
+            self._local_root_asset_counts_signature = signature
+        return self._local_root_asset_counts
+
+    def _get_local_library_root_asset_count(self, root_path):
+
+        return self._get_local_library_root_asset_counts().get(root_path, 0)
 
     def _refresh_library_browser(self, online_mode=None):
 
@@ -724,26 +801,49 @@ class BIM_Library_TaskPanel:
 
     def _get_library_root_tree_label(self, entry):
 
-        label = self._get_library_root_label(entry)
-        source_label = self._get_library_source_label(getattr(entry, "source", None))
-        if label and source_label:
-            return "{} [{}]".format(label, source_label)
-        return label or source_label
+        return self._get_library_root_label(entry)
+
+    def _get_library_root_tree_text(self, entry):
+
+        label = self._get_library_root_tree_label(entry) or os.path.basename(entry.path)
+        count = self._get_local_library_root_asset_count(getattr(entry, "path", ""))
+        return "{} · {}".format(label, count)
 
     def _get_local_library_summary(self):
 
         count = len(self.libraryroots)
         if count == 1:
-            return self._get_library_root_tree_label(self.libraryroots[0])
+            return translate("BIM", "1 local library")
         if count > 1:
             return translate("BIM", "{} local libraries").format(count)
         return ""
 
+    def _get_local_library_detail_summary(self):
+
+        if len(self.libraryroots) == 1:
+            return self._get_library_root_tree_text(self.libraryroots[0])
+        return ""
+
+    def _get_local_library_source_badges(self):
+
+        source_labels = []
+        for entry in self.libraryroots:
+            source_label = self._get_library_source_label(entry.source)
+            if source_label not in source_labels:
+                source_labels.append(source_label)
+        return source_labels
+
     def _get_library_root_tooltip(self):
 
         return "\n\n".join(
-            "{}\n{}".format(
-                self._get_library_root_tree_label(entry),
+            "{}\n{}\n{}".format(
+                "{} · {}".format(
+                    self._get_library_root_label(entry),
+                    self._get_library_source_label(getattr(entry, "source", None)),
+                ),
+                self._get_asset_count_label(
+                    self._get_local_library_root_asset_count(getattr(entry, "path", ""))
+                ),
                 entry.path,
             )
             for entry in self.libraryroots
@@ -756,32 +856,29 @@ class BIM_Library_TaskPanel:
     def _update_library_root_status(self):
 
         if self.libraryroots:
-            count = len(self.libraryroots)
-            is_single = count == 1
             summary = self._get_local_library_summary()
             tooltip = self._get_library_root_tooltip()
-            title = translate("BIM", "Local library") if is_single else summary
-            text = "<b>{}</b>".format(html.escape(title))
-            if is_single and summary:
-                text += " · {}".format(html.escape(summary))
-            elif count > 1:
-                source_labels = []
-                for entry in self.libraryroots:
-                    source_label = self._get_library_source_label(entry.source)
-                    if source_label not in source_labels:
-                        source_labels.append(source_label)
-                if source_labels:
-                    text += " {}".format(
-                        " ".join(self._format_status_badge(label) for label in source_labels)
-                    )
+            detail = self._get_local_library_detail_summary()
+            badges = self._get_local_library_source_badges()
+            text = "<b>{}</b>".format(html.escape(summary))
         else:
             tooltip = translate(
                 "BIM",
                 "Set a library folder explicitly or mount a marked module library root.",
             )
+            detail = ""
+            badges = []
             text = "<b>{}</b>".format(html.escape(translate("BIM", "No local library detected")))
         self.form.labelLibraryRootStatus.setText(text)
         self.form.labelLibraryRootStatus.setToolTip(tooltip)
+        self.form.labelLibraryRootSummary.setText(detail)
+        self.form.labelLibraryRootSummary.setToolTip(tooltip)
+        self.form.labelLibraryRootSummary.setVisible(bool(detail))
+        self.form.labelLibraryRootSources.setText(
+            " ".join(self._format_status_badge(label) for label in badges)
+        )
+        self.form.labelLibraryRootSources.setToolTip(tooltip)
+        self.form.labelLibraryRootSources.setVisible(bool(badges))
 
     def _update_library_mode_status(self, online_mode):
 
@@ -896,13 +993,99 @@ class BIM_Library_TaskPanel:
         for entry in self.libraryroots:
             label = self._make_unique_entry_label(
                 used_labels,
-                self._get_library_root_tree_label(entry),
+                self._get_library_root_tree_text(entry),
                 self._get_library_root_label(entry) or os.path.basename(entry.path),
             )
             used_labels[label] = entry.path
             root_item = self._create_tree_folder_item(label, entry.path)
             self.filemodel.appendRow(root_item)
             self._populate_local_folder_item(root_item, entry.path)
+
+    def _capture_expanded_tree_paths(self):
+
+        expanded = set()
+        found_local_folder = [False]
+
+        def collect(parent_index=None):
+            parent_index = parent_index or self._qtcore.QModelIndex()
+            for row in range(self.filemodel.rowCount(parent_index)):
+                index = self.filemodel.index(row, 0, parent_index)
+                item = self.filemodel.itemFromIndex(index)
+                if not item or item.data(self._tree_item_kind_role) != "folder":
+                    continue
+                item_path = BimLibrarySources.normalize_library_root(item.toolTip())
+                if self._get_matching_library_root(item_path):
+                    found_local_folder[0] = True
+                if self.form.tree.isExpanded(index):
+                    if self._get_matching_library_root(item_path):
+                        expanded.add(item_path)
+                    collect(index)
+
+        collect()
+        if found_local_folder[0]:
+            self._expanded_tree_paths = expanded
+
+    def _get_default_expanded_tree_paths(self):
+
+        if len(self.libraryroots) > 1:
+            return {entry.path for entry in self.libraryroots}
+        return set()
+
+    def _get_tree_expansion_restore_paths(self):
+
+        if self._expanded_tree_paths:
+            return set(self._expanded_tree_paths)
+        return self._get_default_expanded_tree_paths()
+
+    def _remember_tree_expansion_state(self, path, expanded):
+
+        path = BimLibrarySources.normalize_library_root(path)
+        if not path:
+            return
+        if expanded:
+            self._expanded_tree_paths.add(path)
+        else:
+            self._expanded_tree_paths.discard(path)
+
+    def _expand_tree_item_path(self, item, target_path):
+
+        if not item or item.data(self._tree_item_kind_role) != "folder":
+            return False
+
+        item_path = BimLibrarySources.normalize_library_root(item.toolTip())
+        target_path = BimLibrarySources.normalize_library_root(target_path)
+        if not item_path or not target_path:
+            return False
+
+        item_index = self.filemodel.indexFromItem(item)
+        if item_path == target_path:
+            self.form.tree.setExpanded(item_index, True)
+            return True
+
+        if not target_path.startswith(item_path.rstrip("/") + "/"):
+            return False
+
+        if not item.data(self._tree_item_loaded_role):
+            self._populate_local_folder_item(item, item_path)
+        self.form.tree.setExpanded(item_index, True)
+        for row in range(item.rowCount()):
+            if self._expand_tree_item_path(item.child(row), target_path):
+                return True
+        return False
+
+    def _restore_tree_expansion_state(self):
+
+        if self.form.checkOnline.isChecked() or self.form.searchBox.text():
+            return
+
+        target_paths = self._get_tree_expansion_restore_paths()
+        if not target_paths:
+            return
+
+        for path in sorted(target_paths, key=lambda value: value.count("/")):
+            for row in range(self.filemodel.rowCount()):
+                if self._expand_tree_item_path(self.filemodel.item(row), path):
+                    break
 
     def onTreeExpanded(self, index):
 
@@ -915,9 +1098,19 @@ class BIM_Library_TaskPanel:
             return
         if item.data(self._tree_item_kind_role) != "folder":
             return
+        self._remember_tree_expansion_state(item.toolTip(), True)
         if item.data(self._tree_item_loaded_role):
             return
         self._populate_local_folder_item(item, item.toolTip())
+
+    def onTreeCollapsed(self, index):
+
+        if self.form.checkOnline.isChecked() or self.form.searchBox.text():
+            return
+        item = self.filemodel.itemFromIndex(index)
+        if not item or item.data(self._tree_item_kind_role) != "folder":
+            return
+        self._remember_tree_expansion_state(item.toolTip(), False)
 
     def onTreeDoubleClicked(self, index):
 
@@ -952,15 +1145,40 @@ class BIM_Library_TaskPanel:
             return ""
         return item.toolTip()
 
+    def _set_empty_preview_state(self, message=None):
+
+        message = message or translate("BIM", "Select an asset to preview and insert")
+        self.form.framePreview.clear()
+        self.form.framePreview.setText(message)
+        self.form.previewTitle.clear()
+        self.form.previewMeta.clear()
+        self.form.previewSummary.clear()
+        self.form.previewSummary.hide()
+        self.form.previewDetails.hide()
+
+    def _sync_preview_to_tree_selection(self):
+
+        raw_path = self._get_current_tree_raw_path()
+        if not raw_path:
+            self._set_empty_preview_state()
+            return
+        self._update_preview_for_raw_path(raw_path)
+
     def _refresh_current_preview(self):
 
         raw_path = self._get_current_tree_raw_path()
         if raw_path:
             self._update_preview_for_raw_path(raw_path)
+        else:
+            self._set_empty_preview_state()
 
     def _update_preview_for_raw_path(self, raw_path):
 
         from PySide import QtGui
+
+        if not raw_path:
+            self._set_empty_preview_state()
+            return
 
         metadata = self._get_preview_metadata(raw_path)
         thumb = self.getThumbnail(raw_path)
@@ -969,18 +1187,29 @@ class BIM_Library_TaskPanel:
         else:
             px = QtGui.QPixmap()
         self.form.framePreview.setPixmap(px)
-        self.form.framePreview.setText(
-            "" if not px.isNull() else translate("BIM", "No preview available")
-        )
+        if px.isNull():
+            if os.path.isdir(raw_path):
+                self.form.framePreview.setText(
+                    translate("BIM", "Select an asset to preview and insert")
+                )
+            else:
+                self.form.framePreview.setText(translate("BIM", "No preview available"))
+        else:
+            self.form.framePreview.setText("")
         self._update_preview_details(metadata)
 
     def onItemSelected(self, selected, deselected):
         """Generates and displays needed previews"""
 
-        if not selected:
+        if not selected or not selected[0].indexes():
+            self._set_empty_preview_state()
             return
         index = selected[0].indexes()[0]
-        raw_path = self.filemodel.itemFromIndex(index).toolTip()
+        item = self.filemodel.itemFromIndex(index)
+        if not item:
+            self._set_empty_preview_state()
+            return
+        raw_path = item.toolTip()
         self._update_preview_for_raw_path(raw_path)
 
         if False:
@@ -1139,6 +1368,7 @@ class BIM_Library_TaskPanel:
                 self.filemodel.appendRow(it)
 
         query = text.lower().strip()
+        self._capture_expanded_tree_paths()
         self._set_tree_model(self.filemodel)
         self.filemodel.clear()
         if self.form.checkOnline.isChecked():
@@ -1153,6 +1383,7 @@ class BIM_Library_TaskPanel:
                     entry.get("display_label", entry["label"]), entry["path"], entry["search_text"]
                 )
         self.modelmode = 0
+        self._sync_preview_to_tree_selection()
 
     def getFilters(self):
 
@@ -1205,9 +1436,12 @@ class BIM_Library_TaskPanel:
 
     def setFileModel(self):
 
+        self._capture_expanded_tree_paths()
         self._set_tree_model(self.filemodel)
         self._populate_local_root_model()
         self.modelmode = 0
+        self._restore_tree_expansion_state()
+        self._sync_preview_to_tree_selection()
 
     def setOnlineModel(self):
 
@@ -1234,11 +1468,13 @@ class BIM_Library_TaskPanel:
                     else:
                         it.setIcon(QtGui.QIcon(":/icons/Part_document.svg"))
 
+        self._capture_expanded_tree_paths()
         self._set_tree_model(self.filemodel)
         self.filemodel.clear()
         d = self.getOfflineLib()
         addItems(self.filemodel, d, ":github")
         self.modelmode = 0
+        self._sync_preview_to_tree_selection()
 
     def getOfflineLib(self, structured=False):
 
@@ -1336,7 +1572,7 @@ class BIM_Library_TaskPanel:
                 "category": "",
                 "id": "",
                 "tags": [],
-                "summary": translate("BIM", "Folder"),
+                "summary": translate("BIM", "Open a folder or select an asset to preview."),
                 "thumbnail": None,
             }
         label = os.path.splitext(os.path.basename(path))[0]
@@ -1354,7 +1590,7 @@ class BIM_Library_TaskPanel:
         title = html.escape(metadata.get("label", "") or translate("BIM", "No selection"))
         self.form.previewTitle.setText(f"<b>{title}</b>")
 
-        meta_parts = []
+        meta_parts = list(metadata.get("meta_parts") or [])
         if metadata.get("category"):
             meta_parts.append(html.escape(metadata["category"]))
         if metadata.get("id"):
@@ -1439,6 +1675,8 @@ class BIM_Library_TaskPanel:
 
         self._local_search_index = None
         self._local_search_index_root = None
+        self._local_root_asset_counts = {}
+        self._local_root_asset_counts_signature = None
 
     def _is_library_file_candidate(self, name):
 
@@ -3032,7 +3270,12 @@ class BIM_Library_TaskPanel:
             PARAMS.SetBool("LibraryPreview", False)
         else:
             self.form.framePreview.show()
-            if self.form.previewTitle.text() or self.form.previewMeta.text():
+            self._sync_preview_to_tree_selection()
+            if (
+                self.form.previewTitle.text()
+                or self.form.previewMeta.text()
+                or self.form.previewSummary.text()
+            ):
                 self.form.previewDetails.show()
             self.form.buttonPreview.setText(translate("BIM", "Preview") + " ▼")
             PARAMS.SetBool("LibraryPreview", True)
