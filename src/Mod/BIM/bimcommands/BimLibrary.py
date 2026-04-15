@@ -1865,7 +1865,11 @@ class BIM_Library_TaskPanel:
 
         self._clear_pending_insert_state()
         self.previewModeTimer.stop()
-        FreeCADGui.Control.closeDialog()
+        try:
+            if FreeCADGui.Control.activeDialog():
+                FreeCADGui.Control.closeDialog()
+        except Exception:
+            pass
         if self.previewDocName in FreeCAD.listDocuments():
             FreeCAD.closeDocument(self.previewDocName)
         doc = self._get_main_document()
