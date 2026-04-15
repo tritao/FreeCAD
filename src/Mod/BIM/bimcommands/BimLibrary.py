@@ -104,6 +104,46 @@ def _get_configured_library_root():
     return ""
 
 
+def _normalize_asset_kind(kind):
+
+    key = "".join(char.lower() for char in str(kind or "") if char.isalnum())
+    if key in {"equipment", "furniture", "furnishingelement", "furnishing"}:
+        return "equipment"
+    return key
+
+
+def _coerce_asset_vector(value):
+
+    if isinstance(value, FreeCAD.Vector):
+        return FreeCAD.Vector(value.x, value.y, value.z)
+    if isinstance(value, dict):
+        try:
+            return FreeCAD.Vector(
+                float(value.get("x", 0.0)),
+                float(value.get("y", 0.0)),
+                float(value.get("z", 0.0)),
+            )
+        except Exception:
+            return None
+    if isinstance(value, (list, tuple)) and len(value) >= 2:
+        try:
+            return FreeCAD.Vector(
+                float(value[0]),
+                float(value[1]),
+                float(value[2]) if len(value) > 2 else 0.0,
+            )
+        except Exception:
+            return None
+    if isinstance(value, str):
+        try:
+            parts = [float(part.strip()) for part in value.split(",")]
+        except Exception:
+            return None
+        if len(parts) >= 2:
+            return FreeCAD.Vector(parts[0], parts[1], parts[2] if len(parts) > 2 else 0.0)
+    return None
+
+
 def _iter_module_search_roots():
 
     seen = set()
@@ -1000,6 +1040,47 @@ class BIM_Library_TaskPanel:
             return representation.get("root") or representation.get("object")
         return None
 
+    def _get_asset_plan_contract(self, manifest, plan_representation=None):
+
+        plan_data = manifest.get("plan", {})
+        if not isinstance(plan_data, dict):
+            plan_data = {}
+        rep_data = plan_representation if isinstance(plan_representation, dict) else {}
+
+        anchor = _coerce_asset_vector(
+            rep_data.get("anchor")
+            or rep_data.get("insertion")
+            or plan_data.get("anchor")
+            or plan_data.get("insertion")
+        )
+        facing = _coerce_asset_vector(
+            rep_data.get("facing")
+            or rep_data.get("forward")
+            or plan_data.get("facing")
+            or plan_data.get("forward")
+        )
+        return anchor, facing
+
+    def _get_asset_kind(self, manifest):
+
+        kind = _normalize_asset_kind(manifest.get("kind") or manifest.get("type"))
+        if kind:
+            return kind
+
+        category = str(manifest.get("category", "") or "").strip().lower()
+        if category.startswith("furniture/"):
+            return "equipment"
+
+        tags = manifest.get("tags", [])
+        if isinstance(tags, (list, tuple, set)):
+            normalized_tags = {_normalize_asset_kind(tag) for tag in tags}
+            if "equipment" in normalized_tags:
+                return "equipment"
+            if "furniture" in normalized_tags:
+                return "equipment"
+
+        return ""
+
     def _build_asset_descriptor(self, path):
 
         manifest_path = self._get_asset_manifest_path(path)
@@ -1008,10 +1089,13 @@ class BIM_Library_TaskPanel:
             return {
                 "label": label,
                 "source_path": self.cleanPath(path),
+                "kind": "",
                 "model_path": path,
                 "model_root": None,
                 "plan_path": None,
                 "plan_root": None,
+                "plan_anchor": None,
+                "plan_facing": None,
             }
 
         manifest = self._load_asset_manifest(manifest_path)
@@ -1021,14 +1105,18 @@ class BIM_Library_TaskPanel:
             "plan2d",
             aliases=("plan", "symbol2d", "footprint"),
         )
+        plan_anchor, plan_facing = self._get_asset_plan_contract(manifest, plan_data)
         model_path = self._get_asset_representation_path(manifest_path, model_data) or path
         return {
             "label": self._get_asset_label(manifest_path),
             "source_path": manifest.get("id") or self.cleanPath(manifest_path),
+            "kind": self._get_asset_kind(manifest),
             "model_path": model_path,
             "model_root": self._get_asset_representation_root_name(model_data),
             "plan_path": self._get_asset_representation_path(manifest_path, plan_data),
             "plan_root": self._get_asset_representation_root_name(plan_data),
+            "plan_anchor": plan_anchor,
+            "plan_facing": plan_facing,
         }
 
     def _get_asset_model_path(self, manifest_path):
@@ -1362,6 +1450,24 @@ class BIM_Library_TaskPanel:
             except Exception:
                 pass
 
+    def _ensure_active_document(self, doc):
+
+        if not doc:
+            return
+        try:
+            if getattr(FreeCAD.ActiveDocument, "Name", None) != doc.Name:
+                FreeCAD.setActiveDocument(doc.Name)
+        except Exception:
+            pass
+        if not FreeCAD.GuiUp:
+            return
+        try:
+            gui_doc = FreeCADGui.getDocument(doc.Name)
+            if gui_doc:
+                FreeCADGui.ActiveDocument = gui_doc
+        except Exception:
+            pass
+
     def _ensure_symbol_definitions_group(self, doc):
 
         group = doc.getObject(SYMBOL_DEFINITIONS_GROUP)
@@ -1405,6 +1511,21 @@ class BIM_Library_TaskPanel:
                     parent.removeObject(obj)
                 except Exception:
                     pass
+
+    def _retarget_definition_links(self, doc, old_target, new_target):
+
+        if not doc or not old_target or not new_target or old_target == new_target:
+            return
+        for obj in getattr(doc, "Objects", []) or []:
+            if getattr(obj, "TypeId", "") != "App::Link":
+                continue
+            linked = getattr(obj, "LinkedObject", None)
+            if linked != old_target:
+                continue
+            try:
+                obj.setLink(new_target)
+            except Exception:
+                pass
 
     def _get_imported_root_objects(self, added_objects):
 
@@ -1582,6 +1703,15 @@ class BIM_Library_TaskPanel:
             and getattr(obj, "LibraryDefinitionRole", "instance") in {"", "instance"}
         ]
 
+    def _get_symbol_plan_roots(self, asset_group):
+
+        return [
+            obj
+            for obj in list(getattr(asset_group, "Group", []) or [])
+            if getattr(obj, "IsLibraryDefinition", False)
+            and getattr(obj, "LibraryDefinitionRole", "") == "plan2d"
+        ]
+
     def _ensure_equipment_plan_symbol_property(self, obj):
 
         if self._get_symbol_object_type(obj) != "Equipment":
@@ -1599,26 +1729,107 @@ class BIM_Library_TaskPanel:
 
     def _attach_plan_symbol_roots(self, definition_roots, plan_roots):
 
+        changed = False
         if not plan_roots:
-            return
+            return changed
         for definition_obj in definition_roots:
             if not self._ensure_equipment_plan_symbol_property(definition_obj):
                 continue
-            definition_obj.PlanSymbols = [
-                plan_root for plan_root in plan_roots if plan_root != definition_obj
-            ]
+            plan_symbols = [plan_root for plan_root in plan_roots if plan_root != definition_obj]
+            current_symbols = list(getattr(definition_obj, "PlanSymbols", []) or [])
+            if current_symbols == plan_symbols:
+                continue
+            definition_obj.PlanSymbols = plan_symbols
+            changed = True
+        return changed
+
+    def _apply_asset_plan_contract(self, definition_obj, asset_descriptor):
+
+        if not definition_obj or asset_descriptor.get("kind") != "equipment":
+            return False
+        anchor = asset_descriptor.get("plan_anchor")
+        facing = asset_descriptor.get("plan_facing")
+        if anchor is None and facing is None:
+            return False
+        try:
+            import ArchEquipment
+
+            return bool(
+                ArchEquipment.apply_plan_contract(definition_obj, anchor=anchor, facing=facing)
+            )
+        except Exception:
+            return False
+
+    def _apply_asset_plan_contract_to_roots(self, definition_roots, asset_descriptor):
+
+        changed = False
+        for definition_obj in definition_roots or []:
+            changed = self._apply_asset_plan_contract(definition_obj, asset_descriptor) or changed
+        return changed
+
+    def _normalize_definition_roots(self, doc, asset_group, asset_descriptor, root_objects):
+
+        if asset_descriptor.get("kind") != "equipment":
+            return root_objects
+        if not root_objects:
+            return root_objects
+
+        import Arch
+
+        self._ensure_active_document(doc)
+        normalized_roots = []
+        source_path = getattr(asset_group, "LibrarySourcePath", "")
+        multiple_roots = len(root_objects) > 1
+
+        for root_obj in root_objects:
+            if self._get_symbol_object_type(root_obj) == "Equipment":
+                self._apply_asset_plan_contract(root_obj, asset_descriptor)
+                normalized_roots.append(root_obj)
+                continue
+
+            self._ensure_library_metadata(root_obj, source_path, role="source")
+            self._remove_from_parent_groups(root_obj, keep={asset_group})
+            try:
+                if root_obj not in (getattr(asset_group, "Group", []) or []):
+                    asset_group.addObject(root_obj)
+            except Exception:
+                pass
+            self._set_definition_view_state(root_obj)
+
+            if multiple_roots:
+                component_label = getattr(root_obj, "Label", None) or getattr(root_obj, "Name", "")
+                equipment_label = "{} {}".format(asset_descriptor["label"], component_label).strip()
+            else:
+                equipment_label = asset_descriptor["label"]
+
+            equipment = Arch.makeEquipment(root_obj, name=equipment_label)
+            self._ensure_library_metadata(equipment, source_path, role="instance")
+            self._apply_asset_plan_contract(equipment, asset_descriptor)
+            self._remove_from_parent_groups(equipment, keep={asset_group})
+            try:
+                if equipment not in (getattr(asset_group, "Group", []) or []):
+                    asset_group.addObject(equipment)
+            except Exception:
+                pass
+            self._set_definition_view_state(equipment)
+            self._retarget_definition_links(doc, root_obj, equipment)
+            normalized_roots.append(equipment)
+
+        return normalized_roots
 
     def _create_shape_symbol_definitions(self, doc, asset_group, asset_descriptor):
 
         import Arch
         import Part
 
+        self._ensure_active_document(doc)
         obj = Arch.makeEquipment()
         obj.Shape = Part.read(asset_descriptor["model_path"])
         obj.Label = asset_descriptor["label"]
         self._ensure_library_metadata(
             obj, getattr(asset_group, "LibrarySourcePath", ""), role="instance"
         )
+        self._apply_asset_plan_contract(obj, asset_descriptor)
         self._remove_from_parent_groups(obj)
         asset_group.addObject(obj)
         self._set_definition_view_state(obj)
@@ -1697,6 +1908,9 @@ class BIM_Library_TaskPanel:
         for obj in added_objects:
             self._set_definition_view_state(obj)
 
+        root_objects = self._normalize_definition_roots(
+            doc, asset_group, asset_descriptor, root_objects
+        )
         for obj in root_objects:
             self._ensure_library_metadata(
                 obj, getattr(asset_group, "LibrarySourcePath", ""), role="instance"
@@ -1728,6 +1942,19 @@ class BIM_Library_TaskPanel:
         asset_group = self._ensure_symbol_asset_group(doc, source_path, asset_descriptor["label"])
         roots = self._get_symbol_definition_roots(asset_group)
         if roots:
+            initial_root_names = tuple(obj.Name for obj in roots)
+            roots = self._normalize_definition_roots(doc, asset_group, asset_descriptor, roots)
+            roots_changed = tuple(obj.Name for obj in roots) != initial_root_names
+            plan_roots = self._get_symbol_plan_roots(asset_group)
+            plan_symbols_changed = False
+            if plan_roots:
+                plan_symbols_changed = self._attach_plan_symbol_roots(roots, plan_roots)
+            plan_contract_changed = self._apply_asset_plan_contract_to_roots(
+                roots, asset_descriptor
+            )
+            self._set_definition_view_state(asset_group)
+            if roots_changed or plan_symbols_changed or plan_contract_changed:
+                doc.recompute()
             return roots
 
         ext = os.path.splitext(asset_descriptor["model_path"].lower())[1]
@@ -1737,16 +1964,48 @@ class BIM_Library_TaskPanel:
             return self._create_fcstd_symbol_definitions(doc, asset_group, asset_descriptor)
         return []
 
-    def _get_object_preview_shapes(self, obj):
+    def _compose_preview_placement(self, parent_placement=None, local_placement=None):
+
+        if parent_placement is None:
+            parent_placement = FreeCAD.Placement()
+        if local_placement is None:
+            return FreeCAD.Placement(parent_placement)
+        try:
+            return parent_placement.multiply(local_placement)
+        except Exception:
+            try:
+                return FreeCAD.Placement(local_placement)
+            except Exception:
+                return FreeCAD.Placement(parent_placement)
+
+    def _copy_preview_shape(self, shape, placement=None):
+
+        if not shape or shape.isNull():
+            return None
+        preview_shape = shape.copy()
+        if placement is None:
+            return preview_shape
+        try:
+            preview_shape.Placement = placement.multiply(preview_shape.Placement)
+        except Exception:
+            pass
+        return preview_shape
+
+    def _get_object_preview_shapes(self, obj, parent_placement=None):
 
         shapes = []
+        placement = self._compose_preview_placement(
+            parent_placement, getattr(obj, "Placement", None)
+        )
         shape = getattr(obj, "Shape", None)
         if shape and not shape.isNull():
-            shapes.append(shape.copy())
+            preview_shape = self._copy_preview_shape(shape, placement=placement)
+            if preview_shape and not preview_shape.isNull():
+                shapes.append(preview_shape)
             return shapes
 
         for child in getattr(obj, "OutList", []) or []:
-            shapes.extend(self._get_object_preview_shapes(child))
+            shapes.extend(self._get_object_preview_shapes(child, parent_placement=placement))
         return shapes
 
     def _should_prefer_plan_symbol_preview(self):
@@ -1760,6 +2019,15 @@ class BIM_Library_TaskPanel:
         return bool(session and not getattr(session, "_tearing_down", False))
 
     def _get_object_plan_preview_shapes(self, obj):
+
+        try:
+            import ArchEquipment
+
+            shapes = list(ArchEquipment.get_plan_representation_shapes(obj))
+            if shapes:
+                return shapes
+        except Exception:
+            pass
 
         shapes = []
         for plan_obj in getattr(obj, "PlanSymbols", []) or []:
@@ -1966,7 +2234,7 @@ class BIM_Library_TaskPanel:
         w.comboOrigin = c
         c.addItems(
             [
-                translate("BIM", "Origin"),
+                translate("BIM", "Asset anchor / origin"),
                 translate("BIM", "Top left"),
                 translate("BIM", "Top center"),
                 translate("BIM", "Top right"),
@@ -2019,12 +2287,25 @@ class BIM_Library_TaskPanel:
                 obj.Label = self.name
         self._clear_pending_insert_state()
 
+    def _get_instance_definition_anchor(self):
+
+        definition_roots = list(getattr(self, "instance_definition_roots", []) or [])
+        if not definition_roots:
+            return FreeCAD.Vector()
+        try:
+            import ArchEquipment
+
+            return ArchEquipment.get_plan_anchor(definition_roots[0])
+        except Exception:
+            return FreeCAD.Vector()
+
     def getDelta(self):
 
         d = FreeCAD.Vector(-self.shape.BoundBox.Center.x, -self.shape.BoundBox.Center.y, 0)
         idx = self.origin.comboOrigin.currentIndex()
         if idx <= 0:
-            return FreeCAD.Vector()
+            anchor = self._get_instance_definition_anchor()
+            return FreeCAD.Vector(-anchor.x, -anchor.y, -anchor.z)
         elif idx == 1:
             return d.add(
                 FreeCAD.Vector(self.shape.BoundBox.XLength / 2, -self.shape.BoundBox.YLength / 2, 0)
