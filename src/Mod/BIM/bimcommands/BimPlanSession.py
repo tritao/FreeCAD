@@ -1836,11 +1836,14 @@ class PlanEditSession:
     def _should_register_created_plan_object(self, obj):
         if self._tearing_down or not obj or not self.doc:
             return False
-        if getattr(obj, "Document", None) != self.doc:
+        try:
+            if getattr(obj, "Document", None) != self.doc:
+                return False
+            if self._is_hidden_library_definition_object(obj):
+                return False
+            return self._is_supported_plan_object(obj)
+        except ReferenceError:
             return False
-        if self._is_hidden_library_definition_object(obj):
-            return False
-        return self._is_supported_plan_object(obj)
 
     def _queue_created_plan_object(self, obj):
         if not obj or not getattr(obj, "Name", None):
@@ -3972,20 +3975,42 @@ class PlanEditSession:
     def _refresh_plan_object_footprint_display(self, obj):
         if not self._is_supported_plan_object(obj):
             return
+        semantic_obj = self._get_plan_semantic_object(obj)
+        refresh_targets = []
+        for candidate in (semantic_obj, obj):
+            if not candidate:
+                continue
+            name = getattr(candidate, "Name", None)
+            if not name or any(getattr(target, "Name", None) == name for target in refresh_targets):
+                continue
+            refresh_targets.append(candidate)
+
+        refreshed = False
+        for candidate in refresh_targets:
+            view_object = getattr(candidate, "ViewObject", None)
+            proxy = getattr(view_object, "Proxy", None) if view_object else None
+            if not proxy:
+                continue
+            if not hasattr(proxy, "ensureFootprintGroup") and not hasattr(proxy, "updateFootprint"):
+                continue
+            try:
+                if hasattr(proxy, "ensureFootprintGroup"):
+                    proxy.ensureFootprintGroup(view_object)
+                if hasattr(proxy, "updateFootprint"):
+                    proxy.updateFootprint()
+                if hasattr(view_object, "update"):
+                    view_object.update()
+                refreshed = True
+            except Exception:
+                continue
+
         view_object = getattr(obj, "ViewObject", None)
-        proxy = getattr(view_object, "Proxy", None) if view_object else None
-        if not proxy:
-            return
-        if not hasattr(proxy, "ensureFootprintGroup") and not hasattr(proxy, "updateFootprint"):
-            return
-        try:
-            if hasattr(proxy, "ensureFootprintGroup"):
-                proxy.ensureFootprintGroup(view_object)
-            if hasattr(proxy, "updateFootprint"):
-                proxy.updateFootprint()
-            if hasattr(view_object, "update"):
+        if view_object and hasattr(view_object, "update"):
+            try:
                 view_object.update()
-        except Exception:
+            except Exception:
+                pass
+        if not refreshed:
             return
         self._request_view_redraw()
 
