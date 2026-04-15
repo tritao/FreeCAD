@@ -72,7 +72,11 @@ class TestArchBaseGui(TestArchBase):
 
         # Close any open task panels
         if FreeCAD.GuiUp:
-            FreeCADGui.Control.closeDialog()
+            try:
+                if FreeCADGui.Control.activeDialog():
+                    FreeCADGui.Control.closeDialog()
+            except Exception:
+                pass
 
         super().tearDown()
 
