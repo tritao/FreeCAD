@@ -304,6 +304,45 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         self.assertAlmostEqual(0.0, min(ys), delta=1e-6)
         self.assertAlmostEqual(700.0, max(ys), delta=1e-6)
 
+    def test_late_equipment_plan_symbols_refresh_line_footprint_display_data(self):
+        """Assigning plan symbols after creation should refresh cached footprint linework."""
+
+        box = self.document.addObject("Part::Box", "LateEquipmentBox")
+        box.Length = 800
+        box.Width = 500
+        box.Height = 900
+
+        equipment = Arch.makeEquipment(box)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        plan = self.document.addObject("Part::Feature", "LateEquipmentPlan")
+        plan.Shape = Part.makeCompound(
+            [
+                Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(1000, 0, 0)),
+                Part.makeLine(FreeCAD.Vector(1000, 0, 0), FreeCAD.Vector(1000, 700, 0)),
+                Part.makeLine(FreeCAD.Vector(1000, 700, 0), FreeCAD.Vector(0, 700, 0)),
+                Part.makeLine(FreeCAD.Vector(0, 700, 0), FreeCAD.Vector(0, 0, 0)),
+            ]
+        )
+
+        equipment.PlanSymbols = [plan]
+        self.document.recompute()
+        self.pump_gui_events()
+
+        proxy = equipment.ViewObject.Proxy
+        self.assertGreater(proxy.lcoords.point.getNum(), 0)
+        self.assertGreater(proxy.lset.numVertices.getNum(), 0)
+
+        polylines = self._get_line_polylines(proxy)
+        points = [point for polyline in polylines for point in polyline]
+        xs = [point.x for point in points]
+        ys = [point.y for point in points]
+        self.assertAlmostEqual(0.0, min(xs), delta=1e-6)
+        self.assertAlmostEqual(1000.0, max(xs), delta=1e-6)
+        self.assertAlmostEqual(0.0, min(ys), delta=1e-6)
+        self.assertAlmostEqual(700.0, max(ys), delta=1e-6)
+
     def test_window_footprint_ignores_openings_above_cut_height(self):
         """Openings above the cut plane should not emit committed footprint symbols."""
 
