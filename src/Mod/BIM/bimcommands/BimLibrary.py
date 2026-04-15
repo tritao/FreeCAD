@@ -26,6 +26,7 @@ from __future__ import print_function
 
 """The BIM library tool"""
 
+import json
 import os
 import sys
 import tempfile
@@ -62,6 +63,10 @@ RAWURL = LIBRARYURL.replace("/tree", "/raw")
 LIBINDEXFILE = "OfflineLibrary.py"
 USE_API = True  # True to use github API instead of web fetching... Way faster
 REFRESH_INTERVAL = 3600  # Min seconds between allowing a new API calls (3600 = one hour)
+SYMBOL_DEFINITIONS_GROUP = "_SymbolDefinitions"
+SYMBOL_LIBRARY_GROUP = "Library"
+ASSET_MANIFEST = "asset.json"
+LIBRARY_MARKER_FILES = (".freecad-library", "library.json")
 
 
 # TODO as https://github.com/yorikvanhavre/BIM_Workbench/pull/77
@@ -78,6 +83,81 @@ REFRESH_INTERVAL = 3600  # Min seconds between allowing a new API calls (3600 = 
 # findable in QDesigner
 
 
+def _normalize_library_root(path):
+
+    if not path:
+        return ""
+    return os.path.normpath(path).replace("\\", "/")
+
+
+def _get_configured_library_root():
+
+    pr = FreeCAD.ParamGet("User parameter:Plugins/parts_library")
+    path = pr.GetString("destination", "")
+    if path and os.path.exists(path):
+        return _normalize_library_root(path)
+    return ""
+
+
+def _iter_module_search_roots():
+
+    seen = set()
+    additional_paths = FreeCAD.ConfigGet("AdditionalModulePaths") or ""
+    for raw_path in additional_paths.split(";"):
+        raw_path = raw_path.strip()
+        if not raw_path:
+            continue
+        path = _normalize_library_root(raw_path)
+        if path and path not in seen and os.path.isdir(path):
+            seen.add(path)
+            yield path
+
+    for raw_path in sys.path:
+        if not raw_path:
+            continue
+        path = _normalize_library_root(raw_path)
+        if path and path not in seen and os.path.isdir(path):
+            seen.add(path)
+            yield path
+
+
+def _find_marked_library_root(module_root):
+
+    candidates = [
+        module_root,
+        os.path.join(module_root, "Library"),
+    ]
+    for candidate in candidates:
+        if not os.path.isdir(candidate):
+            continue
+        for marker in LIBRARY_MARKER_FILES:
+            if os.path.isfile(os.path.join(candidate, marker)):
+                return _normalize_library_root(candidate)
+    return ""
+
+
+def resolve_library_root_info():
+
+    configured = _get_configured_library_root()
+    if configured:
+        return configured, "configured"
+
+    for module_root in _iter_module_search_roots():
+        discovered = _find_marked_library_root(module_root)
+        if discovered:
+            return discovered, "module_marker"
+
+    addondir = os.path.join(FreeCAD.getUserAppDataDir(), "Mod", "parts_library")
+    if os.path.exists(addondir):
+        return _normalize_library_root(addondir), "legacy_fallback"
+    return "", "none"
+
+
+def resolve_library_root():
+
+    return resolve_library_root_info()[0]
+
+
 class BIM_Library:
 
     def GetResources(self):
@@ -89,21 +169,12 @@ class BIM_Library:
 
     def Activated(self):
 
-        # trying to locate the parts library
-        pr = FreeCAD.ParamGet("User parameter:Plugins/parts_library")
-        libok = False
-        self.librarypath = pr.GetString("destination", "")
-        if self.librarypath:
-            if os.path.exists(self.librarypath):
-                libok = True
-        else:
-            # check if the library is at the standard addon location
-            addondir = os.path.join(FreeCAD.getUserAppDataDir(), "Mod", "parts_library")
-            if os.path.exists(addondir):
-                # save file paths with forward slashes even on windows
-                pr.SetString("destination", addondir.replace("\\", "/"))
-                libok = True
-        panel = BIM_Library_TaskPanel(offlinemode=libok)
+        self.librarypath, self.librarysource = resolve_library_root_info()
+        panel = BIM_Library_TaskPanel(
+            offlinemode=bool(self.librarypath),
+            librarypath=self.librarypath,
+            librarysource=self.librarysource,
+        )
         task = FreeCADGui.Control.showDialog(panel, FreeCADGui.ActiveDocument)
         task.setDocumentName(panel.mainDocName)
         task.setAutoCloseOnDeletedDocument(True)
@@ -111,20 +182,39 @@ class BIM_Library:
 
 class BIM_Library_TaskPanel:
 
-    def __init__(self, offlinemode=False):
+    def __init__(self, offlinemode=False, librarypath="", librarysource=""):
 
-        from PySide import QtGui
+        from PySide import QtCore, QtGui
 
         self.mainDocName = FreeCAD.Gui.ActiveDocument.Document.Name
         self.previewDocName = "Viewer"
 
         self.linked = False
+        self.instance_definition_roots = []
 
-        self.librarypath = FreeCAD.ParamGet("User parameter:Plugins/parts_library").GetString(
-            "destination", ""
-        )
+        resolved_path, resolved_source = resolve_library_root_info()
+        self.librarypath = librarypath or resolved_path
+        if librarysource:
+            self.librarysource = librarysource
+        elif self.librarypath == resolved_path:
+            self.librarysource = resolved_source
+        elif self.librarypath:
+            self.librarysource = "provided"
+        else:
+            self.librarysource = "none"
         self.form = FreeCADGui.PySideUic.loadUi(":/ui/dialogLibrary.ui")
         self.form.setWindowIcon(QtGui.QIcon(":/icons/BIM_Library.svg"))
+        self.form.labelLibraryRootStatus = QtGui.QLabel(self.form)
+        self.form.labelLibraryRootStatus.setObjectName("labelLibraryRootStatus")
+        self.form.labelLibraryRootStatus.setWordWrap(True)
+        self.form.labelLibraryRootStatus.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        self.form.verticalLayout.insertWidget(3, self.form.labelLibraryRootStatus)
+        self.form.labelLibraryModeStatus = QtGui.QLabel(self.form)
+        self.form.labelLibraryModeStatus.setObjectName("labelLibraryModeStatus")
+        self.form.labelLibraryModeStatus.setWordWrap(True)
+        self.form.labelLibraryModeStatus.hide()
+        self.form.verticalLayout.insertWidget(4, self.form.labelLibraryModeStatus)
+        self._update_library_root_status()
 
         # setting up a flat (no directories) file model for search
         self.filemodel = QtGui.QStandardItemModel()
@@ -138,6 +228,19 @@ class BIM_Library_TaskPanel:
         self.form.tree.setModel(self.dirmodel)
         self.form.buttonInsert.clicked.connect(self.insert)
         self.form.buttonLink.clicked.connect(self.link)
+        self.form.buttonInsert.setText(translate("BIM", "Insert Copy"))
+        self.form.buttonInsert.setToolTip(
+            translate(
+                "BIM", "Imports the selected object as regular geometry in the current document"
+            )
+        )
+        self.form.buttonLink.setText(translate("BIM", "Insert Instance"))
+        self.form.buttonLink.setToolTip(
+            translate(
+                "BIM",
+                "Creates or reuses a hidden local symbol definition and inserts visible App::Link instances",
+            )
+        )
 
         self.modelmode = 1  # 0 = File search, 1 = Dir mode
 
@@ -175,11 +278,23 @@ class BIM_Library_TaskPanel:
 
         # retrieve preferences
         self.form.checkOnline.toggled.connect(self.onCheckOnline)
-        self.form.checkOnline.setChecked(PARAMS.GetBool("LibraryOnline", not offlinemode))
+        self.form.checkOnline.setText(translate("BIM", "Show online catalog"))
+        self.form.checkOnline.setToolTip(
+            translate(
+                "BIM",
+                "Shows the online catalog instead of the local library. When enabled, local assets are hidden from the tree.",
+            )
+        )
+        mode_chosen = PARAMS.GetBool("LibraryModeChosen", False)
+        initial_online = PARAMS.GetBool("LibraryOnline", not offlinemode)
+        if not mode_chosen:
+            initial_online = False if self.librarypath else True
+        if not self.librarypath:
+            initial_online = True
+        self.form.checkOnline.setChecked(initial_online)
         self.form.checkFCStdOnly.toggled.connect(self.onCheckFCStdOnly)
         self.form.checkFCStdOnly.setChecked(PARAMS.GetBool("LibraryFCStdOnly", False))
-        self.form.check3DPreview.toggled.connect(self.onCheck3DPreview)
-        self.form.check3DPreview.setChecked(PARAMS.GetBool("3DPreview", False))
+        self._disable_3d_preview_option()
 
         # collapsables
         if PARAMS.GetBool("LibraryPreview", False):
@@ -213,6 +328,68 @@ class BIM_Library_TaskPanel:
         # update the tree
         self.onCheckOnline()
 
+    def _get_library_source_label(self):
+
+        labels = {
+            "configured": translate("BIM", "Configured path"),
+            "module_marker": translate("BIM", "Module marker"),
+            "legacy_fallback": translate("BIM", "Legacy fallback"),
+            "provided": translate("BIM", "Provided path"),
+            "none": translate("BIM", "Not found"),
+        }
+        return labels.get(self.librarysource, self.librarysource or translate("BIM", "Unknown"))
+
+    def _update_library_root_status(self):
+
+        if self.librarypath:
+            path_text = self.librarypath
+            tooltip = self.librarypath
+        else:
+            path_text = translate("BIM", "No local library detected")
+            tooltip = translate(
+                "BIM",
+                "Set a library folder explicitly or mount a marked module library root.",
+            )
+        text = "{}: {}\n{}: {}".format(
+            translate("BIM", "Library"),
+            path_text,
+            translate("BIM", "Source"),
+            self._get_library_source_label(),
+        )
+        self.form.labelLibraryRootStatus.setText(text)
+        self.form.labelLibraryRootStatus.setToolTip(tooltip)
+
+    def _update_library_mode_status(self, online_mode):
+
+        label = self.form.labelLibraryModeStatus
+        if online_mode and self.librarypath:
+            label.setText(
+                translate(
+                    "BIM",
+                    "Showing online catalog. Local library content is hidden in this mode.",
+                )
+            )
+            label.setToolTip(self.librarypath)
+            label.show()
+            return
+        if (not online_mode) and (not self.librarypath):
+            label.setText(
+                translate(
+                    "BIM",
+                    "No local library detected. Configure a library folder or use the online catalog.",
+                )
+            )
+            label.setToolTip(
+                translate(
+                    "BIM",
+                    "Set a local library root explicitly or mount a marked module library root.",
+                )
+            )
+            label.show()
+            return
+        label.clear()
+        label.hide()
+
     def onItemSelected(self, selected, deselected):
         """Generates and displays needed previews"""
 
@@ -225,6 +402,7 @@ class BIM_Library_TaskPanel:
             path = self.dirmodel.filePath(index)
         else:
             path = self.filemodel.itemFromIndex(index).toolTip()
+        path = self._resolve_asset_path(path)
         if path.startswith(":github"):
             path = RAWURL + path[7:]
         thumb = self.getThumbnail(path)
@@ -297,55 +475,50 @@ class BIM_Library_TaskPanel:
             self.form.framePreview.clear()
             return self.previewDocName, self.previousIndex, self.linked
 
-    def link(self, index):
+    def link(self, index=None):
 
-        # check if the main document is open
-        try:
-            # check if the working document is saved
-            if FreeCAD.getDocument(self.mainDocName).FileName == "":
-                FreeCAD.Console.PrintWarning(
-                    translate("BIM", "Save the working file before linking.") + "\n"
-                )
-            else:
-                self.previewOn = PARAMS.GetBool("3DPreview", False)
-                self.linked = True
-                if self.previewOn != True:
-                    BIM_Library_TaskPanel.clicked(self, index, previewDocName="Viewer")
-                self.librarypath = ""
-                # save the file prior to linking
-                BIM_Library_TaskPanel.addtolibrary(self)
-                # link a document if it has been previously saved
-                if self.fileDialog[0] != "":
-                    FreeCADGui.Selection.clearSelection()
-                    # link only root objects
-                    for obj in FreeCAD.ActiveDocument.RootObjects:
-                        FreeCADGui.Selection.addSelection(obj)
-                    objects = FreeCADGui.Selection.getSelection()
-                    # tries to create a link for each object in the selection
-                    for obj in objects:
-                        try:
-                            link = (
-                                FreeCAD.getDocument(self.mainDocName)
-                                .addObject("App::Link", "Link")
-                                .setLink(obj)
-                            )
-                            # FreeCAD.getDocument(self.mainDocName).getObject('Link').Label=FreeCAD.ActiveDocument.ActiveObject.Label
-                            FreeCAD.getDocument(self.mainDocName).getObject(
-                                link
-                            ).Label = FreeCAD.ActiveDocument.ActiveObject.Label
-                        except:
-                            pass
-                    FreeCAD.setActiveDocument(self.mainDocName)
-                    self.librarypath = FreeCAD.ParamGet(
-                        "User parameter:Plugins/parts_library"
-                    ).GetString("destination", "")
-                    self.linked = False
-                    return self.linked
-        except:
+        from draftutils import todo
+
+        doc = self._get_main_document()
+        if not doc:
+            return
+        FreeCAD.setActiveDocument(doc.Name)
+        path = self._resolve_index_path(index)
+        if not path:
+            return
+
+        self.name = self._build_asset_descriptor(path)["label"]
+        ext = os.path.splitext(path.lower())[1]
+        definition_roots = self._ensure_symbol_definition_roots(doc, path)
+        if not definition_roots:
             FreeCAD.Console.PrintWarning(
-                translate("BIM", "It is not possible to link because the main document is closed.")
+                translate(
+                    "BIM",
+                    "Insert Instance currently supports FCStd, STEP and BREP library assets.",
+                )
                 + "\n"
             )
+            return
+
+        if ext in [".stp", ".step", ".brp", ".brep"]:
+            self.instance_definition_roots = definition_roots
+            self.place(path)
+            return
+
+        if ext == ".fcstd":
+            preview_shape = self._build_definition_preview_shape(definition_roots)
+            if preview_shape and not preview_shape.isNull():
+                self.instance_definition_roots = definition_roots
+                self._start_shape_placement(preview_shape)
+                return
+
+        links = [
+            self._create_symbol_link(doc, definition_obj) for definition_obj in definition_roots
+        ]
+        self._add_instances_to_active_container(links)
+        doc.recompute()
+        self._select_inserted_objects(links)
+        todo.ToDo.delay(self.reject, None)
 
     def addtolibrary(self):
         # DISABLED
@@ -387,30 +560,23 @@ class BIM_Library_TaskPanel:
 
         from PySide import QtGui
 
-        def add_line(f, dp, sep):
-            if self.isAllowed(f) and (text.lower() in f.lower()):
-                it = QtGui.QStandardItem(f)
-                it.setToolTip(dp.rstrip(sep) + sep + f.lstrip(sep))
+        def add_line(label, path):
+            if self.isAllowed(label) and (text.lower() in label.lower()):
+                it = QtGui.QStandardItem(label)
+                it.setToolTip(path)
+                it.setIcon(self._get_leaf_icon(label, path))
                 self.filemodel.appendRow(it)
-                if f.lower().endswith(".fcstd"):
-                    it.setIcon(QtGui.QIcon(":icons/freecad-doc.png"))
-                elif f.lower().endswith(".ifc"):
-                    it.setIcon(QtGui.QIcon(":/icons/IFC.svg"))
-                else:
-                    it.setIcon(QtGui.QIcon(":/icons/Part_document.svg"))
 
         self.form.tree.setModel(self.filemodel)
         self.filemodel.clear()
         if self.form.checkOnline.isChecked():
             res = self.getOfflineLib(structured=True)
             for i in range(len(res[0])):
-                add_line(res[0][i], res[2][i], "/")
+                add_line(res[0][i], res[2][i] + "/" + res[0][i])
         else:
-            res = os.walk(self.librarypath)
-            for dp, dn, fn in res:
-                for f in fn:
-                    if not os.path.isdir(os.path.join(dp, f)):
-                        add_line(f, dp, os.path.sep)
+            res = self.getLocalLib(structured=True)
+            for i in range(len(res[0])):
+                add_line(res[0][i], res[1][i])
         self.modelmode = 0
 
     def getFilters(self):
@@ -431,19 +597,41 @@ class BIM_Library_TaskPanel:
         else:
             return True
 
+    def _get_leaf_icon(self, label, path):
+
+        from PySide import QtGui
+
+        leaf_path = self._resolve_asset_path(path)
+        leaf_name = os.path.basename(leaf_path or label).lower()
+        if leaf_name.endswith(".fcstd"):
+            return QtGui.QIcon(":icons/freecad-doc.png")
+        if leaf_name.endswith(".ifc"):
+            return QtGui.QIcon(":/icons/IFC.svg")
+        return QtGui.QIcon(":/icons/Part_document.svg")
+
+    def _populate_tree_model(self, root, data):
+
+        from PySide import QtGui
+
+        for label, value in data.items():
+            if not self.isAllowed(label):
+                continue
+            item = QtGui.QStandardItem(label)
+            root.appendRow(item)
+            if isinstance(value, dict):
+                item.setIcon(QtGui.QIcon.fromTheme("folder", QtGui.QIcon(":/icons/Group.svg")))
+                item.setToolTip("")
+                self._populate_tree_model(item, value)
+            else:
+                item.setToolTip(value)
+                item.setIcon(self._get_leaf_icon(label, value))
+
     def setFileModel(self):
 
-        # self.form.tree.clear()
-        self.form.tree.setModel(self.dirmodel)
-        self.dirmodel.setRootPath(self.librarypath)
-        self.dirmodel.setNameFilters(self.getFilters())
-        self.dirmodel.setNameFilterDisables(False)
-        self.form.tree.setRootIndex(self.dirmodel.index(self.librarypath))
-        self.modelmode = 1
-        self.form.tree.setHeaderHidden(True)
-        self.form.tree.hideColumn(1)
-        self.form.tree.hideColumn(2)
-        self.form.tree.hideColumn(3)
+        self.form.tree.setModel(self.filemodel)
+        self.filemodel.clear()
+        self._populate_tree_model(self.filemodel, self.getLocalLib())
+        self.modelmode = 0
         self.form.tree.selectionModel().selectionChanged.connect(self.onItemSelected)
 
     def setOnlineModel(self):
@@ -511,6 +699,162 @@ class BIM_Library_TaskPanel:
         else:
             return d
 
+    def _load_asset_manifest(self, manifest_path):
+
+        try:
+            with open(manifest_path, "r", encoding="utf8") as handle:
+                manifest = json.load(handle)
+        except Exception:
+            return {}
+        return manifest if isinstance(manifest, dict) else {}
+
+    def _get_asset_label(self, manifest_path):
+
+        manifest = self._load_asset_manifest(manifest_path)
+        return (
+            manifest.get("label")
+            or manifest.get("name")
+            or manifest.get("title")
+            or os.path.basename(os.path.dirname(manifest_path))
+        )
+
+    def _get_asset_manifest_path(self, path):
+
+        if not path:
+            return None
+        if os.path.basename(path).lower() == ASSET_MANIFEST and os.path.isfile(path):
+            return path
+        candidate = os.path.join(os.path.dirname(path), ASSET_MANIFEST)
+        if os.path.isfile(candidate):
+            return candidate
+        return None
+
+    def _get_asset_representation_data(self, manifest, primary_key, aliases=()):
+
+        representations = manifest.get("representations", {})
+        for key in (primary_key,) + tuple(aliases):
+            if key in representations:
+                return representations[key]
+        for key in (primary_key,) + tuple(aliases):
+            if key in manifest:
+                return manifest[key]
+        return None
+
+    def _get_asset_representation_path(self, manifest_path, representation):
+
+        if isinstance(representation, str):
+            relpath = representation
+        elif isinstance(representation, dict):
+            relpath = representation.get("file") or representation.get("path")
+        else:
+            relpath = None
+        if not relpath:
+            return None
+        return os.path.normpath(os.path.join(os.path.dirname(manifest_path), relpath))
+
+    def _get_asset_representation_root_name(self, representation):
+
+        if isinstance(representation, dict):
+            return representation.get("root") or representation.get("object")
+        return None
+
+    def _build_asset_descriptor(self, path):
+
+        manifest_path = self._get_asset_manifest_path(path)
+        if not manifest_path:
+            label = os.path.splitext(os.path.basename(path))[0]
+            return {
+                "label": label,
+                "source_path": self.cleanPath(path),
+                "model_path": path,
+                "model_root": None,
+                "plan_path": None,
+                "plan_root": None,
+            }
+
+        manifest = self._load_asset_manifest(manifest_path)
+        model_data = self._get_asset_representation_data(manifest, "model3d", aliases=("model",))
+        plan_data = self._get_asset_representation_data(
+            manifest,
+            "plan2d",
+            aliases=("plan", "symbol2d", "footprint"),
+        )
+        model_path = self._get_asset_representation_path(manifest_path, model_data) or path
+        return {
+            "label": self._get_asset_label(manifest_path),
+            "source_path": manifest.get("id") or self.cleanPath(manifest_path),
+            "model_path": model_path,
+            "model_root": self._get_asset_representation_root_name(model_data),
+            "plan_path": self._get_asset_representation_path(manifest_path, plan_data),
+            "plan_root": self._get_asset_representation_root_name(plan_data),
+        }
+
+    def _get_asset_model_path(self, manifest_path):
+
+        return self._build_asset_descriptor(manifest_path)["model_path"] or manifest_path
+
+    def _resolve_asset_path(self, path):
+
+        if path and os.path.basename(path).lower() == ASSET_MANIFEST:
+            return self._get_asset_model_path(path)
+        return path
+
+    def _make_unique_entry_label(self, entries, label, fallback_name):
+
+        base = label or fallback_name
+        if base not in entries:
+            return base
+        suffix = 2
+        while True:
+            candidate = f"{base} ({suffix})"
+            if candidate not in entries:
+                return candidate
+            suffix += 1
+
+    def _build_local_library_tree(self, folder):
+
+        entries = {}
+        try:
+            names = sorted(os.listdir(folder))
+        except OSError:
+            return entries
+        for name in names:
+            path = os.path.join(folder, name)
+            if os.path.isdir(path):
+                manifest_path = os.path.join(path, ASSET_MANIFEST)
+                if os.path.isfile(manifest_path):
+                    label = self._get_asset_label(manifest_path)
+                    label = self._make_unique_entry_label(entries, label, name)
+                    entries[label] = manifest_path
+                    continue
+                subtree = self._build_local_library_tree(path)
+                if subtree:
+                    entries[name] = subtree
+                continue
+            if os.path.isfile(path) and self.isAllowed(name):
+                entries[name] = path
+        return entries
+
+    def getLocalLib(self, structured=False):
+
+        def flatten(tree):
+            labels = []
+            paths = []
+            for label, value in tree.items():
+                if isinstance(value, dict):
+                    child_labels, child_paths = flatten(value)
+                    labels.extend(child_labels)
+                    paths.extend(child_paths)
+                elif value:
+                    labels.append(label)
+                    paths.append(value)
+            return labels, paths
+
+        tree = self._build_local_library_tree(self.librarypath)
+        if structured:
+            return flatten(tree)
+        return tree
+
     def urlencode(self, text):
 
         # print(text, type(text))
@@ -543,16 +887,31 @@ class BIM_Library_TaskPanel:
 
         if hasattr(self, "box") and self.box:
             self.box.off()
+        self.instance_definition_roots = []
         FreeCADGui.Control.closeDialog()
         if self.previewDocName in FreeCAD.listDocuments():
             FreeCAD.closeDocument(self.previewDocName)
         FreeCAD.ActiveDocument.recompute()
 
-    def insert(self, index=None):
+    def _resolve_index_path(self, index=None):
 
-        # check if the main document is open
+        if not index:
+            index = self.form.tree.selectedIndexes()
+            if not index:
+                return None
+            index = index[0]
+        if self.modelmode == 1:
+            path = self.dirmodel.filePath(index)
+        else:
+            path = self.filemodel.itemFromIndex(index).toolTip()
+        if path.startswith(":github"):
+            path = self.download(RAWURL + "/" + path[7:])
+        return self._resolve_asset_path(path)
+
+    def _get_main_document(self):
+
         try:
-            FreeCAD.setActiveDocument(self.mainDocName)
+            return FreeCAD.getDocument(self.mainDocName)
         except Exception:
             FreeCAD.Console.PrintError(
                 translate(
@@ -561,20 +920,509 @@ class BIM_Library_TaskPanel:
                 )
                 + "\n"
             )
+            return None
+
+    def _ensure_library_metadata(self, obj, source_path, role="instance"):
+
+        if "LibrarySourcePath" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyString",
+                "LibrarySourcePath",
+                SYMBOL_LIBRARY_GROUP,
+                QT_TRANSLATE_NOOP("App::Property", "The source path for this library symbol"),
+            )
+        if "IsLibraryDefinition" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyBool",
+                "IsLibraryDefinition",
+                SYMBOL_LIBRARY_GROUP,
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "Whether this object is a hidden local symbol definition used for links",
+                ),
+            )
+        if "LibraryDefinitionRole" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyString",
+                "LibraryDefinitionRole",
+                SYMBOL_LIBRARY_GROUP,
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "The internal role of this hidden library definition object",
+                ),
+            )
+        obj.LibrarySourcePath = source_path
+        obj.IsLibraryDefinition = True
+        obj.LibraryDefinitionRole = role
+
+    def _set_definition_view_state(self, obj):
+
+        view_object = getattr(obj, "ViewObject", None)
+        if not view_object:
             return
-        if not index:
-            index = self.form.tree.selectedIndexes()
-            if not index:
-                return
-            index = index[0]
-        if self.modelmode == 1:
-            path = self.dirmodel.filePath(index)
+        if hasattr(view_object, "Visibility"):
+            try:
+                view_object.Visibility = False
+            except Exception:
+                pass
+        if hasattr(view_object, "Selectable"):
+            try:
+                view_object.Selectable = False
+            except Exception:
+                pass
+
+    def _ensure_symbol_definitions_group(self, doc):
+
+        group = doc.getObject(SYMBOL_DEFINITIONS_GROUP)
+        if group is None:
+            group = doc.addObject("App::DocumentObjectGroup", SYMBOL_DEFINITIONS_GROUP)
+            group.Label = translate("BIM", "Symbol Definitions")
+        self._ensure_library_metadata(group, "", role="definitions")
+        self._set_definition_view_state(group)
+        return group
+
+    def _get_symbol_asset_group(self, doc, source_path):
+
+        definitions_group = self._ensure_symbol_definitions_group(doc)
+        for obj in getattr(definitions_group, "Group", []) or []:
+            if getattr(obj, "LibrarySourcePath", "") == source_path:
+                return obj
+        return None
+
+    def _ensure_symbol_asset_group(self, doc, source_path, label):
+
+        group = self._get_symbol_asset_group(doc, source_path)
+        if group is not None:
+            self._set_definition_view_state(group)
+            return group
+
+        group = doc.addObject("App::DocumentObjectGroup", "SymbolAsset")
+        group.Label = label
+        self._ensure_library_metadata(group, source_path, role="asset")
+        self._set_definition_view_state(group)
+        self._ensure_symbol_definitions_group(doc).addObject(group)
+        return group
+
+    def _remove_from_parent_groups(self, obj, keep=None):
+
+        keep = keep or set()
+        for parent in list(getattr(obj, "InList", []) or []):
+            if parent in keep:
+                continue
+            if hasattr(parent, "removeObject"):
+                try:
+                    parent.removeObject(obj)
+                except Exception:
+                    pass
+
+    def _get_imported_root_objects(self, added_objects):
+
+        added_names = {obj.Name for obj in added_objects}
+        roots = []
+        for obj in added_objects:
+            parents = [
+                parent for parent in getattr(obj, "InList", []) if parent.Name in added_names
+            ]
+            if not parents:
+                roots.append(obj)
+        return roots
+
+    def _normalize_symbol_key(self, text):
+
+        return "".join(char.lower() for char in str(text or "") if char.isalnum())
+
+    def _is_explicit_symbol_root(self, obj):
+
+        root_markers = {"root", "symbolroot", "libraryroot", "definitionroot"}
+        for prop_name in ("IsLibraryRoot", "IsSymbolRoot", "LibraryRole", "SymbolRole"):
+            if prop_name not in getattr(obj, "PropertiesList", []):
+                continue
+            value = getattr(obj, prop_name, None)
+            if isinstance(value, bool) and value:
+                return True
+            if isinstance(value, str) and value.strip().lower() in root_markers:
+                return True
+        return False
+
+    def _get_symbol_object_type(self, obj):
+
+        proxy_type = getattr(getattr(obj, "Proxy", None), "Type", "")
+        if proxy_type:
+            return proxy_type
+        try:
+            import Draft
+
+            draft_type = Draft.getType(obj)
+        except Exception:
+            draft_type = ""
+        if draft_type:
+            return draft_type
+        return getattr(obj, "TypeId", "")
+
+    def _is_symbol_container_object(self, obj):
+
+        try:
+            if obj.isDerivedFrom("App::DocumentObjectGroup"):
+                return True
+        except Exception:
+            pass
+        return self._get_symbol_object_type(obj) in {"BuildingPart", "App::DocumentObjectGroup"}
+
+    def _is_symbol_helper_object(self, obj):
+
+        type_name = self._get_symbol_object_type(obj)
+        type_id = getattr(obj, "TypeId", "")
+        if type_name == "App::Link":
+            return True
+        if self._is_symbol_container_object(obj):
+            return True
+        if type_id.startswith("Sketcher::") or type_id.startswith("Image::"):
+            return True
+        shape = getattr(obj, "Shape", None)
+        return not (shape and not shape.isNull()) and not getattr(obj, "OutList", [])
+
+    def _is_preferred_symbol_type(self, obj):
+
+        return self._get_symbol_object_type(obj) in {
+            "Door",
+            "Equipment",
+            "Furniture",
+            "Structure",
+            "Window",
+        }
+
+    def _matches_symbol_asset_label(self, obj, asset_label):
+
+        asset_key = self._normalize_symbol_key(asset_label)
+        if not asset_key:
+            return False
+        name_keys = {
+            self._normalize_symbol_key(getattr(obj, "Label", "")),
+            self._normalize_symbol_key(getattr(obj, "Name", "")),
+        }
+        return asset_key in name_keys
+
+    def _get_candidate_symbol_objects(self, added_objects, allow_helper_objects=False):
+
+        candidates = []
+        for obj in added_objects:
+            if self._get_symbol_object_type(obj) == "App::Link" or self._is_symbol_container_object(
+                obj
+            ):
+                continue
+            if not allow_helper_objects and self._is_symbol_helper_object(obj):
+                continue
+            candidates.append(obj)
+        candidate_names = {obj.Name for obj in candidates}
+        filtered = []
+        for obj in candidates:
+            parents = [
+                parent for parent in getattr(obj, "InList", []) if parent.Name in candidate_names
+            ]
+            if parents and not self._is_explicit_symbol_root(obj):
+                continue
+            filtered.append(obj)
+        return filtered
+
+    def _choose_fcstd_definition_roots(
+        self,
+        added_objects,
+        asset_label,
+        root_name=None,
+        allow_helper_objects=False,
+        preferred_types=None,
+    ):
+
+        imported_roots = self._get_imported_root_objects(added_objects)
+        root_key = self._normalize_symbol_key(root_name)
+        if root_key:
+            named_roots = [
+                obj
+                for obj in added_objects
+                if root_key
+                in {
+                    self._normalize_symbol_key(getattr(obj, "Label", "")),
+                    self._normalize_symbol_key(getattr(obj, "Name", "")),
+                }
+            ]
+            if named_roots:
+                return named_roots
+        explicit_roots = [obj for obj in added_objects if self._is_explicit_symbol_root(obj)]
+        if explicit_roots:
+            return explicit_roots
+
+        candidates = self._get_candidate_symbol_objects(
+            added_objects, allow_helper_objects=allow_helper_objects
+        )
+        if not candidates:
+            return imported_roots
+
+        matching_candidates = [
+            obj for obj in candidates if self._matches_symbol_asset_label(obj, asset_label)
+        ]
+        if matching_candidates:
+            preferred_matches = [
+                obj
+                for obj in matching_candidates
+                if not preferred_types
+                or self._get_symbol_object_type(obj) in preferred_types
+                or self._is_preferred_symbol_type(obj)
+            ]
+            return preferred_matches or matching_candidates
+
+        preferred_candidates = [
+            obj
+            for obj in candidates
+            if (preferred_types and self._get_symbol_object_type(obj) in preferred_types)
+            or (not preferred_types and self._is_preferred_symbol_type(obj))
+        ]
+        if len(preferred_candidates) == 1:
+            return preferred_candidates
+        if len(candidates) == 1:
+            return candidates
+        return imported_roots
+
+    def _get_symbol_definition_roots(self, asset_group):
+
+        return [
+            obj
+            for obj in list(getattr(asset_group, "Group", []) or [])
+            if getattr(obj, "IsLibraryDefinition", False)
+            and getattr(obj, "LibraryDefinitionRole", "instance") in {"", "instance"}
+        ]
+
+    def _ensure_equipment_plan_symbol_property(self, obj):
+
+        if self._get_symbol_object_type(obj) != "Equipment":
+            return False
+        if "PlanSymbols" not in obj.PropertiesList:
+            obj.addProperty(
+                "App::PropertyLinkList",
+                "PlanSymbols",
+                "Equipment",
+                QT_TRANSLATE_NOOP(
+                    "App::Property", "Optional authored 2D plan symbol objects for this equipment"
+                ),
+            )
+        return True
+
+    def _attach_plan_symbol_roots(self, definition_roots, plan_roots):
+
+        if not plan_roots:
+            return
+        for definition_obj in definition_roots:
+            if not self._ensure_equipment_plan_symbol_property(definition_obj):
+                continue
+            definition_obj.PlanSymbols = [
+                plan_root for plan_root in plan_roots if plan_root != definition_obj
+            ]
+
+    def _create_shape_symbol_definitions(self, doc, asset_group, asset_descriptor):
+
+        import Arch
+        import Part
+
+        obj = Arch.makeEquipment()
+        obj.Shape = Part.read(asset_descriptor["model_path"])
+        obj.Label = asset_descriptor["label"]
+        self._ensure_library_metadata(
+            obj, getattr(asset_group, "LibrarySourcePath", ""), role="instance"
+        )
+        self._remove_from_parent_groups(obj)
+        asset_group.addObject(obj)
+        self._set_definition_view_state(obj)
+        if asset_descriptor["plan_path"] and asset_descriptor["plan_path"].lower().endswith(
+            ".fcstd"
+        ):
+            plan_roots = self._create_auxiliary_symbol_roots(
+                doc,
+                asset_group,
+                asset_descriptor["plan_path"],
+                asset_descriptor["label"],
+                asset_descriptor["plan_root"],
+            )
+            self._attach_plan_symbol_roots([obj], plan_roots)
+        doc.recompute()
+        return [obj]
+
+    def _create_auxiliary_symbol_roots(self, doc, asset_group, path, asset_label, root_name=None):
+
+        before = {obj.Name for obj in doc.Objects}
+        FreeCADGui.ActiveDocument.mergeProject(path)
+        added_objects = [obj for obj in doc.Objects if obj.Name not in before]
+        root_objects = self._choose_fcstd_definition_roots(
+            added_objects,
+            asset_label,
+            root_name=root_name,
+            allow_helper_objects=True,
+        )
+
+        for obj in added_objects:
+            self._set_definition_view_state(obj)
+
+        for obj in root_objects:
+            self._ensure_library_metadata(
+                obj, getattr(asset_group, "LibrarySourcePath", ""), role="plan2d"
+            )
+            self._remove_from_parent_groups(obj, keep={asset_group})
+            asset_group.addObject(obj)
+            self._set_definition_view_state(obj)
+        return root_objects
+
+    def _create_fcstd_symbol_definitions(self, doc, asset_group, asset_descriptor):
+
+        before = {obj.Name for obj in doc.Objects}
+        FreeCADGui.ActiveDocument.mergeProject(asset_descriptor["model_path"])
+        added_objects = [obj for obj in doc.Objects if obj.Name not in before]
+        root_objects = self._choose_fcstd_definition_roots(
+            added_objects,
+            asset_descriptor["label"],
+            root_name=asset_descriptor["model_root"],
+        )
+        if asset_descriptor["plan_path"] and os.path.normpath(
+            asset_descriptor["plan_path"]
+        ) == os.path.normpath(asset_descriptor["model_path"]):
+            plan_roots = self._choose_fcstd_definition_roots(
+                added_objects,
+                asset_descriptor["label"],
+                root_name=asset_descriptor["plan_root"],
+                allow_helper_objects=True,
+            )
+        elif asset_descriptor["plan_path"] and asset_descriptor["plan_path"].lower().endswith(
+            ".fcstd"
+        ):
+            plan_roots = self._create_auxiliary_symbol_roots(
+                doc,
+                asset_group,
+                asset_descriptor["plan_path"],
+                asset_descriptor["label"],
+                asset_descriptor["plan_root"],
+            )
         else:
-            path = self.filemodel.itemFromIndex(index).toolTip()
-        if path.startswith(":github"):
-            path = self.download(RAWURL + "/" + path[7:])
-        before = FreeCAD.ActiveDocument.Objects
-        self.name = os.path.splitext(os.path.basename(path))[0]
+            plan_roots = []
+
+        for obj in added_objects:
+            self._set_definition_view_state(obj)
+
+        for obj in root_objects:
+            self._ensure_library_metadata(
+                obj, getattr(asset_group, "LibrarySourcePath", ""), role="instance"
+            )
+            self._remove_from_parent_groups(obj, keep={asset_group})
+            asset_group.addObject(obj)
+            self._set_definition_view_state(obj)
+
+        if plan_roots:
+            for obj in plan_roots:
+                if obj in root_objects:
+                    continue
+                self._ensure_library_metadata(
+                    obj, getattr(asset_group, "LibrarySourcePath", ""), role="plan2d"
+                )
+                self._remove_from_parent_groups(obj, keep={asset_group})
+                asset_group.addObject(obj)
+                self._set_definition_view_state(obj)
+            self._attach_plan_symbol_roots(root_objects, plan_roots)
+
+        self._set_definition_view_state(asset_group)
+        doc.recompute()
+        return root_objects
+
+    def _ensure_symbol_definition_roots(self, doc, path):
+
+        asset_descriptor = self._build_asset_descriptor(path)
+        source_path = asset_descriptor["source_path"]
+        asset_group = self._ensure_symbol_asset_group(doc, source_path, asset_descriptor["label"])
+        roots = self._get_symbol_definition_roots(asset_group)
+        if roots:
+            return roots
+
+        ext = os.path.splitext(asset_descriptor["model_path"].lower())[1]
+        if ext in [".stp", ".step", ".brp", ".brep"]:
+            return self._create_shape_symbol_definitions(doc, asset_group, asset_descriptor)
+        if ext == ".fcstd":
+            return self._create_fcstd_symbol_definitions(doc, asset_group, asset_descriptor)
+        return []
+
+    def _get_object_preview_shapes(self, obj):
+
+        shapes = []
+        shape = getattr(obj, "Shape", None)
+        if shape and not shape.isNull():
+            shapes.append(shape.copy())
+            return shapes
+
+        for child in getattr(obj, "OutList", []) or []:
+            shapes.extend(self._get_object_preview_shapes(child))
+        return shapes
+
+    def _build_definition_preview_shape(self, definition_roots):
+
+        import Part
+
+        shapes = []
+        for obj in definition_roots:
+            shapes.extend(self._get_object_preview_shapes(obj))
+        if not shapes:
+            return None
+        if len(shapes) == 1:
+            return shapes[0]
+        return Part.makeCompound(shapes)
+
+    def _next_instance_label(self, doc, base_label):
+
+        used = {obj.Label for obj in doc.Objects}
+        index = 1
+        while True:
+            label = f"{base_label}{index:03d}"
+            if label not in used:
+                return label
+            index += 1
+
+    def _create_symbol_link(self, doc, definition_obj):
+
+        link = doc.addObject("App::Link", "Link")
+        link.setLink(definition_obj)
+        link.Label = self._next_instance_label(doc, definition_obj.Label)
+        return link
+
+    def _get_active_container(self):
+
+        selection = FreeCADGui.Selection.getSelection()
+        for obj in selection:
+            if hasattr(obj, "addObject") and not getattr(obj, "IsLibraryDefinition", False):
+                return obj
+        return None
+
+    def _add_instances_to_active_container(self, links):
+
+        container = self._get_active_container()
+        if not container:
+            return
+        for link in links:
+            try:
+                container.addObject(link)
+            except Exception:
+                pass
+
+    def _select_inserted_objects(self, objects):
+
+        FreeCADGui.Selection.clearSelection()
+        for obj in objects:
+            FreeCADGui.Selection.addSelection(obj)
+        FreeCADGui.SendMsgToActiveView("ViewSelection")
+
+    def insert(self, index=None):
+
+        doc = self._get_main_document()
+        if not doc:
+            return
+        FreeCAD.setActiveDocument(doc.Name)
+        path = self._resolve_index_path(index)
+        if not path:
+            return
+        before = list(FreeCAD.ActiveDocument.Objects)
+        self.name = self._build_asset_descriptor(path)["label"]
         ext = os.path.splitext(path.lower())[1]
         if ext in [".stp", ".step", ".brp", ".brep"]:
             self.place(path)
@@ -640,12 +1488,12 @@ class BIM_Library_TaskPanel:
             QtGui.QApplication.restoreOverrideCursor()
         return filepath
 
-    def place(self, path):
+    def _start_shape_placement(self, shape):
 
         import Part
         import WorkingPlane
 
-        self.shape = Part.read(path)
+        self.shape = shape
         if hasattr(FreeCADGui, "Snapper"):
             try:
                 import DraftTrackers
@@ -682,6 +1530,12 @@ class BIM_Library_TaskPanel:
             + gui_tool_utils._get_hint_mod_constrain()
             + gui_tool_utils._get_hint_mod_snap()
         )
+
+    def place(self, path):
+
+        import Part
+
+        self._start_shape_placement(Part.read(path))
 
     def makeOriginWidget(self):
 
@@ -730,10 +1584,24 @@ class BIM_Library_TaskPanel:
             import Arch
 
             self.box.off()
-            self.shape.translate(point.add(self.getDelta()))
-            obj = Arch.makeEquipment()
-            obj.Shape = self.shape
-            obj.Label = self.name
+            doc = self._get_main_document()
+            if doc and self.instance_definition_roots:
+                FreeCAD.setActiveDocument(doc.Name)
+                links = []
+                placement = FreeCAD.Placement(point.add(self.getDelta()), FreeCAD.Rotation())
+                for definition_obj in self.instance_definition_roots:
+                    link = self._create_symbol_link(doc, definition_obj)
+                    if hasattr(link, "Placement"):
+                        link.Placement = placement
+                    links.append(link)
+                self._add_instances_to_active_container(links)
+                doc.recompute()
+                self._select_inserted_objects(links)
+            else:
+                self.shape.translate(point.add(self.getDelta()))
+                obj = Arch.makeEquipment()
+                obj.Shape = self.shape
+                obj.Label = self.name
         self.reject()
 
     def getDelta(self):
@@ -832,6 +1700,7 @@ class BIM_Library_TaskPanel:
         if state == None:
             state = self.form.checkOnline.isChecked()
         # save state
+        PARAMS.SetBool("LibraryModeChosen", True)
         PARAMS.SetBool("LibraryOnline", state)
         if state:
             # online
@@ -850,11 +1719,10 @@ class BIM_Library_TaskPanel:
                 else:
                     FreeCAD.Console.PrintLog("BIM Library: Using cached library\n")
             self.setOnlineModel()
-            self.form.buttonLink.setEnabled(False)
         else:
             # offline
             self.setFileModel()
-            self.form.buttonLink.setEnabled(True)
+        self._update_library_mode_status(state)
 
     def onRefresh(self):
         """refreshes the tree"""
@@ -900,18 +1768,34 @@ class BIM_Library_TaskPanel:
     def onCheck3DPreview(self, state):
         """if the 3D preview checkbox is clicked"""
 
-        # save state
-        PARAMS.SetBool("3DPreview", state)
-        self.previewOn = PARAMS.GetBool("3DPreview", False)
-        try:
-            FreeCAD.closeDocument(self.previewDocName)
-        except:
-            pass
-        if self.previewOn == True:
-            self.previewDocName = "Viewer"
-            self.doc = FreeCAD.newDocument(self.previewDocName)
-            FreeCADGui.ActiveDocument.ActiveView.viewIsometric()
-            return self.previewDocName
+        self._disable_3d_preview_option(warn=True)
+        return None
+
+    def _disable_3d_preview_option(self, warn=False):
+        """Disable the stale 3D preview option until it is reimplemented safely."""
+
+        PARAMS.SetBool("3DPreview", False)
+        self.previewOn = False
+        checkbox = self.form.check3DPreview
+        checkbox.blockSignals(True)
+        checkbox.setChecked(False)
+        checkbox.blockSignals(False)
+        checkbox.setEnabled(False)
+        checkbox.setText(translate("BIM", "Preview model in 3D view (temporarily disabled)"))
+        checkbox.setToolTip(
+            translate(
+                "BIM",
+                "The old Library 3D preview document path is currently disabled because it is unstable and needs to be reimplemented.",
+            )
+        )
+        if warn:
+            FreeCAD.Console.PrintWarning(
+                translate(
+                    "BIM",
+                    "Library 3D preview is temporarily disabled until it is reimplemented safely.",
+                )
+                + "\n"
+            )
 
     def onCheckThumbnail(self, state):
         """if the thumbnail checkbox is clicked"""
@@ -989,6 +1873,7 @@ class BIM_Library_TaskPanel:
         import urllib.request
         import urllib.parse
 
+        filepath = self._resolve_asset_path(filepath)
         if filepath.startswith(self.librarypath):
             # strip local part od the path
             filepath = filepath[len(self.librarypath) :]
