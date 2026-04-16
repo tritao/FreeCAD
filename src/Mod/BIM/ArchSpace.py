@@ -491,13 +491,7 @@ class _Space(ArchComponent.Component):
                 # print("setting objects shape")
                 shape = self.processSubShapes(obj, shape.Solids[0], pl)
                 self.applyShape(obj, shape, pl)
-                if hasattr(obj.HorizontalArea, "Value"):
-                    if hasattr(obj, "AreaCalculationType"):
-                        if obj.AreaCalculationType == "At Center of Mass":
-                            a = self.getArea(obj)
-                            obj.HorizontalArea = a
-                    if hasattr(obj, "Area"):
-                        obj.Area = obj.HorizontalArea
+                self._sync_area_properties(obj)
 
                 return
 
@@ -516,6 +510,37 @@ class _Space(ArchComponent.Component):
             return self.face.Area
         else:
             return 0
+
+    def _sync_area_properties(self, obj):
+        """Keep the user-facing space area aligned with the available footprint."""
+
+        if not hasattr(obj, "Area"):
+            return
+
+        area_mode = getattr(obj, "AreaCalculationType", "")
+        horizontal_area = getattr(getattr(obj, "HorizontalArea", None), "Value", None)
+        area_value = horizontal_area
+
+        if area_mode == "At Center of Mass":
+            area_value = self.getArea(obj)
+            if hasattr(obj, "HorizontalArea") and (
+                horizontal_area is None or abs(horizontal_area - area_value) > 0.000001
+            ):
+                obj.HorizontalArea = area_value
+        elif horizontal_area is None or horizontal_area <= 0.000001:
+            # A valid space footprint can still exist even when the generic XY projection
+            # path fails. Fall back so the space label does not stay at 0 m2.
+            footprint_area = self.getArea(obj)
+            if footprint_area > 0.000001:
+                area_value = footprint_area
+
+        if area_value is None:
+            return
+        if hasattr(obj.Area, "Value"):
+            if abs(obj.Area.Value - area_value) > 0.000001:
+                obj.Area = area_value
+        elif obj.Area != area_value:
+            obj.Area = area_value
 
     def getFootprint(self, obj):
         "returns footprint faces for this space at the center of mass"

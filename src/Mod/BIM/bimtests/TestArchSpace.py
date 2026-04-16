@@ -26,6 +26,7 @@
 # Unit tests for the Arch space module
 
 import os
+from unittest.mock import patch
 import Arch
 import Draft
 import Part
@@ -77,6 +78,28 @@ class TestArchSpace(TestArchBase.TestArchBase):
         self.assertEqual(len(faces), 1)
         self.assertGreater(faces[0].Area, 0)
         self.assertAlmostEqual(space.Proxy.getArea(space), faces[0].Area)
+
+    def test_space_area_falls_back_to_footprint_when_projection_area_is_zero(self):
+        """Space Area should fall back to the footprint when XY projection data is unavailable."""
+        operation = "Checking Arch Space area fallback"
+        self.printTestMessage(operation)
+
+        base = App.ActiveDocument.addObject("Part::Feature", "FallbackSpaceBox")
+        base.Shape = Part.makeBox(4000, 3000, 2500)
+
+        def fake_compute_areas(_self, obj):
+            obj.VerticalArea = 0
+            obj.HorizontalArea = 0
+            obj.PerimeterLength = 0
+
+        with patch("ArchComponent.Component.computeAreas", autospec=True) as compute_areas:
+            compute_areas.side_effect = fake_compute_areas
+            space = Arch.makeSpace(base)
+            App.ActiveDocument.recompute()
+
+        self.assertEqual(space.HorizontalArea.getValueAs("m^2").Value, 0)
+        self.assertAlmostEqual(space.Area.getValueAs("m^2").Value, 12.0, places=3)
+        self.assertAlmostEqual(space.PerimeterLength.getValueAs("m").Value, 14.0, places=3)
 
     def testSpaceBBox(self):
         operation = "Checking Arch Space bound box..."
@@ -197,6 +220,61 @@ class TestArchSpace(TestArchBase.TestArchBase):
             actualArea.Value,
             msg=f"Invalid area value. Expected: {expectedArea.UserString}, actual: {actualArea.UserString}",
         )
+
+    def test_space_base_supports_connected_l_shaped_volume(self):
+        """Connected non-rectangular base solids should keep a polygonal footprint."""
+        operation = "Arch Space from connected L-shaped base"
+        self.printTestMessage(operation)
+
+        points = [
+            App.Vector(0.0, 0.0, 0.0),
+            App.Vector(4000.0, 0.0, 0.0),
+            App.Vector(4000.0, 1000.0, 0.0),
+            App.Vector(1000.0, 1000.0, 0.0),
+            App.Vector(1000.0, 3000.0, 0.0),
+            App.Vector(0.0, 3000.0, 0.0),
+            App.Vector(0.0, 0.0, 0.0),
+        ]
+        l_face = Part.Face(Part.makePolygon(points))
+        base = App.ActiveDocument.addObject("Part::Feature", "ConnectedLShape")
+        base.Shape = l_face.extrude(App.Vector(0.0, 0.0, 2500.0))
+
+        space = Arch.makeSpace(base)
+        App.ActiveDocument.recompute()
+
+        faces = space.Proxy.getFootprint(space)
+        actual_area = Units.parseQuantity(str(space.Area)).Value
+
+        self.assertEqual(len(space.Shape.Solids), 1)
+        self.assertEqual(len(faces), 1)
+        self.assertGreater(len(faces[0].OuterWire.Vertexes), 4)
+        self.assertAlmostEqual(actual_area, l_face.Area)
+        self.assertAlmostEqual(faces[0].Area, l_face.Area)
+
+    def test_space_base_multi_solid_keeps_only_first_connected_region(self):
+        """Current Arch Space base-shape flow only keeps the first solid of a disconnected base."""
+        operation = "Arch Space from disconnected multi-solid base"
+        self.printTestMessage(operation)
+
+        box_a = Part.makeBox(2000.0, 1500.0, 2500.0, App.Vector(0.0, 0.0, 0.0))
+        box_b = Part.makeBox(1200.0, 1200.0, 2500.0, App.Vector(4000.0, 0.0, 0.0))
+        disconnected = Part.makeCompound([box_a, box_b])
+        base = App.ActiveDocument.addObject("Part::Feature", "DisconnectedSpaceBase")
+        base.Shape = disconnected
+
+        space = Arch.makeSpace(base)
+        App.ActiveDocument.recompute()
+
+        footprint = space.Proxy.getFootprint(space)
+        actual_area = Units.parseQuantity(str(space.Area)).Value
+        total_disconnected_area = 2000.0 * 1500.0 + 1200.0 * 1200.0
+        first_region_area = 2000.0 * 1500.0
+
+        self.assertEqual(len(base.Shape.Solids), 2)
+        self.assertEqual(len(space.Shape.Solids), 1)
+        self.assertEqual(len(footprint), 1)
+        self.assertAlmostEqual(actual_area, first_region_area)
+        self.assertLess(actual_area, total_disconnected_area)
 
 
 brepArchiCAD = """
