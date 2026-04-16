@@ -2817,6 +2817,24 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             self.assertIsNone(viewer.navicube_override)
             self.assertTrue(view.corner_cross_visible)
 
+    def test_plan_edit_ignores_deleted_view_wrappers_in_overlay_scaling(self):
+        """Overlay scaling should fall back cleanly when the underlying Qt view was deleted."""
+
+        class DeletedView:
+            def __getattribute__(self, name):
+                if name in ("getCameraNode", "getSize", "redraw"):
+                    raise RuntimeError(f"Cannot access attribute '{name}' of deleted object")
+                return object.__getattribute__(self, name)
+
+        session = BimPlanSession.PlanEditSession()
+        session.view = DeletedView()
+        session.viewer = object()
+
+        self.assertIsNone(session._get_plan_view_height())
+        self.assertIsNone(session.view)
+        self.assertIsNone(session.viewer)
+        self.assertEqual(session._scaled_line_width(3), 3.0)
+
     def test_plan_edit_uses_viewer_background_override_api(self):
         """Plan Edit should use the viewer override API for its paper background."""
 
