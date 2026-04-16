@@ -472,6 +472,48 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_linked_symbol_child_picks_prefer_link_instance(self):
+        """Picking linked symbol children should resolve to the placed link instance."""
+
+        level, equipment, link = self._make_plan_symbol_link()
+        plan_symbol = equipment.PlanSymbols[0]
+        base = equipment.Base
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session._refresh_plan_object_footprint_display(link)
+        self.pump_gui_events()
+
+        original_view = session.view
+
+        class FakeView:
+            def __init__(self, infos):
+                self._infos = infos
+
+            def getObjectsInfo(self, _mouse_pos):
+                return self._infos
+
+        try:
+            session.view = FakeView(
+                [{"Document": self.document.Name, "Object": plan_symbol.Name, "ParentObject": link}]
+            )
+            self.assertEqual(("symbol", link), session._get_plan_target_at_position((100, 100)))
+
+            session.view = FakeView(
+                [{"Document": self.document.Name, "Object": base.Name, "ParentObject": link}]
+            )
+            self.assertEqual(("symbol", link), session._get_plan_target_at_position((100, 100)))
+        finally:
+            session.view = original_view
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_direct_symbol_instances_are_selectable_with_handles(self):
         """Direct equipment with authored plan symbols should also be editable plan targets."""
 
@@ -504,6 +546,73 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             },
         )
         self.assertEqual(2, len(session._symbol_handle_trackers))
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_direct_symbol_dependencies_resolve_to_symbol_owner(self):
+        """Plan Edit should keep direct symbol dependencies pickable and mapped to their owner."""
+
+        level, equipment = self._make_direct_plan_symbol_equipment()
+        plan_symbol = equipment.PlanSymbols[0]
+        base = equipment.Base
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session._refresh_plan_object_footprint_display(equipment)
+        self.pump_gui_events()
+
+        self.assertIs(session._get_plan_semantic_object(plan_symbol), equipment)
+        self.assertIs(session._get_plan_semantic_object(base), equipment)
+        self.assertTrue(plan_symbol.ViewObject.Visibility)
+        self.assertTrue(plan_symbol.ViewObject.Selectable)
+
+        original_view = session.view
+
+        class FakeView:
+            def __init__(self, infos):
+                self._infos = infos
+
+            def getObjectsInfo(self, _mouse_pos):
+                return self._infos
+
+        try:
+            session.view = FakeView(
+                [
+                    {
+                        "Document": self.document.Name,
+                        "Object": plan_symbol.Name,
+                        "ParentObject": equipment,
+                    }
+                ]
+            )
+            self.assertEqual(
+                ("symbol", equipment), session._get_plan_target_at_position((100, 100))
+            )
+
+            session.view = FakeView(
+                [{"Document": self.document.Name, "Object": base.Name, "ParentObject": equipment}]
+            )
+            self.assertEqual(
+                ("symbol", equipment), session._get_plan_target_at_position((100, 100))
+            )
+        finally:
+            session.view = original_view
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(plan_symbol)
+        self.pump_gui_events()
+        self.assertIs(equipment, session.selected_symbol)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(base)
+        self.pump_gui_events()
+        self.assertIs(equipment, session.selected_symbol)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
