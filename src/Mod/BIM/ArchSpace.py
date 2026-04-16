@@ -189,6 +189,7 @@ class _Space(ArchComponent.Component):
 
         ArchComponent.Component.__init__(self, obj)
         self.Type = "Space"
+        self._clear_boundary_failure()
         self.setProperties(obj)
         obj.IfcType = "Space"
         obj.CompositionType = "ELEMENT"
@@ -344,11 +345,13 @@ class _Space(ArchComponent.Component):
     def onDocumentRestored(self, obj):
 
         ArchComponent.Component.onDocumentRestored(self, obj)
+        self._clear_boundary_failure()
         self.setProperties(obj)
 
     def loads(self, state):
 
         self.Type = "Space"
+        self._clear_boundary_failure()
 
     def execute(self, obj):
 
@@ -416,6 +419,28 @@ class _Space(ArchComponent.Component):
             g.append(child)
             obj.Group = g
 
+    def _clear_boundary_failure(self):
+        self._last_boundary_error = ""
+        self._last_boundary_error_details = []
+
+    def _set_boundary_failure(self, message="", details=None):
+        self._last_boundary_error = str(message or "").strip()
+        self._last_boundary_error_details = [
+            str(detail).strip() for detail in details or [] if str(detail).strip()
+        ]
+
+    def getLastBoundaryError(self, obj=None):
+        return getattr(self, "_last_boundary_error", "")
+
+    def getLastBoundaryErrorDetails(self, obj=None):
+        return list(getattr(self, "_last_boundary_error_details", []))
+
+    def _get_horizontal_slice_edges(self, shapes, cut_z):
+        section_edges = []
+        for shape in shapes or []:
+            section_edges.extend(ArchComponent.get_horizontal_slice_edges(shape, cut_z))
+        return section_edges
+
     def _get_boundary_faces(self, obj):
         faces = []
         for boundary in getattr(obj, "Boundaries", []) or []:
@@ -444,9 +469,7 @@ class _Space(ArchComponent.Component):
     def _get_horizontal_slice_wires(self, shapes, cut_z):
         import Part
 
-        section_edges = []
-        for shape in shapes or []:
-            section_edges.extend(ArchComponent.get_horizontal_slice_edges(shape, cut_z))
+        section_edges = self._get_horizontal_slice_edges(shapes, cut_z)
         if not section_edges:
             return []
 
@@ -484,7 +507,7 @@ class _Space(ArchComponent.Component):
             return FreeCAD.Vector(center)
         return None
 
-    def _build_faces_from_wires(self, wires, require_single_outer=False):
+    def _classify_wire_records(self, wires):
         import Part
 
         records = []
@@ -524,7 +547,17 @@ class _Space(ArchComponent.Component):
             if parent_candidates:
                 record["parent"] = min(parent_candidates, key=lambda item: item["area"])
                 record["depth"] = len(parent_candidates)
+        return records
 
+    def _build_faces_from_wires(self, wires, require_single_outer=False):
+
+        records = self._classify_wire_records(wires)
+        if not records:
+            return []
+
+        return self._build_faces_from_records(records, require_single_outer=require_single_outer)
+
+    def _build_faces_from_records(self, records, require_single_outer=False):
         if require_single_outer:
             top_level = [record for record in records if record["depth"] == 0]
             nested_islands = [
@@ -560,20 +593,180 @@ class _Space(ArchComponent.Component):
                 faces.append(face)
         return faces
 
-    def _build_shape_from_boundary_loops(self, boundary_faces):
+    def _analyze_boundary_loops(self, boundary_faces):
+        analysis = {
+            "bounding_box": self._get_boundary_bounding_box(boundary_faces),
+            "cut_z": None,
+            "section_edges": [],
+            "wires": [],
+            "records": [],
+            "top_level": [],
+            "nested_islands": [],
+            "supports_single_outer": False,
+        }
+        bb = analysis["bounding_box"]
+        if not boundary_faces or not bb or bb.ZLength <= 0.000001:
+            return analysis
+
+        cut_z = bb.Center.z
+        section_edges = self._get_horizontal_slice_edges(boundary_faces, cut_z)
+        wires = self._get_horizontal_slice_wires(boundary_faces, cut_z) if section_edges else []
+        records = self._classify_wire_records(wires) if wires else []
+        top_level = [record for record in records if record["depth"] == 0]
+        nested_islands = [
+            record for record in records if record["depth"] > 0 and record["depth"] % 2 == 0
+        ]
+
+        analysis.update(
+            {
+                "cut_z": cut_z,
+                "section_edges": section_edges,
+                "wires": wires,
+                "records": records,
+                "top_level": top_level,
+                "nested_islands": nested_islands,
+                "supports_single_outer": len(top_level) == 1 and not nested_islands,
+            }
+        )
+        return analysis
+
+    def _describe_boundary_failure(
+        self, obj, boundary_faces, has_base_shape=False, loop_analysis=None
+    ):
+        label = str(
+            getattr(obj, "Label", "") or getattr(obj, "Name", "") or translate("Arch", "Space")
+        )
+        if boundary_faces:
+            analysis = loop_analysis or self._analyze_boundary_loops(boundary_faces)
+            bb = analysis["bounding_box"]
+            if not bb:
+                return (
+                    translate(
+                        "Arch",
+                        "Arch Space '{label}' could not be created because the selected boundaries have no usable geometry.",
+                    ).format(label=label),
+                    [],
+                )
+            if bb.ZLength <= 0.000001:
+                return (
+                    translate(
+                        "Arch",
+                        "Arch Space '{label}' could not be created because the selected boundaries have no height.",
+                    ).format(label=label),
+                    [
+                        translate(
+                            "Arch",
+                            "Select vertical wall faces or room-bounding objects with height.",
+                        )
+                    ],
+                )
+
+            section_edges = analysis["section_edges"]
+            if not section_edges:
+                return (
+                    translate(
+                        "Arch",
+                        "Arch Space '{label}' could not be created because the selected boundaries do not intersect the plan cut.",
+                    ).format(label=label),
+                    [
+                        translate(
+                            "Arch",
+                            "Select room-bounding faces that span the storey height.",
+                        )
+                    ],
+                )
+
+            wires = analysis["wires"]
+            if not wires:
+                return (
+                    translate(
+                        "Arch",
+                        "Arch Space '{label}' could not be created because the selected boundaries do not form a closed room loop.",
+                    ).format(label=label),
+                    [
+                        translate(
+                            "Arch",
+                            "Select all enclosing walls or explicit boundary faces for the room.",
+                        )
+                    ],
+                )
+
+            top_level = analysis["top_level"]
+            if len(top_level) > 1:
+                return (
+                    translate(
+                        "Arch",
+                        "Arch Space '{label}' could not be created because the selected boundaries form multiple enclosed regions.",
+                    ).format(label=label),
+                    [
+                        translate(
+                            "Arch",
+                            "Create one space per enclosed region, or select a single outer loop with optional inner void loops.",
+                        )
+                    ],
+                )
+
+            nested_islands = analysis["nested_islands"]
+            if nested_islands:
+                return (
+                    translate(
+                        "Arch",
+                        "Arch Space '{label}' could not be created because the selected boundaries contain nested islands that cannot become one space.",
+                    ).format(label=label),
+                    [
+                        translate(
+                            "Arch",
+                            "Use one outer loop with optional inner void loops, or split the selection into separate spaces.",
+                        )
+                    ],
+                )
+
+            return (
+                translate(
+                    "Arch",
+                    "Arch Space '{label}' could not derive a valid solid from the selected boundaries.",
+                ).format(label=label),
+                [
+                    translate(
+                        "Arch",
+                        "Check that the selected walls or faces fully enclose the room at plan level.",
+                    )
+                ],
+            )
+
+        if has_base_shape:
+            return (
+                translate(
+                    "Arch",
+                    "Arch Space '{label}' could not derive a valid solid from its base object.",
+                ).format(label=label),
+                [],
+            )
+
+        return (
+            translate("Arch", "Arch Space '{label}' could not compute its boundary.").format(
+                label=label
+            ),
+            [],
+        )
+
+    def _build_shape_from_boundary_loops(self, boundary_faces, loop_analysis=None):
         if not boundary_faces:
             return None
 
-        bb = self._get_boundary_bounding_box(boundary_faces)
+        analysis = loop_analysis or self._analyze_boundary_loops(boundary_faces)
+        bb = analysis["bounding_box"]
         if not bb:
             return None
         if bb.ZLength <= 0.000001:
             return None
 
-        cut_z = bb.Center.z
-        footprint_faces = self._build_faces_from_wires(
-            self._get_horizontal_slice_wires(boundary_faces, cut_z),
-            require_single_outer=True,
+        if not analysis["supports_single_outer"]:
+            return None
+
+        cut_z = analysis["cut_z"]
+        footprint_faces = self._build_faces_from_records(
+            analysis["records"], require_single_outer=True
         )
         if len(footprint_faces) != 1:
             return None
@@ -605,9 +798,9 @@ class _Space(ArchComponent.Component):
         "computes a shape from a base shape and/or boundary faces"
         import Part
 
+        self._clear_boundary_failure()
         shape = None
         boundary_faces = self._get_boundary_faces(obj)
-        loop_shape = None
         pl = obj.Placement
 
         # print("starting compute")
@@ -625,11 +818,27 @@ class _Space(ArchComponent.Component):
             # print("got shape from base object")
             bb = shape.BoundBox
         else:
-            loop_shape = self._build_shape_from_boundary_loops(boundary_faces)
+            loop_analysis = self._analyze_boundary_loops(boundary_faces)
+            loop_shape = self._build_shape_from_boundary_loops(
+                boundary_faces, loop_analysis=loop_analysis
+            )
             if loop_shape is not None:
                 shape = self.processSubShapes(obj, loop_shape.Solids[0], pl)
                 self.applyShape(obj, shape, pl)
                 self._sync_area_properties(obj)
+                return
+            if boundary_faces and not loop_analysis["supports_single_outer"]:
+                message, details = self._describe_boundary_failure(
+                    obj,
+                    boundary_faces,
+                    has_base_shape=has_base_shape,
+                    loop_analysis=loop_analysis,
+                )
+                self._set_boundary_failure(message, details)
+                if message:
+                    FreeCAD.Console.PrintError(message + "\n")
+                    for detail in details:
+                        FreeCAD.Console.PrintError(f"  - {detail}\n")
                 return
             bb = self._get_boundary_bounding_box(boundary_faces)
             if not bb:
@@ -674,7 +883,14 @@ class _Space(ArchComponent.Component):
 
                 return
 
-        print("Arch: error computing space boundary for", obj.Label)
+        message, details = self._describe_boundary_failure(
+            obj, boundary_faces, has_base_shape=has_base_shape
+        )
+        self._set_boundary_failure(message, details)
+        if message:
+            FreeCAD.Console.PrintError(message + "\n")
+            for detail in details:
+                FreeCAD.Console.PrintError(f"  - {detail}\n")
 
     def getArea(self, obj, notouch=False):
         "returns the horizontal area at the center of the space"
