@@ -922,6 +922,8 @@ class BIMWorkbench(Workbench):
     def setTaskWatchers(self):
         from PySide import QtGui
 
+        from bimcommands import BimPlanSession
+
         translate = FreeCAD.Qt.translate
         workbench = self
         FreeCADGui.Control.clearTaskWatcher()
@@ -976,8 +978,75 @@ class BIMWorkbench(Workbench):
                 context_hint.setText(hint)
                 return True
 
+        class BimPlanEditSessionWatcher:
+            def __init__(self):
+                self._session = None
+                self._widget = None
+                self.container = QtGui.QFrame()
+                self.container.setObjectName("BIMPlanEditContextPanel")
+                self.container.setFrameShape(QtGui.QFrame.NoFrame)
+                self.layout = QtGui.QVBoxLayout(self.container)
+                self.layout.setContentsMargins(0, 0, 0, 0)
+                self.layout.setSpacing(0)
+                self.widgets = [self.container]
+
+            def __del__(self):
+                self._detach_controls()
+
+            def _detach_controls(self):
+                widget = self._widget
+                self._session = None
+                self._widget = None
+                if widget is None:
+                    return
+                try:
+                    self.layout.removeWidget(widget)
+                except Exception:
+                    pass
+                try:
+                    widget.hide()
+                except Exception:
+                    pass
+                try:
+                    widget.setParent(None)
+                except Exception:
+                    pass
+
+            def _ensure_controls(self, session):
+                controls = getattr(session, "task_panel", None)
+                widget = getattr(controls, "form", None) if controls else None
+                if widget is None:
+                    return False
+                if self._session is session and self._widget is widget:
+                    return True
+
+                self._detach_controls()
+                self.layout.addWidget(widget)
+                self._session = session
+                self._widget = widget
+                return True
+
+            def shouldShow(self):
+                if not scene_ready():
+                    self._detach_controls()
+                    return False
+
+                session = BimPlanSession.get_active_session()
+                if session is None:
+                    self._detach_controls()
+                    return False
+                if not self._ensure_controls(session):
+                    return False
+                try:
+                    session.task_panel.refresh_from_session()
+                except Exception:
+                    self._detach_controls()
+                    return False
+                return True
+
         watchers = [
             BimContextWatcher(),
+            BimPlanEditSessionWatcher(),
             BimWatcher(
                 self.taskwatcher_setup,
                 translate("BIM", "Project Setup"),

@@ -42,9 +42,8 @@ class BIM_PlanEdit:
         }
 
     def IsActive(self):
-        return (
-            FreeCAD.ActiveDocument is not None
-            and hasattr(FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph")
+        return FreeCAD.ActiveDocument is not None and hasattr(
+            FreeCADGui.getMainWindow().getActiveWindow(), "getSceneGraph"
         )
 
     def Activated(self):
@@ -52,16 +51,34 @@ class BIM_PlanEdit:
 
         session = BimPlanSession.get_active_session()
         if session:
+            try:
+                FreeCADGui.Control.showTaskView()
+            except Exception:
+                pass
+            try:
+                BimPlanSession._refresh_contextual_task_watchers()
+            except Exception:
+                pass
             panel = getattr(session, "task_panel", None)
-            if panel and getattr(panel, "form", None) is not None and not getattr(panel, "_closed", False):
+            widget = getattr(panel, "form", None) if panel else None
+            if widget is not None:
                 try:
-                    panel.show()
-                    panel.raise_()
-                    panel.activateWindow()
-                    return
-                except RuntimeError:
+                    widget.show()
+                except Exception:
                     pass
-            session.shutdown(close_dialog=False)
+                try:
+                    widget.raise_()
+                except Exception:
+                    pass
+                try:
+                    widget.activateWindow()
+                except Exception:
+                    pass
+                try:
+                    widget.setFocus()
+                except Exception:
+                    pass
+            return
         BimPlanSession.start_session()
 
 

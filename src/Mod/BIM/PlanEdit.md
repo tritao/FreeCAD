@@ -35,11 +35,11 @@ The current mode provides:
 
 - command entry via `BIM_PlanEdit`
 - activation from the BIM workbench and level/storey context menus
-- modeless dock instead of a locked task panel
+- contextual task-panel controls instead of a locked task dialog
 - top orthographic view while the mode is active
 - viewer override mode set to `Footprint`
 - theme-aware lighter plan background while the mode is active
-- storey selection in the dock
+- storey selection in the contextual task panel
 - explicit `Exit Plan Edit`
 - direct grips for selected baseless walls:
   - start endpoint
@@ -82,9 +82,9 @@ The mode contract is:
 - the 3D view is forced to top orthographic while the mode is active
 - plan representations are shown instead of normal 3D presentation where possible
 - direct manipulation happens in the canvas
-- the dock is secondary and should only expose session-level controls
+- the contextual task panel is secondary and should only expose session-level controls
 
-The dock should remain small and modeless. It is not the main editing surface.
+The contextual task panel should remain compact and secondary. It is not the main editing surface.
 
 The primary interactions should happen in the view:
 
@@ -134,7 +134,7 @@ Responsible for:
 - active subtool routing
 - shared cancel and finish behavior
 
-### Modeless `Plan Edit` Dock
+### Contextual `Plan Edit` Controls
 
 Responsible for:
 
@@ -143,10 +143,9 @@ Responsible for:
 - plan-mode settings
 - explicit exit
 
-The dock should not own the editing lifecycle.
-It should live in the normal main-window dock stack, preferably tabified with
-the standard `Tasks` dock when available, instead of reopening as a detached
-tool window.
+The contextual task panel should not own the editing lifecycle.
+It should expose the session controls inside the normal `Tasks` area instead of
+reopening Plan Edit in a separate dock window.
 
 ### Session-Owned Subtools
 
