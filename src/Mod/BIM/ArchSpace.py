@@ -730,7 +730,10 @@ class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
         self.onChanged(vobj, "TextColor")
         self.onChanged(vobj, "FontSize")
         self.onChanged(vobj, "FirstLine")
+        self.onChanged(vobj, "LineColor")
+        self.onChanged(vobj, "LineWidth")
         self.onChanged(vobj, "LineSpacing")
+        self.onChanged(vobj, "DrawStyle")
         self.onChanged(vobj, "FontName")
 
     def createFootprintGroup(self):
@@ -740,6 +743,8 @@ class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
 
         self.fcoords = coin.SoCoordinate3()
         self.fset = coin.SoIndexedFaceSet()
+        self.lcoords = coin.SoCoordinate3()
+        self.lset = coin.SoLineSet()
         shape_hints = coin.SoShapeHints()
         shape_hints.vertexOrdering = coin.SoShapeHints.COUNTERCLOCKWISE
         fill_offset = coin.SoPolygonOffset()
@@ -747,6 +752,13 @@ class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
         fill_offset.factor = 1.0
         fill_offset.units = 4.0
         fill_offset.on = True
+        line_offset = coin.SoPolygonOffset()
+        line_offset.styles = coin.SoPolygonOffsetElement.LINES
+        line_offset.factor = -0.5
+        line_offset.units = -1.0
+        line_offset.on = True
+        self.lstyle = coin.SoDrawStyle()
+        self.lmat = coin.SoBaseColor()
 
         base_color = ArchCommands.getDefaultColor("Space")
         fill_color = tuple(min(1.0, 0.84 + component * 0.16) for component in base_color[:3])
@@ -763,7 +775,79 @@ class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
                 shape_hints=shape_hints,
             )
         )
+        line_sep = coin.SoSeparator()
+        line_sep.addChild(line_offset)
+        line_sep.addChild(self.lmat)
+        line_sep.addChild(self.lstyle)
+        line_sep.addChild(self.lcoords)
+        line_sep.addChild(self.lset)
+        sep.addChild(line_sep)
         return sep
+
+    def updateFootprint(self):
+        ArchComponent.ViewProviderComponent.updateFootprint(self)
+
+        if not hasattr(self, "lcoords") or not hasattr(self, "lset"):
+            return
+
+        self.lcoords.point.deleteValues(0)
+        self.lset.numVertices.deleteValues(0)
+
+        if not hasattr(self, "Object"):
+            return
+
+        faces = self.Object.Proxy.getFootprint(self.Object)
+        if not faces:
+            return
+
+        inverse_placement = None
+        placement = getattr(self.Object, "Placement", None)
+        if placement:
+            try:
+                inverse_placement = placement.inverse()
+            except Exception:
+                inverse_placement = None
+
+        line_verts = []
+        line_counts = []
+        for face in faces:
+            for wire in face.Wires:
+                wire_points = []
+                for edge in wire.Edges:
+                    polyline = self._collect_edge_points(edge)
+                    if len(polyline) < 2:
+                        continue
+                    if wire_points and polyline[0].distanceToPoint(wire_points[-1]) < 0.001:
+                        polyline = polyline[1:]
+                    wire_points.extend(polyline)
+                if len(wire_points) < 2:
+                    continue
+                start_idx = len(line_verts)
+                for point in wire_points:
+                    if inverse_placement is not None:
+                        point = inverse_placement.multVec(point)
+                    line_verts.append([point.x, point.y, point.z])
+                line_counts.append(len(line_verts) - start_idx)
+
+        if line_verts:
+            self.lcoords.point.setValues(line_verts)
+            self.lset.numVertices.setValues(0, len(line_counts), line_counts)
+
+    def _collect_edge_points(self, edge):
+        points = edge.tessellate(1)
+        if points and all(isinstance(point, FreeCAD.Vector) for point in points):
+            return points
+
+        try:
+            points = edge.discretize(Deflection=1.0)
+        except Exception:
+            points = []
+        if points:
+            return [
+                point if isinstance(point, FreeCAD.Vector) else FreeCAD.Vector(point)
+                for point in points
+            ]
+        return []
 
     def updateData(self, obj, prop):
         ArchComponent.ViewProviderComponent.updateData(self, obj, prop)
@@ -875,6 +959,26 @@ class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
             if hasattr(self, "color") and hasattr(vobj, "TextColor"):
                 c = vobj.TextColor
                 self.color.rgb.setValue(c[0], c[1], c[2])
+
+        elif prop == "LineColor":
+            if hasattr(self, "lmat") and hasattr(vobj, "LineColor"):
+                c = vobj.LineColor
+                self.lmat.rgb = (c[0], c[1], c[2])
+
+        elif prop == "LineWidth":
+            if hasattr(self, "lstyle") and hasattr(vobj, "LineWidth"):
+                self.lstyle.lineWidth = max(1.0, float(vobj.LineWidth) * 0.5)
+
+        elif prop == "DrawStyle":
+            if hasattr(self, "lstyle") and hasattr(vobj, "DrawStyle"):
+                if vobj.DrawStyle == "Solid":
+                    self.lstyle.linePattern = 0xFFFF
+                elif vobj.DrawStyle == "Dashed":
+                    self.lstyle.linePattern = 0xF00F
+                elif vobj.DrawStyle == "Dotted":
+                    self.lstyle.linePattern = 0x0F0F
+                else:
+                    self.lstyle.linePattern = 0xFF88
 
         elif prop == "TextPosition":
             if (
