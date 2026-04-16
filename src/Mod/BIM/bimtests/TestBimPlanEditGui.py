@@ -204,6 +204,69 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         finally:
             arch_params.SetBool("autoJoinWalls", original_autojoin)
 
+    def test_plan_edit_dock_stays_embedded_with_task_view(self):
+        """Plan Edit should reopen as a docked panel, not a detached tool window."""
+
+        from PySide import QtCore, QtGui
+
+        plan_params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit")
+        original_bools = {
+            "DockPlacementSaved": plan_params.GetBool("DockPlacementSaved", False),
+            "DockFloating": plan_params.GetBool("DockFloating", False),
+        }
+        original_ints = {
+            "DockArea": plan_params.GetInt("DockArea", 0),
+            "DockHeight": plan_params.GetInt("DockHeight", 0),
+            "DockWidth": plan_params.GetInt("DockWidth", 0),
+            "DockX": plan_params.GetInt("DockX", 0),
+            "DockY": plan_params.GetInt("DockY", 0),
+        }
+
+        try:
+            plan_params.SetBool("DockPlacementSaved", True)
+            plan_params.SetBool("DockFloating", True)
+            plan_params.SetInt("DockArea", 1)
+            plan_params.SetInt("DockX", 120)
+            plan_params.SetInt("DockY", 140)
+            plan_params.SetInt("DockWidth", 320)
+            plan_params.SetInt("DockHeight", 280)
+
+            session = BimPlanSession.start_session()
+            self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+            self.pump_gui_events(timeout_ms=400)
+
+            dock = session.task_panel.form
+            main_window = FreeCADGui.getMainWindow()
+            task_dock = None
+            for candidate in main_window.findChildren(QtGui.QDockWidget):
+                action = candidate.toggleViewAction()
+                if action and action.data() == "Std_TaskView":
+                    task_dock = candidate
+                    break
+            self.assertFalse(dock.isFloating(), "Plan Edit should stay docked on entry.")
+
+            dock.setFloating(True)
+            self.pump_gui_events(timeout_ms=400)
+            self.assertFalse(
+                dock.isFloating(),
+                "Plan Edit should immediately snap back into the main dock stack.",
+            )
+
+            expected_area = QtCore.Qt.RightDockWidgetArea
+            if task_dock is not None and not task_dock.isFloating():
+                expected_area = main_window.dockWidgetArea(task_dock)
+            self.assertEqual(expected_area, main_window.dockWidgetArea(dock))
+            if task_dock is not None and not task_dock.isFloating():
+                self.assertIn(task_dock, main_window.tabifiedDockWidgets(dock))
+
+            session.shutdown(close_dialog=False)
+            self.pump_gui_events()
+        finally:
+            for name, value in original_bools.items():
+                plan_params.SetBool(name, value)
+            for name, value in original_ints.items():
+                plan_params.SetInt(name, value)
+
     def test_plan_edit_hides_joined_wall_additions(self):
         """Joined child walls should stay hidden so their footprints do not overdraw the host."""
 

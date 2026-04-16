@@ -144,6 +144,9 @@ Responsible for:
 - explicit exit
 
 The dock should not own the editing lifecycle.
+It should live in the normal main-window dock stack, preferably tabified with
+the standard `Tasks` dock when available, instead of reopening as a detached
+tool window.
 
 ### Session-Owned Subtools
 
