@@ -346,6 +346,66 @@ class TestArchSpace(TestArchBase.TestArchBase):
         self.assertAlmostEqual(space.Area.getValueAs("m^2").Value, 21.0, places=3)
         self.assertAlmostEqual(space.PerimeterLength.getValueAs("m").Value, 27.0, places=3)
 
+    def test_space_boundary_failure_describes_open_loop(self):
+        """Open boundary selections should keep a useful failure reason."""
+        operation = "Arch Space reports open boundary loops"
+        self.printTestMessage(operation)
+
+        height = 2500.0
+
+        def make_boundary_face(name, points):
+            face_object = App.ActiveDocument.addObject("Part::Feature", name)
+            face_object.Shape = Part.Face(Part.makePolygon(points + [points[0]]))
+            return face_object
+
+        boundaries = [
+            (
+                make_boundary_face(
+                    "OpenSouth",
+                    [
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(4000.0, 0.0, 0.0),
+                        App.Vector(4000.0, 0.0, height),
+                        App.Vector(0.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OpenEast",
+                    [
+                        App.Vector(4000.0, 0.0, 0.0),
+                        App.Vector(4000.0, 3000.0, 0.0),
+                        App.Vector(4000.0, 3000.0, height),
+                        App.Vector(4000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OpenWest",
+                    [
+                        App.Vector(0.0, 3000.0, 0.0),
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(0.0, 0.0, height),
+                        App.Vector(0.0, 3000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+        ]
+
+        with patch("FreeCAD.Console.PrintError") as print_error:
+            space = Arch.makeSpace(boundaries)
+            App.ActiveDocument.recompute()
+
+        self.assertEqual(len(space.Shape.Solids), 0)
+        self.assertIn("closed room loop", space.Proxy.getLastBoundaryError())
+        console_output = "".join(call.args[0] for call in print_error.call_args_list)
+        self.assertIn("closed room loop", console_output)
+
     def test_space_base_supports_connected_l_shaped_volume(self):
         """Connected non-rectangular base solids should keep a polygonal footprint."""
         operation = "Arch Space from connected L-shaped base"
