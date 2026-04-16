@@ -34,7 +34,11 @@ QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
 
 _PLAN_PAPER_RGB = (1.0, 1.0, 1.0)
-_DEFAULT_DOCK_AREA = 2
+_DEFAULT_DOCK_HEIGHT = 240
+_DEFAULT_DOCK_WIDTH = 300
+_MIN_DOCK_HEIGHT = 220
+_MIN_DOCK_WIDTH = 280
+_STD_TASK_DOCK_NAME = "Std_TaskView"
 _MIN_WALL_LENGTH = 10.0
 _PLAN_EDIT_SNAP_SET = {
     "Lock",
@@ -6431,21 +6435,41 @@ class PlanEditDockWidget:
         self._modal_focus_widgets = []
         self._saved_focus_policies = {}
         self._dock = _PlanEditDock(self)
+        self._clear_legacy_floating_preferences()
 
         self.form = self._dock
         self._configure_form(QtCore, QtGui)
         container = self._build_form_contents(QtGui)
-        self._install_form(container, QtCore)
+        self._install_form(container, QtCore, QtGui)
+
+    def _clear_legacy_floating_preferences(self):
+        for remover, name in (
+            (self._params.RemBool, "DockPlacementSaved"),
+            (self._params.RemBool, "DockFloating"),
+            (self._params.RemInt, "DockX"),
+            (self._params.RemInt, "DockY"),
+            (self._params.RemInt, "DockArea"),
+        ):
+            try:
+                remover(name)
+            except Exception:
+                pass
 
     def _configure_form(self, QtCore, QtGui):
         self.form.setWindowTitle(translate("BIM_PlanEdit", "Plan Edit"))
         self.form.setObjectName("BIMPlanEditDock")
         self.form.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
-        self.form.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
+        self.form.setAllowedAreas(
+            QtCore.Qt.LeftDockWidgetArea
+            | QtCore.Qt.RightDockWidgetArea
+            | QtCore.Qt.TopDockWidgetArea
+            | QtCore.Qt.BottomDockWidgetArea
+        )
+        self._apply_dock_features(QtGui)
+
+    def _apply_dock_features(self, QtGui):
         self.form.setFeatures(
-            QtGui.QDockWidget.DockWidgetClosable
-            | QtGui.QDockWidget.DockWidgetMovable
-            | QtGui.QDockWidget.DockWidgetFloatable
+            QtGui.QDockWidget.DockWidgetClosable | QtGui.QDockWidget.DockWidgetMovable
         )
 
     def _build_form_contents(self, QtGui):
@@ -6555,15 +6579,84 @@ class PlanEditDockWidget:
             except Exception:
                 pass
 
-    def _install_form(self, container, QtCore):
+    def _find_standard_task_dock(self, QtGui):
+        main_window = FreeCADGui.getMainWindow()
+        try:
+            dock = main_window.findChild(QtGui.QDockWidget, _STD_TASK_DOCK_NAME)
+        except Exception:
+            dock = None
+        if dock is not None:
+            return dock
+        try:
+            for candidate in main_window.findChildren(QtGui.QDockWidget):
+                action = candidate.toggleViewAction()
+                if action and action.data() == _STD_TASK_DOCK_NAME:
+                    return candidate
+        except Exception:
+            pass
+        return None
+
+    def _get_preferred_dock_area(self, QtCore, QtGui):
+        task_dock = self._find_standard_task_dock(QtGui)
+        if task_dock is not None:
+            try:
+                area = FreeCADGui.getMainWindow().dockWidgetArea(task_dock)
+                if area != QtCore.Qt.NoDockWidgetArea:
+                    return area
+            except Exception:
+                pass
+        return QtCore.Qt.RightDockWidgetArea
+
+    def _tabify_with_standard_task_dock(self, QtGui):
+        task_dock = self._find_standard_task_dock(QtGui)
+        if task_dock is None or self.form is None or task_dock is self.form:
+            return
+        try:
+            if task_dock.isFloating():
+                return
+        except Exception:
+            pass
+        main_window = FreeCADGui.getMainWindow()
+        try:
+            main_window.tabifyDockWidget(task_dock, self.form)
+            self.form.raise_()
+        except Exception:
+            pass
+
+    def _restore_docked_state(self):
+        from PySide import QtGui
+
+        if self.form is None or self._closed:
+            return
+
+        try:
+            self.form.setFloating(False)
+        except Exception:
+            pass
+
+        self._tabify_with_standard_task_dock(QtGui)
+        self._apply_dock_features(QtGui)
+
+    def _on_top_level_changed(self, floating):
+        if not floating or self.form is None or self._closed:
+            return
+
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(0, self._restore_docked_state)
+
+    def _install_form(self, container, QtCore, QtGui):
         self.form.setWidget(container)
         self.form.install_plan_key_filter(
             self.form,
             container,
             *self._modal_focus_widgets,
         )
-        FreeCADGui.getMainWindow().addDockWidget(QtCore.Qt.RightDockWidgetArea, self.form)
+        self.form.topLevelChanged.connect(self._on_top_level_changed)
+        dock_area = self._get_preferred_dock_area(QtCore, QtGui)
+        FreeCADGui.getMainWindow().addDockWidget(dock_area, self.form)
         self._apply_initial_placement(QtCore)
+        self._tabify_with_standard_task_dock(QtGui)
         QtCore.QMetaObject.connectSlotsByName(container)
 
     def show(self):
@@ -6589,45 +6682,17 @@ class PlanEditDockWidget:
             return
         try:
             geometry = self.form.geometry()
-            self._params.SetBool("DockPlacementSaved", True)
-            self._params.SetBool("DockFloating", self.form.isFloating())
-            self._params.SetInt("DockX", geometry.x())
-            self._params.SetInt("DockY", geometry.y())
             self._params.SetInt("DockWidth", geometry.width())
             self._params.SetInt("DockHeight", geometry.height())
-            area = FreeCADGui.getMainWindow().dockWidgetArea(self.form)
-            self._params.SetInt("DockArea", getattr(area, "value", _DEFAULT_DOCK_AREA))
         except RuntimeError:
             pass
         except Exception:
             pass
 
     def _apply_initial_placement(self, QtCore):
-        width = max(self._params.GetInt("DockWidth", 300), 280)
-        height = max(self._params.GetInt("DockHeight", 240), 220)
-
-        if self._params.GetBool("DockPlacementSaved", False):
-            area = self._params.GetInt("DockArea", _DEFAULT_DOCK_AREA)
-            try:
-                dock_area = getattr(QtCore.Qt, "DockWidgetArea", None)
-                if dock_area:
-                    dock_area = dock_area(area)
-                else:
-                    dock_area = QtCore.Qt.RightDockWidgetArea
-                FreeCADGui.getMainWindow().addDockWidget(dock_area, self.form)
-            except Exception:
-                pass
-            self.form.resize(width, height)
-            floating = self._params.GetBool("DockFloating", False)
-            self.form.setFloating(floating)
-            if floating:
-                self.form.move(
-                    self._params.GetInt("DockX", 0),
-                    self._params.GetInt("DockY", 0),
-                )
-            return
-
-        self.form.resize(300, 240)
+        width = max(self._params.GetInt("DockWidth", _DEFAULT_DOCK_WIDTH), _MIN_DOCK_WIDTH)
+        height = max(self._params.GetInt("DockHeight", _DEFAULT_DOCK_HEIGHT), _MIN_DOCK_HEIGHT)
+        self.form.resize(width, height)
         self.form.setFloating(False)
 
     def detach(self):

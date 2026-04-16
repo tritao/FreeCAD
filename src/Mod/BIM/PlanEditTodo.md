@@ -227,6 +227,8 @@ Changes:
 - keep keyboard focus and point-pick behavior centered on the view
 - only use the dock for storey/tool/session controls
 - avoid embedding standalone task widgets into the dock
+- keep the dock inside the normal main-window dock stack instead of restoring
+  a floating utility-window state
 
 Concrete tasks:
 
