@@ -740,17 +740,29 @@ class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
 
         self.fcoords = coin.SoCoordinate3()
         self.fset = coin.SoIndexedFaceSet()
-        material = coin.SoMaterial()
-        material.diffuseColor.setValue(ArchCommands.getDefaultColor("Space"))
-        material.transparency.setValue(0.7)
         shape_hints = coin.SoShapeHints()
         shape_hints.vertexOrdering = coin.SoShapeHints.COUNTERCLOCKWISE
+        fill_offset = coin.SoPolygonOffset()
+        fill_offset.styles = coin.SoPolygonOffsetElement.FILLED
+        fill_offset.factor = 1.0
+        fill_offset.units = 4.0
+        fill_offset.on = True
+
+        base_color = ArchCommands.getDefaultColor("Space")
+        fill_color = tuple(min(1.0, 0.84 + component * 0.16) for component in base_color[:3])
 
         sep = coin.SoSeparator()
-        sep.addChild(material)
-        sep.addChild(self.fcoords)
-        sep.addChild(shape_hints)
-        sep.addChild(self.fset)
+        sep.addChild(fill_offset)
+        sep.addChild(
+            ArchComponent.ViewProviderComponent.buildFootprintFillSeparator(
+                self,
+                fill_color,
+                0.88,
+                self.fcoords,
+                self.fset,
+                shape_hints=shape_hints,
+            )
+        )
         return sep
 
     def updateData(self, obj, prop):
