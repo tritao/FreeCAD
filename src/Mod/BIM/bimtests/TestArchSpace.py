@@ -221,6 +221,131 @@ class TestArchSpace(TestArchBase.TestArchBase):
             msg=f"Invalid area value. Expected: {expectedArea.UserString}, actual: {actualArea.UserString}",
         )
 
+    def test_space_boundaries_support_inner_void_loop(self):
+        """Boundary-derived spaces should support a single inner void."""
+        operation = "Arch Space from boundary loops with an inner void"
+        self.printTestMessage(operation)
+
+        height = 2500.0
+        expected_area = 6000.0 * 4000.0 - 2000.0 * 1500.0
+
+        def make_boundary_face(name, points):
+            face_object = App.ActiveDocument.addObject("Part::Feature", name)
+            face_object.Shape = Part.Face(Part.makePolygon(points + [points[0]]))
+            return face_object
+
+        boundaries = [
+            (
+                make_boundary_face(
+                    "OuterSouth",
+                    [
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(6000.0, 0.0, 0.0),
+                        App.Vector(6000.0, 0.0, height),
+                        App.Vector(0.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterEast",
+                    [
+                        App.Vector(6000.0, 0.0, 0.0),
+                        App.Vector(6000.0, 4000.0, 0.0),
+                        App.Vector(6000.0, 4000.0, height),
+                        App.Vector(6000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterNorth",
+                    [
+                        App.Vector(6000.0, 4000.0, 0.0),
+                        App.Vector(0.0, 4000.0, 0.0),
+                        App.Vector(0.0, 4000.0, height),
+                        App.Vector(6000.0, 4000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterWest",
+                    [
+                        App.Vector(0.0, 4000.0, 0.0),
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(0.0, 0.0, height),
+                        App.Vector(0.0, 4000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "InnerSouth",
+                    [
+                        App.Vector(1000.0, 1000.0, 0.0),
+                        App.Vector(3000.0, 1000.0, 0.0),
+                        App.Vector(3000.0, 1000.0, height),
+                        App.Vector(1000.0, 1000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "InnerEast",
+                    [
+                        App.Vector(3000.0, 1000.0, 0.0),
+                        App.Vector(3000.0, 2500.0, 0.0),
+                        App.Vector(3000.0, 2500.0, height),
+                        App.Vector(3000.0, 1000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "InnerNorth",
+                    [
+                        App.Vector(3000.0, 2500.0, 0.0),
+                        App.Vector(1000.0, 2500.0, 0.0),
+                        App.Vector(1000.0, 2500.0, height),
+                        App.Vector(3000.0, 2500.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "InnerWest",
+                    [
+                        App.Vector(1000.0, 2500.0, 0.0),
+                        App.Vector(1000.0, 1000.0, 0.0),
+                        App.Vector(1000.0, 1000.0, height),
+                        App.Vector(1000.0, 2500.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+        ]
+
+        space = Arch.makeSpace(boundaries)
+        App.ActiveDocument.recompute()
+
+        footprint = space.Proxy.getFootprint(space)
+
+        self.assertEqual(len(space.Shape.Solids), 1)
+        self.assertEqual(len(footprint), 1)
+        self.assertEqual(len(footprint[0].Wires), 2)
+        self.assertAlmostEqual(space.Proxy.getArea(space), expected_area)
+        self.assertAlmostEqual(footprint[0].Area, expected_area)
+        self.assertAlmostEqual(space.Area.getValueAs("m^2").Value, 21.0, places=3)
+        self.assertAlmostEqual(space.PerimeterLength.getValueAs("m").Value, 27.0, places=3)
+
     def test_space_base_supports_connected_l_shaped_volume(self):
         """Connected non-rectangular base solids should keep a polygonal footprint."""
         operation = "Arch Space from connected L-shaped base"
