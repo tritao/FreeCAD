@@ -105,6 +105,31 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         return level, equipment
 
+    def _make_linked_symbolic_equipment(self):
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Feature", "LinkedPlanEquipmentSymbol")
+        base.Shape = Part.makeCompound(
+            [
+                Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(600, 0, 0)),
+                Part.makeLine(FreeCAD.Vector(600, 0, 0), FreeCAD.Vector(600, 400, 0)),
+                Part.makeLine(FreeCAD.Vector(600, 400, 0), FreeCAD.Vector(0, 400, 0)),
+                Part.makeLine(FreeCAD.Vector(0, 400, 0), FreeCAD.Vector(0, 0, 0)),
+            ]
+        )
+        equipment = Arch.makeEquipment(base)
+
+        link = self.document.addObject("App::Link", "LinkedPlanEquipmentLink")
+        link.setLink(equipment)
+        if hasattr(link, "LinkTransform"):
+            link.LinkTransform = True
+        link.Label = "Nightstand 001"
+        link.Placement.Base = FreeCAD.Vector(1000, 800, 0)
+        level.addObject(link)
+
+        self.document.recompute()
+        self.pump_gui_events()
+        return level, equipment, link
+
     def test_plan_edit_embedded_wall_uses_sane_top_plane(self):
         """Embedded wall creation in Plan Edit should start from a clean top plane."""
 
@@ -510,6 +535,51 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             self.assertEqual(("symbol", link), session._get_plan_target_at_position((100, 100)))
         finally:
             session.view = original_view
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_linked_symbol_overlay_fallback_picks_symbol_when_view_pick_misses(self):
+        """Plan Edit should fall back to overlay geometry when footprint picking misses."""
+
+        level, _equipment, link = self._make_linked_symbolic_equipment()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session._refresh_plan_object_footprint_display(link)
+        self.pump_gui_events()
+
+        segments = session._get_symbol_overlay_segments(link)
+        self.assertTrue(segments, "Expected linked symbolic equipment to expose overlay segments.")
+        start, end = segments[0]
+        mid = FreeCAD.Vector(
+            (start.x + end.x) * 0.5, (start.y + end.y) * 0.5, (start.z + end.z) * 0.5
+        )
+
+        real_view = session.view
+        screen_pos = real_view.getPointOnScreen(mid)
+
+        class FakeView:
+            def __init__(self, wrapped):
+                self._wrapped = wrapped
+
+            def getObjectsInfo(self, _mouse_pos):
+                return None
+
+            def getPointOnScreen(self, point):
+                return self._wrapped.getPointOnScreen(point)
+
+        try:
+            session.view = FakeView(real_view)
+            mouse_pos = (int(screen_pos[0]), int(screen_pos[1]))
+            self.assertEqual(("symbol", link), session._get_plan_target_at_position(mouse_pos))
+        finally:
+            session.view = real_view
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()

@@ -1923,6 +1923,62 @@ class PlanEditSession:
 
         return (None, None)
 
+    def _get_screen_distance_sq_to_segment(self, mouse_pos, start, end):
+        if not self.view or not mouse_pos:
+            return None
+        try:
+            cursor_x = float(mouse_pos[0])
+            cursor_y = float(mouse_pos[1])
+            start_x, start_y = self.view.getPointOnScreen(start)
+            end_x, end_y = self.view.getPointOnScreen(end)
+        except Exception:
+            return None
+
+        start_x = float(start_x)
+        start_y = float(start_y)
+        end_x = float(end_x)
+        end_y = float(end_y)
+        dx = end_x - start_x
+        dy = end_y - start_y
+        length_sq = dx * dx + dy * dy
+        if length_sq <= 1e-9:
+            proj_x = start_x
+            proj_y = start_y
+        else:
+            t = ((cursor_x - start_x) * dx + (cursor_y - start_y) * dy) / length_sq
+            t = max(0.0, min(1.0, t))
+            proj_x = start_x + t * dx
+            proj_y = start_y + t * dy
+        offset_x = proj_x - cursor_x
+        offset_y = proj_y - cursor_y
+        return offset_x * offset_x + offset_y * offset_y
+
+    def _pick_plan_symbol_target_from_overlays(self, mouse_pos, radius_px=10):
+        if not self.doc or not self.view or not mouse_pos:
+            return None
+        radius_sq = float(radius_px) * float(radius_px)
+        best_symbol = None
+        best_distance_sq = None
+        seen = set()
+        for obj in getattr(self.doc, "Objects", []) or []:
+            if not self._is_plan_symbol_instance(obj):
+                continue
+            name = getattr(obj, "Name", None)
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            view_object = getattr(obj, "ViewObject", None)
+            if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
+                continue
+            for start, end in self._get_symbol_overlay_segments(obj):
+                distance_sq = self._get_screen_distance_sq_to_segment(mouse_pos, start, end)
+                if distance_sq is None or distance_sq > radius_sq:
+                    continue
+                if best_distance_sq is None or distance_sq < best_distance_sq:
+                    best_symbol = obj
+                    best_distance_sq = distance_sq
+        return best_symbol
+
     def _has_direct_true_property(self, obj, prop_name):
         if not obj:
             return False
@@ -5070,9 +5126,9 @@ class PlanEditSession:
         try:
             infos = self.view.getObjectsInfo((int(mouse_pos[0]), int(mouse_pos[1])))
         except (AttributeError, ReferenceError, RuntimeError):
-            return (None, None)
+            infos = None
         if not infos:
-            return (None, None)
+            infos = []
 
         wall_candidate = None
         symbol_candidate = None
@@ -5098,6 +5154,8 @@ class PlanEditSession:
                 symbol_candidate = target_obj
             elif target_kind == "wall" and wall_candidate is None:
                 wall_candidate = target_obj
+        if symbol_candidate is None:
+            symbol_candidate = self._pick_plan_symbol_target_from_overlays(mouse_pos)
         if symbol_candidate is not None:
             return ("symbol", symbol_candidate)
         if wall_candidate is not None:
