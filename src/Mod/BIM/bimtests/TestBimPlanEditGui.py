@@ -3596,6 +3596,45 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_space_button_rejects_open_boundary_selection(self):
+        """Open wall selections should fail cleanly and leave no orphan space object behind."""
+
+        level, walls = self._make_plan_room_walls()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        before = {obj.Name for obj in self.document.Objects}
+        FreeCADGui.Selection.clearSelection()
+        for wall in walls[:3]:
+            FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        with patch("FreeCAD.Console.PrintError") as print_error, patch(
+            "FreeCAD.Console.PrintWarning"
+        ) as print_warning:
+            self.assertFalse(session.activate_space_tool())
+            self.pump_gui_events()
+
+        created_spaces = [
+            obj
+            for obj in self.document.Objects
+            if obj.Name not in before and Draft.getType(obj) == "Space"
+        ]
+        self.assertEqual(created_spaces, [])
+        error_output = "".join(call.args[0] for call in print_error.call_args_list)
+        warning_output = "".join(call.args[0] for call in print_warning.call_args_list)
+        self.assertIn("closed room loop", error_output)
+        self.assertIn("kept no new space object", warning_output)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_space_editor_can_add_and_remove_wall_boundaries(self):
         """Space boundary editing should stay session-owned inside Plan Edit."""
 

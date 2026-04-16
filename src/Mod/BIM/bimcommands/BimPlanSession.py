@@ -6194,26 +6194,70 @@ class PlanEditSession:
             )
             return False
         space = None
+        reported_failure = False
         try:
             self.doc.openTransaction(translate("BIM_PlanEdit", "Create Space"))
             space = Arch.makeSpace(boundaries)
             if not space:
                 raise RuntimeError("Unable to create space")
             self._add_object_to_active_storey(space)
-            self.doc.commitTransaction()
             self.doc.recompute()
+            if not self._space_has_valid_geometry(space):
+                reported_failure = self._report_space_creation_failure(space)
+                raise RuntimeError("Unable to create space")
+            self.doc.commitTransaction()
         except Exception:
             try:
                 self.doc.abortTransaction()
             except Exception:
                 pass
-            FreeCAD.Console.PrintError(
-                translate("BIM_PlanEdit", "Failed to create the selected space.\n")
-            )
+            if not reported_failure:
+                FreeCAD.Console.PrintError(
+                    translate("BIM_PlanEdit", "Failed to create the selected space.\n")
+                )
             return False
 
         self._register_plan_object(space)
         self._restore_selected_space(space)
+        return True
+
+    def _space_has_valid_geometry(self, space):
+        if not self._is_plan_space_object(space):
+            return False
+        try:
+            shape = getattr(space, "Shape", None)
+        except Exception:
+            return False
+        if not shape:
+            return False
+        try:
+            if shape.isNull():
+                return False
+        except Exception:
+            pass
+        return bool(getattr(shape, "Solids", None))
+
+    def _report_space_creation_failure(self, space):
+        proxy = getattr(space, "Proxy", None)
+        if not proxy:
+            return False
+
+        message = ""
+        if hasattr(proxy, "getLastBoundaryError"):
+            try:
+                message = str(proxy.getLastBoundaryError(space) or "").strip()
+            except Exception:
+                message = ""
+
+        if not message:
+            return False
+
+        FreeCAD.Console.PrintWarning(
+            translate(
+                "BIM_PlanEdit",
+                "Plan Edit kept no new space object because the selection could not be turned into a valid Arch Space.\n",
+            )
+        )
         return True
 
     def _set_selected_space_label(self, label):
