@@ -1597,14 +1597,27 @@ class PlanEditSession:
         proxy = getattr(obj, "Proxy", None)
         return getattr(proxy, "Type", None) == "Equipment"
 
+    def _has_direct_plan_symbols(self, obj):
+        if not obj:
+            return False
+        try:
+            if "PlanSymbols" not in (getattr(obj, "PropertiesList", []) or []):
+                return False
+            return any(symbol is not None for symbol in (getattr(obj, "PlanSymbols", []) or []))
+        except Exception:
+            return False
+
     def _is_plan_symbol_instance(self, obj):
         if not obj:
             return False
-        if getattr(obj, "TypeId", "") != "App::Link":
-            return False
         if self._is_hidden_library_definition_object(obj):
             return False
-        return self._is_plan_equipment_object(obj)
+        if not self._is_plan_equipment_object(obj):
+            return False
+        if getattr(obj, "TypeId", "") == "App::Link":
+            return True
+        semantic_obj = self._get_plan_semantic_object(obj)
+        return obj == semantic_obj and self._has_direct_plan_symbols(semantic_obj)
 
     def _is_plan_context_only_object(self, obj):
         if not obj:
