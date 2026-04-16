@@ -34,11 +34,6 @@ QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
 
 _PLAN_PAPER_RGB = (1.0, 1.0, 1.0)
-_DEFAULT_DOCK_HEIGHT = 240
-_DEFAULT_DOCK_WIDTH = 300
-_MIN_DOCK_HEIGHT = 220
-_MIN_DOCK_WIDTH = 280
-_STD_TASK_DOCK_NAME = "Std_TaskView"
 _MIN_WALL_LENGTH = 10.0
 _PLAN_EDIT_SNAP_SET = {
     "Lock",
@@ -125,6 +120,36 @@ def get_active_session():
     return _active_session
 
 
+def _refresh_contextual_task_watchers():
+    task_view = None
+    try:
+        task_view = FreeCADGui.Control.taskPanel()
+    except Exception:
+        task_view = None
+
+    if task_view is not None:
+        try:
+            update = getattr(task_view, "updateWatcher", None)
+            if callable(update):
+                update()
+                return
+        except Exception:
+            pass
+
+    try:
+        workbench = FreeCADGui.activeWorkbench()
+    except Exception:
+        workbench = None
+    if not workbench or workbench.name() != "BIMWorkbench":
+        return
+    try:
+        if hasattr(workbench, "setTaskWatchers"):
+            FreeCADGui.Control.clearTaskWatcher()
+            workbench.setTaskWatchers()
+    except Exception:
+        pass
+
+
 def start_session():
     global _active_session
 
@@ -134,6 +159,11 @@ def start_session():
     session = PlanEditSession()
     if session.enter():
         _active_session = session
+        try:
+            FreeCADGui.Control.showTaskView()
+        except Exception:
+            pass
+        _refresh_contextual_task_watchers()
         return session
     return None
 
@@ -259,6 +289,7 @@ class PlanEditSession:
         self.view = None
         self.viewer = None
         self.task_panel = None
+        self._aux_task_panels = []
         self._viewport_status_chip = None
         self.current_tool = "Select"
         self._plan_join_type = "Miter"
@@ -377,11 +408,9 @@ class PlanEditSession:
         self._register_edit_callbacks()
         self._refresh_selected_wall()
 
-        panel = PlanEditDockWidget(self)
+        panel = PlanEditControlsWidget(self)
         self.attach_task_panel(panel)
         panel.refresh()
-        panel.show()
-        panel.raise_()
         FreeCAD.Console.PrintMessage(translate("BIM_PlanEdit", "Entered BIM Plan Edit mode.\n"))
         return True
 
@@ -680,11 +709,26 @@ class PlanEditSession:
             self._detach_document_observer()
             self._unregister_edit_callbacks()
             if panel:
-                panel.mark_closed()
+                try:
+                    mark_closed = getattr(panel, "mark_closed", None)
+                    if callable(mark_closed):
+                        mark_closed()
+                except Exception:
+                    pass
                 if close_dialog and not teardown:
-                    panel.close()
+                    try:
+                        close = getattr(panel, "close", None)
+                        if callable(close):
+                            close()
+                    except Exception:
+                        pass
                 else:
-                    panel.detach()
+                    try:
+                        detach = getattr(panel, "detach", None)
+                        if callable(detach):
+                            detach()
+                    except Exception:
+                        pass
             if teardown:
                 self._discard_runtime_references()
             else:
@@ -700,8 +744,10 @@ class PlanEditSession:
                     translate("BIM_PlanEdit", "Exited BIM Plan Edit mode.\n")
                 )
         finally:
+            self._aux_task_panels = []
             _active_session = None
             self._finishing = False
+            _refresh_contextual_task_watchers()
         return True
 
     def collect_storeys(self):
@@ -4409,12 +4455,40 @@ class PlanEditSession:
             return
         self.task_panel = panel
 
+    def attach_aux_task_panel(self, panel):
+        if panel is None or panel in self._aux_task_panels:
+            return
+        self._aux_task_panels.append(panel)
+        try:
+            panel.refresh()
+        except (AttributeError, RuntimeError):
+            self.detach_aux_task_panel(panel)
+
+    def detach_aux_task_panel(self, panel):
+        if panel is None:
+            return
+        self._aux_task_panels = [item for item in self._aux_task_panels if item is not panel]
+
     def detach_task_panel(self):
         panel = self.task_panel
         self.task_panel = None
         if panel:
-            panel.mark_closed()
-            panel.detach()
+            try:
+                mark_closed = getattr(panel, "mark_closed", None)
+                if callable(mark_closed):
+                    mark_closed()
+            except Exception:
+                pass
+            try:
+                detach = getattr(panel, "detach", None)
+                if callable(detach):
+                    detach()
+                else:
+                    dispose = getattr(panel, "dispose", None)
+                    if callable(dispose):
+                        dispose()
+            except Exception:
+                pass
         return panel
 
     def on_panel_closed(self, panel):
@@ -4423,8 +4497,22 @@ class PlanEditSession:
             if not self._finishing:
                 self.shutdown(close_dialog=False, teardown=self._tearing_down)
             return
-        panel.mark_closed()
-        panel.detach()
+        try:
+            mark_closed = getattr(panel, "mark_closed", None)
+            if callable(mark_closed):
+                mark_closed()
+        except Exception:
+            pass
+        try:
+            detach = getattr(panel, "detach", None)
+            if callable(detach):
+                detach()
+            else:
+                dispose = getattr(panel, "dispose", None)
+                if callable(dispose):
+                    dispose()
+        except Exception:
+            pass
 
     def _refresh_task_panel_status(self):
         if self._tearing_down:
@@ -4432,12 +4520,21 @@ class PlanEditSession:
         self._update_input_hints()
         self._refresh_viewport_status_chip()
         panel = self.task_panel
-        if not panel:
-            return
-        try:
-            panel.refresh_from_session()
-        except (AttributeError, RuntimeError):
-            self.on_panel_closed(panel)
+        if panel:
+            try:
+                panel.refresh_from_session()
+            except (AttributeError, RuntimeError):
+                self.on_panel_closed(panel)
+        stale_panels = []
+        for extra_panel in list(self._aux_task_panels):
+            if extra_panel is panel:
+                continue
+            try:
+                extra_panel.refresh_from_session()
+            except (AttributeError, RuntimeError):
+                stale_panels.append(extra_panel)
+        for extra_panel in stale_panels:
+            self.detach_aux_task_panel(extra_panel)
 
     def _is_modal_plan_interaction_active(self):
         return bool(
@@ -6422,57 +6519,27 @@ class PlanEditSession:
         self._sync_selected_opening_handles()
 
 
-class PlanEditDockWidget:
-    """Session dock for Plan Edit mode."""
+class PlanEditControlsWidget:
+    """Reusable session controls widget for Plan Edit mode."""
 
     def __init__(self, session):
-        from PySide import QtCore, QtGui
+        from PySide import QtGui
 
         self.session = session
         self._storey_items = []
-        self._closed = False
-        self._params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit")
         self._modal_focus_widgets = []
         self._saved_focus_policies = {}
-        self._dock = _PlanEditDock(self)
-        self._clear_legacy_floating_preferences()
+        self.form = self._build_form(QtGui)
+        try:
+            self.form.setObjectName("BIMPlanEditContextControls")
+        except Exception:
+            pass
 
-        self.form = self._dock
-        self._configure_form(QtCore, QtGui)
-        container = self._build_form_contents(QtGui)
-        self._install_form(container, QtCore, QtGui)
+    @property
+    def modal_focus_widgets(self):
+        return tuple(self._modal_focus_widgets)
 
-    def _clear_legacy_floating_preferences(self):
-        for remover, name in (
-            (self._params.RemBool, "DockPlacementSaved"),
-            (self._params.RemBool, "DockFloating"),
-            (self._params.RemInt, "DockX"),
-            (self._params.RemInt, "DockY"),
-            (self._params.RemInt, "DockArea"),
-        ):
-            try:
-                remover(name)
-            except Exception:
-                pass
-
-    def _configure_form(self, QtCore, QtGui):
-        self.form.setWindowTitle(translate("BIM_PlanEdit", "Plan Edit"))
-        self.form.setObjectName("BIMPlanEditDock")
-        self.form.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
-        self.form.setAllowedAreas(
-            QtCore.Qt.LeftDockWidgetArea
-            | QtCore.Qt.RightDockWidgetArea
-            | QtCore.Qt.TopDockWidgetArea
-            | QtCore.Qt.BottomDockWidgetArea
-        )
-        self._apply_dock_features(QtGui)
-
-    def _apply_dock_features(self, QtGui):
-        self.form.setFeatures(
-            QtGui.QDockWidget.DockWidgetClosable | QtGui.QDockWidget.DockWidgetMovable
-        )
-
-    def _build_form_contents(self, QtGui):
+    def _build_form(self, QtGui):
         container = QtGui.QWidget()
         layout = QtGui.QVBoxLayout(container)
         layout.setContentsMargins(10, 10, 10, 10)
@@ -6579,126 +6646,30 @@ class PlanEditDockWidget:
             except Exception:
                 pass
 
-    def _find_standard_task_dock(self, QtGui):
-        main_window = FreeCADGui.getMainWindow()
-        try:
-            dock = main_window.findChild(QtGui.QDockWidget, _STD_TASK_DOCK_NAME)
-        except Exception:
-            dock = None
-        if dock is not None:
-            return dock
-        try:
-            for candidate in main_window.findChildren(QtGui.QDockWidget):
-                action = candidate.toggleViewAction()
-                if action and action.data() == _STD_TASK_DOCK_NAME:
-                    return candidate
-        except Exception:
-            pass
-        return None
-
-    def _get_preferred_dock_area(self, QtCore, QtGui):
-        task_dock = self._find_standard_task_dock(QtGui)
-        if task_dock is not None:
+    def dispose(self):
+        form = self.form
+        if form is not None:
             try:
-                area = FreeCADGui.getMainWindow().dockWidgetArea(task_dock)
-                if area != QtCore.Qt.NoDockWidgetArea:
-                    return area
+                parent = form.parentWidget()
+                if parent is not None and hasattr(parent, "layout"):
+                    layout = parent.layout()
+                    if layout is not None:
+                        layout.removeWidget(form)
             except Exception:
                 pass
-        return QtCore.Qt.RightDockWidgetArea
-
-    def _tabify_with_standard_task_dock(self, QtGui):
-        task_dock = self._find_standard_task_dock(QtGui)
-        if task_dock is None or self.form is None or task_dock is self.form:
-            return
-        try:
-            if task_dock.isFloating():
-                return
-        except Exception:
-            pass
-        main_window = FreeCADGui.getMainWindow()
-        try:
-            main_window.tabifyDockWidget(task_dock, self.form)
-            self.form.raise_()
-        except Exception:
-            pass
-
-    def _restore_docked_state(self):
-        from PySide import QtGui
-
-        if self.form is None or self._closed:
-            return
-
-        try:
-            self.form.setFloating(False)
-        except Exception:
-            pass
-
-        self._tabify_with_standard_task_dock(QtGui)
-        self._apply_dock_features(QtGui)
-
-    def _on_top_level_changed(self, floating):
-        if not floating or self.form is None or self._closed:
-            return
-
-        from PySide import QtCore
-
-        QtCore.QTimer.singleShot(0, self._restore_docked_state)
-
-    def _install_form(self, container, QtCore, QtGui):
-        self.form.setWidget(container)
-        self.form.install_plan_key_filter(
-            self.form,
-            container,
-            *self._modal_focus_widgets,
-        )
-        self.form.topLevelChanged.connect(self._on_top_level_changed)
-        dock_area = self._get_preferred_dock_area(QtCore, QtGui)
-        FreeCADGui.getMainWindow().addDockWidget(dock_area, self.form)
-        self._apply_initial_placement(QtCore)
-        self._tabify_with_standard_task_dock(QtGui)
-        QtCore.QMetaObject.connectSlotsByName(container)
-
-    def show(self):
-        if self._closed or self.form is None:
-            return
-        self.form.show()
-
-    def raise_(self):
-        if self._closed or self.form is None:
-            return
-        self.form.raise_()
-
-    def activateWindow(self):
-        if self._closed or self.form is None:
-            return
-        self.form.activateWindow()
-
-    def mark_closed(self):
-        self._closed = True
-
-    def save_state(self):
-        if self.form is None:
-            return
-        try:
-            geometry = self.form.geometry()
-            self._params.SetInt("DockWidth", geometry.width())
-            self._params.SetInt("DockHeight", geometry.height())
-        except RuntimeError:
-            pass
-        except Exception:
-            pass
-
-    def _apply_initial_placement(self, QtCore):
-        width = max(self._params.GetInt("DockWidth", _DEFAULT_DOCK_WIDTH), _MIN_DOCK_WIDTH)
-        height = max(self._params.GetInt("DockHeight", _DEFAULT_DOCK_HEIGHT), _MIN_DOCK_HEIGHT)
-        self.form.resize(width, height)
-        self.form.setFloating(False)
-
-    def detach(self):
-        form = self.form
+            try:
+                form.hide()
+            except Exception:
+                pass
+            try:
+                form.setParent(None)
+            except Exception:
+                pass
+            try:
+                form.deleteLater()
+            except Exception:
+                pass
         self.form = None
-        self._dock = None
         self.status = None
         self.storey_combo = None
         self.select_button = None
@@ -6710,23 +6681,15 @@ class PlanEditDockWidget:
         self.unjoin_button = None
         self.reapply_button = None
         self.exit_button = None
-        if form:
-            try:
-                form.setWidget(None)
-            except RuntimeError:
-                pass
-
-    def close(self):
-        if self.form is None:
-            return
-        self.mark_closed()
-        self.form.close()
+        self._modal_focus_widgets = []
+        self._saved_focus_policies = {}
+        self._storey_items = []
 
     def refresh(self):
-        if self._closed or self.form is None or self.storey_combo is None:
+        if self.form is None or self.storey_combo is None:
             return
+        self.storey_combo.blockSignals(True)
         try:
-            self.storey_combo.blockSignals(True)
             self.storey_combo.clear()
             self._storey_items = [None] + list(self.session.storeys)
             self.storey_combo.addItem(translate("BIM_PlanEdit", "Global XY (Z=0)"))
@@ -6739,106 +6702,110 @@ class PlanEditDockWidget:
             except ValueError:
                 index = 0
             self.storey_combo.setCurrentIndex(index)
-            self.storey_combo.blockSignals(False)
-            self.refresh_from_session()
-        except (AttributeError, RuntimeError):
-            self.mark_closed()
-            self.detach()
+        finally:
+            try:
+                self.storey_combo.blockSignals(False)
+            except Exception:
+                pass
+        self.refresh_from_session()
 
     def refresh_from_session(self):
-        if self._closed or self.form is None or self.status is None or self.exit_button is None:
+        if self.form is None or self.status is None or self.exit_button is None:
             return
-        try:
-            if self.join_type_combo is not None:
-                self.join_type_combo.blockSignals(True)
+
+        if self.join_type_combo is not None:
+            self.join_type_combo.blockSignals(True)
+            try:
                 join_type_index = self.join_type_combo.findData(self.session.get_plan_join_type())
                 if join_type_index >= 0:
                     self.join_type_combo.setCurrentIndex(join_type_index)
-                self.join_type_combo.blockSignals(False)
-            storey_text = self.session.get_storey_label(self.session.active_storey)
-            tool = self.session.current_tool
-            modal_active = self.session._is_modal_plan_interaction_active()
-            if tool == "Join" and self.session.selected_wall:
-                target_wall, joint, detail = self.session._get_plan_join_candidate_state()
-                selection_state = translate("BIM_PlanEdit", "Source wall: {label}").format(
-                    label=self.session.selected_wall.Label
-                )
-                selection_help = translate(
-                    "BIM_PlanEdit",
-                    "Join type: {joint_type}\n{pair_state}\n{action}",
-                ).format(
-                    joint_type=self.session.get_plan_join_type_label(),
-                    pair_state=detail or translate("BIM_PlanEdit", "Candidate wall: none"),
-                    action=self.session._get_plan_join_mode_action_text(target_wall, joint),
-                )
-            elif self.session.selected_opening:
-                selection_state = translate("BIM_PlanEdit", "Opening: {label}").format(
-                    label=self.session.selected_opening.Label
-                )
-                selection_help = translate(
-                    "BIM_PlanEdit",
-                    "Use in-view handles to move or flip the selected opening.",
-                )
-            elif self.session.selected_symbol:
-                selection_state = translate("BIM_PlanEdit", "Symbol: {label}").format(
-                    label=self.session.selected_symbol.Label
-                )
-                if self.session.current_tool == "Rotate Symbol":
-                    if self.session._symbol_rotation_snap_enabled():
-                        selection_help = translate(
-                            "BIM_PlanEdit",
-                            "Use in-view handles to rotate the selected symbol instance. Rotation snaps to {snap} by default; hold Shift for free angle.",
-                        ).format(snap=self.session._format_symbol_rotation_snap_label())
-                    else:
-                        selection_help = translate(
-                            "BIM_PlanEdit",
-                            "Use in-view handles to rotate the selected symbol instance.",
-                        )
+            finally:
+                try:
+                    self.join_type_combo.blockSignals(False)
+                except Exception:
+                    pass
+
+        storey_text = self.session.get_storey_label(self.session.active_storey)
+        tool = self.session.current_tool
+        modal_active = self.session._is_modal_plan_interaction_active()
+        if tool == "Join" and self.session.selected_wall:
+            target_wall, joint, detail = self.session._get_plan_join_candidate_state()
+            selection_state = translate("BIM_PlanEdit", "Source wall: {label}").format(
+                label=self.session.selected_wall.Label
+            )
+            selection_help = translate(
+                "BIM_PlanEdit",
+                "Join type: {joint_type}\n{pair_state}\n{action}",
+            ).format(
+                joint_type=self.session.get_plan_join_type_label(),
+                pair_state=detail or translate("BIM_PlanEdit", "Candidate wall: none"),
+                action=self.session._get_plan_join_mode_action_text(target_wall, joint),
+            )
+        elif self.session.selected_opening:
+            selection_state = translate("BIM_PlanEdit", "Opening: {label}").format(
+                label=self.session.selected_opening.Label
+            )
+            selection_help = translate(
+                "BIM_PlanEdit",
+                "Use in-view handles to move or flip the selected opening.",
+            )
+        elif self.session.selected_symbol:
+            selection_state = translate("BIM_PlanEdit", "Symbol: {label}").format(
+                label=self.session.selected_symbol.Label
+            )
+            if self.session.current_tool == "Rotate Symbol":
+                if self.session._symbol_rotation_snap_enabled():
+                    selection_help = translate(
+                        "BIM_PlanEdit",
+                        "Use in-view handles to rotate the selected symbol instance. Rotation snaps to {snap} by default; hold Shift for free angle.",
+                    ).format(snap=self.session._format_symbol_rotation_snap_label())
                 else:
                     selection_help = translate(
                         "BIM_PlanEdit",
-                        "Use in-view handles to move or rotate the selected symbol instance.",
-                    )
-            elif self.session.selected_wall:
-                selection_state = translate("BIM_PlanEdit", "Wall: {label}").format(
-                    label=self.session.selected_wall.Label
-                )
-                if self.session.is_selected_wall_endpoint_editable():
-                    selection_help = translate(
-                        "BIM_PlanEdit",
-                        "Use wall grips in the viewport to stretch or move the selected wall.",
-                    )
-                else:
-                    selection_help = translate(
-                        "BIM_PlanEdit",
-                        "This wall can be reviewed in plan, but grip editing is unavailable.",
+                        "Use in-view handles to rotate the selected symbol instance.",
                     )
             else:
-                selection_state = translate("BIM_PlanEdit", "Selection: none")
                 selection_help = translate(
                     "BIM_PlanEdit",
-                    "Select a wall, hosted opening, or symbol instance in the viewport to edit it.",
+                    "Use in-view handles to move or rotate the selected symbol instance.",
                 )
-            if self.session._plan_relation_status_message:
-                selection_help = "{}\n{}".format(
-                    selection_help,
-                    self.session._plan_relation_status_message,
-                )
-            self.status.setText(
-                translate(
-                    "BIM_PlanEdit",
-                    "Mode: {tool}\nStorey: {storey}\nDisplay: Footprint\n{selection_state}\n{selection_help}",
-                ).format(
-                    tool=tool,
-                    storey=storey_text,
-                    selection_state=selection_state,
-                    selection_help=selection_help,
-                )
+        elif self.session.selected_wall:
+            selection_state = translate("BIM_PlanEdit", "Wall: {label}").format(
+                label=self.session.selected_wall.Label
             )
-            self._apply_modal_interaction_state(modal_active)
-        except (AttributeError, RuntimeError):
-            self.mark_closed()
-            self.detach()
+            if self.session.is_selected_wall_endpoint_editable():
+                selection_help = translate(
+                    "BIM_PlanEdit",
+                    "Use wall grips in the viewport to stretch or move the selected wall.",
+                )
+            else:
+                selection_help = translate(
+                    "BIM_PlanEdit",
+                    "This wall can be reviewed in plan, but grip editing is unavailable.",
+                )
+        else:
+            selection_state = translate("BIM_PlanEdit", "Selection: none")
+            selection_help = translate(
+                "BIM_PlanEdit",
+                "Select a wall, hosted opening, or symbol instance in the viewport to edit it.",
+            )
+        if self.session._plan_relation_status_message:
+            selection_help = "{}\n{}".format(
+                selection_help,
+                self.session._plan_relation_status_message,
+            )
+        self.status.setText(
+            translate(
+                "BIM_PlanEdit",
+                "Mode: {tool}\nStorey: {storey}\nDisplay: Footprint\n{selection_state}\n{selection_help}",
+            ).format(
+                tool=tool,
+                storey=storey_text,
+                selection_state=selection_state,
+                selection_help=selection_help,
+            )
+        )
+        self._apply_modal_interaction_state(modal_active)
 
     def _apply_modal_interaction_state(self, modal_active):
         from PySide import QtCore
@@ -6916,61 +6883,6 @@ class PlanEditDockWidget:
 
     def on_exit_clicked(self):
         self.session.shutdown()
-
-
-class _PlanEditDock:
-    def __new__(cls, owner):
-        from PySide import QtCore, QtGui
-
-        class _DockWidget(QtGui.QDockWidget):
-            def __init__(self, dock_owner):
-                super().__init__(FreeCADGui.getMainWindow())
-                self._plan_owner = dock_owner
-                self._key_filtered_widgets = []
-
-            def closeEvent(self, event):
-                owner = self._plan_owner
-                if owner and not owner._closed:
-                    if owner.session and not owner.session._tearing_down:
-                        owner.save_state()
-                    owner.mark_closed()
-                    if owner.session:
-                        owner.session.on_panel_closed(owner)
-                super().closeEvent(event)
-                self._plan_owner = None
-
-            def eventFilter(self, watched, event):
-                owner = self._plan_owner
-                if (
-                    owner
-                    and owner.session
-                    and event.type() == QtCore.QEvent.KeyPress
-                    and owner.session._is_wall_readout_edit_active()
-                ):
-                    key = event.key()
-                    if key in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter):
-                        if owner.session._start_wall_readout_edit():
-                            event.accept()
-                            return True
-                    if key == QtCore.Qt.Key_Tab:
-                        if owner.session._start_wall_readout_edit(
-                            cycle=owner.session._is_wall_move_edit_active()
-                        ):
-                            event.accept()
-                            return True
-                return super().eventFilter(watched, event)
-
-            def install_plan_key_filter(self, *widgets):
-                for widget in widgets:
-                    if widget is None:
-                        continue
-                    try:
-                        widget.installEventFilter(self)
-                        self._key_filtered_widgets.append(widget)
-                    except Exception:
-                        pass
-
-        return _DockWidget(owner)
 
 
 class _PlanEditViewportStatusChip:
