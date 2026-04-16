@@ -40,6 +40,31 @@ from unittest.mock import patch
 
 
 class TestBimPlanEditGui(ArchWallGuiTestCase):
+    def _make_fake_left_mouse_press(self, x=250, y=250):
+        from pivy import coin
+
+        class _FakeMousePosition:
+            def __init__(self, x, y):
+                self._value = (x, y)
+
+            def getValue(self):
+                return self._value
+
+        class _FakeMouseEvent:
+            def __init__(self, x, y):
+                self._position = _FakeMousePosition(x, y)
+
+            def getButton(self):
+                return coin.SoMouseButtonEvent.BUTTON1
+
+            def getState(self):
+                return coin.SoMouseButtonEvent.DOWN
+
+            def getPosition(self):
+                return self._position
+
+        return self._FakeEventCallback(_FakeMouseEvent(x, y))
+
     def _make_plan_symbol_link(self, anchor=None, facing=None):
         level = Arch.makeFloor(name="Level 0")
         box = self.document.addObject("Part::Box", "PlanSymbolBox")
@@ -129,6 +154,27 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.document.recompute()
         self.pump_gui_events()
         return level, equipment, link
+
+    def _make_plan_room_walls(self, size=4000, width=200, height=2500):
+        level = Arch.makeFloor(name="Level 0")
+        walls = []
+        placements = (
+            (FreeCAD.Vector(0, 0, 0), 0),
+            (FreeCAD.Vector(size, 0, 0), 90),
+            (FreeCAD.Vector(size, size, 0), 180),
+            (FreeCAD.Vector(0, size, 0), -90),
+        )
+        for index, (base, angle) in enumerate(placements, start=1):
+            wall = Arch.makeWall(length=size, width=width, height=height, align="Left")
+            wall.Label = f"Room Wall {index}"
+            wall.Placement.Base = base
+            wall.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), angle)
+            level.addObject(wall)
+            walls.append(wall)
+
+        self.document.recompute()
+        self.pump_gui_events()
+        return level, walls
 
     def test_plan_edit_embedded_wall_uses_sane_top_plane(self):
         """Embedded wall creation in Plan Edit should start from a clean top plane."""
@@ -1136,7 +1182,87 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNone(session.selected_wall)
         self.assertEqual(len(session._grip_trackers), 0)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
+
         self.assertEqual(len(session._opening_handle_trackers), 3)
+
+    def test_plan_edit_ctrl_click_adds_wall_to_selection_without_replacing_primary_target(self):
+        """Ctrl-click should build a wall selection set while keeping the current primary wall."""
+
+        from PySide import QtCore
+
+        level = Arch.makeFloor(name="Level 0")
+        wall_a = Arch.makeWall(length=3000, width=200, height=2500)
+        wall_b = Arch.makeWall(length=3000, width=200, height=2500)
+        wall_b.Placement = FreeCAD.Placement(
+            FreeCAD.Vector(1500, 1500, 0), FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 90)
+        )
+        level.addObject(wall_a)
+        level.addObject(wall_b)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("wall", wall_a),
+        ):
+            session._on_mouse_pressed(self._make_fake_left_mouse_press())
+
+        self.assertIs(session.selected_wall, wall_a)
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall_a.Name])
+
+        with patch(
+            "PySide.QtGui.QApplication.keyboardModifiers", return_value=QtCore.Qt.ControlModifier
+        ), patch.object(
+            session,
+            "_get_edit_node",
+            return_value=None,
+        ), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("wall", wall_b),
+        ):
+            callback = self._make_fake_left_mouse_press()
+            session._on_mouse_pressed(callback)
+
+        self.assertTrue(callback._handled)
+        self.assertIs(session.selected_wall, wall_a)
+        self.assertEqual(
+            [obj.Name for obj in FreeCADGui.Selection.getSelection()],
+            [wall_a.Name, wall_b.Name],
+        )
+        self.assertGreater(len(session._secondary_selection_trackers), 0)
+        self.assertIn("Selection set: 2 walls", session.task_panel.status.text())
+
+        with patch(
+            "PySide.QtGui.QApplication.keyboardModifiers", return_value=QtCore.Qt.ControlModifier
+        ), patch.object(
+            session,
+            "_get_edit_node",
+            return_value=None,
+        ), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("wall", wall_a),
+        ):
+            callback = self._make_fake_left_mouse_press()
+            session._on_mouse_pressed(callback)
+
+        self.assertTrue(callback._handled)
+        self.assertIs(session.selected_wall, wall_b)
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall_b.Name])
+        self.assertEqual(len(session._secondary_selection_trackers), 0)
+        self.assertNotIn("Selection set:", session.task_panel.status.text())
+
+        session.shutdown(close_dialog=False)
+
+        self.pump_gui_events()
 
     def test_plan_edit_hovered_hosted_door_shows_preselection_overlay(self):
         """Hosted openings should get a hover overlay independent of global preselection."""
@@ -3377,6 +3503,190 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         self.assertNotEqual(original_parts, list(door.WindowParts))
+
+    def test_plan_edit_selects_existing_space(self):
+        """Plan Edit should treat Arch Spaces as first-class selectable targets."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "PlanEditSpaceBase")
+        base.Length = 3200
+        base.Width = 2400
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Bedroom")
+        level.addObject(space)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, space.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        self.assertIs(session.selected_space, space)
+        self.assertIsNone(session.selected_wall)
+        self.assertIsNone(session.selected_opening)
+        self.assertIsNone(session.selected_symbol)
+        self.assertGreater(len(session._space_overlay_trackers), 0)
+        self.assertIn("Space: Bedroom", session.task_panel.status.text())
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_space_button_creates_space_from_selected_walls(self):
+        """The Space action should create and select a real Arch Space from selected walls."""
+
+        level, walls = self._make_plan_room_walls()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        before = {obj.Name for obj in self.document.Objects}
+        FreeCADGui.Selection.clearSelection()
+        for wall in walls:
+            FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        self.assertTrue(session.activate_space_tool())
+        self.pump_gui_events()
+
+        created_spaces = [
+            obj
+            for obj in self.document.Objects
+            if obj.Name not in before and Draft.getType(obj) == "Space"
+        ]
+        self.assertEqual(len(created_spaces), 1)
+        space = created_spaces[0]
+
+        self.assertEqual(Draft.getType(space), "Space")
+        self.assertEqual(space.IfcType, "Space")
+        self.assertIn(level, space.InListRecursive)
+        self.assertIs(session.selected_space, space)
+        self.assertEqual(len(session._get_space_boundary_entries(space)), 4)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_space_editor_can_add_and_remove_wall_boundaries(self):
+        """Space boundary editing should stay session-owned inside Plan Edit."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "EditableSpaceBase")
+        base.Length = 3000
+        base.Width = 2000
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Editable Space")
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")
+        wall.Label = "Boundary Wall"
+        level.addObject(space)
+        level.addObject(wall)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, space.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+        self.assertIs(session.selected_space, space)
+
+        FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+        self.assertIs(session.selected_space, space)
+
+        self.assertTrue(session._add_boundaries_to_selected_space())
+        boundaries = session._get_space_boundary_entries(space)
+        self.assertEqual(len(boundaries), 1)
+        self.assertIs(boundaries[0][0], wall)
+
+        self.assertTrue(session._remove_selected_space_boundaries())
+        self.assertEqual(session._get_space_boundary_entries(space), [])
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_ctrl_click_wall_keeps_selected_space_primary_for_boundary_editing(self):
+        """Ctrl-click should add boundary walls without replacing the selected space editor target."""
+
+        from PySide import QtCore
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "CtrlClickSpaceBase")
+        base.Length = 3000
+        base.Width = 2000
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Ctrl Space")
+        wall = Arch.makeWall(length=3000, width=200, height=2500, align="Left")
+        wall.Label = "Ctrl Boundary Wall"
+        level.addObject(space)
+        level.addObject(wall)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("space", space),
+        ):
+            session._on_mouse_pressed(self._make_fake_left_mouse_press())
+
+        self.assertIs(session.selected_space, space)
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [space.Name])
+
+        with patch(
+            "PySide.QtGui.QApplication.keyboardModifiers", return_value=QtCore.Qt.ControlModifier
+        ), patch.object(
+            session,
+            "_get_edit_node",
+            return_value=None,
+        ), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("wall", wall),
+        ):
+            callback = self._make_fake_left_mouse_press()
+            session._on_mouse_pressed(callback)
+
+        self.assertTrue(callback._handled)
+        self.assertIs(session.selected_space, space)
+        self.assertIsNone(session.selected_wall)
+        self.assertEqual(
+            [obj.Name for obj in FreeCADGui.Selection.getSelection()],
+            [space.Name, wall.Name],
+        )
+        self.assertGreater(len(session._secondary_selection_trackers), 0)
+        self.assertIn("Boundary candidates: 1 wall", session.task_panel.status.text())
+
+        self.assertTrue(session._add_boundaries_to_selected_space())
+        self.pump_gui_events()
+        boundaries = session._get_space_boundary_entries(space)
+        self.assertEqual(len(boundaries), 1)
+        self.assertEqual(boundaries[0][0], wall)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
 
     def test_plan_edit_invalidates_selected_opening_overlay_when_base_changes(self):
         """Selected opening overlays should be invalidated when the opening base changes."""
