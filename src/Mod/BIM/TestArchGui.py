@@ -30,6 +30,7 @@ from bimtests.TestArchBuildingPartGui import TestArchBuildingPartGui
 from bimtests.TestArchStairsGui import TestArchStairsGui
 from bimtests.TestBimLibraryGui import TestBimLibraryGui
 from bimtests.TestBimPlanEditGui import TestBimPlanEditGui
+from bimtests.TestBimProjectManagerGui import TestBimProjectManagerGui
 from bimtests.TestArchFootprintGui import TestArchFootprintGui
 from bimtests.TestArchReportGui import TestArchReportGui
 from bimtests.TestArchSiteGui import TestArchSiteGui
