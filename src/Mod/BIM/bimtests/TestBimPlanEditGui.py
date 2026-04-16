@@ -3573,6 +3573,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIn(level, space.InListRecursive)
         self.assertIs(session.selected_space, space)
         self.assertEqual(len(session._get_space_boundary_entries(space)), 4)
+        self.assertGreater(space.Area.getValueAs("m^2").Value, 0)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
