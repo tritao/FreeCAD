@@ -1482,6 +1482,31 @@ class PlanEditSession:
         self._refresh_plan_object_footprint_display(obj)
         self._request_view_redraw()
 
+    def _is_direct_plan_equipment_object(self, obj):
+        if not obj:
+            return False
+        try:
+            import Draft
+
+            if Draft.getType(obj) == "Equipment":
+                return True
+        except Exception:
+            pass
+        proxy = getattr(obj, "Proxy", None)
+        return getattr(proxy, "Type", None) == "Equipment"
+
+    def _get_direct_plan_symbol_owner(self, obj):
+        if not obj:
+            return None
+        for parent in getattr(obj, "InListRecursive", []) or getattr(obj, "InList", []):
+            if not self._is_direct_plan_equipment_object(parent):
+                continue
+            if obj == getattr(parent, "Base", None):
+                return parent
+            if obj in (getattr(parent, "PlanSymbols", None) or []):
+                return parent
+        return None
+
     def _get_plan_semantic_object(self, obj):
         current = obj
         seen = set()
@@ -1507,7 +1532,8 @@ class PlanEditSession:
             if not linked or linked == current:
                 break
             current = linked
-        return current or obj
+        owner = self._get_direct_plan_symbol_owner(current)
+        return owner or current or obj
 
     def _restore_object_view_state(self):
         if not self.doc or not self._saved_object_view_state:
@@ -1586,16 +1612,7 @@ class PlanEditSession:
     def _is_plan_equipment_object(self, obj):
         if not obj:
             return False
-        obj = self._get_plan_semantic_object(obj)
-        try:
-            import Draft
-
-            if Draft.getType(obj) == "Equipment":
-                return True
-        except Exception:
-            pass
-        proxy = getattr(obj, "Proxy", None)
-        return getattr(proxy, "Type", None) == "Equipment"
+        return self._is_direct_plan_equipment_object(self._get_plan_semantic_object(obj))
 
     def _has_direct_plan_symbols(self, obj):
         if not obj:
@@ -1704,6 +1721,13 @@ class PlanEditSession:
 
     def _apply_context_object_selectability(self, obj, view_object):
         if not view_object or not hasattr(view_object, "Selectable"):
+            return
+        semantic_obj = self._get_plan_semantic_object(obj)
+        if semantic_obj is not None and self._is_symbol_visual_dependency(semantic_obj, obj):
+            try:
+                view_object.Selectable = True
+            except Exception:
+                pass
             return
         if not self._is_plan_context_only_object(obj):
             return
@@ -1875,6 +1899,29 @@ class PlanEditSession:
         if self._is_plan_selectable_wall(obj):
             return "wall"
         return None
+
+    def _get_plan_target_for_object(self, obj, parent_obj=None):
+        seen = set()
+        for candidate in (parent_obj, obj):
+            if not candidate:
+                continue
+            name = getattr(candidate, "Name", None)
+            if name and name in seen:
+                continue
+            if name:
+                seen.add(name)
+            target_kind = self._get_plan_target_kind_for_object(candidate)
+            if target_kind:
+                return (target_kind, candidate)
+
+        semantic_obj = self._get_plan_semantic_object(obj)
+        semantic_name = getattr(semantic_obj, "Name", None)
+        if semantic_obj and semantic_name not in seen:
+            target_kind = self._get_plan_target_kind_for_object(semantic_obj)
+            if target_kind:
+                return (target_kind, semantic_obj)
+
+        return (None, None)
 
     def _has_direct_true_property(self, obj, prop_name):
         if not obj:
@@ -2223,9 +2270,9 @@ class PlanEditSession:
         if self.current_tool == "Select" and selection:
             selected_targets = []
             for selected in selection:
-                target_kind = self._get_plan_target_kind_for_object(selected)
+                target_kind, target_obj = self._get_plan_target_for_object(selected)
                 if target_kind:
-                    selected_targets.append((target_kind, selected))
+                    selected_targets.append((target_kind, target_obj))
 
             matched_target = None
             pending_kind, pending_target = self._pending_selected_plan_target or (None, None)
@@ -5043,13 +5090,14 @@ class PlanEditSession:
             if not doc:
                 continue
             obj = doc.getObject(str(obj_name))
-            target_kind = self._get_plan_target_kind_for_object(obj)
+            parent_obj = info.get("ParentObject")
+            target_kind, target_obj = self._get_plan_target_for_object(obj, parent_obj=parent_obj)
             if target_kind == "opening":
-                return ("opening", obj)
+                return ("opening", target_obj)
             if target_kind == "symbol" and symbol_candidate is None:
-                symbol_candidate = obj
+                symbol_candidate = target_obj
             elif target_kind == "wall" and wall_candidate is None:
-                wall_candidate = obj
+                wall_candidate = target_obj
         if symbol_candidate is not None:
             return ("symbol", symbol_candidate)
         if wall_candidate is not None:
