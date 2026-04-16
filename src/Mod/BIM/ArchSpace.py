@@ -416,20 +416,206 @@ class _Space(ArchComponent.Component):
             g.append(child)
             obj.Group = g
 
+    def _get_boundary_faces(self, obj):
+        faces = []
+        for boundary in getattr(obj, "Boundaries", []) or []:
+            try:
+                base_obj = boundary[0]
+                subnames = boundary[1]
+            except Exception:
+                continue
+            if not hasattr(base_obj, "Shape"):
+                continue
+            if isinstance(subnames, str):
+                sub_iter = [subnames]
+            else:
+                sub_iter = list(subnames or [])
+            for subname in sub_iter:
+                subname = str(subname)
+                if not subname.startswith("Face"):
+                    continue
+                try:
+                    face_index = int(subname[4:]) - 1
+                    faces.append(base_obj.Shape.Faces[face_index])
+                except Exception:
+                    continue
+        return faces
+
+    def _get_horizontal_slice_wires(self, shapes, cut_z):
+        import Part
+
+        section_edges = []
+        for shape in shapes or []:
+            section_edges.extend(ArchComponent.get_horizontal_slice_edges(shape, cut_z))
+        if not section_edges:
+            return []
+
+        try:
+            edge_groups = Part.sortEdges(section_edges)
+        except AttributeError:
+            edge_groups = Part.__sortEdges__(section_edges)
+
+        if edge_groups and hasattr(edge_groups[0], "ShapeType"):
+            edge_groups = [edge_groups]
+
+        wires = []
+        for edges in edge_groups or []:
+            try:
+                wire = Part.Wire(edges)
+            except Exception:
+                continue
+            if not wire.isClosed() or len(wire.Vertexes) < 3:
+                continue
+            wires.append(wire)
+        return wires
+
+    def _get_wire_face_sample_point(self, face):
+        try:
+            points, triangles = face.tessellate(1.0)
+        except Exception:
+            points, triangles = ([], [])
+        if triangles:
+            p1 = FreeCAD.Vector(points[triangles[0][0]])
+            p2 = FreeCAD.Vector(points[triangles[0][1]])
+            p3 = FreeCAD.Vector(points[triangles[0][2]])
+            return p1.add(p2).add(p3).multiply(1.0 / 3.0)
+        center = getattr(face, "CenterOfMass", None)
+        if center is not None:
+            return FreeCAD.Vector(center)
+        return None
+
+    def _build_faces_from_wires(self, wires, require_single_outer=False):
+        import Part
+
+        records = []
+        for wire in wires or []:
+            try:
+                face = Part.Face(wire)
+            except Exception:
+                continue
+            if face.Area <= 0.000001:
+                continue
+            sample_point = self._get_wire_face_sample_point(face)
+            if sample_point is None:
+                continue
+            records.append(
+                {
+                    "wire": wire,
+                    "face": face,
+                    "area": float(face.Area),
+                    "sample": sample_point,
+                    "parent": None,
+                    "depth": 0,
+                }
+            )
+        if not records:
+            return []
+
+        for record in records:
+            parent_candidates = []
+            for other in records:
+                if other is record or other["area"] <= record["area"] + 0.000001:
+                    continue
+                try:
+                    if other["face"].isInside(record["sample"], 0.001, True):
+                        parent_candidates.append(other)
+                except Exception:
+                    continue
+            if parent_candidates:
+                record["parent"] = min(parent_candidates, key=lambda item: item["area"])
+                record["depth"] = len(parent_candidates)
+
+        if require_single_outer:
+            top_level = [record for record in records if record["depth"] == 0]
+            nested_islands = [
+                record for record in records if record["depth"] > 0 and record["depth"] % 2 == 0
+            ]
+            if len(top_level) != 1 or nested_islands:
+                return []
+            outer = top_level[0]
+            wires_for_face = [outer["wire"]]
+            wires_for_face.extend(
+                record["wire"]
+                for record in records
+                if record["parent"] is outer and record["depth"] == 1
+            )
+            try:
+                return [ArchCommands.makeFace(wires_for_face)]
+            except Exception:
+                return []
+
+        faces = []
+        for outer in [record for record in records if record["depth"] % 2 == 0]:
+            wires_for_face = [outer["wire"]]
+            wires_for_face.extend(
+                record["wire"]
+                for record in records
+                if record["parent"] is outer and record["depth"] == outer["depth"] + 1
+            )
+            try:
+                face = ArchCommands.makeFace(wires_for_face)
+            except Exception:
+                continue
+            if getattr(face, "Area", 0.0) > 0.000001:
+                faces.append(face)
+        return faces
+
+    def _build_shape_from_boundary_loops(self, boundary_faces):
+        if not boundary_faces:
+            return None
+
+        bb = self._get_boundary_bounding_box(boundary_faces)
+        if not bb:
+            return None
+        if bb.ZLength <= 0.000001:
+            return None
+
+        cut_z = bb.Center.z
+        footprint_faces = self._build_faces_from_wires(
+            self._get_horizontal_slice_wires(boundary_faces, cut_z),
+            require_single_outer=True,
+        )
+        if len(footprint_faces) != 1:
+            return None
+
+        footprint = footprint_faces[0].copy()
+        footprint.translate(FreeCAD.Vector(0, 0, bb.ZMin - cut_z))
+        try:
+            shape = footprint.extrude(FreeCAD.Vector(0, 0, bb.ZLength))
+        except Exception:
+            return None
+        if not shape or not getattr(shape, "Solids", None):
+            return None
+        try:
+            shape = shape.removeSplitter()
+        except Exception:
+            pass
+        return shape.Solids[0] if len(shape.Solids) == 1 else shape
+
+    def _get_boundary_bounding_box(self, boundary_faces):
+        bb = None
+        for face in boundary_faces or []:
+            if bb is None:
+                bb = face.BoundBox
+            else:
+                bb.add(face.BoundBox)
+        return bb
+
     def getShape(self, obj):
         "computes a shape from a base shape and/or boundary faces"
         import Part
 
         shape = None
-        faces = []
-
+        boundary_faces = self._get_boundary_faces(obj)
+        loop_shape = None
         pl = obj.Placement
 
         # print("starting compute")
 
         # 1: if we have a base shape, we use it
         # Check if there is obj.Base and its validity to proceed
-        if self.ensureBase(obj):
+        has_base_shape = self.ensureBase(obj) and obj.Base.Shape.Solids
+        if has_base_shape:
             if obj.Base.Shape.Solids:
                 shape = obj.Base.Shape.copy()
                 shape = shape.removeSplitter()
@@ -439,13 +625,13 @@ class _Space(ArchComponent.Component):
             # print("got shape from base object")
             bb = shape.BoundBox
         else:
-            bb = None
-            for b in obj.Boundaries:
-                if hasattr(b[0], "Shape"):
-                    if not bb:
-                        bb = b[0].Shape.BoundBox
-                    else:
-                        bb.add(b[0].Shape.BoundBox)
+            loop_shape = self._build_shape_from_boundary_loops(boundary_faces)
+            if loop_shape is not None:
+                shape = self.processSubShapes(obj, loop_shape.Solids[0], pl)
+                self.applyShape(obj, shape, pl)
+                self._sync_area_properties(obj)
+                return
+            bb = self._get_boundary_bounding_box(boundary_faces)
             if not bb:
                 # compute area even if we are not calculating the shape
                 if obj.Shape and obj.Shape.Solids:
@@ -460,14 +646,7 @@ class _Space(ArchComponent.Component):
             # print("created shape from boundbox")
 
         # 3: identifying boundary faces
-        goodfaces = []
-        for b in obj.Boundaries:
-            if hasattr(b[0], "Shape"):
-                for sub in b[1]:
-                    if "Face" in sub:
-                        fn = int(sub[4:]) - 1
-                        faces.append(b[0].Shape.Faces[fn])
-                        # print("adding face ",fn," of object ",b[0].Name)
+        faces = list(boundary_faces)
 
         # print("total: ", len(faces), " faces")
 
@@ -501,13 +680,14 @@ class _Space(ArchComponent.Component):
         "returns the horizontal area at the center of the space"
 
         faces = self.getFootprint(obj)
-        self.face = faces[0] if faces else None
+        self.face = max(faces, key=lambda face: face.Area) if faces else None
         if self.face:
             if not notouch:
                 if hasattr(obj, "PerimeterLength"):
-                    if self.face.OuterWire.Length != obj.PerimeterLength.Value:
-                        obj.PerimeterLength = self.face.OuterWire.Length
-            return self.face.Area
+                    perimeter = sum(wire.Length for face in faces for wire in face.Wires)
+                    if abs(perimeter - obj.PerimeterLength.Value) > 0.000001:
+                        obj.PerimeterLength = perimeter
+            return sum(face.Area for face in faces)
         else:
             return 0
 
@@ -549,6 +729,22 @@ class _Space(ArchComponent.Component):
 
         if not hasattr(obj.Shape, "CenterOfMass"):
             return []
+        try:
+            cut_z = float(obj.Shape.CenterOfMass.z)
+        except Exception:
+            cut_z = float(obj.Shape.BoundBox.Center.z)
+        try:
+            faces = self._build_faces_from_wires(
+                self._get_horizontal_slice_wires([obj.Shape.copy()], cut_z)
+            )
+            if faces:
+                translate_z = obj.Shape.BoundBox.ZMin - cut_z
+                if abs(translate_z) > 0.000001:
+                    for face in faces:
+                        face.translate(FreeCAD.Vector(0, 0, translate_z))
+                return faces
+        except Part.OCCError:
+            pass
         try:
             pl = Part.makePlane(1, 1)
             pl.translate(obj.Shape.CenterOfMass)
