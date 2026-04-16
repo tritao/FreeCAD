@@ -2,6 +2,8 @@
 
 This document defines the intended direction of `Plan Edit` in the BIM workbench and records the first implemented iteration.
 
+Implementation follow-up lives in `PlanEditTodo.md`.
+
 `Plan Edit` is not meant to be a separate 2D drafting document. It is a storey-scoped BIM authoring mode that uses the normal 3D document and view, but constrains interaction to top-plan editing.
 
 ## Goal
