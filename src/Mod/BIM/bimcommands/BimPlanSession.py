@@ -71,11 +71,20 @@ _SYMBOL_VISUAL_PROPERTIES = {
     "PlanSymbols",
     "LinkedObject",
 }
+_SPACE_VISUAL_PROPERTIES = {
+    "Shape",
+    "Placement",
+    "Label",
+    "Boundaries",
+}
 _PLAN_VISUAL_HOVERED_WALL = "hovered_wall"
 _PLAN_VISUAL_HOVERED_OPENING = "hovered_opening"
 _PLAN_VISUAL_HOVERED_SYMBOL = "hovered_symbol"
+_PLAN_VISUAL_HOVERED_SPACE = "hovered_space"
 _PLAN_VISUAL_SELECTED_OPENING = "selected_opening"
 _PLAN_VISUAL_SELECTED_SYMBOL = "selected_symbol"
+_PLAN_VISUAL_SELECTED_SPACE = "selected_space"
+_PLAN_VISUAL_SECONDARY_SELECTION = "secondary_selection"
 _PLAN_VISUAL_WALL_GRIPS = "wall_grips"
 _PLAN_VISUAL_WALL_EDIT_PREVIEW = "wall_edit_preview"
 _PLAN_VISUAL_ALL = "all"
@@ -299,9 +308,11 @@ class PlanEditSession:
         self.selected_wall = None
         self.selected_opening = None
         self.selected_symbol = None
+        self.selected_space = None
         self.hovered_wall = None
         self.hovered_opening = None
         self.hovered_symbol = None
+        self.hovered_space = None
         self._pending_selected_plan_target = None
         self._grip_trackers = []
         self._wall_hover_trackers = []
@@ -309,8 +320,11 @@ class PlanEditSession:
         self._hovered_wall_opening_context_trackers = []
         self._opening_hover_trackers = []
         self._symbol_hover_trackers = []
+        self._space_hover_trackers = []
         self._opening_overlay_trackers = []
         self._symbol_overlay_trackers = []
+        self._space_overlay_trackers = []
+        self._secondary_selection_trackers = []
         self._selected_wall_opening_context_trackers = []
         self._opening_handle_trackers = []
         self._symbol_handle_trackers = []
@@ -351,6 +365,7 @@ class PlanEditSession:
         self._edit_symbol_handle_role = None
         self._edit_symbol_start_placement = None
         self._edit_symbol_reference_point = None
+        self._edit_space = None
         self._ignore_selection_changes = False
         self._mouse_moved_cb = None
         self._mouse_wheel_cb = None
@@ -419,6 +434,9 @@ class PlanEditSession:
         if self.current_tool in ("Move Symbol", "Rotate Symbol"):
             self._cancel_symbol_handle_point_pick()
             return True
+        if self.current_tool == "Set Space Text":
+            self._cancel_space_text_position_pick()
+            return True
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
             return True
@@ -442,14 +460,19 @@ class PlanEditSession:
         self._cancel_pending_edit()
         if self.current_tool in ("Move Symbol", "Rotate Symbol"):
             self._cancel_symbol_handle_point_pick()
+        if self.current_tool == "Set Space Text":
+            self._edit_space = None
         self._clear_hovered_wall_overlay()
         self._clear_junction_node_overlays()
         self._clear_hovered_wall_opening_context_overlay()
         self._clear_wall_grips()
         self._clear_hovered_opening_overlay()
         self._clear_hovered_symbol_overlay()
+        self._clear_hovered_space_overlay()
         self._clear_selected_opening_overlay()
         self._clear_selected_symbol_overlay()
+        self._clear_selected_space_overlay()
+        self._clear_secondary_selected_overlays()
         self._clear_selected_wall_opening_context_overlay()
         self._clear_selected_opening_handles()
         self._clear_selected_symbol_handles()
@@ -482,9 +505,11 @@ class PlanEditSession:
         self.selected_wall = None
         self.selected_opening = None
         self.selected_symbol = None
+        self.selected_space = None
         self.hovered_wall = None
         self.hovered_opening = None
         self.hovered_symbol = None
+        self.hovered_space = None
         self._pending_selected_plan_target = None
         self._edit_wall = None
         self._edit_opening = None
@@ -493,6 +518,7 @@ class PlanEditSession:
         self._edit_symbol_handle_role = None
         self._edit_symbol_start_placement = None
         self._edit_symbol_reference_point = None
+        self._edit_space = None
         self._edit_endpoint = None
         self._edit_endpoints = None
         self._preview_points = None
@@ -836,9 +862,11 @@ class PlanEditSession:
         self._cancel_wall_edit()
         self._cancel_pending_edit()
         self._clear_plan_relation_status()
-        self.selected_wall = None
+        self._set_selected_plan_target()
         self._clear_wall_grips()
         self._clear_selected_wall_opening_context_overlay()
+        self._clear_selected_space_overlay()
+        self._clear_secondary_selected_overlays()
         try:
             FreeCADGui.Selection.clearSelection()
         except (ReferenceError, RuntimeError):
@@ -850,9 +878,11 @@ class PlanEditSession:
         self._cancel_wall_edit()
         self._cancel_pending_edit()
         self._clear_plan_relation_status()
-        self.selected_wall = None
+        self._set_selected_plan_target()
         self._clear_wall_grips()
         self._clear_selected_wall_opening_context_overlay()
+        self._clear_selected_space_overlay()
+        self._clear_secondary_selected_overlays()
         self._clear_rect_wall_preview()
         self._rect_wall_start = None
         self._rect_wall_params = self._get_wall_defaults()
@@ -863,6 +893,17 @@ class PlanEditSession:
             title=translate("BIM_PlanEdit", "First rectangle corner"),
         )
         self._refresh_task_panel_status()
+
+    def activate_space_tool(self):
+        if self.current_tool == "Set Space Text":
+            self._cancel_space_text_position_pick()
+        self._cancel_rect_wall_tool(refresh=False)
+        if self._has_active_embedded_tool():
+            self._cancel_embedded_tool()
+        self._cancel_wall_edit(refresh=False)
+        self._cancel_pending_edit()
+        self._clear_plan_relation_status()
+        return self._create_space_from_current_selection()
 
     def activate_move_tool(self):
         from draftguitools import gui_move
@@ -905,6 +946,7 @@ class PlanEditSession:
         self.current_tool = "Join"
         self._set_selected_plan_target("wall", wall)
         self._restore_gui_selection(wall)
+        self._sync_secondary_selected_overlays()
         self._refresh_task_panel_status()
 
     def get_plan_join_type(self):
@@ -1891,6 +1933,197 @@ class PlanEditSession:
         except Exception:
             return False
 
+    def _is_plan_space_object(self, obj):
+        if not obj:
+            return False
+        obj = self._get_plan_semantic_object(obj)
+        try:
+            import Draft
+
+            if Draft.getType(obj) == "Space":
+                return True
+        except Exception:
+            pass
+        return getattr(obj, "IfcType", "") == "Space"
+
+    @staticmethod
+    def _normalize_space_boundary_subnames(subnames):
+        if isinstance(subnames, str):
+            candidates = [subnames]
+        else:
+            candidates = list(subnames or [])
+        return tuple(str(name) for name in candidates if str(name).startswith("Face"))
+
+    def _get_gui_selection_ex(self):
+        try:
+            return list(FreeCADGui.Selection.getSelectionEx() or [])
+        except (ReferenceError, RuntimeError):
+            return []
+
+    def _get_gui_selection(self):
+        try:
+            return list(FreeCADGui.Selection.getSelection() or [])
+        except (ReferenceError, RuntimeError):
+            return []
+
+    def _get_space_reference_point(self, space):
+        if not self._is_plan_space_object(space):
+            return None
+        shape = getattr(space, "Shape", None)
+        if shape and hasattr(shape, "CenterOfMass"):
+            try:
+                return self._project_plan_point(shape.CenterOfMass)
+            except Exception:
+                pass
+        placement = getattr(space, "Placement", None)
+        if placement is not None:
+            try:
+                return self._project_plan_point(placement.Base)
+            except Exception:
+                pass
+        return None
+
+    def _get_space_boundary_reference_point(self, selection_ex, fallback_space=None):
+        points = []
+        for selection in selection_ex or []:
+            obj = getattr(selection, "Object", None)
+            if not obj or obj == fallback_space:
+                continue
+            subobjects = list(getattr(selection, "SubObjects", []) or [])
+            added_subobject_center = False
+            for subobject in subobjects:
+                center = getattr(subobject, "CenterOfMass", None)
+                if center is None:
+                    continue
+                try:
+                    points.append(FreeCAD.Vector(center.x, center.y, center.z))
+                    added_subobject_center = True
+                except Exception:
+                    continue
+            if added_subobject_center:
+                continue
+            shape = getattr(obj, "Shape", None)
+            bound_box = getattr(shape, "BoundBox", None)
+            center = getattr(bound_box, "Center", None) if bound_box is not None else None
+            if center is None:
+                continue
+            try:
+                points.append(FreeCAD.Vector(center.x, center.y, center.z))
+            except Exception:
+                continue
+        if points:
+            total = FreeCAD.Vector()
+            for point in points:
+                total = total.add(point)
+            return total.multiply(1.0 / float(len(points)))
+        return self._get_space_reference_point(fallback_space)
+
+    def _get_wall_space_boundary_face_name(self, wall, reference_point):
+        wall = self._get_plan_semantic_object(wall)
+        if not self._is_plan_selectable_wall(wall):
+            return None
+        if reference_point is None:
+            return None
+        proxy = getattr(wall, "Proxy", None)
+        if proxy is None or not hasattr(proxy, "calc_endpoints"):
+            return None
+        try:
+            endpoints = proxy.calc_endpoints(wall)
+        except Exception:
+            endpoints = None
+        if not endpoints or len(endpoints) != 2:
+            return None
+        shape = getattr(wall, "Shape", None)
+        if shape is None or not getattr(shape, "Faces", None):
+            return None
+
+        best_face_name = None
+        best_sort_key = None
+        reference_point = FreeCAD.Vector(reference_point.x, reference_point.y, reference_point.z)
+        for index, face in enumerate(shape.Faces, start=1):
+            try:
+                normal_raw = face.normalAt(0, 0)
+                center_raw = face.CenterOfMass
+                normal = FreeCAD.Vector(normal_raw.x, normal_raw.y, normal_raw.z)
+                center = FreeCAD.Vector(center_raw.x, center_raw.y, center_raw.z)
+            except Exception:
+                continue
+            if normal.Length <= 1e-7:
+                continue
+            normal.normalize()
+            if abs(normal.z) > 0.2:
+                continue
+            sort_key = (float(normal.dot(reference_point.sub(center))), float(face.Area or 0.0))
+            if best_sort_key is None or sort_key > best_sort_key:
+                best_sort_key = sort_key
+                best_face_name = f"Face{index}"
+        if best_sort_key is None or best_sort_key[0] <= 1e-7:
+            return None
+        return best_face_name
+
+    def _normalize_space_boundary_links(self, boundaries):
+        merged = {}
+        order = []
+        for obj, subnames in boundaries or []:
+            if not obj or self._is_plan_space_object(obj):
+                continue
+            name = getattr(obj, "Name", None)
+            if not name:
+                continue
+            face_names = self._normalize_space_boundary_subnames(subnames)
+            if not face_names:
+                continue
+            if name not in merged:
+                merged[name] = [obj, []]
+                order.append(name)
+            for face_name in face_names:
+                if face_name not in merged[name][1]:
+                    merged[name][1].append(face_name)
+        return [(merged[name][0], tuple(merged[name][1])) for name in order]
+
+    def _get_space_boundary_entries(self, space):
+        if not self._is_plan_space_object(space):
+            return []
+        entries = []
+        for boundary in getattr(space, "Boundaries", []) or []:
+            try:
+                obj = boundary[0]
+                subnames = boundary[1]
+            except Exception:
+                continue
+            entries.append((obj, self._normalize_space_boundary_subnames(subnames)))
+        return self._normalize_space_boundary_links(entries)
+
+    def _space_boundary_key(self, boundary):
+        obj, subnames = boundary
+        return (
+            getattr(obj, "Name", None),
+            tuple(self._normalize_space_boundary_subnames(subnames)),
+        )
+
+    def _get_selected_space_boundary_links(self, fallback_space=None):
+        selection_ex = self._get_gui_selection_ex()
+        reference_point = (
+            self._get_space_reference_point(fallback_space)
+            if fallback_space is not None
+            else self._get_space_boundary_reference_point(selection_ex)
+        )
+        boundaries = []
+        for selection in selection_ex:
+            obj = getattr(selection, "Object", None)
+            if not obj or obj == fallback_space or self._is_plan_space_object(obj):
+                continue
+            face_names = self._normalize_space_boundary_subnames(
+                getattr(selection, "SubElementNames", []) or []
+            )
+            if face_names:
+                boundaries.append((obj, face_names))
+                continue
+            face_name = self._get_wall_space_boundary_face_name(obj, reference_point)
+            if face_name:
+                boundaries.append((obj, (face_name,)))
+        return self._normalize_space_boundary_links(boundaries)
+
     def _get_plan_target_kind_for_object(self, obj):
         if self._is_hosted_opening_object(obj):
             return "opening"
@@ -1898,6 +2131,8 @@ class PlanEditSession:
             return "symbol"
         if self._is_plan_selectable_wall(obj):
             return "wall"
+        if self._is_plan_space_object(obj):
+            return "space"
         return None
 
     def _get_plan_target_for_object(self, obj, parent_obj=None):
@@ -1979,6 +2214,32 @@ class PlanEditSession:
                     best_distance_sq = distance_sq
         return best_symbol
 
+    def _pick_plan_space_target_from_overlays(self, mouse_pos, radius_px=10):
+        if not self.doc or not self.view or not mouse_pos:
+            return None
+        radius_sq = float(radius_px) * float(radius_px)
+        best_space = None
+        best_distance_sq = None
+        seen = set()
+        for obj in getattr(self.doc, "Objects", []) or []:
+            if not self._is_plan_space_object(obj):
+                continue
+            name = getattr(obj, "Name", None)
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            view_object = getattr(obj, "ViewObject", None)
+            if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
+                continue
+            for start, end in self._get_space_overlay_segments(obj):
+                distance_sq = self._get_screen_distance_sq_to_segment(mouse_pos, start, end)
+                if distance_sq is None or distance_sq > radius_sq:
+                    continue
+                if best_distance_sq is None or distance_sq < best_distance_sq:
+                    best_space = obj
+                    best_distance_sq = distance_sq
+        return best_space
+
     def _has_direct_true_property(self, obj, prop_name):
         if not obj:
             return False
@@ -2041,6 +2302,9 @@ class PlanEditSession:
         if kind == "symbol" and self._is_plan_symbol_instance(obj):
             self._pending_selected_plan_target = ("symbol", obj)
             return
+        if kind == "space" and self._is_plan_space_object(obj):
+            self._pending_selected_plan_target = ("space", obj)
+            return
         if kind == "wall" and self._is_plan_selectable_wall(obj):
             self._pending_selected_plan_target = ("wall", obj)
             return
@@ -2056,9 +2320,139 @@ class PlanEditSession:
             return (kind, obj)
         if kind == "symbol" and self._is_plan_symbol_instance(obj):
             return (kind, obj)
+        if kind == "space" and self._is_plan_space_object(obj):
+            return (kind, obj)
         if kind == "wall" and self._is_plan_selectable_wall(obj):
             return (kind, obj)
         return (None, None)
+
+    def _get_selected_plan_target(self):
+        if self._is_hosted_opening_object(self.selected_opening):
+            return ("opening", self.selected_opening)
+        if self._is_plan_symbol_instance(self.selected_symbol):
+            return ("symbol", self.selected_symbol)
+        if self._is_plan_space_object(self.selected_space):
+            return ("space", self.selected_space)
+        if self._is_plan_selectable_wall(self.selected_wall):
+            return ("wall", self.selected_wall)
+        return (None, None)
+
+    def _get_first_plan_target_from_selection(self, selection):
+        for selected in selection or []:
+            target_kind, target_obj = self._get_plan_target_for_object(selected)
+            if target_kind and target_obj:
+                return (target_kind, target_obj)
+        return (None, None)
+
+    def _set_gui_selection(self, selection):
+        previous_ignore = self._ignore_selection_changes
+        self._ignore_selection_changes = True
+        try:
+            try:
+                FreeCADGui.Selection.clearSelection()
+                seen = set()
+                for obj in selection or []:
+                    if not obj:
+                        continue
+                    key = (
+                        getattr(getattr(obj, "Document", None), "Name", None),
+                        getattr(obj, "Name", None),
+                    )
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    FreeCADGui.Selection.addSelection(obj)
+            except Exception:
+                pass
+        finally:
+            self._ignore_selection_changes = previous_ignore
+
+    def _get_secondary_selected_plan_targets(self):
+        primary_kind, primary_obj = self._get_selected_plan_target()
+        targets = []
+        seen = set()
+        for selected in self._get_gui_selection():
+            target_kind, target_obj = self._get_plan_target_for_object(selected)
+            if not target_kind or not target_obj:
+                continue
+            key = (
+                target_kind,
+                getattr(getattr(target_obj, "Document", None), "Name", None),
+                getattr(target_obj, "Name", None),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            if primary_kind == target_kind and primary_obj == target_obj:
+                continue
+            targets.append((target_kind, target_obj))
+        return targets
+
+    def _format_plan_target_count_label(self, kind, count):
+        labels = {
+            "wall": (translate("BIM_PlanEdit", "wall"), translate("BIM_PlanEdit", "walls")),
+            "opening": (
+                translate("BIM_PlanEdit", "opening"),
+                translate("BIM_PlanEdit", "openings"),
+            ),
+            "symbol": (translate("BIM_PlanEdit", "symbol"), translate("BIM_PlanEdit", "symbols")),
+            "space": (translate("BIM_PlanEdit", "space"), translate("BIM_PlanEdit", "spaces")),
+        }
+        singular, plural = labels.get(
+            kind,
+            (translate("BIM_PlanEdit", "item"), translate("BIM_PlanEdit", "items")),
+        )
+        return "{} {}".format(count, singular if count == 1 else plural)
+
+    def _summarize_plan_targets(self, targets):
+        counts = {}
+        for target_kind, _target_obj in targets or []:
+            counts[target_kind] = counts.get(target_kind, 0) + 1
+        parts = [
+            self._format_plan_target_count_label(kind, counts[kind])
+            for kind in ("wall", "opening", "symbol", "space")
+            if counts.get(kind)
+        ]
+        return ", ".join(parts)
+
+    def _get_plan_selection_summary_text(self):
+        if self.current_tool != "Select":
+            return ""
+        primary_kind, primary_obj = self._get_selected_plan_target()
+        targets = []
+        seen = set()
+        if primary_kind and primary_obj:
+            key = (
+                primary_kind,
+                getattr(getattr(primary_obj, "Document", None), "Name", None),
+                getattr(primary_obj, "Name", None),
+            )
+            seen.add(key)
+            targets.append((primary_kind, primary_obj))
+        for target_kind, target_obj in self._get_secondary_selected_plan_targets():
+            key = (
+                target_kind,
+                getattr(getattr(target_obj, "Document", None), "Name", None),
+                getattr(target_obj, "Name", None),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            targets.append((target_kind, target_obj))
+        if len(targets) <= 1:
+            return ""
+        secondary_targets = targets[1:]
+        if (
+            primary_kind == "space"
+            and secondary_targets
+            and all(target_kind == "wall" for target_kind, _target_obj in secondary_targets)
+        ):
+            return translate("BIM_PlanEdit", "Boundary candidates: {summary}").format(
+                summary=self._summarize_plan_targets(secondary_targets)
+            )
+        return translate("BIM_PlanEdit", "Selection set: {summary}").format(
+            summary=self._summarize_plan_targets(targets)
+        )
 
     def _clear_plan_relation_status(self):
         self._plan_relation_status_message = None
@@ -2109,18 +2503,27 @@ class PlanEditSession:
             self.selected_wall = None
             self.selected_opening = obj
             self.selected_symbol = None
+            self.selected_space = None
         elif kind == "symbol" and self._is_plan_symbol_instance(obj):
             self.selected_wall = None
             self.selected_opening = None
             self.selected_symbol = obj
+            self.selected_space = None
+        elif kind == "space" and self._is_plan_space_object(obj):
+            self.selected_wall = None
+            self.selected_opening = None
+            self.selected_symbol = None
+            self.selected_space = obj
         elif kind == "wall" and self._is_plan_selectable_wall(obj):
             self.selected_wall = obj
             self.selected_opening = None
             self.selected_symbol = None
+            self.selected_space = None
         else:
             self.selected_wall = None
             self.selected_opening = None
             self.selected_symbol = None
+            self.selected_space = None
             kind = None
             obj = None
         self._clear_plan_relation_status()
@@ -2133,6 +2536,7 @@ class PlanEditSession:
             self._sync_selected_wall_opening_context_overlay()
             self._sync_hovered_wall_opening_context_overlay()
             self._sync_hovered_symbol_overlay()
+            self._sync_hovered_space_overlay()
 
     def _schedule_selected_wall_reset(self, reason, obj):
         if self._pending_selected_wall_reset or self._tearing_down:
@@ -2279,10 +2683,12 @@ class PlanEditSession:
         previous_wall = self.selected_wall
         previous_opening = self.selected_opening
         previous_symbol = self.selected_symbol
+        previous_space = self.selected_space
         if self._is_wall_edit_modal_active():
             self.selected_wall = self._edit_wall
             self.selected_opening = None
             self.selected_symbol = None
+            self.selected_space = None
             if previous_wall != self.selected_wall:
                 self._sync_wall_grips()
             self._sync_hovered_wall_overlay()
@@ -2292,13 +2698,43 @@ class PlanEditSession:
             if previous_symbol is not None or self.current_tool != "Select":
                 self._sync_selected_symbol_overlay()
                 self._sync_selected_symbol_handles()
+            if previous_space is not None or self.current_tool != "Select":
+                self._sync_selected_space_overlay()
             self._sync_hovered_symbol_overlay()
             self._sync_hovered_opening_overlay()
+            self._sync_hovered_space_overlay()
+            self._sync_secondary_selected_overlays()
+            self._refresh_task_panel_status()
+            return
+        if self.current_tool == "Set Space Text":
+            self.selected_wall = None
+            self.selected_opening = None
+            self.selected_symbol = None
+            self.selected_space = (
+                self._edit_space if self._is_plan_space_object(self._edit_space) else None
+            )
+            self._clear_wall_grips()
+            self._sync_selected_wall_opening_context_overlay()
+            self._sync_hovered_wall_overlay()
+            self._sync_hovered_wall_opening_context_overlay()
+            if previous_opening is not None:
+                self._sync_selected_opening_overlay()
+                self._sync_selected_opening_handles()
+            if previous_symbol is not None:
+                self._sync_selected_symbol_overlay()
+                self._sync_selected_symbol_handles()
+            if previous_space != self.selected_space or self.current_tool != "Select":
+                self._sync_selected_space_overlay()
+            self._sync_hovered_symbol_overlay()
+            self._sync_hovered_opening_overlay()
+            self._sync_hovered_space_overlay()
+            self._sync_secondary_selected_overlays()
             self._refresh_task_panel_status()
             return
         if self.current_tool == "Join":
             self.selected_opening = None
             self.selected_symbol = None
+            self.selected_space = None
             if not self._is_plan_selectable_wall(self.selected_wall):
                 self.current_tool = "Select"
                 self.selected_wall = None
@@ -2312,13 +2748,18 @@ class PlanEditSession:
             if previous_symbol is not None:
                 self._sync_selected_symbol_overlay()
                 self._sync_selected_symbol_handles()
+            if previous_space is not None:
+                self._sync_selected_space_overlay()
             self._sync_hovered_symbol_overlay()
             self._sync_hovered_opening_overlay()
+            self._sync_hovered_space_overlay()
+            self._sync_secondary_selected_overlays()
             self._refresh_task_panel_status()
             return
         self.selected_wall = None
         self.selected_opening = None
         self.selected_symbol = None
+        self.selected_space = None
         try:
             selection = FreeCADGui.Selection.getSelection()
         except (ReferenceError, RuntimeError):
@@ -2338,7 +2779,7 @@ class PlanEditSession:
                         matched_target = (target_kind, selected)
                         break
             if matched_target is None:
-                for preferred_kind in ("opening", "symbol", "wall"):
+                for preferred_kind in ("opening", "symbol", "wall", "space"):
                     matched_target = next(
                         (
                             (target_kind, selected)
@@ -2358,7 +2799,9 @@ class PlanEditSession:
                     self.selected_opening = selected
                 elif target_kind == "symbol":
                     self.selected_symbol = selected
-                if len(selection) == 1:
+                elif target_kind == "space":
+                    self.selected_space = selected
+                if len(selection) == 1 and target_kind != "space":
                     self._set_pending_selected_plan_target()
                 else:
                     self._set_pending_selected_plan_target(target_kind, selected)
@@ -2370,6 +2813,8 @@ class PlanEditSession:
                 self.selected_opening = pending_target
             elif pending_kind == "symbol":
                 self.selected_symbol = pending_target
+            elif pending_kind == "space":
+                self.selected_space = pending_target
             elif pending_kind == "wall":
                 self.selected_wall = pending_target
         else:
@@ -2385,8 +2830,12 @@ class PlanEditSession:
         if previous_symbol != self.selected_symbol or self.current_tool != "Select":
             self._sync_selected_symbol_overlay()
             self._sync_selected_symbol_handles()
+        if previous_space != self.selected_space or self.current_tool != "Select":
+            self._sync_selected_space_overlay()
         self._sync_hovered_symbol_overlay()
         self._sync_hovered_opening_overlay()
+        self._sync_hovered_space_overlay()
+        self._sync_secondary_selected_overlays()
         self._refresh_task_panel_status()
 
     def _refresh_selected_wall(self):
@@ -2396,6 +2845,7 @@ class PlanEditSession:
         self.current_tool = tool_name
         self._set_hovered_wall(None)
         self._set_hovered_opening(None)
+        self._sync_secondary_selected_overlays()
         self._refresh_task_panel_status()
         self._embedded_tool = command
         self._embedded_tool_name = tool_name
@@ -2448,6 +2898,7 @@ class PlanEditSession:
         self._sync_wall_grips()
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
+        self._sync_selected_space_overlay()
 
     def _cancel_join_tool(self, refresh=True):
         if self.current_tool != "Join":
@@ -2592,6 +3043,7 @@ class PlanEditSession:
             self._refresh_task_panel_status()
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
+        self._sync_selected_space_overlay()
         return True
 
     def _get_rect_wall_corners(self, point):
@@ -3890,17 +4342,24 @@ class PlanEditSession:
             if self.current_tool != "Select":
                 return
             pos = event.getPosition().getValue()
-            node = self._get_edit_node((pos[0], pos[1]))
+            mouse_pos = (pos[0], pos[1])
+            if self._is_plan_additive_selection_active():
+                self._toggle_plan_target_selection_at_position(mouse_pos, event_callback)
+                return
+            node = self._get_edit_node(mouse_pos)
             if not node:
-                if self._activate_opening_target((pos[0], pos[1]), event_callback):
+                if self._activate_opening_target(mouse_pos, event_callback):
                     return
-                if self._activate_symbol_target((pos[0], pos[1]), event_callback):
+                if self._activate_symbol_target(mouse_pos, event_callback):
                     return
-                if self._activate_wall_target((pos[0], pos[1]), event_callback):
+                if self._activate_wall_target(mouse_pos, event_callback):
+                    return
+                if self._activate_space_target(mouse_pos, event_callback):
                     return
                 if (
                     self.selected_opening is not None
                     or self.selected_symbol is not None
+                    or self.selected_space is not None
                     or self.selected_wall is not None
                 ):
                     self._clear_plan_selection_state()
@@ -3911,6 +4370,7 @@ class PlanEditSession:
                 self.selected_opening = obj
                 self.selected_wall = None
                 self.selected_symbol = None
+                self.selected_space = None
                 self._clear_wall_grips()
                 self._activate_opening_handle(obj, index)
             elif node_kind == "symbol_handle":
@@ -3918,6 +4378,7 @@ class PlanEditSession:
                 self.selected_symbol = obj
                 self.selected_wall = None
                 self.selected_opening = None
+                self.selected_space = None
                 self._clear_wall_grips()
                 self._activate_symbol_handle(obj, role)
             else:
@@ -3932,6 +4393,7 @@ class PlanEditSession:
                     self.selected_opening = obj
                     self.selected_wall = None
                     self.selected_symbol = None
+                    self.selected_space = None
                     self._clear_wall_grips()
                     self._activate_opening_handle(obj, index)
                 else:
@@ -3939,6 +4401,7 @@ class PlanEditSession:
                         self.selected_wall = obj
                     self.selected_opening = None
                     self.selected_symbol = None
+                    self.selected_space = None
                     self._activate_wall_grip(index, wall=obj)
             if hasattr(event_callback, "setHandled"):
                 try:
@@ -3952,6 +4415,7 @@ class PlanEditSession:
         if self.current_tool not in ("Select", "Join"):
             self._set_hovered_wall(None)
             self._set_hovered_opening(None)
+            self._set_hovered_space(None)
             return
         event = event_callback.getEvent()
         pos = event.getPosition().getValue()
@@ -4008,37 +4472,58 @@ class PlanEditSession:
             self._clear_hovered_wall_opening_context_overlay()
             self._clear_hovered_opening_overlay()
             self._clear_hovered_symbol_overlay()
+            self._clear_hovered_space_overlay()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
+            self._clear_selected_space_overlay()
+            self._clear_secondary_selected_overlays()
             self._clear_selected_opening_handles()
             self._clear_selected_symbol_handles()
             self._clear_selected_wall_opening_context_overlay()
             self._clear_wall_grips()
             return
+        if self.current_tool == "Set Space Text":
+            self._clear_junction_node_overlays()
+            self._clear_hovered_wall_overlay()
+            self._clear_hovered_wall_opening_context_overlay()
+            self._clear_hovered_opening_overlay()
+            self._clear_hovered_symbol_overlay()
+            self._clear_hovered_space_overlay()
+            self._clear_selected_opening_overlay()
+            self._clear_selected_symbol_overlay()
+            self._clear_secondary_selected_overlays()
+            self._clear_selected_opening_handles()
+            self._clear_selected_symbol_handles()
+            self._clear_selected_wall_opening_context_overlay()
+            self._clear_wall_grips()
+            if self.selected_space and (refresh_all or _PLAN_VISUAL_SELECTED_SPACE in dirty):
+                self._refresh_selected_space_visuals()
+            return
         if self.current_tool == "Select":
             self._sync_junction_node_overlays()
             if refresh_all or _PLAN_VISUAL_HOVERED_WALL in dirty:
                 self._sync_hovered_wall_overlay()
-                self._sync_hovered_wall_opening_context_overlay()
+            self._sync_selected_wall_opening_context_overlay()
+            self._sync_hovered_wall_opening_context_overlay()
             if refresh_all or _PLAN_VISUAL_HOVERED_OPENING in dirty:
                 self._sync_hovered_opening_overlay()
             if refresh_all or _PLAN_VISUAL_HOVERED_SYMBOL in dirty:
                 self._sync_hovered_symbol_overlay()
+            if refresh_all or _PLAN_VISUAL_HOVERED_SPACE in dirty:
+                self._sync_hovered_space_overlay()
+            if refresh_all or _PLAN_VISUAL_SELECTED_OPENING in dirty:
+                self._sync_selected_opening_overlay()
+                self._sync_selected_opening_handles()
+            if refresh_all or _PLAN_VISUAL_SELECTED_SYMBOL in dirty:
+                self._sync_selected_symbol_overlay()
+                self._sync_selected_symbol_handles()
+            if refresh_all or _PLAN_VISUAL_SELECTED_SPACE in dirty:
+                self._sync_selected_space_overlay()
+            if refresh_all or _PLAN_VISUAL_SECONDARY_SELECTION in dirty:
+                self._sync_secondary_selected_overlays()
             if refresh_all or _PLAN_VISUAL_WALL_GRIPS in dirty:
-                if self.selected_wall:
-                    self._sync_wall_grips()
-                self._sync_selected_wall_opening_context_overlay()
-            if self.selected_opening and (refresh_all or _PLAN_VISUAL_SELECTED_OPENING in dirty):
-                self._refresh_selected_opening_visuals()
-            if self.selected_symbol and (refresh_all or _PLAN_VISUAL_SELECTED_SYMBOL in dirty):
-                self._refresh_selected_symbol_visuals()
+                self._sync_wall_grips()
             return
-        if (
-            self._edit_wall
-            and self._preview_points
-            and (refresh_all or _PLAN_VISUAL_WALL_EDIT_PREVIEW in dirty)
-        ):
-            self._sync_wall_edit_preview(self._preview_points)
 
     def _on_key_pressed(self, event_callback):
         if self._tearing_down:
@@ -4102,6 +4587,9 @@ class PlanEditSession:
             return
         if self.current_tool in ("Move Symbol", "Rotate Symbol"):
             self._cancel_symbol_handle_point_pick()
+            return
+        if self.current_tool == "Set Space Text":
+            self._cancel_space_text_position_pick()
             return
         if self._has_active_rect_wall_tool():
             self._cancel_rect_wall_tool()
@@ -4447,6 +4935,45 @@ class PlanEditSession:
             return
         if self.current_tool != "Select":
             return
+        if self.selected_space and obj == self.selected_space and prop in _SPACE_VISUAL_PROPERTIES:
+            self._refresh_plan_object_footprint_display(self.selected_space)
+            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_SPACE)
+            self._refresh_task_panel_status()
+            return
+        if (
+            self.hovered_space
+            and self.hovered_space != self.selected_space
+            and obj == self.hovered_space
+            and prop in _SPACE_VISUAL_PROPERTIES
+        ):
+            self._refresh_plan_object_footprint_display(self.hovered_space)
+            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_SPACE)
+            return
+        secondary_overlay_refresh = False
+        for target_kind, target_obj in self._get_secondary_selected_plan_targets():
+            if target_kind == "space" and obj == target_obj and prop in _SPACE_VISUAL_PROPERTIES:
+                self._refresh_plan_object_footprint_display(target_obj)
+                secondary_overlay_refresh = True
+            elif (
+                target_kind == "symbol"
+                and self._is_symbol_visual_dependency(target_obj, obj)
+                and prop in _SYMBOL_VISUAL_PROPERTIES
+            ):
+                self._refresh_plan_object_footprint_display(target_obj)
+                secondary_overlay_refresh = True
+            elif (
+                target_kind == "opening"
+                and self._is_opening_visual_dependency(target_obj, obj)
+                and prop in _OPENING_VISUAL_PROPERTIES
+            ):
+                self._refresh_opening_footprint_display(target_obj)
+                self._refresh_opening_host_footprint_displays(target_obj)
+                secondary_overlay_refresh = True
+            elif target_kind == "wall" and obj == target_obj and prop in _WALL_VISUAL_PROPERTIES:
+                secondary_overlay_refresh = True
+        if secondary_overlay_refresh:
+            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SECONDARY_SELECTION)
+            return
         if (
             self._is_symbol_visual_dependency(self.selected_symbol, obj)
             and prop in _SYMBOL_VISUAL_PROPERTIES
@@ -4520,6 +5047,9 @@ class PlanEditSession:
         if obj == self.hovered_symbol:
             self.hovered_symbol = None
             self._clear_hovered_symbol_overlay()
+        if obj == self.hovered_space:
+            self.hovered_space = None
+            self._clear_hovered_space_overlay()
         if obj == self.selected_opening:
             self.selected_opening = None
             self._refresh_selected_opening_visuals()
@@ -4527,6 +5057,11 @@ class PlanEditSession:
         if obj == self.selected_symbol:
             self.selected_symbol = None
             self._refresh_selected_symbol_visuals()
+            return
+        if obj == self.selected_space:
+            self.selected_space = None
+            self._refresh_selected_space_visuals()
+            self._refresh_task_panel_status()
             return
         if obj != self.selected_wall:
             return
@@ -4537,6 +5072,17 @@ class PlanEditSession:
             self._refresh_plan_object_footprint_display(self.selected_symbol)
         if self.hovered_symbol and self.hovered_symbol != self.selected_symbol:
             self._refresh_plan_object_footprint_display(self.hovered_symbol)
+        if self.selected_space:
+            self._refresh_plan_object_footprint_display(self.selected_space)
+        if self.hovered_space and self.hovered_space != self.selected_space:
+            self._refresh_plan_object_footprint_display(self.hovered_space)
+        secondary_targets = self._get_secondary_selected_plan_targets()
+        for target_kind, target_obj in secondary_targets:
+            if target_kind in ("symbol", "space"):
+                self._refresh_plan_object_footprint_display(target_obj)
+            elif target_kind == "opening":
+                self._refresh_opening_footprint_display(target_obj)
+                self._refresh_opening_host_footprint_displays(target_obj)
         if self.selected_opening:
             self._refresh_opening_footprint_display(self.selected_opening)
             self._refresh_opening_host_footprint_displays(self.selected_opening)
@@ -4546,13 +5092,20 @@ class PlanEditSession:
             self._refresh_opening_host_footprint_displays(self.hovered_opening)
         if recompute_opening_hosts:
             self._queue_recompute_opening_hosts(self.selected_opening, self.hovered_opening)
-        self._queue_plan_overlay_visual_refresh(
+        visual_args = [
             _PLAN_VISUAL_SELECTED_SYMBOL,
             _PLAN_VISUAL_HOVERED_SYMBOL,
             _PLAN_VISUAL_HOVERED_OPENING,
             _PLAN_VISUAL_HOVERED_WALL,
             _PLAN_VISUAL_WALL_GRIPS,
-        )
+        ]
+        if self.selected_space:
+            visual_args.append(_PLAN_VISUAL_SELECTED_SPACE)
+        if self.hovered_space and self.hovered_space != self.selected_space:
+            visual_args.append(_PLAN_VISUAL_HOVERED_SPACE)
+        if secondary_targets:
+            visual_args.append(_PLAN_VISUAL_SECONDARY_SELECTION)
+        self._queue_plan_overlay_visual_refresh(*visual_args)
 
     def slotUndoDocument(self, doc):
         del doc
@@ -4655,7 +5208,8 @@ class PlanEditSession:
     def _is_modal_plan_interaction_active(self):
         return bool(
             self._is_wall_edit_modal_active()
-            or self.current_tool in ("Move Opening", "Move Symbol", "Rotate Symbol")
+            or self.current_tool
+            in ("Move Opening", "Move Symbol", "Rotate Symbol", "Set Space Text")
         )
 
     def _focus_plan_view(self):
@@ -4790,6 +5344,10 @@ class PlanEditSession:
             context = translate("BIM_PlanEdit", "Symbol: {label}").format(
                 label=self.selected_symbol.Label
             )
+        elif self.selected_space:
+            context = translate("BIM_PlanEdit", "Space: {label}").format(
+                label=self.selected_space.Label
+            )
         elif self.selected_wall:
             context = translate("BIM_PlanEdit", "Wall: {label}").format(
                 label=self.selected_wall.Label
@@ -4798,6 +5356,10 @@ class PlanEditSession:
             context = translate("BIM_PlanEdit", "Storey: {label}").format(
                 label=self.get_storey_label(self.active_storey)
             )
+
+        selection_summary = self._get_plan_selection_summary_text()
+        if selection_summary:
+            context = "{}\n{}".format(context, selection_summary)
 
         hints = self._get_input_hint_specs()
         action = self._format_status_chip_action(hints[0][0]) if hints else ""
@@ -4881,12 +5443,17 @@ class PlanEditSession:
         ui = FreeCADGui.UserInput
 
         if self.current_tool == "Select":
+            additive_hint = (
+                translate("BIM_PlanEdit", "%1 add or remove from selection"),
+                (ui.KeyControl, ui.MouseLeft),
+            )
             if self.selected_opening:
                 return (
                     (
                         translate("BIM_PlanEdit", "%1 pick opening handle"),
                         ui.MouseLeft,
                     ),
+                    additive_hint,
                 )
             if self.selected_symbol:
                 return (
@@ -4894,6 +5461,7 @@ class PlanEditSession:
                         translate("BIM_PlanEdit", "%1 pick symbol handle"),
                         ui.MouseLeft,
                     ),
+                    additive_hint,
                 )
             if self.selected_wall:
                 return (
@@ -4901,12 +5469,22 @@ class PlanEditSession:
                         translate("BIM_PlanEdit", "%1 pick wall grip"),
                         ui.MouseLeft,
                     ),
+                    additive_hint,
+                )
+            if self.selected_space:
+                return (
+                    (
+                        translate("BIM_PlanEdit", "%1 select space boundary target"),
+                        ui.MouseLeft,
+                    ),
+                    additive_hint,
                 )
             return (
                 (
-                    translate("BIM_PlanEdit", "%1 select wall, opening, or symbol"),
+                    translate("BIM_PlanEdit", "%1 select wall, opening, symbol, or space"),
                     ui.MouseLeft,
                 ),
+                additive_hint,
             )
 
         if self.current_tool == "Join":
@@ -5006,6 +5584,16 @@ class PlanEditSession:
                     ui.KeyEscape,
                 ),
             ),
+            "Set Space Text": (
+                (
+                    translate("BIM_PlanEdit", "%1 place text"),
+                    ui.MouseLeft,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 cancel"),
+                    ui.KeyEscape,
+                ),
+            ),
         }.get(self.current_tool, ())
 
     def _get_input_hints(self):
@@ -5094,6 +5682,28 @@ class PlanEditSession:
                 polylines.append(points)
         return polylines
 
+    def _get_space_overlay_polylines(self, space):
+        if not self._is_plan_space_object(space):
+            return []
+        proxy = getattr(space, "Proxy", None)
+        if not proxy or not hasattr(proxy, "getFootprint"):
+            return []
+        try:
+            faces = proxy.getFootprint(space) or []
+        except Exception:
+            return []
+
+        polylines = []
+        for face in faces:
+            for wire in face.Wires:
+                points = [vertex.Point for vertex in wire.Vertexes]
+                if len(points) < 2:
+                    continue
+                if points[0].distanceToPoint(points[-1]) > 0.001:
+                    points.append(points[0])
+                polylines.append(points)
+        return polylines
+
     def _get_opening_overlay_polylines(self, opening):
         if not opening:
             return []
@@ -5132,6 +5742,7 @@ class PlanEditSession:
 
         wall_candidate = None
         symbol_candidate = None
+        space_candidate = None
         for info in infos:
             if not info:
                 continue
@@ -5154,12 +5765,18 @@ class PlanEditSession:
                 symbol_candidate = target_obj
             elif target_kind == "wall" and wall_candidate is None:
                 wall_candidate = target_obj
+            elif target_kind == "space" and space_candidate is None:
+                space_candidate = target_obj
         if symbol_candidate is None:
             symbol_candidate = self._pick_plan_symbol_target_from_overlays(mouse_pos)
         if symbol_candidate is not None:
             return ("symbol", symbol_candidate)
         if wall_candidate is not None:
             return ("wall", wall_candidate)
+        if space_candidate is None:
+            space_candidate = self._pick_plan_space_target_from_overlays(mouse_pos)
+        if space_candidate is not None:
+            return ("space", space_candidate)
         return (None, None)
 
     def _update_hovered_plan_target(self, mouse_pos):
@@ -5171,29 +5788,138 @@ class PlanEditSession:
                 self._set_hovered_wall(None)
             self._set_hovered_opening(None)
             self._set_hovered_symbol(None)
+            self._set_hovered_space(None)
             return
         if self.current_tool != "Select":
             self._set_hovered_wall(None)
             self._set_hovered_opening(None)
             self._set_hovered_symbol(None)
+            self._set_hovered_space(None)
             return
         target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
         if target_kind == "opening":
             self._set_hovered_wall(None)
             self._set_hovered_opening(target_obj)
             self._set_hovered_symbol(None)
+            self._set_hovered_space(None)
         elif target_kind == "symbol":
             self._set_hovered_wall(None)
             self._set_hovered_opening(None)
             self._set_hovered_symbol(target_obj)
+            self._set_hovered_space(None)
         elif target_kind == "wall":
             self._set_hovered_opening(None)
             self._set_hovered_symbol(None)
+            self._set_hovered_space(None)
             self._set_hovered_wall(target_obj)
+        elif target_kind == "space":
+            self._set_hovered_wall(None)
+            self._set_hovered_opening(None)
+            self._set_hovered_symbol(None)
+            self._set_hovered_space(target_obj)
         else:
             self._set_hovered_wall(None)
             self._set_hovered_opening(None)
             self._set_hovered_symbol(None)
+            self._set_hovered_space(None)
+
+    def _is_plan_additive_selection_active(self):
+        if self.current_tool != "Select":
+            return False
+        try:
+            from PySide import QtCore, QtGui
+
+            modifiers = QtGui.QApplication.keyboardModifiers()
+            return bool(modifiers & QtCore.Qt.ControlModifier)
+        except Exception:
+            return False
+
+    def _get_plan_target_from_edit_node(self, node):
+        if not node:
+            return (None, None)
+        node_kind = node[0]
+        if node_kind == "opening_handle":
+            opening = node[1]
+            if self._is_hosted_opening_object(opening):
+                return ("opening", opening)
+            return (None, None)
+        if node_kind == "symbol_handle":
+            symbol = node[1]
+            if self._is_plan_symbol_instance(symbol):
+                return ("symbol", symbol)
+            return (None, None)
+        try:
+            point = node[1]
+            doc = FreeCAD.getDocument(str(point.documentName.getValue()))
+            obj = doc.getObject(str(point.objectName.getValue()))
+        except Exception:
+            return (None, None)
+        if self._is_hosted_opening_object(obj):
+            return ("opening", obj)
+        return self._get_plan_target_for_object(obj)
+
+    def _toggle_plan_target_selection_at_position(self, mouse_pos, event_callback=None):
+        node = self._get_edit_node(mouse_pos)
+        target_kind, target_obj = self._get_plan_target_from_edit_node(node)
+        if target_kind is None:
+            target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
+        if not target_kind or not target_obj:
+            return False
+
+        primary_kind, primary_obj = self._get_selected_plan_target()
+        selection = self._get_gui_selection()
+        if primary_obj is not None and primary_obj not in selection:
+            selection = [primary_obj] + selection
+
+        normalized_selection = []
+        seen = set()
+        for selected in selection:
+            if not selected:
+                continue
+            key = (
+                getattr(getattr(selected, "Document", None), "Name", None),
+                getattr(selected, "Name", None),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized_selection.append(selected)
+        selection = normalized_selection
+
+        was_selected = target_obj in selection
+        if was_selected:
+            new_selection = [selected for selected in selection if selected != target_obj]
+            if primary_obj == target_obj:
+                next_kind, next_obj = self._get_first_plan_target_from_selection(new_selection)
+            elif primary_obj is not None and primary_obj in new_selection:
+                next_kind, next_obj = primary_kind, primary_obj
+            else:
+                next_kind, next_obj = self._get_first_plan_target_from_selection(new_selection)
+        else:
+            new_selection = list(selection)
+            new_selection.append(target_obj)
+            if (
+                primary_obj is not None
+                and primary_obj in new_selection
+                and primary_obj != target_obj
+            ):
+                next_kind, next_obj = primary_kind, primary_obj
+            else:
+                next_kind, next_obj = target_kind, target_obj
+
+        self._set_pending_selected_plan_target(next_kind, next_obj)
+        self._set_hovered_wall(None)
+        self._set_hovered_opening(None)
+        self._set_hovered_symbol(None)
+        self._set_hovered_space(None)
+        self._set_gui_selection(new_selection)
+        self._refresh_selected_wall()
+        if event_callback and hasattr(event_callback, "setHandled"):
+            try:
+                event_callback.setHandled()
+            except Exception:
+                pass
+        return True
 
     def _set_hovered_wall(self, wall):
         if wall == self.selected_wall:
@@ -5223,6 +5949,14 @@ class PlanEditSession:
         self.hovered_symbol = symbol
         self._sync_hovered_symbol_overlay()
 
+    def _set_hovered_space(self, space):
+        if space == self.selected_space:
+            space = None
+        if self.hovered_space == space:
+            return
+        self.hovered_space = space
+        self._sync_hovered_space_overlay()
+
     def _select_opening_for_plan_edit(self, opening, queue_restore=False):
         if not self._is_hosted_opening_object(opening):
             return False
@@ -5233,6 +5967,8 @@ class PlanEditSession:
         self._sync_selected_opening_handles()
         self._sync_selected_symbol_overlay()
         self._sync_selected_symbol_handles()
+        self._sync_selected_space_overlay()
+        self._sync_secondary_selected_overlays()
         self._refresh_task_panel_status()
         if queue_restore:
             self._queue_restore_selected_opening(opening)
@@ -5248,9 +5984,30 @@ class PlanEditSession:
         self._sync_selected_opening_handles()
         self._sync_selected_symbol_overlay()
         self._sync_selected_symbol_handles()
+        self._sync_selected_space_overlay()
+        self._sync_secondary_selected_overlays()
         self._refresh_task_panel_status()
         if queue_restore:
             self._queue_restore_selected_symbol(symbol)
+        return True
+
+    def _select_space_for_plan_edit(self, space, queue_restore=False):
+        if not self._is_plan_space_object(space):
+            return False
+        self.current_tool = "Select"
+        self.hovered_opening = None
+        self.hovered_symbol = None
+        self.hovered_wall = None
+        self._set_selected_plan_target("space", space, pending_restore=queue_restore)
+        self._clear_wall_grips()
+        self._sync_selected_opening_overlay()
+        self._sync_selected_opening_handles()
+        self._sync_selected_symbol_overlay()
+        self._sync_selected_symbol_handles()
+        self._sync_selected_space_overlay()
+        self._refresh_task_panel_status()
+        if queue_restore:
+            self._queue_restore_selected_space(space)
         return True
 
     def _select_wall_for_plan_edit(self, wall, queue_restore=False):
@@ -5260,11 +6017,13 @@ class PlanEditSession:
         self.current_tool = "Select"
         self.hovered_opening = None
         self.hovered_symbol = None
+        self.hovered_space = None
         self._set_selected_plan_target("wall", wall, pending_restore=queue_restore)
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
         self._sync_selected_symbol_overlay()
         self._sync_selected_symbol_handles()
+        self._sync_selected_space_overlay()
         self._sync_wall_grips()
         self._refresh_task_panel_status()
         return True
@@ -5278,6 +6037,7 @@ class PlanEditSession:
         self._set_hovered_wall(None)
         self._set_hovered_opening(None)
         self._set_hovered_symbol(None)
+        self._set_hovered_space(None)
         self._select_opening_for_plan_edit(opening, queue_restore=True)
         if event_callback and hasattr(event_callback, "setHandled"):
             try:
@@ -5294,6 +6054,33 @@ class PlanEditSession:
             return False
         self._set_hovered_wall(None)
         self._set_hovered_opening(None)
+        self._set_hovered_space(None)
+        if event_callback and hasattr(event_callback, "setHandled"):
+            try:
+                event_callback.setHandled()
+            except Exception:
+                pass
+        return True
+
+    def _activate_space_target(self, mouse_pos, event_callback=None):
+        target_kind, space = self._get_plan_target_at_position(mouse_pos)
+        if target_kind != "space":
+            space = None
+        if not self._select_space_for_plan_edit(space, queue_restore=True):
+            return False
+        self._set_hovered_wall(None)
+        self._set_hovered_opening(None)
+        self._set_hovered_symbol(None)
+        previous_ignore = self._ignore_selection_changes
+        self._ignore_selection_changes = True
+        try:
+            try:
+                FreeCADGui.Selection.clearSelection()
+                FreeCADGui.Selection.addSelection(space)
+            except Exception:
+                pass
+        finally:
+            self._ignore_selection_changes = previous_ignore
         if event_callback and hasattr(event_callback, "setHandled"):
             try:
                 event_callback.setHandled()
@@ -5309,6 +6096,7 @@ class PlanEditSession:
             return False
         self._set_hovered_wall(None)
         self._set_hovered_symbol(None)
+        self._set_hovered_space(None)
         previous_ignore = self._ignore_selection_changes
         self._ignore_selection_changes = True
         try:
@@ -5325,6 +6113,295 @@ class PlanEditSession:
             except Exception:
                 pass
         return True
+
+    def _create_space_from_current_selection(self):
+        import Arch
+
+        boundaries = self._get_selected_space_boundary_links()
+        if not boundaries:
+            FreeCAD.Console.PrintWarning(
+                translate(
+                    "BIM_PlanEdit",
+                    "Select room-bounding walls or explicit boundary faces before using Space.\n",
+                )
+            )
+            return False
+        space = None
+        try:
+            self.doc.openTransaction(translate("BIM_PlanEdit", "Create Space"))
+            space = Arch.makeSpace(boundaries)
+            if not space:
+                raise RuntimeError("Unable to create space")
+            self._add_object_to_active_storey(space)
+            self.doc.commitTransaction()
+            self.doc.recompute()
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+            FreeCAD.Console.PrintError(
+                translate("BIM_PlanEdit", "Failed to create the selected space.\n")
+            )
+            return False
+
+        self._register_plan_object(space)
+        self._restore_selected_space(space)
+        return True
+
+    def _set_selected_space_label(self, label):
+        space = self.selected_space
+        if not self._is_plan_space_object(space):
+            return False
+        label = str(label or "").strip()
+        if not label or label == space.Label:
+            return False
+        try:
+            self.doc.openTransaction(translate("BIM_PlanEdit", "Rename Space"))
+            space.Label = label
+            self.doc.commitTransaction()
+            self.doc.recompute()
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+            return False
+        self._refresh_task_panel_status()
+        return True
+
+    def _set_selected_space_type(self, space_type):
+        space = self.selected_space
+        if not self._is_plan_space_object(space):
+            return False
+        space_type = str(space_type or "")
+        if not space_type or space_type == getattr(space, "SpaceType", ""):
+            return False
+        try:
+            self.doc.openTransaction(translate("BIM_PlanEdit", "Change Space Type"))
+            space.SpaceType = space_type
+            self.doc.commitTransaction()
+            self.doc.recompute()
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+            return False
+        self._refresh_task_panel_status()
+        return True
+
+    def _set_space_boundaries(self, space, boundaries):
+        if not self._is_plan_space_object(space):
+            return False
+        boundaries = self._normalize_space_boundary_links(boundaries)
+        try:
+            self.doc.openTransaction(translate("BIM_PlanEdit", "Edit Space Boundaries"))
+            space.Boundaries = boundaries
+            self.doc.commitTransaction()
+            self.doc.recompute()
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+            return False
+        self._refresh_selected_space_visuals()
+        self._refresh_task_panel_status()
+        return True
+
+    def _add_boundaries_to_selected_space(self):
+        space = self.selected_space
+        if not self._is_plan_space_object(space):
+            return False
+        existing = self._get_space_boundary_entries(space)
+        additions = self._get_selected_space_boundary_links(fallback_space=space)
+        if not additions:
+            FreeCAD.Console.PrintWarning(
+                translate(
+                    "BIM_PlanEdit",
+                    "Select room-bounding walls or explicit boundary faces to add to the space.\n",
+                )
+            )
+            return False
+        merged = existing + additions
+        return self._set_space_boundaries(space, merged)
+
+    def _remove_selected_space_boundaries(self, row_indexes=None):
+        space = self.selected_space
+        if not self._is_plan_space_object(space):
+            return False
+        existing = self._get_space_boundary_entries(space)
+        if not existing:
+            return False
+
+        if row_indexes:
+            row_indexes = set(int(index) for index in row_indexes if int(index) >= 0)
+            remaining = [
+                boundary for idx, boundary in enumerate(existing) if idx not in row_indexes
+            ]
+            if len(remaining) == len(existing):
+                return False
+            return self._set_space_boundaries(space, remaining)
+
+        removals = {
+            self._space_boundary_key(boundary)
+            for boundary in self._get_selected_space_boundary_links(fallback_space=space)
+        }
+        if not removals:
+            FreeCAD.Console.PrintWarning(
+                translate(
+                    "BIM_PlanEdit",
+                    "Select boundary rows or room-bounding walls to remove from the space.\n",
+                )
+            )
+            return False
+        remaining = [
+            boundary for boundary in existing if self._space_boundary_key(boundary) not in removals
+        ]
+        if len(remaining) == len(existing):
+            return False
+        return self._set_space_boundaries(space, remaining)
+
+    def _start_space_text_position_pick(self):
+        space = self.selected_space
+        if not self._is_plan_space_object(space):
+            return False
+        self.current_tool = "Set Space Text"
+        self._edit_space = space
+        self._set_hovered_wall(None)
+        self._set_hovered_opening(None)
+        self._set_hovered_symbol(None)
+        self._set_hovered_space(None)
+        self._sync_secondary_selected_overlays()
+        self._refresh_task_panel_status()
+        FreeCAD.activeDraftCommand = self
+        self._set_draft_point_focus_suppressed(True)
+        FreeCADGui.Snapper.getPoint(
+            callback=self._finish_space_text_position_pick,
+            last=self._get_space_reference_point(space),
+            title=translate("BIM_PlanEdit", "Pick space text position"),
+            noTracker=True,
+        )
+        self._queue_focus_plan_view()
+        return True
+
+    def _finish_space_text_position_pick(self, point=None, obj=None):
+        del obj
+        space = self._edit_space
+        self._edit_space = None
+        FreeCAD.activeDraftCommand = None
+        self._set_draft_point_focus_suppressed(False)
+
+        if point is None or not self._is_plan_space_object(space):
+            self.current_tool = "Select"
+            self._refresh_task_panel_status()
+            return
+
+        point = self._project_plan_point(point)
+        try:
+            self.doc.openTransaction(translate("BIM_PlanEdit", "Set Space Text Position"))
+            space.ViewObject.TextPosition = space.Placement.inverse().multVec(point)
+            self.doc.commitTransaction()
+            self.doc.recompute()
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+            self._restore_selected_space(space)
+            return
+
+        self.current_tool = "Select"
+        self._queue_restore_selected_space(space)
+
+    def _cancel_space_text_position_pick(self):
+        space = self._edit_space or self.selected_space
+        self._edit_space = None
+        self._stop_snapper()
+        FreeCAD.activeDraftCommand = None
+        self._set_draft_point_focus_suppressed(False)
+        self.current_tool = "Select"
+        if space:
+            self._set_selected_plan_target("space", space, pending_restore=True)
+        self._sync_selected_space_overlay()
+        self._refresh_task_panel_status()
+
+    def _refresh_selected_space_visuals(self):
+        self._sync_selected_space_overlay()
+        self._request_view_redraw()
+
+    def _restore_selected_space(self, space):
+        self.current_tool = "Select"
+        self._edit_space = None
+        if space:
+            self._set_selected_plan_target("space", space, pending_restore=True)
+        else:
+            self._set_selected_plan_target()
+        if not space:
+            self._sync_selected_space_overlay()
+            self._refresh_task_panel_status()
+            return
+        previous_ignore = self._ignore_selection_changes
+        self._ignore_selection_changes = True
+        try:
+            try:
+                FreeCADGui.Selection.clearSelection()
+                FreeCADGui.Selection.addSelection(space)
+            except Exception:
+                pass
+        finally:
+            self._ignore_selection_changes = previous_ignore
+        self._sync_selected_space_overlay()
+        self._refresh_task_panel_status()
+
+    def _queue_restore_selected_space(self, space):
+        try:
+            from PySide import QtCore
+        except ImportError:
+            self._restore_selected_space(space)
+            return
+        QtCore.QTimer.singleShot(0, lambda: self._restore_selected_space(space))
+
+    def _sync_secondary_selected_overlays(self):
+        self._clear_secondary_selected_overlays()
+        if self.current_tool != "Select":
+            return
+        color = (0.12, 0.72, 0.68)
+        width = self._scaled_line_width(2)
+        for target_kind, target_obj in self._get_secondary_selected_plan_targets():
+            if target_kind == "wall":
+                self._create_wall_overlay_trackers(
+                    target_obj,
+                    color=color,
+                    width=width,
+                    tracker_store=self._secondary_selection_trackers,
+                )
+            elif target_kind == "opening":
+                self._create_opening_overlay_trackers(
+                    target_obj,
+                    color=color,
+                    width=width,
+                    tracker_store=self._secondary_selection_trackers,
+                )
+            elif target_kind == "symbol":
+                self._create_symbol_overlay_trackers(
+                    target_obj,
+                    color=color,
+                    width=width,
+                    tracker_store=self._secondary_selection_trackers,
+                )
+            elif target_kind == "space":
+                self._create_space_overlay_trackers(
+                    target_obj,
+                    color=color,
+                    width=width,
+                    tracker_store=self._secondary_selection_trackers,
+                )
+
+    def _clear_secondary_selected_overlays(self):
+        self._finalize_trackers(self._secondary_selection_trackers)
+        self._secondary_selection_trackers = []
 
     def _sync_hovered_wall_overlay(self):
         self._clear_hovered_wall_overlay()
@@ -5417,7 +6494,7 @@ class PlanEditSession:
             return
         if not self.hovered_wall or self.hovered_wall == self.selected_wall:
             return
-        if self.selected_wall or self.selected_opening:
+        if self.selected_wall or self.selected_opening or self.selected_space:
             return
         color = (0.64, 0.70, 0.84)
         width = self._scaled_line_width(1)
@@ -5448,6 +6525,79 @@ class PlanEditSession:
                 tracker.p2(end)
                 tracker.on()
                 tracker_store.append(tracker)
+
+    def _create_space_overlay_trackers(self, space, color, width, tracker_store):
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            return
+
+        for polyline in self._get_space_overlay_polylines(space):
+            if len(polyline) < 2:
+                continue
+            for start, end in zip(polyline, polyline[1:]):
+                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                tracker.p1(start)
+                tracker.p2(end)
+                tracker.on()
+                tracker_store.append(tracker)
+
+    def _get_space_overlay_segments(self, space):
+        segments = []
+        for polyline in self._get_space_overlay_polylines(space):
+            if len(polyline) < 2:
+                continue
+            for start, end in zip(polyline, polyline[1:]):
+                segments.append((start, end))
+        return segments
+
+    def _sync_hovered_space_overlay(self):
+        self._clear_hovered_space_overlay()
+        if self.current_tool != "Select":
+            return
+        if not self._is_plan_space_object(self.hovered_space):
+            return
+        if self.hovered_space == self.selected_space:
+            return
+        self._create_space_overlay_trackers(
+            self.hovered_space,
+            color=(0.38, 0.62, 0.96),
+            width=self._scaled_line_width(2),
+            tracker_store=self._space_hover_trackers,
+        )
+
+    def _clear_hovered_space_overlay(self):
+        self._finalize_trackers(self._space_hover_trackers)
+        self._space_hover_trackers = []
+
+    def _sync_selected_space_overlay(self):
+        if self.current_tool not in ("Select", "Set Space Text") or not self._is_plan_space_object(
+            self.selected_space
+        ):
+            self._clear_selected_space_overlay()
+            return
+        width = self._scaled_line_width(3)
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            self._clear_selected_space_overlay()
+            return
+        segments = self._get_space_overlay_segments(self.selected_space)
+        color = (0.12, 0.38, 0.95)
+        if len(self._space_overlay_trackers) != len(segments):
+            self._clear_selected_space_overlay()
+            for _start, _end in segments:
+                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                self._space_overlay_trackers.append(tracker)
+        for tracker, (start, end) in zip(self._space_overlay_trackers, segments):
+            tracker.setColor(color)
+            tracker.p1(start)
+            tracker.p2(end)
+            tracker.on()
+
+    def _clear_selected_space_overlay(self):
+        self._finalize_trackers(self._space_overlay_trackers)
+        self._space_overlay_trackers = []
 
     def _sync_hovered_opening_overlay(self):
         self._clear_hovered_opening_overlay()
@@ -6085,6 +7235,7 @@ class PlanEditSession:
         self._set_hovered_wall(None)
         self._set_hovered_opening(None)
         self._set_hovered_symbol(None)
+        self._sync_secondary_selected_overlays()
         self._edit_symbol = symbol
         self._edit_symbol_handle_role = handle_role
         self._edit_symbol_start_placement = self._copy_placement(getattr(symbol, "Placement", None))
@@ -6468,6 +7619,7 @@ class PlanEditSession:
         self.current_tool = "Move Opening"
         self._set_hovered_wall(None)
         self._set_hovered_opening(None)
+        self._sync_secondary_selected_overlays()
         self._edit_opening = opening
         self._edit_opening_handle_index = handle_index
         self._edit_opening_move_anchor = "center"
@@ -6610,11 +7762,14 @@ class PlanEditSession:
         self._set_hovered_wall(None)
         self._set_hovered_opening(None)
         self._set_hovered_symbol(None)
+        self._set_hovered_space(None)
         self._clear_wall_grips()
+        self._sync_secondary_selected_overlays()
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
         self._sync_selected_symbol_overlay()
         self._sync_selected_symbol_handles()
+        self._sync_selected_space_overlay()
         self._refresh_task_panel_status()
 
     def _execute_selected_opening_handle(self, opening, handle_index, handle):
@@ -6648,6 +7803,7 @@ class PlanEditControlsWidget:
         self._storey_items = []
         self._modal_focus_widgets = []
         self._saved_focus_policies = {}
+        self._refreshing_space_editor = False
         self.form = self._build_form(QtGui)
         try:
             self.form.setObjectName("BIMPlanEditContextControls")
@@ -6675,6 +7831,14 @@ class PlanEditControlsWidget:
                     ("select_button", "Select", self.on_select_clicked),
                     ("wall_button", "Wall", self.on_wall_clicked),
                     ("rect_wall_button", "Rect Wall", self.on_rect_wall_clicked),
+                    ("space_button", "Space", self.on_space_clicked),
+                ),
+            )
+        )
+        layout.addLayout(
+            self._build_button_row(
+                QtGui,
+                (
                     ("move_button", "Move", self.on_move_clicked),
                     ("join_button", "Join", self.on_join_clicked),
                     ("reapply_button", "Reapply View", self.on_reapply_clicked),
@@ -6687,6 +7851,9 @@ class PlanEditControlsWidget:
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
 
+        self.space_editor = self._build_space_editor(QtGui)
+        layout.addWidget(self.space_editor)
+
         self.exit_button = self._make_button(QtGui, "Exit Plan Edit", self.on_exit_clicked)
         self.exit_button.setMinimumHeight(32)
         layout.addWidget(self.exit_button)
@@ -6698,9 +7865,16 @@ class PlanEditControlsWidget:
             self.select_button,
             self.wall_button,
             self.rect_wall_button,
+            self.space_button,
             self.move_button,
             self.join_button,
             self.reapply_button,
+            self.space_label_edit,
+            self.space_type_combo,
+            self.space_boundary_list,
+            self.space_add_button,
+            self.space_remove_button,
+            self.space_text_button,
             self.exit_button,
         ]
         self._capture_focus_policies()
@@ -6758,6 +7932,52 @@ class PlanEditControlsWidget:
         row.addWidget(self.unjoin_button)
         return row
 
+    def _build_space_editor(self, QtGui):
+        editor = QtGui.QGroupBox(translate("BIM_PlanEdit", "Space"))
+        editor.setVisible(False)
+        layout = QtGui.QVBoxLayout(editor)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        form = QtGui.QFormLayout()
+        form.setSpacing(6)
+
+        self.space_label_edit = QtGui.QLineEdit(editor)
+        self.space_label_edit.editingFinished.connect(self.on_space_label_edited)
+        form.addRow(translate("BIM_PlanEdit", "Label"), self.space_label_edit)
+
+        self.space_type_combo = QtGui.QComboBox(editor)
+        self.space_type_combo.currentIndexChanged.connect(self.on_space_type_changed)
+        form.addRow(translate("BIM_PlanEdit", "Type"), self.space_type_combo)
+
+        layout.addLayout(form)
+
+        boundaries_label = QtGui.QLabel(translate("BIM_PlanEdit", "Boundaries"), editor)
+        layout.addWidget(boundaries_label)
+
+        self.space_boundary_list = QtGui.QListWidget(editor)
+        self.space_boundary_list.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+        self.space_boundary_list.setMinimumHeight(96)
+        layout.addWidget(self.space_boundary_list)
+
+        button_row = QtGui.QHBoxLayout()
+        button_row.setSpacing(6)
+
+        self.space_add_button = self._make_button(QtGui, "Add", self.on_space_add_clicked)
+        self.space_remove_button = self._make_button(QtGui, "Remove", self.on_space_remove_clicked)
+        self.space_text_button = self._make_button(
+            QtGui,
+            "Set Text Position",
+            self.on_space_text_clicked,
+        )
+
+        button_row.addWidget(self.space_add_button)
+        button_row.addWidget(self.space_remove_button)
+        button_row.addWidget(self.space_text_button)
+        layout.addLayout(button_row)
+
+        return editor
+
     def _capture_focus_policies(self):
         for widget in self._modal_focus_widgets:
             try:
@@ -6794,11 +8014,19 @@ class PlanEditControlsWidget:
         self.select_button = None
         self.wall_button = None
         self.rect_wall_button = None
+        self.space_button = None
         self.move_button = None
         self.join_button = None
         self.join_type_combo = None
         self.unjoin_button = None
         self.reapply_button = None
+        self.space_editor = None
+        self.space_label_edit = None
+        self.space_type_combo = None
+        self.space_boundary_list = None
+        self.space_add_button = None
+        self.space_remove_button = None
+        self.space_text_button = None
         self.exit_button = None
         self._modal_focus_widgets = []
         self._saved_focus_policies = {}
@@ -6888,6 +8116,14 @@ class PlanEditControlsWidget:
                     "BIM_PlanEdit",
                     "Use in-view handles to move or rotate the selected symbol instance.",
                 )
+        elif self.session.selected_space:
+            selection_state = translate("BIM_PlanEdit", "Space: {label}").format(
+                label=self.session.selected_space.Label
+            )
+            selection_help = translate(
+                "BIM_PlanEdit",
+                "Use the space controls below to edit label, type, boundaries, and text position.",
+            )
         elif self.session.selected_wall:
             selection_state = translate("BIM_PlanEdit", "Wall: {label}").format(
                 label=self.session.selected_wall.Label
@@ -6906,7 +8142,18 @@ class PlanEditControlsWidget:
             selection_state = translate("BIM_PlanEdit", "Selection: none")
             selection_help = translate(
                 "BIM_PlanEdit",
-                "Select a wall, hosted opening, or symbol instance in the viewport to edit it.",
+                "Select a wall, hosted opening, symbol instance, or space in the viewport to edit it.",
+            )
+        selection_summary = self.session._get_plan_selection_summary_text()
+        if selection_summary:
+            selection_help = "{}\n{}".format(selection_help, selection_summary)
+        if self.session.current_tool == "Select":
+            selection_help = "{}\n{}".format(
+                selection_help,
+                translate(
+                    "BIM_PlanEdit",
+                    "Ctrl-click adds or removes targets without replacing the current editor target.",
+                ),
             )
         if self.session._plan_relation_status_message:
             selection_help = "{}\n{}".format(
@@ -6924,7 +8171,67 @@ class PlanEditControlsWidget:
                 selection_help=selection_help,
             )
         )
+        self._refresh_space_editor()
         self._apply_modal_interaction_state(modal_active)
+
+    def _refresh_space_editor(self):
+        from PySide import QtGui
+
+        if self.space_editor is None:
+            return
+        space = self.session.selected_space
+        show_editor = bool(space and self.session.current_tool in ("Select", "Set Space Text"))
+        try:
+            self.space_editor.setVisible(show_editor)
+        except Exception:
+            pass
+        if not show_editor:
+            return
+
+        self._refreshing_space_editor = True
+        try:
+            if self.space_label_edit is not None:
+                self.space_label_edit.setText(getattr(space, "Label", ""))
+
+            options = []
+            try:
+                options = list(space.getEnumerationsOfProperty("SpaceType") or [])
+            except Exception:
+                options = []
+            if not options:
+                current_type = getattr(space, "SpaceType", "")
+                options = [current_type] if current_type else []
+            current_type = getattr(space, "SpaceType", "")
+            if self.space_type_combo is not None:
+                self.space_type_combo.blockSignals(True)
+                try:
+                    existing_items = [
+                        self.space_type_combo.itemText(index)
+                        for index in range(self.space_type_combo.count())
+                    ]
+                    if existing_items != options:
+                        self.space_type_combo.clear()
+                        for option in options:
+                            self.space_type_combo.addItem(option, option)
+                    current_index = self.space_type_combo.findData(current_type)
+                    if current_index < 0:
+                        current_index = self.space_type_combo.findText(current_type)
+                    if current_index >= 0:
+                        self.space_type_combo.setCurrentIndex(current_index)
+                finally:
+                    self.space_type_combo.blockSignals(False)
+
+            if self.space_boundary_list is not None:
+                self.space_boundary_list.clear()
+                for obj, subnames in self.session._get_space_boundary_entries(space):
+                    label = getattr(obj, "Label", getattr(obj, "Name", ""))
+                    suffix = ", ".join(subnames)
+                    text = f"{label}: {suffix}" if suffix else label
+                    item = QtGui.QListWidgetItem(text)
+                    item.setToolTip(getattr(obj, "Name", ""))
+                    self.space_boundary_list.addItem(item)
+        finally:
+            self._refreshing_space_editor = False
 
     def _apply_modal_interaction_state(self, modal_active):
         from PySide import QtCore
@@ -6946,6 +8253,7 @@ class PlanEditControlsWidget:
             self.select_button,
             self.wall_button,
             self.rect_wall_button,
+            self.space_button,
             self.move_button,
             self.join_button,
             self.join_type_combo,
@@ -6968,6 +8276,22 @@ class PlanEditControlsWidget:
             except Exception:
                 pass
 
+        has_space = bool(self.session.selected_space)
+        for widget in (
+            self.space_label_edit,
+            self.space_type_combo,
+            self.space_boundary_list,
+            self.space_add_button,
+            self.space_remove_button,
+            self.space_text_button,
+        ):
+            if widget is None:
+                continue
+            try:
+                widget.setEnabled(bool(has_space and not modal_active))
+            except Exception:
+                pass
+
     def on_storey_changed(self, index):
         if 0 <= index < len(self._storey_items):
             self.session.set_active_storey(self._storey_items[index])
@@ -6980,6 +8304,9 @@ class PlanEditControlsWidget:
 
     def on_rect_wall_clicked(self):
         self.session.activate_rect_wall_tool()
+
+    def on_space_clicked(self):
+        self.session.activate_space_tool()
 
     def on_move_clicked(self):
         self.session.activate_move_tool()
@@ -6999,6 +8326,29 @@ class PlanEditControlsWidget:
     def on_reapply_clicked(self):
         self.session.apply_plan_view(fit=False)
         self.refresh_from_session()
+
+    def on_space_label_edited(self):
+        if self._refreshing_space_editor or self.space_label_edit is None:
+            return
+        self.session._set_selected_space_label(self.space_label_edit.text())
+
+    def on_space_type_changed(self, index):
+        if self._refreshing_space_editor or self.space_type_combo is None or index < 0:
+            return
+        value = self.space_type_combo.itemData(index) or self.space_type_combo.itemText(index)
+        self.session._set_selected_space_type(value)
+
+    def on_space_add_clicked(self):
+        self.session._add_boundaries_to_selected_space()
+
+    def on_space_remove_clicked(self):
+        if self.space_boundary_list is None:
+            return
+        rows = sorted({index.row() for index in self.space_boundary_list.selectedIndexes()})
+        self.session._remove_selected_space_boundaries(rows)
+
+    def on_space_text_clicked(self):
+        self.session._start_space_text_position_pick()
 
     def on_exit_clicked(self):
         self.session.shutdown()
