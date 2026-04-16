@@ -75,6 +75,36 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         return level, equipment, link
 
+    def _make_direct_plan_symbol_equipment(self, anchor=None, facing=None):
+        level = Arch.makeFloor(name="Level 0")
+        box = self.document.addObject("Part::Box", "DirectPlanSymbolBox")
+        box.Length = 1400
+        box.Width = 1950
+        box.Height = 600
+        equipment = Arch.makeEquipment(box)
+        if anchor is not None:
+            equipment.PlanAnchor = FreeCAD.Vector(anchor)
+        if facing is not None:
+            equipment.PlanFacing = FreeCAD.Vector(facing)
+
+        plan = self.document.addObject("Part::Feature", "DirectPlanSymbol2D")
+        plan.Shape = Part.makeCompound(
+            [
+                Part.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(1400, 0, 0)),
+                Part.makeLine(FreeCAD.Vector(1400, 0, 0), FreeCAD.Vector(1400, 1950, 0)),
+                Part.makeLine(FreeCAD.Vector(1400, 1950, 0), FreeCAD.Vector(0, 1950, 0)),
+                Part.makeLine(FreeCAD.Vector(0, 1950, 0), FreeCAD.Vector(0, 0, 0)),
+            ]
+        )
+        equipment.PlanSymbols = [plan]
+        equipment.Label = "Bed 001"
+        equipment.Placement.Base = FreeCAD.Vector(1000, 800, 0)
+        level.addObject(equipment)
+
+        self.document.recompute()
+        self.pump_gui_events()
+        return level, equipment
+
     def test_plan_edit_embedded_wall_uses_sane_top_plane(self):
         """Embedded wall creation in Plan Edit should start from a clean top plane."""
 
@@ -436,6 +466,42 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(
             {"move", "rotate"},
             {role for role, _point, _marker in session._get_selected_symbol_handle_specs(link)},
+        )
+        self.assertEqual(2, len(session._symbol_handle_trackers))
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_direct_symbol_instances_are_selectable_with_handles(self):
+        """Direct equipment with authored plan symbols should also be editable plan targets."""
+
+        level, equipment = self._make_direct_plan_symbol_equipment()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        session._refresh_plan_object_footprint_display(equipment)
+        self.pump_gui_events()
+
+        self.assertTrue(equipment.ViewObject.Visibility)
+        self.assertTrue(equipment.ViewObject.Selectable)
+        self.assertTrue(session._is_plan_symbol_instance(equipment))
+        self.assertEqual("symbol", session._get_plan_target_kind_for_object(equipment))
+
+        self.assertTrue(session._select_symbol_for_plan_edit(equipment))
+        self.pump_gui_events()
+
+        self.assertIs(equipment, session.selected_symbol)
+        self.assertEqual(
+            {"move", "rotate"},
+            {
+                role
+                for role, _point, _marker in session._get_selected_symbol_handle_specs(equipment)
+            },
         )
         self.assertEqual(2, len(session._symbol_handle_trackers))
 
