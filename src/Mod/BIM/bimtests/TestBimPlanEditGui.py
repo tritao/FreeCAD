@@ -178,6 +178,27 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         return level, walls
 
+    def _make_split_plan_room_walls(self, width=200, height=2500):
+        level = Arch.makeFloor(name="Level 0")
+        walls = []
+        segments = (
+            ("South Wall", FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(6000, 0, 0)),
+            ("East Wall", FreeCAD.Vector(6000, 0, 0), FreeCAD.Vector(6000, 4000, 0)),
+            ("North Wall", FreeCAD.Vector(6000, 4000, 0), FreeCAD.Vector(0, 4000, 0)),
+            ("West Wall", FreeCAD.Vector(0, 4000, 0), FreeCAD.Vector(0, 0, 0)),
+            ("Divider Wall", FreeCAD.Vector(3000, 0, 0), FreeCAD.Vector(3000, 4000, 0)),
+        )
+        for label, start, end in segments:
+            base = Draft.makeLine(start, end)
+            wall = Arch.makeWall(base, width=width, height=height, name=label.replace(" ", ""))
+            wall.Label = label
+            level.addObject(wall)
+            walls.append(wall)
+
+        self.document.recompute()
+        self.pump_gui_events()
+        return level, walls
+
     def _make_windowed_plan_wall(self, length=3000, width=200, height=2500):
         level = Arch.makeFloor(name="Level 0")
         wall_base = Draft.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(length, 0, 0))
@@ -3803,6 +3824,182 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         status_text = session.task_panel.status.text()
         self.assertIn("Selection set: 3 walls", status_text)
         self.assertIn("Space preflight: Open loop", status_text)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_space_tool_can_pick_a_region_from_multiple_enclosed_rooms(self):
+        """Plan Edit should let the user choose one enclosed region when many are detected."""
+
+        level = Arch.makeFloor(name="Level 0")
+        height = 2500.0
+
+        def make_boundary_face(name, points):
+            face_object = self.document.addObject("Part::Feature", name)
+            face_object.Shape = Part.Face(Part.makePolygon(points + [points[0]]))
+            return face_object
+
+        boundaries = [
+            (
+                make_boundary_face(
+                    "OuterSouth",
+                    [
+                        FreeCAD.Vector(0.0, 0.0, 0.0),
+                        FreeCAD.Vector(6000.0, 0.0, 0.0),
+                        FreeCAD.Vector(6000.0, 0.0, height),
+                        FreeCAD.Vector(0.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterEast",
+                    [
+                        FreeCAD.Vector(6000.0, 0.0, 0.0),
+                        FreeCAD.Vector(6000.0, 4000.0, 0.0),
+                        FreeCAD.Vector(6000.0, 4000.0, height),
+                        FreeCAD.Vector(6000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterNorth",
+                    [
+                        FreeCAD.Vector(6000.0, 4000.0, 0.0),
+                        FreeCAD.Vector(0.0, 4000.0, 0.0),
+                        FreeCAD.Vector(0.0, 4000.0, height),
+                        FreeCAD.Vector(6000.0, 4000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterWest",
+                    [
+                        FreeCAD.Vector(0.0, 4000.0, 0.0),
+                        FreeCAD.Vector(0.0, 0.0, 0.0),
+                        FreeCAD.Vector(0.0, 0.0, height),
+                        FreeCAD.Vector(0.0, 4000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "Divider",
+                    [
+                        FreeCAD.Vector(3000.0, 0.0, 0.0),
+                        FreeCAD.Vector(3000.0, 4000.0, 0.0),
+                        FreeCAD.Vector(3000.0, 4000.0, height),
+                        FreeCAD.Vector(3000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+        ]
+
+        self.document.recompute()
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        before = {obj.Name for obj in self.document.Objects}
+
+        self.assertTrue(session._begin_space_region_pick(boundaries, label="Two Rooms"))
+        self.pump_gui_events()
+
+        self.assertEqual(session.current_tool, "Pick Space Region")
+        self.assertEqual(len(session._space_region_candidates), 2)
+        self.assertIn("pick region", session.task_panel.status.text().lower())
+
+        candidate = session._space_region_candidates[0]
+        screen_pos = session.view.getPointOnScreen(candidate["sample_point"])
+        self.assertIs(session._pick_space_region_candidate(screen_pos), candidate)
+
+        session._on_mouse_pressed(self._make_fake_left_mouse_press(*screen_pos))
+        self.pump_gui_events()
+
+        created_spaces = [
+            obj
+            for obj in self.document.Objects
+            if obj.Name not in before and Draft.getType(obj) == "Space"
+        ]
+        self.assertEqual(len(created_spaces), 1)
+        space = created_spaces[0]
+
+        self.assertEqual(session.current_tool, "Select")
+        self.assertIs(session.selected_space, space)
+        self.assertEqual(len(session._get_space_boundary_entries(space)), len(boundaries))
+        self.assertAlmostEqual(space.Proxy.getArea(space), candidate["area"])
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_space_tool_can_pick_regions_from_selected_space_and_wall(self):
+        """A selected space plus boundary wall should become a region-pick candidate set."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "RegionSeedSpaceBase")
+        base.Length = 6000
+        base.Width = 4000
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Seed Space")
+        wall_base = Draft.makeLine(FreeCAD.Vector(2000, 0, 0), FreeCAD.Vector(2000, 4000, 0))
+        wall = Arch.makeWall(wall_base, width=200, height=2500, name="RegionDivider")
+        wall.Label = "Region Divider"
+        level.addObject(space)
+        level.addObject(wall)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        before = {obj.Name for obj in self.document.Objects}
+
+        session._set_pending_selected_plan_target("space", space)
+        session._set_gui_selection([space, wall])
+        session._refresh_selected_wall()
+
+        self.assertIs(session.selected_space, space)
+        self.assertIsNone(session.selected_wall)
+        self.assertIn("Boundary candidates: 1 wall", session.task_panel.status.text())
+
+        self.assertTrue(session.activate_space_tool())
+        self.pump_gui_events()
+
+        self.assertEqual(session.current_tool, "Pick Space Region")
+        self.assertEqual(len(session._space_region_candidates), 2)
+
+        candidate = min(session._space_region_candidates, key=lambda item: item["area"])
+        self.assertTrue(session._activate_space_region_candidate(candidate))
+        self.pump_gui_events()
+
+        created_spaces = [
+            obj
+            for obj in self.document.Objects
+            if obj.Name not in before and Draft.getType(obj) == "Space"
+        ]
+        self.assertEqual(len(created_spaces), 1)
+        created_space = created_spaces[0]
+
+        self.assertEqual(session.current_tool, "Select")
+        self.assertIs(session.selected_space, created_space)
+        self.assertEqual(session._get_space_boundary_entries(created_space), [])
+        self.assertAlmostEqual(created_space.Proxy.getArea(created_space), candidate["area"])
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
