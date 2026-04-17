@@ -699,6 +699,63 @@ class _Space(ArchComponent.Component):
         delta.z = 0.0
         return float(delta.Length)
 
+    def _is_slice_edge_point_on_edge(self, point, edge, tolerance=_SLICE_EDGE_VERTEX_TOLERANCE):
+        import Part
+
+        if self._get_slice_edge_curve_type(edge) == "Line":
+            vertexes = list(getattr(edge, "Vertexes", []) or [])
+            if len(vertexes) >= 2:
+                start = FreeCAD.Vector(vertexes[0].Point)
+                end = FreeCAD.Vector(vertexes[-1].Point)
+                point = FreeCAD.Vector(point)
+                segment = end.sub(start)
+                length_sq = segment.dot(segment)
+                if length_sq <= tolerance * tolerance:
+                    return point.distanceToPoint(start) <= tolerance
+                t = point.sub(start).dot(segment) / length_sq
+                if t < -0.000001 or t > 1.000001:
+                    return False
+                offset = FreeCAD.Vector(segment)
+                offset.multiply(max(0.0, min(1.0, t)))
+                closest = start.add(offset)
+                return point.distanceToPoint(closest) <= tolerance
+
+        try:
+            vertex = Part.Vertex(FreeCAD.Vector(point))
+            result = vertex.distToShape(edge)
+        except Exception:
+            return False
+        if not result:
+            return False
+        try:
+            distance = float(result[0])
+        except Exception:
+            return False
+        return distance <= tolerance
+
+    def _can_build_faces_from_slice_edges(
+        self, section_edges, tolerance=_SLICE_EDGE_VERTEX_TOLERANCE
+    ):
+        endpoint_records = self._get_slice_edge_endpoint_records(section_edges)
+        if len(endpoint_records) < 2:
+            return False
+
+        for record in endpoint_records:
+            point = record["point"]
+            for edge_index, edge in enumerate(section_edges or []):
+                if edge_index == record["edge_index"]:
+                    continue
+                if not self._is_slice_edge_point_on_edge(point, edge, tolerance=tolerance):
+                    continue
+                other_vertexes = list(getattr(edge, "Vertexes", []) or [])
+                if any(
+                    self._get_slice_edge_gap_distance(point, vertex.Point) <= tolerance
+                    for vertex in other_vertexes
+                ):
+                    continue
+                return True
+        return False
+
     def _get_gap_bridged_slice_edges(
         self,
         section_edges,
@@ -894,17 +951,40 @@ class _Space(ArchComponent.Component):
         if not section_edges:
             return []
 
-        edge_sets = [section_edges]
         bridged_edges = self._get_gap_bridged_slice_edges(section_edges)
-        if len(bridged_edges) > len(section_edges):
-            edge_sets.append(bridged_edges)
+        has_bridged_edges = len(bridged_edges) > len(section_edges)
 
-        for candidate_edges in edge_sets:
-            wires = get_sorted_edge_wires(candidate_edges)
+        wires = get_sorted_edge_wires(section_edges)
+        if wires:
+            return wires
+
+        if has_bridged_edges:
+            wires = get_sorted_edge_wires(bridged_edges)
             if wires:
                 return wires
 
-        for candidate_edges in edge_sets:
+        for candidate_edges in ([bridged_edges] if has_bridged_edges else []):
+            if not self._can_build_faces_from_slice_edges(candidate_edges):
+                continue
+            build_faces = self._get_horizontal_slice_faces_from_edges(candidate_edges)
+            if build_faces:
+                wires = []
+                seen = set()
+                for face in build_faces:
+                    for wire in getattr(face, "Wires", []) or []:
+                        if not wire.isClosed() or len(wire.Vertexes) < 3:
+                            continue
+                        identity = self._get_wire_identity(wire)
+                        if identity in seen:
+                            continue
+                        seen.add(identity)
+                        wires.append(wire)
+                if wires:
+                    return wires
+
+        for candidate_edges in [section_edges]:
+            if not self._can_build_faces_from_slice_edges(candidate_edges):
+                continue
             build_faces = self._get_horizontal_slice_faces_from_edges(candidate_edges)
             if build_faces:
                 wires = []
@@ -2030,6 +2110,8 @@ class _SpaceBoundaryAnalyzer:
     _copy_clean_slice_edge = _Space._copy_clean_slice_edge
     _get_slice_edge_endpoint_records = _Space._get_slice_edge_endpoint_records
     _get_slice_edge_gap_distance = _Space._get_slice_edge_gap_distance
+    _is_slice_edge_point_on_edge = _Space._is_slice_edge_point_on_edge
+    _can_build_faces_from_slice_edges = _Space._can_build_faces_from_slice_edges
     _get_gap_bridged_slice_edges = _Space._get_gap_bridged_slice_edges
     _make_transient_face_from_wires = _Space._make_transient_face_from_wires
     _get_horizontal_slice_faces_from_edges = _Space._get_horizontal_slice_faces_from_edges
