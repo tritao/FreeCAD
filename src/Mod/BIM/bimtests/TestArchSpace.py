@@ -28,6 +28,7 @@
 import os
 from unittest.mock import patch
 import Arch
+import ArchSpace
 import Draft
 import Part
 import FreeCAD as App
@@ -333,6 +334,12 @@ class TestArchSpace(TestArchBase.TestArchBase):
             ),
         ]
 
+        preflight = ArchSpace.analyzeBoundaryLinks(boundaries, label="Inner Void Preview")
+        self.assertTrue(preflight["valid"])
+        self.assertEqual(preflight["code"], "valid")
+        self.assertEqual(preflight["region_count"], 1)
+        self.assertEqual(preflight["inner_void_count"], 1)
+
         space = Arch.makeSpace(boundaries)
         App.ActiveDocument.recompute()
 
@@ -401,6 +408,10 @@ class TestArchSpace(TestArchBase.TestArchBase):
             space = Arch.makeSpace(boundaries)
             App.ActiveDocument.recompute()
 
+        preflight = ArchSpace.analyzeBoundaryLinks(boundaries, label="Open Loop Preview")
+        self.assertFalse(preflight["valid"])
+        self.assertEqual(preflight["code"], "open_loop")
+        self.assertIn("closed room loop", preflight["message"])
         self.assertEqual(len(space.Shape.Solids), 0)
         self.assertIn("closed room loop", space.Proxy.getLastBoundaryError())
         console_output = "".join(call.args[0] for call in print_error.call_args_list)
