@@ -1332,6 +1332,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             [obj.Name for obj in FreeCADGui.Selection.getSelection()],
             [wall_a.Name, wall_b.Name],
         )
+        self.assertEqual(session._get_selected_plan_target(), ("wall", wall_a))
+        self.assertEqual(session._get_secondary_selected_plan_targets(), [("wall", wall_b)])
         self.assertGreater(len(session._secondary_selection_trackers), 0)
         self.assertIn("Selection set: 2 walls", session.task_panel.status.text())
 
@@ -1352,6 +1354,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertTrue(callback._handled)
         self.assertIs(session.selected_wall, wall_b)
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall_b.Name])
+        self.assertEqual(session._get_selected_plan_target(), ("wall", wall_b))
+        self.assertEqual(session._get_secondary_selected_plan_targets(), [])
         self.assertEqual(len(session._secondary_selection_trackers), 0)
         self.assertNotIn("Selection set:", session.task_panel.status.text())
 
@@ -4958,6 +4962,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             [obj.Name for obj in FreeCADGui.Selection.getSelection()],
             [space.Name, wall.Name],
         )
+        self.assertEqual(session._get_selected_plan_target(), ("space", space))
+        self.assertEqual(session._get_secondary_selected_plan_targets(), [("wall", wall)])
         self.assertGreater(len(session._secondary_selection_trackers), 0)
         self.assertIn("Boundary candidates: 1 wall", session.task_panel.status.text())
 

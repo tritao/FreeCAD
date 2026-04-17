@@ -332,6 +332,7 @@ class PlanEditSession:
         self._hovered_space_region_candidate = None
         self._space_region_pick_seed_space = None
         self._pending_selected_plan_target = None
+        self._secondary_selected_plan_targets_state = []
         self._grip_trackers = []
         self._wall_hover_trackers = []
         self._junction_node_trackers = []
@@ -534,6 +535,12 @@ class PlanEditSession:
                 continue
             setattr(self, attr, None)
             changed = True
+        normalized_secondary = self._normalize_plan_target_list(
+            getattr(self, "_secondary_selected_plan_targets_state", [])
+        )
+        if normalized_secondary != getattr(self, "_secondary_selected_plan_targets_state", []):
+            self._secondary_selected_plan_targets_state = normalized_secondary
+            changed = True
         return changed
 
     def enter(self):
@@ -668,6 +675,7 @@ class PlanEditSession:
         self._saved_navigation_state = {}
         self._saved_view_action_state = {}
         self._set_selected_plan_target_state()
+        self._secondary_selected_plan_targets_state = []
         self.hovered_wall = None
         self.hovered_opening = None
         self.hovered_symbol = None
@@ -3016,15 +3024,7 @@ class PlanEditSession:
     def _get_selected_plan_target(self):
         self._sanitize_plan_target_references()
         kind, obj = self._get_selected_plan_target_state()
-        validators = {
-            "opening": self._is_hosted_opening_object,
-            "symbol": self._is_plan_symbol_instance,
-            "region": self._is_plan_region_object,
-            "space": self._is_plan_space_object,
-            "wall": self._is_plan_selectable_wall,
-        }
-        validator = validators.get(kind)
-        if validator is not None and validator(obj):
+        if self._is_valid_plan_target(kind, obj):
             return (kind, obj)
         if kind is not None or obj is not None:
             self._set_selected_plan_target_state()
@@ -3036,6 +3036,82 @@ class PlanEditSession:
             if target_kind and target_obj:
                 return (target_kind, target_obj)
         return (None, None)
+
+    def _is_valid_plan_target(self, kind, obj):
+        validators = {
+            "opening": self._is_hosted_opening_object,
+            "symbol": self._is_plan_symbol_instance,
+            "region": self._is_plan_region_object,
+            "space": self._is_plan_space_object,
+            "wall": self._is_plan_selectable_wall,
+        }
+        validator = validators.get(kind)
+        return bool(validator is not None and validator(obj))
+
+    def _get_plan_target_state_key(self, kind, obj):
+        if not kind or not obj:
+            return None
+        return (
+            kind,
+            getattr(getattr(obj, "Document", None), "Name", None),
+            getattr(obj, "Name", None),
+        )
+
+    def _normalize_plan_target_list(self, targets):
+        normalized = []
+        seen = set()
+        for target in targets or []:
+            try:
+                target_kind, target_obj = target
+            except Exception:
+                continue
+            if not self._is_valid_plan_target(target_kind, target_obj):
+                continue
+            key = self._get_plan_target_state_key(target_kind, target_obj)
+            if key is None or key in seen:
+                continue
+            seen.add(key)
+            normalized.append((target_kind, target_obj))
+        return normalized
+
+    def _normalize_plan_targets_from_selection(self, selection):
+        return self._normalize_plan_target_list(
+            [
+                (target_kind, target_obj)
+                for target_kind, target_obj in (
+                    self._get_plan_target_for_object(selected) for selected in (selection or [])
+                )
+                if target_kind and target_obj
+            ]
+        )
+
+    def _set_secondary_selected_plan_targets(self, targets, primary_kind=None, primary_obj=None):
+        if primary_kind is None and primary_obj is None:
+            primary_kind, primary_obj = self._get_selected_plan_target()
+        normalized = []
+        for target_kind, target_obj in self._normalize_plan_target_list(targets):
+            if target_kind == primary_kind and target_obj == primary_obj:
+                continue
+            normalized.append((target_kind, target_obj))
+        self._secondary_selected_plan_targets_state = normalized
+
+    def _sync_secondary_selected_plan_targets_from_selection(
+        self, selection, primary_kind=None, primary_obj=None
+    ):
+        self._set_secondary_selected_plan_targets(
+            self._normalize_plan_targets_from_selection(selection),
+            primary_kind=primary_kind,
+            primary_obj=primary_obj,
+        )
+
+    def _sync_secondary_selected_plan_targets_from_gui_selection(
+        self, primary_kind=None, primary_obj=None
+    ):
+        self._sync_secondary_selected_plan_targets_from_selection(
+            self._get_gui_selection(),
+            primary_kind=primary_kind,
+            primary_obj=primary_obj,
+        )
 
     @contextmanager
     def _selection_changes_suppressed(self):
@@ -3064,6 +3140,7 @@ class PlanEditSession:
                     self._add_gui_selection_object(obj)
             except Exception:
                 pass
+        self._sync_secondary_selected_plan_targets_from_selection(selection)
 
     def _set_gui_selection_object(self, obj):
         if not obj:
@@ -3088,25 +3165,14 @@ class PlanEditSession:
                     pass
 
     def _get_secondary_selected_plan_targets(self):
+        self._sanitize_plan_target_references()
         primary_kind, primary_obj = self._get_selected_plan_target()
-        targets = []
-        seen = set()
-        for selected in self._get_gui_selection():
-            target_kind, target_obj = self._get_plan_target_for_object(selected)
-            if not target_kind or not target_obj:
-                continue
-            key = (
-                target_kind,
-                getattr(getattr(target_obj, "Document", None), "Name", None),
-                getattr(target_obj, "Name", None),
-            )
-            if key in seen:
-                continue
-            seen.add(key)
-            if primary_kind == target_kind and primary_obj == target_obj:
-                continue
-            targets.append((target_kind, target_obj))
-        return targets
+        self._set_secondary_selected_plan_targets(
+            getattr(self, "_secondary_selected_plan_targets_state", []),
+            primary_kind=primary_kind,
+            primary_obj=primary_obj,
+        )
+        return list(getattr(self, "_secondary_selected_plan_targets_state", []))
 
     def _format_plan_target_count_label(self, kind, count):
         labels = {
@@ -3301,20 +3367,16 @@ class PlanEditSession:
             FreeCAD.Console.PrintWarning(f"  - {label}: {detail}\n")
 
     def _set_selected_plan_target(self, kind=None, obj=None, pending_restore=False):
-        validators = {
-            "opening": self._is_hosted_opening_object,
-            "symbol": self._is_plan_symbol_instance,
-            "region": self._is_plan_region_object,
-            "space": self._is_plan_space_object,
-            "wall": self._is_plan_selectable_wall,
-        }
-        validator = validators.get(kind)
-        if validator is not None and validator(obj):
+        if self._is_valid_plan_target(kind, obj):
             self._set_selected_plan_target_state(kind, obj)
         else:
             self._set_selected_plan_target_state()
             kind = None
             obj = None
+        self._sync_secondary_selected_plan_targets_from_gui_selection(
+            primary_kind=kind,
+            primary_obj=obj,
+        )
         self._clear_plan_relation_status()
         self._sync_active_plan_target_object()
         if pending_restore:
@@ -3476,6 +3538,7 @@ class PlanEditSession:
         previous_region = self.selected_region
         if self._is_wall_edit_modal_active():
             self._set_selected_plan_target_state("wall", self._edit_wall)
+            self._set_secondary_selected_plan_targets([])
             if previous_wall != self.selected_wall:
                 self._sync_wall_grips()
             self._sync_hovered_wall_overlay()
@@ -3502,6 +3565,7 @@ class PlanEditSession:
                 "space",
                 self._edit_space if self._is_plan_space_object(self._edit_space) else None,
             )
+            self._set_secondary_selected_plan_targets([])
             self._clear_wall_grips()
             self._sync_selected_wall_opening_context_overlay()
             self._sync_hovered_wall_overlay()
@@ -3530,6 +3594,7 @@ class PlanEditSession:
                 self.current_tool = "Select"
                 wall = None
             self._set_selected_plan_target_state("wall", wall)
+            self._set_secondary_selected_plan_targets([])
             self._clear_wall_grips()
             self._sync_selected_wall_opening_context_overlay()
             self._sync_hovered_wall_overlay()
@@ -3587,16 +3652,24 @@ class PlanEditSession:
             if matched_target is not None:
                 target_kind, selected = matched_target
                 self._set_selected_plan_target_state(target_kind, selected)
+                self._set_secondary_selected_plan_targets(
+                    selected_targets,
+                    primary_kind=target_kind,
+                    primary_obj=selected,
+                )
                 if len(selection) == 1 and target_kind not in ("space", "region"):
                     self._set_pending_selected_plan_target()
                 else:
                     self._set_pending_selected_plan_target(target_kind, selected)
             else:
+                self._set_secondary_selected_plan_targets([])
                 self._set_pending_selected_plan_target()
         elif self.current_tool in ("Select", "Pick Space Region") and not selection:
             pending_kind, pending_target = self._consume_pending_selected_plan_target()
             self._set_selected_plan_target_state(pending_kind, pending_target)
+            self._set_secondary_selected_plan_targets([])
         else:
+            self._set_secondary_selected_plan_targets([])
             self._set_pending_selected_plan_target()
         if previous_wall != self.selected_wall:
             self._sync_wall_grips()
