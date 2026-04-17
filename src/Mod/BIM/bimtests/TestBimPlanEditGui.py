@@ -3814,6 +3814,90 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_clicking_opening_handle_populates_selection_ex(self):
+        """Opening handle clicks should also create a real SelectionEx entry."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+        door = self._make_hosted_door(wall, name="HandleSelectionDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(
+            session,
+            "_get_edit_node",
+            return_value=("opening_handle", door, 0),
+        ), patch.object(session, "_activate_opening_handle") as activate_handle:
+            callback = self._make_fake_left_mouse_press()
+            session._on_mouse_pressed(callback)
+
+        self.assertTrue(callback._handled)
+        activate_handle.assert_called_once_with(door, 0)
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [door.Name])
+        selection_ex = FreeCADGui.Selection.getSelectionEx("*")
+        self.assertEqual(len(selection_ex), 1)
+        self.assertEqual(selection_ex[0].ObjectName, door.Name)
+        self.assertIs(session.view.getActiveObject("Arch"), door)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_clicking_opening_edit_node_populates_selection_ex(self):
+        """Opening edit-node hits should populate property-view selection before handle activation."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+        door = self._make_hosted_door(wall, name="EditNodeSelectionDoor")
+
+        class _FakeField:
+            def __init__(self, value):
+                self._value = value
+
+            def getValue(self):
+                return self._value
+
+        class _FakePickedPoint:
+            def __init__(self, document_name, object_name, sub_element_name):
+                self.documentName = _FakeField(document_name)
+                self.objectName = _FakeField(object_name)
+                self.subElementName = _FakeField(sub_element_name)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        picked_point = _FakePickedPoint(self.document.Name, door.Name, "EditNode0")
+        with patch.object(
+            session,
+            "_get_edit_node",
+            return_value=("edit_node", picked_point),
+        ), patch.object(session, "_activate_opening_handle") as activate_handle:
+            callback = self._make_fake_left_mouse_press()
+            session._on_mouse_pressed(callback)
+
+        self.assertTrue(callback._handled)
+        activate_handle.assert_called_once_with(door, 0)
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [door.Name])
+        selection_ex = FreeCADGui.Selection.getSelectionEx("*")
+        self.assertEqual(len(selection_ex), 1)
+        self.assertEqual(selection_ex[0].ObjectName, door.Name)
+        self.assertIs(session.view.getActiveObject("Arch"), door)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_region_face_pick_survives_storey_object_hits(self):
         """Region face picks should still resolve when native picking only reports the storey."""
 

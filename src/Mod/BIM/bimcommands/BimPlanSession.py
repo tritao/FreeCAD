@@ -5489,8 +5489,8 @@ class PlanEditSession:
             node_kind = node[0]
             if node_kind == "opening_handle":
                 _kind, obj, index = node
-                self._set_selected_plan_target_state("opening", obj)
-                self._clear_wall_grips()
+                self._select_opening_for_plan_edit(obj)
+                self._set_gui_selection_object(obj)
                 self._activate_opening_handle(obj, index)
             elif node_kind == "symbol_handle":
                 _kind, obj, role = node
@@ -5506,8 +5506,8 @@ class PlanEditSession:
                 except Exception:
                     return
                 if self._is_hosted_opening_object(obj):
-                    self._set_selected_plan_target_state("opening", obj)
-                    self._clear_wall_grips()
+                    self._select_opening_for_plan_edit(obj)
+                    self._set_gui_selection_object(obj)
                     self._activate_opening_handle(obj, index)
                 else:
                     self._set_selected_plan_target_state("wall", obj)
