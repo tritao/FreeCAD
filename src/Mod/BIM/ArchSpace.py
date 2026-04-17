@@ -1026,6 +1026,162 @@ class _Space(ArchComponent.Component):
                             vertical_faces.append(face)
         return vertical_faces
 
+    def _is_space_object(self, obj):
+        if not obj:
+            return False
+        try:
+            if Draft.getType(obj) == "Space":
+                return True
+        except Exception:
+            pass
+        return getattr(obj, "IfcType", "") == "Space"
+
+    @staticmethod
+    def normalizeBoundarySubnames(subnames):
+        """Normalize a boundary subname list down to explicit face references."""
+
+        if isinstance(subnames, str):
+            candidates = [subnames]
+        else:
+            candidates = list(subnames or [])
+        return tuple(str(name) for name in candidates if str(name).startswith("Face"))
+
+    @staticmethod
+    def _get_boundary_entry_object_and_subnames(entry):
+        if isinstance(entry, (tuple, list)):
+            if not entry:
+                return (None, ())
+            obj = entry[0]
+            subnames = entry[1] if len(entry) > 1 else ()
+            return (obj, subnames)
+        return (
+            getattr(entry, "Object", None),
+            getattr(entry, "SubElementNames", ()) or (),
+        )
+
+    @staticmethod
+    def _get_excluded_boundary_object_names(exclude_objects):
+        if exclude_objects is None:
+            return set()
+        if isinstance(exclude_objects, (list, tuple, set)):
+            candidates = list(exclude_objects)
+        else:
+            candidates = [exclude_objects]
+        return {getattr(obj, "Name", None) for obj in candidates if getattr(obj, "Name", None)}
+
+    def _get_wall_boundary_face_name(self, wall, reference_point):
+        if not wall:
+            return None
+        try:
+            if Draft.getType(wall) != "Wall":
+                return None
+        except Exception:
+            return None
+        if reference_point is None:
+            return None
+
+        shape = getattr(wall, "Shape", None)
+        if shape is None or not getattr(shape, "Faces", None):
+            return None
+
+        best_face_name = None
+        best_sort_key = None
+        reference_point = FreeCAD.Vector(reference_point.x, reference_point.y, reference_point.z)
+        reference_z = float(reference_point.z)
+        for index, face in enumerate(shape.Faces, start=1):
+            try:
+                normal_raw = face.normalAt(0, 0)
+                center_raw = face.CenterOfMass
+                bound_box = face.BoundBox
+                normal = FreeCAD.Vector(normal_raw.x, normal_raw.y, normal_raw.z)
+                center = FreeCAD.Vector(center_raw.x, center_raw.y, center_raw.z)
+            except Exception:
+                continue
+            if normal.Length <= 1e-7:
+                continue
+            normal.normalize()
+            if abs(normal.z) > 0.2:
+                continue
+            if bound_box is not None and (
+                reference_z < (float(bound_box.ZMin) - 0.001)
+                or reference_z > (float(bound_box.ZMax) + 0.001)
+            ):
+                continue
+            facing_score = float(normal.dot(reference_point.sub(center)))
+            if facing_score <= 1e-7:
+                continue
+            sort_key = (float(face.Area or 0.0), facing_score)
+            if best_sort_key is None or sort_key > best_sort_key:
+                best_sort_key = sort_key
+                best_face_name = f"Face{index}"
+        if best_sort_key is None:
+            return None
+        return best_face_name
+
+    def getBoundaryFaceNamesForObject(self, obj, reference_point=None):
+        """Return boundary face names for a supported object when no explicit subnames are given."""
+
+        if not obj or self._is_space_object(obj):
+            return ()
+        try:
+            obj_type = Draft.getType(obj)
+        except Exception:
+            obj_type = ""
+
+        if obj_type == "SpaceSeparator":
+            shape = getattr(obj, "Shape", None)
+            if shape is None or not getattr(shape, "Faces", None):
+                return ()
+            return tuple(f"Face{index}" for index, _face in enumerate(shape.Faces, start=1))
+
+        if obj_type == "Wall":
+            face_name = self._get_wall_boundary_face_name(obj, reference_point)
+            return (face_name,) if face_name else ()
+
+        return ()
+
+    def normalizeBoundaryLinks(self, boundaries, exclude_objects=None):
+        """Merge and normalize boundary link-sub tuples into a stable PropertyLinkSubList form."""
+
+        excluded_names = self._get_excluded_boundary_object_names(exclude_objects)
+        merged = {}
+        order = []
+        for entry in boundaries or []:
+            obj, subnames = self._get_boundary_entry_object_and_subnames(entry)
+            if not obj or self._is_space_object(obj):
+                continue
+            name = getattr(obj, "Name", None)
+            if not name or name in excluded_names:
+                continue
+            face_names = self.normalizeBoundarySubnames(subnames)
+            if not face_names:
+                continue
+            if name not in merged:
+                merged[name] = [obj, []]
+                order.append(name)
+            for face_name in face_names:
+                if face_name not in merged[name][1]:
+                    merged[name][1].append(face_name)
+        return [(merged[name][0], tuple(merged[name][1])) for name in order]
+
+    def resolveBoundaryLinks(self, entries, reference_point=None, exclude_objects=None):
+        """Resolve selection-like entries into explicit boundary link-sub tuples."""
+
+        boundaries = []
+        for entry in entries or []:
+            obj, subnames = self._get_boundary_entry_object_and_subnames(entry)
+            if not obj:
+                continue
+            face_names = self.normalizeBoundarySubnames(subnames)
+            if not face_names:
+                face_names = self.getBoundaryFaceNamesForObject(
+                    obj,
+                    reference_point=reference_point,
+                )
+            if face_names:
+                boundaries.append((obj, face_names))
+        return self.normalizeBoundaryLinks(boundaries, exclude_objects=exclude_objects)
+
     def getBoundaryFacesFromLinks(self, boundaries, seed_space=None):
         boundary_links = list(boundaries or [])
         boundary_faces = list(self._get_boundary_faces_from_links(boundary_links))
@@ -1729,6 +1885,16 @@ class _SpaceBoundaryAnalyzer:
     _split_seed_space_footprint_edge = _Space._split_seed_space_footprint_edge
     _make_seed_space_boundary_face = _Space._make_seed_space_boundary_face
     _get_seed_space_boundary_faces = _Space._get_seed_space_boundary_faces
+    _is_space_object = _Space._is_space_object
+    normalizeBoundarySubnames = staticmethod(_Space.normalizeBoundarySubnames)
+    _get_boundary_entry_object_and_subnames = staticmethod(
+        _Space._get_boundary_entry_object_and_subnames
+    )
+    _get_excluded_boundary_object_names = staticmethod(_Space._get_excluded_boundary_object_names)
+    _get_wall_boundary_face_name = _Space._get_wall_boundary_face_name
+    getBoundaryFaceNamesForObject = _Space.getBoundaryFaceNamesForObject
+    normalizeBoundaryLinks = _Space.normalizeBoundaryLinks
+    resolveBoundaryLinks = _Space.resolveBoundaryLinks
     getBoundaryFacesFromLinks = _Space.getBoundaryFacesFromLinks
     _analyze_boundary_loops = _Space._analyze_boundary_loops
     _describe_boundary_failure = _Space._describe_boundary_failure
@@ -1751,6 +1917,40 @@ def getBoundaryFacesFromLinks(boundaries, seed_space=None):
     return _space_boundary_analyzer.getBoundaryFacesFromLinks(
         boundaries,
         seed_space=seed_space,
+    )
+
+
+def normalizeBoundarySubnames(subnames):
+    """Normalize boundary subnames down to explicit face references."""
+
+    return _space_boundary_analyzer.normalizeBoundarySubnames(subnames)
+
+
+def getBoundaryFaceNamesForObject(obj, reference_point=None):
+    """Resolve implicit boundary faces for a supported object."""
+
+    return _space_boundary_analyzer.getBoundaryFaceNamesForObject(
+        obj,
+        reference_point=reference_point,
+    )
+
+
+def normalizeBoundaryLinks(boundaries, exclude_objects=None):
+    """Normalize and merge boundary links into explicit link-sub tuples."""
+
+    return _space_boundary_analyzer.normalizeBoundaryLinks(
+        boundaries,
+        exclude_objects=exclude_objects,
+    )
+
+
+def resolveBoundaryLinks(entries, reference_point=None, exclude_objects=None):
+    """Resolve selection-like entries into explicit boundary link-sub tuples."""
+
+    return _space_boundary_analyzer.resolveBoundaryLinks(
+        entries,
+        reference_point=reference_point,
+        exclude_objects=exclude_objects,
     )
 
 
