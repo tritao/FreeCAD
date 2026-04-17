@@ -25,6 +25,7 @@
 """GUI tests for BIM Plan Edit wall and opening workflows."""
 
 import Arch
+import ArchSpace
 import Draft
 import FreeCAD
 import FreeCADGui
@@ -3876,12 +3877,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        face_name = session._get_wall_space_boundary_face_name(
-            wall, FreeCAD.Vector(1500, 1500, 1000)
+        face_names = ArchSpace.getBoundaryFaceNamesForObject(
+            wall,
+            reference_point=FreeCAD.Vector(1500, 1500, 1000),
         )
-        self.assertIsNotNone(face_name)
+        self.assertEqual(len(face_names), 1)
 
-        face = wall.Shape.Faces[int(face_name[4:]) - 1]
+        face = wall.Shape.Faces[int(face_names[0][4:]) - 1]
         normal = FreeCAD.Vector(face.normalAt(0, 0))
         normal.normalize()
 
