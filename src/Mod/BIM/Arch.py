@@ -1399,6 +1399,42 @@ def makeSpaceSeparator(start=None, end=None, height=None, name=None):
     return separator
 
 
+def makePlanRegion(
+    points=None,
+    parent_space=None,
+    region_type=None,
+    scheme=None,
+    allow_nesting=None,
+    name=None,
+):
+    """Create a lightweight polygonal plan-region object."""
+
+    region = _initializeArchObject(
+        "Part::FeaturePython",
+        baseClassName="_PlanRegion",
+        internalName="PlanRegion",
+        defaultLabel=name if name else translate("Arch", "Plan Region"),
+        moduleName="ArchPlanRegion",
+    )
+    if not region:
+        return None
+
+    points = [FreeCAD.Vector(point) for point in (points or [])]
+    if points:
+        base = FreeCAD.Vector(points[0])
+        region.Placement.Base = base
+        region.Points = [FreeCAD.Vector(point).sub(base) for point in points]
+    if parent_space is not None:
+        region.ParentSpace = parent_space
+    if region_type is not None:
+        region.RegionType = region_type
+    if scheme is not None:
+        region.Scheme = scheme
+    if allow_nesting is not None:
+        region.AllowNesting = bool(allow_nesting)
+    return region
+
+
 def addSpaceBoundaries(space, subobjects):
     """Adds the given subobjects as defining boundaries of the given space.
 
