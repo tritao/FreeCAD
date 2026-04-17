@@ -86,6 +86,7 @@ _PLAN_VISUAL_SELECTED_OPENING = "selected_opening"
 _PLAN_VISUAL_SELECTED_SYMBOL = "selected_symbol"
 _PLAN_VISUAL_SELECTED_SPACE = "selected_space"
 _PLAN_VISUAL_SECONDARY_SELECTION = "secondary_selection"
+_PLAN_VISUAL_SPACE_REGION_PICK = "space_region_pick"
 _PLAN_VISUAL_WALL_GRIPS = "wall_grips"
 _PLAN_VISUAL_WALL_EDIT_PREVIEW = "wall_edit_preview"
 _PLAN_VISUAL_ALL = "all"
@@ -314,6 +315,10 @@ class PlanEditSession:
         self.hovered_opening = None
         self.hovered_symbol = None
         self.hovered_space = None
+        self._space_region_pick_boundaries = []
+        self._space_region_candidates = []
+        self._hovered_space_region_candidate = None
+        self._space_region_pick_seed_space = None
         self._pending_selected_plan_target = None
         self._grip_trackers = []
         self._wall_hover_trackers = []
@@ -326,6 +331,7 @@ class PlanEditSession:
         self._symbol_overlay_trackers = []
         self._space_overlay_trackers = []
         self._secondary_selection_trackers = []
+        self._space_region_pick_trackers = []
         self._selected_wall_opening_context_trackers = []
         self._opening_handle_trackers = []
         self._symbol_handle_trackers = []
@@ -459,6 +465,9 @@ class PlanEditSession:
         if self.current_tool in ("Move Symbol", "Rotate Symbol"):
             self._cancel_symbol_handle_point_pick()
             return True
+        if self.current_tool == "Pick Space Region":
+            self._cancel_space_region_pick()
+            return True
         if self.current_tool == "Set Space Text":
             self._cancel_space_text_position_pick()
             return True
@@ -487,6 +496,11 @@ class PlanEditSession:
             self._cancel_symbol_handle_point_pick()
         if self.current_tool == "Set Space Text":
             self._edit_space = None
+        if self.current_tool == "Pick Space Region":
+            self._space_region_pick_boundaries = []
+            self._space_region_candidates = []
+            self._hovered_space_region_candidate = None
+            self._space_region_pick_seed_space = None
         self._clear_hovered_wall_overlay()
         self._clear_junction_node_overlays()
         self._clear_hovered_wall_opening_context_overlay()
@@ -497,6 +511,7 @@ class PlanEditSession:
         self._clear_selected_opening_overlay()
         self._clear_selected_symbol_overlay()
         self._clear_selected_space_overlay()
+        self._clear_space_region_pick_overlays()
         self._clear_secondary_selected_overlays()
         self._clear_selected_wall_opening_context_overlay()
         self._clear_selected_opening_handles()
@@ -535,6 +550,10 @@ class PlanEditSession:
         self.hovered_opening = None
         self.hovered_symbol = None
         self.hovered_space = None
+        self._space_region_pick_boundaries = []
+        self._space_region_candidates = []
+        self._hovered_space_region_candidate = None
+        self._space_region_pick_seed_space = None
         self._pending_selected_plan_target = None
         self._edit_wall = None
         self._edit_opening = None
@@ -552,6 +571,7 @@ class PlanEditSession:
         self._rect_wall_start = None
         self._rect_wall_params = None
         self._rect_wall_preview_trackers = []
+        self._space_region_pick_trackers = []
         self._edit_wall_visibility = None
         self._embedded_host = None
         self._embedded_tool = None
@@ -891,6 +911,9 @@ class PlanEditSession:
         if self.current_tool in ("Move Symbol", "Rotate Symbol"):
             self._cancel_symbol_handle_point_pick()
             return
+        if self.current_tool == "Pick Space Region":
+            self._cancel_space_region_pick()
+            return
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
         if self._has_active_rect_wall_tool():
@@ -901,6 +924,7 @@ class PlanEditSession:
     def activate_wall_tool(self):
         from bimcommands import BimWall
 
+        self._cancel_space_region_pick(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
         self._cancel_wall_edit()
         self._cancel_pending_edit()
@@ -917,6 +941,7 @@ class PlanEditSession:
         self._start_embedded_tool("Wall", BimWall.Arch_Wall(), host_class=_PlanEditWallHost)
 
     def activate_rect_wall_tool(self):
+        self._cancel_space_region_pick(refresh=False)
         self._cancel_embedded_tool()
         self._cancel_wall_edit()
         self._cancel_pending_edit()
@@ -938,6 +963,7 @@ class PlanEditSession:
         self._refresh_task_panel_status()
 
     def activate_space_tool(self):
+        self._cancel_space_region_pick(refresh=False)
         if self.current_tool == "Set Space Text":
             self._cancel_space_text_position_pick()
         self._cancel_rect_wall_tool(refresh=False)
@@ -951,6 +977,7 @@ class PlanEditSession:
     def activate_move_tool(self):
         from draftguitools import gui_move
 
+        self._cancel_space_region_pick(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
         self._cancel_wall_edit()
         self._cancel_pending_edit()
@@ -959,6 +986,7 @@ class PlanEditSession:
         self._start_embedded_tool("Move", gui_move.Move())
 
     def activate_join_tool(self):
+        self._cancel_space_region_pick(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
 
         if self._has_active_embedded_tool():
@@ -2181,6 +2209,239 @@ class PlanEditSession:
                 boundaries.append((obj, (face_name,)))
         return self._normalize_space_boundary_links(boundaries)
 
+    def _get_selected_space_region_seed(self, targets=None):
+        targets = targets if targets is not None else self._get_selected_plan_targets()
+        if not targets or targets[0][0] != "space":
+            return None
+        secondary_targets = targets[1:]
+        if not secondary_targets:
+            return None
+        if not all(target_kind == "wall" for target_kind, _target_obj in secondary_targets):
+            return None
+        return targets[0][1]
+
+    def _get_space_boundary_overlap_cut_z(self, space, boundary_faces):
+        if not self._is_plan_space_object(space):
+            return None
+        shape = getattr(space, "Shape", None)
+        bound_box = getattr(shape, "BoundBox", None)
+        if bound_box is None:
+            return None
+
+        import ArchSpace
+
+        z_min = float(bound_box.ZMin)
+        z_max = float(bound_box.ZMax)
+        overlap_min, overlap_max = (
+            ArchSpace._space_boundary_analyzer._get_boundary_vertical_overlap(boundary_faces)
+        )
+        if overlap_min is not None:
+            z_min = max(z_min, float(overlap_min))
+        if overlap_max is not None:
+            z_max = min(z_max, float(overlap_max))
+        if z_max - z_min <= 0.000001:
+            return None
+        return 0.5 * (z_min + z_max)
+
+    def _get_space_footprint_splitter_points(self, space, boundary_faces):
+        if not boundary_faces:
+            return []
+
+        import ArchSpace
+
+        cut_z = self._get_space_boundary_overlap_cut_z(space, boundary_faces)
+        if cut_z is None:
+            return []
+
+        splitter_points = []
+        for edge in ArchSpace._space_boundary_analyzer._get_horizontal_slice_edges(
+            boundary_faces,
+            cut_z,
+        ):
+            for vertex in getattr(edge, "Vertexes", []) or []:
+                point = getattr(vertex, "Point", None)
+                if point is None:
+                    continue
+                splitter_points.append(FreeCAD.Vector(point.x, point.y, point.z))
+        return splitter_points
+
+    def _copy_shape_without_element_map(self, shape):
+        if shape is None:
+            return None
+        try:
+            return shape.copy(noElementMap=True)
+        except TypeError:
+            try:
+                clean_shape = shape.copy()
+                if getattr(clean_shape, "ElementMapSize", 0):
+                    clean_shape.clearElementMap()
+                return clean_shape
+            except Exception:
+                return shape
+        except Exception:
+            return shape
+
+    def _split_space_footprint_edge(self, edge, splitter_points, target_z, tolerance=0.001):
+        import Part
+
+        vertexes = list(getattr(edge, "Vertexes", []) or [])
+        curve = getattr(edge, "Curve", None)
+        if len(vertexes) != 2 or curve.__class__.__name__ != "Line":
+            try:
+                clean_edge = edge.copy()
+                if getattr(clean_edge, "ElementMapSize", 0):
+                    clean_edge.clearElementMap()
+            except Exception:
+                clean_edge = edge
+            return [clean_edge]
+
+        start = FreeCAD.Vector(vertexes[0].Point.x, vertexes[0].Point.y, target_z)
+        end = FreeCAD.Vector(vertexes[1].Point.x, vertexes[1].Point.y, target_z)
+        direction = end.sub(start)
+        length_sq = direction.dot(direction)
+        if length_sq <= tolerance * tolerance:
+            return []
+
+        parameters = [0.0, 1.0]
+        for point in splitter_points or []:
+            projected = FreeCAD.Vector(point.x, point.y, target_z)
+            t = direction.dot(projected.sub(start)) / length_sq
+            if t <= tolerance or t >= 1.0 - tolerance:
+                continue
+            closest = start.add(direction.multiply(t))
+            if closest.distanceToPoint(projected) > max(tolerance, math.sqrt(length_sq) * 1e-6):
+                continue
+            parameters.append(float(t))
+
+        parameters = sorted(set(round(value, 9) for value in parameters))
+        edges = []
+        for param_a, param_b in zip(parameters, parameters[1:]):
+            if param_b - param_a <= 1e-9:
+                continue
+            segment_start = start.add(direction.multiply(param_a))
+            segment_end = start.add(direction.multiply(param_b))
+            if segment_start.distanceToPoint(segment_end) <= tolerance:
+                continue
+            try:
+                edges.append(Part.makeLine(segment_start, segment_end))
+            except Exception:
+                continue
+        return edges
+
+    def _make_space_footprint_boundary_face(self, edge, height):
+        import Part
+
+        vertexes = list(getattr(edge, "Vertexes", []) or [])
+        if len(vertexes) == 2 and getattr(edge, "Curve", None).__class__.__name__ == "Line":
+            p1 = FreeCAD.Vector(vertexes[0].Point)
+            p2 = FreeCAD.Vector(vertexes[1].Point)
+            p3 = FreeCAD.Vector(p2.x, p2.y, p2.z + height)
+            p4 = FreeCAD.Vector(p1.x, p1.y, p1.z + height)
+            try:
+                return Part.Face(Part.makePolygon([p1, p2, p3, p4, p1]))
+            except Exception:
+                return None
+
+        try:
+            upper = edge.copy()
+            upper.translate(FreeCAD.Vector(0, 0, height))
+            if getattr(edge, "ElementMapSize", 0):
+                edge.clearElementMap()
+            if getattr(upper, "ElementMapSize", 0):
+                upper.clearElementMap()
+            return Part.makeRuledSurface(edge, upper)
+        except Exception:
+            return None
+
+    def _get_space_footprint_boundary_faces(self, space, boundary_faces=None):
+        if not self._is_plan_space_object(space):
+            return []
+        shape = getattr(space, "Shape", None)
+        bound_box = getattr(shape, "BoundBox", None)
+        if shape is None or bound_box is None or float(bound_box.ZLength) <= 0.000001:
+            return []
+
+        shape_faces = []
+        for face in getattr(shape, "Faces", []) or []:
+            face_bb = getattr(face, "BoundBox", None)
+            if face_bb is None or float(face_bb.ZLength) <= 0.000001:
+                continue
+            if getattr(face, "Area", 0.0) <= 0.000001:
+                continue
+            shape_faces.append(face)
+        if shape_faces:
+            return shape_faces
+
+        proxy = getattr(space, "Proxy", None)
+        if not proxy or not hasattr(proxy, "getFootprint"):
+            return []
+        try:
+            footprint_faces = list(proxy.getFootprint(space) or [])
+        except Exception:
+            return []
+        if not footprint_faces:
+            return []
+
+        import Part
+
+        height = float(bound_box.ZLength)
+        target_z = float(bound_box.ZMin)
+        splitter_points = self._get_space_footprint_splitter_points(space, boundary_faces)
+        vertical_faces = []
+        for footprint_face in footprint_faces:
+            for wire in getattr(footprint_face, "Wires", []) or []:
+                for edge in getattr(wire, "Edges", []) or []:
+                    for lower in self._split_space_footprint_edge(
+                        edge,
+                        splitter_points,
+                        target_z,
+                    ):
+                        face = self._make_space_footprint_boundary_face(lower, height)
+                        if face and getattr(face, "Area", 0.0) > 0.000001:
+                            vertical_faces.append(face)
+        return vertical_faces
+
+    def _get_space_creation_boundary_faces(self, boundaries, region_seed_space=None):
+        import ArchSpace
+
+        boundary_faces = list(
+            ArchSpace._space_boundary_analyzer._get_boundary_faces_from_links(boundaries)
+        )
+        if region_seed_space is not None:
+            boundary_faces.extend(
+                self._get_space_footprint_boundary_faces(
+                    region_seed_space,
+                    boundary_faces=boundary_faces,
+                )
+            )
+        return boundary_faces
+
+    def _get_space_creation_request(self, targets=None):
+        targets = targets if targets is not None else self._get_selected_plan_targets()
+        if not targets:
+            return None
+
+        label = None
+        region_seed_space = self._get_selected_space_region_seed(targets)
+        if region_seed_space is not None:
+            boundaries = self._get_selected_space_boundary_links(fallback_space=region_seed_space)
+            label = getattr(region_seed_space, "Label", None)
+        elif all(target_kind == "wall" for target_kind, _target_obj in targets):
+            boundaries = self._get_selected_space_boundary_links()
+        else:
+            return None
+
+        return {
+            "targets": targets,
+            "label": label,
+            "region_seed_space": region_seed_space,
+            "boundaries": boundaries,
+            "boundary_faces": self._get_space_creation_boundary_faces(
+                boundaries,
+                region_seed_space=region_seed_space,
+            ),
+        }
+
     def _get_plan_target_kind_for_object(self, obj):
         if self._is_hosted_opening_object(obj):
             return "opening"
@@ -2461,6 +2722,16 @@ class PlanEditSession:
         )
         return "{} {}".format(count, singular if count == 1 else plural)
 
+    def _format_space_region_candidate_area(self, candidate):
+        area = float((candidate or {}).get("area", 0.0) or 0.0)
+        if area <= 0.0:
+            return ""
+        try:
+            quantity = FreeCAD.Units.Quantity(area, "mm^2")
+            return quantity.UserString
+        except Exception:
+            return "{:.3f} m^2".format(area / 1000000.0)
+
     def _summarize_plan_targets(self, targets):
         counts = {}
         for target_kind, _target_obj in targets or []:
@@ -2500,27 +2771,22 @@ class PlanEditSession:
         if self.current_tool != "Select":
             return None
 
-        targets = targets if targets is not None else self._get_selected_plan_targets()
-        if not targets:
-            return None
-
-        label = None
-        if targets[0][0] == "space":
-            secondary_targets = targets[1:]
-            if not secondary_targets or not all(
-                target_kind == "wall" for target_kind, _target_obj in secondary_targets
-            ):
-                return None
-            boundaries = self._get_selected_space_boundary_links(fallback_space=targets[0][1])
-            label = getattr(targets[0][1], "Label", None)
-        elif all(target_kind == "wall" for target_kind, _target_obj in targets):
-            boundaries = self._get_selected_space_boundary_links()
-        else:
+        request = self._get_space_creation_request(targets=targets)
+        if not request:
             return None
 
         import ArchSpace
 
-        return ArchSpace.analyzeBoundaryLinks(boundaries, label=label)
+        if request["region_seed_space"] is not None:
+            return ArchSpace.analyzeBoundaryFaces(
+                request["boundary_faces"],
+                label=request["label"],
+                boundary_count=len(request["boundaries"]) + 1,
+            )
+        return ArchSpace.analyzeBoundaryLinks(
+            request["boundaries"],
+            label=request["label"],
+        )
 
     def _format_space_preflight_text(self, report):
         if not report:
@@ -2917,7 +3183,7 @@ class PlanEditSession:
             selection = FreeCADGui.Selection.getSelection()
         except (ReferenceError, RuntimeError):
             return
-        if self.current_tool == "Select" and selection:
+        if self.current_tool in ("Select", "Pick Space Region") and selection:
             selected_targets = []
             for selected in selection:
                 target_kind, target_obj = self._get_plan_target_for_object(selected)
@@ -2960,7 +3226,7 @@ class PlanEditSession:
                     self._set_pending_selected_plan_target(target_kind, selected)
             else:
                 self._set_pending_selected_plan_target()
-        elif self.current_tool == "Select" and not selection:
+        elif self.current_tool in ("Select", "Pick Space Region") and not selection:
             pending_kind, pending_target = self._consume_pending_selected_plan_target()
             if pending_kind == "opening":
                 self.selected_opening = pending_target
@@ -4507,6 +4773,12 @@ class PlanEditSession:
                         except Exception:
                             pass
                 return
+            if self.current_tool == "Pick Space Region":
+                pos = event.getPosition().getValue()
+                candidate = self._pick_space_region_candidate((pos[0], pos[1]))
+                if candidate:
+                    self._activate_space_region_candidate(candidate, event_callback)
+                return
             if self.current_tool != "Select":
                 return
             pos = event.getPosition().getValue()
@@ -4580,6 +4852,14 @@ class PlanEditSession:
     def _on_mouse_moved(self, event_callback):
         if self._tearing_down:
             return
+        if self.current_tool == "Pick Space Region":
+            event = event_callback.getEvent()
+            pos = event.getPosition().getValue()
+            self._set_hovered_space_region_candidate(
+                self._pick_space_region_candidate((pos[0], pos[1]))
+            )
+            self._refresh_plan_overlay_visuals()
+            return
         if self.current_tool not in ("Select", "Join"):
             self._set_hovered_wall(None)
             self._set_hovered_opening(None)
@@ -4641,6 +4921,7 @@ class PlanEditSession:
             self._clear_hovered_opening_overlay()
             self._clear_hovered_symbol_overlay()
             self._clear_hovered_space_overlay()
+            self._clear_space_region_pick_overlays()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
             self._clear_selected_space_overlay()
@@ -4657,6 +4938,7 @@ class PlanEditSession:
             self._clear_hovered_opening_overlay()
             self._clear_hovered_symbol_overlay()
             self._clear_hovered_space_overlay()
+            self._clear_space_region_pick_overlays()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
             self._clear_secondary_selected_overlays()
@@ -4667,7 +4949,30 @@ class PlanEditSession:
             if self.selected_space and (refresh_all or _PLAN_VISUAL_SELECTED_SPACE in dirty):
                 self._refresh_selected_space_visuals()
             return
+        if self.current_tool == "Pick Space Region":
+            self._clear_junction_node_overlays()
+            self._clear_hovered_wall_overlay()
+            self._clear_hovered_wall_opening_context_overlay()
+            self._clear_hovered_opening_overlay()
+            self._clear_hovered_symbol_overlay()
+            self._clear_hovered_space_overlay()
+            self._clear_selected_opening_overlay()
+            self._clear_selected_symbol_overlay()
+            self._clear_selected_space_overlay()
+            self._clear_selected_opening_handles()
+            self._clear_selected_symbol_handles()
+            self._clear_selected_wall_opening_context_overlay()
+            self._clear_wall_grips()
+            if (
+                refresh_all
+                or _PLAN_VISUAL_SECONDARY_SELECTION in dirty
+                or _PLAN_VISUAL_SPACE_REGION_PICK in dirty
+            ):
+                self._sync_secondary_selected_overlays()
+                self._sync_space_region_pick_overlays()
+            return
         if self.current_tool == "Select":
+            self._clear_space_region_pick_overlays()
             self._sync_junction_node_overlays()
             if refresh_all or _PLAN_VISUAL_HOVERED_WALL in dirty:
                 self._sync_hovered_wall_overlay()
@@ -4689,6 +4994,8 @@ class PlanEditSession:
                 self._sync_selected_space_overlay()
             if refresh_all or _PLAN_VISUAL_SECONDARY_SELECTION in dirty:
                 self._sync_secondary_selected_overlays()
+            if refresh_all or _PLAN_VISUAL_SPACE_REGION_PICK in dirty:
+                self._clear_space_region_pick_overlays()
             if refresh_all or _PLAN_VISUAL_WALL_GRIPS in dirty:
                 self._sync_wall_grips()
             return
@@ -4726,6 +5033,9 @@ class PlanEditSession:
             return
         if self.current_tool == "Join" and key == coin.SoKeyboardEvent.ESCAPE:
             self._cancel_join_tool()
+            return
+        if self.current_tool == "Pick Space Region" and key == coin.SoKeyboardEvent.ESCAPE:
+            self._cancel_space_region_pick()
             return
         if self._is_wall_move_edit_active() and key == coin.SoKeyboardEvent.TAB:
             if self._start_wall_readout_edit(cycle=True):
@@ -6273,10 +6583,259 @@ class PlanEditSession:
                 pass
         return True
 
-    def _create_space_from_current_selection(self):
+    def _get_plan_point_from_mouse_pos(self, mouse_pos):
+        if not self.view or not mouse_pos:
+            return None
+        get_point = self._get_runtime_attr(self.view, "getPoint")
+        if get_point is None:
+            return None
+        try:
+            point = get_point(int(mouse_pos[0]), int(mouse_pos[1]))
+        except TypeError:
+            try:
+                point = get_point((int(mouse_pos[0]), int(mouse_pos[1])))
+            except Exception:
+                return None
+        except Exception:
+            return None
+        return self._project_plan_point(point)
+
+    def _get_space_region_candidate_polylines(self, candidate):
+        face = candidate.get("face") if isinstance(candidate, dict) else None
+        if not face:
+            return []
+        return self._get_footprint_overlay_polylines([face])
+
+    def _get_space_region_candidate_segments(self, candidate):
+        segments = []
+        for polyline in self._get_space_region_candidate_polylines(candidate):
+            if len(polyline) < 2:
+                continue
+            for start, end in zip(polyline, polyline[1:]):
+                segments.append((start, end))
+        return segments
+
+    def _pick_space_region_candidate(self, mouse_pos, radius_px=10):
+        if self.current_tool != "Pick Space Region" or not self._space_region_candidates:
+            return None
+
+        point = self._get_plan_point_from_mouse_pos(mouse_pos)
+        if point is not None:
+            for candidate in self._space_region_candidates:
+                face = candidate.get("face")
+                if not face:
+                    continue
+                bound_box = getattr(face, "BoundBox", None)
+                if bound_box is None:
+                    continue
+                test_point = FreeCAD.Vector(point.x, point.y, float(bound_box.ZMin))
+                try:
+                    if face.isInside(test_point, 0.001, True):
+                        return candidate
+                except Exception:
+                    continue
+
+        radius_sq = float(radius_px) * float(radius_px)
+        best_candidate = None
+        best_distance_sq = None
+        for candidate in self._space_region_candidates:
+            for start, end in self._get_space_region_candidate_segments(candidate):
+                distance_sq = self._get_screen_distance_sq_to_segment(mouse_pos, start, end)
+                if distance_sq is None or distance_sq > radius_sq:
+                    continue
+                if best_distance_sq is None or distance_sq < best_distance_sq:
+                    best_candidate = candidate
+                    best_distance_sq = distance_sq
+        return best_candidate
+
+    def _set_hovered_space_region_candidate(self, candidate):
+        if self._hovered_space_region_candidate is candidate:
+            return
+        self._hovered_space_region_candidate = candidate
+        self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SPACE_REGION_PICK)
+        self._refresh_task_panel_status()
+
+    def _create_space_region_base_object(self, candidate):
+        shape = candidate.get("shape") if isinstance(candidate, dict) else None
+        if not shape:
+            return None
+        try:
+            base = self.doc.addObject("Part::Feature", "SpaceRegionBase")
+        except Exception:
+            return None
+        try:
+            base.Shape = self._copy_shape_without_element_map(shape)
+        except Exception:
+            return None
+
+        view_object = getattr(base, "ViewObject", None)
+        if view_object:
+            if hasattr(view_object, "Visibility"):
+                try:
+                    view_object.Visibility = False
+                except Exception:
+                    pass
+            if hasattr(view_object, "ShowInTree"):
+                try:
+                    view_object.ShowInTree = False
+                except Exception:
+                    pass
+            if hasattr(view_object, "Selectable"):
+                try:
+                    view_object.Selectable = False
+                except Exception:
+                    pass
+        return base
+
+    def _begin_space_region_pick(
+        self, boundaries, label=None, boundary_faces=None, seed_space=None
+    ):
+        import ArchSpace
+
+        if boundary_faces is None:
+            report = ArchSpace.getBoundaryRegionCandidates(boundaries, label=label)
+        else:
+            report = ArchSpace.getBoundaryFaceRegionCandidates(
+                boundary_faces,
+                label=label,
+                boundary_count=len(boundaries) + (1 if seed_space is not None else 0),
+            )
+        candidates = list(report.get("candidates", []) or [])
+        if not candidates:
+            message = str(report.get("message") or "").strip()
+            details = [
+                str(detail).strip() for detail in report.get("details", []) if str(detail).strip()
+            ]
+            if message:
+                FreeCAD.Console.PrintError(message + "\n")
+                for detail in details:
+                    FreeCAD.Console.PrintError(f"  - {detail}\n")
+            else:
+                FreeCAD.Console.PrintError(
+                    translate(
+                        "BIM_PlanEdit",
+                        "Failed to derive enclosed space regions from the current selection.\n",
+                    )
+                )
+            return False
+
+        self.current_tool = "Pick Space Region"
+        self._space_region_pick_boundaries = list(boundaries)
+        self._space_region_candidates = candidates
+        self._hovered_space_region_candidate = None
+        self._space_region_pick_seed_space = seed_space
+        self._clear_wall_grips()
+        self._set_hovered_wall(None)
+        self._set_hovered_opening(None)
+        self._set_hovered_symbol(None)
+        self._set_hovered_space(None)
+        self._refresh_selected_wall()
+        FreeCAD.Console.PrintMessage(
+            translate(
+                "BIM_PlanEdit",
+                "Multiple enclosed regions found. Hover a dashed region and click to create that space.\n",
+            )
+        )
+        return True
+
+    def _cancel_space_region_pick(self, refresh=True):
+        was_active = self.current_tool == "Pick Space Region" or bool(self._space_region_candidates)
+        self._space_region_pick_boundaries = []
+        self._space_region_candidates = []
+        self._hovered_space_region_candidate = None
+        self._space_region_pick_seed_space = None
+        self._clear_space_region_pick_overlays()
+        if self.current_tool == "Pick Space Region":
+            self.current_tool = "Select"
+        if was_active:
+            self._refresh_selected_wall()
+        elif refresh:
+            self._refresh_task_panel_status()
+        return was_active
+
+    def _create_space_from_region_candidate(self, candidate, boundaries=None, keep_boundaries=True):
         import Arch
 
-        boundaries = self._get_selected_space_boundary_links()
+        if not isinstance(candidate, dict):
+            return None
+        boundaries = list(boundaries or [])
+
+        space = None
+        reported_failure = False
+        try:
+            self.doc.openTransaction(translate("BIM_PlanEdit", "Create Space"))
+            base = self._create_space_region_base_object(candidate)
+            if not base:
+                raise RuntimeError("Unable to create space base")
+            space = Arch.makeSpace(base)
+            if not space:
+                raise RuntimeError("Unable to create space")
+            if keep_boundaries and boundaries:
+                space.Boundaries = boundaries
+            self._add_object_to_active_storey(space)
+            self.doc.recompute()
+            if not self._space_has_valid_geometry(space):
+                reported_failure = self._report_space_creation_failure(space)
+                raise RuntimeError("Unable to create space")
+            self.doc.commitTransaction()
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+            if not reported_failure:
+                FreeCAD.Console.PrintError(
+                    translate("BIM_PlanEdit", "Failed to create the selected space.\n")
+                )
+            return None
+
+        return space
+
+    def _activate_space_region_candidate(self, candidate, event_callback=None):
+        if self.current_tool != "Pick Space Region" or not isinstance(candidate, dict):
+            return False
+
+        boundaries = list(self._space_region_pick_boundaries or [])
+        if not boundaries and self._space_region_pick_seed_space is None:
+            return False
+
+        space = self._create_space_from_region_candidate(
+            candidate,
+            boundaries=boundaries,
+            keep_boundaries=self._space_region_pick_seed_space is None,
+        )
+        if not space:
+            return False
+
+        self._space_region_pick_boundaries = []
+        self._space_region_candidates = []
+        self._hovered_space_region_candidate = None
+        self._space_region_pick_seed_space = None
+        self._clear_space_region_pick_overlays()
+        self._register_plan_object(space)
+        self._restore_selected_space(space)
+        if event_callback and hasattr(event_callback, "setHandled"):
+            try:
+                event_callback.setHandled()
+            except Exception:
+                pass
+        return True
+
+    def _create_space_from_current_selection(self):
+        import ArchSpace
+
+        request = self._get_space_creation_request()
+        if not request:
+            FreeCAD.Console.PrintWarning(
+                translate(
+                    "BIM_PlanEdit",
+                    "Select room-bounding walls or explicit boundary faces before using Space.\n",
+                )
+            )
+            return False
+
+        boundaries = list(request["boundaries"] or [])
+        region_seed_space = request["region_seed_space"]
         if not boundaries:
             FreeCAD.Console.PrintWarning(
                 translate(
@@ -6285,6 +6844,52 @@ class PlanEditSession:
                 )
             )
             return False
+
+        if region_seed_space is not None:
+            report = ArchSpace.getBoundaryFaceRegionCandidates(
+                request["boundary_faces"],
+                label=request["label"],
+                boundary_count=len(boundaries) + 1,
+            )
+            candidate_count = int(report.get("candidate_count", 0) or 0)
+            if candidate_count > 1:
+                return self._begin_space_region_pick(
+                    boundaries,
+                    label=report.get("label"),
+                    boundary_faces=request["boundary_faces"],
+                    seed_space=region_seed_space,
+                )
+            if candidate_count == 1:
+                space = self._create_space_from_region_candidate(
+                    report["candidates"][0],
+                    boundaries=boundaries,
+                    keep_boundaries=False,
+                )
+                if not space:
+                    return False
+                self._register_plan_object(space)
+                self._restore_selected_space(space)
+                return True
+            message = str(report.get("message") or "").strip()
+            details = [
+                str(detail).strip() for detail in report.get("details", []) if str(detail).strip()
+            ]
+            if message:
+                FreeCAD.Console.PrintError(message + "\n")
+                for detail in details:
+                    FreeCAD.Console.PrintError(f"  - {detail}\n")
+            else:
+                FreeCAD.Console.PrintError(
+                    translate("BIM_PlanEdit", "Failed to create the selected space.\n")
+                )
+            return False
+
+        report = ArchSpace.analyzeBoundaryLinks(boundaries)
+        if report.get("code") == "multiple_regions":
+            return self._begin_space_region_pick(boundaries, label=report.get("label"))
+
+        import Arch
+
         space = None
         reported_failure = False
         try:
@@ -6568,11 +7173,16 @@ class PlanEditSession:
 
     def _sync_secondary_selected_overlays(self):
         self._clear_secondary_selected_overlays()
-        if self.current_tool != "Select":
+        if self.current_tool not in ("Select", "Pick Space Region"):
             return
         color = (0.12, 0.72, 0.68)
         width = self._scaled_line_width(2)
-        for target_kind, target_obj in self._get_secondary_selected_plan_targets():
+        selected_targets = (
+            self._get_selected_plan_targets()
+            if self.current_tool == "Pick Space Region"
+            else self._get_secondary_selected_plan_targets()
+        )
+        for target_kind, target_obj in selected_targets:
             if target_kind == "wall":
                 self._create_wall_overlay_trackers(
                     target_obj,
@@ -6605,6 +7215,41 @@ class PlanEditSession:
     def _clear_secondary_selected_overlays(self):
         self._finalize_trackers(self._secondary_selection_trackers)
         self._secondary_selection_trackers = []
+
+    def _sync_space_region_pick_overlays(self):
+        self._clear_space_region_pick_overlays()
+        if self.current_tool != "Pick Space Region":
+            return
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            return
+
+        for candidate in self._space_region_candidates:
+            hovered = candidate is self._hovered_space_region_candidate
+            color = (0.90, 0.52, 0.10) if hovered else (0.22, 0.44, 0.88)
+            width = self._scaled_line_width(3 if hovered else 2)
+            dotted = not hovered
+            for polyline in self._get_space_region_candidate_polylines(candidate):
+                if len(polyline) < 2:
+                    continue
+                for start, end in zip(polyline, polyline[1:]):
+                    tracker = self._make_plan_line_tracker(
+                        DraftTrackers,
+                        "space-region-pick:{}".format(candidate.get("index", "unknown")),
+                        dotted=dotted,
+                        scolor=color,
+                        swidth=width,
+                        ontop=True,
+                    )
+                    tracker.p1(start)
+                    tracker.p2(end)
+                    tracker.on()
+                    self._space_region_pick_trackers.append(tracker)
+
+    def _clear_space_region_pick_overlays(self):
+        self._finalize_trackers(self._space_region_pick_trackers)
+        self._space_region_pick_trackers = []
 
     def _sync_hovered_wall_overlay(self):
         self._clear_hovered_wall_overlay()
@@ -8351,6 +8996,36 @@ class PlanEditControlsWidget:
                 pair_state=detail or translate("BIM_PlanEdit", "Candidate wall: none"),
                 action=self.session._get_plan_join_mode_action_text(target_wall, joint),
             )
+        elif tool == "Pick Space Region":
+            selection_state = translate("BIM_PlanEdit", "Space creation: pick region")
+            selection_help = translate(
+                "BIM_PlanEdit",
+                "Multiple enclosed regions were found. Hover a dashed outline, then click to create that space.",
+            )
+            targets = self.session._get_selected_plan_targets()
+            if targets:
+                selection_help = "{}\n{}".format(
+                    selection_help,
+                    translate("BIM_PlanEdit", "Boundary candidates: {summary}").format(
+                        summary=self.session._summarize_plan_targets(targets)
+                    ),
+                )
+            candidate_count = len(self.session._space_region_candidates)
+            if candidate_count:
+                selection_help = "{}\n{}".format(
+                    selection_help,
+                    translate("BIM_PlanEdit", "{count} enclosed regions are available.").format(
+                        count=candidate_count
+                    ),
+                )
+            hovered_candidate = self.session._hovered_space_region_candidate
+            if hovered_candidate:
+                selection_help = "{}\n{}".format(
+                    selection_help,
+                    translate("BIM_PlanEdit", "Hovered region area: {area}").format(
+                        area=self.session._format_space_region_candidate_area(hovered_candidate)
+                    ),
+                )
         elif self.session.selected_opening:
             selection_state = translate("BIM_PlanEdit", "Opening: {label}").format(
                 label=self.session.selected_opening.Label
