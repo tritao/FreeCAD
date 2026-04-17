@@ -439,6 +439,36 @@ class PlanEditSession:
             self._discard_stale_runtime_object(obj)
             return None
 
+    def _is_live_document_object(self, obj):
+        if obj is None:
+            return False
+        try:
+            _ = obj.Name
+            return True
+        except (AttributeError, ReferenceError, RuntimeError):
+            return False
+
+    def _sanitize_plan_target_references(self):
+        changed = False
+        for attr in (
+            "selected_wall",
+            "selected_opening",
+            "selected_symbol",
+            "selected_region",
+            "selected_space",
+            "hovered_wall",
+            "hovered_opening",
+            "hovered_symbol",
+            "hovered_region",
+            "hovered_space",
+        ):
+            obj = getattr(self, attr, None)
+            if obj is None or self._is_live_document_object(obj):
+                continue
+            setattr(self, attr, None)
+            changed = True
+        return changed
+
     def enter(self):
         if not self.doc or not self.gui_doc:
             FreeCAD.Console.PrintError(
@@ -1747,6 +1777,9 @@ class PlanEditSession:
         current = obj
         seen = set()
         while current:
+            if not self._is_live_document_object(current):
+                current = None
+                break
             name = getattr(current, "Name", None)
             if name in seen:
                 break
@@ -2736,6 +2769,7 @@ class PlanEditSession:
         return (None, None)
 
     def _get_selected_plan_target(self):
+        self._sanitize_plan_target_references()
         if self._is_hosted_opening_object(self.selected_opening):
             return ("opening", self.selected_opening)
         if self._is_plan_symbol_instance(self.selected_symbol):
@@ -5852,6 +5886,7 @@ class PlanEditSession:
             return
         if self.current_tool != "Select":
             return
+        self._sanitize_plan_target_references()
         if (
             self.selected_region
             and obj == self.selected_region
@@ -6014,6 +6049,7 @@ class PlanEditSession:
         self._schedule_selected_wall_reset("Deleted", obj)
 
     def _invalidate_document_dependent_plan_visuals(self, recompute_opening_hosts=False):
+        self._sanitize_plan_target_references()
         if self.selected_symbol:
             self._refresh_plan_object_footprint_display(self.selected_symbol)
         if self.hovered_symbol and self.hovered_symbol != self.selected_symbol:
@@ -6140,6 +6176,7 @@ class PlanEditSession:
     def _refresh_task_panel_status(self):
         if self._tearing_down:
             return
+        self._sanitize_plan_target_references()
         self._update_input_hints()
         self._refresh_viewport_status_chip()
         panel = self.task_panel
@@ -6338,7 +6375,7 @@ class PlanEditSession:
         if self.selected_region and self.current_tool == "Select":
             action = translate(
                 "BIM_PlanEdit",
-                "Edit scheme, type, and parent space from the property editor",
+                "Edit label, scheme, type, and parent space in the task panel",
             )
         if self._plan_relation_status_message:
             action = self._plan_relation_status_message
@@ -7639,6 +7676,96 @@ class PlanEditSession:
         try:
             self.doc.openTransaction(translate("BIM_PlanEdit", "Change Space Type"))
             space.SpaceType = space_type
+            self.doc.commitTransaction()
+            self.doc.recompute()
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+            return False
+        self._refresh_task_panel_status()
+        return True
+
+    def _set_selected_region_label(self, label):
+        region = self.selected_region
+        if not self._is_plan_region_object(region):
+            return False
+        label = str(label or "").strip()
+        if not label or label == getattr(region, "Label", ""):
+            return False
+        try:
+            self.doc.openTransaction(translate("BIM_PlanEdit", "Rename Region"))
+            region.Label = label
+            self.doc.commitTransaction()
+            self.doc.recompute()
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+            return False
+        self._refresh_task_panel_status()
+        return True
+
+    def _set_selected_region_scheme(self, scheme):
+        region = self.selected_region
+        if not self._is_plan_region_object(region):
+            return False
+        scheme = str(scheme or "").strip()
+        if scheme == str(getattr(region, "Scheme", "") or ""):
+            return False
+        try:
+            self.doc.openTransaction(translate("BIM_PlanEdit", "Change Region Scheme"))
+            region.Scheme = scheme
+            self.doc.commitTransaction()
+            self.doc.recompute()
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+            return False
+        self._refresh_task_panel_status()
+        return True
+
+    def _set_selected_region_type(self, region_type):
+        region = self.selected_region
+        if not self._is_plan_region_object(region):
+            return False
+        region_type = str(region_type or "").strip()
+        if region_type == str(getattr(region, "RegionType", "") or ""):
+            return False
+        try:
+            self.doc.openTransaction(translate("BIM_PlanEdit", "Change Region Type"))
+            region.RegionType = region_type
+            self.doc.commitTransaction()
+            self.doc.recompute()
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+            return False
+        self._refresh_task_panel_status()
+        return True
+
+    def _set_selected_region_parent_space(self, space):
+        region = self.selected_region
+        if not self._is_plan_region_object(region):
+            return False
+        space = self._get_plan_semantic_object(space) if space else None
+        if space is not None and not self._is_plan_space_object(space):
+            return False
+
+        current_parent = getattr(region, "ParentSpace", None)
+        current_parent = self._get_plan_semantic_object(current_parent) if current_parent else None
+        if current_parent == space:
+            return False
+
+        try:
+            self.doc.openTransaction(translate("BIM_PlanEdit", "Change Region Parent Space"))
+            region.ParentSpace = space
             self.doc.commitTransaction()
             self.doc.recompute()
         except Exception:
@@ -9512,8 +9639,10 @@ class PlanEditControlsWidget:
         self._modal_focus_widgets = []
         self._saved_focus_policies = {}
         self._refreshing_space_editor = False
+        self._refreshing_region_editor = False
         self._space_type_option_model = None
         self._space_type_completer = None
+        self._region_parent_space_items = []
         self.form = self._build_form(QtGui)
         try:
             self.form.setObjectName("BIMPlanEditContextControls")
@@ -9572,6 +9701,8 @@ class PlanEditControlsWidget:
 
         self.space_editor = self._build_space_editor(QtGui)
         layout.addWidget(self.space_editor)
+        self.region_editor = self._build_region_editor(QtGui)
+        layout.addWidget(self.region_editor)
 
         self.exit_button = self._make_button(QtGui, "Exit Plan Edit", self.on_exit_clicked)
         self.exit_button.setMinimumHeight(32)
@@ -9596,6 +9727,10 @@ class PlanEditControlsWidget:
             self.space_add_button,
             self.space_remove_button,
             self.space_text_button,
+            self.region_label_edit,
+            self.region_scheme_edit,
+            self.region_type_edit,
+            self.region_parent_space_combo,
             self.exit_button,
         ]
         self._capture_focus_policies()
@@ -9744,6 +9879,71 @@ class PlanEditControlsWidget:
                 line_edit.clear()
         return False
 
+    def _format_region_parent_space_label(self, space):
+        label = str(getattr(space, "Label", "") or "").strip()
+        name = str(getattr(space, "Name", "") or "").strip()
+        if label and name and label != name:
+            return f"{label} ({name})"
+        return label or name or translate("BIM_PlanEdit", "Unnamed Space")
+
+    def _get_region_parent_space_candidates(self, current_parent=None):
+        candidates = []
+        seen = set()
+        active_storey = self.session.active_storey
+
+        for obj in getattr(self.session.doc, "Objects", []) or []:
+            semantic_obj = self.session._get_plan_semantic_object(obj)
+            if not self.session._is_plan_space_object(semantic_obj):
+                continue
+            name = getattr(semantic_obj, "Name", None)
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            candidates.append(semantic_obj)
+
+        current_parent = self.session._get_plan_semantic_object(current_parent)
+        if self.session._is_plan_space_object(current_parent):
+            current_name = getattr(current_parent, "Name", None)
+            if current_name and current_name not in seen:
+                candidates.append(current_parent)
+
+        def sort_key(space):
+            try:
+                in_active_storey = bool(
+                    active_storey and active_storey in (space.InListRecursive or [])
+                )
+            except Exception:
+                in_active_storey = False
+            label = str(getattr(space, "Label", "") or "").strip().lower()
+            name = str(getattr(space, "Name", "") or "").strip().lower()
+            return (0 if in_active_storey else 1, label or name, name)
+
+        return sorted(candidates, key=sort_key)
+
+    def _set_region_parent_space_combo_options(self, region):
+        if self.region_parent_space_combo is None:
+            return
+
+        current_parent = self.session._get_plan_semantic_object(
+            getattr(region, "ParentSpace", None)
+        )
+        candidates = self._get_region_parent_space_candidates(current_parent=current_parent)
+        self._region_parent_space_items = [None] + candidates
+
+        self.region_parent_space_combo.clear()
+        self.region_parent_space_combo.addItem(translate("BIM_PlanEdit", "None"))
+        for space in candidates:
+            self.region_parent_space_combo.addItem(self._format_region_parent_space_label(space))
+
+        current_name = getattr(current_parent, "Name", None) if current_parent else None
+        current_index = 0
+        if current_name:
+            for index, space in enumerate(self._region_parent_space_items):
+                if getattr(space, "Name", None) == current_name:
+                    current_index = index
+                    break
+        self.region_parent_space_combo.setCurrentIndex(current_index)
+
     def _build_space_editor(self, QtGui):
         from PySide import QtCore
 
@@ -9830,6 +10030,58 @@ class PlanEditControlsWidget:
 
         return editor
 
+    def _build_region_editor(self, QtGui):
+        editor = QtGui.QGroupBox(translate("BIM_PlanEdit", "Region"))
+        editor.setVisible(False)
+        layout = QtGui.QVBoxLayout(editor)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        form = QtGui.QFormLayout()
+        form.setSpacing(6)
+
+        self.region_label_edit = QtGui.QLineEdit(editor)
+        if hasattr(self.region_label_edit, "setClearButtonEnabled"):
+            self.region_label_edit.setClearButtonEnabled(True)
+        self.region_label_edit.editingFinished.connect(self.on_region_label_edited)
+        form.addRow(translate("BIM_PlanEdit", "Label"), self.region_label_edit)
+
+        self.region_scheme_edit = QtGui.QLineEdit(editor)
+        if hasattr(self.region_scheme_edit, "setPlaceholderText"):
+            self.region_scheme_edit.setPlaceholderText(translate("BIM_PlanEdit", "Program"))
+        if hasattr(self.region_scheme_edit, "setClearButtonEnabled"):
+            self.region_scheme_edit.setClearButtonEnabled(True)
+        self.region_scheme_edit.editingFinished.connect(self.on_region_scheme_edited)
+        form.addRow(translate("BIM_PlanEdit", "Scheme"), self.region_scheme_edit)
+
+        self.region_type_edit = QtGui.QLineEdit(editor)
+        if hasattr(self.region_type_edit, "setPlaceholderText"):
+            self.region_type_edit.setPlaceholderText(translate("BIM_PlanEdit", "Zone"))
+        if hasattr(self.region_type_edit, "setClearButtonEnabled"):
+            self.region_type_edit.setClearButtonEnabled(True)
+        self.region_type_edit.editingFinished.connect(self.on_region_type_edited)
+        form.addRow(translate("BIM_PlanEdit", "Type"), self.region_type_edit)
+
+        self.region_parent_space_combo = QtGui.QComboBox(editor)
+        self.region_parent_space_combo.currentIndexChanged.connect(
+            self.on_region_parent_space_changed
+        )
+        form.addRow(translate("BIM_PlanEdit", "Parent Space"), self.region_parent_space_combo)
+
+        layout.addLayout(form)
+
+        note = QtGui.QLabel(
+            translate(
+                "BIM_PlanEdit",
+                "Plan regions store semantic zoning metadata and keep a polygonal footprint in plan.",
+            ),
+            editor,
+        )
+        note.setWordWrap(True)
+        layout.addWidget(note)
+
+        return editor
+
     def _capture_focus_policies(self):
         for widget in self._modal_focus_widgets:
             try:
@@ -9881,6 +10133,12 @@ class PlanEditControlsWidget:
         self.space_add_button = None
         self.space_remove_button = None
         self.space_text_button = None
+        self.region_editor = None
+        self.region_label_edit = None
+        self.region_scheme_edit = None
+        self.region_type_edit = None
+        self.region_parent_space_combo = None
+        self._region_parent_space_items = []
         self._space_type_option_model = None
         self._space_type_completer = None
         self.exit_button = None
@@ -10027,7 +10285,7 @@ class PlanEditControlsWidget:
             )
             selection_help = translate(
                 "BIM_PlanEdit",
-                "Plan regions store polygon-based zoning metadata. Edit scheme, type, and parent space from the property editor for now.",
+                "Use the region controls below to edit label, scheme, type, and parent space.",
             )
         elif self.session.selected_space:
             selection_state = translate("BIM_PlanEdit", "Space: {label}").format(
@@ -10085,6 +10343,7 @@ class PlanEditControlsWidget:
             )
         )
         self._refresh_space_editor()
+        self._refresh_region_editor()
         self._apply_modal_interaction_state(modal_active)
 
     def _refresh_space_editor(self):
@@ -10140,6 +10399,35 @@ class PlanEditControlsWidget:
                     self.space_boundary_list.addItem(item)
         finally:
             self._refreshing_space_editor = False
+
+    def _refresh_region_editor(self):
+        if self.region_editor is None:
+            return
+        region = self.session.selected_region
+        show_editor = bool(region and self.session.current_tool == "Select")
+        try:
+            self.region_editor.setVisible(show_editor)
+        except Exception:
+            pass
+        if not show_editor:
+            return
+
+        self._refreshing_region_editor = True
+        try:
+            if self.region_label_edit is not None:
+                self.region_label_edit.setText(getattr(region, "Label", ""))
+            if self.region_scheme_edit is not None:
+                self.region_scheme_edit.setText(getattr(region, "Scheme", ""))
+            if self.region_type_edit is not None:
+                self.region_type_edit.setText(getattr(region, "RegionType", ""))
+            if self.region_parent_space_combo is not None:
+                self.region_parent_space_combo.blockSignals(True)
+                try:
+                    self._set_region_parent_space_combo_options(region)
+                finally:
+                    self.region_parent_space_combo.blockSignals(False)
+        finally:
+            self._refreshing_region_editor = False
 
     def _apply_modal_interaction_state(self, modal_active):
         from PySide import QtCore
@@ -10199,6 +10487,20 @@ class PlanEditControlsWidget:
                 continue
             try:
                 widget.setEnabled(bool(has_space and not modal_active))
+            except Exception:
+                pass
+
+        has_region = bool(self.session.selected_region)
+        for widget in (
+            self.region_label_edit,
+            self.region_scheme_edit,
+            self.region_type_edit,
+            self.region_parent_space_combo,
+        ):
+            if widget is None:
+                continue
+            try:
+                widget.setEnabled(bool(has_region and not modal_active))
             except Exception:
                 pass
 
@@ -10278,6 +10580,28 @@ class PlanEditControlsWidget:
 
     def on_space_text_clicked(self):
         self.session._start_space_text_position_pick()
+
+    def on_region_label_edited(self):
+        if self._refreshing_region_editor or self.region_label_edit is None:
+            return
+        self.session._set_selected_region_label(self.region_label_edit.text())
+
+    def on_region_scheme_edited(self):
+        if self._refreshing_region_editor or self.region_scheme_edit is None:
+            return
+        self.session._set_selected_region_scheme(self.region_scheme_edit.text())
+
+    def on_region_type_edited(self):
+        if self._refreshing_region_editor or self.region_type_edit is None:
+            return
+        self.session._set_selected_region_type(self.region_type_edit.text())
+
+    def on_region_parent_space_changed(self, index):
+        if self._refreshing_region_editor or self.region_parent_space_combo is None:
+            return
+        if index < 0 or index >= len(self._region_parent_space_items):
+            return
+        self.session._set_selected_region_parent_space(self._region_parent_space_items[index])
 
     def on_exit_clicked(self):
         self.session.shutdown()

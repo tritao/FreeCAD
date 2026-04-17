@@ -3680,6 +3680,113 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_region_editor_updates_region_metadata(self):
+        """Region metadata should be editable from the Plan Edit task panel."""
+
+        level = Arch.makeFloor(name="Level 0")
+
+        living_base = self.document.addObject("Part::Box", "LivingRoomBase")
+        living_base.Length = 6000
+        living_base.Width = 4000
+        living_base.Height = 2500
+        living_space = Arch.makeSpace(living_base, name="Living Room")
+
+        dining_base = self.document.addObject("Part::Box", "DiningRoomBase")
+        dining_base.Length = 2800
+        dining_base.Width = 2400
+        dining_base.Height = 2500
+        dining_base.Placement.Base = FreeCAD.Vector(6500, 0, 0)
+        dining_space = Arch.makeSpace(dining_base, name="Dining Room")
+
+        level.addObject(living_space)
+        level.addObject(dining_space)
+        region = self._make_plan_region(level, parent_space=living_space)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, region.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        self.assertIs(session.selected_region, region)
+        self.assertFalse(session.task_panel.region_editor.isHidden())
+        self.assertTrue(session.task_panel.space_editor.isHidden())
+
+        session.task_panel.region_label_edit.setText("Prep Zone")
+        session.task_panel.on_region_label_edited()
+        self.pump_gui_events()
+        self.assertEqual(region.Label, "Prep Zone")
+
+        session.task_panel.region_scheme_edit.setText("Operations")
+        session.task_panel.on_region_scheme_edited()
+        self.pump_gui_events()
+        self.assertEqual(region.Scheme, "Operations")
+
+        session.task_panel.region_type_edit.setText("Kitchen Support")
+        session.task_panel.on_region_type_edited()
+        self.pump_gui_events()
+        self.assertEqual(region.RegionType, "Kitchen Support")
+
+        combo_items = session.task_panel._region_parent_space_items
+        target_index = next(
+            index
+            for index, item in enumerate(combo_items)
+            if getattr(item, "Name", None) == dining_space.Name
+        )
+        session.task_panel.region_parent_space_combo.setCurrentIndex(target_index)
+        session.task_panel.on_region_parent_space_changed(target_index)
+        self.pump_gui_events()
+        self.assertIs(region.ParentSpace, dining_space)
+
+        session.task_panel.region_parent_space_combo.setCurrentIndex(0)
+        session.task_panel.on_region_parent_space_changed(0)
+        self.pump_gui_events()
+        self.assertIsNone(region.ParentSpace)
+        self.assertIn("Region: Prep Zone", session.task_panel.status.text())
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_drops_deleted_selected_region_reference(self):
+        """Deleted region targets should not crash selection/overlay refresh paths."""
+
+        level = Arch.makeFloor(name="Level 0")
+        region = self._make_plan_region(level)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, region.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+        self.assertIs(session.selected_region, region)
+
+        stale_region = region
+        self.document.removeObject(region.Name)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        session.selected_region = stale_region
+        self.assertEqual(session._get_selected_plan_target(), (None, None))
+        self.assertIsNone(session.selected_region)
+
+        session.slotChangedObject(level, "Placement")
+        self.pump_gui_events()
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_space_overlay_follows_wire_edges_when_vertex_order_is_scrambled(self):
         """Space overlays should follow wire edge order, not OCC vertex storage order."""
 
