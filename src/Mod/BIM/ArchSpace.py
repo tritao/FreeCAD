@@ -441,9 +441,9 @@ class _Space(ArchComponent.Component):
             section_edges.extend(ArchComponent.get_horizontal_slice_edges(shape, cut_z))
         return section_edges
 
-    def _get_boundary_faces(self, obj):
+    def _get_boundary_faces_from_links(self, boundaries):
         faces = []
-        for boundary in getattr(obj, "Boundaries", []) or []:
+        for boundary in boundaries or []:
             try:
                 base_obj = boundary[0]
                 subnames = boundary[1]
@@ -465,6 +465,9 @@ class _Space(ArchComponent.Component):
                 except Exception:
                     continue
         return faces
+
+    def _get_boundary_faces(self, obj):
+        return self._get_boundary_faces_from_links(getattr(obj, "Boundaries", []) or [])
 
     def _get_horizontal_slice_wires(self, shapes, cut_z):
         import Part
@@ -631,11 +634,9 @@ class _Space(ArchComponent.Component):
         return analysis
 
     def _describe_boundary_failure(
-        self, obj, boundary_faces, has_base_shape=False, loop_analysis=None
+        self, label, boundary_faces, has_base_shape=False, loop_analysis=None
     ):
-        label = str(
-            getattr(obj, "Label", "") or getattr(obj, "Name", "") or translate("Arch", "Space")
-        )
+        label = str(label or translate("Arch", "Space"))
         if boundary_faces:
             analysis = loop_analysis or self._analyze_boundary_loops(boundary_faces)
             bb = analysis["bounding_box"]
@@ -750,6 +751,58 @@ class _Space(ArchComponent.Component):
             [],
         )
 
+    def _get_boundary_analysis_code(self, boundaries, boundary_faces, loop_analysis):
+        if not boundaries:
+            return "empty"
+        if not boundary_faces:
+            return "unusable_boundaries"
+
+        bb = loop_analysis.get("bounding_box")
+        if not bb:
+            return "unusable_boundaries"
+        if bb.ZLength <= 0.000001:
+            return "no_height"
+        if not loop_analysis.get("section_edges"):
+            return "no_intersection"
+        if not loop_analysis.get("wires"):
+            return "open_loop"
+        if len(loop_analysis.get("top_level", [])) > 1:
+            return "multiple_regions"
+        if loop_analysis.get("nested_islands"):
+            return "nested_islands"
+        if loop_analysis.get("supports_single_outer"):
+            return "valid"
+        return "invalid_solid"
+
+    def analyzeBoundaryLinks(self, boundaries, label=None):
+        label = str(label or translate("Arch", "Space"))
+        boundary_links = list(boundaries or [])
+        boundary_faces = self._get_boundary_faces_from_links(boundary_links)
+        loop_analysis = self._analyze_boundary_loops(boundary_faces)
+        code = self._get_boundary_analysis_code(boundary_links, boundary_faces, loop_analysis)
+        message = ""
+        details = []
+        if code not in ("empty", "valid"):
+            message, details = self._describe_boundary_failure(
+                label,
+                boundary_faces,
+                loop_analysis=loop_analysis,
+            )
+        inner_void_count = len(
+            [record for record in loop_analysis.get("records", []) if record.get("depth") == 1]
+        )
+        return {
+            "label": label,
+            "code": code,
+            "valid": code == "valid",
+            "boundary_count": len(boundary_links),
+            "face_count": len(boundary_faces),
+            "region_count": len(loop_analysis.get("top_level", [])),
+            "inner_void_count": inner_void_count,
+            "message": message,
+            "details": list(details),
+        }
+
     def _build_shape_from_boundary_loops(self, boundary_faces, loop_analysis=None):
         if not boundary_faces:
             return None
@@ -828,8 +881,13 @@ class _Space(ArchComponent.Component):
                 self._sync_area_properties(obj)
                 return
             if boundary_faces and not loop_analysis["supports_single_outer"]:
+                label = str(
+                    getattr(obj, "Label", "")
+                    or getattr(obj, "Name", "")
+                    or translate("Arch", "Space")
+                )
                 message, details = self._describe_boundary_failure(
-                    obj,
+                    label,
                     boundary_faces,
                     has_base_shape=has_base_shape,
                     loop_analysis=loop_analysis,
@@ -883,8 +941,11 @@ class _Space(ArchComponent.Component):
 
                 return
 
+        label = str(
+            getattr(obj, "Label", "") or getattr(obj, "Name", "") or translate("Arch", "Space")
+        )
         message, details = self._describe_boundary_failure(
-            obj, boundary_faces, has_base_shape=has_base_shape
+            label, boundary_faces, has_base_shape=has_base_shape
         )
         self._set_boundary_failure(message, details)
         if message:
@@ -977,6 +1038,32 @@ class _Space(ArchComponent.Component):
             return [Part.Face(w)]
         except Part.OCCError:
             return []
+
+
+class _SpaceBoundaryAnalyzer:
+    """Reusable boundary analysis helper for Plan Edit and tests."""
+
+    _get_horizontal_slice_edges = _Space._get_horizontal_slice_edges
+    _get_boundary_faces_from_links = _Space._get_boundary_faces_from_links
+    _get_horizontal_slice_wires = _Space._get_horizontal_slice_wires
+    _get_wire_face_sample_point = _Space._get_wire_face_sample_point
+    _classify_wire_records = _Space._classify_wire_records
+    _build_faces_from_wires = _Space._build_faces_from_wires
+    _build_faces_from_records = _Space._build_faces_from_records
+    _analyze_boundary_loops = _Space._analyze_boundary_loops
+    _describe_boundary_failure = _Space._describe_boundary_failure
+    _get_boundary_analysis_code = _Space._get_boundary_analysis_code
+    _get_boundary_bounding_box = _Space._get_boundary_bounding_box
+    analyzeBoundaryLinks = _Space.analyzeBoundaryLinks
+
+
+_space_boundary_analyzer = _SpaceBoundaryAnalyzer()
+
+
+def analyzeBoundaryLinks(boundaries, label=None):
+    """Analyze whether boundary links can form one Arch Space."""
+
+    return _space_boundary_analyzer.analyzeBoundaryLinks(boundaries, label=label)
 
 
 class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
