@@ -570,7 +570,7 @@ class PlanEditSession:
         self._attach_selection_observer()
         self._attach_document_observer()
         self._register_edit_callbacks()
-        self._refresh_selected_wall()
+        self._refresh_primary_selected_plan_target()
 
         panel = PlanEditControlsWidget(self)
         self.attach_task_panel(panel)
@@ -3621,8 +3621,12 @@ class PlanEditSession:
         self._sync_active_plan_target_object()
         self._refresh_task_panel_status()
 
-    def _refresh_selected_wall(self):
+    def _refresh_primary_selected_plan_target(self):
         self._refresh_selected_plan_target()
+
+    def _refresh_selected_wall(self):
+        # Compatibility wrapper for older tests and callers.
+        self._refresh_primary_selected_plan_target()
 
     def _start_embedded_tool(self, tool_name, command, host_class=_PlanEditCommandHost):
         self.current_tool = tool_name
@@ -3939,7 +3943,7 @@ class PlanEditSession:
 
         self._cancel_rect_wall_tool(refresh=False)
         self.current_tool = "Select"
-        self._refresh_selected_wall()
+        self._refresh_primary_selected_plan_target()
         self._refresh_task_panel_status()
 
     def _has_active_space_separator_tool(self):
@@ -4205,7 +4209,7 @@ class PlanEditSession:
         self._register_plan_object(separator)
         self._cancel_space_separator_tool(refresh=False)
         self.current_tool = "Select"
-        self._refresh_selected_wall()
+        self._refresh_primary_selected_plan_target()
         self._refresh_task_panel_status()
 
     def _has_active_wall_edit(self):
@@ -5731,7 +5735,7 @@ class PlanEditSession:
         if sub in ("EditNode0", "EditNode1", "EditNode2"):
             return
         del doc, obj, sub, point
-        self._refresh_selected_wall()
+        self._refresh_primary_selected_plan_target()
 
     def removeSelection(self, doc, obj, sub):
         if self._tearing_down:
@@ -5739,7 +5743,7 @@ class PlanEditSession:
         if self._ignore_selection_changes:
             return
         del doc, obj, sub
-        self._refresh_selected_wall()
+        self._refresh_primary_selected_plan_target()
 
     def setSelection(self, doc):
         if self._tearing_down:
@@ -5747,7 +5751,7 @@ class PlanEditSession:
         if self._ignore_selection_changes:
             return
         del doc
-        self._refresh_selected_wall()
+        self._refresh_primary_selected_plan_target()
 
     def clearSelection(self, doc):
         if self._tearing_down:
@@ -5755,7 +5759,7 @@ class PlanEditSession:
         if self._ignore_selection_changes:
             return
         del doc
-        self._refresh_selected_wall()
+        self._refresh_primary_selected_plan_target()
 
     # Document observer interface
 
@@ -6430,15 +6434,33 @@ class PlanEditSession:
             return ""
         return text[0].upper() + text[1:]
 
+    def _get_plan_target_display_label(self, obj):
+        return getattr(obj, "Label", getattr(obj, "Name", ""))
+
+    def _format_plan_target_selection_state(self, kind, obj):
+        if not kind or not obj:
+            return ""
+        templates = {
+            "opening": translate("BIM_PlanEdit", "Opening: {label}"),
+            "symbol": translate("BIM_PlanEdit", "Symbol: {label}"),
+            "region": translate("BIM_PlanEdit", "Region: {label}"),
+            "space": translate("BIM_PlanEdit", "Space: {label}"),
+            "wall": translate("BIM_PlanEdit", "Wall: {label}"),
+        }
+        template = templates.get(kind)
+        if not template:
+            return ""
+        return template.format(label=self._get_plan_target_display_label(obj))
+
     def _get_status_chip_text(self):
         title = translate("BIM_PlanEdit", "Plan Edit · {tool}").format(tool=self.current_tool)
+        selected_kind, selected_obj = self._get_selected_plan_target()
+        selected_context = self._format_plan_target_selection_state(selected_kind, selected_obj)
 
         if self.current_tool == "Move Opening":
             context = (
-                translate("BIM_PlanEdit", "Opening: {label}").format(
-                    label=self.selected_opening.Label
-                )
-                if self.selected_opening
+                selected_context
+                if selected_kind == "opening" and selected_obj is not None
                 else translate("BIM_PlanEdit", "Opening move")
             )
             action = translate("BIM_PlanEdit", "Click target point")
@@ -6446,10 +6468,8 @@ class PlanEditSession:
 
         if self.current_tool == "Move Symbol":
             context = (
-                translate("BIM_PlanEdit", "Symbol: {label}").format(
-                    label=self.selected_symbol.Label
-                )
-                if self.selected_symbol
+                selected_context
+                if selected_kind == "symbol" and selected_obj is not None
                 else translate("BIM_PlanEdit", "Symbol move")
             )
             action = translate("BIM_PlanEdit", "Click target point")
@@ -6457,10 +6477,8 @@ class PlanEditSession:
 
         if self.current_tool == "Rotate Symbol":
             context = (
-                translate("BIM_PlanEdit", "Symbol: {label}").format(
-                    label=self.selected_symbol.Label
-                )
-                if self.selected_symbol
+                selected_context
+                if selected_kind == "symbol" and selected_obj is not None
                 else translate("BIM_PlanEdit", "Symbol rotation")
             )
             if self._symbol_rotation_snap_enabled():
@@ -6473,8 +6491,8 @@ class PlanEditSession:
 
         if self.current_tool == "Move Wall":
             context = (
-                translate("BIM_PlanEdit", "Wall: {label}").format(label=self.selected_wall.Label)
-                if self.selected_wall
+                selected_context
+                if selected_kind == "wall" and selected_obj is not None
                 else translate("BIM_PlanEdit", "Wall move")
             )
             action = translate("BIM_PlanEdit", "Click target point")
@@ -6484,9 +6502,9 @@ class PlanEditSession:
             target_wall, joint, detail = self._get_plan_join_candidate_state()
             context = (
                 translate("BIM_PlanEdit", "Source wall: {label}").format(
-                    label=self.selected_wall.Label
+                    label=self._get_plan_target_display_label(selected_obj)
                 )
-                if self.selected_wall
+                if selected_kind == "wall" and selected_obj is not None
                 else translate("BIM_PlanEdit", "Wall join")
             )
             action = self._get_plan_join_mode_action_text(target_wall, joint)
@@ -6496,8 +6514,8 @@ class PlanEditSession:
 
         if self.current_tool.startswith("Stretch "):
             context = (
-                translate("BIM_PlanEdit", "Wall: {label}").format(label=self.selected_wall.Label)
-                if self.selected_wall
+                selected_context
+                if selected_kind == "wall" and selected_obj is not None
                 else translate("BIM_PlanEdit", "Wall stretch")
             )
             action = translate("BIM_PlanEdit", "Click endpoint or press Enter to type a value")
@@ -6517,26 +6535,8 @@ class PlanEditSession:
             )
             return title, "{}\n{}".format(context, action)
 
-        if self.selected_opening:
-            context = translate("BIM_PlanEdit", "Opening: {label}").format(
-                label=self.selected_opening.Label
-            )
-        elif self.selected_symbol:
-            context = translate("BIM_PlanEdit", "Symbol: {label}").format(
-                label=self.selected_symbol.Label
-            )
-        elif self.selected_region:
-            context = translate("BIM_PlanEdit", "Region: {label}").format(
-                label=self.selected_region.Label
-            )
-        elif self.selected_space:
-            context = translate("BIM_PlanEdit", "Space: {label}").format(
-                label=self.selected_space.Label
-            )
-        elif self.selected_wall:
-            context = translate("BIM_PlanEdit", "Wall: {label}").format(
-                label=self.selected_wall.Label
-            )
+        if selected_context:
+            context = selected_context
         else:
             context = translate("BIM_PlanEdit", "Storey: {label}").format(
                 label=self.get_storey_label(self.active_storey)
@@ -6548,7 +6548,7 @@ class PlanEditSession:
 
         hints = self._get_input_hint_specs()
         action = self._format_status_chip_action(hints[0][0]) if hints else ""
-        if self.selected_region and self.current_tool == "Select":
+        if selected_kind == "region" and self.current_tool == "Select":
             action = translate(
                 "BIM_PlanEdit",
                 "Edit label, scheme, type, and parent space in the task panel",
@@ -6633,13 +6633,14 @@ class PlanEditSession:
 
     def _get_input_hint_specs(self):
         ui = FreeCADGui.UserInput
+        selected_kind, _selected_obj = self._get_selected_plan_target()
 
         if self.current_tool == "Select":
             additive_hint = (
                 translate("BIM_PlanEdit", "%1 add or remove from selection"),
                 (ui.KeyControl, ui.MouseLeft),
             )
-            if self.selected_opening:
+            if selected_kind == "opening":
                 return (
                     (
                         translate("BIM_PlanEdit", "%1 pick opening handle"),
@@ -6647,7 +6648,7 @@ class PlanEditSession:
                     ),
                     additive_hint,
                 )
-            if self.selected_symbol:
+            if selected_kind == "symbol":
                 return (
                     (
                         translate("BIM_PlanEdit", "%1 pick symbol handle"),
@@ -6655,7 +6656,7 @@ class PlanEditSession:
                     ),
                     additive_hint,
                 )
-            if self.selected_wall:
+            if selected_kind == "wall":
                 return (
                     (
                         translate("BIM_PlanEdit", "%1 pick wall grip"),
@@ -6663,7 +6664,7 @@ class PlanEditSession:
                     ),
                     additive_hint,
                 )
-            if self.selected_region:
+            if selected_kind == "region":
                 return (
                     (
                         translate("BIM_PlanEdit", "%1 select another target"),
@@ -6671,7 +6672,7 @@ class PlanEditSession:
                     ),
                     additive_hint,
                 )
-            if self.selected_space:
+            if selected_kind == "space":
                 return (
                     (
                         translate("BIM_PlanEdit", "%1 select space boundary target"),
@@ -7172,7 +7173,7 @@ class PlanEditSession:
         self._set_hovered_space(None)
         self._set_hovered_region(None)
         self._set_gui_selection(new_selection)
-        self._refresh_selected_wall()
+        self._refresh_primary_selected_plan_target()
         self._set_event_handled(event_callback)
         return True
 
@@ -7533,7 +7534,7 @@ class PlanEditSession:
         self._set_hovered_opening(None)
         self._set_hovered_symbol(None)
         self._set_hovered_space(None)
-        self._refresh_selected_wall()
+        self._refresh_primary_selected_plan_target()
         FreeCAD.Console.PrintMessage(
             translate(
                 "BIM_PlanEdit",
@@ -7552,7 +7553,7 @@ class PlanEditSession:
         if self.current_tool == "Pick Space Region":
             self.current_tool = "Select"
         if was_active:
-            self._refresh_selected_wall()
+            self._refresh_primary_selected_plan_target()
         elif refresh:
             self._refresh_task_panel_status()
         return was_active
@@ -10282,10 +10283,14 @@ class PlanEditControlsWidget:
         storey_text = self.session.get_storey_label(self.session.active_storey)
         tool = self.session.current_tool
         modal_active = self.session._is_modal_plan_interaction_active()
-        if tool == "Join" and self.session.selected_wall:
+        selected_kind, selected_obj = self.session._get_selected_plan_target()
+        selected_state = self.session._format_plan_target_selection_state(
+            selected_kind, selected_obj
+        )
+        if tool == "Join" and selected_kind == "wall" and selected_obj is not None:
             target_wall, joint, detail = self.session._get_plan_join_candidate_state()
             selection_state = translate("BIM_PlanEdit", "Source wall: {label}").format(
-                label=self.session.selected_wall.Label
+                label=self.session._get_plan_target_display_label(selected_obj)
             )
             selection_help = translate(
                 "BIM_PlanEdit",
@@ -10344,18 +10349,14 @@ class PlanEditControlsWidget:
                 "BIM_PlanEdit",
                 "Click two points to place a room divider that can split Arch Spaces.",
             )
-        elif self.session.selected_opening:
-            selection_state = translate("BIM_PlanEdit", "Opening: {label}").format(
-                label=self.session.selected_opening.Label
-            )
+        elif selected_kind == "opening" and selected_obj is not None:
+            selection_state = selected_state
             selection_help = translate(
                 "BIM_PlanEdit",
                 "Use in-view handles to move or flip the selected opening.",
             )
-        elif self.session.selected_symbol:
-            selection_state = translate("BIM_PlanEdit", "Symbol: {label}").format(
-                label=self.session.selected_symbol.Label
-            )
+        elif selected_kind == "symbol" and selected_obj is not None:
+            selection_state = selected_state
             if self.session.current_tool == "Rotate Symbol":
                 if self.session._symbol_rotation_snap_enabled():
                     selection_help = translate(
@@ -10372,26 +10373,20 @@ class PlanEditControlsWidget:
                     "BIM_PlanEdit",
                     "Use in-view handles to move or rotate the selected symbol instance.",
                 )
-        elif self.session.selected_region:
-            selection_state = translate("BIM_PlanEdit", "Region: {label}").format(
-                label=self.session.selected_region.Label
-            )
+        elif selected_kind == "region" and selected_obj is not None:
+            selection_state = selected_state
             selection_help = translate(
                 "BIM_PlanEdit",
                 "Use the region controls below to edit label, scheme, type, and parent space.",
             )
-        elif self.session.selected_space:
-            selection_state = translate("BIM_PlanEdit", "Space: {label}").format(
-                label=self.session.selected_space.Label
-            )
+        elif selected_kind == "space" and selected_obj is not None:
+            selection_state = selected_state
             selection_help = translate(
                 "BIM_PlanEdit",
                 "Use the space controls below to edit label, type, boundaries, and text position.",
             )
-        elif self.session.selected_wall:
-            selection_state = translate("BIM_PlanEdit", "Wall: {label}").format(
-                label=self.session.selected_wall.Label
-            )
+        elif selected_kind == "wall" and selected_obj is not None:
+            selection_state = selected_state
             if self.session.is_selected_wall_endpoint_editable():
                 selection_help = translate(
                     "BIM_PlanEdit",
@@ -10444,7 +10439,8 @@ class PlanEditControlsWidget:
 
         if self.space_editor is None:
             return
-        space = self.session.selected_space
+        selected_kind, selected_obj = self.session._get_selected_plan_target()
+        space = selected_obj if selected_kind == "space" else None
         show_editor = bool(space and self.session.current_tool in ("Select", "Set Space Text"))
         try:
             self.space_editor.setVisible(show_editor)
@@ -10496,7 +10492,8 @@ class PlanEditControlsWidget:
     def _refresh_region_editor(self):
         if self.region_editor is None:
             return
-        region = self.session.selected_region
+        selected_kind, selected_obj = self.session._get_selected_plan_target()
+        region = selected_obj if selected_kind == "region" else None
         show_editor = bool(region and self.session.current_tool == "Select")
         try:
             self.region_editor.setVisible(show_editor)
@@ -10567,7 +10564,8 @@ class PlanEditControlsWidget:
             except Exception:
                 pass
 
-        has_space = bool(self.session.selected_space)
+        selected_kind, _selected_obj = self.session._get_selected_plan_target()
+        has_space = selected_kind == "space"
         for widget in (
             self.space_label_edit,
             self.space_type_combo,
@@ -10583,7 +10581,7 @@ class PlanEditControlsWidget:
             except Exception:
                 pass
 
-        has_region = bool(self.session.selected_region)
+        has_region = selected_kind == "region"
         for widget in (
             self.region_label_edit,
             self.region_scheme_edit,
