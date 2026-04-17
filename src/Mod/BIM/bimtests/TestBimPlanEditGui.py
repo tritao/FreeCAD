@@ -158,11 +158,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
     def _make_plan_room_walls(self, size=4000, width=200, height=2500):
         level = Arch.makeFloor(name="Level 0")
         walls = []
+        half = size * 0.5
         placements = (
-            (FreeCAD.Vector(0, 0, 0), 0),
-            (FreeCAD.Vector(size, 0, 0), 90),
-            (FreeCAD.Vector(size, size, 0), 180),
-            (FreeCAD.Vector(0, size, 0), -90),
+            (FreeCAD.Vector(half, 0, 0), 0),
+            (FreeCAD.Vector(size, half, 0), 90),
+            (FreeCAD.Vector(half, size, 0), 180),
+            (FreeCAD.Vector(0, half, 0), -90),
         )
         for index, (base, angle) in enumerate(placements, start=1):
             wall = Arch.makeWall(length=size, width=width, height=height, align="Left")
@@ -3592,6 +3593,56 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(session.selected_space, space)
         self.assertEqual(len(session._get_space_boundary_entries(space)), 4)
         self.assertGreater(space.Area.getValueAs("m^2").Value, 0)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_space_preflight_reports_valid_wall_selection(self):
+        """Selecting enclosing walls should show a valid-space preflight in the task panel."""
+
+        level, walls = self._make_plan_room_walls()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        for wall in walls:
+            FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        status_text = session.task_panel.status.text()
+        self.assertIn("Selection set: 4 walls", status_text)
+        self.assertIn("Space preflight: Valid space", status_text)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_space_preflight_reports_open_loop(self):
+        """Selecting an open wall set should show the preflight failure before creating a space."""
+
+        level, walls = self._make_plan_room_walls()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        for wall in walls[:3]:
+            FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        status_text = session.task_panel.status.text()
+        self.assertIn("Selection set: 3 walls", status_text)
+        self.assertIn("Space preflight: Open loop", status_text)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
