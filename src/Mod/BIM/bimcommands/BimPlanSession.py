@@ -24,6 +24,7 @@
 
 """Session controller for BIM plan editing."""
 
+from contextlib import contextmanager
 import math
 
 import ArchPlanGeometry
@@ -1003,10 +1004,7 @@ class PlanEditSession:
         self._clear_selected_wall_opening_context_overlay()
         self._clear_selected_space_overlay()
         self._clear_secondary_selected_overlays()
-        try:
-            FreeCADGui.Selection.clearSelection()
-        except (ReferenceError, RuntimeError):
-            pass
+        self._set_gui_selection([])
         self._start_embedded_tool("Wall", BimWall.Arch_Wall(), host_class=_PlanEditWallHost)
 
     def activate_rect_wall_tool(self):
@@ -2122,6 +2120,16 @@ class PlanEditSession:
                     pass
 
     def _set_active_object(self, obj):
+        try:
+            self.view.setActiveObject("Arch", None)
+        except Exception:
+            pass
+        try:
+            self.view.setActiveObject("NativeIFC", None)
+        except Exception:
+            pass
+        if obj is None:
+            return
         context = "Arch"
         if getattr(obj, "IfcType", "") == "Building Storey":
             context = "NativeIFC"
@@ -2129,6 +2137,19 @@ class PlanEditSession:
             self.view.setActiveObject(context, obj)
         except Exception:
             pass
+
+    def _sync_active_plan_target_object(self):
+        if not self.view:
+            return
+        target_kind, target_obj = self._get_selected_plan_target()
+        del target_kind
+        if target_obj is not None:
+            self._set_active_object(target_obj)
+            return
+        if self.active_storey is not None:
+            self._set_active_object(self.active_storey)
+            return
+        self._set_active_object(None)
 
     def _attach_selection_observer(self):
         if not self._selection_observer_added:
@@ -2548,7 +2569,7 @@ class PlanEditSession:
 
     def _get_plan_target_for_object(self, obj, parent_obj=None):
         seen = set()
-        for candidate in (parent_obj, obj):
+        for candidate in (obj, parent_obj):
             if not candidate:
                 continue
             name = getattr(candidate, "Name", None)
@@ -2677,6 +2698,168 @@ class PlanEditSession:
                     best_distance_sq = distance_sq
         return best_region
 
+    def _get_region_pick_polylines(self, region):
+        if not self._is_plan_region_object(region):
+            return []
+
+        polylines = self._get_region_overlay_polylines(region)
+        if polylines:
+            return polylines
+
+        proxy = getattr(region, "Proxy", None)
+        points = []
+        if proxy and hasattr(proxy, "_get_local_points"):
+            try:
+                points = list(proxy._get_local_points(region) or [])
+            except Exception:
+                points = []
+        elif hasattr(region, "Points"):
+            points = [FreeCAD.Vector(point) for point in (getattr(region, "Points", []) or [])]
+
+        if len(points) < 3:
+            return []
+
+        placement = getattr(region, "Placement", None)
+        if placement is not None:
+            try:
+                points = [placement.multVec(FreeCAD.Vector(point)) for point in points]
+            except Exception:
+                points = [FreeCAD.Vector(point) for point in points]
+        return [points + [points[0]]]
+
+    def _xy_polygon_area(self, polyline):
+        if not polyline or len(polyline) < 4:
+            return 0.0
+        area = 0.0
+        for start, end in zip(polyline, polyline[1:]):
+            area += float(start.x) * float(end.y) - float(end.x) * float(start.y)
+        return abs(area) * 0.5
+
+    def _xy_point_in_polygon(self, point, polyline, tolerance=1e-9):
+        if not point or not polyline or len(polyline) < 4:
+            return False
+
+        px = float(point.x)
+        py = float(point.y)
+        inside = False
+        points = polyline
+        if points[0].distanceToPoint(points[-1]) > tolerance:
+            points = list(points) + [points[0]]
+
+        for start, end in zip(points, points[1:]):
+            x1 = float(start.x)
+            y1 = float(start.y)
+            x2 = float(end.x)
+            y2 = float(end.y)
+            if abs(y2 - y1) <= tolerance:
+                continue
+            intersects = (y1 > py) != (y2 > py)
+            if not intersects:
+                continue
+            x_cross = x1 + ((py - y1) * (x2 - x1) / (y2 - y1))
+            if x_cross >= px - tolerance:
+                inside = not inside
+        return inside
+
+    def _pick_plan_region_target_from_polylines(self, mouse_pos):
+        if not self.doc or not mouse_pos:
+            return None
+
+        point = self._get_plan_point_from_mouse_pos(mouse_pos)
+        if point is None:
+            return None
+
+        best_region = None
+        best_area = None
+        seen = set()
+        for obj in getattr(self.doc, "Objects", []) or []:
+            if not self._is_plan_region_object(obj):
+                continue
+            name = getattr(obj, "Name", None)
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            view_object = getattr(obj, "ViewObject", None)
+            if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
+                continue
+
+            containing_area = None
+            for polyline in self._get_region_pick_polylines(obj):
+                if not self._xy_point_in_polygon(point, polyline):
+                    continue
+                area = self._xy_polygon_area(polyline)
+                if area <= 0.0:
+                    continue
+                if containing_area is None or area < containing_area:
+                    containing_area = area
+
+            if containing_area is None:
+                continue
+            if best_area is None or containing_area < best_area:
+                best_region = obj
+                best_area = containing_area
+
+        return best_region
+
+    def _pick_plan_target_from_footprint_faces(self, mouse_pos, is_target, get_faces):
+        if not self.doc or not mouse_pos:
+            return None
+
+        point = self._get_plan_point_from_mouse_pos(mouse_pos)
+        if point is None:
+            return None
+
+        best_target = None
+        best_area = None
+        seen = set()
+        for obj in getattr(self.doc, "Objects", []) or []:
+            if not is_target(obj):
+                continue
+            name = getattr(obj, "Name", None)
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            view_object = getattr(obj, "ViewObject", None)
+            if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
+                continue
+
+            containing_area = None
+            for face in get_faces(obj):
+                bound_box = getattr(face, "BoundBox", None)
+                if bound_box is None:
+                    continue
+                test_point = FreeCAD.Vector(point.x, point.y, float(bound_box.ZMin))
+                try:
+                    if not face.isInside(test_point, 0.001, True):
+                        continue
+                except Exception:
+                    continue
+                area = float(getattr(face, "Area", 0.0) or 0.0)
+                if containing_area is None or area < containing_area:
+                    containing_area = area
+
+            if containing_area is None:
+                continue
+            if best_area is None or containing_area < best_area:
+                best_target = obj
+                best_area = containing_area
+
+        return best_target
+
+    def _pick_plan_space_target_from_footprints(self, mouse_pos):
+        return self._pick_plan_target_from_footprint_faces(
+            mouse_pos,
+            self._is_plan_space_object,
+            self._get_space_footprint_faces,
+        )
+
+    def _pick_plan_region_target_from_footprints(self, mouse_pos):
+        return self._pick_plan_target_from_footprint_faces(
+            mouse_pos,
+            self._is_plan_region_object,
+            self._get_region_footprint_faces,
+        )
+
     def _has_direct_true_property(self, obj, prop_name):
         if not obj:
             return False
@@ -2789,10 +2972,17 @@ class PlanEditSession:
                 return (target_kind, target_obj)
         return (None, None)
 
-    def _set_gui_selection(self, selection):
+    @contextmanager
+    def _selection_changes_suppressed(self):
         previous_ignore = self._ignore_selection_changes
         self._ignore_selection_changes = True
         try:
+            yield
+        finally:
+            self._ignore_selection_changes = previous_ignore
+
+    def _set_gui_selection(self, selection):
+        with self._selection_changes_suppressed():
             try:
                 FreeCADGui.Selection.clearSelection()
                 seen = set()
@@ -2806,11 +2996,31 @@ class PlanEditSession:
                     if key in seen:
                         continue
                     seen.add(key)
-                    FreeCADGui.Selection.addSelection(obj)
+                    self._add_gui_selection_object(obj)
             except Exception:
                 pass
-        finally:
-            self._ignore_selection_changes = previous_ignore
+
+    def _set_gui_selection_object(self, obj):
+        if not obj:
+            return
+        self._set_gui_selection([obj])
+
+    def _add_gui_selection_object(self, obj):
+        if not obj:
+            return
+        doc_name = getattr(getattr(obj, "Document", None), "Name", None)
+        obj_name = getattr(obj, "Name", None)
+        try:
+            if doc_name and obj_name:
+                FreeCADGui.Selection.addSelection(doc_name, obj_name)
+            else:
+                FreeCADGui.Selection.addSelection(obj)
+        except Exception:
+            if doc_name and obj_name:
+                try:
+                    FreeCADGui.Selection.addSelection(obj)
+                except Exception:
+                    pass
 
     def _get_secondary_selected_plan_targets(self):
         primary_kind, primary_obj = self._get_selected_plan_target()
@@ -3065,6 +3275,7 @@ class PlanEditSession:
             kind = None
             obj = None
         self._clear_plan_relation_status()
+        self._sync_active_plan_target_object()
         if pending_restore:
             self._set_pending_selected_plan_target(kind, obj)
         else:
@@ -3097,13 +3308,7 @@ class PlanEditSession:
             return
         self._clear_wall_grips()
         self.selected_wall = None
-        try:
-            self._ignore_selection_changes = True
-            FreeCADGui.Selection.clearSelection()
-        except Exception:
-            pass
-        finally:
-            self._ignore_selection_changes = False
+        self._set_gui_selection([])
         self._refresh_task_panel_status()
 
     def suspend_selected_wall_state(self, wall=None, clear_gui_selection=True):
@@ -3121,13 +3326,7 @@ class PlanEditSession:
         self._clear_wall_grips()
         self.selected_wall = None
         if clear_gui_selection:
-            try:
-                self._ignore_selection_changes = True
-                FreeCADGui.Selection.clearSelection()
-            except Exception:
-                pass
-            finally:
-                self._ignore_selection_changes = False
+            self._set_gui_selection([])
         self._refresh_task_panel_status()
 
     def _register_edit_callbacks(self):
@@ -3258,6 +3457,7 @@ class PlanEditSession:
             self._sync_hovered_space_overlay()
             self._sync_hovered_region_overlay()
             self._sync_secondary_selected_overlays()
+            self._sync_active_plan_target_object()
             self._refresh_task_panel_status()
             return
         if self.current_tool == "Set Space Text":
@@ -3287,6 +3487,7 @@ class PlanEditSession:
             self._sync_hovered_space_overlay()
             self._sync_hovered_region_overlay()
             self._sync_secondary_selected_overlays()
+            self._sync_active_plan_target_object()
             self._refresh_task_panel_status()
             return
         if self.current_tool == "Join":
@@ -3316,6 +3517,7 @@ class PlanEditSession:
             self._sync_hovered_space_overlay()
             self._sync_hovered_region_overlay()
             self._sync_secondary_selected_overlays()
+            self._sync_active_plan_target_object()
             self._refresh_task_panel_status()
             return
         self.selected_wall = None
@@ -3406,6 +3608,7 @@ class PlanEditSession:
         self._sync_hovered_space_overlay()
         self._sync_hovered_region_overlay()
         self._sync_secondary_selected_overlays()
+        self._sync_active_plan_target_object()
         self._refresh_task_panel_status()
 
     def _refresh_selected_wall(self):
@@ -3490,16 +3693,7 @@ class PlanEditSession:
     def _restore_gui_selection(self, obj):
         if not obj:
             return
-        previous_ignore = self._ignore_selection_changes
-        self._ignore_selection_changes = True
-        try:
-            try:
-                FreeCADGui.Selection.clearSelection()
-                FreeCADGui.Selection.addSelection(obj)
-            except Exception:
-                pass
-        finally:
-            self._ignore_selection_changes = previous_ignore
+        self._set_gui_selection_object(obj)
 
     def _apply_plan_wall_join(self, source_wall, target_wall):
         if not self._is_plan_selectable_wall(source_wall):
@@ -3729,10 +3923,8 @@ class PlanEditSession:
             return
 
         try:
-            FreeCADGui.Selection.clearSelection()
-            for wall in walls:
-                FreeCADGui.Selection.addSelection(wall)
-        except (ReferenceError, RuntimeError):
+            self._set_gui_selection(walls)
+        except Exception:
             pass
 
         self._cancel_rect_wall_tool(refresh=False)
@@ -4223,11 +4415,7 @@ class PlanEditSession:
             self._cancel_pending_edit()
             return
         self._refresh_wall_hosted_opening_footprints(wall)
-        try:
-            FreeCADGui.Selection.clearSelection()
-            FreeCADGui.Selection.addSelection(wall)
-        except (ReferenceError, RuntimeError):
-            pass
+        self._set_gui_selection_object(wall)
         self.current_tool = "Select"
         self._cancel_pending_edit()
         self._set_selected_plan_target("wall", wall, pending_restore=True)
@@ -5202,7 +5390,8 @@ class PlanEditSession:
             pos = event.getPosition().getValue()
             mouse_pos = (pos[0], pos[1])
             if self._is_plan_additive_selection_active():
-                self._toggle_plan_target_selection_at_position(mouse_pos, event_callback)
+                if not self._toggle_plan_target_selection_at_position(mouse_pos, event_callback):
+                    self._set_event_handled(event_callback)
                 return
             node = self._get_edit_node(mouse_pos)
             if not node:
@@ -5216,14 +5405,8 @@ class PlanEditSession:
                     return
                 if self._activate_space_target(mouse_pos, event_callback):
                     return
-                if (
-                    self.selected_opening is not None
-                    or self.selected_symbol is not None
-                    or self.selected_region is not None
-                    or self.selected_space is not None
-                    or self.selected_wall is not None
-                ):
-                    self._clear_plan_selection_state()
+                self._clear_plan_selection_state()
+                self._set_event_handled(event_callback)
                 return
             node_kind = node[0]
             if node_kind == "opening_handle":
@@ -6833,9 +7016,15 @@ class PlanEditSession:
         if wall_candidate is not None:
             return ("wall", wall_candidate)
         if region_candidate is None:
+            region_candidate = self._pick_plan_region_target_from_polylines(mouse_pos)
+        if region_candidate is None:
+            region_candidate = self._pick_plan_region_target_from_footprints(mouse_pos)
+        if region_candidate is None:
             region_candidate = self._pick_plan_region_target_from_overlays(mouse_pos)
         if region_candidate is not None:
             return ("region", region_candidate)
+        if space_candidate is None:
+            space_candidate = self._pick_plan_space_target_from_footprints(mouse_pos)
         if space_candidate is None:
             space_candidate = self._pick_plan_space_target_from_overlays(mouse_pos)
         if space_candidate is not None:
@@ -6991,12 +7180,28 @@ class PlanEditSession:
         self._set_hovered_region(None)
         self._set_gui_selection(new_selection)
         self._refresh_selected_wall()
+        self._set_event_handled(event_callback)
+        return True
+
+    def _clear_hovered_plan_targets(self, kinds=None):
+        clearers = {
+            "wall": self._set_hovered_wall,
+            "opening": self._set_hovered_opening,
+            "symbol": self._set_hovered_symbol,
+            "space": self._set_hovered_space,
+            "region": self._set_hovered_region,
+        }
+        for kind in kinds or ("wall", "opening", "symbol", "space", "region"):
+            clear_hovered = clearers.get(kind)
+            if clear_hovered is not None:
+                clear_hovered(None)
+
+    def _set_event_handled(self, event_callback):
         if event_callback and hasattr(event_callback, "setHandled"):
             try:
                 event_callback.setHandled()
             except Exception:
                 pass
-        return True
 
     def _set_hovered_wall(self, wall):
         if wall == self.selected_wall:
@@ -7042,222 +7247,152 @@ class PlanEditSession:
         self.hovered_region = region
         self._sync_hovered_region_overlay()
 
-    def _select_opening_for_plan_edit(self, opening, queue_restore=False):
-        if not self._is_hosted_opening_object(opening):
+    def _queue_restore_selected_plan_target(self, kind, obj):
+        if not obj:
+            return
+        queue_restore = {
+            "opening": self._queue_restore_selected_opening,
+            "symbol": self._queue_restore_selected_symbol,
+            "region": self._queue_restore_selected_region,
+            "space": self._queue_restore_selected_space,
+        }.get(kind)
+        if queue_restore is not None:
+            queue_restore(obj)
+
+    def _select_plan_target_for_plan_edit(self, kind, obj, queue_restore=False):
+        validators = {
+            "opening": self._is_hosted_opening_object,
+            "symbol": self._is_plan_symbol_instance,
+            "region": self._is_plan_region_object,
+            "space": self._is_plan_space_object,
+            "wall": self._is_plan_selectable_wall,
+        }
+        validator = validators.get(kind)
+        if validator is None or not validator(obj):
             return False
         self.current_tool = "Select"
-        self._set_selected_plan_target("opening", opening, pending_restore=queue_restore)
-        self._clear_wall_grips()
+        self._set_selected_plan_target(kind, obj, pending_restore=queue_restore)
+        if kind == "wall":
+            self._sync_wall_grips()
+        else:
+            self._clear_wall_grips()
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
         self._sync_selected_symbol_overlay()
         self._sync_selected_symbol_handles()
         self._sync_selected_region_overlay()
         self._sync_selected_space_overlay()
-        self._sync_secondary_selected_overlays()
+        if kind in ("opening", "symbol", "region"):
+            self._sync_secondary_selected_overlays()
         self._refresh_task_panel_status()
         if queue_restore:
-            self._queue_restore_selected_opening(opening)
+            self._queue_restore_selected_plan_target(kind, obj)
         return True
+
+    def _select_opening_for_plan_edit(self, opening, queue_restore=False):
+        return self._select_plan_target_for_plan_edit(
+            "opening",
+            opening,
+            queue_restore=queue_restore,
+        )
 
     def _select_symbol_for_plan_edit(self, symbol, queue_restore=False):
-        if not self._is_plan_symbol_instance(symbol):
-            return False
-        self.current_tool = "Select"
-        self._set_selected_plan_target("symbol", symbol, pending_restore=queue_restore)
-        self._clear_wall_grips()
-        self._sync_selected_opening_overlay()
-        self._sync_selected_opening_handles()
-        self._sync_selected_symbol_overlay()
-        self._sync_selected_symbol_handles()
-        self._sync_selected_region_overlay()
-        self._sync_selected_space_overlay()
-        self._sync_secondary_selected_overlays()
-        self._refresh_task_panel_status()
-        if queue_restore:
-            self._queue_restore_selected_symbol(symbol)
-        return True
+        return self._select_plan_target_for_plan_edit(
+            "symbol",
+            symbol,
+            queue_restore=queue_restore,
+        )
 
     def _select_region_for_plan_edit(self, region, queue_restore=False):
-        if not self._is_plan_region_object(region):
-            return False
-        self.current_tool = "Select"
-        self.hovered_opening = None
-        self.hovered_symbol = None
-        self.hovered_wall = None
-        self.hovered_space = None
-        self._set_selected_plan_target("region", region, pending_restore=queue_restore)
-        self._clear_wall_grips()
-        self._sync_selected_opening_overlay()
-        self._sync_selected_opening_handles()
-        self._sync_selected_symbol_overlay()
-        self._sync_selected_symbol_handles()
-        self._sync_selected_region_overlay()
-        self._sync_selected_space_overlay()
-        self._sync_secondary_selected_overlays()
-        self._refresh_task_panel_status()
-        if queue_restore:
-            self._queue_restore_selected_region(region)
-        return True
+        return self._select_plan_target_for_plan_edit(
+            "region",
+            region,
+            queue_restore=queue_restore,
+        )
 
     def _select_space_for_plan_edit(self, space, queue_restore=False):
-        if not self._is_plan_space_object(space):
-            return False
-        self.current_tool = "Select"
-        self.hovered_opening = None
-        self.hovered_symbol = None
-        self.hovered_wall = None
-        self.hovered_region = None
-        self._set_selected_plan_target("space", space, pending_restore=queue_restore)
-        self._clear_wall_grips()
-        self._sync_selected_opening_overlay()
-        self._sync_selected_opening_handles()
-        self._sync_selected_symbol_overlay()
-        self._sync_selected_symbol_handles()
-        self._sync_selected_region_overlay()
-        self._sync_selected_space_overlay()
-        self._refresh_task_panel_status()
-        if queue_restore:
-            self._queue_restore_selected_space(space)
-        return True
+        return self._select_plan_target_for_plan_edit(
+            "space",
+            space,
+            queue_restore=queue_restore,
+        )
 
     def _select_wall_for_plan_edit(self, wall, queue_restore=False):
-        if not self._is_plan_selectable_wall(wall):
-            return False
+        return self._select_plan_target_for_plan_edit(
+            "wall",
+            wall,
+            queue_restore=queue_restore,
+        )
 
-        self.current_tool = "Select"
-        self.hovered_opening = None
-        self.hovered_symbol = None
-        self.hovered_space = None
-        self.hovered_region = None
-        self._set_selected_plan_target("wall", wall, pending_restore=queue_restore)
-        self._sync_selected_opening_overlay()
-        self._sync_selected_opening_handles()
-        self._sync_selected_symbol_overlay()
-        self._sync_selected_symbol_handles()
-        self._sync_selected_region_overlay()
-        self._sync_selected_space_overlay()
-        self._sync_wall_grips()
-        self._refresh_task_panel_status()
+    def _activate_plan_target(
+        self,
+        kind,
+        mouse_pos,
+        event_callback=None,
+        sync_gui_selection=False,
+        clear_hovered_kinds=None,
+    ):
+        target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
+        if target_kind != kind:
+            target_obj = None
+        select_target = {
+            "opening": self._select_opening_for_plan_edit,
+            "symbol": self._select_symbol_for_plan_edit,
+            "region": self._select_region_for_plan_edit,
+            "space": self._select_space_for_plan_edit,
+            "wall": self._select_wall_for_plan_edit,
+        }.get(kind)
+        if select_target is None or not select_target(target_obj, queue_restore=True):
+            return False
+        self._clear_hovered_plan_targets(clear_hovered_kinds)
+        if sync_gui_selection:
+            self._set_gui_selection_object(target_obj)
+        self._set_event_handled(event_callback)
         return True
 
     def _activate_opening_target(self, mouse_pos, event_callback=None):
-        target_kind, opening = self._get_plan_target_at_position(mouse_pos)
-        if target_kind != "opening":
-            opening = None
-        if not self._is_hosted_opening_object(opening):
-            return False
-        self._set_hovered_wall(None)
-        self._set_hovered_opening(None)
-        self._set_hovered_symbol(None)
-        self._set_hovered_space(None)
-        self._set_hovered_region(None)
-        self._select_opening_for_plan_edit(opening, queue_restore=True)
-        if event_callback and hasattr(event_callback, "setHandled"):
-            try:
-                event_callback.setHandled()
-            except Exception:
-                pass
-        return True
+        return self._activate_plan_target(
+            "opening",
+            mouse_pos,
+            event_callback=event_callback,
+            clear_hovered_kinds=("wall", "opening", "symbol", "space", "region"),
+        )
 
     def _activate_symbol_target(self, mouse_pos, event_callback=None):
-        target_kind, symbol = self._get_plan_target_at_position(mouse_pos)
-        if target_kind != "symbol":
-            symbol = None
-        if not self._select_symbol_for_plan_edit(symbol, queue_restore=True):
-            return False
-        self._set_hovered_wall(None)
-        self._set_hovered_opening(None)
-        self._set_hovered_space(None)
-        self._set_hovered_region(None)
-        if event_callback and hasattr(event_callback, "setHandled"):
-            try:
-                event_callback.setHandled()
-            except Exception:
-                pass
-        return True
+        return self._activate_plan_target(
+            "symbol",
+            mouse_pos,
+            event_callback=event_callback,
+            sync_gui_selection=True,
+            clear_hovered_kinds=("wall", "opening", "space", "region"),
+        )
 
     def _activate_region_target(self, mouse_pos, event_callback=None):
-        target_kind, region = self._get_plan_target_at_position(mouse_pos)
-        if target_kind != "region":
-            region = None
-        if not self._select_region_for_plan_edit(region, queue_restore=True):
-            return False
-        self._set_hovered_wall(None)
-        self._set_hovered_opening(None)
-        self._set_hovered_symbol(None)
-        self._set_hovered_space(None)
-        self._set_hovered_region(None)
-        previous_ignore = self._ignore_selection_changes
-        self._ignore_selection_changes = True
-        try:
-            try:
-                FreeCADGui.Selection.clearSelection()
-                FreeCADGui.Selection.addSelection(region)
-            except Exception:
-                pass
-        finally:
-            self._ignore_selection_changes = previous_ignore
-        if event_callback and hasattr(event_callback, "setHandled"):
-            try:
-                event_callback.setHandled()
-            except Exception:
-                pass
-        return True
+        return self._activate_plan_target(
+            "region",
+            mouse_pos,
+            event_callback=event_callback,
+            sync_gui_selection=True,
+            clear_hovered_kinds=("wall", "opening", "symbol", "space", "region"),
+        )
 
     def _activate_space_target(self, mouse_pos, event_callback=None):
-        target_kind, space = self._get_plan_target_at_position(mouse_pos)
-        if target_kind != "space":
-            space = None
-        if not self._select_space_for_plan_edit(space, queue_restore=True):
-            return False
-        self._set_hovered_wall(None)
-        self._set_hovered_opening(None)
-        self._set_hovered_symbol(None)
-        self._set_hovered_region(None)
-        previous_ignore = self._ignore_selection_changes
-        self._ignore_selection_changes = True
-        try:
-            try:
-                FreeCADGui.Selection.clearSelection()
-                FreeCADGui.Selection.addSelection(space)
-            except Exception:
-                pass
-        finally:
-            self._ignore_selection_changes = previous_ignore
-        if event_callback and hasattr(event_callback, "setHandled"):
-            try:
-                event_callback.setHandled()
-            except Exception:
-                pass
-        return True
+        return self._activate_plan_target(
+            "space",
+            mouse_pos,
+            event_callback=event_callback,
+            sync_gui_selection=True,
+            clear_hovered_kinds=("wall", "opening", "symbol", "region"),
+        )
 
     def _activate_wall_target(self, mouse_pos, event_callback=None):
-        target_kind, wall = self._get_plan_target_at_position(mouse_pos)
-        if target_kind != "wall":
-            wall = None
-        if not self._select_wall_for_plan_edit(wall, queue_restore=True):
-            return False
-        self._set_hovered_wall(None)
-        self._set_hovered_symbol(None)
-        self._set_hovered_space(None)
-        self._set_hovered_region(None)
-        previous_ignore = self._ignore_selection_changes
-        self._ignore_selection_changes = True
-        try:
-            try:
-                FreeCADGui.Selection.clearSelection()
-                FreeCADGui.Selection.addSelection(wall)
-            except Exception:
-                pass
-        finally:
-            self._ignore_selection_changes = previous_ignore
-        if event_callback and hasattr(event_callback, "setHandled"):
-            try:
-                event_callback.setHandled()
-            except Exception:
-                pass
-        return True
+        return self._activate_plan_target(
+            "wall",
+            mouse_pos,
+            event_callback=event_callback,
+            sync_gui_selection=True,
+            clear_hovered_kinds=("wall", "symbol", "space", "region"),
+        )
 
     def _get_plan_point_from_mouse_pos(self, mouse_pos):
         if not self.view or not mouse_pos:
@@ -7933,16 +8068,7 @@ class PlanEditSession:
             self._sync_selected_region_overlay()
             self._refresh_task_panel_status()
             return
-        previous_ignore = self._ignore_selection_changes
-        self._ignore_selection_changes = True
-        try:
-            try:
-                FreeCADGui.Selection.clearSelection()
-                FreeCADGui.Selection.addSelection(region)
-            except Exception:
-                pass
-        finally:
-            self._ignore_selection_changes = previous_ignore
+        self._set_gui_selection_object(region)
         self._sync_selected_region_overlay()
         self._refresh_task_panel_status()
 
@@ -7965,16 +8091,7 @@ class PlanEditSession:
             self._sync_selected_space_overlay()
             self._refresh_task_panel_status()
             return
-        previous_ignore = self._ignore_selection_changes
-        self._ignore_selection_changes = True
-        try:
-            try:
-                FreeCADGui.Selection.clearSelection()
-                FreeCADGui.Selection.addSelection(space)
-            except Exception:
-                pass
-        finally:
-            self._ignore_selection_changes = previous_ignore
+        self._set_gui_selection_object(space)
         self._sync_selected_space_overlay()
         self._refresh_task_panel_status()
 
@@ -9191,16 +9308,7 @@ class PlanEditSession:
             self._sync_selected_symbol_handles()
             self._refresh_task_panel_status()
             return
-        previous_ignore = self._ignore_selection_changes
-        self._ignore_selection_changes = True
-        try:
-            try:
-                FreeCADGui.Selection.clearSelection()
-                FreeCADGui.Selection.addSelection(symbol)
-            except Exception:
-                pass
-        finally:
-            self._ignore_selection_changes = previous_ignore
+        self._set_gui_selection_object(symbol)
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
         self._sync_selected_symbol_overlay()
@@ -9555,16 +9663,7 @@ class PlanEditSession:
             self._sync_selected_opening_handles()
             self._refresh_task_panel_status()
             return
-        previous_ignore = self._ignore_selection_changes
-        self._ignore_selection_changes = True
-        try:
-            try:
-                FreeCADGui.Selection.clearSelection()
-                FreeCADGui.Selection.addSelection(opening)
-            except Exception:
-                pass
-        finally:
-            self._ignore_selection_changes = previous_ignore
+        self._set_gui_selection_object(opening)
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
         self._refresh_task_panel_status()
@@ -9578,6 +9677,7 @@ class PlanEditSession:
         QtCore.QTimer.singleShot(0, lambda: self._restore_selected_opening(opening))
 
     def _clear_plan_selection_state(self):
+        self._set_gui_selection([])
         self._set_selected_plan_target()
         self._set_hovered_wall(None)
         self._set_hovered_opening(None)

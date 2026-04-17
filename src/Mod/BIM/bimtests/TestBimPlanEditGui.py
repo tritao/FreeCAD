@@ -1559,6 +1559,40 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNone(session._pending_selected_plan_target)
         self.assertEqual(len(session._grip_trackers), 0)
 
+    def test_plan_edit_empty_canvas_click_clears_lingering_storey_gui_selection(self):
+        """Select-mode empty clicks should clear the initial storey GUI selection."""
+
+        level = Arch.makeFloor(name="Level 0")
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [level.Name])
+
+        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=(None, None),
+        ):
+            callback = self._make_fake_left_mouse_press()
+            session._on_mouse_pressed(callback)
+
+        self.assertTrue(callback._handled)
+        self.assertEqual(FreeCADGui.Selection.getSelection(), [])
+        self.assertIsNone(session.selected_wall)
+        self.assertIsNone(session.selected_opening)
+        self.assertIsNone(session.selected_symbol)
+        self.assertIsNone(session.selected_space)
+        self.assertIsNone(session.selected_region)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_opening_move_uses_reduced_snap_profile(self):
         """Opening move should use a constrained snap profile while point-picking."""
 
@@ -3676,6 +3710,175 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNone(session.selected_space)
         self.assertGreater(len(session._region_overlay_trackers), 0)
         self.assertIn("Region: Kitchen Zone", session.task_panel.status.text())
+        self.assertIs(session.view.getActiveObject("Arch"), region)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_clicking_region_populates_selection_ex(self):
+        """Clicked region selection should create a real SelectionEx entry for property view."""
+
+        level = Arch.makeFloor(name="Level 0")
+        region = self._make_plan_region(level)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("region", region),
+        ):
+            activated = session._activate_region_target((100, 100))
+
+        self.assertTrue(activated)
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [region.Name])
+        selection_ex = FreeCADGui.Selection.getSelectionEx("*")
+        self.assertEqual(len(selection_ex), 1)
+        self.assertEqual(selection_ex[0].ObjectName, region.Name)
+        self.assertIs(session.view.getActiveObject("Arch"), region)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_region_face_pick_survives_storey_object_hits(self):
+        """Region face picks should still resolve when native picking only reports the storey."""
+
+        level = Arch.makeFloor(name="Level 0")
+        region = self._make_plan_region(level)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        original_view = session.view
+
+        class FakeView:
+            def getObjectsInfo(self, _mouse_pos):
+                return [{"Document": self.document_name, "Object": self.object_name}]
+
+            def __init__(self, document_name, object_name):
+                self.document_name = document_name
+                self.object_name = object_name
+
+        try:
+            session.view = FakeView(self.document.Name, level.Name)
+            with patch.object(
+                session,
+                "_get_plan_point_from_mouse_pos",
+                return_value=FreeCAD.Vector(1500, 1200, 0),
+            ):
+                self.assertEqual(
+                    ("region", region), session._get_plan_target_at_position((100, 100))
+                )
+        finally:
+            session.view = original_view
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_region_pick_beats_parent_space_hit_context(self):
+        """Direct region hits should not be remapped to the enclosing parent space."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "ParentSpaceBase")
+        base.Length = 6000
+        base.Width = 4000
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Living Room")
+        level.addObject(space)
+        region = self._make_plan_region(level, parent_space=space, label="Kitchen Area")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        original_view = session.view
+
+        class FakeView:
+            def __init__(self, document_name, object_name, parent_object):
+                self.document_name = document_name
+                self.object_name = object_name
+                self.parent_object = parent_object
+
+            def getObjectsInfo(self, _mouse_pos):
+                return [
+                    {
+                        "Document": self.document_name,
+                        "Object": self.object_name,
+                        "ParentObject": self.parent_object,
+                    }
+                ]
+
+        try:
+            session.view = FakeView(self.document.Name, region.Name, space)
+            self.assertEqual(("region", region), session._get_plan_target_at_position((100, 100)))
+        finally:
+            session.view = original_view
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_region_pick_uses_region_points_when_footprint_faces_are_unavailable(self):
+        """Saved plan regions should remain pickable from their polygon points."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "FallbackParentSpaceBase")
+        base.Length = 6000
+        base.Width = 4000
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Living Room")
+        level.addObject(space)
+        region = self._make_plan_region(level, parent_space=space, label="Kitchen Area")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        original_view = session.view
+
+        class FakeView:
+            def __init__(self, document_name, object_name, parent_object):
+                self.document_name = document_name
+                self.object_name = object_name
+                self.parent_object = parent_object
+
+            def getObjectsInfo(self, _mouse_pos):
+                return [
+                    {
+                        "Document": self.document_name,
+                        "Object": self.object_name,
+                        "ParentObject": self.parent_object,
+                    }
+                ]
+
+        try:
+            session.view = FakeView(self.document.Name, space.Name, level)
+            with patch.object(
+                session, "_get_region_footprint_faces", return_value=[]
+            ), patch.object(
+                session,
+                "_get_plan_point_from_mouse_pos",
+                return_value=FreeCAD.Vector(1500, 1200, 0),
+            ):
+                self.assertEqual(
+                    ("region", region), session._get_plan_target_at_position((100, 100))
+                )
+        finally:
+            session.view = original_view
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
