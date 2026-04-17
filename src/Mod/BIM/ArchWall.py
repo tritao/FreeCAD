@@ -2370,42 +2370,40 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         if not hasattr(self, "lcoords") or not hasattr(self, "lset"):
             return
 
-        self.lcoords.point.deleteValues(0)
-        self.lset.numVertices.deleteValues(0)
-
-        if not hasattr(self, "Object"):
-            return
-
-        faces = self.Object.Proxy.getFootprint(self.Object)
-        if not faces:
-            return
-
-        inverse_placement = None
-        placement = getattr(self.Object, "Placement", None)
-        if placement:
-            try:
-                inverse_placement = placement.inverse()
-            except Exception:
-                inverse_placement = None
-
         line_verts = []
         line_counts = []
-        for face in faces:
-            for wire in face.Wires:
-                for edge in wire.Edges:
-                    polyline = self._collect_edge_points(edge)
-                    if len(polyline) < 2:
-                        continue
-                    start_idx = len(line_verts)
-                    for point in polyline:
-                        if inverse_placement is not None:
-                            point = inverse_placement.multVec(point)
-                        line_verts.append([point.x, point.y, point.z])
-                    line_counts.append(len(line_verts) - start_idx)
 
-        if line_verts:
-            self.lcoords.point.setValues(line_verts)
-            self.lset.numVertices.setValues(0, len(line_counts), line_counts)
+        if hasattr(self, "Object"):
+            faces = self.Object.Proxy.getFootprint(self.Object)
+            if faces:
+                inverse_placement = None
+                placement = getattr(self.Object, "Placement", None)
+                if placement:
+                    try:
+                        inverse_placement = placement.inverse()
+                    except Exception:
+                        inverse_placement = None
+
+                for face in faces:
+                    for wire in face.Wires:
+                        for edge in wire.Edges:
+                            polyline = self._collect_edge_points(edge)
+                            if len(polyline) < 2:
+                                continue
+                            start_idx = len(line_verts)
+                            for point in polyline:
+                                if inverse_placement is not None:
+                                    point = inverse_placement.multVec(point)
+                                line_verts.append([point.x, point.y, point.z])
+                            line_counts.append(len(line_verts) - start_idx)
+
+        self._update_footprint_line_nodes(
+            self.lcoords,
+            self.lset,
+            line_verts,
+            line_counts,
+            context="ArchWall.updateFootprint",
+        )
 
     def _collect_edge_points(self, edge):
         points = edge.tessellate(1)

@@ -28,6 +28,7 @@
 import os
 from unittest.mock import patch
 import Arch
+import ArchPlanGeometry
 import ArchSpace
 import Draft
 import Part
@@ -79,6 +80,41 @@ class TestArchSpace(TestArchBase.TestArchBase):
         self.assertEqual(len(faces), 1)
         self.assertGreater(faces[0].Area, 0)
         self.assertAlmostEqual(space.Proxy.getArea(space), faces[0].Area)
+
+    def test_plan_geometry_face_wire_polylines_follow_edge_order_when_vertex_order_is_scrambled(
+        self,
+    ):
+        operation = "Checking plan geometry wire polyline ordering..."
+        self.printTestMessage(operation)
+
+        face_shape = Part.makeFace(
+            [
+                Part.makeLine(App.Vector(200, 200, 0), App.Vector(6200, 200, 0)),
+                Part.makeLine(App.Vector(200, 5630, 0), App.Vector(200, 200, 0)),
+                Part.makeLine(App.Vector(6200, 5630, 0), App.Vector(200, 5630, 0)),
+                Part.makeLine(App.Vector(6200, 200, 0), App.Vector(6200, 5630, 0)),
+            ],
+            "Part::FaceMakerBuildFace",
+        )
+
+        polylines = ArchPlanGeometry.get_face_wire_polylines(face_shape.Faces)
+
+        self.assertEqual(len(polylines), 1)
+        polyline = polylines[0]
+        self.assertGreaterEqual(len(polyline), 5)
+        self.assertLess(polyline[0].distanceToPoint(polyline[-1]), 1e-6)
+
+        for start, end in zip(polyline, polyline[1:]):
+            dx = abs(start.x - end.x)
+            dy = abs(start.y - end.y)
+            self.assertTrue(dx < 1e-6 or dy < 1e-6)
+
+        x_values = [round(point.x, 6) for point in polyline[:-1]]
+        y_values = [round(point.y, 6) for point in polyline[:-1]]
+        self.assertEqual(min(x_values), 200.0)
+        self.assertEqual(max(x_values), 6200.0)
+        self.assertEqual(min(y_values), 200.0)
+        self.assertEqual(max(y_values), 5630.0)
 
     def test_space_area_falls_back_to_footprint_when_projection_area_is_zero(self):
         """Space Area should fall back to the footprint when XY projection data is unavailable."""
@@ -416,6 +452,312 @@ class TestArchSpace(TestArchBase.TestArchBase):
         self.assertIn("closed room loop", space.Proxy.getLastBoundaryError())
         console_output = "".join(call.args[0] for call in print_error.call_args_list)
         self.assertIn("closed room loop", console_output)
+
+    def test_space_boundaries_use_shared_vertical_overlap_for_plan_cut(self):
+        """Mixed-height boundaries should slice at their common vertical overlap."""
+        operation = "Arch Space slices mixed-height boundaries at shared overlap"
+        self.printTestMessage(operation)
+
+        short_height = 2500.0
+        tall_height = 6000.0
+
+        def make_boundary_face(name, points):
+            face_object = App.ActiveDocument.addObject("Part::Feature", name)
+            face_object.Shape = Part.Face(Part.makePolygon(points + [points[0]]))
+            return face_object
+
+        boundaries = [
+            (
+                make_boundary_face(
+                    "TallSouth",
+                    [
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(4000.0, 0.0, 0.0),
+                        App.Vector(4000.0, 0.0, tall_height),
+                        App.Vector(0.0, 0.0, tall_height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "ShortEast",
+                    [
+                        App.Vector(4000.0, 0.0, 0.0),
+                        App.Vector(4000.0, 3000.0, 0.0),
+                        App.Vector(4000.0, 3000.0, short_height),
+                        App.Vector(4000.0, 0.0, short_height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "ShortNorth",
+                    [
+                        App.Vector(4000.0, 3000.0, 0.0),
+                        App.Vector(0.0, 3000.0, 0.0),
+                        App.Vector(0.0, 3000.0, short_height),
+                        App.Vector(4000.0, 3000.0, short_height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "ShortWest",
+                    [
+                        App.Vector(0.0, 3000.0, 0.0),
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(0.0, 0.0, short_height),
+                        App.Vector(0.0, 3000.0, short_height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+        ]
+
+        preflight = ArchSpace.analyzeBoundaryLinks(boundaries, label="Mixed Height Preview")
+        self.assertTrue(preflight["valid"])
+        self.assertEqual(preflight["code"], "valid")
+
+        space = Arch.makeSpace(boundaries)
+        App.ActiveDocument.recompute()
+
+        self.assertEqual(len(space.Shape.Solids), 1)
+        self.assertAlmostEqual(space.Area.getValueAs("m^2").Value, 12.0, places=3)
+
+    def test_space_boundary_failure_describes_disjoint_vertical_ranges(self):
+        """Disjoint-height boundaries should explain that there is no common cut height."""
+        operation = "Arch Space reports disjoint vertical ranges"
+        self.printTestMessage(operation)
+
+        low_height = 2500.0
+
+        def make_boundary_face(name, points):
+            face_object = App.ActiveDocument.addObject("Part::Feature", name)
+            face_object.Shape = Part.Face(Part.makePolygon(points + [points[0]]))
+            return face_object
+
+        boundaries = [
+            (
+                make_boundary_face(
+                    "HighSouth",
+                    [
+                        App.Vector(0.0, 0.0, 3000.0),
+                        App.Vector(4000.0, 0.0, 3000.0),
+                        App.Vector(4000.0, 0.0, 5500.0),
+                        App.Vector(0.0, 0.0, 5500.0),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "LowEast",
+                    [
+                        App.Vector(4000.0, 0.0, 0.0),
+                        App.Vector(4000.0, 3000.0, 0.0),
+                        App.Vector(4000.0, 3000.0, low_height),
+                        App.Vector(4000.0, 0.0, low_height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "LowNorth",
+                    [
+                        App.Vector(4000.0, 3000.0, 0.0),
+                        App.Vector(0.0, 3000.0, 0.0),
+                        App.Vector(0.0, 3000.0, low_height),
+                        App.Vector(4000.0, 3000.0, low_height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "LowWest",
+                    [
+                        App.Vector(0.0, 3000.0, 0.0),
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(0.0, 0.0, low_height),
+                        App.Vector(0.0, 3000.0, low_height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+        ]
+
+        preflight = ArchSpace.analyzeBoundaryLinks(boundaries, label="Disjoint Height Preview")
+        self.assertFalse(preflight["valid"])
+        self.assertEqual(preflight["code"], "no_intersection")
+        self.assertIn("overlap vertically", " ".join(preflight["details"]))
+
+    def test_space_boundaries_bridge_opening_notches_in_wall_faces(self):
+        """Room boundaries should stay closed when a wall face is split around openings."""
+        operation = "Arch Space bridges split wall-side faces"
+        self.printTestMessage(operation)
+
+        height = 2500.0
+        expected_area = 4000.0 * 3000.0
+
+        def make_boundary_face(name, points):
+            face_object = App.ActiveDocument.addObject("Part::Feature", name)
+            face_object.Shape = Part.Face(Part.makePolygon(points + [points[0]]))
+            return face_object
+
+        boundaries = [
+            (
+                make_boundary_face(
+                    "SouthWall",
+                    [
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(4000.0, 0.0, 0.0),
+                        App.Vector(4000.0, 0.0, height),
+                        App.Vector(0.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "WestWall",
+                    [
+                        App.Vector(0.0, 3000.0, 0.0),
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(0.0, 0.0, height),
+                        App.Vector(0.0, 3000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "EastWallWithDoor",
+                    [
+                        App.Vector(4000.0, 0.0, 0.0),
+                        App.Vector(4000.0, 1000.0, 0.0),
+                        App.Vector(4000.0, 1000.0, 2100.0),
+                        App.Vector(4000.0, 2000.0, 2100.0),
+                        App.Vector(4000.0, 2000.0, 0.0),
+                        App.Vector(4000.0, 3000.0, 0.0),
+                        App.Vector(4000.0, 3000.0, height),
+                        App.Vector(4000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "NorthWallWithDoor",
+                    [
+                        App.Vector(0.0, 3000.0, 0.0),
+                        App.Vector(1500.0, 3000.0, 0.0),
+                        App.Vector(1500.0, 3000.0, 2100.0),
+                        App.Vector(2500.0, 3000.0, 2100.0),
+                        App.Vector(2500.0, 3000.0, 0.0),
+                        App.Vector(4000.0, 3000.0, 0.0),
+                        App.Vector(4000.0, 3000.0, height),
+                        App.Vector(0.0, 3000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+        ]
+
+        preflight = ArchSpace.analyzeBoundaryLinks(boundaries, label="Opening Notch Preview")
+        self.assertTrue(preflight["valid"])
+        self.assertEqual(preflight["code"], "valid")
+
+        space = Arch.makeSpace(boundaries)
+        App.ActiveDocument.recompute()
+
+        footprint = space.Proxy.getFootprint(space)
+
+        self.assertEqual(len(space.Shape.Solids), 1)
+        self.assertEqual(len(footprint), 1)
+        self.assertAlmostEqual(space.Proxy.getArea(space), expected_area)
+        self.assertAlmostEqual(space.Area.getValueAs("m^2").Value, 12.0, places=3)
+
+    def test_space_boundaries_extract_room_from_t_junction_overhangs(self):
+        """Boundary analysis should recover a room loop from overhanging wall spans."""
+        operation = "Arch Space extracts room loop from T-junction spans"
+        self.printTestMessage(operation)
+
+        height = 2500.0
+        expected_area = (4000.0 - 1000.0) * 3000.0
+
+        def make_boundary_face(name, points):
+            face_object = App.ActiveDocument.addObject("Part::Feature", name)
+            face_object.Shape = Part.Face(Part.makePolygon(points + [points[0]]))
+            return face_object
+
+        boundaries = [
+            (
+                make_boundary_face(
+                    "BottomWall",
+                    [
+                        App.Vector(0.0, 0.0, 0.0),
+                        App.Vector(5000.0, 0.0, 0.0),
+                        App.Vector(5000.0, 0.0, height),
+                        App.Vector(0.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "RightWall",
+                    [
+                        App.Vector(4000.0, 0.0, 0.0),
+                        App.Vector(4000.0, 4000.0, 0.0),
+                        App.Vector(4000.0, 4000.0, height),
+                        App.Vector(4000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "LeftWall",
+                    [
+                        App.Vector(1000.0, 3000.0, 0.0),
+                        App.Vector(1000.0, 0.0, 0.0),
+                        App.Vector(1000.0, 0.0, height),
+                        App.Vector(1000.0, 3000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "TopWall",
+                    [
+                        App.Vector(500.0, 3000.0, 0.0),
+                        App.Vector(4000.0, 3000.0, 0.0),
+                        App.Vector(4000.0, 3000.0, height),
+                        App.Vector(500.0, 3000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+        ]
+
+        preflight = ArchSpace.analyzeBoundaryLinks(boundaries, label="T Junction Preview")
+        self.assertTrue(preflight["valid"])
+        self.assertEqual(preflight["code"], "valid")
+
+        space = Arch.makeSpace(boundaries)
+        App.ActiveDocument.recompute()
+
+        footprint = space.Proxy.getFootprint(space)
+
+        self.assertEqual(len(space.Shape.Solids), 1)
+        self.assertEqual(len(footprint), 1)
+        self.assertAlmostEqual(space.Proxy.getArea(space), expected_area)
+        self.assertAlmostEqual(space.Area.getValueAs("m^2").Value, 9.0, places=3)
 
     def test_space_base_supports_connected_l_shaped_volume(self):
         """Connected non-rectangular base solids should keep a polygonal footprint."""

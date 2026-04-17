@@ -34,11 +34,13 @@ __url__ = "https://www.freecad.org"
 #  Spaces define an open volume inside or outside a
 #  building, ie. a room.
 
+import math
 import re
 
 import FreeCAD
 import ArchComponent
 import ArchCommands
+import ArchPlanGeometry
 import Draft
 
 from draftutils import params
@@ -435,11 +437,184 @@ class _Space(ArchComponent.Component):
     def getLastBoundaryErrorDetails(self, obj=None):
         return list(getattr(self, "_last_boundary_error_details", []))
 
+    def _get_shape_horizontal_slice_edges(self, shape, cut_z):
+        return self._merge_shape_slice_edges(
+            shape, ArchComponent.get_horizontal_slice_edges(shape, cut_z)
+        )
+
     def _get_horizontal_slice_edges(self, shapes, cut_z):
         section_edges = []
         for shape in shapes or []:
-            section_edges.extend(ArchComponent.get_horizontal_slice_edges(shape, cut_z))
+            section_edges.extend(self._get_shape_horizontal_slice_edges(shape, cut_z))
         return section_edges
+
+    def _get_slice_edge_curve_type(self, edge):
+        curve = getattr(edge, "Curve", None)
+        return curve.__class__.__name__ if curve is not None else ""
+
+    def _get_slice_edge_direction(self, edge):
+        vertexes = list(getattr(edge, "Vertexes", []) or [])
+        if len(vertexes) < 2:
+            return None
+        direction = vertexes[-1].Point.sub(vertexes[0].Point)
+        if direction.Length <= 0.000001:
+            return None
+        direction.normalize()
+        return direction
+
+    def _get_linear_slice_edge_merge_data(self, edge):
+        curve = getattr(edge, "Curve", None)
+        if self._get_slice_edge_curve_type(edge) != "Line" or curve is None:
+            return None
+        direction = self._get_slice_edge_direction(edge)
+        if direction is None:
+            return None
+        point = getattr(curve, "Location", None)
+        if point is None:
+            vertexes = list(getattr(edge, "Vertexes", []) or [])
+            if len(vertexes) < 2:
+                return None
+            point = vertexes[0].Point
+        try:
+            return FreeCAD.Vector(point), FreeCAD.Vector(direction)
+        except Exception:
+            return None
+
+    def _get_circular_slice_edge_merge_data(self, edge):
+        curve = getattr(edge, "Curve", None)
+        if self._get_slice_edge_curve_type(edge) != "Circle" or curve is None:
+            return None
+        center = getattr(curve, "Center", None)
+        axis = getattr(curve, "Axis", None)
+        radius = getattr(curve, "Radius", None)
+        if center is None or axis is None or radius is None:
+            return None
+        axis = FreeCAD.Vector(axis)
+        if axis.Length <= 0.000001:
+            return None
+        axis.normalize()
+        return FreeCAD.Vector(center), axis, float(radius)
+
+    def _can_merge_slice_edges(self, edge, other, tolerance=0.001):
+        if self._get_slice_edge_curve_type(edge) != self._get_slice_edge_curve_type(other):
+            return False
+
+        linear_data = self._get_linear_slice_edge_merge_data(edge)
+        other_linear_data = self._get_linear_slice_edge_merge_data(other)
+        if linear_data and other_linear_data:
+            point, direction = linear_data
+            other_point, other_direction = other_linear_data
+            if abs(abs(direction.dot(other_direction)) - 1.0) > 0.0001:
+                return False
+            distance = direction.cross(other_point.sub(point)).Length
+            return distance <= tolerance
+
+        circular_data = self._get_circular_slice_edge_merge_data(edge)
+        other_circular_data = self._get_circular_slice_edge_merge_data(other)
+        if circular_data and other_circular_data:
+            center, axis, radius = circular_data
+            other_center, other_axis, other_radius = other_circular_data
+            if center.sub(other_center).Length > tolerance:
+                return False
+            if abs(abs(axis.dot(other_axis)) - 1.0) > 0.0001:
+                return False
+            return abs(radius - other_radius) <= tolerance
+
+        return False
+
+    def _merge_linear_slice_edges(self, edges, tolerance=0.001):
+        import Part
+
+        data = self._get_linear_slice_edge_merge_data(edges[0])
+        if data is None:
+            return list(edges)
+        origin, direction = data
+        distances = []
+        for edge in edges:
+            for vertex in getattr(edge, "Vertexes", []) or []:
+                distances.append(direction.dot(vertex.Point.sub(origin)))
+        if not distances:
+            return list(edges)
+        start_offset = FreeCAD.Vector(direction)
+        start_offset.multiply(min(distances))
+        end_offset = FreeCAD.Vector(direction)
+        end_offset.multiply(max(distances))
+        start = origin.add(start_offset)
+        end = origin.add(end_offset)
+        if start.distanceToPoint(end) <= tolerance:
+            return list(edges)
+        try:
+            return [Part.makeLine(start, end)]
+        except Exception:
+            return list(edges)
+
+    def _merge_circular_slice_edges(self, edges, tolerance=0.001):
+        import Part
+
+        data = self._get_circular_slice_edge_merge_data(edges[0])
+        if data is None:
+            return list(edges)
+        _center, _axis, _radius = data
+        circle = edges[0].Curve
+        vertexes = [
+            vertex.Point for edge in edges for vertex in getattr(edge, "Vertexes", []) or []
+        ]
+        if len(vertexes) < 2:
+            return list(edges)
+
+        try:
+            base_param = float(circle.parameter(vertexes[0]))
+        except Exception:
+            return list(edges)
+
+        params = []
+        for point in vertexes:
+            try:
+                param = float(circle.parameter(point))
+            except Exception:
+                return list(edges)
+            while param < base_param - math.pi:
+                param += math.tau
+            while param > base_param + math.pi:
+                param -= math.tau
+            params.append(param)
+        if not params:
+            return list(edges)
+
+        start_param = min(params)
+        end_param = max(params)
+        if abs(end_param - start_param) <= tolerance:
+            return list(edges)
+        try:
+            return [Part.ArcOfCircle(circle, start_param, end_param).toShape()]
+        except Exception:
+            return list(edges)
+
+    def _merge_slice_edge_group(self, edges, tolerance=0.001):
+        if len(edges) < 2:
+            return list(edges)
+        curve_type = self._get_slice_edge_curve_type(edges[0])
+        if curve_type == "Line":
+            return self._merge_linear_slice_edges(edges, tolerance=tolerance)
+        if curve_type == "Circle":
+            return self._merge_circular_slice_edges(edges, tolerance=tolerance)
+        return list(edges)
+
+    def _merge_shape_slice_edges(self, shape, edges, tolerance=0.001):
+        merged_edges = []
+        pending = list(edges or [])
+        while pending:
+            edge = pending.pop(0)
+            group = [edge]
+            remaining = []
+            for candidate in pending:
+                if self._can_merge_slice_edges(edge, candidate, tolerance=tolerance):
+                    group.append(candidate)
+                else:
+                    remaining.append(candidate)
+            merged_edges.extend(self._merge_slice_edge_group(group, tolerance=tolerance))
+            pending = remaining
+        return merged_edges
 
     def _get_boundary_faces_from_links(self, boundaries):
         faces = []
@@ -469,12 +644,88 @@ class _Space(ArchComponent.Component):
     def _get_boundary_faces(self, obj):
         return self._get_boundary_faces_from_links(getattr(obj, "Boundaries", []) or [])
 
+    def _get_horizontal_slice_faces_from_edges(self, section_edges):
+        import Part
+
+        if not section_edges or len(section_edges) < 4:
+            return []
+        plain_edges = []
+        for edge in section_edges:
+            try:
+                plain_edge = edge.copy()
+                if getattr(plain_edge, "ElementMapSize", 0):
+                    plain_edge.clearElementMap()
+            except Exception:
+                plain_edge = edge
+            plain_edges.append(plain_edge)
+        try:
+            section_shape = Part.makeFace(plain_edges, "Part::FaceMakerBuildFace")
+        except Exception:
+            return []
+        if not section_shape or section_shape.isNull():
+            return []
+        faces = []
+        for face in getattr(section_shape, "Faces", []) or []:
+            if getattr(face, "Area", 0.0) <= 0.000001:
+                continue
+            faces.append(face)
+        if len(faces) < 2:
+            return faces
+
+        top_level_faces = []
+        for face in faces:
+            sample = self._get_wire_face_sample_point(face)
+            if sample is None:
+                top_level_faces.append(face)
+                continue
+            parent_candidates = []
+            for other in faces:
+                if other is face or other.Area <= face.Area + 0.000001:
+                    continue
+                try:
+                    if other.isInside(sample, 0.001, True):
+                        parent_candidates.append(other)
+                except Exception:
+                    continue
+            if not parent_candidates:
+                top_level_faces.append(face)
+        return top_level_faces
+
+    def _get_wire_identity(self, wire, precision=6):
+        points = {
+            (
+                round(vertex.Point.x, precision),
+                round(vertex.Point.y, precision),
+                round(vertex.Point.z, precision),
+            )
+            for vertex in getattr(wire, "Vertexes", []) or []
+        }
+        if not points:
+            return ()
+        return tuple(sorted(points))
+
     def _get_horizontal_slice_wires(self, shapes, cut_z):
         import Part
 
         section_edges = self._get_horizontal_slice_edges(shapes, cut_z)
         if not section_edges:
             return []
+
+        build_faces = self._get_horizontal_slice_faces_from_edges(section_edges)
+        if build_faces:
+            wires = []
+            seen = set()
+            for face in build_faces:
+                for wire in getattr(face, "Wires", []) or []:
+                    if not wire.isClosed() or len(wire.Vertexes) < 3:
+                        continue
+                    identity = self._get_wire_identity(wire)
+                    if identity in seen:
+                        continue
+                    seen.add(identity)
+                    wires.append(wire)
+            if wires:
+                return wires
 
         try:
             edge_groups = Part.sortEdges(section_edges)
@@ -596,10 +847,27 @@ class _Space(ArchComponent.Component):
                 faces.append(face)
         return faces
 
+    def _get_boundary_vertical_overlap(self, boundary_faces):
+        z_min = None
+        z_max = None
+        for face in boundary_faces or []:
+            bound_box = getattr(face, "BoundBox", None)
+            if bound_box is None:
+                continue
+            if z_min is None:
+                z_min = float(bound_box.ZMin)
+                z_max = float(bound_box.ZMax)
+                continue
+            z_min = max(z_min, float(bound_box.ZMin))
+            z_max = min(z_max, float(bound_box.ZMax))
+        return z_min, z_max
+
     def _analyze_boundary_loops(self, boundary_faces):
         analysis = {
             "bounding_box": self._get_boundary_bounding_box(boundary_faces),
             "cut_z": None,
+            "shared_z_min": None,
+            "shared_z_max": None,
             "section_edges": [],
             "wires": [],
             "records": [],
@@ -611,7 +879,16 @@ class _Space(ArchComponent.Component):
         if not boundary_faces or not bb or bb.ZLength <= 0.000001:
             return analysis
 
-        cut_z = bb.Center.z
+        shared_z_min, shared_z_max = self._get_boundary_vertical_overlap(boundary_faces)
+        if (
+            shared_z_min is None
+            or shared_z_max is None
+            or (shared_z_max - shared_z_min) <= 0.000001
+        ):
+            analysis.update({"shared_z_min": shared_z_min, "shared_z_max": shared_z_max})
+            return analysis
+
+        cut_z = 0.5 * (shared_z_min + shared_z_max)
         section_edges = self._get_horizontal_slice_edges(boundary_faces, cut_z)
         wires = self._get_horizontal_slice_wires(boundary_faces, cut_z) if section_edges else []
         records = self._classify_wire_records(wires) if wires else []
@@ -623,6 +900,8 @@ class _Space(ArchComponent.Component):
         analysis.update(
             {
                 "cut_z": cut_z,
+                "shared_z_min": shared_z_min,
+                "shared_z_max": shared_z_max,
                 "section_edges": section_edges,
                 "wires": wires,
                 "records": records,
@@ -664,17 +943,31 @@ class _Space(ArchComponent.Component):
 
             section_edges = analysis["section_edges"]
             if not section_edges:
+                details = [
+                    translate(
+                        "Arch",
+                        "Select room-bounding faces that span the storey height.",
+                    )
+                ]
+                shared_z_min = analysis.get("shared_z_min")
+                shared_z_max = analysis.get("shared_z_max")
+                if (
+                    shared_z_min is not None
+                    and shared_z_max is not None
+                    and (shared_z_max - shared_z_min) <= 0.000001
+                ):
+                    details = [
+                        translate(
+                            "Arch",
+                            "Select boundaries that overlap vertically at the same storey height.",
+                        )
+                    ]
                 return (
                     translate(
                         "Arch",
                         "Arch Space '{label}' could not be created because the selected boundaries do not intersect the plan cut.",
                     ).format(label=label),
-                    [
-                        translate(
-                            "Arch",
-                            "Select room-bounding faces that span the storey height.",
-                        )
-                    ],
+                    details,
                 )
 
             wires = analysis["wires"]
@@ -1043,13 +1336,26 @@ class _Space(ArchComponent.Component):
 class _SpaceBoundaryAnalyzer:
     """Reusable boundary analysis helper for Plan Edit and tests."""
 
+    _get_shape_horizontal_slice_edges = _Space._get_shape_horizontal_slice_edges
     _get_horizontal_slice_edges = _Space._get_horizontal_slice_edges
+    _get_slice_edge_curve_type = _Space._get_slice_edge_curve_type
+    _get_slice_edge_direction = _Space._get_slice_edge_direction
+    _get_linear_slice_edge_merge_data = _Space._get_linear_slice_edge_merge_data
+    _get_circular_slice_edge_merge_data = _Space._get_circular_slice_edge_merge_data
+    _can_merge_slice_edges = _Space._can_merge_slice_edges
+    _merge_linear_slice_edges = _Space._merge_linear_slice_edges
+    _merge_circular_slice_edges = _Space._merge_circular_slice_edges
+    _merge_slice_edge_group = _Space._merge_slice_edge_group
+    _merge_shape_slice_edges = _Space._merge_shape_slice_edges
     _get_boundary_faces_from_links = _Space._get_boundary_faces_from_links
+    _get_horizontal_slice_faces_from_edges = _Space._get_horizontal_slice_faces_from_edges
+    _get_wire_identity = _Space._get_wire_identity
     _get_horizontal_slice_wires = _Space._get_horizontal_slice_wires
     _get_wire_face_sample_point = _Space._get_wire_face_sample_point
     _classify_wire_records = _Space._classify_wire_records
     _build_faces_from_wires = _Space._build_faces_from_wires
     _build_faces_from_records = _Space._build_faces_from_records
+    _get_boundary_vertical_overlap = _Space._get_boundary_vertical_overlap
     _analyze_boundary_loops = _Space._analyze_boundary_loops
     _describe_boundary_failure = _Space._describe_boundary_failure
     _get_boundary_analysis_code = _Space._get_boundary_analysis_code
@@ -1289,64 +1595,34 @@ class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
         if not hasattr(self, "lcoords") or not hasattr(self, "lset"):
             return
 
-        self.lcoords.point.deleteValues(0)
-        self.lset.numVertices.deleteValues(0)
-
-        if not hasattr(self, "Object"):
-            return
-
-        faces = self.Object.Proxy.getFootprint(self.Object)
-        if not faces:
-            return
-
-        inverse_placement = None
-        placement = getattr(self.Object, "Placement", None)
-        if placement:
-            try:
-                inverse_placement = placement.inverse()
-            except Exception:
-                inverse_placement = None
-
         line_verts = []
         line_counts = []
-        for face in faces:
-            for wire in face.Wires:
-                wire_points = []
-                for edge in wire.Edges:
-                    polyline = self._collect_edge_points(edge)
-                    if len(polyline) < 2:
-                        continue
-                    if wire_points and polyline[0].distanceToPoint(wire_points[-1]) < 0.001:
-                        polyline = polyline[1:]
-                    wire_points.extend(polyline)
-                if len(wire_points) < 2:
-                    continue
-                start_idx = len(line_verts)
-                for point in wire_points:
-                    if inverse_placement is not None:
-                        point = inverse_placement.multVec(point)
-                    line_verts.append([point.x, point.y, point.z])
-                line_counts.append(len(line_verts) - start_idx)
+        if hasattr(self, "Object"):
+            faces = self.Object.Proxy.getFootprint(self.Object)
+            if faces:
+                inverse_placement = None
+                placement = getattr(self.Object, "Placement", None)
+                if placement:
+                    try:
+                        inverse_placement = placement.inverse()
+                    except Exception:
+                        inverse_placement = None
 
-        if line_verts:
-            self.lcoords.point.setValues(line_verts)
-            self.lset.numVertices.setValues(0, len(line_counts), line_counts)
+                for wire_points in ArchPlanGeometry.get_face_wire_polylines(faces):
+                    start_idx = len(line_verts)
+                    for point in wire_points:
+                        if inverse_placement is not None:
+                            point = inverse_placement.multVec(point)
+                        line_verts.append([point.x, point.y, point.z])
+                    line_counts.append(len(line_verts) - start_idx)
 
-    def _collect_edge_points(self, edge):
-        points = edge.tessellate(1)
-        if points and all(isinstance(point, FreeCAD.Vector) for point in points):
-            return points
-
-        try:
-            points = edge.discretize(Deflection=1.0)
-        except Exception:
-            points = []
-        if points:
-            return [
-                point if isinstance(point, FreeCAD.Vector) else FreeCAD.Vector(point)
-                for point in points
-            ]
-        return []
+        self._update_footprint_line_nodes(
+            self.lcoords,
+            self.lset,
+            line_verts,
+            line_counts,
+            context="ArchSpace.updateFootprint",
+        )
 
     def updateData(self, obj, prop):
         ArchComponent.ViewProviderComponent.updateData(self, obj, prop)

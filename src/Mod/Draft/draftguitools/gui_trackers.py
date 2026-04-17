@@ -38,6 +38,7 @@ that is, previews, of the real objects that will be created on the 3D view.
 ## \addtogroup draftguitools
 # @{
 import math
+import os
 import re
 import pivy.coin as coin
 
@@ -58,6 +59,21 @@ from draftutils.todo import ToDo
 __title__ = "FreeCAD Draft Trackers"
 __author__ = "Yorik van Havre"
 __url__ = "https://www.freecad.org"
+
+
+def _bim_line_debug_enabled():
+    value = os.environ.get("FREECAD_BIM_PLAN_DEBUG_LINES", "")
+    return str(value).strip().lower() not in ("", "0", "false", "no", "off")
+
+
+def _format_debug_points(values):
+    formatted = []
+    for value in values:
+        try:
+            formatted.append("({:.3f}, {:.3f}, {:.3f})".format(*value))
+        except Exception:
+            formatted.append(str(value))
+    return "[{}]".format(", ".join(formatted))
 
 
 class Tracker:
@@ -244,23 +260,64 @@ class lineTracker(Tracker):
     def __init__(self, dotted=False, scolor=None, swidth=None, ontop=False):
         line = coin.SoLineSet()
         line.numVertices.setValue(2)
+        self.line = line
         self.coords = coin.SoCoordinate3()  # this is the coordinate
         self.coords.point.setValues(0, 2, [[0, 0, 0], [1, 0, 0]])
+        self._debug_label = "lineTracker"
         super().__init__(dotted, scolor, swidth, [self.coords, line], ontop, name="lineTracker")
+        self._debug_line_state("created")
+
+    def setDebugLabel(self, label):
+        self._debug_label = str(label) if label else "lineTracker"
+        if self.switch is not None:
+            try:
+                self.switch.setName(self._debug_label)
+            except Exception:
+                pass
+
+    def _debug_line_state(self, reason):
+        try:
+            counts = [int(self.line.numVertices[i]) for i in range(self.line.numVertices.getNum())]
+        except Exception:
+            counts = []
+        try:
+            points = [
+                self.coords.point[i].getValue() for i in range(min(self.coords.point.getNum(), 2))
+            ]
+        except Exception:
+            points = []
+        coord_count = self.coords.point.getNum()
+        mismatch = bool(counts) and sum(counts) > coord_count
+        if not mismatch and not _bim_line_debug_enabled():
+            return
+        message = "{} {}: coords={} counts={} visible={} points={}\n".format(
+            self._debug_label,
+            reason,
+            coord_count,
+            counts,
+            self.Visible,
+            _format_debug_points(points),
+        )
+        if mismatch:
+            FreeCAD.Console.PrintWarning("[BIM line debug] " + message)
+        else:
+            FreeCAD.Console.PrintLog("[BIM line debug] " + message)
 
     def p1(self, point=None):
         """Set or get the first point of the line."""
-        if point:
+        if point is not None:
             if self.coords.point.getValues()[0].getValue() != tuple(point):
                 self.coords.point.set1Value(0, point.x, point.y, point.z)
+                self._debug_line_state("p1")
         else:
             return Vector(self.coords.point.getValues()[0].getValue())
 
     def p2(self, point=None):
         """Set or get the second point of the line."""
-        if point:
+        if point is not None:
             if self.coords.point.getValues()[-1].getValue() != tuple(point):
                 self.coords.point.set1Value(1, point.x, point.y, point.z)
+                self._debug_line_state("p2")
         else:
             return Vector(self.coords.point.getValues()[-1].getValue())
 
@@ -269,6 +326,18 @@ class lineTracker(Tracker):
         p1 = Vector(self.coords.point.getValues()[0].getValue())
         p2 = Vector(self.coords.point.getValues()[-1].getValue())
         return (p2.sub(p1)).Length
+
+    def on(self):
+        super().on()
+        self._debug_line_state("on")
+
+    def off(self):
+        super().off()
+        self._debug_line_state("off")
+
+    def finalize(self):
+        self._debug_line_state("finalize")
+        super().finalize()
 
 
 class polygonTracker(Tracker):

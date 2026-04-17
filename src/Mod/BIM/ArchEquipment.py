@@ -612,12 +612,7 @@ class _ViewProviderEquipment(ArchComponent.ViewProviderComponent):
         if not hasattr(self, "lcoords") or not hasattr(self, "lset"):
             return
 
-        self.lcoords.point.deleteValues(0)
-        self.lset.numVertices.deleteValues(0)
-
         polylines = self._collect_local_footprint_polylines()
-        if not polylines:
-            return
 
         verts = []
         counts = []
@@ -627,9 +622,13 @@ class _ViewProviderEquipment(ArchComponent.ViewProviderComponent):
             verts.extend(polyline)
             counts.append(len(polyline))
 
-        if verts:
-            self.lcoords.point.setValues(verts)
-            self.lset.numVertices.setValues(0, len(counts), counts)
+        self._update_footprint_line_nodes(
+            self.lcoords,
+            self.lset,
+            verts,
+            counts,
+            context="ArchEquipment.updateFootprint",
+        )
 
     def setEdit(self, vobj, mode):
         if mode != 0:
