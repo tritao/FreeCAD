@@ -471,6 +471,19 @@ class PlanEditSession:
         self._set_selected_plan_target_state()
         return True
 
+    def _get_plan_target_object_from_state(self, state_kind, state_obj, kind):
+        if state_kind == kind:
+            return state_obj
+        return None
+
+    def _selected_plan_target_changed(self, previous_kind, previous_obj, kind=None):
+        current_kind, current_obj = self._get_selected_plan_target()
+        if kind is None:
+            return previous_kind != current_kind or previous_obj != current_obj
+        previous_target = self._get_plan_target_object_from_state(previous_kind, previous_obj, kind)
+        current_target = self._get_plan_target_object_from_state(current_kind, current_obj, kind)
+        return previous_target != current_target
+
     @property
     def selected_wall(self):
         return self._get_selected_target_for_kind("wall")
@@ -3545,40 +3558,50 @@ class PlanEditSession:
         self._mouse_pressed_cb = None
         self._render_manager = None
 
+    def _sync_primary_selected_plan_target_visuals(self, previous_kind=None, previous_obj=None):
+        self._sync_selected_wall_opening_context_overlay()
+        self._sync_hovered_wall_overlay()
+        self._sync_hovered_wall_opening_context_overlay()
+        if self.current_tool != "Select" or self._selected_plan_target_changed(
+            previous_kind, previous_obj, "opening"
+        ):
+            self._sync_selected_opening_overlay()
+            self._sync_selected_opening_handles()
+        if self.current_tool != "Select" or self._selected_plan_target_changed(
+            previous_kind, previous_obj, "symbol"
+        ):
+            self._sync_selected_symbol_overlay()
+            self._sync_selected_symbol_handles()
+        if self.current_tool != "Select" or self._selected_plan_target_changed(
+            previous_kind, previous_obj, "region"
+        ):
+            self._sync_selected_region_overlay()
+        if self.current_tool != "Select" or self._selected_plan_target_changed(
+            previous_kind, previous_obj, "space"
+        ):
+            self._sync_selected_space_overlay()
+        self._sync_hovered_symbol_overlay()
+        self._sync_hovered_opening_overlay()
+        self._sync_hovered_space_overlay()
+        self._sync_hovered_region_overlay()
+        self._sync_secondary_selected_overlays()
+        self._sync_active_plan_target_object()
+        self._refresh_task_panel_status()
+
     def _refresh_selected_plan_target(self):
         if self._tearing_down:
             return
         if self._ignore_selection_changes:
             return
 
-        previous_wall = self.selected_wall
-        previous_opening = self.selected_opening
-        previous_symbol = self.selected_symbol
-        previous_space = self.selected_space
-        previous_region = self.selected_region
+        previous_kind, previous_obj = self._get_selected_plan_target()
+        previous_wall = self._get_plan_target_object_from_state(previous_kind, previous_obj, "wall")
         if self._is_wall_edit_modal_active():
             self._set_selected_plan_target_state("wall", self._edit_wall)
             self._set_secondary_selected_plan_targets([])
-            if previous_wall != self.selected_wall:
+            if self._selected_plan_target_changed(previous_kind, previous_obj, "wall"):
                 self._sync_wall_grips()
-            self._sync_hovered_wall_overlay()
-            if previous_opening is not None or self.current_tool != "Select":
-                self._sync_selected_opening_overlay()
-                self._sync_selected_opening_handles()
-            if previous_symbol is not None or self.current_tool != "Select":
-                self._sync_selected_symbol_overlay()
-                self._sync_selected_symbol_handles()
-            if previous_space is not None or self.current_tool != "Select":
-                self._sync_selected_space_overlay()
-            if previous_region is not None or self.current_tool != "Select":
-                self._sync_selected_region_overlay()
-            self._sync_hovered_symbol_overlay()
-            self._sync_hovered_opening_overlay()
-            self._sync_hovered_space_overlay()
-            self._sync_hovered_region_overlay()
-            self._sync_secondary_selected_overlays()
-            self._sync_active_plan_target_object()
-            self._refresh_task_panel_status()
+            self._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
             return
         if self.current_tool == "Set Space Text":
             self._set_selected_plan_target_state(
@@ -3587,55 +3610,17 @@ class PlanEditSession:
             )
             self._set_secondary_selected_plan_targets([])
             self._clear_wall_grips()
-            self._sync_selected_wall_opening_context_overlay()
-            self._sync_hovered_wall_overlay()
-            self._sync_hovered_wall_opening_context_overlay()
-            if previous_opening is not None:
-                self._sync_selected_opening_overlay()
-                self._sync_selected_opening_handles()
-            if previous_symbol is not None:
-                self._sync_selected_symbol_overlay()
-                self._sync_selected_symbol_handles()
-            if previous_space != self.selected_space or self.current_tool != "Select":
-                self._sync_selected_space_overlay()
-            if previous_region is not None:
-                self._sync_selected_region_overlay()
-            self._sync_hovered_symbol_overlay()
-            self._sync_hovered_opening_overlay()
-            self._sync_hovered_space_overlay()
-            self._sync_hovered_region_overlay()
-            self._sync_secondary_selected_overlays()
-            self._sync_active_plan_target_object()
-            self._refresh_task_panel_status()
+            self._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
             return
         if self.current_tool == "Join":
-            wall = self.selected_wall
+            wall = previous_wall
             if not self._is_plan_selectable_wall(wall):
                 self.current_tool = "Select"
                 wall = None
             self._set_selected_plan_target_state("wall", wall)
             self._set_secondary_selected_plan_targets([])
             self._clear_wall_grips()
-            self._sync_selected_wall_opening_context_overlay()
-            self._sync_hovered_wall_overlay()
-            self._sync_hovered_wall_opening_context_overlay()
-            if previous_opening is not None:
-                self._sync_selected_opening_overlay()
-                self._sync_selected_opening_handles()
-            if previous_symbol is not None:
-                self._sync_selected_symbol_overlay()
-                self._sync_selected_symbol_handles()
-            if previous_space is not None:
-                self._sync_selected_space_overlay()
-            if previous_region is not None:
-                self._sync_selected_region_overlay()
-            self._sync_hovered_symbol_overlay()
-            self._sync_hovered_opening_overlay()
-            self._sync_hovered_space_overlay()
-            self._sync_hovered_region_overlay()
-            self._sync_secondary_selected_overlays()
-            self._sync_active_plan_target_object()
-            self._refresh_task_panel_status()
+            self._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
             return
         self._set_selected_plan_target_state()
         try:
@@ -3691,28 +3676,9 @@ class PlanEditSession:
         else:
             self._set_secondary_selected_plan_targets([])
             self._set_pending_selected_plan_target()
-        if previous_wall != self.selected_wall:
+        if self._selected_plan_target_changed(previous_kind, previous_obj, "wall"):
             self._sync_wall_grips()
-        self._sync_selected_wall_opening_context_overlay()
-        self._sync_hovered_wall_overlay()
-        self._sync_hovered_wall_opening_context_overlay()
-        if previous_opening != self.selected_opening or self.current_tool != "Select":
-            self._sync_selected_opening_overlay()
-            self._sync_selected_opening_handles()
-        if previous_symbol != self.selected_symbol or self.current_tool != "Select":
-            self._sync_selected_symbol_overlay()
-            self._sync_selected_symbol_handles()
-        if previous_region != self.selected_region or self.current_tool != "Select":
-            self._sync_selected_region_overlay()
-        if previous_space != self.selected_space or self.current_tool != "Select":
-            self._sync_selected_space_overlay()
-        self._sync_hovered_symbol_overlay()
-        self._sync_hovered_opening_overlay()
-        self._sync_hovered_space_overlay()
-        self._sync_hovered_region_overlay()
-        self._sync_secondary_selected_overlays()
-        self._sync_active_plan_target_object()
-        self._refresh_task_panel_status()
+        self._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
 
     def _refresh_primary_selected_plan_target(self):
         self._refresh_selected_plan_target()
