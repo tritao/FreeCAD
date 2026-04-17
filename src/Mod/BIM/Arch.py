@@ -1373,6 +1373,32 @@ def makeSpace(objects=None, baseobj=None, name=None):
     return space
 
 
+def makeSpaceSeparator(start=None, end=None, height=None, name=None):
+    """Create a virtual boundary plane that can split Arch spaces."""
+
+    separator = _initializeArchObject(
+        "Part::FeaturePython",
+        baseClassName="_SpaceSeparator",
+        internalName="SpaceSeparator",
+        defaultLabel=name if name else translate("Arch", "Space Separator"),
+        moduleName="ArchSpaceSeparator",
+    )
+    if not separator:
+        return None
+
+    if start is not None:
+        separator.Placement.Base = FreeCAD.Vector(start)
+        separator.Start = FreeCAD.Vector()
+    if end is not None:
+        if start is not None:
+            separator.End = FreeCAD.Vector(end).sub(FreeCAD.Vector(start))
+        else:
+            separator.End = FreeCAD.Vector(end)
+    if height is not None:
+        separator.Height = height
+    return separator
+
+
 def addSpaceBoundaries(space, subobjects):
     """Adds the given subobjects as defining boundaries of the given space.
 
