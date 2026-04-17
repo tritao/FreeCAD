@@ -1905,6 +1905,7 @@ class _SpaceBoundaryAnalyzer:
     _get_boundary_faces_from_links = _Space._get_boundary_faces_from_links
     _copy_without_element_map = _Space._copy_without_element_map
     _copy_clean_slice_edge = _Space._copy_clean_slice_edge
+    _make_transient_face_from_wires = _Space._make_transient_face_from_wires
     _get_horizontal_slice_faces_from_edges = _Space._get_horizontal_slice_faces_from_edges
     _get_wire_identity = _Space._get_wire_identity
     _get_horizontal_slice_wires = _Space._get_horizontal_slice_wires
