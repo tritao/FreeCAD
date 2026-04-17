@@ -30,6 +30,7 @@ import FreeCAD
 import FreeCADGui
 import math
 import Part
+import Sketcher
 from bimcommands import BimPlanSession
 from bimtests.ArchWallGuiTestUtils import (
     ArchWallGuiTestCase,
@@ -176,6 +177,39 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.document.recompute()
         self.pump_gui_events()
         return level, walls
+
+    def _make_windowed_plan_wall(self, length=3000, width=200, height=2500):
+        level = Arch.makeFloor(name="Level 0")
+        wall_base = Draft.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(length, 0, 0))
+        wall = Arch.makeWall(wall_base, width=width, height=height, name="WindowedWall")
+        level.addObject(wall)
+
+        sketch = self.document.addObject("Sketcher::SketchObject", "WindowSketch")
+        sketch.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+        sketch.addGeometry(
+            Part.LineSegment(FreeCAD.Vector(900, 700, 0), FreeCAD.Vector(1700, 700, 0))
+        )
+        sketch.addGeometry(
+            Part.LineSegment(FreeCAD.Vector(1700, 700, 0), FreeCAD.Vector(1700, 1900, 0))
+        )
+        sketch.addGeometry(
+            Part.LineSegment(FreeCAD.Vector(1700, 1900, 0), FreeCAD.Vector(900, 1900, 0))
+        )
+        sketch.addGeometry(
+            Part.LineSegment(FreeCAD.Vector(900, 1900, 0), FreeCAD.Vector(900, 700, 0))
+        )
+        sketch.addConstraint(Sketcher.Constraint("Coincident", 0, 2, 1, 1))
+        sketch.addConstraint(Sketcher.Constraint("Coincident", 1, 2, 2, 1))
+        sketch.addConstraint(Sketcher.Constraint("Coincident", 2, 2, 3, 1))
+        sketch.addConstraint(Sketcher.Constraint("Coincident", 3, 2, 0, 1))
+        self.document.recompute()
+
+        window = Arch.makeWindow(sketch)
+        Arch.addComponents(window, wall)
+
+        self.document.recompute()
+        self.pump_gui_events()
+        return level, wall, window
 
     def test_plan_edit_embedded_wall_uses_sane_top_plane(self):
         """Embedded wall creation in Plan Edit should start from a clean top plane."""
@@ -3557,6 +3591,77 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_space_overlay_follows_wire_edges_when_vertex_order_is_scrambled(self):
+        """Space overlays should follow wire edge order, not OCC vertex storage order."""
+
+        class _FakeSpaceProxy:
+            Type = "Space"
+
+            def __init__(self, faces):
+                self._faces = list(faces or [])
+
+            def getFootprint(self, _obj):
+                return list(self._faces)
+
+        class _FakeSpace:
+            IfcType = "Space"
+            InList = []
+            InListRecursive = []
+            Name = "OverlaySpace"
+            TypeId = "App::FeaturePython"
+
+        level = Arch.makeFloor(name="Level 0")
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        face_shape = Part.makeFace(
+            [
+                Part.makeLine(FreeCAD.Vector(200, 200, 0), FreeCAD.Vector(6200, 200, 0)),
+                Part.makeLine(FreeCAD.Vector(200, 5630, 0), FreeCAD.Vector(200, 200, 0)),
+                Part.makeLine(FreeCAD.Vector(6200, 5630, 0), FreeCAD.Vector(200, 5630, 0)),
+                Part.makeLine(FreeCAD.Vector(6200, 200, 0), FreeCAD.Vector(6200, 5630, 0)),
+            ],
+            "Part::FaceMakerBuildFace",
+        )
+        self.assertEqual(len(face_shape.Faces), 1)
+
+        space = _FakeSpace()
+        space.Proxy = _FakeSpaceProxy(face_shape.Faces)
+
+        polylines = session._get_space_overlay_polylines(space)
+        self.assertEqual(len(polylines), 1)
+
+        polyline = polylines[0]
+        self.assertGreaterEqual(len(polyline), 5)
+        self.assertLess(polyline[0].distanceToPoint(polyline[-1]), 1e-6)
+        for start, end in zip(polyline, polyline[1:]):
+            dx = abs(start.x - end.x)
+            dy = abs(start.y - end.y)
+            self.assertTrue(dx < 1e-6 or dy < 1e-6)
+
+        x_values = [round(point.x, 6) for point in polyline[:-1]]
+        y_values = [round(point.y, 6) for point in polyline[:-1]]
+        self.assertEqual(min(x_values), 200.0)
+        self.assertEqual(max(x_values), 6200.0)
+        self.assertEqual(min(y_values), 200.0)
+        self.assertEqual(max(y_values), 5630.0)
+        for point in polyline[:-1]:
+            self.assertTrue(
+                abs(point.x - 200.0) < 1e-6
+                or abs(point.x - 6200.0) < 1e-6
+                or abs(point.y - 200.0) < 1e-6
+                or abs(point.y - 5630.0) < 1e-6
+            )
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_space_button_creates_space_from_selected_walls(self):
         """The Space action should create and select a real Arch Space from selected walls."""
 
@@ -3593,6 +3698,61 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(session.selected_space, space)
         self.assertEqual(len(session._get_space_boundary_entries(space)), 4)
         self.assertGreater(space.Area.getValueAs("m^2").Value, 0)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_space_picker_prefers_primary_wall_face_over_opening_reveals(self):
+        """Auto-picked wall boundaries should prefer the room-side wall face, not opening reveals."""
+
+        level, wall, _window = self._make_windowed_plan_wall()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        face_name = session._get_wall_space_boundary_face_name(
+            wall, FreeCAD.Vector(1500, 1500, 1000)
+        )
+        self.assertIsNotNone(face_name)
+
+        face = wall.Shape.Faces[int(face_name[4:]) - 1]
+        normal = FreeCAD.Vector(face.normalAt(0, 0))
+        normal.normalize()
+
+        self.assertGreater(face.Area, 5_000_000.0)
+        self.assertGreater(abs(normal.y), 0.8)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_space_picker_skips_walls_outside_reference_height(self):
+        """Auto-picked space boundaries should ignore walls that do not span the room height."""
+
+        level, walls = self._make_plan_room_walls()
+        walls[0].Placement.Base.z = 3000
+        self.document.recompute()
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        for wall in walls:
+            FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        boundaries = session._get_selected_space_boundary_links()
+        self.assertEqual(len(boundaries), 3)
+        self.assertNotIn(walls[0].Name, [obj.Name for obj, _subnames in boundaries])
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()

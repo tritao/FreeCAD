@@ -26,6 +26,7 @@
 
 import math
 
+import ArchPlanGeometry
 import FreeCAD
 import FreeCADGui
 from draftguitools import gui_base
@@ -2079,15 +2080,6 @@ class PlanEditSession:
             return None
         if reference_point is None:
             return None
-        proxy = getattr(wall, "Proxy", None)
-        if proxy is None or not hasattr(proxy, "calc_endpoints"):
-            return None
-        try:
-            endpoints = proxy.calc_endpoints(wall)
-        except Exception:
-            endpoints = None
-        if not endpoints or len(endpoints) != 2:
-            return None
         shape = getattr(wall, "Shape", None)
         if shape is None or not getattr(shape, "Faces", None):
             return None
@@ -2095,10 +2087,12 @@ class PlanEditSession:
         best_face_name = None
         best_sort_key = None
         reference_point = FreeCAD.Vector(reference_point.x, reference_point.y, reference_point.z)
+        reference_z = float(reference_point.z)
         for index, face in enumerate(shape.Faces, start=1):
             try:
                 normal_raw = face.normalAt(0, 0)
                 center_raw = face.CenterOfMass
+                bound_box = face.BoundBox
                 normal = FreeCAD.Vector(normal_raw.x, normal_raw.y, normal_raw.z)
                 center = FreeCAD.Vector(center_raw.x, center_raw.y, center_raw.z)
             except Exception:
@@ -2108,11 +2102,19 @@ class PlanEditSession:
             normal.normalize()
             if abs(normal.z) > 0.2:
                 continue
-            sort_key = (float(normal.dot(reference_point.sub(center))), float(face.Area or 0.0))
+            if bound_box is not None and (
+                reference_z < (float(bound_box.ZMin) - 0.001)
+                or reference_z > (float(bound_box.ZMax) + 0.001)
+            ):
+                continue
+            facing_score = float(normal.dot(reference_point.sub(center)))
+            if facing_score <= 1e-7:
+                continue
+            sort_key = (float(face.Area or 0.0), facing_score)
             if best_sort_key is None or sort_key > best_sort_key:
                 best_sort_key = sort_key
                 best_face_name = f"Face{index}"
-        if best_sort_key is None or best_sort_key[0] <= 1e-7:
+        if best_sort_key is None:
             return None
         return best_face_name
 
@@ -3912,8 +3914,11 @@ class PlanEditSession:
             return
 
         if self._preview_line_tracker is None:
-            self._preview_line_tracker = DraftTrackers.lineTracker(
-                swidth=self._scaled_line_width(2), ontop=True
+            self._preview_line_tracker = self._make_plan_line_tracker(
+                DraftTrackers,
+                "wall-edit-preview-axis",
+                swidth=self._scaled_line_width(2),
+                ontop=True,
             )
             self._preview_line_tracker.on()
         self._preview_line_tracker.p1(points[0])
@@ -3941,7 +3946,13 @@ class PlanEditSession:
             self._finalize_trackers(self._preview_footprint_trackers)
             self._preview_footprint_trackers = []
             for _start, _end in segments:
-                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                tracker = self._make_plan_line_tracker(
+                    DraftTrackers,
+                    "wall-edit-preview-footprint",
+                    scolor=color,
+                    swidth=width,
+                    ontop=True,
+                )
                 self._preview_footprint_trackers.append(tracker)
 
         for tracker, (start, end) in zip(self._preview_footprint_trackers, segments):
@@ -4062,7 +4073,13 @@ class PlanEditSession:
         if len(self._wall_edit_opening_preview_trackers) != len(segments):
             self._clear_wall_hosted_opening_preview()
             for _start, _end in segments:
-                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                tracker = self._make_plan_line_tracker(
+                    DraftTrackers,
+                    "wall-edit-opening-preview",
+                    scolor=color,
+                    swidth=width,
+                    ontop=True,
+                )
                 self._wall_edit_opening_preview_trackers.append(tracker)
 
         for tracker, (start, end) in zip(self._wall_edit_opening_preview_trackers, segments):
@@ -5813,6 +5830,9 @@ class PlanEditSession:
         self._finalize_trackers(self._grip_trackers)
         self._grip_trackers = []
 
+    def _get_footprint_overlay_polylines(self, faces):
+        return ArchPlanGeometry.get_face_wire_polylines(faces)
+
     def _get_wall_overlay_polylines(self, wall):
         if not wall:
             return []
@@ -5823,17 +5843,7 @@ class PlanEditSession:
             faces = proxy.getFootprint(wall) or []
         except Exception:
             return []
-
-        polylines = []
-        for face in faces:
-            for wire in face.Wires:
-                points = [vertex.Point for vertex in wire.Vertexes]
-                if len(points) < 2:
-                    continue
-                if points[0].distanceToPoint(points[-1]) > 0.001:
-                    points.append(points[0])
-                polylines.append(points)
-        return polylines
+        return self._get_footprint_overlay_polylines(faces)
 
     def _get_space_overlay_polylines(self, space):
         if not self._is_plan_space_object(space):
@@ -5845,17 +5855,7 @@ class PlanEditSession:
             faces = proxy.getFootprint(space) or []
         except Exception:
             return []
-
-        polylines = []
-        for face in faces:
-            for wire in face.Wires:
-                points = [vertex.Point for vertex in wire.Vertexes]
-                if len(points) < 2:
-                    continue
-                if points[0].distanceToPoint(points[-1]) > 0.001:
-                    points.append(points[0])
-                polylines.append(points)
-        return polylines
+        return self._get_footprint_overlay_polylines(faces)
 
     def _get_opening_overlay_polylines(self, opening):
         if not opening:
@@ -5882,6 +5882,12 @@ class PlanEditSession:
                 tracker.finalize()
             except Exception:
                 pass
+
+    def _make_plan_line_tracker(self, DraftTrackers, label, **kwargs):
+        tracker = DraftTrackers.lineTracker(**kwargs)
+        if hasattr(tracker, "setDebugLabel"):
+            tracker.setDebugLabel("BimPlanSession:{}".format(label))
+        return tracker
 
     def _get_plan_target_at_position(self, mouse_pos):
         if not self.view or not mouse_pos:
@@ -6657,7 +6663,13 @@ class PlanEditSession:
             (FreeCAD.Vector(-half_size, half_size, 0), FreeCAD.Vector(half_size, -half_size, 0)),
         )
         for start_offset, end_offset in offsets:
-            tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+            tracker = self._make_plan_line_tracker(
+                DraftTrackers,
+                "junction-node:{}".format(getattr(junction, "Name", "unknown")),
+                scolor=color,
+                swidth=width,
+                ontop=True,
+            )
             tracker.p1(center.add(start_offset))
             tracker.p2(center.add(end_offset))
             tracker.on()
@@ -6717,7 +6729,13 @@ class PlanEditSession:
             if len(polyline) < 2:
                 continue
             for start, end in zip(polyline, polyline[1:]):
-                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                tracker = self._make_plan_line_tracker(
+                    DraftTrackers,
+                    "wall-overlay:{}".format(getattr(wall, "Name", "unknown")),
+                    scolor=color,
+                    swidth=width,
+                    ontop=True,
+                )
                 tracker.p1(start)
                 tracker.p2(end)
                 tracker.on()
@@ -6733,7 +6751,13 @@ class PlanEditSession:
             if len(polyline) < 2:
                 continue
             for start, end in zip(polyline, polyline[1:]):
-                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                tracker = self._make_plan_line_tracker(
+                    DraftTrackers,
+                    "space-overlay:{}".format(getattr(space, "Name", "unknown")),
+                    scolor=color,
+                    swidth=width,
+                    ontop=True,
+                )
                 tracker.p1(start)
                 tracker.p2(end)
                 tracker.on()
@@ -6784,7 +6808,15 @@ class PlanEditSession:
         if len(self._space_overlay_trackers) != len(segments):
             self._clear_selected_space_overlay()
             for _start, _end in segments:
-                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                tracker = self._make_plan_line_tracker(
+                    DraftTrackers,
+                    "selected-space-overlay:{}".format(
+                        getattr(self.selected_space, "Name", "unknown")
+                    ),
+                    scolor=color,
+                    swidth=width,
+                    ontop=True,
+                )
                 self._space_overlay_trackers.append(tracker)
         for tracker, (start, end) in zip(self._space_overlay_trackers, segments):
             tracker.setColor(color)
@@ -6825,7 +6857,13 @@ class PlanEditSession:
             if len(polyline) < 2:
                 continue
             for start, end in zip(polyline, polyline[1:]):
-                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                tracker = self._make_plan_line_tracker(
+                    DraftTrackers,
+                    "opening-overlay:{}".format(getattr(opening, "Name", "unknown")),
+                    scolor=color,
+                    swidth=width,
+                    ontop=True,
+                )
                 tracker.p1(start)
                 tracker.p2(end)
                 tracker.on()
@@ -6857,7 +6895,15 @@ class PlanEditSession:
         if len(self._opening_overlay_trackers) != len(segments):
             self._clear_selected_opening_overlay()
             for _start, _end in segments:
-                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                tracker = self._make_plan_line_tracker(
+                    DraftTrackers,
+                    "selected-opening-overlay:{}".format(
+                        getattr(self.selected_opening, "Name", "unknown")
+                    ),
+                    scolor=color,
+                    swidth=width,
+                    ontop=True,
+                )
                 self._opening_overlay_trackers.append(tracker)
         for tracker, (start, end) in zip(self._opening_overlay_trackers, segments):
             tracker.setColor(color)
@@ -7007,7 +7053,13 @@ class PlanEditSession:
             if len(polyline) < 2:
                 continue
             for start, end in zip(polyline, polyline[1:]):
-                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                tracker = self._make_plan_line_tracker(
+                    DraftTrackers,
+                    "symbol-overlay:{}".format(getattr(symbol, "Name", "unknown")),
+                    scolor=color,
+                    swidth=width,
+                    ontop=True,
+                )
                 tracker.p1(start)
                 tracker.p2(end)
                 tracker.on()
@@ -7047,7 +7099,15 @@ class PlanEditSession:
         if len(self._symbol_overlay_trackers) != len(segments):
             self._clear_selected_symbol_overlay()
             for _start, _end in segments:
-                tracker = DraftTrackers.lineTracker(scolor=color, swidth=width, ontop=True)
+                tracker = self._make_plan_line_tracker(
+                    DraftTrackers,
+                    "selected-symbol-overlay:{}".format(
+                        getattr(self.selected_symbol, "Name", "unknown")
+                    ),
+                    scolor=color,
+                    swidth=width,
+                    ontop=True,
+                )
                 self._symbol_overlay_trackers.append(tracker)
         for tracker, (start, end) in zip(self._symbol_overlay_trackers, segments):
             tracker.setColor(color)
@@ -7311,7 +7371,9 @@ class PlanEditSession:
         )
         if guide_start is None or guide_end is None:
             return
-        guide = DraftTrackers.lineTracker(
+        guide = self._make_plan_line_tracker(
+            DraftTrackers,
+            "symbol-edit-guide:{}".format(getattr(symbol, "Name", "unknown")),
             dotted=True,
             scolor=preview_color,
             swidth=self._scaled_line_width(1),
@@ -7717,7 +7779,9 @@ class PlanEditSession:
             if len(polyline) < 2:
                 continue
             for start, end in zip(polyline, polyline[1:]):
-                tracker = DraftTrackers.lineTracker(
+                tracker = self._make_plan_line_tracker(
+                    DraftTrackers,
+                    "opening-move-preview:{}".format(getattr(opening, "Name", "unknown")),
                     scolor=preview_color,
                     swidth=self._scaled_line_width(3),
                     ontop=True,
@@ -7732,7 +7796,9 @@ class PlanEditSession:
         if guide_start is None or guide_end is None:
             return
 
-        guide = DraftTrackers.lineTracker(
+        guide = self._make_plan_line_tracker(
+            DraftTrackers,
+            "opening-move-guide:{}".format(getattr(opening, "Name", "unknown")),
             dotted=True,
             scolor=preview_color,
             swidth=self._scaled_line_width(1),
