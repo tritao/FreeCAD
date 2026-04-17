@@ -451,6 +451,26 @@ class PlanEditSession:
         self._selected_plan_target_kind = kind
         self._selected_plan_target_obj = obj
 
+    def _get_selected_plan_target_object(self, kind=None):
+        selected_kind, selected_obj = self._get_selected_plan_target()
+        if kind is not None and selected_kind != kind:
+            return None
+        return selected_obj
+
+    def _is_selected_plan_target(self, kind, obj=None):
+        selected_kind, selected_obj = self._get_selected_plan_target()
+        if selected_kind != kind:
+            return False
+        if obj is None:
+            return selected_obj is not None
+        return selected_obj == obj
+
+    def _clear_selected_plan_target_if_matches(self, kind, obj):
+        if not self._is_selected_plan_target(kind, obj):
+            return False
+        self._set_selected_plan_target_state()
+        return True
+
     @property
     def selected_wall(self):
         return self._get_selected_target_for_kind("wall")
@@ -5383,10 +5403,18 @@ class PlanEditSession:
     def _get_edit_node(self, mouse_pos):
         symbol_handle_role = self._pick_selected_symbol_handle(mouse_pos)
         if symbol_handle_role is not None:
-            return ("symbol_handle", self.selected_symbol, symbol_handle_role)
+            return (
+                "symbol_handle",
+                self._get_selected_plan_target_object("symbol"),
+                symbol_handle_role,
+            )
         opening_handle_index = self._pick_selected_opening_handle(mouse_pos)
         if opening_handle_index is not None:
-            return ("opening_handle", self.selected_opening, opening_handle_index)
+            return (
+                "opening_handle",
+                self._get_selected_plan_target_object("opening"),
+                opening_handle_index,
+            )
         if not self._render_manager:
             return None
         try:
@@ -5413,7 +5441,7 @@ class PlanEditSession:
         return None
 
     def _pick_selected_opening_handle(self, mouse_pos, radius_px=10):
-        opening = self.selected_opening
+        opening = self._get_selected_plan_target_object("opening")
         if not self._is_hosted_opening_object(opening) or not self.view:
             return None
         try:
@@ -5649,7 +5677,9 @@ class PlanEditSession:
             self._clear_selected_symbol_handles()
             self._clear_selected_wall_opening_context_overlay()
             self._clear_wall_grips()
-            if self.selected_space and (refresh_all or _PLAN_VISUAL_SELECTED_SPACE in dirty):
+            if self._is_selected_plan_target("space") and (
+                refresh_all or _PLAN_VISUAL_SELECTED_SPACE in dirty
+            ):
                 self._refresh_selected_space_visuals()
             return
         if self.current_tool == "Pick Space Region":
@@ -6123,7 +6153,8 @@ class PlanEditSession:
         self._selected_opening_hard_refresh_queued = False
         if self._tearing_down or self.current_tool != "Select":
             return
-        if not self._is_hosted_opening_object(self.selected_opening):
+        opening = self._get_selected_plan_target_object("opening")
+        if not self._is_hosted_opening_object(opening):
             return
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
@@ -6140,32 +6171,33 @@ class PlanEditSession:
         if self.current_tool != "Select":
             return
         self._sanitize_plan_target_references()
-        if (
-            self.selected_region
-            and obj == self.selected_region
-            and prop in _REGION_VISUAL_PROPERTIES
-        ):
-            self._refresh_plan_object_footprint_display(self.selected_region)
+        selected_wall = self._get_selected_plan_target_object("wall")
+        selected_opening = self._get_selected_plan_target_object("opening")
+        selected_symbol = self._get_selected_plan_target_object("symbol")
+        selected_region = self._get_selected_plan_target_object("region")
+        selected_space = self._get_selected_plan_target_object("space")
+        if selected_region and obj == selected_region and prop in _REGION_VISUAL_PROPERTIES:
+            self._refresh_plan_object_footprint_display(selected_region)
             self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_REGION)
             self._refresh_task_panel_status()
             return
         if (
             self.hovered_region
-            and self.hovered_region != self.selected_region
+            and not self._is_selected_plan_target("region", self.hovered_region)
             and obj == self.hovered_region
             and prop in _REGION_VISUAL_PROPERTIES
         ):
             self._refresh_plan_object_footprint_display(self.hovered_region)
             self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_REGION)
             return
-        if self.selected_space and obj == self.selected_space and prop in _SPACE_VISUAL_PROPERTIES:
-            self._refresh_plan_object_footprint_display(self.selected_space)
+        if selected_space and obj == selected_space and prop in _SPACE_VISUAL_PROPERTIES:
+            self._refresh_plan_object_footprint_display(selected_space)
             self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_SPACE)
             self._refresh_task_panel_status()
             return
         if (
             self.hovered_space
-            and self.hovered_space != self.selected_space
+            and not self._is_selected_plan_target("space", self.hovered_space)
             and obj == self.hovered_space
             and prop in _SPACE_VISUAL_PROPERTIES
         ):
@@ -6201,10 +6233,10 @@ class PlanEditSession:
             self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SECONDARY_SELECTION)
             return
         if (
-            self._is_symbol_visual_dependency(self.selected_symbol, obj)
+            self._is_symbol_visual_dependency(selected_symbol, obj)
             and prop in _SYMBOL_VISUAL_PROPERTIES
         ):
-            self._refresh_plan_object_footprint_display(self.selected_symbol)
+            self._refresh_plan_object_footprint_display(selected_symbol)
             self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_SYMBOL)
             return
         if (
@@ -6215,11 +6247,11 @@ class PlanEditSession:
             self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_SYMBOL)
             return
         if (
-            self._is_opening_visual_dependency(self.selected_opening, obj)
+            self._is_opening_visual_dependency(selected_opening, obj)
             and prop in _OPENING_VISUAL_PROPERTIES
         ):
-            self._refresh_opening_footprint_display(self.selected_opening)
-            self._refresh_opening_host_footprint_displays(self.selected_opening)
+            self._refresh_opening_footprint_display(selected_opening)
+            self._refresh_opening_host_footprint_displays(selected_opening)
             self._queue_plan_overlay_visual_refresh(
                 _PLAN_VISUAL_SELECTED_OPENING,
                 _PLAN_VISUAL_HOVERED_OPENING,
@@ -6243,8 +6275,8 @@ class PlanEditSession:
             self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_WALL)
             return
         if (
-            self.selected_wall
-            and obj in self._get_wall_hosted_openings(self.selected_wall)
+            selected_wall
+            and obj in self._get_wall_hosted_openings(selected_wall)
             and prop in _OPENING_VISUAL_PROPERTIES
         ):
             self._refresh_opening_footprint_display(obj)
@@ -6254,7 +6286,7 @@ class PlanEditSession:
         if obj == self.hovered_wall and prop in _WALL_VISUAL_PROPERTIES:
             self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_WALL)
             return
-        if obj != self.selected_wall:
+        if obj != selected_wall:
             return
         if prop not in _WALL_VISUAL_PROPERTIES:
             return
@@ -6279,41 +6311,41 @@ class PlanEditSession:
         if obj == self.hovered_region:
             self.hovered_region = None
             self._clear_hovered_region_overlay()
-        if obj == self.selected_opening:
-            self.selected_opening = None
+        if self._clear_selected_plan_target_if_matches("opening", obj):
             self._refresh_selected_opening_visuals()
             return
-        if obj == self.selected_symbol:
-            self.selected_symbol = None
+        if self._clear_selected_plan_target_if_matches("symbol", obj):
             self._refresh_selected_symbol_visuals()
             return
-        if obj == self.selected_region:
-            self.selected_region = None
+        if self._clear_selected_plan_target_if_matches("region", obj):
             self._refresh_selected_region_visuals()
             self._refresh_task_panel_status()
             return
-        if obj == self.selected_space:
-            self.selected_space = None
+        if self._clear_selected_plan_target_if_matches("space", obj):
             self._refresh_selected_space_visuals()
             self._refresh_task_panel_status()
             return
-        if obj != self.selected_wall:
+        if not self._is_selected_plan_target("wall", obj):
             return
         self._schedule_selected_wall_reset("Deleted", obj)
 
     def _invalidate_document_dependent_plan_visuals(self, recompute_opening_hosts=False):
         self._sanitize_plan_target_references()
-        if self.selected_symbol:
-            self._refresh_plan_object_footprint_display(self.selected_symbol)
-        if self.hovered_symbol and self.hovered_symbol != self.selected_symbol:
+        selected_symbol = self._get_selected_plan_target_object("symbol")
+        selected_region = self._get_selected_plan_target_object("region")
+        selected_space = self._get_selected_plan_target_object("space")
+        selected_opening = self._get_selected_plan_target_object("opening")
+        if selected_symbol:
+            self._refresh_plan_object_footprint_display(selected_symbol)
+        if self.hovered_symbol and not self._is_selected_plan_target("symbol", self.hovered_symbol):
             self._refresh_plan_object_footprint_display(self.hovered_symbol)
-        if self.selected_region:
-            self._refresh_plan_object_footprint_display(self.selected_region)
-        if self.hovered_region and self.hovered_region != self.selected_region:
+        if selected_region:
+            self._refresh_plan_object_footprint_display(selected_region)
+        if self.hovered_region and not self._is_selected_plan_target("region", self.hovered_region):
             self._refresh_plan_object_footprint_display(self.hovered_region)
-        if self.selected_space:
-            self._refresh_plan_object_footprint_display(self.selected_space)
-        if self.hovered_space and self.hovered_space != self.selected_space:
+        if selected_space:
+            self._refresh_plan_object_footprint_display(selected_space)
+        if self.hovered_space and not self._is_selected_plan_target("space", self.hovered_space):
             self._refresh_plan_object_footprint_display(self.hovered_space)
         secondary_targets = self._get_secondary_selected_plan_targets()
         for target_kind, target_obj in secondary_targets:
@@ -6322,15 +6354,17 @@ class PlanEditSession:
             elif target_kind == "opening":
                 self._refresh_opening_footprint_display(target_obj)
                 self._refresh_opening_host_footprint_displays(target_obj)
-        if self.selected_opening:
-            self._refresh_opening_footprint_display(self.selected_opening)
-            self._refresh_opening_host_footprint_displays(self.selected_opening)
+        if selected_opening:
+            self._refresh_opening_footprint_display(selected_opening)
+            self._refresh_opening_host_footprint_displays(selected_opening)
             self._queue_hard_refresh_selected_opening_visuals()
-        if self.hovered_opening and self.hovered_opening != self.selected_opening:
+        if self.hovered_opening and not self._is_selected_plan_target(
+            "opening", self.hovered_opening
+        ):
             self._refresh_opening_footprint_display(self.hovered_opening)
             self._refresh_opening_host_footprint_displays(self.hovered_opening)
         if recompute_opening_hosts:
-            self._queue_recompute_opening_hosts(self.selected_opening, self.hovered_opening)
+            self._queue_recompute_opening_hosts(selected_opening, self.hovered_opening)
         visual_args = [
             _PLAN_VISUAL_SELECTED_SYMBOL,
             _PLAN_VISUAL_HOVERED_SYMBOL,
@@ -6338,14 +6372,16 @@ class PlanEditSession:
             _PLAN_VISUAL_HOVERED_WALL,
             _PLAN_VISUAL_WALL_GRIPS,
         ]
-        if self.selected_region:
+        if selected_region:
             visual_args.append(_PLAN_VISUAL_SELECTED_REGION)
-        if self.hovered_region and self.hovered_region != self.selected_region:
+        if self.hovered_region and not self._is_selected_plan_target("region", self.hovered_region):
             visual_args.append(_PLAN_VISUAL_HOVERED_REGION)
-        if self.selected_space:
+        if selected_space:
             visual_args.append(_PLAN_VISUAL_SELECTED_SPACE)
-        if self.hovered_space and self.hovered_space != self.selected_space:
+        if self.hovered_space and not self._is_selected_plan_target("space", self.hovered_space):
             visual_args.append(_PLAN_VISUAL_HOVERED_SPACE)
+        if selected_opening:
+            visual_args.append(_PLAN_VISUAL_SELECTED_OPENING)
         if secondary_targets:
             visual_args.append(_PLAN_VISUAL_SECONDARY_SELECTION)
         self._queue_plan_overlay_visual_refresh(*visual_args)
@@ -8465,7 +8501,7 @@ class PlanEditSession:
             return
         if not self._is_plan_space_object(self.hovered_space):
             return
-        if self.hovered_space == self.selected_space:
+        if self._is_selected_plan_target("space", self.hovered_space):
             return
         self._create_space_overlay_trackers(
             self.hovered_space,
@@ -8484,7 +8520,7 @@ class PlanEditSession:
             return
         if not self._is_plan_region_object(self.hovered_region):
             return
-        if self.hovered_region == self.selected_region:
+        if self._is_selected_plan_target("region", self.hovered_region):
             return
         self._create_region_overlay_trackers(
             self.hovered_region,
@@ -8498,8 +8534,9 @@ class PlanEditSession:
         self._region_hover_trackers = []
 
     def _sync_selected_space_overlay(self):
+        space = self._get_selected_plan_target_object("space")
         if self.current_tool not in ("Select", "Set Space Text") or not self._is_plan_space_object(
-            self.selected_space
+            space
         ):
             self._clear_selected_space_overlay()
             return
@@ -8509,16 +8546,14 @@ class PlanEditSession:
         except ImportError:
             self._clear_selected_space_overlay()
             return
-        segments = self._get_space_overlay_segments(self.selected_space)
+        segments = self._get_space_overlay_segments(space)
         color = (0.12, 0.38, 0.95)
         if len(self._space_overlay_trackers) != len(segments):
             self._clear_selected_space_overlay()
             for _start, _end in segments:
                 tracker = self._make_plan_line_tracker(
                     DraftTrackers,
-                    "selected-space-overlay:{}".format(
-                        getattr(self.selected_space, "Name", "unknown")
-                    ),
+                    "selected-space-overlay:{}".format(getattr(space, "Name", "unknown")),
                     scolor=color,
                     swidth=width,
                     ontop=True,
@@ -8535,7 +8570,8 @@ class PlanEditSession:
         self._space_overlay_trackers = []
 
     def _sync_selected_region_overlay(self):
-        if self.current_tool != "Select" or not self._is_plan_region_object(self.selected_region):
+        region = self._get_selected_plan_target_object("region")
+        if self.current_tool != "Select" or not self._is_plan_region_object(region):
             self._clear_selected_region_overlay()
             return
         width = self._scaled_line_width(3)
@@ -8544,16 +8580,14 @@ class PlanEditSession:
         except ImportError:
             self._clear_selected_region_overlay()
             return
-        segments = self._get_region_overlay_segments(self.selected_region)
+        segments = self._get_region_overlay_segments(region)
         color = (0.12, 0.38, 0.95)
         if len(self._region_overlay_trackers) != len(segments):
             self._clear_selected_region_overlay()
             for _start, _end in segments:
                 tracker = self._make_plan_line_tracker(
                     DraftTrackers,
-                    "selected-region-overlay:{}".format(
-                        getattr(self.selected_region, "Name", "unknown")
-                    ),
+                    "selected-region-overlay:{}".format(getattr(region, "Name", "unknown")),
                     scolor=color,
                     swidth=width,
                     ontop=True,
@@ -8575,7 +8609,7 @@ class PlanEditSession:
             return
         if not self._is_hosted_opening_object(self.hovered_opening):
             return
-        if self.hovered_opening == self.selected_opening:
+        if self._is_selected_plan_target("opening", self.hovered_opening):
             return
         self._create_opening_overlay_trackers(
             self.hovered_opening,
@@ -8620,9 +8654,8 @@ class PlanEditSession:
         return segments
 
     def _sync_selected_opening_overlay(self):
-        if self.current_tool != "Select" or not self._is_hosted_opening_object(
-            self.selected_opening
-        ):
+        opening = self._get_selected_plan_target_object("opening")
+        if self.current_tool != "Select" or not self._is_hosted_opening_object(opening):
             self._clear_selected_opening_overlay()
             return
         width = self._scaled_line_width(3)
@@ -8631,16 +8664,14 @@ class PlanEditSession:
         except ImportError:
             self._clear_selected_opening_overlay()
             return
-        segments = self._get_opening_overlay_segments(self.selected_opening)
+        segments = self._get_opening_overlay_segments(opening)
         color = (0.12, 0.38, 0.95)
         if len(self._opening_overlay_trackers) != len(segments):
             self._clear_selected_opening_overlay()
             for _start, _end in segments:
                 tracker = self._make_plan_line_tracker(
                     DraftTrackers,
-                    "selected-opening-overlay:{}".format(
-                        getattr(self.selected_opening, "Name", "unknown")
-                    ),
+                    "selected-opening-overlay:{}".format(getattr(opening, "Name", "unknown")),
                     scolor=color,
                     swidth=width,
                     ontop=True,
@@ -8658,11 +8689,12 @@ class PlanEditSession:
 
     def _sync_selected_wall_opening_context_overlay(self):
         self._clear_selected_wall_opening_context_overlay()
-        if self.current_tool != "Select" or not self.selected_wall or self.selected_opening:
+        wall = self._get_selected_plan_target_object("wall")
+        if self.current_tool != "Select" or not wall or self._is_selected_plan_target("opening"):
             return
         color = (0.46, 0.58, 0.82)
         width = self._scaled_line_width(2)
-        for opening in self._get_wall_hosted_openings(self.selected_wall):
+        for opening in self._get_wall_hosted_openings(wall):
             self._create_opening_overlay_trackers(
                 opening,
                 color=color,
@@ -8812,7 +8844,7 @@ class PlanEditSession:
             return
         if not self._is_plan_symbol_instance(self.hovered_symbol):
             return
-        if self.hovered_symbol == self.selected_symbol:
+        if self._is_selected_plan_target("symbol", self.hovered_symbol):
             return
         self._create_symbol_overlay_trackers(
             self.hovered_symbol,
@@ -8826,7 +8858,8 @@ class PlanEditSession:
         self._symbol_hover_trackers = []
 
     def _sync_selected_symbol_overlay(self):
-        if self.current_tool != "Select" or not self._is_plan_symbol_instance(self.selected_symbol):
+        symbol = self._get_selected_plan_target_object("symbol")
+        if self.current_tool != "Select" or not self._is_plan_symbol_instance(symbol):
             self._clear_selected_symbol_overlay()
             return
         width = self._scaled_line_width(3)
@@ -8835,16 +8868,14 @@ class PlanEditSession:
         except ImportError:
             self._clear_selected_symbol_overlay()
             return
-        segments = self._get_symbol_overlay_segments(self.selected_symbol)
+        segments = self._get_symbol_overlay_segments(symbol)
         color = (0.12, 0.38, 0.95)
         if len(self._symbol_overlay_trackers) != len(segments):
             self._clear_selected_symbol_overlay()
             for _start, _end in segments:
                 tracker = self._make_plan_line_tracker(
                     DraftTrackers,
-                    "selected-symbol-overlay:{}".format(
-                        getattr(self.selected_symbol, "Name", "unknown")
-                    ),
+                    "selected-symbol-overlay:{}".format(getattr(symbol, "Name", "unknown")),
                     scolor=color,
                     swidth=width,
                     ontop=True,
@@ -9038,10 +9069,11 @@ class PlanEditSession:
         ]
 
     def _sync_selected_symbol_handles(self):
+        symbol = self._get_selected_plan_target_object("symbol")
         if self.current_tool != "Select":
             self._clear_selected_symbol_handles()
             return
-        if not self._is_plan_symbol_instance(self.selected_symbol):
+        if not self._is_plan_symbol_instance(symbol):
             self._clear_selected_symbol_handles()
             return
         self._clear_selected_symbol_handles()
@@ -9050,7 +9082,7 @@ class PlanEditSession:
         except ImportError:
             return
         for idx, (_role, point, marker) in enumerate(
-            self._get_selected_symbol_handle_specs(self.selected_symbol)
+            self._get_selected_symbol_handle_specs(symbol)
         ):
             tracker = DraftTrackers.editTracker(
                 pos=point,
@@ -9066,7 +9098,7 @@ class PlanEditSession:
         self._symbol_handle_trackers = []
 
     def _pick_selected_symbol_handle(self, mouse_pos, radius_px=10):
-        symbol = self.selected_symbol
+        symbol = self._get_selected_plan_target_object("symbol")
         if not self._is_plan_symbol_instance(symbol) or not self.view:
             return None
         try:
@@ -9460,10 +9492,11 @@ class PlanEditSession:
         return handle_specs
 
     def _sync_selected_opening_handles(self):
+        opening = self._get_selected_plan_target_object("opening")
         if self.current_tool != "Select":
             self._clear_selected_opening_handles()
             return
-        if not self._is_hosted_opening_object(self.selected_opening):
+        if not self._is_hosted_opening_object(opening):
             self._clear_selected_opening_handles()
             return
         self._clear_selected_opening_handles()
@@ -9471,7 +9504,7 @@ class PlanEditSession:
             import draftguitools.gui_trackers as DraftTrackers
         except ImportError:
             return
-        for idx, point, marker in self._get_selected_opening_handle_specs(self.selected_opening):
+        for idx, point, marker in self._get_selected_opening_handle_specs(opening):
             tracker = DraftTrackers.editTracker(
                 pos=point,
                 idx=idx,
