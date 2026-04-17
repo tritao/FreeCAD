@@ -1135,9 +1135,7 @@ class PlanEditSession:
         self._refresh_task_panel_status()
 
     def activate_plan_region_tool(self):
-        parent_space = (
-            self.selected_space if self._is_plan_space_object(self.selected_space) else None
-        )
+        parent_space = self._get_selected_plan_target_object("space")
         self._cancel_space_region_pick(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
         self._cancel_space_separator_tool(refresh=False)
@@ -1239,7 +1237,7 @@ class PlanEditSession:
         self._set_hovered_space(None)
         self._set_hovered_region(None)
 
-        wall = self.selected_wall
+        wall = self._get_selected_plan_target_object("wall")
         if not self._is_plan_selectable_wall(wall):
             selection = []
             try:
@@ -1332,14 +1330,14 @@ class PlanEditSession:
         if self.current_tool != "Join":
             return None
         wall = self.hovered_wall
-        if not self._is_plan_selectable_wall(wall) or wall == self.selected_wall:
+        if not self._is_plan_selectable_wall(wall) or self._is_selected_plan_target("wall", wall):
             return None
         return wall
 
     def _get_plan_candidate_joint(self, target_wall=None):
         import ArchWallJoinUtils
 
-        source_wall = self.selected_wall
+        source_wall = self._get_selected_plan_target_object("wall")
         target_wall = target_wall or self._get_plan_join_candidate_wall()
         if not self._is_plan_selectable_wall(source_wall):
             return None
@@ -1430,7 +1428,7 @@ class PlanEditSession:
         return True
 
     def _unjoin_current_plan_wall_pair(self):
-        source_wall = self.selected_wall
+        source_wall = self._get_selected_plan_target_object("wall")
         target_wall = self._get_plan_join_candidate_wall()
         if not self._unjoin_plan_wall_pair(source_wall, target_wall):
             FreeCAD.Console.PrintWarning(
@@ -3439,11 +3437,11 @@ class PlanEditSession:
         self._pending_selected_wall_reset = False
         if self._tearing_down or self.current_tool != "Select":
             return
-        wall = self.selected_wall
+        wall = self._get_selected_plan_target_object("wall")
         if not wall:
             return
         self._clear_wall_grips()
-        self.selected_wall = None
+        self._clear_selected_plan_target_if_matches("wall", wall)
         self._set_gui_selection([])
         self._refresh_task_panel_status()
 
@@ -3453,14 +3451,14 @@ class PlanEditSession:
         if self._tearing_down:
             return
         if wall is None:
-            wall = self.selected_wall
+            wall = self._get_selected_plan_target_object("wall")
         if wall is None:
             return
-        if self.selected_wall != wall:
+        if not self._is_selected_plan_target("wall", wall):
             return
         self._pending_selected_wall_reset = False
         self._clear_wall_grips()
-        self.selected_wall = None
+        self._clear_selected_plan_target_if_matches("wall", wall)
         if clear_gui_selection:
             self._set_gui_selection([])
         self._refresh_task_panel_status()
@@ -3750,9 +3748,7 @@ class PlanEditSession:
     def _cancel_join_tool(self, refresh=True):
         if self.current_tool != "Join":
             return False
-        selected_wall = (
-            self.selected_wall if self._is_plan_selectable_wall(self.selected_wall) else None
-        )
+        selected_wall = self._get_selected_plan_target_object("wall")
         self.current_tool = "Select"
         self._set_hovered_wall(None)
         self._set_hovered_opening(None)
@@ -5448,11 +5444,12 @@ class PlanEditSession:
             if self.current_tool == "Join":
                 pos = event.getPosition().getValue()
                 target_kind, target_wall = self._get_plan_target_at_position((pos[0], pos[1]))
+                source_wall = self._get_selected_plan_target_object("wall")
                 if (
                     target_kind == "wall"
                     and self._is_plan_selectable_wall(target_wall)
-                    and target_wall != self.selected_wall
-                    and self._apply_plan_wall_join(self.selected_wall, target_wall)
+                    and target_wall != source_wall
+                    and self._apply_plan_wall_join(source_wall, target_wall)
                 ):
                     if hasattr(event_callback, "setHandled"):
                         try:
@@ -7103,7 +7100,7 @@ class PlanEditSession:
     def _update_hovered_plan_target(self, mouse_pos):
         if self.current_tool == "Join":
             target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
-            if target_kind == "wall" and target_obj != self.selected_wall:
+            if target_kind == "wall" and not self._is_selected_plan_target("wall", target_obj):
                 self._set_hovered_wall(target_obj)
             else:
                 self._set_hovered_wall(None)
@@ -7273,7 +7270,7 @@ class PlanEditSession:
                 pass
 
     def _set_hovered_wall(self, wall):
-        if wall == self.selected_wall:
+        if self._is_selected_plan_target("wall", wall):
             wall = None
         if self.hovered_wall == wall:
             return
@@ -7285,7 +7282,7 @@ class PlanEditSession:
             self._refresh_task_panel_status()
 
     def _set_hovered_opening(self, opening):
-        if opening == self.selected_opening:
+        if self._is_selected_plan_target("opening", opening):
             opening = None
         if self.hovered_opening == opening:
             return
@@ -7293,7 +7290,7 @@ class PlanEditSession:
         self._sync_hovered_opening_overlay()
 
     def _set_hovered_symbol(self, symbol):
-        if symbol == self.selected_symbol:
+        if self._is_selected_plan_target("symbol", symbol):
             symbol = None
         if self.hovered_symbol == symbol:
             return
@@ -7301,7 +7298,7 @@ class PlanEditSession:
         self._sync_hovered_symbol_overlay()
 
     def _set_hovered_space(self, space):
-        if space == self.selected_space:
+        if self._is_selected_plan_target("space", space):
             space = None
         if self.hovered_space == space:
             return
@@ -7309,7 +7306,7 @@ class PlanEditSession:
         self._sync_hovered_space_overlay()
 
     def _set_hovered_region(self, region):
-        if region == self.selected_region:
+        if self._is_selected_plan_target("region", region):
             region = None
         if self.hovered_region == region:
             return
@@ -7850,7 +7847,7 @@ class PlanEditSession:
         return True
 
     def _set_selected_space_label(self, label):
-        space = self.selected_space
+        space = self._get_selected_plan_target_object("space")
         if not self._is_plan_space_object(space):
             return False
         label = str(label or "").strip()
@@ -7871,7 +7868,7 @@ class PlanEditSession:
         return True
 
     def _set_selected_space_type(self, space_type):
-        space = self.selected_space
+        space = self._get_selected_plan_target_object("space")
         if not self._is_plan_space_object(space):
             return False
         space_type = str(space_type or "")
@@ -7892,7 +7889,7 @@ class PlanEditSession:
         return True
 
     def _set_selected_region_label(self, label):
-        region = self.selected_region
+        region = self._get_selected_plan_target_object("region")
         if not self._is_plan_region_object(region):
             return False
         label = str(label or "").strip()
@@ -7913,7 +7910,7 @@ class PlanEditSession:
         return True
 
     def _set_selected_region_scheme(self, scheme):
-        region = self.selected_region
+        region = self._get_selected_plan_target_object("region")
         if not self._is_plan_region_object(region):
             return False
         scheme = str(scheme or "").strip()
@@ -7934,7 +7931,7 @@ class PlanEditSession:
         return True
 
     def _set_selected_region_type(self, region_type):
-        region = self.selected_region
+        region = self._get_selected_plan_target_object("region")
         if not self._is_plan_region_object(region):
             return False
         region_type = str(region_type or "").strip()
@@ -7955,7 +7952,7 @@ class PlanEditSession:
         return True
 
     def _set_selected_region_parent_space(self, space):
-        region = self.selected_region
+        region = self._get_selected_plan_target_object("region")
         if not self._is_plan_region_object(region):
             return False
         space = self._get_plan_semantic_object(space) if space else None
@@ -8003,7 +8000,7 @@ class PlanEditSession:
         return True
 
     def _add_boundaries_to_selected_space(self):
-        space = self.selected_space
+        space = self._get_selected_plan_target_object("space")
         if not self._is_plan_space_object(space):
             return False
         existing = self._get_space_boundary_entries(space)
@@ -8020,7 +8017,7 @@ class PlanEditSession:
         return self._set_space_boundaries(space, merged)
 
     def _remove_selected_space_boundaries(self, row_indexes=None):
-        space = self.selected_space
+        space = self._get_selected_plan_target_object("space")
         if not self._is_plan_space_object(space):
             return False
         existing = self._get_space_boundary_entries(space)
@@ -8056,7 +8053,7 @@ class PlanEditSession:
         return self._set_space_boundaries(space, remaining)
 
     def _start_space_text_position_pick(self):
-        space = self.selected_space
+        space = self._get_selected_plan_target_object("space")
         if not self._is_plan_space_object(space):
             return False
         self.current_tool = "Set Space Text"
@@ -8108,7 +8105,7 @@ class PlanEditSession:
         self._queue_restore_selected_space(space)
 
     def _cancel_space_text_position_pick(self):
-        space = self._edit_space or self.selected_space
+        space = self._edit_space or self._get_selected_plan_target_object("space")
         self._edit_space = None
         self._stop_snapper()
         FreeCAD.activeDraftCommand = None
@@ -8263,7 +8260,7 @@ class PlanEditSession:
         self._clear_hovered_wall_overlay()
         if self.current_tool not in ("Select", "Join"):
             return
-        if not self.hovered_wall or self.hovered_wall == self.selected_wall:
+        if not self.hovered_wall or self._is_selected_plan_target("wall", self.hovered_wall):
             return
         self._create_wall_overlay_trackers(
             self.hovered_wall,
@@ -8284,7 +8281,8 @@ class PlanEditSession:
 
         junctions = []
         seen = set()
-        for wall in (self.selected_wall, self.hovered_wall):
+        selected_wall = self._get_selected_plan_target_object("wall")
+        for wall in (selected_wall, self.hovered_wall):
             if not self._is_plan_selectable_wall(wall):
                 continue
             for relation in ArchWallJoinUtils.iter_wall_relations(wall):
@@ -8330,10 +8328,9 @@ class PlanEditSession:
 
     def _sync_junction_node_overlays(self):
         self._clear_junction_node_overlays()
+        selected_wall = self._get_selected_plan_target_object("wall")
         for junction in self._get_plan_context_junctions():
-            if self.selected_wall and self.selected_wall in (
-                getattr(junction, "Walls", None) or []
-            ):
+            if selected_wall and selected_wall in (getattr(junction, "Walls", None) or []):
                 color = (0.92, 0.58, 0.12)
                 width = self._scaled_line_width(2)
             else:
@@ -8354,14 +8351,10 @@ class PlanEditSession:
         self._clear_hovered_wall_opening_context_overlay()
         if self.current_tool != "Select":
             return
-        if not self.hovered_wall or self.hovered_wall == self.selected_wall:
+        if not self.hovered_wall or self._is_selected_plan_target("wall", self.hovered_wall):
             return
-        if (
-            self.selected_wall
-            or self.selected_opening
-            or self.selected_region
-            or self.selected_space
-        ):
+        selected_kind, _selected_obj = self._get_selected_plan_target()
+        if selected_kind in ("wall", "opening", "region", "space"):
             return
         color = (0.64, 0.70, 0.84)
         width = self._scaled_line_width(1)
