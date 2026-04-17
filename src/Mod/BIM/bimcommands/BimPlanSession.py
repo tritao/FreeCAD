@@ -365,6 +365,9 @@ class PlanEditSession:
         self._rect_wall_start = None
         self._rect_wall_params = None
         self._rect_wall_preview_trackers = []
+        self._space_separator_start = None
+        self._space_separator_height = None
+        self._space_separator_preview_trackers = []
         self._edit_wall_visibility = None
         self._edit_opening = None
         self._edit_opening_handle_index = None
@@ -775,6 +778,7 @@ class PlanEditSession:
             self.task_panel = None
             self._cancel_embedded_tool()
             self._cancel_rect_wall_tool(refresh=False)
+            self._cancel_space_separator_tool(refresh=False)
             self._cancel_wall_edit(restore=not teardown, refresh=False)
             self._cancel_pending_edit()
             if self.current_tool in ("Move Symbol", "Rotate Symbol"):
@@ -918,6 +922,8 @@ class PlanEditSession:
             self._cancel_embedded_tool()
         if self._has_active_rect_wall_tool():
             self._cancel_rect_wall_tool()
+        if self._has_active_space_separator_tool():
+            self._cancel_space_separator_tool()
         self._cancel_wall_edit()
         self._cancel_join_tool()
 
@@ -926,6 +932,7 @@ class PlanEditSession:
 
         self._cancel_space_region_pick(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
+        self._cancel_space_separator_tool(refresh=False)
         self._cancel_wall_edit()
         self._cancel_pending_edit()
         self._clear_plan_relation_status()
@@ -942,6 +949,7 @@ class PlanEditSession:
 
     def activate_rect_wall_tool(self):
         self._cancel_space_region_pick(refresh=False)
+        self._cancel_space_separator_tool(refresh=False)
         self._cancel_embedded_tool()
         self._cancel_wall_edit()
         self._cancel_pending_edit()
@@ -962,11 +970,36 @@ class PlanEditSession:
         )
         self._refresh_task_panel_status()
 
+    def activate_space_separator_tool(self):
+        self._cancel_space_region_pick(refresh=False)
+        self._cancel_rect_wall_tool(refresh=False)
+        if self._has_active_embedded_tool():
+            self._cancel_embedded_tool()
+        self._cancel_wall_edit()
+        self._cancel_pending_edit()
+        self._clear_plan_relation_status()
+        self._set_selected_plan_target()
+        self._clear_wall_grips()
+        self._clear_selected_wall_opening_context_overlay()
+        self._clear_selected_space_overlay()
+        self._clear_secondary_selected_overlays()
+        self._clear_space_separator_preview()
+        self._space_separator_start = None
+        self._space_separator_height = self._get_wall_defaults()["height"]
+        self.current_tool = "Separator"
+        FreeCAD.activeDraftCommand = self
+        FreeCADGui.Snapper.getPoint(
+            callback=self._handle_space_separator_point,
+            title=translate("BIM_PlanEdit", "Separator start point"),
+        )
+        self._refresh_task_panel_status()
+
     def activate_space_tool(self):
         self._cancel_space_region_pick(refresh=False)
         if self.current_tool == "Set Space Text":
             self._cancel_space_text_position_pick()
         self._cancel_rect_wall_tool(refresh=False)
+        self._cancel_space_separator_tool(refresh=False)
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
         self._cancel_wall_edit(refresh=False)
@@ -979,6 +1012,7 @@ class PlanEditSession:
 
         self._cancel_space_region_pick(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
+        self._cancel_space_separator_tool(refresh=False)
         self._cancel_wall_edit()
         self._cancel_pending_edit()
         self._clear_plan_relation_status()
@@ -988,6 +1022,7 @@ class PlanEditSession:
     def activate_join_tool(self):
         self._cancel_space_region_pick(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
+        self._cancel_space_separator_tool(refresh=False)
 
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
@@ -1789,6 +1824,8 @@ class PlanEditSession:
             return False
         if self._is_plan_symbol_instance(obj):
             return True
+        if self._is_plan_space_separator_object(obj):
+            return True
         if self._is_plan_context_only_object(obj):
             return True
         semantic_obj = self._get_plan_semantic_object(obj)
@@ -2030,6 +2067,17 @@ class PlanEditSession:
             pass
         return getattr(obj, "IfcType", "") == "Space"
 
+    def _is_plan_space_separator_object(self, obj):
+        if not obj:
+            return False
+        obj = self._get_plan_semantic_object(obj)
+        try:
+            import Draft
+
+            return Draft.getType(obj) == "SpaceSeparator"
+        except Exception:
+            return False
+
     @staticmethod
     def _normalize_space_boundary_subnames(subnames):
         if isinstance(subnames, str):
@@ -2186,6 +2234,14 @@ class PlanEditSession:
             tuple(self._normalize_space_boundary_subnames(subnames)),
         )
 
+    def _get_space_separator_boundary_face_names(self, separator):
+        if not self._is_plan_space_separator_object(separator):
+            return ()
+        shape = getattr(separator, "Shape", None)
+        if shape is None or not getattr(shape, "Faces", None):
+            return ()
+        return tuple(f"Face{index}" for index, _face in enumerate(shape.Faces, start=1))
+
     def _get_selected_space_boundary_links(self, fallback_space=None):
         selection_ex = self._get_gui_selection_ex()
         reference_point = (
@@ -2204,6 +2260,11 @@ class PlanEditSession:
             if face_names:
                 boundaries.append((obj, face_names))
                 continue
+            if self._is_plan_space_separator_object(obj):
+                face_names = self._get_space_separator_boundary_face_names(obj)
+                if face_names:
+                    boundaries.append((obj, face_names))
+                continue
             face_name = self._get_wall_space_boundary_face_name(obj, reference_point)
             if face_name:
                 boundaries.append((obj, (face_name,)))
@@ -2211,13 +2272,21 @@ class PlanEditSession:
 
     def _get_space_region_seed_targets(self, targets=None):
         targets = list(targets if targets is not None else self._get_selected_plan_targets())
-        if len(targets) < 2:
+        if not targets:
             return (None, [])
 
         space_targets = [
             target_obj for target_kind, target_obj in targets if target_kind == "space"
         ]
         if len(space_targets) != 1:
+            return (None, [])
+
+        if len(targets) == 1:
+            boundary_links = self._get_selected_space_boundary_links(
+                fallback_space=space_targets[0]
+            )
+            if boundary_links:
+                return (space_targets[0], [])
             return (None, [])
 
         wall_targets = [
@@ -3755,6 +3824,116 @@ class PlanEditSession:
         self._refresh_selected_wall()
         self._refresh_task_panel_status()
 
+    def _has_active_space_separator_tool(self):
+        return self._space_separator_start is not None or self.current_tool == "Separator"
+
+    def _clear_space_separator_preview(self):
+        self._finalize_trackers(self._space_separator_preview_trackers)
+        self._space_separator_preview_trackers = []
+
+    def _cancel_space_separator_tool(self, refresh=True):
+        if not self._has_active_space_separator_tool():
+            return False
+        self._stop_snapper()
+        self._clear_space_separator_preview()
+        self._space_separator_start = None
+        self._space_separator_height = None
+        FreeCAD.activeDraftCommand = None
+        self.current_tool = "Select"
+        if refresh:
+            self._refresh_task_panel_status()
+        self._sync_selected_opening_overlay()
+        self._sync_selected_opening_handles()
+        self._sync_selected_space_overlay()
+        return True
+
+    def _update_space_separator_preview(self, point, info):
+        del info
+        start = self._space_separator_start
+        if start is None or point is None:
+            return
+        end = self._project_plan_point(point)
+        if end is None or end.sub(start).Length < _MIN_WALL_LENGTH:
+            return
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except Exception:
+            return
+
+        if not self._space_separator_preview_trackers:
+            tracker = self._make_plan_line_tracker(
+                DraftTrackers,
+                "space_separator_preview",
+                dotted=True,
+                ontop=True,
+            )
+            self._space_separator_preview_trackers.append(tracker)
+        tracker = self._space_separator_preview_trackers[0]
+        tracker.p1(start)
+        tracker.p2(end)
+        tracker.on()
+
+    def _create_space_separator(self, start, end):
+        import Arch
+
+        separator = None
+        self.doc.openTransaction(translate("BIM_PlanEdit", "Create Space Separator"))
+        try:
+            separator = Arch.makeSpaceSeparator(
+                start=start,
+                end=end,
+                height=self._space_separator_height,
+            )
+            if not separator:
+                raise RuntimeError("Unable to create space separator")
+            self._add_object_to_active_storey(separator)
+            self.doc.recompute()
+            self.doc.commitTransaction()
+        except Exception:
+            try:
+                self.doc.abortTransaction()
+            except Exception:
+                pass
+            raise
+        return separator
+
+    def _handle_space_separator_point(self, point=None, obj=None):
+        del obj
+        if point is None:
+            self._cancel_space_separator_tool()
+            return
+
+        point = self._project_plan_point(point)
+        if self._space_separator_start is None:
+            self._space_separator_start = point
+            FreeCADGui.Snapper.getPoint(
+                callback=self._handle_space_separator_point,
+                movecallback=self._update_space_separator_preview,
+                last=point,
+                title=translate("BIM_PlanEdit", "Separator end point"),
+                mode="line",
+            )
+            return
+
+        if point.sub(self._space_separator_start).Length < _MIN_WALL_LENGTH:
+            self._cancel_space_separator_tool()
+            return
+
+        try:
+            separator = self._create_space_separator(self._space_separator_start, point)
+        except Exception:
+            self._cancel_space_separator_tool()
+            FreeCAD.Console.PrintError(
+                translate("BIM_PlanEdit", "Failed to create the space separator.\n")
+            )
+            return
+
+        self._register_plan_object(separator)
+        self._cancel_space_separator_tool(refresh=False)
+        self.current_tool = "Select"
+        self._refresh_selected_wall()
+        self._refresh_task_panel_status()
+
     def _has_active_wall_edit(self):
         return self._is_wall_edit_modal_active() or self._embedded_tool_name == "Wall"
 
@@ -5238,6 +5417,9 @@ class PlanEditSession:
             return
         if self._has_active_rect_wall_tool():
             self._cancel_rect_wall_tool()
+            return
+        if self._has_active_space_separator_tool():
+            self._cancel_space_separator_tool()
 
     # Selection observer interface
 
@@ -6234,6 +6416,16 @@ class PlanEditSession:
             "Set Space Text": (
                 (
                     translate("BIM_PlanEdit", "%1 place text"),
+                    ui.MouseLeft,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 cancel"),
+                    ui.KeyEscape,
+                ),
+            ),
+            "Separator": (
+                (
+                    translate("BIM_PlanEdit", "%1 place separator"),
                     ui.MouseLeft,
                 ),
                 (
@@ -8948,6 +9140,7 @@ class PlanEditControlsWidget:
             self._build_button_row(
                 QtGui,
                 (
+                    ("separator_button", "Separator", self.on_separator_clicked),
                     ("move_button", "Move", self.on_move_clicked),
                     ("join_button", "Join", self.on_join_clicked),
                     ("reapply_button", "Reapply View", self.on_reapply_clicked),
@@ -8975,6 +9168,7 @@ class PlanEditControlsWidget:
             self.wall_button,
             self.rect_wall_button,
             self.space_button,
+            self.separator_button,
             self.move_button,
             self.join_button,
             self.reapply_button,
@@ -9255,6 +9449,7 @@ class PlanEditControlsWidget:
         self.wall_button = None
         self.rect_wall_button = None
         self.space_button = None
+        self.separator_button = None
         self.move_button = None
         self.join_button = None
         self.join_type_combo = None
@@ -9360,6 +9555,12 @@ class PlanEditControlsWidget:
                         area=self.session._format_space_region_candidate_area(hovered_candidate)
                     ),
                 )
+        elif tool == "Separator":
+            selection_state = translate("BIM_PlanEdit", "Separator: place divider")
+            selection_help = translate(
+                "BIM_PlanEdit",
+                "Click two points to place a room divider that can split Arch Spaces.",
+            )
         elif self.session.selected_opening:
             selection_state = translate("BIM_PlanEdit", "Opening: {label}").format(
                 label=self.session.selected_opening.Label
@@ -9414,7 +9615,7 @@ class PlanEditControlsWidget:
             selection_state = translate("BIM_PlanEdit", "Selection: none")
             selection_help = translate(
                 "BIM_PlanEdit",
-                "Select a wall, hosted opening, symbol instance, or space in the viewport to edit it.",
+                "Select a wall, hosted opening, symbol instance, or space to edit it, or use walls and separators to define spaces.",
             )
         selection_summary = self.session._get_plan_selection_summary_text()
         if selection_summary:
@@ -9521,6 +9722,7 @@ class PlanEditControlsWidget:
             self.wall_button,
             self.rect_wall_button,
             self.space_button,
+            self.separator_button,
             self.move_button,
             self.join_button,
             self.join_type_combo,
@@ -9574,6 +9776,9 @@ class PlanEditControlsWidget:
 
     def on_space_clicked(self):
         self.session.activate_space_tool()
+
+    def on_separator_clicked(self):
+        self.session.activate_space_separator_tool()
 
     def on_move_clicked(self):
         self.session.activate_move_tool()
