@@ -3781,6 +3781,39 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_clicking_opening_populates_selection_ex(self):
+        """Clicked opening selection should create a real SelectionEx entry for property view."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+        door = self._make_hosted_door(wall, name="SelectionDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("opening", door),
+        ):
+            activated = session._activate_opening_target((100, 100))
+
+        self.assertTrue(activated)
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [door.Name])
+        selection_ex = FreeCADGui.Selection.getSelectionEx("*")
+        self.assertEqual(len(selection_ex), 1)
+        self.assertEqual(selection_ex[0].ObjectName, door.Name)
+        self.assertIs(session.view.getActiveObject("Arch"), door)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_region_face_pick_survives_storey_object_hits(self):
         """Region face picks should still resolve when native picking only reports the storey."""
 
