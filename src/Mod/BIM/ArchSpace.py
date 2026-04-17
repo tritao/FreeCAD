@@ -669,6 +669,37 @@ class _Space(ArchComponent.Component):
         except Exception:
             return edge
 
+    def _make_transient_face_from_wires(self, wires):
+        import Part
+
+        plain_wires = []
+        for wire in wires or []:
+            plain_wire = self._copy_without_element_map(wire)
+            if plain_wire is None:
+                continue
+            if len(getattr(plain_wire, "Vertexes", []) or []) < 3:
+                continue
+            plain_wires.append(plain_wire)
+        if not plain_wires:
+            return None
+
+        maker = "Part::FaceMakerSimple" if len(plain_wires) == 1 else "Part::FaceMakerCheese"
+        try:
+            shape = Part.makeFace(plain_wires, maker, noElementMap=True)
+        except Exception:
+            return None
+        if not shape or shape.isNull():
+            return None
+
+        faces = [
+            face
+            for face in getattr(shape, "Faces", []) or []
+            if getattr(face, "Area", 0.0) > 0.000001
+        ]
+        if len(faces) != 1:
+            return None
+        return faces[0]
+
     def _get_horizontal_slice_faces_from_edges(self, section_edges):
         import Part
 
@@ -676,7 +707,11 @@ class _Space(ArchComponent.Component):
             return []
         plain_edges = [self._copy_clean_slice_edge(edge) for edge in section_edges]
         try:
-            section_shape = Part.makeFace(plain_edges, "Part::FaceMakerBuildFace")
+            section_shape = Part.makeFace(
+                plain_edges,
+                "Part::FaceMakerBuildFace",
+                noElementMap=True,
+            )
         except Exception:
             return []
         if not section_shape or section_shape.isNull():
@@ -844,10 +879,10 @@ class _Space(ArchComponent.Component):
                 for record in records
                 if record["parent"] is outer and record["depth"] == 1
             )
-            try:
-                return [ArchCommands.makeFace(wires_for_face)]
-            except Exception:
+            face = self._make_transient_face_from_wires(wires_for_face)
+            if face is None:
                 return []
+            return [face]
 
         faces = []
         for outer in [record for record in records if record["depth"] % 2 == 0]:
@@ -857,9 +892,8 @@ class _Space(ArchComponent.Component):
                 for record in records
                 if record["parent"] is outer and record["depth"] == outer["depth"] + 1
             )
-            try:
-                face = ArchCommands.makeFace(wires_for_face)
-            except Exception:
+            face = self._make_transient_face_from_wires(wires_for_face)
+            if face is None:
                 continue
             if getattr(face, "Area", 0.0) > 0.000001:
                 faces.append(face)
@@ -1480,9 +1514,8 @@ class _Space(ArchComponent.Component):
             if record.get("parent") is outer_record
             and record.get("depth") == outer_record.get("depth", 0) + 1
         )
-        try:
-            face = ArchCommands.makeFace(wires_for_face)
-        except Exception:
+        face = self._make_transient_face_from_wires(wires_for_face)
+        if face is None:
             return None
         if not face or getattr(face, "Area", 0.0) <= 0.000001:
             return None
