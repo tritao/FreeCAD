@@ -2078,14 +2078,6 @@ class PlanEditSession:
         except Exception:
             return False
 
-    @staticmethod
-    def _normalize_space_boundary_subnames(subnames):
-        if isinstance(subnames, str):
-            candidates = [subnames]
-        else:
-            candidates = list(subnames or [])
-        return tuple(str(name) for name in candidates if str(name).startswith("Face"))
-
     def _get_gui_selection_ex(self):
         try:
             return list(FreeCADGui.Selection.getSelectionEx() or [])
@@ -2150,73 +2142,11 @@ class PlanEditSession:
             return total.multiply(1.0 / float(len(points)))
         return self._get_space_reference_point(fallback_space)
 
-    def _get_wall_space_boundary_face_name(self, wall, reference_point):
-        wall = self._get_plan_semantic_object(wall)
-        if not self._is_plan_selectable_wall(wall):
-            return None
-        if reference_point is None:
-            return None
-        shape = getattr(wall, "Shape", None)
-        if shape is None or not getattr(shape, "Faces", None):
-            return None
-
-        best_face_name = None
-        best_sort_key = None
-        reference_point = FreeCAD.Vector(reference_point.x, reference_point.y, reference_point.z)
-        reference_z = float(reference_point.z)
-        for index, face in enumerate(shape.Faces, start=1):
-            try:
-                normal_raw = face.normalAt(0, 0)
-                center_raw = face.CenterOfMass
-                bound_box = face.BoundBox
-                normal = FreeCAD.Vector(normal_raw.x, normal_raw.y, normal_raw.z)
-                center = FreeCAD.Vector(center_raw.x, center_raw.y, center_raw.z)
-            except Exception:
-                continue
-            if normal.Length <= 1e-7:
-                continue
-            normal.normalize()
-            if abs(normal.z) > 0.2:
-                continue
-            if bound_box is not None and (
-                reference_z < (float(bound_box.ZMin) - 0.001)
-                or reference_z > (float(bound_box.ZMax) + 0.001)
-            ):
-                continue
-            facing_score = float(normal.dot(reference_point.sub(center)))
-            if facing_score <= 1e-7:
-                continue
-            sort_key = (float(face.Area or 0.0), facing_score)
-            if best_sort_key is None or sort_key > best_sort_key:
-                best_sort_key = sort_key
-                best_face_name = f"Face{index}"
-        if best_sort_key is None:
-            return None
-        return best_face_name
-
-    def _normalize_space_boundary_links(self, boundaries):
-        merged = {}
-        order = []
-        for obj, subnames in boundaries or []:
-            if not obj or self._is_plan_space_object(obj):
-                continue
-            name = getattr(obj, "Name", None)
-            if not name:
-                continue
-            face_names = self._normalize_space_boundary_subnames(subnames)
-            if not face_names:
-                continue
-            if name not in merged:
-                merged[name] = [obj, []]
-                order.append(name)
-            for face_name in face_names:
-                if face_name not in merged[name][1]:
-                    merged[name][1].append(face_name)
-        return [(merged[name][0], tuple(merged[name][1])) for name in order]
-
     def _get_space_boundary_entries(self, space):
         if not self._is_plan_space_object(space):
             return []
+        import ArchSpace
+
         entries = []
         for boundary in getattr(space, "Boundaries", []) or []:
             try:
@@ -2224,51 +2154,38 @@ class PlanEditSession:
                 subnames = boundary[1]
             except Exception:
                 continue
-            entries.append((obj, self._normalize_space_boundary_subnames(subnames)))
-        return self._normalize_space_boundary_links(entries)
+            entries.append((obj, ArchSpace.normalizeBoundarySubnames(subnames)))
+        return ArchSpace.normalizeBoundaryLinks(entries)
 
     def _space_boundary_key(self, boundary):
+        import ArchSpace
+
         obj, subnames = boundary
         return (
             getattr(obj, "Name", None),
-            tuple(self._normalize_space_boundary_subnames(subnames)),
+            tuple(ArchSpace.normalizeBoundarySubnames(subnames)),
         )
 
-    def _get_space_separator_boundary_face_names(self, separator):
-        if not self._is_plan_space_separator_object(separator):
-            return ()
-        shape = getattr(separator, "Shape", None)
-        if shape is None or not getattr(shape, "Faces", None):
-            return ()
-        return tuple(f"Face{index}" for index, _face in enumerate(shape.Faces, start=1))
-
     def _get_selected_space_boundary_links(self, fallback_space=None):
+        import ArchSpace
+
         selection_ex = self._get_gui_selection_ex()
         reference_point = (
             self._get_space_reference_point(fallback_space)
             if fallback_space is not None
             else self._get_space_boundary_reference_point(selection_ex)
         )
-        boundaries = []
+        entries = []
         for selection in selection_ex:
-            obj = getattr(selection, "Object", None)
-            if not obj or obj == fallback_space or self._is_plan_space_object(obj):
+            obj = self._get_plan_semantic_object(getattr(selection, "Object", None))
+            if not obj:
                 continue
-            face_names = self._normalize_space_boundary_subnames(
-                getattr(selection, "SubElementNames", []) or []
-            )
-            if face_names:
-                boundaries.append((obj, face_names))
-                continue
-            if self._is_plan_space_separator_object(obj):
-                face_names = self._get_space_separator_boundary_face_names(obj)
-                if face_names:
-                    boundaries.append((obj, face_names))
-                continue
-            face_name = self._get_wall_space_boundary_face_name(obj, reference_point)
-            if face_name:
-                boundaries.append((obj, (face_name,)))
-        return self._normalize_space_boundary_links(boundaries)
+            entries.append((obj, getattr(selection, "SubElementNames", []) or ()))
+        return ArchSpace.resolveBoundaryLinks(
+            entries,
+            reference_point=reference_point,
+            exclude_objects=(fallback_space,) if fallback_space is not None else None,
+        )
 
     def _get_space_region_seed_targets(self, targets=None):
         targets = list(targets if targets is not None else self._get_selected_plan_targets())
@@ -7182,7 +7099,9 @@ class PlanEditSession:
     def _set_space_boundaries(self, space, boundaries):
         if not self._is_plan_space_object(space):
             return False
-        boundaries = self._normalize_space_boundary_links(boundaries)
+        import ArchSpace
+
+        boundaries = ArchSpace.normalizeBoundaryLinks(boundaries)
         try:
             self.doc.openTransaction(translate("BIM_PlanEdit", "Edit Space Boundaries"))
             space.Boundaries = boundaries
