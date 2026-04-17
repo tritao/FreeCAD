@@ -2303,51 +2303,6 @@ class PlanEditSession:
         region_seed_space, _wall_targets = self._get_space_region_seed_targets(targets)
         return region_seed_space
 
-    def _get_space_boundary_overlap_cut_z(self, space, boundary_faces):
-        if not self._is_plan_space_object(space):
-            return None
-        shape = getattr(space, "Shape", None)
-        bound_box = getattr(shape, "BoundBox", None)
-        if bound_box is None:
-            return None
-
-        import ArchSpace
-
-        z_min = float(bound_box.ZMin)
-        z_max = float(bound_box.ZMax)
-        overlap_min, overlap_max = (
-            ArchSpace._space_boundary_analyzer._get_boundary_vertical_overlap(boundary_faces)
-        )
-        if overlap_min is not None:
-            z_min = max(z_min, float(overlap_min))
-        if overlap_max is not None:
-            z_max = min(z_max, float(overlap_max))
-        if z_max - z_min <= 0.000001:
-            return None
-        return 0.5 * (z_min + z_max)
-
-    def _get_space_footprint_splitter_points(self, space, boundary_faces):
-        if not boundary_faces:
-            return []
-
-        import ArchSpace
-
-        cut_z = self._get_space_boundary_overlap_cut_z(space, boundary_faces)
-        if cut_z is None:
-            return []
-
-        splitter_points = []
-        for edge in ArchSpace._space_boundary_analyzer._get_horizontal_slice_edges(
-            boundary_faces,
-            cut_z,
-        ):
-            for vertex in getattr(edge, "Vertexes", []) or []:
-                point = getattr(vertex, "Point", None)
-                if point is None:
-                    continue
-                splitter_points.append(FreeCAD.Vector(point.x, point.y, point.z))
-        return splitter_points
-
     def _copy_shape_without_element_map(self, shape):
         if shape is None:
             return None
@@ -2363,141 +2318,6 @@ class PlanEditSession:
                 return shape
         except Exception:
             return shape
-
-    def _split_space_footprint_edge(self, edge, splitter_points, target_z, tolerance=0.001):
-        import Part
-
-        vertexes = list(getattr(edge, "Vertexes", []) or [])
-        curve = getattr(edge, "Curve", None)
-        if len(vertexes) != 2 or curve.__class__.__name__ != "Line":
-            try:
-                clean_edge = edge.copy()
-                if getattr(clean_edge, "ElementMapSize", 0):
-                    clean_edge.clearElementMap()
-            except Exception:
-                clean_edge = edge
-            return [clean_edge]
-
-        start = FreeCAD.Vector(vertexes[0].Point.x, vertexes[0].Point.y, target_z)
-        end = FreeCAD.Vector(vertexes[1].Point.x, vertexes[1].Point.y, target_z)
-        direction = end.sub(start)
-        length_sq = direction.dot(direction)
-        if length_sq <= tolerance * tolerance:
-            return []
-
-        parameters = [0.0, 1.0]
-        for point in splitter_points or []:
-            projected = FreeCAD.Vector(point.x, point.y, target_z)
-            t = direction.dot(projected.sub(start)) / length_sq
-            if t <= tolerance or t >= 1.0 - tolerance:
-                continue
-            closest = start.add(direction.multiply(t))
-            if closest.distanceToPoint(projected) > max(tolerance, math.sqrt(length_sq) * 1e-6):
-                continue
-            parameters.append(float(t))
-
-        parameters = sorted(set(round(value, 9) for value in parameters))
-        edges = []
-        for param_a, param_b in zip(parameters, parameters[1:]):
-            if param_b - param_a <= 1e-9:
-                continue
-            segment_start = start.add(direction.multiply(param_a))
-            segment_end = start.add(direction.multiply(param_b))
-            if segment_start.distanceToPoint(segment_end) <= tolerance:
-                continue
-            try:
-                edges.append(Part.makeLine(segment_start, segment_end))
-            except Exception:
-                continue
-        return edges
-
-    def _make_space_footprint_boundary_face(self, edge, height):
-        import Part
-
-        vertexes = list(getattr(edge, "Vertexes", []) or [])
-        if len(vertexes) == 2 and getattr(edge, "Curve", None).__class__.__name__ == "Line":
-            p1 = FreeCAD.Vector(vertexes[0].Point)
-            p2 = FreeCAD.Vector(vertexes[1].Point)
-            p3 = FreeCAD.Vector(p2.x, p2.y, p2.z + height)
-            p4 = FreeCAD.Vector(p1.x, p1.y, p1.z + height)
-            try:
-                return Part.Face(Part.makePolygon([p1, p2, p3, p4, p1]))
-            except Exception:
-                return None
-
-        try:
-            upper = edge.copy()
-            upper.translate(FreeCAD.Vector(0, 0, height))
-            if getattr(edge, "ElementMapSize", 0):
-                edge.clearElementMap()
-            if getattr(upper, "ElementMapSize", 0):
-                upper.clearElementMap()
-            return Part.makeRuledSurface(edge, upper)
-        except Exception:
-            return None
-
-    def _get_space_footprint_boundary_faces(self, space, boundary_faces=None):
-        if not self._is_plan_space_object(space):
-            return []
-        shape = getattr(space, "Shape", None)
-        bound_box = getattr(shape, "BoundBox", None)
-        if shape is None or bound_box is None or float(bound_box.ZLength) <= 0.000001:
-            return []
-
-        shape_faces = []
-        for face in getattr(shape, "Faces", []) or []:
-            face_bb = getattr(face, "BoundBox", None)
-            if face_bb is None or float(face_bb.ZLength) <= 0.000001:
-                continue
-            if getattr(face, "Area", 0.0) <= 0.000001:
-                continue
-            shape_faces.append(face)
-        if shape_faces:
-            return shape_faces
-
-        proxy = getattr(space, "Proxy", None)
-        if not proxy or not hasattr(proxy, "getFootprint"):
-            return []
-        try:
-            footprint_faces = list(proxy.getFootprint(space) or [])
-        except Exception:
-            return []
-        if not footprint_faces:
-            return []
-
-        import Part
-
-        height = float(bound_box.ZLength)
-        target_z = float(bound_box.ZMin)
-        splitter_points = self._get_space_footprint_splitter_points(space, boundary_faces)
-        vertical_faces = []
-        for footprint_face in footprint_faces:
-            for wire in getattr(footprint_face, "Wires", []) or []:
-                for edge in getattr(wire, "Edges", []) or []:
-                    for lower in self._split_space_footprint_edge(
-                        edge,
-                        splitter_points,
-                        target_z,
-                    ):
-                        face = self._make_space_footprint_boundary_face(lower, height)
-                        if face and getattr(face, "Area", 0.0) > 0.000001:
-                            vertical_faces.append(face)
-        return vertical_faces
-
-    def _get_space_creation_boundary_faces(self, boundaries, region_seed_space=None):
-        import ArchSpace
-
-        boundary_faces = list(
-            ArchSpace._space_boundary_analyzer._get_boundary_faces_from_links(boundaries)
-        )
-        if region_seed_space is not None:
-            boundary_faces.extend(
-                self._get_space_footprint_boundary_faces(
-                    region_seed_space,
-                    boundary_faces=boundary_faces,
-                )
-            )
-        return boundary_faces
 
     def _get_space_creation_request(self, targets=None):
         targets = targets if targets is not None else self._get_selected_plan_targets()
@@ -2519,10 +2339,6 @@ class PlanEditSession:
             "label": label,
             "region_seed_space": region_seed_space,
             "boundaries": boundaries,
-            "boundary_faces": self._get_space_creation_boundary_faces(
-                boundaries,
-                region_seed_space=region_seed_space,
-            ),
         }
 
     def _get_existing_space_region_filter_spaces(self, exclude=None):
@@ -2632,19 +2448,15 @@ class PlanEditSession:
         self,
         boundaries,
         label=None,
-        boundary_faces=None,
         seed_space=None,
     ):
         import ArchSpace
 
-        if boundary_faces is None:
-            report = ArchSpace.getBoundaryRegionCandidates(boundaries, label=label)
-        else:
-            report = ArchSpace.getBoundaryFaceRegionCandidates(
-                boundary_faces,
-                label=label,
-                boundary_count=len(boundaries) + (1 if seed_space is not None else 0),
-            )
+        report = ArchSpace.getBoundaryRegionCandidates(
+            boundaries,
+            label=label,
+            seed_space=seed_space,
+        )
         report = dict(report or {})
         candidates = list(report.get("candidates", []) or [])
         skipped_claimed = 0
@@ -3018,15 +2830,10 @@ class PlanEditSession:
 
         import ArchSpace
 
-        if request["region_seed_space"] is not None:
-            return ArchSpace.analyzeBoundaryFaces(
-                request["boundary_faces"],
-                label=request["label"],
-                boundary_count=len(request["boundaries"]) + 1,
-            )
         return ArchSpace.analyzeBoundaryLinks(
             request["boundaries"],
             label=request["label"],
+            seed_space=request["region_seed_space"],
         )
 
     def _format_space_preflight_text(self, report):
@@ -7048,14 +6855,11 @@ class PlanEditSession:
                     pass
         return base
 
-    def _begin_space_region_pick(
-        self, boundaries, label=None, boundary_faces=None, seed_space=None, report=None
-    ):
+    def _begin_space_region_pick(self, boundaries, label=None, seed_space=None, report=None):
         if report is None:
             report = self._get_space_region_candidate_report(
                 boundaries,
                 label=label,
-                boundary_faces=boundary_faces,
                 seed_space=seed_space,
             )
         candidates = list(report.get("candidates", []) or [])
@@ -7213,7 +7017,6 @@ class PlanEditSession:
             report = self._get_space_region_candidate_report(
                 boundaries,
                 label=request["label"],
-                boundary_faces=request["boundary_faces"],
                 seed_space=region_seed_space,
             )
             candidate_count = int(report.get("candidate_count", 0) or 0)
@@ -7221,7 +7024,6 @@ class PlanEditSession:
                 return self._begin_space_region_pick(
                     boundaries,
                     label=report.get("label"),
-                    boundary_faces=request["boundary_faces"],
                     seed_space=region_seed_space,
                     report=report,
                 )
