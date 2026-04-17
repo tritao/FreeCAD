@@ -172,6 +172,9 @@ SpaceTypes = [
     "Transportation - Terminal - Ticket Counter",
 ]
 
+_SLICE_EDGE_VERTEX_TOLERANCE = 0.001
+_SLICE_EDGE_GAP_BRIDGE_TOLERANCE = 150.0
+
 ConditioningTypes = [
     "Unconditioned",
     "Heated",
@@ -669,6 +672,111 @@ class _Space(ArchComponent.Component):
         except Exception:
             return edge
 
+    def _get_slice_edge_endpoint_records(self, section_edges):
+        records = []
+        for edge_index, edge in enumerate(section_edges or []):
+            vertexes = list(getattr(edge, "Vertexes", []) or [])
+            if len(vertexes) < 2:
+                continue
+            for endpoint_index, vertex in enumerate((vertexes[0], vertexes[-1])):
+                try:
+                    point = FreeCAD.Vector(vertex.Point)
+                except Exception:
+                    continue
+                records.append(
+                    {
+                        "id": len(records),
+                        "edge_index": edge_index,
+                        "edge": edge,
+                        "endpoint_index": endpoint_index,
+                        "point": point,
+                    }
+                )
+        return records
+
+    def _get_slice_edge_gap_distance(self, point, other):
+        delta = FreeCAD.Vector(point).sub(FreeCAD.Vector(other))
+        delta.z = 0.0
+        return float(delta.Length)
+
+    def _get_gap_bridged_slice_edges(
+        self,
+        section_edges,
+        gap_tolerance=_SLICE_EDGE_GAP_BRIDGE_TOLERANCE,
+        vertex_tolerance=_SLICE_EDGE_VERTEX_TOLERANCE,
+    ):
+        import Part
+
+        edges = list(section_edges or [])
+        if len(edges) < 2:
+            return edges
+
+        endpoint_records = self._get_slice_edge_endpoint_records(edges)
+        if len(endpoint_records) < 2:
+            return edges
+
+        dangling = []
+        for record in endpoint_records:
+            point = record["point"]
+            is_connected = False
+            for other in endpoint_records:
+                if other["id"] == record["id"] or other["edge_index"] == record["edge_index"]:
+                    continue
+                if self._get_slice_edge_gap_distance(point, other["point"]) <= vertex_tolerance:
+                    is_connected = True
+                    break
+            if not is_connected:
+                dangling.append(record)
+        if len(dangling) < 2:
+            return edges
+
+        nearest_pairs = {}
+        for record in dangling:
+            point = record["point"]
+            best_match = None
+            best_distance = None
+            for other in dangling:
+                if other["id"] == record["id"] or other["edge_index"] == record["edge_index"]:
+                    continue
+                distance = self._get_slice_edge_gap_distance(point, other["point"])
+                if distance <= vertex_tolerance or distance > gap_tolerance:
+                    continue
+                if best_distance is None or distance < best_distance:
+                    best_match = other
+                    best_distance = distance
+            if best_match is not None:
+                nearest_pairs[record["id"]] = (best_distance, best_match)
+
+        connectors = []
+        used_ids = set()
+        for record in dangling:
+            record_id = record["id"]
+            if record_id in used_ids:
+                continue
+            pair = nearest_pairs.get(record_id)
+            if pair is None:
+                continue
+            _distance, other = pair
+            other_id = other["id"]
+            if other_id in used_ids:
+                continue
+            other_pair = nearest_pairs.get(other_id)
+            if other_pair is None or other_pair[1]["id"] != record_id:
+                continue
+            try:
+                connector = Part.makeLine(record["point"], other["point"])
+            except Exception:
+                continue
+            if getattr(connector, "Length", 0.0) <= vertex_tolerance:
+                continue
+            connectors.append(connector)
+            used_ids.add(record_id)
+            used_ids.add(other_id)
+
+        if not connectors:
+            return edges
+        return edges + connectors
+
     def _make_transient_face_from_wires(self, wires):
         import Part
 
@@ -759,45 +867,60 @@ class _Space(ArchComponent.Component):
     def _get_horizontal_slice_wires(self, shapes, cut_z):
         import Part
 
+        def get_sorted_edge_wires(candidate_edges):
+            plain_edges = [self._copy_clean_slice_edge(edge) for edge in candidate_edges]
+            try:
+                edge_groups = Part.sortEdges(plain_edges)
+            except AttributeError:
+                edge_groups = Part.__sortEdges__(plain_edges)
+
+            if edge_groups and hasattr(edge_groups[0], "ShapeType"):
+                edge_groups = [edge_groups]
+
+            wires = []
+            for edges in edge_groups or []:
+                if not edges:
+                    continue
+                try:
+                    wire = Part.Wire(edges)
+                except Exception:
+                    return []
+                if not wire.isClosed() or len(wire.Vertexes) < 3:
+                    return []
+                wires.append(wire)
+            return wires
+
         section_edges = self._get_horizontal_slice_edges(shapes, cut_z)
         if not section_edges:
             return []
 
-        build_faces = self._get_horizontal_slice_faces_from_edges(section_edges)
-        if build_faces:
-            wires = []
-            seen = set()
-            for face in build_faces:
-                for wire in getattr(face, "Wires", []) or []:
-                    if not wire.isClosed() or len(wire.Vertexes) < 3:
-                        continue
-                    identity = self._get_wire_identity(wire)
-                    if identity in seen:
-                        continue
-                    seen.add(identity)
-                    wires.append(wire)
+        edge_sets = [section_edges]
+        bridged_edges = self._get_gap_bridged_slice_edges(section_edges)
+        if len(bridged_edges) > len(section_edges):
+            edge_sets.append(bridged_edges)
+
+        for candidate_edges in edge_sets:
+            wires = get_sorted_edge_wires(candidate_edges)
             if wires:
                 return wires
 
-        plain_edges = [self._copy_clean_slice_edge(edge) for edge in section_edges]
-        try:
-            edge_groups = Part.sortEdges(plain_edges)
-        except AttributeError:
-            edge_groups = Part.__sortEdges__(plain_edges)
-
-        if edge_groups and hasattr(edge_groups[0], "ShapeType"):
-            edge_groups = [edge_groups]
-
-        wires = []
-        for edges in edge_groups or []:
-            try:
-                wire = Part.Wire(edges)
-            except Exception:
-                continue
-            if not wire.isClosed() or len(wire.Vertexes) < 3:
-                continue
-            wires.append(wire)
-        return wires
+        for candidate_edges in edge_sets:
+            build_faces = self._get_horizontal_slice_faces_from_edges(candidate_edges)
+            if build_faces:
+                wires = []
+                seen = set()
+                for face in build_faces:
+                    for wire in getattr(face, "Wires", []) or []:
+                        if not wire.isClosed() or len(wire.Vertexes) < 3:
+                            continue
+                        identity = self._get_wire_identity(wire)
+                        if identity in seen:
+                            continue
+                        seen.add(identity)
+                        wires.append(wire)
+                if wires:
+                    return wires
+        return []
 
     def _get_wire_face_sample_point(self, face):
         try:
@@ -1905,6 +2028,9 @@ class _SpaceBoundaryAnalyzer:
     _get_boundary_faces_from_links = _Space._get_boundary_faces_from_links
     _copy_without_element_map = _Space._copy_without_element_map
     _copy_clean_slice_edge = _Space._copy_clean_slice_edge
+    _get_slice_edge_endpoint_records = _Space._get_slice_edge_endpoint_records
+    _get_slice_edge_gap_distance = _Space._get_slice_edge_gap_distance
+    _get_gap_bridged_slice_edges = _Space._get_gap_bridged_slice_edges
     _make_transient_face_from_wires = _Space._make_transient_face_from_wires
     _get_horizontal_slice_faces_from_edges = _Space._get_horizontal_slice_faces_from_edges
     _get_wire_identity = _Space._get_wire_identity

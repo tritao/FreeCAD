@@ -978,6 +978,149 @@ class TestArchSpace(TestArchBase.TestArchBase):
         self.assertAlmostEqual(space.Proxy.getArea(space), expected_area)
         self.assertAlmostEqual(space.Area.getValueAs("m^2").Value, 12.0, places=3)
 
+    def test_space_boundaries_bridge_small_endpoint_gaps(self):
+        """Small endpoint gaps between room boundaries should be bridged conservatively."""
+        operation = "Arch Space bridges small endpoint gaps"
+        self.printTestMessage(operation)
+
+        height = 2500.0
+        expected_area = 3000.0 * 3000.0
+
+        def make_boundary_face(name, points):
+            face_object = App.ActiveDocument.addObject("Part::Feature", name)
+            face_object.Shape = Part.Face(Part.makePolygon(points + [points[0]]))
+            return face_object
+
+        boundaries = [
+            (
+                make_boundary_face(
+                    "SouthWall",
+                    [
+                        App.Vector(1000.0, 0.0, 0.0),
+                        App.Vector(4000.0, 0.0, 0.0),
+                        App.Vector(4000.0, 0.0, height),
+                        App.Vector(1000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "EastWall",
+                    [
+                        App.Vector(4000.0, 0.0, 0.0),
+                        App.Vector(4000.0, 3000.0, 0.0),
+                        App.Vector(4000.0, 3000.0, height),
+                        App.Vector(4000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "NorthWall",
+                    [
+                        App.Vector(4000.0, 3000.0, 0.0),
+                        App.Vector(1000.0, 3000.0, 0.0),
+                        App.Vector(1000.0, 3000.0, height),
+                        App.Vector(4000.0, 3000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "WestWallWithSmallGap",
+                    [
+                        App.Vector(1000.0, 3000.0, 0.0),
+                        App.Vector(1000.0, 100.0, 0.0),
+                        App.Vector(1000.0, 100.0, height),
+                        App.Vector(1000.0, 3000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+        ]
+
+        preflight = ArchSpace.analyzeBoundaryLinks(boundaries, label="Small Gap Preview")
+        self.assertTrue(preflight["valid"])
+        self.assertEqual(preflight["code"], "valid")
+
+        space = Arch.makeSpace(boundaries)
+        App.ActiveDocument.recompute()
+
+        self.assertEqual(len(space.Shape.Solids), 1)
+        self.assertAlmostEqual(space.Proxy.getArea(space), expected_area)
+        self.assertAlmostEqual(space.Area.getValueAs("m^2").Value, 9.0, places=3)
+
+    def test_space_boundaries_do_not_bridge_large_endpoint_gaps(self):
+        """Large endpoint gaps should still fail so missing walls are reported clearly."""
+        operation = "Arch Space rejects large endpoint gaps"
+        self.printTestMessage(operation)
+
+        height = 2500.0
+
+        def make_boundary_face(name, points):
+            face_object = App.ActiveDocument.addObject("Part::Feature", name)
+            face_object.Shape = Part.Face(Part.makePolygon(points + [points[0]]))
+            return face_object
+
+        boundaries = [
+            (
+                make_boundary_face(
+                    "SouthWall",
+                    [
+                        App.Vector(1000.0, 0.0, 0.0),
+                        App.Vector(4000.0, 0.0, 0.0),
+                        App.Vector(4000.0, 0.0, height),
+                        App.Vector(1000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "EastWall",
+                    [
+                        App.Vector(4000.0, 0.0, 0.0),
+                        App.Vector(4000.0, 3000.0, 0.0),
+                        App.Vector(4000.0, 3000.0, height),
+                        App.Vector(4000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "NorthWall",
+                    [
+                        App.Vector(4000.0, 3000.0, 0.0),
+                        App.Vector(1000.0, 3000.0, 0.0),
+                        App.Vector(1000.0, 3000.0, height),
+                        App.Vector(4000.0, 3000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "WestWallWithLargeGap",
+                    [
+                        App.Vector(1000.0, 3000.0, 0.0),
+                        App.Vector(1000.0, 400.0, 0.0),
+                        App.Vector(1000.0, 400.0, height),
+                        App.Vector(1000.0, 3000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+        ]
+
+        preflight = ArchSpace.analyzeBoundaryLinks(boundaries, label="Large Gap Preview")
+        self.assertFalse(preflight["valid"])
+        self.assertEqual(preflight["code"], "open_loop")
+        self.assertIn("closed room loop", preflight["message"])
+
     def test_space_boundaries_extract_room_from_t_junction_overhangs(self):
         """Boundary analysis should recover a room loop from overhanging wall spans."""
         operation = "Arch Space extracts room loop from T-junction spans"
