@@ -50,6 +50,7 @@ SET(Arch_SRCS
     ArchRoof.py
     ArchStairs.py
     ArchSpace.py
+    ArchPlanRegion.py
     ArchPlanGeometry.py
     ArchRebar.py
     ArchTessellation.py
