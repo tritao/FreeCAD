@@ -8890,6 +8890,19 @@ class PlanEditSession:
 class PlanEditControlsWidget:
     """Reusable session controls widget for Plan Edit mode."""
 
+    _COMMON_SPACE_TYPES = (
+        "Undefined",
+        "Room",
+        "Office",
+        "Restrooms",
+        "Corridor / Transition",
+        "Lobby",
+        "Dining Area",
+        "Exterior",
+        "Active Storage",
+        "Electrical / Mechanical",
+    )
+
     def __init__(self, session):
         from PySide import QtGui
 
@@ -8898,6 +8911,8 @@ class PlanEditControlsWidget:
         self._modal_focus_widgets = []
         self._saved_focus_policies = {}
         self._refreshing_space_editor = False
+        self._space_type_option_model = None
+        self._space_type_completer = None
         self.form = self._build_form(QtGui)
         try:
             self.form.setObjectName("BIMPlanEditContextControls")
@@ -9026,7 +9041,100 @@ class PlanEditControlsWidget:
         row.addWidget(self.unjoin_button)
         return row
 
+    def _get_space_type_display_options(self, options):
+        normalized = []
+        seen = set()
+        for option in options or []:
+            option = str(option or "").strip()
+            if not option or option in seen:
+                continue
+            seen.add(option)
+            normalized.append(option)
+
+        common = [option for option in self._COMMON_SPACE_TYPES if option in seen]
+        remaining = [option for option in normalized if option not in common]
+        if common and remaining:
+            return common + [None] + remaining
+        return common or remaining
+
+    def _set_space_type_combo_options(self, options):
+        from PySide import QtCore
+
+        if self.space_type_combo is None:
+            return
+
+        normalized = []
+        seen = set()
+        for option in options or []:
+            option = str(option or "").strip()
+            if not option or option in seen:
+                continue
+            seen.add(option)
+            normalized.append(option)
+
+        self.space_type_combo.clear()
+        for option in self._get_space_type_display_options(normalized):
+            if option is None:
+                try:
+                    self.space_type_combo.insertSeparator(self.space_type_combo.count())
+                except Exception:
+                    pass
+                continue
+            self.space_type_combo.addItem(option, option)
+            index = self.space_type_combo.count() - 1
+            try:
+                self.space_type_combo.setItemData(index, option, QtCore.Qt.ToolTipRole)
+            except Exception:
+                pass
+
+        if self._space_type_option_model is not None:
+            try:
+                self._space_type_option_model.setStringList(normalized)
+            except Exception:
+                pass
+
+    def _find_space_type_combo_index(self, value):
+        value = str(value or "").strip().lower()
+        if not value or self.space_type_combo is None:
+            return -1
+        for index in range(self.space_type_combo.count()):
+            item_value = self.space_type_combo.itemData(index)
+            if item_value is None:
+                item_value = self.space_type_combo.itemText(index)
+            if str(item_value or "").strip().lower() == value:
+                return index
+        return -1
+
+    def _commit_space_type_combo_text(self, value):
+        if self.space_type_combo is None:
+            return False
+
+        if hasattr(value, "data"):
+            try:
+                value = value.data()
+            except Exception:
+                pass
+
+        index = self._find_space_type_combo_index(value)
+        if index >= 0:
+            self.space_type_combo.setCurrentIndex(index)
+            line_edit = self.space_type_combo.lineEdit()
+            if line_edit is not None:
+                line_edit.setText(self.space_type_combo.itemText(index))
+            return True
+
+        line_edit = self.space_type_combo.lineEdit()
+        current_index = self.space_type_combo.currentIndex()
+        if line_edit is not None:
+            if current_index >= 0:
+                line_edit.setText(self.space_type_combo.itemText(current_index))
+            else:
+                line_edit.clear()
+        return False
+
     def _build_space_editor(self, QtGui):
+        from PySide import QtCore
+
         editor = QtGui.QGroupBox(translate("BIM_PlanEdit", "Space"))
         editor.setVisible(False)
         layout = QtGui.QVBoxLayout(editor)
@@ -9041,6 +9149,44 @@ class PlanEditControlsWidget:
         form.addRow(translate("BIM_PlanEdit", "Label"), self.space_label_edit)
 
         self.space_type_combo = QtGui.QComboBox(editor)
+        self.space_type_combo.setEditable(True)
+        self.space_type_combo.setInsertPolicy(QtGui.QComboBox.NoInsert)
+        self.space_type_combo.setMaxVisibleItems(12)
+        if hasattr(QtGui.QComboBox, "AdjustToMinimumContentsLengthWithIcon"):
+            self.space_type_combo.setSizeAdjustPolicy(
+                QtGui.QComboBox.AdjustToMinimumContentsLengthWithIcon
+            )
+        if hasattr(self.space_type_combo, "setMinimumContentsLength"):
+            self.space_type_combo.setMinimumContentsLength(18)
+        view = self.space_type_combo.view()
+        if view is not None:
+            if hasattr(view, "setTextElideMode"):
+                view.setTextElideMode(QtCore.Qt.ElideRight)
+            if hasattr(view, "setUniformItemSizes"):
+                view.setUniformItemSizes(True)
+        self._space_type_option_model = QtCore.QStringListModel([], self.space_type_combo)
+        self._space_type_completer = QtGui.QCompleter(
+            self._space_type_option_model,
+            self.space_type_combo,
+        )
+        self._space_type_completer.setCompletionMode(QtGui.QCompleter.PopupCompletion)
+        self._space_type_completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+        if hasattr(self._space_type_completer, "setFilterMode"):
+            self._space_type_completer.setFilterMode(QtCore.Qt.MatchContains)
+        self.space_type_combo.setCompleter(self._space_type_completer)
+        try:
+            self._space_type_completer.activated[str].connect(
+                self.on_space_type_completion_activated
+            )
+        except Exception:
+            self._space_type_completer.activated.connect(self.on_space_type_completion_activated)
+        line_edit = self.space_type_combo.lineEdit()
+        if line_edit is not None:
+            if hasattr(line_edit, "setPlaceholderText"):
+                line_edit.setPlaceholderText(translate("BIM_PlanEdit", "Search space types"))
+            if hasattr(line_edit, "setClearButtonEnabled"):
+                line_edit.setClearButtonEnabled(True)
+            line_edit.editingFinished.connect(self.on_space_type_editing_finished)
         self.space_type_combo.currentIndexChanged.connect(self.on_space_type_changed)
         form.addRow(translate("BIM_PlanEdit", "Type"), self.space_type_combo)
 
@@ -9121,6 +9267,8 @@ class PlanEditControlsWidget:
         self.space_add_button = None
         self.space_remove_button = None
         self.space_text_button = None
+        self._space_type_option_model = None
+        self._space_type_completer = None
         self.exit_button = None
         self._modal_focus_widgets = []
         self._saved_focus_policies = {}
@@ -9329,19 +9477,14 @@ class PlanEditControlsWidget:
             if self.space_type_combo is not None:
                 self.space_type_combo.blockSignals(True)
                 try:
-                    existing_items = [
-                        self.space_type_combo.itemText(index)
-                        for index in range(self.space_type_combo.count())
-                    ]
-                    if existing_items != options:
-                        self.space_type_combo.clear()
-                        for option in options:
-                            self.space_type_combo.addItem(option, option)
-                    current_index = self.space_type_combo.findData(current_type)
-                    if current_index < 0:
-                        current_index = self.space_type_combo.findText(current_type)
+                    self._set_space_type_combo_options(options)
+                    current_index = self._find_space_type_combo_index(current_type)
                     if current_index >= 0:
                         self.space_type_combo.setCurrentIndex(current_index)
+                    else:
+                        line_edit = self.space_type_combo.lineEdit()
+                        if line_edit is not None:
+                            line_edit.setText(current_type)
                 finally:
                     self.space_type_combo.blockSignals(False)
 
@@ -9461,6 +9604,19 @@ class PlanEditControlsWidget:
             return
         value = self.space_type_combo.itemData(index) or self.space_type_combo.itemText(index)
         self.session._set_selected_space_type(value)
+
+    def on_space_type_completion_activated(self, value):
+        if self._refreshing_space_editor or self.space_type_combo is None:
+            return
+        self._commit_space_type_combo_text(value)
+
+    def on_space_type_editing_finished(self):
+        if self._refreshing_space_editor or self.space_type_combo is None:
+            return
+        line_edit = self.space_type_combo.lineEdit()
+        if line_edit is None:
+            return
+        self._commit_space_type_combo_text(line_edit.text())
 
     def on_space_add_clicked(self):
         self.session._add_boundaries_to_selected_space()
