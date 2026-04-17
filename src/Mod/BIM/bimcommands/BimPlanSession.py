@@ -57,6 +57,7 @@ _OPENING_MOVE_SNAP_SET = {
 }
 _OPENING_MOVE_ANCHORS = ("center", "left", "right")
 _PLAN_JOIN_TYPES = ("Miter", "Butt", "Tee")
+_PRIMARY_PLAN_TARGET_KINDS = ("wall", "opening", "symbol", "region", "space")
 _OPENING_VISUAL_PROPERTIES = {
     "Shape",
     "Placement",
@@ -319,11 +320,8 @@ class PlanEditSession:
         self._plan_relation_status_message = None
         self.storeys = []
         self.active_storey = None
-        self.selected_wall = None
-        self.selected_opening = None
-        self.selected_symbol = None
-        self.selected_space = None
-        self.selected_region = None
+        self._selected_plan_target_kind = None
+        self._selected_plan_target_obj = None
         self.hovered_wall = None
         self.hovered_opening = None
         self.hovered_symbol = None
@@ -423,6 +421,74 @@ class PlanEditSession:
         app = QtGui.QApplication.instance()
         if app:
             app.aboutToQuit.connect(self.begin_teardown)
+
+    def _get_selected_target_for_kind(self, kind):
+        if getattr(self, "_selected_plan_target_kind", None) == kind:
+            return getattr(self, "_selected_plan_target_obj", None)
+        return None
+
+    def _set_selected_target_for_kind(self, kind, obj):
+        if obj is None:
+            if getattr(self, "_selected_plan_target_kind", None) == kind:
+                self._selected_plan_target_kind = None
+                self._selected_plan_target_obj = None
+            return
+        self._selected_plan_target_kind = kind
+        self._selected_plan_target_obj = obj
+
+    def _get_selected_plan_target_state(self):
+        kind = getattr(self, "_selected_plan_target_kind", None)
+        obj = getattr(self, "_selected_plan_target_obj", None)
+        if kind not in _PRIMARY_PLAN_TARGET_KINDS or obj is None:
+            return (None, None)
+        return (kind, obj)
+
+    def _set_selected_plan_target_state(self, kind=None, obj=None):
+        if kind not in _PRIMARY_PLAN_TARGET_KINDS or obj is None:
+            kind = None
+            obj = None
+        self._selected_plan_target_kind = kind
+        self._selected_plan_target_obj = obj
+
+    @property
+    def selected_wall(self):
+        return self._get_selected_target_for_kind("wall")
+
+    @selected_wall.setter
+    def selected_wall(self, wall):
+        self._set_selected_target_for_kind("wall", wall)
+
+    @property
+    def selected_opening(self):
+        return self._get_selected_target_for_kind("opening")
+
+    @selected_opening.setter
+    def selected_opening(self, opening):
+        self._set_selected_target_for_kind("opening", opening)
+
+    @property
+    def selected_symbol(self):
+        return self._get_selected_target_for_kind("symbol")
+
+    @selected_symbol.setter
+    def selected_symbol(self, symbol):
+        self._set_selected_target_for_kind("symbol", symbol)
+
+    @property
+    def selected_region(self):
+        return self._get_selected_target_for_kind("region")
+
+    @selected_region.setter
+    def selected_region(self, region):
+        self._set_selected_target_for_kind("region", region)
+
+    @property
+    def selected_space(self):
+        return self._get_selected_target_for_kind("space")
+
+    @selected_space.setter
+    def selected_space(self, space):
+        self._set_selected_target_for_kind("space", space)
 
     def _discard_stale_runtime_object(self, obj):
         if obj is self.view:
@@ -601,11 +667,7 @@ class PlanEditSession:
         self._saved_navigation_style = None
         self._saved_navigation_state = {}
         self._saved_view_action_state = {}
-        self.selected_wall = None
-        self.selected_opening = None
-        self.selected_symbol = None
-        self.selected_space = None
-        self.selected_region = None
+        self._set_selected_plan_target_state()
         self.hovered_wall = None
         self.hovered_opening = None
         self.hovered_symbol = None
@@ -2953,16 +3015,19 @@ class PlanEditSession:
 
     def _get_selected_plan_target(self):
         self._sanitize_plan_target_references()
-        if self._is_hosted_opening_object(self.selected_opening):
-            return ("opening", self.selected_opening)
-        if self._is_plan_symbol_instance(self.selected_symbol):
-            return ("symbol", self.selected_symbol)
-        if self._is_plan_region_object(self.selected_region):
-            return ("region", self.selected_region)
-        if self._is_plan_space_object(self.selected_space):
-            return ("space", self.selected_space)
-        if self._is_plan_selectable_wall(self.selected_wall):
-            return ("wall", self.selected_wall)
+        kind, obj = self._get_selected_plan_target_state()
+        validators = {
+            "opening": self._is_hosted_opening_object,
+            "symbol": self._is_plan_symbol_instance,
+            "region": self._is_plan_region_object,
+            "space": self._is_plan_space_object,
+            "wall": self._is_plan_selectable_wall,
+        }
+        validator = validators.get(kind)
+        if validator is not None and validator(obj):
+            return (kind, obj)
+        if kind is not None or obj is not None:
+            self._set_selected_plan_target_state()
         return (None, None)
 
     def _get_first_plan_target_from_selection(self, selection):
@@ -3236,42 +3301,18 @@ class PlanEditSession:
             FreeCAD.Console.PrintWarning(f"  - {label}: {detail}\n")
 
     def _set_selected_plan_target(self, kind=None, obj=None, pending_restore=False):
-        if kind == "opening" and self._is_hosted_opening_object(obj):
-            self.selected_wall = None
-            self.selected_opening = obj
-            self.selected_symbol = None
-            self.selected_space = None
-            self.selected_region = None
-        elif kind == "symbol" and self._is_plan_symbol_instance(obj):
-            self.selected_wall = None
-            self.selected_opening = None
-            self.selected_symbol = obj
-            self.selected_space = None
-            self.selected_region = None
-        elif kind == "region" and self._is_plan_region_object(obj):
-            self.selected_wall = None
-            self.selected_opening = None
-            self.selected_symbol = None
-            self.selected_space = None
-            self.selected_region = obj
-        elif kind == "space" and self._is_plan_space_object(obj):
-            self.selected_wall = None
-            self.selected_opening = None
-            self.selected_symbol = None
-            self.selected_space = obj
-            self.selected_region = None
-        elif kind == "wall" and self._is_plan_selectable_wall(obj):
-            self.selected_wall = obj
-            self.selected_opening = None
-            self.selected_symbol = None
-            self.selected_space = None
-            self.selected_region = None
+        validators = {
+            "opening": self._is_hosted_opening_object,
+            "symbol": self._is_plan_symbol_instance,
+            "region": self._is_plan_region_object,
+            "space": self._is_plan_space_object,
+            "wall": self._is_plan_selectable_wall,
+        }
+        validator = validators.get(kind)
+        if validator is not None and validator(obj):
+            self._set_selected_plan_target_state(kind, obj)
         else:
-            self.selected_wall = None
-            self.selected_opening = None
-            self.selected_symbol = None
-            self.selected_space = None
-            self.selected_region = None
+            self._set_selected_plan_target_state()
             kind = None
             obj = None
         self._clear_plan_relation_status()
@@ -3434,11 +3475,7 @@ class PlanEditSession:
         previous_space = self.selected_space
         previous_region = self.selected_region
         if self._is_wall_edit_modal_active():
-            self.selected_wall = self._edit_wall
-            self.selected_opening = None
-            self.selected_symbol = None
-            self.selected_space = None
-            self.selected_region = None
+            self._set_selected_plan_target_state("wall", self._edit_wall)
             if previous_wall != self.selected_wall:
                 self._sync_wall_grips()
             self._sync_hovered_wall_overlay()
@@ -3461,13 +3498,10 @@ class PlanEditSession:
             self._refresh_task_panel_status()
             return
         if self.current_tool == "Set Space Text":
-            self.selected_wall = None
-            self.selected_opening = None
-            self.selected_symbol = None
-            self.selected_space = (
-                self._edit_space if self._is_plan_space_object(self._edit_space) else None
+            self._set_selected_plan_target_state(
+                "space",
+                self._edit_space if self._is_plan_space_object(self._edit_space) else None,
             )
-            self.selected_region = None
             self._clear_wall_grips()
             self._sync_selected_wall_opening_context_overlay()
             self._sync_hovered_wall_overlay()
@@ -3491,13 +3525,11 @@ class PlanEditSession:
             self._refresh_task_panel_status()
             return
         if self.current_tool == "Join":
-            self.selected_opening = None
-            self.selected_symbol = None
-            self.selected_space = None
-            self.selected_region = None
-            if not self._is_plan_selectable_wall(self.selected_wall):
+            wall = self.selected_wall
+            if not self._is_plan_selectable_wall(wall):
                 self.current_tool = "Select"
-                self.selected_wall = None
+                wall = None
+            self._set_selected_plan_target_state("wall", wall)
             self._clear_wall_grips()
             self._sync_selected_wall_opening_context_overlay()
             self._sync_hovered_wall_overlay()
@@ -3520,11 +3552,7 @@ class PlanEditSession:
             self._sync_active_plan_target_object()
             self._refresh_task_panel_status()
             return
-        self.selected_wall = None
-        self.selected_opening = None
-        self.selected_symbol = None
-        self.selected_space = None
-        self.selected_region = None
+        self._set_selected_plan_target_state()
         try:
             selection = FreeCADGui.Selection.getSelection()
         except (ReferenceError, RuntimeError):
@@ -3558,16 +3586,7 @@ class PlanEditSession:
 
             if matched_target is not None:
                 target_kind, selected = matched_target
-                if target_kind == "wall":
-                    self.selected_wall = selected
-                elif target_kind == "opening":
-                    self.selected_opening = selected
-                elif target_kind == "symbol":
-                    self.selected_symbol = selected
-                elif target_kind == "region":
-                    self.selected_region = selected
-                elif target_kind == "space":
-                    self.selected_space = selected
+                self._set_selected_plan_target_state(target_kind, selected)
                 if len(selection) == 1 and target_kind not in ("space", "region"):
                     self._set_pending_selected_plan_target()
                 else:
@@ -3576,16 +3595,7 @@ class PlanEditSession:
                 self._set_pending_selected_plan_target()
         elif self.current_tool in ("Select", "Pick Space Region") and not selection:
             pending_kind, pending_target = self._consume_pending_selected_plan_target()
-            if pending_kind == "opening":
-                self.selected_opening = pending_target
-            elif pending_kind == "symbol":
-                self.selected_symbol = pending_target
-            elif pending_kind == "region":
-                self.selected_region = pending_target
-            elif pending_kind == "space":
-                self.selected_space = pending_target
-            elif pending_kind == "wall":
-                self.selected_wall = pending_target
+            self._set_selected_plan_target_state(pending_kind, pending_target)
         else:
             self._set_pending_selected_plan_target()
         if previous_wall != self.selected_wall:
@@ -5411,20 +5421,12 @@ class PlanEditSession:
             node_kind = node[0]
             if node_kind == "opening_handle":
                 _kind, obj, index = node
-                self.selected_opening = obj
-                self.selected_wall = None
-                self.selected_symbol = None
-                self.selected_space = None
-                self.selected_region = None
+                self._set_selected_plan_target_state("opening", obj)
                 self._clear_wall_grips()
                 self._activate_opening_handle(obj, index)
             elif node_kind == "symbol_handle":
                 _kind, obj, role = node
-                self.selected_symbol = obj
-                self.selected_wall = None
-                self.selected_opening = None
-                self.selected_space = None
-                self.selected_region = None
+                self._set_selected_plan_target_state("symbol", obj)
                 self._clear_wall_grips()
                 self._activate_symbol_handle(obj, role)
             else:
@@ -5436,20 +5438,11 @@ class PlanEditSession:
                 except Exception:
                     return
                 if self._is_hosted_opening_object(obj):
-                    self.selected_opening = obj
-                    self.selected_wall = None
-                    self.selected_symbol = None
-                    self.selected_space = None
-                    self.selected_region = None
+                    self._set_selected_plan_target_state("opening", obj)
                     self._clear_wall_grips()
                     self._activate_opening_handle(obj, index)
                 else:
-                    if obj != self.selected_wall:
-                        self.selected_wall = obj
-                    self.selected_opening = None
-                    self.selected_symbol = None
-                    self.selected_space = None
-                    self.selected_region = None
+                    self._set_selected_plan_target_state("wall", obj)
                     self._activate_wall_grip(index, wall=obj)
             if hasattr(event_callback, "setHandled"):
                 try:
