@@ -4004,6 +4004,156 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_space_tool_accepts_space_selected_after_wall(self):
+        """Space seeding should work even when the wall is the primary selected target."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "RegionSeedSpaceBase")
+        base.Length = 6000
+        base.Width = 4000
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Seed Space")
+        wall_base = Draft.makeLine(FreeCAD.Vector(2000, 0, 0), FreeCAD.Vector(2000, 4000, 0))
+        wall = Arch.makeWall(wall_base, width=200, height=2500, name="RegionDivider")
+        wall.Label = "Region Divider"
+        level.addObject(space)
+        level.addObject(wall)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session._set_pending_selected_plan_target("wall", wall)
+        session._set_gui_selection([wall, space])
+        session._refresh_selected_wall()
+
+        self.assertIn("Boundary candidates: 1 wall", session.task_panel.status.text())
+        self.assertTrue(session.activate_space_tool())
+        self.pump_gui_events()
+
+        self.assertEqual(session.current_tool, "Pick Space Region")
+        self.assertEqual(len(session._space_region_candidates), 2)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_space_tool_skips_regions_with_existing_spaces(self):
+        """Wall-only space creation should ignore enclosed regions already covered by a space."""
+
+        level = Arch.makeFloor(name="Level 0")
+        height = 2500.0
+
+        def make_boundary_face(name, points):
+            face_object = self.document.addObject("Part::Feature", name)
+            face_object.Shape = Part.Face(Part.makePolygon(points + [points[0]]))
+            return face_object
+
+        boundaries = [
+            (
+                make_boundary_face(
+                    "OuterSouth",
+                    [
+                        FreeCAD.Vector(0.0, 0.0, 0.0),
+                        FreeCAD.Vector(6000.0, 0.0, 0.0),
+                        FreeCAD.Vector(6000.0, 0.0, height),
+                        FreeCAD.Vector(0.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterEast",
+                    [
+                        FreeCAD.Vector(6000.0, 0.0, 0.0),
+                        FreeCAD.Vector(6000.0, 4000.0, 0.0),
+                        FreeCAD.Vector(6000.0, 4000.0, height),
+                        FreeCAD.Vector(6000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterNorth",
+                    [
+                        FreeCAD.Vector(6000.0, 4000.0, 0.0),
+                        FreeCAD.Vector(0.0, 4000.0, 0.0),
+                        FreeCAD.Vector(0.0, 4000.0, height),
+                        FreeCAD.Vector(6000.0, 4000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "OuterWest",
+                    [
+                        FreeCAD.Vector(0.0, 4000.0, 0.0),
+                        FreeCAD.Vector(0.0, 0.0, 0.0),
+                        FreeCAD.Vector(0.0, 0.0, height),
+                        FreeCAD.Vector(0.0, 4000.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+            (
+                make_boundary_face(
+                    "Divider",
+                    [
+                        FreeCAD.Vector(3000.0, 0.0, 0.0),
+                        FreeCAD.Vector(3000.0, 4000.0, 0.0),
+                        FreeCAD.Vector(3000.0, 4000.0, height),
+                        FreeCAD.Vector(3000.0, 0.0, height),
+                    ],
+                ),
+                ["Face1"],
+            ),
+        ]
+
+        base = self.document.addObject("Part::Box", "ExistingBathroomBase")
+        base.Length = 3000
+        base.Width = 4000
+        base.Height = 2500
+        base.Placement.Base = FreeCAD.Vector(3000, 0, 0)
+        existing_bathroom = Arch.makeSpace(base, name="Existing Bathroom")
+        level.addObject(existing_bathroom)
+        self.document.recompute()
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        before = {obj.Name for obj in self.document.Objects}
+
+        self.assertTrue(session._begin_space_region_pick(boundaries, label="Two Rooms"))
+        self.pump_gui_events()
+
+        created_spaces = [
+            obj
+            for obj in self.document.Objects
+            if obj.Name not in before and Draft.getType(obj) == "Space"
+        ]
+        self.assertEqual(len(created_spaces), 1)
+        created_space = created_spaces[0]
+
+        self.assertEqual(session.current_tool, "Select")
+        self.assertIs(session.selected_space, created_space)
+        self.assertEqual(len(session._space_region_candidates), 0)
+        self.assertAlmostEqual(created_space.Area.getValueAs("m^2").Value, 12.0, places=3)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_space_button_rejects_open_boundary_selection(self):
         """Open wall selections should fail cleanly and leave no orphan space object behind."""
 

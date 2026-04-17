@@ -2209,16 +2209,30 @@ class PlanEditSession:
                 boundaries.append((obj, (face_name,)))
         return self._normalize_space_boundary_links(boundaries)
 
+    def _get_space_region_seed_targets(self, targets=None):
+        targets = list(targets if targets is not None else self._get_selected_plan_targets())
+        if len(targets) < 2:
+            return (None, [])
+
+        space_targets = [
+            target_obj for target_kind, target_obj in targets if target_kind == "space"
+        ]
+        if len(space_targets) != 1:
+            return (None, [])
+
+        wall_targets = [
+            (target_kind, target_obj)
+            for target_kind, target_obj in targets
+            if target_kind == "wall"
+        ]
+        if len(wall_targets) != len(targets) - 1:
+            return (None, [])
+
+        return (space_targets[0], wall_targets)
+
     def _get_selected_space_region_seed(self, targets=None):
-        targets = targets if targets is not None else self._get_selected_plan_targets()
-        if not targets or targets[0][0] != "space":
-            return None
-        secondary_targets = targets[1:]
-        if not secondary_targets:
-            return None
-        if not all(target_kind == "wall" for target_kind, _target_obj in secondary_targets):
-            return None
-        return targets[0][1]
+        region_seed_space, _wall_targets = self._get_space_region_seed_targets(targets)
+        return region_seed_space
 
     def _get_space_boundary_overlap_cut_z(self, space, boundary_faces):
         if not self._is_plan_space_object(space):
@@ -2441,6 +2455,136 @@ class PlanEditSession:
                 region_seed_space=region_seed_space,
             ),
         }
+
+    def _get_existing_space_region_filter_spaces(self, exclude=None):
+        if not self.doc:
+            return []
+        active_storey_name = getattr(self.active_storey, "Name", None)
+        exclude_space = self._get_plan_semantic_object(exclude) if exclude else None
+        exclude_name = getattr(exclude_space, "Name", None)
+
+        spaces = []
+        seen = set()
+        for obj in self.doc.Objects:
+            semantic_obj = self._get_plan_semantic_object(obj)
+            name = getattr(semantic_obj, "Name", None)
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            if name == exclude_name or not self._is_plan_space_object(semantic_obj):
+                continue
+            if active_storey_name is not None:
+                storeys = self._get_object_storeys(semantic_obj)
+                if storeys and not any(parent.Name == active_storey_name for parent in storeys):
+                    continue
+            spaces.append(semantic_obj)
+        return spaces
+
+    def _is_space_region_candidate_claimed(self, candidate, spaces, area_ratio_tolerance=0.05):
+        if not isinstance(candidate, dict):
+            return False
+        candidate_face = candidate.get("face")
+        sample_point = candidate.get("sample_point")
+        candidate_area = float(candidate.get("area", 0.0) or 0.0)
+        if candidate_face is None or sample_point is None or candidate_area <= 0.000001:
+            return False
+
+        for space in spaces or []:
+            footprint_faces = self._get_space_footprint_faces(space)
+            if not footprint_faces:
+                continue
+            for footprint_face in footprint_faces:
+                try:
+                    test_point = FreeCAD.Vector(
+                        sample_point.x,
+                        sample_point.y,
+                        float(footprint_face.BoundBox.ZMin),
+                    )
+                    if not footprint_face.isInside(test_point, 0.001, True):
+                        continue
+                except Exception:
+                    continue
+                footprint_area = float(getattr(footprint_face, "Area", 0.0) or 0.0)
+                if footprint_area <= 0.000001:
+                    continue
+                if abs(footprint_area - candidate_area) <= candidate_area * float(
+                    area_ratio_tolerance
+                ):
+                    return True
+        return False
+
+    def _filter_claimed_space_region_candidates(self, candidates, exclude_space=None):
+        candidates = list(candidates or [])
+        if not candidates:
+            return candidates, 0
+
+        spaces = self._get_existing_space_region_filter_spaces(exclude=exclude_space)
+        if not spaces:
+            return candidates, 0
+
+        filtered = []
+        skipped = 0
+        for candidate in candidates:
+            if self._is_space_region_candidate_claimed(candidate, spaces):
+                skipped += 1
+                continue
+            filtered.append(candidate)
+        return filtered, skipped
+
+    def _get_space_region_candidate_report(
+        self,
+        boundaries,
+        label=None,
+        boundary_faces=None,
+        seed_space=None,
+    ):
+        import ArchSpace
+
+        if boundary_faces is None:
+            report = ArchSpace.getBoundaryRegionCandidates(boundaries, label=label)
+        else:
+            report = ArchSpace.getBoundaryFaceRegionCandidates(
+                boundary_faces,
+                label=label,
+                boundary_count=len(boundaries) + (1 if seed_space is not None else 0),
+            )
+        report = dict(report or {})
+        candidates = list(report.get("candidates", []) or [])
+        skipped_claimed = 0
+        if seed_space is None:
+            candidates, skipped_claimed = self._filter_claimed_space_region_candidates(candidates)
+        report["candidates"] = candidates
+        report["candidate_count"] = len(candidates)
+        report["skipped_claimed_candidate_count"] = skipped_claimed
+        return report
+
+    def _report_space_region_candidate_failure(self, report):
+        skipped_claimed = int(report.get("skipped_claimed_candidate_count", 0) or 0)
+        if skipped_claimed and not int(report.get("candidate_count", 0) or 0):
+            FreeCAD.Console.PrintWarning(
+                translate(
+                    "BIM_PlanEdit",
+                    "All enclosed regions are already covered by existing spaces.\n",
+                )
+            )
+            return
+
+        message = str(report.get("message") or "").strip()
+        details = [
+            str(detail).strip() for detail in report.get("details", []) if str(detail).strip()
+        ]
+        if message:
+            FreeCAD.Console.PrintError(message + "\n")
+            for detail in details:
+                FreeCAD.Console.PrintError(f"  - {detail}\n")
+            return
+
+        FreeCAD.Console.PrintError(
+            translate(
+                "BIM_PlanEdit",
+                "Failed to derive enclosed space regions from the current selection.\n",
+            )
+        )
 
     def _get_plan_target_kind_for_object(self, obj):
         if self._is_hosted_opening_object(obj):
@@ -2845,15 +2989,10 @@ class PlanEditSession:
         )
         if len(targets) <= 1:
             return preflight_text
-        secondary_targets = targets[1:]
-        primary_kind = targets[0][0]
-        if (
-            primary_kind == "space"
-            and secondary_targets
-            and all(target_kind == "wall" for target_kind, _target_obj in secondary_targets)
-        ):
+        region_seed_space, wall_targets = self._get_space_region_seed_targets(targets)
+        if region_seed_space is not None and wall_targets:
             summary = translate("BIM_PlanEdit", "Boundary candidates: {summary}").format(
-                summary=self._summarize_plan_targets(secondary_targets)
+                summary=self._summarize_plan_targets(wall_targets)
             )
         else:
             summary = translate("BIM_PlanEdit", "Selection set: {summary}").format(
@@ -6155,17 +6294,19 @@ class PlanEditSession:
             return []
         return self._get_footprint_overlay_polylines(faces)
 
-    def _get_space_overlay_polylines(self, space):
+    def _get_space_footprint_faces(self, space):
         if not self._is_plan_space_object(space):
             return []
         proxy = getattr(space, "Proxy", None)
         if not proxy or not hasattr(proxy, "getFootprint"):
             return []
         try:
-            faces = proxy.getFootprint(space) or []
+            return list(proxy.getFootprint(space) or [])
         except Exception:
             return []
-        return self._get_footprint_overlay_polylines(faces)
+
+    def _get_space_overlay_polylines(self, space):
+        return self._get_footprint_overlay_polylines(self._get_space_footprint_faces(space))
 
     def _get_opening_overlay_polylines(self, opening):
         if not opening:
@@ -6688,36 +6829,39 @@ class PlanEditSession:
         return base
 
     def _begin_space_region_pick(
-        self, boundaries, label=None, boundary_faces=None, seed_space=None
+        self, boundaries, label=None, boundary_faces=None, seed_space=None, report=None
     ):
-        import ArchSpace
-
-        if boundary_faces is None:
-            report = ArchSpace.getBoundaryRegionCandidates(boundaries, label=label)
-        else:
-            report = ArchSpace.getBoundaryFaceRegionCandidates(
-                boundary_faces,
+        if report is None:
+            report = self._get_space_region_candidate_report(
+                boundaries,
                 label=label,
-                boundary_count=len(boundaries) + (1 if seed_space is not None else 0),
+                boundary_faces=boundary_faces,
+                seed_space=seed_space,
             )
         candidates = list(report.get("candidates", []) or [])
         if not candidates:
-            message = str(report.get("message") or "").strip()
-            details = [
-                str(detail).strip() for detail in report.get("details", []) if str(detail).strip()
-            ]
-            if message:
-                FreeCAD.Console.PrintError(message + "\n")
-                for detail in details:
-                    FreeCAD.Console.PrintError(f"  - {detail}\n")
-            else:
-                FreeCAD.Console.PrintError(
-                    translate(
-                        "BIM_PlanEdit",
-                        "Failed to derive enclosed space regions from the current selection.\n",
-                    )
-                )
+            self._report_space_region_candidate_failure(report)
             return False
+
+        skipped_claimed = int(report.get("skipped_claimed_candidate_count", 0) or 0)
+        if skipped_claimed:
+            FreeCAD.Console.PrintMessage(
+                translate(
+                    "BIM_PlanEdit",
+                    "Ignoring {count} enclosed region(s) already covered by existing spaces.\n",
+                ).format(count=skipped_claimed)
+            )
+        if skipped_claimed and len(candidates) == 1:
+            space = self._create_space_from_region_candidate(
+                candidates[0],
+                boundaries=boundaries,
+                keep_boundaries=seed_space is None,
+            )
+            if not space:
+                return False
+            self._register_plan_object(space)
+            self._restore_selected_space(space)
+            return True
 
         self.current_tool = "Pick Space Region"
         self._space_region_pick_boundaries = list(boundaries)
@@ -6846,10 +6990,11 @@ class PlanEditSession:
             return False
 
         if region_seed_space is not None:
-            report = ArchSpace.getBoundaryFaceRegionCandidates(
-                request["boundary_faces"],
+            report = self._get_space_region_candidate_report(
+                boundaries,
                 label=request["label"],
-                boundary_count=len(boundaries) + 1,
+                boundary_faces=request["boundary_faces"],
+                seed_space=region_seed_space,
             )
             candidate_count = int(report.get("candidate_count", 0) or 0)
             if candidate_count > 1:
@@ -6858,6 +7003,7 @@ class PlanEditSession:
                     label=report.get("label"),
                     boundary_faces=request["boundary_faces"],
                     seed_space=region_seed_space,
+                    report=report,
                 )
             if candidate_count == 1:
                 space = self._create_space_from_region_candidate(
@@ -6870,23 +7016,35 @@ class PlanEditSession:
                 self._register_plan_object(space)
                 self._restore_selected_space(space)
                 return True
-            message = str(report.get("message") or "").strip()
-            details = [
-                str(detail).strip() for detail in report.get("details", []) if str(detail).strip()
-            ]
-            if message:
-                FreeCAD.Console.PrintError(message + "\n")
-                for detail in details:
-                    FreeCAD.Console.PrintError(f"  - {detail}\n")
-            else:
-                FreeCAD.Console.PrintError(
-                    translate("BIM_PlanEdit", "Failed to create the selected space.\n")
-                )
+            self._report_space_region_candidate_failure(report)
             return False
 
         report = ArchSpace.analyzeBoundaryLinks(boundaries)
         if report.get("code") == "multiple_regions":
-            return self._begin_space_region_pick(boundaries, label=report.get("label"))
+            region_report = self._get_space_region_candidate_report(
+                boundaries,
+                label=report.get("label"),
+            )
+            candidate_count = int(region_report.get("candidate_count", 0) or 0)
+            if candidate_count > 1:
+                return self._begin_space_region_pick(
+                    boundaries,
+                    label=report.get("label"),
+                    report=region_report,
+                )
+            if candidate_count == 1:
+                space = self._create_space_from_region_candidate(
+                    region_report["candidates"][0],
+                    boundaries=boundaries,
+                    keep_boundaries=True,
+                )
+                if not space:
+                    return False
+                self._register_plan_object(space)
+                self._restore_selected_space(space)
+                return True
+            self._report_space_region_candidate_failure(region_report)
+            return False
 
         import Arch
 
