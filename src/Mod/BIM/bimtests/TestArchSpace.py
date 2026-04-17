@@ -53,6 +53,12 @@ def checkBB(a, b):
     )
 
 
+class _BoundarySelectionEntry:
+    def __init__(self, obj, subelement_names=()):
+        self.Object = obj
+        self.SubElementNames = tuple(subelement_names or ())
+
+
 class TestArchSpace(TestArchBase.TestArchBase):
 
     def testSpace(self):
@@ -518,6 +524,60 @@ class TestArchSpace(TestArchBase.TestArchBase):
         self.assertEqual(report["boundary_count"], 2)
         self.assertAlmostEqual(report["candidates"][0]["area"], 12000000.0)
         self.assertAlmostEqual(report["candidates"][1]["area"], 12000000.0)
+
+    def test_resolve_boundary_links_expands_space_separator_faces(self):
+        """Boundary resolution should expand separators into their explicit face set."""
+        operation = "Arch Space resolves separator boundaries"
+        self.printTestMessage(operation)
+
+        separator = Arch.makeSpaceSeparator(
+            start=App.Vector(0, 0, 0),
+            end=App.Vector(0, 4000, 0),
+            height=2500,
+            name="Divider",
+        )
+        App.ActiveDocument.recompute()
+
+        boundaries = ArchSpace.resolveBoundaryLinks([_BoundarySelectionEntry(separator)])
+
+        self.assertEqual(len(boundaries), 1)
+        self.assertIs(boundaries[0][0], separator)
+        self.assertEqual(
+            boundaries[0][1],
+            tuple(f"Face{index}" for index, _face in enumerate(separator.Shape.Faces, start=1)),
+        )
+
+    def test_resolve_boundary_links_auto_picks_room_side_faces_for_walls(self):
+        """Boundary resolution should auto-pick one room-side face per selected wall."""
+        operation = "Arch Space resolves implicit wall boundaries"
+        self.printTestMessage(operation)
+
+        size = 4000.0
+        height = 2500.0
+        half = size * 0.5
+        walls = []
+        for base, angle in (
+            (App.Vector(half, 0, 0), 0),
+            (App.Vector(size, half, 0), 90),
+            (App.Vector(half, size, 0), 180),
+            (App.Vector(0, half, 0), -90),
+        ):
+            wall = Arch.makeWall(length=size, width=200.0, height=height, align="Left")
+            wall.Placement.Base = base
+            wall.Placement.Rotation = App.Rotation(App.Vector(0, 0, 1), angle)
+            walls.append(wall)
+        App.ActiveDocument.recompute()
+
+        boundaries = ArchSpace.resolveBoundaryLinks(
+            [_BoundarySelectionEntry(wall) for wall in walls],
+            reference_point=App.Vector(half, half, height * 0.5),
+        )
+        report = ArchSpace.analyzeBoundaryLinks(boundaries, label="Auto Wall Preview")
+
+        self.assertEqual(len(boundaries), 4)
+        self.assertTrue(all(len(subnames) == 1 for _obj, subnames in boundaries))
+        self.assertTrue(report["valid"])
+        self.assertEqual(report["code"], "valid")
 
     def test_space_with_region_base_keeps_chosen_multiple_room_candidate(self):
         """A base-backed space should preserve the chosen room when boundaries expose many rooms."""
