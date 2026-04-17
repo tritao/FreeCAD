@@ -91,7 +91,7 @@ class Arch_Window:
         session = BimPlanSession.get_active_session()
         if session and self.sel:
             try:
-                selected = session.selected_wall
+                selected = session._get_selected_plan_target_object("wall")
                 if selected and self.sel[0] == selected:
                     session.suspend_selected_wall_state(selected)
             except Exception:
