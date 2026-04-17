@@ -3715,6 +3715,50 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_primary_selection_state_tracks_compat_properties(self):
+        """Legacy selected_* properties should mirror one primary plan target state."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "SelectionCompatSpaceBase")
+        base.Length = 3200
+        base.Width = 2400
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Bedroom")
+        level.addObject(space)
+        region = self._make_plan_region(level)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session.selected_region = region
+        self.assertEqual(session._get_selected_plan_target(), ("region", region))
+        self.assertEqual(session._get_selected_plan_target_state(), ("region", region))
+        self.assertIs(session.selected_region, region)
+        self.assertIsNone(session.selected_space)
+        self.assertIsNone(session.selected_wall)
+
+        session.selected_space = space
+        self.assertEqual(session._get_selected_plan_target(), ("space", space))
+        self.assertEqual(session._get_selected_plan_target_state(), ("space", space))
+        self.assertIs(session.selected_space, space)
+        self.assertIsNone(session.selected_region)
+
+        session.selected_region = None
+        self.assertEqual(session._get_selected_plan_target(), ("space", space))
+        self.assertIs(session.selected_space, space)
+
+        session.selected_space = None
+        self.assertEqual(session._get_selected_plan_target(), (None, None))
+        self.assertEqual(session._get_selected_plan_target_state(), (None, None))
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_clicking_region_populates_selection_ex(self):
         """Clicked region selection should create a real SelectionEx entry for property view."""
 
