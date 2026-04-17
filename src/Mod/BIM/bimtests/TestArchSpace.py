@@ -480,6 +480,45 @@ class TestArchSpace(TestArchBase.TestArchBase):
             self.assertIsNotNone(candidate["sample_point"])
             self.assertEqual(len(candidate["shape"].Solids), 1)
 
+    def test_seed_space_boundaries_report_split_region_candidates(self):
+        """A seed space plus explicit boundaries should be analyzed in ArchSpace core."""
+        operation = "Arch Space core analyzes seeded region splits"
+        self.printTestMessage(operation)
+
+        base = App.ActiveDocument.addObject("Part::Feature", "SeededLivingRoomBase")
+        base.Shape = Part.makeBox(6000, 4000, 2500)
+        space = Arch.makeSpace(base, name="Living Room")
+        separator = Arch.makeSpaceSeparator(
+            start=App.Vector(3000, 0, 0),
+            end=App.Vector(3000, 4000, 0),
+            height=2500,
+            name="Kitchen Divider",
+        )
+        App.ActiveDocument.recompute()
+
+        boundaries = [(separator, ("Face1",))]
+
+        preflight = ArchSpace.analyzeBoundaryLinks(
+            boundaries,
+            label="Living Room Split Preview",
+            seed_space=space,
+        )
+        report = ArchSpace.getBoundaryRegionCandidates(
+            boundaries,
+            label="Living Room Split Preview",
+            seed_space=space,
+        )
+
+        self.assertEqual(preflight["code"], "multiple_regions")
+        self.assertFalse(preflight["valid"])
+        self.assertEqual(preflight["boundary_count"], 2)
+
+        self.assertEqual(report["code"], "multiple_regions")
+        self.assertEqual(report["candidate_count"], 2)
+        self.assertEqual(report["boundary_count"], 2)
+        self.assertAlmostEqual(report["candidates"][0]["area"], 12000000.0)
+        self.assertAlmostEqual(report["candidates"][1]["area"], 12000000.0)
+
     def test_space_with_region_base_keeps_chosen_multiple_room_candidate(self):
         """A base-backed space should preserve the chosen room when boundaries expose many rooms."""
         operation = "Arch Space keeps a chosen candidate from a multi-room boundary set"

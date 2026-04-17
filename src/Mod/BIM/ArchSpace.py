@@ -880,6 +880,164 @@ class _Space(ArchComponent.Component):
             z_max = min(z_max, float(bound_box.ZMax))
         return z_min, z_max
 
+    def _get_seed_boundary_overlap_cut_z(self, space, boundary_faces):
+        shape = getattr(space, "Shape", None)
+        bound_box = getattr(shape, "BoundBox", None)
+        if bound_box is None:
+            return None
+
+        z_min = float(bound_box.ZMin)
+        z_max = float(bound_box.ZMax)
+        overlap_min, overlap_max = self._get_boundary_vertical_overlap(boundary_faces)
+        if overlap_min is not None:
+            z_min = max(z_min, float(overlap_min))
+        if overlap_max is not None:
+            z_max = min(z_max, float(overlap_max))
+        if z_max - z_min <= 0.000001:
+            return None
+        return 0.5 * (z_min + z_max)
+
+    def _get_seed_space_splitter_points(self, space, boundary_faces):
+        if not boundary_faces:
+            return []
+
+        cut_z = self._get_seed_boundary_overlap_cut_z(space, boundary_faces)
+        if cut_z is None:
+            return []
+
+        splitter_points = []
+        for edge in self._get_horizontal_slice_edges(boundary_faces, cut_z):
+            for vertex in getattr(edge, "Vertexes", []) or []:
+                point = getattr(vertex, "Point", None)
+                if point is None:
+                    continue
+                splitter_points.append(FreeCAD.Vector(point.x, point.y, point.z))
+        return splitter_points
+
+    def _split_seed_space_footprint_edge(self, edge, splitter_points, target_z, tolerance=0.001):
+        import Part
+
+        vertexes = list(getattr(edge, "Vertexes", []) or [])
+        curve = getattr(edge, "Curve", None)
+        if len(vertexes) != 2 or curve.__class__.__name__ != "Line":
+            clean_edge = self._copy_without_element_map(edge)
+            return [clean_edge] if clean_edge is not None else [edge]
+
+        start = FreeCAD.Vector(vertexes[0].Point.x, vertexes[0].Point.y, target_z)
+        end = FreeCAD.Vector(vertexes[1].Point.x, vertexes[1].Point.y, target_z)
+        direction = end.sub(start)
+        length_sq = direction.dot(direction)
+        if length_sq <= tolerance * tolerance:
+            return []
+
+        parameters = [0.0, 1.0]
+        for point in splitter_points or []:
+            projected = FreeCAD.Vector(point.x, point.y, target_z)
+            t = direction.dot(projected.sub(start)) / length_sq
+            if t <= tolerance or t >= 1.0 - tolerance:
+                continue
+            closest = start.add(direction.multiply(t))
+            if closest.distanceToPoint(projected) > max(tolerance, math.sqrt(length_sq) * 1e-6):
+                continue
+            parameters.append(float(t))
+
+        parameters = sorted(set(round(value, 9) for value in parameters))
+        edges = []
+        for param_a, param_b in zip(parameters, parameters[1:]):
+            if param_b - param_a <= 1e-9:
+                continue
+            segment_start = start.add(direction.multiply(param_a))
+            segment_end = start.add(direction.multiply(param_b))
+            if segment_start.distanceToPoint(segment_end) <= tolerance:
+                continue
+            try:
+                edges.append(Part.makeLine(segment_start, segment_end))
+            except Exception:
+                continue
+        return edges
+
+    def _make_seed_space_boundary_face(self, edge, height):
+        import Part
+
+        vertexes = list(getattr(edge, "Vertexes", []) or [])
+        if len(vertexes) == 2 and getattr(edge, "Curve", None).__class__.__name__ == "Line":
+            p1 = FreeCAD.Vector(vertexes[0].Point)
+            p2 = FreeCAD.Vector(vertexes[1].Point)
+            p3 = FreeCAD.Vector(p2.x, p2.y, p2.z + height)
+            p4 = FreeCAD.Vector(p1.x, p1.y, p1.z + height)
+            try:
+                return Part.Face(Part.makePolygon([p1, p2, p3, p4, p1]))
+            except Exception:
+                return None
+
+        try:
+            clean_edge = self._copy_without_element_map(edge)
+            if clean_edge is None:
+                return None
+            upper = self._copy_without_element_map(clean_edge)
+            if upper is None:
+                return None
+            upper.translate(FreeCAD.Vector(0, 0, height))
+            return Part.makeRuledSurface(clean_edge, upper)
+        except Exception:
+            return None
+
+    def _get_seed_space_boundary_faces(self, space, boundary_faces=None):
+        shape = getattr(space, "Shape", None)
+        bound_box = getattr(shape, "BoundBox", None)
+        if shape is None or bound_box is None or float(bound_box.ZLength) <= 0.000001:
+            return []
+
+        shape_faces = []
+        for face in getattr(shape, "Faces", []) or []:
+            face_bb = getattr(face, "BoundBox", None)
+            if face_bb is None or float(face_bb.ZLength) <= 0.000001:
+                continue
+            if getattr(face, "Area", 0.0) <= 0.000001:
+                continue
+            shape_faces.append(face)
+        if shape_faces:
+            return shape_faces
+
+        proxy = getattr(space, "Proxy", None)
+        if not proxy or not hasattr(proxy, "getFootprint"):
+            return []
+        try:
+            footprint_faces = list(proxy.getFootprint(space) or [])
+        except Exception:
+            return []
+        if not footprint_faces:
+            return []
+
+        height = float(bound_box.ZLength)
+        target_z = float(bound_box.ZMin)
+        splitter_points = self._get_seed_space_splitter_points(space, boundary_faces)
+        vertical_faces = []
+        for footprint_face in footprint_faces:
+            for wire in getattr(footprint_face, "Wires", []) or []:
+                for edge in getattr(wire, "Edges", []) or []:
+                    for lower in self._split_seed_space_footprint_edge(
+                        edge,
+                        splitter_points,
+                        target_z,
+                    ):
+                        face = self._make_seed_space_boundary_face(lower, height)
+                        if face and getattr(face, "Area", 0.0) > 0.000001:
+                            vertical_faces.append(face)
+        return vertical_faces
+
+    def getBoundaryFacesFromLinks(self, boundaries, seed_space=None):
+        boundary_links = list(boundaries or [])
+        boundary_faces = list(self._get_boundary_faces_from_links(boundary_links))
+        if seed_space is not None:
+            boundary_faces.extend(
+                self._get_seed_space_boundary_faces(
+                    seed_space,
+                    boundary_faces=boundary_faces,
+                )
+            )
+        return boundary_faces
+
     def _analyze_boundary_loops(self, boundary_faces):
         analysis = {
             "bounding_box": self._get_boundary_bounding_box(boundary_faces),
@@ -1085,13 +1243,17 @@ class _Space(ArchComponent.Component):
             return "valid"
         return "invalid_solid"
 
-    def analyzeBoundaryLinks(self, boundaries, label=None):
+    def analyzeBoundaryLinks(self, boundaries, label=None, seed_space=None):
         label = str(label or translate("Arch", "Space"))
         boundary_links = list(boundaries or [])
-        boundary_faces = self._get_boundary_faces_from_links(boundary_links)
+        boundary_faces = self.getBoundaryFacesFromLinks(
+            boundary_links,
+            seed_space=seed_space,
+        )
+        boundary_count = len(boundary_links) + (1 if seed_space is not None else 0)
         loop_analysis = self._analyze_boundary_loops(boundary_faces)
         code = self._get_boundary_analysis_code(
-            len(boundary_links),
+            boundary_count,
             boundary_faces,
             loop_analysis,
         )
@@ -1110,7 +1272,7 @@ class _Space(ArchComponent.Component):
             "label": label,
             "code": code,
             "valid": code == "valid",
-            "boundary_count": len(boundary_links),
+            "boundary_count": boundary_count,
             "face_count": len(boundary_faces),
             "region_count": len(loop_analysis.get("top_level", [])),
             "inner_void_count": inner_void_count,
@@ -1198,14 +1360,17 @@ class _Space(ArchComponent.Component):
             pass
         return shape.Solids[0] if len(shape.Solids) == 1 else shape
 
-    def getBoundaryRegionCandidates(self, boundaries, label=None):
+    def getBoundaryRegionCandidates(self, boundaries, label=None, seed_space=None):
         label = str(label or translate("Arch", "Space"))
         boundary_links = list(boundaries or [])
-        boundary_faces = self._get_boundary_faces_from_links(boundary_links)
+        boundary_faces = self.getBoundaryFacesFromLinks(
+            boundary_links,
+            seed_space=seed_space,
+        )
         return self.getBoundaryFaceRegionCandidates(
             boundary_faces,
             label=label,
-            boundary_count=len(boundary_links),
+            boundary_count=len(boundary_links) + (1 if seed_space is not None else 0),
         )
 
     def getBoundaryFaceRegionCandidates(self, boundary_faces, label=None, boundary_count=None):
@@ -1559,6 +1724,12 @@ class _SpaceBoundaryAnalyzer:
     _build_faces_from_wires = _Space._build_faces_from_wires
     _build_faces_from_records = _Space._build_faces_from_records
     _get_boundary_vertical_overlap = _Space._get_boundary_vertical_overlap
+    _get_seed_boundary_overlap_cut_z = _Space._get_seed_boundary_overlap_cut_z
+    _get_seed_space_splitter_points = _Space._get_seed_space_splitter_points
+    _split_seed_space_footprint_edge = _Space._split_seed_space_footprint_edge
+    _make_seed_space_boundary_face = _Space._make_seed_space_boundary_face
+    _get_seed_space_boundary_faces = _Space._get_seed_space_boundary_faces
+    getBoundaryFacesFromLinks = _Space.getBoundaryFacesFromLinks
     _analyze_boundary_loops = _Space._analyze_boundary_loops
     _describe_boundary_failure = _Space._describe_boundary_failure
     _get_boundary_analysis_code = _Space._get_boundary_analysis_code
@@ -1574,10 +1745,23 @@ class _SpaceBoundaryAnalyzer:
 _space_boundary_analyzer = _SpaceBoundaryAnalyzer()
 
 
-def analyzeBoundaryLinks(boundaries, label=None):
+def getBoundaryFacesFromLinks(boundaries, seed_space=None):
+    """Expose boundary faces built from link-sub boundaries and an optional seed space."""
+
+    return _space_boundary_analyzer.getBoundaryFacesFromLinks(
+        boundaries,
+        seed_space=seed_space,
+    )
+
+
+def analyzeBoundaryLinks(boundaries, label=None, seed_space=None):
     """Analyze whether boundary links can form one Arch Space."""
 
-    return _space_boundary_analyzer.analyzeBoundaryLinks(boundaries, label=label)
+    return _space_boundary_analyzer.analyzeBoundaryLinks(
+        boundaries,
+        label=label,
+        seed_space=seed_space,
+    )
 
 
 def analyzeBoundaryFaces(boundary_faces, label=None, boundary_count=None):
@@ -1590,10 +1774,14 @@ def analyzeBoundaryFaces(boundary_faces, label=None, boundary_count=None):
     )
 
 
-def getBoundaryRegionCandidates(boundaries, label=None):
+def getBoundaryRegionCandidates(boundaries, label=None, seed_space=None):
     """Expose top-level enclosed regions derived from boundary links."""
 
-    return _space_boundary_analyzer.getBoundaryRegionCandidates(boundaries, label=label)
+    return _space_boundary_analyzer.getBoundaryRegionCandidates(
+        boundaries,
+        label=label,
+        seed_space=seed_space,
+    )
 
 
 def getBoundaryFaceRegionCandidates(boundary_faces, label=None, boundary_count=None):
