@@ -144,6 +144,19 @@ public:
             QString copy = str;
             copy.remove(locale.groupSeparator());
 
+            // Plain quantity literals do not need the expression engine or Python GIL.
+            // Fast-path them first so interactive edits remain responsive while async
+            // recomputes are in flight.
+            if (!copy.contains(QLatin1Char('(')) && !copy.contains(QLatin1Char(')'))
+                && !copy.contains(QLatin1Char('*')) && !copy.contains(QLatin1Char('/'))
+                && !copy.contains(QLatin1Char('^')) && !copy.contains(QLatin1Char('#'))
+                && !copy.contains(QLatin1Char(':')) && !copy.contains(QLatin1Char('['))
+                && !copy.contains(QLatin1Char(']'))) {
+                result = Base::Quantity::parse(copy.toStdString());
+                value = result.getValue();
+                return true;
+            }
+
             // Expression parser
             std::shared_ptr<Expression> expr(
                 ExpressionParser::parse(path.getDocumentObject(), copy.toUtf8().constData())
