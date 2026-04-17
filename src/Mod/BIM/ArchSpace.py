@@ -644,20 +644,37 @@ class _Space(ArchComponent.Component):
     def _get_boundary_faces(self, obj):
         return self._get_boundary_faces_from_links(getattr(obj, "Boundaries", []) or [])
 
+    def _copy_without_element_map(self, shape):
+        if shape is None:
+            return None
+        try:
+            return shape.copy(noElementMap=True)
+        except TypeError:
+            try:
+                plain_shape = shape.copy()
+                if getattr(plain_shape, "ElementMapSize", 0):
+                    plain_shape.clearElementMap()
+                return plain_shape
+            except Exception:
+                return shape
+        except Exception:
+            return shape
+
+    def _copy_clean_slice_edge(self, edge):
+        try:
+            plain_edge = edge.copy()
+            if getattr(plain_edge, "ElementMapSize", 0):
+                plain_edge.clearElementMap()
+            return plain_edge
+        except Exception:
+            return edge
+
     def _get_horizontal_slice_faces_from_edges(self, section_edges):
         import Part
 
         if not section_edges or len(section_edges) < 4:
             return []
-        plain_edges = []
-        for edge in section_edges:
-            try:
-                plain_edge = edge.copy()
-                if getattr(plain_edge, "ElementMapSize", 0):
-                    plain_edge.clearElementMap()
-            except Exception:
-                plain_edge = edge
-            plain_edges.append(plain_edge)
+        plain_edges = [self._copy_clean_slice_edge(edge) for edge in section_edges]
         try:
             section_shape = Part.makeFace(plain_edges, "Part::FaceMakerBuildFace")
         except Exception:
@@ -727,10 +744,11 @@ class _Space(ArchComponent.Component):
             if wires:
                 return wires
 
+        plain_edges = [self._copy_clean_slice_edge(edge) for edge in section_edges]
         try:
-            edge_groups = Part.sortEdges(section_edges)
+            edge_groups = Part.sortEdges(plain_edges)
         except AttributeError:
-            edge_groups = Part.__sortEdges__(section_edges)
+            edge_groups = Part.__sortEdges__(plain_edges)
 
         if edge_groups and hasattr(edge_groups[0], "ShapeType"):
             edge_groups = [edge_groups]
@@ -1044,8 +1062,8 @@ class _Space(ArchComponent.Component):
             [],
         )
 
-    def _get_boundary_analysis_code(self, boundaries, boundary_faces, loop_analysis):
-        if not boundaries:
+    def _get_boundary_analysis_code(self, boundary_count, boundary_faces, loop_analysis):
+        if not boundary_count:
             return "empty"
         if not boundary_faces:
             return "unusable_boundaries"
@@ -1072,7 +1090,11 @@ class _Space(ArchComponent.Component):
         boundary_links = list(boundaries or [])
         boundary_faces = self._get_boundary_faces_from_links(boundary_links)
         loop_analysis = self._analyze_boundary_loops(boundary_faces)
-        code = self._get_boundary_analysis_code(boundary_links, boundary_faces, loop_analysis)
+        code = self._get_boundary_analysis_code(
+            len(boundary_links),
+            boundary_faces,
+            loop_analysis,
+        )
         message = ""
         details = []
         if code not in ("empty", "valid"):
@@ -1096,6 +1118,175 @@ class _Space(ArchComponent.Component):
             "details": list(details),
         }
 
+    def analyzeBoundaryFaces(self, boundary_faces, label=None, boundary_count=None):
+        label = str(label or translate("Arch", "Space"))
+        boundary_faces = list(boundary_faces or [])
+        if boundary_count is None:
+            boundary_count = len(boundary_faces)
+        loop_analysis = self._analyze_boundary_loops(boundary_faces)
+        code = self._get_boundary_analysis_code(
+            int(boundary_count),
+            boundary_faces,
+            loop_analysis,
+        )
+        message = ""
+        details = []
+        if code not in ("empty", "valid"):
+            message, details = self._describe_boundary_failure(
+                label,
+                boundary_faces,
+                loop_analysis=loop_analysis,
+            )
+        inner_void_count = len(
+            [record for record in loop_analysis.get("records", []) if record.get("depth") == 1]
+        )
+        return {
+            "label": label,
+            "code": code,
+            "valid": code == "valid",
+            "boundary_count": int(boundary_count),
+            "face_count": len(boundary_faces),
+            "region_count": len(loop_analysis.get("top_level", [])),
+            "inner_void_count": inner_void_count,
+            "message": message,
+            "details": list(details),
+        }
+
+    def _build_face_from_region_record(self, records, outer_record):
+        if not outer_record:
+            return None
+        wires_for_face = [outer_record["wire"]]
+        wires_for_face.extend(
+            record["wire"]
+            for record in records or []
+            if record.get("parent") is outer_record
+            and record.get("depth") == outer_record.get("depth", 0) + 1
+        )
+        try:
+            face = ArchCommands.makeFace(wires_for_face)
+        except Exception:
+            return None
+        if not face or getattr(face, "Area", 0.0) <= 0.000001:
+            return None
+        return face
+
+    def _build_shape_from_boundary_region(self, boundary_faces, outer_record, loop_analysis=None):
+        if not boundary_faces or not outer_record:
+            return None
+
+        analysis = loop_analysis or self._analyze_boundary_loops(boundary_faces)
+        bb = analysis.get("bounding_box")
+        cut_z = analysis.get("cut_z")
+        if not bb or cut_z is None or bb.ZLength <= 0.000001:
+            return None
+
+        footprint = self._build_face_from_region_record(analysis.get("records", []), outer_record)
+        if footprint is None:
+            return None
+
+        footprint = self._copy_without_element_map(footprint)
+        footprint.translate(FreeCAD.Vector(0, 0, bb.ZMin - cut_z))
+        try:
+            shape = footprint.extrude(FreeCAD.Vector(0, 0, bb.ZLength))
+        except Exception:
+            return None
+        if not shape or not getattr(shape, "Solids", None):
+            return None
+        try:
+            shape = shape.removeSplitter()
+        except Exception:
+            pass
+        return shape.Solids[0] if len(shape.Solids) == 1 else shape
+
+    def getBoundaryRegionCandidates(self, boundaries, label=None):
+        label = str(label or translate("Arch", "Space"))
+        boundary_links = list(boundaries or [])
+        boundary_faces = self._get_boundary_faces_from_links(boundary_links)
+        return self.getBoundaryFaceRegionCandidates(
+            boundary_faces,
+            label=label,
+            boundary_count=len(boundary_links),
+        )
+
+    def getBoundaryFaceRegionCandidates(self, boundary_faces, label=None, boundary_count=None):
+        label = str(label or translate("Arch", "Space"))
+        boundary_faces = list(boundary_faces or [])
+        if boundary_count is None:
+            boundary_count = len(boundary_faces)
+        loop_analysis = self._analyze_boundary_loops(boundary_faces)
+        code = self._get_boundary_analysis_code(
+            int(boundary_count),
+            boundary_faces,
+            loop_analysis,
+        )
+
+        message = ""
+        details = []
+        if code not in ("empty", "valid"):
+            message, details = self._describe_boundary_failure(
+                label,
+                boundary_faces,
+                loop_analysis=loop_analysis,
+            )
+
+        bb = loop_analysis.get("bounding_box")
+        top_level = list(loop_analysis.get("top_level", []) or [])
+        top_level.sort(
+            key=lambda record: (
+                -float(record.get("area", 0.0) or 0.0),
+                round(getattr(record.get("sample"), "x", 0.0), 6),
+                round(getattr(record.get("sample"), "y", 0.0), 6),
+            )
+        )
+
+        candidates = []
+        for index, outer_record in enumerate(top_level):
+            face = self._build_face_from_region_record(
+                loop_analysis.get("records", []), outer_record
+            )
+            shape = self._build_shape_from_boundary_region(
+                boundary_faces,
+                outer_record,
+                loop_analysis=loop_analysis,
+            )
+            if face is None or shape is None:
+                continue
+            sample = outer_record.get("sample")
+            sample_point = None
+            if sample is not None:
+                sample_point = FreeCAD.Vector(
+                    sample.x,
+                    sample.y,
+                    bb.ZMin if bb is not None else sample.z,
+                )
+            candidates.append(
+                {
+                    "index": index,
+                    "area": float(face.Area),
+                    "face": face,
+                    "shape": shape,
+                    "sample_point": sample_point,
+                    "wire_count": len(getattr(face, "Wires", []) or []),
+                }
+            )
+
+        inner_void_count = len(
+            [record for record in loop_analysis.get("records", []) if record.get("depth") == 1]
+        )
+        return {
+            "label": label,
+            "code": code,
+            "valid": code == "valid",
+            "boundary_count": int(boundary_count),
+            "face_count": len(boundary_faces),
+            "region_count": len(top_level),
+            "inner_void_count": inner_void_count,
+            "candidate_count": len(candidates),
+            "message": message,
+            "details": list(details),
+            "candidates": candidates,
+        }
+
     def _build_shape_from_boundary_loops(self, boundary_faces, loop_analysis=None):
         if not boundary_faces:
             return None
@@ -1117,7 +1308,7 @@ class _Space(ArchComponent.Component):
         if len(footprint_faces) != 1:
             return None
 
-        footprint = footprint_faces[0].copy()
+        footprint = self._copy_without_element_map(footprint_faces[0])
         footprint.translate(FreeCAD.Vector(0, 0, bb.ZMin - cut_z))
         try:
             shape = footprint.extrude(FreeCAD.Vector(0, 0, bb.ZLength))
@@ -1147,9 +1338,20 @@ class _Space(ArchComponent.Component):
         self._clear_boundary_failure()
         shape = None
         boundary_faces = self._get_boundary_faces(obj)
+        loop_analysis = self._analyze_boundary_loops(boundary_faces) if boundary_faces else None
         pl = obj.Placement
 
         # print("starting compute")
+
+        if boundary_faces and loop_analysis and loop_analysis["supports_single_outer"]:
+            loop_shape = self._build_shape_from_boundary_loops(
+                boundary_faces, loop_analysis=loop_analysis
+            )
+            if loop_shape is not None:
+                shape = self.processSubShapes(obj, loop_shape.Solids[0], pl)
+                self.applyShape(obj, shape, pl)
+                self._sync_area_properties(obj)
+                return
 
         # 1: if we have a base shape, we use it
         # Check if there is obj.Base and its validity to proceed
@@ -1163,16 +1365,12 @@ class _Space(ArchComponent.Component):
         if shape:
             # print("got shape from base object")
             bb = shape.BoundBox
-        else:
-            loop_analysis = self._analyze_boundary_loops(boundary_faces)
-            loop_shape = self._build_shape_from_boundary_loops(
-                boundary_faces, loop_analysis=loop_analysis
-            )
-            if loop_shape is not None:
-                shape = self.processSubShapes(obj, loop_shape.Solids[0], pl)
+            if loop_analysis and len(loop_analysis.get("top_level", [])) > 1:
+                shape = self.processSubShapes(obj, shape.Solids[0], pl)
                 self.applyShape(obj, shape, pl)
                 self._sync_area_properties(obj)
                 return
+        else:
             if boundary_faces and not loop_analysis["supports_single_outer"]:
                 label = str(
                     getattr(obj, "Label", "")
@@ -1213,12 +1411,12 @@ class _Space(ArchComponent.Component):
         # 4: get cutvolumes from faces
         cutvolumes = []
         for f in faces:
-            f = f.copy()
+            f = self._copy_without_element_map(f)
             f.reverse()
             cutface, cutvolume, invcutvolume = ArchCommands.getCutVolume(f, shape)
             if cutvolume:
                 # print("generated 1 cutvolume")
-                cutvolumes.append(cutvolume.copy())
+                cutvolumes.append(self._copy_without_element_map(cutvolume))
                 # Part.show(cutvolume)
         for v in cutvolumes:
             # print("cutting")
@@ -1305,7 +1503,10 @@ class _Space(ArchComponent.Component):
             cut_z = float(obj.Shape.BoundBox.Center.z)
         try:
             faces = self._build_faces_from_wires(
-                self._get_horizontal_slice_wires([obj.Shape.copy()], cut_z)
+                self._get_horizontal_slice_wires(
+                    [self._copy_without_element_map(obj.Shape)],
+                    cut_z,
+                )
             )
             if faces:
                 translate_z = obj.Shape.BoundBox.ZMin - cut_z
@@ -1318,7 +1519,7 @@ class _Space(ArchComponent.Component):
         try:
             pl = Part.makePlane(1, 1)
             pl.translate(obj.Shape.CenterOfMass)
-            sh = obj.Shape.copy()
+            sh = self._copy_without_element_map(obj.Shape)
             cutplane, v1, v2 = ArchCommands.getCutVolume(pl, sh)
             e = sh.section(cutplane)
             e = Part.__sortEdges__(e.Edges)
@@ -1348,6 +1549,8 @@ class _SpaceBoundaryAnalyzer:
     _merge_slice_edge_group = _Space._merge_slice_edge_group
     _merge_shape_slice_edges = _Space._merge_shape_slice_edges
     _get_boundary_faces_from_links = _Space._get_boundary_faces_from_links
+    _copy_without_element_map = _Space._copy_without_element_map
+    _copy_clean_slice_edge = _Space._copy_clean_slice_edge
     _get_horizontal_slice_faces_from_edges = _Space._get_horizontal_slice_faces_from_edges
     _get_wire_identity = _Space._get_wire_identity
     _get_horizontal_slice_wires = _Space._get_horizontal_slice_wires
@@ -1361,6 +1564,11 @@ class _SpaceBoundaryAnalyzer:
     _get_boundary_analysis_code = _Space._get_boundary_analysis_code
     _get_boundary_bounding_box = _Space._get_boundary_bounding_box
     analyzeBoundaryLinks = _Space.analyzeBoundaryLinks
+    analyzeBoundaryFaces = _Space.analyzeBoundaryFaces
+    _build_face_from_region_record = _Space._build_face_from_region_record
+    _build_shape_from_boundary_region = _Space._build_shape_from_boundary_region
+    getBoundaryRegionCandidates = _Space.getBoundaryRegionCandidates
+    getBoundaryFaceRegionCandidates = _Space.getBoundaryFaceRegionCandidates
 
 
 _space_boundary_analyzer = _SpaceBoundaryAnalyzer()
@@ -1370,6 +1578,32 @@ def analyzeBoundaryLinks(boundaries, label=None):
     """Analyze whether boundary links can form one Arch Space."""
 
     return _space_boundary_analyzer.analyzeBoundaryLinks(boundaries, label=label)
+
+
+def analyzeBoundaryFaces(boundary_faces, label=None, boundary_count=None):
+    """Analyze whether boundary faces can form one Arch Space."""
+
+    return _space_boundary_analyzer.analyzeBoundaryFaces(
+        boundary_faces,
+        label=label,
+        boundary_count=boundary_count,
+    )
+
+
+def getBoundaryRegionCandidates(boundaries, label=None):
+    """Expose top-level enclosed regions derived from boundary links."""
+
+    return _space_boundary_analyzer.getBoundaryRegionCandidates(boundaries, label=label)
+
+
+def getBoundaryFaceRegionCandidates(boundary_faces, label=None, boundary_count=None):
+    """Expose top-level enclosed regions derived from boundary faces."""
+
+    return _space_boundary_analyzer.getBoundaryFaceRegionCandidates(
+        boundary_faces,
+        label=label,
+        boundary_count=boundary_count,
+    )
 
 
 class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
