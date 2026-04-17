@@ -4069,13 +4069,14 @@ TopoShape& TopoShape::makeElementSlice(
     const TopoShape& shape,
     const Base::Vector3d& dir,
     double distance,
-    const char* op
+    const char* op,
+    ElementMapPolicy elementMapPolicy
 )
 {
     if (shape.isNull()) {
         FC_THROWM(NullShapeException, "Null shape");
     }
-    TopoCrossSection cs(dir.x, dir.y, dir.z, shape, op);
+    TopoCrossSection cs(dir.x, dir.y, dir.z, shape, op, elementMapPolicy);
     TopoShape res = cs.slice(1, distance);
     setShape(res._Shape);
     Hasher = res.Hasher;
@@ -4087,16 +4088,17 @@ TopoShape& TopoShape::makeElementSlices(
     const TopoShape& shape,
     const Base::Vector3d& dir,
     const std::vector<double>& distances,
-    const char* op
+    const char* op,
+    ElementMapPolicy elementMapPolicy
 )
 {
     std::vector<TopoShape> wires;
-    TopoCrossSection cs(dir.x, dir.y, dir.z, shape, op);
+    TopoCrossSection cs(dir.x, dir.y, dir.z, shape, op, elementMapPolicy);
     int index = 0;
     for (auto& distance : distances) {
         cs.slice(++index, distance, wires);
     }
-    return makeElementCompound(wires, op, SingleShapeCompoundCreationPolicy::returnShape);
+    return makeElementCompound(wires, op, SingleShapeCompoundCreationPolicy::returnShape, elementMapPolicy);
 }
 
 TopoShape& TopoShape::replaceElementShape(

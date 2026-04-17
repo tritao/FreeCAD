@@ -2235,7 +2235,8 @@ public:
         const TopoShape& source,
         const Base::Vector3d& dir,
         double distance,
-        const char* op = nullptr
+        const char* op = nullptr,
+        ElementMapPolicy elementMapPolicy = ElementMapPolicy::Propagate
     );
     /** Make a cross section slice
      *
@@ -2247,9 +2248,14 @@ public:
      *
      * @return Return the new shape. The TopoShape itself is not modified.
      */
-    TopoShape makeElementSlice(const Base::Vector3d& dir, double distance, const char* op = nullptr) const
+    TopoShape makeElementSlice(
+        const Base::Vector3d& dir,
+        double distance,
+        const char* op = nullptr,
+        ElementMapPolicy elementMapPolicy = ElementMapPolicy::Propagate
+    ) const
     {
-        return TopoShape(0, Hasher).makeElementSlice(*this, dir, distance, op);
+        return TopoShape(0, Hasher).makeElementSlice(*this, dir, distance, op, elementMapPolicy);
     }
 
     /** Make multiple cross section slices
@@ -2269,7 +2275,8 @@ public:
         const TopoShape& source,
         const Base::Vector3d& dir,
         const std::vector<double>& distances,
-        const char* op = nullptr
+        const char* op = nullptr,
+        ElementMapPolicy elementMapPolicy = ElementMapPolicy::Propagate
     );
     /** Make multiple cross section slices
      *
@@ -2284,10 +2291,11 @@ public:
     TopoShape makeElementSlices(
         const Base::Vector3d& dir,
         const std::vector<double>& distances,
-        const char* op = nullptr
+        const char* op = nullptr,
+        ElementMapPolicy elementMapPolicy = ElementMapPolicy::Propagate
     ) const
     {
-        return TopoShape(0, Hasher).makeElementSlices(*this, dir, distances, op);
+        return TopoShape(0, Hasher).makeElementSlices(*this, dir, distances, op, elementMapPolicy);
     }
 
     /* Make fillet shape

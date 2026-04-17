@@ -808,15 +808,22 @@ PyObject* TopoShapePy::slice(PyObject* args) const
 {
     PyObject* dir;
     double d;
-    if (!PyArg_ParseTuple(args, "O!d", &(Base::VectorPy::Type), &dir, &d)) {
+    PyObject* noElementMap = Py_False;
+    if (
+        !PyArg_ParseTuple(args, "O!d|O!", &(Base::VectorPy::Type), &dir, &d, &PyBool_Type, &noElementMap)
+    ) {
         return nullptr;
     }
 
     Base::Vector3d vec = Py::Vector(dir, false).toVector();
+    auto elementMapPolicy = Base::asBoolean(noElementMap) ? ElementMapPolicy::Drop
+                                                          : ElementMapPolicy::Propagate;
 
     try {
         Py::List wires;
-        for (auto& w : getTopoShapePtr()->makeElementSlice(vec, d).getSubTopoShapes(TopAbs_WIRE)) {
+        for (auto& w : getTopoShapePtr()
+                           ->makeElementSlice(vec, d, nullptr, elementMapPolicy)
+                           .getSubTopoShapes(TopAbs_WIRE)) {
             wires.append(shape2pyshape(w));
         }
         return Py::new_reference_to(wires);
@@ -835,19 +842,26 @@ PyObject* TopoShapePy::slice(PyObject* args) const
 PyObject* TopoShapePy::slices(PyObject* args) const
 {
     PyObject *dir, *dist;
-    if (!PyArg_ParseTuple(args, "O!O", &(Base::VectorPy::Type), &dir, &dist)) {
+    PyObject* noElementMap = Py_False;
+    if (
+        !PyArg_ParseTuple(args, "O!O|O!", &(Base::VectorPy::Type), &dir, &dist, &PyBool_Type, &noElementMap)
+    ) {
         return nullptr;
     }
 
     try {
         Base::Vector3d vec = Py::Vector(dir, false).toVector();
+        auto elementMapPolicy = Base::asBoolean(noElementMap) ? ElementMapPolicy::Drop
+                                                              : ElementMapPolicy::Propagate;
         Py::Sequence list(dist);
         std::vector<double> d;
         d.reserve(list.size());
         for (Py::Sequence::iterator it = list.begin(); it != list.end(); ++it) {
             d.push_back((double)Py::Float(*it));
         }
-        return Py::new_reference_to(shape2pyshape(getTopoShapePtr()->makeElementSlices(vec, d)));
+        return Py::new_reference_to(
+            shape2pyshape(getTopoShapePtr()->makeElementSlices(vec, d, nullptr, elementMapPolicy))
+        );
     }
     catch (Standard_Failure& e) {
         PyErr_SetString(PartExceptionOCCError, e.GetMessageString());

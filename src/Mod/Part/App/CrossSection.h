@@ -58,7 +58,14 @@ private:
 class PartExport TopoCrossSection
 {
 public:
-    TopoCrossSection(double a, double b, double c, const TopoShape& s, const char* op = 0);
+    TopoCrossSection(
+        double a,
+        double b,
+        double c,
+        const TopoShape& s,
+        const char* op = 0,
+        ElementMapPolicy elementMapPolicy = ElementMapPolicy::Propagate
+    );
     void slice(int idx, double d, std::vector<TopoShape>& wires) const;
     TopoShape slice(int idx, double d) const;
 
@@ -70,6 +77,7 @@ private:
     double a, b, c;
     const TopoShape& shape;
     const char* op;
+    ElementMapPolicy elementMapPolicy;
 };
 
 }  // namespace Part

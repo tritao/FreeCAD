@@ -232,12 +232,20 @@ TopoDS_Wire CrossSection::fixWire(const TopoDS_Wire& wire) const
     return aFix.Wire();
 }
 
-TopoCrossSection::TopoCrossSection(double a, double b, double c, const TopoShape& s, const char* op)
+TopoCrossSection::TopoCrossSection(
+    double a,
+    double b,
+    double c,
+    const TopoShape& s,
+    const char* op,
+    ElementMapPolicy elementMapPolicy
+)
     : a(a)
     , b(b)
     , c(c)
     , shape(s)
     , op(op ? op : Part::OpCodes::Slice)
+    , elementMapPolicy(elementMapPolicy)
 {}
 
 void TopoCrossSection::slice(int idx, double d, std::vector<TopoShape>& wires) const
@@ -266,8 +274,12 @@ TopoShape TopoCrossSection::slice(int idx, double d) const
 {
     std::vector<TopoShape> wires;
     slice(idx, d, wires);
-    return TopoShape()
-        .makeElementCompound(wires, 0, TopoShape::SingleShapeCompoundCreationPolicy::returnShape);
+    return TopoShape().makeElementCompound(
+        wires,
+        0,
+        TopoShape::SingleShapeCompoundCreationPolicy::returnShape,
+        elementMapPolicy
+    );
 }
 
 void TopoCrossSection::sliceNonSolid(
@@ -282,8 +294,14 @@ void TopoCrossSection::sliceNonSolid(
         std::string prefix(op);
         prefix += Data::indexSuffix(idx);
         auto res = TopoShape()
-                       .makeElementShape(cs, shape, prefix.c_str())
-                       .makeElementWires()
+                       .makeElementShape(cs, shape, prefix.c_str(), elementMapPolicy)
+                       .makeElementWires(
+                           nullptr,
+                           0.0,
+                           TopoShape::ConnectionPolicy::mergeWithTolerance,
+                           nullptr,
+                           elementMapPolicy
+                       )
                        .getSubTopoShapes(TopAbs_WIRE);
         wires.insert(wires.end(), res.begin(), res.end());
     }
@@ -312,7 +330,7 @@ void TopoCrossSection::sliceSolid(
     TopoShape solid(idx);
     std::string prefix(op);
     prefix += Data::indexSuffix(idx);
-    solid.makeElementShape(mkSolid, face, prefix.c_str());
+    solid.makeElementShape(mkSolid, face, prefix.c_str(), elementMapPolicy);
     FCBRepAlgoAPI_Cut mkCut(shape.getShape(), solid.getShape());
 
     if (mkCut.IsDone()) {
@@ -320,7 +338,7 @@ void TopoCrossSection::sliceSolid(
         std::vector<TopoShape> shapes;
         shapes.push_back(shape);
         shapes.push_back(solid);
-        res.makeElementShape(mkCut, shapes, prefix.c_str());
+        res.makeElementShape(mkCut, shapes, prefix.c_str(), elementMapPolicy);
         for (auto& face : res.getSubTopoShapes(TopAbs_FACE)) {
             BRepAdaptor_Surface adapt(TopoDS::Face(face.getShape()));
             if (adapt.GetType() == GeomAbs_Plane) {
@@ -331,7 +349,10 @@ void TopoCrossSection::sliceSolid(
                                               .makeElementWires(
                                                   face.getSubTopoShapes(TopAbs_EDGE),
                                                   prefix.c_str(),
-                                                  true
+                                                  1.0,
+                                                  TopoShape::ConnectionPolicy::mergeWithTolerance,
+                                                  nullptr,
+                                                  elementMapPolicy
                                               )
                                               .getSubTopoShapes(TopAbs_WIRE);
                     wires.insert(wires.end(), repaired_wires.begin(), repaired_wires.end());
