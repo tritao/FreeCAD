@@ -1554,7 +1554,7 @@ class PlanEditSession:
         self._start_wall_edit("Move")
 
     def is_selected_wall_endpoint_editable(self):
-        wall = self.selected_wall
+        wall = self._get_selected_plan_target_object("wall")
         if not wall:
             return False
         proxy = getattr(wall, "Proxy", None)
@@ -1570,7 +1570,7 @@ class PlanEditSession:
             return False
 
     def is_selected_wall_baseless(self):
-        wall = self.selected_wall
+        wall = self._get_selected_plan_target_object("wall")
         if not wall:
             return False
         return not getattr(wall, "Base", None) and self.is_selected_wall_endpoint_editable()
@@ -4323,7 +4323,7 @@ class PlanEditSession:
             )
             return
 
-        wall = self.selected_wall
+        wall = self._get_selected_plan_target_object("wall")
         proxy = getattr(wall, "Proxy", None)
         if (
             not proxy
@@ -4499,7 +4499,7 @@ class PlanEditSession:
 
     def _activate_wall_grip(self, grip_index, wall=None):
         if wall is None:
-            wall = self.selected_wall
+            wall = self._get_selected_plan_target_object("wall")
         try:
             from PySide import QtCore
         except ImportError:
@@ -6926,7 +6926,7 @@ class PlanEditSession:
         except Exception:
             return
 
-        wall = self.selected_wall
+        wall = self._get_selected_plan_target_object("wall")
         proxy = getattr(wall, "Proxy", None)
         if not proxy or not hasattr(proxy, "calc_endpoints"):
             return
