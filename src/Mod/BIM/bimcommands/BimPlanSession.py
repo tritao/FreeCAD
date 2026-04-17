@@ -2480,13 +2480,43 @@ class PlanEditSession:
             spaces.append(semantic_obj)
         return spaces
 
-    def _is_space_region_candidate_claimed(self, candidate, spaces, area_ratio_tolerance=0.05):
+    def _get_xy_bound_box_iou(self, first_shape, second_shape):
+        first_bb = getattr(first_shape, "BoundBox", None)
+        second_bb = getattr(second_shape, "BoundBox", None)
+        if first_bb is None or second_bb is None:
+            return 0.0
+
+        x_overlap = min(float(first_bb.XMax), float(second_bb.XMax)) - max(
+            float(first_bb.XMin), float(second_bb.XMin)
+        )
+        y_overlap = min(float(first_bb.YMax), float(second_bb.YMax)) - max(
+            float(first_bb.YMin), float(second_bb.YMin)
+        )
+        if x_overlap <= 0.000001 or y_overlap <= 0.000001:
+            return 0.0
+
+        intersection_area = x_overlap * y_overlap
+        first_area = max(
+            0.0,
+            (float(first_bb.XMax) - float(first_bb.XMin))
+            * (float(first_bb.YMax) - float(first_bb.YMin)),
+        )
+        second_area = max(
+            0.0,
+            (float(second_bb.XMax) - float(second_bb.XMin))
+            * (float(second_bb.YMax) - float(second_bb.YMin)),
+        )
+        union_area = first_area + second_area - intersection_area
+        if union_area <= 0.000001:
+            return 0.0
+        return intersection_area / union_area
+
+    def _is_space_region_candidate_claimed(self, candidate, spaces, overlap_iou_tolerance=0.9):
         if not isinstance(candidate, dict):
             return False
         candidate_face = candidate.get("face")
         sample_point = candidate.get("sample_point")
-        candidate_area = float(candidate.get("area", 0.0) or 0.0)
-        if candidate_face is None or sample_point is None or candidate_area <= 0.000001:
+        if candidate_face is None or sample_point is None:
             return False
 
         for space in spaces or []:
@@ -2504,12 +2534,10 @@ class PlanEditSession:
                         continue
                 except Exception:
                     continue
-                footprint_area = float(getattr(footprint_face, "Area", 0.0) or 0.0)
-                if footprint_area <= 0.000001:
-                    continue
-                if abs(footprint_area - candidate_area) <= candidate_area * float(
-                    area_ratio_tolerance
-                ):
+                if self._get_xy_bound_box_iou(
+                    candidate_face,
+                    footprint_face,
+                ) >= float(overlap_iou_tolerance):
                     return True
         return False
 

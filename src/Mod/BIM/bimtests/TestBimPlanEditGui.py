@@ -4117,7 +4117,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         ]
 
         base = self.document.addObject("Part::Box", "ExistingBathroomBase")
-        base.Length = 3000
+        # Mimic a saved space footprint that is slightly stale versus the live wall region.
+        base.Length = 2800
         base.Width = 4000
         base.Height = 2500
         base.Placement.Base = FreeCAD.Vector(3000, 0, 0)
