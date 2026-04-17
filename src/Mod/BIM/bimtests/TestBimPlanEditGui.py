@@ -199,6 +199,20 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         return level, walls
 
+    def _make_plan_space_separator(
+        self,
+        level,
+        start=FreeCAD.Vector(3000, 0, 0),
+        end=FreeCAD.Vector(3000, 4000, 0),
+        height=2500,
+        label="Room Divider",
+    ):
+        separator = Arch.makeSpaceSeparator(start=start, end=end, height=height, name=label)
+        level.addObject(separator)
+        self.document.recompute()
+        self.pump_gui_events()
+        return separator
+
     def _make_windowed_plan_wall(self, length=3000, width=200, height=2500):
         level = Arch.makeFloor(name="Level 0")
         wall_base = Draft.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(length, 0, 0))
@@ -3719,6 +3733,133 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(session.selected_space, space)
         self.assertEqual(len(session._get_space_boundary_entries(space)), 4)
         self.assertGreater(space.Area.getValueAs("m^2").Value, 0)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_separator_tool_creates_space_separator_in_active_storey(self):
+        """The Separator action should create a real space-separator object on the storey."""
+
+        level = Arch.makeFloor(name="Level 0")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        before = {obj.Name for obj in self.document.Objects}
+
+        session.activate_space_separator_tool()
+        self.assertEqual(session.current_tool, "Separator")
+
+        session._handle_space_separator_point(FreeCAD.Vector(1000, 500, 0))
+        session._handle_space_separator_point(FreeCAD.Vector(1000, 3500, 0))
+        self.pump_gui_events()
+
+        created = [
+            obj
+            for obj in self.document.Objects
+            if obj.Name not in before and Draft.getType(obj) == "SpaceSeparator"
+        ]
+        self.assertEqual(len(created), 1)
+        separator = created[0]
+
+        self.assertIn(level, separator.InListRecursive)
+        expected_area = 3000.0 * float(separator.Height.Value)
+        self.assertAlmostEqual(separator.Shape.Area, expected_area, places=3)
+        self.assertEqual(session.current_tool, "Select")
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_space_tool_uses_selected_separator_boundary(self):
+        """Wall-based space creation should include selected separators as explicit boundaries."""
+
+        level, walls = self._make_plan_room_walls(size=6000)
+        separator = self._make_plan_space_separator(
+            level,
+            start=FreeCAD.Vector(3000, 0, 0),
+            end=FreeCAD.Vector(3000, 6000, 0),
+        )
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        for obj in list(walls) + [separator]:
+            FreeCADGui.Selection.addSelection(self.document.Name, obj.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        request = session._get_space_creation_request()
+        self.assertIsNotNone(request)
+        self.assertIn(separator, [obj for obj, _subnames in request["boundaries"]])
+
+        self.assertTrue(session.activate_space_tool())
+        self.pump_gui_events()
+
+        self.assertEqual(session.current_tool, "Pick Space Region")
+        self.assertEqual(len(session._space_region_candidates), 2)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_space_tool_can_pick_regions_from_selected_space_and_separator(self):
+        """A selected space plus separator should split the space into region candidates."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "SeedSpaceBase")
+        base.Length = 6000
+        base.Width = 4000
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Living Room")
+        level.addObject(space)
+        separator = self._make_plan_space_separator(level)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        before = {obj.Name for obj in self.document.Objects}
+
+        session._set_pending_selected_plan_target("space", space)
+        session._set_gui_selection([space, separator])
+        session._refresh_selected_wall()
+
+        self.assertIs(session.selected_space, space)
+        request = session._get_space_creation_request()
+        self.assertIsNotNone(request)
+        self.assertIs(request["region_seed_space"], space)
+        self.assertIn(separator, [obj for obj, _subnames in request["boundaries"]])
+
+        self.assertTrue(session.activate_space_tool())
+        self.pump_gui_events()
+
+        self.assertEqual(session.current_tool, "Pick Space Region")
+        self.assertEqual(len(session._space_region_candidates), 2)
+
+        candidate = min(session._space_region_candidates, key=lambda item: item["area"])
+        self.assertTrue(session._activate_space_region_candidate(candidate))
+        self.pump_gui_events()
+
+        created_spaces = [
+            obj
+            for obj in self.document.Objects
+            if obj.Name not in before and Draft.getType(obj) == "Space"
+        ]
+        self.assertEqual(len(created_spaces), 1)
+        self.assertAlmostEqual(
+            created_spaces[0].Proxy.getArea(created_spaces[0]), candidate["area"]
+        )
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
