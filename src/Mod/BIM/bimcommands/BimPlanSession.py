@@ -7421,6 +7421,7 @@ class PlanEditSession:
             "opening",
             mouse_pos,
             event_callback=event_callback,
+            sync_gui_selection=True,
             clear_hovered_kinds=("wall", "opening", "symbol", "space", "region"),
         )
 
