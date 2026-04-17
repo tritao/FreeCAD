@@ -2470,9 +2470,7 @@ class PlanEditSession:
         ]
         return ", ".join(parts)
 
-    def _get_plan_selection_summary_text(self):
-        if self.current_tool != "Select":
-            return ""
+    def _get_selected_plan_targets(self):
         primary_kind, primary_obj = self._get_selected_plan_target()
         targets = []
         seen = set()
@@ -2494,20 +2492,108 @@ class PlanEditSession:
                 continue
             seen.add(key)
             targets.append((target_kind, target_obj))
-        if len(targets) <= 1:
+        return targets
+
+    def _get_space_preflight_report(self, targets=None):
+        if self.current_tool != "Select":
+            return None
+
+        targets = targets if targets is not None else self._get_selected_plan_targets()
+        if not targets:
+            return None
+
+        label = None
+        if targets[0][0] == "space":
+            secondary_targets = targets[1:]
+            if not secondary_targets or not all(
+                target_kind == "wall" for target_kind, _target_obj in secondary_targets
+            ):
+                return None
+            boundaries = self._get_selected_space_boundary_links(fallback_space=targets[0][1])
+            label = getattr(targets[0][1], "Label", None)
+        elif all(target_kind == "wall" for target_kind, _target_obj in targets):
+            boundaries = self._get_selected_space_boundary_links()
+        else:
+            return None
+
+        import ArchSpace
+
+        return ArchSpace.analyzeBoundaryLinks(boundaries, label=label)
+
+    def _format_space_preflight_text(self, report):
+        if not report:
             return ""
+
+        if report.get("valid"):
+            inner_void_count = int(report.get("inner_void_count", 0) or 0)
+            if inner_void_count <= 0:
+                return translate("BIM_PlanEdit", "Space preflight: Valid space")
+            if inner_void_count == 1:
+                return translate("BIM_PlanEdit", "Space preflight: Valid space with 1 inner void")
+            return translate(
+                "BIM_PlanEdit", "Space preflight: Valid space with {count} inner voids"
+            ).format(count=inner_void_count)
+
+        code = report.get("code")
+        status_map = {
+            "empty": translate(
+                "BIM_PlanEdit", "Space preflight: Select room-bounding walls or faces"
+            ),
+            "unusable_boundaries": translate(
+                "BIM_PlanEdit", "Space preflight: No usable boundary faces"
+            ),
+            "no_height": translate("BIM_PlanEdit", "Space preflight: Boundaries have no height"),
+            "no_intersection": translate(
+                "BIM_PlanEdit", "Space preflight: Boundaries miss the plan cut"
+            ),
+            "open_loop": translate("BIM_PlanEdit", "Space preflight: Open loop"),
+            "multiple_regions": translate(
+                "BIM_PlanEdit", "Space preflight: Multiple enclosed regions"
+            ),
+            "nested_islands": translate(
+                "BIM_PlanEdit", "Space preflight: Nested islands are not supported"
+            ),
+            "invalid_solid": translate(
+                "BIM_PlanEdit", "Space preflight: Selection cannot become one space"
+            ),
+        }
+        status = status_map.get(
+            code,
+            translate("BIM_PlanEdit", "Space preflight: Selection cannot become one space"),
+        )
+        details = [
+            str(detail).strip() for detail in report.get("details", []) if str(detail).strip()
+        ]
+        if details:
+            return "{}\n{}".format(status, details[0])
+        return status
+
+    def _get_plan_selection_summary_text(self):
+        if self.current_tool != "Select":
+            return ""
+        targets = self._get_selected_plan_targets()
+        preflight_text = self._format_space_preflight_text(
+            self._get_space_preflight_report(targets)
+        )
+        if len(targets) <= 1:
+            return preflight_text
         secondary_targets = targets[1:]
+        primary_kind = targets[0][0]
         if (
             primary_kind == "space"
             and secondary_targets
             and all(target_kind == "wall" for target_kind, _target_obj in secondary_targets)
         ):
-            return translate("BIM_PlanEdit", "Boundary candidates: {summary}").format(
+            summary = translate("BIM_PlanEdit", "Boundary candidates: {summary}").format(
                 summary=self._summarize_plan_targets(secondary_targets)
             )
-        return translate("BIM_PlanEdit", "Selection set: {summary}").format(
-            summary=self._summarize_plan_targets(targets)
-        )
+        else:
+            summary = translate("BIM_PlanEdit", "Selection set: {summary}").format(
+                summary=self._summarize_plan_targets(targets)
+            )
+        if preflight_text:
+            return "{}\n{}".format(summary, preflight_text)
+        return summary
 
     def _clear_plan_relation_status(self):
         self._plan_relation_status_message = None
