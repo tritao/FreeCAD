@@ -214,6 +214,30 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         return separator
 
+    def _make_plan_region(
+        self,
+        level,
+        points=None,
+        parent_space=None,
+        label="Kitchen Zone",
+    ):
+        if points is None:
+            points = [
+                FreeCAD.Vector(900, 900, 0),
+                FreeCAD.Vector(2900, 900, 0),
+                FreeCAD.Vector(2900, 2100, 0),
+                FreeCAD.Vector(900, 2100, 0),
+            ]
+        region = Arch.makePlanRegion(
+            points=points,
+            parent_space=parent_space,
+            name=label,
+        )
+        level.addObject(region)
+        self.document.recompute()
+        self.pump_gui_events()
+        return region
+
     def _make_windowed_plan_wall(self, length=3000, width=200, height=2500):
         level = Arch.makeFloor(name="Level 0")
         wall_base = Draft.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(length, 0, 0))
@@ -3627,6 +3651,35 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_selects_existing_region(self):
+        """Plan Edit should treat plan regions as first-class selectable targets."""
+
+        level = Arch.makeFloor(name="Level 0")
+        region = self._make_plan_region(level)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, region.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        self.assertIs(session.selected_region, region)
+        self.assertIsNone(session.selected_wall)
+        self.assertIsNone(session.selected_opening)
+        self.assertIsNone(session.selected_symbol)
+        self.assertIsNone(session.selected_space)
+        self.assertGreater(len(session._region_overlay_trackers), 0)
+        self.assertIn("Region: Kitchen Zone", session.task_panel.status.text())
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_space_overlay_follows_wire_edges_when_vertex_order_is_scrambled(self):
         """Space overlays should follow wire edge order, not OCC vertex storage order."""
 
@@ -3734,6 +3787,61 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(session.selected_space, space)
         self.assertEqual(len(session._get_space_boundary_entries(space)), 4)
         self.assertGreater(space.Area.getValueAs("m^2").Value, 0)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_region_button_creates_plan_region_with_parent_space(self):
+        """The Region action should create and select a polygonal plan region."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "LivingRoomBase")
+        base.Length = 6000
+        base.Width = 4000
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Living Room")
+        level.addObject(space)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        before = {obj.Name for obj in self.document.Objects}
+        session._set_pending_selected_plan_target("space", space)
+        session._set_gui_selection([space])
+        session._refresh_selected_wall()
+        self.assertIs(session.selected_space, space)
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", return_value=None):
+            session.activate_plan_region_tool()
+            self.assertEqual(session.current_tool, "Region")
+            for point in (
+                FreeCAD.Vector(1200, 1200, 0),
+                FreeCAD.Vector(3200, 1200, 0),
+                FreeCAD.Vector(3200, 2400, 0),
+                FreeCAD.Vector(1200, 2400, 0),
+            ):
+                session._handle_plan_region_point(point)
+            self.assertTrue(session._finalize_plan_region())
+        self.pump_gui_events()
+
+        created_regions = [
+            obj
+            for obj in self.document.Objects
+            if obj.Name not in before and Draft.getType(obj) == "PlanRegion"
+        ]
+        self.assertEqual(len(created_regions), 1)
+        region = created_regions[0]
+
+        self.assertIs(region.ParentSpace, space)
+        self.assertIn(level, region.InListRecursive)
+        self.assertGreater(len(region.Shape.Faces), 0)
+        self.assertIs(session.selected_region, region)
+        self.assertEqual(session.current_tool, "Select")
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
