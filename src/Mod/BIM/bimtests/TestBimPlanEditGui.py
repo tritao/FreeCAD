@@ -4238,6 +4238,66 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_space_editor_uses_searchable_compact_type_combo(self):
+        """Space type selection should stay compact and searchable inside Plan Edit."""
+
+        from PySide import QtCore, QtGui
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "SearchableSpaceBase")
+        base.Length = 3000
+        base.Width = 2000
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Searchable Space")
+        level.addObject(space)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, space.Name)
+        self.pump_gui_events()
+        session._refresh_selected_wall()
+
+        combo = session.task_panel.space_type_combo
+        self.assertIsNotNone(combo)
+        self.assertTrue(combo.isEditable())
+        self.assertEqual(combo.insertPolicy(), QtGui.QComboBox.NoInsert)
+        self.assertEqual(combo.maxVisibleItems(), 12)
+        self.assertIsNotNone(combo.completer())
+        self.assertEqual(combo.completer().completionMode(), QtGui.QCompleter.PopupCompletion)
+        self.assertEqual(combo.completer().caseSensitivity(), QtCore.Qt.CaseInsensitive)
+        if hasattr(combo.completer(), "filterMode"):
+            self.assertEqual(combo.completer().filterMode(), QtCore.Qt.MatchContains)
+
+        expected_prefix = [
+            "Undefined",
+            "Room",
+            "Office",
+            "Restrooms",
+            "Corridor / Transition",
+            "Lobby",
+            "Dining Area",
+            "Exterior",
+            "Active Storage",
+            "Electrical / Mechanical",
+        ]
+        actual_prefix = [combo.itemText(index) for index in range(len(expected_prefix))]
+        self.assertEqual(actual_prefix, expected_prefix)
+
+        line_edit = combo.lineEdit()
+        self.assertIsNotNone(line_edit)
+        if hasattr(line_edit, "placeholderText"):
+            self.assertEqual(line_edit.placeholderText(), "Search space types")
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_ctrl_click_wall_keeps_selected_space_primary_for_boundary_editing(self):
         """Ctrl-click should add boundary walls without replacing the selected space editor target."""
 
