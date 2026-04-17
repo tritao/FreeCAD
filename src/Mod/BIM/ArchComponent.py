@@ -79,6 +79,25 @@ def _make_projected_horizontal_area_face(projected_faces):
     return fused_face.removeSplitter()
 
 
+def _make_transient_face(shapes, maker_class_name):
+    """Build plain transient faces for analysis-only geometry."""
+
+    import Part
+
+    plain_shapes = []
+    for shape in shapes or []:
+        plain_shape = _copy_without_element_map(shape)
+        if plain_shape is not None:
+            plain_shapes.append(plain_shape)
+    if not plain_shapes:
+        return None
+
+    try:
+        return Part.makeFace(plain_shapes, maker_class_name, noElementMap=True)
+    except Exception:
+        return None
+
+
 def get_horizontal_slice_edges(shape, cut_z):
     """Return transient section edges for a horizontal cut through ``shape``."""
 
@@ -86,7 +105,7 @@ def get_horizontal_slice_edges(shape, cut_z):
         return []
 
     try:
-        wires = shape.slice(FreeCAD.Vector(0, 0, 1), cut_z)
+        wires = shape.slice(FreeCAD.Vector(0, 0, 1), cut_z, True)
     except Exception:
         return []
 
@@ -1485,7 +1504,11 @@ class AreaCalculator:
                 if len(wires) == 1 and not wires[0].isClosed():
                     projectedArea = 0
                 else:
-                    projectedArea = Part.Face(wires).Area
+                    maker = "Part::FaceMakerSimple" if len(wires) == 1 else "Part::FaceMakerCheese"
+                    projectedFace = _make_transient_face(wires, maker)
+                    if projectedFace is None:
+                        raise RuntimeError("Could not build transient projected face")
+                    projectedArea = projectedFace.Area
             except Exception as err:
                 FreeCAD.Console.PrintWarning(
                     translate(
@@ -1601,13 +1624,19 @@ class AreaCalculator:
                             self.resetAreas()
                             return
                         wire = TechDraw.findShapeOutline(face, 1, direction)
-                        projectedFace = Part.makeFace([wire], "Part::FaceMakerSimple")
+                        projectedFace = _make_transient_face(
+                            [wire],
+                            "Part::FaceMakerSimple",
+                        )
                     else:
                         edges = self._get_projected_edges(face, direction)
                         wires = DraftGeomUtils.findWires(edges)
-                        # Using "Part::FaceMakerCheese" as the face can have holes
-                        projectedFace = Part.makeFace(wires, "Part::FaceMakerCheese")
-                    # Part.show(projectedFace)
+                        maker = (
+                            "Part::FaceMakerSimple" if len(wires) == 1 else "Part::FaceMakerCheese"
+                        )
+                        projectedFace = _make_transient_face(wires, maker)
+                    if projectedFace is None:
+                        raise RuntimeError("Could not build transient projected face")
                     projectedFaces.append(projectedFace)
                 except Exception as err:
                     FreeCAD.Console.PrintWarning(

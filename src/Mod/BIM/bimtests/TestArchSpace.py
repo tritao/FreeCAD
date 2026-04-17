@@ -87,6 +87,22 @@ class TestArchSpace(TestArchBase.TestArchBase):
         self.assertGreater(faces[0].Area, 0)
         self.assertAlmostEqual(space.Proxy.getArea(space), faces[0].Area)
 
+    def test_space_footprint_faces_drop_element_map_metadata(self):
+        operation = "Checking Arch Space footprint transient faces..."
+        self.printTestMessage(operation)
+
+        base = App.ActiveDocument.addObject("Part::Feature", "SpaceElementMapBox")
+        base.Shape = Part.makeBox(1000, 500, 2000)
+        space = Arch.makeSpace([base])
+        App.ActiveDocument.recompute()
+
+        faces = space.Proxy.getFootprint(space)
+
+        self.assertTrue(faces)
+        for face in faces:
+            if getattr(face, "ElementMapVersion", "") != "":
+                self.assertEqual(face.ElementMapSize, 0)
+
     def test_plan_geometry_face_wire_polylines_follow_edge_order_when_vertex_order_is_scrambled(
         self,
     ):
