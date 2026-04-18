@@ -42,6 +42,7 @@ from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
 from bimplan.overlays import openings as opening_overlays
 from bimplan.overlays import symbols as symbol_overlays
+from bimplan.overlays import walls as wall_overlays
 from bimplan.providers import (
     PlanActionSpec,
     PlanInspectorSection,
@@ -6542,107 +6543,13 @@ class PlanEditSession:
             pass
 
     def _retarget_edit_tracker(self, tracker, obj, index):
-        selnode = getattr(tracker, "selnode", None)
-        if selnode is None:
-            return
-        doc_name = getattr(getattr(obj, "Document", None), "Name", None)
-        obj_name = getattr(obj, "Name", None)
-        try:
-            if hasattr(selnode, "useNewSelection"):
-                selnode.useNewSelection = False
-            if doc_name and hasattr(selnode, "documentName"):
-                selnode.documentName.setValue(doc_name)
-            if obj_name and hasattr(selnode, "objectName"):
-                selnode.objectName.setValue(obj_name)
-            if hasattr(selnode, "subElementName"):
-                selnode.subElementName.setValue(f"EditNode{index}")
-        except Exception:
-            pass
+        return wall_overlays.retarget_edit_tracker(tracker, obj, index)
 
     def _sync_wall_grips(self):
-        with self._plan_perf_trace_span("sync_wall_grips"):
-            if not self.is_selected_wall_endpoint_editable():
-                self._clear_wall_grips()
-                return
-
-            try:
-                import draftguitools.gui_trackers as DraftTrackers
-                from draftutils import params
-            except Exception:
-                self._clear_wall_grips()
-                return
-
-            wall = self._get_selected_plan_target_object("wall")
-            proxy = getattr(wall, "Proxy", None)
-            if not proxy or not hasattr(proxy, "calc_endpoints"):
-                self._clear_wall_grips()
-                return
-
-            endpoints = proxy.calc_endpoints(wall)
-            if len(endpoints) != 2:
-                self._clear_wall_grips()
-                return
-
-            if hasattr(proxy, "calc_edit_grip_positions"):
-                grip_positions = proxy.calc_edit_grip_positions(wall)
-            else:
-                grip_positions = endpoints + [(endpoints[0] + endpoints[1]) * 0.5]
-            if len(grip_positions) != 3:
-                self._clear_wall_grips()
-                return
-
-            marker_size = self._scaled_marker_size(params.get_param_view("MarkerSize"))
-            midpoint_marker = FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size)
-            wall_state = (
-                marker_size,
-                midpoint_marker,
-                getattr(getattr(wall, "Document", None), "Name", None),
-                getattr(wall, "Name", None),
-                tuple(
-                    (float(position.x), float(position.y), float(position.z))
-                    for position in grip_positions
-                ),
-            )
-            previous_state = self._wall_grip_state
-            reuse_allowed = (
-                len(self._grip_trackers) == 3
-                and previous_state is not None
-                and previous_state[:2] == wall_state[:2]
-            )
-            if reuse_allowed:
-                try:
-                    for index, (tracker, position) in enumerate(
-                        zip(self._grip_trackers, grip_positions)
-                    ):
-                        self._retarget_edit_tracker(tracker, wall, index)
-                        tracker.set(position)
-                        tracker.on()
-                    if previous_state == wall_state:
-                        self._plan_perf_count("wall_grip_cache_hits")
-                    else:
-                        self._plan_perf_count("wall_grip_tracker_reuses")
-                    self._wall_grip_state = wall_state
-                    return
-                except Exception:
-                    self._clear_wall_grips()
-
-            grip_start, grip_end, midpoint = grip_positions
-            self._grip_trackers = [
-                DraftTrackers.editTracker(pos=grip_start, name=wall.Name, idx=0),
-                DraftTrackers.editTracker(pos=grip_end, name=wall.Name, idx=1),
-                DraftTrackers.editTracker(
-                    pos=midpoint,
-                    name=wall.Name,
-                    idx=2,
-                    marker=midpoint_marker,
-                ),
-            ]
-            self._wall_grip_state = wall_state
+        return wall_overlays.sync_wall_grips(self)
 
     def _clear_wall_grips(self):
-        self._finalize_trackers(self._grip_trackers)
-        self._grip_trackers = []
-        self._wall_grip_state = None
+        return wall_overlays.clear_wall_grips(self)
 
     def _get_footprint_overlay_polylines(self, faces):
         return overlay_geometry.get_footprint_overlay_polylines(faces)
@@ -7911,140 +7818,43 @@ class PlanEditSession:
         self._space_region_pick_trackers = []
 
     def _sync_hovered_wall_overlay(self):
-        self._clear_hovered_wall_overlay()
-        if self.current_tool not in ("Select", "Join"):
-            return
-        if not self.hovered_wall or self._is_selected_plan_target("wall", self.hovered_wall):
-            return
-        self._create_wall_overlay_trackers(
-            self.hovered_wall,
-            color=(0.42, 0.62, 0.9),
-            width=self._scaled_line_width(2),
-            tracker_store=self._wall_hover_trackers,
-        )
+        return wall_overlays.sync_hovered_wall_overlay(self)
 
     def _clear_hovered_wall_overlay(self):
-        self._finalize_trackers(self._wall_hover_trackers)
-        self._wall_hover_trackers = []
+        return wall_overlays.clear_hovered_wall_overlay(self)
 
     def _get_plan_context_junctions(self):
-        if self.current_tool not in ("Select", "Join"):
-            return []
-
-        import ArchWallJoinUtils
-
-        junctions = []
-        seen = set()
-        selected_wall = self._get_selected_plan_target_object("wall")
-        for wall in (selected_wall, self.hovered_wall):
-            if not self._is_plan_selectable_wall(wall):
-                continue
-            for relation in ArchWallJoinUtils.iter_wall_relations(wall):
-                if not ArchWallJoinUtils.is_wall_junction(relation):
-                    continue
-                relation_name = getattr(relation, "Name", None)
-                if not relation_name or relation_name in seen:
-                    continue
-                seen.add(relation_name)
-                if getattr(relation, "Status", "") not in ("OK", "Conflict"):
-                    continue
-                junctions.append(relation)
-        return junctions
+        return wall_overlays.get_plan_context_junctions(self)
 
     def _create_junction_node_trackers(self, junction, color, width, tracker_store):
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            return
-
-        intersection = getattr(junction, "Intersection", None)
-        if intersection is None:
-            return
-        units_per_pixel = self._get_plan_view_units_per_pixel() or 1.0
-        half_size = max(units_per_pixel * 8.0, 20.0)
-        center = FreeCAD.Vector(intersection)
-        offsets = (
-            (FreeCAD.Vector(-half_size, -half_size, 0), FreeCAD.Vector(half_size, half_size, 0)),
-            (FreeCAD.Vector(-half_size, half_size, 0), FreeCAD.Vector(half_size, -half_size, 0)),
+        return wall_overlays.create_junction_node_trackers(
+            self,
+            junction,
+            color=color,
+            width=width,
+            tracker_store=tracker_store,
         )
-        for start_offset, end_offset in offsets:
-            tracker = self._make_plan_line_tracker(
-                DraftTrackers,
-                "junction-node:{}".format(getattr(junction, "Name", "unknown")),
-                scolor=color,
-                swidth=width,
-                ontop=True,
-            )
-            tracker.p1(center.add(start_offset))
-            tracker.p2(center.add(end_offset))
-            tracker.on()
-            tracker_store.append(tracker)
 
     def _sync_junction_node_overlays(self):
-        self._clear_junction_node_overlays()
-        selected_wall = self._get_selected_plan_target_object("wall")
-        for junction in self._get_plan_context_junctions():
-            if selected_wall and selected_wall in (getattr(junction, "Walls", None) or []):
-                color = (0.92, 0.58, 0.12)
-                width = self._scaled_line_width(2)
-            else:
-                color = (0.82, 0.70, 0.32)
-                width = self._scaled_line_width(1)
-            self._create_junction_node_trackers(
-                junction,
-                color=color,
-                width=width,
-                tracker_store=self._junction_node_trackers,
-            )
+        return wall_overlays.sync_junction_node_overlays(self)
 
     def _clear_junction_node_overlays(self):
-        self._finalize_trackers(self._junction_node_trackers)
-        self._junction_node_trackers = []
+        return wall_overlays.clear_junction_node_overlays(self)
 
     def _sync_hovered_wall_opening_context_overlay(self):
-        self._clear_hovered_wall_opening_context_overlay()
-        if self.current_tool != "Select":
-            return
-        if not self.hovered_wall or self._is_selected_plan_target("wall", self.hovered_wall):
-            return
-        selected_kind, _selected_obj = self._get_selected_plan_target()
-        if selected_kind in ("wall", "opening", "region", "space"):
-            return
-        color = (0.64, 0.70, 0.84)
-        width = self._scaled_line_width(1)
-        for opening in self._get_wall_hosted_openings(self.hovered_wall):
-            self._create_opening_overlay_trackers(
-                opening,
-                color=color,
-                width=width,
-                tracker_store=self._hovered_wall_opening_context_trackers,
-            )
+        return wall_overlays.sync_hovered_wall_opening_context_overlay(self)
 
     def _clear_hovered_wall_opening_context_overlay(self):
-        self._finalize_trackers(self._hovered_wall_opening_context_trackers)
-        self._hovered_wall_opening_context_trackers = []
+        return wall_overlays.clear_hovered_wall_opening_context_overlay(self)
 
     def _create_wall_overlay_trackers(self, wall, color, width, tracker_store):
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            return
-
-        for polyline in self._get_wall_overlay_polylines(wall):
-            if len(polyline) < 2:
-                continue
-            for start, end in zip(polyline, polyline[1:]):
-                tracker = self._make_plan_line_tracker(
-                    DraftTrackers,
-                    "wall-overlay:{}".format(getattr(wall, "Name", "unknown")),
-                    scolor=color,
-                    swidth=width,
-                    ontop=True,
-                )
-                tracker.p1(start)
-                tracker.p2(end)
-                tracker.on()
-                tracker_store.append(tracker)
+        return wall_overlays.create_wall_overlay_trackers(
+            self,
+            wall,
+            color=color,
+            width=width,
+            tracker_store=tracker_store,
+        )
 
     def _create_space_overlay_trackers(self, space, color, width, tracker_store):
         try:
