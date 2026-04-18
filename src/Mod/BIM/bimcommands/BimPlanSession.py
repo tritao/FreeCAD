@@ -1983,56 +1983,19 @@ class PlanEditSession:
             self._document_observer_added = False
 
     def _is_plan_selectable_wall(self, obj):
-        if not obj:
-            return False
-        obj = self._get_plan_semantic_object(obj)
-        try:
-            import Draft
-
-            return Draft.getType(obj) == "Wall"
-        except Exception:
-            return False
+        return plan_targets.is_plan_selectable_wall(self, obj)
 
     def _is_plan_space_object(self, obj):
-        if not obj:
-            return False
-        obj = self._get_plan_semantic_object(obj)
-        try:
-            import Draft
-
-            if Draft.getType(obj) == "Space":
-                return True
-        except Exception:
-            pass
-        return getattr(obj, "IfcType", "") == "Space"
+        return plan_targets.is_plan_space_object(self, obj)
 
     def _is_plan_custom_pick_only_object(self, obj):
-        if not obj:
-            return False
-        obj = self._get_plan_semantic_object(obj)
-        return self._is_plan_space_object(obj) or self._is_plan_region_object(obj)
+        return plan_targets.is_plan_custom_pick_only_object(self, obj)
 
     def _is_plan_space_separator_object(self, obj):
-        if not obj:
-            return False
-        obj = self._get_plan_semantic_object(obj)
-        try:
-            import Draft
-
-            return Draft.getType(obj) == "SpaceSeparator"
-        except Exception:
-            return False
+        return plan_targets.is_plan_space_separator_object(self, obj)
 
     def _is_plan_region_object(self, obj):
-        if not obj:
-            return False
-        obj = self._get_plan_semantic_object(obj)
-        try:
-            import Draft
-
-            return Draft.getType(obj) == "PlanRegion"
-        except Exception:
-            return False
+        return plan_targets.is_plan_region_object(self, obj)
 
     def _get_gui_selection_ex(self):
         return plan_selection.get_gui_selection_ex()
