@@ -254,6 +254,7 @@ class PlanEditSession:
         self._plan_semantic_object_cache = {}
         self._plan_object_storeys_cache = {}
         self._plan_symbol_instances_cache = None
+        self._plan_opening_instances_cache = None
         self._wall_hosted_openings_cache = None
         self._wall_hosted_openings_cache_queued = False
         self._opening_overlay_screen_cache = {}
@@ -5083,6 +5084,7 @@ class PlanEditSession:
 
     def _invalidate_wall_hosted_openings_cache(self):
         self._wall_hosted_openings_cache = None
+        self._plan_opening_instances_cache = None
         self._wall_hosted_openings_cache_queued = False
 
     def _queue_prime_wall_hosted_openings_cache(self):
@@ -5104,9 +5106,12 @@ class PlanEditSession:
         self._wall_hosted_openings_cache_queued = False
         if self._tearing_down or self._wall_hosted_openings_cache is not None or not self.doc:
             return
-        self._wall_hosted_openings_cache = (
-            getattr(self.doc, "Name", None),
-            self._build_wall_hosted_openings_cache(),
+        doc_name = getattr(self.doc, "Name", None)
+        cache = self._build_wall_hosted_openings_cache()
+        self._wall_hosted_openings_cache = (doc_name, cache)
+        self._plan_opening_instances_cache = (
+            doc_name,
+            self._collect_opening_instances_from_host_cache(cache),
         )
 
     def _build_wall_hosted_openings_cache(self):
@@ -5124,6 +5129,39 @@ class PlanEditSession:
                     cache.setdefault(host_key, []).append(obj)
         return cache
 
+    def _collect_opening_instances_from_host_cache(self, host_cache):
+        openings = []
+        seen = set()
+        for hosted_openings in (host_cache or {}).values():
+            for opening in hosted_openings:
+                opening_key = self._get_document_object_key(opening)
+                if opening_key is None or opening_key in seen:
+                    continue
+                seen.add(opening_key)
+                openings.append(opening)
+        return tuple(openings)
+
+    def _get_plan_opening_instances(self):
+        if not self.doc:
+            return ()
+        doc_name = getattr(self.doc, "Name", None)
+        cache_record = self._plan_opening_instances_cache
+        if cache_record is not None and cache_record[0] == doc_name:
+            self._plan_perf_count("plan_opening_instances_cache_hits")
+            return cache_record[1]
+
+        wall_cache_record = self._wall_hosted_openings_cache
+        if wall_cache_record is None or wall_cache_record[0] != doc_name:
+            host_cache = self._build_wall_hosted_openings_cache()
+            self._wall_hosted_openings_cache = (doc_name, host_cache)
+        else:
+            self._plan_perf_count("wall_hosted_openings_cache_hits")
+            host_cache = wall_cache_record[1]
+
+        openings = self._collect_opening_instances_from_host_cache(host_cache)
+        self._plan_opening_instances_cache = (doc_name, openings)
+        return openings
+
     def _get_wall_hosted_openings(self, wall):
         if not wall or not self.doc:
             return []
@@ -5133,8 +5171,13 @@ class PlanEditSession:
         doc_name = getattr(self.doc, "Name", None)
         cache_record = self._wall_hosted_openings_cache
         if cache_record is None or cache_record[0] != doc_name:
-            cache_record = (doc_name, self._build_wall_hosted_openings_cache())
+            host_cache = self._build_wall_hosted_openings_cache()
+            cache_record = (doc_name, host_cache)
             self._wall_hosted_openings_cache = cache_record
+            self._plan_opening_instances_cache = (
+                doc_name,
+                self._collect_opening_instances_from_host_cache(host_cache),
+            )
         else:
             self._plan_perf_count("wall_hosted_openings_cache_hits")
         return list(cache_record[1].get(wall_key, ()))

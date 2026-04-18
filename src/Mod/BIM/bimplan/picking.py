@@ -48,6 +48,34 @@ def get_screen_distance_sq_to_projected_segment(cursor_xy, start_xy, end_xy):
     return offset_x * offset_x + offset_y * offset_y
 
 
+def should_skip_opening_by_plan_bounds(session, opening, plan_point, radius_px):
+    if plan_point is None:
+        return False
+    try:
+        shape = getattr(opening, "Shape", None)
+        bound_box = getattr(shape, "BoundBox", None)
+    except Exception:
+        return False
+    if bound_box is None:
+        return False
+
+    try:
+        max_span = max(float(bound_box.XLength), float(bound_box.YLength))
+        units_per_px = session._get_plan_view_units_per_pixel()
+        pick_margin = float(radius_px) * float(units_per_px or 0.0) * 4.0
+        margin = max(max_span * 2.0, pick_margin, 1500.0)
+        point_x = float(plan_point.x)
+        point_y = float(plan_point.y)
+        return (
+            point_x < float(bound_box.XMin) - margin
+            or point_x > float(bound_box.XMax) + margin
+            or point_y < float(bound_box.YMin) - margin
+            or point_y > float(bound_box.YMax) + margin
+        )
+    except Exception:
+        return False
+
+
 def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
     with session._plan_perf_trace_span(
         "pick_symbol_target_from_overlays",
@@ -98,8 +126,9 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
         best_distance_sq = None
         seen = set()
         cursor_xy = (float(mouse_pos[0]), float(mouse_pos[1]))
+        plan_point = session._get_plan_point_from_mouse_pos(mouse_pos)
         if candidates is None:
-            objects = getattr(session.doc, "Objects", []) or []
+            objects = session._get_plan_opening_instances()
         else:
             objects = candidates
         for obj in objects or []:
@@ -112,6 +141,9 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
             seen.add(name)
             view_object = getattr(obj, "ViewObject", None)
             if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
+                continue
+            if should_skip_opening_by_plan_bounds(session, obj, plan_point, radius_px):
+                session._plan_perf_count("opening_overlay_pick_bounds_skipped")
                 continue
             session._plan_perf_count("opening_overlay_pick_candidates")
             for projected in session._get_opening_overlay_screen_polylines(obj):
