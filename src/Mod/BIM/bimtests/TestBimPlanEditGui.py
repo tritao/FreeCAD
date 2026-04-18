@@ -5427,6 +5427,34 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_single_wall_selection_skips_space_preflight(self):
+        """Selecting one wall should not run boundary preflight on every panel refresh."""
+
+        level, walls = self._make_plan_room_walls()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch(
+            "ArchSpace.analyzeBoundaryLinks",
+            wraps=ArchSpace.analyzeBoundaryLinks,
+        ) as analyze_boundaries:
+            FreeCADGui.Selection.clearSelection()
+            FreeCADGui.Selection.addSelection(self.document.Name, walls[0].Name)
+            self.pump_gui_events()
+            session._refresh_primary_selected_plan_target()
+
+            status_text = session.task_panel.status.text()
+            self.assertNotIn("Space preflight:", status_text)
+            analyze_boundaries.assert_not_called()
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_space_preflight_reports_open_loop(self):
         """Selecting an open wall set should show the preflight failure before creating a space."""
 

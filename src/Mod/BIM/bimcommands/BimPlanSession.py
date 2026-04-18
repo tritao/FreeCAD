@@ -2593,7 +2593,7 @@ class PlanEditSession:
             self._sync_hovered_region_overlay()
             self._sync_secondary_selected_overlays()
             self._sync_active_plan_target_object()
-            self._refresh_task_panel_status()
+            self._refresh_task_panel_status(selection_only=self.current_tool == "Select")
 
     def _refresh_selected_plan_target(self):
         return plan_selection.refresh_selected_plan_target(self)
