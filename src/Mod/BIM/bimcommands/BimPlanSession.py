@@ -106,7 +106,9 @@ _PLAN_VISUAL_SECONDARY_SELECTION = "secondary_selection"
 _PLAN_VISUAL_SPACE_REGION_PICK = "space_region_pick"
 _PLAN_VISUAL_WALL_GRIPS = "wall_grips"
 _PLAN_VISUAL_WALL_EDIT_PREVIEW = "wall_edit_preview"
+_PLAN_VISUAL_VIEW_SCALE = "view_scale"
 _PLAN_VISUAL_ALL = "all"
+_PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
 _PLAN_VIEW_LOCKED_ACTIONS = (
     "Std_ViewFront",
     "Std_ViewTop",
@@ -415,6 +417,7 @@ class PlanEditSession:
         self._consume_left_button_release = False
         self._key_pressed_cb = None
         self._overlay_refresh_queued = False
+        self._view_scale_overlay_refresh_queued = False
         self._dirty_plan_visuals = set()
         self._render_manager = None
         self._saved_camera = None
@@ -5907,7 +5910,8 @@ class PlanEditSession:
             event_type_name = ""
         if event_type_name != "SoMouseWheelEvent":
             return
-        self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_ALL)
+        with self._plan_perf_trace_event("mouse_wheel", event_type=event_type_name):
+            self._queue_plan_overlay_view_scale_refresh()
 
     def _queue_plan_overlay_visual_refresh(self, *visuals):
         if self._tearing_down:
@@ -5927,21 +5931,103 @@ class PlanEditSession:
         self._overlay_refresh_queued = True
         QtCore.QTimer.singleShot(0, self._flush_plan_overlay_visual_refresh)
 
-    def _consume_dirty_plan_visuals(self):
+    def _queue_plan_overlay_view_scale_refresh(self, delay_ms=_PLAN_VIEW_SCALE_REFRESH_DELAY_MS):
+        if self._tearing_down:
+            return
+        self._dirty_plan_visuals.add(_PLAN_VISUAL_VIEW_SCALE)
+        if self._overlay_refresh_queued or self._view_scale_overlay_refresh_queued:
+            return
+        try:
+            from PySide import QtCore
+        except ImportError:
+            dirty = self._consume_dirty_plan_visuals(default_all=False)
+            if dirty:
+                self._refresh_plan_overlay_visuals(dirty)
+            return
+        self._view_scale_overlay_refresh_queued = True
+        QtCore.QTimer.singleShot(max(0, int(delay_ms)), self._flush_view_scale_overlay_refresh)
+
+    def _consume_dirty_plan_visuals(self, default_all=True):
         dirty = set(self._dirty_plan_visuals)
         self._dirty_plan_visuals.clear()
-        return dirty or {_PLAN_VISUAL_ALL}
+        if dirty:
+            return dirty
+        if default_all:
+            return {_PLAN_VISUAL_ALL}
+        return set()
 
     def _flush_plan_overlay_visual_refresh(self):
         self._overlay_refresh_queued = False
         dirty = self._consume_dirty_plan_visuals()
         self._refresh_plan_overlay_visuals(dirty)
 
+    def _flush_view_scale_overlay_refresh(self):
+        self._view_scale_overlay_refresh_queued = False
+        if self._overlay_refresh_queued:
+            return
+        dirty = self._consume_dirty_plan_visuals(default_all=False)
+        if not dirty:
+            return
+        self._refresh_plan_overlay_visuals(dirty)
+
+    def _refresh_plan_overlay_view_scale(self):
+        with self._plan_perf_trace_span("refresh_plan_overlay_view_scale"):
+            if self.current_tool == "Join":
+                self._sync_junction_node_overlays()
+                if self.hovered_wall:
+                    self._sync_hovered_wall_overlay()
+                return
+            if self.current_tool == "Set Space Text":
+                if self._is_selected_plan_target("space"):
+                    self._sync_selected_space_overlay()
+                return
+            if self.current_tool == "Pick Space Region":
+                if self._space_region_candidates:
+                    self._sync_space_region_pick_overlays()
+                if self._get_selected_plan_targets():
+                    self._sync_secondary_selected_overlays()
+                return
+            if self.current_tool != "Select":
+                return
+            if self.hovered_wall or self._is_selected_plan_target("wall"):
+                self._sync_junction_node_overlays()
+            if self.hovered_wall:
+                self._sync_hovered_wall_overlay()
+                self._sync_hovered_wall_opening_context_overlay()
+            if self._is_selected_plan_target("wall"):
+                self._sync_selected_wall_opening_context_overlay()
+                self._sync_wall_grips()
+            if self.hovered_opening:
+                self._sync_hovered_opening_overlay()
+            if self._is_selected_plan_target("opening"):
+                self._sync_selected_opening_overlay()
+                self._sync_selected_opening_handles()
+            if self.hovered_symbol:
+                self._sync_hovered_symbol_overlay()
+            if self._is_selected_plan_target("symbol"):
+                self._sync_selected_symbol_overlay()
+                self._sync_selected_symbol_handles()
+            if self.hovered_space:
+                self._sync_hovered_space_overlay()
+            if self._is_selected_plan_target("space"):
+                self._sync_selected_space_overlay()
+            if self.hovered_region:
+                self._sync_hovered_region_overlay()
+            if self._is_selected_plan_target("region"):
+                self._sync_selected_region_overlay()
+            if self._get_secondary_selected_plan_targets():
+                self._sync_secondary_selected_overlays()
+
     def _refresh_plan_overlay_visuals(self, dirty=None):
         if self._tearing_down:
             return
         dirty = set(dirty or {_PLAN_VISUAL_ALL})
         refresh_all = _PLAN_VISUAL_ALL in dirty
+        if not refresh_all and _PLAN_VISUAL_VIEW_SCALE in dirty:
+            self._refresh_plan_overlay_view_scale()
+            dirty.discard(_PLAN_VISUAL_VIEW_SCALE)
+            if not dirty:
+                return
         if self.current_tool == "Join":
             if refresh_all or _PLAN_VISUAL_HOVERED_WALL in dirty:
                 self._sync_hovered_wall_overlay()
