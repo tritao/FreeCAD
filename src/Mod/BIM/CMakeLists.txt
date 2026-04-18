@@ -211,6 +211,7 @@ SET(bimplan_SRCS
     bimplan/__init__.py
     bimplan/context.py
     bimplan/hosts.py
+    bimplan/opening_edit.py
     bimplan/overlays/__init__.py
     bimplan/overlays/geometry.py
     bimplan/overlays/manager.py
