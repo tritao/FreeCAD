@@ -33,6 +33,13 @@ import math
 import Part
 import Sketcher
 from bimcommands import BimPlanSession
+from bimplan.providers import (
+    PlanActionSpec,
+    PlanEditProvider,
+    PlanInspectorSection,
+    PlanIssueSpec,
+)
+from bimplan.registry import get_plan_edit_registry
 from bimtests.ArchWallGuiTestUtils import (
     ArchWallGuiTestCase,
     MockTracker,
@@ -41,12 +48,94 @@ from bimtests.ArchWallGuiTestUtils import (
 from unittest.mock import patch
 
 
+class _TestPlanProvider(PlanEditProvider):
+    provider_id = "test-plan-provider"
+    display_name = "Test Plan Provider"
+
+    def __init__(self):
+        self.executed_actions = []
+
+    def get_issues(self, context):
+        del context
+        return (
+            PlanIssueSpec(
+                key="provider-review",
+                title="Provider needs review",
+                message="A test provider contribution should appear in the Plan Edit dock.",
+                severity="warning",
+                actions=(
+                    PlanActionSpec(
+                        key="apply-provider-fix",
+                        label="Apply Test Fix",
+                    ),
+                ),
+            ),
+        )
+
+    def get_inspector_sections(self, context):
+        primary_target = context.get_primary_target()
+        target_label = getattr(primary_target, "label", "") if primary_target else ""
+        if not target_label:
+            target_label = "Nothing selected"
+        return (
+            PlanInspectorSection(
+                key="provider-summary",
+                title="Integration Summary",
+                body=f"Primary target: {target_label}",
+            ),
+        )
+
+    def execute_action(self, action_key, context, session):
+        del session
+        primary_target = context.get_primary_target()
+        target_name = getattr(primary_target, "object_name", "") if primary_target else ""
+        self.executed_actions.append((str(action_key or ""), str(target_name or "")))
+        return True
+
+
 class TestBimPlanEditGui(ArchWallGuiTestCase):
     def _assert_selected_plan_target(self, session, kind, obj):
         self.assertEqual(session._get_selected_plan_target(), (kind, obj))
 
     def _assert_no_selected_plan_target(self, session):
         self._assert_selected_plan_target(session, None, None)
+
+    def _get_scenegraph_named_switches(self, session, switch_name):
+        view = getattr(session, "view", None)
+        scene_graph = view.getSceneGraph() if view else None
+        if scene_graph is None:
+            return []
+
+        nodes = []
+
+        def walk(node):
+            if node is None:
+                return
+            try:
+                name = str(node.getName().getString())
+            except Exception:
+                try:
+                    name = str(node.getName())
+                except Exception:
+                    name = ""
+            if name == switch_name:
+                nodes.append(node)
+            try:
+                child_count = int(node.getNumChildren())
+            except Exception:
+                child_count = 0
+            for index in range(child_count):
+                try:
+                    child = node.getChild(index)
+                except Exception:
+                    continue
+                walk(child)
+
+        walk(scene_graph)
+        return nodes
+
+    def _count_scenegraph_named_switches(self, session, switch_name):
+        return len(self._get_scenegraph_named_switches(session, switch_name))
 
     def _make_fake_left_mouse_press(self, x=250, y=250):
         return self._make_fake_left_mouse_button_event(x, y, down=True)
@@ -312,6 +401,46 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.document.recompute()
         self.pump_gui_events()
         return level, wall, window
+
+    def test_plan_edit_renders_registered_provider_contributions(self):
+        from PySide import QtGui
+
+        registry = get_plan_edit_registry()
+        registry.clear()
+        self.addCleanup(registry.clear)
+
+        provider = _TestPlanProvider()
+        registry.register_provider(provider)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        panel = session.task_panel
+        self.assertIsNotNone(panel, "Plan Edit task panel should be attached.")
+        panel.refresh_from_session()
+        self.pump_gui_events()
+
+        self.assertTrue(panel.integration_panel.isVisible())
+        labels = [
+            str(widget.text()) for widget in panel.integration_panel.findChildren(QtGui.QLabel)
+        ]
+        self.assertTrue(any("Provider needs review" in text for text in labels))
+        self.assertTrue(any("Integration Summary" in text for text in labels))
+
+        buttons = [
+            widget
+            for widget in panel.integration_panel.findChildren(QtGui.QPushButton)
+            if str(widget.text()) == "Apply Test Fix"
+        ]
+        self.assertEqual(1, len(buttons))
+
+        buttons[0].click()
+        self.pump_gui_events()
+        self.assertEqual([("apply-provider-fix", "")], provider.executed_actions)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
 
     def test_plan_edit_embedded_wall_uses_sane_top_plane(self):
         """Embedded wall creation in Plan Edit should start from a clean top plane."""
