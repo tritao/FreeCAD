@@ -10149,6 +10149,10 @@ class PlanEditControlsWidget:
         self._refreshing_region_editor = False
         self._space_type_option_model = None
         self._space_type_completer = None
+        self._space_type_options_cache = None
+        self._space_editor_label_state = None
+        self._space_editor_combo_state = None
+        self._space_editor_boundary_state = None
         self._region_parent_space_items = []
         self.form = self._build_form(QtGui)
         try:
@@ -10392,6 +10396,55 @@ class PlanEditControlsWidget:
         if label and name and label != name:
             return f"{label} ({name})"
         return label or name or translate("BIM_PlanEdit", "Unnamed Space")
+
+    def _get_editor_object_key(self, obj):
+        if obj is None:
+            return None
+        return (
+            getattr(getattr(obj, "Document", None), "Name", None),
+            getattr(obj, "Name", None),
+        )
+
+    def _normalize_space_type_options(self, options):
+        normalized = []
+        seen = set()
+        for option in options or []:
+            option = str(option or "").strip()
+            if not option or option in seen:
+                continue
+            seen.add(option)
+            normalized.append(option)
+        return tuple(normalized)
+
+    def _get_cached_space_type_options(self, space, current_type):
+        if self._space_type_options_cache is None:
+            options = []
+            try:
+                options = list(space.getEnumerationsOfProperty("SpaceType") or [])
+            except Exception:
+                options = []
+            self._space_type_options_cache = self._normalize_space_type_options(options)
+        normalized = list(self._space_type_options_cache or ())
+        current_type = str(current_type or "").strip()
+        if current_type and current_type not in normalized:
+            normalized.append(current_type)
+        return tuple(normalized)
+
+    def _get_space_boundary_signature(self, space):
+        signature = []
+        for boundary in getattr(space, "Boundaries", []) or []:
+            try:
+                obj = boundary[0]
+                subnames = boundary[1]
+            except Exception:
+                continue
+            signature.append(
+                (
+                    self._get_editor_object_key(obj),
+                    tuple(str(subname or "") for subname in (subnames or [])),
+                )
+            )
+        return tuple(signature)
 
     def _get_region_parent_space_candidates(self, current_parent=None):
         candidates = []
@@ -10648,6 +10701,10 @@ class PlanEditControlsWidget:
         self._region_parent_space_items = []
         self._space_type_option_model = None
         self._space_type_completer = None
+        self._space_type_options_cache = None
+        self._space_editor_label_state = None
+        self._space_editor_combo_state = None
+        self._space_editor_boundary_state = None
         self.exit_button = None
         self._modal_focus_widgets = []
         self._saved_focus_policies = {}
@@ -10868,44 +10925,52 @@ class PlanEditControlsWidget:
 
             self._refreshing_space_editor = True
             try:
+                space_key = self._get_editor_object_key(space)
+                label = getattr(space, "Label", "")
                 if self.space_label_edit is not None:
-                    self.space_label_edit.setText(getattr(space, "Label", ""))
+                    label_state = (space_key, label)
+                    if label_state != self._space_editor_label_state:
+                        self.space_label_edit.setText(label)
+                        self._space_editor_label_state = label_state
 
-                options = []
-                try:
-                    options = list(space.getEnumerationsOfProperty("SpaceType") or [])
-                except Exception:
-                    options = []
-                if not options:
-                    current_type = getattr(space, "SpaceType", "")
-                    options = [current_type] if current_type else []
                 current_type = getattr(space, "SpaceType", "")
-                self.session._plan_perf_count("space_type_options", len(options))
+                options = self._get_cached_space_type_options(space, current_type)
                 if self.space_type_combo is not None:
-                    self.space_type_combo.blockSignals(True)
-                    try:
-                        self._set_space_type_combo_options(options)
-                        current_index = self._find_space_type_combo_index(current_type)
-                        if current_index >= 0:
-                            self.space_type_combo.setCurrentIndex(current_index)
-                        else:
-                            line_edit = self.space_type_combo.lineEdit()
-                            if line_edit is not None:
-                                line_edit.setText(current_type)
-                    finally:
-                        self.space_type_combo.blockSignals(False)
+                    combo_state = (space_key, options, str(current_type or ""))
+                    if combo_state != self._space_editor_combo_state:
+                        self.session._plan_perf_count("space_type_options", len(options))
+                        self.space_type_combo.blockSignals(True)
+                        try:
+                            self._set_space_type_combo_options(options)
+                            current_index = self._find_space_type_combo_index(current_type)
+                            if current_index >= 0:
+                                self.space_type_combo.setCurrentIndex(current_index)
+                            else:
+                                line_edit = self.space_type_combo.lineEdit()
+                                if line_edit is not None:
+                                    line_edit.setText(current_type)
+                        finally:
+                            self.space_type_combo.blockSignals(False)
+                        self._space_editor_combo_state = combo_state
 
                 if self.space_boundary_list is not None:
-                    boundary_entries = list(self.session._get_space_boundary_entries(space) or [])
-                    self.session._plan_perf_count("space_boundary_entries", len(boundary_entries))
-                    self.space_boundary_list.clear()
-                    for obj, subnames in boundary_entries:
-                        label = getattr(obj, "Label", getattr(obj, "Name", ""))
-                        suffix = ", ".join(subnames)
-                        text = f"{label}: {suffix}" if suffix else label
-                        item = QtGui.QListWidgetItem(text)
-                        item.setToolTip(getattr(obj, "Name", ""))
-                        self.space_boundary_list.addItem(item)
+                    boundary_state = (space_key, self._get_space_boundary_signature(space))
+                    if boundary_state != self._space_editor_boundary_state:
+                        boundary_entries = list(
+                            self.session._get_space_boundary_entries(space) or []
+                        )
+                        self.session._plan_perf_count(
+                            "space_boundary_entries", len(boundary_entries)
+                        )
+                        self.space_boundary_list.clear()
+                        for obj, subnames in boundary_entries:
+                            label = getattr(obj, "Label", getattr(obj, "Name", ""))
+                            suffix = ", ".join(subnames)
+                            text = f"{label}: {suffix}" if suffix else label
+                            item = QtGui.QListWidgetItem(text)
+                            item.setToolTip(getattr(obj, "Name", ""))
+                            self.space_boundary_list.addItem(item)
+                        self._space_editor_boundary_state = boundary_state
             finally:
                 self._refreshing_space_editor = False
 

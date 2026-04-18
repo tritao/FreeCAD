@@ -3861,6 +3861,54 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_space_editor_refresh_skips_unchanged_rebuilds(self):
+        """Repeated panel refreshes should not rebuild unchanged space editor controls."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "CachedSpaceEditorBase")
+        base.Length = 3200
+        base.Width = 2400
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Bedroom")
+        level.addObject(space)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, space.Name)
+        self.pump_gui_events()
+        session._refresh_primary_selected_plan_target()
+
+        panel = session.task_panel
+        self.assertIsNotNone(panel)
+        panel._space_editor_label_state = None
+        panel._space_editor_combo_state = None
+        panel._space_editor_boundary_state = None
+
+        with patch.object(
+            panel,
+            "_set_space_type_combo_options",
+            wraps=panel._set_space_type_combo_options,
+        ) as set_options, patch.object(
+            session,
+            "_get_space_boundary_entries",
+            wraps=session._get_space_boundary_entries,
+        ) as get_boundary_entries:
+            panel.refresh_from_session()
+            panel.refresh_from_session()
+
+        self.assertEqual(set_options.call_count, 1)
+        self.assertEqual(get_boundary_entries.call_count, 1)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_region_click_cycle_keeps_region_selected_over_parent_space(self):
         """Region click handling should keep the region as the semantic target across press/release."""
 
