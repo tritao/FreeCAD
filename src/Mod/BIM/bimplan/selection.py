@@ -200,7 +200,13 @@ def selection_observer_set(session, doc):
 
 
 def selection_observer_clear(session, doc):
-    with session._plan_perf_trace_event("selection_observer_clear", selection_document=doc):
+    selected_kind, selected_obj = session._get_selected_plan_target()
+    with session._plan_perf_trace_event(
+        "selection_observer_clear",
+        selection_document=doc,
+        selected_before_clear=session._plan_perf_describe_target(selected_kind, selected_obj),
+        selected_before_clear_kind=selected_kind or "none",
+    ):
         session._plan_perf_count("selection_observer_callbacks")
         if session._tearing_down:
             return
@@ -220,7 +226,8 @@ def refresh_selected_plan_target(session):
 
         previous_kind, previous_obj = session._get_selected_plan_target()
         session._plan_perf_set_fields(
-            selected_before=session._plan_perf_describe_target(previous_kind, previous_obj)
+            selected_before=session._plan_perf_describe_target(previous_kind, previous_obj),
+            selected_before_kind=previous_kind or "none",
         )
         previous_wall = session._get_plan_target_object_from_state(
             previous_kind, previous_obj, "wall"
@@ -315,7 +322,9 @@ def refresh_selected_plan_target(session):
         session._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
         selected_kind, selected_obj = session._get_selected_plan_target()
         session._plan_perf_set_fields(
-            selected_after=session._plan_perf_describe_target(selected_kind, selected_obj)
+            selected_after=session._plan_perf_describe_target(selected_kind, selected_obj),
+            selected_after_kind=selected_kind or "none",
+            selection_refresh_cleared_target=bool(previous_kind and not selected_kind),
         )
 
 
