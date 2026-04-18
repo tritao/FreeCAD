@@ -3889,6 +3889,60 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_selecting_wall_uses_lightweight_task_panel_refresh(self):
+        """Wall selection should update the task panel without a full widget rebuild."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(
+            session.task_panel,
+            "refresh_from_session",
+            wraps=session.task_panel.refresh_from_session,
+        ) as refresh_full, patch.object(
+            session.task_panel,
+            "refresh_selection_from_session",
+            wraps=session.task_panel.refresh_selection_from_session,
+        ) as refresh_selection:
+            self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+
+        self.assertEqual(refresh_full.call_count, 0)
+        self.assertEqual(refresh_selection.call_count, 1)
+        self._assert_selected_plan_target(session, "wall", wall)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_switching_selected_walls_reuses_grip_trackers(self):
+        """Switching walls should retarget the existing grip trackers instead of recreating them."""
+
+        level, walls = self._make_plan_room_walls()
+        wall_a, wall_b = walls[:2]
+        self.assertIsNotNone(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(session._select_wall_for_plan_edit(wall_a, sync_gui_selection=True))
+        original_trackers = tuple(session._grip_trackers)
+        self.assertEqual(len(original_trackers), 3)
+
+        self.assertTrue(session._select_wall_for_plan_edit(wall_b, sync_gui_selection=True))
+        self.assertEqual(len(session._grip_trackers), 3)
+        for current, original in zip(session._grip_trackers, original_trackers):
+            self.assertIs(current, original)
+            self.assertEqual(str(current.selnode.objectName.getValue()), wall_b.Name)
+
+        self._assert_selected_plan_target(session, "wall", wall_b)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_selecting_space_refreshes_only_changed_selected_overlays(self):
         """Switching semantic selection to a space should avoid unrelated selected-overlay refreshes."""
 
