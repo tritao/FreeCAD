@@ -219,6 +219,7 @@ SET(bimplan_SRCS
     bimplan/ui/__init__.py
     bimplan/ui/controls.py
     bimplan/ui/status_chip.py
+    bimplan/view.py
 )
 
 SET(BIM_templates

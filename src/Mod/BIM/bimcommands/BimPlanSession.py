@@ -35,6 +35,7 @@ import time
 import ArchPlanGeometry
 import FreeCAD
 import FreeCADGui
+from bimplan import view as plan_view
 from bimplan.context import PlanEditContext
 from bimplan.hosts import _PlanEditCommandHost, _PlanEditWallHost
 from bimplan.providers import (
@@ -142,23 +143,6 @@ _PLAN_VIEW_LOCKED_ACTIONS = (
 )
 
 _active_session = None
-
-
-def _copy_plane(plane):
-    import WorkingPlane
-
-    if plane is None:
-        return None
-
-    def _copy_vec(vec):
-        return FreeCAD.Vector(vec.x, vec.y, vec.z)
-
-    return WorkingPlane.PlaneBase(
-        _copy_vec(plane.u),
-        _copy_vec(plane.v),
-        _copy_vec(plane.axis),
-        _copy_vec(plane.position),
-    )
 
 
 def get_active_session():
@@ -838,6 +822,14 @@ class PlanEditSession:
         FreeCAD.Console.PrintMessage(translate("BIM_PlanEdit", "Entered BIM Plan Edit mode.\n"))
         return True
 
+    @property
+    def _plan_paper_rgb(self):
+        return _PLAN_PAPER_RGB
+
+    @property
+    def _plan_view_locked_actions(self):
+        return _PLAN_VIEW_LOCKED_ACTIONS
+
     def finish(self, cont=False, close_dialog=True, closed=False):
         del cont, closed
         if self.current_tool in ("Move Symbol", "Rotate Symbol"):
@@ -965,187 +957,43 @@ class PlanEditSession:
         self._embedded_tool_name = None
 
     def _get_navigation_style(self):
-        viewer = self.viewer
-        get_navigation_style = self._get_runtime_attr(viewer, "getNavigationStyle")
-        if get_navigation_style is None:
-            return None
-        try:
-            return get_navigation_style()
-        except (AttributeError, ReferenceError, RuntimeError):
-            self._discard_stale_runtime_object(viewer)
-            return None
+        return plan_view.get_navigation_style(self)
 
     def _get_main_window(self):
-        try:
-            return FreeCADGui.getMainWindow()
-        except Exception:
-            return None
+        return plan_view.get_main_window(self)
 
     def _find_main_window_action(self, command_name):
-        from PySide import QtGui
-
-        main_window = self._get_main_window()
-        if not main_window:
-            return None
-        try:
-            return main_window.findChild(QtGui.QAction, command_name)
-        except Exception:
-            return None
+        return plan_view.find_main_window_action(self, command_name)
 
     def _capture_view_action_state(self):
-        for command_name in _PLAN_VIEW_LOCKED_ACTIONS:
-            if command_name in self._saved_view_action_state:
-                continue
-            action = self._find_main_window_action(command_name)
-            if action is None:
-                continue
-            try:
-                self._saved_view_action_state[command_name] = bool(action.isEnabled())
-            except Exception:
-                pass
+        return plan_view.capture_view_action_state(self, _PLAN_VIEW_LOCKED_ACTIONS)
 
     def _apply_locked_view_actions(self):
-        self._capture_view_action_state()
-        for command_name in _PLAN_VIEW_LOCKED_ACTIONS:
-            action = self._find_main_window_action(command_name)
-            if action is None:
-                continue
-            try:
-                action.setEnabled(False)
-            except Exception:
-                pass
+        return plan_view.apply_locked_view_actions(self, _PLAN_VIEW_LOCKED_ACTIONS)
 
     def _restore_locked_view_actions(self):
-        for command_name, enabled in self._saved_view_action_state.items():
-            action = self._find_main_window_action(command_name)
-            if action is None:
-                continue
-            try:
-                action.setEnabled(bool(enabled))
-            except Exception:
-                pass
+        return plan_view.restore_locked_view_actions(self)
 
     def _capture_navigation_flag(self, target, getter_name, state_key):
-        if state_key in self._saved_navigation_state:
-            return
-        getter = self._get_runtime_attr(target, getter_name)
-        if getter is None:
-            return
-        try:
-            self._saved_navigation_state[state_key] = bool(getter())
-        except (AttributeError, ReferenceError, RuntimeError):
-            self._discard_stale_runtime_object(target)
-            pass
+        return plan_view.capture_navigation_flag(self, target, getter_name, state_key)
 
     def _apply_navigation_flag(self, target, setter_name, state_key, enabled):
-        if state_key not in self._saved_navigation_state:
-            return
-        setter = self._get_runtime_attr(target, setter_name)
-        if setter is None:
-            return
-        try:
-            setter(enabled)
-        except (AttributeError, ReferenceError, RuntimeError):
-            self._discard_stale_runtime_object(target)
-            pass
+        return plan_view.apply_navigation_flag(self, target, setter_name, state_key, enabled)
 
     def _capture_navigation_state(self):
-        nav_style = self._get_navigation_style()
-        if nav_style:
-            self._saved_navigation_style = nav_style
-        self._capture_navigation_flag(nav_style, "isRotationEnabled", "rotation_enabled")
-        self._capture_navigation_flag(nav_style, "isOrientationLocked", "orientation_locked")
-        if self._get_runtime_attr(self.viewer, "setNaviCubeEnabledOverride") is None:
-            self._capture_navigation_flag(self.viewer, "isEnabledNaviCube", "navicube_enabled")
-        self._capture_navigation_flag(self.view, "isCornerCrossVisible", "corner_cross_visible")
+        return plan_view.capture_navigation_state(self)
 
     def _apply_plan_background_override(self):
-        viewer = self.viewer
-        set_background_override = self._get_runtime_attr(viewer, "setBackgroundAppearanceOverride")
-        if set_background_override is None:
-            return
-        try:
-            set_background_override(
-                "NONE",
-                _PLAN_PAPER_RGB,
-                _PLAN_PAPER_RGB,
-                _PLAN_PAPER_RGB,
-            )
-        except (AttributeError, ReferenceError, RuntimeError):
-            self._discard_stale_runtime_object(viewer)
-            pass
+        return plan_view.apply_plan_background_override(self, _PLAN_PAPER_RGB)
 
     def _clear_plan_background_override(self):
-        viewer = self.viewer
-        clear_background_override = self._get_runtime_attr(
-            viewer, "clearBackgroundAppearanceOverride"
-        )
-        if clear_background_override is None:
-            return
-        try:
-            clear_background_override()
-        except (AttributeError, ReferenceError, RuntimeError):
-            self._discard_stale_runtime_object(viewer)
-            pass
+        return plan_view.clear_plan_background_override(self)
 
     def _apply_plan_navigation_profile(self):
-        self._capture_navigation_state()
-        nav_style = self._saved_navigation_style or self._get_navigation_style()
-        self._apply_navigation_flag(nav_style, "setRotationEnabled", "rotation_enabled", False)
-        self._apply_navigation_flag(nav_style, "setOrientationLocked", "orientation_locked", True)
-        set_navicube_override = self._get_runtime_attr(self.viewer, "setNaviCubeEnabledOverride")
-        if set_navicube_override is not None:
-            try:
-                set_navicube_override(False)
-            except (AttributeError, ReferenceError, RuntimeError):
-                self._discard_stale_runtime_object(self.viewer)
-                pass
-        else:
-            self._apply_navigation_flag(
-                self.viewer, "setEnabledNaviCube", "navicube_enabled", False
-            )
-        self._apply_navigation_flag(
-            self.view, "setCornerCrossVisible", "corner_cross_visible", False
-        )
-        self._apply_locked_view_actions()
+        return plan_view.apply_plan_navigation_profile(self, _PLAN_VIEW_LOCKED_ACTIONS)
 
     def _restore_navigation_state(self):
-        nav_style = self._saved_navigation_style or self._get_navigation_style()
-        self._apply_navigation_flag(
-            nav_style,
-            "setRotationEnabled",
-            "rotation_enabled",
-            self._saved_navigation_state.get("rotation_enabled"),
-        )
-        self._apply_navigation_flag(
-            nav_style,
-            "setOrientationLocked",
-            "orientation_locked",
-            self._saved_navigation_state.get("orientation_locked"),
-        )
-        clear_navicube_override = self._get_runtime_attr(
-            self.viewer, "clearNaviCubeEnabledOverride"
-        )
-        if clear_navicube_override is not None:
-            try:
-                clear_navicube_override()
-            except (AttributeError, ReferenceError, RuntimeError):
-                self._discard_stale_runtime_object(self.viewer)
-                pass
-        else:
-            self._apply_navigation_flag(
-                self.viewer,
-                "setEnabledNaviCube",
-                "navicube_enabled",
-                self._saved_navigation_state.get("navicube_enabled"),
-            )
-        self._apply_navigation_flag(
-            self.view,
-            "setCornerCrossVisible",
-            "corner_cross_visible",
-            self._saved_navigation_state.get("corner_cross_visible"),
-        )
-        self._restore_locked_view_actions()
+        return plan_view.restore_navigation_state(self)
 
     def shutdown(self, close_dialog=True, teardown=False):
         global _active_session
@@ -1827,118 +1675,19 @@ class PlanEditSession:
         return not getattr(wall, "Base", None) and self.is_selected_wall_endpoint_editable()
 
     def apply_plan_view(self, fit=True):
-        import WorkingPlane
-
-        if self.view:
-            try:
-                self.view.setCameraType("Orthographic")
-                self.view.viewTop()
-            except RuntimeError:
-                self.view = None
-
-        if self.viewer:
-            try:
-                self.viewer.setOverrideMode("Footprint")
-                self._apply_plan_background_override()
-            except RuntimeError:
-                self.viewer = None
-
-        wp = WorkingPlane.get_working_plane(update=False)
-        offset = self.get_storey_elevation(self.active_storey) if self.active_storey else 0.0
-        wp.set_to_top(offset=offset)
-        if hasattr(wp, "_update_all"):
-            wp._update_all(_hist_add=False)
-        # Keep a dedicated immutable-like plan plane for embedded tools instead
-        # of reusing Draft's live PlaneGui state, which can be mutated by other
-        # Draft UI paths during interaction.
-        self._interaction_plane = WorkingPlane.PlaneBase()
-        self._interaction_plane.set_to_top(offset=offset)
-
-        if self.active_storey:
-            self._set_active_object(self.active_storey)
-
-        # Keep the live view decorations and navigation model constrained every
-        # time the session reapplies the plan view, not just in helper tests.
-        self._apply_plan_navigation_profile()
-
-        if fit and self.view:
-            try:
-                self.view.fitAll()
-            except RuntimeError:
-                self.view = None
+        return plan_view.apply_plan_view(self, fit=fit)
 
     def restore_state(self):
-        import WorkingPlane
-
-        self._restore_object_view_state()
-        self._restore_snap_profile()
-        self._interaction_plane = None
-
-        if self.viewer:
-            try:
-                self.viewer.setOverrideMode("As Is")
-                self._clear_plan_background_override()
-            except RuntimeError:
-                self.viewer = None
-
-        if self.view and self._saved_camera_type:
-            try:
-                self.view.setCameraType(self._saved_camera_type)
-            except RuntimeError:
-                self.view = None
-        if self.view and self._saved_camera:
-            try:
-                self.view.setCamera(self._saved_camera)
-            except RuntimeError:
-                self.view = None
-
-        wp = self._working_plane or WorkingPlane.get_working_plane(update=False)
-        if hasattr(wp, "restore"):
-            try:
-                wp.restore()
-                wp._update_all(_hist_add=False)
-            except RuntimeError:
-                pass
-
-        # Restore the viewer/navigation decorations after the plan override is
-        # fully unwound so the normal 3D state comes back coherently.
-        self._restore_navigation_state()
+        return plan_view.restore_state(self)
 
     def _capture_state(self):
-        import WorkingPlane
-
-        get_camera = self._get_runtime_attr(self.view, "getCamera")
-        if get_camera is not None:
-            try:
-                self._saved_camera = get_camera()
-            except (AttributeError, ReferenceError, RuntimeError):
-                self._discard_stale_runtime_object(self.view)
-        get_camera_type = self._get_runtime_attr(self.view, "getCameraType")
-        if get_camera_type is not None:
-            try:
-                self._saved_camera_type = get_camera_type()
-            except (AttributeError, ReferenceError, RuntimeError):
-                self._discard_stale_runtime_object(self.view)
-
-        self._working_plane = WorkingPlane.get_working_plane(update=False)
-        if hasattr(self._working_plane, "save"):
-            self._working_plane.save()
+        return plan_view.capture_state(self)
 
     def get_interaction_plane(self):
-        import WorkingPlane
-
-        if self._interaction_plane is not None:
-            return _copy_plane(self._interaction_plane)
-        return WorkingPlane.get_working_plane(update=False)
+        return plan_view.get_interaction_plane(self)
 
     def _project_plan_point(self, point):
-        plane = self.get_interaction_plane()
-        if plane and hasattr(plane, "project_point"):
-            try:
-                return plane.project_point(point)
-            except Exception:
-                pass
-        return point
+        return plan_view.project_plan_point(self, point)
 
     def _get_wall_defaults(self):
         from draftutils import params
@@ -1951,82 +1700,22 @@ class PlanEditSession:
         }
 
     def _get_plan_view_height(self):
-        get_camera_node = self._get_runtime_attr(self.view, "getCameraNode")
-        if get_camera_node is None:
-            return None
-        try:
-            camera = get_camera_node()
-        except (AttributeError, ReferenceError, RuntimeError):
-            self._discard_stale_runtime_object(self.view)
-            return None
-        try:
-            height_prop = getattr(camera, "height")
-        except (AttributeError, ReferenceError, RuntimeError):
-            return None
-        try:
-            return float(height_prop.getValue())
-        except Exception:
-            return None
+        return plan_view.get_plan_view_height(self)
 
     def _get_plan_overlay_scale(self):
-        height = self._get_plan_view_height()
-        if not height or height <= 0:
-            return 1.0
-        if height <= 5000.0:
-            return 1.0
-        if height >= 30000.0:
-            return 0.35
-        scale = 5000.0 / height
-        return max(0.35, min(1.0, scale * 2.0))
+        return plan_view.get_plan_overlay_scale(self)
 
     def _scaled_line_width(self, base_width):
-        return max(1.0, base_width * self._get_plan_overlay_scale())
+        return plan_view.scaled_line_width(self, base_width)
 
     def _scaled_marker_size(self, base_size):
-        return max(4, int(round(base_size * self._get_plan_overlay_scale())))
+        return plan_view.scaled_marker_size(self, base_size)
 
     def _get_plan_view_units_per_pixel(self):
-        height = self._get_plan_view_height()
-        get_size = self._get_runtime_attr(self.view, "getSize")
-        if not height or height <= 0 or get_size is None:
-            return None
-        try:
-            view_height = float(get_size()[1])
-        except Exception:
-            return None
-        if view_height <= 0:
-            return None
-        return height / view_height
+        return plan_view.get_plan_view_units_per_pixel(self)
 
     def _get_plan_projection_cache_key(self):
-        if not self.view:
-            return None
-        get_camera_node = self._get_runtime_attr(self.view, "getCameraNode")
-        get_size = self._get_runtime_attr(self.view, "getSize")
-        if get_camera_node is None or get_size is None:
-            return None
-        try:
-            camera = get_camera_node()
-        except Exception:
-            return None
-        try:
-            size = get_size()
-            size_key = (int(size[0]), int(size[1]))
-        except Exception:
-            return None
-        try:
-            position = getattr(camera, "position").getValue()
-            position_key = (
-                round(float(position[0]), 6),
-                round(float(position[1]), 6),
-                round(float(position[2]), 6),
-            )
-        except Exception:
-            position_key = (None, None, None)
-        height = self._get_plan_view_height()
-        if height is None:
-            return None
-        return size_key + (round(float(height), 6),) + position_key
+        return plan_view.get_plan_projection_cache_key(self)
 
     def _invalidate_opening_overlay_screen_cache(self):
         self._opening_overlay_screen_cache = {}
@@ -4271,97 +3960,10 @@ class PlanEditSession:
         self._refresh_task_panel_status()
 
     def _register_edit_callbacks(self):
-        try:
-            from pivy import coin
-        except Exception:
-            return
-
-        add_event_callback = self._get_runtime_attr(self.view, "addEventCallbackPivy")
-        if add_event_callback is None:
-            return
-
-        try:
-            viewer = self.viewer
-            if viewer is None:
-                get_viewer = self._get_runtime_attr(self.view, "getViewer")
-                if get_viewer is None:
-                    return
-                viewer = get_viewer()
-                self.viewer = viewer
-            get_render_manager = self._get_runtime_attr(viewer, "getSoRenderManager")
-            self._render_manager = get_render_manager() if get_render_manager is not None else None
-            if self._key_pressed_cb is None:
-                self._key_pressed_cb = add_event_callback(
-                    coin.SoKeyboardEvent.getClassTypeId(), self._on_key_pressed
-                )
-            if self._mouse_moved_cb is None:
-                self._mouse_moved_cb = add_event_callback(
-                    coin.SoLocation2Event.getClassTypeId(), self._on_mouse_moved
-                )
-            if self._mouse_wheel_cb is None:
-                event_type = getattr(coin, "SoMouseWheelEvent", None)
-                if event_type is not None:
-                    self._mouse_wheel_event_type = event_type.getClassTypeId()
-                else:
-                    self._mouse_wheel_event_type = coin.SoEvent.getClassTypeId()
-                self._mouse_wheel_cb = add_event_callback(
-                    self._mouse_wheel_event_type, self._on_mouse_wheel
-                )
-            if self._mouse_pressed_cb is None:
-                self._mouse_pressed_cb = add_event_callback(
-                    coin.SoMouseButtonEvent.getClassTypeId(), self._on_mouse_pressed
-                )
-        except (AttributeError, ReferenceError, RuntimeError):
-            self._discard_stale_runtime_object(self.view)
-            self._render_manager = None
+        return plan_view.register_edit_callbacks(self)
 
     def _unregister_edit_callbacks(self):
-        try:
-            from pivy import coin
-        except Exception:
-            self._key_pressed_cb = None
-            self._mouse_moved_cb = None
-            self._mouse_wheel_cb = None
-            self._mouse_wheel_event_type = None
-            self._mouse_pressed_cb = None
-            self._render_manager = None
-            return
-
-        if not self.view:
-            self._key_pressed_cb = None
-            self._mouse_moved_cb = None
-            self._mouse_wheel_cb = None
-            self._mouse_wheel_event_type = None
-            self._mouse_pressed_cb = None
-            self._render_manager = None
-            return
-
-        try:
-            if self._key_pressed_cb:
-                self.view.removeEventCallbackSWIG(
-                    coin.SoKeyboardEvent.getClassTypeId(), self._key_pressed_cb
-                )
-            if self._mouse_moved_cb:
-                self.view.removeEventCallbackSWIG(
-                    coin.SoLocation2Event.getClassTypeId(), self._mouse_moved_cb
-                )
-            if self._mouse_wheel_cb and self._mouse_wheel_event_type:
-                self.view.removeEventCallbackSWIG(
-                    self._mouse_wheel_event_type, self._mouse_wheel_cb
-                )
-            if self._mouse_pressed_cb:
-                self.view.removeEventCallbackSWIG(
-                    coin.SoMouseButtonEvent.getClassTypeId(), self._mouse_pressed_cb
-                )
-        except RuntimeError:
-            pass
-
-        self._key_pressed_cb = None
-        self._mouse_moved_cb = None
-        self._mouse_wheel_cb = None
-        self._mouse_wheel_event_type = None
-        self._mouse_pressed_cb = None
-        self._render_manager = None
+        return plan_view.unregister_edit_callbacks(self)
 
     def _sync_primary_selected_plan_target_visuals(self, previous_kind=None, previous_obj=None):
         with self._plan_perf_trace_span("sync_primary_selected_plan_target_visuals"):
@@ -7433,42 +7035,13 @@ class PlanEditSession:
         )
 
     def _focus_plan_view(self):
-        if self._tearing_down or not self.view:
-            return
-        try:
-            widget = self.view.graphicsView()
-        except Exception:
-            widget = None
-        if widget is not None:
-            try:
-                widget.activateWindow()
-            except Exception:
-                pass
-            try:
-                widget.setFocus()
-            except Exception:
-                pass
-            return
-        try:
-            self.view.setFocus()
-        except Exception:
-            pass
+        return plan_view.focus_plan_view(self)
 
     def _queue_focus_plan_view(self):
-        try:
-            from PySide import QtCore
-        except Exception:
-            self._focus_plan_view()
-            return
-        QtCore.QTimer.singleShot(0, self._focus_plan_view)
+        return plan_view.queue_focus_plan_view(self)
 
     def _get_plan_view_widget(self):
-        if self._tearing_down or not self.view:
-            return None
-        try:
-            return self.view.graphicsView()
-        except Exception:
-            return None
+        return plan_view.get_plan_view_widget(self)
 
     def _format_status_chip_action(self, message):
         if not message:
@@ -7609,42 +7182,13 @@ class PlanEditSession:
         return title, "{}\n{}".format(context, action)
 
     def _ensure_viewport_status_chip(self):
-        widget = self._get_plan_view_widget()
-        if widget is None:
-            self._clear_viewport_status_chip()
-            return None
-        chip = self._viewport_status_chip
-        if chip is not None and getattr(chip, "host_widget", None) is widget:
-            return chip
-        self._clear_viewport_status_chip()
-        try:
-            chip = _PlanEditViewportStatusChip(self, widget)
-        except Exception:
-            return None
-        self._viewport_status_chip = chip
-        return chip
+        return plan_view.ensure_viewport_status_chip(self, _PlanEditViewportStatusChip)
 
     def _refresh_viewport_status_chip(self):
-        if self._tearing_down:
-            return
-        chip = self._ensure_viewport_status_chip()
-        if chip is None:
-            return
-        title, body = self._get_status_chip_text()
-        try:
-            chip.set_texts(title, body)
-        except Exception:
-            self._clear_viewport_status_chip()
+        return plan_view.refresh_viewport_status_chip(self, _PlanEditViewportStatusChip)
 
     def _clear_viewport_status_chip(self):
-        chip = self._viewport_status_chip
-        self._viewport_status_chip = None
-        if chip is None:
-            return
-        try:
-            chip.close_chip()
-        except Exception:
-            pass
+        return plan_view.clear_viewport_status_chip(self)
 
     def _clear_input_hints(self):
         hint_manager = getattr(FreeCADGui, "HintManager", None)
@@ -7656,16 +7200,7 @@ class PlanEditSession:
             pass
 
     def _request_view_redraw(self):
-        if self._tearing_down:
-            return
-        redraw = self._get_runtime_attr(self.view, "redraw")
-        if redraw is not None:
-            try:
-                redraw()
-                return
-            except Exception:
-                self._discard_stale_runtime_object(self.view)
-                pass
+        return plan_view.request_view_redraw(self)
 
     def _make_input_hint(self, message, *sequences):
         if not hasattr(FreeCADGui, "InputHint"):
