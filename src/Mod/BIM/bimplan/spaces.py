@@ -173,6 +173,544 @@ def get_space_creation_request(session, targets=None):
     }
 
 
+def get_existing_space_region_filter_spaces(session, exclude=None):
+    if not session.doc:
+        return []
+    active_storey_name = getattr(session.active_storey, "Name", None)
+    exclude_space = session._get_plan_semantic_object(exclude) if exclude else None
+    exclude_name = getattr(exclude_space, "Name", None)
+
+    spaces = []
+    seen = set()
+    for obj in session.doc.Objects:
+        semantic_obj = session._get_plan_semantic_object(obj)
+        name = getattr(semantic_obj, "Name", None)
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        if name == exclude_name or not session._is_plan_space_object(semantic_obj):
+            continue
+        if active_storey_name is not None:
+            storeys = session._get_object_storeys(semantic_obj)
+            if storeys and not any(parent.Name == active_storey_name for parent in storeys):
+                continue
+        spaces.append(semantic_obj)
+    return spaces
+
+
+def get_xy_bound_box_iou(first_shape, second_shape):
+    first_bb = getattr(first_shape, "BoundBox", None)
+    second_bb = getattr(second_shape, "BoundBox", None)
+    if first_bb is None or second_bb is None:
+        return 0.0
+
+    x_overlap = min(float(first_bb.XMax), float(second_bb.XMax)) - max(
+        float(first_bb.XMin), float(second_bb.XMin)
+    )
+    y_overlap = min(float(first_bb.YMax), float(second_bb.YMax)) - max(
+        float(first_bb.YMin), float(second_bb.YMin)
+    )
+    if x_overlap <= 0.000001 or y_overlap <= 0.000001:
+        return 0.0
+
+    intersection_area = x_overlap * y_overlap
+    first_area = max(
+        0.0,
+        (float(first_bb.XMax) - float(first_bb.XMin))
+        * (float(first_bb.YMax) - float(first_bb.YMin)),
+    )
+    second_area = max(
+        0.0,
+        (float(second_bb.XMax) - float(second_bb.XMin))
+        * (float(second_bb.YMax) - float(second_bb.YMin)),
+    )
+    union_area = first_area + second_area - intersection_area
+    if union_area <= 0.000001:
+        return 0.0
+    return intersection_area / union_area
+
+
+def is_space_region_candidate_claimed(
+    session,
+    candidate,
+    spaces,
+    overlap_iou_tolerance=0.9,
+):
+    if not isinstance(candidate, dict):
+        return False
+    candidate_face = candidate.get("face")
+    sample_point = candidate.get("sample_point")
+    if candidate_face is None or sample_point is None:
+        return False
+
+    for space in spaces or []:
+        footprint_faces = session._get_space_footprint_faces(space)
+        if not footprint_faces:
+            continue
+        for footprint_face in footprint_faces:
+            try:
+                test_point = FreeCAD.Vector(
+                    sample_point.x,
+                    sample_point.y,
+                    float(footprint_face.BoundBox.ZMin),
+                )
+                if not footprint_face.isInside(test_point, 0.001, True):
+                    continue
+            except Exception:
+                continue
+            if session._get_xy_bound_box_iou(candidate_face, footprint_face) >= float(
+                overlap_iou_tolerance
+            ):
+                return True
+    return False
+
+
+def filter_claimed_space_region_candidates(session, candidates, exclude_space=None):
+    candidates = list(candidates or [])
+    if not candidates:
+        return candidates, 0
+
+    spaces = session._get_existing_space_region_filter_spaces(exclude=exclude_space)
+    if not spaces:
+        return candidates, 0
+
+    filtered = []
+    skipped = 0
+    for candidate in candidates:
+        if session._is_space_region_candidate_claimed(candidate, spaces):
+            skipped += 1
+            continue
+        filtered.append(candidate)
+    return filtered, skipped
+
+
+def get_space_region_candidate_report(session, boundaries, label=None, seed_space=None):
+    import ArchSpace
+
+    report = ArchSpace.getBoundaryRegionCandidates(
+        boundaries,
+        label=label,
+        seed_space=seed_space,
+    )
+    report = dict(report or {})
+    candidates = list(report.get("candidates", []) or [])
+    skipped_claimed = 0
+    if seed_space is None:
+        candidates, skipped_claimed = session._filter_claimed_space_region_candidates(candidates)
+    report["candidates"] = candidates
+    report["candidate_count"] = len(candidates)
+    report["skipped_claimed_candidate_count"] = skipped_claimed
+    return report
+
+
+def report_space_region_candidate_failure(report):
+    skipped_claimed = int(report.get("skipped_claimed_candidate_count", 0) or 0)
+    if skipped_claimed and not int(report.get("candidate_count", 0) or 0):
+        FreeCAD.Console.PrintWarning(
+            translate(
+                "BIM_PlanEdit",
+                "All enclosed regions are already covered by existing spaces.\n",
+            )
+        )
+        return
+
+    message = str(report.get("message") or "").strip()
+    details = [str(detail).strip() for detail in report.get("details", []) if str(detail).strip()]
+    if message:
+        FreeCAD.Console.PrintError(message + "\n")
+        for detail in details:
+            FreeCAD.Console.PrintError(f"  - {detail}\n")
+        return
+
+    FreeCAD.Console.PrintError(
+        translate(
+            "BIM_PlanEdit",
+            "Failed to derive enclosed space regions from the current selection.\n",
+        )
+    )
+
+
+def get_space_region_candidate_polylines(session, candidate):
+    face = candidate.get("face") if isinstance(candidate, dict) else None
+    if not face:
+        return []
+    return session._get_footprint_overlay_polylines([face])
+
+
+def get_space_region_candidate_segments(session, candidate):
+    segments = []
+    for polyline in session._get_space_region_candidate_polylines(candidate):
+        if len(polyline) < 2:
+            continue
+        for start, end in zip(polyline, polyline[1:]):
+            segments.append((start, end))
+    return segments
+
+
+def pick_space_region_candidate(session, mouse_pos, radius_px=10):
+    if session.current_tool != "Pick Space Region" or not session._space_region_candidates:
+        return None
+
+    point = session._get_plan_point_from_mouse_pos(mouse_pos)
+    if point is not None:
+        for candidate in session._space_region_candidates:
+            face = candidate.get("face")
+            if not face:
+                continue
+            bound_box = getattr(face, "BoundBox", None)
+            if bound_box is None:
+                continue
+            test_point = FreeCAD.Vector(point.x, point.y, float(bound_box.ZMin))
+            try:
+                if face.isInside(test_point, 0.001, True):
+                    return candidate
+            except Exception:
+                continue
+
+    radius_sq = float(radius_px) * float(radius_px)
+    best_candidate = None
+    best_distance_sq = None
+    for candidate in session._space_region_candidates:
+        for start, end in session._get_space_region_candidate_segments(candidate):
+            distance_sq = session._get_screen_distance_sq_to_segment(mouse_pos, start, end)
+            if distance_sq is None or distance_sq > radius_sq:
+                continue
+            if best_distance_sq is None or distance_sq < best_distance_sq:
+                best_candidate = candidate
+                best_distance_sq = distance_sq
+    return best_candidate
+
+
+def set_hovered_space_region_candidate(session, candidate, visual_key):
+    if session._hovered_space_region_candidate is candidate:
+        return
+    session._hovered_space_region_candidate = candidate
+    session._queue_plan_overlay_visual_refresh(visual_key)
+    session._refresh_task_panel_status()
+
+
+def create_space_region_base_object(session, candidate):
+    shape = candidate.get("shape") if isinstance(candidate, dict) else None
+    if not shape:
+        return None
+    try:
+        base = session.doc.addObject("Part::Feature", "SpaceRegionBase")
+    except Exception:
+        return None
+    try:
+        shape_copy = session._copy_shape_without_element_map(shape)
+        if shape_copy is None:
+            return None
+        base.Shape = shape_copy
+    except Exception:
+        return None
+
+    view_object = getattr(base, "ViewObject", None)
+    if view_object:
+        if hasattr(view_object, "Visibility"):
+            try:
+                view_object.Visibility = False
+            except Exception:
+                pass
+        if hasattr(view_object, "ShowInTree"):
+            try:
+                view_object.ShowInTree = False
+            except Exception:
+                pass
+        if hasattr(view_object, "Selectable"):
+            try:
+                view_object.Selectable = False
+            except Exception:
+                pass
+    return base
+
+
+def begin_space_region_pick(session, boundaries, label=None, seed_space=None, report=None):
+    if report is None:
+        report = session._get_space_region_candidate_report(
+            boundaries,
+            label=label,
+            seed_space=seed_space,
+        )
+    candidates = list(report.get("candidates", []) or [])
+    if not candidates:
+        session._report_space_region_candidate_failure(report)
+        return False
+
+    skipped_claimed = int(report.get("skipped_claimed_candidate_count", 0) or 0)
+    if skipped_claimed:
+        FreeCAD.Console.PrintMessage(
+            translate(
+                "BIM_PlanEdit",
+                "Ignoring {count} enclosed region(s) already covered by existing spaces.\n",
+            ).format(count=skipped_claimed)
+        )
+    if skipped_claimed and len(candidates) == 1:
+        space = session._create_space_from_region_candidate(
+            candidates[0],
+            boundaries=boundaries,
+            keep_boundaries=seed_space is None,
+        )
+        if not space:
+            return False
+        session._register_plan_object(space)
+        session._restore_selected_space(space)
+        return True
+
+    session.current_tool = "Pick Space Region"
+    session._space_region_pick_boundaries = list(boundaries)
+    session._space_region_candidates = candidates
+    session._hovered_space_region_candidate = None
+    session._space_region_pick_seed_space = seed_space
+    session._clear_wall_grips()
+    session._set_hovered_wall(None)
+    session._set_hovered_opening(None)
+    session._set_hovered_symbol(None)
+    session._set_hovered_space(None)
+    session._refresh_primary_selected_plan_target()
+    FreeCAD.Console.PrintMessage(
+        translate(
+            "BIM_PlanEdit",
+            "Multiple enclosed regions found. Hover a dashed region and click to create that space.\n",
+        )
+    )
+    return True
+
+
+def cancel_space_region_pick(session, refresh=True):
+    was_active = session.current_tool == "Pick Space Region" or bool(
+        session._space_region_candidates
+    )
+    session._space_region_pick_boundaries = []
+    session._space_region_candidates = []
+    session._hovered_space_region_candidate = None
+    session._space_region_pick_seed_space = None
+    session._clear_space_region_pick_overlays()
+    if session.current_tool == "Pick Space Region":
+        session.current_tool = "Select"
+    if was_active:
+        session._refresh_primary_selected_plan_target()
+    elif refresh:
+        session._refresh_task_panel_status()
+    return was_active
+
+
+def create_space_from_region_candidate(session, candidate, boundaries=None, keep_boundaries=True):
+    import Arch
+
+    if not isinstance(candidate, dict):
+        return None
+    boundaries = list(boundaries or [])
+
+    space = None
+    reported_failure = False
+    try:
+        session.doc.openTransaction(translate("BIM_PlanEdit", "Create Space"))
+        base = session._create_space_region_base_object(candidate)
+        if not base:
+            raise RuntimeError("Unable to create space base")
+        space = Arch.makeSpace(base)
+        if not space:
+            raise RuntimeError("Unable to create space")
+        if keep_boundaries and boundaries:
+            space.Boundaries = boundaries
+        session._add_object_to_active_storey(space)
+        session.doc.recompute()
+        if not session._space_has_valid_geometry(space):
+            reported_failure = session._report_space_creation_failure(space)
+            raise RuntimeError("Unable to create space")
+        session.doc.commitTransaction()
+    except Exception:
+        try:
+            session.doc.abortTransaction()
+        except Exception:
+            pass
+        if not reported_failure:
+            FreeCAD.Console.PrintError(
+                translate("BIM_PlanEdit", "Failed to create the selected space.\n")
+            )
+        return None
+
+    return space
+
+
+def activate_space_region_candidate(session, candidate, event_callback=None):
+    if session.current_tool != "Pick Space Region" or not isinstance(candidate, dict):
+        return False
+
+    boundaries = list(session._space_region_pick_boundaries or [])
+    if not boundaries and session._space_region_pick_seed_space is None:
+        return False
+
+    space = session._create_space_from_region_candidate(
+        candidate,
+        boundaries=boundaries,
+        keep_boundaries=session._space_region_pick_seed_space is None,
+    )
+    if not space:
+        return False
+
+    session._space_region_pick_boundaries = []
+    session._space_region_candidates = []
+    session._hovered_space_region_candidate = None
+    session._space_region_pick_seed_space = None
+    session._clear_space_region_pick_overlays()
+    session._register_plan_object(space)
+    session._restore_selected_space(space)
+    session._claim_left_button_click(event_callback)
+    return True
+
+
+def create_space_from_current_selection(session):
+    import Arch
+    import ArchSpace
+
+    request = session._get_space_creation_request()
+    if not request:
+        FreeCAD.Console.PrintWarning(
+            translate(
+                "BIM_PlanEdit",
+                "Select room-bounding walls or explicit boundary faces before using Space.\n",
+            )
+        )
+        return False
+
+    boundaries = list(request["boundaries"] or [])
+    region_seed_space = request["region_seed_space"]
+    if not boundaries:
+        FreeCAD.Console.PrintWarning(
+            translate(
+                "BIM_PlanEdit",
+                "Select room-bounding walls or explicit boundary faces before using Space.\n",
+            )
+        )
+        return False
+
+    if region_seed_space is not None:
+        report = session._get_space_region_candidate_report(
+            boundaries,
+            label=request["label"],
+            seed_space=region_seed_space,
+        )
+        candidate_count = int(report.get("candidate_count", 0) or 0)
+        if candidate_count > 1:
+            return session._begin_space_region_pick(
+                boundaries,
+                label=report.get("label"),
+                seed_space=region_seed_space,
+                report=report,
+            )
+        if candidate_count == 1:
+            space = session._create_space_from_region_candidate(
+                report["candidates"][0],
+                boundaries=boundaries,
+                keep_boundaries=False,
+            )
+            if not space:
+                return False
+            session._register_plan_object(space)
+            session._restore_selected_space(space)
+            return True
+        session._report_space_region_candidate_failure(report)
+        return False
+
+    report = ArchSpace.analyzeBoundaryLinks(boundaries)
+    if report.get("code") == "multiple_regions":
+        region_report = session._get_space_region_candidate_report(
+            boundaries,
+            label=report.get("label"),
+        )
+        candidate_count = int(region_report.get("candidate_count", 0) or 0)
+        if candidate_count > 1:
+            return session._begin_space_region_pick(
+                boundaries,
+                label=report.get("label"),
+                report=region_report,
+            )
+        if candidate_count == 1:
+            space = session._create_space_from_region_candidate(
+                region_report["candidates"][0],
+                boundaries=boundaries,
+                keep_boundaries=True,
+            )
+            if not space:
+                return False
+            session._register_plan_object(space)
+            session._restore_selected_space(space)
+            return True
+        session._report_space_region_candidate_failure(region_report)
+        return False
+
+    space = None
+    reported_failure = False
+    try:
+        session.doc.openTransaction(translate("BIM_PlanEdit", "Create Space"))
+        space = Arch.makeSpace(boundaries)
+        if not space:
+            raise RuntimeError("Unable to create space")
+        session._add_object_to_active_storey(space)
+        session.doc.recompute()
+        if not session._space_has_valid_geometry(space):
+            reported_failure = session._report_space_creation_failure(space)
+            raise RuntimeError("Unable to create space")
+        session.doc.commitTransaction()
+    except Exception:
+        try:
+            session.doc.abortTransaction()
+        except Exception:
+            pass
+        if not reported_failure:
+            FreeCAD.Console.PrintError(
+                translate("BIM_PlanEdit", "Failed to create the selected space.\n")
+            )
+        return False
+
+    session._register_plan_object(space)
+    session._restore_selected_space(space)
+    return True
+
+
+def space_has_valid_geometry(session, space):
+    if not session._is_plan_space_object(space):
+        return False
+    try:
+        shape = getattr(space, "Shape", None)
+    except Exception:
+        return False
+    if not shape:
+        return False
+    try:
+        if shape.isNull():
+            return False
+    except Exception:
+        pass
+    return bool(getattr(shape, "Solids", None))
+
+
+def report_space_creation_failure(space):
+    proxy = getattr(space, "Proxy", None)
+    if not proxy:
+        return False
+
+    message = ""
+    if hasattr(proxy, "getLastBoundaryError"):
+        try:
+            message = str(proxy.getLastBoundaryError(space) or "").strip()
+        except Exception:
+            message = ""
+
+    if not message:
+        return False
+
+    FreeCAD.Console.PrintWarning(
+        translate(
+            "BIM_PlanEdit",
+            "Plan Edit kept no new space object because the selection could not be turned into a valid Arch Space.\n",
+        )
+    )
+    return True
+
+
 def get_space_preflight_report(session, targets=None):
     if session.current_tool != "Select":
         return None
