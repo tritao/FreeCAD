@@ -3861,6 +3861,67 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_selecting_space_refreshes_only_changed_selected_overlays(self):
+        """Switching semantic selection to a space should avoid unrelated selected-overlay refreshes."""
+
+        level, walls = self._make_plan_room_walls()
+        wall = walls[0]
+        base = self.document.addObject("Part::Box", "SemanticSelectSpaceBase")
+        base.Length = 3200
+        base.Width = 2400
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Bedroom")
+        level.addObject(space)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+
+        with patch.object(
+            session,
+            "_sync_selected_opening_overlay",
+            wraps=session._sync_selected_opening_overlay,
+        ) as sync_opening, patch.object(
+            session,
+            "_sync_selected_symbol_overlay",
+            wraps=session._sync_selected_symbol_overlay,
+        ) as sync_symbol, patch.object(
+            session,
+            "_sync_selected_region_overlay",
+            wraps=session._sync_selected_region_overlay,
+        ) as sync_region, patch.object(
+            session,
+            "_sync_selected_space_overlay",
+            wraps=session._sync_selected_space_overlay,
+        ) as sync_space, patch.object(
+            session,
+            "_sync_secondary_selected_overlays",
+            wraps=session._sync_secondary_selected_overlays,
+        ) as sync_secondary, patch.object(
+            session,
+            "_refresh_task_panel_status",
+            wraps=session._refresh_task_panel_status,
+        ) as refresh_panel:
+            self.assertTrue(session._select_space_for_plan_edit(space, sync_gui_selection=True))
+
+        self.assertEqual(sync_opening.call_count, 0)
+        self.assertEqual(sync_symbol.call_count, 0)
+        self.assertEqual(sync_region.call_count, 0)
+        self.assertEqual(sync_space.call_count, 1)
+        self.assertEqual(sync_secondary.call_count, 1)
+        self.assertEqual(refresh_panel.call_count, 1)
+        self._assert_selected_plan_target(session, "space", space)
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [space.Name])
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_space_editor_refresh_skips_unchanged_rebuilds(self):
         """Repeated panel refreshes should not rebuild unchanged space editor controls."""
 

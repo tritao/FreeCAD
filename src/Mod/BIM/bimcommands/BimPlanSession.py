@@ -7650,7 +7650,9 @@ class PlanEditSession:
         if queue_restore is not None:
             queue_restore(obj)
 
-    def _select_plan_target_for_plan_edit(self, kind, obj, queue_restore=False):
+    def _select_plan_target_for_plan_edit(
+        self, kind, obj, queue_restore=False, sync_gui_selection=False
+    ):
         validators = {
             "opening": self._is_hosted_opening_object,
             "symbol": self._is_plan_symbol_instance,
@@ -7661,58 +7663,69 @@ class PlanEditSession:
         validator = validators.get(kind)
         if validator is None or not validator(obj):
             return False
+        previous_kind, previous_obj = self._get_selected_plan_target()
         self.current_tool = "Select"
         self._set_selected_plan_target(kind, obj, pending_restore=queue_restore)
+        if sync_gui_selection:
+            self._set_gui_selection_object(obj)
         if kind == "wall":
             self._sync_wall_grips()
         else:
             self._clear_wall_grips()
-        self._sync_selected_opening_overlay()
-        self._sync_selected_opening_handles()
-        self._sync_selected_symbol_overlay()
-        self._sync_selected_symbol_handles()
-        self._sync_selected_region_overlay()
-        self._sync_selected_space_overlay()
-        if kind in ("opening", "symbol", "region"):
-            self._sync_secondary_selected_overlays()
+        if self._selected_plan_target_changed(previous_kind, previous_obj, "opening"):
+            self._sync_selected_opening_overlay()
+            self._sync_selected_opening_handles()
+        if self._selected_plan_target_changed(previous_kind, previous_obj, "symbol"):
+            self._sync_selected_symbol_overlay()
+            self._sync_selected_symbol_handles()
+        if self._selected_plan_target_changed(previous_kind, previous_obj, "region"):
+            self._sync_selected_region_overlay()
+        if self._selected_plan_target_changed(previous_kind, previous_obj, "space"):
+            self._sync_selected_space_overlay()
+        self._sync_secondary_selected_overlays()
         self._refresh_task_panel_status()
         if queue_restore:
             self._queue_restore_selected_plan_target(kind, obj)
         return True
 
-    def _select_opening_for_plan_edit(self, opening, queue_restore=False):
+    def _select_opening_for_plan_edit(self, opening, queue_restore=False, sync_gui_selection=False):
         return self._select_plan_target_for_plan_edit(
             "opening",
             opening,
             queue_restore=queue_restore,
+            sync_gui_selection=sync_gui_selection,
         )
 
-    def _select_symbol_for_plan_edit(self, symbol, queue_restore=False):
+    def _select_symbol_for_plan_edit(self, symbol, queue_restore=False, sync_gui_selection=False):
         return self._select_plan_target_for_plan_edit(
             "symbol",
             symbol,
             queue_restore=queue_restore,
+            sync_gui_selection=sync_gui_selection,
         )
 
-    def _select_region_for_plan_edit(self, region, queue_restore=False):
+    def _select_region_for_plan_edit(self, region, queue_restore=False, sync_gui_selection=False):
         return self._select_plan_target_for_plan_edit(
             "region",
             region,
             queue_restore=queue_restore,
+            sync_gui_selection=sync_gui_selection,
         )
 
-    def _select_space_for_plan_edit(self, space, queue_restore=False):
+    def _select_space_for_plan_edit(self, space, queue_restore=False, sync_gui_selection=False):
         return self._select_plan_target_for_plan_edit(
             "space",
             space,
             queue_restore=queue_restore,
+            sync_gui_selection=sync_gui_selection,
         )
 
-    def _select_wall_for_plan_edit(self, wall, queue_restore=False):
+    def _select_wall_for_plan_edit(self, wall, queue_restore=False, sync_gui_selection=False):
         return self._select_plan_target_for_plan_edit(
             "wall",
             wall,
             queue_restore=queue_restore,
+            sync_gui_selection=sync_gui_selection,
         )
 
     def _activate_plan_target(
@@ -7744,12 +7757,14 @@ class PlanEditSession:
                 "space": self._select_space_for_plan_edit,
                 "wall": self._select_wall_for_plan_edit,
             }.get(kind)
-            if select_target is None or not select_target(target_obj, queue_restore=True):
+            if select_target is None or not select_target(
+                target_obj,
+                queue_restore=True,
+                sync_gui_selection=sync_gui_selection,
+            ):
                 self._plan_perf_set_fields(activate_plan_target_result=False)
                 return False
             self._clear_hovered_plan_targets(clear_hovered_kinds)
-            if sync_gui_selection:
-                self._set_gui_selection_object(target_obj)
             self._claim_left_button_click(event_callback)
             self._plan_perf_set_fields(
                 activate_plan_target_result=True,
