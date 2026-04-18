@@ -47,7 +47,6 @@ from bimplan.overlays import spaces as space_overlays
 from bimplan.overlays import symbols as symbol_overlays
 from bimplan.overlays import walls as wall_overlays
 from bimplan.registry import get_plan_edit_registry
-from bimplan.targets import PlanTarget
 from bimplan.ui.controls import PlanEditControlsWidget
 from bimplan.ui.status_chip import _PlanEditViewportStatusChip
 
@@ -2601,179 +2600,34 @@ class PlanEditSession:
         return plan_selection.get_selected_plan_targets(self)
 
     def _get_plan_text_property(self, obj, property_names, default=""):
-        if obj is None:
-            return str(default or "")
-        for property_name in property_names or ():
-            if not property_name or not hasattr(obj, property_name):
-                continue
-            try:
-                value = getattr(obj, property_name)
-            except Exception:
-                continue
-            text = str(value or "").strip()
-            if text:
-                return text
-        return str(default or "")
+        return plan_targets.get_plan_text_property(obj, property_names, default=default)
 
     def _get_plan_float_property(self, obj, property_names):
-        if obj is None:
-            return None
-        for property_name in property_names or ():
-            if not property_name or not hasattr(obj, property_name):
-                continue
-            try:
-                value = getattr(obj, property_name)
-            except Exception:
-                continue
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                continue
-        return None
+        return plan_targets.get_plan_float_property(obj, property_names)
 
     def _normalize_plan_requirement_tags(self, value):
-        if value is None:
-            return ()
-        if isinstance(value, str):
-            parts = [item.strip() for item in value.split(",")]
-        elif isinstance(value, (list, tuple, set)):
-            parts = [str(item or "").strip() for item in value]
-        else:
-            parts = [str(value or "").strip()]
-        normalized = []
-        seen = set()
-        for part in parts:
-            if not part or part in seen:
-                continue
-            seen.add(part)
-            normalized.append(part)
-        return tuple(normalized)
+        return plan_targets.normalize_plan_requirement_tags(value)
 
     def _get_plan_host_ref(self, obj):
-        if obj is None:
-            return ""
-        host_ref = self._get_plan_text_property(obj, ("HostRef",))
-        if host_ref:
-            return host_ref
-        hosts = getattr(obj, "Hosts", None) or ()
-        for host in hosts:
-            name = str(getattr(host, "Name", "") or "").strip()
-            if name:
-                return name
-        return ""
+        return plan_targets.get_plan_host_ref(self, obj)
 
     def _make_plan_target_record(self, kind, obj, selected_keys=None, primary_key=None):
-        if not kind or obj is None:
-            return None
-        semantic_obj = self._get_plan_semantic_object(obj)
-        doc = getattr(obj, "Document", None)
-        semantic_doc = getattr(semantic_obj, "Document", None)
-        state_key = self._get_plan_target_state_key(kind, obj)
-        return PlanTarget(
-            kind=str(kind or ""),
-            document_name=str(getattr(doc, "Name", "") or ""),
-            object_name=str(getattr(obj, "Name", "") or ""),
-            label=str(getattr(obj, "Label", getattr(obj, "Name", "")) or ""),
-            semantic_document_name=str(getattr(semantic_doc, "Name", "") or ""),
-            semantic_object_name=str(getattr(semantic_obj, "Name", "") or ""),
-            semantic_label=str(
-                getattr(semantic_obj, "Label", getattr(semantic_obj, "Name", "")) or ""
-            ),
-            is_selected=bool(selected_keys and state_key in selected_keys),
-            is_primary=bool(primary_key is not None and state_key == primary_key),
+        return plan_targets.make_plan_target_record(
+            self,
+            kind,
+            obj,
+            selected_keys=selected_keys,
+            primary_key=primary_key,
         )
 
     def get_plan_targets(self, selected_only=False):
-        selected_targets = self._get_selected_plan_targets()
-        selected_keys = {
-            self._get_plan_target_state_key(target_kind, target_obj)
-            for target_kind, target_obj in selected_targets
-        }
-        selected_keys.discard(None)
-        primary_key = None
-        primary_kind, primary_obj = self._get_selected_plan_target()
-        if primary_kind and primary_obj:
-            primary_key = self._get_plan_target_state_key(primary_kind, primary_obj)
-
-        if selected_only:
-            source_targets = selected_targets
-        else:
-            source_targets = []
-            seen = set()
-            active_storey_name = getattr(self.active_storey, "Name", None)
-            for obj in getattr(self.doc, "Objects", []) or []:
-                target_kind, target_obj = self._get_plan_target_for_object(obj)
-                if not target_kind or not target_obj:
-                    continue
-                state_key = self._get_plan_target_state_key(target_kind, target_obj)
-                if state_key is None or state_key in seen:
-                    continue
-                semantic_obj = self._get_plan_semantic_object(target_obj)
-                if active_storey_name is not None:
-                    storeys = self._get_object_storeys(semantic_obj or target_obj)
-                    if storeys and not any(parent.Name == active_storey_name for parent in storeys):
-                        continue
-                seen.add(state_key)
-                source_targets.append((target_kind, target_obj))
-
-        records = []
-        for target_kind, target_obj in source_targets:
-            target_record = self._make_plan_target_record(
-                target_kind,
-                target_obj,
-                selected_keys=selected_keys,
-                primary_key=primary_key,
-            )
-            if target_record is not None:
-                records.append(target_record)
-        return tuple(records)
+        return plan_targets.get_plan_targets(self, selected_only=selected_only)
 
     def resolve_plan_target_object(self, target):
-        if target is None:
-            return None
-        document_name = str(getattr(target, "document_name", "") or "").strip()
-        object_name = str(getattr(target, "object_name", "") or "").strip()
-        if not object_name:
-            return None
-        doc = None
-        if document_name and getattr(self.doc, "Name", None) == document_name:
-            doc = self.doc
-        elif document_name:
-            try:
-                doc = FreeCAD.getDocument(document_name)
-            except Exception:
-                doc = None
-        else:
-            doc = self.doc
-        if doc is None:
-            return None
-        try:
-            return doc.getObject(object_name)
-        except Exception:
-            return None
+        return plan_targets.resolve_plan_target_object(self, target)
 
     def resolve_plan_semantic_object(self, target):
-        if target is None:
-            return None
-        semantic_document_name = str(getattr(target, "semantic_document_name", "") or "").strip()
-        semantic_object_name = str(getattr(target, "semantic_object_name", "") or "").strip()
-        if semantic_document_name and semantic_object_name:
-            doc = None
-            if getattr(self.doc, "Name", None) == semantic_document_name:
-                doc = self.doc
-            else:
-                try:
-                    doc = FreeCAD.getDocument(semantic_document_name)
-                except Exception:
-                    doc = None
-            if doc is not None:
-                try:
-                    resolved = doc.getObject(semantic_object_name)
-                except Exception:
-                    resolved = None
-                if resolved is not None:
-                    return resolved
-        return self._get_plan_semantic_object(self.resolve_plan_target_object(target))
+        return plan_targets.resolve_plan_semantic_object(self, target)
 
     def _build_plan_semantic_record(self, target_kind, target_obj):
         return plan_provider_runtime.build_plan_semantic_record(
