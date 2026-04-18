@@ -7701,6 +7701,18 @@ class PlanEditSession:
             if clear_hovered is not None:
                 clear_hovered(None)
 
+    def _get_hovered_plan_target(self):
+        for kind, obj in (
+            ("opening", self.hovered_opening),
+            ("symbol", self.hovered_symbol),
+            ("wall", self.hovered_wall),
+            ("region", self.hovered_region),
+            ("space", self.hovered_space),
+        ):
+            if obj is not None:
+                return (kind, obj)
+        return (None, None)
+
     def _set_event_handled(self, event_callback):
         if event_callback and hasattr(event_callback, "setHandled"):
             try:
@@ -7894,7 +7906,15 @@ class PlanEditSession:
             return True
 
     def _activate_semantic_plan_target(self, mouse_pos, event_callback=None):
-        target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
+        target_kind, target_obj = self._get_hovered_plan_target()
+        if target_obj is None:
+            target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
+            self._plan_perf_set_fields(semantic_target_source="picked")
+        else:
+            self._plan_perf_set_fields(
+                semantic_target_source="hovered",
+                hovered_target=self._plan_perf_describe_target(target_kind, target_obj),
+            )
         activate_target = {
             "opening": self._activate_opening_target,
             "symbol": self._activate_symbol_target,
