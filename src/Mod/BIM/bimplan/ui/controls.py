@@ -233,6 +233,34 @@ class PlanEditControlsWidget:
                 except Exception:
                     pass
 
+    def _add_integration_action_row(self, QtGui, parent, layout, actions=()):
+        if not actions:
+            return
+        action_row = QtGui.QHBoxLayout()
+        action_row.setSpacing(6)
+        for action in actions:
+            button = QtGui.QPushButton(str(action.label or ""), parent)
+            tooltip = str(action.tooltip or "").strip()
+            if tooltip:
+                try:
+                    button.setToolTip(tooltip)
+                except Exception:
+                    pass
+            try:
+                button.setProperty("planActionEnabled", bool(action.enabled))
+            except Exception:
+                pass
+            button.setEnabled(bool(action.enabled))
+            button.clicked.connect(
+                lambda _checked=False, current_action=action: self.on_provider_action_clicked(
+                    current_action
+                )
+            )
+            self._integration_action_buttons.append(button)
+            action_row.addWidget(button)
+        action_row.addStretch(1)
+        layout.addLayout(action_row)
+
     def _make_integration_block(self, QtGui, title, body="", actions=()):
         block = QtGui.QFrame(self.integration_panel)
         block.setFrameShape(QtGui.QFrame.StyledPanel)
@@ -253,44 +281,240 @@ class PlanEditControlsWidget:
             body_label.setWordWrap(True)
             layout.addWidget(body_label)
 
-        if actions:
-            action_row = QtGui.QHBoxLayout()
-            action_row.setSpacing(6)
-            for action in actions:
-                button = QtGui.QPushButton(str(action.label or ""), block)
-                tooltip = str(action.tooltip or "").strip()
-                if tooltip:
-                    try:
-                        button.setToolTip(tooltip)
-                    except Exception:
-                        pass
-                try:
-                    button.setProperty("planActionEnabled", bool(action.enabled))
-                except Exception:
-                    pass
-                button.setEnabled(bool(action.enabled))
-                button.clicked.connect(
-                    lambda _checked=False, current_action=action: self.on_provider_action_clicked(
-                        current_action
-                    )
-                )
-                self._integration_action_buttons.append(button)
-                action_row.addWidget(button)
-            action_row.addStretch(1)
-            layout.addLayout(action_row)
+        self._add_integration_action_row(QtGui, block, layout, actions)
         return block
 
-    def _format_provider_issue_title(self, issue):
-        severity = str(getattr(issue, "severity", "") or "").strip().lower()
+    def _make_integration_collapsible_block(
+        self,
+        QtGui,
+        title,
+        summary="",
+        details="",
+        actions=(),
+        collapsed=False,
+        detail_title="Details",
+    ):
+        block = QtGui.QFrame(self.integration_panel)
+        block.setFrameShape(QtGui.QFrame.StyledPanel)
+        layout = QtGui.QVBoxLayout(block)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(4)
+
+        title_label = QtGui.QLabel(str(title or ""), block)
+        title_label.setWordWrap(True)
+        font = title_label.font()
+        font.setBold(True)
+        title_label.setFont(font)
+        layout.addWidget(title_label)
+
+        summary_text = str(summary or "").strip()
+        if summary_text:
+            summary_label = QtGui.QLabel(summary_text, block)
+            summary_label.setWordWrap(True)
+            layout.addWidget(summary_label)
+
+        self._add_integration_action_row(QtGui, block, layout, actions)
+
+        detail_text = str(details or "").strip()
+        if detail_text:
+            detail_group = QtGui.QGroupBox(
+                translate("BIM_PlanEdit", str(detail_title or "Details")),
+                block,
+            )
+            detail_group.setCheckable(True)
+            detail_group.setChecked(not bool(collapsed))
+
+            detail_layout = QtGui.QVBoxLayout(detail_group)
+            detail_layout.setContentsMargins(8, 8, 8, 8)
+            detail_layout.setSpacing(4)
+
+            detail_content = QtGui.QWidget(detail_group)
+            detail_content_layout = QtGui.QVBoxLayout(detail_content)
+            detail_content_layout.setContentsMargins(0, 0, 0, 0)
+            detail_content_layout.setSpacing(4)
+
+            detail_label = QtGui.QLabel(detail_text, detail_content)
+            detail_label.setWordWrap(True)
+            detail_content_layout.addWidget(detail_label)
+
+            detail_layout.addWidget(detail_content)
+            detail_content.setVisible(detail_group.isChecked())
+            try:
+                detail_group.toggled.connect(detail_content.setVisible)
+            except Exception:
+                pass
+            layout.addWidget(detail_group)
+        return block
+
+    def _format_provider_issue_heading(self, provider_label, severity, title):
+        severity = str(severity or "").strip().lower()
         severity_label = {
             "error": translate("BIM_PlanEdit", "Error"),
             "warning": translate("BIM_PlanEdit", "Warning"),
         }.get(severity, translate("BIM_PlanEdit", "Info"))
-        provider_label = self.session.get_plan_provider_display_name(issue.provider_id)
+        provider_text = str(provider_label or "").strip()
+        if not provider_text:
+            provider_text = translate("BIM_PlanEdit", "Integrations")
         return translate("BIM_PlanEdit", "{provider} [{severity}]: {title}").format(
-            provider=provider_label,
+            provider=provider_text,
             severity=severity_label,
-            title=str(getattr(issue, "title", "") or "").strip(),
+            title=str(title or "").strip(),
+        )
+
+    def _format_provider_issue_title(self, issue):
+        provider_label = self.session.get_plan_provider_display_name(issue.provider_id)
+        return self._format_provider_issue_heading(
+            provider_label,
+            getattr(issue, "severity", ""),
+            getattr(issue, "title", ""),
+        )
+
+    def _get_provider_issue_body(self, issue):
+        issue_text = str(getattr(issue, "title", "") or "").strip()
+        message_text = str(getattr(issue, "message", "") or "").strip()
+        body = message_text or issue_text
+        if body == issue_text:
+            body = str(message_text or "").strip()
+        return body
+
+    def _get_provider_issue_group_key(self, issue):
+        return str(getattr(issue, "group_key", "") or "").strip()
+
+    def _get_provider_issue_group_title(self, issue):
+        return str(getattr(issue, "group_title", "") or "").strip()
+
+    def _is_provider_issue_collapsed(self, issue):
+        return bool(getattr(issue, "collapsed", False))
+
+    def _get_provider_issue_severity_rank(self, issue):
+        severity = str(getattr(issue, "severity", "") or "").strip().lower()
+        return {
+            "error": 3,
+            "warning": 2,
+            "info": 1,
+        }.get(severity, 0)
+
+    def _get_provider_issue_group_severity(self, issues):
+        ranked = sorted(
+            tuple(issues or ()),
+            key=self._get_provider_issue_severity_rank,
+            reverse=True,
+        )
+        if not ranked:
+            return "info"
+        return str(getattr(ranked[0], "severity", "") or "info").strip().lower()
+
+    def _get_provider_issue_group_provider_label(self, issues):
+        labels = []
+        seen = set()
+        for issue in tuple(issues or ()):
+            label = str(
+                self.session.get_plan_provider_display_name(getattr(issue, "provider_id", "")) or ""
+            ).strip()
+            if label and label not in seen:
+                labels.append(label)
+                seen.add(label)
+        if len(labels) == 1:
+            return labels[0]
+        if len(labels) > 1:
+            return translate("BIM_PlanEdit", "Integrations")
+        return ""
+
+    def _format_provider_issue_group_title(self, issues):
+        issues = tuple(issues or ())
+        first = issues[0] if issues else None
+        title = self._get_provider_issue_group_title(first) if first is not None else ""
+        if not title and first is not None:
+            title = str(getattr(first, "title", "") or "").strip()
+        if not title:
+            title = translate("BIM_PlanEdit", "{count} issue(s)").format(count=len(issues))
+        return self._format_provider_issue_heading(
+            self._get_provider_issue_group_provider_label(issues),
+            self._get_provider_issue_group_severity(issues),
+            title,
+        )
+
+    def _format_provider_issue_group_summary(self, issues):
+        issues = tuple(issues or ())
+        if len(issues) <= 1:
+            return self._get_provider_issue_body(issues[0]) if issues else ""
+        return translate("BIM_PlanEdit", "{count} related issue(s).").format(count=len(issues))
+
+    def _format_provider_issue_group_details(self, issues):
+        lines = []
+        for issue in tuple(issues or ()):
+            title = str(getattr(issue, "title", "") or "").strip()
+            body = self._get_provider_issue_body(issue)
+            if body and body != title:
+                lines.append(f"- {title}: {body}")
+            elif title:
+                lines.append(f"- {title}")
+            elif body:
+                lines.append(f"- {body}")
+        return "\n".join(lines)
+
+    def _collect_provider_issue_group_actions(self, issues):
+        actions = []
+        seen = set()
+        for issue in tuple(issues or ()):
+            for action in tuple(getattr(issue, "actions", ()) or ()):
+                key = (
+                    str(getattr(action, "provider_id", "") or ""),
+                    str(getattr(action, "key", "") or ""),
+                    str(getattr(action, "label", "") or ""),
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                actions.append(action)
+        return tuple(actions)
+
+    def _group_provider_issues(self, issues):
+        grouped = []
+        groups_by_key = {}
+        for issue in tuple(issues or ()):
+            group_key = self._get_provider_issue_group_key(issue)
+            if not group_key:
+                grouped.append([issue])
+                continue
+            group = groups_by_key.get(group_key)
+            if group is None:
+                group = []
+                groups_by_key[group_key] = group
+                grouped.append(group)
+            group.append(issue)
+        return tuple(tuple(group) for group in grouped if group)
+
+    def _make_provider_issue_block(self, QtGui, issues):
+        issues = tuple(issues or ())
+        if not issues:
+            return None
+        has_group_key = bool(self._get_provider_issue_group_key(issues[0]))
+        collapsed = any(self._is_provider_issue_collapsed(issue) for issue in issues)
+        if len(issues) > 1 or collapsed:
+            details = self._format_provider_issue_group_details(issues)
+            return self._make_integration_collapsible_block(
+                QtGui,
+                self._format_provider_issue_group_title(issues),
+                summary=self._format_provider_issue_group_summary(issues),
+                details=details,
+                actions=self._collect_provider_issue_group_actions(issues),
+                collapsed=collapsed,
+                detail_title=translate("BIM_PlanEdit", "Issue Details"),
+            )
+        issue = issues[0]
+        if has_group_key:
+            return self._make_integration_block(
+                QtGui,
+                self._format_provider_issue_group_title(issues),
+                body=self._get_provider_issue_body(issue),
+                actions=self._collect_provider_issue_group_actions(issues),
+            )
+        return self._make_integration_block(
+            QtGui,
+            self._format_provider_issue_title(issue),
+            body=self._get_provider_issue_body(issue),
+            actions=issue.actions,
         )
 
     def _format_provider_section_title(self, section):
@@ -436,19 +660,10 @@ class PlanEditControlsWidget:
                         actions=section.actions,
                     )
                     self.integration_content_layout.addWidget(block)
-                for issue in issues:
-                    issue_text = str(getattr(issue, "title", "") or "").strip()
-                    message_text = str(getattr(issue, "message", "") or "").strip()
-                    body = message_text or issue_text
-                    if body == issue_text:
-                        body = str(message_text or "").strip()
-                    block = self._make_integration_block(
-                        QtGui,
-                        self._format_provider_issue_title(issue),
-                        body=body,
-                        actions=issue.actions,
-                    )
-                    self.integration_content_layout.addWidget(block)
+                for issue_group in self._group_provider_issues(issues):
+                    block = self._make_provider_issue_block(QtGui, issue_group)
+                    if block is not None:
+                        self.integration_content_layout.addWidget(block)
                 for section in regular_sections:
                     block = self._make_integration_block(
                         QtGui,
