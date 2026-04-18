@@ -421,7 +421,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         panel.refresh_from_session()
         self.pump_gui_events()
 
-        self.assertTrue(panel.integration_panel.isVisible())
+        self.assertFalse(panel.integration_panel.isHidden())
+        self.assertTrue(panel.integration_panel.isVisibleTo(panel.form))
         labels = [
             str(widget.text()) for widget in panel.integration_panel.findChildren(QtGui.QLabel)
         ]
