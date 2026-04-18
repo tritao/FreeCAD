@@ -1650,6 +1650,23 @@ class _Wall(ArchComponent.Component):
             return [start, end, midpoint]
 
         try:
+            offset = float(getattr(getattr(obj, "Offset", None), "Value", 0.0) or 0.0)
+            material = getattr(obj, "Material", None)
+            has_layers = bool(getattr(material, "Thicknesses", None))
+            has_alignment_overrides = bool(
+                getattr(obj, "OverrideAlign", None) or getattr(obj, "OverrideOffset", None)
+            )
+            if (
+                getattr(obj, "Align", "Center") == "Center"
+                and abs(offset) <= 1e-9
+                and not has_layers
+                and not has_alignment_overrides
+            ):
+                return [start, end, midpoint]
+        except Exception:
+            pass
+
+        try:
             faces = self.getFootprint(obj)
         except Exception:
             return [start, end, midpoint]

@@ -506,6 +506,32 @@ class TestArchWall(TestArchBase.TestArchBase):
                     msg=f"For '{align_mode}' align, wall center {shape_center} does not match expected {expected_center}",
                 )
 
+    def test_center_wall_edit_grips_skip_footprint_rebuild(self):
+        """Centered zero-offset wall grips should use the wall centerline directly."""
+
+        wall = Arch.makeWall(length=2000, width=200, height=1500, align="Center")
+        self.document.recompute()
+
+        footprint_calls = []
+        original_get_footprint = wall.Proxy.getFootprint
+
+        def fail_if_called(_obj):
+            footprint_calls.append(True)
+            return original_get_footprint(_obj)
+
+        wall.Proxy.getFootprint = fail_if_called
+        try:
+            positions = wall.Proxy.calc_edit_grip_positions(wall)
+        finally:
+            wall.Proxy.getFootprint = original_get_footprint
+
+        endpoints = wall.Proxy.calc_endpoints(wall)
+        expected = endpoints + [(endpoints[0] + endpoints[1]) * 0.5]
+        self.assertFalse(footprint_calls)
+        self.assertEqual(len(positions), 3)
+        for actual, target in zip(positions, expected):
+            self.assertTrue(actual.isEqual(target, 1e-6))
+
     def test_baseless_wall_stretch_api(self):
         """
         Tests the proxy methods for graphically editing baseless walls:
