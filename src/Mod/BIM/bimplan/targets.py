@@ -58,6 +58,63 @@ def get_plan_target_for_object(session, obj, parent_obj=None):
     return (None, None)
 
 
+def is_plan_selectable_wall(session, obj):
+    if not obj:
+        return False
+    obj = session._get_plan_semantic_object(obj)
+    try:
+        import Draft
+
+        return Draft.getType(obj) == "Wall"
+    except Exception:
+        return False
+
+
+def is_plan_space_object(session, obj):
+    if not obj:
+        return False
+    obj = session._get_plan_semantic_object(obj)
+    try:
+        import Draft
+
+        if Draft.getType(obj) == "Space":
+            return True
+    except Exception:
+        pass
+    return getattr(obj, "IfcType", "") == "Space"
+
+
+def is_plan_custom_pick_only_object(session, obj):
+    if not obj:
+        return False
+    obj = session._get_plan_semantic_object(obj)
+    return session._is_plan_space_object(obj) or session._is_plan_region_object(obj)
+
+
+def is_plan_space_separator_object(session, obj):
+    if not obj:
+        return False
+    obj = session._get_plan_semantic_object(obj)
+    try:
+        import Draft
+
+        return Draft.getType(obj) == "SpaceSeparator"
+    except Exception:
+        return False
+
+
+def is_plan_region_object(session, obj):
+    if not obj:
+        return False
+    obj = session._get_plan_semantic_object(obj)
+    try:
+        import Draft
+
+        return Draft.getType(obj) == "PlanRegion"
+    except Exception:
+        return False
+
+
 def get_plan_text_property(obj, property_names, default=""):
     if obj is None:
         return str(default or "")
