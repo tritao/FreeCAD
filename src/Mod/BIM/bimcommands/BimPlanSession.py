@@ -1979,14 +1979,10 @@ class PlanEditSession:
         self._set_active_object(None)
 
     def _attach_selection_observer(self):
-        if not self._selection_observer_added:
-            FreeCADGui.Selection.addObserver(self)
-            self._selection_observer_added = True
+        return plan_selection.attach_selection_observer(self)
 
     def _detach_selection_observer(self):
-        if self._selection_observer_added:
-            FreeCADGui.Selection.removeObserver(self)
-            self._selection_observer_added = False
+        return plan_selection.detach_selection_observer(self)
 
     def _attach_document_observer(self):
         if not self._document_observer_added:
@@ -5901,56 +5897,16 @@ class PlanEditSession:
     # Selection observer interface
 
     def addSelection(self, doc, obj, sub, point):
-        with self._plan_perf_trace_event(
-            "selection_observer_add",
-            selection_document=doc,
-            selection_object=obj,
-            selection_subelement=sub,
-        ):
-            self._plan_perf_count("selection_observer_callbacks")
-            if self._tearing_down:
-                return
-            if self._ignore_selection_changes:
-                return
-            if sub in ("EditNode0", "EditNode1", "EditNode2"):
-                return
-            del doc, obj, sub, point
-            self._refresh_primary_selected_plan_target()
+        return plan_selection.selection_observer_add(self, doc, obj, sub, point)
 
     def removeSelection(self, doc, obj, sub):
-        with self._plan_perf_trace_event(
-            "selection_observer_remove",
-            selection_document=doc,
-            selection_object=obj,
-            selection_subelement=sub,
-        ):
-            self._plan_perf_count("selection_observer_callbacks")
-            if self._tearing_down:
-                return
-            if self._ignore_selection_changes:
-                return
-            del doc, obj, sub
-            self._refresh_primary_selected_plan_target()
+        return plan_selection.selection_observer_remove(self, doc, obj, sub)
 
     def setSelection(self, doc):
-        with self._plan_perf_trace_event("selection_observer_set", selection_document=doc):
-            self._plan_perf_count("selection_observer_callbacks")
-            if self._tearing_down:
-                return
-            if self._ignore_selection_changes:
-                return
-            del doc
-            self._refresh_primary_selected_plan_target()
+        return plan_selection.selection_observer_set(self, doc)
 
     def clearSelection(self, doc):
-        with self._plan_perf_trace_event("selection_observer_clear", selection_document=doc):
-            self._plan_perf_count("selection_observer_callbacks")
-            if self._tearing_down:
-                return
-            if self._ignore_selection_changes:
-                return
-            del doc
-            self._refresh_primary_selected_plan_target()
+        return plan_selection.selection_observer_clear(self, doc)
 
     # Document observer interface
 
