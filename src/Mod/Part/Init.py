@@ -26,6 +26,7 @@
 # FreeCAD init script of the part module
 
 import FreeCAD
+import sys
 
 translate = FreeCAD.Qt.translate
 
@@ -43,3 +44,30 @@ FreeCAD.addTranslatableExportType(
 )
 
 FreeCAD.__unit_test__ += ["TestPartApp"]
+
+
+def _install_projection_compat(module):
+    """Expose Part.project* before the binary bindings catch up.
+
+    The long-term owner of shape HLR projection is Part. Keep a Python-level shim
+    so source-only users can call the new API immediately while older binaries
+    still provide the implementation through TechDraw.
+    """
+
+    if hasattr(module, "project") and hasattr(module, "projectEx"):
+        return
+
+    try:
+        import TechDraw
+    except ImportError:
+        return
+
+    if not hasattr(module, "project"):
+        module.project = TechDraw.project
+    if not hasattr(module, "projectEx"):
+        module.projectEx = TechDraw.projectEx
+
+
+_part_module = sys.modules.get("Part")
+if _part_module is not None:
+    _install_projection_compat(_part_module)
