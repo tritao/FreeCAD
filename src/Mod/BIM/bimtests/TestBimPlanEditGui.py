@@ -904,6 +904,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         original_view = session.view
+        original_pick_opening = session._pick_plan_opening_target_from_overlays
+        opening_pick_calls = []
 
         class FakeView:
             def __init__(self, infos):
@@ -912,7 +914,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             def getObjectsInfo(self, _mouse_pos):
                 return self._infos
 
+        def fail_if_opening_overlay_pick_runs(*_args, **_kwargs):
+            opening_pick_calls.append(True)
+            return None
+
         try:
+            session._pick_plan_opening_target_from_overlays = fail_if_opening_overlay_pick_runs
             session.view = FakeView(
                 [{"Document": self.document.Name, "Object": plan_symbol.Name, "ParentObject": link}]
             )
@@ -922,7 +929,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 [{"Document": self.document.Name, "Object": base.Name, "ParentObject": link}]
             )
             self.assertEqual(("symbol", link), session._get_plan_target_at_position((100, 100)))
+            self.assertEqual([], opening_pick_calls)
         finally:
+            session._pick_plan_opening_target_from_overlays = original_pick_opening
             session.view = original_view
 
         session.shutdown(close_dialog=False)

@@ -410,17 +410,20 @@ def get_plan_target_at_position(session, mouse_pos):
             elif target_kind == "space" and space_candidate is None:
                 space_candidate = target_obj
         if result == (None, None):
-            opening_candidates = None
-            if wall_candidate is not None:
-                opening_candidates = session._get_wall_hosted_openings(wall_candidate)
-            opening_candidate = session._pick_plan_opening_target_from_overlays(
-                mouse_pos,
-                candidates=opening_candidates,
-            )
-            if opening_candidate is not None:
-                result = ("opening", opening_candidate)
-            elif symbol_candidate is None:
-                symbol_candidate = session._pick_plan_symbol_target_from_overlays(mouse_pos)
+            if symbol_candidate is not None and wall_candidate is None:
+                result = ("symbol", symbol_candidate)
+            else:
+                opening_candidates = None
+                if wall_candidate is not None:
+                    opening_candidates = session._get_wall_hosted_openings(wall_candidate)
+                opening_candidate = session._pick_plan_opening_target_from_overlays(
+                    mouse_pos,
+                    candidates=opening_candidates,
+                )
+                if opening_candidate is not None:
+                    result = ("opening", opening_candidate)
+                elif symbol_candidate is None:
+                    symbol_candidate = session._pick_plan_symbol_target_from_overlays(mouse_pos)
             if result == (None, None) and symbol_candidate is not None:
                 result = ("symbol", symbol_candidate)
             elif result == (None, None) and wall_candidate is not None:
