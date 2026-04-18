@@ -25,6 +25,7 @@
 """Session controller for BIM plan editing."""
 
 from contextlib import contextmanager
+from dataclasses import replace
 import json
 import math
 import os
@@ -34,6 +35,18 @@ import time
 import ArchPlanGeometry
 import FreeCAD
 import FreeCADGui
+from bimplan.context import PlanEditContext
+from bimplan.providers import (
+    PlanActionSpec,
+    PlanInspectorSection,
+    PlanIssueSpec,
+    PlanOverlaySpec,
+    PlanSuggestionSpec,
+)
+from bimplan.registry import get_plan_edit_registry
+from bimplan.semantics import PlanSemanticRecord
+from bimplan.targets import PlanTarget
+from bimplan.transactions import PlanEditTransaction
 from draftguitools import gui_base
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
@@ -1368,6 +1381,35 @@ class PlanEditSession:
         self.apply_plan_view(fit=False)
         self._apply_storey_visibility()
         self._refresh_task_panel_status()
+
+    def get_plan_provider_registry(self):
+        return get_plan_edit_registry()
+
+    def get_plan_provider_display_name(self, provider_id):
+        provider = self.get_plan_provider_registry().get_provider(provider_id)
+        if provider is None:
+            return str(provider_id or "").strip()
+        display_name = str(getattr(provider, "display_name", "") or "").strip()
+        if display_name:
+            return display_name
+        getter = getattr(provider, "get_display_name", None)
+        if callable(getter):
+            try:
+                return str(getter() or "").strip()
+            except Exception:
+                pass
+        provider_name = str(getattr(provider, "provider_id", "") or "").strip()
+        return provider_name or str(provider_id or "").strip()
+
+    def get_plan_edit_context(self):
+        active_storey = self.active_storey
+        return PlanEditContext(
+            session=self,
+            document_name=str(getattr(self.doc, "Name", "") or ""),
+            active_storey_name=str(getattr(active_storey, "Name", "") or ""),
+            active_storey_label=str(self.get_storey_label(active_storey) or ""),
+            current_tool=str(self.current_tool or ""),
+        )
 
     def _on_embedded_command_started(self, tool_name, command=None):
         if self._tearing_down:
@@ -3709,6 +3751,436 @@ class PlanEditSession:
             seen.add(key)
             targets.append((target_kind, target_obj))
         return targets
+
+    def _get_plan_text_property(self, obj, property_names, default=""):
+        if obj is None:
+            return str(default or "")
+        for property_name in property_names or ():
+            if not property_name or not hasattr(obj, property_name):
+                continue
+            try:
+                value = getattr(obj, property_name)
+            except Exception:
+                continue
+            text = str(value or "").strip()
+            if text:
+                return text
+        return str(default or "")
+
+    def _get_plan_float_property(self, obj, property_names):
+        if obj is None:
+            return None
+        for property_name in property_names or ():
+            if not property_name or not hasattr(obj, property_name):
+                continue
+            try:
+                value = getattr(obj, property_name)
+            except Exception:
+                continue
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    def _normalize_plan_requirement_tags(self, value):
+        if value is None:
+            return ()
+        if isinstance(value, str):
+            parts = [item.strip() for item in value.split(",")]
+        elif isinstance(value, (list, tuple, set)):
+            parts = [str(item or "").strip() for item in value]
+        else:
+            parts = [str(value or "").strip()]
+        normalized = []
+        seen = set()
+        for part in parts:
+            if not part or part in seen:
+                continue
+            seen.add(part)
+            normalized.append(part)
+        return tuple(normalized)
+
+    def _get_plan_host_ref(self, obj):
+        if obj is None:
+            return ""
+        host_ref = self._get_plan_text_property(obj, ("HostRef",))
+        if host_ref:
+            return host_ref
+        hosts = getattr(obj, "Hosts", None) or ()
+        for host in hosts:
+            name = str(getattr(host, "Name", "") or "").strip()
+            if name:
+                return name
+        return ""
+
+    def _make_plan_target_record(self, kind, obj, selected_keys=None, primary_key=None):
+        if not kind or obj is None:
+            return None
+        semantic_obj = self._get_plan_semantic_object(obj)
+        doc = getattr(obj, "Document", None)
+        semantic_doc = getattr(semantic_obj, "Document", None)
+        state_key = self._get_plan_target_state_key(kind, obj)
+        return PlanTarget(
+            kind=str(kind or ""),
+            document_name=str(getattr(doc, "Name", "") or ""),
+            object_name=str(getattr(obj, "Name", "") or ""),
+            label=str(getattr(obj, "Label", getattr(obj, "Name", "")) or ""),
+            semantic_document_name=str(getattr(semantic_doc, "Name", "") or ""),
+            semantic_object_name=str(getattr(semantic_obj, "Name", "") or ""),
+            semantic_label=str(
+                getattr(semantic_obj, "Label", getattr(semantic_obj, "Name", "")) or ""
+            ),
+            is_selected=bool(selected_keys and state_key in selected_keys),
+            is_primary=bool(primary_key is not None and state_key == primary_key),
+        )
+
+    def get_plan_targets(self, selected_only=False):
+        selected_targets = self._get_selected_plan_targets()
+        selected_keys = {
+            self._get_plan_target_state_key(target_kind, target_obj)
+            for target_kind, target_obj in selected_targets
+        }
+        selected_keys.discard(None)
+        primary_key = None
+        primary_kind, primary_obj = self._get_selected_plan_target()
+        if primary_kind and primary_obj:
+            primary_key = self._get_plan_target_state_key(primary_kind, primary_obj)
+
+        if selected_only:
+            source_targets = selected_targets
+        else:
+            source_targets = []
+            seen = set()
+            active_storey_name = getattr(self.active_storey, "Name", None)
+            for obj in getattr(self.doc, "Objects", []) or []:
+                target_kind, target_obj = self._get_plan_target_for_object(obj)
+                if not target_kind or not target_obj:
+                    continue
+                state_key = self._get_plan_target_state_key(target_kind, target_obj)
+                if state_key is None or state_key in seen:
+                    continue
+                semantic_obj = self._get_plan_semantic_object(target_obj)
+                if active_storey_name is not None:
+                    storeys = self._get_object_storeys(semantic_obj or target_obj)
+                    if storeys and not any(parent.Name == active_storey_name for parent in storeys):
+                        continue
+                seen.add(state_key)
+                source_targets.append((target_kind, target_obj))
+
+        records = []
+        for target_kind, target_obj in source_targets:
+            target_record = self._make_plan_target_record(
+                target_kind,
+                target_obj,
+                selected_keys=selected_keys,
+                primary_key=primary_key,
+            )
+            if target_record is not None:
+                records.append(target_record)
+        return tuple(records)
+
+    def resolve_plan_target_object(self, target):
+        if target is None:
+            return None
+        document_name = str(getattr(target, "document_name", "") or "").strip()
+        object_name = str(getattr(target, "object_name", "") or "").strip()
+        if not object_name:
+            return None
+        doc = None
+        if document_name and getattr(self.doc, "Name", None) == document_name:
+            doc = self.doc
+        elif document_name:
+            try:
+                doc = FreeCAD.getDocument(document_name)
+            except Exception:
+                doc = None
+        else:
+            doc = self.doc
+        if doc is None:
+            return None
+        try:
+            return doc.getObject(object_name)
+        except Exception:
+            return None
+
+    def resolve_plan_semantic_object(self, target):
+        if target is None:
+            return None
+        semantic_document_name = str(getattr(target, "semantic_document_name", "") or "").strip()
+        semantic_object_name = str(getattr(target, "semantic_object_name", "") or "").strip()
+        if semantic_document_name and semantic_object_name:
+            doc = None
+            if getattr(self.doc, "Name", None) == semantic_document_name:
+                doc = self.doc
+            else:
+                try:
+                    doc = FreeCAD.getDocument(semantic_document_name)
+                except Exception:
+                    doc = None
+            if doc is not None:
+                try:
+                    resolved = doc.getObject(semantic_object_name)
+                except Exception:
+                    resolved = None
+                if resolved is not None:
+                    return resolved
+        return self._get_plan_semantic_object(self.resolve_plan_target_object(target))
+
+    def _build_plan_semantic_record(self, target_kind, target_obj):
+        if not target_kind or target_obj is None:
+            return None
+        semantic_obj = self._get_plan_semantic_object(target_obj)
+        if semantic_obj is None:
+            return None
+        doc = getattr(target_obj, "Document", None)
+        semantic_doc = getattr(semantic_obj, "Document", None)
+        space_label = self._get_plan_text_property(
+            semantic_obj,
+            ("SpaceLabel", "RoomLabel", "Label"),
+        )
+        source_space_name = self._get_plan_text_property(
+            semantic_obj,
+            ("SourceSpaceName",),
+        )
+        if target_kind == "space" and not source_space_name:
+            source_space_name = str(getattr(semantic_obj, "Name", "") or "")
+        usage_category = self._get_plan_text_property(
+            semantic_obj,
+            ("UsageCategory", "SpaceType"),
+        )
+        requirement_tags = self._normalize_plan_requirement_tags(
+            getattr(semantic_obj, "RequirementTags", None)
+        )
+        return PlanSemanticRecord(
+            target_kind=str(target_kind or ""),
+            document_name=str(getattr(doc, "Name", "") or ""),
+            object_name=str(getattr(target_obj, "Name", "") or ""),
+            label=str(getattr(target_obj, "Label", getattr(target_obj, "Name", "")) or ""),
+            semantic_document_name=str(getattr(semantic_doc, "Name", "") or ""),
+            semantic_object_name=str(getattr(semantic_obj, "Name", "") or ""),
+            semantic_label=str(
+                getattr(semantic_obj, "Label", getattr(semantic_obj, "Name", "")) or ""
+            ),
+            space_key=self._get_plan_text_property(semantic_obj, ("SpaceKey",)),
+            space_label=str(space_label or ""),
+            source_space_name=str(source_space_name or ""),
+            usage_category=str(usage_category or ""),
+            object_role=self._get_plan_text_property(semantic_obj, ("ObjectRole",)),
+            semantic_preset=self._get_plan_text_property(semantic_obj, ("SemanticPreset",)),
+            host_ref=self._get_plan_host_ref(semantic_obj),
+            mount_height_mm=self._get_plan_float_property(
+                semantic_obj,
+                ("MountHeight", "MEPMountHeight", "PlumbingMountHeight"),
+            ),
+            requirement_tags=requirement_tags,
+        )
+
+    def get_plan_semantic_records(self, targets=None):
+        if targets is None:
+            targets = self.get_plan_targets(selected_only=True)
+        records = []
+        for target in targets or ():
+            target_kind = None
+            target_obj = None
+            if isinstance(target, PlanTarget):
+                target_kind = target.kind
+                target_obj = self.resolve_plan_target_object(target)
+            else:
+                try:
+                    target_kind, target_obj = target
+                except Exception:
+                    continue
+            record = self._build_plan_semantic_record(target_kind, target_obj)
+            if record is not None:
+                records.append(record)
+        return tuple(records)
+
+    def _get_plan_provider_id(self, provider):
+        if provider is None:
+            return ""
+        getter = getattr(provider, "get_provider_id", None)
+        if callable(getter):
+            try:
+                provider_id = str(getter() or "").strip()
+            except Exception:
+                provider_id = ""
+            if provider_id:
+                return provider_id
+        return str(getattr(provider, "provider_id", "") or "").strip()
+
+    def _coerce_plan_provider_results(self, result):
+        if result is None:
+            return ()
+        if isinstance(result, (str, bytes)):
+            return ()
+        try:
+            return tuple(result)
+        except TypeError:
+            return (result,)
+
+    def _normalize_plan_provider_action(self, provider_id, action):
+        if not isinstance(action, PlanActionSpec):
+            return None
+        if action.provider_id == provider_id:
+            return action
+        return replace(action, provider_id=str(provider_id or ""))
+
+    def _normalize_plan_provider_issue(self, provider_id, issue):
+        if not isinstance(issue, PlanIssueSpec):
+            return None
+        actions = tuple(
+            normalized
+            for normalized in (
+                self._normalize_plan_provider_action(provider_id, action)
+                for action in (issue.actions or ())
+            )
+            if normalized is not None
+        )
+        replacements = {}
+        if issue.provider_id != provider_id:
+            replacements["provider_id"] = str(provider_id or "")
+        if actions != tuple(issue.actions or ()):
+            replacements["actions"] = actions
+        if not replacements:
+            return issue
+        return replace(issue, **replacements)
+
+    def _normalize_plan_provider_suggestion(self, provider_id, suggestion):
+        if not isinstance(suggestion, PlanSuggestionSpec):
+            return None
+        actions = tuple(
+            normalized
+            for normalized in (
+                self._normalize_plan_provider_action(provider_id, action)
+                for action in (suggestion.actions or ())
+            )
+            if normalized is not None
+        )
+        replacements = {}
+        if suggestion.provider_id != provider_id:
+            replacements["provider_id"] = str(provider_id or "")
+        if actions != tuple(suggestion.actions or ()):
+            replacements["actions"] = actions
+        if not replacements:
+            return suggestion
+        return replace(suggestion, **replacements)
+
+    def _normalize_plan_provider_section(self, provider_id, section):
+        if not isinstance(section, PlanInspectorSection):
+            return None
+        actions = tuple(
+            normalized
+            for normalized in (
+                self._normalize_plan_provider_action(provider_id, action)
+                for action in (section.actions or ())
+            )
+            if normalized is not None
+        )
+        replacements = {}
+        if section.provider_id != provider_id:
+            replacements["provider_id"] = str(provider_id or "")
+        if actions != tuple(section.actions or ()):
+            replacements["actions"] = actions
+        if not replacements:
+            return section
+        return replace(section, **replacements)
+
+    def _normalize_plan_provider_overlay(self, provider_id, overlay):
+        if not isinstance(overlay, PlanOverlaySpec):
+            return None
+        if overlay.provider_id == provider_id:
+            return overlay
+        return replace(overlay, provider_id=str(provider_id or ""))
+
+    def _collect_plan_provider_contributions(self, method_name, normalizer):
+        context = self.get_plan_edit_context()
+        results = []
+        for provider in self.get_plan_provider_registry().iter_providers():
+            provider_id = self._get_plan_provider_id(provider)
+            if not provider_id:
+                continue
+            method = getattr(provider, method_name, None)
+            if not callable(method):
+                continue
+            try:
+                provided = method(context)
+            except Exception as exc:
+                FreeCAD.Console.PrintError(
+                    translate(
+                        "BIM_PlanEdit",
+                        "Plan Edit provider '{provider}' failed in {method}: {error}\n",
+                    ).format(provider=provider_id, method=method_name, error=exc)
+                )
+                continue
+            for contribution in self._coerce_plan_provider_results(provided):
+                normalized = normalizer(provider_id, contribution)
+                if normalized is not None:
+                    results.append(normalized)
+        return tuple(results)
+
+    def get_plan_provider_issues(self):
+        return self._collect_plan_provider_contributions(
+            "get_issues",
+            self._normalize_plan_provider_issue,
+        )
+
+    def get_plan_provider_suggestions(self):
+        return self._collect_plan_provider_contributions(
+            "get_suggestions",
+            self._normalize_plan_provider_suggestion,
+        )
+
+    def get_plan_provider_inspector_sections(self):
+        return self._collect_plan_provider_contributions(
+            "get_inspector_sections",
+            self._normalize_plan_provider_section,
+        )
+
+    def get_plan_provider_overlays(self):
+        return self._collect_plan_provider_contributions(
+            "get_overlays",
+            self._normalize_plan_provider_overlay,
+        )
+
+    def execute_plan_provider_action(self, provider_id, action_key, transaction_label=""):
+        provider = self.get_plan_provider_registry().get_provider(provider_id)
+        if provider is None:
+            return False
+        execute_action = getattr(provider, "execute_action", None)
+        if not callable(execute_action):
+            return False
+
+        context = self.get_plan_edit_context()
+        transaction_label = str(transaction_label or "").strip()
+        try:
+            if transaction_label:
+                with PlanEditTransaction(self.doc, transaction_label):
+                    handled = execute_action(action_key, context=context, session=self)
+            else:
+                handled = execute_action(action_key, context=context, session=self)
+        except Exception as exc:
+            FreeCAD.Console.PrintError(
+                translate(
+                    "BIM_PlanEdit",
+                    "Plan Edit provider '{provider}' action '{action}' failed: {error}\n",
+                ).format(provider=provider_id, action=action_key, error=exc)
+            )
+            return False
+
+        if handled is False:
+            return False
+
+        try:
+            if self.doc is not None:
+                self.doc.recompute()
+        except Exception:
+            pass
+        self._refresh_primary_selected_plan_target()
+        self._invalidate_document_dependent_plan_visuals()
+        self._refresh_task_panel_status()
+        self._focus_plan_view()
+        return True
 
     def _get_space_preflight_report(self, targets=None):
         if self.current_tool != "Select":
@@ -10942,6 +11414,8 @@ class PlanEditControlsWidget:
         self._space_editor_combo_state = None
         self._space_editor_boundary_state = None
         self._status_text_state = None
+        self._integration_panel_state = None
+        self._integration_action_buttons = []
         self._modal_interaction_state = None
         self._region_parent_space_items = []
         self.form = self._build_form(QtGui)
@@ -11000,6 +11474,8 @@ class PlanEditControlsWidget:
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
 
+        self.integration_panel = self._build_integration_panel(QtGui)
+        layout.addWidget(self.integration_panel)
         self.space_editor = self._build_space_editor(QtGui)
         layout.addWidget(self.space_editor)
         self.region_editor = self._build_region_editor(QtGui)
@@ -11088,6 +11564,205 @@ class PlanEditControlsWidget:
         row.addWidget(self.join_type_combo, 1)
         row.addWidget(self.unjoin_button)
         return row
+
+    def _build_integration_panel(self, QtGui):
+        panel = QtGui.QGroupBox(translate("BIM_PlanEdit", "Integrations"))
+        panel.setVisible(False)
+        layout = QtGui.QVBoxLayout(panel)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        self.integration_summary = QtGui.QLabel(panel)
+        self.integration_summary.setWordWrap(True)
+        layout.addWidget(self.integration_summary)
+
+        self.integration_content = QtGui.QWidget(panel)
+        self.integration_content_layout = QtGui.QVBoxLayout(self.integration_content)
+        self.integration_content_layout.setContentsMargins(0, 0, 0, 0)
+        self.integration_content_layout.setSpacing(6)
+        layout.addWidget(self.integration_content)
+        return panel
+
+    def _clear_layout(self, layout):
+        if layout is None:
+            return
+        while layout.count():
+            item = layout.takeAt(0)
+            child_layout = item.layout()
+            if child_layout is not None:
+                self._clear_layout(child_layout)
+                child_layout.deleteLater()
+                continue
+            widget = item.widget()
+            if widget is not None:
+                try:
+                    widget.hide()
+                except Exception:
+                    pass
+                try:
+                    widget.setParent(None)
+                except Exception:
+                    pass
+                try:
+                    widget.deleteLater()
+                except Exception:
+                    pass
+
+    def _make_integration_block(self, QtGui, title, body="", actions=()):
+        block = QtGui.QFrame(self.integration_panel)
+        block.setFrameShape(QtGui.QFrame.StyledPanel)
+        layout = QtGui.QVBoxLayout(block)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(4)
+
+        title_label = QtGui.QLabel(str(title or ""), block)
+        title_label.setWordWrap(True)
+        font = title_label.font()
+        font.setBold(True)
+        title_label.setFont(font)
+        layout.addWidget(title_label)
+
+        body_text = str(body or "").strip()
+        if body_text:
+            body_label = QtGui.QLabel(body_text, block)
+            body_label.setWordWrap(True)
+            layout.addWidget(body_label)
+
+        if actions:
+            action_row = QtGui.QHBoxLayout()
+            action_row.setSpacing(6)
+            for action in actions:
+                button = QtGui.QPushButton(str(action.label or ""), block)
+                tooltip = str(action.tooltip or "").strip()
+                if tooltip:
+                    try:
+                        button.setToolTip(tooltip)
+                    except Exception:
+                        pass
+                try:
+                    button.setProperty("planActionEnabled", bool(action.enabled))
+                except Exception:
+                    pass
+                button.setEnabled(bool(action.enabled))
+                button.clicked.connect(
+                    lambda _checked=False, current_action=action: self.on_provider_action_clicked(
+                        current_action
+                    )
+                )
+                self._integration_action_buttons.append(button)
+                action_row.addWidget(button)
+            action_row.addStretch(1)
+            layout.addLayout(action_row)
+        return block
+
+    def _format_provider_issue_title(self, issue):
+        severity = str(getattr(issue, "severity", "") or "").strip().lower()
+        severity_label = {
+            "error": translate("BIM_PlanEdit", "Error"),
+            "warning": translate("BIM_PlanEdit", "Warning"),
+        }.get(severity, translate("BIM_PlanEdit", "Info"))
+        provider_label = self.session.get_plan_provider_display_name(issue.provider_id)
+        return translate("BIM_PlanEdit", "{provider} [{severity}]: {title}").format(
+            provider=provider_label,
+            severity=severity_label,
+            title=str(getattr(issue, "title", "") or "").strip(),
+        )
+
+    def _format_provider_section_title(self, section):
+        provider_label = self.session.get_plan_provider_display_name(section.provider_id)
+        title = str(getattr(section, "title", "") or "").strip()
+        if not title:
+            return provider_label
+        return translate("BIM_PlanEdit", "{provider}: {title}").format(
+            provider=provider_label,
+            title=title,
+        )
+
+    def _set_integration_panel_visible(self, visible):
+        if self.integration_panel is None:
+            return
+        try:
+            self.integration_panel.setVisible(bool(visible))
+        except Exception:
+            pass
+
+    def _hide_integration_panel(self):
+        self._integration_panel_state = None
+        self._integration_action_buttons = []
+        if self.integration_summary is not None:
+            try:
+                self.integration_summary.clear()
+            except Exception:
+                pass
+        self._clear_layout(getattr(self, "integration_content_layout", None))
+        self._set_integration_panel_visible(False)
+
+    def _set_integration_summary_text(self, issues, sections):
+        if self.integration_summary is None:
+            return
+        parts = []
+        issue_count = len(issues or ())
+        section_count = len(sections or ())
+        if issue_count:
+            parts.append(translate("BIM_PlanEdit", "{count} issue(s)").format(count=issue_count))
+        if section_count:
+            parts.append(
+                translate("BIM_PlanEdit", "{count} section(s)").format(count=section_count)
+            )
+        summary = (
+            translate(
+                "BIM_PlanEdit",
+                "Registered plan integrations contributed {details}.",
+            ).format(details=", ".join(parts))
+            if parts
+            else ""
+        )
+        self.integration_summary.setText(summary)
+
+    def _refresh_integration_panel(self):
+        with self.session._plan_perf_trace_span("refresh_integration_panel"):
+            if (
+                self.integration_panel is None
+                or self.integration_summary is None
+                or self.integration_content_layout is None
+            ):
+                return
+            issues = tuple(self.session.get_plan_provider_issues())
+            sections = tuple(self.session.get_plan_provider_inspector_sections())
+            state = (issues, sections)
+            if not issues and not sections:
+                self._hide_integration_panel()
+                return
+            if state != self._integration_panel_state:
+                self._integration_panel_state = state
+                self._integration_action_buttons = []
+                self._set_integration_summary_text(issues, sections)
+                self._clear_layout(self.integration_content_layout)
+                from PySide import QtGui
+
+                for issue in issues:
+                    issue_text = str(getattr(issue, "title", "") or "").strip()
+                    message_text = str(getattr(issue, "message", "") or "").strip()
+                    body = message_text or issue_text
+                    if body == issue_text:
+                        body = str(message_text or "").strip()
+                    block = self._make_integration_block(
+                        QtGui,
+                        self._format_provider_issue_title(issue),
+                        body=body,
+                        actions=issue.actions,
+                    )
+                    self.integration_content_layout.addWidget(block)
+                for section in sections:
+                    block = self._make_integration_block(
+                        QtGui,
+                        self._format_provider_section_title(section),
+                        body=getattr(section, "body", ""),
+                        actions=section.actions,
+                    )
+                    self.integration_content_layout.addWidget(block)
+                self.integration_content_layout.addStretch(1)
+            self._set_integration_panel_visible(True)
 
     def _get_space_type_display_options(self, options):
         normalized = []
@@ -11476,6 +12151,12 @@ class PlanEditControlsWidget:
         self.join_type_combo = None
         self.unjoin_button = None
         self.reapply_button = None
+        self.integration_panel = None
+        self.integration_summary = None
+        self.integration_content = None
+        self.integration_content_layout = None
+        self._integration_panel_state = None
+        self._integration_action_buttons = []
         self.space_editor = None
         self.space_label_edit = None
         self.space_type_combo = None
@@ -11557,6 +12238,15 @@ class PlanEditControlsWidget:
             self.region_editor.setVisible(False)
         except Exception:
             pass
+
+    def on_provider_action_clicked(self, action):
+        if action is None:
+            return
+        self.session.execute_plan_provider_action(
+            getattr(action, "provider_id", ""),
+            getattr(action, "key", ""),
+            transaction_label=getattr(action, "transaction_label", ""),
+        )
 
     def _set_status_text(self, text):
         text = str(text or "")
@@ -11720,6 +12410,7 @@ class PlanEditControlsWidget:
                 return
             self._sync_join_type_combo_from_session()
             self._set_status_text(self._build_status_text())
+            self._refresh_integration_panel()
             self._refresh_space_editor()
             self._refresh_region_editor()
             self._apply_modal_interaction_state(self.session._is_modal_plan_interaction_active())
@@ -11733,6 +12424,7 @@ class PlanEditControlsWidget:
                 self.refresh_from_session()
                 return
             self._set_status_text(self._build_status_text())
+            self._refresh_integration_panel()
             self._hide_space_editor()
             self._hide_region_editor()
             self._apply_modal_interaction_state(self.session._is_modal_plan_interaction_active())
@@ -11897,6 +12589,14 @@ class PlanEditControlsWidget:
                 self.unjoin_button.setEnabled(
                     not modal_active and self.session.current_tool == "Join" and join_candidate
                 )
+            except Exception:
+                pass
+        for button in self._integration_action_buttons:
+            if button is None:
+                continue
+            try:
+                base_enabled = button.property("planActionEnabled")
+                button.setEnabled(bool(base_enabled) and not modal_active)
             except Exception:
                 pass
 
