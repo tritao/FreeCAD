@@ -148,6 +148,12 @@ enum class IsSolid
     solid
 };
 
+enum class BooleanRunMode
+{
+    defaultMode,
+    singleThreaded
+};
+
 enum class IsRuled
 {
     notRuled,
@@ -1523,6 +1529,12 @@ public:
         const char* op = nullptr,
         double tol = -1.0
     );
+    TopoShape& makeElementFuse(
+        const std::vector<TopoShape>& sources,
+        BooleanRunMode runMode,
+        const char* op = nullptr,
+        double tol = -1.0
+    );
     /** Make a fusion of this shape and an input shape
      *
      * @param source: the source shape
@@ -1532,9 +1544,22 @@ public:
      *
      * @return Return the new shape. The TopoShape itself is not modified.
      */
-    TopoShape makeElementFuse(const TopoShape& source, const char* op = nullptr, double tol = -1.0) const
+    TopoShape makeElementFuse(
+        const TopoShape& source,
+        const char* op = nullptr,
+        double tol = -1.0
+    ) const
     {
         return TopoShape(0, Hasher).makeElementFuse({*this, source}, op, tol);
+    }
+    TopoShape makeElementFuse(
+        const TopoShape& source,
+        BooleanRunMode runMode,
+        const char* op = nullptr,
+        double tol = -1.0
+    ) const
+    {
+        return TopoShape(0, Hasher).makeElementFuse({*this, source}, runMode, op, tol);
     }
 
     /** Make a boolean cut of this shape with an input shape
@@ -1554,6 +1579,12 @@ public:
         const char* op = nullptr,
         double tol = -1.0
     );
+    TopoShape& makeElementCut(
+        const std::vector<TopoShape>& sources,
+        BooleanRunMode runMode,
+        const char* op = nullptr,
+        double tol = -1.0
+    );
     /** Make a boolean cut of this shape with an input shape
      *
      * @param source: the source shape
@@ -1563,9 +1594,22 @@ public:
      *
      * @return Return the new shape. The TopoShape itself is not modified.
      */
-    TopoShape makeElementCut(const TopoShape& source, const char* op = nullptr, double tol = -1.0) const
+    TopoShape makeElementCut(
+        const TopoShape& source,
+        const char* op = nullptr,
+        double tol = -1.0
+    ) const
     {
         return TopoShape(0, Hasher).makeElementCut({*this, source}, op, tol);
+    }
+    TopoShape makeElementCut(
+        const TopoShape& source,
+        BooleanRunMode runMode,
+        const char* op = nullptr,
+        double tol = -1.0
+    ) const
+    {
+        return TopoShape(0, Hasher).makeElementCut({*this, source}, runMode, op, tol);
     }
 
     /** Make a boolean xor of this shape with an input shape
@@ -1585,6 +1629,12 @@ public:
         const char* op = nullptr,
         double tol = -1.0
     );
+    TopoShape& makeElementXor(
+        const std::vector<TopoShape>& sources,
+        BooleanRunMode runMode,
+        const char* op = nullptr,
+        double tol = -1.0
+    );
     /** Make a boolean xor of this shape with an input shape
      *
      * @param source: the source shape
@@ -1597,6 +1647,15 @@ public:
     TopoShape makeElementXor(const TopoShape& source, const char* op = nullptr, double tol = -1.0) const
     {
         return TopoShape(0, Hasher).makeElementXor({*this, source}, op, tol);
+    }
+    TopoShape makeElementXor(
+        const TopoShape& source,
+        BooleanRunMode runMode,
+        const char* op = nullptr,
+        double tol = -1.0
+    ) const
+    {
+        return TopoShape(0, Hasher).makeElementXor({*this, source}, runMode, op, tol);
     }
 
     /** Try to simplify geometry of any linear/planar subshape to line/plane
@@ -2111,6 +2170,13 @@ public:
         const char* op = nullptr,
         double tol = -1.0
     );
+    TopoShape& makeElementBoolean(
+        const char* maker,
+        const std::vector<TopoShape>& sources,
+        BooleanRunMode runMode,
+        const char* op = nullptr,
+        double tol = -1.0
+    );
     /** Generalized shape making with mapped element name from shape history
      *
      * @param maker: op code from TopoShapeOpCodes
@@ -2131,6 +2197,13 @@ public:
         const char* op = nullptr,
         double tol = -1.0
     );
+    TopoShape& makeElementBoolean(
+        const char* maker,
+        const TopoShape& source,
+        BooleanRunMode runMode,
+        const char* op = nullptr,
+        double tol = -1.0
+    );
 
     /** Generalized shape making with mapped element name from shape history
      *
@@ -2143,9 +2216,22 @@ public:
      *         shape history using this shape as the source. The shape itself
      *         is not modified.
      */
-    TopoShape makeElementBoolean(const char* maker, const char* op = nullptr, double tol = -1.0) const
+    TopoShape makeElementBoolean(
+        const char* maker,
+        const char* op = nullptr,
+        double tol = -1.0
+    ) const
     {
         return TopoShape(0, Hasher).makeElementBoolean(maker, *this, op, tol);
+    }
+    TopoShape makeElementBoolean(
+        const char* maker,
+        BooleanRunMode runMode,
+        const char* op = nullptr,
+        double tol = -1.0
+    ) const
+    {
+        return TopoShape(0, Hasher).makeElementBoolean(maker, *this, runMode, op, tol);
     }
 
     /** Make a mirrored shape
