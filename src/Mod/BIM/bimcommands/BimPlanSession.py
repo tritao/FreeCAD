@@ -338,6 +338,7 @@ class PlanEditSession:
         self._pending_selected_plan_target = None
         self._secondary_selected_plan_targets_state = []
         self._grip_trackers = []
+        self._wall_grip_state = None
         self._wall_hover_trackers = []
         self._junction_node_trackers = []
         self._hovered_wall_opening_context_trackers = []
@@ -6803,8 +6804,11 @@ class PlanEditSession:
         except Exception:
             pass
 
-    def _refresh_task_panel_status(self):
-        with self._plan_perf_trace_span("refresh_task_panel_status"):
+    def _refresh_task_panel_status(self, selection_only=False):
+        with self._plan_perf_trace_span(
+            "refresh_task_panel_status",
+            selection_only=bool(selection_only),
+        ):
             if self._tearing_down:
                 return
             self._sanitize_plan_target_references()
@@ -6813,7 +6817,13 @@ class PlanEditSession:
             panel = self.task_panel
             if panel:
                 try:
-                    panel.refresh_from_session()
+                    refresh = None
+                    if selection_only:
+                        refresh = getattr(panel, "refresh_selection_from_session", None)
+                    if not callable(refresh):
+                        refresh = getattr(panel, "refresh_from_session", None)
+                    if callable(refresh):
+                        refresh()
                 except (AttributeError, RuntimeError):
                     self.on_panel_closed(panel)
             stale_panels = []
@@ -6821,7 +6831,13 @@ class PlanEditSession:
                 if extra_panel is panel:
                     continue
                 try:
-                    extra_panel.refresh_from_session()
+                    refresh = None
+                    if selection_only:
+                        refresh = getattr(extra_panel, "refresh_selection_from_session", None)
+                    if not callable(refresh):
+                        refresh = getattr(extra_panel, "refresh_from_session", None)
+                    if callable(refresh):
+                        refresh()
                 except (AttributeError, RuntimeError):
                     stale_panels.append(extra_panel)
             for extra_panel in stale_panels:
@@ -7294,50 +7310,108 @@ class PlanEditSession:
         except Exception:
             pass
 
-    def _sync_wall_grips(self):
-        self._clear_wall_grips()
-        if not self.is_selected_wall_endpoint_editable():
+    def _retarget_edit_tracker(self, tracker, obj, index):
+        selnode = getattr(tracker, "selnode", None)
+        if selnode is None:
             return
-
+        doc_name = getattr(getattr(obj, "Document", None), "Name", None)
+        obj_name = getattr(obj, "Name", None)
         try:
-            import draftguitools.gui_trackers as DraftTrackers
-            from draftutils import params
+            if hasattr(selnode, "useNewSelection"):
+                selnode.useNewSelection = False
+            if doc_name and hasattr(selnode, "documentName"):
+                selnode.documentName.setValue(doc_name)
+            if obj_name and hasattr(selnode, "objectName"):
+                selnode.objectName.setValue(obj_name)
+            if hasattr(selnode, "subElementName"):
+                selnode.subElementName.setValue(f"EditNode{index}")
         except Exception:
-            return
+            pass
 
-        wall = self._get_selected_plan_target_object("wall")
-        proxy = getattr(wall, "Proxy", None)
-        if not proxy or not hasattr(proxy, "calc_endpoints"):
-            return
+    def _sync_wall_grips(self):
+        with self._plan_perf_trace_span("sync_wall_grips"):
+            if not self.is_selected_wall_endpoint_editable():
+                self._clear_wall_grips()
+                return
 
-        endpoints = proxy.calc_endpoints(wall)
-        if len(endpoints) != 2:
-            return
+            try:
+                import draftguitools.gui_trackers as DraftTrackers
+                from draftutils import params
+            except Exception:
+                self._clear_wall_grips()
+                return
 
-        if hasattr(proxy, "calc_edit_grip_positions"):
-            grip_positions = proxy.calc_edit_grip_positions(wall)
-        else:
-            grip_positions = endpoints + [(endpoints[0] + endpoints[1]) * 0.5]
-        if len(grip_positions) != 3:
-            return
-        grip_start, grip_end, midpoint = grip_positions
-        marker_size = self._scaled_marker_size(params.get_param_view("MarkerSize"))
-        midpoint_marker = FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size)
+            wall = self._get_selected_plan_target_object("wall")
+            proxy = getattr(wall, "Proxy", None)
+            if not proxy or not hasattr(proxy, "calc_endpoints"):
+                self._clear_wall_grips()
+                return
 
-        self._grip_trackers = [
-            DraftTrackers.editTracker(pos=grip_start, name=wall.Name, idx=0),
-            DraftTrackers.editTracker(pos=grip_end, name=wall.Name, idx=1),
-            DraftTrackers.editTracker(
-                pos=midpoint,
-                name=wall.Name,
-                idx=2,
-                marker=midpoint_marker,
-            ),
-        ]
+            endpoints = proxy.calc_endpoints(wall)
+            if len(endpoints) != 2:
+                self._clear_wall_grips()
+                return
+
+            if hasattr(proxy, "calc_edit_grip_positions"):
+                grip_positions = proxy.calc_edit_grip_positions(wall)
+            else:
+                grip_positions = endpoints + [(endpoints[0] + endpoints[1]) * 0.5]
+            if len(grip_positions) != 3:
+                self._clear_wall_grips()
+                return
+
+            marker_size = self._scaled_marker_size(params.get_param_view("MarkerSize"))
+            midpoint_marker = FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size)
+            wall_state = (
+                marker_size,
+                midpoint_marker,
+                getattr(getattr(wall, "Document", None), "Name", None),
+                getattr(wall, "Name", None),
+                tuple(
+                    (float(position.x), float(position.y), float(position.z))
+                    for position in grip_positions
+                ),
+            )
+            previous_state = self._wall_grip_state
+            reuse_allowed = (
+                len(self._grip_trackers) == 3
+                and previous_state is not None
+                and previous_state[:2] == wall_state[:2]
+            )
+            if reuse_allowed:
+                try:
+                    for index, (tracker, position) in enumerate(
+                        zip(self._grip_trackers, grip_positions)
+                    ):
+                        self._retarget_edit_tracker(tracker, wall, index)
+                        tracker.set(position)
+                        tracker.on()
+                    if previous_state == wall_state:
+                        self._plan_perf_count("wall_grip_cache_hits")
+                    else:
+                        self._plan_perf_count("wall_grip_tracker_reuses")
+                    self._wall_grip_state = wall_state
+                    return
+                except Exception:
+                    self._clear_wall_grips()
+
+            grip_start, grip_end, midpoint = grip_positions
+            self._grip_trackers = [
+                DraftTrackers.editTracker(pos=grip_start, name=wall.Name, idx=0),
+                DraftTrackers.editTracker(pos=grip_end, name=wall.Name, idx=1),
+                DraftTrackers.editTracker(
+                    pos=midpoint,
+                    name=wall.Name,
+                    idx=2,
+                    marker=midpoint_marker,
+                ),
+            ]
+            self._wall_grip_state = wall_state
 
     def _clear_wall_grips(self):
         self._finalize_trackers(self._grip_trackers)
         self._grip_trackers = []
+        self._wall_grip_state = None
 
     def _get_footprint_overlay_polylines(self, faces):
         return ArchPlanGeometry.get_face_wire_polylines(faces)
@@ -7737,7 +7811,10 @@ class PlanEditSession:
         self._sync_hovered_wall_overlay()
         self._sync_hovered_wall_opening_context_overlay()
         if self.current_tool == "Join":
-            self._refresh_task_panel_status()
+            self._refresh_task_panel_status(
+                selection_only=self.current_tool == "Select"
+                and self._is_selected_plan_target("wall")
+            )
 
     def _set_hovered_opening(self, opening):
         if self._is_selected_plan_target("opening", opening):
@@ -7816,7 +7893,9 @@ class PlanEditSession:
         if self._selected_plan_target_changed(previous_kind, previous_obj, "space"):
             self._sync_selected_space_overlay()
         self._sync_secondary_selected_overlays()
-        self._refresh_task_panel_status()
+        self._refresh_task_panel_status(
+            selection_only=self.current_tool == "Select" and self._is_selected_plan_target("wall")
+        )
         if queue_restore:
             self._queue_restore_selected_plan_target(kind, obj)
         return True
@@ -10364,6 +10443,8 @@ class PlanEditControlsWidget:
         self._space_editor_label_state = None
         self._space_editor_combo_state = None
         self._space_editor_boundary_state = None
+        self._status_text_state = None
+        self._modal_interaction_state = None
         self._region_parent_space_items = []
         self.form = self._build_form(QtGui)
         try:
@@ -10916,6 +10997,8 @@ class PlanEditControlsWidget:
         self._space_editor_label_state = None
         self._space_editor_combo_state = None
         self._space_editor_boundary_state = None
+        self._status_text_state = None
+        self._modal_interaction_state = None
         self.exit_button = None
         self._modal_focus_widgets = []
         self._saved_focus_policies = {}
@@ -10945,178 +11028,216 @@ class PlanEditControlsWidget:
                 pass
         self.refresh_from_session()
 
+    def _sync_join_type_combo_from_session(self):
+        if self.join_type_combo is None:
+            return
+        self.join_type_combo.blockSignals(True)
+        try:
+            join_type_index = self.join_type_combo.findData(self.session.get_plan_join_type())
+            if join_type_index >= 0:
+                self.join_type_combo.setCurrentIndex(join_type_index)
+        finally:
+            try:
+                self.join_type_combo.blockSignals(False)
+            except Exception:
+                pass
+
+    def _hide_space_editor(self):
+        if self.space_editor is not None:
+            try:
+                self.space_editor.setVisible(False)
+            except Exception:
+                pass
+        self._space_editor_label_state = None
+        self._space_editor_combo_state = None
+        self._space_editor_boundary_state = None
+
+    def _hide_region_editor(self):
+        if self.region_editor is None:
+            return
+        try:
+            self.region_editor.setVisible(False)
+        except Exception:
+            pass
+
+    def _set_status_text(self, text):
+        text = str(text or "")
+        if self.status is None or text == self._status_text_state:
+            return
+        self.status.setText(text)
+        self._status_text_state = text
+
+    def _build_status_text(self):
+        storey_text = self.session.get_storey_label(self.session.active_storey)
+        tool = self.session.current_tool
+        selected_kind, selected_obj = self.session._get_selected_plan_target()
+        selected_state = self.session._format_plan_target_selection_state(
+            selected_kind, selected_obj
+        )
+        if tool == "Join" and selected_kind == "wall" and selected_obj is not None:
+            target_wall, joint, detail = self.session._get_plan_join_candidate_state()
+            selection_state = translate("BIM_PlanEdit", "Source wall: {label}").format(
+                label=self.session._get_plan_target_display_label(selected_obj)
+            )
+            selection_help = translate(
+                "BIM_PlanEdit",
+                "Join type: {joint_type}\n{pair_state}\n{action}",
+            ).format(
+                joint_type=self.session.get_plan_join_type_label(),
+                pair_state=detail or translate("BIM_PlanEdit", "Candidate wall: none"),
+                action=self.session._get_plan_join_mode_action_text(target_wall, joint),
+            )
+        elif tool == "Pick Space Region":
+            selection_state = translate("BIM_PlanEdit", "Space creation: pick region")
+            selection_help = translate(
+                "BIM_PlanEdit",
+                "Multiple enclosed regions were found. Hover a dashed outline, then click to create that space.",
+            )
+            targets = self.session._get_selected_plan_targets()
+            if targets:
+                selection_help = "{}\n{}".format(
+                    selection_help,
+                    translate("BIM_PlanEdit", "Boundary candidates: {summary}").format(
+                        summary=self.session._summarize_plan_targets(targets)
+                    ),
+                )
+            candidate_count = len(self.session._space_region_candidates)
+            if candidate_count:
+                selection_help = "{}\n{}".format(
+                    selection_help,
+                    translate("BIM_PlanEdit", "{count} enclosed regions are available.").format(
+                        count=candidate_count
+                    ),
+                )
+            hovered_candidate = self.session._hovered_space_region_candidate
+            if hovered_candidate:
+                selection_help = "{}\n{}".format(
+                    selection_help,
+                    translate("BIM_PlanEdit", "Hovered region area: {area}").format(
+                        area=self.session._format_space_region_candidate_area(hovered_candidate)
+                    ),
+                )
+        elif tool == "Region":
+            selection_state = translate("BIM_PlanEdit", "Region: draw polygon")
+            selection_help = translate(
+                "BIM_PlanEdit",
+                "Click polygon points to define a semantic plan region. Press Enter to finish, or click near the first point to close.",
+            )
+            if self.session._is_plan_space_object(self.session._plan_region_parent_space):
+                selection_help = "{}\n{}".format(
+                    selection_help,
+                    translate("BIM_PlanEdit", "Parent space: {label}").format(
+                        label=self.session._plan_region_parent_space.Label
+                    ),
+                )
+        elif tool == "Separator":
+            selection_state = translate("BIM_PlanEdit", "Separator: place divider")
+            selection_help = translate(
+                "BIM_PlanEdit",
+                "Click two points to place a room divider that can split Arch Spaces.",
+            )
+        elif selected_kind == "opening" and selected_obj is not None:
+            selection_state = selected_state
+            selection_help = translate(
+                "BIM_PlanEdit",
+                "Use in-view handles to move or flip the selected opening.",
+            )
+        elif selected_kind == "symbol" and selected_obj is not None:
+            selection_state = selected_state
+            if self.session.current_tool == "Rotate Symbol":
+                if self.session._symbol_rotation_snap_enabled():
+                    selection_help = translate(
+                        "BIM_PlanEdit",
+                        "Use in-view handles to rotate the selected symbol instance. Rotation snaps to {snap} by default; hold Shift for free angle.",
+                    ).format(snap=self.session._format_symbol_rotation_snap_label())
+                else:
+                    selection_help = translate(
+                        "BIM_PlanEdit",
+                        "Use in-view handles to rotate the selected symbol instance.",
+                    )
+            else:
+                selection_help = translate(
+                    "BIM_PlanEdit",
+                    "Use in-view handles to move or rotate the selected symbol instance.",
+                )
+        elif selected_kind == "region" and selected_obj is not None:
+            selection_state = selected_state
+            selection_help = translate(
+                "BIM_PlanEdit",
+                "Use the region controls below to edit label, scheme, type, and parent space.",
+            )
+        elif selected_kind == "space" and selected_obj is not None:
+            selection_state = selected_state
+            selection_help = translate(
+                "BIM_PlanEdit",
+                "Use the space controls below to edit label, type, boundaries, and text position.",
+            )
+        elif selected_kind == "wall" and selected_obj is not None:
+            selection_state = selected_state
+            if self.session.is_selected_wall_endpoint_editable():
+                selection_help = translate(
+                    "BIM_PlanEdit",
+                    "Use wall grips in the viewport to stretch or move the selected wall.",
+                )
+            else:
+                selection_help = translate(
+                    "BIM_PlanEdit",
+                    "This wall can be reviewed in plan, but grip editing is unavailable.",
+                )
+        else:
+            selection_state = translate("BIM_PlanEdit", "Selection: none")
+            selection_help = translate(
+                "BIM_PlanEdit",
+                "Select a wall, hosted opening, symbol instance, region, or space to edit it, or use walls and separators to define spaces.",
+            )
+        selection_summary = self.session._get_plan_selection_summary_text()
+        if selection_summary:
+            selection_help = "{}\n{}".format(selection_help, selection_summary)
+        if self.session.current_tool == "Select":
+            selection_help = "{}\n{}".format(
+                selection_help,
+                translate(
+                    "BIM_PlanEdit",
+                    "Ctrl-click adds or removes targets without replacing the current editor target.",
+                ),
+            )
+        if self.session._plan_relation_status_message:
+            selection_help = "{}\n{}".format(
+                selection_help,
+                self.session._plan_relation_status_message,
+            )
+        return translate(
+            "BIM_PlanEdit",
+            "Mode: {tool}\nStorey: {storey}\nDisplay: Footprint\n{selection_state}\n{selection_help}",
+        ).format(
+            tool=tool,
+            storey=storey_text,
+            selection_state=selection_state,
+            selection_help=selection_help,
+        )
+
     def refresh_from_session(self):
         with self.session._plan_perf_trace_span("refresh_task_panel_widget"):
             if self.form is None or self.status is None or self.exit_button is None:
                 return
-
-            if self.join_type_combo is not None:
-                self.join_type_combo.blockSignals(True)
-                try:
-                    join_type_index = self.join_type_combo.findData(
-                        self.session.get_plan_join_type()
-                    )
-                    if join_type_index >= 0:
-                        self.join_type_combo.setCurrentIndex(join_type_index)
-                finally:
-                    try:
-                        self.join_type_combo.blockSignals(False)
-                    except Exception:
-                        pass
-
-            storey_text = self.session.get_storey_label(self.session.active_storey)
-            tool = self.session.current_tool
-            modal_active = self.session._is_modal_plan_interaction_active()
-            selected_kind, selected_obj = self.session._get_selected_plan_target()
-            selected_state = self.session._format_plan_target_selection_state(
-                selected_kind, selected_obj
-            )
-            if tool == "Join" and selected_kind == "wall" and selected_obj is not None:
-                target_wall, joint, detail = self.session._get_plan_join_candidate_state()
-                selection_state = translate("BIM_PlanEdit", "Source wall: {label}").format(
-                    label=self.session._get_plan_target_display_label(selected_obj)
-                )
-                selection_help = translate(
-                    "BIM_PlanEdit",
-                    "Join type: {joint_type}\n{pair_state}\n{action}",
-                ).format(
-                    joint_type=self.session.get_plan_join_type_label(),
-                    pair_state=detail or translate("BIM_PlanEdit", "Candidate wall: none"),
-                    action=self.session._get_plan_join_mode_action_text(target_wall, joint),
-                )
-            elif tool == "Pick Space Region":
-                selection_state = translate("BIM_PlanEdit", "Space creation: pick region")
-                selection_help = translate(
-                    "BIM_PlanEdit",
-                    "Multiple enclosed regions were found. Hover a dashed outline, then click to create that space.",
-                )
-                targets = self.session._get_selected_plan_targets()
-                if targets:
-                    selection_help = "{}\n{}".format(
-                        selection_help,
-                        translate("BIM_PlanEdit", "Boundary candidates: {summary}").format(
-                            summary=self.session._summarize_plan_targets(targets)
-                        ),
-                    )
-                candidate_count = len(self.session._space_region_candidates)
-                if candidate_count:
-                    selection_help = "{}\n{}".format(
-                        selection_help,
-                        translate("BIM_PlanEdit", "{count} enclosed regions are available.").format(
-                            count=candidate_count
-                        ),
-                    )
-                hovered_candidate = self.session._hovered_space_region_candidate
-                if hovered_candidate:
-                    selection_help = "{}\n{}".format(
-                        selection_help,
-                        translate("BIM_PlanEdit", "Hovered region area: {area}").format(
-                            area=self.session._format_space_region_candidate_area(hovered_candidate)
-                        ),
-                    )
-            elif tool == "Region":
-                selection_state = translate("BIM_PlanEdit", "Region: draw polygon")
-                selection_help = translate(
-                    "BIM_PlanEdit",
-                    "Click polygon points to define a semantic plan region. Press Enter to finish, or click near the first point to close.",
-                )
-                if self.session._is_plan_space_object(self.session._plan_region_parent_space):
-                    selection_help = "{}\n{}".format(
-                        selection_help,
-                        translate("BIM_PlanEdit", "Parent space: {label}").format(
-                            label=self.session._plan_region_parent_space.Label
-                        ),
-                    )
-            elif tool == "Separator":
-                selection_state = translate("BIM_PlanEdit", "Separator: place divider")
-                selection_help = translate(
-                    "BIM_PlanEdit",
-                    "Click two points to place a room divider that can split Arch Spaces.",
-                )
-            elif selected_kind == "opening" and selected_obj is not None:
-                selection_state = selected_state
-                selection_help = translate(
-                    "BIM_PlanEdit",
-                    "Use in-view handles to move or flip the selected opening.",
-                )
-            elif selected_kind == "symbol" and selected_obj is not None:
-                selection_state = selected_state
-                if self.session.current_tool == "Rotate Symbol":
-                    if self.session._symbol_rotation_snap_enabled():
-                        selection_help = translate(
-                            "BIM_PlanEdit",
-                            "Use in-view handles to rotate the selected symbol instance. Rotation snaps to {snap} by default; hold Shift for free angle.",
-                        ).format(snap=self.session._format_symbol_rotation_snap_label())
-                    else:
-                        selection_help = translate(
-                            "BIM_PlanEdit",
-                            "Use in-view handles to rotate the selected symbol instance.",
-                        )
-                else:
-                    selection_help = translate(
-                        "BIM_PlanEdit",
-                        "Use in-view handles to move or rotate the selected symbol instance.",
-                    )
-            elif selected_kind == "region" and selected_obj is not None:
-                selection_state = selected_state
-                selection_help = translate(
-                    "BIM_PlanEdit",
-                    "Use the region controls below to edit label, scheme, type, and parent space.",
-                )
-            elif selected_kind == "space" and selected_obj is not None:
-                selection_state = selected_state
-                selection_help = translate(
-                    "BIM_PlanEdit",
-                    "Use the space controls below to edit label, type, boundaries, and text position.",
-                )
-            elif selected_kind == "wall" and selected_obj is not None:
-                selection_state = selected_state
-                if self.session.is_selected_wall_endpoint_editable():
-                    selection_help = translate(
-                        "BIM_PlanEdit",
-                        "Use wall grips in the viewport to stretch or move the selected wall.",
-                    )
-                else:
-                    selection_help = translate(
-                        "BIM_PlanEdit",
-                        "This wall can be reviewed in plan, but grip editing is unavailable.",
-                    )
-            else:
-                selection_state = translate("BIM_PlanEdit", "Selection: none")
-                selection_help = translate(
-                    "BIM_PlanEdit",
-                    "Select a wall, hosted opening, symbol instance, region, or space to edit it, or use walls and separators to define spaces.",
-                )
-            selection_summary = self.session._get_plan_selection_summary_text()
-            if selection_summary:
-                selection_help = "{}\n{}".format(selection_help, selection_summary)
-            if self.session.current_tool == "Select":
-                selection_help = "{}\n{}".format(
-                    selection_help,
-                    translate(
-                        "BIM_PlanEdit",
-                        "Ctrl-click adds or removes targets without replacing the current editor target.",
-                    ),
-                )
-            if self.session._plan_relation_status_message:
-                selection_help = "{}\n{}".format(
-                    selection_help,
-                    self.session._plan_relation_status_message,
-                )
-            self.status.setText(
-                translate(
-                    "BIM_PlanEdit",
-                    "Mode: {tool}\nStorey: {storey}\nDisplay: Footprint\n{selection_state}\n{selection_help}",
-                ).format(
-                    tool=tool,
-                    storey=storey_text,
-                    selection_state=selection_state,
-                    selection_help=selection_help,
-                )
-            )
+            self._sync_join_type_combo_from_session()
+            self._set_status_text(self._build_status_text())
             self._refresh_space_editor()
             self._refresh_region_editor()
-            self._apply_modal_interaction_state(modal_active)
+            self._apply_modal_interaction_state(self.session._is_modal_plan_interaction_active())
+
+    def refresh_selection_from_session(self):
+        with self.session._plan_perf_trace_span("refresh_task_panel_selection_widget"):
+            if self.form is None or self.status is None or self.exit_button is None:
+                return
+            selected_kind, _selected_obj = self.session._get_selected_plan_target()
+            if self.session.current_tool != "Select" or selected_kind != "wall":
+                self.refresh_from_session()
+                return
+            self._set_status_text(self._build_status_text())
+            self._hide_space_editor()
+            self._hide_region_editor()
+            self._apply_modal_interaction_state(self.session._is_modal_plan_interaction_active())
 
     def _refresh_space_editor(self):
         from PySide import QtGui
@@ -11127,12 +11248,13 @@ class PlanEditControlsWidget:
             selected_kind, selected_obj = self.session._get_selected_plan_target()
             space = selected_obj if selected_kind == "space" else None
             show_editor = bool(space and self.session.current_tool in ("Select", "Set Space Text"))
+            if not show_editor:
+                self._hide_space_editor()
+                return
             try:
-                self.space_editor.setVisible(show_editor)
+                self.space_editor.setVisible(True)
             except Exception:
                 pass
-            if not show_editor:
-                return
 
             self._refreshing_space_editor = True
             try:
@@ -11192,12 +11314,13 @@ class PlanEditControlsWidget:
             selected_kind, selected_obj = self.session._get_selected_plan_target()
             region = selected_obj if selected_kind == "region" else None
             show_editor = bool(region and self.session.current_tool == "Select")
+            if not show_editor:
+                self._hide_region_editor()
+                return
             try:
-                self.region_editor.setVisible(show_editor)
+                self.region_editor.setVisible(True)
             except Exception:
                 pass
-            if not show_editor:
-                return
 
             self._refreshing_region_editor = True
             try:
@@ -11222,6 +11345,22 @@ class PlanEditControlsWidget:
 
     def _apply_modal_interaction_state(self, modal_active):
         from PySide import QtCore
+
+        selected_kind, _selected_obj = self.session._get_selected_plan_target()
+        join_candidate = (
+            self.session._get_plan_candidate_joint() is not None
+            if self.session.current_tool == "Join"
+            else False
+        )
+        state = (
+            bool(modal_active),
+            selected_kind,
+            self.session.current_tool == "Join",
+            bool(join_candidate),
+        )
+        if state == self._modal_interaction_state:
+            return
+        self._modal_interaction_state = state
 
         for widget in self._modal_focus_widgets:
             if widget is None:
@@ -11258,14 +11397,11 @@ class PlanEditControlsWidget:
         if self.unjoin_button is not None:
             try:
                 self.unjoin_button.setEnabled(
-                    not modal_active
-                    and self.session.current_tool == "Join"
-                    and self.session._get_plan_candidate_joint() is not None
+                    not modal_active and self.session.current_tool == "Join" and join_candidate
                 )
             except Exception:
                 pass
 
-        selected_kind, _selected_obj = self.session._get_selected_plan_target()
         has_space = selected_kind == "space"
         for widget in (
             self.space_label_edit,
