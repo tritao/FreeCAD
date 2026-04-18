@@ -34,6 +34,7 @@ from bimplan import picking as plan_picking
 from bimplan import performance as plan_performance
 from bimplan import selection as plan_selection
 from bimplan import snap as plan_snap
+from bimplan import symbol_edit as plan_symbol_edit
 from bimplan import targets as plan_targets
 from bimplan import view as plan_view
 from bimplan.context import PlanEditContext
@@ -7996,265 +7997,33 @@ class PlanEditSession:
         return symbol_overlays.clear_symbol_edit_preview(self)
 
     def _get_symbol_handle_placement(self, symbol, handle_role, point):
-        if not self._is_plan_symbol_instance(symbol) or point is None or not handle_role:
-            return None
-        start_placement = self._edit_symbol_start_placement
-        if start_placement is None:
-            start_placement = self._copy_placement(getattr(symbol, "Placement", None))
-        point = self._resolve_symbol_handle_target_point(
-            symbol, handle_role, point, placement=start_placement
-        )
-        if point is None:
-            return None
-        placement = self._copy_placement(start_placement)
-        parent_global = self._get_symbol_parent_global_placement(symbol, placement=start_placement)
-        anchor_global = self._get_symbol_anchor_point(symbol, placement=start_placement)
-        local_anchor = self._get_symbol_local_anchor(symbol)
-        if handle_role == "move":
-            point_global = FreeCAD.Vector(point.x, point.y, anchor_global.z)
-            try:
-                anchor_parent = parent_global.inverse().multVec(point_global)
-                placement.Base = anchor_parent.sub(placement.Rotation.multVec(local_anchor))
-            except Exception:
-                placement.Base = FreeCAD.Vector(
-                    point.x - local_anchor.x,
-                    point.y - local_anchor.y,
-                    start_placement.Base.z,
-                )
-            return placement
-        if handle_role != "rotate":
-            return None
-
-        anchor = FreeCAD.Vector(anchor_global.x, anchor_global.y, anchor_global.z)
-        reference_point = self._edit_symbol_reference_point
-        if reference_point is None:
-            specs = dict(
-                (role, handle_point)
-                for role, handle_point, _marker in self._get_selected_symbol_handle_specs(symbol)
-            )
-            reference_point = specs.get("rotate")
-        if reference_point is None:
-            return None
-
-        reference_vector = FreeCAD.Vector(
-            reference_point.x - anchor.x,
-            reference_point.y - anchor.y,
-            0,
-        )
-        new_vector = FreeCAD.Vector(point.x - anchor.x, point.y - anchor.y, 0)
-        if reference_vector.Length < 0.001 or new_vector.Length < 0.001:
-            return None
-
-        reference_angle = math.atan2(reference_vector.y, reference_vector.x)
-        target_angle = math.atan2(new_vector.y, new_vector.x)
-        delta_rotation = FreeCAD.Rotation(
-            FreeCAD.Vector(0, 0, 1), math.degrees(target_angle - reference_angle)
-        )
-        current_global = self._get_symbol_global_placement(symbol, placement=start_placement)
-        try:
-            global_rotation = delta_rotation.multiply(current_global.Rotation)
-            placement.Rotation = parent_global.Rotation.inverse().multiply(global_rotation)
-        except Exception:
-            placement.Rotation = delta_rotation.multiply(start_placement.Rotation)
-        try:
-            anchor_parent = parent_global.inverse().multVec(anchor)
-            placement.Base = anchor_parent.sub(placement.Rotation.multVec(local_anchor))
-        except Exception:
-            placement.Base = FreeCAD.Vector(
-                anchor.x - local_anchor.x,
-                anchor.y - local_anchor.y,
-                start_placement.Base.z,
-            )
-        return placement
+        return plan_symbol_edit.get_symbol_handle_placement(self, symbol, handle_role, point)
 
     def _activate_symbol_handle(self, symbol, handle_role):
-        try:
-            from PySide import QtCore
-        except ImportError:
-            self._activate_symbol_handle_now(symbol, handle_role)
-            return
-
-        QtCore.QTimer.singleShot(
-            0,
-            lambda: self._activate_symbol_handle_now(symbol, handle_role),
-        )
+        return plan_symbol_edit.activate_symbol_handle(self, symbol, handle_role)
 
     def _activate_symbol_handle_now(self, symbol, handle_role):
-        if self._tearing_down or not self._is_plan_symbol_instance(symbol):
-            return
-        if handle_role not in {"move", "rotate"}:
-            return
-        self._set_selected_plan_target("symbol", symbol)
-        self._clear_wall_grips()
-        self._start_symbol_handle_point_pick(symbol, handle_role)
+        return plan_symbol_edit.activate_symbol_handle_now(self, symbol, handle_role)
 
     def _start_symbol_handle_point_pick(self, symbol, handle_role):
-        if not self._is_plan_symbol_instance(symbol):
-            return
-        handle_points = {
-            role: point for role, point, _marker in self._get_selected_symbol_handle_specs(symbol)
-        }
-        start_point = handle_points.get(handle_role)
-        if start_point is None:
-            return
-        self.current_tool = "Move Symbol" if handle_role == "move" else "Rotate Symbol"
-        self._set_hovered_wall(None)
-        self._set_hovered_opening(None)
-        self._set_hovered_symbol(None)
-        self._sync_secondary_selected_overlays()
-        self._edit_symbol = symbol
-        self._edit_symbol_handle_role = handle_role
-        self._edit_symbol_start_placement = self._copy_placement(getattr(symbol, "Placement", None))
-        self._edit_symbol_reference_point = FreeCAD.Vector(start_point)
-        self._clear_selected_symbol_overlay()
-        self._clear_selected_symbol_handles()
-        anchor = self._get_symbol_anchor_point(symbol, placement=self._edit_symbol_start_placement)
-        self._sync_symbol_edit_preview(
-            symbol,
-            self._edit_symbol_start_placement,
-            guide_start=anchor,
-            guide_end=start_point,
-        )
-        self._refresh_task_panel_status()
-        FreeCAD.activeDraftCommand = self
-        self._set_draft_point_focus_suppressed(True)
-        FreeCADGui.Snapper.getPoint(
-            last=start_point,
-            callback=self._finish_symbol_handle_point_pick,
-            movecallback=self._update_symbol_handle_point_pick,
-            title=(
-                translate("BIM_PlanEdit", "Pick new symbol position")
-                if handle_role == "move"
-                else translate("BIM_PlanEdit", "Pick new symbol rotation")
-            ),
-            noTracker=True,
-        )
-        self._queue_focus_plan_view()
+        return plan_symbol_edit.start_symbol_handle_point_pick(self, symbol, handle_role)
 
     def _update_symbol_handle_point_pick(self, point=None, snap_info=None):
-        del snap_info
-        symbol = self._edit_symbol
-        handle_role = self._edit_symbol_handle_role
-        if not symbol or not handle_role:
-            self._clear_symbol_edit_preview()
-            return
-        target_point = self._resolve_symbol_handle_target_point(
-            symbol, handle_role, point, placement=self._edit_symbol_start_placement
-        )
-        if target_point is None:
-            self._clear_symbol_edit_preview()
-            return
-        placement = self._get_symbol_handle_placement(symbol, handle_role, point)
-        if placement is None:
-            self._clear_symbol_edit_preview()
-            return
-        guide_start = self._get_symbol_anchor_point(
-            symbol, placement=self._edit_symbol_start_placement
-        )
-        guide_end = (
-            self._get_symbol_anchor_point(symbol, placement=placement)
-            if handle_role == "move"
-            else target_point
-        )
-        self._sync_symbol_edit_preview(
-            symbol, placement, guide_start=guide_start, guide_end=guide_end
+        return plan_symbol_edit.update_symbol_handle_point_pick(
+            self, point=point, snap_info=snap_info
         )
 
     def _finish_symbol_handle_point_pick(self, point=None, obj=None):
-        del obj
-        symbol = self._edit_symbol
-        handle_role = self._edit_symbol_handle_role
-        start_placement = self._edit_symbol_start_placement
-        reference_point = self._edit_symbol_reference_point
-        self._edit_symbol = None
-        self._edit_symbol_handle_role = None
-        self._edit_symbol_start_placement = None
-        self._edit_symbol_reference_point = None
-        FreeCAD.activeDraftCommand = None
-        self._clear_symbol_edit_preview()
-
-        if point is None or not symbol or not handle_role:
-            self.current_tool = "Select"
-            self._restore_selected_symbol(symbol)
-            return
-
-        self._edit_symbol_start_placement = start_placement
-        self._edit_symbol_reference_point = reference_point
-        placement = self._get_symbol_handle_placement(symbol, handle_role, point)
-        self._edit_symbol_start_placement = None
-        self._edit_symbol_reference_point = None
-        if placement is None:
-            self.current_tool = "Select"
-            self._restore_selected_symbol(symbol)
-            return
-
-        try:
-            self.doc.openTransaction(
-                translate(
-                    "BIM_PlanEdit",
-                    "Move Symbol" if handle_role == "move" else "Rotate Symbol",
-                )
-            )
-            symbol.Placement = placement
-            self.doc.commitTransaction()
-            self.doc.recompute()
-        except Exception:
-            try:
-                self.doc.abortTransaction()
-            except Exception:
-                pass
-            self.current_tool = "Select"
-            self._restore_selected_symbol(symbol)
-            return
-
-        self.current_tool = "Select"
-        self._queue_restore_selected_symbol(symbol)
+        return plan_symbol_edit.finish_symbol_handle_point_pick(self, point=point, obj=obj)
 
     def _cancel_symbol_handle_point_pick(self):
-        symbol = self._edit_symbol
-        self._edit_symbol = None
-        self._edit_symbol_handle_role = None
-        self._edit_symbol_start_placement = None
-        self._edit_symbol_reference_point = None
-        self._stop_snapper()
-        FreeCAD.activeDraftCommand = None
-        self._clear_symbol_edit_preview()
-        self.current_tool = "Select"
-        if symbol:
-            self._set_selected_plan_target("symbol", symbol, pending_restore=True)
-        self._sync_selected_opening_overlay()
-        self._sync_selected_opening_handles()
-        self._sync_selected_symbol_overlay()
-        self._sync_selected_symbol_handles()
-        self._refresh_task_panel_status()
+        return plan_symbol_edit.cancel_symbol_handle_point_pick(self)
 
     def _restore_selected_symbol(self, symbol):
-        self.current_tool = "Select"
-        if symbol:
-            self._set_selected_plan_target("symbol", symbol, pending_restore=True)
-        else:
-            self._set_selected_plan_target()
-        if not symbol:
-            self._sync_selected_opening_overlay()
-            self._sync_selected_opening_handles()
-            self._sync_selected_symbol_overlay()
-            self._sync_selected_symbol_handles()
-            self._refresh_task_panel_status()
-            return
-        self._set_gui_selection_object(symbol)
-        self._sync_selected_opening_overlay()
-        self._sync_selected_opening_handles()
-        self._sync_selected_symbol_overlay()
-        self._sync_selected_symbol_handles()
-        self._refresh_task_panel_status()
+        return plan_symbol_edit.restore_selected_symbol(self, symbol)
 
     def _queue_restore_selected_symbol(self, symbol):
-        try:
-            from PySide import QtCore
-        except ImportError:
-            self._restore_selected_symbol(symbol)
-            return
-        QtCore.QTimer.singleShot(0, lambda: self._restore_selected_symbol(symbol))
+        return plan_symbol_edit.queue_restore_selected_symbol(self, symbol)
 
     def _get_selected_opening_edit_handles(self, opening):
         proxy = self._get_opening_view_proxy(opening, "get_plan_edit_handles")
