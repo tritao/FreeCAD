@@ -931,6 +931,9 @@ class BIMWorkbench(Workbench):
         def scene_ready():
             return (FreeCAD.ActiveDocument is not None) and workbench._has_scene_view()
 
+        def plan_edit_active():
+            return BimPlanSession.get_active_session() is not None
+
         context_card = QtGui.QFrame()
         context_card.setObjectName("BimTaskWatcherContext")
         context_card.setFrameShape(QtGui.QFrame.StyledPanel)
@@ -963,14 +966,14 @@ class BIMWorkbench(Workbench):
                 self._condition = condition
 
             def shouldShow(self):
-                return scene_ready() and self._condition()
+                return scene_ready() and not plan_edit_active() and self._condition()
 
         class BimContextWatcher:
             def __init__(self):
                 self.widgets = [context_card]
 
             def shouldShow(self):
-                if not scene_ready():
+                if not scene_ready() or plan_edit_active():
                     return False
 
                 state, hint = workbench._taskwatcher_context()
