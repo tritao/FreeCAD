@@ -1,9 +1,36 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
 import unittest
+import sys
+from types import ModuleType
+
+if "draftguitools.gui_base" not in sys.modules:
+    draftguitools_module = sys.modules.setdefault(
+        "draftguitools",
+        ModuleType("draftguitools"),
+    )
+    gui_base_module = ModuleType("draftguitools.gui_base")
+
+    class _DraftInteractionHost:
+        def __init__(self, command=None):
+            self.command = command
+
+        def activate_command(self, command=None):
+            self.command = command or self.command
+
+        def deactivate_command(self, command=None):
+            self.command = command or self.command
+
+        def request_point(self, **kwargs):
+            del kwargs
+            return None
+
+    gui_base_module.DraftInteractionHost = _DraftInteractionHost
+    sys.modules["draftguitools.gui_base"] = gui_base_module
+    draftguitools_module.gui_base = gui_base_module
 
 from bimplan.context import PlanEditContext
-from bimplan.providers import PlanEditProvider
+from bimplan.providers import PlanEditProvider, PlanIssueSpec
 from bimplan.registry import PlanEditRegistry
 from bimplan.semantics import PlanSemanticRecord
 from bimplan.targets import PlanTarget
@@ -114,6 +141,23 @@ class TestBimPlanCore(unittest.TestCase):
         removed = registry.unregister_provider("second")
         self.assertIs(removed, second)
         self.assertEqual(("first",), registry.provider_ids())
+
+    def test_plan_issue_spec_carries_generic_presentation_hints(self):
+        issue = PlanIssueSpec(
+            key="missing-generated-output",
+            title="Missing generated output",
+            role="workflow",
+            category="MEP",
+            group_key="mep-generation",
+            group_title="Generate MEP output",
+            collapsed=True,
+        )
+
+        self.assertEqual("workflow", issue.role)
+        self.assertEqual("MEP", issue.category)
+        self.assertEqual("mep-generation", issue.group_key)
+        self.assertEqual("Generate MEP output", issue.group_title)
+        self.assertTrue(issue.collapsed)
 
     def test_plan_edit_transaction_commits_on_success_and_aborts_on_failure(self):
         doc = _DummyDoc()

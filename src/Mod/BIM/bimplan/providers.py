@@ -25,6 +25,11 @@ class PlanIssueSpec:
     provider_id: str = ""
     actions: Tuple[PlanActionSpec, ...] = ()
     target_keys: Tuple[str, ...] = ()
+    role: str = ""
+    category: str = ""
+    group_key: str = ""
+    group_title: str = ""
+    collapsed: bool = False
 
 
 @dataclass(frozen=True)
