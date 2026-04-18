@@ -6024,7 +6024,7 @@ class PlanEditSession:
             if mouse_pos is None:
                 return
             self._update_hovered_plan_target(mouse_pos)
-            self._refresh_plan_overlay_visuals()
+            self._request_view_redraw()
             hovered_after = self._get_hovered_plan_target()
             self._plan_perf_set_fields(
                 hovered_after=self._plan_perf_describe_target(hovered_after[0], hovered_after[1])
