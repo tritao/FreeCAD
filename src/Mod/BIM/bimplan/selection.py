@@ -76,6 +76,74 @@ def set_gui_selection_object(session, obj):
     session._set_gui_selection([obj])
 
 
+def attach_selection_observer(session):
+    if not session._selection_observer_added:
+        FreeCADGui.Selection.addObserver(session)
+        session._selection_observer_added = True
+
+
+def detach_selection_observer(session):
+    if session._selection_observer_added:
+        FreeCADGui.Selection.removeObserver(session)
+        session._selection_observer_added = False
+
+
+def selection_observer_add(session, doc, obj, sub, point):
+    with session._plan_perf_trace_event(
+        "selection_observer_add",
+        selection_document=doc,
+        selection_object=obj,
+        selection_subelement=sub,
+    ):
+        session._plan_perf_count("selection_observer_callbacks")
+        if session._tearing_down:
+            return
+        if session._ignore_selection_changes:
+            return
+        if sub in ("EditNode0", "EditNode1", "EditNode2"):
+            return
+        del doc, obj, sub, point
+        session._refresh_primary_selected_plan_target()
+
+
+def selection_observer_remove(session, doc, obj, sub):
+    with session._plan_perf_trace_event(
+        "selection_observer_remove",
+        selection_document=doc,
+        selection_object=obj,
+        selection_subelement=sub,
+    ):
+        session._plan_perf_count("selection_observer_callbacks")
+        if session._tearing_down:
+            return
+        if session._ignore_selection_changes:
+            return
+        del doc, obj, sub
+        session._refresh_primary_selected_plan_target()
+
+
+def selection_observer_set(session, doc):
+    with session._plan_perf_trace_event("selection_observer_set", selection_document=doc):
+        session._plan_perf_count("selection_observer_callbacks")
+        if session._tearing_down:
+            return
+        if session._ignore_selection_changes:
+            return
+        del doc
+        session._refresh_primary_selected_plan_target()
+
+
+def selection_observer_clear(session, doc):
+    with session._plan_perf_trace_event("selection_observer_clear", selection_document=doc):
+        session._plan_perf_count("selection_observer_callbacks")
+        if session._tearing_down:
+            return
+        if session._ignore_selection_changes:
+            return
+        del doc
+        session._refresh_primary_selected_plan_target()
+
+
 def get_selected_target_for_kind(session, kind):
     if getattr(session, "_selected_plan_target_kind", None) == kind:
         return getattr(session, "_selected_plan_target_obj", None)
