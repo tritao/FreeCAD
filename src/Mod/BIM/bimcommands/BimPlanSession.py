@@ -33,6 +33,7 @@ import FreeCADGui
 from bimplan import performance as plan_performance
 from bimplan import selection as plan_selection
 from bimplan import snap as plan_snap
+from bimplan import targets as plan_targets
 from bimplan import view as plan_view
 from bimplan.context import PlanEditContext
 from bimplan.hosts import _PlanEditCommandHost, _PlanEditWallHost
@@ -2378,40 +2379,10 @@ class PlanEditSession:
         )
 
     def _get_plan_target_kind_for_object(self, obj):
-        if self._is_hosted_opening_object(obj):
-            return "opening"
-        if self._is_plan_symbol_instance(obj):
-            return "symbol"
-        if self._is_plan_region_object(obj):
-            return "region"
-        if self._is_plan_selectable_wall(obj):
-            return "wall"
-        if self._is_plan_space_object(obj):
-            return "space"
-        return None
+        return plan_targets.get_plan_target_kind_for_object(self, obj)
 
     def _get_plan_target_for_object(self, obj, parent_obj=None):
-        seen = set()
-        for candidate in (obj, parent_obj):
-            if not candidate:
-                continue
-            name = getattr(candidate, "Name", None)
-            if name and name in seen:
-                continue
-            if name:
-                seen.add(name)
-            target_kind = self._get_plan_target_kind_for_object(candidate)
-            if target_kind:
-                return (target_kind, candidate)
-
-        semantic_obj = self._get_plan_semantic_object(obj)
-        semantic_name = getattr(semantic_obj, "Name", None)
-        if semantic_obj and semantic_name not in seen:
-            target_kind = self._get_plan_target_kind_for_object(semantic_obj)
-            if target_kind:
-                return (target_kind, semantic_obj)
-
-        return (None, None)
+        return plan_targets.get_plan_target_for_object(self, obj, parent_obj=parent_obj)
 
     def _get_screen_distance_sq_to_segment(self, mouse_pos, start, end):
         if not self.view or not mouse_pos:
