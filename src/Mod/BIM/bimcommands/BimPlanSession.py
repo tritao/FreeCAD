@@ -349,10 +349,17 @@ class PlanEditSession:
         self._space_hover_trackers = []
         self._region_hover_trackers = []
         self._plan_overlay_geometry_cache = {
+            "opening": {},
             "space": {},
             "region": {},
         }
+        self._opening_overlay_screen_cache = {}
+        self._opening_overlay_screen_cache_projection_key = None
         self._opening_overlay_trackers = []
+        self._hovered_opening_overlay_dirty = False
+        self._hovered_opening_overlay_render_state = None
+        self._selected_opening_overlay_dirty = False
+        self._selected_opening_overlay_render_state = None
         self._symbol_overlay_trackers = []
         self._space_overlay_trackers = []
         self._selected_space_overlay_dirty = True
@@ -364,6 +371,7 @@ class PlanEditSession:
         self._space_region_pick_trackers = []
         self._selected_wall_opening_context_trackers = []
         self._opening_handle_trackers = []
+        self._selected_opening_handle_render_state = None
         self._symbol_handle_trackers = []
         self._selected_opening_hard_refresh_queued = False
         self._opening_host_recompute_queued = False
@@ -582,6 +590,8 @@ class PlanEditSession:
 
     def _get_plan_overlay_geometry_kinds_for_object(self, obj):
         semantic_obj = self._get_plan_semantic_object(obj)
+        if self._is_hosted_opening_object(semantic_obj):
+            return ("opening",)
         if self._is_plan_space_object(semantic_obj):
             return ("space",)
         if self._is_plan_region_object(semantic_obj):
@@ -616,6 +626,9 @@ class PlanEditSession:
                 cache = self._plan_overlay_geometry_cache.get(kind)
                 if cache is not None:
                     cache.clear()
+            self._invalidate_opening_overlay_screen_cache()
+            self._invalidate_hovered_opening_overlay_cache()
+            self._invalidate_selected_opening_overlay_cache()
             self._invalidate_selected_space_overlay_cache()
             return
         semantic_obj, key, _entry = self._get_plan_overlay_geometry_cache_entry(
@@ -627,6 +640,12 @@ class PlanEditSession:
             cache = self._plan_overlay_geometry_cache.get(kind)
             if cache is not None:
                 cache.pop(key, None)
+        if "opening" in target_kinds:
+            self._invalidate_opening_overlay_screen_cache()
+        if self.hovered_opening == semantic_obj:
+            self._invalidate_hovered_opening_overlay_cache()
+        if self._is_selected_plan_target("opening", semantic_obj):
+            self._invalidate_selected_opening_overlay_cache()
         if self._is_selected_plan_target("space", semantic_obj):
             self._invalidate_selected_space_overlay_cache()
 
@@ -2040,6 +2059,40 @@ class PlanEditSession:
             return None
         return height / view_height
 
+    def _get_plan_projection_cache_key(self):
+        if not self.view:
+            return None
+        get_camera_node = self._get_runtime_attr(self.view, "getCameraNode")
+        get_size = self._get_runtime_attr(self.view, "getSize")
+        if get_camera_node is None or get_size is None:
+            return None
+        try:
+            camera = get_camera_node()
+        except Exception:
+            return None
+        try:
+            size = get_size()
+            size_key = (int(size[0]), int(size[1]))
+        except Exception:
+            return None
+        try:
+            position = getattr(camera, "position").getValue()
+            position_key = (
+                round(float(position[0]), 6),
+                round(float(position[1]), 6),
+                round(float(position[2]), 6),
+            )
+        except Exception:
+            position_key = (None, None, None)
+        height = self._get_plan_view_height()
+        if height is None:
+            return None
+        return size_key + (round(float(height), 6),) + position_key
+
+    def _invalidate_opening_overlay_screen_cache(self):
+        self._opening_overlay_screen_cache = {}
+        self._opening_overlay_screen_cache_projection_key = None
+
     def _apply_plan_snap_profile(self):
         snapper = getattr(FreeCADGui, "Snapper", None)
         if not snapper or not hasattr(snapper, "push_snap_modes"):
@@ -3010,11 +3063,22 @@ class PlanEditSession:
             end_x, end_y = self.view.getPointOnScreen(end)
         except Exception:
             return None
+        return self._get_screen_distance_sq_to_projected_segment(
+            (cursor_x, cursor_y),
+            (start_x, start_y),
+            (end_x, end_y),
+        )
 
-        start_x = float(start_x)
-        start_y = float(start_y)
-        end_x = float(end_x)
-        end_y = float(end_y)
+    def _get_screen_distance_sq_to_projected_segment(self, cursor_xy, start_xy, end_xy):
+        if cursor_xy is None or start_xy is None or end_xy is None:
+            return None
+
+        cursor_x = float(cursor_xy[0])
+        cursor_y = float(cursor_xy[1])
+        start_x = float(start_xy[0])
+        start_y = float(start_xy[1])
+        end_x = float(end_xy[0])
+        end_y = float(end_xy[1])
         dx = end_x - start_x
         dy = end_y - start_y
         length_sq = dx * dx + dy * dy
@@ -3055,6 +3119,52 @@ class PlanEditSession:
                     best_symbol = obj
                     best_distance_sq = distance_sq
         return best_symbol
+
+    def _pick_plan_opening_target_from_overlays(self, mouse_pos, radius_px=10):
+        with self._plan_perf_trace_span(
+            "pick_opening_target_from_overlays",
+            mouse_pos=mouse_pos,
+            radius_px=radius_px,
+        ):
+            if not self.doc or not self.view or not mouse_pos:
+                return None
+            screen_radius_sq = float(radius_px) * float(radius_px)
+            best_opening = None
+            best_distance_sq = None
+            seen = set()
+            cursor_xy = (float(mouse_pos[0]), float(mouse_pos[1]))
+            for obj in getattr(self.doc, "Objects", []) or []:
+                self._plan_perf_count("opening_overlay_pick_objects_scanned")
+                if not self._is_hosted_opening_object(obj):
+                    continue
+                name = getattr(obj, "Name", None)
+                if not name or name in seen:
+                    continue
+                seen.add(name)
+                view_object = getattr(obj, "ViewObject", None)
+                if (
+                    view_object
+                    and hasattr(view_object, "Visibility")
+                    and not view_object.Visibility
+                ):
+                    continue
+                self._plan_perf_count("opening_overlay_pick_candidates")
+                for projected in self._get_opening_overlay_screen_polylines(obj):
+                    for start_xy, end_xy in zip(projected, projected[1:]):
+                        self._plan_perf_count("opening_overlay_pick_segments_scanned")
+                        distance_sq = self._get_screen_distance_sq_to_projected_segment(
+                            cursor_xy, start_xy, end_xy
+                        )
+                        if distance_sq is None or distance_sq > screen_radius_sq:
+                            continue
+                        if best_distance_sq is None or distance_sq < best_distance_sq:
+                            best_opening = obj
+                            best_distance_sq = distance_sq
+            self._plan_perf_set_fields(
+                opening_overlay_pick_mode="screen",
+                opening_overlay_pick_result=self._plan_perf_describe_object(best_opening),
+            )
+            return best_opening
 
     def _pick_plan_space_target_from_overlays(self, mouse_pos, radius_px=10):
         if not self.doc or not self.view or not mouse_pos:
@@ -5755,7 +5865,7 @@ class PlanEditSession:
             return None
         best_index = None
         best_distance_sq = None
-        for idx, point, _marker in self._get_selected_opening_handle_specs(opening):
+        for idx, _role, point, _marker in self._get_selected_opening_handle_specs(opening):
             try:
                 screen_x, screen_y = self.view.getPointOnScreen(point)
             except Exception:
@@ -5880,25 +5990,40 @@ class PlanEditSession:
     def _on_mouse_moved(self, event_callback):
         if self._tearing_down:
             return
-        if self.current_tool == "Pick Space Region":
-            event = event_callback.getEvent()
-            pos = event.getPosition().getValue()
-            self._set_hovered_space_region_candidate(
-                self._pick_space_region_candidate((pos[0], pos[1]))
-            )
-            self._refresh_plan_overlay_visuals()
-            return
-        if self.current_tool not in ("Select", "Join"):
-            self._set_hovered_wall(None)
-            self._set_hovered_opening(None)
-            self._set_hovered_symbol(None)
-            self._set_hovered_space(None)
-            self._set_hovered_region(None)
-            return
         event = event_callback.getEvent()
-        pos = event.getPosition().getValue()
-        self._update_hovered_plan_target((pos[0], pos[1]))
-        self._refresh_plan_overlay_visuals()
+        try:
+            pos = event.getPosition().getValue()
+            mouse_pos = (pos[0], pos[1])
+        except Exception:
+            mouse_pos = None
+        hovered_before = self._get_hovered_plan_target()
+        with self._plan_perf_trace_event(
+            "mouse_moved",
+            mouse_pos=mouse_pos,
+            hovered_before=self._plan_perf_describe_target(hovered_before[0], hovered_before[1]),
+        ):
+            if self.current_tool == "Pick Space Region":
+                if mouse_pos is not None:
+                    self._set_hovered_space_region_candidate(
+                        self._pick_space_region_candidate(mouse_pos)
+                    )
+                    self._refresh_plan_overlay_visuals()
+                return
+            if self.current_tool not in ("Select", "Join"):
+                self._set_hovered_wall(None)
+                self._set_hovered_opening(None)
+                self._set_hovered_symbol(None)
+                self._set_hovered_space(None)
+                self._set_hovered_region(None)
+                return
+            if mouse_pos is None:
+                return
+            self._update_hovered_plan_target(mouse_pos)
+            self._refresh_plan_overlay_visuals()
+            hovered_after = self._get_hovered_plan_target()
+            self._plan_perf_set_fields(
+                hovered_after=self._plan_perf_describe_target(hovered_after[0], hovered_after[1])
+            )
 
     def _on_mouse_wheel(self, event_callback):
         if self._tearing_down:
@@ -7588,18 +7713,59 @@ class PlanEditSession:
         )
 
     def _get_opening_overlay_polylines(self, opening):
-        if not opening:
-            return []
-        view_object = getattr(opening, "ViewObject", None)
-        proxy = getattr(view_object, "Proxy", None)
-        if not proxy:
-            return []
-        if not hasattr(proxy, "get_plan_overlay_polylines"):
-            return []
-        try:
-            return list(proxy.get_plan_overlay_polylines() or [])
-        except Exception:
-            return []
+        if not self._is_hosted_opening_object(opening):
+            return ()
+
+        def compute(opening_obj):
+            view_object = getattr(opening_obj, "ViewObject", None)
+            proxy = getattr(view_object, "Proxy", None)
+            if not proxy or not hasattr(proxy, "get_plan_overlay_polylines"):
+                return ()
+            try:
+                return proxy.get_plan_overlay_polylines() or ()
+            except Exception:
+                return ()
+
+        return self._get_cached_plan_overlay_geometry(
+            "opening",
+            opening,
+            "overlay_polylines",
+            compute,
+        )
+
+    def _get_opening_overlay_screen_polylines(self, opening):
+        if not self._is_hosted_opening_object(opening) or not self.view:
+            return ()
+        projection_key = self._get_plan_projection_cache_key()
+        if projection_key is None:
+            return ()
+        if projection_key != self._opening_overlay_screen_cache_projection_key:
+            self._opening_overlay_screen_cache = {}
+            self._opening_overlay_screen_cache_projection_key = projection_key
+        opening_key = self._get_document_object_key(opening)
+        if opening_key is None:
+            return ()
+        cached = self._opening_overlay_screen_cache.get(opening_key)
+        if cached is not None:
+            self._plan_perf_count("opening_overlay_screen_polylines_cache_hits")
+            return cached
+
+        projected_polylines = []
+        for polyline in self._get_opening_overlay_polylines(opening):
+            if len(polyline) < 2:
+                continue
+            projected = []
+            try:
+                for poly_point in polyline:
+                    screen_point = self.view.getPointOnScreen(poly_point)
+                    projected.append((float(screen_point[0]), float(screen_point[1])))
+            except Exception:
+                projected = []
+            if len(projected) >= 2:
+                projected_polylines.append(tuple(projected))
+        result = tuple(projected_polylines)
+        self._opening_overlay_screen_cache[opening_key] = result
+        return result
 
     def _finalize_trackers(self, trackers):
         for tracker in trackers:
@@ -7667,13 +7833,16 @@ class PlanEditSession:
                 elif target_kind == "space" and space_candidate is None:
                     space_candidate = target_obj
             if result == (None, None):
-                if symbol_candidate is None:
+                opening_candidate = self._pick_plan_opening_target_from_overlays(mouse_pos)
+                if opening_candidate is not None:
+                    result = ("opening", opening_candidate)
+                elif symbol_candidate is None:
                     symbol_candidate = self._pick_plan_symbol_target_from_overlays(mouse_pos)
-                if symbol_candidate is not None:
+                if result == (None, None) and symbol_candidate is not None:
                     result = ("symbol", symbol_candidate)
-                elif wall_candidate is not None:
+                elif result == (None, None) and wall_candidate is not None:
                     result = ("wall", wall_candidate)
-                else:
+                elif result == (None, None):
                     if region_candidate is None:
                         region_candidate = self._pick_plan_region_target_from_polylines(mouse_pos)
                     if region_candidate is None:
@@ -9287,23 +9456,67 @@ class PlanEditSession:
         self._region_overlay_trackers = []
 
     def _sync_hovered_opening_overlay(self):
-        self._clear_hovered_opening_overlay()
-        if self.current_tool != "Select":
-            return
-        if not self._is_hosted_opening_object(self.hovered_opening):
-            return
-        if self._is_selected_plan_target("opening", self.hovered_opening):
-            return
-        self._create_opening_overlay_trackers(
-            self.hovered_opening,
-            color=(0.38, 0.62, 0.96),
-            width=self._scaled_line_width(2),
-            tracker_store=self._opening_hover_trackers,
-        )
+        with self._plan_perf_trace_span("sync_hovered_opening_overlay"):
+            opening = self.hovered_opening
+            if self.current_tool != "Select":
+                self._clear_hovered_opening_overlay()
+                return
+            if not self._is_hosted_opening_object(opening):
+                self._clear_hovered_opening_overlay()
+                return
+            if self._is_selected_plan_target("opening", opening):
+                self._clear_hovered_opening_overlay()
+                return
+            width = self._scaled_line_width(2)
+            color = (0.38, 0.62, 0.96)
+            render_state = (
+                self._get_document_object_key(opening),
+                round(float(width), 3),
+                color,
+            )
+            if (
+                not self._hovered_opening_overlay_dirty
+                and self._hovered_opening_overlay_render_state == render_state
+            ):
+                self._plan_perf_count("hovered_opening_overlay_cache_hits")
+                return
+            try:
+                import draftguitools.gui_trackers as DraftTrackers
+            except ImportError:
+                self._clear_hovered_opening_overlay()
+                return
+            segments = self._get_opening_overlay_segments(opening)
+            self._plan_perf_count("hovered_opening_overlay_segments", len(segments))
+            if self._hovered_opening_overlay_render_state != render_state or len(
+                self._opening_hover_trackers
+            ) != len(segments):
+                self._clear_hovered_opening_overlay()
+                for _start, _end in segments:
+                    tracker = self._make_plan_line_tracker(
+                        DraftTrackers,
+                        "opening-overlay:{}".format(getattr(opening, "Name", "unknown")),
+                        scolor=color,
+                        swidth=width,
+                        ontop=True,
+                    )
+                    self._opening_hover_trackers.append(tracker)
+            for tracker, (start, end) in zip(self._opening_hover_trackers, segments):
+                tracker.setColor(color)
+                tracker.p1(start)
+                tracker.p2(end)
+                tracker.on()
+            self._hovered_opening_overlay_render_state = render_state
+            self._hovered_opening_overlay_dirty = False
 
     def _clear_hovered_opening_overlay(self):
         self._finalize_trackers(self._opening_hover_trackers)
         self._opening_hover_trackers = []
+
+        self._hovered_opening_overlay_dirty = False
+        self._hovered_opening_overlay_render_state = None
+
+    def _invalidate_hovered_opening_overlay_cache(self):
+        self._hovered_opening_overlay_dirty = True
 
     def _create_opening_overlay_trackers(self, opening, color, width, tracker_store):
         try:
@@ -9328,47 +9541,72 @@ class PlanEditSession:
                 tracker_store.append(tracker)
 
     def _get_opening_overlay_segments(self, opening):
-        segments = []
-        for polyline in self._get_opening_overlay_polylines(opening):
-            if len(polyline) < 2:
-                continue
-            for start, end in zip(polyline, polyline[1:]):
-                segments.append((start, end))
-        return segments
+        if not self._is_hosted_opening_object(opening):
+            return ()
+        return self._get_cached_plan_overlay_geometry(
+            "opening",
+            opening,
+            "overlay_segments",
+            lambda opening_obj: self._build_overlay_segments_from_polylines(
+                self._get_opening_overlay_polylines(opening_obj)
+            ),
+        )
 
     def _sync_selected_opening_overlay(self):
-        opening = self._get_selected_plan_target_object("opening")
-        if self.current_tool != "Select" or not self._is_hosted_opening_object(opening):
-            self._clear_selected_opening_overlay()
-            return
-        width = self._scaled_line_width(3)
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            self._clear_selected_opening_overlay()
-            return
-        segments = self._get_opening_overlay_segments(opening)
-        color = (0.12, 0.38, 0.95)
-        if len(self._opening_overlay_trackers) != len(segments):
-            self._clear_selected_opening_overlay()
-            for _start, _end in segments:
-                tracker = self._make_plan_line_tracker(
-                    DraftTrackers,
-                    "selected-opening-overlay:{}".format(getattr(opening, "Name", "unknown")),
-                    scolor=color,
-                    swidth=width,
-                    ontop=True,
-                )
-                self._opening_overlay_trackers.append(tracker)
-        for tracker, (start, end) in zip(self._opening_overlay_trackers, segments):
-            tracker.setColor(color)
-            tracker.p1(start)
-            tracker.p2(end)
-            tracker.on()
+        with self._plan_perf_trace_span("sync_selected_opening_overlay"):
+            opening = self._get_selected_plan_target_object("opening")
+            if self.current_tool != "Select" or not self._is_hosted_opening_object(opening):
+                self._clear_selected_opening_overlay()
+                return
+            width = self._scaled_line_width(3)
+            color = (0.12, 0.38, 0.95)
+            render_state = (
+                self._get_document_object_key(opening),
+                round(float(width), 3),
+                color,
+            )
+            if (
+                not self._selected_opening_overlay_dirty
+                and self._selected_opening_overlay_render_state == render_state
+            ):
+                self._plan_perf_count("selected_opening_overlay_cache_hits")
+                return
+            try:
+                import draftguitools.gui_trackers as DraftTrackers
+            except ImportError:
+                self._clear_selected_opening_overlay()
+                return
+            segments = self._get_opening_overlay_segments(opening)
+            self._plan_perf_count("selected_opening_overlay_segments", len(segments))
+            if self._selected_opening_overlay_render_state != render_state or len(
+                self._opening_overlay_trackers
+            ) != len(segments):
+                self._clear_selected_opening_overlay()
+                for _start, _end in segments:
+                    tracker = self._make_plan_line_tracker(
+                        DraftTrackers,
+                        "selected-opening-overlay:{}".format(getattr(opening, "Name", "unknown")),
+                        scolor=color,
+                        swidth=width,
+                        ontop=True,
+                    )
+                    self._opening_overlay_trackers.append(tracker)
+            for tracker, (start, end) in zip(self._opening_overlay_trackers, segments):
+                tracker.setColor(color)
+                tracker.p1(start)
+                tracker.p2(end)
+                tracker.on()
+            self._selected_opening_overlay_render_state = render_state
+            self._selected_opening_overlay_dirty = False
 
     def _clear_selected_opening_overlay(self):
         self._finalize_trackers(self._opening_overlay_trackers)
         self._opening_overlay_trackers = []
+        self._selected_opening_overlay_dirty = False
+        self._selected_opening_overlay_render_state = None
+
+    def _invalidate_selected_opening_overlay_cache(self):
+        self._selected_opening_overlay_dirty = True
 
     def _sync_selected_wall_opening_context_overlay(self):
         self._clear_selected_wall_opening_context_overlay()
@@ -10171,35 +10409,83 @@ class PlanEditSession:
         for idx, handle in enumerate(self._get_selected_opening_edit_handles(opening)):
             if handle.role not in markers or handle.point is None:
                 continue
-            handle_specs.append((idx, handle.point, markers[handle.role]))
+            handle_specs.append((idx, handle.role, handle.point, markers[handle.role]))
         return handle_specs
 
     def _sync_selected_opening_handles(self):
-        opening = self._get_selected_plan_target_object("opening")
-        if self.current_tool != "Select":
-            self._clear_selected_opening_handles()
-            return
-        if not self._is_hosted_opening_object(opening):
-            self._clear_selected_opening_handles()
-            return
-        self._clear_selected_opening_handles()
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            return
-        for idx, point, marker in self._get_selected_opening_handle_specs(opening):
-            tracker = DraftTrackers.editTracker(
-                pos=point,
-                idx=idx,
-                marker=marker,
-                inactive=True,
+        with self._plan_perf_trace_span("sync_selected_opening_handles"):
+            from draftutils import params
+
+            opening = self._get_selected_plan_target_object("opening")
+            if self.current_tool != "Select":
+                self._clear_selected_opening_handles()
+                return
+            if not self._is_hosted_opening_object(opening):
+                self._clear_selected_opening_handles()
+                return
+            specs = tuple(self._get_selected_opening_handle_specs(opening))
+            marker_size = self._scaled_marker_size(params.get_param_view("MarkerSize"))
+            handle_entries = tuple(
+                (
+                    int(idx),
+                    str(role),
+                    round(float(point.x), 6),
+                    round(float(point.y), 6),
+                    round(float(point.z), 6),
+                    int(marker_size),
+                )
+                for idx, role, point, _marker in specs
             )
-            tracker.on()
-            self._opening_handle_trackers.append(tracker)
+            render_state = (
+                self._get_document_object_key(opening),
+                handle_entries,
+            )
+            if self._selected_opening_handle_render_state == render_state and len(
+                self._opening_handle_trackers
+            ) == len(specs):
+                self._plan_perf_count("selected_opening_handle_cache_hits")
+                return
+            try:
+                import draftguitools.gui_trackers as DraftTrackers
+            except ImportError:
+                self._clear_selected_opening_handles()
+                return
+            previous_state = self._selected_opening_handle_render_state
+            can_reuse_trackers = bool(previous_state) and len(self._opening_handle_trackers) == len(
+                specs
+            )
+            if can_reuse_trackers:
+                previous_entries = previous_state[1]
+                can_reuse_trackers = all(
+                    previous[0] == current[0]
+                    and previous[1] == current[1]
+                    and previous[5] == current[5]
+                    for previous, current in zip(previous_entries, handle_entries)
+                )
+            if not can_reuse_trackers:
+                self._clear_selected_opening_handles()
+                for idx, _role, point, marker in specs:
+                    tracker = DraftTrackers.editTracker(
+                        pos=point,
+                        idx=idx,
+                        marker=marker,
+                        inactive=True,
+                    )
+                    tracker.on()
+                    self._opening_handle_trackers.append(tracker)
+            else:
+                for tracker, (_idx, _role, point, _marker) in zip(
+                    self._opening_handle_trackers, specs
+                ):
+                    tracker.set(point)
+                    tracker.on()
+                self._plan_perf_count("selected_opening_handle_tracker_reuses")
+            self._selected_opening_handle_render_state = render_state
 
     def _clear_selected_opening_handles(self):
         self._finalize_trackers(self._opening_handle_trackers)
         self._opening_handle_trackers = []
+        self._selected_opening_handle_render_state = None
 
     def _get_opening_move_preview_state(self, opening, point):
         if not opening or point is None:
