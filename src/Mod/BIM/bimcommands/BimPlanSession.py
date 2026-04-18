@@ -25,13 +25,13 @@
 """Session controller for BIM plan editing."""
 
 from contextlib import contextmanager
-from dataclasses import replace
 import math
 
 import FreeCAD
 import FreeCADGui
 from bimplan import picking as plan_picking
 from bimplan import performance as plan_performance
+from bimplan import provider_runtime as plan_provider_runtime
 from bimplan import selection as plan_selection
 from bimplan import snap as plan_snap
 from bimplan import symbol_edit as plan_symbol_edit
@@ -46,17 +46,8 @@ from bimplan.overlays import openings as opening_overlays
 from bimplan.overlays import spaces as space_overlays
 from bimplan.overlays import symbols as symbol_overlays
 from bimplan.overlays import walls as wall_overlays
-from bimplan.providers import (
-    PlanActionSpec,
-    PlanInspectorSection,
-    PlanIssueSpec,
-    PlanOverlaySpec,
-    PlanSuggestionSpec,
-)
 from bimplan.registry import get_plan_edit_registry
-from bimplan.semantics import PlanSemanticRecord
 from bimplan.targets import PlanTarget
-from bimplan.transactions import PlanEditTransaction
 from bimplan.ui.controls import PlanEditControlsWidget
 from bimplan.ui.status_chip import _PlanEditViewportStatusChip
 
@@ -911,20 +902,7 @@ class PlanEditSession:
         return get_plan_edit_registry()
 
     def get_plan_provider_display_name(self, provider_id):
-        provider = self.get_plan_provider_registry().get_provider(provider_id)
-        if provider is None:
-            return str(provider_id or "").strip()
-        display_name = str(getattr(provider, "display_name", "") or "").strip()
-        if display_name:
-            return display_name
-        getter = getattr(provider, "get_display_name", None)
-        if callable(getter):
-            try:
-                return str(getter() or "").strip()
-            except Exception:
-                pass
-        provider_name = str(getattr(provider, "provider_id", "") or "").strip()
-        return provider_name or str(provider_id or "").strip()
+        return plan_provider_runtime.get_plan_provider_display_name(self, provider_id)
 
     def get_plan_edit_context(self):
         active_storey = self.active_storey
@@ -2798,196 +2776,50 @@ class PlanEditSession:
         return self._get_plan_semantic_object(self.resolve_plan_target_object(target))
 
     def _build_plan_semantic_record(self, target_kind, target_obj):
-        if not target_kind or target_obj is None:
-            return None
-        semantic_obj = self._get_plan_semantic_object(target_obj)
-        if semantic_obj is None:
-            return None
-        doc = getattr(target_obj, "Document", None)
-        semantic_doc = getattr(semantic_obj, "Document", None)
-        space_label = self._get_plan_text_property(
-            semantic_obj,
-            ("SpaceLabel", "RoomLabel", "Label"),
-        )
-        source_space_name = self._get_plan_text_property(
-            semantic_obj,
-            ("SourceSpaceName",),
-        )
-        if target_kind == "space" and not source_space_name:
-            source_space_name = str(getattr(semantic_obj, "Name", "") or "")
-        usage_category = self._get_plan_text_property(
-            semantic_obj,
-            ("UsageCategory", "SpaceType"),
-        )
-        requirement_tags = self._normalize_plan_requirement_tags(
-            getattr(semantic_obj, "RequirementTags", None)
-        )
-        return PlanSemanticRecord(
-            target_kind=str(target_kind or ""),
-            document_name=str(getattr(doc, "Name", "") or ""),
-            object_name=str(getattr(target_obj, "Name", "") or ""),
-            label=str(getattr(target_obj, "Label", getattr(target_obj, "Name", "")) or ""),
-            semantic_document_name=str(getattr(semantic_doc, "Name", "") or ""),
-            semantic_object_name=str(getattr(semantic_obj, "Name", "") or ""),
-            semantic_label=str(
-                getattr(semantic_obj, "Label", getattr(semantic_obj, "Name", "")) or ""
-            ),
-            space_key=self._get_plan_text_property(semantic_obj, ("SpaceKey",)),
-            space_label=str(space_label or ""),
-            source_space_name=str(source_space_name or ""),
-            usage_category=str(usage_category or ""),
-            object_role=self._get_plan_text_property(semantic_obj, ("ObjectRole",)),
-            semantic_preset=self._get_plan_text_property(semantic_obj, ("SemanticPreset",)),
-            host_ref=self._get_plan_host_ref(semantic_obj),
-            mount_height_mm=self._get_plan_float_property(
-                semantic_obj,
-                ("MountHeight", "MEPMountHeight", "PlumbingMountHeight"),
-            ),
-            requirement_tags=requirement_tags,
+        return plan_provider_runtime.build_plan_semantic_record(
+            self,
+            target_kind,
+            target_obj,
         )
 
     def get_plan_semantic_records(self, targets=None):
-        if targets is None:
-            targets = self.get_plan_targets(selected_only=True)
-        records = []
-        for target in targets or ():
-            target_kind = None
-            target_obj = None
-            if isinstance(target, PlanTarget):
-                target_kind = target.kind
-                target_obj = self.resolve_plan_target_object(target)
-            else:
-                try:
-                    target_kind, target_obj = target
-                except Exception:
-                    continue
-            record = self._build_plan_semantic_record(target_kind, target_obj)
-            if record is not None:
-                records.append(record)
-        return tuple(records)
+        return plan_provider_runtime.get_plan_semantic_records(self, targets=targets)
 
     def _get_plan_provider_id(self, provider):
-        if provider is None:
-            return ""
-        getter = getattr(provider, "get_provider_id", None)
-        if callable(getter):
-            try:
-                provider_id = str(getter() or "").strip()
-            except Exception:
-                provider_id = ""
-            if provider_id:
-                return provider_id
-        return str(getattr(provider, "provider_id", "") or "").strip()
+        return plan_provider_runtime.get_plan_provider_id(provider)
 
     def _coerce_plan_provider_results(self, result):
-        if result is None:
-            return ()
-        if isinstance(result, (str, bytes)):
-            return ()
-        try:
-            return tuple(result)
-        except TypeError:
-            return (result,)
+        return plan_provider_runtime.coerce_plan_provider_results(result)
 
     def _normalize_plan_provider_action(self, provider_id, action):
-        if not isinstance(action, PlanActionSpec):
-            return None
-        if action.provider_id == provider_id:
-            return action
-        return replace(action, provider_id=str(provider_id or ""))
+        return plan_provider_runtime.normalize_plan_provider_action(provider_id, action)
 
     def _normalize_plan_provider_issue(self, provider_id, issue):
-        if not isinstance(issue, PlanIssueSpec):
-            return None
-        actions = tuple(
-            normalized
-            for normalized in (
-                self._normalize_plan_provider_action(provider_id, action)
-                for action in (issue.actions or ())
-            )
-            if normalized is not None
-        )
-        replacements = {}
-        if issue.provider_id != provider_id:
-            replacements["provider_id"] = str(provider_id or "")
-        if actions != tuple(issue.actions or ()):
-            replacements["actions"] = actions
-        if not replacements:
-            return issue
-        return replace(issue, **replacements)
+        return plan_provider_runtime.normalize_plan_provider_issue(self, provider_id, issue)
 
     def _normalize_plan_provider_suggestion(self, provider_id, suggestion):
-        if not isinstance(suggestion, PlanSuggestionSpec):
-            return None
-        actions = tuple(
-            normalized
-            for normalized in (
-                self._normalize_plan_provider_action(provider_id, action)
-                for action in (suggestion.actions or ())
-            )
-            if normalized is not None
+        return plan_provider_runtime.normalize_plan_provider_suggestion(
+            self,
+            provider_id,
+            suggestion,
         )
-        replacements = {}
-        if suggestion.provider_id != provider_id:
-            replacements["provider_id"] = str(provider_id or "")
-        if actions != tuple(suggestion.actions or ()):
-            replacements["actions"] = actions
-        if not replacements:
-            return suggestion
-        return replace(suggestion, **replacements)
 
     def _normalize_plan_provider_section(self, provider_id, section):
-        if not isinstance(section, PlanInspectorSection):
-            return None
-        actions = tuple(
-            normalized
-            for normalized in (
-                self._normalize_plan_provider_action(provider_id, action)
-                for action in (section.actions or ())
-            )
-            if normalized is not None
+        return plan_provider_runtime.normalize_plan_provider_section(
+            self,
+            provider_id,
+            section,
         )
-        replacements = {}
-        if section.provider_id != provider_id:
-            replacements["provider_id"] = str(provider_id or "")
-        if actions != tuple(section.actions or ()):
-            replacements["actions"] = actions
-        if not replacements:
-            return section
-        return replace(section, **replacements)
 
     def _normalize_plan_provider_overlay(self, provider_id, overlay):
-        if not isinstance(overlay, PlanOverlaySpec):
-            return None
-        if overlay.provider_id == provider_id:
-            return overlay
-        return replace(overlay, provider_id=str(provider_id or ""))
+        return plan_provider_runtime.normalize_plan_provider_overlay(provider_id, overlay)
 
     def _collect_plan_provider_contributions(self, method_name, normalizer):
-        context = self.get_plan_edit_context()
-        results = []
-        for provider in self.get_plan_provider_registry().iter_providers():
-            provider_id = self._get_plan_provider_id(provider)
-            if not provider_id:
-                continue
-            method = getattr(provider, method_name, None)
-            if not callable(method):
-                continue
-            try:
-                provided = method(context)
-            except Exception as exc:
-                FreeCAD.Console.PrintError(
-                    translate(
-                        "BIM_PlanEdit",
-                        "Plan Edit provider '{provider}' failed in {method}: {error}\n",
-                    ).format(provider=provider_id, method=method_name, error=exc)
-                )
-                continue
-            for contribution in self._coerce_plan_provider_results(provided):
-                normalized = normalizer(provider_id, contribution)
-                if normalized is not None:
-                    results.append(normalized)
-        return tuple(results)
+        return plan_provider_runtime.collect_plan_provider_contributions(
+            self,
+            method_name,
+            normalizer,
+        )
 
     def get_plan_provider_issues(self):
         return self._collect_plan_provider_contributions(
@@ -3014,43 +2846,12 @@ class PlanEditSession:
         )
 
     def execute_plan_provider_action(self, provider_id, action_key, transaction_label=""):
-        provider = self.get_plan_provider_registry().get_provider(provider_id)
-        if provider is None:
-            return False
-        execute_action = getattr(provider, "execute_action", None)
-        if not callable(execute_action):
-            return False
-
-        context = self.get_plan_edit_context()
-        transaction_label = str(transaction_label or "").strip()
-        try:
-            if transaction_label:
-                with PlanEditTransaction(self.doc, transaction_label):
-                    handled = execute_action(action_key, context=context, session=self)
-            else:
-                handled = execute_action(action_key, context=context, session=self)
-        except Exception as exc:
-            FreeCAD.Console.PrintError(
-                translate(
-                    "BIM_PlanEdit",
-                    "Plan Edit provider '{provider}' action '{action}' failed: {error}\n",
-                ).format(provider=provider_id, action=action_key, error=exc)
-            )
-            return False
-
-        if handled is False:
-            return False
-
-        try:
-            if self.doc is not None:
-                self.doc.recompute()
-        except Exception:
-            pass
-        self._refresh_primary_selected_plan_target()
-        self._invalidate_document_dependent_plan_visuals()
-        self._refresh_task_panel_status()
-        self._focus_plan_view()
-        return True
+        return plan_provider_runtime.execute_plan_provider_action(
+            self,
+            provider_id,
+            action_key,
+            transaction_label=transaction_label,
+        )
 
     def _get_space_preflight_report(self, targets=None):
         if self.current_tool != "Select":
