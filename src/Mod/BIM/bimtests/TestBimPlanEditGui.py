@@ -3861,6 +3861,34 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_clicking_hovered_wall_reuses_hover_target_without_repick(self):
+        """A hovered wall click should promote the hovered target without another pick pass."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session._set_hovered_wall(wall)
+        self.assertIs(session.hovered_wall, wall)
+
+        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
+            session,
+            "_get_plan_target_at_position",
+        ) as get_target:
+            press = self._make_fake_left_mouse_press(250, 250)
+            session._on_mouse_pressed(press)
+
+        self.assertEqual(get_target.call_count, 0)
+        self.assertTrue(press._handled)
+        self._assert_selected_plan_target(session, "wall", wall)
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall.Name])
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_selecting_space_refreshes_only_changed_selected_overlays(self):
         """Switching semantic selection to a space should avoid unrelated selected-overlay refreshes."""
 
