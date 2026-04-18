@@ -20,10 +20,16 @@ MACRO (fc_copy_sources target_name outpath)
 		get_filename_component(outfile "${outpath}/${it}" ABSOLUTE)
 		# Ensure parent directory exists when copying or creating symlinks
 		get_filename_component(outfile_dir "${outfile}" PATH)
+		if(INSTALL_PREFER_SYMLINKS)
+			set(pre_copy_command COMMAND "${CMAKE_COMMAND}" -E rm -rf "${outfile}")
+		else()
+			set(pre_copy_command)
+		endif()
 		add_file_dependencies("${infile}" "${outfile}")
 		ADD_CUSTOM_COMMAND(
 			# Make sure destination directory exists before copy/symlink
 			COMMAND   "${CMAKE_COMMAND}" -E make_directory "${outfile_dir}"
+			${pre_copy_command}
 			COMMAND   "${CMAKE_COMMAND}" -E ${copy_command} "${infile}" "${outfile}"
 			OUTPUT   "${outfile}"
 			COMMENT "Copying ${infile} to ${outfile}${fc_details}"
