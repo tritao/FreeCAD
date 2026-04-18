@@ -31,6 +31,7 @@ import math
 import FreeCAD
 import FreeCADGui
 from bimplan import performance as plan_performance
+from bimplan import selection as plan_selection
 from bimplan import snap as plan_snap
 from bimplan import view as plan_view
 from bimplan.context import PlanEditContext
@@ -342,52 +343,33 @@ class PlanEditSession:
             app.aboutToQuit.connect(self.begin_teardown)
 
     def _get_selected_target_for_kind(self, kind):
-        if getattr(self, "_selected_plan_target_kind", None) == kind:
-            return getattr(self, "_selected_plan_target_obj", None)
-        return None
+        return plan_selection.get_selected_target_for_kind(self, kind)
 
     def _set_selected_target_for_kind(self, kind, obj):
-        if obj is None:
-            if getattr(self, "_selected_plan_target_kind", None) == kind:
-                self._selected_plan_target_kind = None
-                self._selected_plan_target_obj = None
-            return
-        self._selected_plan_target_kind = kind
-        self._selected_plan_target_obj = obj
+        return plan_selection.set_selected_target_for_kind(self, kind, obj)
 
     def _get_selected_plan_target_state(self):
-        kind = getattr(self, "_selected_plan_target_kind", None)
-        obj = getattr(self, "_selected_plan_target_obj", None)
-        if kind not in _PRIMARY_PLAN_TARGET_KINDS or obj is None:
-            return (None, None)
-        return (kind, obj)
+        return plan_selection.get_selected_plan_target_state(
+            self,
+            _PRIMARY_PLAN_TARGET_KINDS,
+        )
 
     def _set_selected_plan_target_state(self, kind=None, obj=None):
-        if kind not in _PRIMARY_PLAN_TARGET_KINDS or obj is None:
-            kind = None
-            obj = None
-        self._selected_plan_target_kind = kind
-        self._selected_plan_target_obj = obj
+        return plan_selection.set_selected_plan_target_state(
+            self,
+            _PRIMARY_PLAN_TARGET_KINDS,
+            kind=kind,
+            obj=obj,
+        )
 
     def _get_selected_plan_target_object(self, kind=None):
-        selected_kind, selected_obj = self._get_selected_plan_target()
-        if kind is not None and selected_kind != kind:
-            return None
-        return selected_obj
+        return plan_selection.get_selected_plan_target_object(self, kind=kind)
 
     def _is_selected_plan_target(self, kind, obj=None):
-        selected_kind, selected_obj = self._get_selected_plan_target()
-        if selected_kind != kind:
-            return False
-        if obj is None:
-            return selected_obj is not None
-        return selected_obj == obj
+        return plan_selection.is_selected_plan_target(self, kind, obj=obj)
 
     def _clear_selected_plan_target_if_matches(self, kind, obj):
-        if not self._is_selected_plan_target(kind, obj):
-            return False
-        self._set_selected_plan_target_state()
-        return True
+        return plan_selection.clear_selected_plan_target_if_matches(self, kind, obj)
 
     def _get_plan_target_object_from_state(self, state_kind, state_obj, kind):
         if state_kind == kind:
@@ -2843,120 +2825,43 @@ class PlanEditSession:
             self._register_plan_object(obj)
 
     def _set_pending_selected_plan_target(self, kind=None, obj=None):
-        if kind == "opening" and self._is_hosted_opening_object(obj):
-            self._pending_selected_plan_target = ("opening", obj)
-            return
-        if kind == "symbol" and self._is_plan_symbol_instance(obj):
-            self._pending_selected_plan_target = ("symbol", obj)
-            return
-        if kind == "region" and self._is_plan_region_object(obj):
-            self._pending_selected_plan_target = ("region", obj)
-            return
-        if kind == "space" and self._is_plan_space_object(obj):
-            self._pending_selected_plan_target = ("space", obj)
-            return
-        if kind == "wall" and self._is_plan_selectable_wall(obj):
-            self._pending_selected_plan_target = ("wall", obj)
-            return
-        self._pending_selected_plan_target = None
+        return plan_selection.set_pending_selected_plan_target(self, kind=kind, obj=obj)
 
     def _consume_pending_selected_plan_target(self):
-        pending_target = self._pending_selected_plan_target
-        self._pending_selected_plan_target = None
-        if not pending_target:
-            return (None, None)
-        kind, obj = pending_target
-        if kind == "opening" and self._is_hosted_opening_object(obj):
-            return (kind, obj)
-        if kind == "symbol" and self._is_plan_symbol_instance(obj):
-            return (kind, obj)
-        if kind == "region" and self._is_plan_region_object(obj):
-            return (kind, obj)
-        if kind == "space" and self._is_plan_space_object(obj):
-            return (kind, obj)
-        if kind == "wall" and self._is_plan_selectable_wall(obj):
-            return (kind, obj)
-        return (None, None)
+        return plan_selection.consume_pending_selected_plan_target(self)
 
     def _get_selected_plan_target(self):
-        self._sanitize_plan_target_references()
-        kind, obj = self._get_selected_plan_target_state()
-        if self._is_valid_plan_target(kind, obj):
-            return (kind, obj)
-        if kind is not None or obj is not None:
-            self._set_selected_plan_target_state()
-        return (None, None)
+        return plan_selection.get_selected_plan_target(self)
 
     def _get_first_plan_target_from_selection(self, selection):
-        for selected in selection or []:
-            target_kind, target_obj = self._get_plan_target_for_object(selected)
-            if target_kind and target_obj:
-                return (target_kind, target_obj)
-        return (None, None)
+        return plan_selection.get_first_plan_target_from_selection(self, selection)
 
     def _is_valid_plan_target(self, kind, obj):
-        validators = {
-            "opening": self._is_hosted_opening_object,
-            "symbol": self._is_plan_symbol_instance,
-            "region": self._is_plan_region_object,
-            "space": self._is_plan_space_object,
-            "wall": self._is_plan_selectable_wall,
-        }
-        validator = validators.get(kind)
-        return bool(validator is not None and validator(obj))
+        return plan_selection.is_valid_plan_target(self, kind, obj)
 
     def _get_plan_target_state_key(self, kind, obj):
-        if not kind or not obj:
-            return None
-        return (
-            kind,
-            getattr(getattr(obj, "Document", None), "Name", None),
-            getattr(obj, "Name", None),
-        )
+        return plan_selection.get_plan_target_state_key(kind, obj)
 
     def _normalize_plan_target_list(self, targets):
-        normalized = []
-        seen = set()
-        for target in targets or []:
-            try:
-                target_kind, target_obj = target
-            except Exception:
-                continue
-            if not self._is_valid_plan_target(target_kind, target_obj):
-                continue
-            key = self._get_plan_target_state_key(target_kind, target_obj)
-            if key is None or key in seen:
-                continue
-            seen.add(key)
-            normalized.append((target_kind, target_obj))
-        return normalized
+        return plan_selection.normalize_plan_target_list(self, targets)
 
     def _normalize_plan_targets_from_selection(self, selection):
-        return self._normalize_plan_target_list(
-            [
-                (target_kind, target_obj)
-                for target_kind, target_obj in (
-                    self._get_plan_target_for_object(selected) for selected in (selection or [])
-                )
-                if target_kind and target_obj
-            ]
-        )
+        return plan_selection.normalize_plan_targets_from_selection(self, selection)
 
     def _set_secondary_selected_plan_targets(self, targets, primary_kind=None, primary_obj=None):
-        if primary_kind is None and primary_obj is None:
-            primary_kind, primary_obj = self._get_selected_plan_target()
-        normalized = []
-        for target_kind, target_obj in self._normalize_plan_target_list(targets):
-            if target_kind == primary_kind and target_obj == primary_obj:
-                continue
-            normalized.append((target_kind, target_obj))
-        self._secondary_selected_plan_targets_state = normalized
+        return plan_selection.set_secondary_selected_plan_targets(
+            self,
+            targets,
+            primary_kind=primary_kind,
+            primary_obj=primary_obj,
+        )
 
     def _sync_secondary_selected_plan_targets_from_selection(
         self, selection, primary_kind=None, primary_obj=None
     ):
-        self._set_secondary_selected_plan_targets(
-            self._normalize_plan_targets_from_selection(selection),
+        return plan_selection.sync_secondary_selected_plan_targets_from_selection(
+            self,
+            selection,
             primary_kind=primary_kind,
             primary_obj=primary_obj,
         )
@@ -2964,8 +2869,8 @@ class PlanEditSession:
     def _sync_secondary_selected_plan_targets_from_gui_selection(
         self, primary_kind=None, primary_obj=None
     ):
-        self._sync_secondary_selected_plan_targets_from_selection(
-            self._get_gui_selection(),
+        return plan_selection.sync_secondary_selected_plan_targets_from_gui_selection(
+            self,
             primary_kind=primary_kind,
             primary_obj=primary_obj,
         )
@@ -3022,14 +2927,7 @@ class PlanEditSession:
                     pass
 
     def _get_secondary_selected_plan_targets(self):
-        self._sanitize_plan_target_references()
-        primary_kind, primary_obj = self._get_selected_plan_target()
-        self._set_secondary_selected_plan_targets(
-            getattr(self, "_secondary_selected_plan_targets_state", []),
-            primary_kind=primary_kind,
-            primary_obj=primary_obj,
-        )
-        return list(getattr(self, "_secondary_selected_plan_targets_state", []))
+        return plan_selection.get_secondary_selected_plan_targets(self)
 
     def _format_plan_target_count_label(self, kind, count):
         labels = {
@@ -3070,28 +2968,7 @@ class PlanEditSession:
         return ", ".join(parts)
 
     def _get_selected_plan_targets(self):
-        primary_kind, primary_obj = self._get_selected_plan_target()
-        targets = []
-        seen = set()
-        if primary_kind and primary_obj:
-            key = (
-                primary_kind,
-                getattr(getattr(primary_obj, "Document", None), "Name", None),
-                getattr(primary_obj, "Name", None),
-            )
-            seen.add(key)
-            targets.append((primary_kind, primary_obj))
-        for target_kind, target_obj in self._get_secondary_selected_plan_targets():
-            key = (
-                target_kind,
-                getattr(getattr(target_obj, "Document", None), "Name", None),
-                getattr(target_obj, "Name", None),
-            )
-            if key in seen:
-                continue
-            seen.add(key)
-            targets.append((target_kind, target_obj))
-        return targets
+        return plan_selection.get_selected_plan_targets(self)
 
     def _get_plan_text_property(self, obj, property_names, default=""):
         if obj is None:

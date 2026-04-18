@@ -218,6 +218,7 @@ SET(bimplan_SRCS
     bimplan/providers.py
     bimplan/registry.py
     bimplan/semantics.py
+    bimplan/selection.py
     bimplan/snap.py
     bimplan/targets.py
     bimplan/transactions.py
