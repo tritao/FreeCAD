@@ -40,6 +40,7 @@ from bimplan.context import PlanEditContext
 from bimplan.hosts import _PlanEditCommandHost, _PlanEditWallHost
 from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
+from bimplan.overlays import openings as opening_overlays
 from bimplan.providers import (
     PlanActionSpec,
     PlanInspectorSection,
@@ -6679,89 +6680,19 @@ class PlanEditSession:
         return overlay_manager.set_plan_line_tracker_width(tracker, width)
 
     def _get_opening_handle_markers(self, marker_size=None):
-        from draftutils import params
-
-        if marker_size is None:
-            marker_size = self._scaled_marker_size(params.get_param_view("MarkerSize"))
-        return {
-            "move": FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size),
-            "flip_hinge": FreeCADGui.getMarkerIndex("CIRCLE_FILLED", marker_size),
-            "flip_opening": FreeCADGui.getMarkerIndex("CROSS", marker_size),
-        }
+        return opening_overlays.get_opening_handle_markers(self, marker_size=marker_size)
 
     def _set_opening_handle_tracker_marker(self, tracker, marker):
-        if tracker is None or marker is None:
-            return
-        marker_node = getattr(tracker, "marker", None)
-        if marker_node is None:
-            return
-        try:
-            marker_node.markerIndex = marker
-        except Exception:
-            return
+        return opening_overlays.set_opening_handle_tracker_marker(tracker, marker)
 
     def _discard_opening_handle_tracker_pool(self):
-        if self._opening_handle_tracker_pool:
-            self._finalize_trackers(self._opening_handle_tracker_pool)
-        self._opening_handle_tracker_pool = []
-        self._opening_handle_tracker_pool_queued = False
+        return opening_overlays.discard_opening_handle_tracker_pool(self)
 
     def _queue_prime_opening_handle_tracker_pool(self):
-        if (
-            self._tearing_down
-            or self.current_tool != "Select"
-            or self._opening_handle_tracker_pool
-            or self._opening_handle_trackers
-            or self._opening_handle_tracker_pool_queued
-            or not self.doc
-        ):
-            return
-        try:
-            from PySide import QtCore
-        except ImportError:
-            return
-        self._opening_handle_tracker_pool_queued = True
-        QtCore.QTimer.singleShot(0, self._prime_opening_handle_tracker_pool)
+        return opening_overlays.queue_prime_opening_handle_tracker_pool(self)
 
     def _prime_opening_handle_tracker_pool(self):
-        self._opening_handle_tracker_pool_queued = False
-        if (
-            self._tearing_down
-            or self.current_tool != "Select"
-            or self._opening_handle_tracker_pool
-            or self._opening_handle_trackers
-            or not self.doc
-        ):
-            return
-        try:
-            has_hosted_opening = any(
-                self._is_hosted_opening_object(obj) for obj in getattr(self.doc, "Objects", ())
-            )
-        except Exception:
-            has_hosted_opening = False
-        if not has_hosted_opening:
-            return
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            return
-        markers = self._get_opening_handle_markers()
-        pooled_trackers = []
-        try:
-            for idx, role in enumerate(("move", "flip_hinge", "flip_opening")):
-                tracker = DraftTrackers.editTracker(
-                    pos=FreeCAD.Vector(),
-                    idx=idx,
-                    marker=markers[role],
-                    inactive=True,
-                )
-                tracker.off()
-                pooled_trackers.append(tracker)
-        except Exception:
-            self._finalize_trackers(pooled_trackers)
-            return
-        self._opening_handle_tracker_pool = pooled_trackers
-        self._plan_perf_count("opening_handle_pool_primes")
+        return opening_overlays.prime_opening_handle_tracker_pool(self)
 
     def _get_plan_target_at_position(self, mouse_pos):
         return plan_picking.get_plan_target_at_position(self, mouse_pos)
@@ -8309,180 +8240,40 @@ class PlanEditSession:
         self._region_overlay_trackers = []
 
     def _sync_hovered_opening_overlay(self):
-        with self._plan_perf_trace_span("sync_hovered_opening_overlay"):
-            opening = self.hovered_opening
-            if self.current_tool != "Select":
-                self._clear_hovered_opening_overlay()
-                return
-            if not self._is_hosted_opening_object(opening):
-                self._clear_hovered_opening_overlay()
-                return
-            if self._is_selected_plan_target("opening", opening):
-                self._clear_hovered_opening_overlay()
-                return
-            width = self._scaled_line_width(2)
-            color = (0.38, 0.62, 0.96)
-            render_state = (
-                self._get_document_object_key(opening),
-                round(float(width), 3),
-                color,
-            )
-            if (
-                not self._hovered_opening_overlay_dirty
-                and self._hovered_opening_overlay_render_state == render_state
-            ):
-                self._plan_perf_count("hovered_opening_overlay_cache_hits")
-                return
-            try:
-                import draftguitools.gui_trackers as DraftTrackers
-            except ImportError:
-                self._clear_hovered_opening_overlay()
-                return
-            segments = self._get_opening_overlay_segments(opening)
-            self._plan_perf_count("hovered_opening_overlay_segments", len(segments))
-            if len(self._opening_hover_trackers) != len(segments):
-                self._clear_hovered_opening_overlay()
-                for _start, _end in segments:
-                    tracker = self._make_plan_line_tracker(
-                        DraftTrackers,
-                        "opening-overlay:{}".format(getattr(opening, "Name", "unknown")),
-                        scolor=color,
-                        swidth=width,
-                        ontop=True,
-                    )
-                    self._opening_hover_trackers.append(tracker)
-            for tracker, (start, end) in zip(self._opening_hover_trackers, segments):
-                self._set_plan_line_tracker_width(tracker, width)
-                tracker.setColor(color)
-                tracker.p1(start)
-                tracker.p2(end)
-                tracker.on()
-            self._hovered_opening_overlay_render_state = render_state
-            self._hovered_opening_overlay_dirty = False
+        return opening_overlays.sync_hovered_opening_overlay(self)
 
     def _clear_hovered_opening_overlay(self):
-        self._finalize_trackers(self._opening_hover_trackers)
-        self._opening_hover_trackers = []
-
-        self._hovered_opening_overlay_dirty = False
-        self._hovered_opening_overlay_render_state = None
+        return opening_overlays.clear_hovered_opening_overlay(self)
 
     def _invalidate_hovered_opening_overlay_cache(self):
-        self._hovered_opening_overlay_dirty = True
+        return opening_overlays.invalidate_hovered_opening_overlay_cache(self)
 
     def _create_opening_overlay_trackers(self, opening, color, width, tracker_store):
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            return
-
-        for polyline in self._get_opening_overlay_polylines(opening):
-            if len(polyline) < 2:
-                continue
-            for start, end in zip(polyline, polyline[1:]):
-                tracker = self._make_plan_line_tracker(
-                    DraftTrackers,
-                    "opening-overlay:{}".format(getattr(opening, "Name", "unknown")),
-                    scolor=color,
-                    swidth=width,
-                    ontop=True,
-                )
-                tracker.p1(start)
-                tracker.p2(end)
-                tracker.on()
-                tracker_store.append(tracker)
+        return opening_overlays.create_opening_overlay_trackers(
+            self,
+            opening,
+            color=color,
+            width=width,
+            tracker_store=tracker_store,
+        )
 
     def _get_opening_overlay_segments(self, opening):
         return overlay_geometry.get_opening_overlay_segments(self, opening)
 
     def _sync_selected_opening_overlay(self):
-        with self._plan_perf_trace_span("sync_selected_opening_overlay"):
-            opening = self._get_selected_plan_target_object("opening")
-            if self.current_tool != "Select" or not self._is_hosted_opening_object(opening):
-                self._clear_selected_opening_overlay()
-                return
-            width = self._scaled_line_width(3)
-            color = (0.12, 0.38, 0.95)
-            render_state = (
-                self._get_document_object_key(opening),
-                round(float(width), 3),
-                color,
-            )
-            if (
-                not self._selected_opening_overlay_dirty
-                and self._selected_opening_overlay_render_state == render_state
-            ):
-                self._plan_perf_count("selected_opening_overlay_cache_hits")
-                return
-            try:
-                import draftguitools.gui_trackers as DraftTrackers
-            except ImportError:
-                self._clear_selected_opening_overlay()
-                return
-            segments = self._get_opening_overlay_segments(opening)
-            self._plan_perf_count("selected_opening_overlay_segments", len(segments))
-            transferred_trackers = False
-            if len(self._opening_overlay_trackers) != len(segments):
-                if (
-                    not self._opening_overlay_trackers
-                    and self.hovered_opening == opening
-                    and len(self._opening_hover_trackers) == len(segments)
-                ):
-                    self._opening_overlay_trackers = self._opening_hover_trackers
-                    self._opening_hover_trackers = []
-                    self._hovered_opening_overlay_render_state = None
-                    transferred_trackers = True
-                    self._plan_perf_count("selected_opening_overlay_tracker_transfers")
-                else:
-                    self._clear_selected_opening_overlay()
-                    for _start, _end in segments:
-                        tracker = self._make_plan_line_tracker(
-                            DraftTrackers,
-                            "selected-opening-overlay:{}".format(
-                                getattr(opening, "Name", "unknown")
-                            ),
-                            scolor=color,
-                            swidth=width,
-                            ontop=True,
-                        )
-                        self._opening_overlay_trackers.append(tracker)
-            for tracker, (start, end) in zip(self._opening_overlay_trackers, segments):
-                self._set_plan_line_tracker_width(tracker, width)
-                tracker.setColor(color)
-                if not transferred_trackers:
-                    tracker.p1(start)
-                    tracker.p2(end)
-                    tracker.on()
-            self._selected_opening_overlay_render_state = render_state
-            self._selected_opening_overlay_dirty = False
+        return opening_overlays.sync_selected_opening_overlay(self)
 
     def _clear_selected_opening_overlay(self):
-        self._finalize_trackers(self._opening_overlay_trackers)
-        self._opening_overlay_trackers = []
-        self._selected_opening_overlay_dirty = False
-        self._selected_opening_overlay_render_state = None
+        return opening_overlays.clear_selected_opening_overlay(self)
 
     def _invalidate_selected_opening_overlay_cache(self):
-        self._selected_opening_overlay_dirty = True
+        return opening_overlays.invalidate_selected_opening_overlay_cache(self)
 
     def _sync_selected_wall_opening_context_overlay(self):
-        self._clear_selected_wall_opening_context_overlay()
-        wall = self._get_selected_plan_target_object("wall")
-        if self.current_tool != "Select" or not wall or self._is_selected_plan_target("opening"):
-            return
-        color = (0.46, 0.58, 0.82)
-        width = self._scaled_line_width(2)
-        for opening in self._get_wall_hosted_openings(wall):
-            self._create_opening_overlay_trackers(
-                opening,
-                color=color,
-                width=width,
-                tracker_store=self._selected_wall_opening_context_trackers,
-            )
+        return opening_overlays.sync_selected_wall_opening_context_overlay(self)
 
     def _clear_selected_wall_opening_context_overlay(self):
-        self._finalize_trackers(self._selected_wall_opening_context_trackers)
-        self._selected_wall_opening_context_trackers = []
+        return opening_overlays.clear_selected_wall_opening_context_overlay(self)
 
     def _copy_placement(self, placement):
         if placement is None:
@@ -9254,104 +9045,13 @@ class PlanEditSession:
         )
 
     def _get_selected_opening_handle_specs(self, opening):
-        from draftutils import params
-
-        handle_specs = []
-        marker_size = self._scaled_marker_size(params.get_param_view("MarkerSize"))
-        markers = self._get_opening_handle_markers(marker_size)
-        for idx, handle in enumerate(self._get_selected_opening_edit_handles(opening)):
-            if handle.role not in markers or handle.point is None:
-                continue
-            handle_specs.append((idx, handle.role, handle.point, markers[handle.role]))
-        return handle_specs
+        return opening_overlays.get_selected_opening_handle_specs(self, opening)
 
     def _sync_selected_opening_handles(self):
-        with self._plan_perf_trace_span("sync_selected_opening_handles"):
-            from draftutils import params
-
-            opening = self._get_selected_plan_target_object("opening")
-            if self.current_tool != "Select":
-                self._clear_selected_opening_handles()
-                return
-            if not self._is_hosted_opening_object(opening):
-                self._clear_selected_opening_handles()
-                return
-            specs = tuple(self._get_selected_opening_handle_specs(opening))
-            marker_size = self._scaled_marker_size(params.get_param_view("MarkerSize"))
-            handle_entries = tuple(
-                (
-                    int(idx),
-                    str(role),
-                    round(float(point.x), 6),
-                    round(float(point.y), 6),
-                    round(float(point.z), 6),
-                    int(marker_size),
-                )
-                for idx, role, point, _marker in specs
-            )
-            render_state = (
-                self._get_document_object_key(opening),
-                handle_entries,
-            )
-            if self._selected_opening_handle_render_state == render_state and len(
-                self._opening_handle_trackers
-            ) == len(specs):
-                self._plan_perf_count("selected_opening_handle_cache_hits")
-                return
-            try:
-                import draftguitools.gui_trackers as DraftTrackers
-            except ImportError:
-                self._clear_selected_opening_handles()
-                return
-            if len(self._opening_handle_trackers) == len(specs):
-                for tracker, (_idx, _role, point, marker) in zip(
-                    self._opening_handle_trackers, specs
-                ):
-                    self._set_opening_handle_tracker_marker(tracker, marker)
-                    tracker.set(point)
-                    tracker.on()
-                self._plan_perf_count("selected_opening_handle_tracker_reuses")
-            else:
-                if not self._opening_handle_trackers and len(
-                    self._opening_handle_tracker_pool
-                ) == len(specs):
-                    self._opening_handle_trackers = self._opening_handle_tracker_pool
-                    self._opening_handle_tracker_pool = []
-                    for tracker, (_idx, _role, point, marker) in zip(
-                        self._opening_handle_trackers, specs
-                    ):
-                        self._set_opening_handle_tracker_marker(tracker, marker)
-                        tracker.set(point)
-                        tracker.on()
-                    self._plan_perf_count("selected_opening_handle_pool_reuses")
-                else:
-                    self._clear_selected_opening_handles()
-                    if self._opening_handle_tracker_pool and len(
-                        self._opening_handle_tracker_pool
-                    ) != len(specs):
-                        self._discard_opening_handle_tracker_pool()
-                    for idx, _role, point, marker in specs:
-                        tracker = DraftTrackers.editTracker(
-                            pos=point,
-                            idx=idx,
-                            marker=marker,
-                            inactive=True,
-                        )
-                        tracker.on()
-                        self._opening_handle_trackers.append(tracker)
-            self._selected_opening_handle_render_state = render_state
+        return opening_overlays.sync_selected_opening_handles(self)
 
     def _clear_selected_opening_handles(self):
-        if self._opening_handle_trackers:
-            self._discard_opening_handle_tracker_pool()
-            for tracker in self._opening_handle_trackers:
-                try:
-                    tracker.off()
-                except Exception:
-                    pass
-            self._opening_handle_tracker_pool = self._opening_handle_trackers
-        self._opening_handle_trackers = []
-        self._selected_opening_handle_render_state = None
+        return opening_overlays.clear_selected_opening_handles(self)
 
     def _get_opening_move_preview_state(self, opening, point):
         if not opening or point is None:
