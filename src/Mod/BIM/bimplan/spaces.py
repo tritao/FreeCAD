@@ -151,7 +151,7 @@ def copy_shape_without_element_map(shape):
 
 
 def get_space_creation_request(session, targets=None):
-    targets = targets if targets is not None else session._get_selected_plan_targets()
+    targets = list(targets if targets is not None else session._get_selected_plan_targets())
     if not targets:
         return None
 
@@ -171,6 +171,19 @@ def get_space_creation_request(session, targets=None):
         "region_seed_space": region_seed_space,
         "boundaries": boundaries,
     }
+
+
+def should_run_space_preflight_for_targets(targets):
+    targets = list(targets or [])
+    if len(targets) <= 1:
+        return False
+
+    kinds = [target_kind for target_kind, _target_obj in targets]
+    if all(kind == "wall" for kind in kinds):
+        return True
+    if kinds.count("space") == 1 and all(kind in ("space", "wall") for kind in kinds):
+        return True
+    return False
 
 
 def get_existing_space_region_filter_spaces(session, exclude=None):
@@ -995,6 +1008,10 @@ def cancel_space_text_position_pick(session):
 
 def get_space_preflight_report(session, targets=None):
     if session.current_tool != "Select":
+        return None
+
+    targets = list(targets if targets is not None else session._get_selected_plan_targets())
+    if not should_run_space_preflight_for_targets(targets):
         return None
 
     request = session._get_space_creation_request(targets=targets)
