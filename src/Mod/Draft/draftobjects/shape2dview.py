@@ -156,10 +156,9 @@ class Shape2DView(DraftObject):
     def getProjected(self, obj, shape, direction):
         "returns projected edges from a shape and a direction"
         import Part
-        import TechDraw
 
         edges = []
-        _groups = TechDraw.projectEx(shape, direction)
+        _groups = Part.projectEx(shape, direction)
         for g in _groups[0:5]:
             if not g.isNull():
                 edges.append(g)

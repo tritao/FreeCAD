@@ -28,7 +28,7 @@
 #include <string>
 #include <TopoDS_Shape.hxx>
 
-#include <Base/Vector3D.h>
+#include <Mod/Part/App/ProjectionAlgos.h>
 #include <Mod/TechDraw/TechDrawGlobal.h>
 
 
@@ -41,7 +41,7 @@ namespace TechDraw
   
 /** Algo class for projecting shapes and creating SVG output of it
  */
-class TechDrawExport ProjectionAlgos
+class TechDrawExport ProjectionAlgos : public Part::ProjectionAlgos
 {
 public:
     /// Constructor
@@ -67,20 +67,6 @@ public:
                        XmlAttributes H1_style=XmlAttributes());
     std::string getDXF(ExtractionType type, double scale, double tolerance);//added by Dan Falck 2011/09/25
 
-
-    const TopoDS_Shape &Input;
-    const Base::Vector3d &Direction;
-
-    TopoDS_Shape V ;// hard edge visibly
-    TopoDS_Shape V1;// Smoth edges visibly
-    TopoDS_Shape VN;// contour edges visibly
-    TopoDS_Shape VO;// contours apparents visibly
-    TopoDS_Shape VI;// isoparamtriques   visibly
-    TopoDS_Shape H ;// hard edge       invisibly
-    TopoDS_Shape H1;// Smoth edges  invisibly
-    TopoDS_Shape HN;// contour edges invisibly
-    TopoDS_Shape HO;// contours apparents invisibly
-    TopoDS_Shape HI;// isoparamtriques   invisibly
 };
 
 } //namespace TechDraw

@@ -222,6 +222,8 @@ SET(Features_SRCS
     PartFeatures.h
     PartFeature.cpp
     PartFeature.h
+    ProjectionAlgos.cpp
+    ProjectionAlgos.h
     PartFeatureReference.cpp
     PartFeatureReference.h
     Part2DObject.cpp

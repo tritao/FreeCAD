@@ -1316,7 +1316,7 @@ class LevelHandler(BaseHandler):
             if self.importer.preferences["DEBUG_GEOMETRY"]:
                 _log(f"Extruding {obj_to_extrude.Label}…")
             obj_to_extrude.recompute(True)
-            projection = TechDraw.project(obj_to_extrude.Shape, Z_NORM)[0]
+            projection = Part.project(obj_to_extrude.Shape, Z_NORM)[0]
             face = Part.Face(Part.Wire(projection.Edges))
             extrude = face.extrude(-Z_NORM * floor.floorThickness.Value)
             part = Part.show(extrude, "Extrusion")

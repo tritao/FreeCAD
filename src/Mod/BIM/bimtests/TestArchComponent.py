@@ -33,6 +33,7 @@ from bimtests import TestArchBase
 from draftutils.messages import _msg
 
 from math import pi, cos, sin, radians
+from unittest.mock import patch
 
 
 class TestArchComponent(TestArchBase.TestArchBase):
@@ -292,6 +293,33 @@ class TestArchComponent(TestArchBase.TestArchBase):
             msg=f"Vertical area > 0.1% | Exp: {theoreticalVerticalArea:.3f} | "
             f"Got: {actualVerticalArea:.3f}",
         )
+
+    def test_plan_region_area_falls_back_to_project_ex_when_project_missing(self):
+        """Plan-region areas should still compute when TechDraw.project is unavailable."""
+
+        import TechDraw
+
+        points = [
+            App.Vector(0, 0, 0),
+            App.Vector(3000, 0, 0),
+            App.Vector(3000, 2000, 0),
+            App.Vector(0, 2000, 0),
+        ]
+        region = Arch.makePlanRegion(points=points, name="Fallback Region")
+        self.document.recompute()
+
+        region.HorizontalArea = 0
+        region.PerimeterLength = 0
+
+        with patch.object(
+            TechDraw,
+            "project",
+            side_effect=AttributeError("module 'TechDraw' has no attribute 'project'"),
+        ):
+            region.Proxy.computeAreas(region)
+
+        self.assertAlmostEqual(region.HorizontalArea.getValueAs("m^2").Value, 6.0, places=3)
+        self.assertAlmostEqual(region.PerimeterLength.getValueAs("m").Value, 10.0, places=3)
 
     def test_remove_single_window_from_wall_host_is_none(self):
         """

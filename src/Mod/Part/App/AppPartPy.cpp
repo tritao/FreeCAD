@@ -97,6 +97,7 @@
 #include "PartFeature.h"
 #include "PartPyCXX.h"
 #include "PyException.h"
+#include "ProjectionAlgos.h"
 #include "Tools.h"
 #include "TopoShapeCompoundPy.h"
 #include "TopoShapePy.h"
@@ -693,6 +694,20 @@ public:
             "r = Part.makeSplitShape(face, split)\n"
             "Part.show(r[0][0])\n"
             "Part.show(r[1][0])\n"
+        );
+        add_varargs_method(
+            "project",
+            &Module::project,
+            "[visibleG0, visibleG1, hiddenG0, hiddenG1] = project(TopoShape[, App.Vector "
+            "Direction])\n"
+            " -- Project a shape and return the visible/invisible parts of it."
+        );
+        add_varargs_method(
+            "projectEx",
+            &Module::projectEx,
+            "[V, V1, VN, VO, VI, H, H1, HN, HO, HI] = projectEx(TopoShape[, App.Vector "
+            "Direction])\n"
+            " -- Project a shape and return all visible/invisible edge groups."
         );
         add_varargs_method(
             "exportUnits",
@@ -2691,6 +2706,76 @@ private:
         }
         Part::Feature::clearShapeCache();
         return Py::Object();
+    }
+
+    Py::Object project(const Py::Tuple& args)
+    {
+        PyObject* pyShape = nullptr;
+        PyObject* pyDirection = nullptr;
+
+        if (!PyArg_ParseTuple(
+                args.ptr(),
+                "O!|O!",
+                &(Part::TopoShapePy::Type),
+                &pyShape,
+                &(Base::VectorPy::Type),
+                &pyDirection
+            )) {
+            throw Py::Exception();
+        }
+
+        auto* shape = static_cast<Part::TopoShapePy*>(pyShape);
+        Base::Vector3d direction(0, 0, 1);
+        if (pyDirection) {
+            direction = *static_cast<Base::VectorPy*>(pyDirection)->getVectorPtr();
+        }
+
+        Part::ProjectionAlgos alg(shape->getTopoShapePtr()->getShape(), direction);
+
+        Py::List list;
+        list.append(Part::shape2pyshape(alg.V));
+        list.append(Part::shape2pyshape(alg.V1));
+        list.append(Part::shape2pyshape(alg.H));
+        list.append(Part::shape2pyshape(alg.H1));
+        return list;
+    }
+
+    Py::Object projectEx(const Py::Tuple& args)
+    {
+        PyObject* pyShape = nullptr;
+        PyObject* pyDirection = nullptr;
+
+        if (!PyArg_ParseTuple(
+                args.ptr(),
+                "O!|O!",
+                &(Part::TopoShapePy::Type),
+                &pyShape,
+                &(Base::VectorPy::Type),
+                &pyDirection
+            )) {
+            throw Py::Exception();
+        }
+
+        auto* shape = static_cast<Part::TopoShapePy*>(pyShape);
+        Base::Vector3d direction(0, 0, 1);
+        if (pyDirection) {
+            direction = *static_cast<Base::VectorPy*>(pyDirection)->getVectorPtr();
+        }
+
+        Part::ProjectionAlgos alg(shape->getTopoShapePtr()->getShape(), direction);
+
+        Py::List list;
+        list.append(Part::shape2pyshape(alg.V));
+        list.append(Part::shape2pyshape(alg.V1));
+        list.append(Part::shape2pyshape(alg.VN));
+        list.append(Part::shape2pyshape(alg.VO));
+        list.append(Part::shape2pyshape(alg.VI));
+        list.append(Part::shape2pyshape(alg.H));
+        list.append(Part::shape2pyshape(alg.H1));
+        list.append(Part::shape2pyshape(alg.HN));
+        list.append(Part::shape2pyshape(alg.HO));
+        list.append(Part::shape2pyshape(alg.HI));
+        return list;
     }
 
     Py::Object splitSubname(const Py::Tuple& args)

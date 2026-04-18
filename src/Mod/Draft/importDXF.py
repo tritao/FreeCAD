@@ -3015,7 +3015,7 @@ def getShapes(filename):
 def projectShape(shape, direction, tess=None):
     """Project shape in a given direction.
 
-    It uses `TechDraw.projectEx(shape, direction)`
+    It uses `Part.projectEx(shape, direction)`
     to return a list with all the parts of the projection.
     The first five elements are added to a list of edges,
     which are then put in a `Part.Compound`.
@@ -3046,13 +3046,12 @@ def projectShape(shape, direction, tess=None):
 
     See also
     --------
-    TechDraw.projectEx, draftgeoutils.wires.cleanProjection
+    Part.projectEx, draftgeoutils.wires.cleanProjection
     """
-    import TechDraw
 
     edges = []
     try:
-        groups = TechDraw.projectEx(shape, direction)
+        groups = Part.projectEx(shape, direction)
     except Part.OCCError:
         print("unable to project shape on direction ", direction)
         return shape

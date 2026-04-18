@@ -1450,14 +1450,53 @@ class AreaCalculator:
         for prop in ["VerticalArea", "HorizontalArea", "PerimeterLength"]:
             setattr(self.obj, prop, 0)
 
-    def _get_projected_edges(self, face, direction):
-        """Return the visible projected edges for a face."""
-        import TechDraw
+    def _collect_projection_edges(self, projection, visible_group_count):
+        """Collect visible edges from a projection result."""
 
-        projection = TechDraw.project(face, direction)
-        if not projection:
-            raise RuntimeError("TechDraw.project returned no shapes")
-        return projection[0].Edges
+        edges = []
+        for group in list(projection or [])[:visible_group_count]:
+            if not group or group.isNull():
+                continue
+            edges.extend(group.Edges)
+        if not edges:
+            raise RuntimeError("Projection returned no visible edges")
+        return edges
+
+    def _get_projected_edges(self, face, direction):
+        """Return the visible projected edges for a face.
+
+        Prefer `Part.project()` when available, but fall back to `Part.projectEx()`
+        so geometry consumers do not depend on the TechDraw workbench bindings.
+        """
+        import Part
+
+        project_error = None
+        project = getattr(Part, "project", None)
+        if callable(project):
+            try:
+                projection = project(face, direction)
+                return self._collect_projection_edges(projection, visible_group_count=2)
+            except Exception as err:
+                project_error = err
+
+        project_ex = getattr(Part, "projectEx", None)
+        if callable(project_ex):
+            try:
+                projection = project_ex(face, direction)
+                return self._collect_projection_edges(projection, visible_group_count=5)
+            except Exception as err:
+                if project_error is not None:
+                    raise RuntimeError(
+                        "Part.project failed "
+                        f"({type(project_error).__name__}: {project_error}) and "
+                        "Part.projectEx failed "
+                        f"({type(err).__name__}: {err})"
+                    ) from err
+                raise
+
+        if project_error is not None:
+            raise project_error
+        raise AttributeError("Part exposes neither project nor projectEx")
 
     def isFaceVertical(self, face, face_index=None):
         """Determine if a face is vertical.

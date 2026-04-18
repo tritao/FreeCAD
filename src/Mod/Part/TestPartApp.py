@@ -77,6 +77,35 @@ class PartTestCases(unittest.TestCase):
         # self.Doc.addObject("Part::Feature","Face").Shape = result
         # self.assertTrue(isinstance(result.Surface, Part.BSplineSurface))
 
+    def testProjectionApis(self):
+        box = Part.makeBox(10, 10, 10)
+        direction = Base.Vector(0, 1, 0)
+
+        projected = Part.project(box, direction)
+        projected_ex = Part.projectEx(box, direction)
+
+        self.assertEqual(len(projected), 4)
+        self.assertEqual(len(projected_ex), 10)
+        self.assertGreater(sum(len(group.Edges) for group in projected if not group.isNull()), 0)
+        self.assertGreater(sum(len(group.Edges) for group in projected_ex if not group.isNull()), 0)
+
+        try:
+            import TechDraw
+        except ImportError:
+            return
+
+        legacy_projected = TechDraw.project(box, direction)
+        legacy_projected_ex = TechDraw.projectEx(box, direction)
+
+        self.assertEqual(
+            [len(group.Edges) for group in projected],
+            [len(group.Edges) for group in legacy_projected],
+        )
+        self.assertEqual(
+            [len(group.Edges) for group in projected_ex],
+            [len(group.Edges) for group in legacy_projected_ex],
+        )
+
     def tearDown(self):
         # closing doc
         FreeCAD.closeDocument("PartTest")

@@ -26,15 +26,8 @@
 # include <sstream>
 # include <BRepLib.hxx>
 # include <BRepMesh_IncrementalMesh.hxx>
-# include <HLRAlgo_Projector.hxx>
-# include <HLRBRep_Algo.hxx>
-# include <HLRBRep_HLRToShape.hxx>
-# include <gp_Ax2.hxx>
-# include <gp_Dir.hxx>
-# include <gp_Pnt.hxx>
 # include <TopExp_Explorer.hxx>
 # include <TopoDS.hxx>
-# include <TopoDS_Shape.hxx>
 
 
 #include "ProjectionAlgos.h"
@@ -48,55 +41,20 @@ using namespace std;
 // ProjectionAlgos
 //===========================================================================
 
-namespace TechDraw {
-  //added by tanderson. aka blobfish.
-  //projection algorithms build a 2d curve(pcurve) but no 3d curve.
-  //this causes problems with meshing algorithms after save and load.
-  const TopoDS_Shape& build3dCurves(const TopoDS_Shape &shape)
-  {
-    TopExp_Explorer it;
-    for (it.Init(shape, TopAbs_EDGE); it.More(); it.Next())
-      BRepLib::BuildCurve3d(TopoDS::Edge(it.Current()));
+const TopoDS_Shape& TechDraw::build3dCurves(const TopoDS_Shape& shape)
+{
+    for (TopExp_Explorer it(shape, TopAbs_EDGE); it.More(); it.Next()) {
+        BRepLib::BuildCurve3d(TopoDS::Edge(it.Current()));
+    }
     return shape;
-  }
 }
 
 ProjectionAlgos::ProjectionAlgos(const TopoDS_Shape &Input, const Base::Vector3d &Dir)
-  : Input(Input), Direction(Dir)
-{
-    execute();
-}
-
-ProjectionAlgos::~ProjectionAlgos()
+  : Part::ProjectionAlgos(Input, Dir)
 {
 }
 
-
-void ProjectionAlgos::execute()
-{
-    Handle( HLRBRep_Algo ) brep_hlr = new HLRBRep_Algo;
-    brep_hlr->Add(Input);
-
-    gp_Ax2 transform(gp_Pnt(0, 0, 0), gp_Dir(Direction.x, Direction.y, Direction.z));
-    HLRAlgo_Projector projector( transform );
-    brep_hlr->Projector(projector);
-    brep_hlr->Update();
-    brep_hlr->Hide();
-
-    // extracting the result sets:
-    HLRBRep_HLRToShape shapes( brep_hlr );
-
-    V  = build3dCurves(shapes.VCompound       ());// hard edge visibly
-    V1 = build3dCurves(shapes.Rg1LineVCompound());// Smoth edges visibly
-    VN = build3dCurves(shapes.RgNLineVCompound());// contour edges visibly
-    VO = build3dCurves(shapes.OutLineVCompound());// contours apparents visibly
-    VI = build3dCurves(shapes.IsoLineVCompound());// isoparamtriques   visibly
-    H  = build3dCurves(shapes.HCompound       ());// hard edge       invisibly
-    H1 = build3dCurves(shapes.Rg1LineHCompound());// Smoth edges  invisibly
-    HN = build3dCurves(shapes.RgNLineHCompound());// contour edges invisibly
-    HO = build3dCurves(shapes.OutLineHCompound());// contours apparents invisibly
-    HI = build3dCurves(shapes.IsoLineHCompound());// isoparamtriques   invisibly
-}
+ProjectionAlgos::~ProjectionAlgos() = default;
 
 string ProjectionAlgos::getSVG(ExtractionType type,
                                double tolerance,
