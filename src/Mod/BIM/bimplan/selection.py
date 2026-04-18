@@ -144,6 +144,112 @@ def selection_observer_clear(session, doc):
         session._refresh_primary_selected_plan_target()
 
 
+def refresh_selected_plan_target(session):
+    with session._plan_perf_trace_span("refresh_selected_plan_target"):
+        session._plan_perf_count("selection_refreshes")
+        if session._tearing_down:
+            return
+        if session._ignore_selection_changes:
+            return
+
+        previous_kind, previous_obj = session._get_selected_plan_target()
+        session._plan_perf_set_fields(
+            selected_before=session._plan_perf_describe_target(previous_kind, previous_obj)
+        )
+        previous_wall = session._get_plan_target_object_from_state(
+            previous_kind, previous_obj, "wall"
+        )
+        if session._is_wall_edit_modal_active():
+            session._set_selected_plan_target_state("wall", session._edit_wall)
+            session._set_secondary_selected_plan_targets([])
+            if session._selected_plan_target_changed(previous_kind, previous_obj, "wall"):
+                session._sync_wall_grips()
+            session._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
+            return
+        if session.current_tool == "Set Space Text":
+            session._set_selected_plan_target_state(
+                "space",
+                session._edit_space if session._is_plan_space_object(session._edit_space) else None,
+            )
+            session._set_secondary_selected_plan_targets([])
+            session._clear_wall_grips()
+            session._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
+            return
+        if session.current_tool == "Join":
+            wall = previous_wall
+            if not session._is_plan_selectable_wall(wall):
+                session.current_tool = "Select"
+                wall = None
+            session._set_selected_plan_target_state("wall", wall)
+            session._set_secondary_selected_plan_targets([])
+            session._clear_wall_grips()
+            session._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
+            return
+        session._set_selected_plan_target_state()
+        try:
+            selection = FreeCADGui.Selection.getSelection()
+        except (ReferenceError, RuntimeError):
+            return
+        session._plan_perf_count("gui_selection_size", len(selection or []))
+        if session.current_tool in ("Select", "Pick Space Region") and selection:
+            selected_targets = []
+            for selected in selection:
+                target_kind, target_obj = session._get_plan_target_for_object(selected)
+                if target_kind:
+                    selected_targets.append((target_kind, target_obj))
+            session._plan_perf_count("selected_targets_considered", len(selected_targets))
+
+            matched_target = None
+            pending_kind, pending_target = session._pending_selected_plan_target or (None, None)
+            if pending_target is not None:
+                for target_kind, selected in selected_targets:
+                    if selected == pending_target and target_kind == pending_kind:
+                        matched_target = (target_kind, selected)
+                        break
+            if matched_target is None:
+                for preferred_kind in ("opening", "symbol", "wall", "region", "space"):
+                    matched_target = next(
+                        (
+                            (target_kind, selected)
+                            for target_kind, selected in selected_targets
+                            if target_kind == preferred_kind
+                        ),
+                        None,
+                    )
+                    if matched_target is not None:
+                        break
+
+            if matched_target is not None:
+                target_kind, selected = matched_target
+                session._set_selected_plan_target_state(target_kind, selected)
+                session._set_secondary_selected_plan_targets(
+                    selected_targets,
+                    primary_kind=target_kind,
+                    primary_obj=selected,
+                )
+                if len(selection) == 1 and target_kind not in ("space", "region"):
+                    session._set_pending_selected_plan_target()
+                else:
+                    session._set_pending_selected_plan_target(target_kind, selected)
+            else:
+                session._set_secondary_selected_plan_targets([])
+                session._set_pending_selected_plan_target()
+        elif session.current_tool in ("Select", "Pick Space Region") and not selection:
+            pending_kind, pending_target = session._consume_pending_selected_plan_target()
+            session._set_selected_plan_target_state(pending_kind, pending_target)
+            session._set_secondary_selected_plan_targets([])
+        else:
+            session._set_secondary_selected_plan_targets([])
+            session._set_pending_selected_plan_target()
+        if session._selected_plan_target_changed(previous_kind, previous_obj, "wall"):
+            session._sync_wall_grips()
+        session._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
+        selected_kind, selected_obj = session._get_selected_plan_target()
+        session._plan_perf_set_fields(
+            selected_after=session._plan_perf_describe_target(selected_kind, selected_obj)
+        )
+
+
 def get_selected_target_for_kind(session, kind):
     if getattr(session, "_selected_plan_target_kind", None) == kind:
         return getattr(session, "_selected_plan_target_obj", None)
