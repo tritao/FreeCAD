@@ -9681,6 +9681,7 @@ class PlanEditSession:
                 return
             segments = self._get_opening_overlay_segments(opening)
             self._plan_perf_count("selected_opening_overlay_segments", len(segments))
+            transferred_trackers = False
             if len(self._opening_overlay_trackers) != len(segments):
                 if (
                     not self._opening_overlay_trackers
@@ -9690,6 +9691,7 @@ class PlanEditSession:
                     self._opening_overlay_trackers = self._opening_hover_trackers
                     self._opening_hover_trackers = []
                     self._hovered_opening_overlay_render_state = None
+                    transferred_trackers = True
                     self._plan_perf_count("selected_opening_overlay_tracker_transfers")
                 else:
                     self._clear_selected_opening_overlay()
@@ -9707,9 +9709,10 @@ class PlanEditSession:
             for tracker, (start, end) in zip(self._opening_overlay_trackers, segments):
                 self._set_plan_line_tracker_width(tracker, width)
                 tracker.setColor(color)
-                tracker.p1(start)
-                tracker.p2(end)
-                tracker.on()
+                if not transferred_trackers:
+                    tracker.p1(start)
+                    tracker.p2(end)
+                    tracker.on()
             self._selected_opening_overlay_render_state = render_state
             self._selected_opening_overlay_dirty = False
 
