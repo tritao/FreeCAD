@@ -2102,6 +2102,16 @@ class PlanEditSession:
             except Exception:
                 pass
             return
+        # Spaces and plan regions are selected through Plan Edit's semantic
+        # picking paths. Leaving their native 3D view objects selectable lets
+        # the viewer replace the intended target with enclosing face hits on
+        # button release, especially for nested region-in-space cases.
+        if self._is_plan_custom_pick_only_object(semantic_obj or obj):
+            try:
+                view_object.Selectable = False
+            except Exception:
+                pass
+            return
         if not self._is_plan_context_only_object(obj):
             return
         try:
@@ -2299,6 +2309,12 @@ class PlanEditSession:
         except Exception:
             pass
         return getattr(obj, "IfcType", "") == "Space"
+
+    def _is_plan_custom_pick_only_object(self, obj):
+        if not obj:
+            return False
+        obj = self._get_plan_semantic_object(obj)
+        return self._is_plan_space_object(obj) or self._is_plan_region_object(obj)
 
     def _is_plan_space_separator_object(self, obj):
         if not obj:
