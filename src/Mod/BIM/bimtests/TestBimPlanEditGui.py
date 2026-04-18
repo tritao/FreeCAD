@@ -1528,6 +1528,42 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_real_view_hovered_wall_shows_preselection_overlay(self):
+        """Real view-based hover should pick a wall and keep the warm path cheap."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        faces = list(
+            getattr(getattr(wall, "Proxy", None), "getFootprint", lambda _obj: [])(wall) or []
+        )
+        self.assertTrue(faces)
+        face = faces[0]
+        point = FreeCAD.Vector(face.CenterOfMass)
+        screen_pos = session.view.getPointOnScreen(point)
+        mouse_pos = (int(screen_pos[0]), int(screen_pos[1]))
+
+        move = self._make_fake_mouse_move_event(*mouse_pos)
+        session._on_mouse_moved(move)
+        self.pump_gui_events()
+
+        self.assertIs(session.hovered_wall, wall)
+        self.assertGreater(len(session._wall_hover_trackers), 0)
+
+        move_again = self._make_fake_mouse_move_event(*mouse_pos)
+        session._on_mouse_moved(move_again)
+        self.pump_gui_events()
+
+        self.assertIs(session.hovered_wall, wall)
+        self.assertGreater(len(session._wall_hover_trackers), 0)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_empty_canvas_click_clears_selected_opening(self):
         """Empty canvas clicks should clear an internally selected opening."""
 
