@@ -4008,6 +4008,42 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_space_overlay_geometry_cache_reuses_footprint_until_invalidated(self):
+        """Space overlay geometry should reuse cached footprint data until invalidated."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "CachedSpaceGeometryBase")
+        base.Length = 3200
+        base.Width = 2400
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Bedroom")
+        level.addObject(space)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(
+            session,
+            "_get_footprint_overlay_polylines",
+            wraps=session._get_footprint_overlay_polylines,
+        ) as get_polylines:
+            first = tuple(session._get_space_overlay_segments(space))
+            second = tuple(session._get_space_overlay_segments(space))
+            session._invalidate_plan_overlay_geometry_cache(space)
+            third = tuple(session._get_space_overlay_segments(space))
+
+        self.assertEqual(get_polylines.call_count, 2)
+        self.assertEqual(first, second)
+        self.assertEqual(second, third)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_region_click_cycle_keeps_region_selected_over_parent_space(self):
         """Region click handling should keep the region as the semantic target across press/release."""
 
