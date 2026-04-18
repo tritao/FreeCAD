@@ -32,12 +32,12 @@ import os
 import tempfile
 import time
 
-import ArchPlanGeometry
 import FreeCAD
 import FreeCADGui
 from bimplan import view as plan_view
 from bimplan.context import PlanEditContext
 from bimplan.hosts import _PlanEditCommandHost, _PlanEditWallHost
+from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
 from bimplan.providers import (
     PlanActionSpec,
@@ -481,84 +481,31 @@ class PlanEditSession:
             return None
 
     def _get_plan_overlay_geometry_kinds_for_object(self, obj):
-        semantic_obj = self._get_plan_semantic_object(obj)
-        if self._is_hosted_opening_object(semantic_obj):
-            return ("opening",)
-        if self._is_plan_space_object(semantic_obj):
-            return ("space",)
-        if self._is_plan_region_object(semantic_obj):
-            return ("region",)
-        return ()
+        return overlay_geometry.get_plan_overlay_geometry_kinds_for_object(self, obj)
 
     def _get_plan_overlay_geometry_cache_entry(self, kind, obj, create=False):
-        cache = self._plan_overlay_geometry_cache.get(str(kind or ""))
-        semantic_obj = self._get_plan_semantic_object(obj)
-        if cache is None or semantic_obj is None:
-            return (None, None, None)
-        key = self._get_document_object_key(semantic_obj)
-        if key is None:
-            return (semantic_obj, None, None)
-        entry = cache.get(key)
-        if entry is None and create:
-            entry = {}
-            cache[key] = entry
-        return (semantic_obj, key, entry)
+        return overlay_geometry.get_plan_overlay_geometry_cache_entry(
+            self,
+            kind,
+            obj,
+            create=create,
+        )
 
     def _invalidate_plan_overlay_geometry_cache(self, obj=None, kinds=None):
-        target_kinds = tuple(kinds or ())
-        if not target_kinds:
-            if obj is None:
-                target_kinds = tuple(self._plan_overlay_geometry_cache.keys())
-            else:
-                target_kinds = self._get_plan_overlay_geometry_kinds_for_object(obj)
-        if not target_kinds:
-            return
-        if obj is None:
-            for kind in target_kinds:
-                cache = self._plan_overlay_geometry_cache.get(kind)
-                if cache is not None:
-                    cache.clear()
-            self._invalidate_opening_overlay_screen_cache()
-            self._invalidate_hovered_opening_overlay_cache()
-            self._invalidate_selected_opening_overlay_cache()
-            self._invalidate_selected_space_overlay_cache()
-            return
-        semantic_obj, key, _entry = self._get_plan_overlay_geometry_cache_entry(
-            target_kinds[0], obj, create=False
+        return overlay_geometry.invalidate_plan_overlay_geometry_cache(
+            self,
+            obj=obj,
+            kinds=kinds,
         )
-        if key is None:
-            return
-        for kind in target_kinds:
-            cache = self._plan_overlay_geometry_cache.get(kind)
-            if cache is not None:
-                cache.pop(key, None)
-        if "opening" in target_kinds:
-            self._invalidate_opening_overlay_screen_cache()
-        if self.hovered_opening == semantic_obj:
-            self._invalidate_hovered_opening_overlay_cache()
-        if self._is_selected_plan_target("opening", semantic_obj):
-            self._invalidate_selected_opening_overlay_cache()
-        if self._is_selected_plan_target("space", semantic_obj):
-            self._invalidate_selected_space_overlay_cache()
 
     def _get_cached_plan_overlay_geometry(self, kind, obj, field_name, compute):
-        semantic_obj, _key, entry = self._get_plan_overlay_geometry_cache_entry(
-            kind, obj, create=True
+        return overlay_geometry.get_cached_plan_overlay_geometry(
+            self,
+            kind,
+            obj,
+            field_name,
+            compute,
         )
-        if semantic_obj is None or entry is None:
-            return ()
-        if field_name in entry:
-            self._plan_perf_count(f"{kind}_{field_name}_cache_hits")
-            return entry[field_name]
-        value = compute(semantic_obj)
-        if field_name == "footprint_faces":
-            value = tuple(value or ())
-        elif field_name == "overlay_polylines":
-            value = tuple(tuple(polyline or ()) for polyline in (value or ()))
-        elif field_name == "overlay_segments":
-            value = tuple(value or ())
-        entry[field_name] = value
-        return value
 
     def _sanitize_plan_target_references(self):
         changed = False
@@ -1719,8 +1666,7 @@ class PlanEditSession:
         return plan_view.get_plan_projection_cache_key(self)
 
     def _invalidate_opening_overlay_screen_cache(self):
-        self._opening_overlay_screen_cache = {}
-        self._opening_overlay_screen_cache_projection_key = None
+        return overlay_geometry.invalidate_opening_overlay_screen_cache(self)
 
     def _apply_plan_snap_profile(self):
         snapper = getattr(FreeCADGui, "Snapper", None)
@@ -7503,147 +7449,31 @@ class PlanEditSession:
         self._wall_grip_state = None
 
     def _get_footprint_overlay_polylines(self, faces):
-        return ArchPlanGeometry.get_face_wire_polylines(faces)
+        return overlay_geometry.get_footprint_overlay_polylines(faces)
 
     def _build_overlay_segments_from_polylines(self, polylines):
-        segments = []
-        for polyline in polylines or ():
-            if len(polyline) < 2:
-                continue
-            for start, end in zip(polyline, polyline[1:]):
-                segments.append((start, end))
-        return tuple(segments)
+        return overlay_geometry.build_overlay_segments_from_polylines(polylines)
 
     def _get_wall_overlay_polylines(self, wall):
-        if not wall:
-            return []
-        proxy = getattr(wall, "Proxy", None)
-        if not proxy or not hasattr(proxy, "getFootprint"):
-            return []
-        try:
-            faces = proxy.getFootprint(wall) or []
-        except Exception:
-            return []
-        return self._get_footprint_overlay_polylines(faces)
+        return overlay_geometry.get_wall_overlay_polylines(self, wall)
 
     def _get_space_footprint_faces(self, space):
-        if not self._is_plan_space_object(space):
-            return ()
-
-        def compute(space_obj):
-            proxy = getattr(space_obj, "Proxy", None)
-            if not proxy or not hasattr(proxy, "getFootprint"):
-                return ()
-            try:
-                return proxy.getFootprint(space_obj) or ()
-            except Exception:
-                return ()
-
-        return self._get_cached_plan_overlay_geometry(
-            "space",
-            space,
-            "footprint_faces",
-            compute,
-        )
+        return overlay_geometry.get_space_footprint_faces(self, space)
 
     def _get_space_overlay_polylines(self, space):
-        if not self._is_plan_space_object(space):
-            return ()
-        return self._get_cached_plan_overlay_geometry(
-            "space",
-            space,
-            "overlay_polylines",
-            lambda space_obj: self._get_footprint_overlay_polylines(
-                self._get_space_footprint_faces(space_obj)
-            ),
-        )
+        return overlay_geometry.get_space_overlay_polylines(self, space)
 
     def _get_region_footprint_faces(self, region):
-        if not self._is_plan_region_object(region):
-            return ()
-
-        def compute(region_obj):
-            proxy = getattr(region_obj, "Proxy", None)
-            if not proxy or not hasattr(proxy, "getFootprint"):
-                return ()
-            try:
-                return proxy.getFootprint(region_obj) or ()
-            except Exception:
-                return ()
-
-        return self._get_cached_plan_overlay_geometry(
-            "region",
-            region,
-            "footprint_faces",
-            compute,
-        )
+        return overlay_geometry.get_region_footprint_faces(self, region)
 
     def _get_region_overlay_polylines(self, region):
-        if not self._is_plan_region_object(region):
-            return ()
-        return self._get_cached_plan_overlay_geometry(
-            "region",
-            region,
-            "overlay_polylines",
-            lambda region_obj: self._get_footprint_overlay_polylines(
-                self._get_region_footprint_faces(region_obj)
-            ),
-        )
+        return overlay_geometry.get_region_overlay_polylines(self, region)
 
     def _get_opening_overlay_polylines(self, opening):
-        if not self._is_hosted_opening_object(opening):
-            return ()
-
-        def compute(opening_obj):
-            view_object = getattr(opening_obj, "ViewObject", None)
-            proxy = getattr(view_object, "Proxy", None)
-            if not proxy or not hasattr(proxy, "get_plan_overlay_polylines"):
-                return ()
-            try:
-                return proxy.get_plan_overlay_polylines() or ()
-            except Exception:
-                return ()
-
-        return self._get_cached_plan_overlay_geometry(
-            "opening",
-            opening,
-            "overlay_polylines",
-            compute,
-        )
+        return overlay_geometry.get_opening_overlay_polylines(self, opening)
 
     def _get_opening_overlay_screen_polylines(self, opening):
-        if not self._is_hosted_opening_object(opening) or not self.view:
-            return ()
-        projection_key = self._get_plan_projection_cache_key()
-        if projection_key is None:
-            return ()
-        if projection_key != self._opening_overlay_screen_cache_projection_key:
-            self._opening_overlay_screen_cache = {}
-            self._opening_overlay_screen_cache_projection_key = projection_key
-        opening_key = self._get_document_object_key(opening)
-        if opening_key is None:
-            return ()
-        cached = self._opening_overlay_screen_cache.get(opening_key)
-        if cached is not None:
-            self._plan_perf_count("opening_overlay_screen_polylines_cache_hits")
-            return cached
-
-        projected_polylines = []
-        for polyline in self._get_opening_overlay_polylines(opening):
-            if len(polyline) < 2:
-                continue
-            projected = []
-            try:
-                for poly_point in polyline:
-                    screen_point = self.view.getPointOnScreen(poly_point)
-                    projected.append((float(screen_point[0]), float(screen_point[1])))
-            except Exception:
-                projected = []
-            if len(projected) >= 2:
-                projected_polylines.append(tuple(projected))
-        result = tuple(projected_polylines)
-        self._opening_overlay_screen_cache[opening_key] = result
-        return result
+        return overlay_geometry.get_opening_overlay_screen_polylines(self, opening)
 
     def _finalize_trackers(self, trackers):
         return overlay_manager.finalize_trackers(trackers)
@@ -9242,28 +9072,10 @@ class PlanEditSession:
                 tracker_store.append(tracker)
 
     def _get_region_overlay_segments(self, region):
-        if not self._is_plan_region_object(region):
-            return ()
-        return self._get_cached_plan_overlay_geometry(
-            "region",
-            region,
-            "overlay_segments",
-            lambda region_obj: self._build_overlay_segments_from_polylines(
-                self._get_region_overlay_polylines(region_obj)
-            ),
-        )
+        return overlay_geometry.get_region_overlay_segments(self, region)
 
     def _get_space_overlay_segments(self, space):
-        if not self._is_plan_space_object(space):
-            return ()
-        return self._get_cached_plan_overlay_geometry(
-            "space",
-            space,
-            "overlay_segments",
-            lambda space_obj: self._build_overlay_segments_from_polylines(
-                self._get_space_overlay_polylines(space_obj)
-            ),
-        )
+        return overlay_geometry.get_space_overlay_segments(self, space)
 
     def _sync_hovered_space_overlay(self):
         self._clear_hovered_space_overlay()
@@ -9494,16 +9306,7 @@ class PlanEditSession:
                 tracker_store.append(tracker)
 
     def _get_opening_overlay_segments(self, opening):
-        if not self._is_hosted_opening_object(opening):
-            return ()
-        return self._get_cached_plan_overlay_geometry(
-            "opening",
-            opening,
-            "overlay_segments",
-            lambda opening_obj: self._build_overlay_segments_from_polylines(
-                self._get_opening_overlay_polylines(opening_obj)
-            ),
-        )
+        return overlay_geometry.get_opening_overlay_segments(self, opening)
 
     def _sync_selected_opening_overlay(self):
         with self._plan_perf_trace_span("sync_selected_opening_overlay"):
