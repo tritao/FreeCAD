@@ -2,7 +2,17 @@
 
 import unittest
 import sys
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
+
+if "FreeCAD" not in sys.modules:
+    try:
+        import FreeCAD  # noqa: F401
+    except ModuleNotFoundError:
+        freecad_module = ModuleType("FreeCAD")
+        freecad_module.Qt = SimpleNamespace(
+            translate=lambda _context, text: text,
+        )
+        sys.modules["FreeCAD"] = freecad_module
 
 if "draftguitools.gui_base" not in sys.modules:
     draftguitools_module = sys.modules.setdefault(
@@ -151,6 +161,7 @@ class TestBimPlanCore(unittest.TestCase):
             group_key="mep-generation",
             group_title="Generate MEP output",
             collapsed=True,
+            summary="Generated output is missing.",
         )
 
         self.assertEqual("workflow", issue.role)
@@ -158,6 +169,7 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual("mep-generation", issue.group_key)
         self.assertEqual("Generate MEP output", issue.group_title)
         self.assertTrue(issue.collapsed)
+        self.assertEqual("Generated output is missing.", issue.summary)
 
     def test_plan_edit_transaction_commits_on_success_and_aborts_on_failure(self):
         doc = _DummyDoc()
