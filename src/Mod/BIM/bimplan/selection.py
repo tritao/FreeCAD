@@ -2,6 +2,79 @@
 
 """Selection state helpers for BIM Plan Edit."""
 
+from contextlib import contextmanager
+
+import FreeCADGui
+
+
+def get_gui_selection_ex():
+    try:
+        return list(FreeCADGui.Selection.getSelectionEx() or [])
+    except (ReferenceError, RuntimeError):
+        return []
+
+
+def get_gui_selection():
+    try:
+        return list(FreeCADGui.Selection.getSelection() or [])
+    except (ReferenceError, RuntimeError):
+        return []
+
+
+@contextmanager
+def selection_changes_suppressed(session):
+    previous_ignore = session._ignore_selection_changes
+    session._ignore_selection_changes = True
+    try:
+        yield
+    finally:
+        session._ignore_selection_changes = previous_ignore
+
+
+def add_gui_selection_object(obj):
+    if not obj:
+        return
+    doc_name = getattr(getattr(obj, "Document", None), "Name", None)
+    obj_name = getattr(obj, "Name", None)
+    try:
+        if doc_name and obj_name:
+            FreeCADGui.Selection.addSelection(doc_name, obj_name)
+        else:
+            FreeCADGui.Selection.addSelection(obj)
+    except Exception:
+        if doc_name and obj_name:
+            try:
+                FreeCADGui.Selection.addSelection(obj)
+            except Exception:
+                pass
+
+
+def set_gui_selection(session, selection):
+    with session._selection_changes_suppressed():
+        try:
+            FreeCADGui.Selection.clearSelection()
+            seen = set()
+            for obj in selection or []:
+                if not obj:
+                    continue
+                key = (
+                    getattr(getattr(obj, "Document", None), "Name", None),
+                    getattr(obj, "Name", None),
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                session._add_gui_selection_object(obj)
+        except Exception:
+            pass
+    session._sync_secondary_selected_plan_targets_from_selection(selection)
+
+
+def set_gui_selection_object(session, obj):
+    if not obj:
+        return
+    session._set_gui_selection([obj])
+
 
 def get_selected_target_for_kind(session, kind):
     if getattr(session, "_selected_plan_target_kind", None) == kind:

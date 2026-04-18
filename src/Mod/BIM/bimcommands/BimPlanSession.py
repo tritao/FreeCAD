@@ -2054,16 +2054,10 @@ class PlanEditSession:
             return False
 
     def _get_gui_selection_ex(self):
-        try:
-            return list(FreeCADGui.Selection.getSelectionEx() or [])
-        except (ReferenceError, RuntimeError):
-            return []
+        return plan_selection.get_gui_selection_ex()
 
     def _get_gui_selection(self):
-        try:
-            return list(FreeCADGui.Selection.getSelection() or [])
-        except (ReferenceError, RuntimeError):
-            return []
+        return plan_selection.get_gui_selection()
 
     def _get_space_reference_point(self, space):
         if not self._is_plan_space_object(space):
@@ -2877,54 +2871,17 @@ class PlanEditSession:
 
     @contextmanager
     def _selection_changes_suppressed(self):
-        previous_ignore = self._ignore_selection_changes
-        self._ignore_selection_changes = True
-        try:
+        with plan_selection.selection_changes_suppressed(self):
             yield
-        finally:
-            self._ignore_selection_changes = previous_ignore
 
     def _set_gui_selection(self, selection):
-        with self._selection_changes_suppressed():
-            try:
-                FreeCADGui.Selection.clearSelection()
-                seen = set()
-                for obj in selection or []:
-                    if not obj:
-                        continue
-                    key = (
-                        getattr(getattr(obj, "Document", None), "Name", None),
-                        getattr(obj, "Name", None),
-                    )
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    self._add_gui_selection_object(obj)
-            except Exception:
-                pass
-        self._sync_secondary_selected_plan_targets_from_selection(selection)
+        return plan_selection.set_gui_selection(self, selection)
 
     def _set_gui_selection_object(self, obj):
-        if not obj:
-            return
-        self._set_gui_selection([obj])
+        return plan_selection.set_gui_selection_object(self, obj)
 
     def _add_gui_selection_object(self, obj):
-        if not obj:
-            return
-        doc_name = getattr(getattr(obj, "Document", None), "Name", None)
-        obj_name = getattr(obj, "Name", None)
-        try:
-            if doc_name and obj_name:
-                FreeCADGui.Selection.addSelection(doc_name, obj_name)
-            else:
-                FreeCADGui.Selection.addSelection(obj)
-        except Exception:
-            if doc_name and obj_name:
-                try:
-                    FreeCADGui.Selection.addSelection(obj)
-                except Exception:
-                    pass
+        return plan_selection.add_gui_selection_object(obj)
 
     def _get_secondary_selected_plan_targets(self):
         return plan_selection.get_secondary_selected_plan_targets(self)
