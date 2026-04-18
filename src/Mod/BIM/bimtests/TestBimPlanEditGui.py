@@ -49,6 +49,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self._assert_selected_plan_target(session, None, None)
 
     def _make_fake_left_mouse_press(self, x=250, y=250):
+        return self._make_fake_left_mouse_button_event(x, y, down=True)
+
+    def _make_fake_left_mouse_release(self, x=250, y=250):
+        return self._make_fake_left_mouse_button_event(x, y, down=False)
+
+    def _make_fake_left_mouse_button_event(self, x=250, y=250, down=True):
         from pivy import coin
 
         class _FakeMousePosition:
@@ -66,7 +72,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return coin.SoMouseButtonEvent.BUTTON1
 
             def getState(self):
-                return coin.SoMouseButtonEvent.DOWN
+                if down:
+                    return coin.SoMouseButtonEvent.DOWN
+                return coin.SoMouseButtonEvent.UP
 
             def getPosition(self):
                 return self._position
@@ -3707,6 +3715,42 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_spaces_and_regions_are_custom_pick_only(self):
+        """Spaces and plan regions should use session-owned picking, not native 3D selection."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "CustomPickSpaceBase")
+        base.Length = 6000
+        base.Width = 4000
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Living Room")
+        level.addObject(space)
+        region = self._make_plan_region(level, parent_space=space, label="Kitchen Area")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(space.ViewObject.Visibility)
+        self.assertFalse(
+            space.ViewObject.Selectable,
+            "Spaces should be selected through Plan Edit, not native face picking.",
+        )
+        self.assertTrue(region.ViewObject.Visibility)
+        self.assertFalse(
+            region.ViewObject.Selectable,
+            "Plan regions should be selected through Plan Edit, not native face picking.",
+        )
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+        self.assertTrue(space.ViewObject.Selectable)
+        self.assertTrue(region.ViewObject.Selectable)
+
     def test_plan_edit_primary_selection_state_tracks_compat_properties(self):
         """Legacy selected_* properties should mirror one primary plan target state."""
 
@@ -3772,6 +3816,51 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             activated = session._activate_region_target((100, 100))
 
         self.assertTrue(activated)
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [region.Name])
+        selection_ex = FreeCADGui.Selection.getSelectionEx("*")
+        self.assertEqual(len(selection_ex), 1)
+        self.assertEqual(selection_ex[0].ObjectName, region.Name)
+        self.assertIs(session.view.getActiveObject("Arch"), region)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_region_click_cycle_keeps_region_selected_over_parent_space(self):
+        """Region click handling should keep the region as the semantic target across press/release."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "ClickCycleParentSpaceBase")
+        base.Length = 6000
+        base.Width = 4000
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Living Room")
+        level.addObject(space)
+        region = self._make_plan_region(level, parent_space=space, label="Kitchen Area")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertFalse(space.ViewObject.Selectable)
+        self.assertFalse(region.ViewObject.Selectable)
+
+        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("region", region),
+        ):
+            press = self._make_fake_left_mouse_press(250, 250)
+            session._on_mouse_pressed(press)
+            release = self._make_fake_left_mouse_release(250, 250)
+            session._on_mouse_pressed(release)
+
+        self.assertTrue(press._handled)
+        self.assertTrue(release._handled)
+        self.assertFalse(session._consume_left_button_release)
+        self._assert_selected_plan_target(session, "region", region)
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [region.Name])
         selection_ex = FreeCADGui.Selection.getSelectionEx("*")
         self.assertEqual(len(selection_ex), 1)
