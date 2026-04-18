@@ -3,8 +3,12 @@
 """Shared overlay management helpers for BIM Plan Edit."""
 
 
+def _session_is_inactive(session):
+    return session._tearing_down or getattr(session, "_finishing", False)
+
+
 def queue_plan_overlay_visual_refresh(session, visuals, visual_all, visual_selected_space):
-    if session._tearing_down:
+    if _session_is_inactive(session):
         return
     dirty = set(visuals) if visuals else {visual_all}
     if visual_all in dirty or visual_selected_space in dirty:
@@ -23,7 +27,7 @@ def queue_plan_overlay_visual_refresh(session, visuals, visual_all, visual_selec
 
 
 def queue_plan_overlay_view_scale_refresh(session, visual_view_scale, delay_ms):
-    if session._tearing_down:
+    if _session_is_inactive(session):
         return
     session._dirty_plan_visuals.add(visual_view_scale)
     if session._overlay_refresh_queued or session._view_scale_overlay_refresh_queued:
@@ -51,12 +55,18 @@ def consume_dirty_plan_visuals(session, visual_all, default_all=True):
 
 def flush_plan_overlay_visual_refresh(session):
     session._overlay_refresh_queued = False
+    if _session_is_inactive(session):
+        session._consume_dirty_plan_visuals(default_all=False)
+        return
     dirty = session._consume_dirty_plan_visuals()
     session._refresh_plan_overlay_visuals(dirty)
 
 
 def flush_view_scale_overlay_refresh(session):
     session._view_scale_overlay_refresh_queued = False
+    if _session_is_inactive(session):
+        session._consume_dirty_plan_visuals(default_all=False)
+        return
     if session._overlay_refresh_queued:
         return
     dirty = session._consume_dirty_plan_visuals(default_all=False)

@@ -331,15 +331,42 @@ class PlanEditSession:
         self._embedded_tool_name = None
         self._finishing = False
         self._tearing_down = False
+        self._teardown_signal_sources = []
         self._plan_edit_params = FreeCAD.ParamGet(
             "User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit"
         )
         self._plan_perf_log_path = self._resolve_plan_perf_log_path()
         self._plan_perf_current_event = None
         self._plan_perf_sequence = 0
+        self._connect_teardown_signals(QtGui)
+
+    def _connect_teardown_signal(self, signal):
+        try:
+            signal.connect(self.begin_teardown)
+        except Exception:
+            return
+        self._teardown_signal_sources.append(signal)
+
+    def _connect_teardown_signals(self, QtGui):
         app = QtGui.QApplication.instance()
         if app:
-            app.aboutToQuit.connect(self.begin_teardown)
+            self._connect_teardown_signal(app.aboutToQuit)
+        main_window = self._get_main_window()
+        if main_window:
+            try:
+                signal = main_window.mainWindowClosed
+            except AttributeError:
+                signal = None
+            if signal is not None:
+                self._connect_teardown_signal(signal)
+
+    def _disconnect_teardown_signals(self):
+        for signal in self._teardown_signal_sources:
+            try:
+                signal.disconnect(self.begin_teardown)
+            except Exception:
+                pass
+        self._teardown_signal_sources = []
 
     def _get_selected_target_for_kind(self, kind):
         return plan_selection.get_selected_target_for_kind(self, kind)
@@ -846,6 +873,9 @@ class PlanEditSession:
                     translate("BIM_PlanEdit", "Exited BIM Plan Edit mode.\n")
                 )
         finally:
+            self._disconnect_teardown_signals()
+            self._tearing_down = True
+            self._discard_runtime_references()
             self._aux_task_panels = []
             _active_session = None
             self._finishing = False
@@ -4585,7 +4615,7 @@ class PlanEditSession:
                 self._sync_secondary_selected_overlays()
 
     def _refresh_plan_overlay_visuals(self, dirty=None):
-        if self._tearing_down:
+        if self._tearing_down or self._finishing:
             return
         dirty = set(dirty or {_PLAN_VISUAL_ALL})
         refresh_all = _PLAN_VISUAL_ALL in dirty
