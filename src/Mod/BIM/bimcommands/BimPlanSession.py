@@ -41,6 +41,7 @@ from bimplan.hosts import _PlanEditCommandHost, _PlanEditWallHost
 from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
 from bimplan.overlays import openings as opening_overlays
+from bimplan.overlays import symbols as symbol_overlays
 from bimplan.providers import (
     PlanActionSpec,
     PlanInspectorSection,
@@ -8296,439 +8297,110 @@ class PlanEditSession:
         return getattr(obj, "Placement", FreeCAD.Placement())
 
     def _get_symbol_global_placement(self, symbol, placement=None):
-        current_global = self._get_plan_object_global_placement(symbol)
-        if placement is None:
-            return current_global
-        current_local = getattr(symbol, "Placement", None)
-        if current_local is None:
-            return placement
-        try:
-            parent_global = current_global.multiply(current_local.inverse())
-            return parent_global.multiply(placement)
-        except Exception:
-            return placement
+        return symbol_overlays.get_symbol_global_placement(self, symbol, placement=placement)
 
     def _get_symbol_parent_global_placement(self, symbol, placement=None):
-        placement = placement or getattr(symbol, "Placement", None)
-        current_global = self._get_plan_object_global_placement(symbol)
-        if placement is None:
-            return current_global
-        try:
-            return current_global.multiply(placement.inverse())
-        except Exception:
-            return FreeCAD.Placement()
+        return symbol_overlays.get_symbol_parent_global_placement(self, symbol, placement=placement)
 
     def _get_symbol_plan_proxy(self, symbol, *attrs):
-        semantic_obj = self._get_plan_semantic_object(symbol)
-        view_object = getattr(semantic_obj, "ViewObject", None)
-        proxy = getattr(view_object, "Proxy", None) if view_object else None
-        if not proxy:
-            return None
-        for attr in attrs:
-            if not hasattr(proxy, attr):
-                return None
-        return proxy
+        return symbol_overlays.get_symbol_plan_proxy(self, symbol, *attrs)
 
     def _get_symbol_semantic_proxy(self, symbol, *attrs):
-        semantic_obj = self._get_plan_semantic_object(symbol)
-        proxy = getattr(semantic_obj, "Proxy", None)
-        if not proxy:
-            return None
-        for attr in attrs:
-            if not hasattr(proxy, attr):
-                return None
-        return proxy
+        return symbol_overlays.get_symbol_semantic_proxy(self, symbol, *attrs)
 
     def _get_symbol_overlay_polylines(self, symbol, placement=None):
-        if not self._is_plan_symbol_instance(symbol):
-            return []
-        proxy = self._get_symbol_plan_proxy(symbol, "_collect_local_footprint_polylines")
-        if not proxy:
-            return []
-        try:
-            local_polylines = list(proxy._collect_local_footprint_polylines() or [])
-        except Exception:
-            return []
-
-        placement = self._get_symbol_global_placement(symbol, placement=placement)
-        polylines = []
-        for polyline in local_polylines:
-            points = []
-            for point in polyline:
-                if isinstance(point, FreeCAD.Vector):
-                    local_point = FreeCAD.Vector(point)
-                else:
-                    try:
-                        z_value = point[2] if len(point) > 2 else 0.0
-                        local_point = FreeCAD.Vector(point[0], point[1], z_value)
-                    except Exception:
-                        continue
-                try:
-                    points.append(placement.multVec(local_point))
-                except Exception:
-                    continue
-            if len(points) >= 2:
-                polylines.append(points)
-        return polylines
+        return symbol_overlays.get_symbol_overlay_polylines(self, symbol, placement=placement)
 
     def _get_symbol_overlay_segments(self, symbol, placement=None):
-        segments = []
-        for polyline in self._get_symbol_overlay_polylines(symbol, placement=placement):
-            if len(polyline) < 2:
-                continue
-            for start, end in zip(polyline, polyline[1:]):
-                segments.append((start, end))
-        return segments
+        return symbol_overlays.get_symbol_overlay_segments(self, symbol, placement=placement)
 
     def _refresh_selected_symbol_visuals(self):
-        self._sync_selected_symbol_overlay()
-        self._sync_selected_symbol_handles()
-        self._request_view_redraw()
+        return symbol_overlays.refresh_selected_symbol_visuals(self)
 
     def _create_symbol_overlay_trackers(self, symbol, color, width, tracker_store, placement=None):
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            return
-
-        for polyline in self._get_symbol_overlay_polylines(symbol, placement=placement):
-            if len(polyline) < 2:
-                continue
-            for start, end in zip(polyline, polyline[1:]):
-                tracker = self._make_plan_line_tracker(
-                    DraftTrackers,
-                    "symbol-overlay:{}".format(getattr(symbol, "Name", "unknown")),
-                    scolor=color,
-                    swidth=width,
-                    ontop=True,
-                )
-                tracker.p1(start)
-                tracker.p2(end)
-                tracker.on()
-                tracker_store.append(tracker)
-
-    def _sync_hovered_symbol_overlay(self):
-        self._clear_hovered_symbol_overlay()
-        if self.current_tool != "Select":
-            return
-        if not self._is_plan_symbol_instance(self.hovered_symbol):
-            return
-        if self._is_selected_plan_target("symbol", self.hovered_symbol):
-            return
-        self._create_symbol_overlay_trackers(
-            self.hovered_symbol,
-            color=(0.38, 0.62, 0.96),
-            width=self._scaled_line_width(2),
-            tracker_store=self._symbol_hover_trackers,
+        return symbol_overlays.create_symbol_overlay_trackers(
+            self,
+            symbol,
+            color=color,
+            width=width,
+            tracker_store=tracker_store,
+            placement=placement,
         )
 
+    def _sync_hovered_symbol_overlay(self):
+        return symbol_overlays.sync_hovered_symbol_overlay(self)
+
     def _clear_hovered_symbol_overlay(self):
-        self._finalize_trackers(self._symbol_hover_trackers)
-        self._symbol_hover_trackers = []
+        return symbol_overlays.clear_hovered_symbol_overlay(self)
 
     def _sync_selected_symbol_overlay(self):
-        symbol = self._get_selected_plan_target_object("symbol")
-        if self.current_tool != "Select" or not self._is_plan_symbol_instance(symbol):
-            self._clear_selected_symbol_overlay()
-            return
-        width = self._scaled_line_width(3)
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            self._clear_selected_symbol_overlay()
-            return
-        segments = self._get_symbol_overlay_segments(symbol)
-        color = (0.12, 0.38, 0.95)
-        if len(self._symbol_overlay_trackers) != len(segments):
-            self._clear_selected_symbol_overlay()
-            for _start, _end in segments:
-                tracker = self._make_plan_line_tracker(
-                    DraftTrackers,
-                    "selected-symbol-overlay:{}".format(getattr(symbol, "Name", "unknown")),
-                    scolor=color,
-                    swidth=width,
-                    ontop=True,
-                )
-                self._symbol_overlay_trackers.append(tracker)
-        for tracker, (start, end) in zip(self._symbol_overlay_trackers, segments):
-            tracker.setColor(color)
-            tracker.p1(start)
-            tracker.p2(end)
-            tracker.on()
+        return symbol_overlays.sync_selected_symbol_overlay(self)
 
     def _clear_selected_symbol_overlay(self):
-        self._finalize_trackers(self._symbol_overlay_trackers)
-        self._symbol_overlay_trackers = []
+        return symbol_overlays.clear_selected_symbol_overlay(self)
 
     def _get_symbol_local_anchor(self, symbol):
-        semantic_obj = self._get_plan_semantic_object(symbol)
-        proxy = self._get_symbol_semantic_proxy(symbol, "get_plan_anchor")
-        if proxy:
-            try:
-                return FreeCAD.Vector(proxy.get_plan_anchor(semantic_obj))
-            except Exception:
-                pass
-        try:
-            import ArchEquipment
-
-            return ArchEquipment.get_plan_anchor(semantic_obj)
-        except Exception:
-            return FreeCAD.Vector()
+        return symbol_overlays.get_symbol_local_anchor(self, symbol)
 
     def _get_symbol_local_facing(self, symbol):
-        semantic_obj = self._get_plan_semantic_object(symbol)
-        proxy = self._get_symbol_semantic_proxy(symbol, "get_plan_facing")
-        if proxy:
-            try:
-                facing = FreeCAD.Vector(proxy.get_plan_facing(semantic_obj))
-            except Exception:
-                facing = None
-        else:
-            facing = None
-        if facing is None:
-            try:
-                import ArchEquipment
-
-                facing = ArchEquipment.get_plan_facing(semantic_obj)
-            except Exception:
-                facing = FreeCAD.Vector(1, 0, 0)
-        facing = FreeCAD.Vector(facing.x, facing.y, 0)
-        if facing.Length < 0.001:
-            return FreeCAD.Vector(1, 0, 0)
-        facing.normalize()
-        return facing
+        return symbol_overlays.get_symbol_local_facing(self, symbol)
 
     def _get_symbol_anchor_point(self, symbol, placement=None):
-        placement = self._get_symbol_global_placement(symbol, placement=placement)
-        anchor = self._get_symbol_local_anchor(symbol)
-        try:
-            return placement.multVec(anchor)
-        except Exception:
-            base = getattr(placement, "Base", None)
-            if base is None:
-                return FreeCAD.Vector()
-            return FreeCAD.Vector(base.x, base.y, base.z)
+        return symbol_overlays.get_symbol_anchor_point(self, symbol, placement=placement)
 
     def _get_symbol_facing_vector(self, symbol, placement=None):
-        placement = self._get_symbol_global_placement(symbol, placement=placement)
-        facing = self._get_symbol_local_facing(symbol)
-        try:
-            facing = placement.Rotation.multVec(facing)
-        except Exception:
-            pass
-        facing = FreeCAD.Vector(facing.x, facing.y, 0)
-        if facing.Length < 0.001:
-            return FreeCAD.Vector()
-        facing.normalize()
-        return facing
+        return symbol_overlays.get_symbol_facing_vector(self, symbol, placement=placement)
 
     def _symbol_rotation_snap_enabled(self):
-        params = getattr(self, "_plan_edit_params", None)
-        if not params:
-            return True
-        try:
-            return params.GetBool("SymbolRotateAngleSnap", True)
-        except Exception:
-            return True
+        return symbol_overlays.symbol_rotation_snap_enabled(self)
 
     def _get_symbol_rotation_snap_increment_degrees(self):
-        params = getattr(self, "_plan_edit_params", None)
-        if not params:
-            return 15.0
-        try:
-            increment = float(params.GetFloat("SymbolRotateAngleIncrement", 15.0))
-        except Exception:
-            increment = 15.0
-        if increment <= 0.001:
-            return 15.0
-        return min(increment, 180.0)
+        return symbol_overlays.get_symbol_rotation_snap_increment_degrees(self)
 
     def _get_symbol_rotation_snap_step_radians(self):
-        return math.radians(self._get_symbol_rotation_snap_increment_degrees())
+        return symbol_overlays.get_symbol_rotation_snap_step_radians(self)
 
     def _format_symbol_rotation_snap_label(self):
-        increment = self._get_symbol_rotation_snap_increment_degrees()
-        rounded = round(increment)
-        if abs(increment - rounded) < 1e-9:
-            return "{}°".format(int(rounded))
-        return "{}°".format(("{:.3f}".format(increment)).rstrip("0").rstrip("."))
+        return symbol_overlays.format_symbol_rotation_snap_label(self)
 
     def _symbol_rotation_free_angle_override_active(self):
-        try:
-            from PySide import QtCore, QtGui
-
-            modifiers = QtGui.QApplication.keyboardModifiers()
-            return bool(modifiers & QtCore.Qt.ShiftModifier)
-        except Exception:
-            return False
+        return symbol_overlays.symbol_rotation_free_angle_override_active(self)
 
     def _resolve_symbol_handle_target_point(self, symbol, handle_role, point, placement=None):
-        if point is None:
-            return None
-        if isinstance(point, FreeCAD.Vector):
-            target_point = FreeCAD.Vector(point.x, point.y, point.z)
-        else:
-            try:
-                z_value = point[2] if len(point) > 2 else 0.0
-                target_point = FreeCAD.Vector(point[0], point[1], z_value)
-            except Exception:
-                return None
-        if handle_role != "rotate":
-            return target_point
-        if not self._symbol_rotation_snap_enabled():
-            return target_point
-        if self._symbol_rotation_free_angle_override_active():
-            return target_point
-
-        snap_step = self._get_symbol_rotation_snap_step_radians()
-        if snap_step <= 1e-9:
-            return target_point
-
-        anchor = self._get_symbol_anchor_point(symbol, placement=placement)
-        vector = FreeCAD.Vector(target_point.x - anchor.x, target_point.y - anchor.y, 0)
-        radius = math.hypot(vector.x, vector.y)
-        if radius < 0.001:
-            return target_point
-
-        snapped_angle = round(math.atan2(vector.y, vector.x) / snap_step) * snap_step
-        return FreeCAD.Vector(
-            anchor.x + radius * math.cos(snapped_angle),
-            anchor.y + radius * math.sin(snapped_angle),
-            anchor.z,
+        return symbol_overlays.resolve_symbol_handle_target_point(
+            self,
+            symbol,
+            handle_role,
+            point,
+            placement=placement,
         )
 
     def _get_symbol_handle_radius(self, symbol, placement=None):
-        placement = placement or self._get_plan_object_global_placement(symbol)
-        anchor = self._get_symbol_anchor_point(symbol, placement=placement)
-        radius = 0.0
-        for polyline in self._get_symbol_overlay_polylines(symbol, placement=placement):
-            for point in polyline:
-                radius = max(
-                    radius,
-                    math.hypot(float(point.x) - float(anchor.x), float(point.y) - float(anchor.y)),
-                )
-        units_per_pixel = self._get_plan_view_units_per_pixel() or 10.0
-        return max(radius * 1.2, 28.0 * units_per_pixel, 300.0)
+        return symbol_overlays.get_symbol_handle_radius(self, symbol, placement=placement)
 
     def _get_selected_symbol_handle_specs(self, symbol):
-        from draftutils import params
-
-        if not self._is_plan_symbol_instance(symbol):
-            return []
-
-        placement = self._get_plan_object_global_placement(symbol)
-        anchor = self._get_symbol_anchor_point(symbol, placement=placement)
-        radius = self._get_symbol_handle_radius(symbol, placement=placement)
-        rotate_direction = self._get_symbol_facing_vector(symbol, placement=placement)
-        if rotate_direction.Length < 0.001:
-            rotate_direction = FreeCAD.Vector(1, 0, 0)
-        rotate_offset = rotate_direction.multiply(radius)
-        marker_size = self._scaled_marker_size(params.get_param_view("MarkerSize"))
-        return [
-            (
-                "move",
-                anchor,
-                FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size),
-            ),
-            (
-                "rotate",
-                anchor.add(rotate_offset),
-                FreeCADGui.getMarkerIndex("CIRCLE_FILLED", marker_size),
-            ),
-        ]
+        return symbol_overlays.get_selected_symbol_handle_specs(self, symbol)
 
     def _sync_selected_symbol_handles(self):
-        symbol = self._get_selected_plan_target_object("symbol")
-        if self.current_tool != "Select":
-            self._clear_selected_symbol_handles()
-            return
-        if not self._is_plan_symbol_instance(symbol):
-            self._clear_selected_symbol_handles()
-            return
-        self._clear_selected_symbol_handles()
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            return
-        for idx, (_role, point, marker) in enumerate(
-            self._get_selected_symbol_handle_specs(symbol)
-        ):
-            tracker = DraftTrackers.editTracker(
-                pos=point,
-                idx=idx,
-                marker=marker,
-                inactive=True,
-            )
-            tracker.on()
-            self._symbol_handle_trackers.append(tracker)
+        return symbol_overlays.sync_selected_symbol_handles(self)
 
     def _clear_selected_symbol_handles(self):
-        self._finalize_trackers(self._symbol_handle_trackers)
-        self._symbol_handle_trackers = []
+        return symbol_overlays.clear_selected_symbol_handles(self)
 
     def _pick_selected_symbol_handle(self, mouse_pos, radius_px=10):
-        symbol = self._get_selected_plan_target_object("symbol")
-        if not self._is_plan_symbol_instance(symbol) or not self.view:
-            return None
-        try:
-            cursor_x = int(mouse_pos[0])
-            cursor_y = int(mouse_pos[1])
-        except Exception:
-            return None
-        best_role = None
-        best_distance_sq = None
-        for role, point, _marker in self._get_selected_symbol_handle_specs(symbol):
-            try:
-                screen_x, screen_y = self.view.getPointOnScreen(point)
-            except Exception:
-                continue
-            dx = float(screen_x) - float(cursor_x)
-            dy = float(screen_y) - float(cursor_y)
-            distance_sq = dx * dx + dy * dy
-            if distance_sq > radius_px * radius_px:
-                continue
-            if best_distance_sq is None or distance_sq < best_distance_sq:
-                best_role = role
-                best_distance_sq = distance_sq
-        return best_role
+        return symbol_overlays.pick_selected_symbol_handle(self, mouse_pos, radius_px=radius_px)
 
     def _sync_symbol_edit_preview(self, symbol, placement, guide_start=None, guide_end=None):
-        self._clear_symbol_edit_preview()
-        if self.current_tool not in ("Move Symbol", "Rotate Symbol"):
-            return
-        if not self._is_plan_symbol_instance(symbol) or placement is None:
-            return
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            return
-
-        preview_color = (0.12, 0.38, 0.95)
-        self._create_symbol_overlay_trackers(
+        return symbol_overlays.sync_symbol_edit_preview(
+            self,
             symbol,
-            color=preview_color,
-            width=self._scaled_line_width(3),
-            tracker_store=self._symbol_edit_preview_trackers,
-            placement=placement,
+            placement,
+            guide_start=guide_start,
+            guide_end=guide_end,
         )
-        if guide_start is None or guide_end is None:
-            return
-        guide = self._make_plan_line_tracker(
-            DraftTrackers,
-            "symbol-edit-guide:{}".format(getattr(symbol, "Name", "unknown")),
-            dotted=True,
-            scolor=preview_color,
-            swidth=self._scaled_line_width(1),
-            ontop=True,
-        )
-        guide.p1(guide_start)
-        guide.p2(guide_end)
-        guide.on()
-        self._symbol_edit_preview_trackers.append(guide)
 
     def _clear_symbol_edit_preview(self):
-        self._finalize_trackers(self._symbol_edit_preview_trackers)
-        self._symbol_edit_preview_trackers = []
+        return symbol_overlays.clear_symbol_edit_preview(self)
 
     def _get_symbol_handle_placement(self, symbol, handle_role, point):
         if not self._is_plan_symbol_instance(symbol) or point is None or not handle_role:
