@@ -3,6 +3,7 @@
 """BIM-owned Plan Edit integration primitives."""
 
 from .context import PlanEditContext
+from .hosts import _PlanEditCommandHost, _PlanEditWallHost
 from .providers import (
     PlanActionSpec,
     PlanEditProvider,
@@ -22,6 +23,8 @@ __all__ = [
     "PlanEditProvider",
     "PlanEditRegistry",
     "PlanEditTransaction",
+    "_PlanEditCommandHost",
+    "_PlanEditWallHost",
     "PlanInspectorSection",
     "PlanIssueSpec",
     "PlanOverlaySpec",
