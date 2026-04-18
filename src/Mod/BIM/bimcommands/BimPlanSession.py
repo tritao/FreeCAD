@@ -6496,6 +6496,8 @@ class PlanEditSession:
             if mouse_pos is None:
                 return
             self._update_hovered_plan_target(mouse_pos)
+            if self._grip_trackers or self._is_selected_plan_target("wall"):
+                self._sync_wall_grips()
             self._request_view_redraw()
             hovered_after = self._get_hovered_plan_target()
             self._plan_perf_set_fields(
