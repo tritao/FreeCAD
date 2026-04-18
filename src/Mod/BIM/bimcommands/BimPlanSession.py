@@ -35,6 +35,7 @@ from bimplan import performance as plan_performance
 from bimplan import selection as plan_selection
 from bimplan import snap as plan_snap
 from bimplan import symbol_edit as plan_symbol_edit
+from bimplan import opening_edit as plan_opening_edit
 from bimplan import targets as plan_targets
 from bimplan import view as plan_view
 from bimplan.context import PlanEditContext
@@ -8026,57 +8027,22 @@ class PlanEditSession:
         return plan_symbol_edit.queue_restore_selected_symbol(self, symbol)
 
     def _get_selected_opening_edit_handles(self, opening):
-        proxy = self._get_opening_view_proxy(opening, "get_plan_edit_handles")
-        if not proxy:
-            return []
-        return list(proxy.get_plan_edit_handles() or [])
+        return plan_opening_edit.get_selected_opening_edit_handles(self, opening)
 
     def _get_opening_plan_proxy(self, opening, *attrs):
-        if not opening:
-            return None
-        proxy = getattr(opening, "Proxy", None)
-        if proxy and all(hasattr(proxy, attr) for attr in attrs):
-            return proxy
-        return self._get_opening_view_proxy(opening, *attrs)
+        return plan_opening_edit.get_opening_plan_proxy(self, opening, *attrs)
 
     def _get_opening_view_proxy(self, opening, *attrs):
-        if not opening:
-            return None
-        view_object = getattr(opening, "ViewObject", None)
-        proxy = getattr(view_object, "Proxy", None)
-        if not proxy:
-            return None
-        for attr in attrs:
-            if not hasattr(proxy, attr):
-                return None
-        return proxy
+        return plan_opening_edit.get_opening_view_proxy(self, opening, *attrs)
 
     def _project_opening_handle_point(self, opening, handle, point):
-        if point is None or not opening or getattr(handle, "role", None) != "move":
-            return point
-        proxy = self._get_opening_plan_proxy(opening, "project_point_to_host_axis")
-        if not proxy:
-            return point
-        return proxy.project_point_to_host_axis(point, anchor=self._edit_opening_move_anchor)
+        return plan_opening_edit.project_opening_handle_point(self, opening, handle, point)
 
     def _get_opening_move_anchor_modes(self, opening):
-        proxy = self._get_opening_plan_proxy(opening, "get_plan_move_anchor_modes")
-        if not proxy:
-            return _OPENING_MOVE_ANCHORS
-        modes = tuple(proxy.get_plan_move_anchor_modes() or ())
-        return modes or _OPENING_MOVE_ANCHORS
+        return plan_opening_edit.get_opening_move_anchor_modes(self, opening)
 
     def _execute_opening_handle(self, opening, handle_index, point=None):
-        proxy = self._get_opening_view_proxy(opening, "execute_plan_edit_handle")
-        if not proxy:
-            return False
-        return bool(
-            proxy.execute_plan_edit_handle(
-                handle_index,
-                point,
-                anchor=self._edit_opening_move_anchor,
-            )
-        )
+        return plan_opening_edit.execute_opening_handle(self, opening, handle_index, point=point)
 
     def _get_selected_opening_handle_specs(self, opening):
         return opening_overlays.get_selected_opening_handle_specs(self, opening)
@@ -8088,262 +8054,47 @@ class PlanEditSession:
         return opening_overlays.clear_selected_opening_handles(self)
 
     def _get_opening_move_preview_state(self, opening, point):
-        if not opening or point is None:
-            return None
-        proxy = self._get_opening_view_proxy(opening, "get_plan_move_preview_state")
-        if not proxy:
-            return None
-        return proxy.get_plan_move_preview_state(point, anchor=self._edit_opening_move_anchor)
+        return plan_opening_edit.get_opening_move_preview_state(self, opening, point)
 
     def _sync_opening_move_preview(self, opening, point):
-        self._clear_opening_move_preview()
-        if self.current_tool != "Move Opening" or not opening or point is None:
-            return
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            return
-
-        preview_state = self._get_opening_move_preview_state(opening, point)
-        if not preview_state:
-            return
-
-        preview_color = (0.12, 0.38, 0.95)
-        for polyline in preview_state.get("polylines", []):
-            if len(polyline) < 2:
-                continue
-            for start, end in zip(polyline, polyline[1:]):
-                tracker = self._make_plan_line_tracker(
-                    DraftTrackers,
-                    "opening-move-preview:{}".format(getattr(opening, "Name", "unknown")),
-                    scolor=preview_color,
-                    swidth=self._scaled_line_width(3),
-                    ontop=True,
-                )
-                tracker.p1(start)
-                tracker.p2(end)
-                tracker.on()
-                self._opening_move_preview_trackers.append(tracker)
-
-        guide_start = preview_state.get("guide_start")
-        guide_end = preview_state.get("guide_end")
-        if guide_start is None or guide_end is None:
-            return
-
-        guide = self._make_plan_line_tracker(
-            DraftTrackers,
-            "opening-move-guide:{}".format(getattr(opening, "Name", "unknown")),
-            dotted=True,
-            scolor=preview_color,
-            swidth=self._scaled_line_width(1),
-            ontop=True,
-        )
-        guide.p1(guide_start)
-        guide.p2(guide_end)
-        guide.on()
-        self._opening_move_preview_trackers.append(guide)
-
-        try:
-            dim = DraftTrackers.archDimTracker(mode=1)
-        except Exception:
-            return
-        dim.dimnode.textColor.setValue(preview_color)
-        dim.offset = self._get_opening_move_readout_offset(opening)
-        dim.p1(guide_start)
-        dim.p2(guide_end)
-        dim.on()
-        self._opening_move_preview_trackers.append(dim)
+        return plan_opening_edit.sync_opening_move_preview(self, opening, point)
 
     def _clear_opening_move_preview(self):
-        self._finalize_trackers(self._opening_move_preview_trackers)
-        self._opening_move_preview_trackers = []
+        return plan_opening_edit.clear_opening_move_preview(self)
 
     def _cycle_opening_move_anchor(self):
-        if self.current_tool != "Move Opening":
-            return False
-        anchor_modes = self._get_opening_move_anchor_modes(self._edit_opening)
-        try:
-            current_index = anchor_modes.index(self._edit_opening_move_anchor)
-        except ValueError:
-            current_index = 0
-        self._edit_opening_move_anchor = anchor_modes[(current_index + 1) % len(anchor_modes)]
-        return True
+        return plan_opening_edit.cycle_opening_move_anchor(self)
 
     def _refresh_opening_move_preview_from_raw_point(self):
-        opening = self._edit_opening
-        handle_index = self._edit_opening_handle_index
-        if not opening or handle_index is None:
-            return
-        handles = self._get_selected_opening_edit_handles(opening)
-        if handle_index < 0 or handle_index >= len(handles):
-            return
-        handle = handles[handle_index]
-        raw_point = self._edit_opening_move_raw_point
-        if raw_point is None:
-            raw_point = handle.point
-        point = self._project_opening_handle_point(opening, handle, raw_point)
-        self._sync_opening_move_preview(opening, point)
+        return plan_opening_edit.refresh_opening_move_preview_from_raw_point(self)
 
     def _activate_opening_handle(self, opening, handle_index):
-        try:
-            from PySide import QtCore
-        except ImportError:
-            self._activate_opening_handle_now(opening, handle_index)
-            return
-
-        QtCore.QTimer.singleShot(
-            0,
-            lambda: self._activate_opening_handle_now(opening, handle_index),
-        )
+        return plan_opening_edit.activate_opening_handle(self, opening, handle_index)
 
     def _activate_opening_handle_now(self, opening, handle_index):
-        if self._tearing_down or not opening:
-            return
-        self._set_selected_plan_target("opening", opening)
-        self._clear_wall_grips()
-        handles = self._get_selected_opening_edit_handles(opening)
-        if handle_index < 0 or handle_index >= len(handles):
-            return
-        handle = handles[handle_index]
-        if handle.interaction == "point_pick":
-            self._start_opening_handle_point_pick(opening, handle_index, handle)
-        else:
-            self._execute_selected_opening_handle(opening, handle_index, handle)
+        return plan_opening_edit.activate_opening_handle_now(self, opening, handle_index)
 
     def _start_opening_handle_point_pick(self, opening, handle_index, handle):
-        if not opening:
-            return
-        self.current_tool = "Move Opening"
-        self._set_hovered_wall(None)
-        self._set_hovered_opening(None)
-        self._sync_secondary_selected_overlays()
-        self._edit_opening = opening
-        self._edit_opening_handle_index = handle_index
-        self._edit_opening_move_anchor = "center"
-        self._edit_opening_move_raw_point = FreeCAD.Vector(handle.point)
-        self._clear_selected_opening_overlay()
-        self._clear_selected_opening_handles()
-        self._sync_opening_move_preview(opening, handle.point)
-        self._refresh_task_panel_status()
-        FreeCAD.activeDraftCommand = self
-        self._push_opening_move_snap_profile()
-        self._set_draft_point_focus_suppressed(True)
-        FreeCADGui.Snapper.getPoint(
-            last=handle.point,
-            callback=self._finish_opening_handle_point_pick,
-            movecallback=self._update_opening_handle_point_pick,
-            title=handle.title or translate("BIM_PlanEdit", "Pick new opening position"),
-            noTracker=True,
+        return plan_opening_edit.start_opening_handle_point_pick(
+            self, opening, handle_index, handle
         )
-        self._queue_focus_plan_view()
 
     def _update_opening_handle_point_pick(self, point=None, snap_info=None):
-        del snap_info
-        opening = self._edit_opening
-        handle_index = self._edit_opening_handle_index
-        if not opening or handle_index is None:
-            self._clear_opening_move_preview()
-            return
-        handles = self._get_selected_opening_edit_handles(opening)
-        if handle_index < 0 or handle_index >= len(handles):
-            self._clear_opening_move_preview()
-            return
-        handle = handles[handle_index]
-        self._edit_opening_move_raw_point = FreeCAD.Vector(point) if point is not None else None
-        point = self._project_opening_handle_point(opening, handle, point)
-        self._sync_opening_move_preview(opening, point)
+        return plan_opening_edit.update_opening_handle_point_pick(
+            self, point=point, snap_info=snap_info
+        )
 
     def _finish_opening_handle_point_pick(self, point=None, obj=None):
-        del obj
-        opening = self._edit_opening
-        handle_index = self._edit_opening_handle_index
-        self._edit_opening = None
-        self._edit_opening_handle_index = None
-        self._pop_opening_move_snap_profile()
-        FreeCAD.activeDraftCommand = None
-        self._clear_opening_move_preview()
-        self._edit_opening_move_raw_point = None
-
-        if point is None or not opening:
-            self.current_tool = "Select"
-            self._edit_opening_move_anchor = "center"
-            self._sync_selected_opening_overlay()
-            self._sync_selected_opening_handles()
-            self._refresh_task_panel_status()
-            return
-
-        handles = self._get_selected_opening_edit_handles(opening)
-        if handle_index is None or handle_index < 0 or handle_index >= len(handles):
-            self.current_tool = "Select"
-            self._edit_opening_move_anchor = "center"
-            self._refresh_task_panel_status()
-            return
-        handle = handles[handle_index]
-        point = self._project_opening_handle_point(opening, handle, point)
-
-        try:
-            self.doc.openTransaction(
-                handle.transaction or translate("BIM_PlanEdit", "Edit Opening")
-            )
-            moved = self._execute_opening_handle(opening, handle_index, point)
-            if not moved:
-                raise RuntimeError("Unable to execute opening handle")
-            self.doc.commitTransaction()
-            self.doc.recompute()
-        except Exception:
-            try:
-                self.doc.abortTransaction()
-            except Exception:
-                pass
-            self._edit_opening_move_anchor = "center"
-            self._restore_selected_opening(opening)
-            return
-
-        self._edit_opening_move_anchor = "center"
-        self.current_tool = "Select"
-        self._refresh_task_panel_status()
-        self._queue_restore_selected_opening(opening)
+        return plan_opening_edit.finish_opening_handle_point_pick(self, point=point, obj=obj)
 
     def _cancel_opening_handle_point_pick(self):
-        opening = self._edit_opening
-        self._edit_opening = None
-        self._edit_opening_handle_index = None
-        self._stop_snapper()
-        self._pop_opening_move_snap_profile()
-        FreeCAD.activeDraftCommand = None
-        self._clear_opening_move_preview()
-        self._edit_opening_move_anchor = "center"
-        self._edit_opening_move_raw_point = None
-        self.current_tool = "Select"
-        if opening:
-            self._set_selected_plan_target("opening", opening, pending_restore=True)
-        self._sync_selected_opening_overlay()
-        self._sync_selected_opening_handles()
-        self._refresh_task_panel_status()
+        return plan_opening_edit.cancel_opening_handle_point_pick(self)
 
     def _restore_selected_opening(self, opening):
-        self.current_tool = "Select"
-        if opening:
-            self._set_selected_plan_target("opening", opening, pending_restore=True)
-        else:
-            self._set_selected_plan_target()
-        if not opening:
-            self._sync_selected_opening_overlay()
-            self._sync_selected_opening_handles()
-            self._refresh_task_panel_status()
-            return
-        self._set_gui_selection_object(opening)
-        self._sync_selected_opening_overlay()
-        self._sync_selected_opening_handles()
-        self._refresh_task_panel_status()
+        return plan_opening_edit.restore_selected_opening(self, opening)
 
     def _queue_restore_selected_opening(self, opening):
-        try:
-            from PySide import QtCore
-        except ImportError:
-            self._restore_selected_opening(opening)
-            return
-        QtCore.QTimer.singleShot(0, lambda: self._restore_selected_opening(opening))
+        return plan_opening_edit.queue_restore_selected_opening(self, opening)
 
     def _clear_plan_selection_state(self):
         self._set_gui_selection([])
@@ -8364,21 +8115,6 @@ class PlanEditSession:
         self._refresh_task_panel_status()
 
     def _execute_selected_opening_handle(self, opening, handle_index, handle):
-        try:
-            self.doc.openTransaction(
-                handle.transaction or translate("BIM_PlanEdit", "Edit Opening")
-            )
-            executed = self._execute_opening_handle(opening, handle_index)
-            if not executed:
-                raise RuntimeError("Unable to execute opening handle")
-            self.doc.commitTransaction()
-            self.doc.recompute()
-        except Exception:
-            try:
-                self.doc.abortTransaction()
-            except Exception:
-                pass
-            return
-        self._set_selected_plan_target("opening", opening, pending_restore=True)
-        self._sync_selected_opening_overlay()
-        self._sync_selected_opening_handles()
+        return plan_opening_edit.execute_selected_opening_handle(
+            self, opening, handle_index, handle
+        )
