@@ -322,6 +322,8 @@ def project_plan_point(session, point):
 
 
 def get_plan_view_height(session):
+    if session._tearing_down or getattr(session, "_finishing", False) or not session.view:
+        return None
     get_camera_node = session._get_runtime_attr(session.view, "getCameraNode")
     if get_camera_node is None:
         return None
@@ -375,7 +377,7 @@ def get_plan_view_units_per_pixel(session):
 
 
 def get_plan_projection_cache_key(session):
-    if not session.view:
+    if session._tearing_down or getattr(session, "_finishing", False) or not session.view:
         return None
     get_camera_node = session._get_runtime_attr(session.view, "getCameraNode")
     get_size = session._get_runtime_attr(session.view, "getSize")
