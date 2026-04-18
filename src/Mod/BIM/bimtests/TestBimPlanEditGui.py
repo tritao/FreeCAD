@@ -4268,6 +4268,129 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_mouse_move_resyncs_selected_wall_grips(self):
+        """Mouse moves should resync the active wall grips instead of leaving stale overlays."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+        self.assertEqual(len(session._grip_trackers), 3)
+
+        expected_positions = tuple(
+            (
+                round(float(position.x), 6),
+                round(float(position.y), 6),
+                round(float(position.z), 6),
+            )
+            for position in wall.Proxy.calc_edit_grip_positions(wall)
+        )
+
+        bogus_positions = (
+            FreeCAD.Vector(1111, 2222, 0),
+            FreeCAD.Vector(3333, 4444, 0),
+            FreeCAD.Vector(5555, 6666, 0),
+        )
+        for tracker, bogus in zip(session._grip_trackers, bogus_positions):
+            tracker.set(bogus)
+
+        current_positions = tuple(
+            (
+                round(float(tracker.position.x), 6),
+                round(float(tracker.position.y), 6),
+                round(float(tracker.position.z), 6),
+            )
+            for tracker in session._grip_trackers
+        )
+        self.assertNotEqual(current_positions, expected_positions)
+
+        with patch.object(session, "_get_plan_target_at_position", return_value=(None, None)):
+            session._on_mouse_moved(self._make_fake_mouse_move_event(10, 10))
+        self.pump_gui_events()
+
+        refreshed_positions = tuple(
+            (
+                round(float(tracker.position.x), 6),
+                round(float(tracker.position.y), 6),
+                round(float(tracker.position.z), 6),
+            )
+            for tracker in session._grip_trackers
+        )
+        self.assertEqual(refreshed_positions, expected_positions)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_clearing_wall_grips_removes_edit_trackers_from_scenegraph(self):
+        """Clearing a selected wall should remove the live editTracker nodes from the scenegraph."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        baseline = self._count_scenegraph_named_switches(session, "editTracker")
+
+        self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+        self.pump_gui_events()
+
+        self.assertEqual(len(session._grip_trackers), 3)
+        self.assertEqual(
+            self._count_scenegraph_named_switches(session, "editTracker"),
+            baseline + 3,
+        )
+
+        FreeCADGui.Selection.clearSelection()
+        self.pump_gui_events()
+        session._refresh_primary_selected_plan_target()
+        self.pump_gui_events(timeout_ms=400)
+
+        self.assertEqual(len(session._grip_trackers), 0)
+        self._assert_no_selected_plan_target(session)
+        self.assertEqual(
+            self._count_scenegraph_named_switches(session, "editTracker"),
+            baseline,
+        )
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_edit_tracker_finalized_before_insert_does_not_leak_scenegraph_node(self):
+        """Finalizing an edit tracker before the delayed insert runs must not leak an orphan node."""
+
+        import draftguitools.gui_trackers as DraftTrackers
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        baseline = self._count_scenegraph_named_switches(session, "editTracker")
+
+        tracker = DraftTrackers.editTracker(
+            pos=FreeCAD.Vector(1000, 1000, 0),
+            name=wall.Name,
+            idx=0,
+        )
+        tracker.finalize()
+        self.pump_gui_events(timeout_ms=400)
+
+        self.assertEqual(
+            self._count_scenegraph_named_switches(session, "editTracker"),
+            baseline,
+        )
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_selecting_space_refreshes_only_changed_selected_overlays(self):
         """Switching semantic selection to a space should avoid unrelated selected-overlay refreshes."""
 
