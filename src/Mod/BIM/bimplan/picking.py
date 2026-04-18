@@ -49,30 +49,39 @@ def get_screen_distance_sq_to_projected_segment(cursor_xy, start_xy, end_xy):
 
 
 def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
-    if not session.doc or not session.view or not mouse_pos:
-        return None
-    radius_sq = float(radius_px) * float(radius_px)
-    best_symbol = None
-    best_distance_sq = None
-    seen = set()
-    for obj in getattr(session.doc, "Objects", []) or []:
-        if not session._is_plan_symbol_instance(obj):
-            continue
-        name = getattr(obj, "Name", None)
-        if not name or name in seen:
-            continue
-        seen.add(name)
-        view_object = getattr(obj, "ViewObject", None)
-        if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
-            continue
-        for start, end in session._get_symbol_overlay_segments(obj):
-            distance_sq = session._get_screen_distance_sq_to_segment(mouse_pos, start, end)
-            if distance_sq is None or distance_sq > radius_sq:
+    with session._plan_perf_trace_span(
+        "pick_symbol_target_from_overlays",
+        mouse_pos=mouse_pos,
+        radius_px=radius_px,
+    ):
+        if not session.doc or not session.view or not mouse_pos:
+            return None
+        radius_sq = float(radius_px) * float(radius_px)
+        best_symbol = None
+        best_distance_sq = None
+        cursor_xy = (float(mouse_pos[0]), float(mouse_pos[1]))
+        for obj in session._get_plan_symbol_instances():
+            session._plan_perf_count("symbol_overlay_pick_candidates")
+            view_object = getattr(obj, "ViewObject", None)
+            if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
                 continue
-            if best_distance_sq is None or distance_sq < best_distance_sq:
-                best_symbol = obj
-                best_distance_sq = distance_sq
-    return best_symbol
+            for projected in session._get_symbol_overlay_screen_polylines(obj):
+                for start_xy, end_xy in zip(projected, projected[1:]):
+                    session._plan_perf_count("symbol_overlay_pick_segments_scanned")
+                    distance_sq = session._get_screen_distance_sq_to_projected_segment(
+                        cursor_xy,
+                        start_xy,
+                        end_xy,
+                    )
+                    if distance_sq is None or distance_sq > radius_sq:
+                        continue
+                    if best_distance_sq is None or distance_sq < best_distance_sq:
+                        best_symbol = obj
+                        best_distance_sq = distance_sq
+        session._plan_perf_set_fields(
+            symbol_overlay_pick_result=session._plan_perf_describe_object(best_symbol)
+        )
+        return best_symbol
 
 
 def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, candidates=None):

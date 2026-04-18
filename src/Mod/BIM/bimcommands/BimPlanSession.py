@@ -253,10 +253,12 @@ class PlanEditSession:
         }
         self._plan_semantic_object_cache = {}
         self._plan_object_storeys_cache = {}
+        self._plan_symbol_instances_cache = None
         self._wall_hosted_openings_cache = None
         self._wall_hosted_openings_cache_queued = False
         self._opening_overlay_screen_cache = {}
         self._opening_overlay_screen_cache_projection_key = None
+        self._symbol_overlay_screen_cache = {}
         self._opening_overlay_trackers = []
         self._hovered_opening_overlay_dirty = False
         self._hovered_opening_overlay_render_state = None
@@ -527,6 +529,8 @@ class PlanEditSession:
     def _invalidate_plan_classification_cache(self):
         self._plan_semantic_object_cache.clear()
         self._plan_object_storeys_cache.clear()
+        self._plan_symbol_instances_cache = None
+        self._symbol_overlay_screen_cache.clear()
 
     def _get_cached_plan_overlay_geometry(self, kind, obj, field_name, compute):
         return overlay_geometry.get_cached_plan_overlay_geometry(
@@ -2649,7 +2653,13 @@ class PlanEditSession:
         for _relation, label, _status, detail in warnings:
             FreeCAD.Console.PrintWarning(f"  - {label}: {detail}\n")
 
-    def _set_selected_plan_target(self, kind=None, obj=None, pending_restore=False):
+    def _set_selected_plan_target(
+        self,
+        kind=None,
+        obj=None,
+        pending_restore=False,
+        preserve_hovered_symbol_overlay=False,
+    ):
         if self._is_valid_plan_target(kind, obj):
             self._set_selected_plan_target_state(kind, obj)
         else:
@@ -2670,7 +2680,8 @@ class PlanEditSession:
             self._sync_junction_node_overlays()
             self._sync_selected_wall_opening_context_overlay()
             self._sync_hovered_wall_opening_context_overlay()
-            self._sync_hovered_symbol_overlay()
+            if not preserve_hovered_symbol_overlay:
+                self._sync_hovered_symbol_overlay()
             self._sync_hovered_space_overlay()
             self._sync_hovered_region_overlay()
 
@@ -6422,7 +6433,15 @@ class PlanEditSession:
             return False
         previous_kind, previous_obj = self._get_selected_plan_target()
         self.current_tool = "Select"
-        self._set_selected_plan_target(kind, obj, pending_restore=queue_restore)
+        preserve_hovered_symbol_overlay = (
+            kind == "symbol" and self.hovered_symbol == obj and bool(self._symbol_hover_trackers)
+        )
+        self._set_selected_plan_target(
+            kind,
+            obj,
+            pending_restore=queue_restore,
+            preserve_hovered_symbol_overlay=preserve_hovered_symbol_overlay,
+        )
         if sync_gui_selection:
             if defer_gui_selection:
                 self._schedule_gui_selection_object(obj)
@@ -6637,7 +6656,7 @@ class PlanEditSession:
             mouse_pos,
             event_callback=event_callback,
             sync_gui_selection=True,
-            clear_hovered_kinds=("wall", "opening", "space", "region"),
+            clear_hovered_kinds=("wall", "opening", "symbol", "space", "region"),
             resolved_target=resolved_target,
         )
 
@@ -7017,6 +7036,12 @@ class PlanEditSession:
 
     def _get_symbol_overlay_segments(self, symbol, placement=None):
         return symbol_overlays.get_symbol_overlay_segments(self, symbol, placement=placement)
+
+    def _get_plan_symbol_instances(self):
+        return symbol_overlays.get_plan_symbol_instances(self)
+
+    def _get_symbol_overlay_screen_polylines(self, symbol):
+        return symbol_overlays.get_symbol_overlay_screen_polylines(self, symbol)
 
     def _refresh_selected_symbol_visuals(self):
         return symbol_overlays.refresh_selected_symbol_visuals(self)
