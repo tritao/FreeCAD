@@ -84,6 +84,8 @@ class Tracker:
         import Part
 
         self.ontop = ontop
+        self._finalized = False
+        self._scene_graph = None
         self.color = coin.SoBaseColor()
         drawstyle = coin.SoDrawStyle()
         if swidth:
@@ -109,15 +111,18 @@ class Tracker:
         Also called by ghostTracker.remove.
         """
         switch = self.switch
+        self._finalized = True
         if switch is None:
             self.Visible = False
             return
-        ToDo.delay(self._removeSwitch, switch)
+        ToDo.delay(self._removeSwitch, (switch, self._scene_graph))
         self.switch = None
         self.Visible = False
 
     def get_scene_graph(self):
         """Returns the current scenegraph or None if this is not a 3D view"""
+        if self._scene_graph is not None:
+            return self._scene_graph
         v = gui_utils.get_3d_view()
         if v:
             return v.getSceneGraph()
@@ -130,25 +135,44 @@ class Tracker:
         Must not be called
         from an event handler (or other scene graph traversal).
         """
+        if switch is None or self._finalized:
+            return
+        if switch is not self.switch:
+            return
         sg = self.get_scene_graph()
         if not sg:
+            return
+        self._scene_graph = sg
+        if sg.findChild(switch) >= 0:
             return
         if self.ontop:
             sg.insertChild(switch, 0)
         else:
             sg.addChild(switch)
 
-    def _removeSwitch(self, switch):
+    def _removeSwitch(self, switch_data):
         """Remove self.switch from the scene graph.
 
         As with _insertSwitch,
         must not be called during scene graph traversal).
         """
-        sg = self.get_scene_graph()
+        if isinstance(switch_data, tuple):
+            switch, sg = switch_data
+        else:
+            switch = switch_data
+            sg = None
+        if sg is None:
+            sg = self._scene_graph
+        if sg is None:
+            sg = self.get_scene_graph()
         if not sg:
             return
-        if sg.findChild(switch) >= 0:
-            sg.removeChild(switch)
+        try:
+            if sg.findChild(switch) >= 0:
+                sg.removeChild(switch)
+        finally:
+            if self._scene_graph is sg:
+                self._scene_graph = None
 
     def on(self):
         """Set the visibility to True."""
