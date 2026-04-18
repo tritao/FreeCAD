@@ -357,6 +357,7 @@ class PlanEditSession:
         self._plan_perf_current_event = None
         self._plan_perf_sequence = 0
         self._plan_provider_refresh_cache = None
+        self._plan_provider_document_cache = {}
         self._connect_teardown_signals(QtGui)
 
     def _connect_teardown_signal(self, signal):
@@ -992,6 +993,9 @@ class PlanEditSession:
             yield self._plan_provider_refresh_cache
         finally:
             self._plan_provider_refresh_cache = previous_cache
+
+    def _invalidate_plan_provider_document_cache(self):
+        self._plan_provider_document_cache = {}
 
     def _plan_provider_integrations_disabled(self):
         env_value = str(os.environ.get("FC_BIM_PLAN_EDIT_DISABLE_INTEGRATIONS", "") or "").strip()
@@ -5331,6 +5335,7 @@ class PlanEditSession:
     def slotCreatedObject(self, obj):
         if self._tearing_down:
             return
+        self._invalidate_plan_provider_document_cache()
         self._invalidate_plan_classification_cache()
         self._invalidate_wall_hosted_openings_cache()
         self._queue_created_plan_object(obj)
@@ -5338,6 +5343,7 @@ class PlanEditSession:
     def slotChangedObject(self, obj, prop):
         if self._tearing_down:
             return
+        self._invalidate_plan_provider_document_cache()
         self._invalidate_plan_classification_cache()
         self._invalidate_wall_hosted_openings_cache()
         if self.current_tool != "Select":
@@ -5468,6 +5474,7 @@ class PlanEditSession:
     def slotDeletedObject(self, obj):
         if self._tearing_down:
             return
+        self._invalidate_plan_provider_document_cache()
         self._invalidate_plan_classification_cache()
         self._invalidate_wall_hosted_openings_cache()
         self._invalidate_plan_overlay_geometry_cache(obj)
@@ -5505,6 +5512,7 @@ class PlanEditSession:
         self._schedule_selected_wall_reset("Deleted", obj)
 
     def _invalidate_document_dependent_plan_visuals(self, recompute_opening_hosts=False):
+        self._invalidate_plan_provider_document_cache()
         self._invalidate_plan_classification_cache()
         self._invalidate_wall_hosted_openings_cache()
         self._invalidate_plan_overlay_geometry_cache()
