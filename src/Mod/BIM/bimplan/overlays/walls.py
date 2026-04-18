@@ -27,16 +27,19 @@ def retarget_edit_tracker(tracker, obj, index):
 
 def sync_wall_grips(session):
     with session._plan_perf_trace_span("sync_wall_grips"):
+        session._wall_grip_sync_queued = False
+        session._wall_grip_sync_generation += 1
         if not session.is_selected_wall_endpoint_editable():
             session._clear_wall_grips()
             return
 
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-            from draftutils import params
-        except Exception:
-            session._clear_wall_grips()
-            return
+        with session._plan_perf_trace_span("wall_grips_import_trackers"):
+            try:
+                import draftguitools.gui_trackers as DraftTrackers
+                from draftutils import params
+            except Exception:
+                session._clear_wall_grips()
+                return
 
         wall = session._get_selected_plan_target_object("wall")
         proxy = getattr(wall, "Proxy", None)
@@ -44,21 +47,24 @@ def sync_wall_grips(session):
             session._clear_wall_grips()
             return
 
-        endpoints = proxy.calc_endpoints(wall)
+        with session._plan_perf_trace_span("wall_grips_calc_endpoints"):
+            endpoints = proxy.calc_endpoints(wall)
         if len(endpoints) != 2:
             session._clear_wall_grips()
             return
 
-        if hasattr(proxy, "calc_edit_grip_positions"):
-            grip_positions = proxy.calc_edit_grip_positions(wall)
-        else:
-            grip_positions = endpoints + [(endpoints[0] + endpoints[1]) * 0.5]
+        with session._plan_perf_trace_span("wall_grips_calc_positions"):
+            if hasattr(proxy, "calc_edit_grip_positions"):
+                grip_positions = proxy.calc_edit_grip_positions(wall)
+            else:
+                grip_positions = endpoints + [(endpoints[0] + endpoints[1]) * 0.5]
         if len(grip_positions) != 3:
             session._clear_wall_grips()
             return
 
-        marker_size = session._scaled_marker_size(params.get_param_view("MarkerSize"))
-        midpoint_marker = FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size)
+        with session._plan_perf_trace_span("wall_grips_marker_lookup"):
+            marker_size = session._scaled_marker_size(params.get_param_view("MarkerSize"))
+            midpoint_marker = FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size)
         wall_state = (
             marker_size,
             midpoint_marker,
@@ -77,12 +83,16 @@ def sync_wall_grips(session):
         )
         if reuse_allowed:
             try:
-                for index, (tracker, position) in enumerate(
-                    zip(session._grip_trackers, grip_positions)
-                ):
-                    session._retarget_edit_tracker(tracker, wall, index)
-                    tracker.set(position)
-                    tracker.on()
+                with session._plan_perf_trace_span("wall_grips_retarget_trackers"):
+                    for index, tracker in enumerate(session._grip_trackers):
+                        session._retarget_edit_tracker(tracker, wall, index)
+                with session._plan_perf_trace_span("wall_grips_position_trackers"):
+                    for tracker, position in zip(session._grip_trackers, grip_positions):
+                        tracker.set(position)
+                with session._plan_perf_trace_span("wall_grips_show_trackers"):
+                    for tracker in session._grip_trackers:
+                        if not getattr(tracker, "Visible", False):
+                            tracker.on()
                 if previous_state == wall_state:
                     session._plan_perf_count("wall_grip_cache_hits")
                 else:
@@ -93,20 +103,62 @@ def sync_wall_grips(session):
                 session._clear_wall_grips()
 
         grip_start, grip_end, midpoint = grip_positions
-        session._grip_trackers = [
-            DraftTrackers.editTracker(pos=grip_start, name=wall.Name, idx=0),
-            DraftTrackers.editTracker(pos=grip_end, name=wall.Name, idx=1),
-            DraftTrackers.editTracker(
-                pos=midpoint,
-                name=wall.Name,
-                idx=2,
-                marker=midpoint_marker,
-            ),
-        ]
+        with session._plan_perf_trace_span("wall_grips_create_trackers"):
+            session._grip_trackers = [
+                DraftTrackers.editTracker(pos=grip_start, name=wall.Name, idx=0),
+                DraftTrackers.editTracker(pos=grip_end, name=wall.Name, idx=1),
+                DraftTrackers.editTracker(
+                    pos=midpoint,
+                    name=wall.Name,
+                    idx=2,
+                    marker=midpoint_marker,
+                ),
+            ]
         session._wall_grip_state = wall_state
 
 
+def hide_wall_grips(session):
+    for tracker in session._grip_trackers:
+        try:
+            tracker.off()
+        except Exception:
+            pass
+
+
+def schedule_wall_grip_sync(session, delay_ms=120):
+    if session._tearing_down:
+        return
+    hide_wall_grips(session)
+    session._wall_grip_sync_queued = True
+    session._wall_grip_sync_generation += 1
+    generation = session._wall_grip_sync_generation
+    try:
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(
+            delay_ms,
+            lambda generation=generation: session._run_scheduled_wall_grip_sync(generation),
+        )
+    except Exception:
+        session._run_scheduled_wall_grip_sync(generation)
+
+
+def run_scheduled_wall_grip_sync(session, generation=None):
+    if not session._wall_grip_sync_queued:
+        return
+    if generation is not None and generation != session._wall_grip_sync_generation:
+        return
+    session._wall_grip_sync_queued = False
+    with session._plan_perf_trace_event("scheduled_wall_grip_sync"):
+        if session._tearing_down:
+            return
+        sync_wall_grips(session)
+        session._request_view_redraw()
+
+
 def clear_wall_grips(session):
+    session._wall_grip_sync_queued = False
+    session._wall_grip_sync_generation += 1
     session._finalize_trackers(session._grip_trackers)
     session._grip_trackers = []
     session._wall_grip_state = None

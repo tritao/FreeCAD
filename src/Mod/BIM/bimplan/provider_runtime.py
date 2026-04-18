@@ -211,30 +211,42 @@ def normalize_plan_provider_overlay(provider_id, overlay):
 
 
 def collect_plan_provider_contributions(session, method_name, normalizer):
-    context = session.get_plan_edit_context()
-    results = []
-    for provider in session.get_plan_provider_registry().iter_providers():
-        provider_id = session._get_plan_provider_id(provider)
-        if not provider_id:
-            continue
-        method = getattr(provider, method_name, None)
-        if not callable(method):
-            continue
-        try:
-            provided = method(context)
-        except Exception as exc:
-            FreeCAD.Console.PrintError(
-                translate(
-                    "BIM_PlanEdit",
-                    "Plan Edit provider '{provider}' failed in {method}: {error}\n",
-                ).format(provider=provider_id, method=method_name, error=exc)
+    with session._plan_perf_trace_span(f"collect_plan_provider_contributions_{method_name}"):
+        context = session.get_plan_edit_context()
+        results = []
+        for provider in session.get_plan_provider_registry().iter_providers():
+            provider_id = session._get_plan_provider_id(provider)
+            if not provider_id:
+                continue
+            method = getattr(provider, method_name, None)
+            if not callable(method):
+                continue
+            span_name = "plan_provider_{}_{}".format(
+                provider_id.replace(" ", "_"),
+                method_name,
             )
-            continue
-        for contribution in session._coerce_plan_provider_results(provided):
-            normalized = normalizer(provider_id, contribution)
-            if normalized is not None:
-                results.append(normalized)
-    return tuple(results)
+            with session._plan_perf_trace_span(span_name):
+                try:
+                    provided = method(context)
+                except Exception as exc:
+                    FreeCAD.Console.PrintError(
+                        translate(
+                            "BIM_PlanEdit",
+                            "Plan Edit provider '{provider}' failed in {method}: {error}\n",
+                        ).format(provider=provider_id, method=method_name, error=exc)
+                    )
+                    continue
+            contribution_count = 0
+            for contribution in session._coerce_plan_provider_results(provided):
+                normalized = normalizer(provider_id, contribution)
+                if normalized is not None:
+                    results.append(normalized)
+                    contribution_count += 1
+            session._plan_perf_count(
+                "plan_provider_{}_{}_contributions".format(provider_id, method_name),
+                contribution_count,
+            )
+        return tuple(results)
 
 
 def execute_plan_provider_action(session, provider_id, action_key, transaction_label=""):

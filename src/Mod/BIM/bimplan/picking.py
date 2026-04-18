@@ -75,11 +75,12 @@ def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
     return best_symbol
 
 
-def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10):
+def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, candidates=None):
     with session._plan_perf_trace_span(
         "pick_opening_target_from_overlays",
         mouse_pos=mouse_pos,
         radius_px=radius_px,
+        candidate_mode="hosted" if candidates is not None else "document",
     ):
         if not session.doc or not session.view or not mouse_pos:
             return None
@@ -88,7 +89,11 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10):
         best_distance_sq = None
         seen = set()
         cursor_xy = (float(mouse_pos[0]), float(mouse_pos[1]))
-        for obj in getattr(session.doc, "Objects", []) or []:
+        if candidates is None:
+            objects = getattr(session.doc, "Objects", []) or []
+        else:
+            objects = candidates
+        for obj in objects or []:
             session._plan_perf_count("opening_overlay_pick_objects_scanned")
             if not session._is_hosted_opening_object(obj):
                 continue
@@ -361,7 +366,8 @@ def get_plan_target_at_position(session, mouse_pos):
         if not session.view or not mouse_pos:
             return (None, None)
         try:
-            infos = session.view.getObjectsInfo((int(mouse_pos[0]), int(mouse_pos[1])))
+            with session._plan_perf_trace_span("view_get_objects_info"):
+                infos = session.view.getObjectsInfo((int(mouse_pos[0]), int(mouse_pos[1])))
         except (AttributeError, ReferenceError, RuntimeError):
             infos = None
         if not infos:
@@ -404,7 +410,13 @@ def get_plan_target_at_position(session, mouse_pos):
             elif target_kind == "space" and space_candidate is None:
                 space_candidate = target_obj
         if result == (None, None):
-            opening_candidate = session._pick_plan_opening_target_from_overlays(mouse_pos)
+            opening_candidates = None
+            if wall_candidate is not None:
+                opening_candidates = session._get_wall_hosted_openings(wall_candidate)
+            opening_candidate = session._pick_plan_opening_target_from_overlays(
+                mouse_pos,
+                candidates=opening_candidates,
+            )
             if opening_candidate is not None:
                 result = ("opening", opening_candidate)
             elif symbol_candidate is None:

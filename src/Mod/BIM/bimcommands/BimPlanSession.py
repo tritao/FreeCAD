@@ -26,6 +26,8 @@
 
 from contextlib import contextmanager
 import math
+import os
+import time
 
 import FreeCAD
 import FreeCADGui
@@ -123,6 +125,9 @@ _PLAN_VISUAL_WALL_GRIPS = "wall_grips"
 _PLAN_VISUAL_WALL_EDIT_PREVIEW = "wall_edit_preview"
 _PLAN_VISUAL_VIEW_SCALE = "view_scale"
 _PLAN_VISUAL_ALL = "all"
+_PLAN_GUI_SELECTION_SYNC_DELAY_MS = 80
+_PLAN_HOVER_PICK_INTERVAL_MS = 80
+_PLAN_WALL_GRIP_REFRESH_DELAY_MS = 120
 _PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
 _PLAN_VIEW_LOCKED_ACTIONS = (
     "Std_ViewFront",
@@ -221,6 +226,9 @@ class PlanEditSession:
         self.hovered_symbol = None
         self.hovered_space = None
         self.hovered_region = None
+        self._hover_pick_dirty = False
+        self._hover_pick_last_time = 0.0
+        self._hover_pick_last_mouse_pos = None
         self._space_region_pick_boundaries = []
         self._space_region_candidates = []
         self._hovered_space_region_candidate = None
@@ -229,6 +237,8 @@ class PlanEditSession:
         self._secondary_selected_plan_targets_state = []
         self._grip_trackers = []
         self._wall_grip_state = None
+        self._wall_grip_sync_queued = False
+        self._wall_grip_sync_generation = 0
         self._wall_hover_trackers = []
         self._junction_node_trackers = []
         self._hovered_wall_opening_context_trackers = []
@@ -241,6 +251,10 @@ class PlanEditSession:
             "space": {},
             "region": {},
         }
+        self._plan_semantic_object_cache = {}
+        self._plan_object_storeys_cache = {}
+        self._wall_hosted_openings_cache = None
+        self._wall_hosted_openings_cache_queued = False
         self._opening_overlay_screen_cache = {}
         self._opening_overlay_screen_cache_projection_key = None
         self._opening_overlay_trackers = []
@@ -272,6 +286,10 @@ class PlanEditSession:
         self._edit_opening_move_anchor = "center"
         self._edit_opening_move_raw_point = None
         self._selection_observer_added = False
+        self._selection_refresh_queued = False
+        self._gui_selection_sync_queued = False
+        self._gui_selection_sync_generation = 0
+        self._queued_gui_selection_object = None
         self._document_observer_added = False
         self._pending_created_plan_objects = {}
         self._created_plan_objects_flush_queued = False
@@ -338,6 +356,7 @@ class PlanEditSession:
         self._plan_perf_log_path = self._resolve_plan_perf_log_path()
         self._plan_perf_current_event = None
         self._plan_perf_sequence = 0
+        self._plan_provider_refresh_cache = None
         self._connect_teardown_signals(QtGui)
 
     def _connect_teardown_signal(self, signal):
@@ -504,6 +523,10 @@ class PlanEditSession:
             kinds=kinds,
         )
 
+    def _invalidate_plan_classification_cache(self):
+        self._plan_semantic_object_cache.clear()
+        self._plan_object_storeys_cache.clear()
+
     def _get_cached_plan_overlay_geometry(self, kind, obj, field_name, compute):
         return overlay_geometry.get_cached_plan_overlay_geometry(
             self,
@@ -577,53 +600,83 @@ class PlanEditSession:
         return plan_performance.plan_perf_trace_span(self, name, **fields)
 
     def enter(self):
-        if not self.doc or not self.gui_doc:
-            FreeCAD.Console.PrintError(
-                translate("BIM_PlanEdit", "An active document and 3D view are required.\n")
-            )
-            return False
-
-        self.view = self.gui_doc.ActiveView
-        get_viewer = self._get_runtime_attr(self.view, "getViewer")
-        if self.view is None or get_viewer is None:
-            FreeCAD.Console.PrintError(
-                translate("BIM_PlanEdit", "Plan Edit requires an active 3D Inventor view.\n")
-            )
-            return False
-
-        try:
-            self.viewer = get_viewer()
-        except (AttributeError, ReferenceError, RuntimeError):
-            self._discard_stale_runtime_object(self.view)
-            FreeCAD.Console.PrintError(
-                translate("BIM_PlanEdit", "Plan Edit requires an active 3D Inventor view.\n")
-            )
-            return False
-        self._capture_state()
-
-        self.storeys = self.collect_storeys()
-        self.active_storey = self.find_initial_storey()
-        self._capture_object_view_state()
-        self.apply_plan_view()
-        self._apply_plan_snap_profile()
-        self._apply_storey_visibility()
-        self._attach_selection_observer()
-        self._attach_document_observer()
-        self._register_edit_callbacks()
-        self._refresh_primary_selected_plan_target()
-
-        panel = PlanEditControlsWidget(self)
-        self.attach_task_panel(panel)
-        panel.refresh()
-        self._queue_prime_opening_handle_tracker_pool()
-        if self._is_plan_perf_trace_enabled():
-            FreeCAD.Console.PrintMessage(
-                translate("BIM_PlanEdit", "BIM Plan Edit perf trace: {path}\n").format(
-                    path=self._plan_perf_log_path
+        with self._plan_perf_trace_event("enter_plan_edit"):
+            self._plan_perf_count("document_objects", len(getattr(self.doc, "Objects", []) or []))
+            if not self.doc or not self.gui_doc:
+                FreeCAD.Console.PrintError(
+                    translate("BIM_PlanEdit", "An active document and 3D view are required.\n")
                 )
-            )
-        FreeCAD.Console.PrintMessage(translate("BIM_PlanEdit", "Entered BIM Plan Edit mode.\n"))
-        return True
+                return False
+
+            with self._plan_perf_trace_span("enter_acquire_view"):
+                self.view = self.gui_doc.ActiveView
+                get_viewer = self._get_runtime_attr(self.view, "getViewer")
+                if self.view is None or get_viewer is None:
+                    FreeCAD.Console.PrintError(
+                        translate(
+                            "BIM_PlanEdit",
+                            "Plan Edit requires an active 3D Inventor view.\n",
+                        )
+                    )
+                    return False
+
+                try:
+                    self.viewer = get_viewer()
+                except (AttributeError, ReferenceError, RuntimeError):
+                    self._discard_stale_runtime_object(self.view)
+                    FreeCAD.Console.PrintError(
+                        translate(
+                            "BIM_PlanEdit",
+                            "Plan Edit requires an active 3D Inventor view.\n",
+                        )
+                    )
+                    return False
+
+            with self._plan_perf_trace_span("capture_plan_edit_state"):
+                self._capture_state()
+
+            with self._plan_perf_trace_span("collect_storeys"):
+                self.storeys = self.collect_storeys()
+                self._plan_perf_count("storeys_found", len(self.storeys))
+            with self._plan_perf_trace_span("find_initial_storey"):
+                self.active_storey = self.find_initial_storey()
+                self._plan_perf_set_fields(
+                    active_storey=self._plan_perf_describe_object(self.active_storey)
+                )
+            with self._plan_perf_trace_span("capture_object_view_state"):
+                self._capture_object_view_state()
+            with self._plan_perf_trace_span("apply_plan_view"):
+                self.apply_plan_view(fit=False)
+            with self._plan_perf_trace_span("apply_plan_snap_profile"):
+                self._apply_plan_snap_profile()
+            self._apply_storey_visibility()
+            with self._plan_perf_trace_span("attach_selection_observer"):
+                self._attach_selection_observer()
+            with self._plan_perf_trace_span("attach_document_observer"):
+                self._attach_document_observer()
+            with self._plan_perf_trace_span("register_edit_callbacks"):
+                self._register_edit_callbacks()
+            with self._plan_perf_trace_span("refresh_primary_selected_plan_target_on_enter"):
+                self._refresh_primary_selected_plan_target()
+
+            with self._plan_perf_trace_span("build_task_panel"):
+                panel = PlanEditControlsWidget(self)
+            with self._plan_perf_trace_span("attach_task_panel"):
+                self.attach_task_panel(panel)
+            with self._plan_perf_trace_span("task_panel_initial_refresh"):
+                panel.refresh(refresh_integrations=False)
+            with self._plan_perf_trace_span("queue_prime_opening_handle_tracker_pool"):
+                self._queue_prime_opening_handle_tracker_pool()
+            with self._plan_perf_trace_span("queue_prime_wall_hosted_openings_cache"):
+                self._queue_prime_wall_hosted_openings_cache()
+            if self._is_plan_perf_trace_enabled():
+                FreeCAD.Console.PrintMessage(
+                    translate("BIM_PlanEdit", "BIM Plan Edit perf trace: {path}\n").format(
+                        path=self._plan_perf_log_path
+                    )
+                )
+            FreeCAD.Console.PrintMessage(translate("BIM_PlanEdit", "Entered BIM Plan Edit mode.\n"))
+            return True
 
     @property
     def _plan_paper_rgb(self):
@@ -930,6 +983,24 @@ class PlanEditSession:
 
     def get_plan_provider_registry(self):
         return get_plan_edit_registry()
+
+    @contextmanager
+    def _plan_provider_refresh_cache_scope(self):
+        previous_cache = self._plan_provider_refresh_cache
+        self._plan_provider_refresh_cache = {}
+        try:
+            yield self._plan_provider_refresh_cache
+        finally:
+            self._plan_provider_refresh_cache = previous_cache
+
+    def _plan_provider_integrations_disabled(self):
+        env_value = str(os.environ.get("FC_BIM_PLAN_EDIT_DISABLE_INTEGRATIONS", "") or "").strip()
+        if env_value:
+            return env_value not in {"0", "false", "False", "no", "off"}
+        try:
+            return bool(self._plan_edit_params.GetBool("DisableIntegrations", False))
+        except Exception:
+            return False
 
     def get_plan_provider_display_name(self, provider_id):
         return plan_provider_runtime.get_plan_provider_display_name(self, provider_id)
@@ -1529,8 +1600,10 @@ class PlanEditSession:
         self._saved_object_view_state = {}
         if not self.doc:
             return
-        for obj in self.doc.Objects:
-            self._register_object_view_state(obj)
+        with self._plan_perf_trace_span("capture_object_view_state_objects"):
+            for obj in self.doc.Objects:
+                self._plan_perf_count("capture_view_state_objects_scanned")
+                self._register_object_view_state(obj)
 
     def _register_object_view_state(self, obj):
         if not obj:
@@ -1605,6 +1678,11 @@ class PlanEditSession:
         return None
 
     def _get_plan_semantic_object(self, obj):
+        key = self._get_document_object_key(obj)
+        if key is not None and key in self._plan_semantic_object_cache:
+            self._plan_perf_count("semantic_object_cache_hits")
+            return self._plan_semantic_object_cache[key]
+
         current = obj
         seen = set()
         while current:
@@ -1633,7 +1711,10 @@ class PlanEditSession:
                 break
             current = linked
         owner = self._get_direct_plan_symbol_owner(current)
-        return owner or current or obj
+        result = owner or current or obj
+        if key is not None:
+            self._plan_semantic_object_cache[key] = result
+        return result
 
     def _restore_object_view_state(self):
         if not self.doc or not self._saved_object_view_state:
@@ -1867,6 +1948,11 @@ class PlanEditSession:
     def _get_object_storeys(self, obj):
         if not obj:
             return []
+        key = self._get_document_object_key(obj)
+        if key is not None and key in self._plan_object_storeys_cache:
+            self._plan_perf_count("object_storeys_cache_hits")
+            return list(self._plan_object_storeys_cache[key])
+
         storeys = []
         seen = set()
         parents = list(getattr(obj, "InListRecursive", []) or getattr(obj, "InList", []))
@@ -1878,89 +1964,108 @@ class PlanEditSession:
             seen.add(parent.Name)
             if self._is_storey_object(parent):
                 storeys.append(parent)
+        if key is not None:
+            self._plan_object_storeys_cache[key] = tuple(storeys)
         return storeys
 
     def _apply_storey_visibility(self):
-        if not self.doc or not self._saved_object_view_state:
-            return
+        with self._plan_perf_trace_span(
+            "apply_storey_visibility",
+            active_storey=self._plan_perf_describe_object(self.active_storey),
+        ):
+            if not self.doc or not self._saved_object_view_state:
+                return
 
-        active_storey_name = getattr(self.active_storey, "Name", None)
+            active_storey_name = getattr(self.active_storey, "Name", None)
 
-        if active_storey_name is None:
-            self._restore_object_view_state()
+            if active_storey_name is None:
+                with self._plan_perf_trace_span("restore_object_view_state_for_global_plan"):
+                    self._restore_object_view_state()
+                for obj in self.doc.Objects:
+                    self._plan_perf_count("storey_visibility_objects_scanned")
+                    view_object = getattr(obj, "ViewObject", None)
+                    state = self._saved_object_view_state.get(obj.Name, {})
+                    if not self._is_supported_plan_object(obj):
+                        self._plan_perf_count("storey_visibility_hidden_unsupported")
+                        self._apply_hidden_object_state(view_object)
+                        continue
+                    self._plan_perf_count("storey_visibility_supported")
+                    if view_object and hasattr(view_object, "Visibility"):
+                        try:
+                            view_object.Visibility = self._get_supported_plan_visibility(obj, state)
+                        except Exception:
+                            pass
+                    self._apply_context_object_selectability(obj, view_object)
+                return
+
             for obj in self.doc.Objects:
+                self._plan_perf_count("storey_visibility_objects_scanned")
                 view_object = getattr(obj, "ViewObject", None)
-                state = self._saved_object_view_state.get(obj.Name, {})
-                if not self._is_supported_plan_object(obj):
-                    self._apply_hidden_object_state(view_object)
+                state = self._saved_object_view_state.get(obj.Name)
+                if not view_object or not state:
+                    self._plan_perf_count("storey_visibility_objects_skipped_no_view_state")
                     continue
-                if view_object and hasattr(view_object, "Visibility"):
-                    try:
-                        view_object.Visibility = self._get_supported_plan_visibility(obj, state)
-                    except Exception:
-                        pass
-                self._apply_context_object_selectability(obj, view_object)
-            return
 
-        for obj in self.doc.Objects:
-            view_object = getattr(obj, "ViewObject", None)
-            state = self._saved_object_view_state.get(obj.Name)
-            if not view_object or not state:
-                continue
-
-            storeys = self._get_object_storeys(obj)
-            if not storeys:
-                if not self._is_supported_plan_object(obj):
-                    self._apply_hidden_object_state(view_object)
-                    continue
-                for prop, value in state.items():
-                    if hasattr(view_object, prop):
+                storeys = self._get_object_storeys(obj)
+                if not storeys:
+                    self._plan_perf_count("storey_visibility_global_objects")
+                    if not self._is_supported_plan_object(obj):
+                        self._plan_perf_count("storey_visibility_hidden_unsupported")
+                        self._apply_hidden_object_state(view_object)
+                        continue
+                    self._plan_perf_count("storey_visibility_supported")
+                    for prop, value in state.items():
+                        if hasattr(view_object, prop):
+                            try:
+                                setattr(view_object, prop, value)
+                            except Exception:
+                                pass
+                    if hasattr(view_object, "Visibility"):
                         try:
-                            setattr(view_object, prop, value)
+                            view_object.Visibility = self._get_supported_plan_visibility(obj, state)
                         except Exception:
                             pass
+                    self._apply_context_object_selectability(obj, view_object)
+                    continue
+
+                belongs_to_active = any(parent.Name == active_storey_name for parent in storeys)
+                if belongs_to_active:
+                    self._plan_perf_count("storey_visibility_active_storey_objects")
+                    for prop, value in state.items():
+                        if hasattr(view_object, prop):
+                            try:
+                                setattr(view_object, prop, value)
+                            except Exception:
+                                pass
+                    if not self._is_supported_plan_object(obj):
+                        self._plan_perf_count("storey_visibility_hidden_unsupported")
+                        self._apply_hidden_object_state(view_object)
+                        continue
+                    self._plan_perf_count("storey_visibility_supported")
+                    if hasattr(view_object, "Visibility"):
+                        try:
+                            view_object.Visibility = self._get_supported_plan_visibility(obj, state)
+                        except Exception:
+                            pass
+                    self._apply_context_object_selectability(obj, view_object)
+                    continue
+
+                self._plan_perf_count("storey_visibility_other_storey_objects")
                 if hasattr(view_object, "Visibility"):
                     try:
                         view_object.Visibility = self._get_supported_plan_visibility(obj, state)
                     except Exception:
                         pass
-                self._apply_context_object_selectability(obj, view_object)
-                continue
-
-            belongs_to_active = any(parent.Name == active_storey_name for parent in storeys)
-            if belongs_to_active:
-                for prop, value in state.items():
-                    if hasattr(view_object, prop):
-                        try:
-                            setattr(view_object, prop, value)
-                        except Exception:
-                            pass
-                if not self._is_supported_plan_object(obj):
-                    self._apply_hidden_object_state(view_object)
-                    continue
-                if hasattr(view_object, "Visibility"):
+                if hasattr(view_object, "Transparency"):
                     try:
-                        view_object.Visibility = self._get_supported_plan_visibility(obj, state)
+                        view_object.Transparency = max(int(state.get("Transparency", 0)), 85)
                     except Exception:
                         pass
-                self._apply_context_object_selectability(obj, view_object)
-                continue
-
-            if hasattr(view_object, "Visibility"):
-                try:
-                    view_object.Visibility = self._get_supported_plan_visibility(obj, state)
-                except Exception:
-                    pass
-            if hasattr(view_object, "Transparency"):
-                try:
-                    view_object.Transparency = max(int(state.get("Transparency", 0)), 85)
-                except Exception:
-                    pass
-            if hasattr(view_object, "Selectable"):
-                try:
-                    view_object.Selectable = False
-                except Exception:
-                    pass
+                if hasattr(view_object, "Selectable"):
+                    try:
+                        view_object.Selectable = False
+                    except Exception:
+                        pass
 
     def _set_active_object(self, obj):
         try:
@@ -1999,6 +2104,12 @@ class PlanEditSession:
 
     def _detach_selection_observer(self):
         return plan_selection.detach_selection_observer(self)
+
+    def _schedule_selection_refresh(self):
+        return plan_selection.schedule_selection_refresh(self)
+
+    def _run_scheduled_selection_refresh(self):
+        return plan_selection.run_scheduled_selection_refresh(self)
 
     def _attach_document_observer(self):
         if not self._document_observer_added:
@@ -2128,11 +2239,12 @@ class PlanEditSession:
             radius_px=radius_px,
         )
 
-    def _pick_plan_opening_target_from_overlays(self, mouse_pos, radius_px=10):
+    def _pick_plan_opening_target_from_overlays(self, mouse_pos, radius_px=10, candidates=None):
         return plan_picking.pick_plan_opening_target_from_overlays(
             self,
             mouse_pos,
             radius_px=radius_px,
+            candidates=candidates,
         )
 
     def _pick_plan_space_target_from_overlays(self, mouse_pos, radius_px=10):
@@ -2295,6 +2407,12 @@ class PlanEditSession:
     def _set_gui_selection_object(self, obj):
         return plan_selection.set_gui_selection_object(self, obj)
 
+    def _schedule_gui_selection_object(self, obj, delay_ms=_PLAN_GUI_SELECTION_SYNC_DELAY_MS):
+        return plan_selection.schedule_gui_selection_object(self, obj, delay_ms=delay_ms)
+
+    def _run_scheduled_gui_selection_sync(self, generation=None):
+        return plan_selection.run_scheduled_gui_selection_sync(self, generation=generation)
+
     def _add_gui_selection_object(self, obj):
         return plan_selection.add_gui_selection_object(obj)
 
@@ -2412,6 +2530,9 @@ class PlanEditSession:
         return plan_provider_runtime.normalize_plan_provider_overlay(provider_id, overlay)
 
     def _collect_plan_provider_contributions(self, method_name, normalizer):
+        if self._plan_provider_integrations_disabled():
+            self._plan_perf_count("plan_provider_integrations_disabled")
+            return ()
         return plan_provider_runtime.collect_plan_provider_contributions(
             self,
             method_name,
@@ -2443,6 +2564,8 @@ class PlanEditSession:
         )
 
     def execute_plan_provider_action(self, provider_id, action_key, transaction_label=""):
+        if self._plan_provider_integrations_disabled():
+            return False
         return plan_provider_runtime.execute_plan_provider_action(
             self,
             provider_id,
@@ -2596,33 +2719,48 @@ class PlanEditSession:
 
     def _sync_primary_selected_plan_target_visuals(self, previous_kind=None, previous_obj=None):
         with self._plan_perf_trace_span("sync_primary_selected_plan_target_visuals"):
-            self._sync_selected_wall_opening_context_overlay()
-            self._sync_hovered_wall_overlay()
-            self._sync_hovered_wall_opening_context_overlay()
+            with self._plan_perf_trace_span("sync_selected_wall_opening_context_overlay"):
+                self._sync_selected_wall_opening_context_overlay()
+            with self._plan_perf_trace_span("sync_hovered_wall_overlay"):
+                self._sync_hovered_wall_overlay()
+            with self._plan_perf_trace_span("sync_hovered_wall_opening_context_overlay"):
+                self._sync_hovered_wall_opening_context_overlay()
             if self.current_tool != "Select" or self._selected_plan_target_changed(
                 previous_kind, previous_obj, "opening"
             ):
-                self._sync_selected_opening_overlay()
-                self._sync_selected_opening_handles()
+                with self._plan_perf_trace_span("sync_selected_opening_overlay"):
+                    self._sync_selected_opening_overlay()
+                with self._plan_perf_trace_span("sync_selected_opening_handles"):
+                    self._sync_selected_opening_handles()
             if self.current_tool != "Select" or self._selected_plan_target_changed(
                 previous_kind, previous_obj, "symbol"
             ):
-                self._sync_selected_symbol_overlay()
-                self._sync_selected_symbol_handles()
+                with self._plan_perf_trace_span("sync_selected_symbol_overlay"):
+                    self._sync_selected_symbol_overlay()
+                with self._plan_perf_trace_span("sync_selected_symbol_handles"):
+                    self._sync_selected_symbol_handles()
             if self.current_tool != "Select" or self._selected_plan_target_changed(
                 previous_kind, previous_obj, "region"
             ):
-                self._sync_selected_region_overlay()
+                with self._plan_perf_trace_span("sync_selected_region_overlay"):
+                    self._sync_selected_region_overlay()
             if self.current_tool != "Select" or self._selected_plan_target_changed(
                 previous_kind, previous_obj, "space"
             ):
-                self._sync_selected_space_overlay()
-            self._sync_hovered_symbol_overlay()
-            self._sync_hovered_opening_overlay()
-            self._sync_hovered_space_overlay()
-            self._sync_hovered_region_overlay()
-            self._sync_secondary_selected_overlays()
-            self._sync_active_plan_target_object()
+                with self._plan_perf_trace_span("sync_selected_space_overlay"):
+                    self._sync_selected_space_overlay()
+            with self._plan_perf_trace_span("sync_hovered_symbol_overlay"):
+                self._sync_hovered_symbol_overlay()
+            with self._plan_perf_trace_span("sync_hovered_opening_overlay"):
+                self._sync_hovered_opening_overlay()
+            with self._plan_perf_trace_span("sync_hovered_space_overlay"):
+                self._sync_hovered_space_overlay()
+            with self._plan_perf_trace_span("sync_hovered_region_overlay"):
+                self._sync_hovered_region_overlay()
+            with self._plan_perf_trace_span("sync_secondary_selected_overlays"):
+                self._sync_secondary_selected_overlays()
+            with self._plan_perf_trace_span("sync_active_plan_target_object"):
+                self._sync_active_plan_target_object()
             self._refresh_task_panel_status(selection_only=self.current_tool == "Select")
 
     def _refresh_selected_plan_target(self):
@@ -4516,7 +4654,8 @@ class PlanEditSession:
                 return
             if mouse_pos is None:
                 return
-            self._update_hovered_plan_target(mouse_pos)
+            if not self._update_hovered_plan_target(mouse_pos):
+                return
             if self._grip_trackers or self._is_selected_plan_target("wall"):
                 self._sync_wall_grips()
             self._request_view_redraw()
@@ -4927,16 +5066,63 @@ class PlanEditSession:
             return
         self._refresh_plan_object_footprint_display(wall)
 
+    def _invalidate_wall_hosted_openings_cache(self):
+        self._wall_hosted_openings_cache = None
+        self._wall_hosted_openings_cache_queued = False
+
+    def _queue_prime_wall_hosted_openings_cache(self):
+        if (
+            self._tearing_down
+            or self._wall_hosted_openings_cache is not None
+            or self._wall_hosted_openings_cache_queued
+            or not self.doc
+        ):
+            return
+        try:
+            from PySide import QtCore
+        except ImportError:
+            return
+        self._wall_hosted_openings_cache_queued = True
+        QtCore.QTimer.singleShot(0, self._prime_wall_hosted_openings_cache)
+
+    def _prime_wall_hosted_openings_cache(self):
+        self._wall_hosted_openings_cache_queued = False
+        if self._tearing_down or self._wall_hosted_openings_cache is not None or not self.doc:
+            return
+        self._wall_hosted_openings_cache = (
+            getattr(self.doc, "Name", None),
+            self._build_wall_hosted_openings_cache(),
+        )
+
+    def _build_wall_hosted_openings_cache(self):
+        cache = {}
+        if not self.doc:
+            return cache
+        with self._plan_perf_trace_span("build_wall_hosted_openings_cache"):
+            for obj in getattr(self.doc, "Objects", []) or []:
+                if not self._is_hosted_opening_object(obj):
+                    continue
+                for host in getattr(obj, "Hosts", None) or []:
+                    host_key = self._get_document_object_key(host)
+                    if host_key is None:
+                        continue
+                    cache.setdefault(host_key, []).append(obj)
+        return cache
+
     def _get_wall_hosted_openings(self, wall):
         if not wall or not self.doc:
             return []
-        openings = []
-        for obj in getattr(self.doc, "Objects", []) or []:
-            if not self._is_hosted_opening_object(obj):
-                continue
-            if wall in (getattr(obj, "Hosts", None) or []):
-                openings.append(obj)
-        return openings
+        wall_key = self._get_document_object_key(wall)
+        if wall_key is None:
+            return []
+        doc_name = getattr(self.doc, "Name", None)
+        cache_record = self._wall_hosted_openings_cache
+        if cache_record is None or cache_record[0] != doc_name:
+            cache_record = (doc_name, self._build_wall_hosted_openings_cache())
+            self._wall_hosted_openings_cache = cache_record
+        else:
+            self._plan_perf_count("wall_hosted_openings_cache_hits")
+        return list(cache_record[1].get(wall_key, ()))
 
     def _refresh_wall_hosted_opening_footprints(self, wall):
         for opening in self._get_wall_hosted_openings(wall):
@@ -5145,11 +5331,15 @@ class PlanEditSession:
     def slotCreatedObject(self, obj):
         if self._tearing_down:
             return
+        self._invalidate_plan_classification_cache()
+        self._invalidate_wall_hosted_openings_cache()
         self._queue_created_plan_object(obj)
 
     def slotChangedObject(self, obj, prop):
         if self._tearing_down:
             return
+        self._invalidate_plan_classification_cache()
+        self._invalidate_wall_hosted_openings_cache()
         if self.current_tool != "Select":
             return
         self._sanitize_plan_target_references()
@@ -5278,6 +5468,8 @@ class PlanEditSession:
     def slotDeletedObject(self, obj):
         if self._tearing_down:
             return
+        self._invalidate_plan_classification_cache()
+        self._invalidate_wall_hosted_openings_cache()
         self._invalidate_plan_overlay_geometry_cache(obj)
         if obj == self.hovered_wall:
             self.hovered_wall = None
@@ -5313,6 +5505,8 @@ class PlanEditSession:
         self._schedule_selected_wall_reset("Deleted", obj)
 
     def _invalidate_document_dependent_plan_visuals(self, recompute_opening_hosts=False):
+        self._invalidate_plan_classification_cache()
+        self._invalidate_wall_hosted_openings_cache()
         self._invalidate_plan_overlay_geometry_cache()
         self._sanitize_plan_target_references()
         selected_symbol = self._get_selected_plan_target_object("symbol")
@@ -5891,6 +6085,12 @@ class PlanEditSession:
     def _sync_wall_grips(self):
         return wall_overlays.sync_wall_grips(self)
 
+    def _schedule_wall_grip_sync(self, delay_ms=_PLAN_WALL_GRIP_REFRESH_DELAY_MS):
+        return wall_overlays.schedule_wall_grip_sync(self, delay_ms=delay_ms)
+
+    def _run_scheduled_wall_grip_sync(self, generation=None):
+        return wall_overlays.run_scheduled_wall_grip_sync(self, generation=generation)
+
     def _clear_wall_grips(self):
         return wall_overlays.clear_wall_grips(self)
 
@@ -5948,9 +6148,29 @@ class PlanEditSession:
     def _get_plan_target_at_position(self, mouse_pos):
         return plan_picking.get_plan_target_at_position(self, mouse_pos)
 
-    def _update_hovered_plan_target(self, mouse_pos):
+    def _should_skip_hover_pick(self, mouse_pos, force=False):
+        if force or mouse_pos is None:
+            return False
+        try:
+            now = time.monotonic()
+        except Exception:
+            return False
+        elapsed_ms = (now - float(self._hover_pick_last_time or 0.0)) * 1000.0
+        if elapsed_ms >= _PLAN_HOVER_PICK_INTERVAL_MS:
+            self._hover_pick_last_time = now
+            self._hover_pick_last_mouse_pos = (float(mouse_pos[0]), float(mouse_pos[1]))
+            return False
+        self._hover_pick_dirty = True
+        self._hover_pick_last_mouse_pos = (float(mouse_pos[0]), float(mouse_pos[1]))
+        self._plan_perf_count("hover_pick_skipped")
+        return True
+
+    def _update_hovered_plan_target(self, mouse_pos, force=False):
         if self.current_tool == "Join":
+            if self._should_skip_hover_pick(mouse_pos, force=force):
+                return False
             target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
+            self._hover_pick_dirty = False
             if target_kind == "wall" and not self._is_selected_plan_target("wall", target_obj):
                 self._set_hovered_wall(target_obj)
             else:
@@ -5959,15 +6179,19 @@ class PlanEditSession:
             self._set_hovered_symbol(None)
             self._set_hovered_space(None)
             self._set_hovered_region(None)
-            return
+            return True
         if self.current_tool != "Select":
+            self._hover_pick_dirty = False
             self._set_hovered_wall(None)
             self._set_hovered_opening(None)
             self._set_hovered_symbol(None)
             self._set_hovered_space(None)
             self._set_hovered_region(None)
-            return
+            return True
+        if self._should_skip_hover_pick(mouse_pos, force=force):
+            return False
         target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
+        self._hover_pick_dirty = False
         if target_kind == "opening":
             self._set_hovered_wall(None)
             self._set_hovered_opening(target_obj)
@@ -5981,11 +6205,11 @@ class PlanEditSession:
             self._set_hovered_space(None)
             self._set_hovered_region(None)
         elif target_kind == "wall":
+            self._set_hovered_wall(target_obj)
             self._set_hovered_opening(None)
             self._set_hovered_symbol(None)
             self._set_hovered_space(None)
             self._set_hovered_region(None)
-            self._set_hovered_wall(target_obj)
         elif target_kind == "region":
             self._set_hovered_wall(None)
             self._set_hovered_opening(None)
@@ -6004,6 +6228,7 @@ class PlanEditSession:
             self._set_hovered_symbol(None)
             self._set_hovered_space(None)
             self._set_hovered_region(None)
+        return True
 
     def _is_plan_additive_selection_active(self):
         if self.current_tool != "Select":
@@ -6169,7 +6394,13 @@ class PlanEditSession:
             queue_restore(obj)
 
     def _select_plan_target_for_plan_edit(
-        self, kind, obj, queue_restore=False, sync_gui_selection=False
+        self,
+        kind,
+        obj,
+        queue_restore=False,
+        sync_gui_selection=False,
+        defer_gui_selection=False,
+        defer_wall_grips=False,
     ):
         validators = {
             "opening": self._is_hosted_opening_object,
@@ -6185,9 +6416,15 @@ class PlanEditSession:
         self.current_tool = "Select"
         self._set_selected_plan_target(kind, obj, pending_restore=queue_restore)
         if sync_gui_selection:
-            self._set_gui_selection_object(obj)
+            if defer_gui_selection:
+                self._schedule_gui_selection_object(obj)
+            else:
+                self._set_gui_selection_object(obj)
         if kind == "wall":
-            self._sync_wall_grips()
+            if defer_wall_grips:
+                self._schedule_wall_grip_sync()
+            else:
+                self._sync_wall_grips()
         else:
             self._clear_wall_grips()
         if self._selected_plan_target_changed(previous_kind, previous_obj, "opening"):
@@ -6201,51 +6438,94 @@ class PlanEditSession:
         if self._selected_plan_target_changed(previous_kind, previous_obj, "space"):
             self._sync_selected_space_overlay()
         self._sync_secondary_selected_overlays()
-        self._refresh_task_panel_status(
-            selection_only=self.current_tool == "Select" and self._is_selected_plan_target("wall")
-        )
+        self._refresh_task_panel_status(selection_only=self.current_tool == "Select")
         if queue_restore:
             self._queue_restore_selected_plan_target(kind, obj)
         return True
 
-    def _select_opening_for_plan_edit(self, opening, queue_restore=False, sync_gui_selection=False):
+    def _select_opening_for_plan_edit(
+        self,
+        opening,
+        queue_restore=False,
+        sync_gui_selection=False,
+        defer_gui_selection=False,
+        defer_wall_grips=False,
+    ):
         return self._select_plan_target_for_plan_edit(
             "opening",
             opening,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
+            defer_gui_selection=defer_gui_selection,
+            defer_wall_grips=defer_wall_grips,
         )
 
-    def _select_symbol_for_plan_edit(self, symbol, queue_restore=False, sync_gui_selection=False):
+    def _select_symbol_for_plan_edit(
+        self,
+        symbol,
+        queue_restore=False,
+        sync_gui_selection=False,
+        defer_gui_selection=False,
+        defer_wall_grips=False,
+    ):
         return self._select_plan_target_for_plan_edit(
             "symbol",
             symbol,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
+            defer_gui_selection=defer_gui_selection,
+            defer_wall_grips=defer_wall_grips,
         )
 
-    def _select_region_for_plan_edit(self, region, queue_restore=False, sync_gui_selection=False):
+    def _select_region_for_plan_edit(
+        self,
+        region,
+        queue_restore=False,
+        sync_gui_selection=False,
+        defer_gui_selection=False,
+        defer_wall_grips=False,
+    ):
         return self._select_plan_target_for_plan_edit(
             "region",
             region,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
+            defer_gui_selection=defer_gui_selection,
+            defer_wall_grips=defer_wall_grips,
         )
 
-    def _select_space_for_plan_edit(self, space, queue_restore=False, sync_gui_selection=False):
+    def _select_space_for_plan_edit(
+        self,
+        space,
+        queue_restore=False,
+        sync_gui_selection=False,
+        defer_gui_selection=False,
+        defer_wall_grips=False,
+    ):
         return self._select_plan_target_for_plan_edit(
             "space",
             space,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
+            defer_gui_selection=defer_gui_selection,
+            defer_wall_grips=defer_wall_grips,
         )
 
-    def _select_wall_for_plan_edit(self, wall, queue_restore=False, sync_gui_selection=False):
+    def _select_wall_for_plan_edit(
+        self,
+        wall,
+        queue_restore=False,
+        sync_gui_selection=False,
+        defer_gui_selection=False,
+        defer_wall_grips=False,
+    ):
         return self._select_plan_target_for_plan_edit(
             "wall",
             wall,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
+            defer_gui_selection=defer_gui_selection,
+            defer_wall_grips=defer_wall_grips,
         )
 
     def _activate_plan_target(
@@ -6256,6 +6536,8 @@ class PlanEditSession:
         sync_gui_selection=False,
         clear_hovered_kinds=None,
         resolved_target=None,
+        defer_gui_selection=False,
+        defer_wall_grips=False,
     ):
         if resolved_target is None:
             target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
@@ -6281,6 +6563,8 @@ class PlanEditSession:
                 target_obj,
                 queue_restore=True,
                 sync_gui_selection=sync_gui_selection,
+                defer_gui_selection=defer_gui_selection,
+                defer_wall_grips=defer_wall_grips,
             ):
                 self._plan_perf_set_fields(activate_plan_target_result=False)
                 return False
@@ -6294,10 +6578,14 @@ class PlanEditSession:
 
     def _activate_semantic_plan_target(self, mouse_pos, event_callback=None):
         target_kind, target_obj = self._get_hovered_plan_target()
-        if target_obj is None:
+        if target_obj is None or self._hover_pick_dirty:
             target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
-            self._plan_perf_set_fields(semantic_target_source="picked")
+            source = "picked_after_throttled_hover" if self._hover_pick_dirty else "picked"
+            self._hover_pick_dirty = False
+            self._plan_perf_count(f"semantic_target_source_{source}")
+            self._plan_perf_set_fields(semantic_target_source=source)
         else:
+            self._plan_perf_count("semantic_target_source_hovered")
             self._plan_perf_set_fields(
                 semantic_target_source="hovered",
                 hovered_target=self._plan_perf_describe_target(target_kind, target_obj),
@@ -6311,6 +6599,14 @@ class PlanEditSession:
         }.get(target_kind)
         if activate_target is None:
             return False
+        if target_kind == "wall":
+            return activate_target(
+                mouse_pos,
+                event_callback=event_callback,
+                resolved_target=(target_kind, target_obj),
+                defer_gui_selection=True,
+                defer_wall_grips=True,
+            )
         return activate_target(
             mouse_pos,
             event_callback=event_callback,
@@ -6357,7 +6653,14 @@ class PlanEditSession:
             resolved_target=resolved_target,
         )
 
-    def _activate_wall_target(self, mouse_pos, event_callback=None, resolved_target=None):
+    def _activate_wall_target(
+        self,
+        mouse_pos,
+        event_callback=None,
+        resolved_target=None,
+        defer_gui_selection=False,
+        defer_wall_grips=False,
+    ):
         return self._activate_plan_target(
             "wall",
             mouse_pos,
@@ -6365,6 +6668,8 @@ class PlanEditSession:
             sync_gui_selection=True,
             clear_hovered_kinds=("wall", "symbol", "space", "region"),
             resolved_target=resolved_target,
+            defer_gui_selection=defer_gui_selection,
+            defer_wall_grips=defer_wall_grips,
         )
 
     def _get_plan_point_from_mouse_pos(self, mouse_pos):
