@@ -41,6 +41,7 @@ from bimplan.hosts import _PlanEditCommandHost, _PlanEditWallHost
 from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
 from bimplan.overlays import openings as opening_overlays
+from bimplan.overlays import spaces as space_overlays
 from bimplan.overlays import symbols as symbol_overlays
 from bimplan.overlays import walls as wall_overlays
 from bimplan.providers import (
@@ -7731,91 +7732,16 @@ class PlanEditSession:
         QtCore.QTimer.singleShot(0, lambda: self._restore_selected_space(space))
 
     def _sync_secondary_selected_overlays(self):
-        self._clear_secondary_selected_overlays()
-        if self.current_tool not in ("Select", "Pick Space Region"):
-            return
-        color = (0.12, 0.72, 0.68)
-        width = self._scaled_line_width(2)
-        selected_targets = (
-            self._get_selected_plan_targets()
-            if self.current_tool == "Pick Space Region"
-            else self._get_secondary_selected_plan_targets()
-        )
-        for target_kind, target_obj in selected_targets:
-            if target_kind == "wall":
-                self._create_wall_overlay_trackers(
-                    target_obj,
-                    color=color,
-                    width=width,
-                    tracker_store=self._secondary_selection_trackers,
-                )
-            elif target_kind == "opening":
-                self._create_opening_overlay_trackers(
-                    target_obj,
-                    color=color,
-                    width=width,
-                    tracker_store=self._secondary_selection_trackers,
-                )
-            elif target_kind == "symbol":
-                self._create_symbol_overlay_trackers(
-                    target_obj,
-                    color=color,
-                    width=width,
-                    tracker_store=self._secondary_selection_trackers,
-                )
-            elif target_kind == "region":
-                self._create_region_overlay_trackers(
-                    target_obj,
-                    color=color,
-                    width=width,
-                    tracker_store=self._secondary_selection_trackers,
-                )
-            elif target_kind == "space":
-                self._create_space_overlay_trackers(
-                    target_obj,
-                    color=color,
-                    width=width,
-                    tracker_store=self._secondary_selection_trackers,
-                )
+        return space_overlays.sync_secondary_selected_overlays(self)
 
     def _clear_secondary_selected_overlays(self):
-        self._finalize_trackers(self._secondary_selection_trackers)
-        self._secondary_selection_trackers = []
+        return space_overlays.clear_secondary_selected_overlays(self)
 
     def _sync_space_region_pick_overlays(self):
-        self._clear_space_region_pick_overlays()
-        if self.current_tool != "Pick Space Region":
-            return
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            return
-
-        for candidate in self._space_region_candidates:
-            hovered = candidate is self._hovered_space_region_candidate
-            color = (0.90, 0.52, 0.10) if hovered else (0.22, 0.44, 0.88)
-            width = self._scaled_line_width(3 if hovered else 2)
-            dotted = not hovered
-            for polyline in self._get_space_region_candidate_polylines(candidate):
-                if len(polyline) < 2:
-                    continue
-                for start, end in zip(polyline, polyline[1:]):
-                    tracker = self._make_plan_line_tracker(
-                        DraftTrackers,
-                        "space-region-pick:{}".format(candidate.get("index", "unknown")),
-                        dotted=dotted,
-                        scolor=color,
-                        swidth=width,
-                        ontop=True,
-                    )
-                    tracker.p1(start)
-                    tracker.p2(end)
-                    tracker.on()
-                    self._space_region_pick_trackers.append(tracker)
+        return space_overlays.sync_space_region_pick_overlays(self)
 
     def _clear_space_region_pick_overlays(self):
-        self._finalize_trackers(self._space_region_pick_trackers)
-        self._space_region_pick_trackers = []
+        return space_overlays.clear_space_region_pick_overlays(self)
 
     def _sync_hovered_wall_overlay(self):
         return wall_overlays.sync_hovered_wall_overlay(self)
@@ -7857,48 +7783,22 @@ class PlanEditSession:
         )
 
     def _create_space_overlay_trackers(self, space, color, width, tracker_store):
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            return
-
-        for polyline in self._get_space_overlay_polylines(space):
-            if len(polyline) < 2:
-                continue
-            for start, end in zip(polyline, polyline[1:]):
-                tracker = self._make_plan_line_tracker(
-                    DraftTrackers,
-                    "space-overlay:{}".format(getattr(space, "Name", "unknown")),
-                    scolor=color,
-                    swidth=width,
-                    ontop=True,
-                )
-                tracker.p1(start)
-                tracker.p2(end)
-                tracker.on()
-                tracker_store.append(tracker)
+        return space_overlays.create_space_overlay_trackers(
+            self,
+            space,
+            color=color,
+            width=width,
+            tracker_store=tracker_store,
+        )
 
     def _create_region_overlay_trackers(self, region, color, width, tracker_store):
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            return
-
-        for polyline in self._get_region_overlay_polylines(region):
-            if len(polyline) < 2:
-                continue
-            for start, end in zip(polyline, polyline[1:]):
-                tracker = self._make_plan_line_tracker(
-                    DraftTrackers,
-                    "region-overlay:{}".format(getattr(region, "Name", "unknown")),
-                    scolor=color,
-                    swidth=width,
-                    ontop=True,
-                )
-                tracker.p1(start)
-                tracker.p2(end)
-                tracker.on()
-                tracker_store.append(tracker)
+        return space_overlays.create_region_overlay_trackers(
+            self,
+            region,
+            color=color,
+            width=width,
+            tracker_store=tracker_store,
+        )
 
     def _get_region_overlay_segments(self, region):
         return overlay_geometry.get_region_overlay_segments(self, region)
@@ -7907,148 +7807,31 @@ class PlanEditSession:
         return overlay_geometry.get_space_overlay_segments(self, space)
 
     def _sync_hovered_space_overlay(self):
-        self._clear_hovered_space_overlay()
-        if self.current_tool != "Select":
-            return
-        if not self._is_plan_space_object(self.hovered_space):
-            return
-        if self._is_selected_plan_target("space", self.hovered_space):
-            return
-        self._create_space_overlay_trackers(
-            self.hovered_space,
-            color=(0.38, 0.62, 0.96),
-            width=self._scaled_line_width(2),
-            tracker_store=self._space_hover_trackers,
-        )
+        return space_overlays.sync_hovered_space_overlay(self)
 
     def _clear_hovered_space_overlay(self):
-        self._finalize_trackers(self._space_hover_trackers)
-        self._space_hover_trackers = []
+        return space_overlays.clear_hovered_space_overlay(self)
 
     def _sync_hovered_region_overlay(self):
-        self._clear_hovered_region_overlay()
-        if self.current_tool != "Select":
-            return
-        if not self._is_plan_region_object(self.hovered_region):
-            return
-        if self._is_selected_plan_target("region", self.hovered_region):
-            return
-        self._create_region_overlay_trackers(
-            self.hovered_region,
-            color=(0.38, 0.62, 0.96),
-            width=self._scaled_line_width(2),
-            tracker_store=self._region_hover_trackers,
-        )
+        return space_overlays.sync_hovered_region_overlay(self)
 
     def _clear_hovered_region_overlay(self):
-        self._finalize_trackers(self._region_hover_trackers)
-        self._region_hover_trackers = []
+        return space_overlays.clear_hovered_region_overlay(self)
 
     def _invalidate_selected_space_overlay_cache(self):
-        self._selected_space_overlay_dirty = True
+        return space_overlays.invalidate_selected_space_overlay_cache(self)
 
     def _sync_selected_space_overlay(self):
-        with self._plan_perf_trace_span("sync_selected_space_overlay"):
-            space = self._get_selected_plan_target_object("space")
-            if self.current_tool not in (
-                "Select",
-                "Set Space Text",
-            ) or not self._is_plan_space_object(space):
-                self._clear_selected_space_overlay()
-                return
-            width = self._scaled_line_width(3)
-            try:
-                import draftguitools.gui_trackers as DraftTrackers
-            except ImportError:
-                self._clear_selected_space_overlay()
-                return
-            color = (0.12, 0.38, 0.95)
-            space_key = self._get_document_object_key(space)
-            geometry_key = space_key
-            render_state = (space_key, round(float(width), 3), color)
-            if (
-                not self._selected_space_overlay_dirty
-                and self._selected_space_overlay_render_state == render_state
-            ):
-                self._plan_perf_count("selected_space_overlay_cache_hits")
-                return
-            if (
-                not self._selected_space_overlay_dirty
-                and self._selected_space_overlay_geometry_key == geometry_key
-            ):
-                segments = self._selected_space_overlay_segments
-                self._plan_perf_count("selected_space_overlay_segment_cache_hits")
-            else:
-                segments = tuple(self._get_space_overlay_segments(space))
-                self._selected_space_overlay_geometry_key = geometry_key
-                self._selected_space_overlay_segments = segments
-            self._plan_perf_count("selected_space_overlay_segments", len(segments))
-            if self._selected_space_overlay_render_state != render_state or len(
-                self._space_overlay_trackers
-            ) != len(segments):
-                self._clear_selected_space_overlay()
-                for _start, _end in segments:
-                    tracker = self._make_plan_line_tracker(
-                        DraftTrackers,
-                        "selected-space-overlay:{}".format(getattr(space, "Name", "unknown")),
-                        scolor=color,
-                        swidth=width,
-                        ontop=True,
-                    )
-                    self._space_overlay_trackers.append(tracker)
-                self._selected_space_overlay_geometry_key = geometry_key
-                self._selected_space_overlay_segments = segments
-            for tracker, (start, end) in zip(self._space_overlay_trackers, segments):
-                tracker.setColor(color)
-                tracker.p1(start)
-                tracker.p2(end)
-                tracker.on()
-            self._selected_space_overlay_render_state = render_state
-            self._selected_space_overlay_dirty = False
+        return space_overlays.sync_selected_space_overlay(self)
 
     def _clear_selected_space_overlay(self):
-        self._finalize_trackers(self._space_overlay_trackers)
-        self._space_overlay_trackers = []
-        self._selected_space_overlay_dirty = False
-        self._selected_space_overlay_geometry_key = None
-        self._selected_space_overlay_segments = ()
-        self._selected_space_overlay_render_state = None
+        return space_overlays.clear_selected_space_overlay(self)
 
     def _sync_selected_region_overlay(self):
-        with self._plan_perf_trace_span("sync_selected_region_overlay"):
-            region = self._get_selected_plan_target_object("region")
-            if self.current_tool != "Select" or not self._is_plan_region_object(region):
-                self._clear_selected_region_overlay()
-                return
-            width = self._scaled_line_width(3)
-            try:
-                import draftguitools.gui_trackers as DraftTrackers
-            except ImportError:
-                self._clear_selected_region_overlay()
-                return
-            segments = self._get_region_overlay_segments(region)
-            self._plan_perf_count("selected_region_overlay_segments", len(segments))
-            color = (0.12, 0.38, 0.95)
-            if len(self._region_overlay_trackers) != len(segments):
-                self._clear_selected_region_overlay()
-                for _start, _end in segments:
-                    tracker = self._make_plan_line_tracker(
-                        DraftTrackers,
-                        "selected-region-overlay:{}".format(getattr(region, "Name", "unknown")),
-                        scolor=color,
-                        swidth=width,
-                        ontop=True,
-                    )
-                    self._region_overlay_trackers.append(tracker)
-            for tracker, (start, end) in zip(self._region_overlay_trackers, segments):
-                tracker.setColor(color)
-                tracker.p1(start)
-                tracker.p2(end)
-                tracker.on()
+        return space_overlays.sync_selected_region_overlay(self)
 
     def _clear_selected_region_overlay(self):
-        self._finalize_trackers(self._region_overlay_trackers)
-        self._region_overlay_trackers = []
+        return space_overlays.clear_selected_region_overlay(self)
 
     def _sync_hovered_opening_overlay(self):
         return opening_overlays.sync_hovered_opening_overlay(self)

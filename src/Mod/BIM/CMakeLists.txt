@@ -215,6 +215,7 @@ SET(bimplan_SRCS
     bimplan/overlays/geometry.py
     bimplan/overlays/manager.py
     bimplan/overlays/openings.py
+    bimplan/overlays/spaces.py
     bimplan/overlays/symbols.py
     bimplan/overlays/walls.py
     bimplan/performance.py
