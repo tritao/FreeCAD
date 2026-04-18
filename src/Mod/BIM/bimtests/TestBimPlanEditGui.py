@@ -3909,6 +3909,44 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_selected_space_overlay_sync_skips_unchanged_rebuilds(self):
+        """Repeated selected-space overlay syncs should reuse cached state until invalidated."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "CachedSpaceOverlayBase")
+        base.Length = 3200
+        base.Width = 2400
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Bedroom")
+        level.addObject(space)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session._set_selected_plan_target_state("space", space)
+        session._clear_selected_space_overlay()
+
+        with patch.object(
+            session,
+            "_get_space_overlay_segments",
+            wraps=session._get_space_overlay_segments,
+        ) as get_segments:
+            session._sync_selected_space_overlay()
+            session._sync_selected_space_overlay()
+            session._invalidate_selected_space_overlay_cache()
+            session._sync_selected_space_overlay()
+
+        self.assertEqual(get_segments.call_count, 2)
+        self.assertGreater(len(session._space_overlay_trackers), 0)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_region_click_cycle_keeps_region_selected_over_parent_space(self):
         """Region click handling should keep the region as the semantic target across press/release."""
 
