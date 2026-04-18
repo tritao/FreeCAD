@@ -3825,6 +3825,42 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_clicking_space_resolves_target_once_per_press(self):
+        """A semantic click should resolve the plan target once, then reuse that result."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "SingleResolveSpaceBase")
+        base.Length = 6000
+        base.Width = 4000
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="Living Room")
+        level.addObject(space)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("space", space),
+        ) as get_target:
+            press = self._make_fake_left_mouse_press(250, 250)
+            session._on_mouse_pressed(press)
+
+        self.assertEqual(get_target.call_count, 1)
+        self.assertTrue(press._handled)
+        self._assert_selected_plan_target(session, "space", space)
+        self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [space.Name])
+        self.assertIs(session.view.getActiveObject("Arch"), space)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_region_click_cycle_keeps_region_selected_over_parent_space(self):
         """Region click handling should keep the region as the semantic target across press/release."""
 
