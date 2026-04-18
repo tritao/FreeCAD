@@ -54,7 +54,25 @@ class PlanEditControlsWidget:
         return tuple(self._modal_focus_widgets)
 
     def _build_form(self, QtGui):
-        container = QtGui.QWidget()
+        outer = QtGui.QWidget()
+        outer_layout = QtGui.QVBoxLayout(outer)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+        outer.setMinimumWidth(280)
+        outer.setMaximumWidth(360)
+
+        scroll = QtGui.QScrollArea(outer)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QtGui.QFrame.NoFrame)
+        try:
+            from PySide import QtCore
+
+            scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        except Exception:
+            pass
+        outer_layout.addWidget(scroll)
+
+        container = QtGui.QWidget(scroll)
         layout = QtGui.QVBoxLayout(container)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
@@ -138,7 +156,8 @@ class PlanEditControlsWidget:
         self._capture_focus_policies()
 
         container.setLayout(layout)
-        return container
+        scroll.setWidget(container)
+        return outer
 
     def _build_intro_label(self, QtGui):
         intro = QtGui.QLabel(
@@ -208,6 +227,28 @@ class PlanEditControlsWidget:
         layout.addWidget(self.integration_content)
         return panel
 
+    def _make_wrapped_plain_label(self, QtGui, text, parent, bold=False):
+        label = QtGui.QLabel(str(text or ""), parent)
+        label.setWordWrap(True)
+        try:
+            from PySide import QtCore
+
+            label.setTextFormat(QtCore.Qt.PlainText)
+        except Exception:
+            pass
+        try:
+            label.setSizePolicy(
+                QtGui.QSizePolicy.Preferred,
+                QtGui.QSizePolicy.Minimum,
+            )
+        except Exception:
+            pass
+        if bold:
+            font = label.font()
+            font.setBold(True)
+            label.setFont(font)
+        return label
+
     def _clear_layout(self, layout):
         if layout is None:
             return
@@ -268,17 +309,17 @@ class PlanEditControlsWidget:
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(4)
 
-        title_label = QtGui.QLabel(str(title or ""), block)
-        title_label.setWordWrap(True)
-        font = title_label.font()
-        font.setBold(True)
-        title_label.setFont(font)
+        title_label = self._make_wrapped_plain_label(
+            QtGui,
+            title,
+            block,
+            bold=True,
+        )
         layout.addWidget(title_label)
 
         body_text = str(body or "").strip()
         if body_text:
-            body_label = QtGui.QLabel(body_text, block)
-            body_label.setWordWrap(True)
+            body_label = self._make_wrapped_plain_label(QtGui, body_text, block)
             layout.addWidget(body_label)
 
         self._add_integration_action_row(QtGui, block, layout, actions)
@@ -300,17 +341,17 @@ class PlanEditControlsWidget:
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(4)
 
-        title_label = QtGui.QLabel(str(title or ""), block)
-        title_label.setWordWrap(True)
-        font = title_label.font()
-        font.setBold(True)
-        title_label.setFont(font)
+        title_label = self._make_wrapped_plain_label(
+            QtGui,
+            title,
+            block,
+            bold=True,
+        )
         layout.addWidget(title_label)
 
         summary_text = str(summary or "").strip()
         if summary_text:
-            summary_label = QtGui.QLabel(summary_text, block)
-            summary_label.setWordWrap(True)
+            summary_label = self._make_wrapped_plain_label(QtGui, summary_text, block)
             layout.addWidget(summary_label)
 
         self._add_integration_action_row(QtGui, block, layout, actions)
@@ -333,8 +374,11 @@ class PlanEditControlsWidget:
             detail_content_layout.setContentsMargins(0, 0, 0, 0)
             detail_content_layout.setSpacing(4)
 
-            detail_label = QtGui.QLabel(detail_text, detail_content)
-            detail_label.setWordWrap(True)
+            detail_label = self._make_wrapped_plain_label(
+                QtGui,
+                detail_text,
+                detail_content,
+            )
             detail_content_layout.addWidget(detail_label)
             layout.addWidget(detail_content)
             detail_content.setVisible(expanded)
