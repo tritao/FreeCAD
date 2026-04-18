@@ -1094,7 +1094,19 @@ Py::Object View3DInventorPy::saveVectorGraphic(const Py::Tuple& args)
 Py::Object View3DInventorPy::getCameraNode()
 {
     try {
-        SoNode* camera = getView3DInventorPtr()->getViewer()->getSoRenderManager()->getCamera();
+        auto* view = getView3DInventorPtr();
+        if (!view) {
+            throw Py::RuntimeError("Cannot access camera node of deleted view");
+        }
+        auto* viewer = view->getViewer();
+        if (!viewer) {
+            throw Py::RuntimeError("Cannot access camera node without a 3D viewer");
+        }
+        auto* renderManager = viewer->getSoRenderManager();
+        if (!renderManager) {
+            throw Py::RuntimeError("Cannot access camera node without a render manager");
+        }
+        SoNode* camera = renderManager->getCamera();
         if (!camera) {
             return Py::None();
         }
