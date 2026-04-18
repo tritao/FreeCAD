@@ -215,6 +215,16 @@ SET(bimcommands_SRCS
     bimcommands/__init__.py
 )
 
+SET(bimplan_SRCS
+    bimplan/__init__.py
+    bimplan/context.py
+    bimplan/providers.py
+    bimplan/registry.py
+    bimplan/semantics.py
+    bimplan/targets.py
+    bimplan/transactions.py
+)
+
 SET(BIM_templates
     Resources/templates/webgl_export_template.html
 )
@@ -264,6 +274,7 @@ SET(bimtests_SRCS
     bimtests/ArchWallGuiTestUtils.py
     bimtests/TestArchWallGui.py
     bimtests/TestBimLibraryGui.py
+    bimtests/TestBimPlanCore.py
     bimtests/TestBimPlanEditGui.py
     bimtests/TestBimProjectManagerGui.py
     bimtests/TestArchWallJoinWorkflowGui.py
@@ -370,6 +381,7 @@ ADD_CUSTOM_TARGET(BIM ALL
             ${ArchGuiIcon_SVG}
             ${importers_SRCS}
             ${ImportersSample_Files}
+            ${bimplan_SRCS}
             ${bimcommands_SRCS}
             ${bimtests_SRCS}
             ${bimtests_FIXTURES}
@@ -384,6 +396,7 @@ add_custom_target(ArchSqlParser ALL DEPENDS ${BIM_GENERATED_PARSER})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${Arch_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${Dice3DS_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${importers_SRCS})
+fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimplan_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimcommands_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimtests_SRCS})
 fc_copy_sources(BIM "${CMAKE_BINARY_DIR}/Mod/BIM" ${bimtests_FIXTURES})
@@ -429,6 +442,12 @@ INSTALL(
     FILES
         ${importers_SRCS}
     DESTINATION Mod/BIM/importers
+)
+
+INSTALL(
+    FILES
+        ${bimplan_SRCS}
+    DESTINATION Mod/BIM/bimplan
 )
 
 INSTALL(
