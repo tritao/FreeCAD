@@ -54,6 +54,23 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
     def _make_fake_left_mouse_release(self, x=250, y=250):
         return self._make_fake_left_mouse_button_event(x, y, down=False)
 
+    def _make_fake_mouse_move_event(self, x=250, y=250):
+        class _FakeMousePosition:
+            def __init__(self, x, y):
+                self._value = (x, y)
+
+            def getValue(self):
+                return self._value
+
+        class _FakeMouseEvent:
+            def __init__(self, x, y):
+                self._position = _FakeMousePosition(x, y)
+
+            def getPosition(self):
+                return self._position
+
+        return self._FakeEventCallback(_FakeMouseEvent(x, y))
+
     def _make_fake_mouse_wheel_event(self):
         class _FakeTypeId:
             def getName(self):
@@ -1444,6 +1461,72 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(len(session._grip_trackers), 0)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertEqual(len(session._opening_handle_trackers), 3)
+
+    def test_plan_edit_real_view_picking_hover_and_click_hosted_door(self):
+        """Real view-based hover and click should pick a hosted opening."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="RealPickDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        proxy = getattr(door.ViewObject, "Proxy", None)
+        self.assertIsNotNone(proxy)
+        polylines = list(proxy.get_plan_overlay_polylines() or [])
+        self.assertTrue(polylines)
+        self.assertGreaterEqual(len(polylines[0]), 2)
+
+        start = polylines[0][0]
+        end = polylines[0][1]
+        mid = FreeCAD.Vector(
+            (start.x + end.x) * 0.5,
+            (start.y + end.y) * 0.5,
+            (start.z + end.z) * 0.5,
+        )
+        screen_pos = session.view.getPointOnScreen(mid)
+        mouse_pos = (int(screen_pos[0]), int(screen_pos[1]))
+
+        move = self._make_fake_mouse_move_event(*mouse_pos)
+        session._on_mouse_moved(move)
+        self.pump_gui_events()
+
+        self.assertIs(session.hovered_opening, door)
+        self.assertGreater(len(session._opening_hover_trackers), 0)
+
+        move_again = self._make_fake_mouse_move_event(*mouse_pos)
+        session._on_mouse_moved(move_again)
+        self.pump_gui_events()
+
+        self.assertIs(session.hovered_opening, door)
+        self.assertGreater(len(session._opening_hover_trackers), 0)
+
+        press = self._make_fake_left_mouse_press(*mouse_pos)
+        session._on_mouse_pressed(press)
+        self.pump_gui_events()
+
+        release = self._make_fake_left_mouse_release(*mouse_pos)
+        session._on_mouse_pressed(release)
+        self.pump_gui_events()
+
+        self.assertTrue(press._handled)
+        self.assertTrue(release._handled)
+        self.assertFalse(session._consume_left_button_release)
+        self._assert_selected_plan_target(session, "opening", door)
+        self.assertEqual(len(session._grip_trackers), 0)
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
+        self.assertEqual(len(session._opening_handle_trackers), 3)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
 
     def test_plan_edit_empty_canvas_click_clears_selected_opening(self):
         """Empty canvas clicks should clear an internally selected opening."""
@@ -4167,6 +4250,77 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_selected_opening_overlay_sync_skips_unchanged_rebuilds(self):
+        """Repeated selected-opening overlay syncs should reuse cached state until invalidated."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+        door = self._make_hosted_door(wall, name="CachedOpeningOverlayDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
+        self.pump_gui_events()
+        session._refresh_primary_selected_plan_target()
+        session._clear_selected_opening_overlay()
+
+        with patch.object(
+            session,
+            "_get_opening_overlay_segments",
+            wraps=session._get_opening_overlay_segments,
+        ) as get_segments:
+            session._sync_selected_opening_overlay()
+            session._sync_selected_opening_overlay()
+            session._invalidate_plan_overlay_geometry_cache(door)
+            session._sync_selected_opening_overlay()
+
+        self.assertEqual(get_segments.call_count, 2)
+        self.assertGreater(len(session._opening_overlay_trackers), 0)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_selected_opening_handle_sync_skips_unchanged_rebuilds(self):
+        """Repeated selected-opening handle syncs should keep the existing trackers."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+        door = self._make_hosted_door(wall, name="CachedOpeningHandleDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
+        self.pump_gui_events()
+        session._refresh_primary_selected_plan_target()
+        session._clear_selected_opening_handles()
+
+        session._sync_selected_opening_handles()
+        original_trackers = tuple(session._opening_handle_trackers)
+        self.assertGreater(len(original_trackers), 0)
+
+        session._sync_selected_opening_handles()
+        for current, original in zip(session._opening_handle_trackers, original_trackers):
+            self.assertIs(current, original)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_space_overlay_geometry_cache_reuses_footprint_until_invalidated(self):
         """Space overlay geometry should reuse cached footprint data until invalidated."""
 
@@ -5617,6 +5771,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             BimPlanSession._PLAN_VISUAL_HOVERED_OPENING,
             BimPlanSession._PLAN_VISUAL_HOVERED_WALL,
             BimPlanSession._PLAN_VISUAL_WALL_GRIPS,
+            BimPlanSession._PLAN_VISUAL_SELECTED_OPENING,
         )
 
     def test_plan_edit_shows_grips_for_straight_base_wall(self):
