@@ -30,6 +30,7 @@ class PlanIssueSpec:
     group_key: str = ""
     group_title: str = ""
     collapsed: bool = False
+    summary: str = ""
 
 
 @dataclass(frozen=True)

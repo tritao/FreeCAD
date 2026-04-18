@@ -317,18 +317,18 @@ class PlanEditControlsWidget:
 
         detail_text = str(details or "").strip()
         if detail_text:
-            detail_group = QtGui.QGroupBox(
-                translate("BIM_PlanEdit", str(detail_title or "Details")),
-                block,
-            )
-            detail_group.setCheckable(True)
-            detail_group.setChecked(not bool(collapsed))
+            show_text = translate("BIM_PlanEdit", "Show details")
+            hide_text = translate("BIM_PlanEdit", "Hide details")
+            expanded = not bool(collapsed)
+            detail_button = QtGui.QPushButton(hide_text if expanded else show_text, block)
+            try:
+                detail_button.setCheckable(True)
+                detail_button.setChecked(expanded)
+            except Exception:
+                pass
+            layout.addWidget(detail_button)
 
-            detail_layout = QtGui.QVBoxLayout(detail_group)
-            detail_layout.setContentsMargins(8, 8, 8, 8)
-            detail_layout.setSpacing(4)
-
-            detail_content = QtGui.QWidget(detail_group)
+            detail_content = QtGui.QWidget(block)
             detail_content_layout = QtGui.QVBoxLayout(detail_content)
             detail_content_layout.setContentsMargins(0, 0, 0, 0)
             detail_content_layout.setSpacing(4)
@@ -336,14 +336,18 @@ class PlanEditControlsWidget:
             detail_label = QtGui.QLabel(detail_text, detail_content)
             detail_label.setWordWrap(True)
             detail_content_layout.addWidget(detail_label)
+            layout.addWidget(detail_content)
+            detail_content.setVisible(expanded)
 
-            detail_layout.addWidget(detail_content)
-            detail_content.setVisible(detail_group.isChecked())
+            def toggle_details(checked):
+                is_expanded = bool(checked)
+                detail_content.setVisible(is_expanded)
+                detail_button.setText(hide_text if is_expanded else show_text)
+
             try:
-                detail_group.toggled.connect(detail_content.setVisible)
+                detail_button.toggled.connect(toggle_details)
             except Exception:
                 pass
-            layout.addWidget(detail_group)
         return block
 
     def _format_provider_issue_heading(self, provider_label, severity, title):
@@ -362,6 +366,14 @@ class PlanEditControlsWidget:
         )
 
     def _format_provider_issue_title(self, issue):
+        role = self._get_provider_issue_role(issue)
+        if role == "workflow":
+            title = self._get_provider_issue_group_title(issue)
+            if title:
+                return title
+            issue_title = str(getattr(issue, "title", "") or "").strip()
+            if issue_title:
+                return issue_title
         provider_label = self.session.get_plan_provider_display_name(issue.provider_id)
         return self._format_provider_issue_heading(
             provider_label,
@@ -376,6 +388,15 @@ class PlanEditControlsWidget:
         if body == issue_text:
             body = str(message_text or "").strip()
         return body
+
+    def _get_provider_issue_summary(self, issue):
+        summary = str(getattr(issue, "summary", "") or "").strip()
+        if summary:
+            return summary
+        return self._get_provider_issue_body(issue)
+
+    def _get_provider_issue_role(self, issue):
+        return str(getattr(issue, "role", "") or "").strip().lower()
 
     def _get_provider_issue_group_key(self, issue):
         return str(getattr(issue, "group_key", "") or "").strip()
@@ -428,6 +449,8 @@ class PlanEditControlsWidget:
             title = str(getattr(first, "title", "") or "").strip()
         if not title:
             title = translate("BIM_PlanEdit", "{count} issue(s)").format(count=len(issues))
+        if first is not None and self._get_provider_issue_role(first) == "workflow":
+            return title
         return self._format_provider_issue_heading(
             self._get_provider_issue_group_provider_label(issues),
             self._get_provider_issue_group_severity(issues),
@@ -437,7 +460,17 @@ class PlanEditControlsWidget:
     def _format_provider_issue_group_summary(self, issues):
         issues = tuple(issues or ())
         if len(issues) <= 1:
-            return self._get_provider_issue_body(issues[0]) if issues else ""
+            return self._get_provider_issue_summary(issues[0]) if issues else ""
+        summaries = []
+        seen = set()
+        for issue in issues:
+            summary = self._get_provider_issue_summary(issue)
+            if not summary or summary in seen:
+                continue
+            summaries.append(summary)
+            seen.add(summary)
+        if summaries:
+            return "\n".join(f"- {summary}" for summary in summaries)
         return translate("BIM_PlanEdit", "{count} related issue(s).").format(count=len(issues))
 
     def _format_provider_issue_group_details(self, issues):
@@ -552,18 +585,23 @@ class PlanEditControlsWidget:
         )
 
     def _make_integration_details_group(self, QtGui, sections):
-        group = QtGui.QGroupBox(
-            translate("BIM_PlanEdit", "Details"),
-            self.integration_panel,
-        )
-        group.setCheckable(True)
-        group.setChecked(
-            any(not self._is_provider_section_collapsed(section) for section in sections)
-        )
+        group = QtGui.QFrame(self.integration_panel)
+        group.setFrameShape(QtGui.QFrame.NoFrame)
 
         layout = QtGui.QVBoxLayout(group)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
+
+        expanded = any(not self._is_provider_section_collapsed(section) for section in sections)
+        show_text = translate("BIM_PlanEdit", "Show details")
+        hide_text = translate("BIM_PlanEdit", "Hide details")
+        detail_button = QtGui.QPushButton(hide_text if expanded else show_text, group)
+        try:
+            detail_button.setCheckable(True)
+            detail_button.setChecked(expanded)
+        except Exception:
+            pass
+        layout.addWidget(detail_button)
 
         content = QtGui.QWidget(group)
         content_layout = QtGui.QVBoxLayout(content)
@@ -580,9 +618,15 @@ class PlanEditControlsWidget:
             content_layout.addWidget(block)
         layout.addWidget(content)
 
-        content.setVisible(group.isChecked())
+        content.setVisible(expanded)
+
+        def toggle_details(checked):
+            is_expanded = bool(checked)
+            content.setVisible(is_expanded)
+            detail_button.setText(hide_text if is_expanded else show_text)
+
         try:
-            group.toggled.connect(content.setVisible)
+            detail_button.toggled.connect(toggle_details)
         except Exception:
             pass
         return group
@@ -606,8 +650,15 @@ class PlanEditControlsWidget:
         self._clear_layout(self.integration_content_layout)
         self._set_integration_panel_visible(False)
 
-    def _set_integration_summary_text(self, issues, sections):
+    def _set_integration_summary_text(self, issues, sections, summary_sections=()):
         if self.integration_summary is None:
+            return
+        if tuple(summary_sections or ()):
+            self.integration_summary.clear()
+            try:
+                self.integration_summary.setVisible(False)
+            except Exception:
+                pass
             return
         parts = []
         issue_count = len(issues or ())
@@ -621,12 +672,16 @@ class PlanEditControlsWidget:
         summary = (
             translate(
                 "BIM_PlanEdit",
-                "Registered plan integrations contributed {details}.",
+                "Plan guidance: {details}.",
             ).format(details=", ".join(parts))
             if parts
             else ""
         )
         self.integration_summary.setText(summary)
+        try:
+            self.integration_summary.setVisible(bool(summary))
+        except Exception:
+            pass
 
     def _refresh_integration_panel(self):
         with self.session._plan_perf_trace_span("refresh_integration_panel"):
@@ -645,12 +700,16 @@ class PlanEditControlsWidget:
             if state != self._integration_panel_state:
                 self._integration_panel_state = state
                 self._integration_action_buttons = []
-                self._set_integration_summary_text(issues, sections)
                 self._clear_layout(self.integration_content_layout)
                 from PySide import QtGui
 
                 summary_sections, regular_sections, detail_sections = (
                     self._partition_provider_sections(sections)
+                )
+                self._set_integration_summary_text(
+                    issues,
+                    sections,
+                    summary_sections=summary_sections,
                 )
                 for section in summary_sections:
                     block = self._make_integration_block(
