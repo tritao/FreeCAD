@@ -7206,22 +7206,48 @@ class PlanEditSession:
         return plan_opening_edit.queue_restore_selected_opening(self, opening)
 
     def _clear_plan_selection_state(self):
-        self._set_gui_selection([])
-        self._set_selected_plan_target()
-        self._set_hovered_wall(None)
-        self._set_hovered_opening(None)
-        self._set_hovered_symbol(None)
-        self._set_hovered_space(None)
-        self._set_hovered_region(None)
-        self._clear_wall_grips()
-        self._sync_secondary_selected_overlays()
-        self._sync_selected_opening_overlay()
-        self._sync_selected_opening_handles()
-        self._sync_selected_symbol_overlay()
-        self._sync_selected_symbol_handles()
-        self._sync_selected_region_overlay()
-        self._sync_selected_space_overlay()
-        self._refresh_task_panel_status()
+        previous_kind, previous_obj = self._get_selected_plan_target()
+        with self._plan_perf_trace_event(
+            "clear_plan_selection_state",
+            clear_selection_started_kind=previous_kind or "none",
+            clear_selection_started_target=self._plan_perf_describe_target(
+                previous_kind, previous_obj
+            ),
+        ):
+            with self._plan_perf_trace_span("clear_plan_selection_gui_selection"):
+                self._set_gui_selection([])
+            with self._plan_perf_trace_span("clear_plan_selection_target_state"):
+                self._set_selected_plan_target()
+            with self._plan_perf_trace_span("clear_plan_selection_hover_state"):
+                self._set_hovered_wall(None)
+                self._set_hovered_opening(None)
+                self._set_hovered_symbol(None)
+                self._set_hovered_space(None)
+                self._set_hovered_region(None)
+            with self._plan_perf_trace_span("clear_plan_selection_wall_grips"):
+                self._clear_wall_grips()
+            with self._plan_perf_trace_span("clear_plan_selection_secondary_overlays"):
+                self._sync_secondary_selected_overlays()
+            with self._plan_perf_trace_span("clear_plan_selection_opening_overlay"):
+                self._sync_selected_opening_overlay()
+                self._sync_selected_opening_handles()
+            with self._plan_perf_trace_span("clear_plan_selection_symbol_overlay"):
+                self._sync_selected_symbol_overlay()
+                self._sync_selected_symbol_handles()
+            with self._plan_perf_trace_span("clear_plan_selection_region_overlay"):
+                self._sync_selected_region_overlay()
+            with self._plan_perf_trace_span("clear_plan_selection_space_overlay"):
+                self._sync_selected_space_overlay()
+            with self._plan_perf_trace_span("clear_plan_selection_task_status"):
+                self._refresh_task_panel_status(selection_only=self.current_tool == "Select")
+            selected_kind, selected_obj = self._get_selected_plan_target()
+            self._plan_perf_set_fields(
+                clear_selection_ended_kind=selected_kind or "none",
+                clear_selection_ended_target=self._plan_perf_describe_target(
+                    selected_kind, selected_obj
+                ),
+                clear_selection_cleared_wall=bool(previous_kind == "wall" and not selected_kind),
+            )
 
     def _execute_selected_opening_handle(self, opening, handle_index, handle):
         return plan_opening_edit.execute_selected_opening_handle(
