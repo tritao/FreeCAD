@@ -48,6 +48,193 @@ Current entry/ownership points:
 This is already close to the desired architecture. The missing part is a
 clearer "edit mode shell" around the session entry and exit rules.
 
+## Phase 0: Split `BimPlanSession.py` by Responsibility
+
+Goal:
+
+- stop growing one 12k+ line session file
+- keep Plan Edit moving without forcing a big-bang rewrite
+- align new code with the existing `src/Mod/BIM/bimplan/` package
+
+This split should happen by ownership, not by arbitrary line count.
+
+### Non-goals
+
+- do not create `BimPlanSession_part1.py` / `part2.py`
+- do not introduce mixins just to move code around
+- do not break the public `bimcommands.BimPlanSession` import path during the refactor
+- do not combine behavior changes with file moves unless unavoidable
+
+### Compatibility Rule
+
+During the migration:
+
+- keep [BimPlanSession.py](/media/joao/DEV/FreeCAD-Distro/FreeCAD/src/Mod/BIM/bimcommands/BimPlanSession.py)
+  as the public import point
+- allow it to become a compatibility shell that re-exports:
+  - `start_session()`
+  - `get_active_session()`
+  - `PlanEditSession`
+- move real implementation into `src/Mod/BIM/bimplan/`
+
+This keeps tests, commands, and downstream callers stable while the internals
+are being carved out.
+
+### Target Package Layout
+
+The target layout should be:
+
+- `src/Mod/BIM/bimplan/session.py`
+  - `PlanEditSession`
+  - active-session module state
+  - `start_session()`
+  - `get_active_session()`
+  - top-level entry and shutdown orchestration
+- `src/Mod/BIM/bimplan/hosts.py`
+  - `_PlanEditWallHost`
+  - `_PlanEditCommandHost`
+  - helpers for reused Draft/BIM interactive command bridges
+- `src/Mod/BIM/bimplan/view.py`
+  - viewer state capture/restore
+  - event callback registration
+  - view-scale helpers
+  - screen projection and redraw helpers
+- `src/Mod/BIM/bimplan/selection.py`
+  - primary and secondary target state
+  - GUI selection synchronization
+  - hover state
+  - target resolution and selection policy helpers
+- `src/Mod/BIM/bimplan/overlays/manager.py`
+  - overlay refresh queueing
+  - dirty-visual routing
+  - shared tracker lifecycle helpers
+- `src/Mod/BIM/bimplan/overlays/walls.py`
+  - wall hover and selected overlays
+  - wall grips
+  - junction-node visuals
+  - wall opening context overlays
+- `src/Mod/BIM/bimplan/overlays/openings.py`
+  - opening hover and selected overlays
+  - opening handle pools
+  - opening move previews
+- `src/Mod/BIM/bimplan/overlays/spaces.py`
+  - space hover and selected overlays
+  - space-region pick overlays
+  - space text-position visuals
+- `src/Mod/BIM/bimplan/overlays/regions.py`
+  - region hover and selected overlays
+  - region preview overlays
+  - secondary-selection overlays when region-driven
+- `src/Mod/BIM/bimplan/tools/base.py`
+  - a shared session-owned subtool contract
+  - enter / leave / mouse / key / cancel hooks
+- `src/Mod/BIM/bimplan/tools/select.py`
+  - default selection tool behavior
+  - pick routing
+  - additive-selection semantics
+- `src/Mod/BIM/bimplan/tools/walls.py`
+  - wall grip edit flows
+  - wall move / stretch / rect-wall tool logic
+  - wall edit preview orchestration
+- `src/Mod/BIM/bimplan/tools/openings.py`
+  - hosted opening selection
+  - opening handle actions
+  - opening move interactions
+- `src/Mod/BIM/bimplan/tools/spaces.py`
+  - space creation
+  - space boundary add / remove
+  - space text positioning
+  - separator-driven room split flows
+- `src/Mod/BIM/bimplan/tools/regions.py`
+  - plan region creation and edit flows
+  - plan region polygon handling
+  - region-driven room subdivision actions
+- `src/Mod/BIM/bimplan/tools/symbols.py`
+  - symbol selection and handles
+  - library-symbol plan interactions
+- `src/Mod/BIM/bimplan/tools/join.py`
+  - wall join mode
+  - join preview / candidate logic
+- `src/Mod/BIM/bimplan/ui/controls.py`
+  - `PlanEditControlsWidget`
+  - dock-facing controls, tool buttons, provider sections
+- `src/Mod/BIM/bimplan/ui/status_chip.py`
+  - `_PlanEditViewportStatusChip`
+  - mode / tool / storey viewport readout
+
+The existing modules remain valid and should stay:
+
+- `context.py`
+- `providers.py`
+- `registry.py`
+- `semantics.py`
+- `targets.py`
+- `transactions.py`
+
+### Ownership Rules
+
+The split should follow these rules:
+
+- `session.py` owns mode lifecycle and cross-cutting coordination only
+- `ui/*` owns widgets only, not editing rules
+- `tools/*` owns interaction behavior
+- `overlays/*` owns tracker creation and refresh policy
+- `selection.py` owns what is selected or hovered
+- `view.py` owns camera / viewport / event hookup details
+
+`PlanEditSession` should remain the coordinator, not the implementation bucket.
+
+### Recommended Migration Order
+
+Use this order to keep risk low:
+
+1. Extract `ui/controls.py` and `ui/status_chip.py`.
+2. Extract `hosts.py` for the embedded command bridges.
+3. Extract `view.py` for viewer-state and callback plumbing.
+4. Extract `overlays/manager.py` plus the shared tracker utilities.
+5. Move overlay families one at a time:
+   - `openings.py`
+   - `spaces.py`
+   - `regions.py`
+   - `walls.py`
+6. Extract `selection.py`.
+7. Extract tool families one at a time:
+   - `select.py`
+   - `spaces.py`
+   - `regions.py`
+   - `symbols.py`
+   - `openings.py`
+   - `join.py`
+   - `walls.py`
+8. Reduce [BimPlanSession.py](/media/joao/DEV/FreeCAD-Distro/FreeCAD/src/Mod/BIM/bimcommands/BimPlanSession.py)
+   to a compatibility wrapper after the new module structure is stable.
+
+Walls should move late. They are the hottest interaction path and currently have
+the densest overlay coupling.
+
+### Commit Strategy
+
+Each extraction commit should do one thing:
+
+- create the destination module
+- move code with minimal logic change
+- leave thin forwarding methods behind if needed
+- keep tests passing after each move
+
+Avoid "move half the file and fix five bugs" commits. Those are difficult to
+review and difficult to upstream.
+
+### Minimum Acceptable End State
+
+The first useful refactor milestone is:
+
+- `PlanEditControlsWidget` moved out
+- viewport status chip moved out
+- embedded command hosts moved out
+- `PlanEditSession` still large, but no longer also owns all UI code
+
+That is already a meaningful improvement and should be upstreamable on its own.
+
 ## Phase 1: Entry and Exit Shell
 
 Goal:
