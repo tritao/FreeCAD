@@ -211,6 +211,8 @@ SET(bimplan_SRCS
     bimplan/__init__.py
     bimplan/context.py
     bimplan/hosts.py
+    bimplan/overlays/__init__.py
+    bimplan/overlays/manager.py
     bimplan/providers.py
     bimplan/registry.py
     bimplan/semantics.py

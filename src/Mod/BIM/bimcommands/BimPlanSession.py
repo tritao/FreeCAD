@@ -38,6 +38,7 @@ import FreeCADGui
 from bimplan import view as plan_view
 from bimplan.context import PlanEditContext
 from bimplan.hosts import _PlanEditCommandHost, _PlanEditWallHost
+from bimplan.overlays import manager as overlay_manager
 from bimplan.providers import (
     PlanActionSpec,
     PlanInspectorSection,
@@ -6012,61 +6013,32 @@ class PlanEditSession:
             self._queue_plan_overlay_view_scale_refresh()
 
     def _queue_plan_overlay_visual_refresh(self, *visuals):
-        if self._tearing_down:
-            return
-        dirty = set(visuals) if visuals else {_PLAN_VISUAL_ALL}
-        if _PLAN_VISUAL_ALL in dirty or _PLAN_VISUAL_SELECTED_SPACE in dirty:
-            self._invalidate_selected_space_overlay_cache()
-        self._dirty_plan_visuals.update(dirty)
-        if self._overlay_refresh_queued:
-            return
-        try:
-            from PySide import QtCore
-        except ImportError:
-            dirty = self._consume_dirty_plan_visuals()
-            self._refresh_plan_overlay_visuals(dirty)
-            return
-        self._overlay_refresh_queued = True
-        QtCore.QTimer.singleShot(0, self._flush_plan_overlay_visual_refresh)
+        return overlay_manager.queue_plan_overlay_visual_refresh(
+            self,
+            visuals,
+            _PLAN_VISUAL_ALL,
+            _PLAN_VISUAL_SELECTED_SPACE,
+        )
 
     def _queue_plan_overlay_view_scale_refresh(self, delay_ms=_PLAN_VIEW_SCALE_REFRESH_DELAY_MS):
-        if self._tearing_down:
-            return
-        self._dirty_plan_visuals.add(_PLAN_VISUAL_VIEW_SCALE)
-        if self._overlay_refresh_queued or self._view_scale_overlay_refresh_queued:
-            return
-        try:
-            from PySide import QtCore
-        except ImportError:
-            dirty = self._consume_dirty_plan_visuals(default_all=False)
-            if dirty:
-                self._refresh_plan_overlay_visuals(dirty)
-            return
-        self._view_scale_overlay_refresh_queued = True
-        QtCore.QTimer.singleShot(max(0, int(delay_ms)), self._flush_view_scale_overlay_refresh)
+        return overlay_manager.queue_plan_overlay_view_scale_refresh(
+            self,
+            _PLAN_VISUAL_VIEW_SCALE,
+            delay_ms,
+        )
 
     def _consume_dirty_plan_visuals(self, default_all=True):
-        dirty = set(self._dirty_plan_visuals)
-        self._dirty_plan_visuals.clear()
-        if dirty:
-            return dirty
-        if default_all:
-            return {_PLAN_VISUAL_ALL}
-        return set()
+        return overlay_manager.consume_dirty_plan_visuals(
+            self,
+            _PLAN_VISUAL_ALL,
+            default_all=default_all,
+        )
 
     def _flush_plan_overlay_visual_refresh(self):
-        self._overlay_refresh_queued = False
-        dirty = self._consume_dirty_plan_visuals()
-        self._refresh_plan_overlay_visuals(dirty)
+        return overlay_manager.flush_plan_overlay_visual_refresh(self)
 
     def _flush_view_scale_overlay_refresh(self):
-        self._view_scale_overlay_refresh_queued = False
-        if self._overlay_refresh_queued:
-            return
-        dirty = self._consume_dirty_plan_visuals(default_all=False)
-        if not dirty:
-            return
-        self._refresh_plan_overlay_visuals(dirty)
+        return overlay_manager.flush_view_scale_overlay_refresh(self)
 
     def _refresh_plan_overlay_view_scale(self):
         with self._plan_perf_trace_span("refresh_plan_overlay_view_scale"):
@@ -7674,36 +7646,13 @@ class PlanEditSession:
         return result
 
     def _finalize_trackers(self, trackers):
-        for tracker in trackers:
-            try:
-                if hasattr(tracker, "off"):
-                    tracker.off()
-            except Exception:
-                pass
-            try:
-                tracker.finalize()
-            except Exception:
-                pass
+        return overlay_manager.finalize_trackers(trackers)
 
     def _make_plan_line_tracker(self, DraftTrackers, label, **kwargs):
-        tracker = DraftTrackers.lineTracker(**kwargs)
-        if hasattr(tracker, "setDebugLabel"):
-            tracker.setDebugLabel("BimPlanSession:{}".format(label))
-        return tracker
+        return overlay_manager.make_plan_line_tracker(DraftTrackers, label, **kwargs)
 
     def _set_plan_line_tracker_width(self, tracker, width):
-        if tracker is None or width is None:
-            return
-        switch = getattr(tracker, "switch", None)
-        if switch is None:
-            return
-        try:
-            separator = switch.getChild(0)
-            drawstyle = separator.getChild(0) if separator is not None else None
-            if drawstyle is not None and hasattr(drawstyle, "lineWidth"):
-                drawstyle.lineWidth = width
-        except Exception:
-            return
+        return overlay_manager.set_plan_line_tracker_width(tracker, width)
 
     def _get_opening_handle_markers(self, marker_size=None):
         from draftutils import params
