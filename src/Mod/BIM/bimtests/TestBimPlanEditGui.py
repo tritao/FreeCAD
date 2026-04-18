@@ -54,9 +54,12 @@ class _TestPlanProvider(PlanEditProvider):
 
     def __init__(self):
         self.executed_actions = []
+        self.issue_calls = 0
+        self.section_calls = 0
 
     def get_issues(self, context):
         del context
+        self.issue_calls += 1
         return (
             PlanIssueSpec(
                 key="provider-review",
@@ -73,6 +76,7 @@ class _TestPlanProvider(PlanEditProvider):
         )
 
     def get_inspector_sections(self, context):
+        self.section_calls += 1
         primary_target = context.get_primary_target()
         target_label = getattr(primary_target, "label", "") if primary_target else ""
         if not target_label:
@@ -439,6 +443,78 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         buttons[0].click()
         self.pump_gui_events()
         self.assertEqual([("apply-provider-fix", "")], provider.executed_actions)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_can_disable_provider_integrations_for_perf(self):
+        """A temporary perf switch should bypass providers and hide the integration panel."""
+
+        registry = get_plan_edit_registry()
+        registry.clear()
+        self.addCleanup(registry.clear)
+
+        provider = _TestPlanProvider()
+        registry.register_provider(provider)
+
+        with patch.dict("os.environ", {"FC_BIM_PLAN_EDIT_DISABLE_INTEGRATIONS": "1"}):
+            session = BimPlanSession.start_session()
+            self.assertIsNotNone(session)
+            self.pump_gui_events()
+
+            panel = session.task_panel
+            self.assertIsNotNone(panel)
+            panel.refresh_from_session()
+            self.pump_gui_events(timeout_ms=500)
+
+            self.assertEqual(0, provider.issue_calls)
+            self.assertEqual(0, provider.section_calls)
+            self.assertTrue(panel.integration_panel.isHidden())
+            self.assertFalse(
+                session.execute_plan_provider_action("test-plan-provider", "apply-provider-fix")
+            )
+            self.assertEqual([], provider.executed_actions)
+
+            session.shutdown(close_dialog=False)
+            self.pump_gui_events()
+
+    def test_plan_edit_wall_selection_defers_provider_refresh(self):
+        """Wall selection should not synchronously run provider integrations."""
+
+        registry = get_plan_edit_registry()
+        registry.clear()
+        self.addCleanup(registry.clear)
+
+        provider = _TestPlanProvider()
+        registry.register_provider(provider)
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        panel = session.task_panel
+        self.assertIsNotNone(panel)
+        panel.refresh_from_session()
+        self.pump_gui_events()
+        provider.issue_calls = 0
+        provider.section_calls = 0
+
+        session._set_hovered_wall(wall)
+        with patch.object(session, "_get_edit_node", return_value=None):
+            press = self._make_fake_left_mouse_press(250, 250)
+            session._on_mouse_pressed(press)
+
+        self.assertTrue(press._handled)
+        self._assert_selected_plan_target(session, "wall", wall)
+        self.assertEqual(0, provider.issue_calls)
+        self.assertEqual(0, provider.section_calls)
+
+        self.pump_gui_events(timeout_ms=500)
+        self.assertGreater(provider.issue_calls, 0)
+        self.assertGreater(provider.section_calls, 0)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -4144,7 +4220,45 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(get_target.call_count, 0)
         self.assertTrue(press._handled)
         self._assert_selected_plan_target(session, "wall", wall)
+        self.assertEqual(FreeCADGui.Selection.getSelection(), [])
+        self.pump_gui_events()
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall.Name])
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_click_after_skipped_hover_repicks_target(self):
+        """A throttled hover must not let a stale hovered wall steal the click."""
+
+        stale_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        target_wall = Arch.makeWall(length=3000, width=200, height=2500)
+        target_wall.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 1000, 0), FreeCAD.Rotation())
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        session._set_hovered_wall(stale_wall)
+        session._hover_pick_dirty = True
+
+        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
+            session,
+            "_get_plan_target_at_position",
+            return_value=("wall", target_wall),
+        ) as get_target:
+            press = self._make_fake_left_mouse_press(250, 250)
+            session._on_mouse_pressed(press)
+
+        self.assertEqual(get_target.call_count, 1)
+        self.assertTrue(press._handled)
+        self._assert_selected_plan_target(session, "wall", target_wall)
+        self.assertEqual(FreeCADGui.Selection.getSelection(), [])
+        self.pump_gui_events()
+        self.assertEqual(
+            [obj.Name for obj in FreeCADGui.Selection.getSelection()],
+            [target_wall.Name],
+        )
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()

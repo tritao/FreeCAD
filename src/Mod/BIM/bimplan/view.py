@@ -212,38 +212,46 @@ def apply_plan_view(session, fit=True):
     import WorkingPlane
 
     if session.view:
-        try:
-            session.view.setCameraType("Orthographic")
-            session.view.viewTop()
-        except RuntimeError:
-            session.view = None
+        with session._plan_perf_trace_span("apply_plan_view_camera_top"):
+            try:
+                session.view.setCameraType("Orthographic")
+                session.view.viewTop()
+            except RuntimeError:
+                session.view = None
 
     if session.viewer:
-        try:
-            session.viewer.setOverrideMode("Footprint")
-            session._apply_plan_background_override()
-        except RuntimeError:
-            session.viewer = None
+        with session._plan_perf_trace_span("apply_plan_view_footprint_override"):
+            try:
+                session.viewer.setOverrideMode("Footprint")
+                session._apply_plan_background_override()
+            except RuntimeError:
+                session.viewer = None
 
-    wp = WorkingPlane.get_working_plane(update=False)
-    offset = session.get_storey_elevation(session.active_storey) if session.active_storey else 0.0
-    wp.set_to_top(offset=offset)
-    if hasattr(wp, "_update_all"):
-        wp._update_all(_hist_add=False)
+    with session._plan_perf_trace_span("apply_plan_view_working_plane"):
+        wp = WorkingPlane.get_working_plane(update=False)
+        offset = (
+            session.get_storey_elevation(session.active_storey) if session.active_storey else 0.0
+        )
+        wp.set_to_top(offset=offset)
+        if hasattr(wp, "_update_all"):
+            wp._update_all(_hist_add=False)
 
-    session._interaction_plane = WorkingPlane.PlaneBase()
-    session._interaction_plane.set_to_top(offset=offset)
+        session._interaction_plane = WorkingPlane.PlaneBase()
+        session._interaction_plane.set_to_top(offset=offset)
 
     if session.active_storey:
-        session._set_active_object(session.active_storey)
+        with session._plan_perf_trace_span("apply_plan_view_set_active_object"):
+            session._set_active_object(session.active_storey)
 
-    session._apply_plan_navigation_profile()
+    with session._plan_perf_trace_span("apply_plan_view_navigation_profile"):
+        session._apply_plan_navigation_profile()
 
     if fit and session.view:
-        try:
-            session.view.fitAll()
-        except RuntimeError:
-            session.view = None
+        with session._plan_perf_trace_span("apply_plan_view_fit_all"):
+            try:
+                session.view.fitAll()
+            except RuntimeError:
+                session.view = None
 
 
 def restore_state(session):

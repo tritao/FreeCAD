@@ -50,30 +50,72 @@ def add_gui_selection_object(obj):
 
 
 def set_gui_selection(session, selection):
-    with session._selection_changes_suppressed():
-        try:
-            FreeCADGui.Selection.clearSelection()
-            seen = set()
-            for obj in selection or []:
-                if not obj:
-                    continue
-                key = (
-                    getattr(getattr(obj, "Document", None), "Name", None),
-                    getattr(obj, "Name", None),
-                )
-                if key in seen:
-                    continue
-                seen.add(key)
-                session._add_gui_selection_object(obj)
-        except Exception:
-            pass
-    session._sync_secondary_selected_plan_targets_from_selection(selection)
+    session._gui_selection_sync_queued = False
+    session._gui_selection_sync_generation += 1
+    session._queued_gui_selection_object = None
+    with session._plan_perf_trace_span("set_gui_selection"):
+        with session._selection_changes_suppressed():
+            try:
+                with session._plan_perf_trace_span("set_gui_selection_clear"):
+                    FreeCADGui.Selection.clearSelection()
+                seen = set()
+                for obj in selection or []:
+                    if not obj:
+                        continue
+                    key = (
+                        getattr(getattr(obj, "Document", None), "Name", None),
+                        getattr(obj, "Name", None),
+                    )
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    with session._plan_perf_trace_span("set_gui_selection_add"):
+                        session._add_gui_selection_object(obj)
+            except Exception:
+                pass
+        with session._plan_perf_trace_span("set_gui_selection_secondary_targets"):
+            session._sync_secondary_selected_plan_targets_from_selection(selection)
 
 
 def set_gui_selection_object(session, obj):
     if not obj:
         return
     session._set_gui_selection([obj])
+
+
+def schedule_gui_selection_object(session, obj, delay_ms=80):
+    if session._tearing_down or not obj:
+        return
+    session._gui_selection_sync_queued = True
+    session._gui_selection_sync_generation += 1
+    session._queued_gui_selection_object = obj
+    generation = session._gui_selection_sync_generation
+    try:
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(
+            delay_ms,
+            lambda generation=generation: session._run_scheduled_gui_selection_sync(generation),
+        )
+    except Exception:
+        session._run_scheduled_gui_selection_sync(generation)
+
+
+def run_scheduled_gui_selection_sync(session, generation=None):
+    if not session._gui_selection_sync_queued:
+        return
+    if generation is not None and generation != session._gui_selection_sync_generation:
+        return
+    obj = session._queued_gui_selection_object
+    if obj is None:
+        session._gui_selection_sync_queued = False
+        return
+    with session._plan_perf_trace_event("scheduled_gui_selection_sync"):
+        if session._tearing_down:
+            session._gui_selection_sync_queued = False
+            session._queued_gui_selection_object = None
+            return
+        set_gui_selection_object(session, obj)
 
 
 def attach_selection_observer(session):
@@ -86,6 +128,30 @@ def detach_selection_observer(session):
     if session._selection_observer_added:
         FreeCADGui.Selection.removeObserver(session)
         session._selection_observer_added = False
+
+
+def schedule_selection_refresh(session):
+    if session._tearing_down or session._ignore_selection_changes:
+        return
+    if session._selection_refresh_queued:
+        return
+    session._selection_refresh_queued = True
+    try:
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(0, session._run_scheduled_selection_refresh)
+    except Exception:
+        session._run_scheduled_selection_refresh()
+
+
+def run_scheduled_selection_refresh(session):
+    if not session._selection_refresh_queued:
+        return
+    session._selection_refresh_queued = False
+    with session._plan_perf_trace_event("selection_observer_refresh"):
+        if session._tearing_down or session._ignore_selection_changes:
+            return
+        session._refresh_primary_selected_plan_target()
 
 
 def selection_observer_add(session, doc, obj, sub, point):
@@ -103,7 +169,7 @@ def selection_observer_add(session, doc, obj, sub, point):
         if sub in ("EditNode0", "EditNode1", "EditNode2"):
             return
         del doc, obj, sub, point
-        session._refresh_primary_selected_plan_target()
+        session._schedule_selection_refresh()
 
 
 def selection_observer_remove(session, doc, obj, sub):
@@ -119,7 +185,7 @@ def selection_observer_remove(session, doc, obj, sub):
         if session._ignore_selection_changes:
             return
         del doc, obj, sub
-        session._refresh_primary_selected_plan_target()
+        session._schedule_selection_refresh()
 
 
 def selection_observer_set(session, doc):
@@ -130,7 +196,7 @@ def selection_observer_set(session, doc):
         if session._ignore_selection_changes:
             return
         del doc
-        session._refresh_primary_selected_plan_target()
+        session._schedule_selection_refresh()
 
 
 def selection_observer_clear(session, doc):
@@ -141,7 +207,7 @@ def selection_observer_clear(session, doc):
         if session._ignore_selection_changes:
             return
         del doc
-        session._refresh_primary_selected_plan_target()
+        session._schedule_selection_refresh()
 
 
 def refresh_selected_plan_target(session):
@@ -242,7 +308,10 @@ def refresh_selected_plan_target(session):
             session._set_secondary_selected_plan_targets([])
             session._set_pending_selected_plan_target()
         if session._selected_plan_target_changed(previous_kind, previous_obj, "wall"):
-            session._sync_wall_grips()
+            if session._get_selected_plan_target_object("wall"):
+                session._schedule_wall_grip_sync()
+            else:
+                session._clear_wall_grips()
         session._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
         selected_kind, selected_obj = session._get_selected_plan_target()
         session._plan_perf_set_fields(

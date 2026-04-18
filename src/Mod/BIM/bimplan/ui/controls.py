@@ -22,6 +22,7 @@ class PlanEditControlsWidget:
         "Active Storage",
         "Electrical / Mechanical",
     )
+    _INTEGRATION_REFRESH_DELAY_MS = 350
 
     def __init__(self, session):
         from PySide import QtGui
@@ -40,6 +41,8 @@ class PlanEditControlsWidget:
         self._space_editor_boundary_state = None
         self._status_text_state = None
         self._integration_panel_state = None
+        self._integration_refresh_queued = False
+        self._integration_refresh_generation = 0
         self._integration_action_buttons = []
         self._modal_interaction_state = None
         self._region_parent_space_items = []
@@ -727,7 +730,36 @@ class PlanEditControlsWidget:
         except Exception:
             pass
 
-    def _refresh_integration_panel(self):
+    def _queue_integration_panel_refresh(self, delay_ms=None):
+        if self.form is None:
+            return
+        self._integration_refresh_queued = True
+        self._integration_refresh_generation += 1
+        generation = self._integration_refresh_generation
+        if delay_ms is None:
+            delay_ms = self._INTEGRATION_REFRESH_DELAY_MS
+        try:
+            from PySide import QtCore
+
+            QtCore.QTimer.singleShot(
+                int(delay_ms),
+                lambda generation=generation: self._run_queued_integration_panel_refresh(
+                    generation
+                ),
+            )
+        except Exception:
+            self._run_queued_integration_panel_refresh(generation)
+
+    def _run_queued_integration_panel_refresh(self, generation=None):
+        with self.session._plan_perf_trace_event("queued_integration_panel_refresh"):
+            if not self._integration_refresh_queued:
+                return
+            if generation is not None and generation != self._integration_refresh_generation:
+                return
+            self._integration_refresh_queued = False
+            self._refresh_integration_panel(defer=False)
+
+    def _refresh_integration_panel(self, defer=False):
         with self.session._plan_perf_trace_span("refresh_integration_panel"):
             if (
                 self.integration_panel is None
@@ -735,8 +767,22 @@ class PlanEditControlsWidget:
                 or self.integration_content_layout is None
             ):
                 return
-            issues = tuple(self.session.get_plan_provider_issues())
-            sections = tuple(self.session.get_plan_provider_inspector_sections())
+            if self.session._plan_provider_integrations_disabled():
+                self.session._plan_perf_count("integration_panel_disabled")
+                self._integration_refresh_queued = False
+                self._hide_integration_panel()
+                return
+            if defer:
+                self.session._plan_perf_count("integration_panel_deferred_refreshes")
+                self._queue_integration_panel_refresh()
+                return
+            self._integration_refresh_queued = False
+            self._integration_refresh_generation += 1
+            with self.session._plan_provider_refresh_cache_scope():
+                with self.session._plan_perf_trace_span("collect_plan_provider_issues"):
+                    issues = tuple(self.session.get_plan_provider_issues())
+                with self.session._plan_perf_trace_span("collect_plan_provider_inspector_sections"):
+                    sections = tuple(self.session.get_plan_provider_inspector_sections())
             state = (issues, sections)
             if not issues and not sections:
                 self._hide_integration_panel()
@@ -1203,7 +1249,7 @@ class PlanEditControlsWidget:
         self._saved_focus_policies = {}
         self._storey_items = []
 
-    def refresh(self):
+    def refresh(self, defer_integrations=False, refresh_integrations=True):
         if self.form is None or self.storey_combo is None:
             return
         self.storey_combo.blockSignals(True)
@@ -1225,7 +1271,10 @@ class PlanEditControlsWidget:
                 self.storey_combo.blockSignals(False)
             except Exception:
                 pass
-        self.refresh_from_session()
+        self.refresh_from_session(
+            defer_integrations=defer_integrations,
+            refresh_integrations=refresh_integrations,
+        )
 
     def _sync_join_type_combo_from_session(self):
         if self.join_type_combo is None:
@@ -1424,13 +1473,14 @@ class PlanEditControlsWidget:
             selection_help=selection_help,
         )
 
-    def refresh_from_session(self):
+    def refresh_from_session(self, defer_integrations=False, refresh_integrations=True):
         with self.session._plan_perf_trace_span("refresh_task_panel_widget"):
             if self.form is None or self.status is None or self.exit_button is None:
                 return
             self._sync_join_type_combo_from_session()
             self._set_status_text(self._build_status_text())
-            self._refresh_integration_panel()
+            if refresh_integrations:
+                self._refresh_integration_panel(defer=defer_integrations)
             self._refresh_space_editor()
             self._refresh_region_editor()
             self._apply_modal_interaction_state(self.session._is_modal_plan_interaction_active())
@@ -1441,10 +1491,10 @@ class PlanEditControlsWidget:
                 return
             selected_kind, _selected_obj = self.session._get_selected_plan_target()
             if self.session.current_tool != "Select" or selected_kind != "wall":
-                self.refresh_from_session()
+                self.refresh_from_session(defer_integrations=True)
                 return
             self._set_status_text(self._build_status_text())
-            self._refresh_integration_panel()
+            self._refresh_integration_panel(defer=True)
             self._hide_space_editor()
             self._hide_region_editor()
             self._apply_modal_interaction_state(self.session._is_modal_plan_interaction_active())
