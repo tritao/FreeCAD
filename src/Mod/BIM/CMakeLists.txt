@@ -215,6 +215,9 @@ SET(bimplan_SRCS
     bimplan/semantics.py
     bimplan/targets.py
     bimplan/transactions.py
+    bimplan/ui/__init__.py
+    bimplan/ui/controls.py
+    bimplan/ui/status_chip.py
 )
 
 SET(BIM_templates
