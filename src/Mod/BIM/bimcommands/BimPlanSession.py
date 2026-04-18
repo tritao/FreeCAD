@@ -31,6 +31,7 @@ import math
 import FreeCAD
 import FreeCADGui
 from bimplan import performance as plan_performance
+from bimplan import snap as plan_snap
 from bimplan import view as plan_view
 from bimplan.context import PlanEditContext
 from bimplan.hosts import _PlanEditCommandHost, _PlanEditWallHost
@@ -1515,50 +1516,16 @@ class PlanEditSession:
         return overlay_geometry.invalidate_opening_overlay_screen_cache(self)
 
     def _apply_plan_snap_profile(self):
-        snapper = getattr(FreeCADGui, "Snapper", None)
-        if not snapper or not hasattr(snapper, "push_snap_modes"):
-            return
-        try:
-            snapper.push_snap_modes(_PLAN_EDIT_SNAP_SET)
-        except Exception:
-            pass
+        return plan_snap.apply_plan_snap_profile(_PLAN_EDIT_SNAP_SET)
 
     def _restore_snap_profile(self):
-        snapper = getattr(FreeCADGui, "Snapper", None)
-        if not snapper or not hasattr(snapper, "pop_snap_modes"):
-            return
-        try:
-            snapper.pop_snap_modes()
-        except Exception:
-            pass
+        return plan_snap.restore_snap_profile()
 
     def _push_opening_move_snap_profile(self):
-        snapper = getattr(FreeCADGui, "Snapper", None)
-        if (
-            self._opening_move_snap_profile_pushed
-            or not snapper
-            or not hasattr(snapper, "push_snap_modes")
-        ):
-            return
-        try:
-            snapper.push_snap_modes(_OPENING_MOVE_SNAP_SET)
-            self._opening_move_snap_profile_pushed = True
-        except Exception:
-            pass
+        return plan_snap.push_opening_move_snap_profile(self, _OPENING_MOVE_SNAP_SET)
 
     def _pop_opening_move_snap_profile(self):
-        snapper = getattr(FreeCADGui, "Snapper", None)
-        if (
-            not self._opening_move_snap_profile_pushed
-            or not snapper
-            or not hasattr(snapper, "pop_snap_modes")
-        ):
-            return
-        try:
-            snapper.pop_snap_modes()
-        except Exception:
-            pass
-        self._opening_move_snap_profile_pushed = False
+        return plan_snap.pop_opening_move_snap_profile(self)
 
     def _capture_object_view_state(self):
         self._saved_object_view_state = {}
