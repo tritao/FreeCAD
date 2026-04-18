@@ -399,6 +399,7 @@ class PlanEditSession:
         self._mouse_wheel_cb = None
         self._mouse_wheel_event_type = None
         self._mouse_pressed_cb = None
+        self._consume_left_button_release = False
         self._key_pressed_cb = None
         self._overlay_refresh_queued = False
         self._dirty_plan_visuals = set()
@@ -5440,7 +5441,14 @@ class PlanEditSession:
         if event.getButton() != coin.SoMouseButtonEvent.BUTTON1:
             return
 
+        if event.getState() == coin.SoMouseButtonEvent.UP:
+            if self._consume_left_button_release:
+                self._consume_left_button_release = False
+                self._set_event_handled(event_callback)
+            return
+
         if event.getState() == coin.SoMouseButtonEvent.DOWN:
+            self._consume_left_button_release = False
             if self.current_tool == "Join":
                 pos = event.getPosition().getValue()
                 target_kind, target_wall = self._get_plan_target_at_position((pos[0], pos[1]))
@@ -5451,11 +5459,7 @@ class PlanEditSession:
                     and target_wall != source_wall
                     and self._apply_plan_wall_join(source_wall, target_wall)
                 ):
-                    if hasattr(event_callback, "setHandled"):
-                        try:
-                            event_callback.setHandled()
-                        except Exception:
-                            pass
+                    self._claim_left_button_click(event_callback)
                 return
             if self.current_tool == "Pick Space Region":
                 pos = event.getPosition().getValue()
@@ -5469,7 +5473,7 @@ class PlanEditSession:
             mouse_pos = (pos[0], pos[1])
             if self._is_plan_additive_selection_active():
                 if not self._toggle_plan_target_selection_at_position(mouse_pos, event_callback):
-                    self._set_event_handled(event_callback)
+                    self._claim_left_button_click(event_callback)
                 return
             node = self._get_edit_node(mouse_pos)
             if not node:
@@ -5484,7 +5488,7 @@ class PlanEditSession:
                 if self._activate_space_target(mouse_pos, event_callback):
                     return
                 self._clear_plan_selection_state()
-                self._set_event_handled(event_callback)
+                self._claim_left_button_click(event_callback)
                 return
             node_kind = node[0]
             if node_kind == "opening_handle":
@@ -5512,11 +5516,7 @@ class PlanEditSession:
                 else:
                     self._set_selected_plan_target_state("wall", obj)
                     self._activate_wall_grip(index, wall=obj)
-            if hasattr(event_callback, "setHandled"):
-                try:
-                    event_callback.setHandled()
-                except Exception:
-                    pass
+            self._claim_left_button_click(event_callback)
 
     def _on_mouse_moved(self, event_callback):
         if self._tearing_down:
@@ -7246,7 +7246,7 @@ class PlanEditSession:
         self._set_hovered_region(None)
         self._set_gui_selection(new_selection)
         self._refresh_primary_selected_plan_target()
-        self._set_event_handled(event_callback)
+        self._claim_left_button_click(event_callback)
         return True
 
     def _clear_hovered_plan_targets(self, kinds=None):
@@ -7268,6 +7268,13 @@ class PlanEditSession:
                 event_callback.setHandled()
             except Exception:
                 pass
+
+    def _claim_left_button_click(self, event_callback):
+        # Plan Edit owns overlay-driven picks, so also swallow the matching
+        # button release to prevent the base 3D view selection pass from
+        # clearing or replacing the GUI selection afterwards.
+        self._consume_left_button_release = True
+        self._set_event_handled(event_callback)
 
     def _set_hovered_wall(self, wall):
         if self._is_selected_plan_target("wall", wall):
@@ -7413,7 +7420,7 @@ class PlanEditSession:
         self._clear_hovered_plan_targets(clear_hovered_kinds)
         if sync_gui_selection:
             self._set_gui_selection_object(target_obj)
-        self._set_event_handled(event_callback)
+        self._claim_left_button_click(event_callback)
         return True
 
     def _activate_opening_target(self, mouse_pos, event_callback=None):
@@ -7692,11 +7699,7 @@ class PlanEditSession:
         self._clear_space_region_pick_overlays()
         self._register_plan_object(space)
         self._restore_selected_space(space)
-        if event_callback and hasattr(event_callback, "setHandled"):
-            try:
-                event_callback.setHandled()
-            except Exception:
-                pass
+        self._claim_left_button_click(event_callback)
         return True
 
     def _create_space_from_current_selection(self):
