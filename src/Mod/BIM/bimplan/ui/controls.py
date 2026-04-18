@@ -303,6 +303,66 @@ class PlanEditControlsWidget:
             title=title,
         )
 
+    def _get_provider_section_role(self, section):
+        return str(getattr(section, "role", "") or "").strip().lower()
+
+    def _is_provider_section_collapsed(self, section):
+        return bool(getattr(section, "collapsed", False))
+
+    def _partition_provider_sections(self, sections):
+        summary_sections = []
+        detail_sections = []
+        regular_sections = []
+        for section in tuple(sections or ()):
+            role = self._get_provider_section_role(section)
+            if role == "summary":
+                summary_sections.append(section)
+            elif role == "details":
+                detail_sections.append(section)
+            else:
+                regular_sections.append(section)
+        return (
+            tuple(summary_sections),
+            tuple(regular_sections),
+            tuple(detail_sections),
+        )
+
+    def _make_integration_details_group(self, QtGui, sections):
+        group = QtGui.QGroupBox(
+            translate("BIM_PlanEdit", "Details"),
+            self.integration_panel,
+        )
+        group.setCheckable(True)
+        group.setChecked(
+            any(not self._is_provider_section_collapsed(section) for section in sections)
+        )
+
+        layout = QtGui.QVBoxLayout(group)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        content = QtGui.QWidget(group)
+        content_layout = QtGui.QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(6)
+
+        for section in sections:
+            block = self._make_integration_block(
+                QtGui,
+                self._format_provider_section_title(section),
+                body=getattr(section, "body", ""),
+                actions=section.actions,
+            )
+            content_layout.addWidget(block)
+        layout.addWidget(content)
+
+        content.setVisible(group.isChecked())
+        try:
+            group.toggled.connect(content.setVisible)
+        except Exception:
+            pass
+        return group
+
     def _set_integration_panel_visible(self, visible):
         if self.integration_panel is None:
             return
@@ -365,6 +425,17 @@ class PlanEditControlsWidget:
                 self._clear_layout(self.integration_content_layout)
                 from PySide import QtGui
 
+                summary_sections, regular_sections, detail_sections = (
+                    self._partition_provider_sections(sections)
+                )
+                for section in summary_sections:
+                    block = self._make_integration_block(
+                        QtGui,
+                        self._format_provider_section_title(section),
+                        body=getattr(section, "body", ""),
+                        actions=section.actions,
+                    )
+                    self.integration_content_layout.addWidget(block)
                 for issue in issues:
                     issue_text = str(getattr(issue, "title", "") or "").strip()
                     message_text = str(getattr(issue, "message", "") or "").strip()
@@ -378,7 +449,7 @@ class PlanEditControlsWidget:
                         actions=issue.actions,
                     )
                     self.integration_content_layout.addWidget(block)
-                for section in sections:
+                for section in regular_sections:
                     block = self._make_integration_block(
                         QtGui,
                         self._format_provider_section_title(section),
@@ -386,6 +457,12 @@ class PlanEditControlsWidget:
                         actions=section.actions,
                     )
                     self.integration_content_layout.addWidget(block)
+                if detail_sections:
+                    group = self._make_integration_details_group(
+                        QtGui,
+                        detail_sections,
+                    )
+                    self.integration_content_layout.addWidget(group)
                 self.integration_content_layout.addStretch(1)
             self._set_integration_panel_visible(True)
 

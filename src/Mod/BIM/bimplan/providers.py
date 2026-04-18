@@ -44,6 +44,8 @@ class PlanInspectorSection:
     body: str = ""
     provider_id: str = ""
     actions: Tuple[PlanActionSpec, ...] = ()
+    role: str = ""
+    collapsed: bool = False
 
 
 @dataclass(frozen=True)
