@@ -348,6 +348,10 @@ class PlanEditSession:
         self._opening_overlay_trackers = []
         self._symbol_overlay_trackers = []
         self._space_overlay_trackers = []
+        self._selected_space_overlay_dirty = True
+        self._selected_space_overlay_geometry_key = None
+        self._selected_space_overlay_segments = ()
+        self._selected_space_overlay_render_state = None
         self._region_overlay_trackers = []
         self._secondary_selection_trackers = []
         self._space_region_pick_trackers = []
@@ -556,6 +560,17 @@ class PlanEditSession:
             return True
         except (AttributeError, ReferenceError, RuntimeError):
             return False
+
+    def _get_document_object_key(self, obj):
+        if obj is None:
+            return None
+        try:
+            return (
+                getattr(getattr(obj, "Document", None), "Name", None),
+                getattr(obj, "Name", None),
+            )
+        except Exception:
+            return None
 
     def _sanitize_plan_target_references(self):
         changed = False
@@ -5824,6 +5839,8 @@ class PlanEditSession:
         if self._tearing_down:
             return
         dirty = set(visuals) if visuals else {_PLAN_VISUAL_ALL}
+        if _PLAN_VISUAL_ALL in dirty or _PLAN_VISUAL_SELECTED_SPACE in dirty:
+            self._invalidate_selected_space_overlay_cache()
         self._dirty_plan_visuals.update(dirty)
         if self._overlay_refresh_queued:
             return
@@ -8460,6 +8477,7 @@ class PlanEditSession:
         self._refresh_task_panel_status()
 
     def _refresh_selected_space_visuals(self):
+        self._invalidate_selected_space_overlay_cache()
         self._sync_selected_space_overlay()
         self._request_view_redraw()
 
@@ -8835,6 +8853,9 @@ class PlanEditSession:
         self._finalize_trackers(self._region_hover_trackers)
         self._region_hover_trackers = []
 
+    def _invalidate_selected_space_overlay_cache(self):
+        self._selected_space_overlay_dirty = True
+
     def _sync_selected_space_overlay(self):
         with self._plan_perf_trace_span("sync_selected_space_overlay"):
             space = self._get_selected_plan_target_object("space")
@@ -8850,10 +8871,30 @@ class PlanEditSession:
             except ImportError:
                 self._clear_selected_space_overlay()
                 return
-            segments = self._get_space_overlay_segments(space)
-            self._plan_perf_count("selected_space_overlay_segments", len(segments))
             color = (0.12, 0.38, 0.95)
-            if len(self._space_overlay_trackers) != len(segments):
+            space_key = self._get_document_object_key(space)
+            geometry_key = space_key
+            render_state = (space_key, round(float(width), 3), color)
+            if (
+                not self._selected_space_overlay_dirty
+                and self._selected_space_overlay_render_state == render_state
+            ):
+                self._plan_perf_count("selected_space_overlay_cache_hits")
+                return
+            if (
+                not self._selected_space_overlay_dirty
+                and self._selected_space_overlay_geometry_key == geometry_key
+            ):
+                segments = self._selected_space_overlay_segments
+                self._plan_perf_count("selected_space_overlay_segment_cache_hits")
+            else:
+                segments = tuple(self._get_space_overlay_segments(space))
+                self._selected_space_overlay_geometry_key = geometry_key
+                self._selected_space_overlay_segments = segments
+            self._plan_perf_count("selected_space_overlay_segments", len(segments))
+            if self._selected_space_overlay_render_state != render_state or len(
+                self._space_overlay_trackers
+            ) != len(segments):
                 self._clear_selected_space_overlay()
                 for _start, _end in segments:
                     tracker = self._make_plan_line_tracker(
@@ -8864,15 +8905,23 @@ class PlanEditSession:
                         ontop=True,
                     )
                     self._space_overlay_trackers.append(tracker)
+                self._selected_space_overlay_geometry_key = geometry_key
+                self._selected_space_overlay_segments = segments
             for tracker, (start, end) in zip(self._space_overlay_trackers, segments):
                 tracker.setColor(color)
                 tracker.p1(start)
                 tracker.p2(end)
                 tracker.on()
+            self._selected_space_overlay_render_state = render_state
+            self._selected_space_overlay_dirty = False
 
     def _clear_selected_space_overlay(self):
         self._finalize_trackers(self._space_overlay_trackers)
         self._space_overlay_trackers = []
+        self._selected_space_overlay_dirty = False
+        self._selected_space_overlay_geometry_key = None
+        self._selected_space_overlay_segments = ()
+        self._selected_space_overlay_render_state = None
 
     def _sync_selected_region_overlay(self):
         with self._plan_perf_trace_span("sync_selected_region_overlay"):
