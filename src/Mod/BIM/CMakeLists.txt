@@ -227,6 +227,7 @@ SET(bimplan_SRCS
     bimplan/semantics.py
     bimplan/selection.py
     bimplan/snap.py
+    bimplan/spaces.py
     bimplan/symbol_edit.py
     bimplan/targets.py
     bimplan/transactions.py
