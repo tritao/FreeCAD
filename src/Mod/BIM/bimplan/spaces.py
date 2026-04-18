@@ -711,6 +711,288 @@ def report_space_creation_failure(space):
     return True
 
 
+def set_selected_space_label(session, label):
+    space = session._get_selected_plan_target_object("space")
+    if not session._is_plan_space_object(space):
+        return False
+    label = str(label or "").strip()
+    if not label or label == space.Label:
+        return False
+    try:
+        session.doc.openTransaction(translate("BIM_PlanEdit", "Rename Space"))
+        space.Label = label
+        session.doc.commitTransaction()
+        session.doc.recompute()
+    except Exception:
+        try:
+            session.doc.abortTransaction()
+        except Exception:
+            pass
+        return False
+    session._refresh_task_panel_status()
+    return True
+
+
+def set_selected_space_type(session, space_type):
+    space = session._get_selected_plan_target_object("space")
+    if not session._is_plan_space_object(space):
+        return False
+    space_type = str(space_type or "")
+    if not space_type or space_type == getattr(space, "SpaceType", ""):
+        return False
+    try:
+        session.doc.openTransaction(translate("BIM_PlanEdit", "Change Space Type"))
+        space.SpaceType = space_type
+        session.doc.commitTransaction()
+        session.doc.recompute()
+    except Exception:
+        try:
+            session.doc.abortTransaction()
+        except Exception:
+            pass
+        return False
+    session._refresh_task_panel_status()
+    return True
+
+
+def set_selected_region_label(session, label):
+    region = session._get_selected_plan_target_object("region")
+    if not session._is_plan_region_object(region):
+        return False
+    label = str(label or "").strip()
+    if not label or label == getattr(region, "Label", ""):
+        return False
+    try:
+        session.doc.openTransaction(translate("BIM_PlanEdit", "Rename Region"))
+        region.Label = label
+        session.doc.commitTransaction()
+        session.doc.recompute()
+    except Exception:
+        try:
+            session.doc.abortTransaction()
+        except Exception:
+            pass
+        return False
+    session._refresh_task_panel_status()
+    return True
+
+
+def set_selected_region_scheme(session, scheme):
+    region = session._get_selected_plan_target_object("region")
+    if not session._is_plan_region_object(region):
+        return False
+    scheme = str(scheme or "").strip()
+    if scheme == str(getattr(region, "Scheme", "") or ""):
+        return False
+    try:
+        session.doc.openTransaction(translate("BIM_PlanEdit", "Change Region Scheme"))
+        region.Scheme = scheme
+        session.doc.commitTransaction()
+        session.doc.recompute()
+    except Exception:
+        try:
+            session.doc.abortTransaction()
+        except Exception:
+            pass
+        return False
+    session._refresh_task_panel_status()
+    return True
+
+
+def set_selected_region_type(session, region_type):
+    region = session._get_selected_plan_target_object("region")
+    if not session._is_plan_region_object(region):
+        return False
+    region_type = str(region_type or "").strip()
+    if region_type == str(getattr(region, "RegionType", "") or ""):
+        return False
+    try:
+        session.doc.openTransaction(translate("BIM_PlanEdit", "Change Region Type"))
+        region.RegionType = region_type
+        session.doc.commitTransaction()
+        session.doc.recompute()
+    except Exception:
+        try:
+            session.doc.abortTransaction()
+        except Exception:
+            pass
+        return False
+    session._refresh_task_panel_status()
+    return True
+
+
+def set_selected_region_parent_space(session, space):
+    region = session._get_selected_plan_target_object("region")
+    if not session._is_plan_region_object(region):
+        return False
+    space = session._get_plan_semantic_object(space) if space else None
+    if space is not None and not session._is_plan_space_object(space):
+        return False
+
+    current_parent = getattr(region, "ParentSpace", None)
+    current_parent = session._get_plan_semantic_object(current_parent) if current_parent else None
+    if current_parent == space:
+        return False
+
+    try:
+        session.doc.openTransaction(translate("BIM_PlanEdit", "Change Region Parent Space"))
+        region.ParentSpace = space
+        session.doc.commitTransaction()
+        session.doc.recompute()
+    except Exception:
+        try:
+            session.doc.abortTransaction()
+        except Exception:
+            pass
+        return False
+    session._refresh_task_panel_status()
+    return True
+
+
+def set_space_boundaries(session, space, boundaries):
+    if not session._is_plan_space_object(space):
+        return False
+    import ArchSpace
+
+    boundaries = ArchSpace.normalizeBoundaryLinks(boundaries)
+    try:
+        session.doc.openTransaction(translate("BIM_PlanEdit", "Edit Space Boundaries"))
+        space.Boundaries = boundaries
+        session.doc.commitTransaction()
+        session.doc.recompute()
+    except Exception:
+        try:
+            session.doc.abortTransaction()
+        except Exception:
+            pass
+        return False
+    session._refresh_selected_space_visuals()
+    session._refresh_task_panel_status()
+    return True
+
+
+def add_boundaries_to_selected_space(session):
+    space = session._get_selected_plan_target_object("space")
+    if not session._is_plan_space_object(space):
+        return False
+    existing = session._get_space_boundary_entries(space)
+    additions = session._get_selected_space_boundary_links(fallback_space=space)
+    if not additions:
+        FreeCAD.Console.PrintWarning(
+            translate(
+                "BIM_PlanEdit",
+                "Select room-bounding walls or explicit boundary faces to add to the space.\n",
+            )
+        )
+        return False
+    merged = existing + additions
+    return session._set_space_boundaries(space, merged)
+
+
+def remove_selected_space_boundaries(session, row_indexes=None):
+    space = session._get_selected_plan_target_object("space")
+    if not session._is_plan_space_object(space):
+        return False
+    existing = session._get_space_boundary_entries(space)
+    if not existing:
+        return False
+
+    if row_indexes:
+        row_indexes = set(int(index) for index in row_indexes if int(index) >= 0)
+        remaining = [boundary for idx, boundary in enumerate(existing) if idx not in row_indexes]
+        if len(remaining) == len(existing):
+            return False
+        return session._set_space_boundaries(space, remaining)
+
+    removals = {
+        session._space_boundary_key(boundary)
+        for boundary in session._get_selected_space_boundary_links(fallback_space=space)
+    }
+    if not removals:
+        FreeCAD.Console.PrintWarning(
+            translate(
+                "BIM_PlanEdit",
+                "Select boundary rows or room-bounding walls to remove from the space.\n",
+            )
+        )
+        return False
+    remaining = [
+        boundary for boundary in existing if session._space_boundary_key(boundary) not in removals
+    ]
+    if len(remaining) == len(existing):
+        return False
+    return session._set_space_boundaries(space, remaining)
+
+
+def start_space_text_position_pick(session):
+    space = session._get_selected_plan_target_object("space")
+    if not session._is_plan_space_object(space):
+        return False
+    import FreeCADGui
+
+    session.current_tool = "Set Space Text"
+    session._edit_space = space
+    session._set_hovered_wall(None)
+    session._set_hovered_opening(None)
+    session._set_hovered_symbol(None)
+    session._set_hovered_space(None)
+    session._sync_secondary_selected_overlays()
+    session._refresh_task_panel_status()
+    FreeCAD.activeDraftCommand = session
+    session._set_draft_point_focus_suppressed(True)
+    FreeCADGui.Snapper.getPoint(
+        callback=session._finish_space_text_position_pick,
+        last=session._get_space_reference_point(space),
+        title=translate("BIM_PlanEdit", "Pick space text position"),
+        noTracker=True,
+    )
+    session._queue_focus_plan_view()
+    return True
+
+
+def finish_space_text_position_pick(session, point=None, obj=None):
+    del obj
+    space = session._edit_space
+    session._edit_space = None
+    FreeCAD.activeDraftCommand = None
+    session._set_draft_point_focus_suppressed(False)
+
+    if point is None or not session._is_plan_space_object(space):
+        session.current_tool = "Select"
+        session._refresh_task_panel_status()
+        return
+
+    point = session._project_plan_point(point)
+    try:
+        session.doc.openTransaction(translate("BIM_PlanEdit", "Set Space Text Position"))
+        space.ViewObject.TextPosition = space.Placement.inverse().multVec(point)
+        session.doc.commitTransaction()
+        session.doc.recompute()
+    except Exception:
+        try:
+            session.doc.abortTransaction()
+        except Exception:
+            pass
+        session._restore_selected_space(space)
+        return
+
+    session.current_tool = "Select"
+    session._queue_restore_selected_space(space)
+
+
+def cancel_space_text_position_pick(session):
+    space = session._edit_space or session._get_selected_plan_target_object("space")
+    session._edit_space = None
+    session._stop_snapper()
+    FreeCAD.activeDraftCommand = None
+    session._set_draft_point_focus_suppressed(False)
+    session.current_tool = "Select"
+    if space:
+        session._set_selected_plan_target("space", space, pending_restore=True)
+    session._sync_selected_space_overlay()
+    session._refresh_task_panel_status()
+
+
 def get_space_preflight_report(session, targets=None):
     if session.current_tool != "Select":
         return None
