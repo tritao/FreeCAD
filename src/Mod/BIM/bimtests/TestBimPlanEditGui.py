@@ -54,6 +54,17 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
     def _make_fake_left_mouse_release(self, x=250, y=250):
         return self._make_fake_left_mouse_button_event(x, y, down=False)
 
+    def _make_fake_mouse_wheel_event(self):
+        class _FakeTypeId:
+            def getName(self):
+                return "SoMouseWheelEvent"
+
+        class _FakeWheelEvent:
+            def getTypeId(self):
+                return _FakeTypeId()
+
+        return self._FakeEventCallback(_FakeWheelEvent())
+
     def _make_fake_left_mouse_button_event(self, x=250, y=250, down=True):
         from pivy import coin
 
@@ -3889,6 +3900,30 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_mouse_wheel_queues_view_scale_refresh(self):
+        """Zoom events should queue the dedicated debounced view-scale refresh path."""
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(
+            session,
+            "_queue_plan_overlay_view_scale_refresh",
+            wraps=session._queue_plan_overlay_view_scale_refresh,
+        ) as queue_scale, patch.object(
+            session,
+            "_queue_plan_overlay_visual_refresh",
+            wraps=session._queue_plan_overlay_visual_refresh,
+        ) as queue_visual:
+            session._on_mouse_wheel(self._make_fake_mouse_wheel_event())
+
+        self.assertEqual(queue_scale.call_count, 1)
+        self.assertEqual(queue_visual.call_count, 0)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_selecting_wall_uses_lightweight_task_panel_refresh(self):
         """Wall selection should update the task panel without a full widget rebuild."""
 
@@ -3913,6 +3948,48 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(refresh_full.call_count, 0)
         self.assertEqual(refresh_selection.call_count, 1)
         self._assert_selected_plan_target(session, "wall", wall)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_zoom_refresh_keeps_selected_space_overlay_geometry_cache(self):
+        """Zoom-style view-scale refreshes should reuse cached selected-space geometry."""
+
+        level = Arch.makeFloor(name="Level 0")
+        base = self.document.addObject("Part::Box", "ZoomSpaceOverlayBase")
+        base.Length = 3200
+        base.Width = 2400
+        base.Height = 2500
+        space = Arch.makeSpace(base, name="ZoomSpace")
+        level.addObject(space)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(session._select_space_for_plan_edit(space, sync_gui_selection=True))
+        with patch.object(
+            session,
+            "_get_plan_view_height",
+            return_value=5000.0,
+        ):
+            session._sync_selected_space_overlay()
+        self.assertFalse(session._selected_space_overlay_dirty)
+
+        with patch.object(
+            session,
+            "_get_space_overlay_segments",
+            wraps=session._get_space_overlay_segments,
+        ) as get_segments, patch.object(
+            session,
+            "_get_plan_view_height",
+            return_value=20000.0,
+        ):
+            session._refresh_plan_overlay_visuals({BimPlanSession._PLAN_VISUAL_VIEW_SCALE})
+
+        self.assertEqual(get_segments.call_count, 0)
+        self.assertFalse(session._selected_space_overlay_dirty)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
