@@ -1818,10 +1818,11 @@ class ViewProviderComponent:
             self._refreshHostedFootprints(obj)
         return
 
-    def updateFootprint(self):
+    def updateFootprint(self, faces=None):
         self.fset.coordIndex.deleteValues(0)
         self.fcoords.point.deleteValues(0)
-        faces = self.Object.Proxy.getFootprint(self.Object)
+        if faces is None:
+            faces = self.Object.Proxy.getFootprint(self.Object)
         if faces:
             inverse_placement = self.Object.Placement.inverse()
             verts = []

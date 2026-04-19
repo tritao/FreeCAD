@@ -2382,7 +2382,11 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
             obj.ViewObject.DiffuseColor = obj.ViewObject.DiffuseColor
 
     def updateFootprint(self):
-        ArchComponent.ViewProviderComponent.updateFootprint(self)
+        faces = None
+        if hasattr(self, "Object"):
+            faces = self.Object.Proxy.getFootprint(self.Object)
+
+        ArchComponent.ViewProviderComponent.updateFootprint(self, faces=faces)
 
         if not hasattr(self, "lcoords") or not hasattr(self, "lset"):
             return
@@ -2390,29 +2394,27 @@ class _ViewProviderWall(ArchComponent.ViewProviderComponent):
         line_verts = []
         line_counts = []
 
-        if hasattr(self, "Object"):
-            faces = self.Object.Proxy.getFootprint(self.Object)
-            if faces:
-                inverse_placement = None
-                placement = getattr(self.Object, "Placement", None)
-                if placement:
-                    try:
-                        inverse_placement = placement.inverse()
-                    except Exception:
-                        inverse_placement = None
+        if faces:
+            inverse_placement = None
+            placement = getattr(self.Object, "Placement", None)
+            if placement:
+                try:
+                    inverse_placement = placement.inverse()
+                except Exception:
+                    inverse_placement = None
 
-                for face in faces:
-                    for wire in face.Wires:
-                        for edge in wire.Edges:
-                            polyline = self._collect_edge_points(edge)
-                            if len(polyline) < 2:
-                                continue
-                            start_idx = len(line_verts)
-                            for point in polyline:
-                                if inverse_placement is not None:
-                                    point = inverse_placement.multVec(point)
-                                line_verts.append([point.x, point.y, point.z])
-                            line_counts.append(len(line_verts) - start_idx)
+            for face in faces:
+                for wire in face.Wires:
+                    for edge in wire.Edges:
+                        polyline = self._collect_edge_points(edge)
+                        if len(polyline) < 2:
+                            continue
+                        start_idx = len(line_verts)
+                        for point in polyline:
+                            if inverse_placement is not None:
+                                point = inverse_placement.multVec(point)
+                            line_verts.append([point.x, point.y, point.z])
+                        line_counts.append(len(line_verts) - start_idx)
 
         self._update_footprint_line_nodes(
             self.lcoords,
