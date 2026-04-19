@@ -26,6 +26,8 @@ class PlanToolSpec:
     provider_id: str = ""
     group: str = ""
     priority: int = 0
+    interaction: str = ""
+    prompt: str = ""
 
 
 @dataclass(frozen=True)

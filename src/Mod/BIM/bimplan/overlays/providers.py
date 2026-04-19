@@ -7,7 +7,10 @@ import FreeCAD
 
 def sync_provider_overlays(session):
     with session._plan_perf_trace_span("sync_provider_overlays"):
-        if session.current_tool != "Select" or session._plan_provider_integrations_disabled():
+        if (
+            session.current_tool not in ("Select", "Provider Point")
+            or session._plan_provider_integrations_disabled()
+        ):
             clear_provider_overlays(session)
             return
 
