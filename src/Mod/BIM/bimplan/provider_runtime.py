@@ -12,6 +12,7 @@ from bimplan.providers import (
     PlanInspectorSection,
     PlanIssueSpec,
     PlanOverlaySpec,
+    PlanOverlayTargetSpec,
     PlanSuggestionSpec,
     PlanToolSpec,
 )
@@ -221,10 +222,25 @@ def normalize_plan_provider_overlay(provider_id, overlay):
     target_keys = tuple(str(key or "") for key in tuple(overlay.target_keys or ()) if key)
     if target_keys != tuple(overlay.target_keys or ()):
         replacements["target_keys"] = target_keys
-    points = tuple(_coerce_plan_overlay_point(point) for point in tuple(overlay.points or ()))
-    points = tuple(point for point in points if point is not None)
+    raw_points = tuple(overlay.points or ())
+    raw_point_targets = tuple(overlay.point_targets or ())
+    point_pairs = []
+    for index, raw_point in enumerate(raw_points):
+        point = _coerce_plan_overlay_point(raw_point)
+        if point is None:
+            continue
+        target = None
+        if raw_point_targets:
+            raw_target = raw_point_targets[index] if index < len(raw_point_targets) else None
+            target = _coerce_plan_overlay_target(raw_target)
+        point_pairs.append((point, target))
+    points = tuple(point for point, _target in point_pairs)
     if points != tuple(overlay.points or ()):
         replacements["points"] = points
+    if raw_point_targets:
+        point_targets = tuple(target or PlanOverlayTargetSpec() for _point, target in point_pairs)
+        if point_targets != raw_point_targets:
+            replacements["point_targets"] = point_targets
     polylines = tuple(
         _coerce_plan_overlay_polyline(polyline) for polyline in tuple(overlay.polylines or ())
     )
@@ -237,6 +253,32 @@ def normalize_plan_provider_overlay(provider_id, overlay):
     if not replacements:
         return overlay
     return replace(overlay, **replacements)
+
+
+def _coerce_plan_overlay_target(target):
+    if target is None:
+        return PlanOverlayTargetSpec()
+    if isinstance(target, PlanOverlayTargetSpec):
+        document_name = str(target.document_name or "").strip()
+        object_name = str(target.object_name or "").strip()
+        target_kind = str(target.target_kind or "").strip()
+        subname = str(target.subname or "").strip()
+    elif isinstance(target, dict):
+        document_name = str(target.get("document_name", "") or "").strip()
+        object_name = str(target.get("object_name", "") or "").strip()
+        target_kind = str(target.get("target_kind", "") or "").strip()
+        subname = str(target.get("subname", "") or "").strip()
+    else:
+        document_name = str(getattr(target, "document_name", "") or "").strip()
+        object_name = str(getattr(target, "object_name", "") or "").strip()
+        target_kind = str(getattr(target, "target_kind", "") or "").strip()
+        subname = str(getattr(target, "subname", "") or "").strip()
+    return PlanOverlayTargetSpec(
+        document_name=document_name,
+        object_name=object_name,
+        target_kind=target_kind,
+        subname=subname,
+    )
 
 
 def _coerce_plan_overlay_point(point):

@@ -69,12 +69,21 @@ class PlanInspectorSection:
 
 
 @dataclass(frozen=True)
+class PlanOverlayTargetSpec:
+    document_name: str = ""
+    object_name: str = ""
+    target_kind: str = ""
+    subname: str = ""
+
+
+@dataclass(frozen=True)
 class PlanOverlaySpec:
     key: str
     label: str = ""
     provider_id: str = ""
     target_keys: Tuple[str, ...] = ()
     points: Tuple[Tuple[float, float, float], ...] = ()
+    point_targets: Tuple[PlanOverlayTargetSpec, ...] = ()
     polylines: Tuple[Tuple[Tuple[float, float, float], ...], ...] = ()
     color: Tuple[float, float, float] = (0.2, 0.55, 0.85)
     line_width: float = 2.0

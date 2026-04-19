@@ -4,6 +4,8 @@
 
 import FreeCAD
 
+_PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
+
 
 def get_screen_distance_sq_to_segment(session, mouse_pos, start, end):
     if not session.view or not mouse_pos:
@@ -495,6 +497,11 @@ def get_plan_target_from_edit_node(session, node):
     if not node:
         return (None, None)
     node_kind = node[0]
+    if node_kind == "provider_overlay_point":
+        target_kind, obj = get_provider_overlay_target_from_edit_node(session, node)
+        if session._is_valid_plan_target(target_kind, obj):
+            return (target_kind, obj)
+        return session._get_plan_target_for_object(obj)
     if node_kind == "opening_handle":
         opening = node[1]
         if session._is_hosted_opening_object(opening):
@@ -514,6 +521,60 @@ def get_plan_target_from_edit_node(session, node):
     if session._is_hosted_opening_object(obj):
         return ("opening", obj)
     return session._get_plan_target_for_object(obj)
+
+
+def get_provider_overlay_target_from_edit_node(session, node):
+    if not node or node[0] != "provider_overlay_point":
+        return (None, None)
+    try:
+        point = node[1]
+        document_name = str(point.documentName.getValue())
+        object_name = str(point.objectName.getValue())
+        subname = str(point.subElementName.getValue())
+    except Exception:
+        return (None, None)
+    obj = _resolve_document_object(session, document_name, object_name)
+    if obj is None:
+        return (None, None)
+    target_kind = _parse_provider_overlay_target_kind(subname)
+    if target_kind and session._is_valid_plan_target(target_kind, obj):
+        return (target_kind, obj)
+    inferred_kind, inferred_obj = session._get_plan_target_for_object(obj)
+    if inferred_kind and inferred_obj:
+        return (inferred_kind, inferred_obj)
+    return (None, obj)
+
+
+def is_provider_overlay_point_subname(subname):
+    return str(subname or "").startswith(_PROVIDER_OVERLAY_POINT_PREFIX + ":")
+
+
+def _parse_provider_overlay_target_kind(subname):
+    parts = str(subname or "").split(":")
+    if len(parts) < 2 or parts[0] != _PROVIDER_OVERLAY_POINT_PREFIX:
+        return ""
+    return parts[1].strip()
+
+
+def _resolve_document_object(session, document_name, object_name):
+    object_name = str(object_name or "").strip()
+    if not object_name:
+        return None
+    document_name = str(document_name or "").strip()
+    doc = None
+    if document_name:
+        try:
+            doc = FreeCAD.getDocument(document_name)
+        except Exception:
+            doc = None
+    if doc is None:
+        doc = getattr(session, "doc", None)
+    if doc is None:
+        return None
+    try:
+        return doc.getObject(object_name)
+    except Exception:
+        return None
 
 
 def get_hovered_plan_target(session):
