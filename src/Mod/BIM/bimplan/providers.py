@@ -17,6 +17,18 @@ class PlanActionSpec:
 
 
 @dataclass(frozen=True)
+class PlanToolSpec:
+    key: str
+    label: str
+    tooltip: str = ""
+    enabled: bool = True
+    transaction_label: str = ""
+    provider_id: str = ""
+    group: str = ""
+    priority: int = 0
+
+
+@dataclass(frozen=True)
 class PlanIssueSpec:
     key: str
     title: str
@@ -60,8 +72,14 @@ class PlanOverlaySpec:
     label: str = ""
     provider_id: str = ""
     target_keys: Tuple[str, ...] = ()
+    points: Tuple[Tuple[float, float, float], ...] = ()
+    polylines: Tuple[Tuple[Tuple[float, float, float], ...], ...] = ()
     color: Tuple[float, float, float] = (0.2, 0.55, 0.85)
     line_width: float = 2.0
+    marker_size: float = 160.0
+    dotted: bool = False
+    visible: bool = True
+    category: str = ""
 
 
 class PlanEditProvider:
@@ -95,6 +113,10 @@ class PlanEditProvider:
         return ()
 
     def get_overlays(self, context) -> Sequence[PlanOverlaySpec]:
+        del context
+        return ()
+
+    def get_tools(self, context) -> Sequence[PlanToolSpec]:
         del context
         return ()
 

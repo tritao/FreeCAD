@@ -718,6 +718,19 @@ class PlanEditControlsWidget:
             pass
         return group
 
+    def _sort_provider_tools(self, tools):
+        return tuple(
+            sorted(
+                tuple(tools or ()),
+                key=lambda tool: (
+                    str(getattr(tool, "group", "") or ""),
+                    int(getattr(tool, "priority", 0) or 0),
+                    str(getattr(tool, "label", "") or ""),
+                    str(getattr(tool, "key", "") or ""),
+                ),
+            )
+        )
+
     def _set_integration_panel_visible(self, visible):
         if self.integration_panel is None:
             return
@@ -737,7 +750,7 @@ class PlanEditControlsWidget:
         self._clear_layout(self.integration_content_layout)
         self._set_integration_panel_visible(False)
 
-    def _set_integration_summary_text(self, issues, sections, summary_sections=()):
+    def _set_integration_summary_text(self, issues, sections, tools=(), summary_sections=()):
         if self.integration_summary is None:
             return
         if tuple(summary_sections or ()):
@@ -750,8 +763,11 @@ class PlanEditControlsWidget:
         parts = []
         issue_count = len(issues or ())
         section_count = len(sections or ())
+        tool_count = len(tools or ())
         if issue_count:
             parts.append(translate("BIM_PlanEdit", "{count} issue(s)").format(count=issue_count))
+        if tool_count:
+            parts.append(translate("BIM_PlanEdit", "{count} tool(s)").format(count=tool_count))
         if section_count:
             parts.append(
                 translate("BIM_PlanEdit", "{count} section(s)").format(count=section_count)
@@ -819,12 +835,22 @@ class PlanEditControlsWidget:
             self._integration_refresh_queued = False
             self._integration_refresh_generation += 1
             with self.session._plan_provider_refresh_cache_scope():
+                with self.session._plan_perf_trace_span("collect_plan_provider_tools"):
+                    tools = tuple(self.session.get_plan_provider_tools())
                 with self.session._plan_perf_trace_span("collect_plan_provider_issues"):
                     issues = tuple(self.session.get_plan_provider_issues())
                 with self.session._plan_perf_trace_span("collect_plan_provider_inspector_sections"):
                     sections = tuple(self.session.get_plan_provider_inspector_sections())
-            state = (issues, sections)
-            if not issues and not sections:
+            queue_overlay_refresh = getattr(
+                self.session,
+                "queue_plan_provider_overlay_refresh",
+                None,
+            )
+            if callable(queue_overlay_refresh):
+                queue_overlay_refresh()
+            tools = self._sort_provider_tools(tools)
+            state = (tools, issues, sections)
+            if not tools and not issues and not sections:
                 self._hide_integration_panel()
                 return
             if state != self._integration_panel_state:
@@ -839,6 +865,7 @@ class PlanEditControlsWidget:
                 self._set_integration_summary_text(
                     issues,
                     sections,
+                    tools=tools,
                     summary_sections=summary_sections,
                 )
                 for section in summary_sections:
@@ -853,6 +880,13 @@ class PlanEditControlsWidget:
                     block = self._make_provider_issue_block(QtGui, issue_group)
                     if block is not None:
                         self.integration_content_layout.addWidget(block)
+                if tools:
+                    block = self._make_integration_block(
+                        QtGui,
+                        translate("BIM_PlanEdit", "Tools"),
+                        actions=tools,
+                    )
+                    self.integration_content_layout.addWidget(block)
                 for section in regular_sections:
                     block = self._make_integration_block(
                         QtGui,
