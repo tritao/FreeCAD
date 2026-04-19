@@ -205,10 +205,13 @@ class Arch_Window:
     def getPoint(self, point=None, obj=None):
         "this function is called by the snapper when it has a 3D point"
 
+        from contextlib import nullcontext
+
         import Draft
         from draftutils import gui_utils
         from draftutils.messages import _wrn
         from ArchWindowPresets import WindowPresets
+        from bimcommands import BimPlanSession
 
         SketchArch = False
 
@@ -222,153 +225,165 @@ class Arch_Window:
         if self.sel:
             obj = self.sel[0]
         point = point.add(FreeCAD.Vector(0, 0, self.SillHeight))
-        self.doc.openTransaction(translate("Arch", "Create Window"))
-
-        FreeCADGui.doCommand("import FreeCAD, Arch, DraftGeomUtils, WorkingPlane")
-        FreeCADGui.doCommand("wp = WorkingPlane.get_working_plane()")
-
-        if self.baseFace is not None:
-            FreeCADGui.doCommand(
-                "face = FreeCAD.ActiveDocument."
-                + self.baseFace[0].Name
-                + ".Shape.Faces["
-                + str(self.baseFace[1])
-                + "]"
-            )
-            FreeCADGui.doCommand("pl = DraftGeomUtils.placement_from_face(face, vec_z = wp.axis)")
-        else:
-            FreeCADGui.doCommand("pl = FreeCAD.Placement()")
-            FreeCADGui.doCommand("pl.Rotation = FreeCAD.Rotation(wp.u, wp.axis, -wp.v, 'XZY')")
-
-        FreeCADGui.doCommand(
-            "pl.Base = FreeCAD.Vector("
-            + str(point.x)
-            + ", "
-            + str(point.y)
-            + ", "
-            + str(point.z)
-            + ")"
+        session = BimPlanSession.get_active_session()
+        defer_updates = (
+            session.defer_document_visual_updates()
+            if session and hasattr(session, "defer_document_visual_updates")
+            else nullcontext()
         )
+        with defer_updates:
+            self.doc.openTransaction(translate("Arch", "Create Window"))
 
-        if self.baseFace is not None:
-            host = self.baseFace[0]
-        elif obj:
-            host = obj
-        else:
-            host = None
+            FreeCADGui.doCommand("import FreeCAD, Arch, DraftGeomUtils, WorkingPlane")
+            FreeCADGui.doCommand("wp = WorkingPlane.get_working_plane()")
 
-        if self.Preset >= len(WindowPresets):
-            preset = False
-            # library object
-            col = self.doc.Objects
-            path = self.librarypresets[self.Preset - len(WindowPresets)][1]
-            FreeCADGui.doCommand("FreeCADGui.ActiveDocument.mergeProject(" + repr(path) + ")")
-            # find the latest added window
-            nol = self.doc.Objects
-            for o in nol[len(col) :]:
-                if Draft.getType(o) == "Window":
-                    if Draft.getType(o.Base) != "Sketcher::SketchObject":
-                        _wrn(
-                            translate(
-                                "Arch", "Window not based on sketch. Window not aligned or resized."
-                            )
-                        )
-                        self.Include = False
-                        break
-                    FreeCADGui.doCommand("win = FreeCAD.ActiveDocument.getObject('" + o.Name + "')")
-                    FreeCADGui.doCommand("win.Base.Placement = pl")
-                    # Historically, this normal was deduced by the orientation of the Base Sketch and hardcoded in the Normal property.
-                    # Now with the new AutoNormalReversed property/flag, set True as default, the auto Normal previously in opposite direction to is now consistent with that previously hardcoded.
-                    # With the normal set to 'auto', window object would not suffer weird shape if the Base Sketch is rotated by some reason.
-                    # Keep the property be 'auto' (0,0,0) here.
-                    # FreeCADGui.doCommand("win.Normal = pl.Rotation.multVec(FreeCAD.Vector(0, 0, -1))")
-                    FreeCADGui.doCommand("win.Width = " + str(self.Width))
-                    FreeCADGui.doCommand("win.Height = " + str(self.Height))
-                    FreeCADGui.doCommand("win.Base.recompute()")
-                    if not self.has_width_and_height_constraint(o.Base):
-                        _wrn(
-                            translate(
-                                "Arch",
-                                "No Width and/or Height constraint in window sketch. Window not resized.",
-                            )
-                        )
-                    break
-            else:
-                _wrn(translate("Arch", "No window found. Cannot continue."))
-                self.Include = False
-
-        else:
-            # preset
-            preset = True
-            wp = ""
-            for p in self.wparams:
-                wp += ", " + p.lower() + "=" + str(getattr(self, p))
-            import ArchSketchObject
-
-            if (
-                host
-                and hasattr(host, "Base")
-                and Draft.getType(host.Base) == "ArchSketch"
-                and hasattr(ArchSketchObject, "attachToHost")
-                and hasattr(FreeCAD, "ArchSketchLock")
-                and FreeCAD.ArchSketchLock
-            ):
-                if self.Include:
-                    # Window base sketch's placement stay at origin is good if addon exists and self.Include
-                    #
-                    # Put Sketch in 'upright' position to ensure the opening symbol on plan (SymbolPlan enabled) is correct
-                    # - see https://github.com/FreeCAD/FreeCAD/issues/24903#issuecomment-3475455946
-                    # placement = FreeCAD.Placement(App.Vector(0,0,0),App.Rotation(App.Vector(1,0,0),90))
-                    # TODO 2025.11.1 : To improve the algorithm to be more robust to allow the Base Sketch in any orientation but without problem
-                    FreeCADGui.doCommand(
-                        "pl90 = FreeCAD.Placement(App.Vector(0,0,0),App.Rotation(App.Vector(1,0,0),90))"
-                    )
-                    FreeCADGui.doCommand(
-                        "win = Arch.makeWindowPreset('"
-                        + WindowPresets[self.Preset]
-                        + "' "
-                        + wp
-                        + ", placement=pl90"
-                        + ")"
-                    )
-                else:
-                    # Window base sketch's placement follow getPoint placement if addon exists but NOT self.Include
-                    FreeCADGui.doCommand(
-                        "win = Arch.makeWindowPreset('"
-                        + WindowPresets[self.Preset]
-                        + "' "
-                        + wp
-                        + ", placement=pl"
-                    )
-                    FreeCADGui.doCommand("win.AttachToAxisOrSketch = 'None'")
-                FreeCADGui.doCommand("FreeCADGui.Selection.addSelection(win)")
-                w = FreeCADGui.Selection.getSelection()[0]
-                FreeCADGui.doCommand("FreeCAD.SketchArchPl = pl")
-                wPl = FreeCAD.SketchArchPl
-                SketchArch = True
-            else:
+            if self.baseFace is not None:
                 FreeCADGui.doCommand(
-                    "win = Arch.makeWindowPreset('"
-                    + WindowPresets[self.Preset]
-                    + "' "
-                    + wp
-                    + ", placement = pl)"
+                    "face = FreeCAD.ActiveDocument."
+                    + self.baseFace[0].Name
+                    + ".Shape.Faces["
+                    + str(self.baseFace[1])
+                    + "]"
                 )
-                SketchArch = False
+                FreeCADGui.doCommand(
+                    "pl = DraftGeomUtils.placement_from_face(face, vec_z = wp.axis)"
+                )
+            else:
+                FreeCADGui.doCommand("pl = FreeCAD.Placement()")
+                FreeCADGui.doCommand("pl.Rotation = FreeCAD.Rotation(wp.u, wp.axis, -wp.v, 'XZY')")
 
-        if self.Include:
-            if Draft.getType(host) in ALLOWEDHOSTS:
-                FreeCADGui.doCommand("win.Hosts = [FreeCAD.ActiveDocument." + host.Name + "]")
-                siblings = host.Proxy.getSiblings(host)
-                for sibling in siblings:
+            FreeCADGui.doCommand(
+                "pl.Base = FreeCAD.Vector("
+                + str(point.x)
+                + ", "
+                + str(point.y)
+                + ", "
+                + str(point.z)
+                + ")"
+            )
+
+            if self.baseFace is not None:
+                host = self.baseFace[0]
+            elif obj:
+                host = obj
+            else:
+                host = None
+
+            if self.Preset >= len(WindowPresets):
+                preset = False
+                # library object
+                col = self.doc.Objects
+                path = self.librarypresets[self.Preset - len(WindowPresets)][1]
+                FreeCADGui.doCommand("FreeCADGui.ActiveDocument.mergeProject(" + repr(path) + ")")
+                # find the latest added window
+                nol = self.doc.Objects
+                for o in nol[len(col) :]:
+                    if Draft.getType(o) == "Window":
+                        if Draft.getType(o.Base) != "Sketcher::SketchObject":
+                            _wrn(
+                                translate(
+                                    "Arch",
+                                    "Window not based on sketch. Window not aligned or resized.",
+                                )
+                            )
+                            self.Include = False
+                            break
+                        FreeCADGui.doCommand(
+                            "win = FreeCAD.ActiveDocument.getObject('" + o.Name + "')"
+                        )
+                        FreeCADGui.doCommand("win.Base.Placement = pl")
+                        # Historically, this normal was deduced by the orientation of the Base Sketch and hardcoded in the Normal property.
+                        # Now with the new AutoNormalReversed property/flag, set True as default, the auto Normal previously in opposite direction to is now consistent with that previously hardcoded.
+                        # With the normal set to 'auto', window object would not suffer weird shape if the Base Sketch is rotated by some reason.
+                        # Keep the property be 'auto' (0,0,0) here.
+                        # FreeCADGui.doCommand("win.Normal = pl.Rotation.multVec(FreeCAD.Vector(0, 0, -1))")
+                        FreeCADGui.doCommand("win.Width = " + str(self.Width))
+                        FreeCADGui.doCommand("win.Height = " + str(self.Height))
+                        FreeCADGui.doCommand("win.Base.recompute()")
+                        if not self.has_width_and_height_constraint(o.Base):
+                            _wrn(
+                                translate(
+                                    "Arch",
+                                    "No Width and/or Height constraint in window sketch. Window not resized.",
+                                )
+                            )
+                        break
+                else:
+                    _wrn(translate("Arch", "No window found. Cannot continue."))
+                    self.Include = False
+
+            else:
+                # preset
+                preset = True
+                wp = ""
+                for p in self.wparams:
+                    wp += ", " + p.lower() + "=" + str(getattr(self, p))
+                import ArchSketchObject
+
+                if (
+                    host
+                    and hasattr(host, "Base")
+                    and Draft.getType(host.Base) == "ArchSketch"
+                    and hasattr(ArchSketchObject, "attachToHost")
+                    and hasattr(FreeCAD, "ArchSketchLock")
+                    and FreeCAD.ArchSketchLock
+                ):
+                    if self.Include:
+                        # Window base sketch's placement stay at origin is good if addon exists and self.Include
+                        #
+                        # Put Sketch in 'upright' position to ensure the opening symbol on plan (SymbolPlan enabled) is correct
+                        # - see https://github.com/FreeCAD/FreeCAD/issues/24903#issuecomment-3475455946
+                        # placement = FreeCAD.Placement(App.Vector(0,0,0),App.Rotation(App.Vector(1,0,0),90))
+                        # TODO 2025.11.1 : To improve the algorithm to be more robust to allow the Base Sketch in any orientation but without problem
+                        FreeCADGui.doCommand(
+                            "pl90 = FreeCAD.Placement(App.Vector(0,0,0),App.Rotation(App.Vector(1,0,0),90))"
+                        )
+                        FreeCADGui.doCommand(
+                            "win = Arch.makeWindowPreset('"
+                            + WindowPresets[self.Preset]
+                            + "' "
+                            + wp
+                            + ", placement=pl90"
+                            + ")"
+                        )
+                    else:
+                        # Window base sketch's placement follow getPoint placement if addon exists but NOT self.Include
+                        FreeCADGui.doCommand(
+                            "win = Arch.makeWindowPreset('"
+                            + WindowPresets[self.Preset]
+                            + "' "
+                            + wp
+                            + ", placement=pl"
+                        )
+                        FreeCADGui.doCommand("win.AttachToAxisOrSketch = 'None'")
+                    FreeCADGui.doCommand("FreeCADGui.Selection.addSelection(win)")
+                    w = FreeCADGui.Selection.getSelection()[0]
+                    FreeCADGui.doCommand("FreeCAD.SketchArchPl = pl")
+                    wPl = FreeCAD.SketchArchPl
+                    SketchArch = True
+                else:
                     FreeCADGui.doCommand(
-                        "win.Hosts = win.Hosts + [FreeCAD.ActiveDocument." + sibling.Name + "]"
+                        "win = Arch.makeWindowPreset('"
+                        + WindowPresets[self.Preset]
+                        + "' "
+                        + wp
+                        + ", placement = pl)"
                     )
-                if SketchArch:
-                    ArchSketchObject.attachToHost(w, target=host, pl=wPl)
+                    SketchArch = False
 
-        self.doc.commitTransaction()
-        self.doc.recompute()
+            if self.Include:
+                if Draft.getType(host) in ALLOWEDHOSTS:
+                    FreeCADGui.doCommand("win.Hosts = [FreeCAD.ActiveDocument." + host.Name + "]")
+                    siblings = host.Proxy.getSiblings(host)
+                    for sibling in siblings:
+                        FreeCADGui.doCommand(
+                            "win.Hosts = win.Hosts + [FreeCAD.ActiveDocument." + sibling.Name + "]"
+                        )
+                    if SketchArch:
+                        ArchSketchObject.attachToHost(w, target=host, pl=wPl)
+
+            self.doc.commitTransaction()
+            self.doc.recompute()
         # gui_utils.end_all_events()  # Causes a crash on Linux.
         self.tracker.finalize()
         return
