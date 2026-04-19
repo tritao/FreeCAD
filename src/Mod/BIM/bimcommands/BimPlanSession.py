@@ -280,6 +280,13 @@ class PlanEditSession:
         self._provider_selected_objects = []
         self._provider_point_host_target = None
         self._provider_point_host_source = ""
+        self._provider_point_preview_trackers = []
+        self._provider_point_preview_render_state = None
+        self._provider_point_preview_style_state = None
+        self._provider_point_preview_source_point = None
+        self._provider_point_preview_point = None
+        self._provider_point_preview_host_target = None
+        self._provider_point_preview_host_source = ""
         self._secondary_selection_trackers = []
         self._space_region_pick_trackers = []
         self._selected_wall_opening_context_trackers = []
@@ -763,6 +770,7 @@ class PlanEditSession:
         self._clear_selected_space_overlay()
         self._clear_selected_region_overlay()
         self._clear_provider_overlays()
+        self._clear_provider_point_preview()
         self._clear_space_region_pick_overlays()
         self._clear_secondary_selected_overlays()
         self._clear_selected_wall_opening_context_overlay()
@@ -800,6 +808,12 @@ class PlanEditSession:
         self._provider_selected_objects = []
         self._provider_point_host_target = None
         self._provider_point_host_source = ""
+        self._provider_point_preview_render_state = None
+        self._provider_point_preview_style_state = None
+        self._provider_point_preview_source_point = None
+        self._provider_point_preview_point = None
+        self._provider_point_preview_host_target = None
+        self._provider_point_preview_host_source = ""
         self._secondary_selected_plan_targets_state = []
         self.hovered_wall = None
         self.hovered_opening = None
@@ -907,6 +921,7 @@ class PlanEditSession:
             self._clear_selected_space_overlay()
             self._clear_selected_region_overlay()
             self._clear_provider_overlays()
+            self._clear_provider_point_preview()
             self._clear_selected_wall_opening_context_overlay()
             self._clear_selected_opening_handles()
             self._discard_opening_handle_tracker_pool()
@@ -2708,6 +2723,7 @@ class PlanEditSession:
         try:
             snapper.getPoint(
                 callback=self._handle_provider_point_tool_point,
+                movecallback=self._update_provider_point_tool_preview,
                 title=self._get_provider_point_tool_prompt(),
                 noTracker=True,
             )
@@ -2719,11 +2735,13 @@ class PlanEditSession:
 
     def _cancel_provider_point_tool(self, refresh=True):
         if not self._has_active_provider_point_tool():
+            self._clear_provider_point_preview()
             return False
         self._stop_snapper()
         self._provider_point_tool = None
         self._provider_point_host_target = None
         self._provider_point_host_source = ""
+        self._clear_provider_point_preview()
         FreeCAD.activeDraftCommand = None
         self.current_tool = "Select"
         if refresh:
@@ -2758,6 +2776,7 @@ class PlanEditSession:
         self._clear_selected_wall_opening_context_overlay()
         self._clear_selected_opening_handles()
         self._clear_selected_symbol_handles()
+        self._clear_provider_point_preview()
         host_kind, host_obj, host_source = self._get_provider_point_context_host_state()
         self._provider_point_host_target = (host_kind, host_obj)
         self._provider_point_host_source = host_source
@@ -2782,6 +2801,7 @@ class PlanEditSession:
             return
         plan_point = self._project_plan_point(point)
         if plan_point is None:
+            self._clear_provider_point_preview()
             self._arm_provider_point_tool()
             return
         tool = self._provider_point_tool
@@ -2800,8 +2820,44 @@ class PlanEditSession:
             transaction_label=getattr(tool, "transaction_label", ""),
             payload=payload,
         )
+        self._clear_provider_point_preview()
         if self._has_active_provider_point_tool():
             self._arm_provider_point_tool()
+
+    def _update_provider_point_tool_preview(self, point=None, obj=None):
+        if not self._has_active_provider_point_tool():
+            self._clear_provider_point_preview()
+            return
+        if point is None:
+            self._clear_provider_point_preview()
+            return
+        plan_point = self._project_plan_point(point)
+        if plan_point is None:
+            self._clear_provider_point_preview()
+            return
+        snap_info = self._get_provider_point_snap_info()
+        snap_object = self._resolve_provider_point_snap_object(obj, snap_info)
+        snap_target = (None, None)
+        if snap_object is not None:
+            snap_target = self._get_plan_target_for_object(snap_object)
+        host_kind, host_obj, host_source = self._get_provider_point_payload_host_target(
+            snap_target=snap_target,
+            selected_target=self._get_selected_plan_target(),
+            selected_targets=self._get_selected_plan_targets(),
+            hovered_target=self._get_hovered_plan_target(),
+        )
+        placement_point = (
+            self._project_provider_point_to_host(plan_point, host_obj)
+            if host_kind == "wall"
+            else None
+        )
+        if placement_point is None:
+            placement_point = plan_point
+        self._provider_point_preview_source_point = plan_point
+        self._provider_point_preview_point = placement_point
+        self._provider_point_preview_host_target = (host_kind, host_obj)
+        self._provider_point_preview_host_source = host_source
+        self._sync_provider_point_preview()
 
     def _get_provider_point_snap_info(self):
         snapper = getattr(FreeCADGui, "Snapper", None)
@@ -5137,6 +5193,7 @@ class PlanEditSession:
                 return
             if self.current_tool == "Provider Point":
                 self._sync_provider_overlays()
+                self._sync_provider_point_preview()
                 return
             if self.current_tool != "Select":
                 return
@@ -5194,6 +5251,7 @@ class PlanEditSession:
             self._clear_selected_space_overlay()
             self._clear_selected_region_overlay()
             self._clear_provider_overlays()
+            self._clear_provider_point_preview()
             self._clear_secondary_selected_overlays()
             self._clear_selected_opening_handles()
             self._clear_selected_symbol_handles()
@@ -5214,6 +5272,7 @@ class PlanEditSession:
             self._clear_selected_space_overlay()
             self._clear_selected_region_overlay()
             self._clear_provider_overlays()
+            self._clear_provider_point_preview()
             self._clear_secondary_selected_overlays()
             self._clear_selected_opening_handles()
             self._clear_selected_symbol_handles()
@@ -5233,6 +5292,7 @@ class PlanEditSession:
             self._clear_selected_symbol_overlay()
             self._clear_selected_region_overlay()
             self._clear_provider_overlays()
+            self._clear_provider_point_preview()
             self._clear_secondary_selected_overlays()
             self._clear_selected_opening_handles()
             self._clear_selected_symbol_handles()
@@ -5256,6 +5316,7 @@ class PlanEditSession:
             self._clear_selected_space_overlay()
             self._clear_selected_region_overlay()
             self._clear_provider_overlays()
+            self._clear_provider_point_preview()
             self._clear_selected_opening_handles()
             self._clear_selected_symbol_handles()
             self._clear_selected_wall_opening_context_overlay()
@@ -5288,6 +5349,7 @@ class PlanEditSession:
             self._clear_wall_grips()
             if refresh_all or _PLAN_VISUAL_PROVIDER_OVERLAYS in dirty:
                 self._sync_provider_overlays()
+            self._sync_provider_point_preview()
             return
         if self.current_tool == "Select":
             self._clear_space_region_pick_overlays()
@@ -5322,6 +5384,7 @@ class PlanEditSession:
                 self._sync_wall_grips()
             if refresh_all or _PLAN_VISUAL_PROVIDER_OVERLAYS in dirty:
                 self._sync_provider_overlays()
+            self._clear_provider_point_preview()
             return
 
     def _on_key_pressed(self, event_callback):
@@ -7543,6 +7606,12 @@ class PlanEditSession:
 
     def _clear_provider_overlays(self):
         return provider_overlays.clear_provider_overlays(self)
+
+    def _sync_provider_point_preview(self):
+        return provider_overlays.sync_provider_point_preview(self)
+
+    def _clear_provider_point_preview(self):
+        return provider_overlays.clear_provider_point_preview(self)
 
     def _sync_hovered_opening_overlay(self):
         return opening_overlays.sync_hovered_opening_overlay(self)
