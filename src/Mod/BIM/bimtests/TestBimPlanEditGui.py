@@ -1101,7 +1101,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertIsNone(main_window.findChild(QtGui.QWidget, "BIMPlanEditContextControls"))
 
-    def test_plan_edit_disables_external_window_command_action(self):
+    def test_plan_edit_disables_external_command_actions(self):
         """External commands should not stay available while Plan Edit owns interaction."""
 
         from PySide import QtGui
@@ -1112,28 +1112,53 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         action.setObjectName("Arch_Window")
         action.setEnabled(True)
         main_window.addAction(action)
+        command_action = QtGui.QAction()
+        command_action.setObjectName("Arch_Wall")
+        command_action.setEnabled(True)
+        original_command = FreeCADGui.Command
+
+        class _FakeCommand:
+            def getAction(self):
+                return [command_action]
+
+        class _CommandNamespace:
+            def get(self, command_name):
+                if command_name == "Arch_Wall":
+                    return _FakeCommand()
+                return original_command.get(command_name)
+
         session = None
 
         try:
-            session = BimPlanSession.start_session()
-            self.assertIsNotNone(session)
-            self.pump_gui_events()
+            with patch.object(command_gate.FreeCADGui, "Command", _CommandNamespace()):
+                session = BimPlanSession.start_session()
+                self.assertIsNotNone(session)
+                self.pump_gui_events()
 
-            self.assertTrue(command_gate.is_command_blocked("Arch_Window"))
-            self.assertFalse(action.isEnabled())
+                self.assertTrue(command_gate.is_command_blocked("Arch_Window"))
+                self.assertFalse(action.isEnabled())
+                self.assertFalse(command_action.isEnabled())
 
-            session.shutdown(close_dialog=False)
-            session = None
-            self.pump_gui_events()
+                action.setEnabled(True)
+                command_action.setEnabled(True)
+                self.pump_gui_events()
+                self.assertFalse(action.isEnabled())
+                self.assertFalse(command_action.isEnabled())
+
+                session.shutdown(close_dialog=False)
+                session = None
+                self.pump_gui_events()
 
             self.assertFalse(command_gate.is_command_blocked("Arch_Window"))
             self.assertTrue(action.isEnabled())
+            self.assertTrue(command_action.isEnabled())
         finally:
             if session is not None:
                 session.shutdown(close_dialog=False, teardown=True)
             command_gate.uninstall()
             main_window.removeAction(action)
             action.deleteLater()
+            command_action.deleteLater()
 
     def test_plan_edit_hides_joined_wall_additions(self):
         """Joined child walls should stay hidden so their footprints do not overdraw the host."""

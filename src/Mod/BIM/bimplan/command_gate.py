@@ -36,6 +36,8 @@ BLOCKED_COMMANDS = (
 
 _active_session = None
 _saved_action_states = {}
+_disabled_action_callbacks = {}
+_refresh_queued = False
 
 
 def _external_commands_allowed():
@@ -76,6 +78,7 @@ def install(session):
     if _external_commands_allowed():
         return
     refresh()
+    refresh_later()
 
 
 def refresh():
@@ -83,16 +86,43 @@ def refresh():
         return
     for command_name in BLOCKED_COMMANDS:
         for action in _find_command_actions(command_name):
-            _disable_action(action)
+            _disable_action(command_name, action)
+
+
+def refresh_later():
+    global _refresh_queued
+
+    if _refresh_queued:
+        return
+    try:
+        from PySide import QtCore
+    except Exception:
+        return
+
+    _refresh_queued = True
+
+    def _run_refresh():
+        global _refresh_queued
+
+        _refresh_queued = False
+        refresh()
+
+    for delay in (0, 50, 250):
+        try:
+            QtCore.QTimer.singleShot(delay, _run_refresh)
+        except Exception:
+            pass
 
 
 def uninstall(session=None):
-    global _active_session
+    global _active_session, _refresh_queued
 
     if session is not None and _active_session is not None and _active_session is not session:
         return
+    _disconnect_actions()
     _restore_actions()
     _active_session = None
+    _refresh_queued = False
 
 
 def _main_window():
@@ -105,11 +135,21 @@ def _main_window():
 def _find_command_actions(command_name):
     from PySide import QtGui
 
+    actions = []
+    try:
+        command = FreeCADGui.Command.get(command_name)
+    except Exception:
+        command = None
+    if command is not None:
+        try:
+            actions.extend(command.getAction())
+        except Exception:
+            pass
+
     main_window = _main_window()
     if main_window is None:
-        return ()
+        return _unique_actions(actions)
 
-    actions = []
     try:
         actions.extend(main_window.findChildren(QtGui.QAction, command_name))
     except Exception:
@@ -122,6 +162,10 @@ def _find_command_actions(command_name):
         if action is not None:
             actions.append(action)
 
+    return _unique_actions(actions)
+
+
+def _unique_actions(actions):
     seen = set()
     unique_actions = []
     for action in actions:
@@ -133,17 +177,67 @@ def _find_command_actions(command_name):
     return tuple(unique_actions)
 
 
-def _disable_action(action):
+def _disable_action(command_name, action):
     action_key = id(action)
     if action_key not in _saved_action_states:
         try:
             _saved_action_states[action_key] = (action, bool(action.isEnabled()))
         except Exception:
             return
+    if action_key not in _disabled_action_callbacks:
+        _connect_action_guard(command_name, action)
     try:
-        action.setEnabled(False)
+        if action.isEnabled():
+            action.setEnabled(False)
     except Exception:
         pass
+
+
+def _connect_action_guard(command_name, action):
+    action_key = id(action)
+
+    def _reenforce_disabled_state():
+        if not is_command_blocked(command_name):
+            return
+        try:
+            if action.isEnabled():
+                action.setEnabled(False)
+        except Exception:
+            pass
+
+    def _discard_action_state():
+        _saved_action_states.pop(action_key, None)
+        _disabled_action_callbacks.pop(action_key, None)
+
+    try:
+        action.changed.connect(_reenforce_disabled_state)
+    except Exception:
+        return
+    try:
+        action.destroyed.connect(_discard_action_state)
+    except Exception:
+        pass
+    _disabled_action_callbacks[action_key] = (
+        action,
+        _reenforce_disabled_state,
+        _discard_action_state,
+    )
+
+
+def _disconnect_actions():
+    global _disabled_action_callbacks
+
+    callbacks = _disabled_action_callbacks
+    _disabled_action_callbacks = {}
+    for action, changed_callback, destroyed_callback in callbacks.values():
+        try:
+            action.changed.disconnect(changed_callback)
+        except Exception:
+            pass
+        try:
+            action.destroyed.disconnect(destroyed_callback)
+        except Exception:
+            pass
 
 
 def _restore_actions():
