@@ -92,6 +92,7 @@ class PlanEditControlsWidget:
                 (
                     ("wall_button", "Wall", self.on_wall_clicked),
                     ("rect_wall_button", "Rect Wall", self.on_rect_wall_clicked),
+                    ("window_button", "Window", self.on_window_clicked),
                 ),
                 (
                     ("space_button", "Space", self.on_space_clicked),
@@ -136,6 +137,7 @@ class PlanEditControlsWidget:
             self.select_button,
             self.wall_button,
             self.rect_wall_button,
+            self.window_button,
             self.space_button,
             self.region_button,
             self.separator_button,
@@ -1403,6 +1405,7 @@ class PlanEditControlsWidget:
         self.select_button = None
         self.wall_button = None
         self.rect_wall_button = None
+        self.window_button = None
         self.space_button = None
         self.region_button = None
         self.separator_button = None
@@ -1596,15 +1599,18 @@ class PlanEditControlsWidget:
                 "BIM_PlanEdit",
                 "Click two points to place a room divider that can split Arch Spaces.",
             )
+        elif tool == "Window":
+            selection_state = translate("BIM_PlanEdit", "Window: place on wall")
+            selection_help = translate(
+                "BIM_PlanEdit",
+                "Click along the selected or hovered wall to place a hosted window.",
+            )
         elif tool == "Provider Point":
             selection_state = self.session._get_provider_point_tool_label()
             selection_help = self.session._get_provider_point_tool_prompt()
         elif selected_kind == "opening" and selected_obj is not None:
             selection_state = selected_state
-            selection_help = translate(
-                "BIM_PlanEdit",
-                "Use in-view handles to move or flip the selected opening.",
-            )
+            selection_help = self.session._format_opening_selection_help(selected_obj)
         elif selected_kind == "symbol" and selected_obj is not None:
             selection_state = selected_state
             if self.session.current_tool == "Rotate Symbol":
@@ -1707,6 +1713,7 @@ class PlanEditControlsWidget:
         selected_kind, selected_obj = self.session._get_selected_plan_target()
         current_tool = self.session.current_tool
         has_wall = selected_kind == "wall" and selected_obj is not None
+        can_place_window = self.session.can_place_plan_window()
         in_join_mode = current_tool == "Join"
         join_candidate = (
             self.session._get_plan_candidate_joint() is not None if in_join_mode else False
@@ -1753,6 +1760,19 @@ class PlanEditControlsWidget:
         else:
             unjoin_tip = translate("BIM_PlanEdit", "Remove the hovered existing wall joint.")
         self._set_widget_tooltip(self.unjoin_button, unjoin_tip)
+        self._set_widget_visible(self.window_button, can_place_window or current_tool == "Window")
+        self._set_widget_enabled(self.window_button, enabled and can_place_window)
+        self._set_widget_tooltip(
+            self.window_button,
+            (
+                translate(
+                    "BIM_PlanEdit",
+                    "Place a hosted window on the selected or hovered wall.",
+                )
+                if can_place_window
+                else translate("BIM_PlanEdit", "Select or hover a wall before placing a window.")
+            ),
+        )
 
     def refresh_from_session(self, defer_integrations=False, refresh_integrations=True):
         with self.session._plan_perf_trace_span("refresh_task_panel_widget"):
@@ -1922,6 +1942,7 @@ class PlanEditControlsWidget:
             self.select_button,
             self.wall_button,
             self.rect_wall_button,
+            self.window_button,
             self.space_button,
             self.region_button,
             self.separator_button,
@@ -2003,6 +2024,9 @@ class PlanEditControlsWidget:
 
     def on_rect_wall_clicked(self):
         self.session.activate_rect_wall_tool()
+
+    def on_window_clicked(self):
+        self.session.activate_window_tool()
 
     def on_space_clicked(self):
         self.session.activate_space_tool()

@@ -1928,6 +1928,87 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertEqual(len(session._opening_handle_trackers), 3)
 
+    def test_plan_edit_window_tool_creates_hosted_window_on_selected_wall(self):
+        """The Plan Edit Window tool should create a real hosted Arch Window."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ):
+            self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+            self.assertTrue(session.can_place_plan_window())
+
+            before = {obj.Name for obj in self.document.Objects}
+            self.assertTrue(session.activate_window_tool())
+            self.assertEqual(session.current_tool, "Window")
+            self.assertIs(session._window_host_wall, wall)
+            self.assertIn("callback", captured)
+            self.assertIn("movecallback", captured)
+
+            point = FreeCAD.Vector(1200, 100, 0)
+            captured["movecallback"](point, None)
+            self.assertEqual(4, len(session._window_preview_trackers))
+
+            captured["callback"](point, None)
+
+        self.pump_gui_events()
+
+        created = [obj for obj in self.document.Objects if obj.Name not in before]
+        windows = [
+            obj
+            for obj in created
+            if getattr(obj, "IfcType", "") == "Window" and session._is_hosted_opening_object(obj)
+        ]
+        self.assertEqual(1, len(windows))
+
+        window = windows[0]
+        self.assertIn(wall, window.Hosts)
+        self.assertIn(level, window.InListRecursive)
+        self.assertAlmostEqual(float(getattr(window.Width, "Value", window.Width)), 900.0)
+        self.assertAlmostEqual(float(getattr(window.Height, "Value", window.Height)), 1200.0)
+        self.assertEqual(session.current_tool, "Select")
+        self._assert_selected_plan_target(session, "opening", window)
+
+    def test_plan_edit_selected_window_status_uses_window_label(self):
+        """Hosted windows should be labelled as windows, not generic openings."""
+
+        level, wall, window = self._make_windowed_plan_wall()
+        del wall
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, window.Name)
+        self.pump_gui_events()
+        session._refresh_primary_selected_plan_target()
+
+        self._assert_selected_plan_target(session, "opening", window)
+        self.assertTrue(
+            session._format_plan_target_selection_state("opening", window).startswith("Window:")
+        )
+        self.assertIn("selected window", session._format_opening_selection_help(window))
+
     def test_plan_edit_ctrl_click_adds_wall_to_selection_without_replacing_primary_target(self):
         """Ctrl-click should build a wall selection set while keeping the current primary wall."""
 
