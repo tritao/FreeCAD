@@ -2664,6 +2664,486 @@ def getBoundaryFaceRegionCandidates(boundary_faces, label=None, boundary_count=N
     )
 
 
+_SPACE_TEXT_CANDIDATE_RATIOS = (0.5, 0.38, 0.62, 0.25, 0.75, 0.12, 0.88)
+
+
+def _get_length_value(value, default=0.0):
+    try:
+        return float(value.Value)
+    except Exception:
+        try:
+            return float(value)
+        except Exception:
+            return default
+
+
+def _get_object_global_placement(obj):
+    if not obj:
+        return FreeCAD.Placement()
+    if hasattr(obj, "getGlobalPlacement"):
+        try:
+            placement = obj.getGlobalPlacement()
+            if placement is not None:
+                return placement
+        except Exception:
+            pass
+    return getattr(obj, "Placement", FreeCAD.Placement())
+
+
+def _get_linked_object(obj):
+    if not obj or getattr(obj, "TypeId", "") != "App::Link":
+        return None
+    linked = getattr(obj, "LinkedObject", None)
+    if linked is not None:
+        return linked
+    if hasattr(obj, "getLinkedObject"):
+        try:
+            return obj.getLinkedObject(True)
+        except TypeError:
+            try:
+                return obj.getLinkedObject()
+            except Exception:
+                return None
+        except Exception:
+            return None
+    return None
+
+
+def _is_direct_equipment_object(obj):
+    if not obj:
+        return False
+    try:
+        if Draft.getType(obj) == "Equipment":
+            return True
+    except Exception:
+        pass
+    proxy = getattr(obj, "Proxy", None)
+    return getattr(proxy, "Type", None) == "Equipment"
+
+
+def _has_authored_plan_symbols(obj):
+    try:
+        if "PlanSymbols" not in (getattr(obj, "PropertiesList", []) or []):
+            return False
+        return any(symbol is not None for symbol in (getattr(obj, "PlanSymbols", []) or []))
+    except Exception:
+        return False
+
+
+def _get_space_label_obstacle_semantic_object(obj):
+    if not obj:
+        return None
+    try:
+        if getattr(obj, "IsLibraryDefinition", False) and getattr(obj, "TypeId", "") != "App::Link":
+            return None
+    except Exception:
+        pass
+    view_object = getattr(obj, "ViewObject", None)
+    if view_object is not None:
+        try:
+            if not view_object.Visibility:
+                return None
+        except Exception:
+            pass
+
+    semantic = obj
+    seen = set()
+    while getattr(semantic, "TypeId", "") == "App::Link":
+        name = getattr(semantic, "Name", None)
+        if name in seen:
+            break
+        if name:
+            seen.add(name)
+        linked = _get_linked_object(semantic)
+        if linked is None or linked is semantic:
+            break
+        semantic = linked
+
+    if _is_direct_equipment_object(semantic):
+        return semantic
+    return None
+
+
+def _vector_from_point(point):
+    if isinstance(point, FreeCAD.Vector):
+        return FreeCAD.Vector(point)
+    try:
+        z_value = point[2] if len(point) > 2 else 0.0
+        return FreeCAD.Vector(point[0], point[1], z_value)
+    except Exception:
+        return None
+
+
+def _iter_equipment_local_plan_points(equipment):
+    view_object = getattr(equipment, "ViewObject", None)
+    view_proxy = getattr(view_object, "Proxy", None) if view_object else None
+    if view_proxy and hasattr(view_proxy, "_collect_local_footprint_polylines"):
+        try:
+            yielded = False
+            for polyline in view_proxy._collect_local_footprint_polylines() or []:
+                for point in polyline:
+                    vector = _vector_from_point(point)
+                    if vector is not None:
+                        yielded = True
+                        yield vector
+            if yielded:
+                return
+        except Exception:
+            pass
+
+    if not _has_authored_plan_symbols(equipment):
+        return
+
+    try:
+        import ArchEquipment
+
+        shapes = ArchEquipment.get_plan_representation_shapes(equipment)
+    except Exception:
+        shapes = ()
+
+    for shape in shapes or ():
+        vertices = getattr(shape, "Vertexes", None) or ()
+        if vertices:
+            for vertex in vertices:
+                point = getattr(vertex, "Point", None)
+                if point is not None:
+                    yield FreeCAD.Vector(point)
+            continue
+        try:
+            bb = shape.BoundBox
+            for x in (bb.XMin, bb.XMax):
+                for y in (bb.YMin, bb.YMax):
+                    yield FreeCAD.Vector(x, y, bb.ZMin)
+        except Exception:
+            pass
+
+
+def _bounds_from_points(points):
+    points = list(points or ())
+    if not points:
+        return None
+    return (
+        min(float(point.x) for point in points),
+        min(float(point.y) for point in points),
+        max(float(point.x) for point in points),
+        max(float(point.y) for point in points),
+        min(float(point.z) for point in points),
+        max(float(point.z) for point in points),
+    )
+
+
+def _bounds_center(bounds):
+    return FreeCAD.Vector(
+        (bounds[0] + bounds[2]) * 0.5,
+        (bounds[1] + bounds[3]) * 0.5,
+        (bounds[4] + bounds[5]) * 0.5,
+    )
+
+
+def _bounds_intersect_xy(first, second):
+    return not (
+        first[2] < second[0] or first[0] > second[2] or first[3] < second[1] or first[1] > second[3]
+    )
+
+
+def _bounds_intersection_area_xy(first, second):
+    if not _bounds_intersect_xy(first, second):
+        return 0.0
+    return max(0.0, min(first[2], second[2]) - max(first[0], second[0])) * max(
+        0.0,
+        min(first[3], second[3]) - max(first[1], second[1]),
+    )
+
+
+def _bounds_distance_xy(first, second):
+    dx = max(second[0] - first[2], first[0] - second[2], 0.0)
+    dy = max(second[1] - first[3], first[1] - second[3], 0.0)
+    return math.hypot(dx, dy)
+
+
+def _point_in_polyline_xy(point, polyline):
+    points = list(polyline or ())
+    if len(points) < 3:
+        return False
+    inside = False
+    x = float(point.x)
+    y = float(point.y)
+    previous = points[-1]
+    for current in points:
+        x1 = float(previous.x)
+        y1 = float(previous.y)
+        x2 = float(current.x)
+        y2 = float(current.y)
+        crosses = (y1 > y) != (y2 > y)
+        if crosses:
+            x_at_y = (x2 - x1) * (y - y1) / ((y2 - y1) or 1e-12) + x1
+            if x < x_at_y:
+                inside = not inside
+        previous = current
+    return inside
+
+
+def _point_in_space_footprint(faces, point):
+    for face in faces or ():
+        try:
+            bb = face.BoundBox
+            if (
+                point.x < bb.XMin - 0.001
+                or point.x > bb.XMax + 0.001
+                or point.y < bb.YMin - 0.001
+                or point.y > bb.YMax + 0.001
+            ):
+                continue
+            test_point = FreeCAD.Vector(point.x, point.y, face.CenterOfMass.z)
+            if face.isInside(test_point, 0.001, True):
+                return True
+        except Exception:
+            pass
+        try:
+            for polyline in ArchPlanGeometry.get_face_wire_polylines([face]):
+                if _point_in_polyline_xy(point, polyline):
+                    return True
+        except Exception:
+            pass
+    return False
+
+
+def _bounds_touches_space_footprint(faces, bounds):
+    center = _bounds_center(bounds)
+    if _point_in_space_footprint(faces, center):
+        return True
+    for x in (bounds[0], bounds[2]):
+        for y in (bounds[1], bounds[3]):
+            if _point_in_space_footprint(faces, FreeCAD.Vector(x, y, center.z)):
+                return True
+    return False
+
+
+def _get_space_footprint_faces(space):
+    proxy = getattr(space, "Proxy", None)
+    if proxy and hasattr(proxy, "getFootprint"):
+        try:
+            faces = proxy.getFootprint(space) or ()
+            if faces:
+                return tuple(faces)
+        except Exception:
+            pass
+    shape = getattr(space, "Shape", None)
+    return tuple(getattr(shape, "Faces", []) or ())
+
+
+def _get_default_space_text_position(space):
+    try:
+        shape = space.Shape
+        pos = shape.CenterOfMass
+        return FreeCAD.Vector(pos.x, pos.y, shape.BoundBox.ZMin)
+    except (AttributeError, RuntimeError):
+        return FreeCAD.Vector()
+
+
+def _estimate_space_text_box(vobj):
+    text_lines = []
+    for line in getattr(vobj, "Text", []) or []:
+        line = str(line or "")
+        if not line:
+            continue
+        if hasattr(vobj, "Object"):
+            line = line.replace("$label", getattr(vobj.Object, "Label", ""))
+            if "$area" in line and hasattr(vobj.Object, "Area"):
+                area_value = _get_length_value(getattr(vobj.Object, "Area", 0.0))
+                line = line.replace("$area", "{:.2f}".format(area_value))
+        text_lines.append(line)
+    if not text_lines:
+        text_lines = [getattr(getattr(vobj, "Object", None), "Label", "") or " "]
+
+    font_size = max(_get_length_value(getattr(vobj, "FontSize", 0.0), 1.0), 1.0)
+    first_line = max(_get_length_value(getattr(vobj, "FirstLine", font_size), font_size), 1.0)
+    line_spacing = max(float(getattr(vobj, "LineSpacing", 1.0) or 1.0), 0.1)
+
+    widths = []
+    for index, line in enumerate(text_lines):
+        size = first_line if index == 0 else font_size
+        widths.append(max(1, len(line)) * size * 0.58)
+    width = max(widths or [font_size])
+    below = font_size * 0.6 * max(1, len(text_lines) - 1)
+    above = first_line * line_spacing + font_size * line_spacing * max(0, len(text_lines) - 2)
+    padding = max(font_size, first_line) * 0.35
+    return {
+        "width": width + padding * 2.0,
+        "below": below + padding,
+        "above": above + padding,
+        "padding": padding,
+    }
+
+
+def _get_label_candidate_bounds(point, text_box, text_align="Center"):
+    width = float(text_box.get("width", 0.0) or 0.0)
+    below = float(text_box.get("below", 0.0) or 0.0)
+    above = float(text_box.get("above", 0.0) or 0.0)
+    if text_align == "Left":
+        xmin = point.x
+        xmax = point.x + width
+    elif text_align == "Right":
+        xmin = point.x - width
+        xmax = point.x
+    else:
+        xmin = point.x - width * 0.5
+        xmax = point.x + width * 0.5
+    return (xmin, point.y - below, xmax, point.y + above, point.z, point.z)
+
+
+def _iter_space_text_candidates(default_point, space_bounds):
+    seen = set()
+
+    def add(point):
+        key = (round(float(point.x), 6), round(float(point.y), 6), round(float(point.z), 6))
+        if key in seen:
+            return
+        seen.add(key)
+        yield point
+
+    for point in add(default_point):
+        yield point
+
+    x_min, y_min, x_max, y_max, z_min, _z_max = space_bounds
+    if abs(x_max - x_min) < 1e-6 or abs(y_max - y_min) < 1e-6:
+        return
+    for y_ratio in _SPACE_TEXT_CANDIDATE_RATIOS:
+        for x_ratio in _SPACE_TEXT_CANDIDATE_RATIOS:
+            point = FreeCAD.Vector(
+                x_min + (x_max - x_min) * x_ratio,
+                y_min + (y_max - y_min) * y_ratio,
+                z_min,
+            )
+            for candidate in add(point):
+                yield candidate
+
+
+def _collect_space_label_obstacle_bounds(space, faces):
+    doc = getattr(space, "Document", None) or FreeCAD.ActiveDocument
+    if doc is None:
+        return ()
+    try:
+        space_bb = space.Shape.BoundBox
+        space_bounds = (
+            float(space_bb.XMin),
+            float(space_bb.YMin),
+            float(space_bb.XMax),
+            float(space_bb.YMax),
+            float(space_bb.ZMin),
+            float(space_bb.ZMax),
+        )
+    except Exception:
+        space_bounds = None
+    obstacles = []
+    for obj in getattr(doc, "Objects", []) or []:
+        if obj is space:
+            continue
+        semantic = _get_space_label_obstacle_semantic_object(obj)
+        if semantic is None or semantic is space:
+            continue
+        local_points = list(_iter_equipment_local_plan_points(semantic))
+        if not local_points:
+            continue
+        placement = _get_object_global_placement(obj)
+        try:
+            global_points = [placement.multVec(point) for point in local_points]
+        except Exception:
+            continue
+        bounds = _bounds_from_points(global_points)
+        if bounds is None:
+            continue
+        if space_bounds is not None and not _bounds_intersect_xy(space_bounds, bounds):
+            continue
+        if space_bounds is not None and (
+            bounds[5] < space_bounds[4] - 1.0 or bounds[4] > space_bounds[5] + 1.0
+        ):
+            continue
+        if not _bounds_touches_space_footprint(faces, bounds):
+            continue
+        obstacles.append(bounds)
+    return tuple(obstacles)
+
+
+def _score_space_text_candidate(
+    point, default_point, candidate_bounds, obstacle_bounds, space_bounds
+):
+    overlap_area = sum(
+        _bounds_intersection_area_xy(candidate_bounds, obstacle) for obstacle in obstacle_bounds
+    )
+    if obstacle_bounds:
+        clearance = min(
+            _bounds_distance_xy(candidate_bounds, obstacle) for obstacle in obstacle_bounds
+        )
+    else:
+        clearance = 0.0
+    center_distance = math.hypot(point.x - default_point.x, point.y - default_point.y)
+    boundary_margin = min(
+        point.x - space_bounds[0],
+        space_bounds[2] - point.x,
+        point.y - space_bounds[1],
+        space_bounds[3] - point.y,
+    )
+    return (
+        1 if overlap_area <= 1e-6 else 0,
+        -overlap_area,
+        -center_distance,
+        clearance,
+        boundary_margin,
+    )
+
+
+def _get_automatic_space_text_position(space, text_box=None, text_align="Center"):
+    default_point = _get_default_space_text_position(space)
+    faces = _get_space_footprint_faces(space)
+    if not faces:
+        return default_point
+    obstacles = _collect_space_label_obstacle_bounds(space, faces)
+    if not obstacles:
+        return default_point
+    text_box = text_box or {"width": 0.0, "below": 0.0, "above": 0.0, "padding": 0.0}
+    default_bounds = _get_label_candidate_bounds(default_point, text_box, text_align)
+    if all(not _bounds_intersect_xy(default_bounds, obstacle) for obstacle in obstacles):
+        return default_point
+
+    try:
+        shape_bounds = space.Shape.BoundBox
+        space_bounds = (
+            float(shape_bounds.XMin),
+            float(shape_bounds.YMin),
+            float(shape_bounds.XMax),
+            float(shape_bounds.YMax),
+            float(shape_bounds.ZMin),
+            float(shape_bounds.ZMax),
+        )
+    except Exception:
+        return default_point
+
+    best_point = default_point
+    best_score = _score_space_text_candidate(
+        default_point,
+        default_point,
+        default_bounds,
+        obstacles,
+        space_bounds,
+    )
+    for candidate in _iter_space_text_candidates(default_point, space_bounds):
+        if not _point_in_space_footprint(faces, candidate):
+            continue
+        candidate_bounds = _get_label_candidate_bounds(candidate, text_box, text_align)
+        score = _score_space_text_candidate(
+            candidate,
+            default_point,
+            candidate_bounds,
+            obstacles,
+            space_bounds,
+        )
+        if score > best_score:
+            best_point = candidate
+            best_score = score
+    return best_point
+
+
 class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
     "A View Provider for Section Planes"
 
@@ -2930,12 +3410,12 @@ class _ViewProviderSpace(ArchComponent.ViewProviderComponent):
             import DraftVecUtils
 
             if DraftVecUtils.isNull(vobj.TextPosition):
-                try:
-                    pos = vobj.Object.Shape.CenterOfMass
-                    z = vobj.Object.Shape.BoundBox.ZMin
-                    pos = FreeCAD.Vector(pos.x, pos.y, z)
-                except (AttributeError, RuntimeError):
-                    pos = FreeCAD.Vector()
+                text_align = getattr(vobj, "TextAlign", "Center")
+                pos = _get_automatic_space_text_position(
+                    vobj.Object,
+                    text_box=_estimate_space_text_box(vobj),
+                    text_align=text_align,
+                )
             else:
                 pos = vobj.Object.Placement.multVec(vobj.TextPosition)
         # placement's displacement will be already added by the coin node

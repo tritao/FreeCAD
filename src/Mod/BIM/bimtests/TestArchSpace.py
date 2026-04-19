@@ -104,6 +104,46 @@ class TestArchSpace(TestArchBase.TestArchBase):
             if getattr(face, "ElementMapVersion", "") != "":
                 self.assertEqual(face.ElementMapSize, 0)
 
+    def test_space_auto_text_position_avoids_linked_plan_symbol_footprint(self):
+        operation = "Checking Arch Space automatic text avoids plan symbols..."
+        self.printTestMessage(operation)
+
+        base = App.ActiveDocument.addObject("Part::Feature", "SpaceLabelAvoidanceBase")
+        base.Shape = Part.makeBox(6000, 4000, 2500)
+        space = Arch.makeSpace(base, name="Living Room")
+
+        plan_symbol = App.ActiveDocument.addObject("Part::Feature", "CenteredPlanSymbol")
+        plan_symbol.Shape = Part.makeBox(900, 900, 1)
+        equipment = Arch.makeEquipment(name="Dining Table Definition")
+        equipment.PlanSymbols = [plan_symbol]
+        equipment.addProperty("App::PropertyBool", "IsLibraryDefinition", "Test")
+        equipment.IsLibraryDefinition = True
+
+        symbol_link = App.ActiveDocument.addObject("App::Link", "DiningTableSymbol")
+        symbol_link.LinkedObject = equipment
+        symbol_link.Placement = App.Placement(App.Vector(2550, 1550, 0), App.Rotation())
+        App.ActiveDocument.recompute()
+
+        text_box = {"width": 900.0, "below": 450.0, "above": 450.0, "padding": 0.0}
+        default_point = ArchSpace._get_default_space_text_position(space)
+        default_bounds = ArchSpace._get_label_candidate_bounds(default_point, text_box, "Center")
+        faces = ArchSpace._get_space_footprint_faces(space)
+        obstacle_bounds = ArchSpace._collect_space_label_obstacle_bounds(space, faces)
+
+        self.assertEqual(len(obstacle_bounds), 1)
+        self.assertTrue(ArchSpace._bounds_intersect_xy(default_bounds, obstacle_bounds[0]))
+
+        text_point = ArchSpace._get_automatic_space_text_position(
+            space,
+            text_box=text_box,
+            text_align="Center",
+        )
+        text_bounds = ArchSpace._get_label_candidate_bounds(text_point, text_box, "Center")
+
+        self.assertTrue(ArchSpace._point_in_space_footprint(faces, text_point))
+        self.assertFalse(ArchSpace._bounds_intersect_xy(text_bounds, obstacle_bounds[0]))
+        self.assertGreater(text_point.distanceToPoint(default_point), 1.0)
+
     def test_plan_geometry_face_wire_polylines_follow_edge_order_when_vertex_order_is_scrambled(
         self,
     ):
