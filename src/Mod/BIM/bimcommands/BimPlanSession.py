@@ -41,6 +41,7 @@ from bimplan import symbol_edit as plan_symbol_edit
 from bimplan import opening_edit as plan_opening_edit
 from bimplan import targets as plan_targets
 from bimplan import view as plan_view
+from bimplan import window_create as plan_window_create
 from bimplan.context import PlanEditContext
 from bimplan.hosts import _PlanEditCommandHost, _PlanEditWallHost
 from bimplan.overlays import geometry as overlay_geometry
@@ -335,6 +336,8 @@ class PlanEditSession:
         self._space_separator_start = None
         self._space_separator_height = None
         self._space_separator_preview_trackers = []
+        self._window_host_wall = None
+        self._window_preview_trackers = []
         self._plan_region_points = []
         self._plan_region_parent_space = None
         self._plan_region_preview_trackers = []
@@ -725,6 +728,9 @@ class PlanEditSession:
         if self.current_tool == "Set Space Text":
             self._cancel_space_text_position_pick()
             return True
+        if self.current_tool == "Window":
+            self._cancel_window_tool()
+            return True
         if self._has_active_provider_point_tool():
             self._cancel_provider_point_tool()
             return True
@@ -747,6 +753,7 @@ class PlanEditSession:
         self._clear_input_hints()
         self._cancel_embedded_tool()
         self._cancel_rect_wall_tool(refresh=False)
+        self._cancel_window_tool(refresh=False)
         self._cancel_plan_region_tool(refresh=False)
         self._cancel_provider_point_tool(refresh=False)
         self._cancel_wall_edit(restore=False, refresh=False)
@@ -1098,6 +1105,8 @@ class PlanEditSession:
             self._cancel_embedded_tool()
         if self._has_active_rect_wall_tool():
             self._cancel_rect_wall_tool()
+        if self._has_active_window_tool():
+            self._cancel_window_tool()
         if self._has_active_plan_region_tool():
             self._cancel_plan_region_tool()
         if self._has_active_space_separator_tool():
@@ -1111,6 +1120,7 @@ class PlanEditSession:
         self._cancel_space_region_pick(refresh=False)
         self._cancel_plan_region_tool(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
+        self._cancel_window_tool(refresh=False)
         self._cancel_space_separator_tool(refresh=False)
         self._cancel_provider_point_tool(refresh=False)
         self._cancel_wall_edit()
@@ -1127,6 +1137,7 @@ class PlanEditSession:
     def activate_rect_wall_tool(self):
         self._cancel_space_region_pick(refresh=False)
         self._cancel_plan_region_tool(refresh=False)
+        self._cancel_window_tool(refresh=False)
         self._cancel_space_separator_tool(refresh=False)
         self._cancel_provider_point_tool(refresh=False)
         self._cancel_embedded_tool()
@@ -1149,10 +1160,36 @@ class PlanEditSession:
         )
         self._refresh_task_panel_status()
 
+    def can_place_plan_window(self):
+        return plan_window_create.can_place_window(self)
+
+    def activate_window_tool(self):
+        self._cancel_space_region_pick(refresh=False)
+        self._cancel_plan_region_tool(refresh=False)
+        self._cancel_rect_wall_tool(refresh=False)
+        self._cancel_space_separator_tool(refresh=False)
+        self._cancel_provider_point_tool(refresh=False)
+        if self._has_active_embedded_tool():
+            self._cancel_embedded_tool()
+        self._cancel_wall_edit()
+        self._cancel_pending_edit()
+        self._clear_plan_relation_status()
+        self._clear_wall_grips()
+        self._clear_selected_wall_opening_context_overlay()
+        self._clear_selected_opening_overlay()
+        self._clear_selected_opening_handles()
+        self._clear_selected_symbol_overlay()
+        self._clear_selected_space_overlay()
+        self._clear_selected_region_overlay()
+        self._clear_secondary_selected_overlays()
+        self._clear_window_preview()
+        return plan_window_create.activate_window_tool(self)
+
     def activate_plan_region_tool(self):
         parent_space = self._get_selected_plan_target_object("space")
         self._cancel_space_region_pick(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
+        self._cancel_window_tool(refresh=False)
         self._cancel_space_separator_tool(refresh=False)
         self._cancel_provider_point_tool(refresh=False)
         if self._has_active_embedded_tool():
@@ -1187,6 +1224,7 @@ class PlanEditSession:
         self._cancel_space_region_pick(refresh=False)
         self._cancel_plan_region_tool(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
+        self._cancel_window_tool(refresh=False)
         self._cancel_provider_point_tool(refresh=False)
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
@@ -1215,6 +1253,7 @@ class PlanEditSession:
         if self.current_tool == "Set Space Text":
             self._cancel_space_text_position_pick()
         self._cancel_rect_wall_tool(refresh=False)
+        self._cancel_window_tool(refresh=False)
         self._cancel_space_separator_tool(refresh=False)
         self._cancel_provider_point_tool(refresh=False)
         if self._has_active_embedded_tool():
@@ -1230,6 +1269,7 @@ class PlanEditSession:
         self._cancel_space_region_pick(refresh=False)
         self._cancel_plan_region_tool(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
+        self._cancel_window_tool(refresh=False)
         self._cancel_space_separator_tool(refresh=False)
         self._cancel_provider_point_tool(refresh=False)
         self._cancel_wall_edit()
@@ -1242,6 +1282,7 @@ class PlanEditSession:
         self._cancel_space_region_pick(refresh=False)
         self._cancel_plan_region_tool(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
+        self._cancel_window_tool(refresh=False)
         self._cancel_space_separator_tool(refresh=False)
         self._cancel_provider_point_tool(refresh=False)
 
@@ -3591,6 +3632,24 @@ class PlanEditSession:
         self._refresh_primary_selected_plan_target()
         self._refresh_task_panel_status()
 
+    def _has_active_window_tool(self):
+        return plan_window_create.has_active_window_tool(self)
+
+    def _clear_window_preview(self):
+        return plan_window_create.clear_window_preview(self)
+
+    def _cancel_window_tool(self, refresh=True):
+        return plan_window_create.cancel_window_tool(self, refresh=refresh)
+
+    def _project_window_point_to_host(self, point, wall=None):
+        return plan_window_create.project_window_point_to_host(self, point, wall=wall)
+
+    def _update_window_tool_preview(self, point=None, info=None):
+        return plan_window_create.update_window_tool_preview(self, point=point, info=info)
+
+    def _handle_window_tool_point(self, point=None, obj=None):
+        return plan_window_create.handle_window_tool_point(self, point=point, obj=obj)
+
     def _has_active_space_separator_tool(self):
         return self._space_separator_start is not None or self.current_tool == "Separator"
 
@@ -5394,6 +5453,27 @@ class PlanEditSession:
                 self._sync_provider_overlays()
             self._sync_provider_point_preview()
             return
+        if self.current_tool == "Window":
+            self._clear_junction_node_overlays()
+            self._clear_hovered_wall_overlay()
+            self._clear_hovered_wall_opening_context_overlay()
+            self._clear_hovered_opening_overlay()
+            self._clear_hovered_symbol_overlay()
+            self._clear_hovered_space_overlay()
+            self._clear_hovered_region_overlay()
+            self._clear_space_region_pick_overlays()
+            self._clear_selected_opening_overlay()
+            self._clear_selected_symbol_overlay()
+            self._clear_selected_space_overlay()
+            self._clear_selected_region_overlay()
+            self._clear_provider_overlays()
+            self._clear_provider_point_preview()
+            self._clear_secondary_selected_overlays()
+            self._clear_selected_opening_handles()
+            self._clear_selected_symbol_handles()
+            self._clear_selected_wall_opening_context_overlay()
+            self._clear_wall_grips()
+            return
         if self.current_tool == "Select":
             self._clear_space_region_pick_overlays()
             self._sync_junction_node_overlays()
@@ -5481,6 +5561,9 @@ class PlanEditSession:
         if self.current_tool == "Provider Point" and key == coin.SoKeyboardEvent.ESCAPE:
             self._cancel_provider_point_tool()
             return
+        if self.current_tool == "Window" and key == coin.SoKeyboardEvent.ESCAPE:
+            self._cancel_window_tool()
+            return
         if self._is_wall_move_edit_active() and key == coin.SoKeyboardEvent.TAB:
             if self._start_wall_readout_edit(cycle=True):
                 if hasattr(event_callback, "setHandled"):
@@ -5515,6 +5598,9 @@ class PlanEditSession:
             return
         if self._has_active_provider_point_tool():
             self._cancel_provider_point_tool()
+            return
+        if self._has_active_window_tool():
+            self._cancel_window_tool()
             return
         if self._has_active_rect_wall_tool():
             self._cancel_rect_wall_tool()
@@ -6297,7 +6383,7 @@ class PlanEditSession:
         return bool(
             self._is_wall_edit_modal_active()
             or self.current_tool
-            in ("Move Opening", "Move Symbol", "Rotate Symbol", "Set Space Text")
+            in ("Move Opening", "Move Symbol", "Rotate Symbol", "Set Space Text", "Window")
         )
 
     def _focus_plan_view(self):
@@ -6325,11 +6411,51 @@ class PlanEditSession:
     def _get_plan_target_display_label(self, obj):
         return getattr(obj, "Label", getattr(obj, "Name", ""))
 
+    def _get_opening_display_kind_key(self, opening):
+        if not opening:
+            return "Opening"
+        semantic_obj = self._get_plan_semantic_object(opening)
+        ifc_type = getattr(semantic_obj, "IfcType", "") if semantic_obj else ""
+        if ifc_type in {"Window", "Door"}:
+            return ifc_type
+        try:
+            import Draft
+
+            if Draft.getType(semantic_obj) == "Window":
+                return "Window"
+        except Exception:
+            pass
+        return "Opening"
+
+    def _get_opening_display_kind(self, opening):
+        return translate("BIM_PlanEdit", self._get_opening_display_kind_key(opening))
+
+    def _format_opening_selection_help(self, opening):
+        opening_kind = self._get_opening_display_kind_key(opening)
+        if opening_kind == "Door":
+            return translate(
+                "BIM_PlanEdit",
+                "Use in-view handles to move or flip the selected door.",
+            )
+        if opening_kind == "Window":
+            return translate(
+                "BIM_PlanEdit",
+                "Use the in-view handle to move the selected window along its host wall.",
+            )
+        return translate(
+            "BIM_PlanEdit",
+            "Use in-view handles to move or flip the selected opening.",
+        )
+
     def _format_plan_target_selection_state(self, kind, obj):
         if not kind or not obj:
             return ""
+        if kind == "opening":
+            return translate("BIM_PlanEdit", "{kind}: {label}").format(
+                kind=self._get_opening_display_kind(obj),
+                label=self._get_plan_target_display_label(obj),
+            )
         templates = {
-            "opening": translate("BIM_PlanEdit", "Opening: {label}"),
             "symbol": translate("BIM_PlanEdit", "Symbol: {label}"),
             "region": translate("BIM_PlanEdit", "Region: {label}"),
             "space": translate("BIM_PlanEdit", "Space: {label}"),
@@ -6635,6 +6761,16 @@ class PlanEditSession:
             )
 
         return {
+            "Window": (
+                (
+                    translate("BIM_PlanEdit", "%1 place window"),
+                    ui.MouseLeft,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 cancel"),
+                    ui.KeyEscape,
+                ),
+            ),
             "Move Opening": (
                 (
                     translate("BIM_PlanEdit", "%1 place opening"),

@@ -1,0 +1,329 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+"""Hosted window creation helpers for BIM Plan Edit."""
+
+from contextlib import nullcontext
+
+import FreeCAD
+import FreeCADGui
+
+translate = FreeCAD.Qt.translate
+
+DEFAULT_WINDOW_WIDTH = 900.0
+DEFAULT_WINDOW_HEIGHT = 1200.0
+DEFAULT_WINDOW_SILL_HEIGHT = 900.0
+DEFAULT_WINDOW_FRAME_THICKNESS = 60.0
+DEFAULT_WINDOW_GLASS_THICKNESS = 10.0
+
+
+def can_place_window(session):
+    return get_window_host_wall(session) is not None
+
+
+def get_window_host_wall(session):
+    wall = session._get_selected_plan_target_object("wall")
+    if session._is_plan_selectable_wall(wall):
+        return wall
+    wall = getattr(session, "hovered_wall", None)
+    if session._is_plan_selectable_wall(wall):
+        return wall
+    return None
+
+
+def activate_window_tool(session):
+    wall = get_window_host_wall(session)
+    if not wall:
+        FreeCAD.Console.PrintWarning(
+            translate("BIM_PlanEdit", "Select or hover a wall before placing a window.\n")
+        )
+        return False
+
+    session._set_selected_plan_target("wall", wall)
+    session._restore_gui_selection(wall)
+    session._window_host_wall = wall
+    session.current_tool = "Window"
+    FreeCAD.activeDraftCommand = session
+    FreeCADGui.Snapper.getPoint(
+        callback=session._handle_window_tool_point,
+        movecallback=session._update_window_tool_preview,
+        title=translate("BIM_PlanEdit", "Window location"),
+    )
+    session._refresh_task_panel_status()
+    return True
+
+
+def has_active_window_tool(session):
+    return session.current_tool == "Window" or session._window_host_wall is not None
+
+
+def clear_window_preview(session):
+    session._finalize_trackers(session._window_preview_trackers)
+    session._window_preview_trackers = []
+
+
+def cancel_window_tool(session, refresh=True):
+    if not has_active_window_tool(session):
+        return False
+    session._stop_snapper()
+    clear_window_preview(session)
+    session._window_host_wall = None
+    FreeCAD.activeDraftCommand = None
+    session.current_tool = "Select"
+    if refresh:
+        session._refresh_task_panel_status()
+    return True
+
+
+def _coerce_length(value, default=0.0):
+    try:
+        value = value.Value
+    except AttributeError:
+        pass
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _get_wall_axis_context(wall):
+    proxy = getattr(wall, "Proxy", None)
+    if proxy is None or not hasattr(proxy, "calc_endpoints"):
+        return None
+    try:
+        endpoints = proxy.calc_endpoints(wall)
+        start = FreeCAD.Vector(endpoints[0])
+        end = FreeCAD.Vector(endpoints[1])
+    except Exception:
+        return None
+    axis = end.sub(start)
+    axis.z = 0.0
+    length = axis.Length
+    if length <= 1e-9:
+        return None
+    axis.normalize()
+    vertical = FreeCAD.Vector(0, 0, 1)
+    normal = axis.cross(vertical)
+    if normal.Length <= 1e-9:
+        return None
+    normal.normalize()
+    wall_width = _coerce_length(getattr(wall, "Width", None), 200.0)
+    return {
+        "start": start,
+        "end": end,
+        "axis": axis,
+        "vertical": vertical,
+        "normal": normal,
+        "length": length,
+        "base_z": start.z,
+        "wall_width": wall_width,
+    }
+
+
+def project_window_point_to_host(session, point, wall=None):
+    wall = wall or session._window_host_wall
+    if point is None or wall is None:
+        return None
+    context = _get_wall_axis_context(wall)
+    if not context:
+        return None
+    try:
+        source = FreeCAD.Vector(point)
+    except Exception:
+        return None
+    offset = source.sub(context["start"])
+    offset.z = 0.0
+    half_width = DEFAULT_WINDOW_WIDTH * 0.5
+    target_u = offset.dot(context["axis"])
+    if context["length"] >= DEFAULT_WINDOW_WIDTH:
+        target_u = min(max(target_u, half_width), context["length"] - half_width)
+    else:
+        target_u = context["length"] * 0.5
+    projected = context["start"].add(FreeCAD.Vector(context["axis"]).multiply(target_u))
+    projected.z = context["base_z"]
+    return projected
+
+
+def _get_window_preview_points(session, point):
+    wall = session._window_host_wall
+    center = project_window_point_to_host(session, point, wall)
+    context = _get_wall_axis_context(wall)
+    if center is None or not context:
+        return ()
+    half_width = DEFAULT_WINDOW_WIDTH * 0.5
+    half_depth = max(context["wall_width"], 80.0) * 0.5
+    axis = context["axis"]
+    normal = context["normal"]
+    return (
+        center.add(FreeCAD.Vector(axis).multiply(-half_width)).add(
+            FreeCAD.Vector(normal).multiply(-half_depth)
+        ),
+        center.add(FreeCAD.Vector(axis).multiply(half_width)).add(
+            FreeCAD.Vector(normal).multiply(-half_depth)
+        ),
+        center.add(FreeCAD.Vector(axis).multiply(half_width)).add(
+            FreeCAD.Vector(normal).multiply(half_depth)
+        ),
+        center.add(FreeCAD.Vector(axis).multiply(-half_width)).add(
+            FreeCAD.Vector(normal).multiply(half_depth)
+        ),
+    )
+
+
+def update_window_tool_preview(session, point=None, info=None):
+    del info
+    points = _get_window_preview_points(session, point)
+    clear_window_preview(session)
+    if len(points) != 4:
+        return
+    try:
+        import draftguitools.gui_trackers as DraftTrackers
+    except Exception:
+        return
+    color = (0.12, 0.38, 0.95)
+    width = session._scaled_line_width(2)
+    for index, (start, end) in enumerate(zip(points, points[1:] + points[:1])):
+        tracker = session._make_plan_line_tracker(
+            DraftTrackers,
+            "window-placement-preview:{}".format(index),
+            scolor=color,
+            swidth=width,
+            ontop=True,
+        )
+        tracker.p1(start)
+        tracker.p2(end)
+        tracker.on()
+        session._window_preview_trackers.append(tracker)
+
+
+def _add_rectangle(sketch, x_min, y_min, x_max, y_max):
+    import Part
+    import Sketcher
+
+    start_index = sketch.GeometryCount
+    sketch.addGeometry(
+        Part.LineSegment(FreeCAD.Vector(x_min, y_min, 0), FreeCAD.Vector(x_max, y_min, 0))
+    )
+    sketch.addGeometry(
+        Part.LineSegment(FreeCAD.Vector(x_max, y_min, 0), FreeCAD.Vector(x_max, y_max, 0))
+    )
+    sketch.addGeometry(
+        Part.LineSegment(FreeCAD.Vector(x_max, y_max, 0), FreeCAD.Vector(x_min, y_max, 0))
+    )
+    sketch.addGeometry(
+        Part.LineSegment(FreeCAD.Vector(x_min, y_max, 0), FreeCAD.Vector(x_min, y_min, 0))
+    )
+    sketch.addConstraint(Sketcher.Constraint("Coincident", start_index, 2, start_index + 1, 1))
+    sketch.addConstraint(
+        Sketcher.Constraint("Coincident", start_index + 1, 2, start_index + 2, 1)
+    )
+    sketch.addConstraint(
+        Sketcher.Constraint("Coincident", start_index + 2, 2, start_index + 3, 1)
+    )
+    sketch.addConstraint(Sketcher.Constraint("Coincident", start_index + 3, 2, start_index, 1))
+
+
+def _make_window_base_sketch(session, wall, center):
+    context = _get_wall_axis_context(wall)
+    if not context:
+        return None
+
+    sketch = session.doc.addObject("Sketcher::SketchObject", "PlanWindowSketch")
+    axis = context["axis"]
+    vertical = context["vertical"]
+    normal = context["normal"]
+    rotation = FreeCAD.Rotation(axis, vertical, normal, "XYZ")
+    sketch.Placement = FreeCAD.Placement(FreeCAD.Vector(center), rotation)
+
+    half_width = DEFAULT_WINDOW_WIDTH * 0.5
+    y_min = DEFAULT_WINDOW_SILL_HEIGHT
+    y_max = DEFAULT_WINDOW_SILL_HEIGHT + DEFAULT_WINDOW_HEIGHT
+    inset = DEFAULT_WINDOW_FRAME_THICKNESS
+    _add_rectangle(sketch, -half_width, y_min, half_width, y_max)
+    if DEFAULT_WINDOW_WIDTH > inset * 2.0 and DEFAULT_WINDOW_HEIGHT > inset * 2.0:
+        _add_rectangle(
+            sketch,
+            -half_width + inset,
+            y_min + inset,
+            half_width - inset,
+            y_max - inset,
+        )
+    return sketch
+
+
+def create_window(session, wall, point):
+    import Arch
+
+    center = project_window_point_to_host(session, point, wall)
+    if center is None:
+        return None
+
+    window = None
+    defer_updates = getattr(session, "defer_document_visual_updates", None)
+    update_scope = defer_updates() if defer_updates else nullcontext()
+    with update_scope:
+        session.doc.openTransaction(translate("BIM_PlanEdit", "Create Window"))
+        try:
+            sketch = _make_window_base_sketch(session, wall, center)
+            if sketch is None:
+                raise RuntimeError("Unable to create window sketch")
+            session.doc.recompute()
+            window = Arch.makeWindow(
+                baseobj=sketch,
+                width=DEFAULT_WINDOW_WIDTH,
+                height=DEFAULT_WINDOW_HEIGHT,
+                name="Window",
+            )
+            window.IfcType = "Window"
+            window.Width = DEFAULT_WINDOW_WIDTH
+            window.Height = DEFAULT_WINDOW_HEIGHT
+            window.HoleDepth = 0
+            window.WindowParts = [
+                "Frame",
+                "Frame",
+                "Wire0,Wire1",
+                str(DEFAULT_WINDOW_FRAME_THICKNESS),
+                "0",
+                "Glass",
+                "Glass panel",
+                "Wire1",
+                str(DEFAULT_WINDOW_GLASS_THICKNESS),
+                str(DEFAULT_WINDOW_FRAME_THICKNESS * 0.5),
+            ]
+            Arch.addComponents(window, wall)
+            session._add_object_to_active_storey(window)
+            session.doc.recompute()
+            if not session._is_hosted_opening_object(window):
+                raise RuntimeError("Created window is not hosted")
+            session.doc.commitTransaction()
+        except Exception:
+            try:
+                session.doc.abortTransaction()
+            except Exception:
+                pass
+            raise
+    return window
+
+
+def handle_window_tool_point(session, point=None, obj=None):
+    del obj
+    if point is None:
+        cancel_window_tool(session)
+        return
+    wall = session._window_host_wall
+    if not session._is_plan_selectable_wall(wall):
+        cancel_window_tool(session)
+        FreeCAD.Console.PrintWarning(
+            translate("BIM_PlanEdit", "Select or hover a wall before placing a window.\n")
+        )
+        return
+    try:
+        window = create_window(session, wall, point)
+    except Exception:
+        cancel_window_tool(session)
+        FreeCAD.Console.PrintError(translate("BIM_PlanEdit", "Failed to create the window.\n"))
+        return
+    session._invalidate_wall_hosted_openings_cache()
+    session._register_plan_object(window)
+    cancel_window_tool(session, refresh=False)
+    session._restore_selected_opening(window)
+    session._refresh_task_panel_status()
