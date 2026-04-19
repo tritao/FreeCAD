@@ -311,6 +311,9 @@ class PlanEditSession:
         self._document_observer_added = False
         self._pending_created_plan_objects = {}
         self._created_plan_objects_flush_queued = False
+        self._created_plan_objects_flush_deferred = False
+        self._document_visual_update_defer_depth = 0
+        self._document_visual_refresh_deferred = False
         self._pending_selected_wall_reset = False
         self._wall_edit_modal_active = False
         self._edit_wall = None
@@ -2380,6 +2383,9 @@ class PlanEditSession:
         if not obj or not getattr(obj, "Name", None):
             return
         self._pending_created_plan_objects[obj.Name] = obj
+        if self._are_document_visual_updates_deferred():
+            self._created_plan_objects_flush_deferred = True
+            return
         if self._created_plan_objects_flush_queued:
             return
         self._created_plan_objects_flush_queued = True
@@ -2390,14 +2396,51 @@ class PlanEditSession:
         except Exception:
             self._flush_created_plan_objects()
 
-    def _flush_created_plan_objects(self):
+    def _flush_created_plan_objects(self, force=False):
         self._created_plan_objects_flush_queued = False
+        if self._are_document_visual_updates_deferred() and not force:
+            self._created_plan_objects_flush_deferred = True
+            return
+        self._created_plan_objects_flush_deferred = False
         pending = list(self._pending_created_plan_objects.values())
         self._pending_created_plan_objects.clear()
         for obj in pending:
             if not self._should_register_created_plan_object(obj):
                 continue
             self._register_plan_object(obj)
+
+    def _are_document_visual_updates_deferred(self):
+        return self._document_visual_update_defer_depth > 0
+
+    def _defer_document_visual_refresh(self):
+        self._document_visual_refresh_deferred = True
+
+    @contextmanager
+    def defer_document_visual_updates(self):
+        """Batch document observer visual work while an external command mutates the model."""
+
+        self._document_visual_update_defer_depth += 1
+        try:
+            yield
+        finally:
+            self._document_visual_update_defer_depth = max(
+                0,
+                self._document_visual_update_defer_depth - 1,
+            )
+            if self._document_visual_update_defer_depth or self._tearing_down:
+                return
+            if self._created_plan_objects_flush_deferred or self._pending_created_plan_objects:
+                self._created_plan_objects_flush_deferred = False
+                self._document_visual_update_defer_depth = 1
+                try:
+                    self._flush_created_plan_objects(force=True)
+                finally:
+                    self._document_visual_update_defer_depth = 0
+            if self._document_visual_refresh_deferred:
+                self._document_visual_refresh_deferred = False
+                self._invalidate_document_dependent_plan_visuals()
+                self._refresh_primary_selected_plan_target()
+                self._refresh_task_panel_status(selection_only=True)
 
     def _set_pending_selected_plan_target(self, kind=None, obj=None):
         return plan_selection.set_pending_selected_plan_target(self, kind=kind, obj=obj)
@@ -3168,7 +3211,7 @@ class PlanEditSession:
         self._clear_selected_plan_target_if_matches("wall", wall)
         if clear_gui_selection:
             self._set_gui_selection([])
-        self._refresh_task_panel_status()
+        self._refresh_task_panel_status(selection_only=True)
 
     def _register_edit_callbacks(self):
         return plan_view.register_edit_callbacks(self)
@@ -5898,6 +5941,9 @@ class PlanEditSession:
         self._provider_overlay_state = None
         self._invalidate_plan_classification_cache()
         self._invalidate_wall_hosted_openings_cache()
+        if self._are_document_visual_updates_deferred():
+            self._defer_document_visual_refresh()
+            return
         if self.current_tool != "Select":
             return
         self._sanitize_plan_target_references()
@@ -6031,6 +6077,9 @@ class PlanEditSession:
         self._invalidate_plan_classification_cache()
         self._invalidate_wall_hosted_openings_cache()
         self._invalidate_plan_overlay_geometry_cache(obj)
+        if self._are_document_visual_updates_deferred():
+            self._defer_document_visual_refresh()
+            return
         if obj == self.hovered_wall:
             self.hovered_wall = None
             self._clear_hovered_wall_overlay()
@@ -6136,6 +6185,9 @@ class PlanEditSession:
 
     def slotRecomputedDocument(self, doc):
         del doc
+        if self._are_document_visual_updates_deferred():
+            self._defer_document_visual_refresh()
+            return
         self._invalidate_document_dependent_plan_visuals()
 
     def attach_task_panel(self, panel):
