@@ -202,6 +202,24 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         return self._FakeEventCallback(_FakeWheelEvent())
 
+    def _make_fake_selection_node(self, document_name, object_name, sub_element_name):
+        class _Field:
+            def __init__(self, value):
+                self._value = value
+
+            def getValue(self):
+                return self._value
+
+        return type(
+            "FakeSelectionNode",
+            (),
+            {
+                "documentName": _Field(document_name),
+                "objectName": _Field(object_name),
+                "subElementName": _Field(sub_element_name),
+            },
+        )()
+
     def _make_fake_left_mouse_button_event(self, x=250, y=250, down=True):
         from pivy import coin
 
@@ -671,6 +689,35 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertGreater(provider.section_calls, 0)
         self.assertGreater(provider.tool_calls, 0)
         self.assertGreater(provider.overlay_calls, 0)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_provider_overlay_point_selects_target_object(self):
+        marker = Draft.makePoint(FreeCAD.Vector(100, 200, 0))
+        marker.Label = "Electrical Marker"
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        node = self._make_fake_selection_node(
+            self.document.Name,
+            marker.Name,
+            "ProviderOverlayPoint:object:0",
+        )
+        event = self._make_fake_left_mouse_press()
+
+        self.assertTrue(
+            session._activate_provider_overlay_target_node(
+                ("provider_overlay_point", node),
+                event,
+            )
+        )
+        self.assertTrue(event._handled)
+        self.assertIn(marker, FreeCADGui.Selection.getSelection())
+        self._assert_no_selected_plan_target(session)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()

@@ -40,7 +40,14 @@ if "draftguitools.gui_base" not in sys.modules:
     draftguitools_module.gui_base = gui_base_module
 
 from bimplan.context import PlanEditContext
-from bimplan.providers import PlanEditProvider, PlanIssueSpec
+from bimplan.picking import get_provider_overlay_target_from_edit_node
+from bimplan.provider_runtime import normalize_plan_provider_overlay
+from bimplan.providers import (
+    PlanEditProvider,
+    PlanIssueSpec,
+    PlanOverlaySpec,
+    PlanOverlayTargetSpec,
+)
 from bimplan.registry import PlanEditRegistry
 from bimplan.semantics import PlanSemanticRecord
 from bimplan.targets import PlanTarget
@@ -48,10 +55,17 @@ from bimplan.transactions import PlanEditTransaction
 
 
 class _DummySession:
-    def __init__(self, selected_targets=None, all_targets=None, semantic_records=None):
+    def __init__(
+        self,
+        selected_targets=None,
+        all_targets=None,
+        semantic_records=None,
+        selected_objects=None,
+    ):
         self.selected_targets = tuple(selected_targets or ())
         self.all_targets = tuple(all_targets or self.selected_targets)
         self.semantic_records = tuple(semantic_records or ())
+        self.selected_objects = tuple(selected_objects or ())
 
     def get_plan_targets(self, selected_only=False):
         if selected_only:
@@ -61,6 +75,9 @@ class _DummySession:
     def get_plan_semantic_records(self, targets=None):
         del targets
         return self.semantic_records
+
+    def get_selected_objects(self):
+        return self.selected_objects
 
     def resolve_plan_target_object(self, target):
         return f"target:{target.object_name}"
@@ -117,6 +134,7 @@ class TestBimPlanCore(unittest.TestCase):
             selected_targets=(target,),
             all_targets=(target,),
             semantic_records=(semantic_record,),
+            selected_objects=("raw-object",),
         )
         context = PlanEditContext(
             session=session,
@@ -129,10 +147,69 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual((target,), context.get_selected_targets())
         self.assertEqual((target,), context.get_all_targets())
         self.assertEqual(target, context.get_primary_target())
+        self.assertEqual(("raw-object",), context.get_selected_objects())
         self.assertEqual((semantic_record,), context.get_selected_semantic_records())
         self.assertEqual(semantic_record, context.get_primary_semantic_record())
         self.assertEqual("target:Space001", context.resolve_object(target))
         self.assertEqual("semantic:Space001", context.resolve_semantic_object(target))
+
+    def test_plan_overlay_spec_carries_normalized_point_targets(self):
+        overlay = PlanOverlaySpec(
+            key="fixture-status",
+            points=((1.0, 2.0, 3.0), ("invalid",)),
+            point_targets=(
+                {
+                    "document_name": " PlanDoc ",
+                    "object_name": " Socket001 ",
+                    "target_kind": " object ",
+                },
+                {"object_name": "Ignored"},
+            ),
+        )
+
+        normalized = normalize_plan_provider_overlay("test-provider", overlay)
+
+        self.assertEqual("test-provider", normalized.provider_id)
+        self.assertEqual(((1.0, 2.0, 3.0),), normalized.points)
+        self.assertEqual(
+            (
+                PlanOverlayTargetSpec(
+                    document_name="PlanDoc",
+                    object_name="Socket001",
+                    target_kind="object",
+                ),
+            ),
+            normalized.point_targets,
+        )
+
+    def test_provider_overlay_edit_node_resolves_raw_document_object(self):
+        class _Field:
+            def __init__(self, value):
+                self._value = value
+
+            def getValue(self):
+                return self._value
+
+        marker = SimpleNamespace(Name="Socket001")
+        doc = SimpleNamespace(getObject=lambda name: marker if name == marker.Name else None)
+        session = SimpleNamespace(
+            doc=doc,
+            _is_valid_plan_target=lambda _kind, _obj: False,
+            _get_plan_target_for_object=lambda _obj: (None, None),
+        )
+        point = SimpleNamespace(
+            documentName=_Field(""),
+            objectName=_Field("Socket001"),
+            subElementName=_Field("ProviderOverlayPoint:object:0"),
+        )
+
+        self.assertEqual(
+            (None, marker),
+            get_provider_overlay_target_from_edit_node(
+                session,
+                ("provider_overlay_point", point),
+            ),
+        )
 
     def test_registry_preserves_provider_order_and_replacement(self):
         registry = PlanEditRegistry()

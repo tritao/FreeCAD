@@ -10,6 +10,7 @@ from .providers import (
     PlanInspectorSection,
     PlanIssueSpec,
     PlanOverlaySpec,
+    PlanOverlayTargetSpec,
     PlanSuggestionSpec,
     PlanToolSpec,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "PlanInspectorSection",
     "PlanIssueSpec",
     "PlanOverlaySpec",
+    "PlanOverlayTargetSpec",
     "PlanSemanticRecord",
     "PlanSuggestionSpec",
     "PlanTarget",

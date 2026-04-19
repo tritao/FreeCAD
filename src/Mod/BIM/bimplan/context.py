@@ -29,6 +29,12 @@ class PlanEditContext:
         targets = self.get_selected_targets()
         return targets[0] if targets else None
 
+    def get_selected_objects(self):
+        getter = getattr(self.session, "get_selected_objects", None)
+        if callable(getter):
+            return tuple(getter() or ())
+        return ()
+
     def get_selected_semantic_records(self):
         getter = getattr(self.session, "get_plan_semantic_records", None)
         if callable(getter):

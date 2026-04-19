@@ -2517,6 +2517,9 @@ class PlanEditSession:
     def get_plan_targets(self, selected_only=False):
         return plan_targets.get_plan_targets(self, selected_only=selected_only)
 
+    def get_selected_objects(self):
+        return tuple(self._get_gui_selection())
+
     def resolve_plan_target_object(self, target):
         return plan_targets.resolve_plan_target_object(self, target)
 
@@ -4768,9 +4771,13 @@ class PlanEditSession:
         for picked_point in picked_points:
             path = picked_point.getPath()
             point = path.getNode(path.getLength() - 2)
-            if hasattr(point, "subElementName") and "EditNode" in str(
-                point.subElementName.getValue()
-            ):
+            try:
+                sub_element = str(point.subElementName.getValue())
+            except Exception:
+                continue
+            if plan_picking.is_provider_overlay_point_subname(sub_element):
+                return ("provider_overlay_point", point)
+            if "EditNode" in sub_element:
                 return ("edit_node", point)
         return None
 
@@ -4882,6 +4889,12 @@ class PlanEditSession:
                         self._set_selected_plan_target_state("symbol", obj)
                         self._clear_wall_grips()
                         self._activate_symbol_handle(obj, role)
+                    elif node_kind == "provider_overlay_point":
+                        if not self._activate_provider_overlay_target_node(
+                            node,
+                            event_callback,
+                        ):
+                            return
                     else:
                         point = node[1]
                         try:
@@ -6633,6 +6646,27 @@ class PlanEditSession:
 
     def _get_plan_target_from_edit_node(self, node):
         return plan_picking.get_plan_target_from_edit_node(self, node)
+
+    def _get_provider_overlay_target_from_edit_node(self, node):
+        return plan_picking.get_provider_overlay_target_from_edit_node(self, node)
+
+    def _activate_provider_overlay_target_node(self, node, event_callback=None):
+        target_kind, target_obj = self._get_provider_overlay_target_from_edit_node(node)
+        if target_obj is None:
+            return False
+        if self._is_valid_plan_target(target_kind, target_obj):
+            self._set_pending_selected_plan_target(target_kind, target_obj)
+        else:
+            self._set_pending_selected_plan_target()
+        self._set_hovered_wall(None)
+        self._set_hovered_opening(None)
+        self._set_hovered_symbol(None)
+        self._set_hovered_space(None)
+        self._set_hovered_region(None)
+        self._set_gui_selection_object(target_obj)
+        self._refresh_primary_selected_plan_target()
+        self._claim_left_button_click(event_callback)
+        return True
 
     def _toggle_plan_target_selection_at_position(self, mouse_pos, event_callback=None):
         node = self._get_edit_node(mouse_pos)
