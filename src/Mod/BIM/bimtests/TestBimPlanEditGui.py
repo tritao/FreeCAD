@@ -1985,6 +1985,69 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(session.current_tool, "Select")
         self._assert_selected_plan_target(session, "opening", window)
 
+    def test_plan_edit_window_tool_uses_current_snap_wall_for_host(self):
+        """Window placement should follow the wall under the cursor, not stale selection."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall_a = Arch.makeWall(length=3000, width=200, height=2500)
+        base_b = Draft.makeLine(FreeCAD.Vector(2000, 0, 0), FreeCAD.Vector(2000, 3000, 0))
+        wall_b = Arch.makeWall(base_b, width=200, height=2500, name="SnapWall")
+        level.addObject(wall_a)
+        level.addObject(wall_b)
+        self.document.recompute()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        captured = {}
+        snap_info = {
+            "Document": self.document.Name,
+            "Object": wall_b.Name,
+            "Component": "Face1",
+            "SubName": "Face1",
+        }
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ), patch.object(FreeCADGui.Snapper, "snapInfo", snap_info, create=True):
+            self.assertTrue(session._select_wall_for_plan_edit(wall_a, sync_gui_selection=True))
+            self.assertTrue(session.activate_window_tool())
+            self.assertIs(session._window_host_wall, wall_a)
+
+            before = {obj.Name for obj in self.document.Objects}
+            point = FreeCAD.Vector(2100, 1200, 0)
+            captured["movecallback"](point, None)
+            self.assertIs(session._window_host_wall, wall_b)
+
+            captured["callback"](point, None)
+
+        self.pump_gui_events()
+
+        created = [obj for obj in self.document.Objects if obj.Name not in before]
+        windows = [
+            obj
+            for obj in created
+            if getattr(obj, "IfcType", "") == "Window" and session._is_hosted_opening_object(obj)
+        ]
+        self.assertEqual(1, len(windows))
+
+        window = windows[0]
+        self.assertIn(wall_b, window.Hosts)
+        self.assertNotIn(wall_a, window.Hosts)
+        self.assertAlmostEqual(window.Base.Placement.Base.x, 2000.0, delta=1e-6)
+        self.assertAlmostEqual(window.Base.Placement.Base.y, 1200.0, delta=1e-6)
+
+        sketch_x_axis = window.Base.Placement.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
+        self.assertAlmostEqual(abs(sketch_x_axis.x), 0.0, delta=1e-6)
+        self.assertAlmostEqual(abs(sketch_x_axis.y), 1.0, delta=1e-6)
+
     def test_plan_edit_selected_window_status_uses_window_label(self):
         """Hosted windows should be labelled as windows, not generic openings."""
 
