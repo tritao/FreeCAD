@@ -1985,6 +1985,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIn(level, window.InListRecursive)
         self.assertAlmostEqual(float(getattr(window.Width, "Value", window.Width)), 900.0)
         self.assertAlmostEqual(float(getattr(window.Height, "Value", window.Height)), 1200.0)
+        self.assertAlmostEqual(window.Base.Placement.Base.z, 900.0, delta=1e-6)
+        self.assertAlmostEqual(window.Shape.BoundBox.ZMin, 900.0, delta=1e-6)
         self.assertEqual(session.current_tool, "Select")
         self._assert_selected_plan_target(session, "opening", window)
 
@@ -2048,6 +2050,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertNotIn(wall_a, window.Hosts)
         self.assertAlmostEqual(window.Base.Placement.Base.x, 2000.0, delta=1e-6)
         self.assertAlmostEqual(window.Base.Placement.Base.y, 1200.0, delta=1e-6)
+        self.assertAlmostEqual(window.Base.Placement.Base.z, 900.0, delta=1e-6)
 
         sketch_x_axis = window.Base.Placement.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
         self.assertAlmostEqual(abs(sketch_x_axis.x), 0.0, delta=1e-6)

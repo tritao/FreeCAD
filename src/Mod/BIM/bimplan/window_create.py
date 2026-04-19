@@ -319,12 +319,8 @@ def _add_rectangle(sketch, x_min, y_min, x_max, y_max):
         Part.LineSegment(FreeCAD.Vector(x_min, y_max, 0), FreeCAD.Vector(x_min, y_min, 0))
     )
     sketch.addConstraint(Sketcher.Constraint("Coincident", start_index, 2, start_index + 1, 1))
-    sketch.addConstraint(
-        Sketcher.Constraint("Coincident", start_index + 1, 2, start_index + 2, 1)
-    )
-    sketch.addConstraint(
-        Sketcher.Constraint("Coincident", start_index + 2, 2, start_index + 3, 1)
-    )
+    sketch.addConstraint(Sketcher.Constraint("Coincident", start_index + 1, 2, start_index + 2, 1))
+    sketch.addConstraint(Sketcher.Constraint("Coincident", start_index + 2, 2, start_index + 3, 1))
     sketch.addConstraint(Sketcher.Constraint("Coincident", start_index + 3, 2, start_index, 1))
 
 
@@ -338,11 +334,14 @@ def _make_window_base_sketch(session, wall, center):
     vertical = context["vertical"]
     normal = context["normal"]
     rotation = FreeCAD.Rotation(axis, vertical, normal, "XYZ")
-    sketch.Placement = FreeCAD.Placement(FreeCAD.Vector(center), rotation)
+    placement_base = FreeCAD.Vector(center).add(
+        FreeCAD.Vector(vertical).multiply(DEFAULT_WINDOW_SILL_HEIGHT)
+    )
+    sketch.Placement = FreeCAD.Placement(placement_base, rotation)
 
     half_width = DEFAULT_WINDOW_WIDTH * 0.5
-    y_min = DEFAULT_WINDOW_SILL_HEIGHT
-    y_max = DEFAULT_WINDOW_SILL_HEIGHT + DEFAULT_WINDOW_HEIGHT
+    y_min = 0.0
+    y_max = DEFAULT_WINDOW_HEIGHT
     inset = DEFAULT_WINDOW_FRAME_THICKNESS
     _add_rectangle(sketch, -half_width, y_min, half_width, y_max)
     if DEFAULT_WINDOW_WIDTH > inset * 2.0 and DEFAULT_WINDOW_HEIGHT > inset * 2.0:
