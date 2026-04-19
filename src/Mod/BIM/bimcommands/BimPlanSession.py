@@ -278,6 +278,8 @@ class PlanEditSession:
         self._provider_overlay_state = None
         self._provider_overlay_visibility = {}
         self._provider_selected_objects = []
+        self._provider_point_host_target = None
+        self._provider_point_host_source = ""
         self._secondary_selection_trackers = []
         self._space_region_pick_trackers = []
         self._selected_wall_opening_context_trackers = []
@@ -796,6 +798,8 @@ class PlanEditSession:
         self._saved_view_action_state = {}
         self._set_selected_plan_target_state()
         self._provider_selected_objects = []
+        self._provider_point_host_target = None
+        self._provider_point_host_source = ""
         self._secondary_selected_plan_targets_state = []
         self.hovered_wall = None
         self.hovered_opening = None
@@ -2718,6 +2722,8 @@ class PlanEditSession:
             return False
         self._stop_snapper()
         self._provider_point_tool = None
+        self._provider_point_host_target = None
+        self._provider_point_host_source = ""
         FreeCAD.activeDraftCommand = None
         self.current_tool = "Select"
         if refresh:
@@ -2752,6 +2758,9 @@ class PlanEditSession:
         self._clear_selected_wall_opening_context_overlay()
         self._clear_selected_opening_handles()
         self._clear_selected_symbol_handles()
+        host_kind, host_obj, host_source = self._get_provider_point_context_host_state()
+        self._provider_point_host_target = (host_kind, host_obj)
+        self._provider_point_host_source = host_source
         self._provider_point_tool = tool
         self.current_tool = "Provider Point"
         self._refresh_task_panel_status()
@@ -2759,6 +2768,8 @@ class PlanEditSession:
         if self._arm_provider_point_tool():
             return True
         self._provider_point_tool = None
+        self._provider_point_host_target = None
+        self._provider_point_host_source = ""
         self.current_tool = "Select"
         self._refresh_task_panel_status()
         return False
@@ -2821,6 +2832,86 @@ class PlanEditSession:
         except Exception:
             return None
 
+    def _normalize_provider_point_host_target(self, target):
+        if not target:
+            return (None, None)
+        try:
+            target_kind, target_obj = target
+        except Exception:
+            return (None, None)
+        if target_kind == "wall" and self._is_plan_selectable_wall(target_obj):
+            return ("wall", target_obj)
+        return (None, None)
+
+    def _get_provider_point_context_host_state(self):
+        selected_kind, selected_obj = self._normalize_provider_point_host_target(
+            self._get_selected_plan_target()
+        )
+        if selected_obj is not None:
+            return selected_kind, selected_obj, "selected"
+        hovered_kind, hovered_obj = self._normalize_provider_point_host_target(
+            self._get_hovered_plan_target()
+        )
+        if hovered_obj is not None:
+            return hovered_kind, hovered_obj, "hovered"
+        return None, None, ""
+
+    def _get_provider_point_payload_host_target(
+        self,
+        *,
+        snap_target,
+        selected_target,
+        selected_targets,
+        hovered_target,
+    ):
+        selected_kind, selected_obj = self._normalize_provider_point_host_target(selected_target)
+        if selected_obj is not None:
+            return selected_kind, selected_obj, "selected"
+        selected_walls = []
+        for target in selected_targets or ():
+            target_kind, target_obj = self._normalize_provider_point_host_target(target)
+            if target_obj is not None and target_obj not in selected_walls:
+                selected_walls.append(target_obj)
+        if len(selected_walls) == 1:
+            return "wall", selected_walls[0], "selected"
+        snap_kind, snap_obj = self._normalize_provider_point_host_target(snap_target)
+        if snap_obj is not None:
+            return snap_kind, snap_obj, "snap"
+        stored_kind, stored_obj = self._normalize_provider_point_host_target(
+            self._provider_point_host_target
+        )
+        if stored_obj is not None:
+            return stored_kind, stored_obj, self._provider_point_host_source or "stored"
+        hovered_kind, hovered_obj = self._normalize_provider_point_host_target(hovered_target)
+        if hovered_obj is not None:
+            return hovered_kind, hovered_obj, "hovered"
+        return None, None, ""
+
+    def _project_provider_point_to_host(self, point, host_wall):
+        if point is None or host_wall is None:
+            return None
+        proxy = getattr(host_wall, "Proxy", None)
+        if proxy is None or not hasattr(proxy, "calc_endpoints"):
+            return None
+        try:
+            endpoints = proxy.calc_endpoints(host_wall)
+            start = FreeCAD.Vector(endpoints[0])
+            end = FreeCAD.Vector(endpoints[1])
+            source = FreeCAD.Vector(point)
+        except Exception:
+            return None
+        axis = end.sub(start)
+        axis.z = 0.0
+        length_sq = axis.dot(axis)
+        if length_sq <= 1e-9:
+            return None
+        offset = source.sub(start)
+        offset.z = 0.0
+        factor = max(0.0, min(1.0, offset.dot(axis) / length_sq))
+        projected = start.add(axis.multiply(factor))
+        projected.z = getattr(source, "z", 0.0)
+        return projected
+
     def _build_provider_point_tool_payload(
         self,
         tool,
@@ -2843,9 +2934,26 @@ class PlanEditSession:
         snap_object_name = str(snap_info.get("Object", "") or "").strip()
         if not snap_object_name and snap_object is not None:
             snap_object_name = str(getattr(snap_object, "Name", "") or "")
+        selected_target = self._get_selected_plan_target()
+        selected_targets = self._get_selected_plan_targets()
+        hovered_target = self._get_hovered_plan_target()
+        host_kind, host_obj, host_source = self._get_provider_point_payload_host_target(
+            snap_target=snap_target,
+            selected_target=selected_target,
+            selected_targets=selected_targets,
+            hovered_target=hovered_target,
+        )
+        placement_point = (
+            self._project_provider_point_to_host(plan_point, host_obj)
+            if host_kind == "wall"
+            else None
+        )
+        if placement_point is None:
+            placement_point = plan_point
         return {
             "tool": tool,
             "point": plan_point,
+            "placement_point": placement_point,
             "raw_point": raw_point,
             "snap_info": snap_info,
             "snap_object": snap_object,
@@ -2854,9 +2962,11 @@ class PlanEditSession:
             "snap_object_name": snap_object_name,
             "snap_component": snap_component,
             "snap_subname": snap_subname,
-            "selected_target": self._get_selected_plan_target(),
-            "selected_targets": self._get_selected_plan_targets(),
-            "hovered_target": self._get_hovered_plan_target(),
+            "selected_target": selected_target,
+            "selected_targets": selected_targets,
+            "hovered_target": hovered_target,
+            "host_target": (host_kind, host_obj),
+            "host_source": host_source,
         }
 
     def _get_space_preflight_report(self, targets=None):

@@ -631,6 +631,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(tool, payload["tool"])
         self.assertEqual(120.0, payload["point"].x)
         self.assertEqual(340.0, payload["point"].y)
+        self.assertEqual(("wall", wall), payload["host_target"])
+        self.assertEqual("selected", payload["host_source"])
+        expected_placement = session._project_provider_point_to_host(payload["point"], wall)
+        self.assertIsNotNone(expected_placement)
+        self.assertAlmostEqual(expected_placement.x, payload["placement_point"].x)
+        self.assertAlmostEqual(expected_placement.y, payload["placement_point"].y)
         self.assertEqual(999.0, payload["raw_point"].z)
         self.assertEqual(snap_info, payload["snap_info"])
         self.assertIs(wall, payload["snap_object"])
@@ -642,6 +648,50 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(selected_target, payload["selected_target"])
         self.assertEqual(selected_targets, payload["selected_targets"])
         self.assertEqual(hovered_target, payload["hovered_target"])
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_provider_point_tool_uses_selected_wall_host_context(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        tool = PlanToolSpec(
+            key="place-test-marker",
+            label="Place Test Marker",
+            provider_id="test-plan-provider",
+            interaction="point",
+        )
+        captured = []
+
+        def _capture_action(provider_id, action_key, transaction_label="", payload=None):
+            captured.append((provider_id, action_key, transaction_label, payload))
+            return True
+
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint"),
+            patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True),
+            patch.object(session, "execute_plan_provider_action", side_effect=_capture_action),
+        ):
+            self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+            self.assertTrue(session.start_plan_provider_point_tool(tool))
+            raw_point = FreeCAD.Vector(120.0, 340.0, 999.0)
+            session._handle_provider_point_tool_point(raw_point, None)
+            self.assertTrue(session._cancel_provider_point_tool())
+
+        self.assertEqual(1, len(captured))
+        payload = captured[0][3]
+        self.assertEqual(("wall", wall), payload["host_target"])
+        self.assertEqual("selected", payload["host_source"])
+        expected_placement = session._project_provider_point_to_host(payload["point"], wall)
+        self.assertIsNotNone(expected_placement)
+        self.assertAlmostEqual(expected_placement.x, payload["placement_point"].x)
+        self.assertAlmostEqual(expected_placement.y, payload["placement_point"].y)
+        self.assertEqual((None, None), payload["snap_target"])
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
