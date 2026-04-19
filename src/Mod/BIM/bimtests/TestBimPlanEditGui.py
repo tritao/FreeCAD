@@ -1101,6 +1101,40 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertIsNone(main_window.findChild(QtGui.QWidget, "BIMPlanEditContextControls"))
 
+    def test_plan_edit_disables_external_window_command_action(self):
+        """External commands should not stay available while Plan Edit owns interaction."""
+
+        from PySide import QtGui
+        from bimplan import command_gate
+
+        main_window = FreeCADGui.getMainWindow()
+        action = QtGui.QAction(main_window)
+        action.setObjectName("Arch_Window")
+        action.setEnabled(True)
+        main_window.addAction(action)
+        session = None
+
+        try:
+            session = BimPlanSession.start_session()
+            self.assertIsNotNone(session)
+            self.pump_gui_events()
+
+            self.assertTrue(command_gate.is_command_blocked("Arch_Window"))
+            self.assertFalse(action.isEnabled())
+
+            session.shutdown(close_dialog=False)
+            session = None
+            self.pump_gui_events()
+
+            self.assertFalse(command_gate.is_command_blocked("Arch_Window"))
+            self.assertTrue(action.isEnabled())
+        finally:
+            if session is not None:
+                session.shutdown(close_dialog=False, teardown=True)
+            command_gate.uninstall()
+            main_window.removeAction(action)
+            action.deleteLater()
+
     def test_plan_edit_hides_joined_wall_additions(self):
         """Joined child walls should stay hidden so their footprints do not overdraw the host."""
 
