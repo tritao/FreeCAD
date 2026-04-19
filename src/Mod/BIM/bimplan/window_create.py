@@ -394,6 +394,10 @@ def create_window(session, wall, point):
                 str(DEFAULT_WINDOW_GLASS_THICKNESS),
                 str(DEFAULT_WINDOW_FRAME_THICKNESS * 0.5),
             ]
+            # Build the opening before it is hosted. Window shape changes touch
+            # hosts, so doing this while unhosted avoids a second wall/window
+            # recompute pass after Arch.addComponents().
+            session.doc.recompute()
             Arch.addComponents(window, wall)
             session._add_object_to_active_storey(window)
             session.doc.recompute()
