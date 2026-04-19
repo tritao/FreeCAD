@@ -16,6 +16,7 @@ def sync_provider_overlays(session):
                 overlay
                 for overlay in session.get_plan_provider_overlays()
                 if bool(getattr(overlay, "visible", True))
+                and session.is_plan_provider_overlay_visible(overlay)
             )
         render_state = (
             overlays,
