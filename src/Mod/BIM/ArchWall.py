@@ -720,7 +720,7 @@ class _Wall(ArchComponent.Component):
                 )
 
         # set the Area property
-        obj.Area = obj.Length.Value * obj.Height.Value
+        self.setPropertyIfChanged(obj, "Area", obj.Length.Value * obj.Height.Value)
 
     def onBeforeChange(self, obj, prop):
         """Method called before the object has a property changed.

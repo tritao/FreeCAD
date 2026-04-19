@@ -1162,6 +1162,42 @@ class Component(ArchIFC.IfcProduct):
             return True
         return False
 
+    def isSamePlacement(self, first, second):
+        """Check that two placements are almost equal."""
+
+        try:
+            delta = FreeCAD.Placement(first).inverse().multiply(FreeCAD.Placement(second))
+        except Exception:
+            return False
+        return self.isIdentity(delta)
+
+    def setPlacementIfChanged(self, obj, placement):
+        """Assign Placement only when it would change."""
+
+        if self.isSamePlacement(obj.Placement, placement):
+            return
+        obj.Placement = placement
+
+    def setPropertyIfChanged(self, obj, prop, value, tolerance=0.000001):
+        """Assign a property only when it would change."""
+
+        try:
+            current = getattr(obj, prop)
+        except Exception:
+            return
+        current_value = getattr(current, "Value", current)
+        value_value = getattr(value, "Value", value)
+        try:
+            if abs(float(current_value) - float(value_value)) < tolerance:
+                return
+        except (TypeError, ValueError):
+            try:
+                if current == value:
+                    return
+            except Exception:
+                pass
+        setattr(obj, prop, value)
+
     def applyShape(self, obj, shape, placement, allowinvalid=False, allownosolid=False):
         """Check the given shape, then assign it to the object.
 
@@ -1208,19 +1244,19 @@ class Component(ArchIFC.IfcProduct):
                             pass
                         else:
                             shape = r
-                        p = self.spread(
-                            obj, shape, placement
-                        ).Placement.copy()  # for some reason this gets zeroed in next line
-                        obj.Shape = self.spread(obj, shape, placement)
+                        applied_shape = self.spread(obj, shape, placement)
+                        # Keep a copy before assigning the shape; assignment can zero it.
+                        p = applied_shape.Placement.copy()
+                        obj.Shape = applied_shape
                         if not self.isIdentity(placement):
-                            obj.Placement = placement
+                            self.setPlacementIfChanged(obj, placement)
                         else:
-                            obj.Placement = p
+                            self.setPlacementIfChanged(obj, p)
                     else:
                         if allownosolid:
                             obj.Shape = self.spread(obj, shape, placement)
                             if not self.isIdentity(placement):
-                                obj.Placement = placement
+                                self.setPlacementIfChanged(obj, placement)
                         else:
                             FreeCAD.Console.PrintWarning(
                                 obj.Label + " " + translate("Arch", "has no solid") + "\n"
@@ -1229,7 +1265,7 @@ class Component(ArchIFC.IfcProduct):
                     if allowinvalid:
                         obj.Shape = self.spread(obj, shape, placement)
                         if not self.isIdentity(placement):
-                            obj.Placement = placement
+                            self.setPlacementIfChanged(obj, placement)
                     else:
                         FreeCAD.Console.PrintWarning(
                             obj.Label + " " + translate("Arch", "has an invalid shape") + "\n"
