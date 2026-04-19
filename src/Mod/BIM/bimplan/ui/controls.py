@@ -1533,6 +1533,7 @@ class PlanEditControlsWidget:
         selected_state = self.session._format_plan_target_selection_state(
             selected_kind, selected_obj
         )
+        provider_state = self.session._format_provider_selected_object_state()
         if tool == "Join" and selected_kind == "wall" and selected_obj is not None:
             target_wall, joint, detail = self.session._get_plan_join_candidate_state()
             selection_state = translate("BIM_PlanEdit", "Source wall: {label}").format(
@@ -1646,6 +1647,9 @@ class PlanEditControlsWidget:
                     "BIM_PlanEdit",
                     "This wall can be reviewed in plan, but grip editing is unavailable.",
                 )
+        elif provider_state:
+            selection_state = provider_state
+            selection_help = self.session._format_provider_selected_object_help()
         else:
             selection_state = translate("BIM_PlanEdit", "No target selected")
             selection_help = translate(

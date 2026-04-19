@@ -6288,10 +6288,35 @@ class PlanEditSession:
             return ""
         return template.format(label=self._get_plan_target_display_label(obj))
 
+    def _get_provider_selected_objects(self):
+        return tuple(self._normalize_gui_object_selection(self._provider_selected_objects))
+
+    def _format_provider_selected_object_state(self):
+        objects = self._get_provider_selected_objects()
+        if not objects:
+            return ""
+        if len(objects) == 1:
+            return translate("BIM_PlanEdit", "Object: {label}").format(
+                label=self._get_plan_target_display_label(objects[0])
+            )
+        return translate("BIM_PlanEdit", "{count} integration objects selected").format(
+            count=len(objects)
+        )
+
+    def _format_provider_selected_object_help(self):
+        if not self._get_provider_selected_objects():
+            return ""
+        return translate(
+            "BIM_PlanEdit",
+            "Use the integration details and actions below for the selected object.",
+        )
+
     def _get_status_chip_text(self):
         title = translate("BIM_PlanEdit", "Plan Edit · {tool}").format(tool=self.current_tool)
         selected_kind, selected_obj = self._get_selected_plan_target()
         selected_context = self._format_plan_target_selection_state(selected_kind, selected_obj)
+        provider_context = self._format_provider_selected_object_state()
+        provider_action = self._format_provider_selected_object_help()
 
         if self.current_tool == "Provider Point":
             title = translate("BIM_PlanEdit", "Plan Edit · {tool}").format(
@@ -6379,6 +6404,8 @@ class PlanEditSession:
 
         if selected_context:
             context = selected_context
+        elif provider_context:
+            context = provider_context
         else:
             context = translate("BIM_PlanEdit", "Storey: {label}").format(
                 label=self.get_storey_label(self.active_storey)
@@ -6395,6 +6422,8 @@ class PlanEditSession:
                 "BIM_PlanEdit",
                 "Edit label, scheme, type, and parent space in the task panel",
             )
+        if provider_context and self.current_tool == "Select":
+            action = provider_action
         if self._plan_relation_status_message:
             action = self._plan_relation_status_message
         if not action:

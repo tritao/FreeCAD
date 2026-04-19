@@ -861,6 +861,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertTrue(event._handled)
         self.assertIn(marker, FreeCADGui.Selection.getSelection())
         self._assert_no_selected_plan_target(session)
+        self.assertIn("Object: Electrical Marker", session.task_panel.status.text())
+        self.assertIn("integration details", session.task_panel.status.text())
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
