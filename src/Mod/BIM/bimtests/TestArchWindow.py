@@ -731,6 +731,44 @@ class TestArchWindow(TestArchBase.TestArchBase):
         self.assertIsNotNone(context["move_u_min"])
         self.assertIsNotNone(context["move_u_max"])
 
+    def test_hosted_opening_plan_frame_uses_wall_thickness_without_host_footprint(self):
+        """Simple wall hosts should not need a full wall footprint slice for plan bounds."""
+
+        wall_width = 240.0
+        wall = Arch.makeWall(length=3000, width=wall_width, height=2500, name="PlanSpanWall")
+        self.document.recompute()
+
+        window_width = 800.0
+        window_height = 1200.0
+        window_sketch = self._create_sketch_with_wires(
+            "PlanSpanWindowSketch", [(0, 0, window_width, window_height)]
+        )
+        window_sketch.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+        window_sketch.Placement.Base = FreeCAD.Vector(1100, wall_width * 0.5, 800)
+        self.document.recompute()
+
+        window = Arch.makeWindow(baseobj=window_sketch, name="PlanSpanWindow")
+        window.Width = window_width
+        window.Height = window_height
+        self.document.recompute()
+
+        Arch.addComponents(window, wall)
+        self.document.recompute()
+
+        with patch.object(
+            wall.Proxy,
+            "getFootprint",
+            side_effect=AssertionError("simple wall span should use wall thickness"),
+        ) as get_footprint:
+            cut_z, base_z = window.Proxy._get_footprint_cut_context()
+            frame = window.Proxy._get_hosted_opening_plan_frame(window.Shape, cut_z, base_z)
+            context = window.Proxy.get_plan_move_context()
+
+        get_footprint.assert_not_called()
+        self.assertIsNotNone(frame)
+        self.assertIsNotNone(context)
+        self.assertAlmostEqual(frame["vmax"] - frame["vmin"], wall_width, delta=1e-6)
+
     def _create_sketch_with_wires(
         self, name: str, wire_definitions: list[tuple[float, float, float, float]]
     ) -> "FreeCAD.DocumentObject":
