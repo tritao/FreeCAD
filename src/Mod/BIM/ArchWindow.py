@@ -242,6 +242,10 @@ class _HostedOpeningPlanGeometry:
 
         return origin, axis_u, axis_v
 
+    def _get_host_plan_object(self):
+        hosts = getattr(self.Object, "Hosts", None) or []
+        return hosts[0] if hosts else None
+
     def _get_section_plan_basis(self, section_edges):
         if not section_edges:
             return None
@@ -330,11 +334,11 @@ class _HostedOpeningPlanGeometry:
             "vmax": max(v_values),
         }
 
-    def _get_host_plan_thickness(self):
-        hosts = getattr(self.Object, "Hosts", None) or []
-        host = hosts[0] if hosts else None
+    def _get_host_plan_thickness(self, host=None, fallback=120.0, allow_shape_fallback=True):
+        if host is None:
+            host = self._get_host_plan_object()
         if not host:
-            return 120.0
+            return fallback
 
         width = getattr(host, "Width", None)
         if width is not None:
@@ -363,17 +367,45 @@ class _HostedOpeningPlanGeometry:
                 pass
 
         host_shape = getattr(host, "Shape", None)
-        if host_shape and not host_shape.isNull():
+        if allow_shape_fallback and host_shape and not host_shape.isNull():
             bb = host_shape.BoundBox
             lengths = [length for length in (bb.XLength, bb.YLength) if length > 0.0]
             if lengths:
                 return min(lengths)
 
-        return 120.0
+        return fallback
+
+    def _is_simple_wall_host_for_plan_span(self, host):
+        try:
+            if Draft.getType(host) != "Wall":
+                return False
+        except Exception:
+            return False
+
+        base = getattr(host, "Base", None)
+        shape = getattr(base, "Shape", None) if base else None
+        if shape:
+            try:
+                if len(shape.Edges) > 1:
+                    return False
+            except Exception:
+                return False
+        return True
+
+    def _get_host_plan_v_bounds_from_thickness(self, center_v):
+        host = self._get_host_plan_object()
+        if not host or not self._is_simple_wall_host_for_plan_span(host):
+            return None
+
+        thickness = self._get_host_plan_thickness(host=host, fallback=None)
+        if thickness is None or thickness <= 0.0:
+            return None
+
+        half_thickness = thickness * 0.5
+        return center_v - half_thickness, center_v + half_thickness
 
     def _get_host_plan_v_bounds(self, origin, axis_u, axis_v):
-        hosts = getattr(self.Object, "Hosts", None) or []
-        host = hosts[0] if hosts else None
+        host = self._get_host_plan_object()
         if not host:
             return None
 
@@ -543,7 +575,9 @@ class _HostedOpeningPlanGeometry:
         source_vmin = center_v - half_width_v
         source_vmax = center_v + half_width_v
 
-        host_v_bounds = self._get_host_plan_v_bounds(origin, axis_u, axis_v)
+        host_v_bounds = self._get_host_plan_v_bounds_from_thickness(center_v)
+        if host_v_bounds is None:
+            host_v_bounds = self._get_host_plan_v_bounds(origin, axis_u, axis_v)
         if host_v_bounds is not None:
             vmin, vmax = host_v_bounds
         else:
@@ -1875,9 +1909,6 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         umax = section_profile["umax"]
         vmin = section_profile["vmin"]
         vmax = section_profile["vmax"]
-        host_v_bounds = self._get_host_plan_v_bounds(origin, axis_u, axis_v)
-        if host_v_bounds is not None:
-            vmin, vmax = host_v_bounds
         width_u = max(umax - umin, 0.0)
         width_v = max(vmax - vmin, 0.0)
         if width_u <= 0.0:
@@ -1995,16 +2026,8 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             return []
 
         polylines = list(self._get_symbol_footprint_polylines(section_profile, base_z))
-        host_v_bounds = self._get_host_plan_v_bounds(
-            section_profile["origin"],
-            section_profile["axis_u"],
-            section_profile["axis_v"],
-        )
-        if host_v_bounds is not None:
-            vmin, vmax = host_v_bounds
-        else:
-            vmin = section_profile["vmin"]
-            vmax = section_profile["vmax"]
+        vmin = section_profile["vmin"]
+        vmax = section_profile["vmax"]
 
         if vmax > vmin:
             mid_v = (vmin + vmax) * 0.5
@@ -2075,10 +2098,6 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         umax = section_profile["umax"]
         vmin = section_profile["vmin"]
         vmax = section_profile["vmax"]
-
-        host_v_bounds = self._get_host_plan_v_bounds(origin, axis_u, axis_v)
-        if host_v_bounds is not None:
-            vmin, vmax = host_v_bounds
 
         width_v = max(vmax - vmin, 0.0)
         symbol_inset = min(width_v * 0.25, 30.0)
