@@ -459,6 +459,26 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         ]
         self.assertTrue(any("Provider needs review" in text for text in labels))
         self.assertTrue(any("Integration Summary" in text for text in labels))
+        self.assertTrue(any("Overlays" in text for text in labels))
+
+        overlay_checkboxes = [
+            widget
+            for widget in panel.integration_panel.findChildren(QtGui.QCheckBox)
+            if "Provider Preview" in str(widget.text())
+        ]
+        self.assertEqual(1, len(overlay_checkboxes))
+        overlay_key = session.get_plan_provider_overlay_visibility_key(
+            "test-plan-provider",
+            "provider-preview",
+        )
+        self.assertTrue(overlay_checkboxes[0].isChecked())
+        self.assertNotIn(overlay_key, session._provider_overlay_visibility)
+        overlay_checkboxes[0].setChecked(False)
+        self.pump_gui_events()
+        self.assertFalse(session._provider_overlay_visibility[overlay_key])
+        overlay_checkboxes[0].setChecked(True)
+        self.pump_gui_events()
+        self.assertNotIn(overlay_key, session._provider_overlay_visibility)
 
         buttons = [
             widget
@@ -513,6 +533,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             self.assertEqual(0, provider.issue_calls)
             self.assertEqual(0, provider.section_calls)
             self.assertEqual(0, provider.tool_calls)
+            self.assertEqual(0, provider.overlay_calls)
             self.assertTrue(panel.integration_panel.isHidden())
             self.assertFalse(
                 session.execute_plan_provider_action("test-plan-provider", "apply-provider-fix")
@@ -546,6 +567,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         provider.issue_calls = 0
         provider.section_calls = 0
         provider.tool_calls = 0
+        provider.overlay_calls = 0
 
         session._set_hovered_wall(wall)
         with patch.object(session, "_get_edit_node", return_value=None):
@@ -557,11 +579,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(0, provider.issue_calls)
         self.assertEqual(0, provider.section_calls)
         self.assertEqual(0, provider.tool_calls)
+        self.assertEqual(0, provider.overlay_calls)
 
         self.pump_gui_events(timeout_ms=500)
         self.assertGreater(provider.issue_calls, 0)
         self.assertGreater(provider.section_calls, 0)
         self.assertGreater(provider.tool_calls, 0)
+        self.assertGreater(provider.overlay_calls, 0)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()

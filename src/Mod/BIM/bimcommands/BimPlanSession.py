@@ -276,6 +276,7 @@ class PlanEditSession:
         self._region_overlay_trackers = []
         self._provider_overlay_trackers = []
         self._provider_overlay_state = None
+        self._provider_overlay_visibility = {}
         self._secondary_selection_trackers = []
         self._space_region_pick_trackers = []
         self._selected_wall_opening_context_trackers = []
@@ -2588,6 +2589,34 @@ class PlanEditSession:
             "get_overlays",
             self._normalize_plan_provider_overlay,
         )
+
+    def get_plan_provider_overlay_visibility_key(self, provider_id, overlay_key):
+        provider_id = str(provider_id or "").strip()
+        overlay_key = str(overlay_key or "").strip()
+        if not provider_id or not overlay_key:
+            return None
+        return (provider_id, overlay_key)
+
+    def is_plan_provider_overlay_visible(self, overlay):
+        key = self.get_plan_provider_overlay_visibility_key(
+            getattr(overlay, "provider_id", ""),
+            getattr(overlay, "key", ""),
+        )
+        if key is None:
+            return True
+        return self._provider_overlay_visibility.get(key, True)
+
+    def set_plan_provider_overlay_visible(self, provider_id, overlay_key, visible):
+        key = self.get_plan_provider_overlay_visibility_key(provider_id, overlay_key)
+        if key is None:
+            return
+        visible = bool(visible)
+        if visible:
+            self._provider_overlay_visibility.pop(key, None)
+        else:
+            self._provider_overlay_visibility[key] = False
+        self._provider_overlay_state = None
+        self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_PROVIDER_OVERLAYS)
 
     def queue_plan_provider_overlay_refresh(self):
         self._provider_overlay_state = None

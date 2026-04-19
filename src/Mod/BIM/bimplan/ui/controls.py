@@ -44,6 +44,7 @@ class PlanEditControlsWidget:
         self._integration_refresh_queued = False
         self._integration_refresh_generation = 0
         self._integration_action_buttons = []
+        self._integration_overlay_checkboxes = []
         self._modal_interaction_state = None
         self._region_parent_space_items = []
         self.header_mode_label = None
@@ -731,6 +732,98 @@ class PlanEditControlsWidget:
             )
         )
 
+    def _build_provider_overlay_legend_items(self, overlays):
+        items = []
+        seen = set()
+        for overlay in tuple(overlays or ()):
+            if not bool(getattr(overlay, "visible", True)):
+                continue
+            provider_id = str(getattr(overlay, "provider_id", "") or "").strip()
+            overlay_key = str(getattr(overlay, "key", "") or "").strip()
+            if not provider_id or not overlay_key:
+                continue
+            identity = (provider_id, overlay_key)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            label = str(getattr(overlay, "label", "") or "").strip() or overlay_key
+            provider_label = self.session.get_plan_provider_display_name(provider_id)
+            if provider_label:
+                label = translate("BIM_PlanEdit", "{provider}: {label}").format(
+                    provider=provider_label,
+                    label=label,
+                )
+            items.append(
+                (
+                    provider_id,
+                    overlay_key,
+                    label,
+                    tuple(getattr(overlay, "color", ()) or ()),
+                    self.session.is_plan_provider_overlay_visible(overlay),
+                )
+            )
+        return tuple(items)
+
+    def _make_provider_overlay_legend_block(self, QtGui, items):
+        if not items:
+            return None
+        block = QtGui.QFrame(self.integration_panel)
+        block.setFrameShape(QtGui.QFrame.StyledPanel)
+        layout = QtGui.QVBoxLayout(block)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(4)
+
+        title_label = self._make_wrapped_plain_label(
+            QtGui,
+            translate("BIM_PlanEdit", "Overlays"),
+            block,
+            bold=True,
+        )
+        layout.addWidget(title_label)
+
+        for provider_id, overlay_key, label, color, checked in items:
+            row = QtGui.QHBoxLayout()
+            row.setSpacing(6)
+            swatch = QtGui.QLabel(block)
+            swatch.setFixedSize(12, 12)
+            swatch.setStyleSheet(
+                "background-color: {}; border: 1px solid #555;".format(
+                    self._format_provider_overlay_color(color)
+                )
+            )
+            row.addWidget(swatch)
+
+            checkbox = QtGui.QCheckBox(label, block)
+            checkbox.setChecked(bool(checked))
+            checkbox.toggled.connect(
+                lambda checked, current_provider_id=provider_id, current_overlay_key=overlay_key: (
+                    self.on_provider_overlay_visibility_changed(
+                        current_provider_id,
+                        current_overlay_key,
+                        checked,
+                    )
+                )
+            )
+            self._integration_overlay_checkboxes.append(checkbox)
+            row.addWidget(checkbox)
+            row.addStretch(1)
+            layout.addLayout(row)
+        return block
+
+    def _format_provider_overlay_color(self, color):
+        rgb = []
+        for value in tuple(color or ())[:3]:
+            try:
+                channel = float(value)
+            except (TypeError, ValueError):
+                channel = 0.0
+            if channel <= 1.0:
+                channel *= 255.0
+            rgb.append(max(0, min(255, int(round(channel)))))
+        while len(rgb) < 3:
+            rgb.append(0)
+        return "rgb({}, {}, {})".format(rgb[0], rgb[1], rgb[2])
+
     def _set_integration_panel_visible(self, visible):
         if self.integration_panel is None:
             return
@@ -742,6 +835,7 @@ class PlanEditControlsWidget:
     def _hide_integration_panel(self):
         self._integration_panel_state = None
         self._integration_action_buttons = []
+        self._integration_overlay_checkboxes = []
         if self.integration_summary is not None:
             try:
                 self.integration_summary.clear()
@@ -750,7 +844,14 @@ class PlanEditControlsWidget:
         self._clear_layout(self.integration_content_layout)
         self._set_integration_panel_visible(False)
 
-    def _set_integration_summary_text(self, issues, sections, tools=(), summary_sections=()):
+    def _set_integration_summary_text(
+        self,
+        issues,
+        sections,
+        tools=(),
+        overlay_items=(),
+        summary_sections=(),
+    ):
         if self.integration_summary is None:
             return
         if tuple(summary_sections or ()):
@@ -764,10 +865,15 @@ class PlanEditControlsWidget:
         issue_count = len(issues or ())
         section_count = len(sections or ())
         tool_count = len(tools or ())
+        overlay_count = len(overlay_items or ())
         if issue_count:
             parts.append(translate("BIM_PlanEdit", "{count} issue(s)").format(count=issue_count))
         if tool_count:
             parts.append(translate("BIM_PlanEdit", "{count} tool(s)").format(count=tool_count))
+        if overlay_count:
+            parts.append(
+                translate("BIM_PlanEdit", "{count} overlay(s)").format(count=overlay_count)
+            )
         if section_count:
             parts.append(
                 translate("BIM_PlanEdit", "{count} section(s)").format(count=section_count)
@@ -837,6 +943,8 @@ class PlanEditControlsWidget:
             with self.session._plan_provider_refresh_cache_scope():
                 with self.session._plan_perf_trace_span("collect_plan_provider_tools"):
                     tools = tuple(self.session.get_plan_provider_tools())
+                with self.session._plan_perf_trace_span("collect_plan_provider_overlays"):
+                    overlays = tuple(self.session.get_plan_provider_overlays())
                 with self.session._plan_perf_trace_span("collect_plan_provider_issues"):
                     issues = tuple(self.session.get_plan_provider_issues())
                 with self.session._plan_perf_trace_span("collect_plan_provider_inspector_sections"):
@@ -849,13 +957,15 @@ class PlanEditControlsWidget:
             if callable(queue_overlay_refresh):
                 queue_overlay_refresh()
             tools = self._sort_provider_tools(tools)
-            state = (tools, issues, sections)
-            if not tools and not issues and not sections:
+            overlay_items = self._build_provider_overlay_legend_items(overlays)
+            state = (tools, overlay_items, issues, sections)
+            if not tools and not overlay_items and not issues and not sections:
                 self._hide_integration_panel()
                 return
             if state != self._integration_panel_state:
                 self._integration_panel_state = state
                 self._integration_action_buttons = []
+                self._integration_overlay_checkboxes = []
                 self._clear_layout(self.integration_content_layout)
                 from PySide import QtGui
 
@@ -866,6 +976,7 @@ class PlanEditControlsWidget:
                     issues,
                     sections,
                     tools=tools,
+                    overlay_items=overlay_items,
                     summary_sections=summary_sections,
                 )
                 for section in summary_sections:
@@ -887,6 +998,10 @@ class PlanEditControlsWidget:
                         actions=tools,
                     )
                     self.integration_content_layout.addWidget(block)
+                if overlay_items:
+                    block = self._make_provider_overlay_legend_block(QtGui, overlay_items)
+                    if block is not None:
+                        self.integration_content_layout.addWidget(block)
                 for section in regular_sections:
                     block = self._make_integration_block(
                         QtGui,
@@ -1303,6 +1418,7 @@ class PlanEditControlsWidget:
         self.integration_content_layout = None
         self._integration_panel_state = None
         self._integration_action_buttons = []
+        self._integration_overlay_checkboxes = []
         self.space_editor = None
         self.space_label_edit = None
         self.space_type_combo = None
@@ -1396,6 +1512,9 @@ class PlanEditControlsWidget:
             getattr(action, "key", ""),
             transaction_label=getattr(action, "transaction_label", ""),
         )
+
+    def on_provider_overlay_visibility_changed(self, provider_id, overlay_key, visible):
+        self.session.set_plan_provider_overlay_visible(provider_id, overlay_key, visible)
 
     def _set_status_text(self, text):
         text = str(text or "")
@@ -1818,6 +1937,13 @@ class PlanEditControlsWidget:
             try:
                 base_enabled = button.property("planActionEnabled")
                 button.setEnabled(bool(base_enabled) and not modal_active)
+            except Exception:
+                pass
+        for checkbox in self._integration_overlay_checkboxes:
+            if checkbox is None:
+                continue
+            try:
+                checkbox.setEnabled(not modal_active)
             except Exception:
                 pass
 
