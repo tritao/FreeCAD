@@ -34,6 +34,7 @@ __url__ = "https://www.freecad.org"
 #  Spaces define an open volume inside or outside a
 #  building, ie. a room.
 
+import json
 import math
 import re
 
@@ -186,6 +187,8 @@ ConditioningTypes = [
 
 AreaCalculationType = ["XY-plane projection", "At Center of Mass"]
 
+_BOUNDARY_SIDE_HINT_VERSION = 1
+
 
 class _Space(ArchComponent.Component):
     "A space object"
@@ -212,6 +215,19 @@ class _Space(ArchComponent.Component):
                 ),
                 locked=True,
             )
+        if not "BoundarySideHints" in pl:
+            obj.addProperty(
+                "App::PropertyStringList",
+                "BoundarySideHints",
+                "Space",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "Hidden wall-side references used to keep space boundaries stable after wall topology changes",
+                ),
+                locked=True,
+            )
+        if "BoundarySideHints" in obj.PropertiesList:
+            obj.setEditorMode("BoundarySideHints", 2)
         if not "Area" in pl:
             obj.addProperty(
                 "App::PropertyArea",
@@ -645,7 +661,416 @@ class _Space(ArchComponent.Component):
         return faces
 
     def _get_boundary_faces(self, obj):
-        return self._get_boundary_faces_from_links(getattr(obj, "Boundaries", []) or [])
+        boundaries = self._get_stable_boundary_links(obj)
+        return self._get_boundary_faces_from_links(boundaries)
+
+    def _get_shape_reference_point(self, shape):
+        if shape is None:
+            return None
+        try:
+            if shape.isNull():
+                return None
+        except Exception:
+            pass
+        try:
+            return FreeCAD.Vector(shape.CenterOfMass)
+        except Exception:
+            pass
+        try:
+            bb = shape.BoundBox
+            return FreeCAD.Vector(
+                0.5 * (float(bb.XMin) + float(bb.XMax)),
+                0.5 * (float(bb.YMin) + float(bb.YMax)),
+                0.5 * (float(bb.ZMin) + float(bb.ZMax)),
+            )
+        except Exception:
+            return None
+
+    def _get_space_reference_point(self, obj):
+        point = self._get_shape_reference_point(getattr(obj, "Shape", None))
+        if point is not None:
+            return point
+        try:
+            base_shape = obj.Base.Shape
+        except Exception:
+            base_shape = None
+        return self._get_shape_reference_point(base_shape)
+
+    @staticmethod
+    def _vector_to_boundary_hint(point):
+        try:
+            return [float(point.x), float(point.y), float(point.z)]
+        except Exception:
+            return None
+
+    @staticmethod
+    def _vector_from_boundary_hint(value):
+        try:
+            if len(value) != 3:
+                return None
+            return FreeCAD.Vector(float(value[0]), float(value[1]), float(value[2]))
+        except Exception:
+            return None
+
+    def _object_local_point_from_global(self, obj, point):
+        try:
+            return obj.Placement.inverse().multVec(FreeCAD.Vector(point))
+        except Exception:
+            return None
+
+    def _object_global_point_from_local(self, obj, point):
+        try:
+            return obj.Placement.multVec(FreeCAD.Vector(point))
+        except Exception:
+            return None
+
+    def _object_local_direction_from_global(self, obj, direction):
+        try:
+            local_direction = obj.Placement.inverse().Rotation.multVec(FreeCAD.Vector(direction))
+        except Exception:
+            return None
+        if local_direction.Length <= 1e-7:
+            return None
+        local_direction.normalize()
+        return local_direction
+
+    def _object_global_direction_from_local(self, obj, direction):
+        try:
+            global_direction = obj.Placement.Rotation.multVec(FreeCAD.Vector(direction))
+        except Exception:
+            return None
+        if global_direction.Length <= 1e-7:
+            return None
+        global_direction.normalize()
+        return global_direction
+
+    def _load_boundary_side_hints(self, obj):
+        hints = {}
+        for raw_hint in getattr(obj, "BoundarySideHints", []) or []:
+            try:
+                hint = json.loads(str(raw_hint))
+            except Exception:
+                continue
+            if not isinstance(hint, dict):
+                continue
+            if hint.get("kind") != "wall-side":
+                continue
+            object_name = hint.get("object")
+            if object_name:
+                hints[str(object_name)] = hint
+        return hints
+
+    def _get_boundary_face(self, obj, face_name):
+        try:
+            if not str(face_name).startswith("Face"):
+                return None
+            index = int(str(face_name)[4:]) - 1
+            return obj.Shape.Faces[index]
+        except Exception:
+            return None
+
+    def _get_boundary_face_normal_and_center(self, face):
+        try:
+            normal_raw = face.normalAt(0, 0)
+            center_raw = face.CenterOfMass
+            normal = FreeCAD.Vector(normal_raw.x, normal_raw.y, normal_raw.z)
+            center = FreeCAD.Vector(center_raw.x, center_raw.y, center_raw.z)
+        except Exception:
+            return None, None
+        if normal.Length <= 1e-7:
+            return None, None
+        normal.normalize()
+        return normal, center
+
+    def _get_boundary_face_reference_score(self, face, reference_point):
+        if face is None or reference_point is None:
+            return None
+        normal, center = self._get_boundary_face_normal_and_center(face)
+        if normal is None or center is None:
+            return None
+        return float(normal.dot(FreeCAD.Vector(reference_point).sub(center)))
+
+    def _get_wall_side_reference_point(self, wall, face_name, fallback_reference=None):
+        face = self._get_boundary_face(wall, face_name)
+        if face is not None:
+            normal, center = self._get_boundary_face_normal_and_center(face)
+            if normal is not None and center is not None and abs(normal.z) <= 0.2:
+                offset = 1000.0
+                try:
+                    width = getattr(wall, "Width", 0.0)
+                    width = getattr(width, "Value", width)
+                    offset = max(offset, float(width) * 2.0)
+                except Exception:
+                    pass
+                direction = FreeCAD.Vector(normal)
+                direction.multiply(offset)
+                return center.add(direction)
+        if fallback_reference is not None:
+            try:
+                return FreeCAD.Vector(fallback_reference)
+            except Exception:
+                return None
+        return None
+
+    def _get_boundary_hint_reference_point(self, wall, hint):
+        if not hint:
+            return None
+        local_reference = self._vector_from_boundary_hint(hint.get("local_reference"))
+        if local_reference is not None:
+            reference_point = self._object_global_point_from_local(wall, local_reference)
+            if reference_point is not None:
+                return reference_point
+        return self._vector_from_boundary_hint(hint.get("reference"))
+
+    def _get_boundary_hint_normal(self, wall, hint):
+        if not hint:
+            return None
+        local_normal = self._vector_from_boundary_hint(hint.get("local_normal"))
+        if local_normal is not None:
+            normal = self._object_global_direction_from_local(wall, local_normal)
+            if normal is not None:
+                return normal
+        normal = self._vector_from_boundary_hint(hint.get("normal"))
+        if normal is None or normal.Length <= 1e-7:
+            return None
+        normal.normalize()
+        return normal
+
+    def _get_wall_boundary_face_name_for_normal(self, wall, normal, reference_point=None):
+        if wall is None or normal is None:
+            return None
+        try:
+            if Draft.getType(wall) != "Wall":
+                return None
+        except Exception:
+            return None
+        shape = getattr(wall, "Shape", None)
+        if shape is None or not getattr(shape, "Faces", None):
+            return None
+
+        normal = FreeCAD.Vector(normal)
+        if normal.Length <= 1e-7:
+            return None
+        normal.normalize()
+
+        best_face_name = None
+        best_sort_key = None
+        for index, face in enumerate(shape.Faces, start=1):
+            face_normal, face_center = self._get_boundary_face_normal_and_center(face)
+            if face_normal is None or face_center is None:
+                continue
+            if abs(face_normal.z) > 0.2:
+                continue
+            normal_score = float(face_normal.dot(normal))
+            if normal_score <= 0.8:
+                continue
+            facing_score = 0.0
+            if reference_point is not None:
+                facing_score = float(
+                    face_normal.dot(FreeCAD.Vector(reference_point).sub(face_center))
+                )
+            sort_key = (normal_score, float(face.Area or 0.0), facing_score)
+            if best_sort_key is None or sort_key > best_sort_key:
+                best_sort_key = sort_key
+                best_face_name = f"Face{index}"
+        return best_face_name
+
+    def _should_refresh_wall_boundary_face(
+        self, wall, current_face_name, candidate_face_name, reference_point
+    ):
+        if not candidate_face_name or candidate_face_name == current_face_name:
+            return False
+
+        current_face = self._get_boundary_face(wall, current_face_name)
+        candidate_face = self._get_boundary_face(wall, candidate_face_name)
+        if current_face is None:
+            return True
+        if candidate_face is None:
+            return False
+
+        current_score = self._get_boundary_face_reference_score(current_face, reference_point)
+        candidate_score = self._get_boundary_face_reference_score(candidate_face, reference_point)
+        if current_score is not None and current_score <= 1e-7:
+            return True
+
+        try:
+            current_normal = current_face.normalAt(0, 0)
+            if abs(float(current_normal.z)) > 0.2:
+                return True
+        except Exception:
+            pass
+
+        try:
+            current_area = float(current_face.Area or 0.0)
+            candidate_area = float(candidate_face.Area or 0.0)
+        except Exception:
+            current_area = 0.0
+            candidate_area = 0.0
+        if candidate_area > 0.0 and current_area <= 0.0:
+            return True
+        if candidate_area > max(current_area * 2.0, current_area + 1.0):
+            return True
+
+        if (
+            candidate_score is not None
+            and current_score is not None
+            and candidate_score > max(current_score * 2.0, current_score + 1.0)
+        ):
+            return True
+
+        return False
+
+    def _get_stable_boundary_links(self, obj):
+        boundaries = list(getattr(obj, "Boundaries", []) or [])
+        if not boundaries:
+            return boundaries
+
+        hints = self._load_boundary_side_hints(obj)
+        fallback_reference = self._get_space_reference_point(obj)
+        stable_boundaries = []
+        changed = False
+
+        for entry in boundaries:
+            boundary_obj, subnames = self._get_boundary_entry_object_and_subnames(entry)
+            if not boundary_obj:
+                continue
+            face_names = self.normalizeBoundarySubnames(subnames)
+            object_name = getattr(boundary_obj, "Name", None)
+            try:
+                is_wall = Draft.getType(boundary_obj) == "Wall"
+            except Exception:
+                is_wall = False
+
+            if is_wall and object_name and len(face_names) == 1:
+                current_face_name = face_names[0]
+                hint = hints.get(object_name)
+                hint_face_name = str(hint.get("face", "")) if hint else ""
+                hint_matches_current_face = bool(hint) and (
+                    not hint_face_name or hint_face_name == current_face_name
+                )
+                if (
+                    hint
+                    and not hint_matches_current_face
+                    and self._get_boundary_face(boundary_obj, current_face_name) is not None
+                ):
+                    stable_boundaries.append((boundary_obj, tuple(face_names)))
+                    continue
+
+                reference_point = None
+                if hint_matches_current_face:
+                    reference_point = self._get_boundary_hint_reference_point(
+                        boundary_obj,
+                        hint,
+                    )
+                if reference_point is None:
+                    reference_point = fallback_reference
+
+                candidate_face_name = self._get_wall_boundary_face_name(
+                    boundary_obj,
+                    reference_point,
+                )
+                if not candidate_face_name and hint_matches_current_face:
+                    candidate_face_name = self._get_wall_boundary_face_name_for_normal(
+                        boundary_obj,
+                        self._get_boundary_hint_normal(boundary_obj, hint),
+                        reference_point=reference_point,
+                    )
+                if candidate_face_name and candidate_face_name != current_face_name:
+                    should_refresh = (
+                        hint_matches_current_face
+                        or self._should_refresh_wall_boundary_face(
+                            boundary_obj,
+                            current_face_name,
+                            candidate_face_name,
+                            reference_point,
+                        )
+                    )
+                    if should_refresh:
+                        face_names = (candidate_face_name,)
+                        changed = True
+
+            if face_names:
+                stable_boundaries.append((boundary_obj, tuple(face_names)))
+
+        stable_boundaries = self.normalizeBoundaryLinks(stable_boundaries, exclude_objects=obj)
+        if changed:
+            try:
+                obj.Boundaries = stable_boundaries
+            except Exception:
+                pass
+        return stable_boundaries
+
+    def _sync_boundary_side_hints(self, obj, shape=None):
+        if not hasattr(obj, "BoundarySideHints"):
+            return
+
+        space_reference = self._get_shape_reference_point(shape)
+        if space_reference is None:
+            space_reference = self._get_space_reference_point(obj)
+
+        hints = []
+        seen = set()
+        for boundary_obj, subnames in getattr(obj, "Boundaries", []) or []:
+            object_name = getattr(boundary_obj, "Name", None)
+            if not object_name or object_name in seen:
+                continue
+            try:
+                if Draft.getType(boundary_obj) != "Wall":
+                    continue
+            except Exception:
+                continue
+            face_names = self.normalizeBoundarySubnames(subnames)
+            if len(face_names) != 1:
+                continue
+            face = self._get_boundary_face(boundary_obj, face_names[0])
+            reference_point = self._get_wall_side_reference_point(
+                boundary_obj,
+                face_names[0],
+                fallback_reference=space_reference,
+            )
+            reference_hint = self._vector_to_boundary_hint(reference_point)
+            if reference_hint is None:
+                continue
+            local_reference_hint = self._vector_to_boundary_hint(
+                self._object_local_point_from_global(boundary_obj, reference_point)
+            )
+            normal, _center = self._get_boundary_face_normal_and_center(face)
+            normal_hint = self._vector_to_boundary_hint(normal)
+            local_normal_hint = self._vector_to_boundary_hint(
+                self._object_local_direction_from_global(boundary_obj, normal)
+            )
+            try:
+                face_area = float(face.Area or 0.0) if face is not None else 0.0
+            except Exception:
+                face_area = 0.0
+            hint = {
+                "version": _BOUNDARY_SIDE_HINT_VERSION,
+                "kind": "wall-side",
+                "object": object_name,
+                "face": face_names[0],
+                "reference": reference_hint,
+                "area": face_area,
+            }
+            if local_reference_hint is not None:
+                hint["local_reference"] = local_reference_hint
+            if normal_hint is not None:
+                hint["normal"] = normal_hint
+            if local_normal_hint is not None:
+                hint["local_normal"] = local_normal_hint
+            hints.append(
+                json.dumps(
+                    hint,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+            )
+            seen.add(object_name)
+
+        try:
+            if list(getattr(obj, "BoundarySideHints", []) or []) != hints:
+                obj.BoundarySideHints = hints
+        except Exception:
+            pass
 
     def _copy_without_element_map(self, shape):
         if shape is None:
@@ -1908,6 +2333,7 @@ class _Space(ArchComponent.Component):
                 shape = self.processSubShapes(obj, loop_shape.Solids[0], pl)
                 self.applyShape(obj, shape, pl)
                 self._sync_area_properties(obj)
+                self._sync_boundary_side_hints(obj, shape)
                 return
 
         # 1: if we have a base shape, we use it
@@ -1926,6 +2352,7 @@ class _Space(ArchComponent.Component):
                 shape = self.processSubShapes(obj, shape.Solids[0], pl)
                 self.applyShape(obj, shape, pl)
                 self._sync_area_properties(obj)
+                self._sync_boundary_side_hints(obj, shape)
                 return
         else:
             if boundary_faces and not loop_analysis["supports_single_outer"]:
@@ -1986,6 +2413,7 @@ class _Space(ArchComponent.Component):
                 shape = self.processSubShapes(obj, shape.Solids[0], pl)
                 self.applyShape(obj, shape, pl)
                 self._sync_area_properties(obj)
+                self._sync_boundary_side_hints(obj, shape)
 
                 return
 
