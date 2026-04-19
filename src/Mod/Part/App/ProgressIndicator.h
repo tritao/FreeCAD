@@ -25,8 +25,6 @@
 
 #pragma once
 
-#include <memory>
-
 #include <Message_ProgressIndicator.hxx>
 #include <Standard_Version.hxx>
 
@@ -41,7 +39,7 @@ class PartExport ProgressIndicator: public Message_ProgressIndicator
 {
 public:
     ProgressIndicator();
-    ~ProgressIndicator() override;
+    ~ProgressIndicator() override = default;
 
     void Show(const Message_ProgressScope& theScope, const Standard_Boolean isForce) override;
     Standard_Boolean UserBreak() override;
@@ -49,7 +47,18 @@ public:
 
 private:
     std::size_t currentStep {0};
-    std::unique_ptr<Base::SequencerLauncher> progress;
+    Base::SequencerLauncher progress;
 };
+
+template<typename Builder>
+void buildWithProgress(Builder& builder)
+{
+#if OCC_VERSION_HEX >= 0x070600
+    ProgressIndicator progress;
+    builder.Build(progress.Start());
+#else
+    builder.Build();
+#endif
+}
 
 }  // namespace Part
