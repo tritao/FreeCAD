@@ -35,6 +35,7 @@
 #include <App/PropertyOverrides.h>
 
 #include <functional>
+#include <memory>
 
 #include <Mod/Part/PartGlobal.h>
 
@@ -48,9 +49,15 @@ class Property;
 
 namespace Gui
 {
+class DebouncedFunction;
 class ViewProviderPlane;
 class ViewProvider;
 }  // namespace Gui
+
+namespace Part
+{
+class AttachExtension;
+}
 
 namespace PartGui
 {
@@ -89,6 +96,9 @@ public:
         return completed;
     }
 
+    void flushPendingAttachmentUpdate();
+    void stopPendingAttachmentUpdate();
+
 Q_SIGNALS:
     void placementUpdated();
 
@@ -120,6 +130,10 @@ private:
     void documentDeleted(const Gui::Document&);
     void onSelectionChanged(const Gui::SelectionChanges& msg) override;
     void updateReferencesUI();
+    Part::AttachExtension* getAttachExtension() const;
+    void schedulePendingAttachmentUpdate();
+    bool refreshPreviewStatus();
+    void updatePreviewUi(bool attached, const QString& errMessage = {});
 
     /**
      * @brief updatePreview: calculate attachment, update 3d view, update status message
@@ -168,6 +182,7 @@ protected:
     std::string ObjectName;
 
 private:
+    std::unique_ptr<Gui::DebouncedFunction> attachmentUpdateScheduler;
     QWidget* proxy;
     std::unique_ptr<Ui_TaskAttacher> ui;
     VisibilityFunction visibilityFunc;
