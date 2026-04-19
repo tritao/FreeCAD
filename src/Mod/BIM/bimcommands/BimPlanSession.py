@@ -2755,7 +2755,6 @@ class PlanEditSession:
         return False
 
     def _handle_provider_point_tool_point(self, point=None, obj=None):
-        del obj
         if not self._has_active_provider_point_tool():
             return
         if point is None:
@@ -2766,7 +2765,15 @@ class PlanEditSession:
             self._arm_provider_point_tool()
             return
         tool = self._provider_point_tool
-        payload = {"point": plan_point, "tool": tool}
+        snap_info = self._get_provider_point_snap_info()
+        snap_object = self._resolve_provider_point_snap_object(obj, snap_info)
+        payload = self._build_provider_point_tool_payload(
+            tool,
+            raw_point=point,
+            plan_point=plan_point,
+            snap_object=snap_object,
+            snap_info=snap_info,
+        )
         self.execute_plan_provider_action(
             getattr(tool, "provider_id", ""),
             getattr(tool, "key", ""),
@@ -2775,6 +2782,73 @@ class PlanEditSession:
         )
         if self._has_active_provider_point_tool():
             self._arm_provider_point_tool()
+
+    def _get_provider_point_snap_info(self):
+        snapper = getattr(FreeCADGui, "Snapper", None)
+        if snapper is None:
+            return {}
+        snap_info = getattr(snapper, "snapInfo", None)
+        if isinstance(snap_info, dict):
+            return dict(snap_info)
+        return {}
+
+    def _resolve_provider_point_snap_object(self, snap_object, snap_info):
+        if snap_object is not None:
+            return snap_object
+        object_name = str(snap_info.get("Object", "") or "").strip()
+        if not object_name:
+            return None
+        doc = self.doc
+        document_name = str(snap_info.get("Document", "") or "").strip()
+        if document_name:
+            try:
+                doc = FreeCAD.getDocument(document_name)
+            except Exception:
+                doc = self.doc
+        if doc is None:
+            return None
+        try:
+            return doc.getObject(object_name)
+        except Exception:
+            return None
+
+    def _build_provider_point_tool_payload(
+        self,
+        tool,
+        *,
+        raw_point,
+        plan_point,
+        snap_object,
+        snap_info,
+    ):
+        snap_target = (None, None)
+        if snap_object is not None:
+            snap_target = self._get_plan_target_for_object(snap_object)
+        snap_component = str(snap_info.get("Component", "") or "").strip()
+        snap_subname = str(snap_info.get("SubName", "") or snap_component).strip()
+        snap_document_name = str(snap_info.get("Document", "") or "").strip()
+        if not snap_document_name and snap_object is not None:
+            snap_document_name = str(
+                getattr(getattr(snap_object, "Document", None), "Name", "") or ""
+            )
+        snap_object_name = str(snap_info.get("Object", "") or "").strip()
+        if not snap_object_name and snap_object is not None:
+            snap_object_name = str(getattr(snap_object, "Name", "") or "")
+        return {
+            "tool": tool,
+            "point": plan_point,
+            "raw_point": raw_point,
+            "snap_info": snap_info,
+            "snap_object": snap_object,
+            "snap_target": snap_target,
+            "snap_document_name": snap_document_name,
+            "snap_object_name": snap_object_name,
+            "snap_component": snap_component,
+            "snap_subname": snap_subname,
+            "selected_target": self._get_selected_plan_target(),
+            "selected_targets": self._get_selected_plan_targets(),
+            "hovered_target": self._get_hovered_plan_target(),
+        }
 
     def _get_space_preflight_report(self, targets=None):
         return plan_spaces.get_space_preflight_report(self, targets=targets)
