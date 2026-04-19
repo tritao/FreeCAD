@@ -46,6 +46,7 @@ from bimplan.hosts import _PlanEditCommandHost, _PlanEditWallHost
 from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
 from bimplan.overlays import openings as opening_overlays
+from bimplan.overlays import providers as provider_overlays
 from bimplan.overlays import spaces as space_overlays
 from bimplan.overlays import symbols as symbol_overlays
 from bimplan.overlays import walls as wall_overlays
@@ -123,6 +124,7 @@ _PLAN_VISUAL_SECONDARY_SELECTION = "secondary_selection"
 _PLAN_VISUAL_SPACE_REGION_PICK = "space_region_pick"
 _PLAN_VISUAL_WALL_GRIPS = "wall_grips"
 _PLAN_VISUAL_WALL_EDIT_PREVIEW = "wall_edit_preview"
+_PLAN_VISUAL_PROVIDER_OVERLAYS = "provider_overlays"
 _PLAN_VISUAL_VIEW_SCALE = "view_scale"
 _PLAN_VISUAL_ALL = "all"
 _PLAN_GUI_SELECTION_SYNC_DELAY_MS = 80
@@ -272,6 +274,8 @@ class PlanEditSession:
         self._selected_space_overlay_segments = ()
         self._selected_space_overlay_render_state = None
         self._region_overlay_trackers = []
+        self._provider_overlay_trackers = []
+        self._provider_overlay_state = None
         self._secondary_selection_trackers = []
         self._space_region_pick_trackers = []
         self._selected_wall_opening_context_trackers = []
@@ -749,6 +753,7 @@ class PlanEditSession:
         self._clear_selected_symbol_overlay()
         self._clear_selected_space_overlay()
         self._clear_selected_region_overlay()
+        self._clear_provider_overlays()
         self._clear_space_region_pick_overlays()
         self._clear_secondary_selected_overlays()
         self._clear_selected_wall_opening_context_overlay()
@@ -887,6 +892,9 @@ class PlanEditSession:
             self._clear_hovered_symbol_overlay()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
+            self._clear_selected_space_overlay()
+            self._clear_selected_region_overlay()
+            self._clear_provider_overlays()
             self._clear_selected_wall_opening_context_overlay()
             self._clear_selected_opening_handles()
             self._discard_opening_handle_tracker_pool()
@@ -2518,6 +2526,9 @@ class PlanEditSession:
     def _normalize_plan_provider_action(self, provider_id, action):
         return plan_provider_runtime.normalize_plan_provider_action(provider_id, action)
 
+    def _normalize_plan_provider_tool(self, provider_id, tool):
+        return plan_provider_runtime.normalize_plan_provider_tool(provider_id, tool)
+
     def _normalize_plan_provider_issue(self, provider_id, issue):
         return plan_provider_runtime.normalize_plan_provider_issue(self, provider_id, issue)
 
@@ -2560,6 +2571,12 @@ class PlanEditSession:
             self._normalize_plan_provider_suggestion,
         )
 
+    def get_plan_provider_tools(self):
+        return self._collect_plan_provider_contributions(
+            "get_tools",
+            self._normalize_plan_provider_tool,
+        )
+
     def get_plan_provider_inspector_sections(self):
         return self._collect_plan_provider_contributions(
             "get_inspector_sections",
@@ -2571,6 +2588,10 @@ class PlanEditSession:
             "get_overlays",
             self._normalize_plan_provider_overlay,
         )
+
+    def queue_plan_provider_overlay_refresh(self):
+        self._provider_overlay_state = None
+        self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_PROVIDER_OVERLAYS)
 
     def execute_plan_provider_action(self, provider_id, action_key, transaction_label=""):
         if self._plan_provider_integrations_disabled():
@@ -4793,6 +4814,7 @@ class PlanEditSession:
             self._clear_selected_symbol_overlay()
             self._clear_selected_space_overlay()
             self._clear_selected_region_overlay()
+            self._clear_provider_overlays()
             self._clear_secondary_selected_overlays()
             self._clear_selected_opening_handles()
             self._clear_selected_symbol_handles()
@@ -4812,6 +4834,7 @@ class PlanEditSession:
             self._clear_selected_symbol_overlay()
             self._clear_selected_space_overlay()
             self._clear_selected_region_overlay()
+            self._clear_provider_overlays()
             self._clear_secondary_selected_overlays()
             self._clear_selected_opening_handles()
             self._clear_selected_symbol_handles()
@@ -4830,6 +4853,7 @@ class PlanEditSession:
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
             self._clear_selected_region_overlay()
+            self._clear_provider_overlays()
             self._clear_secondary_selected_overlays()
             self._clear_selected_opening_handles()
             self._clear_selected_symbol_handles()
@@ -4852,6 +4876,7 @@ class PlanEditSession:
             self._clear_selected_symbol_overlay()
             self._clear_selected_space_overlay()
             self._clear_selected_region_overlay()
+            self._clear_provider_overlays()
             self._clear_selected_opening_handles()
             self._clear_selected_symbol_handles()
             self._clear_selected_wall_opening_context_overlay()
@@ -4895,6 +4920,8 @@ class PlanEditSession:
                 self._clear_space_region_pick_overlays()
             if refresh_all or _PLAN_VISUAL_WALL_GRIPS in dirty:
                 self._sync_wall_grips()
+            if refresh_all or _PLAN_VISUAL_PROVIDER_OVERLAYS in dirty:
+                self._sync_provider_overlays()
             return
 
     def _on_key_pressed(self, event_callback):
@@ -5390,6 +5417,7 @@ class PlanEditSession:
         if self._tearing_down:
             return
         self._invalidate_plan_provider_document_cache()
+        self._provider_overlay_state = None
         self._invalidate_plan_classification_cache()
         self._invalidate_wall_hosted_openings_cache()
         self._queue_created_plan_object(obj)
@@ -5398,6 +5426,7 @@ class PlanEditSession:
         if self._tearing_down:
             return
         self._invalidate_plan_provider_document_cache()
+        self._provider_overlay_state = None
         self._invalidate_plan_classification_cache()
         self._invalidate_wall_hosted_openings_cache()
         if self.current_tool != "Select":
@@ -5529,6 +5558,7 @@ class PlanEditSession:
         if self._tearing_down:
             return
         self._invalidate_plan_provider_document_cache()
+        self._provider_overlay_state = None
         self._invalidate_plan_classification_cache()
         self._invalidate_wall_hosted_openings_cache()
         self._invalidate_plan_overlay_geometry_cache(obj)
@@ -5611,6 +5641,7 @@ class PlanEditSession:
             _PLAN_VISUAL_HOVERED_OPENING,
             _PLAN_VISUAL_HOVERED_WALL,
             _PLAN_VISUAL_WALL_GRIPS,
+            _PLAN_VISUAL_PROVIDER_OVERLAYS,
         ]
         if selected_region:
             visual_args.append(_PLAN_VISUAL_SELECTED_REGION)
@@ -7005,6 +7036,12 @@ class PlanEditSession:
 
     def _clear_selected_region_overlay(self):
         return space_overlays.clear_selected_region_overlay(self)
+
+    def _sync_provider_overlays(self):
+        return provider_overlays.sync_provider_overlays(self)
+
+    def _clear_provider_overlays(self):
+        return provider_overlays.clear_provider_overlays(self)
 
     def _sync_hovered_opening_overlay(self):
         return opening_overlays.sync_hovered_opening_overlay(self)

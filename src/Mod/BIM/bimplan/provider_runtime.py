@@ -12,6 +12,7 @@ from bimplan.providers import (
     PlanIssueSpec,
     PlanOverlaySpec,
     PlanSuggestionSpec,
+    PlanToolSpec,
 )
 from bimplan.semantics import PlanSemanticRecord
 from bimplan.targets import PlanTarget
@@ -139,6 +140,14 @@ def normalize_plan_provider_action(provider_id, action):
     return replace(action, provider_id=str(provider_id or ""))
 
 
+def normalize_plan_provider_tool(provider_id, tool):
+    if not isinstance(tool, PlanToolSpec):
+        return None
+    if tool.provider_id == provider_id:
+        return tool
+    return replace(tool, provider_id=str(provider_id or ""))
+
+
 def normalize_plan_provider_issue(session, provider_id, issue):
     if not isinstance(issue, PlanIssueSpec):
         return None
@@ -205,9 +214,63 @@ def normalize_plan_provider_section(session, provider_id, section):
 def normalize_plan_provider_overlay(provider_id, overlay):
     if not isinstance(overlay, PlanOverlaySpec):
         return None
-    if overlay.provider_id == provider_id:
+    replacements = {}
+    if overlay.provider_id != provider_id:
+        replacements["provider_id"] = str(provider_id or "")
+    target_keys = tuple(str(key or "") for key in tuple(overlay.target_keys or ()) if key)
+    if target_keys != tuple(overlay.target_keys or ()):
+        replacements["target_keys"] = target_keys
+    points = tuple(_coerce_plan_overlay_point(point) for point in tuple(overlay.points or ()))
+    points = tuple(point for point in points if point is not None)
+    if points != tuple(overlay.points or ()):
+        replacements["points"] = points
+    polylines = tuple(
+        _coerce_plan_overlay_polyline(polyline) for polyline in tuple(overlay.polylines or ())
+    )
+    polylines = tuple(polyline for polyline in polylines if len(polyline) >= 2)
+    if polylines != tuple(overlay.polylines or ()):
+        replacements["polylines"] = polylines
+    color = _coerce_plan_overlay_color(overlay.color)
+    if color != overlay.color:
+        replacements["color"] = color
+    if not replacements:
         return overlay
-    return replace(overlay, provider_id=str(provider_id or ""))
+    return replace(overlay, **replacements)
+
+
+def _coerce_plan_overlay_point(point):
+    try:
+        return (
+            float(point.x),
+            float(point.y),
+            float(getattr(point, "z", 0.0) or 0.0),
+        )
+    except AttributeError:
+        pass
+    try:
+        z_value = point[2] if len(point) > 2 else 0.0
+        return (float(point[0]), float(point[1]), float(z_value))
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+def _coerce_plan_overlay_polyline(polyline):
+    points = []
+    for point in tuple(polyline or ()):
+        coerced = _coerce_plan_overlay_point(point)
+        if coerced is not None:
+            points.append(coerced)
+    return tuple(points)
+
+
+def _coerce_plan_overlay_color(color):
+    try:
+        values = tuple(float(value) for value in tuple(color or ()))
+    except (TypeError, ValueError):
+        return (0.2, 0.55, 0.85)
+    if len(values) < 3:
+        return (0.2, 0.55, 0.85)
+    return values[:3]
 
 
 def collect_plan_provider_contributions(session, method_name, normalizer):

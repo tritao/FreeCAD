@@ -11,6 +11,7 @@ from .providers import (
     PlanIssueSpec,
     PlanOverlaySpec,
     PlanSuggestionSpec,
+    PlanToolSpec,
 )
 from .registry import PlanEditRegistry, get_plan_edit_registry
 from .semantics import PlanSemanticRecord
@@ -31,5 +32,6 @@ __all__ = [
     "PlanSemanticRecord",
     "PlanSuggestionSpec",
     "PlanTarget",
+    "PlanToolSpec",
     "get_plan_edit_registry",
 ]

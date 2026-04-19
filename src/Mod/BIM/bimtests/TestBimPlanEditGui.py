@@ -38,6 +38,8 @@ from bimplan.providers import (
     PlanEditProvider,
     PlanInspectorSection,
     PlanIssueSpec,
+    PlanOverlaySpec,
+    PlanToolSpec,
 )
 from bimplan.registry import get_plan_edit_registry
 from bimtests.ArchWallGuiTestUtils import (
@@ -56,6 +58,8 @@ class _TestPlanProvider(PlanEditProvider):
         self.executed_actions = []
         self.issue_calls = 0
         self.section_calls = 0
+        self.tool_calls = 0
+        self.overlay_calls = 0
 
     def get_issues(self, context):
         del context
@@ -86,6 +90,29 @@ class _TestPlanProvider(PlanEditProvider):
                 key="provider-summary",
                 title="Integration Summary",
                 body=f"Primary target: {target_label}",
+            ),
+        )
+
+    def get_tools(self, context):
+        del context
+        self.tool_calls += 1
+        return (
+            PlanToolSpec(
+                key="run-provider-tool",
+                label="Run Test Tool",
+                tooltip="Run a provider-owned Plan Edit tool.",
+            ),
+        )
+
+    def get_overlays(self, context):
+        del context
+        self.overlay_calls += 1
+        return (
+            PlanOverlaySpec(
+                key="provider-preview",
+                label="Provider Preview",
+                points=((100.0, 200.0, 0.0),),
+                color=(0.1, 0.2, 0.3),
             ),
         )
 
@@ -444,6 +471,22 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         self.assertEqual([("apply-provider-fix", "")], provider.executed_actions)
 
+        tool_buttons = [
+            widget
+            for widget in panel.integration_panel.findChildren(QtGui.QPushButton)
+            if str(widget.text()) == "Run Test Tool"
+        ]
+        self.assertEqual(1, len(tool_buttons))
+
+        tool_buttons[0].click()
+        self.pump_gui_events()
+        self.assertEqual(
+            [("apply-provider-fix", ""), ("run-provider-tool", "")],
+            provider.executed_actions,
+        )
+        self.assertGreater(provider.tool_calls, 0)
+        self.assertGreater(provider.overlay_calls, 0)
+
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
@@ -469,6 +512,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
             self.assertEqual(0, provider.issue_calls)
             self.assertEqual(0, provider.section_calls)
+            self.assertEqual(0, provider.tool_calls)
             self.assertTrue(panel.integration_panel.isHidden())
             self.assertFalse(
                 session.execute_plan_provider_action("test-plan-provider", "apply-provider-fix")
@@ -501,6 +545,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         provider.issue_calls = 0
         provider.section_calls = 0
+        provider.tool_calls = 0
 
         session._set_hovered_wall(wall)
         with patch.object(session, "_get_edit_node", return_value=None):
@@ -511,10 +556,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self._assert_selected_plan_target(session, "wall", wall)
         self.assertEqual(0, provider.issue_calls)
         self.assertEqual(0, provider.section_calls)
+        self.assertEqual(0, provider.tool_calls)
 
         self.pump_gui_events(timeout_ms=500)
         self.assertGreater(provider.issue_calls, 0)
         self.assertGreater(provider.section_calls, 0)
+        self.assertGreater(provider.tool_calls, 0)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
