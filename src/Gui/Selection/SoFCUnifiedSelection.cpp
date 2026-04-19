@@ -111,6 +111,36 @@ void printPreselectionInfo(
 
 SoFullPath* Gui::SoFCUnifiedSelection::currentHighlightPath = nullptr;
 
+namespace Gui::SelectionPickPolicy
+{
+
+std::size_t choosePreferredPick(const std::vector<Candidate>& picked)
+{
+    if (picked.empty()) {
+        return 0;
+    }
+
+    std::size_t preferred = 0;
+    int pickedPriority = picked.front().priority;
+    const void* firstOwner = picked.front().owner;
+
+    for (std::size_t i = 1; i < picked.size(); ++i) {
+        const auto& info = picked[i];
+        if (info.owner != firstOwner) {
+            break;
+        }
+
+        if (info.priority > pickedPriority && info.closeToFirst) {
+            preferred = i;
+            pickedPriority = info.priority;
+        }
+    }
+
+    return preferred;
+}
+
+}  // namespace Gui::SelectionPickPolicy
+
 // *************************************************************************
 
 SO_NODE_SOURCE(SoFCUnifiedSelection)
@@ -250,6 +280,36 @@ int SoFCUnifiedSelection::getPriority(const SoPickedPoint* p)
     return 0;
 }
 
+SelectionPickPolicy::Candidate SoFCUnifiedSelection::getPickCandidate(
+    const PickedInfo& info,
+    const PickedInfo* firstPicked
+)
+{
+    SelectionPickPolicy::Candidate candidate;
+    candidate.owner = info.vpd;
+    candidate.priority = getPriority(info.pp);
+
+    if (firstPicked && info.pp && firstPicked->pp) {
+        candidate.closeToFirst = info.pp->getPoint().equals(firstPicked->pp->getPoint(), 0.2F);
+    }
+
+    return candidate;
+}
+
+std::vector<SelectionPickPolicy::Candidate> SoFCUnifiedSelection::getPickCandidates(
+    const std::vector<PickedInfo>& picked
+)
+{
+    std::vector<SelectionPickPolicy::Candidate> candidates;
+    candidates.reserve(picked.size());
+    const PickedInfo* firstPicked = picked.empty() ? nullptr : &picked.front();
+    for (const auto& info : picked) {
+        candidates.push_back(getPickCandidate(info, firstPicked));
+    }
+
+    return candidates;
+}
+
 std::vector<SoFCUnifiedSelection::PickedInfo> SoFCUnifiedSelection::getPickedList(
     SoHandleEventAction* action,
     bool singlePick
@@ -310,24 +370,8 @@ std::vector<SoFCUnifiedSelection::PickedInfo> SoFCUnifiedSelection::getPickedLis
     // points where the first is of a face and the second of a line with
     // almost similar coordinates we use the second point, instead.
 
-    int picked_prio = getPriority(ret[0].pp);
-    auto last_vpd = ret[0].vpd;
-    const SbVec3f& picked_pt = ret.front().pp->getPoint();
-    auto itPicked = ret.begin();
-    for (auto it = ret.begin() + 1; it != ret.end(); ++it) {
-        auto& info = *it;
-        if (last_vpd != info.vpd) {
-            break;
-        }
-
-        int cur_prio = getPriority(info.pp);
-        const SbVec3f& cur_pt = info.pp->getPoint();
-
-        if ((cur_prio > picked_prio) && picked_pt.equals(cur_pt, 0.2F)) {
-            itPicked = it;
-            picked_prio = cur_prio;
-        }
-    }
+    auto pickedIndex = SelectionPickPolicy::choosePreferredPick(getPickCandidates(ret));
+    auto itPicked = ret.begin() + pickedIndex;
 
     if (singlePick) {
         std::vector<PickedInfo> sret(itPicked, itPicked + 1);

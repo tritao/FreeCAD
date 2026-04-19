@@ -23,9 +23,11 @@
 
 #pragma once
 
+#include <cstddef>
 #include <list>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include <Inventor/elements/SoLazyElement.h>
 #include <Inventor/fields/SoSFBool.h>
@@ -44,6 +46,20 @@ class SoDetail;
 
 namespace Gui
 {
+
+namespace SelectionPickPolicy
+{
+
+struct Candidate
+{
+    const void* owner {nullptr};
+    int priority {0};
+    bool closeToFirst {false};
+};
+
+GuiExport std::size_t choosePreferredPick(const std::vector<Candidate>& picked);
+
+}  // namespace SelectionPickPolicy
 
 class Document;
 class ViewProviderDocumentObject;
@@ -105,6 +121,14 @@ private:
         ViewProviderDocumentObject* vpd {nullptr};
         std::string element;
     };
+
+    static SelectionPickPolicy::Candidate getPickCandidate(
+        const PickedInfo&,
+        const PickedInfo* firstPicked = nullptr
+    );
+    static std::vector<SelectionPickPolicy::Candidate> getPickCandidates(
+        const std::vector<PickedInfo>&
+    );
 
     bool setPreselect(const PickedInfo&);
     bool setPreselect(
