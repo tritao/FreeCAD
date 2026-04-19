@@ -37,8 +37,10 @@
 #include <App/ObjectIdentifier.h>
 #include <App/Datums.h>
 #include <App/Part.h>
+#include <Base/Console.h>
 #include <Gui/Application.h>
 #include <Gui/ActionFunction.h>
+#include <Gui/AsyncRecomputeProgressDialog.h>
 #include <Gui/BitmapFactory.h>
 #include <Gui/CommandT.h>
 #include <Gui/Document.h>
@@ -1658,7 +1660,26 @@ bool TaskDlgAttacher::accept()
             "MapMode = '%s'",
             AttachEngine::getModeName(eMapMode(pcAttach->MapMode.getValue())).c_str()
         );
-        Gui::cmdAppObject(obj, "recompute()");
+        const auto outcome = Gui::runAsyncDocumentObjectRecomputeProgressDialog(
+            parameter,
+            tr("Attachment"),
+            tr("Computing attachment..."),
+            obj,
+            /*recursive=*/false,
+            [obj]() {
+                if (obj) {
+                    obj->recomputeFeature(/*recursive=*/false);
+                }
+            }
+        );
+        if (!outcome.success) {
+            if (!outcome.canceled) {
+                throw Base::RuntimeError(
+                    outcome.message.empty() ? "Attachment recompute failed" : outcome.message
+                );
+            }
+            return false;
+        }
 
         Gui::Command::commitCommand(tid);
     }
@@ -1689,9 +1710,28 @@ bool TaskDlgAttacher::reject()
     Gui::DocumentT doc(getDocumentName());
     Gui::Document* document = doc.getDocument();
     if (document) {
+        App::Document* appDocument = document->getDocument();
         // roll back the done things
         Gui::Command::abortCommand(tid);
-        Gui::Command::doCommand(Gui::Command::Doc, "%s.recompute()", doc.getAppDocumentPython().c_str());
+        const auto outcome = Gui::runAsyncDocumentRecomputeProgressDialog(
+            parameter,
+            tr("Attachment"),
+            tr("Restoring document..."),
+            appDocument,
+            /*force=*/false,
+            [appDocument]() {
+                if (appDocument) {
+                    appDocument->recompute();
+                }
+            }
+        );
+        if (!outcome.success && !outcome.canceled) {
+            Base::Console().error(
+                "%s\n",
+                outcome.message.empty() ? "Attachment rollback recompute failed"
+                                        : outcome.message.c_str()
+            );
+        }
     }
 
     accepted = false;

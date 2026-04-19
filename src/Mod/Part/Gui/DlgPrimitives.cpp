@@ -39,6 +39,7 @@
 #include <App/Application.h>
 #include <App/Part.h>
 #include <App/Document.h>
+#include <App/DocumentObject.h>
 #include <Base/Rotation.h>
 #include <Base/Tools.h>
 #include <Base/UnitsApi.h>
@@ -180,7 +181,7 @@ void Picker::createPrimitive(QWidget* widget, const QString& descr, Gui::Documen
                 descr,
                 QObject::tr("Computing primitive..."),
                 app
-        )) {
+            )) {
             return;
         }
         Gui::Command::runCommand(Gui::Command::Gui, "Gui.SendMsgToActiveView(\"ViewFit\")");
@@ -2395,7 +2396,7 @@ void DlgPrimitives::tryCreatePrimitive(const QString& placement)
             prim,
             tr("Computing primitive..."),
             doc
-    )) {
+        )) {
         return;
     }
     Gui::Command::runCommand(Gui::Command::Gui, "Gui.SendMsgToActiveView(\"ViewFit\")");
