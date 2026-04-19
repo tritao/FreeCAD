@@ -544,6 +544,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             self.pump_gui_events()
 
     def test_plan_edit_provider_point_tool_dispatches_plan_point(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
         session = BimPlanSession.start_session()
         self.assertIsNotNone(session)
         self.pump_gui_events()
@@ -563,14 +566,41 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             captured.append((provider_id, action_key, transaction_label, payload))
             return True
 
+        snap_info = {
+            "Object": wall.Name,
+            "Component": "Edge1",
+            "SubName": "Edge1",
+        }
+        selected_target = ("wall", wall)
+        selected_targets = ("selected-wall-target",)
+        hovered_target = ("wall", wall)
+
         with patch.object(FreeCADGui.Snapper, "getPoint") as get_point, patch.object(
+            FreeCADGui.Snapper,
+            "snapInfo",
+            snap_info,
+            create=True,
+        ), patch.object(
             session,
             "execute_plan_provider_action",
             side_effect=_capture_action,
+        ), patch.object(
+            session,
+            "_get_selected_plan_target",
+            return_value=selected_target,
+        ), patch.object(
+            session,
+            "_get_selected_plan_targets",
+            return_value=selected_targets,
+        ), patch.object(
+            session,
+            "_get_hovered_plan_target",
+            return_value=hovered_target,
         ):
             self.assertTrue(session.start_plan_provider_point_tool(tool))
             self.assertEqual("Provider Point", session.current_tool)
-            session._handle_provider_point_tool_point(FreeCAD.Vector(120.0, 340.0, 999.0))
+            raw_point = FreeCAD.Vector(120.0, 340.0, 999.0)
+            session._handle_provider_point_tool_point(raw_point, wall)
             self.assertEqual("Provider Point", session.current_tool)
             self.assertGreaterEqual(get_point.call_count, 2)
             self.assertTrue(session._cancel_provider_point_tool())
@@ -583,6 +613,17 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(tool, payload["tool"])
         self.assertEqual(120.0, payload["point"].x)
         self.assertEqual(340.0, payload["point"].y)
+        self.assertEqual(999.0, payload["raw_point"].z)
+        self.assertEqual(snap_info, payload["snap_info"])
+        self.assertIs(wall, payload["snap_object"])
+        self.assertEqual(("wall", wall), payload["snap_target"])
+        self.assertEqual(self.document.Name, payload["snap_document_name"])
+        self.assertEqual(wall.Name, payload["snap_object_name"])
+        self.assertEqual("Edge1", payload["snap_component"])
+        self.assertEqual("Edge1", payload["snap_subname"])
+        self.assertEqual(selected_target, payload["selected_target"])
+        self.assertEqual(selected_targets, payload["selected_targets"])
+        self.assertEqual(hovered_target, payload["hovered_target"])
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
