@@ -2,6 +2,7 @@
 
 """Runtime helpers for BIM Plan Edit provider integrations."""
 
+from contextlib import nullcontext
 from dataclasses import replace
 import inspect
 
@@ -387,9 +388,20 @@ def execute_plan_provider_action(
 
     context = session.get_plan_edit_context()
     transaction_label = str(transaction_label or "").strip()
+    defer_updates = getattr(session, "defer_document_visual_updates", None)
+    visual_update_context = defer_updates() if callable(defer_updates) else nullcontext()
     try:
-        if transaction_label:
-            with PlanEditTransaction(session.doc, transaction_label):
+        with visual_update_context:
+            if transaction_label:
+                with PlanEditTransaction(session.doc, transaction_label):
+                    handled = _execute_plan_provider_action_callback(
+                        execute_action,
+                        action_key,
+                        context,
+                        session,
+                        payload,
+                    )
+            else:
                 handled = _execute_plan_provider_action_callback(
                     execute_action,
                     action_key,
@@ -397,14 +409,12 @@ def execute_plan_provider_action(
                     session,
                     payload,
                 )
-        else:
-            handled = _execute_plan_provider_action_callback(
-                execute_action,
-                action_key,
-                context,
-                session,
-                payload,
-            )
+            if handled is not False:
+                try:
+                    if session.doc is not None:
+                        session.doc.recompute()
+                except Exception:
+                    pass
     except Exception as exc:
         FreeCAD.Console.PrintError(
             translate(
@@ -417,11 +427,6 @@ def execute_plan_provider_action(
     if handled is False:
         return False
 
-    try:
-        if session.doc is not None:
-            session.doc.recompute()
-    except Exception:
-        pass
     session._refresh_primary_selected_plan_target()
     session._invalidate_document_dependent_plan_visuals()
     session._refresh_task_panel_status()

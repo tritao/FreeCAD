@@ -1747,12 +1747,27 @@ class PlanEditSession:
             return False
 
     def _register_plan_object(self, obj):
-        if not obj:
+        self._register_plan_objects((obj,))
+
+    def _register_plan_objects(self, objects):
+        registered = []
+        seen_names = set()
+        for obj in tuple(objects or ()):
+            if not obj:
+                continue
+            name = getattr(obj, "Name", None)
+            if name and name in seen_names:
+                continue
+            if name:
+                seen_names.add(name)
+            self._add_object_to_active_storey(obj)
+            self._register_object_view_state(obj)
+            registered.append(obj)
+        if not registered:
             return
-        self._add_object_to_active_storey(obj)
-        self._register_object_view_state(obj)
         self._apply_storey_visibility()
-        self._refresh_plan_object_footprint_display(obj)
+        for obj in registered:
+            self._refresh_plan_object_footprint_display(obj, request_redraw=False)
         self._request_view_redraw()
 
     def _is_direct_plan_equipment_object(self, obj):
@@ -1898,6 +1913,30 @@ class PlanEditSession:
             return False
         return self._is_direct_plan_equipment_object(self._get_plan_semantic_object(obj))
 
+    def _is_cabinetry_plan_context_object(self, obj):
+        if not obj:
+            return False
+        proxy_type = str(getattr(getattr(obj, "Proxy", None), "Type", "") or "")
+        return proxy_type in {
+            "CabinetryApplianceTower",
+            "CabinetryBaseCabinet",
+            "CabinetryBlindCornerBaseCabinet",
+            "CabinetryFridgeSurround",
+            "CabinetryProject",
+            "CabinetryRunAccessories",
+            "CabinetryRunApplianceRepresentation",
+            "CabinetryRunGuide",
+            "CabinetryRunProfileRepresentation",
+            "CabinetryRunReservation",
+            "CabinetryRunReservationRepresentation",
+            "CabinetryTallCabinet",
+            "CabinetryVanityBase",
+            "CabinetryWallCabinet",
+            "CabinetZone",
+            "CabinetRun",
+            "CabinetRunJunction",
+        }
+
     def _has_direct_plan_symbols(self, obj):
         if not obj:
             return False
@@ -1929,6 +1968,7 @@ class PlanEditSession:
             self._is_plan_container_object(obj)
             or self._is_plan_background_object(obj)
             or self._is_plan_equipment_object(obj)
+            or self._is_cabinetry_plan_context_object(obj)
         )
 
     def _is_component_addition_object(self, obj):
@@ -2450,10 +2490,12 @@ class PlanEditSession:
         self._created_plan_objects_flush_deferred = False
         pending = list(self._pending_created_plan_objects.values())
         self._pending_created_plan_objects.clear()
+        eligible = []
         for obj in pending:
             if not self._should_register_created_plan_object(obj):
                 continue
-            self._register_plan_object(obj)
+            eligible.append(obj)
+        self._register_plan_objects(eligible)
 
     def _are_document_visual_updates_deferred(self):
         return self._document_visual_update_defer_depth > 0
@@ -5659,7 +5701,7 @@ class PlanEditSession:
             return True
         return obj in (getattr(semantic_obj, "PlanSymbols", None) or [])
 
-    def _refresh_plan_object_footprint_display(self, obj):
+    def _refresh_plan_object_footprint_display(self, obj, *, request_redraw=True):
         if not self._is_supported_plan_object(obj):
             return
         self._invalidate_plan_overlay_geometry_cache(obj)
@@ -5679,16 +5721,37 @@ class PlanEditSession:
             proxy = getattr(view_object, "Proxy", None) if view_object else None
             if not proxy:
                 continue
-            if not hasattr(proxy, "ensureFootprintGroup") and not hasattr(proxy, "updateFootprint"):
+            if (
+                not hasattr(proxy, "ensureFootprintGroup")
+                and not hasattr(proxy, "updateFootprint")
+                and not hasattr(proxy, "refreshFootprint")
+            ):
                 continue
             try:
-                if hasattr(proxy, "ensureFootprintGroup"):
-                    proxy.ensureFootprintGroup(view_object)
-                if hasattr(proxy, "updateFootprint"):
-                    proxy.updateFootprint()
+                if hasattr(proxy, "refreshFootprint"):
+                    proxy.refreshFootprint()
+                else:
+                    if hasattr(proxy, "ensureFootprintGroup"):
+                        proxy.ensureFootprintGroup(view_object)
+                    if hasattr(proxy, "updateFootprint"):
+                        proxy.updateFootprint()
                 if hasattr(view_object, "update"):
                     view_object.update()
                 refreshed = True
+            except TypeError:
+                try:
+                    if hasattr(proxy, "refreshFootprint"):
+                        proxy.refreshFootprint(view_object)
+                    else:
+                        if hasattr(proxy, "ensureFootprintGroup"):
+                            proxy.ensureFootprintGroup(view_object)
+                        if hasattr(proxy, "updateFootprint"):
+                            proxy.updateFootprint()
+                    if hasattr(view_object, "update"):
+                        view_object.update()
+                    refreshed = True
+                except Exception:
+                    continue
             except Exception:
                 continue
 
@@ -5700,7 +5763,8 @@ class PlanEditSession:
                 pass
         if not refreshed:
             return
-        self._request_view_redraw()
+        if request_redraw:
+            self._request_view_redraw()
 
     def _refresh_opening_footprint_display(self, opening):
         if not self._is_hosted_opening_object(opening):
