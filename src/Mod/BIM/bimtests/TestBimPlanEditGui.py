@@ -722,6 +722,50 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_additive_provider_overlay_point_keeps_wall_selection(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        marker = Draft.makePoint(FreeCAD.Vector(100, 200, 0))
+        marker.Label = "Electrical Marker"
+        self.document.recompute()
+        FreeCADGui.Selection.clearSelection()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+        self.pump_gui_events()
+        self._assert_selected_plan_target(session, "wall", wall)
+        self.assertEqual([wall], FreeCADGui.Selection.getSelection())
+
+        node = self._make_fake_selection_node(
+            self.document.Name,
+            marker.Name,
+            "ProviderOverlayPoint:object:0",
+        )
+        event = self._make_fake_left_mouse_press()
+
+        with (
+            patch.object(session, "_get_edit_node", return_value=("provider_overlay_point", node)),
+            patch.object(
+                session,
+                "_toggle_raw_plan_object_selection",
+                wraps=session._toggle_raw_plan_object_selection,
+            ) as toggle_raw_selection,
+        ):
+            self.assertTrue(session._toggle_plan_target_selection_at_position((250, 250), event))
+
+        toggle_raw_selection.assert_called_once_with(marker, event)
+        self.assertTrue(event._handled)
+        selection = FreeCADGui.Selection.getSelection()
+        self.assertIn(wall, selection)
+        self.assertIn(marker, session._provider_selected_objects)
+        self.assertIn(marker, session.get_selected_objects())
+        self._assert_selected_plan_target(session, "wall", wall)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_embedded_wall_uses_sane_top_plane(self):
         """Embedded wall creation in Plan Edit should start from a clean top plane."""
 
