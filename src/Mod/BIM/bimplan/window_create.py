@@ -2,10 +2,9 @@
 
 """Hosted window creation helpers for BIM Plan Edit."""
 
-from contextlib import nullcontext
-
 import FreeCAD
 import FreeCADGui
+from bimplan import hosted_openings as plan_hosted_openings
 
 translate = FreeCAD.Qt.translate
 
@@ -362,54 +361,43 @@ def create_window(session, wall, point):
     if center is None:
         return None
 
-    window = None
-    defer_updates = getattr(session, "defer_document_visual_updates", None)
-    update_scope = defer_updates() if defer_updates else nullcontext()
-    with update_scope:
-        session.doc.openTransaction(translate("BIM_PlanEdit", "Create Window"))
-        try:
-            sketch = _make_window_base_sketch(session, wall, center)
-            if sketch is None:
-                raise RuntimeError("Unable to create window sketch")
-            session.doc.recompute()
-            window = Arch.makeWindow(
-                baseobj=sketch,
-                width=DEFAULT_WINDOW_WIDTH,
-                height=DEFAULT_WINDOW_HEIGHT,
-                name="Window",
-            )
-            window.IfcType = "Window"
-            window.Width = DEFAULT_WINDOW_WIDTH
-            window.Height = DEFAULT_WINDOW_HEIGHT
-            window.HoleDepth = 0
-            window.WindowParts = [
-                "Frame",
-                "Frame",
-                "Wire0,Wire1",
-                str(DEFAULT_WINDOW_FRAME_THICKNESS),
-                "0",
-                "Glass",
-                "Glass panel",
-                "Wire1",
-                str(DEFAULT_WINDOW_GLASS_THICKNESS),
-                str(DEFAULT_WINDOW_FRAME_THICKNESS * 0.5),
-            ]
-            # Build the opening before it is hosted. Window shape changes touch
-            # hosts, so doing this while unhosted avoids a second wall/window
-            # recompute pass after Arch.addComponents().
-            session.doc.recompute()
-            Arch.addComponents(window, wall)
-            session._add_object_to_active_storey(window)
-            session.doc.recompute()
-            if not session._is_hosted_opening_object(window):
-                raise RuntimeError("Created window is not hosted")
-            session.doc.commitTransaction()
-        except Exception:
-            try:
-                session.doc.abortTransaction()
-            except Exception:
-                pass
-            raise
+    def build_window():
+        sketch = _make_window_base_sketch(session, wall, center)
+        if sketch is None:
+            raise RuntimeError("Unable to create window sketch")
+        session.doc.recompute()
+        window = Arch.makeWindow(
+            baseobj=sketch,
+            width=DEFAULT_WINDOW_WIDTH,
+            height=DEFAULT_WINDOW_HEIGHT,
+            name="Window",
+        )
+        window.IfcType = "Window"
+        window.Width = DEFAULT_WINDOW_WIDTH
+        window.Height = DEFAULT_WINDOW_HEIGHT
+        window.HoleDepth = 0
+        window.WindowParts = [
+            "Frame",
+            "Frame",
+            "Wire0,Wire1",
+            str(DEFAULT_WINDOW_FRAME_THICKNESS),
+            "0",
+            "Glass",
+            "Glass panel",
+            "Wire1",
+            str(DEFAULT_WINDOW_GLASS_THICKNESS),
+            str(DEFAULT_WINDOW_FRAME_THICKNESS * 0.5),
+        ]
+        return window
+
+    window = plan_hosted_openings.create_hosted_opening(
+        session,
+        wall,
+        build_window,
+        translate("BIM_PlanEdit", "Create Window"),
+    )
+    if not session._is_hosted_opening_object(window):
+        raise RuntimeError("Created window is not hosted")
     return window
 
 
