@@ -646,13 +646,6 @@ void TaskTransformedParameters::recomputeFeature()
     requestRecompute(/*waitForCompletion=*/false);
 }
 
-void TaskTransformedParameters::recomputeFeatureExactly()
-{
-    if (auto* view = getTopTransformedView()) {
-        view->recomputeFeature();
-    }
-}
-
 void TaskTransformedParameters::scheduleRecomputeFeature()
 {
     if (!blockUpdate) {
@@ -855,6 +848,17 @@ TaskDlgTransformedParameters::TaskDlgTransformedParameters(ViewProviderTransform
     : TaskDlgFeatureParameters(viewProvider)
 {}
 
+TaskDlgFeatureParameters::AcceptRecomputeMode
+TaskDlgTransformedParameters::acceptRecomputeMode(bool isUpdateBlocked) const
+{
+    // With live preview enabled, accept() flushes pending preview work before
+    // applying. The remaining document recompute intentionally stays on the
+    // command path because it only propagates touched parents; queueing a
+    // document-wide async recompute here would re-run the transformed feature
+    // after the flushed preview and break the no-extra-rerun accept contract.
+    return isUpdateBlocked ? AcceptRecomputeMode::AsyncDocument : AcceptRecomputeMode::CommandDocument;
+}
+
 void TaskDlgTransformedParameters::ensureDeferredRejectConnection()
 {
     ensureDeferredDialogRejectConnection(
@@ -896,11 +900,6 @@ bool TaskDlgTransformedParameters::accept()
     // stays focused on serializing the UI state into document commands.
     parameter->flushPendingRecompute();
     parameter->apply();
-    if (!parameter->isUpdateBlocked()) {
-        // Interactive preview may skip expensive final-quality steps. Rerun an
-        // exact recompute on accept so the committed feature matches final mode.
-        parameter->recomputeFeatureExactly();
-    }
 
     return TaskDlgFeatureParameters::accept();
 }
