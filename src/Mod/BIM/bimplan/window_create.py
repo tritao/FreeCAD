@@ -43,11 +43,18 @@ def activate_window_tool(session):
     session._window_host_wall = wall
     session.current_tool = "Window"
     FreeCAD.activeDraftCommand = session
+    try:
+        FreeCADGui.Snapper.setSelectMode(False)
+    except Exception:
+        pass
+    session._set_draft_point_focus_suppressed(True)
     FreeCADGui.Snapper.getPoint(
         callback=session._handle_window_tool_point,
         movecallback=session._update_window_tool_preview,
         title=translate("BIM_PlanEdit", "Window location"),
+        noTracker=True,
     )
+    session._queue_focus_plan_view()
     session._refresh_task_panel_status()
     return True
 
@@ -119,8 +126,105 @@ def _get_wall_axis_context(wall):
     }
 
 
+def _get_window_snap_info(info=None):
+    if isinstance(info, dict):
+        return dict(info)
+    snapper = getattr(FreeCADGui, "Snapper", None)
+    if snapper is None:
+        return {}
+    snap_info = getattr(snapper, "snapInfo", None)
+    if isinstance(snap_info, dict):
+        return dict(snap_info)
+    return {}
+
+
+def _resolve_window_snap_object(session, snap_object=None, snap_info=None):
+    if snap_object is not None and not isinstance(snap_object, dict):
+        return snap_object
+    snap_info = _get_window_snap_info(snap_info)
+    object_name = str(snap_info.get("Object", "") or "").strip()
+    if not object_name:
+        return None
+    doc = session.doc
+    document_name = str(snap_info.get("Document", "") or "").strip()
+    if document_name:
+        try:
+            doc = FreeCAD.getDocument(document_name)
+        except Exception:
+            doc = session.doc
+    if doc is None:
+        return None
+    try:
+        return doc.getObject(object_name)
+    except Exception:
+        return None
+
+
+def _get_opening_host_wall(session, opening):
+    if not session._is_hosted_opening_object(opening):
+        return None
+    for host in getattr(opening, "Hosts", None) or ():
+        if session._is_plan_selectable_wall(host):
+            return host
+    return None
+
+
+def _get_wall_from_target(session, target_kind, target_obj):
+    if target_kind == "wall" and session._is_plan_selectable_wall(target_obj):
+        return target_obj
+    if target_kind == "opening":
+        return _get_opening_host_wall(session, target_obj)
+    return None
+
+
+def _get_wall_from_snap_object(session, snap_object):
+    if snap_object is None:
+        return None
+    target_kind, target_obj = session._get_plan_target_for_object(snap_object)
+    wall = _get_wall_from_target(session, target_kind, target_obj)
+    if wall is not None:
+        return wall
+    if session._is_plan_selectable_wall(snap_object):
+        return snap_object
+    wall = _get_opening_host_wall(session, snap_object)
+    if wall is not None:
+        return wall
+
+    linked_objects = []
+    try:
+        linked_objects.extend(snap_object.InList)
+    except Exception:
+        pass
+    try:
+        linked_objects.extend(snap_object.InListRecursive)
+    except Exception:
+        pass
+    for candidate in linked_objects:
+        target_kind, target_obj = session._get_plan_target_for_object(candidate)
+        wall = _get_wall_from_target(session, target_kind, target_obj)
+        if wall is not None:
+            return wall
+    return None
+
+
+def resolve_window_host_wall(session, snap_object=None, snap_info=None):
+    snap_info = _get_window_snap_info(snap_info)
+    resolved_snap_object = _resolve_window_snap_object(
+        session,
+        snap_object=snap_object,
+        snap_info=snap_info,
+    )
+    wall = _get_wall_from_snap_object(session, resolved_snap_object)
+    if wall is not None:
+        return wall
+    wall = getattr(session, "_window_host_wall", None)
+    if session._is_plan_selectable_wall(wall):
+        return wall
+    return get_window_host_wall(session)
+
+
 def project_window_point_to_host(session, point, wall=None):
-    wall = wall or session._window_host_wall
+    wall = wall or resolve_window_host_wall(session)
     if point is None or wall is None:
         return None
     context = _get_wall_axis_context(wall)
@@ -143,8 +247,8 @@ def project_window_point_to_host(session, point, wall=None):
     return projected
 
 
-def _get_window_preview_points(session, point):
-    wall = session._window_host_wall
+def _get_window_preview_points(session, point, wall=None):
+    wall = wall or resolve_window_host_wall(session)
     center = project_window_point_to_host(session, point, wall)
     context = _get_wall_axis_context(wall)
     if center is None or not context:
@@ -170,8 +274,10 @@ def _get_window_preview_points(session, point):
 
 
 def update_window_tool_preview(session, point=None, info=None):
-    del info
-    points = _get_window_preview_points(session, point)
+    wall = resolve_window_host_wall(session, snap_object=info, snap_info=info)
+    if wall is not None:
+        session._window_host_wall = wall
+    points = _get_window_preview_points(session, point, wall=wall)
     clear_window_preview(session)
     if len(points) != 4:
         return
@@ -305,11 +411,10 @@ def create_window(session, wall, point):
 
 
 def handle_window_tool_point(session, point=None, obj=None):
-    del obj
     if point is None:
         cancel_window_tool(session)
         return
-    wall = session._window_host_wall
+    wall = resolve_window_host_wall(session, snap_object=obj)
     if not session._is_plan_selectable_wall(wall):
         cancel_window_tool(session)
         FreeCAD.Console.PrintWarning(
