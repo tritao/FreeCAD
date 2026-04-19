@@ -1420,6 +1420,7 @@ SET(FreeCADGui_CPP_SRCS
     StyleParameters/ParameterManager.cpp
 )
 SET(FreeCADGui_SRCS
+    AsyncRecomputeProgressDialog.h
     AsyncPreviewController.h
     AsyncPreviewSession.h
     AsyncPreviewWidgetUtils.h
