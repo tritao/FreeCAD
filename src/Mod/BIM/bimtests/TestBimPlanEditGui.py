@@ -6534,6 +6534,76 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_defers_document_visual_refresh_until_scope_exit(self):
+        """Document changes inside a deferred scope should produce one visual refresh."""
+
+        session = BimPlanSession.PlanEditSession()
+        with (
+            patch.object(
+                session,
+                "_invalidate_document_dependent_plan_visuals",
+            ) as invalidate_visuals,
+            patch.object(
+                session,
+                "_refresh_primary_selected_plan_target",
+            ) as refresh_selection,
+            patch.object(
+                session,
+                "_refresh_task_panel_status",
+            ) as refresh_status,
+        ):
+            with session.defer_document_visual_updates():
+                session.slotChangedObject(object(), "Placement")
+                session.slotRecomputedDocument(self.document)
+                invalidate_visuals.assert_not_called()
+                refresh_selection.assert_not_called()
+                refresh_status.assert_not_called()
+
+            invalidate_visuals.assert_called_once_with()
+            refresh_selection.assert_called_once_with()
+            refresh_status.assert_called_once_with(selection_only=True)
+
+    def test_plan_edit_defers_created_object_registration_until_scope_exit(self):
+        """Objects created inside a deferred scope should be registered after the scope exits."""
+
+        session = BimPlanSession.PlanEditSession()
+        obj = self.document.addObject("App::FeaturePython", "DeferredPlanObject")
+        with (
+            patch.object(
+                session,
+                "_should_register_created_plan_object",
+                return_value=True,
+            ),
+            patch.object(session, "_register_plan_object") as register_object,
+            patch.object(
+                session,
+                "_invalidate_document_dependent_plan_visuals",
+            ) as invalidate_visuals,
+            patch.object(
+                session,
+                "_refresh_primary_selected_plan_target",
+            ) as refresh_selection,
+            patch.object(
+                session,
+                "_refresh_task_panel_status",
+            ) as refresh_status,
+        ):
+            register_object.side_effect = lambda registered: session.slotChangedObject(
+                registered,
+                "Group",
+            )
+            with session.defer_document_visual_updates():
+                session.slotCreatedObject(obj)
+                self.assertIn(obj.Name, session._pending_created_plan_objects)
+                session._flush_created_plan_objects()
+                register_object.assert_not_called()
+
+            register_object.assert_called_once_with(obj)
+            invalidate_visuals.assert_called_once_with()
+            refresh_selection.assert_called_once_with()
+            refresh_status.assert_called_once_with(selection_only=True)
+            self.assertFalse(session._pending_created_plan_objects)
+
     def test_plan_edit_invalidates_selected_opening_overlay_when_base_changes(self):
         """Selected opening overlays should be invalidated when the opening base changes."""
 
