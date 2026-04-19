@@ -5,6 +5,10 @@
 import FreeCAD
 
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
+_PROVIDER_POINT_PREVIEW_MARKER_SIZE = 180.0
+_PROVIDER_POINT_PREVIEW_HOSTED_COLOR = (0.12, 0.38, 0.95)
+_PROVIDER_POINT_PREVIEW_UNHOSTED_COLOR = (0.95, 0.52, 0.10)
+_PROVIDER_POINT_PREVIEW_HOST_COLOR = (0.10, 0.58, 0.38)
 
 
 def sync_provider_overlays(session):
@@ -51,6 +55,183 @@ def clear_provider_overlays(session):
     session._finalize_trackers(session._provider_overlay_trackers)
     session._provider_overlay_trackers = []
     session._provider_overlay_state = None
+
+
+def sync_provider_point_preview(session):
+    if session.current_tool != "Provider Point" or session._provider_point_preview_point is None:
+        clear_provider_point_preview(session)
+        return
+
+    try:
+        import draftguitools.gui_trackers as DraftTrackers
+    except ImportError:
+        clear_provider_point_preview(session)
+        return
+
+    specs = _get_provider_point_preview_segment_specs(session)
+    if not specs:
+        clear_provider_point_preview(session)
+        return
+
+    render_state = _get_provider_point_preview_render_state(session, specs)
+    if render_state == session._provider_point_preview_render_state:
+        session._plan_perf_count("provider_point_preview_cache_hits")
+        return
+
+    style_state = tuple((spec["label"], spec["dotted"]) for spec in specs)
+    if (
+        len(session._provider_point_preview_trackers) != len(specs)
+        or style_state != session._provider_point_preview_style_state
+    ):
+        _clear_provider_point_preview_trackers(session)
+        session._provider_point_preview_style_state = style_state
+        for spec in specs:
+            tracker = session._make_plan_line_tracker(
+                DraftTrackers,
+                spec["label"],
+                dotted=spec["dotted"],
+                scolor=spec["color"],
+                swidth=spec["width"],
+                ontop=True,
+            )
+            session._provider_point_preview_trackers.append(tracker)
+
+    for tracker, spec in zip(session._provider_point_preview_trackers, specs):
+        session._set_plan_line_tracker_width(tracker, spec["width"])
+        tracker.setColor(spec["color"])
+        tracker.p1(spec["start"])
+        tracker.p2(spec["end"])
+        tracker.on()
+
+    session._provider_point_preview_render_state = render_state
+    session._plan_perf_count(
+        "provider_point_preview_trackers",
+        len(session._provider_point_preview_trackers),
+    )
+
+
+def clear_provider_point_preview(session):
+    _clear_provider_point_preview_trackers(session)
+    session._provider_point_preview_source_point = None
+    session._provider_point_preview_point = None
+    session._provider_point_preview_host_target = None
+    session._provider_point_preview_host_source = ""
+
+
+def _clear_provider_point_preview_trackers(session):
+    session._finalize_trackers(session._provider_point_preview_trackers)
+    session._provider_point_preview_trackers = []
+    session._provider_point_preview_render_state = None
+    session._provider_point_preview_style_state = None
+
+
+def _get_provider_point_preview_segment_specs(session):
+    point = _to_vector(session._provider_point_preview_point)
+    if point is None:
+        return ()
+    source = _to_vector(session._provider_point_preview_source_point)
+    if source is None:
+        source = point
+    host_kind, host_obj = _normalize_host_target(session._provider_point_preview_host_target)
+    hosted = host_kind == "wall" and host_obj is not None
+    preview_color = (
+        _PROVIDER_POINT_PREVIEW_HOSTED_COLOR
+        if hosted
+        else _PROVIDER_POINT_PREVIEW_UNHOSTED_COLOR
+    )
+    width = session._scaled_line_width(2)
+    specs = []
+    specs.extend(
+        _get_cross_marker_segment_specs(
+            point,
+            label="provider-point-preview-marker",
+            color=preview_color,
+            width=width,
+            dotted=not hosted,
+            marker_size=session._scaled_marker_size(_PROVIDER_POINT_PREVIEW_MARKER_SIZE),
+        )
+    )
+    if hosted:
+        specs.extend(
+            _get_provider_point_host_segment_specs(
+                session,
+                host_obj,
+                color=_PROVIDER_POINT_PREVIEW_HOST_COLOR,
+                width=session._scaled_line_width(2),
+            )
+        )
+        if FreeCAD.Vector(source).sub(point).Length > 1e-6:
+            specs.append(
+                {
+                    "label": "provider-point-preview-tether",
+                    "start": source,
+                    "end": point,
+                    "color": preview_color,
+                    "width": session._scaled_line_width(1),
+                    "dotted": True,
+                }
+            )
+    return tuple(specs)
+
+
+def _get_cross_marker_segment_specs(point, *, label, color, width, dotted, marker_size):
+    half_size = max(1.0, float(marker_size) / 2.0)
+    return (
+        {
+            "label": label,
+            "start": FreeCAD.Vector(point.x - half_size, point.y, point.z),
+            "end": FreeCAD.Vector(point.x + half_size, point.y, point.z),
+            "color": color,
+            "width": width,
+            "dotted": dotted,
+        },
+        {
+            "label": label,
+            "start": FreeCAD.Vector(point.x, point.y - half_size, point.z),
+            "end": FreeCAD.Vector(point.x, point.y + half_size, point.z),
+            "color": color,
+            "width": width,
+            "dotted": dotted,
+        },
+    )
+
+
+def _get_provider_point_host_segment_specs(session, host_wall, *, color, width):
+    specs = []
+    for polyline in session._get_wall_overlay_polylines(host_wall):
+        points = tuple(_to_vector(point) for point in tuple(polyline or ()))
+        points = tuple(point for point in points if point is not None)
+        if len(points) < 2:
+            continue
+        for start, end in zip(points, points[1:]):
+            specs.append(
+                {
+                    "label": "provider-point-preview-host",
+                    "start": start,
+                    "end": end,
+                    "color": color,
+                    "width": width,
+                    "dotted": False,
+                }
+            )
+    return tuple(specs)
+
+
+def _get_provider_point_preview_render_state(session, specs):
+    return (
+        round(float(session._get_plan_overlay_scale()), 4),
+        tuple(
+            (
+                spec["label"],
+                _round_vector(spec["start"]),
+                _round_vector(spec["end"]),
+                _round_tuple(spec["color"]),
+                round(float(spec["width"]), 4),
+                bool(spec["dotted"]),
+            )
+            for spec in specs
+        ),
+    )
 
 
 def _create_provider_overlay_trackers(session, DraftTrackers, overlay):
@@ -227,3 +408,27 @@ def _to_vector(point):
         return FreeCAD.Vector(float(point[0]), float(point[1]), float(point[2]))
     except (TypeError, ValueError, IndexError):
         return None
+
+
+def _normalize_host_target(target):
+    if not target:
+        return (None, None)
+    try:
+        host_kind, host_obj = target
+    except Exception:
+        return (None, None)
+    if host_kind == "wall" and host_obj is not None:
+        return host_kind, host_obj
+    return (None, None)
+
+
+def _round_vector(point):
+    return (
+        round(float(point.x), 4),
+        round(float(point.y), 4),
+        round(float(point.z), 4),
+    )
+
+
+def _round_tuple(values):
+    return tuple(round(float(value), 4) for value in tuple(values or ()))

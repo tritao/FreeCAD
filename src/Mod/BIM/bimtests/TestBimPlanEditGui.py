@@ -696,6 +696,99 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
 
+    def test_plan_edit_provider_point_tool_previews_selected_wall_host(self):
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        tool = PlanToolSpec(
+            key="place-test-marker",
+            label="Place Test Marker",
+            provider_id="test-plan-provider",
+            interaction="point",
+        )
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ), patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True):
+            self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+            self.assertTrue(session.start_plan_provider_point_tool(tool))
+            self.assertIn("movecallback", captured)
+
+            raw_point = FreeCAD.Vector(120.0, 340.0, 999.0)
+            captured["movecallback"](raw_point, None)
+
+            plan_point = session._project_plan_point(raw_point)
+            expected_placement = session._project_provider_point_to_host(plan_point, wall)
+            self.assertIsNotNone(expected_placement)
+            self.assertEqual(("wall", wall), session._provider_point_preview_host_target)
+            self.assertEqual("selected", session._provider_point_preview_host_source)
+            self.assertAlmostEqual(
+                expected_placement.x, session._provider_point_preview_point.x
+            )
+            self.assertAlmostEqual(
+                expected_placement.y, session._provider_point_preview_point.y
+            )
+            self.assertGreater(len(session._provider_point_preview_trackers), 2)
+
+            self.assertTrue(session._cancel_provider_point_tool())
+
+        self.assertIsNone(session._provider_point_preview_point)
+        self.assertEqual([], session._provider_point_preview_trackers)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_provider_point_tool_previews_unhosted_point(self):
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        tool = PlanToolSpec(
+            key="place-test-marker",
+            label="Place Test Marker",
+            provider_id="test-plan-provider",
+            interaction="point",
+        )
+        captured = {}
+
+        def fake_get_point(**kwargs):
+            captured.update(kwargs)
+
+        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
+            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        ), patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True), patch.object(
+            session, "_get_selected_plan_target", return_value=(None, None)
+        ), patch.object(
+            session, "_get_selected_plan_targets", return_value=()
+        ), patch.object(
+            session, "_get_hovered_plan_target", return_value=(None, None)
+        ):
+            self.assertTrue(session.start_plan_provider_point_tool(tool))
+            self.assertIn("movecallback", captured)
+
+            raw_point = FreeCAD.Vector(120.0, 340.0, 999.0)
+            captured["movecallback"](raw_point, None)
+
+            plan_point = session._project_plan_point(raw_point)
+            self.assertEqual((None, None), session._provider_point_preview_host_target)
+            self.assertEqual("", session._provider_point_preview_host_source)
+            self.assertAlmostEqual(plan_point.x, session._provider_point_preview_point.x)
+            self.assertAlmostEqual(plan_point.y, session._provider_point_preview_point.y)
+            self.assertEqual(2, len(session._provider_point_preview_trackers))
+
+            self.assertTrue(session._cancel_provider_point_tool())
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_wall_selection_defers_provider_refresh(self):
         """Wall selection should not synchronously run provider integrations."""
 
