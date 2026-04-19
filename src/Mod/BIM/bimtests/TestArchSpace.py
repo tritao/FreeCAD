@@ -32,6 +32,7 @@ import ArchPlanGeometry
 import ArchSpace
 import Draft
 import Part
+import Sketcher
 import FreeCAD as App
 from FreeCAD import Units
 from bimtests import TestArchBase
@@ -594,6 +595,122 @@ class TestArchSpace(TestArchBase.TestArchBase):
         self.assertTrue(all(len(subnames) == 1 for _obj, subnames in boundaries))
         self.assertTrue(report["valid"])
         self.assertEqual(report["code"], "valid")
+
+    def test_space_wall_boundary_survives_opening_face_renumbering(self):
+        """Wall-backed space boundaries should survive hosted openings renumbering faces."""
+        operation = "Arch Space refreshes stale wall boundary faces after openings"
+        self.printTestMessage(operation)
+
+        length = 4000.0
+        room_far_y = -3200.0
+        height = 2500.0
+        wall_width = 200.0
+        room_reference = App.Vector(length * 0.5, room_far_y * 0.5, height * 0.5)
+
+        wall_base = Draft.makeLine(App.Vector(0, 0, 0), App.Vector(length, 0, 0))
+        wall = Arch.makeWall(
+            wall_base,
+            width=wall_width,
+            height=height,
+            align="Left",
+            name="OpeningHostWall",
+        )
+        App.ActiveDocument.recompute()
+
+        initial_face_name = ArchSpace.getBoundaryFaceNamesForObject(
+            wall,
+            reference_point=room_reference,
+        )[0]
+        initial_face = wall.Shape.Faces[int(initial_face_name[4:]) - 1]
+        room_side_y = float(initial_face.CenterOfMass.y)
+
+        def make_boundary_face(name, points):
+            face_object = App.ActiveDocument.addObject("Part::Feature", name)
+            face_object.Shape = Part.Face(Part.makePolygon(points + [points[0]]))
+            return face_object
+
+        boundaries = [
+            (wall, (initial_face_name,)),
+            (
+                make_boundary_face(
+                    "OpeningRoomEastBoundary",
+                    [
+                        App.Vector(length, room_side_y, 0.0),
+                        App.Vector(length, room_far_y, 0.0),
+                        App.Vector(length, room_far_y, height),
+                        App.Vector(length, room_side_y, height),
+                    ],
+                ),
+                ("Face1",),
+            ),
+            (
+                make_boundary_face(
+                    "OpeningRoomNorthBoundary",
+                    [
+                        App.Vector(length, room_far_y, 0.0),
+                        App.Vector(0.0, room_far_y, 0.0),
+                        App.Vector(0.0, room_far_y, height),
+                        App.Vector(length, room_far_y, height),
+                    ],
+                ),
+                ("Face1",),
+            ),
+            (
+                make_boundary_face(
+                    "OpeningRoomWestBoundary",
+                    [
+                        App.Vector(0.0, room_far_y, 0.0),
+                        App.Vector(0.0, room_side_y, 0.0),
+                        App.Vector(0.0, room_side_y, height),
+                        App.Vector(0.0, room_far_y, height),
+                    ],
+                ),
+                ("Face1",),
+            ),
+        ]
+        space = Arch.makeSpace(boundaries, name="Opening Room")
+        App.ActiveDocument.recompute()
+
+        initial_area = space.Proxy.getArea(space)
+        self.assertGreater(initial_area, 0.0)
+        self.assertTrue(getattr(space, "BoundarySideHints", []))
+
+        sketch = App.ActiveDocument.addObject("Sketcher::SketchObject", "OpeningSketch")
+        sketch.Placement.Rotation = App.Rotation(App.Vector(1, 0, 0), 90)
+        sketch.addGeometry(
+            [
+                Part.LineSegment(App.Vector(1400.0, 700.0, 0.0), App.Vector(2200.0, 700.0, 0.0)),
+                Part.LineSegment(App.Vector(2200.0, 700.0, 0.0), App.Vector(2200.0, 1900.0, 0.0)),
+                Part.LineSegment(App.Vector(2200.0, 1900.0, 0.0), App.Vector(1400.0, 1900.0, 0.0)),
+                Part.LineSegment(App.Vector(1400.0, 1900.0, 0.0), App.Vector(1400.0, 700.0, 0.0)),
+            ]
+        )
+        sketch.addConstraint(Sketcher.Constraint("Coincident", 0, 2, 1, 1))
+        sketch.addConstraint(Sketcher.Constraint("Coincident", 1, 2, 2, 1))
+        sketch.addConstraint(Sketcher.Constraint("Coincident", 2, 2, 3, 1))
+        sketch.addConstraint(Sketcher.Constraint("Coincident", 3, 2, 0, 1))
+        App.ActiveDocument.recompute()
+
+        window = Arch.makeWindow(sketch, name="RenumberingWindow")
+        window.Width = 800.0
+        window.Height = 1200.0
+        window.HoleDepth = 0.0
+        window.WindowParts = ["DefaultFrame", "Frame", "Wire0", "60", "0"]
+        App.ActiveDocument.recompute()
+        Arch.addComponents(window, wall)
+        App.ActiveDocument.recompute()
+
+        refreshed_face_name = ArchSpace.getBoundaryFaceNamesForObject(
+            wall,
+            reference_point=room_reference,
+        )[0]
+        stored_wall_faces = [
+            tuple(subnames) for boundary_obj, subnames in space.Boundaries if boundary_obj is wall
+        ]
+
+        self.assertNotEqual(refreshed_face_name, initial_face_name)
+        self.assertEqual(stored_wall_faces, [(refreshed_face_name,)])
+        self.assertAlmostEqual(space.Proxy.getArea(space), initial_area)
 
     def test_space_with_region_base_keeps_chosen_multiple_room_candidate(self):
         """A base-backed space should preserve the chosen room when boundaries expose many rooms."""
