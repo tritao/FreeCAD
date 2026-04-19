@@ -32,6 +32,7 @@ import time
 import FreeCAD
 import FreeCADGui
 from bimplan import picking as plan_picking
+from bimplan import command_gate as plan_command_gate
 from bimplan import performance as plan_performance
 from bimplan import provider_runtime as plan_provider_runtime
 from bimplan import selection as plan_selection
@@ -697,6 +698,8 @@ class PlanEditSession:
                 self._queue_prime_opening_handle_tracker_pool()
             with self._plan_perf_trace_span("queue_prime_wall_hosted_openings_cache"):
                 self._queue_prime_wall_hosted_openings_cache()
+            with self._plan_perf_trace_span("install_command_gate"):
+                plan_command_gate.install(self)
             if self._is_plan_perf_trace_enabled():
                 FreeCAD.Console.PrintMessage(
                     translate("BIM_PlanEdit", "BIM Plan Edit perf trace: {path}\n").format(
@@ -749,6 +752,7 @@ class PlanEditSession:
         if self._tearing_down:
             return
         self._tearing_down = True
+        plan_command_gate.uninstall(self)
         self._clear_viewport_status_chip()
         self._clear_input_hints()
         self._cancel_embedded_tool()
@@ -906,6 +910,7 @@ class PlanEditSession:
         self._finishing = True
 
         try:
+            plan_command_gate.uninstall(self)
             if not self._document_is_alive():
                 self.begin_teardown()
             teardown = teardown or self._tearing_down
@@ -7099,11 +7104,7 @@ class PlanEditSession:
             provider_selection.append(obj)
         self._provider_selected_objects = self._normalize_gui_object_selection(provider_selection)
         new_selection = self._normalize_gui_object_selection(
-            [
-                selected
-                for selected in selection
-                if self._get_plan_target_for_object(selected)[0]
-            ]
+            [selected for selected in selection if self._get_plan_target_for_object(selected)[0]]
         )
 
         if primary_obj is not None and primary_obj in new_selection:

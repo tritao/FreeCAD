@@ -1,0 +1,158 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+"""Command gating while BIM Plan Edit owns viewport interaction."""
+
+import os
+
+import FreeCAD
+import FreeCADGui
+
+translate = FreeCAD.Qt.translate
+
+ALLOW_EXTERNAL_COMMANDS_ENV = "FC_BIM_PLAN_EDIT_ALLOW_EXTERNAL_COMMANDS"
+
+BLOCKED_COMMANDS = (
+    "Arch_Window",
+    "BIM_Door",
+    "BIM_Windows",
+    "Arch_Wall",
+    "Arch_Space",
+    "Draft_Edit",
+    "Draft_Line",
+    "Draft_Wire",
+    "Draft_Rectangle",
+    "Draft_Circle",
+    "Draft_Arc",
+    "Draft_Arc_3Points",
+    "Draft_BSpline",
+    "Draft_BezCurve",
+    "Draft_CubicBezCurve",
+    "Draft_Move",
+    "Draft_Rotate",
+    "Draft_Trimex",
+    "Draft_Offset",
+    "Draft_Stretch",
+)
+
+_active_session = None
+_saved_action_states = {}
+
+
+def _external_commands_allowed():
+    value = os.environ.get(ALLOW_EXTERNAL_COMMANDS_ENV, "")
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
+def active_session():
+    return _active_session
+
+
+def blocked_commands():
+    return BLOCKED_COMMANDS
+
+
+def is_command_blocked(command_name):
+    if _external_commands_allowed():
+        return False
+    return _active_session is not None and command_name in BLOCKED_COMMANDS
+
+
+def warn_blocked(command_name):
+    FreeCAD.Console.PrintWarning(
+        translate(
+            "BIM_PlanEdit",
+            "{command} is disabled while BIM Plan Edit is active. "
+            "Use the Plan Edit task-panel tools or leave Plan Edit first.\n",
+        ).format(command=command_name)
+    )
+
+
+def install(session):
+    global _active_session
+
+    if _active_session is not None and _active_session is not session:
+        uninstall(_active_session)
+    _active_session = session
+    if _external_commands_allowed():
+        return
+    refresh()
+
+
+def refresh():
+    if _active_session is None or _external_commands_allowed():
+        return
+    for command_name in BLOCKED_COMMANDS:
+        for action in _find_command_actions(command_name):
+            _disable_action(action)
+
+
+def uninstall(session=None):
+    global _active_session
+
+    if session is not None and _active_session is not None and _active_session is not session:
+        return
+    _restore_actions()
+    _active_session = None
+
+
+def _main_window():
+    try:
+        return FreeCADGui.getMainWindow()
+    except Exception:
+        return None
+
+
+def _find_command_actions(command_name):
+    from PySide import QtGui
+
+    main_window = _main_window()
+    if main_window is None:
+        return ()
+
+    actions = []
+    try:
+        actions.extend(main_window.findChildren(QtGui.QAction, command_name))
+    except Exception:
+        pass
+    if not actions:
+        try:
+            action = main_window.findChild(QtGui.QAction, command_name)
+        except Exception:
+            action = None
+        if action is not None:
+            actions.append(action)
+
+    seen = set()
+    unique_actions = []
+    for action in actions:
+        action_key = id(action)
+        if action_key in seen:
+            continue
+        seen.add(action_key)
+        unique_actions.append(action)
+    return tuple(unique_actions)
+
+
+def _disable_action(action):
+    action_key = id(action)
+    if action_key not in _saved_action_states:
+        try:
+            _saved_action_states[action_key] = (action, bool(action.isEnabled()))
+        except Exception:
+            return
+    try:
+        action.setEnabled(False)
+    except Exception:
+        pass
+
+
+def _restore_actions():
+    global _saved_action_states
+
+    saved_states = _saved_action_states
+    _saved_action_states = {}
+    for action, enabled in saved_states.values():
+        try:
+            action.setEnabled(bool(enabled))
+        except Exception:
+            pass
