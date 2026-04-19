@@ -1946,13 +1946,28 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         captured = {}
+        prehost_window_shapes = []
 
         def fake_get_point(**kwargs):
             captured.update(kwargs)
 
+        original_add_components = Arch.addComponents
+
+        def record_add_components(objects, host):
+            window = objects[0] if isinstance(objects, list) else objects
+            prehost_window_shapes.append(
+                bool(
+                    getattr(window, "Shape", None)
+                    and not window.Shape.isNull()
+                    and window.Shape.Solids
+                )
+            )
+            return original_add_components(objects, host)
+
         with (
             patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+            patch.object(Arch, "addComponents", side_effect=record_add_components),
         ):
             self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
             self.assertTrue(session.can_place_plan_window())
@@ -1981,6 +1996,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(1, len(windows))
 
         window = windows[0]
+        self.assertEqual([True], prehost_window_shapes)
         self.assertIn(wall, window.Hosts)
         self.assertIn(level, window.InListRecursive)
         self.assertAlmostEqual(float(getattr(window.Width, "Value", window.Width)), 900.0)
