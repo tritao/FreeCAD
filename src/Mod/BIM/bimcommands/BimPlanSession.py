@@ -355,6 +355,7 @@ class PlanEditSession:
         self._embedded_host = None
         self._embedded_tool = None
         self._embedded_tool_name = None
+        self._provider_point_tool = None
         self._finishing = False
         self._tearing_down = False
         self._teardown_signal_sources = []
@@ -711,6 +712,9 @@ class PlanEditSession:
         if self.current_tool == "Set Space Text":
             self._cancel_space_text_position_pick()
             return True
+        if self._has_active_provider_point_tool():
+            self._cancel_provider_point_tool()
+            return True
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
             return True
@@ -731,6 +735,7 @@ class PlanEditSession:
         self._cancel_embedded_tool()
         self._cancel_rect_wall_tool(refresh=False)
         self._cancel_plan_region_tool(refresh=False)
+        self._cancel_provider_point_tool(refresh=False)
         self._cancel_wall_edit(restore=False, refresh=False)
         self._cancel_pending_edit()
         if self.current_tool in ("Move Symbol", "Rotate Symbol"):
@@ -1062,6 +1067,9 @@ class PlanEditSession:
         if self.current_tool == "Pick Space Region":
             self._cancel_space_region_pick()
             return
+        if self._has_active_provider_point_tool():
+            self._cancel_provider_point_tool()
+            return
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
         if self._has_active_rect_wall_tool():
@@ -1080,6 +1088,7 @@ class PlanEditSession:
         self._cancel_plan_region_tool(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
         self._cancel_space_separator_tool(refresh=False)
+        self._cancel_provider_point_tool(refresh=False)
         self._cancel_wall_edit()
         self._cancel_pending_edit()
         self._clear_plan_relation_status()
@@ -1095,6 +1104,7 @@ class PlanEditSession:
         self._cancel_space_region_pick(refresh=False)
         self._cancel_plan_region_tool(refresh=False)
         self._cancel_space_separator_tool(refresh=False)
+        self._cancel_provider_point_tool(refresh=False)
         self._cancel_embedded_tool()
         self._cancel_wall_edit()
         self._cancel_pending_edit()
@@ -1120,6 +1130,7 @@ class PlanEditSession:
         self._cancel_space_region_pick(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
         self._cancel_space_separator_tool(refresh=False)
+        self._cancel_provider_point_tool(refresh=False)
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
         self._cancel_wall_edit()
@@ -1152,6 +1163,7 @@ class PlanEditSession:
         self._cancel_space_region_pick(refresh=False)
         self._cancel_plan_region_tool(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
+        self._cancel_provider_point_tool(refresh=False)
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
         self._cancel_wall_edit()
@@ -1180,6 +1192,7 @@ class PlanEditSession:
             self._cancel_space_text_position_pick()
         self._cancel_rect_wall_tool(refresh=False)
         self._cancel_space_separator_tool(refresh=False)
+        self._cancel_provider_point_tool(refresh=False)
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
         self._cancel_wall_edit(refresh=False)
@@ -1194,6 +1207,7 @@ class PlanEditSession:
         self._cancel_plan_region_tool(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
         self._cancel_space_separator_tool(refresh=False)
+        self._cancel_provider_point_tool(refresh=False)
         self._cancel_wall_edit()
         self._cancel_pending_edit()
         self._clear_plan_relation_status()
@@ -1205,6 +1219,7 @@ class PlanEditSession:
         self._cancel_plan_region_tool(refresh=False)
         self._cancel_rect_wall_tool(refresh=False)
         self._cancel_space_separator_tool(refresh=False)
+        self._cancel_provider_point_tool(refresh=False)
 
         if self._has_active_embedded_tool():
             self._cancel_embedded_tool()
@@ -2622,7 +2637,13 @@ class PlanEditSession:
         self._provider_overlay_state = None
         self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_PROVIDER_OVERLAYS)
 
-    def execute_plan_provider_action(self, provider_id, action_key, transaction_label=""):
+    def execute_plan_provider_action(
+        self,
+        provider_id,
+        action_key,
+        transaction_label="",
+        payload=None,
+    ):
         if self._plan_provider_integrations_disabled():
             return False
         return plan_provider_runtime.execute_plan_provider_action(
@@ -2630,7 +2651,130 @@ class PlanEditSession:
             provider_id,
             action_key,
             transaction_label=transaction_label,
+            payload=payload,
         )
+
+    def _has_active_provider_point_tool(self):
+        return self.current_tool == "Provider Point" and self._provider_point_tool is not None
+
+    def _get_provider_point_tool_label(self):
+        tool = self._provider_point_tool
+        if tool is None:
+            return translate("BIM_PlanEdit", "Provider Point")
+        label = str(getattr(tool, "label", "") or "").strip()
+        if label:
+            return label
+        return str(getattr(tool, "key", "") or "").strip() or translate(
+            "BIM_PlanEdit",
+            "Provider Point",
+        )
+
+    def _get_provider_point_tool_prompt(self):
+        tool = self._provider_point_tool
+        if tool is None:
+            return translate("BIM_PlanEdit", "Click a plan point")
+        prompt = str(getattr(tool, "prompt", "") or "").strip()
+        if prompt:
+            return prompt
+        return translate("BIM_PlanEdit", "Click a plan point for {tool}").format(
+            tool=self._get_provider_point_tool_label()
+        )
+
+    def _arm_provider_point_tool(self):
+        if not self._has_active_provider_point_tool():
+            return False
+        snapper = getattr(FreeCADGui, "Snapper", None)
+        if snapper is None:
+            return False
+        FreeCAD.activeDraftCommand = self
+        try:
+            snapper.setSelectMode(False)
+        except Exception:
+            pass
+        self._set_draft_point_focus_suppressed(True)
+        try:
+            snapper.getPoint(
+                callback=self._handle_provider_point_tool_point,
+                title=self._get_provider_point_tool_prompt(),
+                noTracker=True,
+            )
+        except Exception:
+            self._set_draft_point_focus_suppressed(False)
+            return False
+        self._queue_focus_plan_view()
+        return True
+
+    def _cancel_provider_point_tool(self, refresh=True):
+        if not self._has_active_provider_point_tool():
+            return False
+        self._stop_snapper()
+        self._provider_point_tool = None
+        FreeCAD.activeDraftCommand = None
+        self.current_tool = "Select"
+        if refresh:
+            self._refresh_task_panel_status()
+        self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_ALL)
+        return True
+
+    def start_plan_provider_point_tool(self, tool):
+        if tool is None:
+            return False
+        if self._plan_provider_integrations_disabled():
+            return False
+        self._cancel_space_region_pick(refresh=False)
+        self._cancel_plan_region_tool(refresh=False)
+        self._cancel_rect_wall_tool(refresh=False)
+        self._cancel_space_separator_tool(refresh=False)
+        if self.current_tool == "Set Space Text":
+            self._cancel_space_text_position_pick()
+        if self.current_tool in ("Move Symbol", "Rotate Symbol"):
+            self._cancel_symbol_handle_point_pick()
+        if self._has_active_embedded_tool():
+            self._cancel_embedded_tool()
+        self._cancel_wall_edit(refresh=False)
+        self._cancel_pending_edit()
+        self._clear_plan_relation_status()
+        self._set_hovered_wall(None)
+        self._set_hovered_opening(None)
+        self._set_hovered_symbol(None)
+        self._set_hovered_space(None)
+        self._set_hovered_region(None)
+        self._clear_wall_grips()
+        self._clear_selected_wall_opening_context_overlay()
+        self._clear_selected_opening_handles()
+        self._clear_selected_symbol_handles()
+        self._provider_point_tool = tool
+        self.current_tool = "Provider Point"
+        self._refresh_task_panel_status()
+        self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_ALL)
+        if self._arm_provider_point_tool():
+            return True
+        self._provider_point_tool = None
+        self.current_tool = "Select"
+        self._refresh_task_panel_status()
+        return False
+
+    def _handle_provider_point_tool_point(self, point=None, obj=None):
+        del obj
+        if not self._has_active_provider_point_tool():
+            return
+        if point is None:
+            self._cancel_provider_point_tool()
+            return
+        plan_point = self._project_plan_point(point)
+        if plan_point is None:
+            self._arm_provider_point_tool()
+            return
+        tool = self._provider_point_tool
+        payload = {"point": plan_point, "tool": tool}
+        self.execute_plan_provider_action(
+            getattr(tool, "provider_id", ""),
+            getattr(tool, "key", ""),
+            transaction_label=getattr(tool, "transaction_label", ""),
+            payload=payload,
+        )
+        if self._has_active_provider_point_tool():
+            self._arm_provider_point_tool()
 
     def _get_space_preflight_report(self, targets=None):
         return plan_spaces.get_space_preflight_report(self, targets=targets)
@@ -4788,6 +4932,9 @@ class PlanEditSession:
                 if self._get_selected_plan_targets():
                     self._sync_secondary_selected_overlays()
                 return
+            if self.current_tool == "Provider Point":
+                self._sync_provider_overlays()
+                return
             if self.current_tool != "Select":
                 return
             if self.hovered_wall or self._is_selected_plan_target("wall"):
@@ -4918,6 +5065,27 @@ class PlanEditSession:
                 self._sync_secondary_selected_overlays()
                 self._sync_space_region_pick_overlays()
             return
+        if self.current_tool == "Provider Point":
+            self._clear_junction_node_overlays()
+            self._clear_hovered_wall_overlay()
+            self._clear_hovered_wall_opening_context_overlay()
+            self._clear_hovered_opening_overlay()
+            self._clear_hovered_symbol_overlay()
+            self._clear_hovered_space_overlay()
+            self._clear_hovered_region_overlay()
+            self._clear_space_region_pick_overlays()
+            self._clear_selected_opening_overlay()
+            self._clear_selected_symbol_overlay()
+            self._clear_selected_space_overlay()
+            self._clear_selected_region_overlay()
+            self._clear_secondary_selected_overlays()
+            self._clear_selected_opening_handles()
+            self._clear_selected_symbol_handles()
+            self._clear_selected_wall_opening_context_overlay()
+            self._clear_wall_grips()
+            if refresh_all or _PLAN_VISUAL_PROVIDER_OVERLAYS in dirty:
+                self._sync_provider_overlays()
+            return
         if self.current_tool == "Select":
             self._clear_space_region_pick_overlays()
             self._sync_junction_node_overlays()
@@ -5001,6 +5169,9 @@ class PlanEditSession:
         if self.current_tool == "Region" and key == coin.SoKeyboardEvent.ESCAPE:
             self._cancel_plan_region_tool()
             return
+        if self.current_tool == "Provider Point" and key == coin.SoKeyboardEvent.ESCAPE:
+            self._cancel_provider_point_tool()
+            return
         if self._is_wall_move_edit_active() and key == coin.SoKeyboardEvent.TAB:
             if self._start_wall_readout_edit(cycle=True):
                 if hasattr(event_callback, "setHandled"):
@@ -5032,6 +5203,9 @@ class PlanEditSession:
             return
         if self.current_tool == "Set Space Text":
             self._cancel_space_text_position_pick()
+            return
+        if self._has_active_provider_point_tool():
+            self._cancel_provider_point_tool()
             return
         if self._has_active_rect_wall_tool():
             self._cancel_rect_wall_tool()
@@ -5853,6 +6027,12 @@ class PlanEditSession:
         selected_kind, selected_obj = self._get_selected_plan_target()
         selected_context = self._format_plan_target_selection_state(selected_kind, selected_obj)
 
+        if self.current_tool == "Provider Point":
+            title = translate("BIM_PlanEdit", "Plan Edit · {tool}").format(
+                tool=self._get_provider_point_tool_label()
+            )
+            return title, self._get_provider_point_tool_prompt()
+
         if self.current_tool == "Move Opening":
             context = (
                 selected_context
@@ -6086,6 +6266,20 @@ class PlanEditSession:
                 (
                     translate("BIM_PlanEdit", "%1 edit length"),
                     ui.KeyReturn,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 cancel"),
+                    ui.KeyEscape,
+                ),
+            )
+
+        if self.current_tool == "Provider Point":
+            return (
+                (
+                    translate("BIM_PlanEdit", "%1 place point for {tool}").format(
+                        tool=self._get_provider_point_tool_label()
+                    ),
+                    ui.MouseLeft,
                 ),
                 (
                     translate("BIM_PlanEdit", "%1 cancel"),

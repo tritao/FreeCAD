@@ -543,6 +543,50 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             session.shutdown(close_dialog=False)
             self.pump_gui_events()
 
+    def test_plan_edit_provider_point_tool_dispatches_plan_point(self):
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        tool = PlanToolSpec(
+            key="place-test-marker",
+            label="Place Test Marker",
+            tooltip="Click in plan to place a test marker.",
+            transaction_label="Place Test Marker",
+            provider_id="test-plan-provider",
+            interaction="point",
+            prompt="Click a plan point to place a test marker.",
+        )
+        captured = []
+
+        def _capture_action(provider_id, action_key, transaction_label="", payload=None):
+            captured.append((provider_id, action_key, transaction_label, payload))
+            return True
+
+        with patch.object(FreeCADGui.Snapper, "getPoint") as get_point, patch.object(
+            session,
+            "execute_plan_provider_action",
+            side_effect=_capture_action,
+        ):
+            self.assertTrue(session.start_plan_provider_point_tool(tool))
+            self.assertEqual("Provider Point", session.current_tool)
+            session._handle_provider_point_tool_point(FreeCAD.Vector(120.0, 340.0, 999.0))
+            self.assertEqual("Provider Point", session.current_tool)
+            self.assertGreaterEqual(get_point.call_count, 2)
+            self.assertTrue(session._cancel_provider_point_tool())
+
+        self.assertEqual(1, len(captured))
+        provider_id, action_key, transaction_label, payload = captured[0]
+        self.assertEqual("test-plan-provider", provider_id)
+        self.assertEqual("place-test-marker", action_key)
+        self.assertEqual("Place Test Marker", transaction_label)
+        self.assertIs(tool, payload["tool"])
+        self.assertEqual(120.0, payload["point"].x)
+        self.assertEqual(340.0, payload["point"].y)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
     def test_plan_edit_wall_selection_defers_provider_refresh(self):
         """Wall selection should not synchronously run provider integrations."""
 

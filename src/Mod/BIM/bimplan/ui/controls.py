@@ -1507,6 +1507,10 @@ class PlanEditControlsWidget:
     def on_provider_action_clicked(self, action):
         if action is None:
             return
+        interaction = str(getattr(action, "interaction", "") or "").strip().lower()
+        if interaction == "point":
+            self.session.start_plan_provider_point_tool(action)
+            return
         self.session.execute_plan_provider_action(
             getattr(action, "provider_id", ""),
             getattr(action, "key", ""),
@@ -1591,6 +1595,9 @@ class PlanEditControlsWidget:
                 "BIM_PlanEdit",
                 "Click two points to place a room divider that can split Arch Spaces.",
             )
+        elif tool == "Provider Point":
+            selection_state = self.session._get_provider_point_tool_label()
+            selection_help = self.session._get_provider_point_tool_prompt()
         elif selected_kind == "opening" and selected_obj is not None:
             selection_state = selected_state
             selection_help = translate(
@@ -1703,8 +1710,11 @@ class PlanEditControlsWidget:
         enabled = not bool(modal_active)
 
         if self.header_mode_label is not None:
+            mode_label = current_tool
+            if current_tool == "Provider Point":
+                mode_label = self.session._get_provider_point_tool_label()
             self.header_mode_label.setText(
-                translate("BIM_PlanEdit", "{tool} mode").format(tool=current_tool)
+                translate("BIM_PlanEdit", "{tool} mode").format(tool=mode_label)
             )
 
         self._set_widget_enabled(self.join_button, enabled and has_wall)

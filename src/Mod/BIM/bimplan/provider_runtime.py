@@ -3,6 +3,7 @@
 """Runtime helpers for BIM Plan Edit provider integrations."""
 
 from dataclasses import replace
+import inspect
 
 import FreeCAD
 
@@ -312,7 +313,29 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
         return tuple(results)
 
 
-def execute_plan_provider_action(session, provider_id, action_key, transaction_label=""):
+def _execute_plan_provider_action_callback(execute_action, action_key, context, session, payload):
+    if payload is None:
+        return execute_action(action_key, context=context, session=session)
+    try:
+        signature = inspect.signature(execute_action)
+    except (TypeError, ValueError):
+        return execute_action(action_key, context=context, session=session)
+    parameters = signature.parameters
+    accepts_payload = "payload" in parameters or any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()
+    )
+    if accepts_payload:
+        return execute_action(action_key, context=context, session=session, payload=payload)
+    return execute_action(action_key, context=context, session=session)
+
+
+def execute_plan_provider_action(
+    session,
+    provider_id,
+    action_key,
+    transaction_label="",
+    payload=None,
+):
     provider = session.get_plan_provider_registry().get_provider(provider_id)
     if provider is None:
         return False
@@ -325,9 +348,21 @@ def execute_plan_provider_action(session, provider_id, action_key, transaction_l
     try:
         if transaction_label:
             with PlanEditTransaction(session.doc, transaction_label):
-                handled = execute_action(action_key, context=context, session=session)
+                handled = _execute_plan_provider_action_callback(
+                    execute_action,
+                    action_key,
+                    context,
+                    session,
+                    payload,
+                )
         else:
-            handled = execute_action(action_key, context=context, session=session)
+            handled = _execute_plan_provider_action_callback(
+                execute_action,
+                action_key,
+                context,
+                session,
+                payload,
+            )
     except Exception as exc:
         FreeCAD.Console.PrintError(
             translate(
