@@ -593,27 +593,34 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         selected_targets = ("selected-wall-target",)
         hovered_target = ("wall", wall)
 
-        with patch.object(FreeCADGui.Snapper, "getPoint") as get_point, patch.object(
-            FreeCADGui.Snapper,
-            "snapInfo",
-            snap_info,
-            create=True,
-        ), patch.object(
-            session,
-            "execute_plan_provider_action",
-            side_effect=_capture_action,
-        ), patch.object(
-            session,
-            "_get_selected_plan_target",
-            return_value=selected_target,
-        ), patch.object(
-            session,
-            "_get_selected_plan_targets",
-            return_value=selected_targets,
-        ), patch.object(
-            session,
-            "_get_hovered_plan_target",
-            return_value=hovered_target,
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint") as get_point,
+            patch.object(
+                FreeCADGui.Snapper,
+                "snapInfo",
+                snap_info,
+                create=True,
+            ),
+            patch.object(
+                session,
+                "execute_plan_provider_action",
+                side_effect=_capture_action,
+            ),
+            patch.object(
+                session,
+                "_get_selected_plan_target",
+                return_value=selected_target,
+            ),
+            patch.object(
+                session,
+                "_get_selected_plan_targets",
+                return_value=selected_targets,
+            ),
+            patch.object(
+                session,
+                "_get_hovered_plan_target",
+                return_value=hovered_target,
+            ),
         ):
             self.assertTrue(session.start_plan_provider_point_tool(tool))
             self.assertEqual("Provider Point", session.current_tool)
@@ -715,9 +722,11 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         def fake_get_point(**kwargs):
             captured.update(kwargs)
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
-        ), patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True):
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+            patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True),
+        ):
             self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
             self.assertTrue(session.start_plan_provider_point_tool(tool))
             self.assertIn("movecallback", captured)
@@ -730,12 +739,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             self.assertIsNotNone(expected_placement)
             self.assertEqual(("wall", wall), session._provider_point_preview_host_target)
             self.assertEqual("selected", session._provider_point_preview_host_source)
-            self.assertAlmostEqual(
-                expected_placement.x, session._provider_point_preview_point.x
-            )
-            self.assertAlmostEqual(
-                expected_placement.y, session._provider_point_preview_point.y
-            )
+            self.assertAlmostEqual(expected_placement.x, session._provider_point_preview_point.x)
+            self.assertAlmostEqual(expected_placement.y, session._provider_point_preview_point.y)
             self.assertGreater(len(session._provider_point_preview_trackers), 2)
 
             self.assertTrue(session._cancel_provider_point_tool())
@@ -762,14 +767,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         def fake_get_point(**kwargs):
             captured.update(kwargs)
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
-        ), patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True), patch.object(
-            session, "_get_selected_plan_target", return_value=(None, None)
-        ), patch.object(
-            session, "_get_selected_plan_targets", return_value=()
-        ), patch.object(
-            session, "_get_hovered_plan_target", return_value=(None, None)
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+            patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True),
+            patch.object(session, "_get_selected_plan_target", return_value=(None, None)),
+            patch.object(session, "_get_selected_plan_targets", return_value=()),
+            patch.object(session, "_get_hovered_plan_target", return_value=(None, None)),
         ):
             self.assertTrue(session.start_plan_provider_point_tool(tool))
             self.assertIn("movecallback", captured)
@@ -1634,12 +1638,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._edit_symbol_handle_role = "rotate"
         session._edit_symbol_start_placement = link.Placement.copy()
         session._edit_symbol_reference_point = handle_points["rotate"]
-        with patch.object(
-            session, "_symbol_rotation_snap_enabled", return_value=True
-        ), patch.object(
-            session, "_get_symbol_rotation_snap_increment_degrees", return_value=15.0
-        ), patch.object(
-            session, "_symbol_rotation_free_angle_override_active", return_value=False
+        with (
+            patch.object(session, "_symbol_rotation_snap_enabled", return_value=True),
+            patch.object(session, "_get_symbol_rotation_snap_increment_degrees", return_value=15.0),
+            patch.object(
+                session, "_symbol_rotation_free_angle_override_active", return_value=False
+            ),
         ):
             session._finish_symbol_handle_point_pick(raw_point)
         self.pump_gui_events()
@@ -1686,12 +1690,10 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._edit_symbol_handle_role = "rotate"
         session._edit_symbol_start_placement = link.Placement.copy()
         session._edit_symbol_reference_point = handle_points["rotate"]
-        with patch.object(
-            session, "_symbol_rotation_snap_enabled", return_value=True
-        ), patch.object(
-            session, "_get_symbol_rotation_snap_increment_degrees", return_value=15.0
-        ), patch.object(
-            session, "_symbol_rotation_free_angle_override_active", return_value=True
+        with (
+            patch.object(session, "_symbol_rotation_snap_enabled", return_value=True),
+            patch.object(session, "_get_symbol_rotation_snap_increment_degrees", return_value=15.0),
+            patch.object(session, "_symbol_rotation_free_angle_override_active", return_value=True),
         ):
             session._finish_symbol_handle_point_pick(raw_point)
         self.pump_gui_events()
@@ -1948,8 +1950,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         def fake_get_point(**kwargs):
             captured.update(kwargs)
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
             self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
             self.assertTrue(session.can_place_plan_window())
@@ -2014,9 +2017,11 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         def fake_get_point(**kwargs):
             captured.update(kwargs)
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
-        ), patch.object(FreeCADGui.Snapper, "snapInfo", snap_info, create=True):
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+            patch.object(FreeCADGui.Snapper, "snapInfo", snap_info, create=True),
+        ):
             self.assertTrue(session._select_wall_for_plan_edit(wall_a, sync_gui_selection=True))
             self.assertTrue(session.activate_window_tool())
             self.assertIs(session._window_host_wall, wall_a)
@@ -2094,26 +2099,34 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=("wall", wall_a),
+        with (
+            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=("wall", wall_a),
+            ),
         ):
             session._on_mouse_pressed(self._make_fake_left_mouse_press())
 
         self._assert_selected_plan_target(session, "wall", wall_a)
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall_a.Name])
 
-        with patch(
-            "PySide.QtGui.QApplication.keyboardModifiers", return_value=QtCore.Qt.ControlModifier
-        ), patch.object(
-            session,
-            "_get_edit_node",
-            return_value=None,
-        ), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=("wall", wall_b),
+        with (
+            patch(
+                "PySide.QtGui.QApplication.keyboardModifiers",
+                return_value=QtCore.Qt.ControlModifier,
+            ),
+            patch.object(
+                session,
+                "_get_edit_node",
+                return_value=None,
+            ),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=("wall", wall_b),
+            ),
         ):
             callback = self._make_fake_left_mouse_press()
             session._on_mouse_pressed(callback)
@@ -2129,16 +2142,21 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertGreater(len(session._secondary_selection_trackers), 0)
         self.assertIn("Selection set: 2 walls", session.task_panel.status.text())
 
-        with patch(
-            "PySide.QtGui.QApplication.keyboardModifiers", return_value=QtCore.Qt.ControlModifier
-        ), patch.object(
-            session,
-            "_get_edit_node",
-            return_value=None,
-        ), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=("wall", wall_a),
+        with (
+            patch(
+                "PySide.QtGui.QApplication.keyboardModifiers",
+                return_value=QtCore.Qt.ControlModifier,
+            ),
+            patch.object(
+                session,
+                "_get_edit_node",
+                return_value=None,
+            ),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=("wall", wall_a),
+            ),
         ):
             callback = self._make_fake_left_mouse_press()
             session._on_mouse_pressed(callback)
@@ -2337,10 +2355,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         def fake_single_shot(delay, callback):
             calls.append((delay, callback))
 
-        with patch("PySide.QtCore.QTimer.singleShot", side_effect=fake_single_shot), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=("opening", door),
+        with (
+            patch("PySide.QtCore.QTimer.singleShot", side_effect=fake_single_shot),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=("opening", door),
+            ),
         ):
             activated = session._activate_opening_target((100, 100))
 
@@ -2383,10 +2404,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             def getPosition(self):
                 return self._position
 
-        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=(None, None),
+        with (
+            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=(None, None),
+            ),
         ):
             session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
 
@@ -2445,10 +2469,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             def getPosition(self):
                 return self._position
 
-        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=(None, None),
+        with (
+            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=(None, None),
+            ),
         ):
             session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
 
@@ -2471,10 +2498,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [level.Name])
 
-        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=(None, None),
+        with (
+            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=(None, None),
+            ),
         ):
             callback = self._make_fake_left_mouse_press()
             session._on_mouse_pressed(callback)
@@ -2516,14 +2546,17 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         def fake_get_point(**kwargs):
             captured.update(kwargs)
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
-        ), patch.object(
-            FreeCADGui.Snapper,
-            "push_snap_modes",
-            side_effect=lambda modes: pushed_modes.append(set(modes)),
-        ), patch.object(
-            FreeCADGui.Snapper, "pop_snap_modes", side_effect=lambda: popped.append(True)
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+            patch.object(
+                FreeCADGui.Snapper,
+                "push_snap_modes",
+                side_effect=lambda modes: pushed_modes.append(set(modes)),
+            ),
+            patch.object(
+                FreeCADGui.Snapper, "pop_snap_modes", side_effect=lambda: popped.append(True)
+            ),
         ):
             session._start_opening_handle_point_pick(door, 0, handle)
 
@@ -2657,11 +2690,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         handle = session._get_selected_opening_edit_handles(door)[0]
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", return_value=None), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
-        ), patch.object(
-            session, "_refresh_opening_move_preview_from_raw_point", return_value=None
-        ) as refresh_preview:
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+            patch.object(
+                session, "_refresh_opening_move_preview_from_raw_point", return_value=None
+            ) as refresh_preview,
+        ):
             session._start_opening_handle_point_pick(door, 0, handle)
 
             from pivy import coin
@@ -2709,9 +2744,11 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         handle = session._get_selected_opening_edit_handles(door)[0]
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", return_value=None), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
-        ), patch.object(FreeCADGui.HintManager, "show") as show_hints:
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+            patch.object(FreeCADGui.HintManager, "show") as show_hints,
+        ):
             session._start_opening_handle_point_pick(door, 0, handle)
 
         self.assertTrue(show_hints.called)
@@ -2991,10 +3028,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             def getPosition(self):
                 return self._position
 
-        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=("wall", target_wall),
+        with (
+            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=("wall", target_wall),
+            ),
         ):
             session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
 
@@ -3062,10 +3102,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             def getPosition(self):
                 return self._position
 
-        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=("wall", target_wall),
+        with (
+            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=("wall", target_wall),
+            ),
         ):
             session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
 
@@ -3136,10 +3179,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             def getPosition(self):
                 return self._position
 
-        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=("wall", target_wall),
+        with (
+            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=("wall", target_wall),
+            ),
         ):
             session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
 
@@ -3276,10 +3322,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             def getPosition(self):
                 return self._position
 
-        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=("wall", branch_down),
+        with (
+            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=("wall", branch_down),
+            ),
         ):
             session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
 
@@ -3462,8 +3511,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             captured.update(kwargs)
 
         original_endpoints = wall.Proxy.calc_endpoints(wall)
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
             session._start_wall_grip_edit(2)
 
@@ -3518,8 +3568,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             captured.update(kwargs)
 
         original_endpoints = wall.Proxy.calc_endpoints(wall)
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
             session._start_wall_grip_edit(2)
 
@@ -3575,8 +3626,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         def fake_get_point(**kwargs):
             captured.update(kwargs)
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
             calls[0][1]()
 
@@ -3624,9 +3676,10 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             def fake_get_point(**kwargs):
                 captured.update(kwargs)
 
-            with patch.object(
-                FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point
-            ), patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None):
+            with (
+                patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+                patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+            ):
                 calls[0][1]()
 
             self.assertEqual(session.current_tool, "Move Opening")
@@ -3981,8 +4034,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         def fake_get_point(**kwargs):
             captured.update(kwargs)
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
             session._start_wall_grip_edit(1)
 
@@ -4016,8 +4070,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         def fake_get_point(**kwargs):
             captured.update(kwargs)
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
             session._start_wall_grip_edit(2)
 
@@ -4053,8 +4108,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         def fake_get_point(**kwargs):
             captured.update(kwargs)
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
             session._start_wall_grip_edit(2)
 
@@ -4189,8 +4245,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         def fake_get_point(**kwargs):
             captured.update(kwargs)
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
             session._start_wall_grip_edit(1)
 
@@ -4223,9 +4280,11 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         def fake_get_point(**kwargs):
             captured.update(kwargs)
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
-        ), patch.object(session, "_refresh_opening_footprint_display") as refresh_opening:
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
+            patch.object(session, "_refresh_opening_footprint_display") as refresh_opening,
+        ):
             session._start_wall_grip_edit(2)
             new_midpoint = captured["last"].add(FreeCAD.Vector(400, 0, 0))
             captured["callback"](new_midpoint, None)
@@ -4267,8 +4326,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         axis = original_endpoints[1].sub(original_endpoints[0]).normalize()
         shortened_end = original_endpoints[0].add(axis.multiply(1600.0))
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
             session._start_wall_grip_edit(1)
             captured["callback"](shortened_end, None)
@@ -4398,8 +4458,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         original_endpoints = wall.Proxy.calc_endpoints(wall)
         new_start = FreeCAD.Vector(original_endpoints[0]).add(FreeCAD.Vector(200.0, 0.0, 0.0))
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
             session._start_wall_grip_edit(0)
             captured["callback"](new_start, None)
@@ -4452,8 +4513,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         axis = original_endpoints[1].sub(original_endpoints[0]).normalize()
         shortened_end = original_endpoints[0].add(axis.multiply(1600.0))
 
-        with patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point), patch.object(
-            FreeCADGui.Snapper, "setSelectMode", return_value=None
+        with (
+            patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
+            patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
             session._start_wall_grip_edit(1)
             captured["callback"](shortened_end, None)
@@ -4725,11 +4787,14 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=("space", space),
-        ) as get_target:
+        with (
+            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=("space", space),
+            ) as get_target,
+        ):
             press = self._make_fake_left_mouse_press(250, 250)
             session._on_mouse_pressed(press)
 
@@ -4755,10 +4820,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._set_hovered_wall(wall)
         self.assertIs(session.hovered_wall, wall)
 
-        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
-            session,
-            "_get_plan_target_at_position",
-        ) as get_target:
+        with (
+            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+            ) as get_target,
+        ):
             press = self._make_fake_left_mouse_press(250, 250)
             session._on_mouse_pressed(press)
 
@@ -4787,11 +4855,14 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._set_hovered_wall(stale_wall)
         session._hover_pick_dirty = True
 
-        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=("wall", target_wall),
-        ) as get_target:
+        with (
+            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=("wall", target_wall),
+            ) as get_target,
+        ):
             press = self._make_fake_left_mouse_press(250, 250)
             session._on_mouse_pressed(press)
 
@@ -4815,15 +4886,18 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        with patch.object(
-            session,
-            "_queue_plan_overlay_view_scale_refresh",
-            wraps=session._queue_plan_overlay_view_scale_refresh,
-        ) as queue_scale, patch.object(
-            session,
-            "_queue_plan_overlay_visual_refresh",
-            wraps=session._queue_plan_overlay_visual_refresh,
-        ) as queue_visual:
+        with (
+            patch.object(
+                session,
+                "_queue_plan_overlay_view_scale_refresh",
+                wraps=session._queue_plan_overlay_view_scale_refresh,
+            ) as queue_scale,
+            patch.object(
+                session,
+                "_queue_plan_overlay_visual_refresh",
+                wraps=session._queue_plan_overlay_visual_refresh,
+            ) as queue_visual,
+        ):
             session._on_mouse_wheel(self._make_fake_mouse_wheel_event())
 
         self.assertEqual(queue_scale.call_count, 1)
@@ -4842,15 +4916,18 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        with patch.object(
-            session.task_panel,
-            "refresh_from_session",
-            wraps=session.task_panel.refresh_from_session,
-        ) as refresh_full, patch.object(
-            session.task_panel,
-            "refresh_selection_from_session",
-            wraps=session.task_panel.refresh_selection_from_session,
-        ) as refresh_selection:
+        with (
+            patch.object(
+                session.task_panel,
+                "refresh_from_session",
+                wraps=session.task_panel.refresh_from_session,
+            ) as refresh_full,
+            patch.object(
+                session.task_panel,
+                "refresh_selection_from_session",
+                wraps=session.task_panel.refresh_selection_from_session,
+            ) as refresh_selection,
+        ):
             self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
 
         self.assertEqual(refresh_full.call_count, 0)
@@ -4885,14 +4962,17 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             session._sync_selected_space_overlay()
         self.assertFalse(session._selected_space_overlay_dirty)
 
-        with patch.object(
-            session,
-            "_get_space_overlay_segments",
-            wraps=session._get_space_overlay_segments,
-        ) as get_segments, patch.object(
-            session,
-            "_get_plan_view_height",
-            return_value=20000.0,
+        with (
+            patch.object(
+                session,
+                "_get_space_overlay_segments",
+                wraps=session._get_space_overlay_segments,
+            ) as get_segments,
+            patch.object(
+                session,
+                "_get_plan_view_height",
+                return_value=20000.0,
+            ),
         ):
             session._refresh_plan_overlay_visuals({BimPlanSession._PLAN_VISUAL_VIEW_SCALE})
 
@@ -5073,31 +5153,38 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
 
-        with patch.object(
-            session,
-            "_sync_selected_opening_overlay",
-            wraps=session._sync_selected_opening_overlay,
-        ) as sync_opening, patch.object(
-            session,
-            "_sync_selected_symbol_overlay",
-            wraps=session._sync_selected_symbol_overlay,
-        ) as sync_symbol, patch.object(
-            session,
-            "_sync_selected_region_overlay",
-            wraps=session._sync_selected_region_overlay,
-        ) as sync_region, patch.object(
-            session,
-            "_sync_selected_space_overlay",
-            wraps=session._sync_selected_space_overlay,
-        ) as sync_space, patch.object(
-            session,
-            "_sync_secondary_selected_overlays",
-            wraps=session._sync_secondary_selected_overlays,
-        ) as sync_secondary, patch.object(
-            session,
-            "_refresh_task_panel_status",
-            wraps=session._refresh_task_panel_status,
-        ) as refresh_panel:
+        with (
+            patch.object(
+                session,
+                "_sync_selected_opening_overlay",
+                wraps=session._sync_selected_opening_overlay,
+            ) as sync_opening,
+            patch.object(
+                session,
+                "_sync_selected_symbol_overlay",
+                wraps=session._sync_selected_symbol_overlay,
+            ) as sync_symbol,
+            patch.object(
+                session,
+                "_sync_selected_region_overlay",
+                wraps=session._sync_selected_region_overlay,
+            ) as sync_region,
+            patch.object(
+                session,
+                "_sync_selected_space_overlay",
+                wraps=session._sync_selected_space_overlay,
+            ) as sync_space,
+            patch.object(
+                session,
+                "_sync_secondary_selected_overlays",
+                wraps=session._sync_secondary_selected_overlays,
+            ) as sync_secondary,
+            patch.object(
+                session,
+                "_refresh_task_panel_status",
+                wraps=session._refresh_task_panel_status,
+            ) as refresh_panel,
+        ):
             self.assertTrue(session._select_space_for_plan_edit(space, sync_gui_selection=True))
 
         self.assertEqual(sync_opening.call_count, 0)
@@ -5142,15 +5229,18 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         panel._space_editor_combo_state = None
         panel._space_editor_boundary_state = None
 
-        with patch.object(
-            panel,
-            "_set_space_type_combo_options",
-            wraps=panel._set_space_type_combo_options,
-        ) as set_options, patch.object(
-            session,
-            "_get_space_boundary_entries",
-            wraps=session._get_space_boundary_entries,
-        ) as get_boundary_entries:
+        with (
+            patch.object(
+                panel,
+                "_set_space_type_combo_options",
+                wraps=panel._set_space_type_combo_options,
+            ) as set_options,
+            patch.object(
+                session,
+                "_get_space_boundary_entries",
+                wraps=session._get_space_boundary_entries,
+            ) as get_boundary_entries,
+        ):
             panel.refresh_from_session()
             panel.refresh_from_session()
 
@@ -5327,10 +5417,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertFalse(space.ViewObject.Selectable)
         self.assertFalse(region.ViewObject.Selectable)
 
-        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=("region", region),
+        with (
+            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=("region", region),
+            ),
         ):
             press = self._make_fake_left_mouse_press(250, 250)
             session._on_mouse_pressed(press)
@@ -5399,11 +5492,14 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        with patch.object(
-            session,
-            "_get_edit_node",
-            return_value=("opening_handle", door, 0),
-        ), patch.object(session, "_activate_opening_handle") as activate_handle:
+        with (
+            patch.object(
+                session,
+                "_get_edit_node",
+                return_value=("opening_handle", door, 0),
+            ),
+            patch.object(session, "_activate_opening_handle") as activate_handle,
+        ):
             callback = self._make_fake_left_mouse_press()
             session._on_mouse_pressed(callback)
 
@@ -5448,11 +5544,14 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         picked_point = _FakePickedPoint(self.document.Name, door.Name, "EditNode0")
-        with patch.object(
-            session,
-            "_get_edit_node",
-            return_value=("edit_node", picked_point),
-        ), patch.object(session, "_activate_opening_handle") as activate_handle:
+        with (
+            patch.object(
+                session,
+                "_get_edit_node",
+                return_value=("edit_node", picked_point),
+            ),
+            patch.object(session, "_activate_opening_handle") as activate_handle,
+        ):
             callback = self._make_fake_left_mouse_press()
             session._on_mouse_pressed(callback)
 
@@ -5589,12 +5688,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         try:
             session.view = FakeView(self.document.Name, space.Name, level)
-            with patch.object(
-                session, "_get_region_footprint_faces", return_value=[]
-            ), patch.object(
-                session,
-                "_get_plan_point_from_mouse_pos",
-                return_value=FreeCAD.Vector(1500, 1200, 0),
+            with (
+                patch.object(session, "_get_region_footprint_faces", return_value=[]),
+                patch.object(
+                    session,
+                    "_get_plan_point_from_mouse_pos",
+                    return_value=FreeCAD.Vector(1500, 1200, 0),
+                ),
             ):
                 self.assertEqual(
                     ("region", region), session._get_plan_target_at_position((100, 100))
@@ -6485,9 +6585,10 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
 
-        with patch("FreeCAD.Console.PrintError") as print_error, patch(
-            "FreeCAD.Console.PrintWarning"
-        ) as print_warning:
+        with (
+            patch("FreeCAD.Console.PrintError") as print_error,
+            patch("FreeCAD.Console.PrintWarning") as print_warning,
+        ):
             self.assertFalse(session.activate_space_tool())
             self.pump_gui_events()
 
@@ -6633,26 +6734,34 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        with patch.object(session, "_get_edit_node", return_value=None), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=("space", space),
+        with (
+            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=("space", space),
+            ),
         ):
             session._on_mouse_pressed(self._make_fake_left_mouse_press())
 
         self.assertIs(session.selected_space, space)
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [space.Name])
 
-        with patch(
-            "PySide.QtGui.QApplication.keyboardModifiers", return_value=QtCore.Qt.ControlModifier
-        ), patch.object(
-            session,
-            "_get_edit_node",
-            return_value=None,
-        ), patch.object(
-            session,
-            "_get_plan_target_at_position",
-            return_value=("wall", wall),
+        with (
+            patch(
+                "PySide.QtGui.QApplication.keyboardModifiers",
+                return_value=QtCore.Qt.ControlModifier,
+            ),
+            patch.object(
+                session,
+                "_get_edit_node",
+                return_value=None,
+            ),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=("wall", wall),
+            ),
         ):
             callback = self._make_fake_left_mouse_press()
             session._on_mouse_pressed(callback)
@@ -6800,13 +6909,11 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
 
-        with patch.object(
-            session, "_queue_hard_refresh_selected_opening_visuals"
-        ) as hard_refresh, patch.object(
-            session, "_queue_recompute_opening_hosts"
-        ) as recompute_hosts, patch.object(
-            session, "_queue_plan_overlay_visual_refresh"
-        ) as queue_refresh:
+        with (
+            patch.object(session, "_queue_hard_refresh_selected_opening_visuals") as hard_refresh,
+            patch.object(session, "_queue_recompute_opening_hosts") as recompute_hosts,
+            patch.object(session, "_queue_plan_overlay_visual_refresh") as queue_refresh,
+        ):
             session.slotUndoDocument(self.document)
 
         hard_refresh.assert_called_once_with()
