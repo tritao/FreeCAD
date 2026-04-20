@@ -217,13 +217,16 @@ SET(bimcommands_SRCS
 
 SET(bimplan_SRCS
     bimplan/__init__.py
+    bimplan/command_gate.py
     bimplan/context.py
+    bimplan/hosted_openings.py
     bimplan/hosts.py
     bimplan/opening_edit.py
     bimplan/overlays/__init__.py
     bimplan/overlays/geometry.py
     bimplan/overlays/manager.py
     bimplan/overlays/openings.py
+    bimplan/overlays/providers.py
     bimplan/overlays/spaces.py
     bimplan/overlays/symbols.py
     bimplan/overlays/walls.py
@@ -243,6 +246,7 @@ SET(bimplan_SRCS
     bimplan/ui/controls.py
     bimplan/ui/status_chip.py
     bimplan/view.py
+    bimplan/window_create.py
 )
 
 SET(BIM_templates
