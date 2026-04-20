@@ -4,7 +4,12 @@
 
 
 def _session_is_inactive(session):
-    return session._tearing_down or getattr(session, "_finishing", False)
+    if session._tearing_down or getattr(session, "_finishing", False):
+        return True
+    document_is_alive = getattr(session, "_document_is_alive", None)
+    if callable(document_is_alive):
+        return not document_is_alive()
+    return False
 
 
 def queue_plan_overlay_visual_refresh(session, visuals, visual_all, visual_selected_space):

@@ -800,7 +800,7 @@ class PlanEditSession:
 
     def _document_is_alive(self):
         doc = self.doc
-        if not doc:
+        if doc is None:
             return False
         try:
             _ = doc.Name
@@ -1019,17 +1019,28 @@ class PlanEditSession:
         return None
 
     def get_storey_elevation(self, obj):
-        if hasattr(obj, "Placement"):
-            return obj.Placement.Base.z
+        try:
+            placement = getattr(obj, "Placement", None)
+        except Exception:
+            return 0.0
+        if placement is not None:
+            try:
+                return placement.Base.z
+            except Exception:
+                return 0.0
         return 0.0
 
     def get_storey_label(self, obj):
-        if not obj:
+        if obj is None:
             return translate("BIM_PlanEdit", "Global XY (Z=0)")
         elevation = FreeCAD.Units.Quantity(
             self.get_storey_elevation(obj), FreeCAD.Units.Length
         ).UserString
-        return f"{obj.Label} [{elevation}]"
+        try:
+            label = str(getattr(obj, "Label", "") or getattr(obj, "Name", "") or "")
+        except Exception:
+            return translate("BIM_PlanEdit", "Global XY (Z=0)")
+        return f"{label} [{elevation}]"
 
     def set_active_storey(self, storey):
         self.active_storey = storey
@@ -1064,12 +1075,25 @@ class PlanEditSession:
     def get_plan_provider_display_name(self, provider_id):
         return plan_provider_runtime.get_plan_provider_display_name(self, provider_id)
 
+    def _safe_plan_object_name(self, obj):
+        if obj is None:
+            return ""
+        try:
+            return str(getattr(obj, "Name", "") or "")
+        except Exception:
+            return ""
+
     def get_plan_edit_context(self):
+        doc = self.doc if self._document_is_alive() else None
         active_storey = self.active_storey
+        active_storey_name = self._safe_plan_object_name(active_storey)
+        if active_storey is not None and not active_storey_name:
+            active_storey = None
+            self.active_storey = None
         return PlanEditContext(
             session=self,
-            document_name=str(getattr(self.doc, "Name", "") or ""),
-            active_storey_name=str(getattr(active_storey, "Name", "") or ""),
+            document_name=self._safe_plan_object_name(doc),
+            active_storey_name=active_storey_name,
             active_storey_label=str(self.get_storey_label(active_storey) or ""),
             current_tool=str(self.current_tool or ""),
         )
@@ -2526,6 +2550,8 @@ class PlanEditSession:
                     self._document_visual_update_defer_depth = 0
             if self._document_visual_refresh_deferred:
                 self._document_visual_refresh_deferred = False
+                if not self._document_is_alive():
+                    return
                 self._invalidate_document_dependent_plan_visuals()
                 self._refresh_primary_selected_plan_target()
                 self._refresh_task_panel_status(selection_only=True)
@@ -2725,6 +2751,9 @@ class PlanEditSession:
         return plan_provider_runtime.normalize_plan_provider_overlay(provider_id, overlay)
 
     def _collect_plan_provider_contributions(self, method_name, normalizer):
+        if self._tearing_down or self._finishing or not self._document_is_alive():
+            self._plan_perf_count("plan_provider_inactive_session")
+            return ()
         if self._plan_provider_integrations_disabled():
             self._plan_perf_count("plan_provider_integrations_disabled")
             return ()
@@ -2803,6 +2832,8 @@ class PlanEditSession:
         transaction_label="",
         payload=None,
     ):
+        if self._tearing_down or self._finishing or not self._document_is_alive():
+            return False
         if self._plan_provider_integrations_disabled():
             return False
         return plan_provider_runtime.execute_plan_provider_action(
@@ -5376,7 +5407,7 @@ class PlanEditSession:
                 self._sync_secondary_selected_overlays()
 
     def _refresh_plan_overlay_visuals(self, dirty=None):
-        if self._tearing_down or self._finishing:
+        if self._tearing_down or self._finishing or not self._document_is_alive():
             return
         dirty = set(dirty or {_PLAN_VISUAL_ALL})
         refresh_all = _PLAN_VISUAL_ALL in dirty
@@ -6269,6 +6300,8 @@ class PlanEditSession:
         self._schedule_selected_wall_reset("Deleted", obj)
 
     def _invalidate_document_dependent_plan_visuals(self, recompute_opening_hosts=False):
+        if self._tearing_down or self._finishing or not self._document_is_alive():
+            return
         self._invalidate_plan_provider_document_cache()
         self._invalidate_plan_classification_cache()
         self._invalidate_wall_hosted_openings_cache()
@@ -6345,6 +6378,13 @@ class PlanEditSession:
             return
         self._invalidate_document_dependent_plan_visuals()
 
+    def slotDeletedDocument(self, doc):
+        del doc
+        if self._tearing_down:
+            return
+        self.begin_teardown()
+        self.shutdown(close_dialog=False, teardown=True)
+
     def attach_task_panel(self, panel):
         if self.task_panel is panel:
             return
@@ -6414,7 +6454,7 @@ class PlanEditSession:
             "refresh_task_panel_status",
             selection_only=bool(selection_only),
         ):
-            if self._tearing_down:
+            if self._tearing_down or not self._document_is_alive():
                 return
             self._sanitize_plan_target_references()
             self._update_input_hints()
