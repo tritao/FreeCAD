@@ -124,6 +124,13 @@ class _TestPlanProvider(PlanEditProvider):
         return True
 
 
+class _DeletedDocument:
+    def __getattribute__(self, name):
+        if name == "Name":
+            raise ReferenceError("Cannot access attribute 'Name' of deleted object")
+        return object.__getattribute__(self, name)
+
+
 class TestBimPlanEditGui(ArchWallGuiTestCase):
     def _assert_selected_plan_target(self, session, kind, obj):
         self.assertEqual(session._get_selected_plan_target(), (kind, obj))
@@ -560,6 +567,45 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
             session.shutdown(close_dialog=False)
             self.pump_gui_events()
+
+    def test_plan_edit_provider_collection_ignores_deleted_document(self):
+        """Queued provider refreshes should not touch a deleted document wrapper."""
+
+        registry = get_plan_edit_registry()
+        registry.clear()
+        self.addCleanup(registry.clear)
+
+        provider = _TestPlanProvider()
+        registry.register_provider(provider)
+
+        session = BimPlanSession.PlanEditSession()
+        session.doc = _DeletedDocument()
+
+        try:
+            self.assertEqual((), session.get_plan_provider_tools())
+            self.assertIsNone(session.doc)
+            self.assertEqual(0, provider.tool_calls)
+        finally:
+            session.shutdown(close_dialog=False, teardown=True)
+
+    def test_plan_edit_queued_overlay_refresh_ignores_deleted_document(self):
+        """Queued overlay refreshes should drain without provider sync after document deletion."""
+
+        session = BimPlanSession.PlanEditSession()
+        session.doc = _DeletedDocument()
+        session._overlay_refresh_queued = True
+        session._dirty_plan_visuals.add(BimPlanSession._PLAN_VISUAL_ALL)
+
+        try:
+            with patch.object(session, "_refresh_plan_overlay_visuals") as refresh_visuals:
+                session._flush_plan_overlay_visual_refresh()
+
+            refresh_visuals.assert_not_called()
+            self.assertFalse(session._overlay_refresh_queued)
+            self.assertFalse(session._dirty_plan_visuals)
+            self.assertIsNone(session.doc)
+        finally:
+            session.shutdown(close_dialog=False, teardown=True)
 
     def test_plan_edit_provider_point_tool_dispatches_plan_point(self):
         wall = Arch.makeWall(length=3000, width=200, height=2500)
@@ -6905,7 +6951,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 "_should_register_created_plan_object",
                 return_value=True,
             ),
-            patch.object(session, "_register_plan_object") as register_object,
+            patch.object(session, "_register_plan_objects") as register_objects,
             patch.object(
                 session,
                 "_invalidate_document_dependent_plan_visuals",
@@ -6919,17 +6965,16 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 "_refresh_task_panel_status",
             ) as refresh_status,
         ):
-            register_object.side_effect = lambda registered: session.slotChangedObject(
-                registered,
-                "Group",
-            )
+            register_objects.side_effect = lambda registered: [
+                session.slotChangedObject(obj, "Group") for obj in registered
+            ]
             with session.defer_document_visual_updates():
                 session.slotCreatedObject(obj)
                 self.assertIn(obj.Name, session._pending_created_plan_objects)
                 session._flush_created_plan_objects()
-                register_object.assert_not_called()
+                register_objects.assert_not_called()
 
-            register_object.assert_called_once_with(obj)
+            register_objects.assert_called_once_with([obj])
             invalidate_visuals.assert_called_once_with()
             refresh_selection.assert_called_once_with()
             refresh_status.assert_called_once_with(selection_only=True)

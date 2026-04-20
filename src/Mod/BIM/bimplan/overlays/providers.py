@@ -13,8 +13,12 @@ _PROVIDER_POINT_PREVIEW_HOST_COLOR = (0.10, 0.58, 0.38)
 
 def sync_provider_overlays(session):
     with session._plan_perf_trace_span("sync_provider_overlays"):
+        document_is_alive = getattr(session, "_document_is_alive", None)
         if (
-            session.current_tool not in ("Select", "Provider Point")
+            session._tearing_down
+            or getattr(session, "_finishing", False)
+            or (callable(document_is_alive) and not document_is_alive())
+            or session.current_tool not in ("Select", "Provider Point")
             or session._plan_provider_integrations_disabled()
         ):
             clear_provider_overlays(session)
@@ -135,9 +139,7 @@ def _get_provider_point_preview_segment_specs(session):
     host_kind, host_obj = _normalize_host_target(session._provider_point_preview_host_target)
     hosted = host_kind == "wall" and host_obj is not None
     preview_color = (
-        _PROVIDER_POINT_PREVIEW_HOSTED_COLOR
-        if hosted
-        else _PROVIDER_POINT_PREVIEW_UNHOSTED_COLOR
+        _PROVIDER_POINT_PREVIEW_HOSTED_COLOR if hosted else _PROVIDER_POINT_PREVIEW_UNHOSTED_COLOR
     )
     width = session._scaled_line_width(2)
     specs = []

@@ -63,6 +63,18 @@ class PlanEditControlsWidget:
     def modal_focus_widgets(self):
         return tuple(self._modal_focus_widgets)
 
+    def _session_is_inactive(self):
+        if getattr(self.session, "_tearing_down", False) or getattr(
+            self.session,
+            "_finishing",
+            False,
+        ):
+            return True
+        document_is_alive = getattr(self.session, "_document_is_alive", None)
+        if callable(document_is_alive):
+            return not document_is_alive()
+        return False
+
     def _build_form(self, QtGui):
         outer = QtGui.QWidget()
         try:
@@ -895,7 +907,7 @@ class PlanEditControlsWidget:
             pass
 
     def _queue_integration_panel_refresh(self, delay_ms=None):
-        if self.form is None:
+        if self.form is None or self._session_is_inactive():
             return
         self._integration_refresh_queued = True
         self._integration_refresh_generation += 1
@@ -920,6 +932,9 @@ class PlanEditControlsWidget:
                 return
             if generation is not None and generation != self._integration_refresh_generation:
                 return
+            if self._session_is_inactive():
+                self._integration_refresh_queued = False
+                return
             self._integration_refresh_queued = False
             self._refresh_integration_panel(defer=False)
 
@@ -930,6 +945,10 @@ class PlanEditControlsWidget:
                 or self.integration_summary is None
                 or self.integration_content_layout is None
             ):
+                return
+            if self._session_is_inactive():
+                self._integration_refresh_queued = False
+                self._hide_integration_panel()
                 return
             if self.session._plan_provider_integrations_disabled():
                 self.session._plan_perf_count("integration_panel_disabled")
@@ -1372,6 +1391,8 @@ class PlanEditControlsWidget:
                 pass
 
     def dispose(self):
+        self._integration_refresh_queued = False
+        self._integration_refresh_generation += 1
         form = self.form
         if form is not None:
             try:

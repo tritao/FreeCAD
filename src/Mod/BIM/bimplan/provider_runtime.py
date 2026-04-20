@@ -319,7 +319,13 @@ def _coerce_plan_overlay_color(color):
 
 def collect_plan_provider_contributions(session, method_name, normalizer):
     with session._plan_perf_trace_span(f"collect_plan_provider_contributions_{method_name}"):
-        context = session.get_plan_edit_context()
+        document_is_alive = getattr(session, "_document_is_alive", None)
+        if callable(document_is_alive) and not document_is_alive():
+            return ()
+        try:
+            context = session.get_plan_edit_context()
+        except (ReferenceError, RuntimeError):
+            return ()
         results = []
         for provider in session.get_plan_provider_registry().iter_providers():
             provider_id = session._get_plan_provider_id(provider)
@@ -379,6 +385,9 @@ def execute_plan_provider_action(
     transaction_label="",
     payload=None,
 ):
+    document_is_alive = getattr(session, "_document_is_alive", None)
+    if callable(document_is_alive) and not document_is_alive():
+        return False
     provider = session.get_plan_provider_registry().get_provider(provider_id)
     if provider is None:
         return False
