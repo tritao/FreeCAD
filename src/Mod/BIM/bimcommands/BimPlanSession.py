@@ -187,12 +187,30 @@ def _refresh_contextual_task_watchers():
         pass
 
 
+def _register_builtin_plan_edit_integrations():
+    try:
+        from bimplan.window_provider import register_plan_edit_providers
+
+        register_plan_edit_providers()
+    except Exception as exc:
+        try:
+            FreeCAD.Console.PrintError(
+                translate(
+                    "BIM_PlanEdit",
+                    "BIM Plan Edit window provider registration failed: {error}\n",
+                ).format(error=exc)
+            )
+        except Exception:
+            pass
+
+
 def start_session():
     global _active_session
 
     if _active_session:
         return _active_session
 
+    _register_builtin_plan_edit_integrations()
     session = PlanEditSession()
     if session.enter():
         _active_session = session

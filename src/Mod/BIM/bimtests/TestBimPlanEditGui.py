@@ -2201,6 +2201,77 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         )
         self.assertIn("selected window", session._format_opening_selection_help(window))
 
+    def test_plan_edit_selected_window_shows_contextual_window_guidance(self):
+        """Selected hosted windows should contribute BIM window guidance."""
+
+        from PySide import QtGui
+
+        registry = get_plan_edit_registry()
+        registry.clear()
+        self.addCleanup(registry.clear)
+
+        level, wall, window = self._make_windowed_plan_wall()
+        del wall
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(session._select_opening_for_plan_edit(window, sync_gui_selection=True))
+        session.task_panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        panel = session.task_panel
+        self.assertFalse(panel.integration_panel.isHidden())
+        labels = [
+            str(widget.text()) for widget in panel.integration_panel.findChildren(QtGui.QLabel)
+        ]
+        self.assertTrue(any("BIM Windows: Window" in text for text in labels))
+        self.assertTrue(any("Host wall:" in text for text in labels))
+        self.assertTrue(any("Status: hosted" in text for text in labels))
+
+        buttons = [
+            widget
+            for widget in panel.integration_panel.findChildren(QtGui.QPushButton)
+            if str(widget.text()) in {"Recompute host", "Select host wall", "Center on host"}
+        ]
+        self.assertEqual(3, len(buttons))
+
+    def test_plan_edit_selected_wall_shows_contextual_window_markers(self):
+        """Selected walls should expose hosted windows through provider overlays."""
+
+        registry = get_plan_edit_registry()
+        registry.clear()
+        self.addCleanup(registry.clear)
+
+        level, wall, window = self._make_windowed_plan_wall()
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+        session.task_panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        overlays = [
+            overlay
+            for overlay in session.get_plan_provider_overlays()
+            if getattr(overlay, "provider_id", "") == "bim-window"
+        ]
+        self.assertEqual(1, len(overlays))
+        self.assertEqual("Hosted windows", overlays[0].label)
+        self.assertEqual(1, len(overlays[0].points))
+        self.assertEqual(1, len(overlays[0].point_targets))
+        self.assertEqual(window.Name, overlays[0].point_targets[0].object_name)
+        self.assertEqual("opening", overlays[0].point_targets[0].target_kind)
+
     def test_plan_edit_ctrl_click_adds_wall_to_selection_without_replacing_primary_target(self):
         """Ctrl-click should build a wall selection set while keeping the current primary wall."""
 
