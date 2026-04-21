@@ -2,9 +2,11 @@
 
 """Target records exposed by BIM Plan Edit integrations."""
 
+from contextlib import nullcontext
 from dataclasses import dataclass
 
 import FreeCAD
+from bimplan import provider_targets as plan_provider_targets
 
 
 @dataclass(frozen=True)
@@ -13,6 +15,10 @@ class PlanTarget:
     document_name: str = ""
     object_name: str = ""
     label: str = ""
+    provider_id: str = ""
+    target_key: str = ""
+    category: str = ""
+    role: str = ""
     semantic_document_name: str = ""
     semantic_object_name: str = ""
     semantic_label: str = ""
@@ -25,6 +31,8 @@ def get_plan_target_kind_for_object(session, obj):
         return "opening"
     if session._is_plan_symbol_instance(obj):
         return "symbol"
+    if session._is_plan_provider_target_object(obj):
+        return "provider"
     if session._is_plan_region_object(obj):
         return "region"
     if session._is_plan_selectable_wall(obj):
@@ -184,18 +192,30 @@ def get_plan_host_ref(session, obj):
 def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=None):
     if not kind or obj is None:
         return None
+    provider_target = (
+        session._get_plan_provider_target_for_object(obj) if kind == "provider" else None
+    )
     semantic_obj = session._get_plan_semantic_object(obj)
     doc = getattr(obj, "Document", None)
-    semantic_doc = getattr(semantic_obj, "Document", None)
     state_key = session._get_plan_target_state_key(kind, obj)
+    fields = plan_provider_targets.resolve_plan_provider_target_display_fields(
+        session,
+        semantic_obj,
+        provider_target,
+        getattr(obj, "Label", getattr(obj, "Name", "")),
+    )
     return PlanTarget(
         kind=str(kind or ""),
         document_name=str(getattr(doc, "Name", "") or ""),
         object_name=str(getattr(obj, "Name", "") or ""),
-        label=str(getattr(obj, "Label", getattr(obj, "Name", "")) or ""),
-        semantic_document_name=str(getattr(semantic_doc, "Name", "") or ""),
-        semantic_object_name=str(getattr(semantic_obj, "Name", "") or ""),
-        semantic_label=str(getattr(semantic_obj, "Label", getattr(semantic_obj, "Name", "")) or ""),
+        label=fields["label"],
+        provider_id=fields["provider_id"],
+        target_key=fields["target_key"],
+        category=fields["category"],
+        role=fields["role"],
+        semantic_document_name=fields["semantic_document_name"],
+        semantic_object_name=fields["semantic_object_name"],
+        semantic_label=fields["semantic_label"],
         is_selected=bool(selected_keys and state_key in selected_keys),
         is_primary=bool(primary_key is not None and state_key == primary_key),
     )
@@ -219,20 +239,26 @@ def get_plan_targets(session, selected_only=False):
         source_targets = []
         seen = set()
         active_storey_name = getattr(session.active_storey, "Name", None)
-        for obj in getattr(session.doc, "Objects", []) or []:
-            target_kind, target_obj = session._get_plan_target_for_object(obj)
-            if not target_kind or not target_obj:
-                continue
-            state_key = session._get_plan_target_state_key(target_kind, target_obj)
-            if state_key is None or state_key in seen:
-                continue
-            semantic_obj = session._get_plan_semantic_object(target_obj)
-            if active_storey_name is not None:
-                storeys = session._get_object_storeys(semantic_obj or target_obj)
-                if storeys and not any(parent.Name == active_storey_name for parent in storeys):
+        provider_refresh_scope = (
+            session._plan_provider_refresh_cache_scope()
+            if hasattr(session, "_plan_provider_refresh_cache_scope")
+            else nullcontext()
+        )
+        with provider_refresh_scope:
+            for obj in getattr(session.doc, "Objects", []) or []:
+                target_kind, target_obj = session._get_plan_target_for_object(obj)
+                if not target_kind or not target_obj:
                     continue
-            seen.add(state_key)
-            source_targets.append((target_kind, target_obj))
+                state_key = session._get_plan_target_state_key(target_kind, target_obj)
+                if state_key is None or state_key in seen:
+                    continue
+                semantic_obj = session._get_plan_semantic_object(target_obj)
+                if active_storey_name is not None:
+                    storeys = session._get_object_storeys(semantic_obj or target_obj)
+                    if storeys and not any(parent.Name == active_storey_name for parent in storeys):
+                        continue
+                seen.add(state_key)
+                source_targets.append((target_kind, target_obj))
 
     records = []
     for target_kind, target_obj in source_targets:

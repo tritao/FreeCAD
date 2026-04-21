@@ -8,6 +8,7 @@ import inspect
 
 import FreeCAD
 
+from bimplan import provider_targets as plan_provider_targets
 from bimplan.providers import (
     PlanActionSpec,
     PlanInspectorSection,
@@ -259,6 +260,22 @@ def normalize_plan_provider_overlay(provider_id, overlay):
     return replace(overlay, **replacements)
 
 
+def normalize_plan_provider_target(provider_id, target):
+    return plan_provider_targets.normalize_plan_provider_target(provider_id, target)
+
+
+def get_plan_provider_targets(session):
+    return plan_provider_targets.get_plan_provider_targets(session)
+
+
+def get_plan_provider_target_for_object(session, obj):
+    return plan_provider_targets.get_plan_provider_target_for_object(session, obj)
+
+
+def is_plan_provider_target_object(session, obj):
+    return plan_provider_targets.is_plan_provider_target_object(session, obj)
+
+
 def _coerce_plan_overlay_target(target):
     if target is None:
         return PlanOverlayTargetSpec()
@@ -348,6 +365,10 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
         document_is_alive = getattr(session, "_document_is_alive", None)
         if callable(document_is_alive) and not document_is_alive():
             return ()
+        refresh_cache = getattr(session, "_plan_provider_refresh_cache", None)
+        cache_key = ("provider_contributions", str(method_name or ""))
+        if isinstance(refresh_cache, dict) and cache_key in refresh_cache:
+            return refresh_cache[cache_key]
         try:
             context = session.get_plan_edit_context()
         except (ReferenceError, RuntimeError):
@@ -385,7 +406,10 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
                 "plan_provider_{}_{}_contributions".format(provider_id, method_name),
                 contribution_count,
             )
-        return tuple(results)
+        contributions = tuple(results)
+        if isinstance(refresh_cache, dict):
+            refresh_cache[cache_key] = contributions
+        return contributions
 
 
 def _execute_plan_provider_action_callback(execute_action, action_key, context, session, payload):
