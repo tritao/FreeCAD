@@ -175,4 +175,5 @@ class PublicClassStub:
 
 
 StubSignatureKey: TypeAlias = tuple[str, str, str]
-StubSignatureOverrides: TypeAlias = dict[StubSignatureKey, StubSignature]
+StubSignatureGroup: TypeAlias = tuple[StubSignature, ...]
+StubSignatureOverrides: TypeAlias = dict[StubSignatureKey, StubSignatureGroup]

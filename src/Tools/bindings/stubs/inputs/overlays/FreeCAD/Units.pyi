@@ -2,19 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Literal, TypeAlias, overload
+from typing import Literal, TypeAlias
 
 from FreeCAD.Base import Quantity
 
 _NumberFormat: TypeAlias = Literal["g", "f", "e"]
 
 Radian: Quantity
-
-@overload
-def listSchemas() -> tuple[str, ...]: ...
-@overload
-def listSchemas(index: int, /) -> str: ...
-@overload
-def toNumber(value: Quantity, format: _NumberFormat = ..., decimals: int = ..., /) -> str: ...
-@overload
-def toNumber(value: float, format: _NumberFormat = ..., decimals: int = ..., /) -> str: ...

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
 from __future__ import annotations
+from typing import overload
 
 def open(Name: str, /) -> None: ...
 def insert(Name: str, DocName: str, /) -> None: ...
@@ -8,6 +9,28 @@ def export(object: Sequence[DocumentObject], Name: str, /) -> None: ...
 def read(Name: str, /) -> Shape: ...
 def show(pcObj: Shape, name: str = "Shape", /) -> Feature: ...
 def getFacets(shape: Shape, /) -> list[tuple[Point3, Point3, Point3]]: ...
+@overload
+def makeRevolution(
+    pCrv: Geometry,
+    vmin: float = ...,
+    vmax: float = ...,
+    angle: float = 360,
+    pPnt: Vector | None = None,
+    pDir: Vector | None = None,
+    type: type | None = None,
+    /,
+) -> Shape: ...
+@overload
+def makeRevolution(
+    pCrv: Edge,
+    vmin: float = ...,
+    vmax: float = ...,
+    angle: float = 360,
+    pPnt: Vector | None = None,
+    pDir: Vector | None = None,
+    type: type | None = None,
+    /,
+) -> Shape: ...
 def makeCompound(shapes: ShapeSequence, force: Any = ..., op: str | None = None) -> Compound: ...
 def makeShell(shapes: ShapeSequence, op: str | None = None) -> Shell: ...
 def makeFace(
@@ -82,6 +105,56 @@ def makeLoft(
     max_degree: int = 5,
     op: str | None = None,
 ) -> Shape: ...
+@overload
+def makeWireString(
+    intext: str | bytes,
+    dir: str,
+    fontfile: str,
+    height: float,
+    track: float = 0,
+    /,
+) -> list[list[Wire]]: ...
+@overload
+def makeWireString(
+    intext: str | bytes, fontspec: str, height: float, track: float = 0, /
+) -> list[list[Wire]]: ...
+@overload
+def setStaticValue(name: str, cval: str, /) -> None: ...
+@overload
+def setStaticValue(name: str, value: int | float, /) -> None: ...
+@overload
+def getShape(
+    obj: DocumentObject,
+    subname: str | None = None,
+    mat: Matrix | None = None,
+    needSubElement: bool = False,
+    transform: bool = True,
+    retType: Literal[0] = 0,
+    noElementMap: bool = False,
+    refine: bool = False,
+) -> Shape: ...
+@overload
+def getShape(
+    obj: DocumentObject,
+    subname: str | None,
+    mat: Matrix | None,
+    needSubElement: bool,
+    transform: bool,
+    retType: Literal[1, 2],
+    noElementMap: bool = False,
+    refine: bool = False,
+) -> tuple[Shape, Matrix, DocumentObject | None]: ...
+@overload
+def getShape(
+    obj: DocumentObject,
+    subname: str | None = None,
+    mat: Matrix | None = None,
+    needSubElement: bool = False,
+    transform: bool = True,
+    retType: int = 0,
+    noElementMap: bool = False,
+    refine: bool = False,
+) -> Shape | tuple[Shape, Matrix, DocumentObject | None]: ...
 def makePlane(
     length: float,
     width: float,

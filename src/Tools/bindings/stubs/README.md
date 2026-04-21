@@ -52,9 +52,8 @@ stubs are ready to be maintained or generated at the package source.
 Public module overlays merge top-level symbols into generated modules instead of
 replacing the whole file. Keep overlays focused on aliases, helper types, and
 manual APIs that the generator still cannot model. Use source-adjacent
-`*.module.pyi` files for single-signature module functions; keep overloaded
-module functions in overlays until the module stub path grows overload-group
-support.
+`*.module.pyi` files for module function signatures and keep overlays focused
+on the remaining helper definitions and synthetic public APIs.
 
 The helper also runs the smoke checks from this directory:
 

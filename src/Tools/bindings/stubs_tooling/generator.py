@@ -63,6 +63,7 @@ from .model import (
     PublicTypeGroup,
     PublicTypeTarget,
     StubSignature,
+    StubSignatureGroup,
     StubSignatureOverrides,
 )
 from .parsing import (
@@ -647,10 +648,10 @@ def signature(method: BindingMethod, class_method: bool = False) -> str:
     return f"({self_arg}*args: Any)"
 
 
-def known_stub_signature(
+def known_stub_signatures(
     method: BindingMethod,
     stub_signature_overrides: StubSignatureOverrides,
-) -> StubSignature | None:
+) -> StubSignatureGroup | None:
     return stub_signature_overrides.get((method.source, method.context_name, method.python_name))
 
 
@@ -679,32 +680,50 @@ def valid_identifier(name: str) -> bool:
     return name.isidentifier() and not keyword.iskeyword(name)
 
 
-def stub_line(
+def render_stub_lines(
     method: BindingMethod,
     class_method: bool = False,
     class_symbol: str | None = None,
     stub_signature_overrides: StubSignatureOverrides | None = None,
-) -> str:
+) -> tuple[str, ...]:
     if valid_identifier(method.python_name):
-        known_signature = known_stub_signature(
+        known_signatures = known_stub_signatures(
             method,
             stub_signature_overrides or {},
         )
-        if known_signature:
-            parameters = resolve_signature_placeholders(
-                known_signature.parameters,
-                class_symbol,
-                known_signature.class_symbol,
-            )
-            returns = resolve_signature_placeholders(
-                known_signature.returns,
-                class_symbol,
-                known_signature.class_symbol,
-            )
-            signature_text = format_signature(parameters, class_method)
-            return f"def {method.python_name}{signature_text} -> {returns}: ..."
-        return f"def {method.python_name}{signature(method, class_method)} -> Any: ..."
-    return f"# TODO: invalid Python identifier from binding table: {method.python_name!r}"
+        if known_signatures:
+            rendered: list[str] = []
+            use_overload = len(known_signatures) > 1
+            for known_signature in known_signatures:
+                parameters = resolve_signature_placeholders(
+                    known_signature.parameters,
+                    class_symbol,
+                    known_signature.class_symbol,
+                )
+                returns = resolve_signature_placeholders(
+                    known_signature.returns,
+                    class_symbol,
+                    known_signature.class_symbol,
+                )
+                signature_text = format_signature(parameters, class_method)
+                if use_overload:
+                    rendered.append("@overload")
+                rendered.append(f"def {method.python_name}{signature_text} -> {returns}: ...")
+            return tuple(rendered)
+        return (f"def {method.python_name}{signature(method, class_method)} -> Any: ...",)
+    return (f"# TODO: invalid Python identifier from binding table: {method.python_name!r}",)
+
+
+def methods_need_overload_import(
+    methods: list[BindingMethod],
+    stub_signature_overrides: StubSignatureOverrides | None,
+) -> bool:
+    overrides = stub_signature_overrides or {}
+    return any(
+        signatures is not None and len(signatures) > 1
+        for method in methods
+        for signatures in (known_stub_signatures(method, overrides),)
+    )
 
 
 def write_stub_file(
@@ -714,13 +733,16 @@ def write_stub_file(
     stub_signature_overrides: StubSignatureOverrides | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    typing_import = "from typing import Any, overload" if methods_need_overload_import(
+        methods, stub_signature_overrides
+    ) else "from typing import Any"
     lines = [
         "# This is a generated inventory skeleton. Refine signatures before publishing.",
         "from __future__ import annotations",
-        "from typing import Any",
+        typing_import,
         "",
     ]
-    seen: set[str] = set()
+    seen: set[tuple[str, ...]] = set()
 
     if class_name:
         safe_class_name = class_name.rsplit(".", 1)[-1]
@@ -729,24 +751,27 @@ def write_stub_file(
         class_start = len(lines)
         lines.append(f"class {safe_class_name}:")
         for method in methods:
-            rendered = "    " + stub_line(
-                method,
-                class_method=True,
-                class_symbol=safe_class_name,
-                stub_signature_overrides=stub_signature_overrides,
+            rendered = tuple(
+                "    " + line
+                for line in render_stub_lines(
+                    method,
+                    class_method=True,
+                    class_symbol=safe_class_name,
+                    stub_signature_overrides=stub_signature_overrides,
+                )
             )
             if rendered in seen:
                 continue
-            lines.append(rendered)
+            lines.extend(rendered)
             seen.add(rendered)
         if len(lines) == class_start + 1:
             lines.append("    pass")
     else:
         for method in methods:
-            rendered = stub_line(method, stub_signature_overrides=stub_signature_overrides)
+            rendered = render_stub_lines(method, stub_signature_overrides=stub_signature_overrides)
             if rendered in seen:
                 continue
-            lines.append(rendered)
+            lines.extend(rendered)
             seen.add(rendered)
 
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -856,8 +881,8 @@ def module_stub_signature_from_function_node(
 
 def parse_stub_signature_overrides(
     override_dir: Path,
-) -> dict[tuple[str, str, str], tuple[StubSignature, Path]]:
-    signatures: dict[tuple[str, str, str], tuple[StubSignature, Path]] = {}
+) -> dict[tuple[str, str, str], tuple[StubSignatureGroup, Path]]:
+    signatures: dict[tuple[str, str, str], tuple[StubSignatureGroup, Path]] = {}
     pycxx_override_dir = (
         override_dir / "pycxx" if (override_dir / "pycxx").exists() else override_dir
     )
@@ -891,7 +916,7 @@ def parse_stub_signature_overrides(
                         f"{path}: duplicate signature for {module_name}.{node.name}.{item.name}; "
                         f"already defined in {earlier_path}"
                     )
-                signatures[key] = (signature, path)
+                signatures[key] = ((signature,), path)
 
     return signatures
 
@@ -899,8 +924,8 @@ def parse_stub_signature_overrides(
 def parse_module_stub_signature_overrides(
     root: Path,
     source_dir: Path,
-) -> dict[tuple[str, str], tuple[StubSignature, Path]]:
-    signatures: dict[tuple[str, str], tuple[StubSignature, Path]] = {}
+) -> dict[tuple[str, str], tuple[StubSignatureGroup, Path]]:
+    signatures: dict[tuple[str, str], tuple[StubSignatureGroup, Path]] = {}
     for path in sorted(iter_module_stub_pyi_files(root, source_dir)):
         module_name = path.name.removesuffix(MODULE_STUB_PYI_SUFFIX)
         if not module_name or not all(valid_identifier(part) for part in module_name.split(".")):
@@ -919,12 +944,15 @@ def parse_module_stub_signature_overrides(
             key = (module_name, node.name)
             signature = module_stub_signature_from_function_node(path, source, module_name, node)
             if key in signatures:
-                _, earlier_path = signatures[key]
-                raise ValueError(
-                    f"{path}: duplicate signature for {module_name}.{node.name}; "
-                    f"already defined in {earlier_path}"
-                )
-            signatures[key] = (signature, path)
+                earlier_group, earlier_path = signatures[key]
+                if earlier_path != path:
+                    raise ValueError(
+                        f"{path}: duplicate signature for {module_name}.{node.name}; "
+                        f"already defined in {earlier_path}"
+                    )
+                signatures[key] = (earlier_group + (signature,), path)
+                continue
+            signatures[key] = ((signature,), path)
 
     return signatures
 
@@ -1193,28 +1221,37 @@ def type_stub_lines(
     stub_signature_overrides: StubSignatureOverrides,
     include_future_import: bool = True,
 ) -> list[str]:
+    methods = [method for _, _, _, group in type_groups for method in group]
+    typing_import = (
+        "from typing import Any, overload"
+        if methods_need_overload_import(methods, stub_signature_overrides)
+        else "from typing import Any"
+    )
     lines = [
         "# Generated public type stubs from PyCXX binding method tables.",
     ]
     if include_future_import:
         lines.append("from __future__ import annotations")
-    lines.extend(["from typing import Any", ""])
+    lines.extend([typing_import, ""])
 
     for class_symbol, variable_symbol, base_symbols, methods in type_groups:
         base_clause = f"({', '.join(base_symbols)})" if base_symbols else ""
         lines.append(f"class {class_symbol}{base_clause}:")
-        seen: set[str] = set()
+        seen: set[tuple[str, ...]] = set()
         class_start = len(lines)
         for method in methods:
-            rendered = "    " + stub_line(
-                method,
-                class_method=True,
-                class_symbol=class_symbol,
-                stub_signature_overrides=stub_signature_overrides,
+            rendered = tuple(
+                "    " + line
+                for line in render_stub_lines(
+                    method,
+                    class_method=True,
+                    class_symbol=class_symbol,
+                    stub_signature_overrides=stub_signature_overrides,
+                )
             )
             if rendered in seen:
                 continue
-            lines.append(rendered)
+            lines.extend(rendered)
             seen.add(rendered)
         if len(lines) == class_start:
             lines.append("    pass")
@@ -2121,6 +2158,30 @@ def overlay_insertion_index(body: list[ast.stmt]) -> int:
     return insertion_index
 
 
+def is_future_import(node: ast.stmt) -> bool:
+    return isinstance(node, ast.ImportFrom) and node.module == "__future__"
+
+
+def normalize_future_imports(body: list[ast.stmt]) -> list[ast.stmt]:
+    if not body:
+        return body
+
+    docstring_end = 0
+    if (
+        isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        docstring_end = 1
+
+    future_imports = [node for node in body[docstring_end:] if is_future_import(node)]
+    if not future_imports:
+        return body
+
+    rest = [node for node in body[docstring_end:] if not is_future_import(node)]
+    return body[:docstring_end] + future_imports + rest
+
+
 def merge_overlay_module(target_source: str, overlay_source: str) -> str:
     # Overlay modules replace matching top-level symbols but keep generated members
     # that the overlay does not mention. This lets small overlays add helper types
@@ -2141,7 +2202,7 @@ def merge_overlay_module(target_source: str, overlay_source: str) -> str:
         overlay_nodes.extend(copy.deepcopy(node) for node in group)
 
     insertion_index = overlay_insertion_index(target_body)
-    target_tree.body = (
+    target_tree.body = normalize_future_imports(
         target_body[:insertion_index] + overlay_nodes + target_body[insertion_index:]
     )
 
