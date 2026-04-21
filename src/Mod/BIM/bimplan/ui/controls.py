@@ -3,6 +3,7 @@
 """Task-panel controls for BIM Plan Edit."""
 
 import FreeCAD
+from bimplan.providers import PlanIssueSeverity, PlanToolInteraction
 
 translate = FreeCAD.Qt.translate
 
@@ -461,10 +462,9 @@ class PlanEditControlsWidget:
         return block
 
     def _format_provider_issue_heading(self, provider_label, severity, title):
-        severity = str(severity or "").strip().lower()
         severity_label = {
-            "error": translate("BIM_PlanEdit", "Error"),
-            "warning": translate("BIM_PlanEdit", "Warning"),
+            PlanIssueSeverity.ERROR: translate("BIM_PlanEdit", "Error"),
+            PlanIssueSeverity.WARNING: translate("BIM_PlanEdit", "Warning"),
         }.get(severity, translate("BIM_PlanEdit", "Info"))
         provider_text = str(provider_label or "").strip()
         if not provider_text:
@@ -518,12 +518,11 @@ class PlanEditControlsWidget:
         return bool(getattr(issue, "collapsed", False))
 
     def _get_provider_issue_severity_rank(self, issue):
-        severity = str(getattr(issue, "severity", "") or "").strip().lower()
         return {
-            "error": 3,
-            "warning": 2,
-            "info": 1,
-        }.get(severity, 0)
+            PlanIssueSeverity.ERROR: 3,
+            PlanIssueSeverity.WARNING: 2,
+            PlanIssueSeverity.INFO: 1,
+        }.get(getattr(issue, "severity", PlanIssueSeverity.INFO), 0)
 
     def _get_provider_issue_group_severity(self, issues):
         ranked = sorted(
@@ -532,8 +531,8 @@ class PlanEditControlsWidget:
             reverse=True,
         )
         if not ranked:
-            return "info"
-        return str(getattr(ranked[0], "severity", "") or "info").strip().lower()
+            return PlanIssueSeverity.INFO
+        return getattr(ranked[0], "severity", PlanIssueSeverity.INFO)
 
     def _get_provider_issue_group_provider_label(self, issues):
         labels = []
@@ -1611,8 +1610,10 @@ class PlanEditControlsWidget:
     def on_provider_action_clicked(self, action):
         if action is None:
             return
-        interaction = str(getattr(action, "interaction", "") or "").strip().lower()
-        if interaction == "point":
+        if (
+            getattr(action, "interaction", PlanToolInteraction.IMMEDIATE)
+            == PlanToolInteraction.POINT
+        ):
             self.session.start_plan_provider_point_tool(action)
             return
         self.session.execute_plan_provider_action(

@@ -38,8 +38,11 @@ from bimplan.providers import (
     PlanEditProvider,
     PlanInspectorSection,
     PlanIssueSpec,
+    PlanIssueSeverity,
     PlanOverlaySpec,
+    PlanOverlayTargetKind,
     PlanToolSpec,
+    PlanToolInteraction,
 )
 from bimplan.registry import get_plan_edit_registry
 from bimtests.ArchWallGuiTestUtils import (
@@ -69,7 +72,7 @@ class _TestPlanProvider(PlanEditProvider):
                 key="provider-review",
                 title="Provider needs review",
                 message="A test provider contribution should appear in the Plan Edit dock.",
-                severity="warning",
+                severity=PlanIssueSeverity.WARNING,
                 actions=(
                     PlanActionSpec(
                         key="apply-provider-fix",
@@ -621,7 +624,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             tooltip="Click in plan to place a test marker.",
             transaction_label="Place Test Marker",
             provider_id="test-plan-provider",
-            interaction="point",
+            interaction=PlanToolInteraction.POINT,
             prompt="Click a plan point to place a test marker.",
         )
         captured = []
@@ -717,7 +720,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             key="place-test-marker",
             label="Place Test Marker",
             provider_id="test-plan-provider",
-            interaction="point",
+            interaction=PlanToolInteraction.POINT,
         )
         captured = []
 
@@ -761,7 +764,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             key="place-test-marker",
             label="Place Test Marker",
             provider_id="test-plan-provider",
-            interaction="point",
+            interaction=PlanToolInteraction.POINT,
         )
         captured = {}
 
@@ -806,7 +809,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             key="place-test-marker",
             label="Place Test Marker",
             provider_id="test-plan-provider",
-            interaction="point",
+            interaction=PlanToolInteraction.POINT,
         )
         captured = {}
 
@@ -2453,7 +2456,10 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(1, len(overlays[0].points))
         self.assertEqual(1, len(overlays[0].point_targets))
         self.assertEqual(window.Name, overlays[0].point_targets[0].object_name)
-        self.assertEqual("opening", overlays[0].point_targets[0].target_kind)
+        self.assertEqual(
+            PlanOverlayTargetKind.OPENING,
+            overlays[0].point_targets[0].target_kind,
+        )
 
     def test_plan_edit_ctrl_click_adds_wall_to_selection_without_replacing_primary_target(self):
         """Ctrl-click should build a wall selection set while keeping the current primary wall."""
