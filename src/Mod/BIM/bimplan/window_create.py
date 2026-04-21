@@ -321,6 +321,37 @@ def _add_rectangle(sketch, x_min, y_min, x_max, y_max):
     sketch.addConstraint(Sketcher.Constraint("Coincident", start_index + 1, 2, start_index + 2, 1))
     sketch.addConstraint(Sketcher.Constraint("Coincident", start_index + 2, 2, start_index + 3, 1))
     sketch.addConstraint(Sketcher.Constraint("Coincident", start_index + 3, 2, start_index, 1))
+    sketch.addConstraint(Sketcher.Constraint("Horizontal", start_index))
+    sketch.addConstraint(Sketcher.Constraint("Vertical", start_index + 1))
+    sketch.addConstraint(Sketcher.Constraint("Horizontal", start_index + 2))
+    sketch.addConstraint(Sketcher.Constraint("Vertical", start_index + 3))
+    return start_index
+
+
+def _add_outer_rectangle_size_constraints(sketch, start_index, width, height):
+    import Sketcher
+
+    sketch.addConstraint(Sketcher.Constraint("DistanceX", start_index, 1, start_index, 2, width))
+    sketch.renameConstraint(sketch.ConstraintCount - 1, "Width")
+    sketch.addConstraint(
+        Sketcher.Constraint("DistanceY", start_index + 1, 1, start_index + 1, 2, height)
+    )
+    sketch.renameConstraint(sketch.ConstraintCount - 1, "Height")
+
+
+def _link_inner_rectangle_to_outer_rectangle(sketch, outer_start, inner_start, inset):
+    import Sketcher
+
+    sketch.addConstraint(
+        Sketcher.Constraint("DistanceX", outer_start + 3, 2, inner_start + 3, 2, inset)
+    )
+    sketch.addConstraint(
+        Sketcher.Constraint("DistanceX", inner_start + 1, 1, outer_start + 1, 1, inset)
+    )
+    sketch.addConstraint(Sketcher.Constraint("DistanceY", outer_start, 1, inner_start, 1, inset))
+    sketch.addConstraint(
+        Sketcher.Constraint("DistanceY", inner_start + 2, 2, outer_start + 2, 2, inset)
+    )
 
 
 def _make_window_base_sketch(session, wall, center):
@@ -342,15 +373,17 @@ def _make_window_base_sketch(session, wall, center):
     y_min = 0.0
     y_max = DEFAULT_WINDOW_HEIGHT
     inset = DEFAULT_WINDOW_FRAME_THICKNESS
-    _add_rectangle(sketch, -half_width, y_min, half_width, y_max)
+    outer_start = _add_rectangle(sketch, -half_width, y_min, half_width, y_max)
+    _add_outer_rectangle_size_constraints(sketch, outer_start, DEFAULT_WINDOW_WIDTH, y_max - y_min)
     if DEFAULT_WINDOW_WIDTH > inset * 2.0 and DEFAULT_WINDOW_HEIGHT > inset * 2.0:
-        _add_rectangle(
+        inner_start = _add_rectangle(
             sketch,
             -half_width + inset,
             y_min + inset,
             half_width - inset,
             y_max - inset,
         )
+        _link_inner_rectangle_to_outer_rectangle(sketch, outer_start, inner_start, inset)
     return sketch
 
 
