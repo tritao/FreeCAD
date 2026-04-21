@@ -164,3 +164,56 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
+
+    def test_plan_edit_provider_selection_survives_overlay_mode_switch(self):
+        """Selected provider targets should persist across overlay mode changes."""
+
+        marker = Draft.makePoint(FreeCAD.Vector(100, 200, 0))
+        marker.Label = "Electrical Marker"
+        self.document.recompute()
+        FreeCADGui.Selection.clearSelection()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with patch.object(
+            session,
+            "get_plan_provider_targets",
+            return_value=(self._make_provider_target_spec(marker),),
+        ):
+            self.assertTrue(session.set_plan_provider_overlay_mode("electrical"))
+            self.assertTrue(session._is_plan_provider_target_object(marker))
+
+            session._set_gui_selection_object(marker)
+            session._refresh_primary_selected_plan_target()
+            self.pump_gui_events()
+
+            self.assertEqual(("provider", marker), session._get_selected_plan_target())
+            self.assertEqual([marker], FreeCADGui.Selection.getSelection())
+            self.assertEqual((marker,), session.get_selected_objects())
+            self.assertEqual(
+                ("provider", marker),
+                plan_targets.get_plan_pick_target_for_object(session, marker),
+            )
+
+            self.assertTrue(session.set_plan_provider_overlay_mode("architecture"))
+            self.assertEqual(("provider", marker), session._get_selected_plan_target())
+            self.assertEqual([marker], FreeCADGui.Selection.getSelection())
+            self.assertEqual((marker,), session.get_selected_objects())
+            self.assertEqual(
+                (None, None),
+                plan_targets.get_plan_pick_target_for_object(session, marker),
+            )
+
+            self.assertTrue(session.set_plan_provider_overlay_mode("electrical"))
+            self.assertEqual(("provider", marker), session._get_selected_plan_target())
+            self.assertEqual([marker], FreeCADGui.Selection.getSelection())
+            self.assertEqual((marker,), session.get_selected_objects())
+            self.assertEqual(
+                ("provider", marker),
+                plan_targets.get_plan_pick_target_for_object(session, marker),
+            )
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
