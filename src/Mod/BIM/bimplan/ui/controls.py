@@ -173,6 +173,8 @@ class PlanEditControlsWidget:
             self.region_parent_space_combo,
             self.window_width_edit,
             self.window_width_apply_button,
+            self.window_height_edit,
+            self.window_height_apply_button,
             self.window_preset_combo,
             self.window_preset_apply_button,
             self.exit_button,
@@ -1409,6 +1411,15 @@ class PlanEditControlsWidget:
         self.window_width_edit.returnPressed.connect(self.on_window_width_apply_clicked)
         form.addRow(translate("BIM_PlanEdit", "Width"), self.window_width_edit)
 
+        self.window_height_edit = QtGui.QLineEdit(editor)
+        if hasattr(self.window_height_edit, "setClearButtonEnabled"):
+            self.window_height_edit.setClearButtonEnabled(True)
+        if hasattr(self.window_height_edit, "setPlaceholderText"):
+            self.window_height_edit.setPlaceholderText(translate("BIM_PlanEdit", "1200 mm"))
+        self.window_height_edit.textChanged.connect(self.on_window_height_text_changed)
+        self.window_height_edit.returnPressed.connect(self.on_window_height_apply_clicked)
+        form.addRow(translate("BIM_PlanEdit", "Height"), self.window_height_edit)
+
         self.window_preset_combo = QtGui.QComboBox(editor)
         if hasattr(QtGui.QComboBox, "AdjustToMinimumContentsLengthWithIcon"):
             self.window_preset_combo.setSizeAdjustPolicy(
@@ -1435,6 +1446,12 @@ class PlanEditControlsWidget:
             self.on_window_width_apply_clicked,
         )
         button_row.addWidget(self.window_width_apply_button)
+        self.window_height_apply_button = self._make_button(
+            QtGui,
+            "Apply Height",
+            self.on_window_height_apply_clicked,
+        )
+        button_row.addWidget(self.window_height_apply_button)
         self.window_preset_apply_button = self._make_button(
             QtGui,
             "Apply Style",
@@ -1521,6 +1538,8 @@ class PlanEditControlsWidget:
         self.window_editor = None
         self.window_width_edit = None
         self.window_width_apply_button = None
+        self.window_height_edit = None
+        self.window_height_apply_button = None
         self.window_preset_combo = None
         self.window_preset_note = None
         self.window_preset_apply_button = None
@@ -2060,9 +2079,11 @@ class PlanEditControlsWidget:
             or self.session.current_tool != "Select"
         ):
             return None
-        if self.session._can_edit_window_width(
-            selected_obj
-        ) or self.session._can_apply_window_style_preset(selected_obj):
+        if (
+            self.session._can_edit_window_width(selected_obj)
+            or self.session._can_edit_window_height(selected_obj)
+            or self.session._can_apply_window_style_preset(selected_obj)
+        ):
             return selected_obj
         return None
 
@@ -2070,7 +2091,9 @@ class PlanEditControlsWidget:
         self,
         current_style,
         current_width_text,
+        current_height_text,
         can_edit_width,
+        can_edit_height,
         can_apply_style,
     ):
         current_style = str(current_style or "").strip()
@@ -2086,15 +2109,42 @@ class PlanEditControlsWidget:
             if current_width_text
             else translate("BIM_PlanEdit", "Current width: unresolved")
         )
-        if can_edit_width and can_apply_style:
+        height_text = (
+            translate("BIM_PlanEdit", "Current height: {height}").format(
+                height=current_height_text,
+            )
+            if current_height_text
+            else translate("BIM_PlanEdit", "Current height: unresolved")
+        )
+        if can_edit_width and can_edit_height and can_apply_style:
+            hint_text = translate(
+                "BIM_PlanEdit",
+                "Change the width or height directly or apply a built-in preset while keeping the hosted position.",
+            )
+        elif can_edit_width and can_apply_style:
             hint_text = translate(
                 "BIM_PlanEdit",
                 "Change the width directly or apply a built-in preset while keeping the hosted position.",
+            )
+        elif can_edit_height and can_apply_style:
+            hint_text = translate(
+                "BIM_PlanEdit",
+                "Change the height directly or apply a built-in preset while keeping the hosted position.",
+            )
+        elif can_edit_width and can_edit_height:
+            hint_text = translate(
+                "BIM_PlanEdit",
+                "Change the width or height directly while keeping the hosted position.",
             )
         elif can_edit_width:
             hint_text = translate(
                 "BIM_PlanEdit",
                 "Change the width directly while keeping the hosted position.",
+            )
+        elif can_edit_height:
+            hint_text = translate(
+                "BIM_PlanEdit",
+                "Change the height directly while keeping the hosted position.",
             )
         elif can_apply_style:
             hint_text = translate(
@@ -2106,7 +2156,7 @@ class PlanEditControlsWidget:
                 "BIM_PlanEdit",
                 "Window editing is unavailable for the current selection.",
             )
-        return "{}\n{}\n{}".format(style_text, width_text, hint_text)
+        return "{}\n{}\n{}\n{}".format(style_text, width_text, height_text, hint_text)
 
     def _update_window_width_apply_state(self, modal_active=None):
         if self.window_width_edit is None or self.window_width_apply_button is None:
@@ -2143,6 +2193,45 @@ class PlanEditControlsWidget:
                 else translate(
                     "BIM_PlanEdit",
                     "Enter a different positive width before applying it.",
+                )
+            ),
+        )
+
+    def _update_window_height_apply_state(self, modal_active=None):
+        if self.window_height_edit is None or self.window_height_apply_button is None:
+            return
+
+        window = self._get_window_editor_target()
+        can_edit_height = bool(window and self.session._can_edit_window_height(window))
+        if modal_active is None:
+            modal_active = self.session._is_modal_plan_interaction_active()
+
+        current_height = self.session._get_selected_window_height_mm() if can_edit_height else None
+        entered_height = self._coerce_window_length_mm(self.window_height_edit.text())
+        can_apply = bool(
+            can_edit_height
+            and entered_height is not None
+            and entered_height > 0.0
+            and (current_height is None or abs(entered_height - current_height) > 1e-6)
+        )
+        if modal_active:
+            can_apply = False
+
+        try:
+            self.window_height_apply_button.setEnabled(can_apply)
+        except Exception:
+            pass
+        self._set_widget_tooltip(
+            self.window_height_apply_button,
+            (
+                translate(
+                    "BIM_PlanEdit",
+                    "Apply the entered height to the current window.",
+                )
+                if can_apply
+                else translate(
+                    "BIM_PlanEdit",
+                    "Enter a different positive height before applying it.",
                 )
             ),
         )
@@ -2207,23 +2296,29 @@ class PlanEditControlsWidget:
             try:
                 window_key = self._get_editor_object_key(window)
                 can_edit_width = self.session._can_edit_window_width(window)
+                can_edit_height = self.session._can_edit_window_height(window)
                 can_apply_style = self.session._can_apply_window_style_preset(window)
                 current_style = self.session._get_selected_window_style_preset()
                 current_width_text = self.session._get_selected_window_width_text()
+                current_height_text = self.session._get_selected_window_height_text()
                 combo_items = self._get_window_preset_combo_items(current_style)
                 state = (
                     window_key,
                     combo_items,
                     str(current_style or ""),
                     str(current_width_text or ""),
+                    str(current_height_text or ""),
                     bool(can_edit_width),
+                    bool(can_edit_height),
                     bool(can_apply_style),
                 )
                 if state != self._window_editor_state:
                     self.window_width_edit.blockSignals(True)
+                    self.window_height_edit.blockSignals(True)
                     self.window_preset_combo.blockSignals(True)
                     try:
                         self.window_width_edit.setText(str(current_width_text or ""))
+                        self.window_height_edit.setText(str(current_height_text or ""))
                         self.window_preset_combo.clear()
                         for item_data, item_label in combo_items:
                             self.window_preset_combo.addItem(item_label, item_data)
@@ -2236,24 +2331,29 @@ class PlanEditControlsWidget:
                         )
                     finally:
                         self.window_width_edit.blockSignals(False)
+                        self.window_height_edit.blockSignals(False)
                         self.window_preset_combo.blockSignals(False)
 
                     self.window_preset_note.setText(
                         self._format_window_editor_note(
                             current_style,
                             current_width_text,
+                            current_height_text,
                             can_edit_width,
+                            can_edit_height,
                             can_apply_style,
                         )
                     )
                     self._window_editor_state = state
 
                 self._set_widget_enabled(self.window_width_edit, bool(can_edit_width))
+                self._set_widget_enabled(self.window_height_edit, bool(can_edit_height))
                 self._set_widget_enabled(self.window_preset_combo, bool(can_apply_style))
             finally:
                 self._refreshing_window_editor = False
 
             self._update_window_width_apply_state()
+            self._update_window_height_apply_state()
             self._update_window_preset_apply_state()
 
     def _apply_modal_interaction_state(self, modal_active):
@@ -2367,6 +2467,11 @@ class PlanEditControlsWidget:
             and _selected_obj is not None
             and self.session._can_edit_window_width(_selected_obj)
         )
+        can_edit_window_height = (
+            selected_kind == "opening"
+            and _selected_obj is not None
+            and self.session._can_edit_window_height(_selected_obj)
+        )
         can_apply_window_style = (
             selected_kind == "opening"
             and _selected_obj is not None
@@ -2379,6 +2484,13 @@ class PlanEditControlsWidget:
                 widget.setEnabled(bool(can_edit_window_width and not modal_active))
             except Exception:
                 pass
+        for widget in (self.window_height_edit, self.window_height_apply_button):
+            if widget is None:
+                continue
+            try:
+                widget.setEnabled(bool(can_edit_window_height and not modal_active))
+            except Exception:
+                pass
         for widget in (self.window_preset_combo, self.window_preset_apply_button):
             if widget is None:
                 continue
@@ -2387,6 +2499,7 @@ class PlanEditControlsWidget:
             except Exception:
                 pass
         self._update_window_width_apply_state(modal_active=modal_active)
+        self._update_window_height_apply_state(modal_active=modal_active)
         self._update_window_preset_apply_state(modal_active=modal_active)
 
     def on_storey_changed(self, index):
@@ -2502,10 +2615,21 @@ class PlanEditControlsWidget:
             return
         self._update_window_width_apply_state()
 
+    def on_window_height_text_changed(self, _text):
+        if self._refreshing_window_editor:
+            return
+        self._update_window_height_apply_state()
+
     def on_window_width_apply_clicked(self):
         if self._refreshing_window_editor or self.window_width_edit is None:
             return
         if self.session._set_selected_window_width(self.window_width_edit.text()):
+            self.refresh_from_session(defer_integrations=True)
+
+    def on_window_height_apply_clicked(self):
+        if self._refreshing_window_editor or self.window_height_edit is None:
+            return
+        if self.session._set_selected_window_height(self.window_height_edit.text()):
             self.refresh_from_session(defer_integrations=True)
 
     def on_window_preset_apply_clicked(self):

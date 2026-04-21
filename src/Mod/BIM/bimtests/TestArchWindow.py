@@ -208,6 +208,72 @@ class TestArchWindow(TestArchBase.TestArchBase):
         self.assertFalse(ArchWindow.canEditWindowWidth(window))
         self.assertFalse(Arch.setWindowWidth(window, 950.0))
 
+    def test_resize_window_height_named_sketch_preserves_anchor(self):
+        """Shared Arch resize should preserve the anchor of named-constraint height edits."""
+
+        def get_shape_center(obj):
+            bound_box = obj.Shape.BoundBox
+            return FreeCAD.Vector(
+                (float(bound_box.XMin) + float(bound_box.XMax)) * 0.5,
+                (float(bound_box.YMin) + float(bound_box.YMax)) * 0.5,
+                (float(bound_box.ZMin) + float(bound_box.ZMax)) * 0.5,
+            )
+
+        sketch = self._create_sketch_with_named_constraints(
+            "ResizeNamedHeightSketch", 800.0, 1200.0
+        )
+        sketch.Placement.Base = FreeCAD.Vector(250.0, 100.0, 0.0)
+        window = Arch.makeWindow(baseobj=sketch, name="ResizeNamedHeightWindow")
+        self.document.recompute()
+
+        original_center = get_shape_center(window.Base)
+
+        self.assertTrue(Arch.setWindowHeight(window, 1400.0))
+        self.document.recompute()
+
+        updated_center = get_shape_center(window.Base)
+        self.assertAlmostEqual(window.Width.Value, 800.0, places=5)
+        self.assertAlmostEqual(window.Height.Value, 1400.0, places=5)
+        self.assertAlmostEqual(window.Base.getDatum("Height").Value, 1400.0, places=5)
+        self.assertAlmostEqual(original_center.x, updated_center.x, places=5)
+        self.assertAlmostEqual(original_center.y, updated_center.y, places=5)
+        self.assertAlmostEqual(original_center.z, updated_center.z, places=5)
+
+    def test_resize_window_height_simple_sketch_preserves_anchor(self):
+        """Shared Arch resize should rewrite simple sketch height edits in place."""
+
+        def get_shape_center(obj):
+            bound_box = obj.Shape.BoundBox
+            return FreeCAD.Vector(
+                (float(bound_box.XMin) + float(bound_box.XMax)) * 0.5,
+                (float(bound_box.YMin) + float(bound_box.YMax)) * 0.5,
+                (float(bound_box.ZMin) + float(bound_box.ZMax)) * 0.5,
+            )
+
+        sketch = self._create_sketch_with_wires("ResizeSimpleHeightSketch", [(0, 0, 800, 1200)])
+        sketch.Placement.Base = FreeCAD.Vector(100.0, 50.0, 0.0)
+        window = Arch.makeWindow(baseobj=sketch, name="ResizeSimpleHeightWindow")
+        self.document.recompute()
+
+        original_center = get_shape_center(window.Base)
+        original_width = ArchWindow.getWindowWidthMm(window)
+        original_height = ArchWindow.getWindowHeightMm(window)
+
+        self.assertTrue(Arch.setWindowHeight(window, 1400.0))
+        self.document.recompute()
+
+        updated_center = get_shape_center(window.Base)
+        updated_width = ArchWindow.getWindowWidthMm(window)
+        updated_height = ArchWindow.getWindowHeightMm(window)
+        self.assertAlmostEqual(window.Height.Value, 1400.0, places=5)
+        self.assertAlmostEqual(original_width, 800.0, places=5)
+        self.assertAlmostEqual(original_height, 1200.0, places=5)
+        self.assertAlmostEqual(updated_width, original_width, places=5)
+        self.assertAlmostEqual(updated_height, 1400.0, places=5)
+        self.assertAlmostEqual(original_center.x, updated_center.x, places=5)
+        self.assertAlmostEqual(original_center.y, updated_center.y, places=5)
+        self.assertAlmostEqual(original_center.z, updated_center.z, places=5)
+
     def test_create_from_sketch_with_custom_parts(self):
         """Test creating a window from sketch with explicit custom parts."""
         sketch = self._create_sketch_with_wires(

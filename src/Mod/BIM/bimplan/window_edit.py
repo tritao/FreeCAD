@@ -20,8 +20,16 @@ def can_edit_window_width(window):
     return bool(ArchWindow.isWindowObject(window) and ArchWindow.canEditWindowWidth(window))
 
 
+def can_edit_window_height(window):
+    return bool(ArchWindow.isWindowObject(window) and ArchWindow.canEditWindowHeight(window))
+
+
 def can_edit_window(window):
-    return bool(can_edit_window_style_preset(window) or can_edit_window_width(window))
+    return bool(
+        can_edit_window_style_preset(window)
+        or can_edit_window_width(window)
+        or can_edit_window_height(window)
+    )
 
 
 def get_window_width_mm(window):
@@ -30,6 +38,14 @@ def get_window_width_mm(window):
 
 def get_window_width_user_string(window):
     return ArchWindow.getWindowWidthUserString(window)
+
+
+def get_window_height_mm(window):
+    return ArchWindow.getWindowHeightMm(window)
+
+
+def get_window_height_user_string(window):
+    return ArchWindow.getWindowHeightUserString(window)
 
 
 def get_selected_window_style_preset(session):
@@ -57,9 +73,24 @@ def get_selected_window_width_text(session):
     return get_window_width_user_string(window)
 
 
+def get_selected_window_height_mm(session):
+    window = session._get_selected_plan_target_object("opening")
+    return get_window_height_mm(window)
+
+
+def get_selected_window_height_text(session):
+    window = session._get_selected_plan_target_object("opening")
+    return get_window_height_user_string(window)
+
+
 def can_apply_selected_window_width(session):
     window = session._get_selected_plan_target_object("opening")
     return can_edit_window_width(window)
+
+
+def can_apply_selected_window_height(session):
+    window = session._get_selected_plan_target_object("opening")
+    return can_edit_window_height(window)
 
 
 def apply_selected_window_style_preset(session, preset_name):
@@ -101,6 +132,32 @@ def set_selected_window_width(session, value):
         target_width,
         preserve_anchor=True,
         transaction_label=translate("BIM_PlanEdit", "Change Window Width"),
+    ):
+        return False
+
+    session._invalidate_document_dependent_plan_visuals(recompute_opening_hosts=True)
+    session._refresh_task_panel_status()
+    return True
+
+
+def set_selected_window_height(session, value):
+    window = session._get_selected_plan_target_object("opening")
+    if not can_edit_window_height(window):
+        return False
+
+    target_height = _parse_length_mm(value)
+    if target_height is None or target_height <= 0.0:
+        return False
+
+    current_height = get_window_height_mm(window)
+    if current_height is not None and abs(target_height - current_height) <= 1e-6:
+        return False
+
+    if not ArchWindow.setWindowHeight(
+        window,
+        target_height,
+        preserve_anchor=True,
+        transaction_label=translate("BIM_PlanEdit", "Change Window Height"),
     ):
         return False
 
