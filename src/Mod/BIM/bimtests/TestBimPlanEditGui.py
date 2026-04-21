@@ -2201,6 +2201,122 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         )
         self.assertIn("selected window", session._format_opening_selection_help(window))
 
+    def test_plan_edit_selected_window_shows_style_editor(self):
+        """Selected windows should expose preset switching in the task panel."""
+
+        level, wall, window = self._make_windowed_plan_wall()
+        del wall
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(session._select_opening_for_plan_edit(window, sync_gui_selection=True))
+        session.task_panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        panel = session.task_panel
+        combo = panel.window_preset_combo
+
+        self.assertFalse(panel.window_editor.isHidden())
+        self.assertIsNotNone(combo)
+        self.assertFalse(combo.isEditable())
+        self.assertEqual("Custom / Current", str(combo.itemText(0)))
+        self.assertEqual("", str(combo.itemData(0) or ""))
+        self.assertEqual(
+            ["Custom / Current"] + list(session._get_window_style_preset_options()),
+            [str(combo.itemText(index)) for index in range(combo.count())],
+        )
+        self.assertFalse(panel.window_preset_apply_button.isEnabled())
+        self.assertIn("change its style", panel.status.text().lower())
+
+    def test_plan_edit_selected_window_can_apply_built_in_style_preset(self):
+        """Selected windows should accept built-in preset rewrites without drifting."""
+
+        from ArchWindowPresets import WindowPresets
+
+        def get_shape_center(obj):
+            bound_box = obj.Shape.BoundBox
+            return FreeCAD.Vector(
+                (float(bound_box.XMin) + float(bound_box.XMax)) * 0.5,
+                (float(bound_box.YMin) + float(bound_box.YMax)) * 0.5,
+                (float(bound_box.ZMin) + float(bound_box.ZMax)) * 0.5,
+            )
+
+        def get_shape_size(obj):
+            bound_box = obj.Shape.BoundBox
+            return (
+                max(float(bound_box.XLength), float(bound_box.YLength)),
+                float(bound_box.ZLength),
+            )
+
+        level, wall, window = self._make_windowed_plan_wall()
+        original_parts = list(window.WindowParts)
+        original_center = get_shape_center(window.Base)
+        original_width, original_height = get_shape_size(window.Base)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(session._select_opening_for_plan_edit(window, sync_gui_selection=True))
+        session.task_panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        panel = session.task_panel
+        combo = panel.window_preset_combo
+        target_style = "Sliding 2-pane"
+        target_index = combo.findText(target_style)
+
+        self.assertGreaterEqual(target_index, 0)
+        combo.setCurrentIndex(target_index)
+        self.pump_gui_events()
+        self.assertTrue(panel.window_preset_apply_button.isEnabled())
+
+        panel.window_preset_apply_button.click()
+        self.pump_gui_events(timeout_ms=500)
+        panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        self.assertIn(wall, window.Hosts)
+        self.assertEqual(
+            WindowPresets.index(target_style) + 1, int(getattr(window, "Preset", 0) or 0)
+        )
+        self.assertEqual(target_style, session._get_selected_window_style_preset())
+        self.assertNotEqual(original_parts, list(window.WindowParts))
+        updated_center = get_shape_center(window.Base)
+        self.assertAlmostEqual(original_center.x, updated_center.x, delta=1e-6)
+        self.assertAlmostEqual(original_center.y, updated_center.y, delta=1e-6)
+        self.assertAlmostEqual(original_center.z, updated_center.z, delta=1e-6)
+        self.assertAlmostEqual(
+            original_width,
+            max(
+                float(window.Base.Shape.BoundBox.XLength), float(window.Base.Shape.BoundBox.YLength)
+            ),
+            delta=1e-6,
+        )
+        self.assertAlmostEqual(
+            original_height,
+            float(window.Base.Shape.BoundBox.ZLength),
+            delta=1e-6,
+        )
+        self.assertAlmostEqual(
+            original_width, float(getattr(window.Width, "Value", window.Width)), delta=1e-6
+        )
+        self.assertAlmostEqual(
+            original_height,
+            float(getattr(window.Height, "Value", window.Height)),
+            delta=1e-6,
+        )
+        self.assertEqual(target_style, str(panel.window_preset_combo.currentText()))
+        self.assertFalse(panel.window_preset_apply_button.isEnabled())
+
     def test_plan_edit_selected_window_shows_contextual_window_guidance(self):
         """Selected hosted windows should contribute BIM window guidance."""
 

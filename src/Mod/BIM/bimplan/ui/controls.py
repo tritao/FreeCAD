@@ -31,11 +31,13 @@ class PlanEditControlsWidget:
         self._storey_items = []
         self._modal_focus_widgets = []
         self._saved_focus_policies = {}
+        self._refreshing_window_editor = False
         self._refreshing_space_editor = False
         self._refreshing_region_editor = False
         self._space_type_option_model = None
         self._space_type_completer = None
         self._space_type_options_cache = None
+        self._window_editor_state = None
         self._space_editor_label_state = None
         self._space_editor_combo_state = None
         self._space_editor_boundary_state = None
@@ -139,6 +141,8 @@ class PlanEditControlsWidget:
         layout.addWidget(self.space_editor)
         self.region_editor = self._build_region_editor(QtGui)
         layout.addWidget(self.region_editor)
+        self.window_editor = self._build_window_editor(QtGui)
+        layout.addWidget(self.window_editor)
         self.integration_panel = self._build_integration_panel(QtGui)
         layout.addWidget(self.integration_panel)
 
@@ -166,6 +170,8 @@ class PlanEditControlsWidget:
             self.region_scheme_edit,
             self.region_type_edit,
             self.region_parent_space_combo,
+            self.window_preset_combo,
+            self.window_preset_apply_button,
             self.exit_button,
         ]
         self._capture_focus_policies()
@@ -1383,6 +1389,47 @@ class PlanEditControlsWidget:
 
         return editor
 
+    def _build_window_editor(self, QtGui):
+        editor = QtGui.QGroupBox(translate("BIM_PlanEdit", "Window"))
+        editor.setVisible(False)
+        layout = QtGui.QVBoxLayout(editor)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        form = QtGui.QFormLayout()
+        form.setSpacing(6)
+
+        self.window_preset_combo = QtGui.QComboBox(editor)
+        if hasattr(QtGui.QComboBox, "AdjustToMinimumContentsLengthWithIcon"):
+            self.window_preset_combo.setSizeAdjustPolicy(
+                QtGui.QComboBox.AdjustToMinimumContentsLengthWithIcon
+            )
+        if hasattr(self.window_preset_combo, "setMinimumContentsLength"):
+            self.window_preset_combo.setMinimumContentsLength(18)
+        self.window_preset_combo.currentIndexChanged.connect(
+            self.on_window_preset_selection_changed
+        )
+        form.addRow(translate("BIM_PlanEdit", "Style"), self.window_preset_combo)
+
+        layout.addLayout(form)
+
+        self.window_preset_note = QtGui.QLabel(editor)
+        self.window_preset_note.setWordWrap(True)
+        layout.addWidget(self.window_preset_note)
+
+        button_row = QtGui.QHBoxLayout()
+        button_row.setSpacing(6)
+        self.window_preset_apply_button = self._make_button(
+            QtGui,
+            "Apply Style",
+            self.on_window_preset_apply_clicked,
+        )
+        button_row.addWidget(self.window_preset_apply_button)
+        button_row.addStretch(1)
+        layout.addLayout(button_row)
+
+        return editor
+
     def _capture_focus_policies(self):
         for widget in self._modal_focus_widgets:
             try:
@@ -1455,7 +1502,12 @@ class PlanEditControlsWidget:
         self.region_scheme_edit = None
         self.region_type_edit = None
         self.region_parent_space_combo = None
+        self.window_editor = None
+        self.window_preset_combo = None
+        self.window_preset_note = None
+        self.window_preset_apply_button = None
         self._region_parent_space_items = []
+        self._window_editor_state = None
         self._space_type_option_model = None
         self._space_type_completer = None
         self._space_type_options_cache = None
@@ -1527,6 +1579,15 @@ class PlanEditControlsWidget:
             self.region_editor.setVisible(False)
         except Exception:
             pass
+
+    def _hide_window_editor(self):
+        if self.window_editor is None:
+            return
+        try:
+            self.window_editor.setVisible(False)
+        except Exception:
+            pass
+        self._window_editor_state = None
 
     def on_provider_action_clicked(self, action):
         if action is None:
@@ -1806,6 +1867,7 @@ class PlanEditControlsWidget:
                 self._refresh_integration_panel(defer=defer_integrations)
             self._refresh_space_editor()
             self._refresh_region_editor()
+            self._refresh_window_editor()
             self._apply_modal_interaction_state(self.session._is_modal_plan_interaction_active())
 
     def refresh_selection_from_session(self):
@@ -1821,6 +1883,7 @@ class PlanEditControlsWidget:
             self._refresh_integration_panel(defer=True)
             self._hide_space_editor()
             self._hide_region_editor()
+            self._hide_window_editor()
             self._apply_modal_interaction_state(self.session._is_modal_plan_interaction_active())
 
     def _refresh_space_editor(self):
@@ -1926,6 +1989,138 @@ class PlanEditControlsWidget:
                         self.region_parent_space_combo.blockSignals(False)
             finally:
                 self._refreshing_region_editor = False
+
+    def _get_window_preset_combo_items(self, current_style):
+        items = []
+        current_style = str(current_style or "").strip()
+        if not current_style:
+            items.append(("", translate("BIM_PlanEdit", "Custom / Current")))
+        for preset in self.session._get_window_style_preset_options():
+            items.append((str(preset or ""), str(preset or "")))
+        return tuple(items)
+
+    def _find_combo_data_index(self, combo, value):
+        if combo is None:
+            return -1
+        value = str(value or "").strip()
+        if not value:
+            return -1
+        for index in range(combo.count()):
+            item_value = combo.itemData(index)
+            if item_value is None:
+                item_value = combo.itemText(index)
+            if str(item_value or "").strip() == value:
+                return index
+        return -1
+
+    def _format_window_editor_note(self, current_style):
+        current_style = str(current_style or "").strip()
+        current_text = (
+            translate("BIM_PlanEdit", "Current style: {style}").format(style=current_style)
+            if current_style
+            else translate("BIM_PlanEdit", "Current style: Custom")
+        )
+        hint_text = translate(
+            "BIM_PlanEdit",
+            "Apply a built-in preset while keeping the hosted position, width, height, frame depth, and frame offset.",
+        )
+        return "{}\n{}".format(current_text, hint_text)
+
+    def _update_window_preset_apply_state(self, modal_active=None):
+        if self.window_preset_combo is None or self.window_preset_apply_button is None:
+            return
+
+        selected_kind, selected_obj = self.session._get_selected_plan_target()
+        has_window = (
+            selected_kind == "opening"
+            and selected_obj is not None
+            and self.session._can_apply_window_style_preset(selected_obj)
+        )
+        if modal_active is None:
+            modal_active = self.session._is_modal_plan_interaction_active()
+
+        current_style = self.session._get_selected_window_style_preset() if has_window else ""
+        selected_style = ""
+        index = self.window_preset_combo.currentIndex()
+        if index >= 0:
+            selected_style = self.window_preset_combo.itemData(index)
+            if selected_style is None:
+                selected_style = self.window_preset_combo.itemText(index)
+        selected_style = str(selected_style or "").strip()
+        can_apply = bool(has_window and selected_style and selected_style != current_style)
+        if modal_active:
+            can_apply = False
+
+        try:
+            self.window_preset_apply_button.setEnabled(can_apply)
+        except Exception:
+            pass
+        self._set_widget_tooltip(
+            self.window_preset_apply_button,
+            (
+                translate(
+                    "BIM_PlanEdit",
+                    "Apply the selected built-in style to the current window.",
+                )
+                if can_apply
+                else translate(
+                    "BIM_PlanEdit",
+                    "Choose a different built-in style before applying it.",
+                )
+            ),
+        )
+
+    def _refresh_window_editor(self):
+        with self.session._plan_perf_trace_span("refresh_window_editor"):
+            if self.window_editor is None:
+                return
+
+            selected_kind, selected_obj = self.session._get_selected_plan_target()
+            window = (
+                selected_obj
+                if selected_kind == "opening"
+                and selected_obj is not None
+                and self.session._can_apply_window_style_preset(selected_obj)
+                else None
+            )
+            show_editor = bool(window and self.session.current_tool == "Select")
+            if not show_editor:
+                self._hide_window_editor()
+                return
+
+            try:
+                self.window_editor.setVisible(True)
+            except Exception:
+                pass
+
+            self._refreshing_window_editor = True
+            try:
+                window_key = self._get_editor_object_key(window)
+                current_style = self.session._get_selected_window_style_preset()
+                combo_items = self._get_window_preset_combo_items(current_style)
+                state = (window_key, combo_items, str(current_style or ""))
+                if state != self._window_editor_state:
+                    self.window_preset_combo.blockSignals(True)
+                    try:
+                        self.window_preset_combo.clear()
+                        for item_data, item_label in combo_items:
+                            self.window_preset_combo.addItem(item_label, item_data)
+                        current_index = self._find_combo_data_index(
+                            self.window_preset_combo,
+                            current_style,
+                        )
+                        self.window_preset_combo.setCurrentIndex(
+                            current_index if current_index >= 0 else 0
+                        )
+                    finally:
+                        self.window_preset_combo.blockSignals(False)
+
+                    self.window_preset_note.setText(self._format_window_editor_note(current_style))
+                    self._window_editor_state = state
+            finally:
+                self._refreshing_window_editor = False
+
+            self._update_window_preset_apply_state()
 
     def _apply_modal_interaction_state(self, modal_active):
         from PySide import QtCore
@@ -2033,6 +2228,20 @@ class PlanEditControlsWidget:
             except Exception:
                 pass
 
+        has_window = (
+            selected_kind == "opening"
+            and _selected_obj is not None
+            and self.session._can_apply_window_style_preset(_selected_obj)
+        )
+        for widget in (self.window_preset_combo, self.window_preset_apply_button):
+            if widget is None:
+                continue
+            try:
+                widget.setEnabled(bool(has_window and not modal_active))
+            except Exception:
+                pass
+        self._update_window_preset_apply_state(modal_active=modal_active)
+
     def on_storey_changed(self, index):
         if 0 <= index < len(self._storey_items):
             self.session.set_active_storey(self._storey_items[index])
@@ -2134,6 +2343,26 @@ class PlanEditControlsWidget:
         if index < 0 or index >= len(self._region_parent_space_items):
             return
         self.session._set_selected_region_parent_space(self._region_parent_space_items[index])
+
+    def on_window_preset_selection_changed(self, index):
+        del index
+        if self._refreshing_window_editor:
+            return
+        self._update_window_preset_apply_state()
+
+    def on_window_preset_apply_clicked(self):
+        if self._refreshing_window_editor or self.window_preset_combo is None:
+            return
+        index = self.window_preset_combo.currentIndex()
+        if index < 0:
+            return
+        preset_name = self.window_preset_combo.itemData(index)
+        if preset_name is None:
+            preset_name = self.window_preset_combo.itemText(index)
+        preset_name = str(preset_name or "").strip()
+        if not preset_name:
+            return
+        self.session._apply_selected_window_style_preset(preset_name)
 
     def on_exit_clicked(self):
         self.session.shutdown()
