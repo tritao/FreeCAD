@@ -89,7 +89,7 @@ def add_generation_args(parser: argparse.ArgumentParser) -> None:
         "--override-dir",
         type=Path,
         help=(
-            "Curated PyCXX source-signature override directory for generated skeletons. "
+            "Curated PyCXX class-method signature override directory for generated skeletons. "
             f"Defaults to {DEFAULT_OVERRIDE_DIR} when that directory exists."
         ),
     )
@@ -158,10 +158,12 @@ def run_generate(args: argparse.Namespace) -> int:
     methods = collect_methods(root, source_dir)
     classes = collect_binding_classes(root, source_dir, type_registrations)
     override_dir = resolve_optional_dir(root, args.override_dir, DEFAULT_OVERRIDE_DIR)
-    stub_signature_overrides = (
-        load_stub_signature_overrides(override_dir, methods, type_registrations)
-        if override_dir
-        else {}
+    stub_signature_overrides = load_stub_signature_overrides(
+        root,
+        source_dir,
+        override_dir,
+        methods,
+        type_registrations,
     )
     overlay_dir = (
         None

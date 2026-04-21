@@ -23,6 +23,7 @@ from typing import Iterable
 
 from .model import (
     HELPER_PYI_FILES,
+    MODULE_STUB_PYI_SUFFIX,
     SKIPPED_SOURCE_PREFIXES,
     SOURCE_EXTENSIONS,
     STRING_LITERAL_RE,
@@ -237,9 +238,21 @@ def iter_binding_pyi_files(root: Path, source_dir: Path) -> Iterable[Path]:
     for path in source_dir.rglob("*.pyi"):
         if not path.is_file():
             continue
+        if path.name.endswith(MODULE_STUB_PYI_SUFFIX):
+            continue
         rel = path.relative_to(root).as_posix()
         if rel in HELPER_PYI_FILES:
             continue
+        if skipped_source_path(rel):
+            continue
+        yield path
+
+
+def iter_module_stub_pyi_files(root: Path, source_dir: Path) -> Iterable[Path]:
+    for path in source_dir.rglob(f"*{MODULE_STUB_PYI_SUFFIX}"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(root).as_posix()
         if skipped_source_path(rel):
             continue
         yield path

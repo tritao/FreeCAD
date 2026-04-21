@@ -47,6 +47,7 @@ from .model import (
     ImportTarget,
     INIT_MODULE_RE,
     MethodKind,
+    MODULE_STUB_PYI_SUFFIX,
     ModuleDef,
     PUBLIC_STUB_DECORATORS,
     PYMETHODDEF_RE,
@@ -71,6 +72,7 @@ from .parsing import (
     first_string_literal,
     generated_source,
     iter_binding_pyi_files,
+    iter_module_stub_pyi_files,
     iter_source_files,
     line_number,
     normalize_doc,
@@ -895,29 +897,22 @@ def parse_stub_signature_overrides(
 
 
 def parse_module_stub_signature_overrides(
-    override_dir: Path,
+    root: Path,
+    source_dir: Path,
 ) -> dict[tuple[str, str], tuple[StubSignature, Path]]:
     signatures: dict[tuple[str, str], tuple[StubSignature, Path]] = {}
-    pycxx_override_dir = (
-        override_dir / "pycxx" if (override_dir / "pycxx").exists() else override_dir
-    )
-    module_override_dir = pycxx_override_dir / "modules"
-    if not module_override_dir.exists():
-        return signatures
-
-    for path in sorted(module_override_dir.rglob("*.pyi")):
-        relative = path.relative_to(module_override_dir)
-        module_name = overlay_module_name(relative)
-        if not module_name or module_name == "__init__":
-            raise ValueError(f"{path}: invalid module override path")
+    for path in sorted(iter_module_stub_pyi_files(root, source_dir)):
+        module_name = path.name.removesuffix(MODULE_STUB_PYI_SUFFIX)
+        if not module_name or not all(valid_identifier(part) for part in module_name.split(".")):
+            raise ValueError(f"{path}: invalid module stub filename")
         source = path.read_text(encoding="utf-8")
         try:
             tree = ast.parse(source, filename=str(path))
         except SyntaxError as exc:
             raise ValueError(f"{path}: invalid stub override syntax: {exc}") from exc
 
-        # Module overrides live in a dedicated tree so class override file naming
-        # stays unchanged while public module paths remain package-shaped.
+        # Stub-only module signatures live next to the binding sources, but use a
+        # dedicated filename suffix so the legacy binding parser ignores them.
         for node in tree.body:
             if not isinstance(node, ast.FunctionDef):
                 continue
@@ -935,12 +930,14 @@ def parse_module_stub_signature_overrides(
 
 
 def load_stub_signature_overrides(
-    override_dir: Path,
+    root: Path,
+    source_dir: Path,
+    override_dir: Path | None,
     methods: list[BindingMethod],
     type_registrations: dict[str, list[str]],
 ) -> StubSignatureOverrides:
-    public_signatures = parse_stub_signature_overrides(override_dir)
-    public_module_signatures = parse_module_stub_signature_overrides(override_dir)
+    public_signatures = parse_stub_signature_overrides(override_dir) if override_dir else {}
+    public_module_signatures = parse_module_stub_signature_overrides(root, source_dir)
     if not public_signatures and not public_module_signatures:
         return {}
 

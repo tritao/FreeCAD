@@ -28,6 +28,7 @@ SKIPPED_SOURCE_PREFIXES = (
 )
 DEFAULT_OVERLAY_DIR = Path("src/Tools/bindings/stubs/inputs/overlays")
 DEFAULT_OVERRIDE_DIR = Path("src/Tools/bindings/stubs/inputs/pycxx-overrides")
+MODULE_STUB_PYI_SUFFIX = ".module.pyi"
 
 ADD_METHOD_RE = re.compile(r"\b(?P<kind>add_(?:varargs|keyword|noargs)_method)\s*\(")
 BEHAVIOR_NAME_RE = re.compile(r"\bbehaviors\s*\(\s*\)\s*\.\s*name\s*\(\s*\"([^\"]+)\"\s*\)")

@@ -37,10 +37,12 @@ That command writes:
 Keep hand-written public module overlays under `inputs/overlays/`. Keep
 generated PyCXX type signature inputs under `inputs/pycxx-overrides/`, using
 public import names such as `inputs/pycxx-overrides/FreeCADGui/_View3DInventor.pyi`
-for class methods and package-shaped module paths such as
-`inputs/pycxx-overrides/modules/FreeCAD/Console.pyi` for module functions. Do
-not edit generated output directly; use it as input for curated overlays or
-source signature overrides.
+for class methods. Keep stub-only module function signatures in source-adjacent
+`*.module.pyi` files such as `src/App/FreeCAD.module.pyi` or
+`src/Base/FreeCAD.Console.module.pyi`. These module stub files are consumed by
+`stubs_tooling` only; the legacy binding generator does not read them. Do not
+edit generated output directly; use it as input for curated overlays or source
+signature overrides.
 
 Use package-shaped overlay paths that mirror the public import tree, such as
 `inputs/overlays/Part/__init__.pyi` or `inputs/overlays/Part/Geom2d.pyi`.
@@ -49,9 +51,10 @@ stubs are ready to be maintained or generated at the package source.
 
 Public module overlays merge top-level symbols into generated modules instead of
 replacing the whole file. Keep overlays focused on aliases, helper types, and
-manual APIs that the generator still cannot model. Use module signature
-overrides for single-signature module functions; keep overloaded module
-functions in overlays until the override path grows overload-group support.
+manual APIs that the generator still cannot model. Use source-adjacent
+`*.module.pyi` files for single-signature module functions; keep overloaded
+module functions in overlays until the module stub path grows overload-group
+support.
 
 The helper also runs the smoke checks from this directory:
 
