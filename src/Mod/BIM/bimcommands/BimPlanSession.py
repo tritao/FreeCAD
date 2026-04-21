@@ -43,6 +43,7 @@ from bimplan import opening_edit as plan_opening_edit
 from bimplan import targets as plan_targets
 from bimplan import view as plan_view
 from bimplan import window_create as plan_window_create
+from bimplan import window_edit as plan_window_edit
 from bimplan.context import PlanEditContext
 from bimplan.hosts import _PlanEditCommandHost, _PlanEditWallHost
 from bimplan.overlays import geometry as overlay_geometry
@@ -6571,10 +6572,19 @@ class PlanEditSession:
                 "Use in-view handles to move or flip the selected door.",
             )
         if opening_kind == "Window":
-            return translate(
+            help_text = translate(
                 "BIM_PlanEdit",
                 "Use the in-view handle to move the selected window along its host wall.",
             )
+            if self._can_apply_window_style_preset(opening):
+                help_text = "{} {}".format(
+                    help_text,
+                    translate(
+                        "BIM_PlanEdit",
+                        "Use the window controls below to change its style.",
+                    ),
+                )
+            return help_text
         return translate(
             "BIM_PlanEdit",
             "Use in-view handles to move or flip the selected opening.",
@@ -7760,6 +7770,23 @@ class PlanEditSession:
 
     def _set_selected_space_type(self, space_type):
         return plan_spaces.set_selected_space_type(self, space_type)
+
+    def _get_window_style_preset_options(self):
+        return plan_window_edit.get_window_style_preset_options()
+
+    def _get_selected_window_style_preset(self):
+        return plan_window_edit.get_selected_window_style_preset(self)
+
+    def _can_apply_window_style_preset(self, window=None):
+        if window is None:
+            window = self._get_selected_plan_target_object("opening")
+        return plan_window_edit.can_edit_window_style_preset(window)
+
+    def _can_apply_selected_window_style_preset(self):
+        return plan_window_edit.can_apply_selected_window_style_preset(self)
+
+    def _apply_selected_window_style_preset(self, preset_name):
+        return plan_window_edit.apply_selected_window_style_preset(self, preset_name)
 
     def _set_selected_region_label(self, label):
         return plan_spaces.set_selected_region_label(self, label)
