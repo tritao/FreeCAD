@@ -82,6 +82,12 @@ WindowOpeningModes = [
     "Sliding inv",
 ]
 WindowPresets = ArchWindowPresets.WindowPresets
+_WINDOW_PRESET_REWRITE_METHODS = (
+    "deleteAllConstraints",
+    "deleteAllGeometry",
+    "addConstraint",
+    "addGeometry",
+)
 
 
 def recolorize(attr):  # names is [docname,objname]
@@ -103,6 +109,506 @@ def recolorize(attr):  # names is [docname,objname]
             obj.ViewObject.Proxy.colorize(obj)
 
 
+def getWindowPresetNames(preset_kind=None):
+    """Return built-in preset names filtered by preset kind."""
+
+    preset_kind = str(preset_kind or "").strip().lower()
+    if preset_kind and preset_kind not in {"window", "door", "opening"}:
+        return tuple()
+
+    presets = []
+    for preset_name in WindowPresets:
+        preset_name = str(preset_name or "").strip()
+        if not preset_name:
+            continue
+        if preset_kind and _get_window_preset_kind(preset_name) != preset_kind:
+            continue
+        presets.append(preset_name)
+    return tuple(presets)
+
+
+def getWindowPresetName(obj):
+    """Return the preset name currently stored on this Arch window object."""
+
+    try:
+        preset_index = int(getattr(obj, "Preset", 0) or 0)
+    except Exception:
+        return ""
+    if preset_index <= 0 or preset_index > len(WindowPresets):
+        return ""
+    return str(WindowPresets[preset_index - 1] or "").strip()
+
+
+def isWindowObject(obj):
+    """Return True when this Arch Window object semantically represents a window."""
+
+    return _get_window_object_kind(obj) == "window"
+
+
+def validateWindowPresetApplication(obj, preset_name=None):
+    """Return a structured validation status for applying a built-in opening preset."""
+
+    preset_name = str(preset_name or "").strip()
+    object_kind = _get_window_object_kind(obj)
+    current_preset_name = getWindowPresetName(obj)
+    preset_kind = _get_window_preset_kind(preset_name) if preset_name else ""
+
+    if object_kind not in {"window", "door", "opening"}:
+        return WindowPresetApplicationStatus(
+            allowed=False,
+            reason=translate("Arch", "Object is not an Arch window, door, or opening."),
+            object_kind=object_kind,
+            preset_name=preset_name,
+            preset_kind=preset_kind,
+            current_preset_name=current_preset_name,
+        )
+
+    if _is_link_object(obj):
+        return WindowPresetApplicationStatus(
+            allowed=False,
+            reason=translate("Arch", "Linked openings cannot be rewritten in place."),
+            object_kind=object_kind,
+            preset_name=preset_name,
+            preset_kind=preset_kind,
+            current_preset_name=current_preset_name,
+        )
+
+    if preset_name:
+        if not preset_kind:
+            return WindowPresetApplicationStatus(
+                allowed=False,
+                reason=translate("Arch", "Unknown built-in opening preset."),
+                object_kind=object_kind,
+                preset_name=preset_name,
+                preset_kind=preset_kind,
+                current_preset_name=current_preset_name,
+            )
+        if preset_kind != object_kind:
+            return WindowPresetApplicationStatus(
+                allowed=False,
+                reason=translate("Arch", "Preset kind does not match the selected opening."),
+                object_kind=object_kind,
+                preset_name=preset_name,
+                preset_kind=preset_kind,
+                current_preset_name=current_preset_name,
+            )
+        if preset_name == current_preset_name:
+            return WindowPresetApplicationStatus(
+                allowed=False,
+                reason=translate("Arch", "Preset is already applied."),
+                object_kind=object_kind,
+                preset_name=preset_name,
+                preset_kind=preset_kind,
+                current_preset_name=current_preset_name,
+            )
+
+    base = getattr(obj, "Base", None)
+    if base is None:
+        return WindowPresetApplicationStatus(
+            allowed=False,
+            reason=translate("Arch", "Opening has no editable base sketch."),
+            object_kind=object_kind,
+            preset_name=preset_name,
+            preset_kind=preset_kind,
+            current_preset_name=current_preset_name,
+        )
+
+    if not all(hasattr(base, method_name) for method_name in _WINDOW_PRESET_REWRITE_METHODS):
+        return WindowPresetApplicationStatus(
+            allowed=False,
+            reason=translate("Arch", "Opening base does not support in-place preset rewrites."),
+            object_kind=object_kind,
+            preset_name=preset_name,
+            preset_kind=preset_kind,
+            current_preset_name=current_preset_name,
+        )
+
+    width = _resolve_window_width_mm(obj)
+    if width is None or width <= 0.0:
+        return WindowPresetApplicationStatus(
+            allowed=False,
+            reason=translate("Arch", "Opening width could not be resolved."),
+            object_kind=object_kind,
+            preset_name=preset_name,
+            preset_kind=preset_kind,
+            current_preset_name=current_preset_name,
+        )
+
+    height = _resolve_window_height_mm(obj)
+    if height is None or height <= 0.0:
+        return WindowPresetApplicationStatus(
+            allowed=False,
+            reason=translate("Arch", "Opening height could not be resolved."),
+            object_kind=object_kind,
+            preset_name=preset_name,
+            preset_kind=preset_kind,
+            current_preset_name=current_preset_name,
+        )
+
+    return WindowPresetApplicationStatus(
+        allowed=True,
+        object_kind=object_kind,
+        preset_name=preset_name,
+        preset_kind=preset_kind,
+        current_preset_name=current_preset_name,
+    )
+
+
+def canApplyWindowPreset(obj, preset_name=None):
+    """Return True when the object can accept an in-place built-in preset rewrite."""
+
+    return validateWindowPresetApplication(obj, preset_name).allowed
+
+
+def applyWindowPreset(
+    obj,
+    preset_name,
+    preserve_anchor=True,
+    transaction_label=None,
+    raise_on_error=False,
+):
+    """Apply a built-in preset to an existing Arch opening in place."""
+
+    preset_name = str(preset_name or "").strip()
+    status = validateWindowPresetApplication(obj, preset_name)
+    if not status.allowed:
+        if raise_on_error:
+            raise ValueError(str(status.reason or "Invalid window preset application"))
+        return False
+
+    width = _resolve_window_width_mm(obj)
+    height = _resolve_window_height_mm(obj)
+    if width is None or width <= 0.0 or height is None or height <= 0.0:
+        if raise_on_error:
+            raise ValueError("Opening size could not be resolved")
+        return False
+
+    doc = getattr(obj, "Document", None) or FreeCAD.ActiveDocument
+    target_base = getattr(obj, "Base", None)
+    if doc is None or target_base is None:
+        if raise_on_error:
+            raise ValueError("Opening document or base sketch is unavailable")
+        return False
+
+    old_anchor = _get_window_anchor(obj) if preserve_anchor else None
+    temp_window = None
+    temp_base = None
+    temp_window_name = ""
+    temp_base_name = ""
+    if not transaction_label:
+        transaction_label = translate("Arch", "Change Window Preset")
+
+    try:
+        doc.openTransaction(transaction_label)
+
+        temp_window = _make_window_preset_object(obj, preset_name, width, height)
+        if temp_window is None:
+            raise RuntimeError("Window preset creation failed")
+        temp_window_name = str(getattr(temp_window, "Name", "") or "")
+
+        temp_base = getattr(temp_window, "Base", None)
+        if temp_base is None:
+            raise RuntimeError("Window preset base sketch missing")
+        temp_base_name = str(getattr(temp_base, "Name", "") or "")
+
+        _rewrite_sketch_geometry(target_base, temp_base)
+
+        obj.WindowParts = list(getattr(temp_window, "WindowParts", ()) or ())
+        if hasattr(obj, "Preset"):
+            obj.Preset = int(getattr(temp_window, "Preset", 0) or 0)
+        if hasattr(obj, "Frame") and hasattr(temp_window, "Frame"):
+            obj.Frame = temp_window.Frame
+        if hasattr(obj, "Offset") and hasattr(temp_window, "Offset"):
+            obj.Offset = temp_window.Offset
+        if hasattr(obj, "Width"):
+            obj.Width = width
+        if hasattr(obj, "Height"):
+            obj.Height = height
+        if hasattr(obj, "IfcType") and hasattr(temp_window, "IfcType"):
+            obj.IfcType = temp_window.IfcType
+
+        doc.recompute()
+
+        new_anchor = _get_window_anchor(obj)
+        if old_anchor is not None and new_anchor is not None:
+            delta = old_anchor.sub(new_anchor)
+            if delta.Length > 1e-6:
+                placement = FreeCAD.Placement(target_base.Placement)
+                placement.Base = placement.Base.add(delta)
+                target_base.Placement = placement
+
+        _remove_document_object_if_present(doc, temp_window_name)
+        _remove_document_object_if_present(doc, temp_base_name)
+
+        doc.recompute()
+        doc.commitTransaction()
+    except Exception:
+        try:
+            doc.abortTransaction()
+        except Exception:
+            pass
+        if raise_on_error:
+            raise
+        return False
+
+    return True
+
+
+def _get_window_object_kind(obj):
+    if obj is None:
+        return ""
+    ifc_type = str(getattr(obj, "IfcType", "") or "").strip()
+    if ifc_type == "Door":
+        return "door"
+    if ifc_type == "Opening Element":
+        return "opening"
+    if ifc_type == "Window":
+        return "window"
+    try:
+        if Draft.getType(obj) == "Window":
+            return "window"
+    except Exception:
+        pass
+    return ""
+
+
+def _get_window_preset_kind(preset_name):
+    return str(ArchWindowPresets.getWindowPresetKind(preset_name) or "").strip().lower()
+
+
+def _is_link_object(obj):
+    try:
+        return bool(obj and obj.isDerivedFrom("App::Link"))
+    except Exception:
+        return False
+
+
+def _resolve_window_width_mm(obj):
+    width = _get_property_length_mm(obj, "Width")
+    if width and width > 0.0:
+        return width
+
+    base = getattr(obj, "Base", None)
+    width = _get_named_sketch_constraint_mm(base, "Width")
+    if width and width > 0.0:
+        return width
+
+    local_extents = _get_sketch_local_axis_extents_mm(base)
+    if local_extents:
+        width = local_extents[0]
+        if width > 0.0:
+            return width
+
+    shape = getattr(base, "Shape", None)
+    extents = _get_shape_planar_extents(shape)
+    if extents:
+        width = extents[0]
+        if width > 0.0:
+            return width
+
+    return None
+
+
+def _resolve_window_height_mm(obj):
+    height = _get_property_length_mm(obj, "Height")
+    if height and height > 0.0:
+        return height
+
+    base = getattr(obj, "Base", None)
+    height = _get_named_sketch_constraint_mm(base, "Height")
+    if height and height > 0.0:
+        return height
+
+    local_extents = _get_sketch_local_axis_extents_mm(base)
+    if local_extents:
+        height = local_extents[1]
+        if height > 0.0:
+            return height
+
+    shape = getattr(base, "Shape", None)
+    extents = _get_shape_planar_extents(shape)
+    if len(extents) > 1:
+        height = extents[1]
+        if height > 0.0:
+            return height
+
+    return None
+
+
+def _get_window_anchor(obj):
+    base = getattr(obj, "Base", None)
+    anchor = _get_object_shape_center(base)
+    if anchor is not None:
+        return anchor
+    return _get_object_shape_center(obj)
+
+
+def _get_object_shape_center(obj):
+    shape = getattr(obj, "Shape", None)
+    if not shape:
+        return None
+    try:
+        if shape.isNull():
+            return None
+    except Exception:
+        pass
+    bound_box = getattr(shape, "BoundBox", None)
+    if bound_box is None:
+        return None
+    return FreeCAD.Vector(
+        (float(bound_box.XMin) + float(bound_box.XMax)) * 0.5,
+        (float(bound_box.YMin) + float(bound_box.YMax)) * 0.5,
+        (float(bound_box.ZMin) + float(bound_box.ZMax)) * 0.5,
+    )
+
+
+def _make_window_preset_object(obj, preset_name, width, height):
+    frame_depth = _get_property_length_mm(obj, "Frame")
+    frame_offset = _get_property_length_mm(obj, "Offset")
+    if frame_depth is None or frame_depth <= 0.0:
+        frame_depth = _get_positive_arch_window_param("WindowW2", 40.0)
+
+    return ArchWindowPresets.makeWindowPreset(
+        preset_name,
+        width,
+        height,
+        _get_positive_arch_window_param("WindowH1", 50.0),
+        _get_positive_arch_window_param("WindowH2", 50.0),
+        _get_arch_window_param("WindowH3", 50.0),
+        _get_positive_arch_window_param("WindowW1", 50.0),
+        frame_depth,
+        frame_offset if frame_offset is not None else _get_arch_window_param("WindowO1", 0.0),
+        _get_arch_window_param("WindowO2", 0.0),
+    )
+
+
+def _get_named_sketch_constraint_mm(sketch, name):
+    if sketch is None or not hasattr(sketch, "getDatum"):
+        return None
+    try:
+        return _coerce_length_mm(sketch.getDatum(str(name or "").strip()))
+    except Exception:
+        return None
+
+
+def _get_sketch_local_axis_extents_mm(sketch):
+    geometry = tuple(getattr(sketch, "Geometry", ()) or ())
+    if not geometry:
+        return tuple()
+
+    min_x = None
+    min_y = None
+    min_z = None
+    max_x = None
+    max_y = None
+    max_z = None
+
+    for element in geometry:
+        try:
+            bound_box = element.toShape().BoundBox
+        except Exception:
+            continue
+
+        min_x = float(bound_box.XMin) if min_x is None else min(min_x, float(bound_box.XMin))
+        min_y = float(bound_box.YMin) if min_y is None else min(min_y, float(bound_box.YMin))
+        min_z = float(bound_box.ZMin) if min_z is None else min(min_z, float(bound_box.ZMin))
+        max_x = float(bound_box.XMax) if max_x is None else max(max_x, float(bound_box.XMax))
+        max_y = float(bound_box.YMax) if max_y is None else max(max_y, float(bound_box.YMax))
+        max_z = float(bound_box.ZMax) if max_z is None else max(max_z, float(bound_box.ZMax))
+
+    if min_x is None or min_y is None or min_z is None:
+        return tuple()
+
+    return (
+        max(0.0, max_x - min_x),
+        max(0.0, max_y - min_y),
+        max(0.0, max_z - min_z),
+    )
+
+
+def _get_shape_planar_extents(shape):
+    bound_box = getattr(shape, "BoundBox", None)
+    if bound_box is None:
+        return tuple()
+
+    lengths = sorted(
+        (
+            abs(float(bound_box.XLength)),
+            abs(float(bound_box.YLength)),
+            abs(float(bound_box.ZLength)),
+        ),
+        reverse=True,
+    )
+    return tuple(length for length in lengths if length > 1e-7)
+
+
+def _get_arch_window_param(name, default):
+    try:
+        return float(params.get_param_arch(name))
+    except Exception:
+        return float(default)
+
+
+def _get_positive_arch_window_param(name, default):
+    value = _get_arch_window_param(name, default)
+    if value > 0.0:
+        return value
+    return float(default)
+
+
+def _remove_document_object_if_present(doc, object_name):
+    object_name = str(object_name or "").strip()
+    if not object_name:
+        return
+    try:
+        if doc.getObject(object_name) is None:
+            return
+    except Exception:
+        pass
+    doc.removeObject(object_name)
+
+
+def _rewrite_sketch_geometry(target, source):
+    placement = FreeCAD.Placement(target.Placement)
+
+    target.deleteAllConstraints()
+    target.deleteAllGeometry()
+    target.Placement = placement
+
+    for geometry in tuple(getattr(source, "Geometry", ()) or ()):
+        target.addGeometry(geometry)
+
+    for constraint in tuple(getattr(source, "Constraints", ()) or ()):
+        index = target.addConstraint(constraint)
+        name = str(getattr(constraint, "Name", "") or "").strip()
+        if not name:
+            continue
+        try:
+            target.renameConstraint(index, name)
+        except Exception:
+            pass
+
+
+def _coerce_length_mm(value):
+    try:
+        value = value.Value
+    except AttributeError:
+        pass
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _get_property_length_mm(obj, name):
+    if obj is None or not hasattr(obj, name):
+        return None
+    try:
+        return _coerce_length_mm(getattr(obj, name))
+    except Exception:
+        return None
+
+
 @dataclass(frozen=True)
 class OpeningPlanEditHandle:
     role: str
@@ -110,6 +616,16 @@ class OpeningPlanEditHandle:
     interaction: str = "immediate"
     title: str = ""
     transaction: str = ""
+
+
+@dataclass(frozen=True)
+class WindowPresetApplicationStatus:
+    allowed: bool
+    reason: str = ""
+    object_kind: str = ""
+    preset_name: str = ""
+    preset_kind: str = ""
+    current_preset_name: str = ""
 
 
 class _HostedOpeningPlanGeometry:
