@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import FreeCAD
 
+from . import provider_targets as plan_provider_targets
 from .provider_targets import resolve_plan_provider_target_display_fields
 
 
@@ -61,6 +62,46 @@ def get_plan_target_for_object(session, obj, parent_obj=None):
     semantic_name = getattr(semantic_obj, "Name", None)
     if semantic_obj and semantic_name not in seen:
         target_kind = session._get_plan_target_kind_for_object(semantic_obj)
+        if target_kind:
+            return (target_kind, semantic_obj)
+
+    return (None, None)
+
+
+def get_plan_pick_target_for_object(session, obj, parent_obj=None):
+    seen = set()
+    for candidate in (obj, parent_obj):
+        if not candidate:
+            continue
+        name = getattr(candidate, "Name", None)
+        if name and name in seen:
+            continue
+        if name:
+            seen.add(name)
+        target_kind = session._get_plan_target_kind_for_object(candidate)
+        if (
+            target_kind == "provider"
+            and not plan_provider_targets.is_plan_provider_target_visible_for_mode(
+                session,
+                candidate,
+            )
+        ):
+            continue
+        if target_kind:
+            return (target_kind, candidate)
+
+    semantic_obj = session._get_plan_semantic_object(obj)
+    semantic_name = getattr(semantic_obj, "Name", None)
+    if semantic_obj and semantic_name not in seen:
+        target_kind = session._get_plan_target_kind_for_object(semantic_obj)
+        if (
+            target_kind == "provider"
+            and not plan_provider_targets.is_plan_provider_target_visible_for_mode(
+                session,
+                semantic_obj,
+            )
+        ):
+            return (None, None)
         if target_kind:
             return (target_kind, semantic_obj)
 
