@@ -6,7 +6,8 @@ from contextlib import nullcontext
 from dataclasses import dataclass
 
 import FreeCAD
-from bimplan import provider_targets as plan_provider_targets
+
+from .provider_targets import resolve_plan_provider_target_display_fields
 
 
 @dataclass(frozen=True)
@@ -198,7 +199,7 @@ def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=
     semantic_obj = session._get_plan_semantic_object(obj)
     doc = getattr(obj, "Document", None)
     state_key = session._get_plan_target_state_key(kind, obj)
-    fields = plan_provider_targets.resolve_plan_provider_target_display_fields(
+    fields = resolve_plan_provider_target_display_fields(
         session,
         semantic_obj,
         provider_target,

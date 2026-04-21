@@ -225,6 +225,7 @@ SET(bimplan_SRCS
     bimplan/performance.py
     bimplan/picking.py
     bimplan/provider_runtime.py
+    bimplan/provider_targets.py
     bimplan/providers.py
     bimplan/registry.py
     bimplan/semantics.py
