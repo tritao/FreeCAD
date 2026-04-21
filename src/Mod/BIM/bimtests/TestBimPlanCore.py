@@ -4,6 +4,7 @@ from contextlib import nullcontext
 import unittest
 import sys
 from types import ModuleType, SimpleNamespace
+from unittest.mock import patch
 
 if "FreeCAD" not in sys.modules:
     try:
@@ -56,7 +57,10 @@ if "draftguitools.gui_base" not in sys.modules:
     draftguitools_module.gui_base = gui_base_module
 
 from bimplan.context import PlanEditContext
+from bimplan.overlays import providers as provider_overlays
 from bimplan.picking import (
+    get_hovered_plan_target,
+    get_plan_target_at_position,
     get_provider_overlay_target_from_edit_node,
     pick_provider_overlay_target_from_objects_info,
     pick_provider_overlay_target_from_overlays,
@@ -77,6 +81,7 @@ from bimplan.providers import (
 )
 from bimplan.registry import PlanEditRegistry
 from bimplan.semantics import PlanSemanticRecord
+from bimplan.selection import resolve_selected_target_for_gui_object
 from bimplan.targets import PlanTarget, get_plan_target_for_object, make_plan_target_record
 from bimplan.transactions import PlanEditTransaction
 from bimplan.ui.controls import PlanEditControlsWidget
@@ -211,6 +216,58 @@ class TestBimPlanCore(unittest.TestCase):
             ),
             normalized.point_targets,
         )
+
+    def test_get_hovered_plan_target_returns_provider_target(self):
+        provider = SimpleNamespace(Name="Socket001")
+        session = SimpleNamespace(
+            hovered_opening=None,
+            hovered_provider=provider,
+            hovered_symbol=None,
+            hovered_wall=None,
+            hovered_region=None,
+            hovered_space=None,
+        )
+
+        self.assertEqual(("provider", provider), get_hovered_plan_target(session))
+
+    def test_hovered_provider_overlay_specs_follow_visible_socket_marker(self):
+        provider = SimpleNamespace(
+            Name="Socket001",
+            Document=SimpleNamespace(Name="PlanDoc"),
+        )
+        session = SimpleNamespace(
+            current_tool="Select",
+            hovered_provider=provider,
+            doc=provider.Document,
+            _plan_provider_refresh_cache_scope=lambda: nullcontext(),
+            get_plan_provider_overlays=lambda: (
+                PlanOverlaySpec(
+                    key="fixture-status",
+                    points=((100.0, 200.0, 0.0),),
+                    point_targets=(
+                        PlanOverlayTargetSpec(
+                            object_name=provider.Name,
+                            target_kind=PlanOverlayTargetKind.PROVIDER,
+                        ),
+                    ),
+                    marker_kind=PlanOverlayMarkerKind.SQUARE,
+                    marker_size=180.0,
+                ),
+            ),
+            is_plan_provider_overlay_visible=lambda _overlay: True,
+            _get_document_object_key=lambda obj: (
+                getattr(getattr(obj, "Document", None), "Name", None),
+                getattr(obj, "Name", None),
+            ),
+            _scaled_line_width=lambda width: float(width),
+            _scaled_marker_size=lambda size: float(size),
+        )
+
+        specs = provider_overlays._get_hovered_provider_segment_specs(session)
+
+        self.assertEqual(4, len(specs))
+        self.assertTrue(all(spec["color"] == (0.38, 0.62, 0.96) for spec in specs))
+        self.assertTrue(all(spec["width"] > 2.0 for spec in specs))
 
     def test_provider_overlay_edit_node_resolves_raw_document_object(self):
         class _Field:
@@ -361,6 +418,257 @@ class TestBimPlanCore(unittest.TestCase):
             ("object", marker),
             pick_provider_overlay_target_from_objects_info(session, (100, 200)),
         )
+
+    def test_get_plan_target_at_position_prefers_provider_overlay_over_space_fallback(self):
+        space = SimpleNamespace(
+            Name="Space001",
+            Label="Bedroom",
+            Document=SimpleNamespace(Name="TestDoc"),
+        )
+        marker = SimpleNamespace(
+            Name="Socket001",
+            Label="Socket 001",
+            Document=SimpleNamespace(Name="TestDoc"),
+        )
+        doc = SimpleNamespace(
+            Name="TestDoc",
+            getObject=lambda name: (
+                space if name == space.Name else marker if name == marker.Name else None
+            ),
+        )
+        sys.modules["FreeCAD"].getDocument = lambda name: doc if name == doc.Name else None
+
+        class _View:
+            def getObjectsInfo(self, _mouse_pos):
+                return (
+                    {
+                        "Document": doc.Name,
+                        "Object": space.Name,
+                    },
+                )
+
+        session = SimpleNamespace(
+            doc=doc,
+            view=_View(),
+            get_plan_provider_overlay_mode=lambda: "all",
+            _pick_provider_overlay_target_from_overlays=lambda mouse_pos, radius_px=16: (
+                "provider",
+                marker,
+            ),
+            _pick_plan_opening_target_from_overlays=lambda *args, **kwargs: None,
+            _pick_plan_symbol_target_from_overlays=lambda *args, **kwargs: None,
+            _pick_plan_region_target_from_polylines=lambda *args, **kwargs: None,
+            _pick_plan_region_target_from_footprints=lambda *args, **kwargs: None,
+            _pick_plan_region_target_from_overlays=lambda *args, **kwargs: None,
+            _pick_plan_space_target_from_footprints=lambda *args, **kwargs: space,
+            _pick_plan_space_target_from_overlays=lambda *args, **kwargs: space,
+            _get_wall_hosted_openings=lambda *_args, **_kwargs: (),
+            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
+            _plan_perf_count=lambda *_args, **_kwargs: None,
+            _plan_perf_set_fields=lambda **_kwargs: None,
+            _plan_perf_describe_object=lambda obj: getattr(obj, "Name", ""),
+            _plan_perf_describe_target=lambda kind, obj: (
+                kind,
+                getattr(obj, "Name", ""),
+            ),
+        )
+
+        with patch(
+            "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
+            return_value=("space", space),
+        ):
+            self.assertEqual(
+                ("provider", marker),
+                get_plan_target_at_position(session, (100, 200)),
+            )
+
+    def test_get_plan_target_at_position_prefers_provider_over_wall_in_focused_overlay_mode(self):
+        wall = SimpleNamespace(
+            Name="Wall001",
+            Label="Wall 001",
+            Document=SimpleNamespace(Name="TestDoc"),
+        )
+        marker = SimpleNamespace(
+            Name="Socket001",
+            Label="Socket 001",
+            Document=SimpleNamespace(Name="TestDoc"),
+        )
+        doc = SimpleNamespace(
+            Name="TestDoc",
+            getObject=lambda name: (
+                wall if name == wall.Name else marker if name == marker.Name else None
+            ),
+        )
+        sys.modules["FreeCAD"].getDocument = lambda name: doc if name == doc.Name else None
+
+        class _View:
+            def getObjectsInfo(self, _mouse_pos):
+                return (
+                    {
+                        "Document": doc.Name,
+                        "Object": wall.Name,
+                    },
+                    {
+                        "Document": doc.Name,
+                        "Object": marker.Name,
+                    },
+                )
+
+        def _get_plan_pick_target_for_object(_session, obj, parent_obj=None):
+            del parent_obj
+            if obj is wall:
+                return ("wall", wall)
+            if obj is marker:
+                return ("provider", marker)
+            return (None, None)
+
+        session = SimpleNamespace(
+            doc=doc,
+            view=_View(),
+            get_plan_provider_overlay_mode=lambda: "electrical",
+            _pick_provider_overlay_target_from_overlays=lambda *_args, **_kwargs: (None, None),
+            _pick_plan_opening_target_from_overlays=lambda *args, **kwargs: None,
+            _pick_plan_symbol_target_from_overlays=lambda *args, **kwargs: None,
+            _pick_plan_region_target_from_polylines=lambda *args, **kwargs: None,
+            _pick_plan_region_target_from_footprints=lambda *args, **kwargs: None,
+            _pick_plan_region_target_from_overlays=lambda *args, **kwargs: None,
+            _pick_plan_space_target_from_footprints=lambda *args, **kwargs: None,
+            _pick_plan_space_target_from_overlays=lambda *args, **kwargs: None,
+            _get_wall_hosted_openings=lambda *_args, **_kwargs: (),
+            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
+            _plan_perf_count=lambda *_args, **_kwargs: None,
+            _plan_perf_set_fields=lambda **_kwargs: None,
+            _plan_perf_describe_target=lambda kind, obj: (
+                kind,
+                getattr(obj, "Name", ""),
+            ),
+        )
+
+        with patch(
+            "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
+            side_effect=_get_plan_pick_target_for_object,
+        ):
+            self.assertEqual(
+                ("provider", marker),
+                get_plan_target_at_position(session, (100, 200)),
+            )
+
+    def test_get_plan_target_at_position_keeps_wall_priority_in_all_overlay_mode(self):
+        wall = SimpleNamespace(
+            Name="Wall001",
+            Label="Wall 001",
+            Document=SimpleNamespace(Name="TestDoc"),
+        )
+        marker = SimpleNamespace(
+            Name="Socket001",
+            Label="Socket 001",
+            Document=SimpleNamespace(Name="TestDoc"),
+        )
+        doc = SimpleNamespace(
+            Name="TestDoc",
+            getObject=lambda name: (
+                wall if name == wall.Name else marker if name == marker.Name else None
+            ),
+        )
+        sys.modules["FreeCAD"].getDocument = lambda name: doc if name == doc.Name else None
+
+        class _View:
+            def getObjectsInfo(self, _mouse_pos):
+                return (
+                    {
+                        "Document": doc.Name,
+                        "Object": wall.Name,
+                    },
+                    {
+                        "Document": doc.Name,
+                        "Object": marker.Name,
+                    },
+                )
+
+        def _get_plan_pick_target_for_object(_session, obj, parent_obj=None):
+            del parent_obj
+            if obj is wall:
+                return ("wall", wall)
+            if obj is marker:
+                return ("provider", marker)
+            return (None, None)
+
+        session = SimpleNamespace(
+            doc=doc,
+            view=_View(),
+            get_plan_provider_overlay_mode=lambda: "all",
+            _pick_provider_overlay_target_from_overlays=lambda *_args, **_kwargs: (None, None),
+            _pick_plan_opening_target_from_overlays=lambda *args, **kwargs: None,
+            _pick_plan_symbol_target_from_overlays=lambda *args, **kwargs: None,
+            _pick_plan_region_target_from_polylines=lambda *args, **kwargs: None,
+            _pick_plan_region_target_from_footprints=lambda *args, **kwargs: None,
+            _pick_plan_region_target_from_overlays=lambda *args, **kwargs: None,
+            _pick_plan_space_target_from_footprints=lambda *args, **kwargs: None,
+            _pick_plan_space_target_from_overlays=lambda *args, **kwargs: None,
+            _get_wall_hosted_openings=lambda *_args, **_kwargs: (),
+            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
+            _plan_perf_count=lambda *_args, **_kwargs: None,
+            _plan_perf_set_fields=lambda **_kwargs: None,
+            _plan_perf_describe_target=lambda kind, obj: (
+                kind,
+                getattr(obj, "Name", ""),
+            ),
+        )
+
+        with patch(
+            "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
+            side_effect=_get_plan_pick_target_for_object,
+        ):
+            self.assertEqual(
+                ("wall", wall),
+                get_plan_target_at_position(session, (100, 200)),
+            )
+
+    def test_resolve_selected_target_for_gui_object_preserves_pending_provider_target(self):
+        marker = SimpleNamespace(
+            Name="Link002",
+            Label="Nightstand002",
+            Document=SimpleNamespace(Name="TestDoc"),
+        )
+        session = SimpleNamespace(
+            _is_valid_plan_target=lambda kind, obj: kind == "provider" and obj is marker,
+            _get_plan_target_for_object=lambda _selected: ("symbol", marker),
+        )
+
+        self.assertEqual(
+            ("provider", marker),
+            resolve_selected_target_for_gui_object(
+                session,
+                marker,
+                pending_kind="provider",
+                pending_target=marker,
+            ),
+        )
+
+    def test_resolve_selected_target_for_gui_object_preserves_visible_provider_target(self):
+        marker = SimpleNamespace(
+            Name="Link002",
+            Label="Nightstand002",
+            Document=SimpleNamespace(Name="TestDoc"),
+        )
+        session = SimpleNamespace(
+            _is_valid_plan_target=lambda kind, obj: kind == "provider" and obj is marker,
+            _get_plan_target_for_object=lambda _selected: ("symbol", marker),
+        )
+
+        with patch(
+            "bimplan.selection.plan_provider_targets.is_plan_provider_target_visible_for_mode",
+            return_value=True,
+        ):
+            self.assertEqual(
+                ("provider", marker),
+                resolve_selected_target_for_gui_object(
+                    session,
+                    marker,
+                    preserved_kind="provider",
+                    preserved_target=marker,
+                ),
+            )
 
     def test_provider_overlay_legend_items_filter_by_mode(self):
         widget = object.__new__(PlanEditControlsWidget)

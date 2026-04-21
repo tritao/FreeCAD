@@ -5,6 +5,9 @@
 import FreeCAD
 import FreeCADGui
 
+_VIEW_PREFERENCES_PATH = "User parameter:BaseApp/Preferences/View"
+_ENABLE_PRESELECTION_PARAM = "EnablePreselection"
+
 
 def _copy_plane(plane):
     import WorkingPlane
@@ -208,6 +211,54 @@ def restore_navigation_state(session):
     session._restore_locked_view_actions()
 
 
+def _get_view_preferences():
+    return FreeCAD.ParamGet(_VIEW_PREFERENCES_PATH)
+
+
+def capture_preselection_state(session):
+    if getattr(session, "_saved_preselection_state", None) is not None:
+        return
+    params = _get_view_preferences()
+    try:
+        has_preselection_param = _ENABLE_PRESELECTION_PARAM in params.GetBools()
+    except Exception:
+        has_preselection_param = True
+    try:
+        enabled = bool(params.GetBool(_ENABLE_PRESELECTION_PARAM, True))
+    except Exception:
+        enabled = True
+    session._saved_preselection_state = (has_preselection_param, enabled)
+
+
+def force_plan_preselection(session):
+    capture_preselection_state(session)
+    params = _get_view_preferences()
+    try:
+        if bool(params.GetBool(_ENABLE_PRESELECTION_PARAM, True)):
+            return
+        params.SetBool(_ENABLE_PRESELECTION_PARAM, True)
+        session._plan_preselection_forced = True
+    except Exception:
+        pass
+
+
+def restore_preselection_state(session):
+    state = getattr(session, "_saved_preselection_state", None)
+    if state is None:
+        return
+    session._saved_preselection_state = None
+    session._plan_preselection_forced = False
+    had_preselection_param, enabled = state
+    params = _get_view_preferences()
+    try:
+        if had_preselection_param:
+            params.SetBool(_ENABLE_PRESELECTION_PARAM, bool(enabled))
+        else:
+            params.RemBool(_ENABLE_PRESELECTION_PARAM)
+    except Exception:
+        pass
+
+
 def apply_plan_view(session, fit=True):
     import WorkingPlane
 
@@ -257,6 +308,7 @@ def apply_plan_view(session, fit=True):
 def restore_state(session):
     import WorkingPlane
 
+    session._restore_preselection_state()
     session._restore_object_view_state()
     session._restore_snap_profile()
     session._interaction_plane = None

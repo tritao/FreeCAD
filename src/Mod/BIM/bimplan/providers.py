@@ -34,6 +34,27 @@ class PlanIssueSeverity(_PlanContractEnum):
     ERROR = "error"
 
 
+class PlanContextPanelState(_PlanContractEnum):
+    """High-level contextual panel states resolved by the task panel."""
+
+    EMPTY = "empty"
+    ACTIVE_TOOL = "active_tool"
+    SINGLE_OBJECT = "single_object"
+    MULTI_SELECTION = "multi_selection"
+    GEOMETRY_REVIEW = "geometry_review"
+
+
+class PlanContextSubjectKind(_PlanContractEnum):
+    """Shared subject kinds supported by the contextual MEP panel."""
+
+    SCOPE = "scope"
+    INTERACTION = "interaction"
+    ENDPOINT = "endpoint"
+    NETWORK = "network"
+    DISTRIBUTION = "distribution"
+    GEOMETRY = "geometry"
+
+
 class PlanOverlayTargetKind(_PlanContractEnum):
     """Selectable target kinds available through provider overlay points."""
 
@@ -122,6 +143,46 @@ class PlanSuggestionSpec:
 
 
 @dataclass(frozen=True)
+class PlanContextRowSpec:
+    """Compact key/value row rendered in the contextual panel summary."""
+
+    label: str
+    value: str = ""
+
+
+@dataclass(frozen=True)
+class PlanContextDetailSpec:
+    """Collapsed advanced content exposed below the contextual panel summary."""
+
+    key: str
+    title: str
+    body: str = ""
+    rows: Tuple[PlanContextRowSpec, ...] = ()
+    collapsed: bool = True
+
+
+@dataclass(frozen=True)
+class PlanContextPanelSpec:
+    """Shared contextual-panel contract for MEP overlay modes.
+
+    Providers may contribute one or more candidate panels. The task panel is
+    expected to resolve these down to a single contextual state.
+    """
+
+    key: str
+    title: str
+    subtitle: str = ""
+    state: PlanContextPanelState = PlanContextPanelState.EMPTY
+    subject_kind: PlanContextSubjectKind = PlanContextSubjectKind.SCOPE
+    provider_id: str = ""
+    summary_rows: Tuple[PlanContextRowSpec, ...] = ()
+    message: str = ""
+    primary_action: PlanActionSpec | None = None
+    secondary_actions: Tuple[PlanActionSpec, ...] = ()
+    details: Tuple[PlanContextDetailSpec, ...] = ()
+
+
+@dataclass(frozen=True)
 class PlanInspectorSection:
     """Structured task-panel content contributed by a provider."""
 
@@ -201,6 +262,7 @@ class PlanEditProvider:
 
     Providers are expected to be mostly declarative:
     - report issues, suggestions, and inspector sections for the current context
+    - optionally report contextual panel candidates for MEP-focused inspectors
     - expose overlays and optional first-class targets for in-view interaction
     - expose tools and handle action callbacks
 
@@ -228,6 +290,10 @@ class PlanEditProvider:
         return ()
 
     def get_suggestions(self, context) -> Sequence[PlanSuggestionSpec]:
+        del context
+        return ()
+
+    def get_context_panels(self, context) -> Sequence[PlanContextPanelSpec]:
         del context
         return ()
 

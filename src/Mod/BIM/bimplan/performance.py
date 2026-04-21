@@ -37,8 +37,34 @@ def resolve_plan_perf_log_path(session):
     return None
 
 
+def resolve_plan_pick_debug_log_path(session):
+    del session
+    env_value = str(os.environ.get("FC_BIM_PLAN_EDIT_PICK_DEBUG", "") or "").strip()
+    env_log_path = str(os.environ.get("FC_BIM_PLAN_EDIT_PICK_DEBUG_LOG", "") or "").strip()
+    false_values = {"0", "false", "False", "no", "off"}
+    true_values = {"1", "true", "True", "yes", "on"}
+
+    if env_value:
+        if env_value in false_values:
+            return None
+        if env_value in true_values:
+            return env_log_path or os.path.join(
+                tempfile.gettempdir(),
+                "bim_plan_edit_pick_debug.jsonl",
+            )
+        return env_value
+
+    if env_log_path:
+        return env_log_path
+    return None
+
+
 def is_plan_perf_trace_enabled(session):
     return bool(session._plan_perf_log_path)
+
+
+def is_plan_pick_debug_enabled(session):
+    return bool(getattr(session, "_plan_pick_debug_log_path", None))
 
 
 def plan_perf_describe_object(_session, obj):
@@ -146,6 +172,49 @@ def plan_perf_write_event(session, event, total_ms):
             handle.write(
                 json.dumps(session._plan_perf_finalize_event(event, total_ms), sort_keys=True)
             )
+            handle.write("\n")
+    except Exception:
+        pass
+
+
+def plan_pick_debug_event(session, name, **fields):
+    if not session._is_plan_pick_debug_enabled():
+        return
+    try:
+        session._plan_pick_debug_sequence = (
+            int(getattr(session, "_plan_pick_debug_sequence", 0)) + 1
+        )
+    except Exception:
+        session._plan_pick_debug_sequence = 1
+
+    output = {
+        "event": str(name),
+        "seq": session._plan_pick_debug_sequence,
+        "pid": os.getpid(),
+        "ts_unix": round(time.time(), 6),
+        "tool": getattr(session, "current_tool", ""),
+        "fields": {},
+    }
+    scope = str(getattr(session, "_plan_pick_debug_scope_name", "") or "").strip()
+    if scope:
+        output["scope"] = scope
+    get_mode = getattr(session, "get_plan_provider_overlay_mode", None)
+    if callable(get_mode):
+        try:
+            output["overlay_mode"] = str(get_mode() or "")
+        except Exception:
+            pass
+    for key, value in fields.items():
+        if value is None:
+            continue
+        output["fields"][str(key)] = plan_perf_coerce_value(session, value)
+
+    try:
+        directory = os.path.dirname(session._plan_pick_debug_log_path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        with open(session._plan_pick_debug_log_path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(output, sort_keys=True))
             handle.write("\n")
     except Exception:
         pass

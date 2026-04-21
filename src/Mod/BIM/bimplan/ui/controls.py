@@ -3,7 +3,12 @@
 """Task-panel controls for BIM Plan Edit."""
 
 import FreeCAD
-from bimplan.providers import PlanIssueSeverity, PlanToolInteraction
+from bimplan.providers import (
+    PlanContextPanelState,
+    PlanContextSubjectKind,
+    PlanIssueSeverity,
+    PlanToolInteraction,
+)
 
 translate = FreeCAD.Qt.translate
 
@@ -286,17 +291,108 @@ class PlanEditControlsWidget:
     def _build_integration_panel(self, QtGui):
         panel, layout = self._build_section(QtGui, "Plan Guidance")
         panel.setVisible(False)
+        layout.setSpacing(10)
+        try:
+            panel.setObjectName("BIMPlanEditGuidancePanel")
+        except Exception:
+            pass
+        self._apply_integration_panel_styles(panel)
 
         self.integration_summary = QtGui.QLabel(panel)
         self.integration_summary.setWordWrap(True)
+        self._set_integration_style_property(self.integration_summary, "planPanelSummary", "true")
         layout.addWidget(self.integration_summary)
 
         self.integration_content = QtGui.QWidget(panel)
         self.integration_content_layout = QtGui.QVBoxLayout(self.integration_content)
         self.integration_content_layout.setContentsMargins(0, 0, 0, 0)
-        self.integration_content_layout.setSpacing(6)
+        self.integration_content_layout.setSpacing(8)
         layout.addWidget(self.integration_content)
         return panel
+
+    def _apply_integration_panel_styles(self, widget):
+        if widget is None:
+            return
+        try:
+            widget.setStyleSheet("""
+                QWidget#BIMPlanEditGuidancePanel {
+                    background: transparent;
+                }
+                QFrame[planCard="true"] {
+                    background: palette(window);
+                    border: 1px solid palette(midlight);
+                    border-radius: 3px;
+                }
+                QFrame[planCardRole="summary"] {
+                    background: palette(window);
+                    border-color: palette(midlight);
+                }
+                QFrame[planCardRole="issue-warning"] {
+                    background: palette(window);
+                    border-color: #d5b27c;
+                }
+                QFrame[planCardRole="issue-error"] {
+                    background: palette(window);
+                    border-color: #d29c92;
+                }
+                QFrame[planCardRole="utility"] {
+                    background: palette(window);
+                    border-color: palette(midlight);
+                }
+                QFrame[planCardRole="detail"] {
+                    background: palette(window);
+                    border-color: palette(midlight);
+                }
+                QLabel[planCardTitle="true"] {
+                    font-weight: bold;
+                }
+                QLabel[planEyebrow="true"] {
+                    color: palette(text);
+                    font-weight: bold;
+                }
+                QLabel[planSectionHeading="true"] {
+                    color: palette(window-text);
+                    font-weight: bold;
+                    margin-top: 4px;
+                }
+                QLabel[planSubsectionTitle="true"] {
+                    color: palette(window-text);
+                    font-weight: bold;
+                    margin-top: 2px;
+                }
+                QLabel[planKeyValueLabel="true"] {
+                    color: palette(text);
+                    font-weight: bold;
+                }
+                QLabel[planPrimaryValue="true"] {
+                    font-weight: bold;
+                }
+                QLabel[planPanelSummary="true"] {
+                    color: palette(text);
+                }
+                QLabel[planStatusLabel="true"] {
+                }
+                QLabel[planStatusValue="true"] {
+                    font-weight: bold;
+                }
+                QLabel[planStatusTone="success"] {
+                    color: #2f5d38;
+                }
+                QLabel[planStatusTone="warning"] {
+                    color: #785100;
+                }
+                QLabel[planStatusTone="danger"] {
+                    color: #8a4233;
+                }
+                QLabel[planStatusTone="muted"] {
+                    color: #666666;
+                }
+                QLabel[planStatusTone="neutral"] {
+                    color: palette(window-text);
+                }
+                """)
+        except Exception:
+            pass
 
     def _make_wrapped_plain_label(self, QtGui, text, parent, bold=False):
         label = QtGui.QLabel(str(text or ""), parent)
@@ -319,6 +415,230 @@ class PlanEditControlsWidget:
             font.setBold(True)
             label.setFont(font)
         return label
+
+    def _set_integration_style_property(self, widget, name, value):
+        if widget is None:
+            return
+        try:
+            widget.setProperty(name, value)
+        except Exception:
+            return
+        try:
+            style = widget.style()
+            if style is not None:
+                style.unpolish(widget)
+                style.polish(widget)
+        except Exception:
+            pass
+        try:
+            widget.update()
+        except Exception:
+            pass
+
+    def _make_integration_group_heading(self, QtGui, text):
+        heading = self._make_wrapped_plain_label(QtGui, text, self.integration_panel, bold=True)
+        self._set_integration_style_property(heading, "planSectionHeading", "true")
+        return heading
+
+    def _create_integration_card(self, QtGui, role="default"):
+        block = QtGui.QFrame(self.integration_panel)
+        block.setFrameShape(QtGui.QFrame.StyledPanel)
+        self._set_integration_style_property(block, "planCard", "true")
+        self._set_integration_style_property(block, "planCardRole", str(role or "default"))
+
+        layout = QtGui.QVBoxLayout(block)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+        return block, layout
+
+    def _add_integration_card_header(self, QtGui, layout, parent, title, eyebrow=""):
+        eyebrow_text = str(eyebrow or "").strip()
+        if eyebrow_text:
+            eyebrow_label = self._make_wrapped_plain_label(QtGui, eyebrow_text, parent, bold=True)
+            self._set_integration_style_property(eyebrow_label, "planEyebrow", "true")
+            layout.addWidget(eyebrow_label)
+
+        title_label = self._make_wrapped_plain_label(QtGui, title, parent, bold=True)
+        self._set_integration_style_property(title_label, "planCardTitle", "true")
+        layout.addWidget(title_label)
+
+    def _get_action_identity(self, action):
+        return (
+            str(getattr(action, "provider_id", "") or "").strip(),
+            str(getattr(action, "key", "") or "").strip(),
+            str(getattr(action, "label", "") or "").strip(),
+        )
+
+    def _collect_action_identities(self, actions):
+        identities = []
+        seen = set()
+        for action in tuple(actions or ()):
+            identity = self._get_action_identity(action)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            identities.append(identity)
+        return tuple(identities)
+
+    def _collect_action_labels(self, actions):
+        labels = []
+        seen = set()
+        for action in tuple(actions or ()):
+            label = str(getattr(action, "label", "") or "").strip()
+            if not label or label in seen:
+                continue
+            seen.add(label)
+            labels.append(label)
+        return tuple(labels)
+
+    def _filter_integration_actions(
+        self,
+        actions,
+        hidden_action_ids=(),
+        hidden_action_labels=(),
+    ):
+        hidden = set(tuple(hidden_action_ids or ()))
+        hidden_labels = {str(label or "").strip() for label in tuple(hidden_action_labels or ())}
+        visible = []
+        for action in tuple(actions or ()):
+            if self._get_action_identity(action) in hidden:
+                continue
+            if str(getattr(action, "label", "") or "").strip() in hidden_labels:
+                continue
+            visible.append(action)
+        return tuple(visible)
+
+    def _build_detail_toggle_text(self, expanded, detail_title):
+        detail_text = str(detail_title or "").strip() or translate("BIM_PlanEdit", "Details")
+        if expanded:
+            return translate("BIM_PlanEdit", "Hide details")
+        return translate("BIM_PlanEdit", "{detail}...").format(
+            detail=detail_text,
+        )
+
+    def _parse_workflow_summary_body(self, body):
+        lines = [
+            str(line or "").strip()
+            for line in str(body or "").splitlines()
+            if str(line or "").strip()
+        ]
+        if not lines:
+            return None
+        scope = ""
+        next_step = ""
+        extra_lines = []
+        groups = []
+        current_group = None
+        for index, line in enumerate(lines):
+            if line.startswith("Scope:"):
+                scope = line.partition(":")[2].strip()
+                current_group = None
+                continue
+            if line.startswith("Next:"):
+                next_step = line.partition(":")[2].strip()
+                current_group = None
+                continue
+            if line.startswith("- "):
+                if current_group is not None:
+                    current_group[1].append(line[2:].strip())
+                else:
+                    extra_lines.append(line[2:].strip())
+                continue
+            current_group = None
+            next_line = lines[index + 1] if index + 1 < len(lines) else ""
+            if next_line.startswith("- "):
+                current_group = [line, []]
+                groups.append(current_group)
+                continue
+            extra_lines.append(line)
+        structured_groups = tuple(
+            (title, tuple(rows))
+            for title, rows in groups
+            if str(title or "").strip() or tuple(rows or ())
+        )
+        if not scope and not next_step and not structured_groups:
+            return None
+        return {
+            "scope": scope,
+            "next_step": next_step,
+            "groups": structured_groups,
+            "extra_lines": tuple(extra_lines),
+        }
+
+    def _normalize_summary_status_text(self, text):
+        normalized = str(text or "").strip()
+        lowered = normalized.lower()
+        replacements = {
+            "ready": translate("BIM_PlanEdit", "Ready"),
+            "waiting for authoring": translate("BIM_PlanEdit", "Blocked"),
+            "not generated": translate("BIM_PlanEdit", "Not generated"),
+            "no action needed": translate("BIM_PlanEdit", "No action needed"),
+        }
+        if lowered in replacements:
+            return replacements[lowered]
+        if normalized[:1].islower():
+            return normalized[:1].upper() + normalized[1:]
+        return normalized
+
+    def _get_summary_status_tone(self, text):
+        lowered = str(text or "").strip().lower()
+        if "ready" in lowered or "no action needed" in lowered:
+            return "success"
+        if "missing" in lowered or "issue" in lowered or "not generated" in lowered:
+            return "danger"
+        if "waiting" in lowered or "blocked" in lowered:
+            return "muted"
+        if lowered:
+            return "warning"
+        return "neutral"
+
+    def _make_summary_meta_row(self, QtGui, parent, label, value, prominent=False):
+        row_widget = QtGui.QWidget(parent)
+        row = QtGui.QHBoxLayout(row_widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+
+        key_label = self._make_wrapped_plain_label(QtGui, label, row_widget, bold=True)
+        self._set_integration_style_property(key_label, "planKeyValueLabel", "true")
+        row.addWidget(key_label)
+
+        value_label = self._make_wrapped_plain_label(QtGui, value, row_widget, bold=prominent)
+        if prominent:
+            self._set_integration_style_property(value_label, "planPrimaryValue", "true")
+        row.addWidget(value_label, 1)
+        return row_widget
+
+    def _make_summary_status_row(self, QtGui, parent, row_text):
+        row_widget = QtGui.QWidget(parent)
+        row = QtGui.QHBoxLayout(row_widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+
+        label_text, separator, value_text = str(row_text or "").partition(":")
+        label = self._make_wrapped_plain_label(QtGui, label_text.strip(), row_widget)
+        self._set_integration_style_property(label, "planStatusLabel", "true")
+        row.addWidget(label, 1)
+
+        if separator:
+            status_text = self._normalize_summary_status_text(value_text)
+            status_label = self._make_wrapped_plain_label(
+                QtGui,
+                status_text,
+                row_widget,
+                bold=True,
+            )
+            try:
+                status_label.setWordWrap(False)
+            except Exception:
+                pass
+            self._set_integration_style_property(status_label, "planStatusValue", "true")
+            self._set_integration_style_property(
+                status_label,
+                "planStatusTone",
+                self._get_summary_status_tone(status_text),
+            )
+            row.addWidget(status_label)
+        return row_widget
 
     def _clear_layout(self, layout):
         if layout is None:
@@ -345,12 +665,35 @@ class PlanEditControlsWidget:
                 except Exception:
                     pass
 
-    def _add_integration_action_row(self, QtGui, parent, layout, actions=()):
+    def _add_integration_action_row(
+        self,
+        QtGui,
+        parent,
+        layout,
+        actions=(),
+        hidden_action_ids=(),
+        hidden_action_labels=(),
+        primary_first=False,
+        grid_columns=0,
+        default_role="secondary",
+    ):
+        actions = self._filter_integration_actions(
+            actions,
+            hidden_action_ids=hidden_action_ids,
+            hidden_action_labels=hidden_action_labels,
+        )
         if not actions:
             return
-        action_row = QtGui.QHBoxLayout()
-        action_row.setSpacing(6)
-        for action in actions:
+        use_grid = bool(grid_columns and len(actions) > 1)
+        if use_grid:
+            action_layout = QtGui.QGridLayout()
+            action_layout.setContentsMargins(0, 0, 0, 0)
+            action_layout.setHorizontalSpacing(6)
+            action_layout.setVerticalSpacing(6)
+        else:
+            action_layout = QtGui.QHBoxLayout()
+            action_layout.setSpacing(6)
+        for index, action in enumerate(actions):
             button = QtGui.QPushButton(str(action.label or ""), parent)
             tooltip = str(action.tooltip or "").strip()
             if tooltip:
@@ -368,32 +711,70 @@ class PlanEditControlsWidget:
                     current_action
                 )
             )
+            button_role = (
+                "primary" if primary_first and index == 0 else str(default_role or "secondary")
+            )
+            self._set_integration_style_property(button, "planActionRole", button_role)
+            try:
+                button.setAutoDefault(False)
+                button.setDefault(False)
+            except Exception:
+                pass
+            if button_role == "primary":
+                try:
+                    button.setMinimumHeight(30)
+                except Exception:
+                    pass
+                try:
+                    font = button.font()
+                    font.setBold(True)
+                    button.setFont(font)
+                except Exception:
+                    pass
             self._integration_action_buttons.append(button)
-            action_row.addWidget(button)
-        action_row.addStretch(1)
-        layout.addLayout(action_row)
+            if use_grid:
+                row_index = index // int(grid_columns)
+                column_index = index % int(grid_columns)
+                action_layout.addWidget(button, row_index, column_index)
+            else:
+                action_layout.addWidget(button)
+        if not use_grid:
+            action_layout.addStretch(1)
+        layout.addLayout(action_layout)
 
-    def _make_integration_block(self, QtGui, title, body="", actions=()):
-        block = QtGui.QFrame(self.integration_panel)
-        block.setFrameShape(QtGui.QFrame.StyledPanel)
-        layout = QtGui.QVBoxLayout(block)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(4)
-
-        title_label = self._make_wrapped_plain_label(
-            QtGui,
-            title,
-            block,
-            bold=True,
-        )
-        layout.addWidget(title_label)
+    def _make_integration_block(
+        self,
+        QtGui,
+        title,
+        body="",
+        actions=(),
+        card_role="default",
+        eyebrow="",
+        hidden_action_ids=(),
+        hidden_action_labels=(),
+        primary_first=False,
+        action_columns=0,
+        default_action_role="secondary",
+    ):
+        block, layout = self._create_integration_card(QtGui, card_role)
+        self._add_integration_card_header(QtGui, layout, block, title, eyebrow=eyebrow)
 
         body_text = str(body or "").strip()
         if body_text:
             body_label = self._make_wrapped_plain_label(QtGui, body_text, block)
             layout.addWidget(body_label)
 
-        self._add_integration_action_row(QtGui, block, layout, actions)
+        self._add_integration_action_row(
+            QtGui,
+            block,
+            layout,
+            actions,
+            hidden_action_ids=hidden_action_ids,
+            hidden_action_labels=hidden_action_labels,
+            primary_first=primary_first,
+            grid_columns=action_columns,
+            default_role=default_action_role,
+        )
         return block
 
     def _make_integration_collapsible_block(
@@ -405,40 +786,57 @@ class PlanEditControlsWidget:
         actions=(),
         collapsed=False,
         detail_title="Details",
+        card_role="default",
+        eyebrow="",
+        hidden_action_ids=(),
+        hidden_action_labels=(),
+        primary_first=False,
     ):
-        block = QtGui.QFrame(self.integration_panel)
-        block.setFrameShape(QtGui.QFrame.StyledPanel)
-        layout = QtGui.QVBoxLayout(block)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(4)
-
-        title_label = self._make_wrapped_plain_label(
-            QtGui,
-            title,
-            block,
-            bold=True,
-        )
-        layout.addWidget(title_label)
+        block, layout = self._create_integration_card(QtGui, card_role)
+        self._add_integration_card_header(QtGui, layout, block, title, eyebrow=eyebrow)
 
         summary_text = str(summary or "").strip()
         if summary_text:
             summary_label = self._make_wrapped_plain_label(QtGui, summary_text, block)
             layout.addWidget(summary_label)
 
-        self._add_integration_action_row(QtGui, block, layout, actions)
+        self._add_integration_action_row(
+            QtGui,
+            block,
+            layout,
+            actions,
+            hidden_action_ids=hidden_action_ids,
+            hidden_action_labels=hidden_action_labels,
+            primary_first=primary_first,
+        )
 
         detail_text = str(details or "").strip()
         if detail_text:
-            show_text = translate("BIM_PlanEdit", "Show details")
-            hide_text = translate("BIM_PlanEdit", "Hide details")
             expanded = not bool(collapsed)
-            detail_button = QtGui.QPushButton(hide_text if expanded else show_text, block)
+            detail_button = QtGui.QPushButton(
+                self._build_detail_toggle_text(expanded, detail_title),
+                block,
+            )
             try:
                 detail_button.setCheckable(True)
                 detail_button.setChecked(expanded)
             except Exception:
                 pass
-            layout.addWidget(detail_button)
+            try:
+                detail_button.setFlat(True)
+                detail_button.setAutoDefault(False)
+                detail_button.setSizePolicy(
+                    QtGui.QSizePolicy.Maximum,
+                    QtGui.QSizePolicy.Fixed,
+                )
+            except Exception:
+                pass
+            try:
+                from PySide import QtCore
+
+                layout.addWidget(detail_button, 0, QtCore.Qt.AlignLeft)
+            except Exception:
+                layout.addWidget(detail_button)
 
             detail_content = QtGui.QWidget(block)
             detail_content_layout = QtGui.QVBoxLayout(detail_content)
@@ -457,12 +855,98 @@ class PlanEditControlsWidget:
             def toggle_details(checked):
                 is_expanded = bool(checked)
                 detail_content.setVisible(is_expanded)
-                detail_button.setText(hide_text if is_expanded else show_text)
+                detail_button.setText(self._build_detail_toggle_text(is_expanded, detail_title))
 
             try:
                 detail_button.toggled.connect(toggle_details)
             except Exception:
                 pass
+        return block
+
+    def _make_summary_section_block(self, QtGui, section):
+        provider_label = self.session.get_plan_provider_display_name(section.provider_id)
+        parsed = self._parse_workflow_summary_body(getattr(section, "body", ""))
+        if parsed is None:
+            return self._make_integration_block(
+                QtGui,
+                str(getattr(section, "title", "") or "").strip()
+                or translate("BIM_PlanEdit", "Summary"),
+                body=getattr(section, "body", ""),
+                actions=section.actions,
+                card_role="summary",
+                eyebrow=provider_label,
+                primary_first=True,
+            )
+
+        block, layout = self._create_integration_card(QtGui, "summary")
+        section_title = str(getattr(section, "title", "") or "").strip() or translate(
+            "BIM_PlanEdit",
+            "Summary",
+        )
+        self._add_integration_card_header(
+            QtGui,
+            layout,
+            block,
+            section_title,
+            eyebrow=provider_label,
+        )
+
+        scope_text = str(parsed.get("scope", "") or "").strip()
+        if scope_text:
+            layout.addWidget(
+                self._make_summary_meta_row(
+                    QtGui,
+                    block,
+                    translate("BIM_PlanEdit", "Scope"),
+                    scope_text,
+                )
+            )
+
+        next_step_text = str(parsed.get("next_step", "") or "").strip()
+        if next_step_text:
+            layout.addWidget(
+                self._make_summary_meta_row(
+                    QtGui,
+                    block,
+                    translate("BIM_PlanEdit", "Next Step"),
+                    next_step_text,
+                    prominent=True,
+                )
+            )
+
+        self._add_integration_action_row(
+            QtGui,
+            block,
+            layout,
+            section.actions,
+            primary_first=True,
+        )
+
+        for group_title, rows in tuple(parsed.get("groups", ()) or ()):
+            group_widget = QtGui.QWidget(block)
+            group_layout = QtGui.QVBoxLayout(group_widget)
+            group_layout.setContentsMargins(0, 0, 0, 0)
+            group_layout.setSpacing(4)
+
+            group_label = self._make_wrapped_plain_label(
+                QtGui, group_title, group_widget, bold=True
+            )
+            self._set_integration_style_property(group_label, "planSubsectionTitle", "true")
+            group_layout.addWidget(group_label)
+            for row_text in tuple(rows or ()):
+                group_layout.addWidget(
+                    self._make_summary_status_row(
+                        QtGui,
+                        group_widget,
+                        row_text,
+                    )
+                )
+            layout.addWidget(group_widget)
+
+        extra_lines = tuple(parsed.get("extra_lines", ()) or ())
+        if extra_lines:
+            extra_label = self._make_wrapped_plain_label(QtGui, "\n".join(extra_lines), block)
+            layout.addWidget(extra_label)
         return block
 
     def _format_provider_issue_heading(self, provider_label, severity, title):
@@ -631,12 +1115,16 @@ class PlanEditControlsWidget:
             group.append(issue)
         return tuple(tuple(group) for group in grouped if group)
 
-    def _make_provider_issue_block(self, QtGui, issues):
+    def _make_provider_issue_block(self, QtGui, issues, hidden_action_ids=()):
         issues = tuple(issues or ())
         if not issues:
             return None
         has_group_key = bool(self._get_provider_issue_group_key(issues[0]))
         collapsed = any(self._is_provider_issue_collapsed(issue) for issue in issues)
+        card_role = {
+            PlanIssueSeverity.ERROR: "issue-error",
+            PlanIssueSeverity.WARNING: "issue-warning",
+        }.get(self._get_provider_issue_group_severity(issues), "detail")
         if len(issues) > 1 or collapsed:
             details = self._format_provider_issue_group_details(issues)
             return self._make_integration_collapsible_block(
@@ -647,6 +1135,8 @@ class PlanEditControlsWidget:
                 actions=self._collect_provider_issue_group_actions(issues),
                 collapsed=collapsed,
                 detail_title=translate("BIM_PlanEdit", "Issue Details"),
+                card_role=card_role,
+                hidden_action_ids=hidden_action_ids,
             )
         issue = issues[0]
         if has_group_key:
@@ -655,12 +1145,16 @@ class PlanEditControlsWidget:
                 self._format_provider_issue_group_title(issues),
                 body=self._get_provider_issue_body(issue),
                 actions=self._collect_provider_issue_group_actions(issues),
+                card_role=card_role,
+                hidden_action_ids=hidden_action_ids,
             )
         return self._make_integration_block(
             QtGui,
             self._format_provider_issue_title(issue),
             body=self._get_provider_issue_body(issue),
             actions=issue.actions,
+            card_role=card_role,
+            hidden_action_ids=hidden_action_ids,
         )
 
     def _format_provider_section_title(self, section):
@@ -697,24 +1191,203 @@ class PlanEditControlsWidget:
             tuple(detail_sections),
         )
 
-    def _make_integration_details_group(self, QtGui, sections):
-        group = QtGui.QFrame(self.integration_panel)
-        group.setFrameShape(QtGui.QFrame.NoFrame)
+    def _get_provider_context_panel_state_rank(self, panel):
+        return {
+            PlanContextPanelState.ACTIVE_TOOL: 0,
+            PlanContextPanelState.GEOMETRY_REVIEW: 1,
+            PlanContextPanelState.SINGLE_OBJECT: 2,
+            PlanContextPanelState.MULTI_SELECTION: 3,
+            PlanContextPanelState.EMPTY: 4,
+        }.get(getattr(panel, "state", None), 5)
 
-        layout = QtGui.QVBoxLayout(group)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+    def _resolve_provider_context_panel(self, panels):
+        ranked = []
+        for index, panel in enumerate(tuple(panels or ())):
+            if not panel:
+                continue
+            ranked.append((self._get_provider_context_panel_state_rank(panel), index, panel))
+        if not ranked:
+            return None
+        ranked.sort(key=lambda entry: (entry[0], entry[1]))
+        return ranked[0][2]
+
+    def _get_provider_context_panel_heading(self, panel):
+        state = getattr(panel, "state", None)
+        subject_kind = getattr(panel, "subject_kind", None)
+        if (
+            state == PlanContextPanelState.ACTIVE_TOOL
+            or subject_kind == PlanContextSubjectKind.INTERACTION
+        ):
+            return translate("BIM_PlanEdit", "Current Tool")
+        if (
+            state == PlanContextPanelState.GEOMETRY_REVIEW
+            or subject_kind == PlanContextSubjectKind.GEOMETRY
+        ):
+            return translate("BIM_PlanEdit", "Geometry")
+        if state in (
+            PlanContextPanelState.SINGLE_OBJECT,
+            PlanContextPanelState.MULTI_SELECTION,
+        ) or subject_kind in (
+            PlanContextSubjectKind.ENDPOINT,
+            PlanContextSubjectKind.NETWORK,
+            PlanContextSubjectKind.DISTRIBUTION,
+        ):
+            return translate("BIM_PlanEdit", "Selection")
+        return translate("BIM_PlanEdit", "Context")
+
+    def _collect_provider_context_panel_actions(self, panel):
+        actions = []
+        seen = set()
+        primary_action = getattr(panel, "primary_action", None)
+        has_primary = bool(primary_action and getattr(primary_action, "enabled", False))
+        if has_primary:
+            identity = self._get_action_identity(primary_action)
+            seen.add(identity)
+            actions.append(primary_action)
+        for action in tuple(getattr(panel, "secondary_actions", ()) or ()):
+            if not bool(getattr(action, "enabled", False)):
+                continue
+            identity = self._get_action_identity(action)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            actions.append(action)
+        return tuple(actions), has_primary
+
+    def _make_provider_context_panel_detail(self, QtGui, parent, layout, detail):
+        detail_title = str(getattr(detail, "title", "") or "").strip()
+        if not detail_title:
+            return
+        expanded = not bool(getattr(detail, "collapsed", True))
+        detail_button = QtGui.QPushButton(
+            self._build_detail_toggle_text(expanded, detail_title),
+            parent,
+        )
+        try:
+            detail_button.setCheckable(True)
+            detail_button.setChecked(expanded)
+            detail_button.setFlat(True)
+            detail_button.setAutoDefault(False)
+            detail_button.setSizePolicy(
+                QtGui.QSizePolicy.Maximum,
+                QtGui.QSizePolicy.Fixed,
+            )
+        except Exception:
+            pass
+        try:
+            from PySide import QtCore
+
+            layout.addWidget(detail_button, 0, QtCore.Qt.AlignLeft)
+        except Exception:
+            layout.addWidget(detail_button)
+
+        content = QtGui.QWidget(parent)
+        content_layout = QtGui.QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(4)
+
+        for row in tuple(getattr(detail, "rows", ()) or ()):
+            content_layout.addWidget(
+                self._make_summary_meta_row(
+                    QtGui,
+                    content,
+                    getattr(row, "label", ""),
+                    getattr(row, "value", ""),
+                )
+            )
+
+        body_text = str(getattr(detail, "body", "") or "").strip()
+        if body_text:
+            content_layout.addWidget(self._make_wrapped_plain_label(QtGui, body_text, content))
+        layout.addWidget(content)
+        content.setVisible(expanded)
+
+        def toggle_details(checked):
+            is_expanded = bool(checked)
+            content.setVisible(is_expanded)
+            detail_button.setText(self._build_detail_toggle_text(is_expanded, detail_title))
+
+        try:
+            detail_button.toggled.connect(toggle_details)
+        except Exception:
+            pass
+
+    def _make_provider_context_panel_block(self, QtGui, panel):
+        block, layout = self._create_integration_card(QtGui, "detail")
+        title = str(getattr(panel, "title", "") or "").strip() or translate(
+            "BIM_PlanEdit",
+            "Context",
+        )
+        self._add_integration_card_header(QtGui, layout, block, title)
+
+        subtitle = str(getattr(panel, "subtitle", "") or "").strip()
+        if subtitle:
+            subtitle_label = self._make_wrapped_plain_label(QtGui, subtitle, block)
+            self._set_integration_style_property(subtitle_label, "planPanelSummary", "true")
+            layout.addWidget(subtitle_label)
+
+        for row in tuple(getattr(panel, "summary_rows", ()) or ()):
+            layout.addWidget(
+                self._make_summary_meta_row(
+                    QtGui,
+                    block,
+                    getattr(row, "label", ""),
+                    getattr(row, "value", ""),
+                )
+            )
+
+        message = str(getattr(panel, "message", "") or "").strip()
+        if message:
+            layout.addWidget(self._make_wrapped_plain_label(QtGui, message, block))
+
+        actions, has_primary = self._collect_provider_context_panel_actions(panel)
+        self._add_integration_action_row(
+            QtGui,
+            block,
+            layout,
+            actions=actions,
+            primary_first=has_primary,
+        )
+
+        for detail in tuple(getattr(panel, "details", ()) or ()):
+            self._make_provider_context_panel_detail(QtGui, block, layout, detail)
+        return block
+
+    def _make_integration_details_group(self, QtGui, sections):
+        group, layout = self._create_integration_card(QtGui, "detail")
+        self._add_integration_card_header(
+            QtGui,
+            layout,
+            group,
+            translate("BIM_PlanEdit", "Additional details"),
+        )
 
         expanded = any(not self._is_provider_section_collapsed(section) for section in sections)
-        show_text = translate("BIM_PlanEdit", "Show details")
-        hide_text = translate("BIM_PlanEdit", "Hide details")
-        detail_button = QtGui.QPushButton(hide_text if expanded else show_text, group)
+        detail_title = translate("BIM_PlanEdit", "Provider Notes")
+        detail_button = QtGui.QPushButton(
+            self._build_detail_toggle_text(expanded, detail_title),
+            group,
+        )
         try:
             detail_button.setCheckable(True)
             detail_button.setChecked(expanded)
         except Exception:
             pass
-        layout.addWidget(detail_button)
+        try:
+            detail_button.setFlat(True)
+            detail_button.setAutoDefault(False)
+            detail_button.setSizePolicy(
+                QtGui.QSizePolicy.Maximum,
+                QtGui.QSizePolicy.Fixed,
+            )
+        except Exception:
+            pass
+        try:
+            from PySide import QtCore
+
+            layout.addWidget(detail_button, 0, QtCore.Qt.AlignLeft)
+        except Exception:
+            layout.addWidget(detail_button)
 
         content = QtGui.QWidget(group)
         content_layout = QtGui.QVBoxLayout(content)
@@ -736,7 +1409,7 @@ class PlanEditControlsWidget:
         def toggle_details(checked):
             is_expanded = bool(checked)
             content.setVisible(is_expanded)
-            detail_button.setText(hide_text if is_expanded else show_text)
+            detail_button.setText(self._build_detail_toggle_text(is_expanded, detail_title))
 
         try:
             detail_button.toggled.connect(toggle_details)
@@ -800,14 +1473,14 @@ class PlanEditControlsWidget:
         )
 
     def _format_provider_overlay_mode_label(self, mode):
-        normalized = str(mode or "").strip().lower()
+        mode_key = str(mode or "").strip().lower()
         for option_key, option_label in self._get_provider_overlay_mode_options():
-            if option_key == normalized:
+            if option_key == mode_key:
                 return option_label
         return translate("BIM_PlanEdit", "Architecture")
 
     def _filter_provider_overlay_legend_items_for_mode(self, items, active_mode=None):
-        normalized = (
+        mode_key = (
             str(
                 active_mode
                 or getattr(self.session, "get_plan_provider_overlay_mode", lambda: "architecture")()
@@ -815,12 +1488,10 @@ class PlanEditControlsWidget:
             .strip()
             .lower()
         )
-        if normalized == "all":
+        if mode_key == "all":
             return tuple(items or ())
         return tuple(
-            item
-            for item in tuple(items or ())
-            if len(item) > 5 and str(item[5] or "") == normalized
+            item for item in tuple(items or ()) if len(item) > 5 and str(item[5] or "") == mode_key
         )
 
     def _group_provider_overlay_legend_items(self, items, active_mode=None):
@@ -844,30 +1515,27 @@ class PlanEditControlsWidget:
         )
 
     def _make_provider_overlay_legend_block(self, QtGui, items, active_mode="architecture"):
-        block = QtGui.QFrame(self.integration_panel)
-        block.setFrameShape(QtGui.QFrame.StyledPanel)
-        layout = QtGui.QVBoxLayout(block)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(4)
-
-        title_label = self._make_wrapped_plain_label(
+        block, layout = self._create_integration_card(QtGui, "utility")
+        self._add_integration_card_header(
             QtGui,
-            translate("BIM_PlanEdit", "Overlays"),
+            layout,
             block,
-            bold=True,
+            translate("BIM_PlanEdit", "Overlays"),
         )
-        layout.addWidget(title_label)
 
-        mode_row = QtGui.QHBoxLayout()
-        mode_row.setSpacing(6)
+        mode_row_widget = QtGui.QWidget(block)
+        mode_row = QtGui.QHBoxLayout(mode_row_widget)
+        mode_row.setContentsMargins(0, 0, 0, 0)
+        mode_row.setSpacing(8)
         mode_label = self._make_wrapped_plain_label(
             QtGui,
             translate("BIM_PlanEdit", "Mode"),
-            block,
+            mode_row_widget,
             bold=True,
         )
+        self._set_integration_style_property(mode_label, "planKeyValueLabel", "true")
         mode_row.addWidget(mode_label)
-        mode_combo = QtGui.QComboBox(block)
+        mode_combo = QtGui.QComboBox(mode_row_widget)
         for mode_key, mode_text in self._get_provider_overlay_mode_options():
             mode_combo.addItem(mode_text, mode_key)
         current_index = mode_combo.findData(str(active_mode or "architecture"))
@@ -881,12 +1549,12 @@ class PlanEditControlsWidget:
         )
         mode_row.addWidget(mode_combo)
         mode_row.addStretch(1)
-        layout.addLayout(mode_row)
+        layout.addWidget(mode_row_widget)
 
         content = QtGui.QWidget(block)
         content_layout = QtGui.QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(4)
+        content_layout.setSpacing(6)
         layout.addWidget(content)
 
         self._integration_overlay_block = block
@@ -917,6 +1585,26 @@ class PlanEditControlsWidget:
         except Exception:
             pass
 
+    def _set_widget_updates_enabled(self, widget, enabled):
+        if widget is None:
+            return
+        try:
+            widget.setUpdatesEnabled(bool(enabled))
+        except Exception:
+            pass
+
+    def _refresh_widget_geometry(self, widget):
+        if widget is None:
+            return
+        try:
+            widget.updateGeometry()
+        except Exception:
+            pass
+        try:
+            widget.update()
+        except Exception:
+            pass
+
     def _reset_integration_panel_dynamic_refs(self):
         self._integration_overlay_block = None
         self._integration_overlay_mode_combo = None
@@ -942,10 +1630,11 @@ class PlanEditControlsWidget:
         tools=(),
         overlay_items=(),
         summary_sections=(),
+        context_panel=None,
     ):
         if self.integration_summary is None:
             return
-        if tuple(summary_sections or ()):
+        if tuple(summary_sections or ()) or context_panel is not None:
             self.integration_summary.clear()
             try:
                 self.integration_summary.setVisible(False)
@@ -1040,53 +1729,81 @@ class PlanEditControlsWidget:
             from PySide import QtGui
         except Exception:
             return
-        self._set_provider_overlay_mode_combo_value(active_mode)
-        self._integration_overlay_checkboxes = []
-        self._clear_layout(self._integration_overlay_content_layout)
-
-        grouped_items = self._group_provider_overlay_legend_items(items, active_mode=active_mode)
         parent = self._integration_overlay_block or self.integration_panel
-        if not grouped_items:
-            empty_label = self._make_wrapped_plain_label(
-                QtGui,
-                translate("BIM_PlanEdit", "No overlays are available in {mode} mode.").format(
-                    mode=self._format_provider_overlay_mode_label(active_mode),
-                ),
-                parent,
+        self._set_widget_updates_enabled(parent, False)
+        try:
+            self._set_provider_overlay_mode_combo_value(active_mode)
+            self._integration_overlay_checkboxes = []
+            self._clear_layout(self._integration_overlay_content_layout)
+
+            grouped_items = self._group_provider_overlay_legend_items(
+                items,
+                active_mode=active_mode,
             )
-            self._integration_overlay_content_layout.addWidget(empty_label)
-            return
-
-        for _category, category_label, category_items in grouped_items:
-            heading = self._make_wrapped_plain_label(QtGui, category_label, parent, bold=True)
-            self._integration_overlay_content_layout.addWidget(heading)
-            for provider_id, overlay_key, label, color, checked, _item_category in category_items:
-                row = QtGui.QHBoxLayout()
-                row.setSpacing(6)
-                swatch = QtGui.QLabel(parent)
-                swatch.setFixedSize(12, 12)
-                swatch.setStyleSheet(
-                    "background-color: {}; border: 1px solid #555;".format(
-                        self._format_provider_overlay_color(color)
-                    )
+            if not grouped_items:
+                empty_label = self._make_wrapped_plain_label(
+                    QtGui,
+                    translate(
+                        "BIM_PlanEdit",
+                        "No overlays are available in {mode} mode.",
+                    ).format(
+                        mode=self._format_provider_overlay_mode_label(active_mode),
+                    ),
+                    parent,
                 )
-                row.addWidget(swatch)
+                self._integration_overlay_content_layout.addWidget(empty_label)
+                return
 
-                checkbox = QtGui.QCheckBox(label, parent)
-                checkbox.setChecked(bool(checked))
-                checkbox.toggled.connect(
-                    lambda checked, current_provider_id=provider_id, current_overlay_key=overlay_key: (
-                        self.on_provider_overlay_visibility_changed(
-                            current_provider_id,
-                            current_overlay_key,
-                            checked,
+            for category, category_label, category_items in grouped_items:
+                heading = self._make_wrapped_plain_label(
+                    QtGui,
+                    category_label,
+                    parent,
+                    bold=True,
+                )
+                self._set_integration_style_property(
+                    heading,
+                    "planSubsectionTitle",
+                    "true",
+                )
+                self._integration_overlay_content_layout.addWidget(heading)
+                for (
+                    provider_id,
+                    overlay_key,
+                    label,
+                    color,
+                    checked,
+                    _item_category,
+                ) in category_items:
+                    row = QtGui.QHBoxLayout()
+                    row.setSpacing(6)
+                    swatch = QtGui.QLabel(parent)
+                    swatch.setFixedSize(12, 12)
+                    swatch.setStyleSheet(
+                        "background-color: {}; border: 1px solid #555;".format(
+                            self._format_provider_overlay_color(color)
                         )
                     )
-                )
-                self._integration_overlay_checkboxes.append(checkbox)
-                row.addWidget(checkbox)
-                row.addStretch(1)
-                self._integration_overlay_content_layout.addLayout(row)
+                    row.addWidget(swatch)
+
+                    checkbox = QtGui.QCheckBox(label, parent)
+                    checkbox.setChecked(bool(checked))
+                    checkbox.toggled.connect(
+                        lambda checked, current_provider_id=provider_id, current_overlay_key=overlay_key: (
+                            self.on_provider_overlay_visibility_changed(
+                                current_provider_id,
+                                current_overlay_key,
+                                checked,
+                            )
+                        )
+                    )
+                    self._integration_overlay_checkboxes.append(checkbox)
+                    row.addWidget(checkbox)
+                    row.addStretch(1)
+                    self._integration_overlay_content_layout.addLayout(row)
+        finally:
+            self._set_widget_updates_enabled(parent, True)
+            self._refresh_widget_geometry(parent)
 
     def _refresh_integration_panel(self, defer=False):
         with self.session._plan_perf_trace_span("refresh_integration_panel"):
@@ -1118,6 +1835,8 @@ class PlanEditControlsWidget:
                     overlays = tuple(self.session.get_plan_provider_overlays())
                 with self.session._plan_perf_trace_span("collect_plan_provider_issues"):
                     issues = tuple(self.session.get_plan_provider_issues())
+                with self.session._plan_perf_trace_span("collect_plan_provider_context_panels"):
+                    context_panels = tuple(self.session.get_plan_provider_context_panels())
                 with self.session._plan_perf_trace_span("collect_plan_provider_inspector_sections"):
                     sections = tuple(self.session.get_plan_provider_inspector_sections())
             queue_overlay_refresh = getattr(
@@ -1134,11 +1853,23 @@ class PlanEditControlsWidget:
                 overlay_items,
                 active_mode=overlay_mode,
             )
-            summary_sections, regular_sections, detail_sections = (
-                self._partition_provider_sections(sections)
+            summary_sections, regular_sections, detail_sections = self._partition_provider_sections(
+                sections
             )
-            state = (tools, overlay_items, issues, sections)
-            if not tools and not overlay_items and not issues and not sections:
+            context_panel = self._resolve_provider_context_panel(context_panels)
+            context_panel_actions, _has_context_primary = (
+                self._collect_provider_context_panel_actions(context_panel)
+                if context_panel is not None
+                else ((), False)
+            )
+            state = (tools, overlay_items, issues, sections, context_panel)
+            if (
+                not tools
+                and not overlay_items
+                and not issues
+                and not sections
+                and context_panel is None
+            ):
                 self._hide_integration_panel()
                 return
             self._set_integration_summary_text(
@@ -1147,6 +1878,7 @@ class PlanEditControlsWidget:
                 tools=tools,
                 overlay_items=active_overlay_items,
                 summary_sections=summary_sections,
+                context_panel=context_panel,
             )
             if state != self._integration_panel_state:
                 self._integration_panel_state = state
@@ -1156,23 +1888,80 @@ class PlanEditControlsWidget:
                 self._clear_layout(self.integration_content_layout)
                 from PySide import QtGui
 
-                for section in summary_sections:
-                    block = self._make_integration_block(
-                        QtGui,
-                        self._format_provider_section_title(section),
-                        body=getattr(section, "body", ""),
-                        actions=section.actions,
+                grouped_issue_sets = self._group_provider_issues(issues)
+                promoted_action_ids = self._collect_action_identities(
+                    action
+                    for section in summary_sections
+                    for action in tuple(getattr(section, "actions", ()) or ())
+                )
+                hidden_tool_action_labels = self._collect_action_labels(
+                    tuple(
+                        action
+                        for section in summary_sections
+                        for action in tuple(getattr(section, "actions", ()) or ())
                     )
+                    + tuple(
+                        action
+                        for issue_group in grouped_issue_sets
+                        for action in tuple(
+                            self._filter_integration_actions(
+                                self._collect_provider_issue_group_actions(issue_group),
+                                hidden_action_ids=promoted_action_ids,
+                            )
+                        )
+                    )
+                    + tuple(
+                        action
+                        for section in regular_sections
+                        for action in tuple(getattr(section, "actions", ()) or ())
+                    )
+                    + tuple(context_panel_actions)
+                )
+                for section in summary_sections:
+                    block = self._make_summary_section_block(QtGui, section)
                     self.integration_content_layout.addWidget(block)
-                for issue_group in self._group_provider_issues(issues):
-                    block = self._make_provider_issue_block(QtGui, issue_group)
+                if context_panel is not None:
+                    self.integration_content_layout.addWidget(
+                        self._make_integration_group_heading(
+                            QtGui,
+                            self._get_provider_context_panel_heading(context_panel),
+                        )
+                    )
+                    self.integration_content_layout.addWidget(
+                        self._make_provider_context_panel_block(QtGui, context_panel)
+                    )
+                if issues:
+                    self.integration_content_layout.addWidget(
+                        self._make_integration_group_heading(
+                            QtGui,
+                            translate("BIM_PlanEdit", "Action Needed"),
+                        )
+                    )
+                for issue_group in grouped_issue_sets:
+                    block = self._make_provider_issue_block(
+                        QtGui,
+                        issue_group,
+                        hidden_action_ids=promoted_action_ids,
+                    )
                     if block is not None:
                         self.integration_content_layout.addWidget(block)
+                if tools or overlay_items:
+                    self.integration_content_layout.addWidget(
+                        self._make_integration_group_heading(
+                            QtGui,
+                            translate("BIM_PlanEdit", "Utilities"),
+                        )
+                    )
                 if tools:
                     block = self._make_integration_block(
                         QtGui,
                         translate("BIM_PlanEdit", "Tools"),
                         actions=tools,
+                        card_role="utility",
+                        hidden_action_ids=promoted_action_ids,
+                        hidden_action_labels=hidden_tool_action_labels,
+                        action_columns=3,
+                        default_action_role="utility",
                     )
                     self.integration_content_layout.addWidget(block)
                 if overlay_items:
@@ -1183,12 +1972,21 @@ class PlanEditControlsWidget:
                     )
                     if block is not None:
                         self.integration_content_layout.addWidget(block)
+                if regular_sections or detail_sections:
+                    self.integration_content_layout.addWidget(
+                        self._make_integration_group_heading(
+                            QtGui,
+                            translate("BIM_PlanEdit", "More Context"),
+                        )
+                    )
                 for section in regular_sections:
                     block = self._make_integration_block(
                         QtGui,
                         self._format_provider_section_title(section),
                         body=getattr(section, "body", ""),
                         actions=section.actions,
+                        card_role="detail",
+                        hidden_action_ids=promoted_action_ids,
                     )
                     self.integration_content_layout.addWidget(block)
                 if detail_sections:
@@ -1914,6 +2712,9 @@ class PlanEditControlsWidget:
                 "BIM_PlanEdit",
                 "Use the space controls below to edit label, type, boundaries, and text position.",
             )
+        elif selected_kind == "provider" and selected_obj is not None:
+            selection_state = selected_state
+            selection_help = self.session._format_provider_target_help(selected_obj)
         elif selected_kind == "wall" and selected_obj is not None:
             selection_state = selected_state
             if self.session.is_selected_wall_endpoint_editable():
@@ -1933,7 +2734,7 @@ class PlanEditControlsWidget:
             selection_state = translate("BIM_PlanEdit", "No target selected")
             selection_help = translate(
                 "BIM_PlanEdit",
-                "Click a wall, opening, symbol, region, or space. Use create tools to add plan geometry.",
+                "Click a wall, opening, symbol, integration target, region, or space. Use create tools to add plan geometry.",
             )
         selection_summary = self.session._get_plan_selection_summary_text()
         if selection_summary:
@@ -2081,7 +2882,12 @@ class PlanEditControlsWidget:
         with self.session._plan_perf_trace_span("refresh_task_panel_provider_overlay_mode_widget"):
             if self.form is None or self.integration_panel is None:
                 return
-            self._refresh_integration_panel(defer=False)
+            self._set_widget_updates_enabled(self.integration_panel, False)
+            try:
+                self._refresh_integration_panel(defer=False)
+            finally:
+                self._set_widget_updates_enabled(self.integration_panel, True)
+                self._refresh_widget_geometry(self.integration_panel)
 
     def _refresh_space_editor(self):
         from PySide import QtGui
@@ -2761,7 +3567,8 @@ class PlanEditControlsWidget:
         preset_name = str(preset_name or "").strip()
         if not preset_name:
             return
-        self.session._apply_selected_window_style_preset(preset_name)
+        if self.session._apply_selected_window_style_preset(preset_name):
+            self.refresh_from_session(defer_integrations=True)
 
     def on_exit_clicked(self):
         self.session.shutdown()
