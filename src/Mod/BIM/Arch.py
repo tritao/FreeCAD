@@ -2266,6 +2266,27 @@ def makeWindow(
     return window
 
 
+def validateWindowPresetApplication(window, preset_name=None):
+    """Return validation status for applying a built-in preset to an Arch opening."""
+
+    import ArchWindow
+
+    return ArchWindow.validateWindowPresetApplication(window, preset_name)
+
+
+def applyWindowPreset(window, preset_name, preserve_anchor=True, raise_on_error=False):
+    """Apply a built-in preset to an existing Arch opening object."""
+
+    import ArchWindow
+
+    return ArchWindow.applyWindowPreset(
+        window,
+        preset_name,
+        preserve_anchor=preserve_anchor,
+        raise_on_error=raise_on_error,
+    )
+
+
 def is_debasable(wall):
     """Determines if an Arch Wall can be cleanly converted to a baseless state.
 

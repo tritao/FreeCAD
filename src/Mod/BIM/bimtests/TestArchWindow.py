@@ -548,6 +548,92 @@ class TestArchWindow(TestArchBase.TestArchBase):
             "A simple door should have 2 solid components (frame and panel).",
         )
 
+    def test_apply_window_preset_rewrites_existing_window_in_place(self):
+        """Applying a preset should reuse the existing object, base sketch, and host context."""
+
+        def get_shape_center(obj):
+            bound_box = obj.Shape.BoundBox
+            return FreeCAD.Vector(
+                (float(bound_box.XMin) + float(bound_box.XMax)) * 0.5,
+                (float(bound_box.YMin) + float(bound_box.YMax)) * 0.5,
+                (float(bound_box.ZMin) + float(bound_box.ZMax)) * 0.5,
+            )
+
+        wall_base = Draft.makeLine(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(3000, 0, 0))
+        wall = Arch.makeWall(wall_base, width=200, height=2500, align="Left")
+        sketch = self._create_sketch_with_named_constraints("PresetRewriteSketch", 800, 1200)
+        sketch.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+        sketch.Placement.Base = FreeCAD.Vector(900, 0, 700)
+        self.document.recompute()
+
+        window = Arch.makeWindow(sketch, name="PresetRewriteWindow")
+        window.WindowParts = ["DefaultFrame", "Frame", "Wire0", "60", "0"]
+        Arch.addComponents(window, wall)
+        self.document.recompute()
+
+        original_base = window.Base
+        original_parts = list(window.WindowParts)
+        original_center = get_shape_center(window.Base)
+
+        self.assertTrue(ArchWindow.canApplyWindowPreset(window))
+        self.assertIn("Sliding 2-pane", ArchWindow.getWindowPresetNames("window"))
+
+        self.assertTrue(Arch.applyWindowPreset(window, "Sliding 2-pane"))
+        self.document.recompute()
+
+        self.assertIs(window.Base, original_base)
+        self.assertIn(wall, window.Hosts)
+        self.assertEqual("Sliding 2-pane", ArchWindow.getWindowPresetName(window))
+        self.assertNotEqual(original_parts, list(window.WindowParts))
+        self.assertAlmostEqual(window.Width.Value, 800.0, places=5)
+        self.assertAlmostEqual(window.Height.Value, 1200.0, places=5)
+
+        updated_center = get_shape_center(window.Base)
+        self.assertAlmostEqual(original_center.x, updated_center.x, places=5)
+        self.assertAlmostEqual(original_center.y, updated_center.y, places=5)
+        self.assertAlmostEqual(original_center.z, updated_center.z, places=5)
+
+        window.Width = 950.0
+        window.Height = 1250.0
+        self.document.recompute()
+        self.assertAlmostEqual(window.Base.getDatum("Width").Value, 950.0, places=5)
+        self.assertAlmostEqual(window.Base.getDatum("Height").Value, 1250.0, places=5)
+
+    def test_apply_window_preset_requires_editable_sketch_base(self):
+        """Preset rewrites should be unavailable when a window has no editable sketch base."""
+
+        window = Arch.makeWindow(name="PresetlessWindow")
+        self.document.recompute()
+
+        status = Arch.validateWindowPresetApplication(window, "Fixed")
+        self.assertFalse(status.allowed)
+        self.assertIn("editable base sketch", status.reason)
+        self.assertFalse(ArchWindow.canApplyWindowPreset(window))
+        self.assertFalse(Arch.applyWindowPreset(window, "Fixed"))
+
+    def test_apply_window_preset_rejects_kind_mismatch(self):
+        """A window should only accept built-in presets of the same semantic kind."""
+
+        sketch = self._create_sketch_with_named_constraints("PresetKindSketch", 800, 1200)
+        sketch.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), 90)
+        self.document.recompute()
+
+        window = Arch.makeWindow(sketch, name="PresetKindWindow")
+        window.WindowParts = ["DefaultFrame", "Frame", "Wire0", "60", "0"]
+        self.document.recompute()
+
+        self.assertIn("Simple door", ArchWindow.getWindowPresetNames("door"))
+        self.assertNotIn("Simple door", ArchWindow.getWindowPresetNames("window"))
+
+        status = Arch.validateWindowPresetApplication(window, "Simple door")
+        self.assertFalse(status.allowed)
+        self.assertEqual("window", status.object_kind)
+        self.assertEqual("door", status.preset_kind)
+        self.assertIn("does not match", status.reason)
+
+        self.assertFalse(ArchWindow.canApplyWindowPreset(window, "Simple door"))
+        self.assertFalse(Arch.applyWindowPreset(window, "Simple door"))
+
     def test_cloned_window_in_wall_creates_opening(self):
         """Tests if a cloned Arch.Window, when hosted in a wall, creates a geometric opening."""
 
