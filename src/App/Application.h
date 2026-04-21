@@ -59,6 +59,7 @@ namespace Base
 {
 class ConsoleObserverStd;
 class ConsoleObserverFile;
+class SequencerLauncher;
 }
 
 namespace App
@@ -107,6 +108,35 @@ enum class RecomputeFailure
     Exception
 };
 
+/**
+ * @brief Request-scoped progress and cancellation bridge for recomputes.
+ *
+ * The current implementation still presents progress through the legacy
+ * Sequencer UI, but the handle itself is owned by a recompute request so
+ * modeling code does not need to reach for the global Sequencer singleton.
+ */
+class AppExport RecomputeProgressHandle
+{
+public:
+    RecomputeProgressHandle();
+    ~RecomputeProgressHandle();
+
+    void activate();
+    void cancel();
+    bool wasCanceled() const;
+    void setText(const char* text);
+    void setProgress(std::size_t progress);
+
+private:
+    void ensureSequencer();
+
+    std::atomic<bool> _canceled {false};
+    std::unique_ptr<Base::SequencerLauncher> _sequencer;
+};
+
+AppExport RecomputeProgressHandle* currentRecomputeProgress();
+AppExport bool currentRecomputeWasCanceled();
+
 /// Result returned by processing a recompute request.
 struct AppExport RecomputeResult
 {
@@ -139,6 +169,7 @@ struct AppExport RecomputeRequest
     bool force {false};
     int options {0};
     bool recursive {false};
+    std::shared_ptr<RecomputeProgressHandle> progress;
     // Callback to be invoked when recompute is complete.
     Callback callback {};
 };
