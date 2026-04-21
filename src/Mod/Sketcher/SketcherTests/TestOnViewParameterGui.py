@@ -6,12 +6,20 @@ import FreeCAD
 
 try:
     import FreeCADGui
-
-    GUI_AVAILABLE = FreeCADGui.getMainWindow() is not None
-except (ImportError, AttributeError):
-    GUI_AVAILABLE = False
+except ImportError:
+    FreeCADGui = None
 
 from PySide import QtCore, QtGui
+
+
+def is_gui_available():
+    if FreeCADGui is None:
+        return False
+
+    try:
+        return FreeCADGui.getMainWindow() is not None
+    except (AttributeError, RuntimeError):
+        return False
 
 
 class TestOnViewParameterGui(unittest.TestCase):
@@ -32,7 +40,7 @@ class TestOnViewParameterGui(unittest.TestCase):
     }
 
     def setUp(self):
-        if not GUI_AVAILABLE:
+        if not is_gui_available():
             self.skipTest("GUI not available")
 
         FreeCADGui.activateWorkbench("SketcherWorkbench")
@@ -41,7 +49,7 @@ class TestOnViewParameterGui(unittest.TestCase):
         self.doc.recompute()
 
     def tearDown(self):
-        if not GUI_AVAILABLE:
+        if not is_gui_available():
             return
 
         gui_doc = FreeCADGui.ActiveDocument
@@ -133,7 +141,6 @@ class TestOnViewParameterGui(unittest.TestCase):
             if spinbox.isVisible()
         ]
 
-    @unittest.skipIf(not GUI_AVAILABLE, "GUI not available")
     def test_rectangle_ovp_enter_finishes_without_crash(self):
         """
         Reproduce the rectangle OVP acceptance flow from PR #29201 review:

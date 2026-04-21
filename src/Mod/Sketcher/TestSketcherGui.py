@@ -2,6 +2,10 @@
 
 from SketcherTests.TestPlacementUpdate import TestSketchPlacementUpdate
 from SketcherTests.TestOnViewParameterGui import TestOnViewParameterGui
+from SketcherTests.TestToolbarPersistenceGui import TestToolbarPersistenceGui
 
-# Use the module so that code checkers don't complain (flake8)
-True if TestSketchPlacementUpdate and TestOnViewParameterGui else False
+__all__ = [
+    "TestSketchPlacementUpdate",
+    "TestOnViewParameterGui",
+    "TestToolbarPersistenceGui",
+]

@@ -5,15 +5,22 @@
 import unittest
 import FreeCAD
 
-# check if GUI is available
 try:
     import FreeCADGui
-
-    GUI_AVAILABLE = FreeCADGui.getMainWindow() is not None
-except (ImportError, AttributeError):
-    GUI_AVAILABLE = False
+except ImportError:
+    FreeCADGui = None
 
 from FreeCAD import Base
+
+
+def is_gui_available():
+    if FreeCADGui is None:
+        return False
+
+    try:
+        return FreeCADGui.getMainWindow() is not None
+    except (AttributeError, RuntimeError):
+        return False
 
 
 class TestSketchPlacementUpdate(unittest.TestCase):
@@ -36,7 +43,7 @@ class TestSketchPlacementUpdate(unittest.TestCase):
         then attach a sketch to the cylinder to the bottom round face of the
         cylinder.
         """
-        if not GUI_AVAILABLE:
+        if not is_gui_available():
             self.skipTest("GUI not available")
 
         self.doc = FreeCAD.newDocument("TestPlacementUpdate")
@@ -75,10 +82,9 @@ class TestSketchPlacementUpdate(unittest.TestCase):
 
     def tearDown(self):
         """clean up the test document"""
-        if GUI_AVAILABLE:
+        if is_gui_available():
             FreeCAD.closeDocument(self.doc.Name)
 
-    @unittest.skipIf(not GUI_AVAILABLE, "GUI not available")
     def test_attachment_offset_updates_in_edit_mode(self):
         """
         test that changing AttachmentOffset while editing updates the transform.
@@ -113,7 +119,6 @@ class TestSketchPlacementUpdate(unittest.TestCase):
         # exit edit mode
         FreeCADGui.ActiveDocument.resetEdit()
 
-    @unittest.skipIf(not GUI_AVAILABLE, "GUI not available")
     def test_multiple_attachment_offset_updates(self):
         """
         test that multiple AttachmentOffset changes in edit mode all update correctly.
@@ -145,7 +150,6 @@ class TestSketchPlacementUpdate(unittest.TestCase):
         # exit edit mode
         FreeCADGui.ActiveDocument.resetEdit()
 
-    @unittest.skipIf(not GUI_AVAILABLE, "GUI not available")
     def test_no_update_when_not_editing(self):
         """
         verify that attachment offset changes don't cause issues when sketch is not in edit mode.
@@ -163,7 +167,6 @@ class TestSketchPlacementUpdate(unittest.TestCase):
         )
         self.assertEqual(self.sketch.MapMode, "FlatFace", "Sketch should still be attached")
 
-    @unittest.skipIf(not GUI_AVAILABLE, "GUI not available")
     def test_unattached_sketch_placement_updates(self):
         """
         test that unattached sketches also work correctly.
