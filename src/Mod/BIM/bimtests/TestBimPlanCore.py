@@ -79,6 +79,7 @@ from bimplan.registry import PlanEditRegistry
 from bimplan.semantics import PlanSemanticRecord
 from bimplan.targets import PlanTarget, get_plan_target_for_object, make_plan_target_record
 from bimplan.transactions import PlanEditTransaction
+from bimplan.ui.controls import PlanEditControlsWidget
 
 
 class _DummySession:
@@ -359,6 +360,41 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(
             ("object", marker),
             pick_provider_overlay_target_from_objects_info(session, (100, 200)),
+        )
+
+    def test_provider_overlay_legend_items_filter_by_mode(self):
+        widget = object.__new__(PlanEditControlsWidget)
+        widget.session = SimpleNamespace(get_plan_provider_overlay_mode=lambda: "architecture")
+        items = (
+            (
+                "test-provider",
+                "provider-preview",
+                "Provider Preview",
+                (0.1, 0.2, 0.3),
+                True,
+                "architecture",
+            ),
+            (
+                "test-provider",
+                "electrical-preview",
+                "Electrical Preview",
+                (0.9, 0.6, 0.1),
+                True,
+                "electrical",
+            ),
+        )
+
+        self.assertEqual(
+            (items[0],),
+            widget._filter_provider_overlay_legend_items_for_mode(items),
+        )
+        self.assertEqual(
+            (items[1],),
+            widget._filter_provider_overlay_legend_items_for_mode(items, active_mode="electrical"),
+        )
+        self.assertEqual(
+            items,
+            widget._filter_provider_overlay_legend_items_for_mode(items, active_mode="all"),
         )
 
     def test_provider_target_record_uses_provider_metadata(self):

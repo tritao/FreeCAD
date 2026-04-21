@@ -776,20 +776,72 @@ class PlanEditControlsWidget:
                     provider=provider_label,
                     label=label,
                 )
+            category = self.session.get_plan_provider_overlay_category(overlay)
             items.append(
                 (
                     provider_id,
                     overlay_key,
                     label,
                     tuple(getattr(overlay, "color", ()) or ()),
-                    self.session.is_plan_provider_overlay_visible(overlay),
+                    self.session.is_plan_provider_overlay_enabled(overlay),
+                    category,
                 )
             )
         return tuple(items)
 
-    def _make_provider_overlay_legend_block(self, QtGui, items):
-        if not items:
-            return None
+    def _get_provider_overlay_mode_options(self):
+        return (
+            ("architecture", translate("BIM_PlanEdit", "Architecture")),
+            ("electrical", translate("BIM_PlanEdit", "Electrical")),
+            ("plumbing", translate("BIM_PlanEdit", "Plumbing")),
+            ("all", translate("BIM_PlanEdit", "All")),
+        )
+
+    def _format_provider_overlay_mode_label(self, mode):
+        normalized = str(mode or "").strip().lower()
+        for option_key, option_label in self._get_provider_overlay_mode_options():
+            if option_key == normalized:
+                return option_label
+        return translate("BIM_PlanEdit", "Architecture")
+
+    def _filter_provider_overlay_legend_items_for_mode(self, items, active_mode=None):
+        normalized = (
+            str(
+                active_mode
+                or getattr(self.session, "get_plan_provider_overlay_mode", lambda: "architecture")()
+            )
+            .strip()
+            .lower()
+        )
+        if normalized == "all":
+            return tuple(items or ())
+        return tuple(
+            item
+            for item in tuple(items or ())
+            if len(item) > 5 and str(item[5] or "") == normalized
+        )
+
+    def _group_provider_overlay_legend_items(self, items, active_mode=None):
+        grouped = []
+        groups_by_key = {}
+        for item in self._filter_provider_overlay_legend_items_for_mode(
+            items, active_mode=active_mode
+        ):
+            category = str(item[5] or "").strip().lower() if len(item) > 5 else "architecture"
+            if category not in groups_by_key:
+                groups_by_key[category] = []
+                grouped.append(category)
+            groups_by_key[category].append(item)
+        return tuple(
+            (
+                category,
+                self._format_provider_overlay_mode_label(category),
+                tuple(groups_by_key.get(category, ())),
+            )
+            for category in grouped
+        )
+
+    def _make_provider_overlay_legend_block(self, QtGui, items, active_mode="architecture"):
         block = QtGui.QFrame(self.integration_panel)
         block.setFrameShape(QtGui.QFrame.StyledPanel)
         layout = QtGui.QVBoxLayout(block)
@@ -804,33 +856,73 @@ class PlanEditControlsWidget:
         )
         layout.addWidget(title_label)
 
-        for provider_id, overlay_key, label, color, checked in items:
-            row = QtGui.QHBoxLayout()
-            row.setSpacing(6)
-            swatch = QtGui.QLabel(block)
-            swatch.setFixedSize(12, 12)
-            swatch.setStyleSheet(
-                "background-color: {}; border: 1px solid #555;".format(
-                    self._format_provider_overlay_color(color)
-                )
+        mode_row = QtGui.QHBoxLayout()
+        mode_row.setSpacing(6)
+        mode_label = self._make_wrapped_plain_label(
+            QtGui,
+            translate("BIM_PlanEdit", "Mode"),
+            block,
+            bold=True,
+        )
+        mode_row.addWidget(mode_label)
+        mode_combo = QtGui.QComboBox(block)
+        for mode_key, mode_text in self._get_provider_overlay_mode_options():
+            mode_combo.addItem(mode_text, mode_key)
+        current_index = mode_combo.findData(str(active_mode or "architecture"))
+        if current_index < 0:
+            current_index = 0
+        mode_combo.setCurrentIndex(current_index)
+        mode_combo.currentIndexChanged.connect(
+            lambda index, current_combo=mode_combo: self.on_provider_overlay_mode_changed(
+                current_combo.itemData(index)
             )
-            row.addWidget(swatch)
+        )
+        mode_row.addWidget(mode_combo)
+        mode_row.addStretch(1)
+        layout.addLayout(mode_row)
 
-            checkbox = QtGui.QCheckBox(label, block)
-            checkbox.setChecked(bool(checked))
-            checkbox.toggled.connect(
-                lambda checked, current_provider_id=provider_id, current_overlay_key=overlay_key: (
-                    self.on_provider_overlay_visibility_changed(
-                        current_provider_id,
-                        current_overlay_key,
-                        checked,
+        grouped_items = self._group_provider_overlay_legend_items(items, active_mode=active_mode)
+        if not grouped_items:
+            empty_label = self._make_wrapped_plain_label(
+                QtGui,
+                translate("BIM_PlanEdit", "No overlays are available in {mode} mode.").format(
+                    mode=self._format_provider_overlay_mode_label(active_mode),
+                ),
+                block,
+            )
+            layout.addWidget(empty_label)
+            return block
+
+        for _category, category_label, category_items in grouped_items:
+            heading = self._make_wrapped_plain_label(QtGui, category_label, block, bold=True)
+            layout.addWidget(heading)
+            for provider_id, overlay_key, label, color, checked, _item_category in category_items:
+                row = QtGui.QHBoxLayout()
+                row.setSpacing(6)
+                swatch = QtGui.QLabel(block)
+                swatch.setFixedSize(12, 12)
+                swatch.setStyleSheet(
+                    "background-color: {}; border: 1px solid #555;".format(
+                        self._format_provider_overlay_color(color)
                     )
                 )
-            )
-            self._integration_overlay_checkboxes.append(checkbox)
-            row.addWidget(checkbox)
-            row.addStretch(1)
-            layout.addLayout(row)
+                row.addWidget(swatch)
+
+                checkbox = QtGui.QCheckBox(label, block)
+                checkbox.setChecked(bool(checked))
+                checkbox.toggled.connect(
+                    lambda checked, current_provider_id=provider_id, current_overlay_key=overlay_key: (
+                        self.on_provider_overlay_visibility_changed(
+                            current_provider_id,
+                            current_overlay_key,
+                            checked,
+                        )
+                    )
+                )
+                self._integration_overlay_checkboxes.append(checkbox)
+                row.addWidget(checkbox)
+                row.addStretch(1)
+                layout.addLayout(row)
         return block
 
     def _format_provider_overlay_color(self, color):
@@ -988,7 +1080,12 @@ class PlanEditControlsWidget:
                 queue_overlay_refresh()
             tools = self._sort_provider_tools(tools)
             overlay_items = self._build_provider_overlay_legend_items(overlays)
-            state = (tools, overlay_items, issues, sections)
+            overlay_mode = self.session.get_plan_provider_overlay_mode()
+            active_overlay_items = self._filter_provider_overlay_legend_items_for_mode(
+                overlay_items,
+                active_mode=overlay_mode,
+            )
+            state = (tools, overlay_mode, overlay_items, issues, sections)
             if not tools and not overlay_items and not issues and not sections:
                 self._hide_integration_panel()
                 return
@@ -1006,7 +1103,7 @@ class PlanEditControlsWidget:
                     issues,
                     sections,
                     tools=tools,
-                    overlay_items=overlay_items,
+                    overlay_items=active_overlay_items,
                     summary_sections=summary_sections,
                 )
                 for section in summary_sections:
@@ -1029,7 +1126,11 @@ class PlanEditControlsWidget:
                     )
                     self.integration_content_layout.addWidget(block)
                 if overlay_items:
-                    block = self._make_provider_overlay_legend_block(QtGui, overlay_items)
+                    block = self._make_provider_overlay_legend_block(
+                        QtGui,
+                        overlay_items,
+                        active_mode=overlay_mode,
+                    )
                     if block is not None:
                         self.integration_content_layout.addWidget(block)
                 for section in regular_sections:
@@ -1643,6 +1744,9 @@ class PlanEditControlsWidget:
 
     def on_provider_overlay_visibility_changed(self, provider_id, overlay_key, visible):
         self.session.set_plan_provider_overlay_visible(provider_id, overlay_key, visible)
+
+    def on_provider_overlay_mode_changed(self, mode):
+        getattr(self.session, "set_plan_provider_overlay_mode", lambda _mode: False)(mode)
 
     def _set_status_text(self, text):
         text = str(text or "")

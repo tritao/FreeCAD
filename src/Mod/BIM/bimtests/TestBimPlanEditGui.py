@@ -118,6 +118,13 @@ class _TestPlanProvider(PlanEditProvider):
                 points=((100.0, 200.0, 0.0),),
                 color=(0.1, 0.2, 0.3),
             ),
+            PlanOverlaySpec(
+                key="electrical-preview",
+                label="Electrical Preview",
+                points=((160.0, 260.0, 0.0),),
+                color=(0.9, 0.6, 0.1),
+                category="electrical",
+            ),
         )
 
     def execute_action(self, action_key, context, session):
@@ -535,6 +542,87 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         )
         self.assertGreater(provider.tool_calls, 0)
         self.assertGreater(provider.overlay_calls, 0)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_overlay_mode_filters_provider_overlay_categories(self):
+        from PySide import QtGui
+
+        registry = get_plan_edit_registry()
+        registry.clear()
+        self.addCleanup(registry.clear)
+
+        provider = _TestPlanProvider()
+        registry.register_provider(provider)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
+        self.pump_gui_events()
+
+        panel = session.task_panel
+        self.assertIsNotNone(panel, "Plan Edit task panel should be attached.")
+        panel.refresh_from_session()
+        self.pump_gui_events()
+
+        self.assertEqual("architecture", session.get_plan_provider_overlay_mode())
+
+        architecture_checkboxes = [
+            widget
+            for widget in panel.integration_panel.findChildren(QtGui.QCheckBox)
+            if "Preview" in str(widget.text())
+        ]
+        self.assertTrue(
+            any("Provider Preview" in str(widget.text()) for widget in architecture_checkboxes)
+        )
+        self.assertFalse(
+            any("Electrical Preview" in str(widget.text()) for widget in architecture_checkboxes)
+        )
+
+        overlay_mode_combo = None
+        for combo in panel.integration_panel.findChildren(QtGui.QComboBox):
+            if combo.findData("electrical") >= 0 and combo.findData("architecture") >= 0:
+                overlay_mode_combo = combo
+                break
+        self.assertIsNotNone(overlay_mode_combo)
+
+        overlay_mode_combo.setCurrentIndex(overlay_mode_combo.findData("electrical"))
+        self.pump_gui_events()
+
+        self.assertEqual("electrical", session.get_plan_provider_overlay_mode())
+        electrical_checkboxes = [
+            widget
+            for widget in panel.integration_panel.findChildren(QtGui.QCheckBox)
+            if "Preview" in str(widget.text())
+        ]
+        self.assertTrue(
+            any("Electrical Preview" in str(widget.text()) for widget in electrical_checkboxes)
+        )
+        self.assertFalse(
+            any("Provider Preview" in str(widget.text()) for widget in electrical_checkboxes)
+        )
+
+        overlay_mode_combo = None
+        for combo in panel.integration_panel.findChildren(QtGui.QComboBox):
+            if combo.findData("all") >= 0 and combo.findData("architecture") >= 0:
+                overlay_mode_combo = combo
+                break
+        self.assertIsNotNone(overlay_mode_combo)
+        overlay_mode_combo.setCurrentIndex(overlay_mode_combo.findData("all"))
+        self.pump_gui_events()
+
+        self.assertEqual("all", session.get_plan_provider_overlay_mode())
+        all_mode_checkboxes = [
+            widget
+            for widget in panel.integration_panel.findChildren(QtGui.QCheckBox)
+            if "Preview" in str(widget.text())
+        ]
+        self.assertTrue(
+            any("Provider Preview" in str(widget.text()) for widget in all_mode_checkboxes)
+        )
+        self.assertTrue(
+            any("Electrical Preview" in str(widget.text()) for widget in all_mode_checkboxes)
+        )
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
