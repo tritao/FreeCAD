@@ -1309,6 +1309,13 @@ class PublicClassStubTransformer(ast.NodeTransformer):
         self.class_depth += 1
         try:
             node.body = [self.visit(item) for item in node.body]
+            flattened: list[ast.stmt] = []
+            for item in node.body:
+                if isinstance(item, ast.If) and type_checking_test(item.test) and not item.orelse:
+                    flattened.extend(item.body)
+                else:
+                    flattened.append(item)
+            node.body = flattened
         finally:
             self.class_depth -= 1
         return node

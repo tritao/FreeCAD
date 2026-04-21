@@ -69,7 +69,9 @@ Use `inputs/pycxx-overrides/` for PyCXX type method tables that the inventory
 tool can map to a public class. These fragments are source inputs to the
 generator, not the published stub tree. Use `@typing_only` on methods inside a
 binding `.pyi` class when extra typing-only methods belong to that class and
-should stay next to the binding source. Use `inputs/class-overlays/` for
+should stay next to the binding source. Use class-body `if TYPE_CHECKING:`
+blocks for typing-only attributes that should stay next to the binding source.
+Use `inputs/class-overlays/` for
 typing-only additions that should stay outside the binding `.pyi` inputs. Use
 curated overlays for APIs that
 still need hand-written public module stubs, including manual `PyMethodDef`,
