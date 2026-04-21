@@ -2871,7 +2871,7 @@ class PlanEditSession:
         self._provider_overlay_state = None
         plan_selection.clear_hidden_provider_preselection(self)
         self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_PROVIDER_OVERLAYS)
-        self._refresh_task_panel_status()
+        self._refresh_provider_overlay_mode_panels()
         return True
 
     def get_plan_provider_overlay_category(self, overlay):
@@ -6592,6 +6592,39 @@ class PlanEditSession:
                     refresh = None
                     if selection_only:
                         refresh = getattr(extra_panel, "refresh_selection_from_session", None)
+                    if not callable(refresh):
+                        refresh = getattr(extra_panel, "refresh_from_session", None)
+                    if callable(refresh):
+                        refresh()
+                except (AttributeError, RuntimeError):
+                    stale_panels.append(extra_panel)
+            for extra_panel in stale_panels:
+                self.detach_aux_task_panel(extra_panel)
+
+    def _refresh_provider_overlay_mode_panels(self):
+        with self._plan_perf_trace_span("refresh_provider_overlay_mode_panels"):
+            if self._tearing_down or not self._document_is_alive():
+                return
+            panel = self.task_panel
+            if panel:
+                try:
+                    refresh = getattr(panel, "refresh_provider_overlay_mode_from_session", None)
+                    if not callable(refresh):
+                        refresh = getattr(panel, "refresh_from_session", None)
+                    if callable(refresh):
+                        refresh()
+                except (AttributeError, RuntimeError):
+                    self.on_panel_closed(panel)
+            stale_panels = []
+            for extra_panel in list(self._aux_task_panels):
+                if extra_panel is panel:
+                    continue
+                try:
+                    refresh = getattr(
+                        extra_panel,
+                        "refresh_provider_overlay_mode_from_session",
+                        None,
+                    )
                     if not callable(refresh):
                         refresh = getattr(extra_panel, "refresh_from_session", None)
                     if callable(refresh):
