@@ -9,6 +9,142 @@ from bimplan import targets as plan_targets
 from bimplan.providers import PlanOverlayMarkerKind
 
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
+_FOCUSED_PROVIDER_OVERLAY_PICK_MODES = frozenset(("electrical", "plumbing"))
+_PROVIDER_OVERLAY_PICK_RADIUS_PX = 12.0
+_PROVIDER_OVERLAY_PICK_PADDING_PX = 3.0
+_PROVIDER_OVERLAY_PICK_PADDING_RATIO = 0.15
+_PROVIDER_OVERLAY_MARKER_TOLERANCE_BASE_PX = 4.5
+_PROVIDER_OVERLAY_MARKER_TOLERANCE_WIDTH_SCALE = 1.25
+_MAX_PICK_DEBUG_ITEMS = 40
+
+
+def _get_plan_provider_overlay_pick_mode(session):
+    get_mode = getattr(session, "get_plan_provider_overlay_mode", None)
+    if not callable(get_mode):
+        return "all"
+    try:
+        mode = str(get_mode() or "").strip().lower()
+    except Exception:
+        return "all"
+    return mode or "all"
+
+
+def _should_prioritize_provider_targets_for_mode(session):
+    return _get_plan_provider_overlay_pick_mode(session) in _FOCUSED_PROVIDER_OVERLAY_PICK_MODES
+
+
+def _emit_pick_debug(session, name, **fields):
+    is_active = getattr(session, "_is_plan_pick_debug_active", None)
+    emit = getattr(session, "_plan_pick_debug_event", None)
+    if not callable(is_active) or not callable(emit):
+        return
+    try:
+        if not is_active():
+            return
+    except Exception:
+        return
+    try:
+        emit(name, **fields)
+    except Exception:
+        return
+
+
+def _append_pick_debug_item(items, value, limit=_MAX_PICK_DEBUG_ITEMS):
+    if items is None or value is None or len(items) >= int(limit):
+        return
+    items.append(value)
+
+
+def _describe_pick_object(session, obj):
+    describe = getattr(session, "_plan_perf_describe_object", None)
+    if callable(describe):
+        try:
+            return describe(obj)
+        except Exception:
+            pass
+    if obj is None:
+        return None
+    document_name = str(getattr(getattr(obj, "Document", None), "Name", "") or "").strip()
+    object_name = str(getattr(obj, "Name", "") or "").strip()
+    label = str(getattr(obj, "Label", "") or "").strip()
+    result = {}
+    if document_name:
+        result["document"] = document_name
+    if object_name:
+        result["name"] = object_name
+    if label and label != object_name:
+        result["label"] = label
+    return result or repr(obj)
+
+
+def _describe_pick_target(session, kind, obj):
+    describe = getattr(session, "_plan_perf_describe_target", None)
+    if callable(describe):
+        try:
+            return describe(kind, obj)
+        except Exception:
+            pass
+    if not kind or obj is None:
+        return None
+    result = {"kind": str(kind)}
+    described = _describe_pick_object(session, obj)
+    if isinstance(described, dict):
+        result.update(described)
+    elif described is not None:
+        result["value"] = described
+    return result
+
+
+def _describe_pick_info_entry(info):
+    if not info:
+        return None
+    result = {}
+    for key in ("Document", "Object"):
+        value = str(info.get(key) or "").strip()
+        if value:
+            result[key.lower()] = value
+    parent_obj = info.get("ParentObject")
+    if parent_obj is not None:
+        result["parent_object"] = {
+            "document": str(
+                getattr(getattr(parent_obj, "Document", None), "Name", "") or ""
+            ).strip(),
+            "name": str(getattr(parent_obj, "Name", "") or "").strip(),
+        }
+    return result or None
+
+
+def _describe_pick_overlay_target(target):
+    if target is None:
+        return None
+    target_kind = getattr(target, "target_kind", None)
+    if target_kind is not None:
+        target_kind = getattr(target_kind, "value", target_kind)
+    result = {
+        "document_name": str(getattr(target, "document_name", "") or "").strip(),
+        "object_name": str(getattr(target, "object_name", "") or "").strip(),
+        "target_kind": str(target_kind or "").strip(),
+    }
+    subname = str(getattr(target, "subname", "") or "").strip()
+    if subname:
+        result["subname"] = subname
+    return result
+
+
+def _describe_pick_overlay(overlay):
+    if overlay is None:
+        return None
+    marker_kind = getattr(overlay, "marker_kind", None)
+    if marker_kind is not None:
+        marker_kind = getattr(marker_kind, "value", marker_kind)
+    return {
+        "provider_id": str(getattr(overlay, "provider_id", "") or "").strip(),
+        "key": str(getattr(overlay, "key", "") or "").strip(),
+        "category": str(getattr(overlay, "category", "") or "").strip(),
+        "marker_kind": str(marker_kind or "").strip(),
+        "marker_size": float(getattr(overlay, "marker_size", 0.0) or 0.0),
+        "point_count": len(tuple(getattr(overlay, "points", ()) or ())),
+    }
 
 
 def get_screen_distance_sq_to_segment(session, mouse_pos, start, end):
@@ -177,7 +313,11 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
         return best_opening
 
 
-def pick_provider_overlay_target_from_overlays(session, mouse_pos, radius_px=12):
+def pick_provider_overlay_target_from_overlays(
+    session,
+    mouse_pos,
+    radius_px=_PROVIDER_OVERLAY_PICK_RADIUS_PX,
+):
     with session._plan_perf_trace_span(
         "pick_provider_overlay_target_from_overlays",
         mouse_pos=mouse_pos,
@@ -199,6 +339,7 @@ def pick_provider_overlay_target_from_overlays(session, mouse_pos, radius_px=12)
         best_distance_sq = None
         best_target_kind = None
         best_target_obj = None
+        debug_candidates = []
         for overlay in tuple(get_overlays() or ()):
             if not bool(getattr(overlay, "visible", True)):
                 continue
@@ -236,6 +377,16 @@ def pick_provider_overlay_target_from_overlays(session, mouse_pos, radius_px=12)
                     overlay,
                     fallback_radius_px=radius_px,
                 )
+                debug_candidate = {
+                    "overlay": _describe_pick_overlay(overlay),
+                    "point_index": index,
+                    "target": _describe_pick_overlay_target(target),
+                    "center_distance_px": round(center_distance_sq**0.5, 3),
+                    "pick_radius_px": round(float(pick_radius_px), 3),
+                    "marker_tolerance_px": round(float(marker_tolerance_px), 3),
+                }
+                if marker_distance_sq is not None:
+                    debug_candidate["marker_distance_px"] = round(marker_distance_sq**0.5, 3)
                 distance_sq = center_distance_sq
                 if marker_distance_sq is not None:
                     distance_sq = min(distance_sq, marker_distance_sq)
@@ -243,6 +394,8 @@ def pick_provider_overlay_target_from_overlays(session, mouse_pos, radius_px=12)
                     marker_distance_sq is None
                     or marker_distance_sq > marker_tolerance_px * marker_tolerance_px
                 ):
+                    debug_candidate["decision"] = "outside_radius"
+                    _append_pick_debug_item(debug_candidates, debug_candidate)
                     continue
                 target_obj = _resolve_document_object(
                     session,
@@ -250,7 +403,13 @@ def pick_provider_overlay_target_from_overlays(session, mouse_pos, radius_px=12)
                     getattr(target, "object_name", ""),
                 )
                 if target_obj is None:
+                    debug_candidate["decision"] = "unresolved_object"
+                    _append_pick_debug_item(debug_candidates, debug_candidate)
                     continue
+                debug_candidate["decision"] = "candidate"
+                debug_candidate["resolved_object"] = _describe_pick_object(session, target_obj)
+                debug_candidate["distance_px"] = round(distance_sq**0.5, 3)
+                _append_pick_debug_item(debug_candidates, debug_candidate)
                 if best_distance_sq is None or distance_sq < best_distance_sq:
                     best_distance_sq = distance_sq
                     best_target_kind = (
@@ -259,6 +418,14 @@ def pick_provider_overlay_target_from_overlays(session, mouse_pos, radius_px=12)
                     best_target_obj = target_obj
         session._plan_perf_set_fields(
             provider_overlay_pick_result=session._plan_perf_describe_object(best_target_obj)
+        )
+        _emit_pick_debug(
+            session,
+            "pick_provider_overlay_target_from_overlays",
+            mouse_pos=mouse_pos,
+            fallback_radius_px=radius_px,
+            candidates=debug_candidates,
+            result=_describe_pick_target(session, best_target_kind, best_target_obj),
         )
         return (best_target_kind, best_target_obj)
 
@@ -279,21 +446,64 @@ def pick_provider_overlay_target_from_objects_info(session, mouse_pos):
 
         visible_targets = _collect_visible_provider_overlay_targets(session)
         if not visible_targets:
+            _emit_pick_debug(
+                session,
+                "pick_provider_overlay_target_from_objects_info",
+                mouse_pos=mouse_pos,
+                objects_info=[_describe_pick_info_entry(info) for info in infos],
+                visible_targets=[],
+                result=None,
+            )
             return (None, None)
 
+        debug_infos = []
+        debug_visible_targets = []
+        for identity, target in tuple(visible_targets.items())[:_MAX_PICK_DEBUG_ITEMS]:
+            debug_visible_targets.append(
+                {
+                    "identity": list(identity),
+                    "target": _describe_pick_overlay_target(target),
+                }
+            )
         for info in infos:
+            info_entry = {
+                "info": _describe_pick_info_entry(info),
+                "candidates": [],
+            }
             for target_kind, target_obj in _iter_provider_overlay_targets_from_info(
                 session,
                 info,
                 visible_targets,
             ):
+                _append_pick_debug_item(
+                    info_entry["candidates"],
+                    _describe_pick_target(session, target_kind, target_obj),
+                )
                 if target_obj is not None:
                     session._plan_perf_set_fields(
                         provider_overlay_info_pick_result=session._plan_perf_describe_object(
                             target_obj
                         )
                     )
+                    _append_pick_debug_item(debug_infos, info_entry)
+                    _emit_pick_debug(
+                        session,
+                        "pick_provider_overlay_target_from_objects_info",
+                        mouse_pos=mouse_pos,
+                        objects_info=debug_infos,
+                        visible_targets=debug_visible_targets,
+                        result=_describe_pick_target(session, target_kind, target_obj),
+                    )
                     return (target_kind, target_obj)
+            _append_pick_debug_item(debug_infos, info_entry)
+        _emit_pick_debug(
+            session,
+            "pick_provider_overlay_target_from_objects_info",
+            mouse_pos=mouse_pos,
+            objects_info=debug_infos,
+            visible_targets=debug_visible_targets,
+            result=None,
+        )
         return (None, None)
 
 
@@ -539,6 +749,7 @@ def get_plan_target_at_position(session, mouse_pos):
     with session._plan_perf_trace_span("get_plan_target_at_position", mouse_pos=mouse_pos):
         if not session.view or not mouse_pos:
             return (None, None)
+        prioritize_provider_targets = _should_prioritize_provider_targets_for_mode(session)
         try:
             with session._plan_perf_trace_span("view_get_objects_info"):
                 infos = session.view.getObjectsInfo((int(mouse_pos[0]), int(mouse_pos[1])))
@@ -553,6 +764,7 @@ def get_plan_target_at_position(session, mouse_pos):
         provider_candidate = None
         region_candidate = None
         space_candidate = None
+        debug_infos = []
         result = (None, None)
         for info in infos:
             session._plan_perf_count("objects_info_scanned")
@@ -571,6 +783,14 @@ def get_plan_target_at_position(session, mouse_pos):
                 obj,
                 parent_obj=parent_obj,
             )
+            _append_pick_debug_item(
+                debug_infos,
+                {
+                    "info": _describe_pick_info_entry(info),
+                    "resolved_object": _describe_pick_object(session, obj),
+                    "target": _describe_pick_target(session, target_kind, target_obj),
+                },
+            )
             if target_kind == "opening":
                 result = ("opening", target_obj)
                 break
@@ -585,10 +805,19 @@ def get_plan_target_at_position(session, mouse_pos):
             elif target_kind == "space" and space_candidate is None:
                 space_candidate = target_obj
         if result == (None, None):
-            if symbol_candidate is not None and wall_candidate is None:
-                result = ("symbol", symbol_candidate)
-            elif provider_candidate is not None:
+            if provider_candidate is None:
+                provider_overlay_kind, provider_overlay_obj = (
+                    session._pick_provider_overlay_target_from_overlays(
+                        mouse_pos,
+                        radius_px=_PROVIDER_OVERLAY_PICK_RADIUS_PX,
+                    )
+                )
+                if provider_overlay_kind == "provider" and provider_overlay_obj is not None:
+                    provider_candidate = provider_overlay_obj
+            if prioritize_provider_targets and provider_candidate is not None:
                 result = ("provider", provider_candidate)
+            elif symbol_candidate is not None and wall_candidate is None:
+                result = ("symbol", symbol_candidate)
             else:
                 opening_candidates = None
                 if wall_candidate is not None:
@@ -605,6 +834,8 @@ def get_plan_target_at_position(session, mouse_pos):
                 result = ("symbol", symbol_candidate)
             elif result == (None, None) and wall_candidate is not None:
                 result = ("wall", wall_candidate)
+            elif result == (None, None) and provider_candidate is not None:
+                result = ("provider", provider_candidate)
             elif result == (None, None):
                 if region_candidate is None:
                     region_candidate = session._pick_plan_region_target_from_polylines(mouse_pos)
@@ -623,6 +854,22 @@ def get_plan_target_at_position(session, mouse_pos):
                         result = ("space", space_candidate)
         session._plan_perf_set_fields(
             picked_target=session._plan_perf_describe_target(result[0], result[1])
+        )
+        _emit_pick_debug(
+            session,
+            "get_plan_target_at_position",
+            mouse_pos=mouse_pos,
+            overlay_mode=_get_plan_provider_overlay_pick_mode(session),
+            prioritize_provider_targets=prioritize_provider_targets,
+            objects_info=debug_infos,
+            candidates={
+                "symbol": _describe_pick_target(session, "symbol", symbol_candidate),
+                "provider": _describe_pick_target(session, "provider", provider_candidate),
+                "wall": _describe_pick_target(session, "wall", wall_candidate),
+                "region": _describe_pick_target(session, "region", region_candidate),
+                "space": _describe_pick_target(session, "space", space_candidate),
+            },
+            result=_describe_pick_target(session, result[0], result[1]),
         )
         return result
 
@@ -811,7 +1058,14 @@ def _get_provider_overlay_pick_radius_px(session, overlay, point, fallback_radiu
         projected_radius_px = (
             (float(edge_x) - float(center_x)) ** 2 + (float(edge_y) - float(center_y)) ** 2
         ) ** 0.5
-        radius_px = max(radius_px, projected_radius_px + max(6.0, projected_radius_px * 0.25))
+        radius_px = max(
+            radius_px,
+            projected_radius_px
+            + max(
+                _PROVIDER_OVERLAY_PICK_PADDING_PX,
+                projected_radius_px * _PROVIDER_OVERLAY_PICK_PADDING_RATIO,
+            ),
+        )
     except Exception:
         pass
     return radius_px
@@ -857,7 +1111,10 @@ def _get_provider_overlay_marker_segments(overlay, point):
 
 def _get_provider_overlay_marker_tolerance_px(overlay, fallback_radius_px):
     line_width = max(1.0, float(getattr(overlay, "line_width", 2.0) or 2.0))
-    return max(float(fallback_radius_px), 6.0 + (line_width * 1.5))
+    return max(
+        _PROVIDER_OVERLAY_MARKER_TOLERANCE_BASE_PX,
+        2.0 + (line_width * _PROVIDER_OVERLAY_MARKER_TOLERANCE_WIDTH_SCALE),
+    )
 
 
 def _get_provider_overlay_pick_extent_factor(marker_kind):
@@ -886,6 +1143,7 @@ def _has_provider_overlay_target_identity(target):
 def get_hovered_plan_target(session):
     for kind, obj in (
         ("opening", session.hovered_opening),
+        ("provider", session.hovered_provider),
         ("symbol", session.hovered_symbol),
         ("wall", session.hovered_wall),
         ("region", session.hovered_region),

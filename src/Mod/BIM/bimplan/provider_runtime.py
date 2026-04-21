@@ -16,6 +16,11 @@ from .provider_targets import (
 )
 from .providers import (
     PlanActionSpec,
+    PlanContextDetailSpec,
+    PlanContextPanelSpec,
+    PlanContextPanelState,
+    PlanContextRowSpec,
+    PlanContextSubjectKind,
     PlanInspectorSection,
     PlanIssueSpec,
     PlanIssueSeverity,
@@ -226,6 +231,117 @@ def normalize_plan_provider_section(session, provider_id, section):
     if not replacements:
         return section
     return replace(section, **replacements)
+
+
+def normalize_plan_provider_context_row(row):
+    if not isinstance(row, PlanContextRowSpec):
+        return None
+    replacements = {}
+    label = str(row.label or "").strip()
+    value = str(row.value or "").strip()
+    if not label:
+        return None
+    if label != row.label:
+        replacements["label"] = label
+    if value != row.value:
+        replacements["value"] = value
+    if not replacements:
+        return row
+    return replace(row, **replacements)
+
+
+def normalize_plan_provider_context_detail(detail):
+    if not isinstance(detail, PlanContextDetailSpec):
+        return None
+    rows = tuple(
+        normalized
+        for normalized in (normalize_plan_provider_context_row(row) for row in (detail.rows or ()))
+        if normalized is not None
+    )
+    replacements = {}
+    key = str(detail.key or "").strip()
+    title = str(detail.title or "").strip()
+    body = str(detail.body or "").strip()
+    if not key or not title:
+        return None
+    if key != detail.key:
+        replacements["key"] = key
+    if title != detail.title:
+        replacements["title"] = title
+    if body != detail.body:
+        replacements["body"] = body
+    if rows != tuple(detail.rows or ()):
+        replacements["rows"] = rows
+    if not replacements:
+        return detail
+    return replace(detail, **replacements)
+
+
+def normalize_plan_provider_context_panel(session, provider_id, panel):
+    if not isinstance(panel, PlanContextPanelSpec):
+        return None
+    if not isinstance(panel.state, PlanContextPanelState):
+        return None
+    if not isinstance(panel.subject_kind, PlanContextSubjectKind):
+        return None
+    summary_rows = tuple(
+        normalized
+        for normalized in (
+            normalize_plan_provider_context_row(row) for row in (panel.summary_rows or ())
+        )
+        if normalized is not None
+    )
+    details = tuple(
+        normalized
+        for normalized in (
+            normalize_plan_provider_context_detail(detail) for detail in (panel.details or ())
+        )
+        if normalized is not None
+    )
+    primary_action = None
+    if panel.primary_action is not None:
+        primary_action = session._normalize_plan_provider_action(
+            provider_id,
+            panel.primary_action,
+        )
+        if primary_action is None:
+            return None
+    secondary_actions = tuple(
+        normalized
+        for normalized in (
+            session._normalize_plan_provider_action(provider_id, action)
+            for action in (panel.secondary_actions or ())
+        )
+        if normalized is not None
+    )
+    replacements = {}
+    key = str(panel.key or "").strip()
+    title = str(panel.title or "").strip()
+    subtitle = str(panel.subtitle or "").strip()
+    message = str(panel.message or "").strip()
+    if not key or not title:
+        return None
+    if key != panel.key:
+        replacements["key"] = key
+    if title != panel.title:
+        replacements["title"] = title
+    if subtitle != panel.subtitle:
+        replacements["subtitle"] = subtitle
+    if message != panel.message:
+        replacements["message"] = message
+    if panel.provider_id != provider_id:
+        replacements["provider_id"] = str(provider_id or "")
+    if summary_rows != tuple(panel.summary_rows or ()):
+        replacements["summary_rows"] = summary_rows
+    if primary_action != panel.primary_action:
+        replacements["primary_action"] = primary_action
+    if secondary_actions != tuple(panel.secondary_actions or ()):
+        replacements["secondary_actions"] = secondary_actions
+    if details != tuple(panel.details or ()):
+        replacements["details"] = details
+    if not replacements:
+        return panel
+    return replace(panel, **replacements)
 
 
 def normalize_plan_provider_overlay(provider_id, overlay):

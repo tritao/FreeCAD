@@ -36,12 +36,18 @@ import Sketcher
 from bimcommands import BimPlanSession
 from bimplan.providers import (
     PlanActionSpec,
+    PlanContextPanelSpec,
+    PlanContextPanelState,
+    PlanContextRowSpec,
+    PlanContextSubjectKind,
     PlanEditProvider,
     PlanInspectorSection,
     PlanIssueSpec,
     PlanIssueSeverity,
     PlanOverlaySpec,
+    PlanOverlayTargetSpec,
     PlanOverlayTargetKind,
+    PlanProviderTargetSpec,
     PlanToolSpec,
     PlanToolInteraction,
 )
@@ -60,6 +66,7 @@ class _TestPlanProvider(PlanEditProvider):
 
     def __init__(self):
         self.executed_actions = []
+        self.context_panel_calls = 0
         self.issue_calls = 0
         self.section_calls = 0
         self.tool_calls = 0
@@ -80,6 +87,27 @@ class _TestPlanProvider(PlanEditProvider):
                         label="Apply Test Fix",
                     ),
                 ),
+            ),
+        )
+
+    def get_context_panels(self, context):
+        self.context_panel_calls += 1
+        primary_target = context.get_primary_target()
+        target_label = getattr(primary_target, "label", "") if primary_target else ""
+        if not target_label:
+            target_label = "Nothing selected"
+        return (
+            PlanContextPanelSpec(
+                key="provider-context",
+                title=target_label,
+                subtitle="Test Selection",
+                state=PlanContextPanelState.SINGLE_OBJECT,
+                subject_kind=PlanContextSubjectKind.ENDPOINT,
+                summary_rows=(
+                    PlanContextRowSpec(label="State", value="Ready"),
+                    PlanContextRowSpec(label="Owner", value="Test Plan Provider"),
+                ),
+                message="Context panel content should appear in the Plan Edit dock.",
             ),
         )
 
@@ -493,7 +521,18 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         labels = [
             str(widget.text()) for widget in panel.integration_panel.findChildren(QtGui.QLabel)
         ]
+        self.assertTrue(any("Action Needed" in text for text in labels))
+        self.assertTrue(any("Utilities" in text for text in labels))
+        self.assertTrue(any("More Context" in text for text in labels))
+        self.assertTrue(any("Selection" in text for text in labels))
         self.assertTrue(any("Provider needs review" in text for text in labels))
+        self.assertTrue(any("Test Selection" in text for text in labels))
+        self.assertTrue(
+            any(
+                "Context panel content should appear in the Plan Edit dock." in text
+                for text in labels
+            )
+        )
         self.assertTrue(any("Integration Summary" in text for text in labels))
         self.assertTrue(any("Overlays" in text for text in labels))
 
@@ -1049,6 +1088,104 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIn(marker, session._provider_selected_objects)
         self.assertIn(marker, session.get_selected_objects())
         self._assert_selected_plan_target(session, "wall", wall)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_provider_overlay_target_detects_clicked_raw_object(self):
+        marker = Draft.makePoint(FreeCAD.Vector(100, 200, 0))
+        marker.Label = "Electrical Marker"
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        original_view = session.view
+
+        class FakeView:
+            def getObjectsInfo(self, _mouse_pos):
+                return (
+                    {
+                        "Document": marker.Document.Name,
+                        "Object": marker.Name,
+                    },
+                )
+
+        try:
+            session.view = FakeView()
+            with (
+                patch.object(
+                    session,
+                    "get_plan_provider_overlays",
+                    return_value=(
+                        PlanOverlaySpec(
+                            key="electrical-marker",
+                            point_targets=(
+                                PlanOverlayTargetSpec(
+                                    document_name=marker.Document.Name,
+                                    object_name=marker.Name,
+                                    target_kind=PlanOverlayTargetKind.OBJECT,
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+                patch.object(session, "is_plan_provider_overlay_visible", return_value=True),
+            ):
+                self.assertEqual(
+                    ("provider_overlay_target", "object", marker),
+                    session._get_edit_node((100, 100)),
+                )
+        finally:
+            session.view = original_view
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_provider_overlay_point_selects_provider_target(self):
+        marker = Draft.makePoint(FreeCAD.Vector(100, 200, 0))
+        marker.Label = "Electrical Marker"
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        node = self._make_fake_selection_node(
+            self.document.Name,
+            marker.Name,
+            "ProviderOverlayPoint:provider:0",
+        )
+        event = self._make_fake_left_mouse_press()
+
+        with patch.object(
+            session,
+            "get_plan_provider_targets",
+            return_value=(
+                PlanProviderTargetSpec(
+                    key="electrical-fixture:{}:{}".format(self.document.Name, marker.Name),
+                    label=marker.Label,
+                    provider_id="materia-electrical-fixtures",
+                    document_name=self.document.Name,
+                    object_name=marker.Name,
+                    semantic_document_name=self.document.Name,
+                    semantic_object_name=marker.Name,
+                    category="electrical",
+                    role="fixture",
+                ),
+            ),
+        ):
+            self.assertTrue(
+                session._activate_provider_overlay_target_node(
+                    ("provider_overlay_point", node),
+                    event,
+                )
+            )
+            self.assertTrue(event._handled)
+            self.assertEqual(("provider", marker), session._get_selected_plan_target())
+            self.assertEqual([], session._provider_selected_objects)
+            self.assertIn(marker, FreeCADGui.Selection.getSelection())
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -4555,6 +4692,38 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(viewer.isEnabledNaviCube(), original_navicube)
         self.assertEqual(view.isCornerCrossVisible(), original_corner_cross)
 
+    def test_plan_edit_temporarily_enables_preselection(self):
+        """Plan Edit should force preselection while active and restore the user preference."""
+
+        view_params = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View")
+        had_preselection_param = "EnablePreselection" in view_params.GetBools()
+        original_preselection = view_params.GetBool("EnablePreselection", True)
+
+        session = None
+        try:
+            view_params.SetBool("EnablePreselection", False)
+
+            session = BimPlanSession.start_session()
+            self.assertIsNotNone(session)
+            self.pump_gui_events()
+
+            self.assertTrue(view_params.GetBool("EnablePreselection", False))
+
+            session.shutdown(close_dialog=False)
+            session = None
+            self.pump_gui_events()
+
+            self.assertFalse(view_params.GetBool("EnablePreselection", True))
+        finally:
+            if session is not None:
+                session.shutdown(close_dialog=False)
+                self.pump_gui_events()
+            if had_preselection_param:
+                view_params.SetBool("EnablePreselection", original_preselection)
+            else:
+                view_params.RemBool("EnablePreselection")
+            self.pump_gui_events()
+
     def test_plan_edit_keeps_paper_background_when_view_preferences_change(self):
         """Plan Edit should keep its paper override while view preferences change."""
 
@@ -5432,7 +5601,76 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self._assert_selected_plan_target(session, "wall", wall)
         self.assertEqual(FreeCADGui.Selection.getSelection(), [])
         self.pump_gui_events()
+        self.assertEqual(len(session._grip_trackers), 3)
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall.Name])
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_clicking_picked_wall_shows_wall_grips(self):
+        """A raw wall click should leave visible wall edit grips after deferred sync."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with (
+            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=("wall", wall),
+            ),
+        ):
+            press = self._make_fake_left_mouse_press(250, 250)
+            session._on_mouse_pressed(press)
+
+        self.assertTrue(press._handled)
+        self._assert_selected_plan_target(session, "wall", wall)
+        self.assertEqual(len(session._grip_trackers), 0)
+        self.pump_gui_events()
+        self.assertEqual(len(session._grip_trackers), 3)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_clicking_multi_edge_base_wall_keeps_grips_hidden(self):
+        """Multi-edge base walls are selectable but do not expose endpoint grips."""
+
+        wire = Draft.make_wire(
+            [
+                FreeCAD.Vector(0, 0, 0),
+                FreeCAD.Vector(1500, 0, 0),
+                FreeCAD.Vector(1500, 1000, 0),
+            ],
+            closed=False,
+        )
+        wall = Arch.makeWall(wire, width=200, height=2500)
+        self.document.recompute()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with (
+            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(
+                session,
+                "_get_plan_target_at_position",
+                return_value=("wall", wall),
+            ),
+        ):
+            press = self._make_fake_left_mouse_press(250, 250)
+            session._on_mouse_pressed(press)
+
+        self.assertTrue(press._handled)
+        self._assert_selected_plan_target(session, "wall", wall)
+        self.assertFalse(session.is_selected_wall_endpoint_editable())
+        self.pump_gui_events()
+        self.assertEqual(len(session._grip_trackers), 0)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -5468,6 +5706,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self._assert_selected_plan_target(session, "wall", target_wall)
         self.assertEqual(FreeCADGui.Selection.getSelection(), [])
         self.pump_gui_events()
+        self.assertEqual(len(session._grip_trackers), 3)
         self.assertEqual(
             [obj.Name for obj in FreeCADGui.Selection.getSelection()],
             [target_wall.Name],

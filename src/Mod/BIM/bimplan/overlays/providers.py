@@ -2,12 +2,17 @@
 
 """Provider-owned overlay rendering for BIM Plan Edit."""
 
+from contextlib import nullcontext
 import math
 
 import FreeCAD
 from bimplan.providers import PlanOverlayMarkerKind
 
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
+_PROVIDER_OVERLAY_PICK_TRACKER_SCALE = 0.14
+_PROVIDER_HOVER_COLOR = (0.38, 0.62, 0.96)
+_PROVIDER_HOVER_MARKER_SCALE = 1.2
+_PROVIDER_HOVER_WIDTH_DELTA = 1.0
 _PROVIDER_POINT_PREVIEW_MARKER_SIZE = 180.0
 _PROVIDER_POINT_PREVIEW_HOSTED_COLOR = (0.12, 0.38, 0.95)
 _PROVIDER_POINT_PREVIEW_UNHOSTED_COLOR = (0.95, 0.52, 0.10)
@@ -62,6 +67,49 @@ def clear_provider_overlays(session):
     session._finalize_trackers(session._provider_overlay_trackers)
     session._provider_overlay_trackers = []
     session._provider_overlay_state = None
+
+
+def sync_hovered_provider_overlay(session):
+    with session._plan_perf_trace_span("sync_hovered_provider_overlay"):
+        clear_hovered_provider_overlay(session)
+        if session.current_tool != "Select":
+            return
+        plan_provider_integrations_disabled = getattr(
+            session, "_plan_provider_integrations_disabled", None
+        )
+        if callable(plan_provider_integrations_disabled) and plan_provider_integrations_disabled():
+            return
+        provider_obj = getattr(session, "hovered_provider", None)
+        if provider_obj is None:
+            return
+        if session._is_selected_plan_target("provider", provider_obj):
+            return
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            return
+        specs = _get_hovered_provider_segment_specs(session)
+        if not specs:
+            return
+        for spec in specs:
+            tracker = session._make_plan_line_tracker(
+                DraftTrackers,
+                spec["label"],
+                dotted=spec["dotted"],
+                scolor=spec["color"],
+                swidth=spec["width"],
+                ontop=True,
+            )
+            tracker.p1(spec["start"])
+            tracker.p2(spec["end"])
+            tracker.on()
+            session._provider_hover_trackers.append(tracker)
+        session._plan_perf_count("hovered_provider_trackers", len(session._provider_hover_trackers))
+
+
+def clear_hovered_provider_overlay(session):
+    session._finalize_trackers(session._provider_hover_trackers)
+    session._provider_hover_trackers = []
 
 
 def sync_provider_point_preview(session):
@@ -372,6 +420,56 @@ def _get_provider_point_preview_render_state(session, specs):
     )
 
 
+def _get_hovered_provider_segment_specs(session):
+    provider_obj = getattr(session, "hovered_provider", None)
+    object_key = session._get_document_object_key(provider_obj)
+    if object_key is None:
+        return ()
+    specs = []
+    for overlay in _get_visible_provider_overlays(session):
+        key = str(getattr(overlay, "key", "") or "overlay")
+        marker_size = session._scaled_marker_size(
+            float(getattr(overlay, "marker_size", 160.0) or 160.0) * _PROVIDER_HOVER_MARKER_SCALE
+        )
+        width = session._scaled_line_width(
+            max(2.0, float(getattr(overlay, "line_width", 2.0) or 2.0))
+            + _PROVIDER_HOVER_WIDTH_DELTA
+        )
+        marker_kind = overlay.marker_kind
+        point_targets = tuple(getattr(overlay, "point_targets", ()) or ())
+        for index, point in enumerate(tuple(getattr(overlay, "points", ()) or ())):
+            target = point_targets[index] if index < len(point_targets) else None
+            if not _provider_target_matches_object(session, target, object_key):
+                continue
+            point_vector = _to_vector(point)
+            if point_vector is None:
+                continue
+            specs.extend(
+                _get_point_marker_segment_specs(
+                    point_vector,
+                    label="hovered-provider-overlay:{}".format(key),
+                    color=_PROVIDER_HOVER_COLOR,
+                    width=width,
+                    dotted=False,
+                    marker_size=marker_size,
+                    marker_kind=marker_kind,
+                )
+            )
+    return tuple(specs)
+
+
+def _get_visible_provider_overlays(session):
+    refresh_scope_factory = getattr(session, "_plan_provider_refresh_cache_scope", None)
+    refresh_scope = refresh_scope_factory() if callable(refresh_scope_factory) else nullcontext()
+    with refresh_scope:
+        return tuple(
+            overlay
+            for overlay in session.get_plan_provider_overlays()
+            if bool(getattr(overlay, "visible", True))
+            and session.is_plan_provider_overlay_visible(overlay)
+        )
+
+
 def _create_provider_overlay_trackers(session, DraftTrackers, overlay):
     color = tuple(getattr(overlay, "color", (0.2, 0.55, 0.85)) or (0.2, 0.55, 0.85))
     width = session._scaled_line_width(float(getattr(overlay, "line_width", 2.0) or 2.0))
@@ -485,7 +583,12 @@ def _create_target_pick_tracker(
 
         marker = FreeCADGui.getMarkerIndex(
             "CIRCLE",
-            int(max(2.0, session._scaled_marker_size(marker_size * 0.08))),
+            int(
+                max(
+                    4.0,
+                    session._scaled_marker_size(marker_size * _PROVIDER_OVERLAY_PICK_TRACKER_SCALE),
+                )
+            ),
         )
     except Exception:
         marker = None
@@ -512,6 +615,22 @@ def _create_target_pick_tracker(
 
 def _has_target_identity(target):
     return bool(str(getattr(target, "object_name", "") or "").strip())
+
+
+def _get_target_identity(session, target):
+    if not _has_target_identity(target):
+        return None
+    document_name = str(getattr(target, "document_name", "") or "").strip()
+    if not document_name:
+        document_name = str(getattr(getattr(session, "doc", None), "Name", "") or "")
+    object_name = str(getattr(target, "object_name", "") or "").strip()
+    if not document_name or not object_name:
+        return None
+    return (document_name, object_name)
+
+
+def _provider_target_matches_object(session, target, object_key):
+    return object_key is not None and _get_target_identity(session, target) == object_key
 
 
 def _retarget_pick_tracker(session, tracker, target, target_index):

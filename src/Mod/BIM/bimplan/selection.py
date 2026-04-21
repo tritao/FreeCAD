@@ -6,6 +6,7 @@ from contextlib import contextmanager, nullcontext
 
 import FreeCAD
 import FreeCADGui
+from . import provider_targets as plan_provider_targets
 
 
 def get_gui_selection_ex():
@@ -263,13 +264,40 @@ def _should_filter_hidden_provider_preselection(session, doc_name, obj_name):
 
 
 def _should_filter_hidden_provider_preselection_for_object(session, obj):
-    try:
-        from . import provider_targets as plan_provider_targets
-    except Exception:
-        return False
     if not plan_provider_targets.is_plan_provider_target_object(session, obj):
         return False
     return not plan_provider_targets.is_plan_provider_target_visible_for_mode(session, obj)
+
+
+def _should_preserve_provider_selected_target(session, kind, obj, selected):
+    if kind != "provider" or obj is None or selected != obj:
+        return False
+    if not session._is_valid_plan_target(kind, obj):
+        return False
+    return bool(plan_provider_targets.is_plan_provider_target_visible_for_mode(session, obj))
+
+
+def resolve_selected_target_for_gui_object(
+    session,
+    selected,
+    *,
+    pending_kind=None,
+    pending_target=None,
+    preserved_kind=None,
+    preserved_target=None,
+):
+    if selected is None:
+        return (None, None)
+    if selected == pending_target and session._is_valid_plan_target(pending_kind, pending_target):
+        return (pending_kind, pending_target)
+    if _should_preserve_provider_selected_target(
+        session,
+        preserved_kind,
+        preserved_target,
+        selected,
+    ):
+        return (preserved_kind, preserved_target)
+    return session._get_plan_target_for_object(selected)
 
 
 def _resolve_document_object(session, document_name, object_name):
@@ -369,6 +397,9 @@ def refresh_selected_plan_target(session):
         session._plan_perf_count("gui_selection_size", len(selection or []))
         if session.current_tool in ("Select", "Pick Space Region") and selection:
             selected_targets = []
+            pending_kind, pending_target = session._pending_selected_plan_target or (None, None)
+            preserved_kind = previous_kind if previous_kind == "provider" else None
+            preserved_target = previous_obj if preserved_kind else None
             provider_refresh_scope = (
                 session._plan_provider_refresh_cache_scope()
                 if hasattr(session, "_plan_provider_refresh_cache_scope")
@@ -376,13 +407,19 @@ def refresh_selected_plan_target(session):
             )
             with provider_refresh_scope:
                 for selected in selection:
-                    target_kind, target_obj = session._get_plan_target_for_object(selected)
+                    target_kind, target_obj = resolve_selected_target_for_gui_object(
+                        session,
+                        selected,
+                        pending_kind=pending_kind,
+                        pending_target=pending_target,
+                        preserved_kind=preserved_kind,
+                        preserved_target=preserved_target,
+                    )
                     if target_kind:
                         selected_targets.append((target_kind, target_obj))
             session._plan_perf_count("selected_targets_considered", len(selected_targets))
 
             matched_target = None
-            pending_kind, pending_target = session._pending_selected_plan_target or (None, None)
             if pending_target is not None:
                 for target_kind, selected in selected_targets:
                     if selected == pending_target and target_kind == pending_kind:
