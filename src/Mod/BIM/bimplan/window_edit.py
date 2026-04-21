@@ -93,6 +93,25 @@ def can_apply_selected_window_height(session):
     return can_edit_window_height(window)
 
 
+def can_apply_selected_window_size(session, width_value=None, height_value=None):
+    window = session._get_selected_plan_target_object("opening")
+    resize_targets = _resolve_window_resize_targets(
+        window,
+        width_value=width_value,
+        height_value=height_value,
+    )
+    if resize_targets is None:
+        return False
+
+    target_width, target_height = resize_targets
+    status = ArchWindow.validateWindowResize(
+        window,
+        width=target_width,
+        height=target_height,
+    )
+    return bool(status.allowed and not status.noop)
+
+
 def apply_selected_window_style_preset(session, preset_name):
     window = session._get_selected_plan_target_object("opening")
     if not can_edit_window_style_preset(window):
@@ -115,55 +134,85 @@ def apply_selected_window_style_preset(session, preset_name):
 
 
 def set_selected_window_width(session, value):
-    window = session._get_selected_plan_target_object("opening")
-    if not can_edit_window_width(window):
-        return False
-
-    target_width = _parse_length_mm(value)
-    if target_width is None or target_width <= 0.0:
-        return False
-
-    current_width = get_window_width_mm(window)
-    if current_width is not None and abs(target_width - current_width) <= 1e-6:
-        return False
-
-    if not ArchWindow.setWindowWidth(
-        window,
-        target_width,
-        preserve_anchor=True,
+    return _set_selected_window_size(
+        session,
+        width_value=value,
         transaction_label=translate("BIM_PlanEdit", "Change Window Width"),
-    ):
-        return False
-
-    session._invalidate_document_dependent_plan_visuals(recompute_opening_hosts=True)
-    session._refresh_task_panel_status()
-    return True
+    )
 
 
 def set_selected_window_height(session, value):
-    window = session._get_selected_plan_target_object("opening")
-    if not can_edit_window_height(window):
-        return False
-
-    target_height = _parse_length_mm(value)
-    if target_height is None or target_height <= 0.0:
-        return False
-
-    current_height = get_window_height_mm(window)
-    if current_height is not None and abs(target_height - current_height) <= 1e-6:
-        return False
-
-    if not ArchWindow.setWindowHeight(
-        window,
-        target_height,
-        preserve_anchor=True,
+    return _set_selected_window_size(
+        session,
+        height_value=value,
         transaction_label=translate("BIM_PlanEdit", "Change Window Height"),
+    )
+
+
+def set_selected_window_size(session, width_value=None, height_value=None):
+    return _set_selected_window_size(
+        session,
+        width_value=width_value,
+        height_value=height_value,
+        transaction_label=translate("BIM_PlanEdit", "Change Window Size"),
+    )
+
+
+def _set_selected_window_size(
+    session,
+    width_value=None,
+    height_value=None,
+    transaction_label=None,
+):
+    window = session._get_selected_plan_target_object("opening")
+    resize_targets = _resolve_window_resize_targets(
+        window,
+        width_value=width_value,
+        height_value=height_value,
+    )
+    if resize_targets is None:
+        return False
+
+    target_width, target_height = resize_targets
+    if not ArchWindow.resizeWindow(
+        window,
+        width=target_width,
+        height=target_height,
+        preserve_anchor=True,
+        transaction_label=transaction_label,
     ):
         return False
 
     session._invalidate_document_dependent_plan_visuals(recompute_opening_hosts=True)
     session._refresh_task_panel_status()
     return True
+
+
+def _resolve_window_resize_targets(window, width_value=None, height_value=None):
+    if not ArchWindow.isWindowObject(window):
+        return None
+
+    target_width = None
+    if can_edit_window_width(window) and width_value is not None:
+        target_width = _parse_length_mm(width_value)
+        current_width = get_window_width_mm(window)
+        if target_width is None or target_width <= 0.0:
+            return None
+        if current_width is not None and abs(target_width - current_width) <= 1e-6:
+            target_width = None
+
+    target_height = None
+    if can_edit_window_height(window) and height_value is not None:
+        target_height = _parse_length_mm(height_value)
+        current_height = get_window_height_mm(window)
+        if target_height is None or target_height <= 0.0:
+            return None
+        if current_height is not None and abs(target_height - current_height) <= 1e-6:
+            target_height = None
+
+    if target_width is None and target_height is None:
+        return None
+    return target_width, target_height
 
 
 def _parse_length_mm(value):

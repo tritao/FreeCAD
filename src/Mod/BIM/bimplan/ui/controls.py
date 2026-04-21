@@ -172,9 +172,8 @@ class PlanEditControlsWidget:
             self.region_type_edit,
             self.region_parent_space_combo,
             self.window_width_edit,
-            self.window_width_apply_button,
             self.window_height_edit,
-            self.window_height_apply_button,
+            self.window_size_apply_button,
             self.window_preset_combo,
             self.window_preset_apply_button,
             self.exit_button,
@@ -1509,7 +1508,7 @@ class PlanEditControlsWidget:
         if hasattr(self.window_width_edit, "setPlaceholderText"):
             self.window_width_edit.setPlaceholderText(translate("BIM_PlanEdit", "950 mm"))
         self.window_width_edit.textChanged.connect(self.on_window_width_text_changed)
-        self.window_width_edit.returnPressed.connect(self.on_window_width_apply_clicked)
+        self.window_width_edit.returnPressed.connect(self.on_window_size_apply_clicked)
         form.addRow(translate("BIM_PlanEdit", "Width"), self.window_width_edit)
 
         self.window_height_edit = QtGui.QLineEdit(editor)
@@ -1518,7 +1517,7 @@ class PlanEditControlsWidget:
         if hasattr(self.window_height_edit, "setPlaceholderText"):
             self.window_height_edit.setPlaceholderText(translate("BIM_PlanEdit", "1200 mm"))
         self.window_height_edit.textChanged.connect(self.on_window_height_text_changed)
-        self.window_height_edit.returnPressed.connect(self.on_window_height_apply_clicked)
+        self.window_height_edit.returnPressed.connect(self.on_window_size_apply_clicked)
         form.addRow(translate("BIM_PlanEdit", "Height"), self.window_height_edit)
 
         self.window_preset_combo = QtGui.QComboBox(editor)
@@ -1541,18 +1540,12 @@ class PlanEditControlsWidget:
 
         button_row = QtGui.QHBoxLayout()
         button_row.setSpacing(6)
-        self.window_width_apply_button = self._make_button(
+        self.window_size_apply_button = self._make_button(
             QtGui,
-            "Apply Width",
-            self.on_window_width_apply_clicked,
+            "Apply Size",
+            self.on_window_size_apply_clicked,
         )
-        button_row.addWidget(self.window_width_apply_button)
-        self.window_height_apply_button = self._make_button(
-            QtGui,
-            "Apply Height",
-            self.on_window_height_apply_clicked,
-        )
-        button_row.addWidget(self.window_height_apply_button)
+        button_row.addWidget(self.window_size_apply_button)
         self.window_preset_apply_button = self._make_button(
             QtGui,
             "Apply Style",
@@ -1638,9 +1631,8 @@ class PlanEditControlsWidget:
         self.region_parent_space_combo = None
         self.window_editor = None
         self.window_width_edit = None
-        self.window_width_apply_button = None
         self.window_height_edit = None
-        self.window_height_apply_button = None
+        self.window_size_apply_button = None
         self.window_preset_combo = None
         self.window_preset_note = None
         self.window_preset_apply_button = None
@@ -2262,80 +2254,40 @@ class PlanEditControlsWidget:
             )
         return "{}\n{}\n{}\n{}".format(style_text, width_text, height_text, hint_text)
 
-    def _update_window_width_apply_state(self, modal_active=None):
-        if self.window_width_edit is None or self.window_width_apply_button is None:
+    def _update_window_size_apply_state(self, modal_active=None):
+        if (
+            self.window_width_edit is None
+            or self.window_height_edit is None
+            or self.window_size_apply_button is None
+        ):
             return
 
-        window = self._get_window_editor_target()
-        can_edit_width = bool(window and self.session._can_edit_window_width(window))
+        can_apply = bool(
+            self.session._can_apply_selected_window_size(
+                width_value=self.window_width_edit.text(),
+                height_value=self.window_height_edit.text(),
+            )
+        )
         if modal_active is None:
             modal_active = self.session._is_modal_plan_interaction_active()
-
-        current_width = self.session._get_selected_window_width_mm() if can_edit_width else None
-        entered_width = self._coerce_window_length_mm(self.window_width_edit.text())
-        can_apply = bool(
-            can_edit_width
-            and entered_width is not None
-            and entered_width > 0.0
-            and (current_width is None or abs(entered_width - current_width) > 1e-6)
-        )
         if modal_active:
             can_apply = False
 
         try:
-            self.window_width_apply_button.setEnabled(can_apply)
+            self.window_size_apply_button.setEnabled(can_apply)
         except Exception:
             pass
         self._set_widget_tooltip(
-            self.window_width_apply_button,
+            self.window_size_apply_button,
             (
                 translate(
                     "BIM_PlanEdit",
-                    "Apply the entered width to the current window.",
+                    "Apply the entered width and height values in one step.",
                 )
                 if can_apply
                 else translate(
                     "BIM_PlanEdit",
-                    "Enter a different positive width before applying it.",
-                )
-            ),
-        )
-
-    def _update_window_height_apply_state(self, modal_active=None):
-        if self.window_height_edit is None or self.window_height_apply_button is None:
-            return
-
-        window = self._get_window_editor_target()
-        can_edit_height = bool(window and self.session._can_edit_window_height(window))
-        if modal_active is None:
-            modal_active = self.session._is_modal_plan_interaction_active()
-
-        current_height = self.session._get_selected_window_height_mm() if can_edit_height else None
-        entered_height = self._coerce_window_length_mm(self.window_height_edit.text())
-        can_apply = bool(
-            can_edit_height
-            and entered_height is not None
-            and entered_height > 0.0
-            and (current_height is None or abs(entered_height - current_height) > 1e-6)
-        )
-        if modal_active:
-            can_apply = False
-
-        try:
-            self.window_height_apply_button.setEnabled(can_apply)
-        except Exception:
-            pass
-        self._set_widget_tooltip(
-            self.window_height_apply_button,
-            (
-                translate(
-                    "BIM_PlanEdit",
-                    "Apply the entered height to the current window.",
-                )
-                if can_apply
-                else translate(
-                    "BIM_PlanEdit",
-                    "Enter a different positive height before applying it.",
+                    "Enter at least one different positive size before applying it.",
                 )
             ),
         )
@@ -2456,8 +2408,7 @@ class PlanEditControlsWidget:
             finally:
                 self._refreshing_window_editor = False
 
-            self._update_window_width_apply_state()
-            self._update_window_height_apply_state()
+            self._update_window_size_apply_state()
             self._update_window_preset_apply_state()
 
     def _apply_modal_interaction_state(self, modal_active):
@@ -2581,14 +2532,14 @@ class PlanEditControlsWidget:
             and _selected_obj is not None
             and self.session._can_apply_window_style_preset(_selected_obj)
         )
-        for widget in (self.window_width_edit, self.window_width_apply_button):
+        for widget in (self.window_width_edit,):
             if widget is None:
                 continue
             try:
                 widget.setEnabled(bool(can_edit_window_width and not modal_active))
             except Exception:
                 pass
-        for widget in (self.window_height_edit, self.window_height_apply_button):
+        for widget in (self.window_height_edit,):
             if widget is None:
                 continue
             try:
@@ -2602,8 +2553,7 @@ class PlanEditControlsWidget:
                 widget.setEnabled(bool(can_apply_window_style and not modal_active))
             except Exception:
                 pass
-        self._update_window_width_apply_state(modal_active=modal_active)
-        self._update_window_height_apply_state(modal_active=modal_active)
+        self._update_window_size_apply_state(modal_active=modal_active)
         self._update_window_preset_apply_state(modal_active=modal_active)
 
     def on_storey_changed(self, index):
@@ -2717,23 +2667,24 @@ class PlanEditControlsWidget:
     def on_window_width_text_changed(self, _text):
         if self._refreshing_window_editor:
             return
-        self._update_window_width_apply_state()
+        self._update_window_size_apply_state()
 
     def on_window_height_text_changed(self, _text):
         if self._refreshing_window_editor:
             return
-        self._update_window_height_apply_state()
+        self._update_window_size_apply_state()
 
-    def on_window_width_apply_clicked(self):
-        if self._refreshing_window_editor or self.window_width_edit is None:
+    def on_window_size_apply_clicked(self):
+        if (
+            self._refreshing_window_editor
+            or self.window_width_edit is None
+            or self.window_height_edit is None
+        ):
             return
-        if self.session._set_selected_window_width(self.window_width_edit.text()):
-            self.refresh_from_session(defer_integrations=True)
-
-    def on_window_height_apply_clicked(self):
-        if self._refreshing_window_editor or self.window_height_edit is None:
-            return
-        if self.session._set_selected_window_height(self.window_height_edit.text()):
+        if self.session._set_selected_window_size(
+            width_value=self.window_width_edit.text(),
+            height_value=self.window_height_edit.text(),
+        ):
             self.refresh_from_session(defer_integrations=True)
 
     def on_window_preset_apply_clicked(self):
