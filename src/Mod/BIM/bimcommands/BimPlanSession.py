@@ -2869,6 +2869,7 @@ class PlanEditSession:
             return False
         self._provider_overlay_mode = normalized
         self._provider_overlay_state = None
+        plan_selection.clear_hidden_provider_preselection(self)
         self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_PROVIDER_OVERLAYS)
         self._refresh_task_panel_status()
         return True
@@ -5808,6 +5809,12 @@ class PlanEditSession:
 
     def clearSelection(self, doc):
         return plan_selection.selection_observer_clear(self, doc)
+
+    def setPreselection(self, doc, obj, sub):
+        return plan_selection.selection_observer_set_preselection(self, doc, obj, sub)
+
+    def removePreselection(self, doc, obj, sub):
+        return plan_selection.selection_observer_remove_preselection(self, doc, obj, sub)
 
     # Document observer interface
 

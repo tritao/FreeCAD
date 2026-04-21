@@ -4,6 +4,7 @@
 
 from contextlib import contextmanager, nullcontext
 
+import FreeCAD
 import FreeCADGui
 
 
@@ -214,6 +215,108 @@ def selection_observer_clear(session, doc):
             return
         del doc
         session._schedule_selection_refresh()
+
+
+def selection_observer_set_preselection(session, doc, obj, sub):
+    with session._plan_perf_trace_event(
+        "selection_observer_set_preselection",
+        selection_document=doc,
+        selection_object=obj,
+        selection_subelement=sub,
+    ):
+        session._plan_perf_count("selection_observer_callbacks")
+        if session._tearing_down:
+            return
+        if not _should_filter_hidden_provider_preselection(session, doc, obj):
+            return
+        session._plan_perf_count("provider_preselection_filtered")
+        _clear_gui_preselection()
+
+
+def selection_observer_remove_preselection(session, doc, obj, sub):
+    with session._plan_perf_trace_event(
+        "selection_observer_remove_preselection",
+        selection_document=doc,
+        selection_object=obj,
+        selection_subelement=sub,
+    ):
+        session._plan_perf_count("selection_observer_callbacks")
+
+
+def clear_hidden_provider_preselection(session):
+    if session._tearing_down:
+        return False
+    preselected_obj = _get_gui_preselection_object(session)
+    if preselected_obj is None:
+        return False
+    if not _should_filter_hidden_provider_preselection_for_object(session, preselected_obj):
+        return False
+    session._plan_perf_count("provider_preselection_cleared_for_mode")
+    return _clear_gui_preselection()
+
+
+def _should_filter_hidden_provider_preselection(session, doc_name, obj_name):
+    preselected_obj = _resolve_document_object(session, doc_name, obj_name)
+    if preselected_obj is None:
+        return False
+    return _should_filter_hidden_provider_preselection_for_object(session, preselected_obj)
+
+
+def _should_filter_hidden_provider_preselection_for_object(session, obj):
+    try:
+        from . import provider_targets as plan_provider_targets
+    except Exception:
+        return False
+    if not plan_provider_targets.is_plan_provider_target_object(session, obj):
+        return False
+    return not plan_provider_targets.is_plan_provider_target_visible_for_mode(session, obj)
+
+
+def _resolve_document_object(session, document_name, object_name):
+    object_name = str(object_name or "").strip()
+    if not object_name:
+        return None
+    document_name = str(document_name or "").strip()
+    doc = None
+    if document_name:
+        try:
+            doc = FreeCAD.getDocument(document_name)
+        except Exception:
+            doc = None
+    if doc is None:
+        doc = getattr(session, "doc", None)
+    if doc is None:
+        return None
+    try:
+        return doc.getObject(object_name)
+    except Exception:
+        return None
+
+
+def _get_gui_preselection_object(session):
+    try:
+        preselection = FreeCADGui.Selection.getPreselection()
+    except Exception:
+        return None
+    try:
+        obj = getattr(preselection, "Object", None)
+    except Exception:
+        obj = None
+    if obj is not None:
+        return obj
+    return _resolve_document_object(
+        session,
+        getattr(preselection, "DocumentName", ""),
+        getattr(preselection, "ObjectName", ""),
+    )
+
+
+def _clear_gui_preselection():
+    try:
+        FreeCADGui.Selection.clearPreselection()
+        return True
+    except Exception:
+        return False
 
 
 def refresh_selected_plan_target(session):
