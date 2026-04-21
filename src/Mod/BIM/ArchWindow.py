@@ -88,6 +88,7 @@ _WINDOW_PRESET_REWRITE_METHODS = (
     "addConstraint",
     "addGeometry",
 )
+_WINDOW_RESIZE_REWRITE_METHODS = _WINDOW_PRESET_REWRITE_METHODS
 
 
 def recolorize(attr):  # names is [docname,objname]
@@ -260,6 +261,301 @@ def canApplyWindowPreset(obj, preset_name=None):
     return validateWindowPresetApplication(obj, preset_name).allowed
 
 
+def getWindowWidthMm(obj):
+    """Return the resolved width of this opening in millimeters."""
+
+    width = _resolve_window_width_mm(obj)
+    if width is None or width <= 0.0:
+        return None
+    return float(width)
+
+
+def getWindowHeightMm(obj):
+    """Return the resolved height of this opening in millimeters."""
+
+    height = _resolve_window_height_mm(obj)
+    if height is None or height <= 0.0:
+        return None
+    return float(height)
+
+
+def getWindowWidthUserString(obj):
+    """Return the resolved width formatted in user units."""
+
+    width = getWindowWidthMm(obj)
+    if width is None:
+        return ""
+    return FreeCAD.Units.Quantity(width, FreeCAD.Units.Length).UserString
+
+
+def getWindowHeightUserString(obj):
+    """Return the resolved height formatted in user units."""
+
+    height = getWindowHeightMm(obj)
+    if height is None:
+        return ""
+    return FreeCAD.Units.Quantity(height, FreeCAD.Units.Length).UserString
+
+
+def validateWindowResize(obj, width=None, height=None):
+    """Return a structured validation status for editing opening size in place."""
+
+    object_kind = _get_window_object_kind(obj)
+    current_width = getWindowWidthMm(obj)
+    current_height = getWindowHeightMm(obj)
+    base = getattr(obj, "Base", None)
+    width_mode = _get_window_resize_mode(base, "Width", current_width)
+    height_mode = _get_window_resize_mode(base, "Height", current_height)
+
+    if object_kind not in {"window", "door", "opening"}:
+        return WindowResizeStatus(
+            allowed=False,
+            reason=translate("Arch", "Object is not an Arch window, door, or opening."),
+            object_kind=object_kind,
+            current_width=current_width,
+            current_height=current_height,
+            width_mode=width_mode,
+            height_mode=height_mode,
+        )
+
+    if _is_link_object(obj):
+        return WindowResizeStatus(
+            allowed=False,
+            reason=translate("Arch", "Linked openings cannot be resized in place."),
+            object_kind=object_kind,
+            current_width=current_width,
+            current_height=current_height,
+            width_mode=width_mode,
+            height_mode=height_mode,
+        )
+
+    target_width = current_width
+    target_height = current_height
+
+    if width is not None:
+        target_width = _parse_length_mm(width)
+        if target_width is None or target_width <= 0.0:
+            return WindowResizeStatus(
+                allowed=False,
+                reason=translate("Arch", "Opening width is invalid."),
+                object_kind=object_kind,
+                current_width=current_width,
+                current_height=current_height,
+                width_mode=width_mode,
+                height_mode=height_mode,
+            )
+        if not width_mode:
+            return WindowResizeStatus(
+                allowed=False,
+                reason=translate("Arch", "Opening width cannot be edited in place."),
+                object_kind=object_kind,
+                current_width=current_width,
+                current_height=current_height,
+                target_width=target_width,
+                target_height=target_height,
+                width_mode=width_mode,
+                height_mode=height_mode,
+            )
+
+    if height is not None:
+        target_height = _parse_length_mm(height)
+        if target_height is None or target_height <= 0.0:
+            return WindowResizeStatus(
+                allowed=False,
+                reason=translate("Arch", "Opening height is invalid."),
+                object_kind=object_kind,
+                current_width=current_width,
+                current_height=current_height,
+                width_mode=width_mode,
+                height_mode=height_mode,
+            )
+        if not height_mode:
+            return WindowResizeStatus(
+                allowed=False,
+                reason=translate("Arch", "Opening height cannot be edited in place."),
+                object_kind=object_kind,
+                current_width=current_width,
+                current_height=current_height,
+                target_width=target_width,
+                target_height=target_height,
+                width_mode=width_mode,
+                height_mode=height_mode,
+            )
+
+    requested_resize = bool(width is not None or height is not None)
+    if (
+        requested_resize
+        and "rewrite" in {width_mode, height_mode}
+        and (("property" in {width_mode, height_mode}) or (base is None))
+    ):
+        return WindowResizeStatus(
+            allowed=False,
+            reason=translate("Arch", "Opening dimensions require incompatible resize modes."),
+            object_kind=object_kind,
+            current_width=current_width,
+            current_height=current_height,
+            target_width=target_width,
+            target_height=target_height,
+            width_mode=width_mode,
+            height_mode=height_mode,
+        )
+
+    allowed = bool(requested_resize or width_mode or height_mode)
+    noop = bool(
+        (not requested_resize)
+        or (
+            requested_resize
+            and (
+                width is None
+                or (current_width is not None and abs(target_width - current_width) <= 1e-6)
+            )
+            and (
+                height is None
+                or (current_height is not None and abs(target_height - current_height) <= 1e-6)
+            )
+        )
+    )
+
+    return WindowResizeStatus(
+        allowed=allowed,
+        object_kind=object_kind,
+        current_width=current_width,
+        current_height=current_height,
+        target_width=target_width,
+        target_height=target_height,
+        width_mode=width_mode,
+        height_mode=height_mode,
+        noop=noop,
+    )
+
+
+def canResizeWindow(obj, width=None, height=None):
+    """Return True when this opening can accept the requested size edit."""
+
+    return validateWindowResize(obj, width=width, height=height).allowed
+
+
+def canEditWindowWidth(obj):
+    """Return True when this opening supports width edits in place."""
+
+    current_width = getWindowWidthMm(obj)
+    if current_width is None or current_width <= 0.0:
+        return False
+    return validateWindowResize(obj, width=current_width).allowed
+
+
+def canEditWindowHeight(obj):
+    """Return True when this opening supports height edits in place."""
+
+    current_height = getWindowHeightMm(obj)
+    if current_height is None or current_height <= 0.0:
+        return False
+    return validateWindowResize(obj, height=current_height).allowed
+
+
+def resizeWindow(
+    obj,
+    width=None,
+    height=None,
+    preserve_anchor=True,
+    transaction_label=None,
+    raise_on_error=False,
+):
+    """Resize an existing Arch opening in place."""
+
+    status = validateWindowResize(obj, width=width, height=height)
+    if not status.allowed:
+        if raise_on_error:
+            raise ValueError(str(status.reason or "Invalid window resize"))
+        return False
+    if status.noop:
+        return True
+
+    doc = getattr(obj, "Document", None) or FreeCAD.ActiveDocument
+    if doc is None:
+        if raise_on_error:
+            raise ValueError("Opening document is unavailable")
+        return False
+
+    base = getattr(obj, "Base", None)
+    old_anchor = _get_window_anchor(obj) if preserve_anchor else None
+    if not transaction_label:
+        transaction_label = translate("Arch", "Resize Opening")
+
+    try:
+        doc.openTransaction(transaction_label)
+
+        if "rewrite" in {status.width_mode, status.height_mode}:
+            if base is None:
+                raise RuntimeError("Opening base sketch is unavailable")
+            if not _rewrite_window_size_by_scaling(
+                base,
+                target_width=status.target_width if width is not None else None,
+                target_height=status.target_height if height is not None else None,
+            ):
+                raise RuntimeError("Opening size rewrite failed")
+
+        if width is not None and hasattr(obj, "Width"):
+            obj.Width = status.target_width
+        if height is not None and hasattr(obj, "Height"):
+            obj.Height = status.target_height
+
+        doc.recompute()
+        _preserve_window_anchor(obj, old_anchor)
+        doc.recompute()
+        doc.commitTransaction()
+    except Exception:
+        try:
+            doc.abortTransaction()
+        except Exception:
+            pass
+        if raise_on_error:
+            raise
+        return False
+
+    return True
+
+
+def setWindowWidth(
+    obj,
+    value,
+    preserve_anchor=True,
+    transaction_label=None,
+    raise_on_error=False,
+):
+    """Resize an opening by changing its width."""
+
+    if not transaction_label:
+        transaction_label = translate("Arch", "Change Opening Width")
+    return resizeWindow(
+        obj,
+        width=value,
+        preserve_anchor=preserve_anchor,
+        transaction_label=transaction_label,
+        raise_on_error=raise_on_error,
+    )
+
+
+def setWindowHeight(
+    obj,
+    value,
+    preserve_anchor=True,
+    transaction_label=None,
+    raise_on_error=False,
+):
+    """Resize an opening by changing its height."""
+
+    if not transaction_label:
+        transaction_label = translate("Arch", "Change Opening Height")
+    return resizeWindow(
+        obj,
+        height=value,
+        preserve_anchor=preserve_anchor,
+        transaction_label=transaction_label,
+        raise_on_error=raise_on_error,
+    )
+
+
 def applyWindowPreset(
     obj,
     preset_name,
@@ -329,13 +625,7 @@ def applyWindowPreset(
 
         doc.recompute()
 
-        new_anchor = _get_window_anchor(obj)
-        if old_anchor is not None and new_anchor is not None:
-            delta = old_anchor.sub(new_anchor)
-            if delta.Length > 1e-6:
-                placement = FreeCAD.Placement(target_base.Placement)
-                placement.Base = placement.Base.add(delta)
-                target_base.Placement = placement
+        _preserve_window_anchor(obj, old_anchor)
 
         _remove_document_object_if_present(doc, temp_window_name)
         _remove_document_object_if_present(doc, temp_base_name)
@@ -589,6 +879,133 @@ def _rewrite_sketch_geometry(target, source):
             pass
 
 
+def _rewrite_window_size_by_scaling(base, target_width=None, target_height=None):
+    import Part
+
+    if base is None or not _is_simple_window_scalable_sketch(base):
+        return False
+
+    bounds = _get_sketch_local_axis_bounds_mm(base)
+    if not bounds:
+        return False
+
+    x_bounds, y_bounds = bounds
+    current_width = x_bounds[1] - x_bounds[0]
+    current_height = y_bounds[1] - y_bounds[0]
+    if current_width <= 1e-6 or current_height <= 1e-6:
+        return False
+
+    if target_width is None:
+        target_width = current_width
+    if target_height is None:
+        target_height = current_height
+    if target_width <= 0.0 or target_height <= 0.0:
+        return False
+
+    center_x = (x_bounds[0] + x_bounds[1]) * 0.5
+    center_y = (y_bounds[0] + y_bounds[1]) * 0.5
+    scale_x = float(target_width) / float(current_width)
+    scale_y = float(target_height) / float(current_height)
+    placement = FreeCAD.Placement(base.Placement)
+    geometry = tuple(getattr(base, "Geometry", ()) or ())
+    constraints = tuple(getattr(base, "Constraints", ()) or ())
+
+    scaled_geometry = []
+    for element in geometry:
+        if element.__class__.__name__ != "LineSegment":
+            return False
+        start_point = FreeCAD.Vector(element.StartPoint)
+        end_point = FreeCAD.Vector(element.EndPoint)
+        start_point.x = center_x + ((start_point.x - center_x) * scale_x)
+        end_point.x = center_x + ((end_point.x - center_x) * scale_x)
+        start_point.y = center_y + ((start_point.y - center_y) * scale_y)
+        end_point.y = center_y + ((end_point.y - center_y) * scale_y)
+        scaled_geometry.append(Part.LineSegment(start_point, end_point))
+
+    base.deleteAllConstraints()
+    base.deleteAllGeometry()
+    base.Placement = placement
+
+    for element in scaled_geometry:
+        base.addGeometry(element)
+
+    for constraint in constraints:
+        index = base.addConstraint(constraint)
+        name = str(getattr(constraint, "Name", "") or "").strip()
+        if not name:
+            continue
+        try:
+            base.renameConstraint(index, name)
+        except Exception:
+            pass
+
+    return True
+
+
+def _get_window_resize_mode(base, prop_name, current_length):
+    if base is None:
+        return "property"
+    if _has_named_constraint(base, prop_name):
+        return "property"
+    if current_length and current_length > 0.0:
+        if _supports_window_sketch_rewrite(base) and _is_simple_window_scalable_sketch(base):
+            return "rewrite"
+    return ""
+
+
+def _supports_window_sketch_rewrite(sketch):
+    return bool(
+        sketch is not None
+        and all(hasattr(sketch, method_name) for method_name in _WINDOW_RESIZE_REWRITE_METHODS)
+    )
+
+
+def _is_simple_window_scalable_sketch(sketch):
+    geometry = tuple(getattr(sketch, "Geometry", ()) or ())
+    if not geometry:
+        return False
+    if any(element.__class__.__name__ != "LineSegment" for element in geometry):
+        return False
+    constraints = tuple(getattr(sketch, "Constraints", ()) or ())
+    return not any(str(getattr(constraint, "Name", "") or "").strip() for constraint in constraints)
+
+
+def _get_sketch_local_axis_bounds_mm(sketch):
+    geometry = tuple(getattr(sketch, "Geometry", ()) or ())
+    if not geometry:
+        return tuple()
+
+    min_x = None
+    min_y = None
+    max_x = None
+    max_y = None
+    for element in geometry:
+        try:
+            bound_box = element.toShape().BoundBox
+        except Exception:
+            continue
+        min_x = float(bound_box.XMin) if min_x is None else min(min_x, float(bound_box.XMin))
+        min_y = float(bound_box.YMin) if min_y is None else min(min_y, float(bound_box.YMin))
+        max_x = float(bound_box.XMax) if max_x is None else max(max_x, float(bound_box.XMax))
+        max_y = float(bound_box.YMax) if max_y is None else max(max_y, float(bound_box.YMax))
+
+    if min_x is None or min_y is None or max_x is None or max_y is None:
+        return tuple()
+    return ((float(min_x), float(max_x)), (float(min_y), float(max_y)))
+
+
+def _has_named_constraint(sketch, name):
+    if sketch is None:
+        return False
+    name = str(name or "").strip()
+    if not name:
+        return False
+    constraints = tuple(getattr(sketch, "Constraints", ()) or ())
+    return any(
+        str(getattr(constraint, "Name", "") or "").strip() == name for constraint in constraints
+    )
+
+
 def _coerce_length_mm(value):
     try:
         value = value.Value
@@ -609,6 +1026,40 @@ def _get_property_length_mm(obj, name):
         return None
 
 
+def _parse_length_mm(value):
+    if value is None:
+        return None
+    length = _coerce_length_mm(value)
+    if length is not None:
+        return length
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return float(FreeCAD.Units.Quantity(text).Value)
+    except Exception:
+        return None
+
+
+def _preserve_window_anchor(obj, old_anchor):
+    if old_anchor is None:
+        return
+    new_anchor = _get_window_anchor(obj)
+    if new_anchor is None:
+        return
+    delta = old_anchor.sub(new_anchor)
+    if delta.Length <= 1e-6:
+        return
+
+    placement_target = getattr(obj, "Base", None) or obj
+    if not hasattr(placement_target, "Placement"):
+        return
+
+    placement = FreeCAD.Placement(placement_target.Placement)
+    placement.Base = placement.Base.add(delta)
+    placement_target.Placement = placement
+
+
 @dataclass(frozen=True)
 class OpeningPlanEditHandle:
     role: str
@@ -626,6 +1077,20 @@ class WindowPresetApplicationStatus:
     preset_name: str = ""
     preset_kind: str = ""
     current_preset_name: str = ""
+
+
+@dataclass(frozen=True)
+class WindowResizeStatus:
+    allowed: bool
+    reason: str = ""
+    object_kind: str = ""
+    current_width: float | None = None
+    current_height: float | None = None
+    target_width: float | None = None
+    target_height: float | None = None
+    width_mode: str = ""
+    height_mode: str = ""
+    noop: bool = False
 
 
 class _HostedOpeningPlanGeometry:
@@ -3597,8 +4062,14 @@ class _ArchWindowTaskPanel:
 
     def accept(self):
         if self.obj:
-            self.obj.Width = self.widthWidget.property("value")
-            self.obj.Height = self.heightWidget.property("value")
+            if not resizeWindow(
+                self.obj,
+                width=self.widthWidget.property("value"),
+                height=self.heightWidget.property("value"),
+                preserve_anchor=True,
+                transaction_label=translate("Arch", "Resize Opening"),
+            ):
+                _wrn(translate("Arch", "Unable to resize opening in place") + "\n")
             self.obj.Opening = self.openingWidget.property("value")
         self.basepanel.obj = self.obj
         return self.basepanel.accept()
