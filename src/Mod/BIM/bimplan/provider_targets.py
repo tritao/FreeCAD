@@ -97,6 +97,13 @@ def is_plan_provider_target_object(session, obj) -> bool:
     return get_plan_provider_target_for_object(session, obj) is not None
 
 
+def is_plan_provider_target_visible_for_mode(session, obj, mode=None) -> bool:
+    target = get_plan_provider_target_for_object(session, obj)
+    if target is None:
+        return False
+    return bool(session.is_plan_provider_overlay_visible_for_mode(target, mode=mode))
+
+
 def get_plan_provider_target_role_key(session, obj) -> str:
     target = get_plan_provider_target_for_object(session, obj)
     if target is None:

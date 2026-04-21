@@ -4,6 +4,8 @@
 
 import FreeCAD
 import math
+from bimplan import provider_targets as plan_provider_targets
+from bimplan import targets as plan_targets
 from bimplan.providers import PlanOverlayMarkerKind
 
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
@@ -548,6 +550,7 @@ def get_plan_target_at_position(session, mouse_pos):
 
         wall_candidate = None
         symbol_candidate = None
+        provider_candidate = None
         region_candidate = None
         space_candidate = None
         result = (None, None)
@@ -559,22 +562,22 @@ def get_plan_target_at_position(session, mouse_pos):
             obj_name = info.get("Object")
             if not doc_name or not obj_name:
                 continue
-            try:
-                doc = FreeCAD.getDocument(str(doc_name))
-            except Exception:
-                doc = None
-            if not doc:
+            obj = _resolve_document_object(session, doc_name, obj_name)
+            if obj is None:
                 continue
-            obj = doc.getObject(str(obj_name))
             parent_obj = info.get("ParentObject")
-            target_kind, target_obj = session._get_plan_target_for_object(
-                obj, parent_obj=parent_obj
+            target_kind, target_obj = plan_targets.get_plan_pick_target_for_object(
+                session,
+                obj,
+                parent_obj=parent_obj,
             )
             if target_kind == "opening":
                 result = ("opening", target_obj)
                 break
             if target_kind == "symbol" and symbol_candidate is None:
                 symbol_candidate = target_obj
+            elif target_kind == "provider" and provider_candidate is None:
+                provider_candidate = target_obj
             elif target_kind == "region" and region_candidate is None:
                 region_candidate = target_obj
             elif target_kind == "wall" and wall_candidate is None:
@@ -584,6 +587,8 @@ def get_plan_target_at_position(session, mouse_pos):
         if result == (None, None):
             if symbol_candidate is not None and wall_candidate is None:
                 result = ("symbol", symbol_candidate)
+            elif provider_candidate is not None:
+                result = ("provider", provider_candidate)
             else:
                 opening_candidates = None
                 if wall_candidate is not None:

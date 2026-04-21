@@ -294,6 +294,7 @@ SET(bimtests_SRCS
     bimtests/TestBimLibraryGui.py
     bimtests/TestBimPlanCore.py
     bimtests/TestBimPlanEditGui.py
+    bimtests/TestBimPlanProviderSelectionGui.py
     bimtests/TestBimProjectManagerGui.py
     bimtests/TestArchWallJoinWorkflowGui.py
     bimtests/TestArchMaterial.py
