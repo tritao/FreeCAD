@@ -524,6 +524,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertTrue(any("Action Needed" in text for text in labels))
         self.assertTrue(any("Utilities" in text for text in labels))
         self.assertTrue(any("More Context" in text for text in labels))
+        self.assertTrue(any("Mode" in text for text in labels))
         self.assertTrue(any("Selection" in text for text in labels))
         self.assertTrue(any("Provider needs review" in text for text in labels))
         self.assertTrue(any("Test Selection" in text for text in labels))
@@ -618,12 +619,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             any("Electrical Preview" in str(widget.text()) for widget in architecture_checkboxes)
         )
 
-        overlay_mode_combo = None
-        for combo in panel.integration_panel.findChildren(QtGui.QComboBox):
-            if combo.findData("electrical") >= 0 and combo.findData("architecture") >= 0:
-                overlay_mode_combo = combo
-                break
+        overlay_mode_combo = panel._integration_overlay_mode_combo
         self.assertIsNotNone(overlay_mode_combo)
+        self.assertTrue(overlay_mode_combo.isVisibleTo(panel.integration_panel))
 
         overlay_mode_combo.setCurrentIndex(overlay_mode_combo.findData("electrical"))
         self.pump_gui_events()
@@ -641,11 +639,6 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             any("Provider Preview" in str(widget.text()) for widget in electrical_checkboxes)
         )
 
-        overlay_mode_combo = None
-        for combo in panel.integration_panel.findChildren(QtGui.QComboBox):
-            if combo.findData("all") >= 0 and combo.findData("architecture") >= 0:
-                overlay_mode_combo = combo
-                break
         self.assertIsNotNone(overlay_mode_combo)
         overlay_mode_combo.setCurrentIndex(overlay_mode_combo.findData("all"))
         self.pump_gui_events()

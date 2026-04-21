@@ -298,6 +298,30 @@ class PlanEditControlsWidget:
             pass
         self._apply_integration_panel_styles(panel)
 
+        overlay_mode_row = QtGui.QWidget(panel)
+        overlay_mode_layout = QtGui.QHBoxLayout(overlay_mode_row)
+        overlay_mode_layout.setContentsMargins(0, 0, 0, 0)
+        overlay_mode_layout.setSpacing(8)
+        overlay_mode_label = self._make_wrapped_plain_label(
+            QtGui,
+            translate("BIM_PlanEdit", "Mode"),
+            overlay_mode_row,
+            bold=True,
+        )
+        self._set_integration_style_property(overlay_mode_label, "planKeyValueLabel", "true")
+        overlay_mode_layout.addWidget(overlay_mode_label)
+        self._integration_overlay_mode_combo = QtGui.QComboBox(overlay_mode_row)
+        for mode_key, mode_text in self._get_provider_overlay_mode_options():
+            self._integration_overlay_mode_combo.addItem(mode_text, mode_key)
+        self._set_provider_overlay_mode_combo_value(self.session.get_plan_provider_overlay_mode())
+        self._integration_overlay_mode_combo.currentIndexChanged.connect(
+            lambda index, current_combo=self._integration_overlay_mode_combo: (
+                self.on_provider_overlay_mode_changed(current_combo.itemData(index))
+            )
+        )
+        overlay_mode_layout.addWidget(self._integration_overlay_mode_combo, 1)
+        layout.addWidget(overlay_mode_row)
+
         self.integration_summary = QtGui.QLabel(panel)
         self.integration_summary.setWordWrap(True)
         self._set_integration_style_property(self.integration_summary, "planPanelSummary", "true")
@@ -1523,34 +1547,6 @@ class PlanEditControlsWidget:
             translate("BIM_PlanEdit", "Overlays"),
         )
 
-        mode_row_widget = QtGui.QWidget(block)
-        mode_row = QtGui.QHBoxLayout(mode_row_widget)
-        mode_row.setContentsMargins(0, 0, 0, 0)
-        mode_row.setSpacing(8)
-        mode_label = self._make_wrapped_plain_label(
-            QtGui,
-            translate("BIM_PlanEdit", "Mode"),
-            mode_row_widget,
-            bold=True,
-        )
-        self._set_integration_style_property(mode_label, "planKeyValueLabel", "true")
-        mode_row.addWidget(mode_label)
-        mode_combo = QtGui.QComboBox(mode_row_widget)
-        for mode_key, mode_text in self._get_provider_overlay_mode_options():
-            mode_combo.addItem(mode_text, mode_key)
-        current_index = mode_combo.findData(str(active_mode or "architecture"))
-        if current_index < 0:
-            current_index = 0
-        mode_combo.setCurrentIndex(current_index)
-        mode_combo.currentIndexChanged.connect(
-            lambda index, current_combo=mode_combo: self.on_provider_overlay_mode_changed(
-                current_combo.itemData(index)
-            )
-        )
-        mode_row.addWidget(mode_combo)
-        mode_row.addStretch(1)
-        layout.addWidget(mode_row_widget)
-
         content = QtGui.QWidget(block)
         content_layout = QtGui.QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -1558,7 +1554,6 @@ class PlanEditControlsWidget:
         layout.addWidget(content)
 
         self._integration_overlay_block = block
-        self._integration_overlay_mode_combo = mode_combo
         self._integration_overlay_content_layout = content_layout
         self._refresh_provider_overlay_legend_block(items, active_mode=active_mode)
         return block
@@ -1607,7 +1602,6 @@ class PlanEditControlsWidget:
 
     def _reset_integration_panel_dynamic_refs(self):
         self._integration_overlay_block = None
-        self._integration_overlay_mode_combo = None
         self._integration_overlay_content_layout = None
 
     def _hide_integration_panel(self):
@@ -1745,7 +1739,7 @@ class PlanEditControlsWidget:
                     QtGui,
                     translate(
                         "BIM_PlanEdit",
-                        "No overlays are available in {mode} mode.",
+                        "No overlays are available for {mode}.",
                     ).format(
                         mode=self._format_provider_overlay_mode_label(active_mode),
                     ),
@@ -1849,6 +1843,7 @@ class PlanEditControlsWidget:
             tools = self._sort_provider_tools(tools)
             overlay_items = self._build_provider_overlay_legend_items(overlays)
             overlay_mode = self.session.get_plan_provider_overlay_mode()
+            self._set_provider_overlay_mode_combo_value(overlay_mode)
             active_overlay_items = self._filter_provider_overlay_legend_items_for_mode(
                 overlay_items,
                 active_mode=overlay_mode,
