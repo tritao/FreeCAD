@@ -48,6 +48,9 @@ class PlanEditControlsWidget:
         self._integration_refresh_generation = 0
         self._integration_action_buttons = []
         self._integration_overlay_checkboxes = []
+        self._integration_overlay_block = None
+        self._integration_overlay_mode_combo = None
+        self._integration_overlay_content_layout = None
         self._modal_interaction_state = None
         self._region_parent_space_items = []
         self.header_mode_label = None
@@ -880,48 +883,16 @@ class PlanEditControlsWidget:
         mode_row.addStretch(1)
         layout.addLayout(mode_row)
 
-        grouped_items = self._group_provider_overlay_legend_items(items, active_mode=active_mode)
-        if not grouped_items:
-            empty_label = self._make_wrapped_plain_label(
-                QtGui,
-                translate("BIM_PlanEdit", "No overlays are available in {mode} mode.").format(
-                    mode=self._format_provider_overlay_mode_label(active_mode),
-                ),
-                block,
-            )
-            layout.addWidget(empty_label)
-            return block
+        content = QtGui.QWidget(block)
+        content_layout = QtGui.QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(4)
+        layout.addWidget(content)
 
-        for _category, category_label, category_items in grouped_items:
-            heading = self._make_wrapped_plain_label(QtGui, category_label, block, bold=True)
-            layout.addWidget(heading)
-            for provider_id, overlay_key, label, color, checked, _item_category in category_items:
-                row = QtGui.QHBoxLayout()
-                row.setSpacing(6)
-                swatch = QtGui.QLabel(block)
-                swatch.setFixedSize(12, 12)
-                swatch.setStyleSheet(
-                    "background-color: {}; border: 1px solid #555;".format(
-                        self._format_provider_overlay_color(color)
-                    )
-                )
-                row.addWidget(swatch)
-
-                checkbox = QtGui.QCheckBox(label, block)
-                checkbox.setChecked(bool(checked))
-                checkbox.toggled.connect(
-                    lambda checked, current_provider_id=provider_id, current_overlay_key=overlay_key: (
-                        self.on_provider_overlay_visibility_changed(
-                            current_provider_id,
-                            current_overlay_key,
-                            checked,
-                        )
-                    )
-                )
-                self._integration_overlay_checkboxes.append(checkbox)
-                row.addWidget(checkbox)
-                row.addStretch(1)
-                layout.addLayout(row)
+        self._integration_overlay_block = block
+        self._integration_overlay_mode_combo = mode_combo
+        self._integration_overlay_content_layout = content_layout
+        self._refresh_provider_overlay_legend_block(items, active_mode=active_mode)
         return block
 
     def _format_provider_overlay_color(self, color):
@@ -946,10 +917,16 @@ class PlanEditControlsWidget:
         except Exception:
             pass
 
+    def _reset_integration_panel_dynamic_refs(self):
+        self._integration_overlay_block = None
+        self._integration_overlay_mode_combo = None
+        self._integration_overlay_content_layout = None
+
     def _hide_integration_panel(self):
         self._integration_panel_state = None
         self._integration_action_buttons = []
         self._integration_overlay_checkboxes = []
+        self._reset_integration_panel_dynamic_refs()
         if self.integration_summary is not None:
             try:
                 self.integration_summary.clear()
@@ -1038,6 +1015,79 @@ class PlanEditControlsWidget:
             self._integration_refresh_queued = False
             self._refresh_integration_panel(defer=False)
 
+    def _set_provider_overlay_mode_combo_value(self, active_mode):
+        combo = self._integration_overlay_mode_combo
+        if combo is None:
+            return
+        current_index = combo.findData(str(active_mode or "architecture"))
+        if current_index < 0:
+            current_index = 0
+        if combo.currentIndex() == current_index:
+            return
+        try:
+            combo.blockSignals(True)
+            combo.setCurrentIndex(current_index)
+        finally:
+            try:
+                combo.blockSignals(False)
+            except Exception:
+                pass
+
+    def _refresh_provider_overlay_legend_block(self, items, active_mode="architecture"):
+        if self._integration_overlay_content_layout is None:
+            return
+        try:
+            from PySide import QtGui
+        except Exception:
+            return
+        self._set_provider_overlay_mode_combo_value(active_mode)
+        self._integration_overlay_checkboxes = []
+        self._clear_layout(self._integration_overlay_content_layout)
+
+        grouped_items = self._group_provider_overlay_legend_items(items, active_mode=active_mode)
+        parent = self._integration_overlay_block or self.integration_panel
+        if not grouped_items:
+            empty_label = self._make_wrapped_plain_label(
+                QtGui,
+                translate("BIM_PlanEdit", "No overlays are available in {mode} mode.").format(
+                    mode=self._format_provider_overlay_mode_label(active_mode),
+                ),
+                parent,
+            )
+            self._integration_overlay_content_layout.addWidget(empty_label)
+            return
+
+        for _category, category_label, category_items in grouped_items:
+            heading = self._make_wrapped_plain_label(QtGui, category_label, parent, bold=True)
+            self._integration_overlay_content_layout.addWidget(heading)
+            for provider_id, overlay_key, label, color, checked, _item_category in category_items:
+                row = QtGui.QHBoxLayout()
+                row.setSpacing(6)
+                swatch = QtGui.QLabel(parent)
+                swatch.setFixedSize(12, 12)
+                swatch.setStyleSheet(
+                    "background-color: {}; border: 1px solid #555;".format(
+                        self._format_provider_overlay_color(color)
+                    )
+                )
+                row.addWidget(swatch)
+
+                checkbox = QtGui.QCheckBox(label, parent)
+                checkbox.setChecked(bool(checked))
+                checkbox.toggled.connect(
+                    lambda checked, current_provider_id=provider_id, current_overlay_key=overlay_key: (
+                        self.on_provider_overlay_visibility_changed(
+                            current_provider_id,
+                            current_overlay_key,
+                            checked,
+                        )
+                    )
+                )
+                self._integration_overlay_checkboxes.append(checkbox)
+                row.addWidget(checkbox)
+                row.addStretch(1)
+                self._integration_overlay_content_layout.addLayout(row)
+
     def _refresh_integration_panel(self, defer=False):
         with self.session._plan_perf_trace_span("refresh_integration_panel"):
             if (
@@ -1084,27 +1134,28 @@ class PlanEditControlsWidget:
                 overlay_items,
                 active_mode=overlay_mode,
             )
-            state = (tools, overlay_mode, overlay_items, issues, sections)
+            summary_sections, regular_sections, detail_sections = (
+                self._partition_provider_sections(sections)
+            )
+            state = (tools, overlay_items, issues, sections)
             if not tools and not overlay_items and not issues and not sections:
                 self._hide_integration_panel()
                 return
+            self._set_integration_summary_text(
+                issues,
+                sections,
+                tools=tools,
+                overlay_items=active_overlay_items,
+                summary_sections=summary_sections,
+            )
             if state != self._integration_panel_state:
                 self._integration_panel_state = state
                 self._integration_action_buttons = []
                 self._integration_overlay_checkboxes = []
+                self._reset_integration_panel_dynamic_refs()
                 self._clear_layout(self.integration_content_layout)
                 from PySide import QtGui
 
-                summary_sections, regular_sections, detail_sections = (
-                    self._partition_provider_sections(sections)
-                )
-                self._set_integration_summary_text(
-                    issues,
-                    sections,
-                    tools=tools,
-                    overlay_items=active_overlay_items,
-                    summary_sections=summary_sections,
-                )
                 for section in summary_sections:
                     block = self._make_integration_block(
                         QtGui,
@@ -1147,6 +1198,11 @@ class PlanEditControlsWidget:
                     )
                     self.integration_content_layout.addWidget(group)
                 self.integration_content_layout.addStretch(1)
+            elif overlay_items:
+                self._refresh_provider_overlay_legend_block(
+                    overlay_items,
+                    active_mode=overlay_mode,
+                )
             self._set_integration_panel_visible(True)
 
     def _get_space_type_display_options(self, options):
@@ -2020,6 +2076,12 @@ class PlanEditControlsWidget:
             self._hide_region_editor()
             self._hide_window_editor()
             self._apply_modal_interaction_state(self.session._is_modal_plan_interaction_active())
+
+    def refresh_provider_overlay_mode_from_session(self):
+        with self.session._plan_perf_trace_span("refresh_task_panel_provider_overlay_mode_widget"):
+            if self.form is None or self.integration_panel is None:
+                return
+            self._refresh_integration_panel(defer=False)
 
     def _refresh_space_editor(self):
         from PySide import QtGui
