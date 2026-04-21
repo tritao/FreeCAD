@@ -131,6 +131,10 @@ _PLAN_VISUAL_WALL_EDIT_PREVIEW = "wall_edit_preview"
 _PLAN_VISUAL_PROVIDER_OVERLAYS = "provider_overlays"
 _PLAN_VISUAL_VIEW_SCALE = "view_scale"
 _PLAN_VISUAL_ALL = "all"
+_PLAN_PROVIDER_OVERLAY_MODE_ALL = "all"
+_PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE = "architecture"
+_PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL = "electrical"
+_PLAN_PROVIDER_OVERLAY_MODE_PLUMBING = "plumbing"
 _PLAN_GUI_SELECTION_SYNC_DELAY_MS = 80
 _PLAN_HOVER_PICK_INTERVAL_MS = 80
 _PLAN_WALL_GRIP_REFRESH_DELAY_MS = 120
@@ -299,6 +303,7 @@ class PlanEditSession:
         self._provider_overlay_trackers = []
         self._provider_overlay_state = None
         self._provider_overlay_visibility = {}
+        self._provider_overlay_mode = _PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
         self._provider_selected_objects = []
         self._provider_point_host_target = None
         self._provider_point_host_source = ""
@@ -2843,7 +2848,40 @@ class PlanEditSession:
             return None
         return (provider_id, overlay_key)
 
-    def is_plan_provider_overlay_visible(self, overlay):
+    def _normalize_plan_provider_overlay_mode(self, mode):
+        normalized = str(mode or "").strip().lower()
+        if normalized == _PLAN_PROVIDER_OVERLAY_MODE_ALL:
+            return _PLAN_PROVIDER_OVERLAY_MODE_ALL
+        if normalized == _PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL:
+            return _PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL
+        if normalized == _PLAN_PROVIDER_OVERLAY_MODE_PLUMBING:
+            return _PLAN_PROVIDER_OVERLAY_MODE_PLUMBING
+        return _PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
+
+    def get_plan_provider_overlay_mode(self):
+        return self._normalize_plan_provider_overlay_mode(
+            getattr(self, "_provider_overlay_mode", _PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE)
+        )
+
+    def set_plan_provider_overlay_mode(self, mode):
+        normalized = self._normalize_plan_provider_overlay_mode(mode)
+        if normalized == self.get_plan_provider_overlay_mode():
+            return False
+        self._provider_overlay_mode = normalized
+        self._provider_overlay_state = None
+        self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_PROVIDER_OVERLAYS)
+        self._refresh_task_panel_status()
+        return True
+
+    def get_plan_provider_overlay_category(self, overlay):
+        category = str(getattr(overlay, "category", "") or "").strip().lower()
+        if category == _PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL:
+            return _PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL
+        if category == _PLAN_PROVIDER_OVERLAY_MODE_PLUMBING:
+            return _PLAN_PROVIDER_OVERLAY_MODE_PLUMBING
+        return _PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
+
+    def is_plan_provider_overlay_enabled(self, overlay):
         key = self.get_plan_provider_overlay_visibility_key(
             getattr(overlay, "provider_id", ""),
             getattr(overlay, "key", ""),
@@ -2851,6 +2889,21 @@ class PlanEditSession:
         if key is None:
             return True
         return self._provider_overlay_visibility.get(key, True)
+
+    def is_plan_provider_overlay_visible_for_mode(self, overlay, mode=None):
+        overlay_mode = self._normalize_plan_provider_overlay_mode(
+            self.get_plan_provider_overlay_mode() if mode is None else mode
+        )
+        if overlay_mode == _PLAN_PROVIDER_OVERLAY_MODE_ALL:
+            return True
+        return self.get_plan_provider_overlay_category(overlay) == overlay_mode
+
+    def is_plan_provider_overlay_visible(self, overlay):
+        if not bool(getattr(overlay, "visible", True)):
+            return False
+        if not self.is_plan_provider_overlay_enabled(overlay):
+            return False
+        return self.is_plan_provider_overlay_visible_for_mode(overlay)
 
     def set_plan_provider_overlay_visible(self, provider_id, overlay_key, visible):
         key = self.get_plan_provider_overlay_visibility_key(provider_id, overlay_key)
