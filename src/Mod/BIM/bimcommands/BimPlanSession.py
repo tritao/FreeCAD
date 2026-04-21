@@ -7951,6 +7951,13 @@ class PlanEditSession:
     def _can_apply_selected_window_height(self):
         return plan_window_edit.can_apply_selected_window_height(self)
 
+    def _can_apply_selected_window_size(self, width_value=None, height_value=None):
+        return plan_window_edit.can_apply_selected_window_size(
+            self,
+            width_value=width_value,
+            height_value=height_value,
+        )
+
     def _apply_selected_window_style_preset(self, preset_name):
         return plan_window_edit.apply_selected_window_style_preset(self, preset_name)
 
@@ -7959,6 +7966,13 @@ class PlanEditSession:
 
     def _set_selected_window_height(self, value):
         return plan_window_edit.set_selected_window_height(self, value)
+
+    def _set_selected_window_size(self, width_value=None, height_value=None):
+        return plan_window_edit.set_selected_window_size(
+            self,
+            width_value=width_value,
+            height_value=height_value,
+        )
 
     def _set_selected_region_label(self, label):
         return plan_spaces.set_selected_region_label(self, label)

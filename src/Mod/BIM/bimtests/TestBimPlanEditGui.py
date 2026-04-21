@@ -2324,8 +2324,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(
             session._get_selected_window_height_text(), str(panel.window_height_edit.text())
         )
-        self.assertFalse(panel.window_width_apply_button.isEnabled())
-        self.assertFalse(panel.window_height_apply_button.isEnabled())
+        self.assertIsNotNone(panel.window_size_apply_button)
+        self.assertFalse(panel.window_size_apply_button.isEnabled())
         self.assertIsNotNone(combo)
         self.assertFalse(combo.isEditable())
         self.assertEqual("Custom / Current", str(combo.itemText(0)))
@@ -2373,9 +2373,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         panel = session.task_panel
         panel.window_width_edit.setText("950 mm")
         self.pump_gui_events()
-        self.assertTrue(panel.window_width_apply_button.isEnabled())
+        self.assertTrue(panel.window_size_apply_button.isEnabled())
 
-        panel.window_width_apply_button.click()
+        panel.window_size_apply_button.click()
         self.pump_gui_events(timeout_ms=500)
         panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
@@ -2395,7 +2395,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(
             session._get_selected_window_width_text(), str(panel.window_width_edit.text())
         )
-        self.assertFalse(panel.window_width_apply_button.isEnabled())
+        self.assertFalse(panel.window_size_apply_button.isEnabled())
 
     def test_plan_edit_selected_window_can_change_height(self):
         """Selected windows should accept height edits without drifting their center."""
@@ -2427,9 +2427,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         panel = session.task_panel
         panel.window_height_edit.setText("1400 mm")
         self.pump_gui_events()
-        self.assertTrue(panel.window_height_apply_button.isEnabled())
+        self.assertTrue(panel.window_size_apply_button.isEnabled())
 
-        panel.window_height_apply_button.click()
+        panel.window_size_apply_button.click()
         self.pump_gui_events(timeout_ms=500)
         panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
@@ -2451,7 +2451,70 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(
             session._get_selected_window_height_text(), str(panel.window_height_edit.text())
         )
-        self.assertFalse(panel.window_height_apply_button.isEnabled())
+        self.assertFalse(panel.window_size_apply_button.isEnabled())
+
+    def test_plan_edit_selected_window_can_change_size_together(self):
+        """Selected windows should apply width and height changes in one step."""
+
+        def get_shape_center(obj):
+            bound_box = obj.Shape.BoundBox
+            return FreeCAD.Vector(
+                (float(bound_box.XMin) + float(bound_box.XMax)) * 0.5,
+                (float(bound_box.YMin) + float(bound_box.YMax)) * 0.5,
+                (float(bound_box.ZMin) + float(bound_box.ZMax)) * 0.5,
+            )
+
+        level, wall, window = self._make_windowed_plan_wall()
+        original_center = get_shape_center(window.Base)
+        original_width = ArchWindow.getWindowWidthMm(window)
+        original_height = ArchWindow.getWindowHeightMm(window)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(session._select_opening_for_plan_edit(window, sync_gui_selection=True))
+        session.task_panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        panel = session.task_panel
+        panel.window_width_edit.setText("950 mm")
+        panel.window_height_edit.setText("1400 mm")
+        self.pump_gui_events()
+        self.assertTrue(panel.window_size_apply_button.isEnabled())
+
+        panel.window_size_apply_button.click()
+        self.pump_gui_events(timeout_ms=500)
+        panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        updated_center = get_shape_center(window.Base)
+        updated_width = ArchWindow.getWindowWidthMm(window)
+        updated_height = ArchWindow.getWindowHeightMm(window)
+        self.assertIn(wall, window.Hosts)
+        self.assertAlmostEqual(original_center.x, updated_center.x, delta=1e-6)
+        self.assertAlmostEqual(original_center.y, updated_center.y, delta=1e-6)
+        self.assertAlmostEqual(original_center.z, updated_center.z, delta=1e-6)
+        self.assertAlmostEqual(original_width, 800.0, delta=1e-6)
+        self.assertAlmostEqual(original_height, 1200.0, delta=1e-6)
+        self.assertAlmostEqual(updated_width, 950.0, delta=1e-6)
+        self.assertAlmostEqual(updated_height, 1400.0, delta=1e-6)
+        self.assertAlmostEqual(
+            float(getattr(window.Width, "Value", window.Width)), 950.0, delta=1e-6
+        )
+        self.assertAlmostEqual(
+            float(getattr(window.Height, "Value", window.Height)), 1400.0, delta=1e-6
+        )
+        self.assertEqual(
+            session._get_selected_window_width_text(), str(panel.window_width_edit.text())
+        )
+        self.assertEqual(
+            session._get_selected_window_height_text(), str(panel.window_height_edit.text())
+        )
+        self.assertFalse(panel.window_size_apply_button.isEnabled())
 
     def test_plan_edit_selected_window_can_apply_built_in_style_preset(self):
         """Selected windows should accept built-in preset rewrites without drifting."""
