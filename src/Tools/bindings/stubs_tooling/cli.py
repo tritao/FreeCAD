@@ -28,7 +28,7 @@ from .generator import (
     markdown_report,
     write_outputs,
 )
-from .model import DEFAULT_CLASS_OVERLAY_DIR, DEFAULT_OVERLAY_DIR, DEFAULT_OVERRIDE_DIR
+from .model import DEFAULT_OVERLAY_DIR, DEFAULT_OVERRIDE_DIR
 from .parsing import iter_source_files
 
 DESCRIPTION = """Generate type-checker stubs for FreeCAD Python bindings.
@@ -91,14 +91,6 @@ def add_generation_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "Curated PyCXX source-signature override directory for generated skeletons. "
             f"Defaults to {DEFAULT_OVERRIDE_DIR} when that directory exists."
-        ),
-    )
-    parser.add_argument(
-        "--class-overlay-dir",
-        type=Path,
-        help=(
-            "Curated checker-only class overlay directory to merge into generated public stubs. "
-            f"Defaults to {DEFAULT_CLASS_OVERLAY_DIR} when that directory exists."
         ),
     )
     parser.add_argument(
@@ -176,11 +168,6 @@ def run_generate(args: argparse.Namespace) -> int:
         if args.no_overlays
         else resolve_optional_dir(root, args.overlay_dir, DEFAULT_OVERLAY_DIR)
     )
-    class_overlay_dir = (
-        None
-        if args.no_overlays
-        else resolve_optional_dir(root, args.class_overlay_dir, DEFAULT_CLASS_OVERLAY_DIR)
-    )
 
     if args.out_dir:
         out_dir = args.out_dir if args.out_dir.is_absolute() else root / args.out_dir
@@ -192,7 +179,6 @@ def run_generate(args: argparse.Namespace) -> int:
             type_registrations,
             stub_signature_overrides,
             overlay_dir,
-            class_overlay_dir,
         )
         summary = (
             f"Wrote {len(methods)} registrations and {len(classes)} class bindings to {out_dir} "

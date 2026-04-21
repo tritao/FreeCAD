@@ -27,7 +27,6 @@ SKIPPED_SOURCE_PREFIXES = (
     ("src", "Tools", "bindings", "templates"),
 )
 DEFAULT_OVERLAY_DIR = Path("src/Tools/bindings/stubs/inputs/overlays")
-DEFAULT_CLASS_OVERLAY_DIR = Path("src/Tools/bindings/stubs/inputs/class-overlays")
 DEFAULT_OVERRIDE_DIR = Path("src/Tools/bindings/stubs/inputs/pycxx-overrides")
 
 ADD_METHOD_RE = re.compile(r"\b(?P<kind>add_(?:varargs|keyword|noargs)_method)\s*\(")

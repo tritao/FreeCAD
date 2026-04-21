@@ -29,6 +29,7 @@ def class_declarations(source_code):
 def typing_only(method):
     """
     Mark a method as typing-only so it is ignored by binding code generation.
+    Use class-body if TYPE_CHECKING blocks for typing-only attributes.
     """
     ...
 

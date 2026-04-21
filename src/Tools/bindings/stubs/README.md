@@ -35,7 +35,6 @@ That command writes:
   is not committed.
 
 Keep hand-written public module overlays under `inputs/overlays/`. Keep
-checker-only partial class augmentations under `inputs/class-overlays/`. Keep
 generated PyCXX type signature inputs under `inputs/pycxx-overrides/`, using
 public import names such as
 `inputs/pycxx-overrides/FreeCADGui/_View3DInventor.pyi`. Do not edit generated
@@ -71,9 +70,7 @@ generator, not the published stub tree. Use `@typing_only` on methods inside a
 binding `.pyi` class when extra typing-only methods belong to that class and
 should stay next to the binding source. Use class-body `if TYPE_CHECKING:`
 blocks for typing-only attributes that should stay next to the binding source.
-Use `inputs/class-overlays/` for
-typing-only additions that should stay outside the binding `.pyi` inputs. Use
-curated overlays for APIs that
+Use curated overlays for APIs that
 still need hand-written public module stubs, including manual `PyMethodDef`,
 Boost.Python, or pybind code that is not represented in the binding `.pyi`
 generator model. Keep these files focused on public Python signatures. Avoid
@@ -83,6 +80,25 @@ against the implementation.
 When a manual API is large or actively changing, prefer adding generator input
 for it instead of growing a large overlay. When it is small, stable, or hard to
 model in the generator, a maintained overlay is the lower-risk option.
+
+### Typing-only Members
+
+Prefer source-side typing additions when they naturally belong to an existing
+binding class.
+
+- Use `@typing_only` for methods.
+- Use class-body `if TYPE_CHECKING:` blocks for attributes.
+
+This split matches the current binding parser behavior:
+
+- the legacy method parser still walks class-body `if` blocks, so
+  `if TYPE_CHECKING:` is not enough to hide methods from binding generation
+- the legacy attribute parser only consumes top-level class attributes, so
+  attributes inside `if TYPE_CHECKING:` stay stub-only
+
+The public stub generator flattens class-body `if TYPE_CHECKING:` attribute
+blocks into ordinary class members in the emitted stubs, so the published stub
+surface stays clean.
 
 ## Maintenance Notes
 

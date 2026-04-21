@@ -7,7 +7,7 @@ end-to-end pipeline:
 - discover Python-facing registrations and binding classes from C++ and ``.pyi``
   sources
 - map raw findings onto public FreeCAD module names
-- merge curated overlays and checker-only class augmentations
+- merge curated overlays
 - emit both debug artifacts and the final public stub tree
 
 It relies on ``type_context_rules`` only for cases that cannot be derived
@@ -1053,14 +1053,12 @@ def public_module_names(
     classes: list[BindingClass],
     type_registrations: dict[str, list[str]],
     overlay_dir: Path | None,
-    class_overlay_dir: Path | None,
 ) -> set[str]:
     return (
         module_names_from_methods(methods)
         | module_names_from_classes(classes)
         | module_names_from_type_methods(methods, type_registrations)
         | module_names_from_overlays(overlay_dir)
-        | module_names_from_overlays(class_overlay_dir)
     )
 
 
@@ -2005,117 +2003,6 @@ def top_level_symbol_names(node: ast.stmt) -> set[str]:
             return set()
 
 
-def class_member_name(node: ast.stmt) -> str | None:
-    match node:
-        case ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name) | ast.ClassDef(name=name):
-            return name
-        case ast.AnnAssign(target=ast.Name(id=name)):
-            return name
-        case ast.Assign(targets=targets):
-            for target in targets:
-                if isinstance(target, ast.Name):
-                    return target.id
-            return None
-        case _:
-            return None
-
-
-def merge_class_overlay_module(target_source: str, overlay_source: str) -> str:
-    target_tree = ast.parse(target_source)
-    overlay_tree = ast.parse(overlay_source)
-
-    target_classes = {
-        node.name: node for node in target_tree.body if isinstance(node, ast.ClassDef)
-    }
-    target_symbols = public_stub_symbols(target_source)
-
-    for node in overlay_tree.body:
-        if isinstance(node, ast.ClassDef):
-            existing = target_classes.get(node.name)
-            if existing is None:
-                copied_node = copy.deepcopy(node)
-                target_tree.body.append(copied_node)
-                target_classes[node.name] = copied_node
-                target_symbols.add(node.name)
-                continue
-
-            overlay_docstring = (
-                len(node.body) > 0
-                and isinstance(node.body[0], ast.Expr)
-                and isinstance(node.body[0].value, ast.Constant)
-                and isinstance(node.body[0].value.value, str)
-            )
-            overlay_members = node.body[1:] if overlay_docstring else node.body
-            replacement_names = {
-                name
-                for member in overlay_members
-                if (name := class_member_name(member)) is not None
-            }
-            preserved_body: list[ast.stmt] = []
-            for member in existing.body:
-                member_name = class_member_name(member)
-                if member_name is not None and member_name in replacement_names:
-                    continue
-                preserved_body.append(member)
-            existing.body = preserved_body + [copy.deepcopy(member) for member in overlay_members]
-            continue
-
-        names = top_level_symbol_names(node)
-        if names and names.issubset(target_symbols):
-            continue
-        insertion_index = 0
-        while insertion_index < len(target_tree.body):
-            current = target_tree.body[insertion_index]
-            if (
-                isinstance(current, ast.Expr)
-                and isinstance(current.value, ast.Constant)
-                and isinstance(current.value.value, str)
-            ):
-                insertion_index += 1
-                continue
-            if isinstance(current, (ast.Import, ast.ImportFrom, ast.Assign, ast.AnnAssign)):
-                insertion_index += 1
-                continue
-            break
-        target_tree.body.insert(insertion_index, copy.deepcopy(node))
-        target_symbols |= names
-
-    merged = ast.unparse(target_tree).rstrip() + "\n"
-    preamble = leading_comment_block(target_source)
-    if preamble:
-        return f"{preamble}\n\n{merged}"
-    return merged
-
-
-def apply_class_overlay_stubs(
-    class_overlay_dir: Path,
-    target_dir: Path,
-    module_names: set[str] | None = None,
-) -> int:
-    count = 0
-    if not class_overlay_dir.exists():
-        return count
-
-    for source in sorted(class_overlay_dir.rglob("*.pyi")):
-        relative = source.relative_to(class_overlay_dir)
-        module_name = overlay_module_name(relative)
-        target = (
-            module_stub_path(target_dir, module_name, module_names)
-            if module_names and module_name
-            else target_dir / relative
-        )
-        if not target.exists():
-            continue
-        merged = merge_class_overlay_module(
-            target.read_text(encoding="utf-8"),
-            source.read_text(encoding="utf-8"),
-        )
-        target.write_text(merged, encoding="utf-8")
-        count += 1
-
-    return count
-
-
 def markdown_report(methods: list[BindingMethod]) -> str:
     by_family = Counter(method.family for method in methods)
     by_context = Counter(
@@ -2162,7 +2049,6 @@ def write_outputs(
     type_registrations: dict[str, list[str]],
     stub_signature_overrides: StubSignatureOverrides,
     overlay_dir: Path | None = None,
-    class_overlay_dir: Path | None = None,
 ) -> int:
     validate_public_class_aliases(classes)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -2179,9 +2065,7 @@ def write_outputs(
 
     write_stubs(out_dir / registration_stub_dir, methods, stub_signature_overrides)
     write_class_stubs(out_dir / class_stub_dir, root, classes)
-    module_names = public_module_names(
-        methods, classes, type_registrations, overlay_dir, class_overlay_dir
-    )
+    module_names = public_module_names(methods, classes, type_registrations, overlay_dir)
     write_public_module_stubs(out_dir / "stubs", methods, module_names, stub_signature_overrides)
     overlay_count = (
         copy_overlay_stubs(overlay_dir, out_dir / "stubs", module_names) if overlay_dir else 0
@@ -2194,6 +2078,4 @@ def write_outputs(
         module_names,
     )
     append_class_stubs(out_dir / "stubs", root, classes, module_names)
-    if class_overlay_dir:
-        apply_class_overlay_stubs(class_overlay_dir, out_dir / "stubs", module_names)
     return overlay_count
