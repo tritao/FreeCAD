@@ -62,7 +62,7 @@ class Placement(PyObjectBase):
     Base: Vector = None
     """Vector to the Base Position of the Placement."""
 
-    Rotation: Vector = None
+    Rotation: RotationPy = None
     """Orientation of the placement expressed as rotation."""
 
     Matrix: MatrixPy = None
@@ -153,7 +153,7 @@ class Placement(PyObjectBase):
         ...
 
     @constmethod
-    def toMatrix(self) -> MatrixPy:
+    def toMatrix(self) -> Matrix:
         """
         Compute the matrix representation of the placement.
         """

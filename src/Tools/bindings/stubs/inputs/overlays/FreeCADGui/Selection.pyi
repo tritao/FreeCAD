@@ -1,0 +1,119 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+from __future__ import annotations
+
+from enum import IntEnum
+from typing import Protocol, overload
+
+from FreeCAD import DocumentObject
+from FreeCADGui import SelectionObject
+
+_Point3 = tuple[float, float, float]
+
+class ResolveMode(IntEnum):
+    NoResolve = 0
+    OldStyleElement = 1
+    NewStyleElement = 2
+    FollowLink = 3
+
+class SelectionStyle(IntEnum):
+    NormalSelection = 0
+    GreedySelection = 1
+
+class _SelectionGate(Protocol):
+    def allow(self, doc: object, obj: DocumentObject, sub: str, /) -> bool: ...
+
+class Filter:
+    def __init__(self, filter: str, /) -> None: ...
+    def match(self) -> bool: ...
+    def test(self, obj: DocumentObject, sub_name: str = "", /) -> bool: ...
+    def result(self) -> list[tuple[SelectionObject, ...]]: ...
+    def setFilter(self, filter: str, /) -> None: ...
+    def getFilter(self) -> str: ...
+
+@overload
+def addSelection(
+    doc_name: str,
+    obj_name: str,
+    sub_name: str = "",
+    x: float = 0.0,
+    y: float = 0.0,
+    z: float = 0.0,
+    clear: bool = True,
+    /,
+) -> None: ...
+@overload
+def addSelection(
+    obj: DocumentObject,
+    sub_name: str = "",
+    x: float = 0.0,
+    y: float = 0.0,
+    z: float = 0.0,
+    clear: bool = True,
+    /,
+) -> None: ...
+@overload
+def addSelection(
+    obj: DocumentObject,
+    sub_names: list[str] | tuple[str, ...],
+    clear: bool = True,
+    /,
+) -> None: ...
+def updateSelection(show: bool, obj: DocumentObject, sub_name: str = "", /) -> None: ...
+@overload
+def removeSelection(doc_name: str, obj_name: str, sub_name: str = "", /) -> None: ...
+@overload
+def removeSelection(obj: DocumentObject, sub_name: str = "", /) -> None: ...
+@overload
+def clearSelection(clear_preselect: bool = True, /) -> None: ...
+@overload
+def clearSelection(doc_name: str | None, clear_preselect: bool = True, /) -> None: ...
+def isSelected(obj: DocumentObject, sub_name: str = "", resolve: int = 1, /) -> bool: ...
+def setPreselection(
+    obj: DocumentObject,
+    subname: str = "",
+    x: float = 0.0,
+    y: float = 0.0,
+    z: float = 0.0,
+    tp: int = 1,
+) -> None: ...
+def getPreselection() -> SelectionObject: ...
+def clearPreselection() -> None: ...
+def countObjectsOfType(type_name: str, doc_name: str | None = None, resolve: int = 1, /) -> int: ...
+def getSelection(
+    doc_name: str | None = None,
+    resolve: int = 1,
+    single: bool = False,
+    /,
+) -> list[DocumentObject]: ...
+def getPickedList(doc_name: str | None = None, /) -> list[SelectionObject]: ...
+def enablePickedList(enable: bool = True, /) -> None: ...
+def getCompleteSelection(resolve: int = 1, /) -> list[SelectionObject]: ...
+def getSelectionEx(
+    doc_name: str | None = None,
+    resolve: int = 1,
+    single: bool = False,
+    /,
+) -> list[SelectionObject]: ...
+def getSelectionObject(
+    doc_name: str,
+    obj_name: str,
+    sub_name: str,
+    point: _Point3 = ...,
+    /,
+) -> SelectionObject: ...
+def setSelectionStyle(selection_style: int, /) -> None: ...
+def addObserver(observer: object, resolve: int = 1, /) -> None: ...
+def removeObserver(observer: object, /) -> None: ...
+def addSelectionGate(filter: str | Filter | _SelectionGate, resolve: int = 1, /) -> None: ...
+def removeSelectionGate(doc_name: str = "", /) -> None: ...
+def setVisible(visible: bool | None = None, /) -> None: ...
+def pushSelStack(clear_forward: bool = True, overwrite: bool = False, /) -> None: ...
+def hasSelection(doc_name: str | None = None, resolve: int = 0, /) -> bool: ...
+def hasSubSelection(doc_name: str | None = None, sub_element: bool = False, /) -> bool: ...
+def getSelectionFromStack(
+    doc_name: str | None = None,
+    resolve: int = 1,
+    index: int = 0,
+    /,
+) -> list[SelectionObject]: ...

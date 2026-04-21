@@ -1,0 +1,91 @@
+# Python Stub Overlays
+
+This directory contains manually curated `.pyi` overlays for Python APIs that
+are registered outside the generated class-wrapper `.pyi` binding path.
+
+Use the helper to regenerate discovery output and run the smoke checks:
+
+```sh
+src/Tools/bindings/stubs/check-stubs.sh
+```
+
+The helper runs the stub generator:
+
+```sh
+python3 src/Tools/bindings/generate_stubs.py --root . --out-dir src/Tools/bindings/stubs/generated
+```
+
+The implementation now lives under `src/Tools/bindings/stubs_tooling/`:
+`model.py` for shared types and regexes, `parsing.py` for low-level source
+parsing, `generator.py` for stub construction, and `cli.py` for argument
+handling. `type_context_rules.py` holds the remaining manual PyCXX context
+classifications that are not derivable yet.
+
+That command writes:
+
+- `stubs/`: import-shaped public stubs with overlays from this directory
+  applied, plus mapped PyCXX type method tables where the runtime type can be
+  tied to a public or private stub name. This tree is suitable for a
+  type-checker search path and is the generated output committed in-tree.
+- `debug/registration-stubs/`: flat permissive skeletons from C++
+  registration tables for local generator inspection. These debug outputs are
+  not committed.
+- `debug/class-stubs/`: public class stubs derived from binding `.pyi` specs,
+  with generator-only decorators stripped. This is also a flat debug view and
+  is not committed.
+
+Keep hand-written public module overlays under `inputs/overlays/`. Keep
+checker-only partial class augmentations under `inputs/class-overlays/`. Keep
+generated PyCXX type signature inputs under `inputs/pycxx-overrides/`, using
+public import names such as
+`inputs/pycxx-overrides/FreeCADGui/_View3DInventor.pyi`. Do not edit generated
+output directly; use it as input for curated overlays or source signature
+overrides.
+
+Use package-shaped overlay paths that mirror the public import tree, such as
+`inputs/overlays/Part/__init__.pyi` or `inputs/overlays/Part/Geom2d.pyi`.
+Third-party packages such as Pivy should stay out of this tree until their
+stubs are ready to be maintained or generated at the package source.
+
+The helper also runs the smoke checks from this directory:
+
+```sh
+python3 src/Tools/bindings/generate_stubs.py check --root . --out-dir src/Tools/bindings/stubs/generated
+```
+
+## Recommended Direction
+
+Prefer generated stubs for classes that already have binding `.pyi` specs.
+Those files are close to the C++ wrapper source of truth and can be improved
+without creating a second hand-written API surface.
+
+When the same binding class is exported through multiple public module paths,
+the merged public stubs keep one canonical class body and make the other
+symbols re-export aliases. `FreeCAD.Base` is canonical for classes sourced from
+`src/Base/`, which preserves type identity for APIs that use paths such as
+`FreeCAD.Vector`, `FreeCAD.Base.Vector`, or `Part.Precision`.
+
+Use `inputs/pycxx-overrides/` for PyCXX type method tables that the inventory
+tool can map to a public class. These fragments are source inputs to the
+generator, not the published stub tree. Use `inputs/class-overlays/` for
+typing-only additions to generated classes that must not change the runtime
+binding generator input `.pyi` files. Use curated overlays for APIs that
+still need hand-written public module stubs, including manual `PyMethodDef`,
+Boost.Python, or pybind code that is not represented in the binding `.pyi`
+generator model. Keep these files focused on public Python signatures. Avoid
+moving raw generated skeletons into the tree without reviewing the signatures
+against the implementation.
+
+When a manual API is large or actively changing, prefer adding generator input
+for it instead of growing a large overlay. When it is small, stable, or hard to
+model in the generator, a maintained overlay is the lower-risk option.
+
+## Maintenance Notes
+
+Use `generate_stubs.py` in scripts and documentation. Do not introduce another
+entrypoint name for the same pipeline.
+
+When a PyCXX type context still needs a manual rule, add it in
+`stubs_tooling/type_context_rules.py`. Use an internal reason for helper types
+that should not surface publicly, and use public targets only when the current
+discovery path cannot map the context automatically.
