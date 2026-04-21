@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from Metadata import export, constmethod, class_declarations
+from Metadata import export, constmethod, class_declarations, typing_methods
 from PyObjectBase import PyObjectBase
 from Matrix import Matrix as MatrixPy
 from Rotation import Rotation as RotationPy
@@ -21,6 +21,16 @@ from typing import Sequence, overload
             Placement value() const
             { return *(getPlacementPtr()); }
         """)
+@typing_methods("""
+@overload
+def __mul__(self, vector: Vector, /) -> Vector: ...
+@overload
+def __mul__(self, rotation: RotationPy, /) -> "Placement": ...
+@overload
+def __mul__(self, matrix: MatrixPy, /) -> MatrixPy: ...
+@overload
+def __mul__(self, placement: "Placement", /) -> "Placement": ...
+""")
 class Placement(PyObjectBase):
     """
     Base.Placement class.

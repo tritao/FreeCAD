@@ -26,6 +26,13 @@ def class_declarations(source_code):
     """
     ...
 
+def typing_methods(source_code):
+    """
+    A decorator to attach typing-only method stubs to a class.
+    This metadata is consumed by the stub generator and ignored by binding code generation.
+    """
+    ...
+
 def sequence_protocol(**kwargs):
     """
     A decorator to attach sequence protocol metadata to a class.

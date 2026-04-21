@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from Metadata import export, constmethod, sequence_protocol, class_declarations
+from Metadata import export, constmethod, sequence_protocol, class_declarations, typing_methods
 from PyObjectBase import PyObjectBase
 from typing import overload, Sequence
 
@@ -36,6 +36,16 @@ from typing import overload, Sequence
 private:
     Py::List sequence;
         """)
+@typing_methods("""
+def __add__(self, vector2: "Vector", /) -> "Vector": ...
+def __sub__(self, vector2: "Vector", /) -> "Vector": ...
+@overload
+def __mul__(self, factor: float, /) -> "Vector": ...
+@overload
+def __mul__(self, vector2: "Vector", /) -> float: ...
+def __rmul__(self, factor: float, /) -> "Vector": ...
+def __truediv__(self, factor: float, /) -> "Vector": ...
+""")
 class Vector(PyObjectBase):
     """
     Base.Vector class.
