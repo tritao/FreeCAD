@@ -745,7 +745,7 @@ def pick_plan_region_target_from_footprints(session, mouse_pos):
     )
 
 
-def get_plan_target_at_position(session, mouse_pos):
+def get_plan_target_at_position(session, mouse_pos, *, include_space_fallback=True):
     with session._plan_perf_trace_span("get_plan_target_at_position", mouse_pos=mouse_pos):
         if not session.view or not mouse_pos:
             return (None, None)
@@ -845,7 +845,7 @@ def get_plan_target_at_position(session, mouse_pos):
                     region_candidate = session._pick_plan_region_target_from_overlays(mouse_pos)
                 if region_candidate is not None:
                     result = ("region", region_candidate)
-                else:
+                elif include_space_fallback:
                     if space_candidate is None:
                         space_candidate = session._pick_plan_space_target_from_footprints(mouse_pos)
                     if space_candidate is None:
@@ -861,6 +861,7 @@ def get_plan_target_at_position(session, mouse_pos):
             mouse_pos=mouse_pos,
             overlay_mode=_get_plan_provider_overlay_pick_mode(session),
             prioritize_provider_targets=prioritize_provider_targets,
+            include_space_fallback=bool(include_space_fallback),
             objects_info=debug_infos,
             candidates={
                 "symbol": _describe_pick_target(session, "symbol", symbol_candidate),
