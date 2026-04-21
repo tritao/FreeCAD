@@ -49,7 +49,9 @@ stubs are ready to be maintained or generated at the package source.
 
 Public module overlays merge top-level symbols into generated modules instead of
 replacing the whole file. Keep overlays focused on aliases, helper types, and
-manual APIs that the generator still cannot model.
+manual APIs that the generator still cannot model. Use module signature
+overrides for single-signature module functions; keep overloaded module
+functions in overlays until the override path grows overload-group support.
 
 The helper also runs the smoke checks from this directory:
 

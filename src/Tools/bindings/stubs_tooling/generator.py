@@ -2095,37 +2095,58 @@ def top_level_symbol_names(node: ast.stmt) -> set[str]:
             return set()
 
 
+def overlay_symbol_groups(body: list[ast.stmt]) -> list[tuple[set[str], list[ast.stmt]]]:
+    groups: list[tuple[set[str], list[ast.stmt]]] = []
+    for node in body:
+        names = top_level_symbol_names(node)
+        if groups and names and groups[-1][0] == names:
+            groups[-1][1].append(node)
+            continue
+        groups.append((names, [node]))
+    return groups
+
+
+def overlay_insertion_index(body: list[ast.stmt]) -> int:
+    insertion_index = 0
+    while insertion_index < len(body):
+        current = body[insertion_index]
+        if (
+            isinstance(current, ast.Expr)
+            and isinstance(current.value, ast.Constant)
+            and isinstance(current.value.value, str)
+        ):
+            insertion_index += 1
+            continue
+        if isinstance(current, (ast.Import, ast.ImportFrom, ast.Assign, ast.AnnAssign)):
+            insertion_index += 1
+            continue
+        break
+    return insertion_index
+
+
 def merge_overlay_module(target_source: str, overlay_source: str) -> str:
     # Overlay modules replace matching top-level symbols but keep generated members
     # that the overlay does not mention. This lets small overlays add helper types
-    # without restating the whole module surface.
+    # without restating the whole module surface. Grouping consecutive nodes by
+    # symbol also preserves overload sets and overlay ordering.
     target_tree = ast.parse(target_source)
     overlay_tree = ast.parse(overlay_source)
 
-    for node in overlay_tree.body:
-        names = top_level_symbol_names(node)
+    target_body = target_tree.body
+    overlay_nodes: list[ast.stmt] = []
+    for names, group in overlay_symbol_groups(overlay_tree.body):
         if names:
-            target_tree.body = [
+            target_body = [
                 existing
-                for existing in target_tree.body
+                for existing in target_body
                 if not top_level_symbol_names(existing).intersection(names)
             ]
+        overlay_nodes.extend(copy.deepcopy(node) for node in group)
 
-        insertion_index = 0
-        while insertion_index < len(target_tree.body):
-            current = target_tree.body[insertion_index]
-            if (
-                isinstance(current, ast.Expr)
-                and isinstance(current.value, ast.Constant)
-                and isinstance(current.value.value, str)
-            ):
-                insertion_index += 1
-                continue
-            if isinstance(current, (ast.Import, ast.ImportFrom, ast.Assign, ast.AnnAssign)):
-                insertion_index += 1
-                continue
-            break
-        target_tree.body.insert(insertion_index, copy.deepcopy(node))
+    insertion_index = overlay_insertion_index(target_body)
+    target_tree.body = (
+        target_body[:insertion_index] + overlay_nodes + target_body[insertion_index:]
+    )
 
     merged = ast.unparse(target_tree).rstrip() + "\n"
     preamble = leading_comment_block(target_source)
