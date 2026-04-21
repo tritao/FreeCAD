@@ -68,8 +68,11 @@ from bimplan.provider_runtime import (
 from bimplan.providers import (
     PlanEditProvider,
     PlanIssueSpec,
+    PlanIssueSeverity,
     PlanOverlaySpec,
+    PlanOverlayMarkerKind,
     PlanOverlayTargetSpec,
+    PlanOverlayTargetKind,
     PlanProviderTargetSpec,
 )
 from bimplan.registry import PlanEditRegistry
@@ -181,14 +184,14 @@ class TestBimPlanCore(unittest.TestCase):
         overlay = PlanOverlaySpec(
             key="fixture-status",
             points=((1.0, 2.0, 3.0), ("invalid",)),
-            marker_kind=" diamond_filled ",
+            marker_kind=PlanOverlayMarkerKind.DIAMOND,
             point_targets=(
-                {
-                    "document_name": " PlanDoc ",
-                    "object_name": " Socket001 ",
-                    "target_kind": " object ",
-                },
-                {"object_name": "Ignored"},
+                PlanOverlayTargetSpec(
+                    document_name=" PlanDoc ",
+                    object_name=" Socket001 ",
+                    target_kind=PlanOverlayTargetKind.OBJECT,
+                ),
+                PlanOverlayTargetSpec(object_name="Ignored"),
             ),
         )
 
@@ -196,13 +199,13 @@ class TestBimPlanCore(unittest.TestCase):
 
         self.assertEqual("test-provider", normalized.provider_id)
         self.assertEqual(((1.0, 2.0, 3.0),), normalized.points)
-        self.assertEqual("diamond", normalized.marker_kind)
+        self.assertEqual(PlanOverlayMarkerKind.DIAMOND, normalized.marker_kind)
         self.assertEqual(
             (
                 PlanOverlayTargetSpec(
                     document_name="PlanDoc",
                     object_name="Socket001",
-                    target_kind="object",
+                    target_kind=PlanOverlayTargetKind.OBJECT,
                 ),
             ),
             normalized.point_targets,
@@ -255,7 +258,7 @@ class TestBimPlanCore(unittest.TestCase):
                     point_targets=(
                         PlanOverlayTargetSpec(
                             object_name=marker.Name,
-                            target_kind="object",
+                            target_kind=PlanOverlayTargetKind.OBJECT,
                         ),
                     ),
                     marker_size=220.0,
@@ -291,10 +294,10 @@ class TestBimPlanCore(unittest.TestCase):
                     point_targets=(
                         PlanOverlayTargetSpec(
                             object_name=marker.Name,
-                            target_kind="object",
+                            target_kind=PlanOverlayTargetKind.OBJECT,
                         ),
                     ),
-                    marker_kind="square",
+                    marker_kind=PlanOverlayMarkerKind.SQUARE,
                     marker_size=200.0,
                 ),
             ),
@@ -341,7 +344,7 @@ class TestBimPlanCore(unittest.TestCase):
                         PlanOverlayTargetSpec(
                             document_name=doc.Name,
                             object_name=marker.Name,
-                            target_kind="object",
+                            target_kind=PlanOverlayTargetKind.OBJECT,
                         ),
                     ),
                 ),
@@ -444,6 +447,7 @@ class TestBimPlanCore(unittest.TestCase):
         issue = PlanIssueSpec(
             key="missing-generated-output",
             title="Missing generated output",
+            severity=PlanIssueSeverity.WARNING,
             role="workflow",
             category="MEP",
             group_key="mep-generation",
@@ -458,6 +462,7 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual("Generate MEP output", issue.group_title)
         self.assertTrue(issue.collapsed)
         self.assertEqual("Generated output is missing.", issue.summary)
+        self.assertEqual(PlanIssueSeverity.WARNING, issue.severity)
 
     def test_plan_edit_transaction_commits_on_success_and_aborts_on_failure(self):
         doc = _DummyDoc()

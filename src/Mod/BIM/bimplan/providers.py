@@ -1,13 +1,66 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Provider-facing models for BIM Plan Edit integrations."""
+"""Provider-facing models for BIM Plan Edit integrations.
+
+These dataclasses are the public contract used by BIM-owned and external
+Plan Edit providers. Providers return declarative data here, while the core
+session owns rendering, selection, and action execution.
+"""
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Sequence, Tuple
+
+
+class _PlanContractEnum(str, Enum):
+    """Shared base for closed-vocabulary provider contract values."""
+
+    def __str__(self) -> str:
+        return self.value
+
+
+class PlanToolInteraction(_PlanContractEnum):
+    """Plan Edit tool interaction modes exposed by providers."""
+
+    IMMEDIATE = "immediate"
+    POINT = "point"
+
+
+class PlanIssueSeverity(_PlanContractEnum):
+    """Supported provider issue severities."""
+
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+
+class PlanOverlayTargetKind(_PlanContractEnum):
+    """Selectable target kinds available through provider overlay points."""
+
+    OBJECT = "object"
+    OPENING = "opening"
+    PROVIDER = "provider"
+    REGION = "region"
+    SPACE = "space"
+    SYMBOL = "symbol"
+    WALL = "wall"
+
+
+class PlanOverlayMarkerKind(_PlanContractEnum):
+    """Supported provider point marker glyphs."""
+
+    CIRCLE = "circle"
+    CIRCLE_CROSS = "circle_cross"
+    CROSS = "cross"
+    DIAMOND = "diamond"
+    HOURGLASS = "hourglass"
+    SQUARE = "square"
 
 
 @dataclass(frozen=True)
 class PlanActionSpec:
+    """Declarative action exposed by provider sections, issues, or suggestions."""
+
     key: str
     label: str
     tooltip: str = ""
@@ -18,6 +71,12 @@ class PlanActionSpec:
 
 @dataclass(frozen=True)
 class PlanToolSpec:
+    """Declarative viewport tool exposed by a provider.
+
+    `interaction`, `prompt`, and `default_host_target` are currently consumed by
+    provider point tools that run inside the Plan Edit session.
+    """
+
     key: str
     label: str
     tooltip: str = ""
@@ -26,17 +85,19 @@ class PlanToolSpec:
     provider_id: str = ""
     group: str = ""
     priority: int = 0
-    interaction: str = ""
+    interaction: PlanToolInteraction = PlanToolInteraction.IMMEDIATE
     prompt: str = ""
     default_host_target: tuple = ()
 
 
 @dataclass(frozen=True)
 class PlanIssueSpec:
+    """Provider-reported problem shown in the Plan Guidance panel."""
+
     key: str
     title: str
     message: str = ""
-    severity: str = "info"
+    severity: PlanIssueSeverity = PlanIssueSeverity.INFO
     provider_id: str = ""
     actions: Tuple[PlanActionSpec, ...] = ()
     target_keys: Tuple[str, ...] = ()
@@ -50,6 +111,8 @@ class PlanIssueSpec:
 
 @dataclass(frozen=True)
 class PlanSuggestionSpec:
+    """Low-priority recommendation surfaced by a provider."""
+
     key: str
     title: str
     message: str = ""
@@ -60,6 +123,8 @@ class PlanSuggestionSpec:
 
 @dataclass(frozen=True)
 class PlanInspectorSection:
+    """Structured task-panel content contributed by a provider."""
+
     key: str
     title: str
     body: str = ""
@@ -71,14 +136,29 @@ class PlanInspectorSection:
 
 @dataclass(frozen=True)
 class PlanOverlayTargetSpec:
+    """Identity payload for an overlay point.
+
+    When `point_targets` are supplied on a `PlanOverlaySpec`, they align by
+    index with the `points` tuple and allow the rendered overlay marker to
+    resolve back to a document object or Plan Edit target kind.
+    """
+
     document_name: str = ""
     object_name: str = ""
-    target_kind: str = ""
+    target_kind: PlanOverlayTargetKind | None = None
     subname: str = ""
 
 
 @dataclass(frozen=True)
 class PlanProviderTargetSpec:
+    """First-class selectable Plan Edit target supplied by a provider.
+
+    `document_name` and `object_name` identify the authored object selected in
+    the document. `semantic_document_name` and `semantic_object_name` may point
+    at a different semantic object when the provider target should inherit room,
+    host, or storey semantics from another object.
+    """
+
     key: str
     label: str = ""
     provider_id: str = ""
@@ -92,6 +172,14 @@ class PlanProviderTargetSpec:
 
 @dataclass(frozen=True)
 class PlanOverlaySpec:
+    """Lightweight plan-space visualization contributed by a provider.
+
+    `target_keys` associate the overlay with provider-defined targets or issues.
+    `point_targets` align by index with `points` and make point markers
+    selectable. `category` is used for grouping and visibility controls in the
+    Plan Guidance UI.
+    """
+
     key: str
     label: str = ""
     provider_id: str = ""
@@ -102,14 +190,23 @@ class PlanOverlaySpec:
     color: Tuple[float, float, float] = (0.2, 0.55, 0.85)
     line_width: float = 2.0
     marker_size: float = 160.0
-    marker_kind: str = "cross"
+    marker_kind: PlanOverlayMarkerKind = PlanOverlayMarkerKind.CROSS
     dotted: bool = False
     visible: bool = True
     category: str = ""
 
 
 class PlanEditProvider:
-    """Base class for add-ons extending BIM Plan Edit."""
+    """Base class for add-ons extending BIM Plan Edit.
+
+    Providers are expected to be mostly declarative:
+    - report issues, suggestions, and inspector sections for the current context
+    - expose overlays and optional first-class targets for in-view interaction
+    - expose tools and handle action callbacks
+
+    The session owns when these hooks are called, how results are normalized,
+    and how provider targets participate in selection and task-panel state.
+    """
 
     provider_id = ""
     display_name = ""
@@ -143,6 +240,8 @@ class PlanEditProvider:
         return ()
 
     def get_targets(self, context) -> Sequence[PlanProviderTargetSpec]:
+        """Return first-class selectable targets for the current plan context."""
+
         del context
         return ()
 

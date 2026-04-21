@@ -10,11 +10,15 @@ from .providers import (
     PlanEditProvider,
     PlanInspectorSection,
     PlanIssueSpec,
+    PlanIssueSeverity,
     PlanOverlaySpec,
+    PlanOverlayMarkerKind,
     PlanOverlayTargetSpec,
+    PlanOverlayTargetKind,
     PlanProviderTargetSpec,
     PlanSuggestionSpec,
     PlanToolSpec,
+    PlanToolInteraction,
 )
 from .registry import PlanEditRegistry, get_plan_edit_registry
 from .semantics import PlanSemanticRecord
@@ -33,12 +37,16 @@ __all__ = [
     "_PlanEditWallHost",
     "PlanInspectorSection",
     "PlanIssueSpec",
+    "PlanIssueSeverity",
     "PlanOverlaySpec",
+    "PlanOverlayMarkerKind",
     "PlanOverlayTargetSpec",
+    "PlanOverlayTargetKind",
     "PlanProviderTargetSpec",
     "PlanSemanticRecord",
     "PlanSuggestionSpec",
     "PlanTarget",
     "PlanToolSpec",
+    "PlanToolInteraction",
     "get_plan_edit_registry",
 ]
