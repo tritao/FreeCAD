@@ -2,7 +2,7 @@
 
 """Selection state helpers for BIM Plan Edit."""
 
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 import FreeCADGui
 
@@ -266,10 +266,16 @@ def refresh_selected_plan_target(session):
         session._plan_perf_count("gui_selection_size", len(selection or []))
         if session.current_tool in ("Select", "Pick Space Region") and selection:
             selected_targets = []
-            for selected in selection:
-                target_kind, target_obj = session._get_plan_target_for_object(selected)
-                if target_kind:
-                    selected_targets.append((target_kind, target_obj))
+            provider_refresh_scope = (
+                session._plan_provider_refresh_cache_scope()
+                if hasattr(session, "_plan_provider_refresh_cache_scope")
+                else nullcontext()
+            )
+            with provider_refresh_scope:
+                for selected in selection:
+                    target_kind, target_obj = session._get_plan_target_for_object(selected)
+                    if target_kind:
+                        selected_targets.append((target_kind, target_obj))
             session._plan_perf_count("selected_targets_considered", len(selected_targets))
 
             matched_target = None
@@ -280,7 +286,7 @@ def refresh_selected_plan_target(session):
                         matched_target = (target_kind, selected)
                         break
             if matched_target is None:
-                for preferred_kind in ("opening", "symbol", "wall", "region", "space"):
+                for preferred_kind in ("opening", "symbol", "wall", "provider", "region", "space"):
                     matched_target = next(
                         (
                             (target_kind, selected)
@@ -387,6 +393,7 @@ def is_valid_plan_target(session, kind, obj):
     validators = {
         "opening": session._is_hosted_opening_object,
         "symbol": session._is_plan_symbol_instance,
+        "provider": session._is_plan_provider_target_object,
         "region": session._is_plan_region_object,
         "space": session._is_plan_space_object,
         "wall": session._is_plan_selectable_wall,

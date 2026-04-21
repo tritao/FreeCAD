@@ -3,6 +3,7 @@
 """Pointer picking helpers for BIM Plan Edit."""
 
 import FreeCAD
+import math
 
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
 
@@ -17,7 +18,14 @@ def get_screen_distance_sq_to_segment(session, mouse_pos, start, end):
         end_x, end_y = session.view.getPointOnScreen(end)
     except Exception:
         return None
-    return session._get_screen_distance_sq_to_projected_segment(
+    projector = getattr(session, "_get_screen_distance_sq_to_projected_segment", None)
+    if callable(projector):
+        return projector(
+            (cursor_x, cursor_y),
+            (start_x, start_y),
+            (end_x, end_y),
+        )
+    return get_screen_distance_sq_to_projected_segment(
         (cursor_x, cursor_y),
         (start_x, start_y),
         (end_x, end_y),
@@ -164,6 +172,124 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
             opening_overlay_pick_result=session._plan_perf_describe_object(best_opening),
         )
         return best_opening
+
+
+def pick_provider_overlay_target_from_overlays(session, mouse_pos, radius_px=12):
+    with session._plan_perf_trace_span(
+        "pick_provider_overlay_target_from_overlays",
+        mouse_pos=mouse_pos,
+        radius_px=radius_px,
+    ):
+        if not session.view or not mouse_pos:
+            return (None, None)
+        try:
+            cursor_x = float(mouse_pos[0])
+            cursor_y = float(mouse_pos[1])
+        except Exception:
+            return (None, None)
+
+        get_overlays = getattr(session, "get_plan_provider_overlays", None)
+        if not callable(get_overlays):
+            return (None, None)
+        is_visible = getattr(session, "is_plan_provider_overlay_visible", None)
+
+        best_distance_sq = None
+        best_target_kind = None
+        best_target_obj = None
+        for overlay in tuple(get_overlays() or ()):
+            if not bool(getattr(overlay, "visible", True)):
+                continue
+            if callable(is_visible) and not is_visible(overlay):
+                continue
+            points = tuple(getattr(overlay, "points", ()) or ())
+            targets = tuple(getattr(overlay, "point_targets", ()) or ())
+            for index, point in enumerate(points):
+                target = targets[index] if index < len(targets) else None
+                if not _has_provider_overlay_target_identity(target):
+                    continue
+                point_vec = _coerce_overlay_point_vector(point)
+                if point_vec is None:
+                    continue
+                try:
+                    point_x, point_y = session.view.getPointOnScreen(point_vec)
+                except Exception:
+                    continue
+                dx = float(point_x) - cursor_x
+                dy = float(point_y) - cursor_y
+                center_distance_sq = dx * dx + dy * dy
+                pick_radius_px = _get_provider_overlay_pick_radius_px(
+                    session,
+                    overlay,
+                    point_vec,
+                    fallback_radius_px=radius_px,
+                )
+                marker_distance_sq = _get_provider_overlay_marker_screen_distance_sq(
+                    session,
+                    mouse_pos,
+                    overlay,
+                    point_vec,
+                )
+                marker_tolerance_px = _get_provider_overlay_marker_tolerance_px(
+                    overlay,
+                    fallback_radius_px=radius_px,
+                )
+                distance_sq = center_distance_sq
+                if marker_distance_sq is not None:
+                    distance_sq = min(distance_sq, marker_distance_sq)
+                if center_distance_sq > pick_radius_px * pick_radius_px and (
+                    marker_distance_sq is None
+                    or marker_distance_sq > marker_tolerance_px * marker_tolerance_px
+                ):
+                    continue
+                target_obj = _resolve_document_object(
+                    session,
+                    getattr(target, "document_name", ""),
+                    getattr(target, "object_name", ""),
+                )
+                if target_obj is None:
+                    continue
+                if best_distance_sq is None or distance_sq < best_distance_sq:
+                    best_distance_sq = distance_sq
+                    best_target_kind = str(getattr(target, "target_kind", "") or "").strip()
+                    best_target_obj = target_obj
+        session._plan_perf_set_fields(
+            provider_overlay_pick_result=session._plan_perf_describe_object(best_target_obj)
+        )
+        return (best_target_kind, best_target_obj)
+
+
+def pick_provider_overlay_target_from_objects_info(session, mouse_pos):
+    with session._plan_perf_trace_span(
+        "pick_provider_overlay_target_from_objects_info",
+        mouse_pos=mouse_pos,
+    ):
+        if not session.view or not mouse_pos:
+            return (None, None)
+        try:
+            infos = session.view.getObjectsInfo((int(mouse_pos[0]), int(mouse_pos[1])))
+        except (AttributeError, ReferenceError, RuntimeError):
+            return (None, None)
+        if not infos:
+            return (None, None)
+
+        visible_targets = _collect_visible_provider_overlay_targets(session)
+        if not visible_targets:
+            return (None, None)
+
+        for info in infos:
+            for target_kind, target_obj in _iter_provider_overlay_targets_from_info(
+                session,
+                info,
+                visible_targets,
+            ):
+                if target_obj is not None:
+                    session._plan_perf_set_fields(
+                        provider_overlay_info_pick_result=session._plan_perf_describe_object(
+                            target_obj
+                        )
+                    )
+                    return (target_kind, target_obj)
+        return (None, None)
 
 
 def pick_plan_space_target_from_overlays(session, mouse_pos, radius_px=10):
@@ -497,7 +623,7 @@ def get_plan_target_from_edit_node(session, node):
     if not node:
         return (None, None)
     node_kind = node[0]
-    if node_kind == "provider_overlay_point":
+    if node_kind in ("provider_overlay_point", "provider_overlay_target"):
         target_kind, obj = get_provider_overlay_target_from_edit_node(session, node)
         if session._is_valid_plan_target(target_kind, obj):
             return (target_kind, obj)
@@ -524,7 +650,15 @@ def get_plan_target_from_edit_node(session, node):
 
 
 def get_provider_overlay_target_from_edit_node(session, node):
-    if not node or node[0] != "provider_overlay_point":
+    if not node:
+        return (None, None)
+    node_kind = node[0]
+    if node_kind == "provider_overlay_target":
+        try:
+            return (node[1], node[2])
+        except Exception:
+            return (None, None)
+    if node_kind != "provider_overlay_point":
         return (None, None)
     try:
         point = node[1]
@@ -575,6 +709,170 @@ def _resolve_document_object(session, document_name, object_name):
         return doc.getObject(object_name)
     except Exception:
         return None
+
+
+def _coerce_overlay_point_vector(point):
+    if point is None:
+        return None
+    if isinstance(point, FreeCAD.Vector):
+        return FreeCAD.Vector(point)
+    try:
+        return FreeCAD.Vector(float(point[0]), float(point[1]), float(point[2]))
+    except (TypeError, ValueError, IndexError):
+        try:
+            return FreeCAD.Vector(
+                float(point.x),
+                float(point.y),
+                float(getattr(point, "z", 0.0) or 0.0),
+            )
+        except Exception:
+            return None
+
+
+def _collect_visible_provider_overlay_targets(session):
+    get_overlays = getattr(session, "get_plan_provider_overlays", None)
+    if not callable(get_overlays):
+        return {}
+    is_visible = getattr(session, "is_plan_provider_overlay_visible", None)
+    targets = {}
+    for overlay in tuple(get_overlays() or ()):
+        if not bool(getattr(overlay, "visible", True)):
+            continue
+        if callable(is_visible) and not is_visible(overlay):
+            continue
+        for target in tuple(getattr(overlay, "point_targets", ()) or ()):
+            if not _has_provider_overlay_target_identity(target):
+                continue
+            identity = _get_provider_overlay_target_identity(session, target)
+            if identity is None or identity in targets:
+                continue
+            targets[identity] = target
+    return targets
+
+
+def _iter_provider_overlay_targets_from_info(session, info, visible_targets):
+    if not info or not visible_targets:
+        return ()
+    yielded = []
+    for obj in _iter_objects_info_candidate_objects(session, info):
+        if obj is None:
+            continue
+        identity = (
+            str(getattr(getattr(obj, "Document", None), "Name", "") or "").strip(),
+            str(getattr(obj, "Name", "") or "").strip(),
+        )
+        if not identity[1]:
+            continue
+        target = visible_targets.get(identity)
+        if target is None:
+            continue
+        yielded.append((str(getattr(target, "target_kind", "") or "").strip(), obj))
+    return tuple(yielded)
+
+
+def _iter_objects_info_candidate_objects(session, info):
+    if not info:
+        return ()
+    candidates = []
+    doc_name = str(info.get("Document") or "").strip()
+    obj_name = str(info.get("Object") or "").strip()
+    if obj_name:
+        resolved = _resolve_document_object(session, doc_name, obj_name)
+        if resolved is not None:
+            candidates.append(resolved)
+    parent_obj = info.get("ParentObject")
+    if parent_obj is not None and parent_obj not in candidates:
+        candidates.append(parent_obj)
+    return tuple(candidates)
+
+
+def _get_provider_overlay_pick_radius_px(session, overlay, point, fallback_radius_px):
+    radius_px = max(1.0, float(fallback_radius_px))
+    marker_size = max(1.0, float(getattr(overlay, "marker_size", 160.0) or 160.0))
+    marker_half_size = marker_size / 2.0
+    marker_extent_factor = _get_provider_overlay_pick_extent_factor(
+        getattr(overlay, "marker_kind", "cross")
+    )
+    try:
+        center_x, center_y = session.view.getPointOnScreen(point)
+        edge_x, edge_y = session.view.getPointOnScreen(
+            FreeCAD.Vector(
+                point.x + (marker_half_size * marker_extent_factor),
+                point.y,
+                point.z,
+            )
+        )
+        projected_radius_px = (
+            (float(edge_x) - float(center_x)) ** 2 + (float(edge_y) - float(center_y)) ** 2
+        ) ** 0.5
+        radius_px = max(radius_px, projected_radius_px + max(6.0, projected_radius_px * 0.25))
+    except Exception:
+        pass
+    return radius_px
+
+
+def _get_provider_overlay_marker_screen_distance_sq(session, mouse_pos, overlay, point):
+    marker_segments = _get_provider_overlay_marker_segments(overlay, point)
+    if not marker_segments:
+        return None
+    best_distance_sq = None
+    for start, end in marker_segments:
+        distance_sq = get_screen_distance_sq_to_segment(session, mouse_pos, start, end)
+        if distance_sq is None:
+            continue
+        if best_distance_sq is None or distance_sq < best_distance_sq:
+            best_distance_sq = distance_sq
+    return best_distance_sq
+
+
+def _get_provider_overlay_marker_segments(overlay, point):
+    try:
+        from bimplan.overlays.providers import _get_point_marker_segment_specs
+    except Exception:
+        return ()
+    try:
+        specs = _get_point_marker_segment_specs(
+            point,
+            label="provider-overlay-pick",
+            color=(0.0, 0.0, 0.0),
+            width=float(getattr(overlay, "line_width", 2.0) or 2.0),
+            dotted=bool(getattr(overlay, "dotted", False)),
+            marker_size=float(getattr(overlay, "marker_size", 160.0) or 160.0),
+            marker_kind=str(getattr(overlay, "marker_kind", "cross") or "cross"),
+        )
+    except Exception:
+        return ()
+    return tuple(
+        (spec.get("start"), spec.get("end"))
+        for spec in tuple(specs or ())
+        if spec.get("start") is not None and spec.get("end") is not None
+    )
+
+
+def _get_provider_overlay_marker_tolerance_px(overlay, fallback_radius_px):
+    line_width = max(1.0, float(getattr(overlay, "line_width", 2.0) or 2.0))
+    return max(float(fallback_radius_px), 6.0 + (line_width * 1.5))
+
+
+def _get_provider_overlay_pick_extent_factor(marker_kind):
+    normalized = str(marker_kind or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized in ("square", "hourglass"):
+        return math.sqrt(2.0)
+    return 1.0
+
+
+def _get_provider_overlay_target_identity(session, target):
+    object_name = str(getattr(target, "object_name", "") or "").strip()
+    if not object_name:
+        return None
+    document_name = str(getattr(target, "document_name", "") or "").strip()
+    if not document_name:
+        document_name = str(getattr(getattr(session, "doc", None), "Name", "") or "")
+    return (document_name, object_name)
+
+
+def _has_provider_overlay_target_identity(target):
+    return bool(str(getattr(target, "object_name", "") or "").strip())
 
 
 def get_hovered_plan_target(session):

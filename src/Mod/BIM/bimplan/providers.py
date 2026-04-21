@@ -78,6 +78,19 @@ class PlanOverlayTargetSpec:
 
 
 @dataclass(frozen=True)
+class PlanProviderTargetSpec:
+    key: str
+    label: str = ""
+    provider_id: str = ""
+    document_name: str = ""
+    object_name: str = ""
+    semantic_document_name: str = ""
+    semantic_object_name: str = ""
+    category: str = ""
+    role: str = ""
+
+
+@dataclass(frozen=True)
 class PlanOverlaySpec:
     key: str
     label: str = ""
@@ -126,6 +139,10 @@ class PlanEditProvider:
         return ()
 
     def get_overlays(self, context) -> Sequence[PlanOverlaySpec]:
+        del context
+        return ()
+
+    def get_targets(self, context) -> Sequence[PlanProviderTargetSpec]:
         del context
         return ()
 

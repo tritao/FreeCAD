@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
+from contextlib import nullcontext
 import unittest
 import sys
 from types import ModuleType, SimpleNamespace
@@ -13,6 +14,21 @@ if "FreeCAD" not in sys.modules:
             translate=lambda _context, text: text,
         )
         sys.modules["FreeCAD"] = freecad_module
+
+if not hasattr(sys.modules["FreeCAD"], "Vector"):
+
+    class _FakeVector:
+        def __init__(self, x=0.0, y=0.0, z=0.0):
+            if hasattr(x, "x") and hasattr(x, "y"):
+                self.x = float(x.x)
+                self.y = float(x.y)
+                self.z = float(getattr(x, "z", 0.0) or 0.0)
+                return
+            self.x = float(x)
+            self.y = float(y)
+            self.z = float(z)
+
+    sys.modules["FreeCAD"].Vector = _FakeVector
 
 if "draftguitools.gui_base" not in sys.modules:
     draftguitools_module = sys.modules.setdefault(
@@ -40,17 +56,25 @@ if "draftguitools.gui_base" not in sys.modules:
     draftguitools_module.gui_base = gui_base_module
 
 from bimplan.context import PlanEditContext
-from bimplan.picking import get_provider_overlay_target_from_edit_node
-from bimplan.provider_runtime import normalize_plan_provider_overlay
+from bimplan.picking import (
+    get_provider_overlay_target_from_edit_node,
+    pick_provider_overlay_target_from_objects_info,
+    pick_provider_overlay_target_from_overlays,
+)
+from bimplan.provider_runtime import (
+    get_plan_provider_target_for_object,
+    normalize_plan_provider_overlay,
+)
 from bimplan.providers import (
     PlanEditProvider,
     PlanIssueSpec,
     PlanOverlaySpec,
     PlanOverlayTargetSpec,
+    PlanProviderTargetSpec,
 )
 from bimplan.registry import PlanEditRegistry
 from bimplan.semantics import PlanSemanticRecord
-from bimplan.targets import PlanTarget
+from bimplan.targets import PlanTarget, get_plan_target_for_object, make_plan_target_record
 from bimplan.transactions import PlanEditTransaction
 
 
@@ -212,6 +236,191 @@ class TestBimPlanCore(unittest.TestCase):
                 ("provider_overlay_point", point),
             ),
         )
+
+    def test_pick_provider_overlay_target_from_overlays_resolves_marker(self):
+        marker = SimpleNamespace(Name="Socket001", Label="Socket 001")
+        doc = SimpleNamespace(getObject=lambda name: marker if name == marker.Name else None)
+
+        class _View:
+            def getPointOnScreen(self, point):
+                return (float(point.x), float(point.y))
+
+        session = SimpleNamespace(
+            doc=doc,
+            view=_View(),
+            get_plan_provider_overlays=lambda: (
+                PlanOverlaySpec(
+                    key="fixture-status",
+                    points=((100.0, 200.0, 0.0),),
+                    point_targets=(
+                        PlanOverlayTargetSpec(
+                            object_name=marker.Name,
+                            target_kind="object",
+                        ),
+                    ),
+                    marker_size=220.0,
+                ),
+            ),
+            is_plan_provider_overlay_visible=lambda _overlay: True,
+            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
+            _plan_perf_count=lambda *_args, **_kwargs: None,
+            _plan_perf_set_fields=lambda **_kwargs: None,
+            _plan_perf_describe_object=lambda obj: getattr(obj, "Name", ""),
+        )
+
+        self.assertEqual(
+            ("object", marker),
+            pick_provider_overlay_target_from_overlays(session, (108, 204)),
+        )
+
+    def test_pick_provider_overlay_target_from_overlays_accepts_square_corner_click(self):
+        marker = SimpleNamespace(Name="Socket001", Label="Socket 001")
+        doc = SimpleNamespace(getObject=lambda name: marker if name == marker.Name else None)
+
+        class _View:
+            def getPointOnScreen(self, point):
+                return (float(point.x), float(point.y))
+
+        session = SimpleNamespace(
+            doc=doc,
+            view=_View(),
+            get_plan_provider_overlays=lambda: (
+                PlanOverlaySpec(
+                    key="fixture-status",
+                    points=((100.0, 200.0, 0.0),),
+                    point_targets=(
+                        PlanOverlayTargetSpec(
+                            object_name=marker.Name,
+                            target_kind="object",
+                        ),
+                    ),
+                    marker_kind="square",
+                    marker_size=200.0,
+                ),
+            ),
+            is_plan_provider_overlay_visible=lambda _overlay: True,
+            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
+            _plan_perf_count=lambda *_args, **_kwargs: None,
+            _plan_perf_set_fields=lambda **_kwargs: None,
+            _plan_perf_describe_object=lambda obj: getattr(obj, "Name", ""),
+        )
+
+        self.assertEqual(
+            ("object", marker),
+            pick_provider_overlay_target_from_overlays(session, (200, 300)),
+        )
+
+    def test_pick_provider_overlay_target_from_objects_info_resolves_marker(self):
+        marker = SimpleNamespace(
+            Name="Socket001",
+            Label="Socket 001",
+            Document=SimpleNamespace(Name="TestDoc"),
+        )
+        doc = SimpleNamespace(
+            Name="TestDoc",
+            getObject=lambda name: marker if name == marker.Name else None,
+        )
+        sys.modules["FreeCAD"].getDocument = lambda name: doc if name == doc.Name else None
+
+        class _View:
+            def getObjectsInfo(self, _mouse_pos):
+                return (
+                    {
+                        "Document": doc.Name,
+                        "Object": marker.Name,
+                    },
+                )
+
+        session = SimpleNamespace(
+            doc=doc,
+            view=_View(),
+            get_plan_provider_overlays=lambda: (
+                PlanOverlaySpec(
+                    key="fixture-status",
+                    point_targets=(
+                        PlanOverlayTargetSpec(
+                            document_name=doc.Name,
+                            object_name=marker.Name,
+                            target_kind="object",
+                        ),
+                    ),
+                ),
+            ),
+            is_plan_provider_overlay_visible=lambda _overlay: True,
+            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
+            _plan_perf_count=lambda *_args, **_kwargs: None,
+            _plan_perf_set_fields=lambda **_kwargs: None,
+            _plan_perf_describe_object=lambda obj: getattr(obj, "Name", ""),
+        )
+
+        self.assertEqual(
+            ("object", marker),
+            pick_provider_overlay_target_from_objects_info(session, (100, 200)),
+        )
+
+    def test_provider_target_record_uses_provider_metadata(self):
+        marker = SimpleNamespace(
+            Name="Socket001",
+            Label="Socket 001",
+            Document=SimpleNamespace(Name="PlanDoc"),
+        )
+        provider_target = PlanProviderTargetSpec(
+            key="electrical-fixture:PlanDoc:Socket001",
+            label="Kitchen Socket",
+            provider_id="materia-electrical-fixtures",
+            document_name="PlanDoc",
+            object_name="Socket001",
+            semantic_document_name="PlanDoc",
+            semantic_object_name="Socket001",
+            category="electrical",
+            role="fixture",
+        )
+        session = SimpleNamespace(
+            _get_plan_target_kind_for_object=lambda obj: "provider" if obj is marker else None,
+            _get_plan_provider_target_for_object=lambda obj: (
+                provider_target if obj is marker else None
+            ),
+            _get_plan_semantic_object=lambda obj: obj,
+            resolve_plan_semantic_object=lambda target: (
+                marker if target == provider_target else None
+            ),
+            _get_plan_target_state_key=lambda kind, obj: (kind, getattr(obj, "Name", "")),
+        )
+
+        self.assertEqual(("provider", marker), get_plan_target_for_object(session, marker))
+
+        record = make_plan_target_record(session, "provider", marker)
+        self.assertEqual("Kitchen Socket", record.label)
+        self.assertEqual("materia-electrical-fixtures", record.provider_id)
+        self.assertEqual("electrical-fixture:PlanDoc:Socket001", record.target_key)
+        self.assertEqual("electrical", record.category)
+        self.assertEqual("fixture", record.role)
+
+    def test_get_plan_provider_target_for_object_matches_document_identity(self):
+        marker = SimpleNamespace(
+            Name="Socket001",
+            Label="Socket 001",
+            Document=SimpleNamespace(Name="PlanDoc"),
+        )
+        other_marker = SimpleNamespace(
+            Name="Socket001",
+            Label="Socket 001",
+            Document=SimpleNamespace(Name="OtherDoc"),
+        )
+        provider_target = PlanProviderTargetSpec(
+            key="electrical-fixture:PlanDoc:Socket001",
+            provider_id="materia-electrical-fixtures",
+            document_name="PlanDoc",
+            object_name="Socket001",
+        )
+        session = SimpleNamespace(
+            doc=SimpleNamespace(Name="PlanDoc"),
+            _plan_provider_refresh_cache={},
+            get_plan_provider_targets=lambda: (provider_target,),
+        )
+
+        self.assertIs(provider_target, get_plan_provider_target_for_object(session, marker))
+        self.assertIsNone(get_plan_provider_target_for_object(session, other_marker))
 
     def test_registry_preserves_provider_order_and_replacement(self):
         registry = PlanEditRegistry()

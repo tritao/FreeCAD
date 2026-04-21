@@ -492,7 +492,7 @@ def _create_target_pick_tracker(
     kwargs = {
         "pos": point,
         "idx": int(target_index),
-        "inactive": True,
+        "inactive": False,
     }
     if marker is not None:
         kwargs["marker"] = marker

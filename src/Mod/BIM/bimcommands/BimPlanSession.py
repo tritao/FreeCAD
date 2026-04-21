@@ -35,6 +35,7 @@ from bimplan import picking as plan_picking
 from bimplan import command_gate as plan_command_gate
 from bimplan import performance as plan_performance
 from bimplan import provider_runtime as plan_provider_runtime
+from bimplan import provider_targets as plan_provider_targets
 from bimplan import selection as plan_selection
 from bimplan import snap as plan_snap
 from bimplan import spaces as plan_spaces
@@ -82,7 +83,7 @@ _OPENING_MOVE_SNAP_SET = {
 }
 _OPENING_MOVE_ANCHORS = ("center", "left", "right")
 _PLAN_JOIN_TYPES = ("Miter", "Butt", "Tee")
-_PRIMARY_PLAN_TARGET_KINDS = ("wall", "opening", "symbol", "region", "space")
+_PRIMARY_PLAN_TARGET_KINDS = ("wall", "opening", "symbol", "provider", "region", "space")
 _OPENING_VISUAL_PROPERTIES = {
     "Shape",
     "Placement",
@@ -403,6 +404,7 @@ class PlanEditSession:
         self._plan_perf_sequence = 0
         self._plan_provider_refresh_cache = None
         self._plan_provider_document_cache = {}
+        self._plan_provider_target_collection_depth = 0
         self._connect_teardown_signals(QtGui)
 
     def _connect_teardown_signal(self, signal):
@@ -682,7 +684,6 @@ class PlanEditSession:
 
             with self._plan_perf_trace_span("capture_plan_edit_state"):
                 self._capture_state()
-
             with self._plan_perf_trace_span("collect_storeys"):
                 self.storeys = self.collect_storeys()
                 self._plan_perf_count("storeys_found", len(self.storeys))
@@ -858,6 +859,7 @@ class PlanEditSession:
         self._hovered_space_region_candidate = None
         self._space_region_pick_seed_space = None
         self._pending_selected_plan_target = None
+        self._plan_provider_target_collection_depth = 0
         self._edit_wall = None
         self._edit_opening = None
         self._edit_opening_handle_index = None
@@ -2433,6 +2435,16 @@ class PlanEditSession:
             candidates=candidates,
         )
 
+    def _pick_provider_overlay_target_from_overlays(self, mouse_pos, radius_px=12):
+        return plan_picking.pick_provider_overlay_target_from_overlays(
+            self,
+            mouse_pos,
+            radius_px=radius_px,
+        )
+
+    def _pick_provider_overlay_target_from_objects_info(self, mouse_pos):
+        return plan_picking.pick_provider_overlay_target_from_objects_info(self, mouse_pos)
+
     def _pick_plan_space_target_from_overlays(self, mouse_pos, radius_px=10):
         return plan_picking.pick_plan_space_target_from_overlays(
             self,
@@ -2769,6 +2781,9 @@ class PlanEditSession:
     def _normalize_plan_provider_overlay(self, provider_id, overlay):
         return plan_provider_runtime.normalize_plan_provider_overlay(provider_id, overlay)
 
+    def _normalize_plan_provider_target(self, provider_id, target):
+        return plan_provider_targets.normalize_plan_provider_target(provider_id, target)
+
     def _collect_plan_provider_contributions(self, method_name, normalizer):
         if self._tearing_down or self._finishing or not self._document_is_alive():
             self._plan_perf_count("plan_provider_inactive_session")
@@ -2811,6 +2826,15 @@ class PlanEditSession:
             "get_overlays",
             self._normalize_plan_provider_overlay,
         )
+
+    def get_plan_provider_targets(self):
+        return plan_provider_targets.get_plan_provider_targets(self)
+
+    def _get_plan_provider_target_for_object(self, obj):
+        return plan_provider_targets.get_plan_provider_target_for_object(self, obj)
+
+    def _is_plan_provider_target_object(self, obj):
+        return plan_provider_targets.is_plan_provider_target_object(self, obj)
 
     def get_plan_provider_overlay_visibility_key(self, provider_id, overlay_key):
         provider_id = str(provider_id or "").strip()
@@ -5129,6 +5153,12 @@ class PlanEditSession:
                 self._get_selected_plan_target_object("opening"),
                 opening_handle_index,
             )
+        target_kind, target_obj = self._pick_provider_overlay_target_from_objects_info(mouse_pos)
+        if target_obj is not None:
+            return ("provider_overlay_target", target_kind, target_obj)
+        target_kind, target_obj = self._pick_provider_overlay_target_from_overlays(mouse_pos)
+        if target_obj is not None:
+            return ("provider_overlay_target", target_kind, target_obj)
         if not self._render_manager:
             return None
         try:
@@ -5142,20 +5172,18 @@ class PlanEditSession:
         ray_pick.setPickAll(True)
         ray_pick.apply(self._render_manager.getSceneGraph())
         picked_points = ray_pick.getPickedPointList()
-        if not picked_points:
-            return None
-
-        for picked_point in picked_points:
-            path = picked_point.getPath()
-            point = path.getNode(path.getLength() - 2)
-            try:
-                sub_element = str(point.subElementName.getValue())
-            except Exception:
-                continue
-            if plan_picking.is_provider_overlay_point_subname(sub_element):
-                return ("provider_overlay_point", point)
-            if "EditNode" in sub_element:
-                return ("edit_node", point)
+        if picked_points:
+            for picked_point in picked_points:
+                path = picked_point.getPath()
+                point = path.getNode(path.getLength() - 2)
+                try:
+                    sub_element = str(point.subElementName.getValue())
+                except Exception:
+                    continue
+                if plan_picking.is_provider_overlay_point_subname(sub_element):
+                    return ("provider_overlay_point", point)
+                if "EditNode" in sub_element:
+                    return ("edit_node", point)
         return None
 
     def _pick_selected_opening_handle(self, mouse_pos, radius_px=10):
@@ -5266,7 +5294,7 @@ class PlanEditSession:
                         self._set_selected_plan_target_state("symbol", obj)
                         self._clear_wall_grips()
                         self._activate_symbol_handle(obj, role)
-                    elif node_kind == "provider_overlay_point":
+                    elif node_kind in ("provider_overlay_point", "provider_overlay_target"):
                         if not self._activate_provider_overlay_target_node(
                             node,
                             event_callback,
@@ -6545,6 +6573,12 @@ class PlanEditSession:
     def _get_plan_target_display_label(self, obj):
         return getattr(obj, "Label", getattr(obj, "Name", ""))
 
+    def _format_provider_target_role_label(self, obj):
+        return plan_provider_targets.get_plan_provider_target_role_label(self, obj)
+
+    def _format_provider_target_help(self, obj):
+        return plan_provider_targets.format_plan_provider_target_help(self, obj)
+
     def _get_opening_display_kind_key(self, opening):
         if not opening:
             return "Opening"
@@ -6622,6 +6656,11 @@ class PlanEditSession:
             "space": translate("BIM_PlanEdit", "Space: {label}"),
             "wall": translate("BIM_PlanEdit", "Wall: {label}"),
         }
+        if kind == "provider":
+            return translate("BIM_PlanEdit", "{kind}: {label}").format(
+                kind=self._format_provider_target_role_label(obj),
+                label=self._get_plan_target_display_label(obj),
+            )
         template = templates.get(kind)
         if not template:
             return ""
@@ -6761,8 +6800,11 @@ class PlanEditSession:
                 "BIM_PlanEdit",
                 "Edit label, scheme, type, and parent space in the task panel",
             )
-        if provider_context and self.current_tool == "Select":
-            action = provider_action
+        if (selected_kind == "provider" or provider_context) and self.current_tool == "Select":
+            if selected_kind == "provider":
+                action = self._format_provider_target_help(selected_obj)
+            else:
+                action = provider_action
         if self._plan_relation_status_message:
             action = self._plan_relation_status_message
         if not action:
@@ -6852,11 +6894,19 @@ class PlanEditSession:
                     ),
                     additive_hint,
                 )
+            if selected_kind == "provider":
+                return (
+                    (
+                        translate("BIM_PlanEdit", "%1 select another integration target"),
+                        ui.MouseLeft,
+                    ),
+                    additive_hint,
+                )
             return (
                 (
                     translate(
                         "BIM_PlanEdit",
-                        "%1 select wall, opening, symbol, region, or space",
+                        "%1 select wall, opening, symbol, integration target, region, or space",
                     ),
                     ui.MouseLeft,
                 ),
@@ -7281,7 +7331,7 @@ class PlanEditSession:
 
     def _toggle_plan_target_selection_at_position(self, mouse_pos, event_callback=None):
         node = self._get_edit_node(mouse_pos)
-        if node and node[0] == "provider_overlay_point":
+        if node and node[0] in ("provider_overlay_point", "provider_overlay_target"):
             target_kind, target_obj = self._get_provider_overlay_target_from_edit_node(node)
             if target_obj is not None and not self._is_valid_plan_target(
                 target_kind,
