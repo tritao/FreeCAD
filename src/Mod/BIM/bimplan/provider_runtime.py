@@ -8,8 +8,13 @@ import inspect
 
 import FreeCAD
 
-from bimplan import provider_targets as plan_provider_targets
-from bimplan.providers import (
+from .provider_targets import (
+    get_plan_provider_target_for_object as _get_plan_provider_target_for_object,
+    get_plan_provider_targets as _get_plan_provider_targets,
+    is_plan_provider_target_object as _is_plan_provider_target_object,
+    normalize_plan_provider_target as _normalize_plan_provider_target,
+)
+from .providers import (
     PlanActionSpec,
     PlanInspectorSection,
     PlanIssueSpec,
@@ -22,9 +27,9 @@ from bimplan.providers import (
     PlanToolSpec,
     PlanToolInteraction,
 )
-from bimplan.semantics import PlanSemanticRecord
-from bimplan.targets import PlanTarget
-from bimplan.transactions import PlanEditTransaction
+from .semantics import PlanSemanticRecord
+from .targets import PlanTarget
+from .transactions import PlanEditTransaction
 
 translate = FreeCAD.Qt.translate
 
@@ -270,19 +275,19 @@ def normalize_plan_provider_overlay(provider_id, overlay):
 
 
 def normalize_plan_provider_target(provider_id, target):
-    return plan_provider_targets.normalize_plan_provider_target(provider_id, target)
+    return _normalize_plan_provider_target(provider_id, target)
 
 
 def get_plan_provider_targets(session):
-    return plan_provider_targets.get_plan_provider_targets(session)
+    return _get_plan_provider_targets(session)
 
 
 def get_plan_provider_target_for_object(session, obj):
-    return plan_provider_targets.get_plan_provider_target_for_object(session, obj)
+    return _get_plan_provider_target_for_object(session, obj)
 
 
 def is_plan_provider_target_object(session, obj):
-    return plan_provider_targets.is_plan_provider_target_object(session, obj)
+    return _is_plan_provider_target_object(session, obj)
 
 
 def _normalize_plan_overlay_target(target):
