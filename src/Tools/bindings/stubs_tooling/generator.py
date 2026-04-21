@@ -647,11 +647,8 @@ def signature(method: BindingMethod, class_method: bool = False) -> str:
 
 def known_stub_signature(
     method: BindingMethod,
-    class_method: bool,
     stub_signature_overrides: StubSignatureOverrides,
 ) -> StubSignature | None:
-    if not class_method:
-        return None
     return stub_signature_overrides.get((method.source, method.context_name, method.python_name))
 
 
@@ -689,7 +686,6 @@ def stub_line(
     if valid_identifier(method.python_name):
         known_signature = known_stub_signature(
             method,
-            class_method,
             stub_signature_overrides or {},
         )
         if known_signature:
@@ -829,6 +825,33 @@ def stub_signature_from_function_node(
     return StubSignature(parameters, returns, class_symbol)
 
 
+def module_stub_signature_from_function_node(
+    path: Path,
+    source: str,
+    module_name: str,
+    node: ast.FunctionDef,
+) -> StubSignature:
+    if node.returns is None:
+        raise ValueError(f"{path}: {module_name}.{node.name} is missing a return annotation")
+    definition = ast.get_source_segment(source, node) or ""
+    if definition:
+        start = definition.find("(")
+        if start == -1:
+            raise ValueError(f"{path}: {module_name}.{node.name} has no parameter list")
+        parameters, end = extract_balanced(definition, start, "(", ")")
+        return_match = re.match(r"\s*->\s*(?P<returns>.+?)\s*:", definition[end:], re.DOTALL)
+        if not return_match:
+            raise ValueError(f"{path}: {module_name}.{node.name} is missing a return annotation")
+        returns = " ".join(return_match.group("returns").split())
+    else:
+        parameters = ast.unparse(node.args)
+        returns = ast.unparse(node.returns)
+    parameters = parameters.strip()
+    if parameters.startswith(("self", "cls")):
+        raise ValueError(f"{path}: {module_name}.{node.name} must not declare self or cls")
+    return StubSignature(parameters, returns)
+
+
 def parse_stub_signature_overrides(
     override_dir: Path,
 ) -> dict[tuple[str, str, str], tuple[StubSignature, Path]]:
@@ -841,6 +864,8 @@ def parse_stub_signature_overrides(
 
     for path in sorted(pycxx_override_dir.rglob("*.pyi")):
         relative = path.relative_to(pycxx_override_dir)
+        if relative.parts and relative.parts[0] == "modules":
+            continue
         module_name = ".".join(relative.parent.parts)
         if not module_name:
             raise ValueError(f"{path}: PyCXX override files must live below a module directory")
@@ -869,13 +894,54 @@ def parse_stub_signature_overrides(
     return signatures
 
 
+def parse_module_stub_signature_overrides(
+    override_dir: Path,
+) -> dict[tuple[str, str], tuple[StubSignature, Path]]:
+    signatures: dict[tuple[str, str], tuple[StubSignature, Path]] = {}
+    pycxx_override_dir = (
+        override_dir / "pycxx" if (override_dir / "pycxx").exists() else override_dir
+    )
+    module_override_dir = pycxx_override_dir / "modules"
+    if not module_override_dir.exists():
+        return signatures
+
+    for path in sorted(module_override_dir.rglob("*.pyi")):
+        relative = path.relative_to(module_override_dir)
+        module_name = overlay_module_name(relative)
+        if not module_name or module_name == "__init__":
+            raise ValueError(f"{path}: invalid module override path")
+        source = path.read_text(encoding="utf-8")
+        try:
+            tree = ast.parse(source, filename=str(path))
+        except SyntaxError as exc:
+            raise ValueError(f"{path}: invalid stub override syntax: {exc}") from exc
+
+        # Module overrides live in a dedicated tree so class override file naming
+        # stays unchanged while public module paths remain package-shaped.
+        for node in tree.body:
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            key = (module_name, node.name)
+            signature = module_stub_signature_from_function_node(path, source, module_name, node)
+            if key in signatures:
+                _, earlier_path = signatures[key]
+                raise ValueError(
+                    f"{path}: duplicate signature for {module_name}.{node.name}; "
+                    f"already defined in {earlier_path}"
+                )
+            signatures[key] = (signature, path)
+
+    return signatures
+
+
 def load_stub_signature_overrides(
     override_dir: Path,
     methods: list[BindingMethod],
     type_registrations: dict[str, list[str]],
 ) -> StubSignatureOverrides:
     public_signatures = parse_stub_signature_overrides(override_dir)
-    if not public_signatures:
+    public_module_signatures = parse_module_stub_signature_overrides(override_dir)
+    if not public_signatures and not public_module_signatures:
         return {}
 
     context_index = public_type_context_index(methods, type_registrations)
@@ -884,6 +950,13 @@ def load_stub_signature_overrides(
         for method in methods
         if method.context_kind == "python_type"
     }
+    module_method_index: dict[tuple[str, str], list[StubSignatureKey]] = defaultdict(list)
+    for method in methods:
+        if not method.inferred_module:
+            continue
+        module_method_index[(method.inferred_module, method.python_name)].append(
+            (method.source, method.context_name, method.python_name)
+        )
     overrides: StubSignatureOverrides = {}
     errors: list[str] = []
 
@@ -907,6 +980,20 @@ def load_stub_signature_overrides(
                 f"{path}: {module_name}.{class_symbol}.{method_name} is not registered "
                 f"in mapped contexts: {contexts}"
             )
+            continue
+
+        for override_key in matched_keys:
+            existing = overrides.get(override_key)
+            if existing and existing != signature_override:
+                errors.append(f"{path}: conflicting override for {override_key}")
+                continue
+            overrides[override_key] = signature_override
+
+    for public_key, (signature_override, path) in sorted(public_module_signatures.items()):
+        matched_keys = module_method_index.get(public_key, [])
+        if not matched_keys:
+            module_name, function_name = public_key
+            errors.append(f"{path}: {module_name}.{function_name} is not registered in the inventory")
             continue
 
         for override_key in matched_keys:
@@ -1970,7 +2057,12 @@ def copy_overlay_stubs(
             else target_dir / relative
         )
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
+        overlay_source = source.read_text(encoding="utf-8")
+        if target.exists():
+            merged = merge_overlay_module(target.read_text(encoding="utf-8"), overlay_source)
+            target.write_text(merged, encoding="utf-8")
+        else:
+            target.write_text(overlay_source, encoding="utf-8")
         count += 1
 
     return count
@@ -2001,6 +2093,45 @@ def top_level_symbol_names(node: ast.stmt) -> set[str]:
             return {alias.asname or alias.name for alias in names if alias.name != "*"}
         case _:
             return set()
+
+
+def merge_overlay_module(target_source: str, overlay_source: str) -> str:
+    # Overlay modules replace matching top-level symbols but keep generated members
+    # that the overlay does not mention. This lets small overlays add helper types
+    # without restating the whole module surface.
+    target_tree = ast.parse(target_source)
+    overlay_tree = ast.parse(overlay_source)
+
+    for node in overlay_tree.body:
+        names = top_level_symbol_names(node)
+        if names:
+            target_tree.body = [
+                existing
+                for existing in target_tree.body
+                if not top_level_symbol_names(existing).intersection(names)
+            ]
+
+        insertion_index = 0
+        while insertion_index < len(target_tree.body):
+            current = target_tree.body[insertion_index]
+            if (
+                isinstance(current, ast.Expr)
+                and isinstance(current.value, ast.Constant)
+                and isinstance(current.value.value, str)
+            ):
+                insertion_index += 1
+                continue
+            if isinstance(current, (ast.Import, ast.ImportFrom, ast.Assign, ast.AnnAssign)):
+                insertion_index += 1
+                continue
+            break
+        target_tree.body.insert(insertion_index, copy.deepcopy(node))
+
+    merged = ast.unparse(target_tree).rstrip() + "\n"
+    preamble = leading_comment_block(target_source)
+    if preamble:
+        return f"{preamble}\n\n{merged}"
+    return merged
 
 
 def markdown_report(methods: list[BindingMethod]) -> str:
