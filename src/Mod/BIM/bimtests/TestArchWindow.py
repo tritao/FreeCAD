@@ -67,6 +67,8 @@ class TestArchWindow(TestArchBase.TestArchBase):
             "Default part type incorrect for single-wire sketch.",
         )
         self.assertIn("Wire0", window.WindowParts[2])
+        self.assertAlmostEqual(window.Width.Value, 1000.0, places=5)
+        self.assertAlmostEqual(window.Height.Value, 1200.0, places=5)
         self.assertFalse(window.Shape.isNull())
         self.assertGreater(len(window.Shape.Solids), 0)
 
@@ -86,24 +88,23 @@ class TestArchWindow(TestArchBase.TestArchBase):
         )
         self.assertIn("Wire0", window.WindowParts[2])
         self.assertIn("Wire1", window.WindowParts[2])
+        self.assertAlmostEqual(window.Width.Value, 1000.0, places=5)
+        self.assertAlmostEqual(window.Height.Value, 1200.0, places=5)
         self.assertFalse(window.Shape.isNull())
         self.assertGreater(len(window.Shape.Solids), 0)
 
-    def test_sketch_named_constraints_driven_by_window_props(self):
-        """Test that window Width/Height properties drive sketch's named constraints."""
+    def test_sketch_named_constraints_drive_and_initialize_window_props(self):
+        """Window dimensions should initialize from and continue driving named sketch constraints."""
         sketch_width, sketch_height = 800.0, 1000.0
         sketch = self._create_sketch_with_named_constraints(
             "SketchNamed", sketch_width, sketch_height
         )
 
         window = Arch.makeWindow(baseobj=sketch, name="Window_NamedSketch")
-        # Set window Width/Height to ensure they become the drivers if sketch also has the constraints.
-        # They need to be set explicitly after creating the window, as they are not automatically initialized
-        # from the sketch.
-        window.Width = sketch_width
-        window.Height = sketch_height
         self.document.recompute()
 
+        self.assertEqual(window.Width.Value, sketch_width)
+        self.assertEqual(window.Height.Value, sketch_height)
         self.assertEqual(sketch.getDatum("Width").Value, sketch_width)
         self.assertEqual(sketch.getDatum("Height").Value, sketch_height)
 
@@ -124,6 +125,88 @@ class TestArchWindow(TestArchBase.TestArchBase):
             new_win_height,
             "Window.Height should drive sketch 'Height' constraint.",
         )
+
+    def test_resize_window_width_named_sketch_preserves_anchor(self):
+        """Shared Arch resize should preserve the anchor of named-constraint sketches."""
+
+        def get_shape_center(obj):
+            bound_box = obj.Shape.BoundBox
+            return FreeCAD.Vector(
+                (float(bound_box.XMin) + float(bound_box.XMax)) * 0.5,
+                (float(bound_box.YMin) + float(bound_box.YMax)) * 0.5,
+                (float(bound_box.ZMin) + float(bound_box.ZMax)) * 0.5,
+            )
+
+        sketch = self._create_sketch_with_named_constraints("ResizeNamedSketch", 800.0, 1200.0)
+        sketch.Placement.Base = FreeCAD.Vector(250.0, 100.0, 0.0)
+        window = Arch.makeWindow(baseobj=sketch, name="ResizeNamedWindow")
+        self.document.recompute()
+
+        original_center = get_shape_center(window.Base)
+
+        self.assertTrue(Arch.setWindowWidth(window, 950.0))
+        self.document.recompute()
+
+        updated_center = get_shape_center(window.Base)
+        self.assertAlmostEqual(window.Width.Value, 950.0, places=5)
+        self.assertAlmostEqual(window.Height.Value, 1200.0, places=5)
+        self.assertAlmostEqual(window.Base.getDatum("Width").Value, 950.0, places=5)
+        self.assertAlmostEqual(original_center.x, updated_center.x, places=5)
+        self.assertAlmostEqual(original_center.y, updated_center.y, places=5)
+        self.assertAlmostEqual(original_center.z, updated_center.z, places=5)
+
+    def test_resize_window_width_simple_sketch_preserves_anchor(self):
+        """Shared Arch resize should fall back to simple sketch rewrites when needed."""
+
+        def get_shape_center(obj):
+            bound_box = obj.Shape.BoundBox
+            return FreeCAD.Vector(
+                (float(bound_box.XMin) + float(bound_box.XMax)) * 0.5,
+                (float(bound_box.YMin) + float(bound_box.YMax)) * 0.5,
+                (float(bound_box.ZMin) + float(bound_box.ZMax)) * 0.5,
+            )
+
+        sketch = self._create_sketch_with_wires("ResizeSimpleSketch", [(0, 0, 800, 1200)])
+        sketch.Placement.Base = FreeCAD.Vector(100.0, 50.0, 0.0)
+        window = Arch.makeWindow(baseobj=sketch, name="ResizeSimpleWindow")
+        self.document.recompute()
+
+        original_center = get_shape_center(window.Base)
+        original_width = ArchWindow.getWindowWidthMm(window)
+        original_height = ArchWindow.getWindowHeightMm(window)
+
+        self.assertTrue(Arch.setWindowWidth(window, 950.0))
+        self.document.recompute()
+
+        updated_center = get_shape_center(window.Base)
+        updated_width = ArchWindow.getWindowWidthMm(window)
+        updated_height = ArchWindow.getWindowHeightMm(window)
+        self.assertAlmostEqual(window.Width.Value, 950.0, places=5)
+        self.assertAlmostEqual(original_width, 800.0, places=5)
+        self.assertAlmostEqual(updated_width, 950.0, places=5)
+        self.assertAlmostEqual(updated_height, original_height, places=5)
+        self.assertAlmostEqual(original_center.x, updated_center.x, places=5)
+        self.assertAlmostEqual(original_center.y, updated_center.y, places=5)
+        self.assertAlmostEqual(original_center.z, updated_center.z, places=5)
+
+    def test_resize_window_width_rejects_partial_named_constraint_sketch(self):
+        """Width edits should be rejected when only a non-width named constraint is present."""
+
+        sketch = self._create_sketch_with_named_constraints("ResizeMixedSketch", 800.0, 1200.0)
+        width_index = next(
+            i for i, constraint in enumerate(sketch.Constraints) if constraint.Name == "Width"
+        )
+        sketch.renameConstraint(width_index, "ProfileWidth")
+        self.document.recompute()
+
+        window = Arch.makeWindow(baseobj=sketch, name="ResizeMixedWindow")
+        self.document.recompute()
+
+        status = Arch.validateWindowResize(window, width=950.0)
+        self.assertFalse(status.allowed)
+        self.assertIn("width cannot be edited", status.reason.lower())
+        self.assertFalse(ArchWindow.canEditWindowWidth(window))
+        self.assertFalse(Arch.setWindowWidth(window, 950.0))
 
     def test_create_from_sketch_with_custom_parts(self):
         """Test creating a window from sketch with explicit custom parts."""
@@ -226,9 +309,8 @@ class TestArchWindow(TestArchBase.TestArchBase):
         """
         Test if a window hosted in a wall creates a geometric opening,
         verifying changes in Volume and VerticalArea.
-        Manually sets win.Width and win.Height after Arch.makeWindow(sk)
-        as current Arch.makeWindow(sk) behavior does not initialize these
-        properties from the sketch. It expects win.Placement to remain identity.
+        Uses the dimensions inferred by Arch.makeWindow(sk) from the sketch.
+        It expects win.Placement to remain identity.
         """
         # 1. Create Wall
         wall_length = 3000.0
@@ -266,11 +348,6 @@ class TestArchWindow(TestArchBase.TestArchBase):
 
         # 3. Create Window from sketch
         win = Arch.makeWindow(sk, name="WindowInWall_Args")
-
-        # Manually set Width and Height to match the sketch profile dimensions
-        win.Width = sketch_profile_width
-        win.Height = sketch_profile_height
-        # win.Placement remains identity
 
         win.HoleDepth = 0  # Use "smart" hole depth calculation
         win.WindowParts = ["DefaultFrame", "Frame", "Wire0", "60", "0"]
