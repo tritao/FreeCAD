@@ -2,6 +2,8 @@
 
 """Provider-owned overlay rendering for BIM Plan Edit."""
 
+import math
+
 import FreeCAD
 
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
@@ -144,13 +146,14 @@ def _get_provider_point_preview_segment_specs(session):
     width = session._scaled_line_width(2)
     specs = []
     specs.extend(
-        _get_cross_marker_segment_specs(
+        _get_point_marker_segment_specs(
             point,
             label="provider-point-preview-marker",
             color=preview_color,
             width=width,
             dotted=not hosted,
             marker_size=session._scaled_marker_size(_PROVIDER_POINT_PREVIEW_MARKER_SIZE),
+            marker_kind="cross",
         )
     )
     if hosted:
@@ -176,6 +179,97 @@ def _get_provider_point_preview_segment_specs(session):
     return tuple(specs)
 
 
+def _get_point_marker_segment_specs(
+    point,
+    *,
+    label,
+    color,
+    width,
+    dotted,
+    marker_size,
+    marker_kind,
+):
+    marker_kind = _normalize_marker_kind(marker_kind)
+    if marker_kind == "circle":
+        return _get_circle_marker_segment_specs(
+            point,
+            label=label,
+            color=color,
+            width=width,
+            dotted=dotted,
+            marker_size=marker_size,
+        )
+    if marker_kind == "circle_cross":
+        return _get_circle_marker_segment_specs(
+            point,
+            label=label,
+            color=color,
+            width=width,
+            dotted=dotted,
+            marker_size=marker_size,
+        ) + _get_cross_marker_segment_specs(
+            point,
+            label=label,
+            color=color,
+            width=width,
+            dotted=dotted,
+            marker_size=marker_size * 0.7,
+        )
+    if marker_kind == "diamond":
+        half_size = max(1.0, float(marker_size) / 2.0)
+        return _get_polyline_marker_segment_specs(
+            (
+                FreeCAD.Vector(point.x, point.y + half_size, point.z),
+                FreeCAD.Vector(point.x + half_size, point.y, point.z),
+                FreeCAD.Vector(point.x, point.y - half_size, point.z),
+                FreeCAD.Vector(point.x - half_size, point.y, point.z),
+            ),
+            label=label,
+            color=color,
+            width=width,
+            dotted=dotted,
+            closed=True,
+        )
+    if marker_kind == "hourglass":
+        half_size = max(1.0, float(marker_size) / 2.0)
+        return _get_polyline_marker_segment_specs(
+            (
+                FreeCAD.Vector(point.x - half_size, point.y + half_size, point.z),
+                FreeCAD.Vector(point.x + half_size, point.y + half_size, point.z),
+                FreeCAD.Vector(point.x - half_size, point.y - half_size, point.z),
+                FreeCAD.Vector(point.x + half_size, point.y - half_size, point.z),
+            ),
+            label=label,
+            color=color,
+            width=width,
+            dotted=dotted,
+            closed=True,
+        )
+    if marker_kind == "square":
+        half_size = max(1.0, float(marker_size) / 2.0)
+        return _get_polyline_marker_segment_specs(
+            (
+                FreeCAD.Vector(point.x - half_size, point.y + half_size, point.z),
+                FreeCAD.Vector(point.x + half_size, point.y + half_size, point.z),
+                FreeCAD.Vector(point.x + half_size, point.y - half_size, point.z),
+                FreeCAD.Vector(point.x - half_size, point.y - half_size, point.z),
+            ),
+            label=label,
+            color=color,
+            width=width,
+            dotted=dotted,
+            closed=True,
+        )
+    return _get_cross_marker_segment_specs(
+        point,
+        label=label,
+        color=color,
+        width=width,
+        dotted=dotted,
+        marker_size=marker_size,
+    )
+
+
 def _get_cross_marker_segment_specs(point, *, label, color, width, dotted, marker_size):
     half_size = max(1.0, float(marker_size) / 2.0)
     return (
@@ -195,6 +289,48 @@ def _get_cross_marker_segment_specs(point, *, label, color, width, dotted, marke
             "width": width,
             "dotted": dotted,
         },
+    )
+
+
+def _get_circle_marker_segment_specs(point, *, label, color, width, dotted, marker_size):
+    radius = max(1.0, float(marker_size) / 2.0)
+    segments = max(8, int(round(radius / 25.0)))
+    circle_points = []
+    for index in range(segments):
+        angle = (2.0 * math.pi * index) / float(segments)
+        circle_points.append(
+            FreeCAD.Vector(
+                point.x + math.cos(angle) * radius,
+                point.y + math.sin(angle) * radius,
+                point.z,
+            )
+        )
+    return _get_polyline_marker_segment_specs(
+        tuple(circle_points),
+        label=label,
+        color=color,
+        width=width,
+        dotted=dotted,
+        closed=True,
+    )
+
+
+def _get_polyline_marker_segment_specs(points, *, label, color, width, dotted, closed):
+    points = tuple(_to_vector(point) for point in tuple(points or ()))
+    points = tuple(point for point in points if point is not None)
+    if len(points) < 2:
+        return ()
+    segment_points = points + (points[0],) if closed else points
+    return tuple(
+        {
+            "label": label,
+            "start": start,
+            "end": end,
+            "color": color,
+            "width": width,
+            "dotted": dotted,
+        }
+        for start, end in zip(segment_points, segment_points[1:])
     )
 
 
@@ -252,15 +388,17 @@ def _create_provider_overlay_trackers(session, DraftTrackers, overlay):
             dotted=dotted,
         )
     marker_size = float(getattr(overlay, "marker_size", 160.0) or 160.0)
+    marker_kind = str(getattr(overlay, "marker_kind", "cross") or "cross")
     point_targets = tuple(getattr(overlay, "point_targets", ()) or ())
     for index, point in enumerate(tuple(getattr(overlay, "points", ()) or ())):
         target = point_targets[index] if index < len(point_targets) else None
-        _create_cross_marker_trackers(
+        _create_point_marker_trackers(
             session,
             DraftTrackers,
             "provider-overlay-point:{}".format(key),
             _to_vector(point),
             marker_size=marker_size,
+            marker_kind=marker_kind,
             color=color,
             width=width,
             dotted=dotted,
@@ -289,13 +427,14 @@ def _create_polyline_trackers(session, DraftTrackers, label, polyline, *, color,
         session._provider_overlay_trackers.append(tracker)
 
 
-def _create_cross_marker_trackers(
+def _create_point_marker_trackers(
     session,
     DraftTrackers,
     label,
     point,
     *,
     marker_size,
+    marker_kind,
     color,
     width,
     dotted,
@@ -304,28 +443,25 @@ def _create_cross_marker_trackers(
 ):
     if point is None:
         return
-    half_size = max(1.0, marker_size / 2.0)
-    segments = (
-        (
-            FreeCAD.Vector(point.x - half_size, point.y, point.z),
-            FreeCAD.Vector(point.x + half_size, point.y, point.z),
-        ),
-        (
-            FreeCAD.Vector(point.x, point.y - half_size, point.z),
-            FreeCAD.Vector(point.x, point.y + half_size, point.z),
-        ),
-    )
-    for start, end in segments:
+    for spec in _get_point_marker_segment_specs(
+        point,
+        label=label,
+        color=color,
+        width=width,
+        dotted=dotted,
+        marker_size=marker_size,
+        marker_kind=marker_kind,
+    ):
         tracker = session._make_plan_line_tracker(
             DraftTrackers,
-            label,
-            dotted=dotted,
-            scolor=color,
-            swidth=width,
+            spec["label"],
+            dotted=spec["dotted"],
+            scolor=spec["color"],
+            swidth=spec["width"],
             ontop=True,
         )
-        tracker.p1(start)
-        tracker.p2(end)
+        tracker.p1(spec["start"])
+        tracker.p2(spec["end"])
         tracker.on()
         session._provider_overlay_trackers.append(tracker)
     _create_target_pick_tracker(
@@ -434,3 +570,26 @@ def _round_vector(point):
 
 def _round_tuple(values):
     return tuple(round(float(value), 4) for value in tuple(values or ()))
+
+
+def _normalize_marker_kind(marker_kind):
+    normalized = str(marker_kind or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if not normalized:
+        return "cross"
+    aliases = {
+        "circle": "circle",
+        "circle_cross": "circle_cross",
+        "circle_filled": "circle",
+        "circle_line": "circle",
+        "circle_with_cross": "circle_cross",
+        "cross": "cross",
+        "diamond": "diamond",
+        "diamond_filled": "diamond",
+        "hourglass": "hourglass",
+        "hourglass_filled": "hourglass",
+        "light_point": "circle_cross",
+        "plus": "cross",
+        "square": "square",
+        "square_filled": "square",
+    }
+    return aliases.get(normalized, "cross")
