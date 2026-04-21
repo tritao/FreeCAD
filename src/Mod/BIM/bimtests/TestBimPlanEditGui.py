@@ -2222,6 +2222,11 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         combo = panel.window_preset_combo
 
         self.assertFalse(panel.window_editor.isHidden())
+        self.assertIsNotNone(panel.window_width_edit)
+        self.assertEqual(
+            session._get_selected_window_width_text(), str(panel.window_width_edit.text())
+        )
+        self.assertFalse(panel.window_width_apply_button.isEnabled())
         self.assertIsNotNone(combo)
         self.assertFalse(combo.isEditable())
         self.assertEqual("Custom / Current", str(combo.itemText(0)))
@@ -2231,7 +2236,67 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             [str(combo.itemText(index)) for index in range(combo.count())],
         )
         self.assertFalse(panel.window_preset_apply_button.isEnabled())
-        self.assertIn("change its style", panel.status.text().lower())
+        self.assertIn("change its width or style", panel.status.text().lower())
+
+    def test_plan_edit_selected_window_can_change_width(self):
+        """Selected windows should accept width edits without drifting their center."""
+
+        def get_shape_center(obj):
+            bound_box = obj.Shape.BoundBox
+            return FreeCAD.Vector(
+                (float(bound_box.XMin) + float(bound_box.XMax)) * 0.5,
+                (float(bound_box.YMin) + float(bound_box.YMax)) * 0.5,
+                (float(bound_box.ZMin) + float(bound_box.ZMax)) * 0.5,
+            )
+
+        def get_shape_size(obj):
+            bound_box = obj.Shape.BoundBox
+            return (
+                max(float(bound_box.XLength), float(bound_box.YLength)),
+                float(bound_box.ZLength),
+            )
+
+        level, wall, window = self._make_windowed_plan_wall()
+        original_center = get_shape_center(window.Base)
+        original_width, original_height = get_shape_size(window.Base)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(session._select_opening_for_plan_edit(window, sync_gui_selection=True))
+        session.task_panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        panel = session.task_panel
+        panel.window_width_edit.setText("950 mm")
+        self.pump_gui_events()
+        self.assertTrue(panel.window_width_apply_button.isEnabled())
+
+        panel.window_width_apply_button.click()
+        self.pump_gui_events(timeout_ms=500)
+        panel.refresh_from_session()
+        self.pump_gui_events(timeout_ms=500)
+
+        updated_center = get_shape_center(window.Base)
+        updated_width, updated_height = get_shape_size(window.Base)
+        self.assertIn(wall, window.Hosts)
+        self.assertAlmostEqual(original_center.x, updated_center.x, delta=1e-6)
+        self.assertAlmostEqual(original_center.y, updated_center.y, delta=1e-6)
+        self.assertAlmostEqual(original_center.z, updated_center.z, delta=1e-6)
+        self.assertAlmostEqual(original_width, 800.0, delta=1e-6)
+        self.assertAlmostEqual(updated_width, 950.0, delta=1e-6)
+        self.assertAlmostEqual(updated_height, original_height, delta=1e-6)
+        self.assertAlmostEqual(
+            float(getattr(window.Width, "Value", window.Width)), 950.0, delta=1e-6
+        )
+        self.assertEqual(
+            session._get_selected_window_width_text(), str(panel.window_width_edit.text())
+        )
+        self.assertFalse(panel.window_width_apply_button.isEnabled())
 
     def test_plan_edit_selected_window_can_apply_built_in_style_preset(self):
         """Selected windows should accept built-in preset rewrites without drifting."""

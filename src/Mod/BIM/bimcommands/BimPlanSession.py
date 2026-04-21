@@ -6576,7 +6576,25 @@ class PlanEditSession:
                 "BIM_PlanEdit",
                 "Use the in-view handle to move the selected window along its host wall.",
             )
-            if self._can_apply_window_style_preset(opening):
+            can_edit_width = self._can_edit_window_width(opening)
+            can_apply_style = self._can_apply_window_style_preset(opening)
+            if can_edit_width and can_apply_style:
+                help_text = "{} {}".format(
+                    help_text,
+                    translate(
+                        "BIM_PlanEdit",
+                        "Use the window controls below to change its width or style.",
+                    ),
+                )
+            elif can_edit_width:
+                help_text = "{} {}".format(
+                    help_text,
+                    translate(
+                        "BIM_PlanEdit",
+                        "Use the window controls below to change its width.",
+                    ),
+                )
+            elif can_apply_style:
                 help_text = "{} {}".format(
                     help_text,
                     translate(
@@ -7777,16 +7795,33 @@ class PlanEditSession:
     def _get_selected_window_style_preset(self):
         return plan_window_edit.get_selected_window_style_preset(self)
 
+    def _get_selected_window_width_mm(self):
+        return plan_window_edit.get_selected_window_width_mm(self)
+
+    def _get_selected_window_width_text(self):
+        return plan_window_edit.get_selected_window_width_text(self)
+
     def _can_apply_window_style_preset(self, window=None):
         if window is None:
             window = self._get_selected_plan_target_object("opening")
         return plan_window_edit.can_edit_window_style_preset(window)
 
+    def _can_edit_window_width(self, window=None):
+        if window is None:
+            window = self._get_selected_plan_target_object("opening")
+        return plan_window_edit.can_edit_window_width(window)
+
     def _can_apply_selected_window_style_preset(self):
         return plan_window_edit.can_apply_selected_window_style_preset(self)
 
+    def _can_apply_selected_window_width(self):
+        return plan_window_edit.can_apply_selected_window_width(self)
+
     def _apply_selected_window_style_preset(self, preset_name):
         return plan_window_edit.apply_selected_window_style_preset(self, preset_name)
+
+    def _set_selected_window_width(self, value):
+        return plan_window_edit.set_selected_window_width(self, value)
 
     def _set_selected_region_label(self, label):
         return plan_spaces.set_selected_region_label(self, label)
