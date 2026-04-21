@@ -40,6 +40,7 @@ else:
 
 
 _KITCHEN_PLANNING_MODES = ["Auto", "SingleRun", "Galley", "L", "U"]
+_KITCHEN_PRIMARY_EDGE_INDEX_AUTO = -1
 
 
 def _copy_vector(value, default=None):
@@ -137,6 +138,17 @@ class _PlanRegion(ArchComponent.Component):
                 ),
             ).KitchenPlanningMode = list(_KITCHEN_PLANNING_MODES)
             obj.KitchenPlanningMode = "Auto"
+        if "KitchenPrimaryEdgeIndex" not in pl:
+            obj.addProperty(
+                "App::PropertyInteger",
+                "KitchenPrimaryEdgeIndex",
+                "Region",
+                QT_TRANSLATE_NOOP(
+                    "App::Property",
+                    "The polygon edge index Cabinetry should treat as the primary kitchen host edge. Use -1 for auto.",
+                ),
+            )
+            obj.KitchenPrimaryEdgeIndex = _KITCHEN_PRIMARY_EDGE_INDEX_AUTO
 
     def _set_ifc_type(self, obj):
         try:
@@ -162,7 +174,7 @@ class _PlanRegion(ArchComponent.Component):
 
     def onChanged(self, obj, prop):
         ArchComponent.Component.onChanged(self, obj, prop)
-        if prop in ("Points", "Placement", "KitchenPlanningMode"):
+        if prop in ("Points", "Placement", "KitchenPlanningMode", "KitchenPrimaryEdgeIndex"):
             try:
                 obj.touch()
             except Exception:
