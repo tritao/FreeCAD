@@ -7447,8 +7447,12 @@ class PlanEditSession:
     def _prime_opening_handle_tracker_pool(self):
         return opening_overlays.prime_opening_handle_tracker_pool(self)
 
-    def _get_plan_target_at_position(self, mouse_pos):
-        return plan_picking.get_plan_target_at_position(self, mouse_pos)
+    def _get_plan_target_at_position(self, mouse_pos, include_space_fallback=True):
+        return plan_picking.get_plan_target_at_position(
+            self,
+            mouse_pos,
+            include_space_fallback=include_space_fallback,
+        )
 
     def _should_skip_hover_pick(self, mouse_pos, force=False):
         if force or mouse_pos is None:
@@ -7494,7 +7498,11 @@ class PlanEditSession:
             return True
         if self._should_skip_hover_pick(mouse_pos, force=force):
             return False
-        target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
+        target_kind, target_obj = self._get_plan_target_at_position(
+            mouse_pos,
+            include_space_fallback=self.get_plan_provider_overlay_mode()
+            not in (_PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL, _PLAN_PROVIDER_OVERLAY_MODE_PLUMBING),
+        )
         self._hover_pick_dirty = False
         if target_kind == "opening":
             self._set_hovered_wall(None)

@@ -624,6 +624,118 @@ class TestBimPlanCore(unittest.TestCase):
                 get_plan_target_at_position(session, (100, 200)),
             )
 
+    def test_get_plan_target_at_position_keeps_space_fallback_for_clicks_in_focused_overlay_mode(
+        self,
+    ):
+        space = SimpleNamespace(
+            Name="SpaceKitchen",
+            Label="Kitchen",
+            Document=SimpleNamespace(Name="TestDoc"),
+        )
+        doc = SimpleNamespace(
+            Name="TestDoc",
+            getObject=lambda name: space if name == space.Name else None,
+        )
+        sys.modules["FreeCAD"].getDocument = lambda name: doc if name == doc.Name else None
+
+        class _View:
+            def getObjectsInfo(self, _mouse_pos):
+                return (
+                    {
+                        "Document": doc.Name,
+                        "Object": space.Name,
+                    },
+                )
+
+        session = SimpleNamespace(
+            doc=doc,
+            view=_View(),
+            get_plan_provider_overlay_mode=lambda: "electrical",
+            _pick_provider_overlay_target_from_overlays=lambda *_args, **_kwargs: (None, None),
+            _pick_plan_opening_target_from_overlays=lambda *args, **kwargs: None,
+            _pick_plan_symbol_target_from_overlays=lambda *args, **kwargs: None,
+            _pick_plan_region_target_from_polylines=lambda *args, **kwargs: None,
+            _pick_plan_region_target_from_footprints=lambda *args, **kwargs: None,
+            _pick_plan_region_target_from_overlays=lambda *args, **kwargs: None,
+            _pick_plan_space_target_from_footprints=lambda *args, **kwargs: space,
+            _pick_plan_space_target_from_overlays=lambda *args, **kwargs: space,
+            _get_wall_hosted_openings=lambda *_args, **_kwargs: (),
+            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
+            _plan_perf_count=lambda *_args, **_kwargs: None,
+            _plan_perf_set_fields=lambda **_kwargs: None,
+            _plan_perf_describe_target=lambda kind, obj: (
+                kind,
+                getattr(obj, "Name", ""),
+            ),
+        )
+
+        with patch(
+            "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
+            return_value=("space", space),
+        ):
+            self.assertEqual(
+                ("space", space),
+                get_plan_target_at_position(session, (100, 200)),
+            )
+
+    def test_get_plan_target_at_position_can_skip_space_fallback_for_hover_in_focused_overlay_mode(
+        self,
+    ):
+        space = SimpleNamespace(
+            Name="SpaceKitchen",
+            Label="Kitchen",
+            Document=SimpleNamespace(Name="TestDoc"),
+        )
+        doc = SimpleNamespace(
+            Name="TestDoc",
+            getObject=lambda name: space if name == space.Name else None,
+        )
+        sys.modules["FreeCAD"].getDocument = lambda name: doc if name == doc.Name else None
+
+        class _View:
+            def getObjectsInfo(self, _mouse_pos):
+                return (
+                    {
+                        "Document": doc.Name,
+                        "Object": space.Name,
+                    },
+                )
+
+        session = SimpleNamespace(
+            doc=doc,
+            view=_View(),
+            get_plan_provider_overlay_mode=lambda: "electrical",
+            _pick_provider_overlay_target_from_overlays=lambda *_args, **_kwargs: (None, None),
+            _pick_plan_opening_target_from_overlays=lambda *args, **kwargs: None,
+            _pick_plan_symbol_target_from_overlays=lambda *args, **kwargs: None,
+            _pick_plan_region_target_from_polylines=lambda *args, **kwargs: None,
+            _pick_plan_region_target_from_footprints=lambda *args, **kwargs: None,
+            _pick_plan_region_target_from_overlays=lambda *args, **kwargs: None,
+            _pick_plan_space_target_from_footprints=lambda *args, **kwargs: space,
+            _pick_plan_space_target_from_overlays=lambda *args, **kwargs: space,
+            _get_wall_hosted_openings=lambda *_args, **_kwargs: (),
+            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
+            _plan_perf_count=lambda *_args, **_kwargs: None,
+            _plan_perf_set_fields=lambda **_kwargs: None,
+            _plan_perf_describe_target=lambda kind, obj: (
+                kind,
+                getattr(obj, "Name", ""),
+            ),
+        )
+
+        with patch(
+            "bimplan.picking.plan_targets.get_plan_pick_target_for_object",
+            return_value=("space", space),
+        ):
+            self.assertEqual(
+                (None, None),
+                get_plan_target_at_position(
+                    session,
+                    (100, 200),
+                    include_space_fallback=False,
+                ),
+            )
+
     def test_resolve_selected_target_for_gui_object_preserves_pending_provider_target(self):
         marker = SimpleNamespace(
             Name="Link002",
