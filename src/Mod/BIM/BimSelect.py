@@ -33,15 +33,27 @@ class CyclicSelectionObserver:
             return
         if not hasattr(FreeCAD, "CyclicSelectionObserver"):
             return
-        FreeCADGui.Selection.removeSelection(FreeCAD.ActiveDocument.getObject(object))
+        FreeCADGui.Selection.removeSelection(document, object, element or "")
         FreeCADGui.Selection.removeObserver(FreeCAD.CyclicSelectionObserver)
         del FreeCAD.CyclicSelectionObserver
         preselection = FreeCADGui.Selection.getPreselection()
-        FreeCADGui.Selection.addSelection(
-            FreeCAD.ActiveDocument.getObject(preselection.Object.Name),
-            preselection.SubElementNames[0],
-        )
-        FreeCAD.ActiveDocument.recompute()
+        # The selection wrapper keeps the names even if the wrapped object was deleted.
+        document_name = getattr(preselection, "DocumentName", "")
+        object_name = getattr(preselection, "ObjectName", "")
+        subelement_names = getattr(preselection, "SubElementNames", ()) or ()
+        if not document_name or not object_name:
+            return
+        try:
+            doc = FreeCAD.getDocument(document_name)
+        except NameError:
+            return
+        if not doc.getObject(object_name):
+            return
+        if subelement_names:
+            FreeCADGui.Selection.addSelection(document_name, object_name, subelement_names[0])
+        else:
+            FreeCADGui.Selection.addSelection(document_name, object_name)
+        doc.recompute()
 
 
 class CyclicObjectSelector:
