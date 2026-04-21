@@ -28,6 +28,7 @@ class PlanToolSpec:
     priority: int = 0
     interaction: str = ""
     prompt: str = ""
+    default_host_target: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,7 @@ class PlanOverlaySpec:
     color: Tuple[float, float, float] = (0.2, 0.55, 0.85)
     line_width: float = 2.0
     marker_size: float = 160.0
+    marker_kind: str = "cross"
     dotted: bool = False
     visible: bool = True
     category: str = ""

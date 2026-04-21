@@ -251,6 +251,9 @@ def normalize_plan_provider_overlay(provider_id, overlay):
     color = _coerce_plan_overlay_color(overlay.color)
     if color != overlay.color:
         replacements["color"] = color
+    marker_kind = _coerce_plan_overlay_marker_kind(getattr(overlay, "marker_kind", "cross"))
+    if marker_kind != getattr(overlay, "marker_kind", "cross"):
+        replacements["marker_kind"] = marker_kind
     if not replacements:
         return overlay
     return replace(overlay, **replacements)
@@ -315,6 +318,29 @@ def _coerce_plan_overlay_color(color):
     if len(values) < 3:
         return (0.2, 0.55, 0.85)
     return values[:3]
+
+
+def _coerce_plan_overlay_marker_kind(marker_kind):
+    normalized = str(marker_kind or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if not normalized:
+        return "cross"
+    aliases = {
+        "circle": "circle",
+        "circle_cross": "circle_cross",
+        "circle_filled": "circle",
+        "circle_line": "circle",
+        "circle_with_cross": "circle_cross",
+        "cross": "cross",
+        "diamond": "diamond",
+        "diamond_filled": "diamond",
+        "hourglass": "hourglass",
+        "hourglass_filled": "hourglass",
+        "light_point": "circle_cross",
+        "plus": "cross",
+        "square": "square",
+        "square_filled": "square",
+    }
+    return aliases.get(normalized, "cross")
 
 
 def collect_plan_provider_contributions(session, method_name, normalizer):

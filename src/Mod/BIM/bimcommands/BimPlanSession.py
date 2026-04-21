@@ -2958,6 +2958,12 @@ class PlanEditSession:
         self._clear_selected_symbol_handles()
         self._clear_provider_point_preview()
         host_kind, host_obj, host_source = self._get_provider_point_context_host_state()
+        if host_obj is None:
+            host_kind, host_obj = self._normalize_provider_point_host_target(
+                getattr(tool, "default_host_target", ())
+            )
+            if host_obj is not None:
+                host_source = "tool"
         self._provider_point_host_target = (host_kind, host_obj)
         self._provider_point_host_source = host_source
         self._provider_point_tool = tool

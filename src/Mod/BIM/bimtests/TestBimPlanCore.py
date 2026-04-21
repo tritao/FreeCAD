@@ -157,6 +157,7 @@ class TestBimPlanCore(unittest.TestCase):
         overlay = PlanOverlaySpec(
             key="fixture-status",
             points=((1.0, 2.0, 3.0), ("invalid",)),
+            marker_kind=" diamond_filled ",
             point_targets=(
                 {
                     "document_name": " PlanDoc ",
@@ -171,6 +172,7 @@ class TestBimPlanCore(unittest.TestCase):
 
         self.assertEqual("test-provider", normalized.provider_id)
         self.assertEqual(((1.0, 2.0, 3.0),), normalized.points)
+        self.assertEqual("diamond", normalized.marker_kind)
         self.assertEqual(
             (
                 PlanOverlayTargetSpec(
