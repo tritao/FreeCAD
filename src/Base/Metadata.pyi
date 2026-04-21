@@ -26,10 +26,9 @@ def class_declarations(source_code):
     """
     ...
 
-def typing_methods(source_code):
+def typing_only(method):
     """
-    A decorator to attach typing-only method stubs to a class.
-    This metadata is consumed by the stub generator and ignored by binding code generation.
+    Mark a method as typing-only so it is ignored by binding code generation.
     """
     ...
 

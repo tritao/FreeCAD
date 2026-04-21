@@ -67,7 +67,7 @@ symbols re-export aliases. `FreeCAD.Base` is canonical for classes sourced from
 
 Use `inputs/pycxx-overrides/` for PyCXX type method tables that the inventory
 tool can map to a public class. These fragments are source inputs to the
-generator, not the published stub tree. Use `@typing_methods(...)` inside a
+generator, not the published stub tree. Use `@typing_only` on methods inside a
 binding `.pyi` class when extra typing-only methods belong to that class and
 should stay next to the binding source. Use `inputs/class-overlays/` for
 typing-only additions that should stay outside the binding `.pyi` inputs. Use

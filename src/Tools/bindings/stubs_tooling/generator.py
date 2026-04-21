@@ -29,7 +29,6 @@ import keyword
 from pathlib import Path
 import re
 import shutil
-import textwrap
 from typing import Iterable
 
 from .model import (
@@ -1404,43 +1403,6 @@ def class_node(root: Path, klass: BindingClass) -> ast.ClassDef | None:
     return None
 
 
-def decorator_string_arg(decorator: ast.expr) -> str | None:
-    if not isinstance(decorator, ast.Call) or not decorator.args:
-        return None
-    try:
-        value = ast.literal_eval(decorator.args[0])
-    except (ValueError, SyntaxError):
-        return None
-    return value if isinstance(value, str) else None
-
-
-def class_typing_method_nodes(klass: BindingClass, node: ast.ClassDef) -> list[ast.stmt]:
-    members: list[ast.stmt] = []
-    for decorator in node.decorator_list:
-        if decorator_name(decorator).split(".", 1)[-1] != "typing_methods":
-            continue
-        payload = decorator_string_arg(decorator)
-        if payload is None:
-            raise ValueError(
-                f"{klass.source}:{klass.line} {klass.class_name} has invalid typing_methods payload"
-            )
-        try:
-            parsed = ast.parse(textwrap.dedent(payload))
-        except SyntaxError as exc:
-            raise ValueError(
-                f"{klass.source}:{klass.line} {klass.class_name} has invalid typing_methods "
-                f"payload: {exc.msg}"
-            ) from exc
-        for item in parsed.body:
-            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                raise ValueError(
-                    f"{klass.source}:{klass.line} {klass.class_name} typing_methods payload "
-                    "may only contain function definitions"
-                )
-            members.append(item)
-    return members
-
-
 def type_checking_test(node: ast.expr) -> bool:
     match node:
         case ast.Name(id="TYPE_CHECKING"):
@@ -1791,7 +1753,6 @@ def public_class_stub_source(
     if not node:
         return None
     node = copy.deepcopy(node)
-    node.body.extend(class_typing_method_nodes(klass, node))
     import_bindings = transformed_import_bindings(
         source_import_bindings(root, klass.source), renames
     )
