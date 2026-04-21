@@ -13,10 +13,14 @@ from bimplan.providers import (
     PlanActionSpec,
     PlanInspectorSection,
     PlanIssueSpec,
+    PlanIssueSeverity,
     PlanOverlaySpec,
+    PlanOverlayMarkerKind,
     PlanOverlayTargetSpec,
+    PlanOverlayTargetKind,
     PlanSuggestionSpec,
     PlanToolSpec,
+    PlanToolInteraction,
 )
 from bimplan.semantics import PlanSemanticRecord
 from bimplan.targets import PlanTarget
@@ -147,6 +151,8 @@ def normalize_plan_provider_action(provider_id, action):
 def normalize_plan_provider_tool(provider_id, tool):
     if not isinstance(tool, PlanToolSpec):
         return None
+    if not isinstance(tool.interaction, PlanToolInteraction):
+        return None
     if tool.provider_id == provider_id:
         return tool
     return replace(tool, provider_id=str(provider_id or ""))
@@ -154,6 +160,8 @@ def normalize_plan_provider_tool(provider_id, tool):
 
 def normalize_plan_provider_issue(session, provider_id, issue):
     if not isinstance(issue, PlanIssueSpec):
+        return None
+    if not isinstance(issue.severity, PlanIssueSeverity):
         return None
     actions = tuple(
         normalized
@@ -218,6 +226,8 @@ def normalize_plan_provider_section(session, provider_id, section):
 def normalize_plan_provider_overlay(provider_id, overlay):
     if not isinstance(overlay, PlanOverlaySpec):
         return None
+    if not isinstance(overlay.marker_kind, PlanOverlayMarkerKind):
+        return None
     replacements = {}
     if overlay.provider_id != provider_id:
         replacements["provider_id"] = str(provider_id or "")
@@ -234,7 +244,9 @@ def normalize_plan_provider_overlay(provider_id, overlay):
         target = None
         if raw_point_targets:
             raw_target = raw_point_targets[index] if index < len(raw_point_targets) else None
-            target = _coerce_plan_overlay_target(raw_target)
+            target = _normalize_plan_overlay_target(raw_target)
+            if raw_target is not None and target is None:
+                return None
         point_pairs.append((point, target))
     points = tuple(point for point, _target in point_pairs)
     if points != tuple(overlay.points or ()):
@@ -252,9 +264,6 @@ def normalize_plan_provider_overlay(provider_id, overlay):
     color = _coerce_plan_overlay_color(overlay.color)
     if color != overlay.color:
         replacements["color"] = color
-    marker_kind = _coerce_plan_overlay_marker_kind(getattr(overlay, "marker_kind", "cross"))
-    if marker_kind != getattr(overlay, "marker_kind", "cross"):
-        replacements["marker_kind"] = marker_kind
     if not replacements:
         return overlay
     return replace(overlay, **replacements)
@@ -276,30 +285,26 @@ def is_plan_provider_target_object(session, obj):
     return plan_provider_targets.is_plan_provider_target_object(session, obj)
 
 
-def _coerce_plan_overlay_target(target):
+def _normalize_plan_overlay_target(target):
     if target is None:
         return PlanOverlayTargetSpec()
-    if isinstance(target, PlanOverlayTargetSpec):
-        document_name = str(target.document_name or "").strip()
-        object_name = str(target.object_name or "").strip()
-        target_kind = str(target.target_kind or "").strip()
-        subname = str(target.subname or "").strip()
-    elif isinstance(target, dict):
-        document_name = str(target.get("document_name", "") or "").strip()
-        object_name = str(target.get("object_name", "") or "").strip()
-        target_kind = str(target.get("target_kind", "") or "").strip()
-        subname = str(target.get("subname", "") or "").strip()
-    else:
-        document_name = str(getattr(target, "document_name", "") or "").strip()
-        object_name = str(getattr(target, "object_name", "") or "").strip()
-        target_kind = str(getattr(target, "target_kind", "") or "").strip()
-        subname = str(getattr(target, "subname", "") or "").strip()
-    return PlanOverlayTargetSpec(
-        document_name=document_name,
-        object_name=object_name,
-        target_kind=target_kind,
-        subname=subname,
-    )
+    if not isinstance(target, PlanOverlayTargetSpec):
+        return None
+    if target.target_kind is not None and not isinstance(target.target_kind, PlanOverlayTargetKind):
+        return None
+    document_name = str(target.document_name or "").strip()
+    object_name = str(target.object_name or "").strip()
+    subname = str(target.subname or "").strip()
+    replacements = {}
+    if document_name != target.document_name:
+        replacements["document_name"] = document_name
+    if object_name != target.object_name:
+        replacements["object_name"] = object_name
+    if subname != target.subname:
+        replacements["subname"] = subname
+    if not replacements:
+        return target
+    return replace(target, **replacements)
 
 
 def _coerce_plan_overlay_point(point):
@@ -335,29 +340,6 @@ def _coerce_plan_overlay_color(color):
     if len(values) < 3:
         return (0.2, 0.55, 0.85)
     return values[:3]
-
-
-def _coerce_plan_overlay_marker_kind(marker_kind):
-    normalized = str(marker_kind or "").strip().lower().replace("-", "_").replace(" ", "_")
-    if not normalized:
-        return "cross"
-    aliases = {
-        "circle": "circle",
-        "circle_cross": "circle_cross",
-        "circle_filled": "circle",
-        "circle_line": "circle",
-        "circle_with_cross": "circle_cross",
-        "cross": "cross",
-        "diamond": "diamond",
-        "diamond_filled": "diamond",
-        "hourglass": "hourglass",
-        "hourglass_filled": "hourglass",
-        "light_point": "circle_cross",
-        "plus": "cross",
-        "square": "square",
-        "square_filled": "square",
-    }
-    return aliases.get(normalized, "cross")
 
 
 def collect_plan_provider_contributions(session, method_name, normalizer):

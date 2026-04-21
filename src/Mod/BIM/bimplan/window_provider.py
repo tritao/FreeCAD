@@ -9,8 +9,10 @@ from bimplan.providers import (
     PlanEditProvider,
     PlanInspectorSection,
     PlanIssueSpec,
+    PlanIssueSeverity,
     PlanOverlaySpec,
     PlanOverlayTargetSpec,
+    PlanOverlayTargetKind,
 )
 from bimplan.registry import get_plan_edit_registry
 
@@ -41,7 +43,7 @@ class BIMWindowPlanEditProvider(PlanEditProvider):
                         "This window is selected in Plan Edit, but it is not hosted by "
                         "a selectable wall."
                     ),
-                    severity="warning",
+                    severity=PlanIssueSeverity.WARNING,
                     role="authoring",
                     category="windows",
                 )
@@ -57,7 +59,7 @@ class BIMWindowPlanEditProvider(PlanEditProvider):
                             "Plan Edit cannot resolve the hosted window center. "
                             "Recomputing the host usually refreshes the window footprint."
                         ),
-                        severity="warning",
+                        severity=PlanIssueSeverity.WARNING,
                         actions=(_recompute_host_action(),),
                         role="authoring",
                         category="windows",
@@ -72,7 +74,7 @@ class BIMWindowPlanEditProvider(PlanEditProvider):
                             "The selected window center or width falls outside the "
                             "current host wall span."
                         ),
-                        severity="warning",
+                        severity=PlanIssueSeverity.WARNING,
                         actions=(_center_on_host_action(), _recompute_host_action()),
                         role="authoring",
                         category="windows",
@@ -88,7 +90,7 @@ class BIMWindowPlanEditProvider(PlanEditProvider):
                         "The selected window has no usable shape. Recompute its host "
                         "and window footprint before continuing plan edits."
                     ),
-                    severity="warning",
+                    severity=PlanIssueSeverity.WARNING,
                     actions=(_recompute_host_action(),),
                     role="authoring",
                     category="windows",
@@ -147,7 +149,7 @@ class BIMWindowPlanEditProvider(PlanEditProvider):
                 PlanOverlayTargetSpec(
                     document_name=str(getattr(getattr(window, "Document", None), "Name", "") or ""),
                     object_name=str(getattr(window, "Name", "") or ""),
-                    target_kind="opening",
+                    target_kind=PlanOverlayTargetKind.OPENING,
                 )
             )
         if not points:

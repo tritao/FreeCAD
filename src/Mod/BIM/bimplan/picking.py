@@ -4,6 +4,7 @@
 
 import FreeCAD
 import math
+from bimplan.providers import PlanOverlayMarkerKind
 
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
 
@@ -250,7 +251,9 @@ def pick_provider_overlay_target_from_overlays(session, mouse_pos, radius_px=12)
                     continue
                 if best_distance_sq is None or distance_sq < best_distance_sq:
                     best_distance_sq = distance_sq
-                    best_target_kind = str(getattr(target, "target_kind", "") or "").strip()
+                    best_target_kind = (
+                        target.target_kind.value if target.target_kind is not None else ""
+                    )
                     best_target_obj = target_obj
         session._plan_perf_set_fields(
             provider_overlay_pick_result=session._plan_perf_describe_object(best_target_obj)
@@ -766,7 +769,7 @@ def _iter_provider_overlay_targets_from_info(session, info, visible_targets):
         target = visible_targets.get(identity)
         if target is None:
             continue
-        yielded.append((str(getattr(target, "target_kind", "") or "").strip(), obj))
+        yielded.append((target.target_kind.value if target.target_kind is not None else "", obj))
     return tuple(yielded)
 
 
@@ -790,9 +793,7 @@ def _get_provider_overlay_pick_radius_px(session, overlay, point, fallback_radiu
     radius_px = max(1.0, float(fallback_radius_px))
     marker_size = max(1.0, float(getattr(overlay, "marker_size", 160.0) or 160.0))
     marker_half_size = marker_size / 2.0
-    marker_extent_factor = _get_provider_overlay_pick_extent_factor(
-        getattr(overlay, "marker_kind", "cross")
-    )
+    marker_extent_factor = _get_provider_overlay_pick_extent_factor(overlay.marker_kind)
     try:
         center_x, center_y = session.view.getPointOnScreen(point)
         edge_x, edge_y = session.view.getPointOnScreen(
@@ -838,7 +839,7 @@ def _get_provider_overlay_marker_segments(overlay, point):
             width=float(getattr(overlay, "line_width", 2.0) or 2.0),
             dotted=bool(getattr(overlay, "dotted", False)),
             marker_size=float(getattr(overlay, "marker_size", 160.0) or 160.0),
-            marker_kind=str(getattr(overlay, "marker_kind", "cross") or "cross"),
+            marker_kind=overlay.marker_kind,
         )
     except Exception:
         return ()
@@ -855,8 +856,10 @@ def _get_provider_overlay_marker_tolerance_px(overlay, fallback_radius_px):
 
 
 def _get_provider_overlay_pick_extent_factor(marker_kind):
-    normalized = str(marker_kind or "").strip().lower().replace("-", "_").replace(" ", "_")
-    if normalized in ("square", "hourglass"):
+    if marker_kind in (
+        PlanOverlayMarkerKind.SQUARE,
+        PlanOverlayMarkerKind.HOURGLASS,
+    ):
         return math.sqrt(2.0)
     return 1.0
 

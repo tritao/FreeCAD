@@ -5,6 +5,7 @@
 import math
 
 import FreeCAD
+from bimplan.providers import PlanOverlayMarkerKind
 
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
 _PROVIDER_POINT_PREVIEW_MARKER_SIZE = 180.0
@@ -153,7 +154,7 @@ def _get_provider_point_preview_segment_specs(session):
             width=width,
             dotted=not hosted,
             marker_size=session._scaled_marker_size(_PROVIDER_POINT_PREVIEW_MARKER_SIZE),
-            marker_kind="cross",
+            marker_kind=PlanOverlayMarkerKind.CROSS,
         )
     )
     if hosted:
@@ -189,8 +190,7 @@ def _get_point_marker_segment_specs(
     marker_size,
     marker_kind,
 ):
-    marker_kind = _normalize_marker_kind(marker_kind)
-    if marker_kind == "circle":
+    if marker_kind == PlanOverlayMarkerKind.CIRCLE:
         return _get_circle_marker_segment_specs(
             point,
             label=label,
@@ -199,7 +199,7 @@ def _get_point_marker_segment_specs(
             dotted=dotted,
             marker_size=marker_size,
         )
-    if marker_kind == "circle_cross":
+    if marker_kind == PlanOverlayMarkerKind.CIRCLE_CROSS:
         return _get_circle_marker_segment_specs(
             point,
             label=label,
@@ -215,7 +215,7 @@ def _get_point_marker_segment_specs(
             dotted=dotted,
             marker_size=marker_size * 0.7,
         )
-    if marker_kind == "diamond":
+    if marker_kind == PlanOverlayMarkerKind.DIAMOND:
         half_size = max(1.0, float(marker_size) / 2.0)
         return _get_polyline_marker_segment_specs(
             (
@@ -230,7 +230,7 @@ def _get_point_marker_segment_specs(
             dotted=dotted,
             closed=True,
         )
-    if marker_kind == "hourglass":
+    if marker_kind == PlanOverlayMarkerKind.HOURGLASS:
         half_size = max(1.0, float(marker_size) / 2.0)
         return _get_polyline_marker_segment_specs(
             (
@@ -245,7 +245,7 @@ def _get_point_marker_segment_specs(
             dotted=dotted,
             closed=True,
         )
-    if marker_kind == "square":
+    if marker_kind == PlanOverlayMarkerKind.SQUARE:
         half_size = max(1.0, float(marker_size) / 2.0)
         return _get_polyline_marker_segment_specs(
             (
@@ -388,7 +388,7 @@ def _create_provider_overlay_trackers(session, DraftTrackers, overlay):
             dotted=dotted,
         )
     marker_size = float(getattr(overlay, "marker_size", 160.0) or 160.0)
-    marker_kind = str(getattr(overlay, "marker_kind", "cross") or "cross")
+    marker_kind = overlay.marker_kind
     point_targets = tuple(getattr(overlay, "point_targets", ()) or ())
     for index, point in enumerate(tuple(getattr(overlay, "points", ()) or ())):
         target = point_targets[index] if index < len(point_targets) else None
@@ -524,7 +524,8 @@ def _retarget_pick_tracker(session, tracker, target, target_index):
     object_name = str(getattr(target, "object_name", "") or "").strip()
     if not document_name or not object_name:
         return False
-    target_kind = str(getattr(target, "target_kind", "") or "").strip().replace(":", "_")
+    target_kind = target.target_kind.value if target.target_kind is not None else ""
+    target_kind = target_kind.replace(":", "_")
     subname = "{}:{}:{}".format(_PROVIDER_OVERLAY_POINT_PREFIX, target_kind, int(target_index))
     try:
         if hasattr(selnode, "useNewSelection"):
@@ -570,26 +571,3 @@ def _round_vector(point):
 
 def _round_tuple(values):
     return tuple(round(float(value), 4) for value in tuple(values or ()))
-
-
-def _normalize_marker_kind(marker_kind):
-    normalized = str(marker_kind or "").strip().lower().replace("-", "_").replace(" ", "_")
-    if not normalized:
-        return "cross"
-    aliases = {
-        "circle": "circle",
-        "circle_cross": "circle_cross",
-        "circle_filled": "circle",
-        "circle_line": "circle",
-        "circle_with_cross": "circle_cross",
-        "cross": "cross",
-        "diamond": "diamond",
-        "diamond_filled": "diamond",
-        "hourglass": "hourglass",
-        "hourglass_filled": "hourglass",
-        "light_point": "circle_cross",
-        "plus": "cross",
-        "square": "square",
-        "square_filled": "square",
-    }
-    return aliases.get(normalized, "cross")
