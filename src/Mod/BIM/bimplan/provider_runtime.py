@@ -21,6 +21,7 @@ from .providers import (
     PlanContextPanelState,
     PlanContextRowSpec,
     PlanContextSubjectKind,
+    PlanEditHandleSpec,
     PlanInspectorSection,
     PlanIssueSpec,
     PlanIssueSeverity,
@@ -166,6 +167,53 @@ def normalize_plan_provider_tool(provider_id, tool):
     if tool.provider_id == provider_id:
         return tool
     return replace(tool, provider_id=str(provider_id or ""))
+
+
+def normalize_plan_provider_edit_handle(provider_id, handle):
+    if not isinstance(handle, PlanEditHandleSpec):
+        return None
+    if not isinstance(handle.interaction, PlanToolInteraction):
+        return None
+    if not isinstance(handle.marker_kind, PlanOverlayMarkerKind):
+        return None
+    key = str(handle.key or "").strip()
+    point = _coerce_plan_overlay_point(handle.point)
+    if not key or point is None:
+        return None
+    replacements = {}
+    normalized_provider_id = str(provider_id or "")
+    if handle.provider_id != normalized_provider_id:
+        replacements["provider_id"] = normalized_provider_id
+    label = str(handle.label or "").strip()
+    tooltip = str(handle.tooltip or "").strip()
+    target_key = str(handle.target_key or "").strip()
+    action_key = str(handle.action_key or "").strip()
+    transaction_label = str(handle.transaction_label or "").strip()
+    prompt = str(handle.prompt or "").strip()
+    role = str(handle.role or "").strip()
+    if key != handle.key:
+        replacements["key"] = key
+    if point != handle.point:
+        replacements["point"] = point
+    if label != handle.label:
+        replacements["label"] = label
+    if tooltip != handle.tooltip:
+        replacements["tooltip"] = tooltip
+    if target_key != handle.target_key:
+        replacements["target_key"] = target_key
+    if not action_key:
+        action_key = key
+    if action_key != handle.action_key:
+        replacements["action_key"] = action_key
+    if transaction_label != handle.transaction_label:
+        replacements["transaction_label"] = transaction_label
+    if prompt != handle.prompt:
+        replacements["prompt"] = prompt
+    if role != handle.role:
+        replacements["role"] = role
+    if not replacements:
+        return handle
+    return replace(handle, **replacements)
 
 
 def normalize_plan_provider_issue(session, provider_id, issue):
@@ -396,6 +444,13 @@ def normalize_plan_provider_target(provider_id, target):
 
 def get_plan_provider_targets(session):
     return _get_plan_provider_targets(session)
+
+
+def get_plan_provider_edit_handles(session):
+    return session._collect_plan_provider_contributions(
+        "get_edit_handles",
+        session._normalize_plan_provider_edit_handle,
+    )
 
 
 def get_plan_provider_target_for_object(session, obj):

@@ -112,6 +112,24 @@ class PlanToolSpec:
 
 
 @dataclass(frozen=True)
+class PlanEditHandleSpec:
+    """Direct-manipulation handle exposed by a provider for a selected target."""
+
+    key: str
+    point: tuple[float, float, float]
+    label: str = ""
+    tooltip: str = ""
+    provider_id: str = ""
+    target_key: str = ""
+    action_key: str = ""
+    transaction_label: str = ""
+    prompt: str = ""
+    role: str = ""
+    interaction: PlanToolInteraction = PlanToolInteraction.POINT
+    marker_kind: PlanOverlayMarkerKind = PlanOverlayMarkerKind.DIAMOND
+
+
+@dataclass(frozen=True)
 class PlanIssueSpec:
     """Provider-reported problem shown in the Plan Guidance panel."""
 
@@ -312,6 +330,10 @@ class PlanEditProvider:
         return ()
 
     def get_tools(self, context) -> Sequence[PlanToolSpec]:
+        del context
+        return ()
+
+    def get_edit_handles(self, context) -> Sequence[PlanEditHandleSpec]:
         del context
         return ()
 
