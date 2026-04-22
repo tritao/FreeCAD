@@ -31,6 +31,10 @@ from .generator import (
 )
 from .model import DEFAULT_OVERLAY_DIR
 from .parsing import iter_source_files
+from .runtime_audit import (
+    audit_curated_runtime_symbols,
+    default_runtime_executable,
+)
 
 DESCRIPTION = """Generate type-checker stubs for FreeCAD Python bindings.
 
@@ -127,6 +131,27 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             ),
         )
         parser.set_defaults(command="lint-docs")
+        return parser.parse_args(argv[1:])
+
+    if argv and argv[0] == "check-runtime":
+        parser = argparse.ArgumentParser(
+            description="Generate binding stubs and audit curated runtime-backed APIs."
+        )
+        add_generation_args(parser)
+        parser.add_argument(
+            "--log-dir",
+            type=Path,
+            help="Optional directory for individual generator and runtime-audit logs.",
+        )
+        parser.add_argument(
+            "--runtime-executable",
+            type=Path,
+            help=(
+                "Executable used to run the runtime audit. Defaults to build/bin/FreeCAD "
+                "when present, then build/bin/FreeCADCmd, then the current Python."
+            ),
+        )
+        parser.set_defaults(command="check-runtime")
         return parser.parse_args(argv[1:])
 
     parser = argparse.ArgumentParser(description=DESCRIPTION)
@@ -272,10 +297,45 @@ def run_lint_docs(args: argparse.Namespace) -> int:
     return 1
 
 
+def run_check_runtime(args: argparse.Namespace) -> int:
+    root = args.root.resolve()
+    source_dir = args.source_dir if args.source_dir.is_absolute() else root / args.source_dir
+    if not source_dir.exists():
+        sys.stderr.write(f"source directory does not exist: {source_dir}\n")
+        return 2
+
+    if args.out_dir is None:
+        args.out_dir = DEFAULT_STUBS_OUT_DIR
+    generation_code = run_generate(args)
+    if generation_code != 0:
+        return generation_code
+
+    runtime_executable = (
+        args.runtime_executable.resolve()
+        if args.runtime_executable is not None
+        else default_runtime_executable(root)
+    )
+    report = audit_curated_runtime_symbols(root, source_dir, runtime_executable)
+    output = report.render(root)
+
+    if getattr(args, "log_dir", None):
+        log_dir = args.log_dir.resolve()
+        write_log(log_dir / "python-stubs-runtime-audit.log", output + "\n" + report.command_output)
+
+    if report.ok:
+        sys.stdout.write(output)
+        return 0
+
+    sys.stderr.write(output)
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     if args.command == "check":
         return run_check(args)
     if args.command == "lint-docs":
         return run_lint_docs(args)
+    if args.command == "check-runtime":
+        return run_check_runtime(args)
     return run_generate(args)

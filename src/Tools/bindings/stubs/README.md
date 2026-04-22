@@ -77,6 +77,20 @@ docstrings plus docstrings on curated top-level functions, curated classes, and
 their methods. Pass file or directory paths after `lint-docs` to audit a
 smaller slice while documentation coverage is still being filled in.
 
+Use the runtime audit to verify that curated source-adjacent APIs still map to
+real symbols in a live FreeCAD runtime:
+
+```sh
+python3 src/Tools/bindings/generate_stubs.py check-runtime --root . --out-dir src/Tools/bindings/stubs/generated
+```
+
+The runtime audit is intentionally narrower than the static smoke checks. The
+current version verifies import-stable top-level functions from curated
+source-adjacent module stubs for `FreeCAD`, `FreeCAD.Console`, `FreeCAD.Qt`,
+`FreeCAD.Units`, and `Part`. This catches missing or misplaced runtime symbols
+without trying to execute the full API surface or validate every call
+signature dynamically.
+
 ## Recommended Direction
 
 Prefer generated stubs for classes that already have binding `.pyi` specs.
