@@ -3041,6 +3041,9 @@ class PlanEditSession:
         self._provider_overlay_state = None
         self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_PROVIDER_OVERLAYS)
 
+    def queue_plan_provider_overlay_sync(self):
+        self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_PROVIDER_OVERLAYS)
+
     def execute_plan_provider_action(
         self,
         provider_id,
