@@ -183,6 +183,58 @@ def clear_hovered_wall_overlay(session):
     session._wall_hover_trackers = []
 
 
+def sync_selected_wall_overlay(session):
+    with session._plan_perf_trace_span("sync_selected_wall_overlay"):
+        wall = session._get_selected_plan_target_object("wall")
+        if session.current_tool != "Select" or not session._is_plan_selectable_wall(wall):
+            session._clear_selected_wall_overlay()
+            return
+        width = session._scaled_line_width(4)
+        color = (0.12, 0.38, 0.95)
+        segments = session._build_overlay_segments_from_polylines(
+            session._get_wall_overlay_polylines(wall)
+        )
+        session._plan_perf_count("selected_wall_overlay_segments", len(segments))
+        transferred_trackers = False
+        if len(session._wall_overlay_trackers) != len(segments):
+            if (
+                not session._wall_overlay_trackers
+                and session.hovered_wall == wall
+                and len(session._wall_hover_trackers) == len(segments)
+            ):
+                session._wall_overlay_trackers = session._wall_hover_trackers
+                session._wall_hover_trackers = []
+                transferred_trackers = True
+                session._plan_perf_count("selected_wall_overlay_tracker_transfers")
+            else:
+                session._clear_selected_wall_overlay()
+                try:
+                    import draftguitools.gui_trackers as DraftTrackers
+                except ImportError:
+                    return
+                for _start, _end in segments:
+                    tracker = session._make_plan_line_tracker(
+                        DraftTrackers,
+                        "selected-wall-overlay:{}".format(getattr(wall, "Name", "unknown")),
+                        scolor=color,
+                        swidth=width,
+                        ontop=True,
+                    )
+                    session._wall_overlay_trackers.append(tracker)
+        for tracker, (start, end) in zip(session._wall_overlay_trackers, segments):
+            session._set_plan_line_tracker_width(tracker, width)
+            tracker.setColor(color)
+            if not transferred_trackers:
+                tracker.p1(start)
+                tracker.p2(end)
+                tracker.on()
+
+
+def clear_selected_wall_overlay(session):
+    session._finalize_trackers(session._wall_overlay_trackers)
+    session._wall_overlay_trackers = []
+
+
 def get_plan_context_junctions(session):
     if session.current_tool not in ("Select", "Join"):
         return []

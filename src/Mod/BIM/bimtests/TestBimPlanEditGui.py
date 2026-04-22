@@ -3587,6 +3587,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertTrue(activated)
         self._assert_selected_plan_target(session, "wall", wall)
         self.assertEqual(len(session._wall_hover_trackers), 0)
+        self.assertGreater(len(session._wall_overlay_trackers), 0)
         self.assertEqual(len(session._grip_trackers), 3)
 
     def test_plan_edit_selected_wall_shows_hosted_opening_context(self):
@@ -3609,6 +3610,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertTrue(activated)
         self._assert_selected_plan_target(session, "wall", wall)
+        self.assertGreater(len(session._wall_overlay_trackers), 0)
         self.assertEqual(len(session._grip_trackers), 3)
         self.assertGreater(len(session._selected_wall_opening_context_trackers), 0)
         self.assertEqual(len(session._opening_overlay_trackers), 0)
@@ -3617,6 +3619,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._select_opening_for_plan_edit(door)
 
         self._assert_selected_plan_target(session, "opening", door)
+        self.assertEqual(len(session._wall_overlay_trackers), 0)
         self.assertEqual(len(session._selected_wall_opening_context_trackers), 0)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertEqual(len(session._opening_handle_trackers), 3)
@@ -5909,6 +5912,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
         self.pump_gui_events()
 
+        self.assertGreater(len(session._wall_overlay_trackers), 0)
         self.assertEqual(len(session._grip_trackers), 3)
         self.assertEqual(
             self._count_scenegraph_named_switches(session, "editTracker"),
@@ -5921,6 +5925,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events(timeout_ms=400)
 
         self.assertEqual(len(session._grip_trackers), 0)
+        self.assertEqual(len(session._wall_overlay_trackers), 0)
         self._assert_no_selected_plan_target(session)
         self.assertEqual(
             self._count_scenegraph_named_switches(session, "editTracker"),
