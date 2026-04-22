@@ -121,6 +121,7 @@ _PLAN_VISUAL_HOVERED_SYMBOL = "hovered_symbol"
 _PLAN_VISUAL_HOVERED_PROVIDER = "hovered_provider"
 _PLAN_VISUAL_HOVERED_SPACE = "hovered_space"
 _PLAN_VISUAL_HOVERED_REGION = "hovered_region"
+_PLAN_VISUAL_SELECTED_PROVIDER = "selected_provider"
 _PLAN_VISUAL_SELECTED_OPENING = "selected_opening"
 _PLAN_VISUAL_SELECTED_SYMBOL = "selected_symbol"
 _PLAN_VISUAL_SELECTED_SPACE = "selected_space"
@@ -276,6 +277,7 @@ class PlanEditSession:
         self._opening_hover_trackers = []
         self._symbol_hover_trackers = []
         self._provider_hover_trackers = []
+        self._provider_selected_trackers = []
         self._space_hover_trackers = []
         self._region_hover_trackers = []
         self._plan_overlay_geometry_cache = {
@@ -306,6 +308,7 @@ class PlanEditSession:
         self._region_overlay_trackers = []
         self._provider_overlay_trackers = []
         self._provider_overlay_state = None
+        self._selected_provider_overlay_render_state = None
         self._provider_overlay_visibility = {}
         self._provider_overlay_mode = _PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
         self._provider_selected_objects = []
@@ -866,6 +869,7 @@ class PlanEditSession:
         self._clear_hovered_provider_overlay()
         self._clear_hovered_space_overlay()
         self._clear_hovered_region_overlay()
+        self._clear_selected_provider_overlay()
         self._clear_selected_opening_overlay()
         self._clear_selected_symbol_overlay()
         self._clear_selected_space_overlay()
@@ -1031,6 +1035,7 @@ class PlanEditSession:
             self._clear_hovered_opening_overlay()
             self._clear_hovered_symbol_overlay()
             self._clear_hovered_provider_overlay()
+            self._clear_selected_provider_overlay()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
             self._clear_selected_space_overlay()
@@ -3582,6 +3587,8 @@ class PlanEditSession:
                 self._sync_hovered_symbol_overlay()
             with self._plan_perf_trace_span("sync_hovered_provider_overlay"):
                 self._sync_hovered_provider_overlay()
+            with self._plan_perf_trace_span("sync_selected_provider_overlay"):
+                self._sync_selected_provider_overlay()
             with self._plan_perf_trace_span("sync_hovered_opening_overlay"):
                 self._sync_hovered_opening_overlay()
             with self._plan_perf_trace_span("sync_hovered_space_overlay"):
@@ -3665,6 +3672,7 @@ class PlanEditSession:
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
         self._sync_selected_space_overlay()
+        self._sync_selected_provider_overlay()
 
     def _cancel_join_tool(self, refresh=True):
         if self.current_tool != "Join":
@@ -3803,6 +3811,7 @@ class PlanEditSession:
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
         self._sync_selected_space_overlay()
+        self._sync_selected_provider_overlay()
         return True
 
     def _get_rect_wall_corners(self, point):
@@ -3967,6 +3976,7 @@ class PlanEditSession:
             self._refresh_task_panel_status()
         self._sync_selected_region_overlay()
         self._sync_selected_space_overlay()
+        self._sync_selected_provider_overlay()
         return True
 
     def _get_plan_region_close_tolerance(self):
@@ -4121,6 +4131,7 @@ class PlanEditSession:
         self._sync_selected_opening_overlay()
         self._sync_selected_opening_handles()
         self._sync_selected_space_overlay()
+        self._sync_selected_provider_overlay()
         return True
 
     def _update_space_separator_preview(self, point, info):
@@ -5689,8 +5700,11 @@ class PlanEditSession:
                 self._sync_selected_opening_handles()
             if self.hovered_symbol:
                 self._sync_hovered_symbol_overlay()
+            self._sync_provider_overlays()
             if self.hovered_provider:
                 self._sync_hovered_provider_overlay()
+            if self._is_selected_plan_target("provider") or self._get_provider_selected_objects():
+                self._sync_selected_provider_overlay()
             if self._is_selected_plan_target("symbol"):
                 self._sync_selected_symbol_overlay()
                 self._sync_selected_symbol_handles()
@@ -5726,6 +5740,7 @@ class PlanEditSession:
             self._clear_hovered_space_overlay()
             self._clear_hovered_region_overlay()
             self._clear_space_region_pick_overlays()
+            self._clear_selected_provider_overlay()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
             self._clear_selected_space_overlay()
@@ -5749,6 +5764,7 @@ class PlanEditSession:
             self._clear_hovered_space_overlay()
             self._clear_hovered_region_overlay()
             self._clear_space_region_pick_overlays()
+            self._clear_selected_provider_overlay()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
             self._clear_selected_space_overlay()
@@ -5772,6 +5788,7 @@ class PlanEditSession:
             self._clear_hovered_space_overlay()
             self._clear_hovered_region_overlay()
             self._clear_space_region_pick_overlays()
+            self._clear_selected_provider_overlay()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
             self._clear_selected_region_overlay()
@@ -5797,6 +5814,7 @@ class PlanEditSession:
             self._clear_hovered_provider_overlay()
             self._clear_hovered_space_overlay()
             self._clear_hovered_region_overlay()
+            self._clear_selected_provider_overlay()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
             self._clear_selected_space_overlay()
@@ -5826,6 +5844,7 @@ class PlanEditSession:
             self._clear_hovered_space_overlay()
             self._clear_hovered_region_overlay()
             self._clear_space_region_pick_overlays()
+            self._clear_selected_provider_overlay()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
             self._clear_selected_space_overlay()
@@ -5850,6 +5869,7 @@ class PlanEditSession:
             self._clear_hovered_space_overlay()
             self._clear_hovered_region_overlay()
             self._clear_space_region_pick_overlays()
+            self._clear_selected_provider_overlay()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
             self._clear_selected_space_overlay()
@@ -5897,8 +5917,11 @@ class PlanEditSession:
             if refresh_all or _PLAN_VISUAL_WALL_GRIPS in dirty:
                 self._sync_selected_wall_overlay()
                 self._sync_wall_grips()
-            if refresh_all or _PLAN_VISUAL_PROVIDER_OVERLAYS in dirty:
+            provider_overlays_dirty = refresh_all or _PLAN_VISUAL_PROVIDER_OVERLAYS in dirty
+            if provider_overlays_dirty:
                 self._sync_provider_overlays()
+            if provider_overlays_dirty or refresh_all or _PLAN_VISUAL_SELECTED_PROVIDER in dirty:
+                self._sync_selected_provider_overlay()
             self._clear_provider_point_preview()
             return
 
@@ -6634,6 +6657,7 @@ class PlanEditSession:
         selected_region = self._get_selected_plan_target_object("region")
         selected_space = self._get_selected_plan_target_object("space")
         selected_opening = self._get_selected_plan_target_object("opening")
+        selected_provider = self._get_selected_plan_target_object("provider")
         if selected_symbol:
             self._refresh_plan_object_footprint_display(selected_symbol)
         if self.hovered_symbol and not self._is_selected_plan_target("symbol", self.hovered_symbol):
@@ -6683,6 +6707,8 @@ class PlanEditSession:
             visual_args.append(_PLAN_VISUAL_HOVERED_SPACE)
         if selected_opening:
             visual_args.append(_PLAN_VISUAL_SELECTED_OPENING)
+        if selected_provider or self._get_provider_selected_objects():
+            visual_args.append(_PLAN_VISUAL_SELECTED_PROVIDER)
         if secondary_targets:
             visual_args.append(_PLAN_VISUAL_SECONDARY_SELECTION)
         self._queue_plan_overlay_visual_refresh(*visual_args)
@@ -8466,6 +8492,12 @@ class PlanEditSession:
     def _clear_hovered_provider_overlay(self):
         return provider_overlays.clear_hovered_provider_overlay(self)
 
+    def _sync_selected_provider_overlay(self):
+        return provider_overlays.sync_selected_provider_overlay(self)
+
+    def _clear_selected_provider_overlay(self):
+        return provider_overlays.clear_selected_provider_overlay(self)
+
     def _sync_provider_point_preview(self):
         return provider_overlays.sync_provider_point_preview(self)
 
@@ -8775,6 +8807,8 @@ class PlanEditSession:
                 self._sync_selected_region_overlay()
             with self._plan_perf_trace_span("clear_plan_selection_space_overlay"):
                 self._sync_selected_space_overlay()
+            with self._plan_perf_trace_span("clear_plan_selection_provider_overlay"):
+                self._sync_selected_provider_overlay()
             with self._plan_perf_trace_span("clear_plan_selection_task_status"):
                 self._refresh_task_panel_status(selection_only=self.current_tool == "Select")
             selected_kind, selected_obj = self._get_selected_plan_target()
