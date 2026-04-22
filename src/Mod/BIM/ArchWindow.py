@@ -3033,41 +3033,62 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
 
         return polylines
 
-    def get_plan_overlay_polylines(self):
-        """Return global-space plan overlay polylines for selection highlighting."""
+    def _get_plan_overlay_guide_polylines(self, section_profile, base_z):
+        if not section_profile:
+            return []
+
+        vmin = section_profile["vmin"]
+        vmax = section_profile["vmax"]
+        if vmax <= vmin:
+            return []
+
+        mid_v = (vmin + vmax) * 0.5
+        origin = section_profile["origin"]
+        axis_u = section_profile["axis_u"]
+        axis_v = section_profile["axis_v"]
+        start = origin.add(FreeCAD.Vector(axis_u).multiply(section_profile["umin"])).add(
+            FreeCAD.Vector(axis_v).multiply(mid_v)
+        )
+        end = origin.add(FreeCAD.Vector(axis_u).multiply(section_profile["umax"])).add(
+            FreeCAD.Vector(axis_v).multiply(mid_v)
+        )
+        start.z = base_z
+        end.z = base_z
+        return [[start, end]]
+
+    def get_plan_overlay_geometry(self):
+        """Return structured global-space plan geometry for overlays and picking."""
 
         if not hasattr(self, "Object"):
-            return []
+            return {"symbol_polylines": (), "guide_polylines": ()}
 
         shape = getattr(self.Object, "Shape", None)
         cut_z, base_z = self._get_footprint_cut_context()
         if cut_z is None:
-            return []
+            return {"symbol_polylines": (), "guide_polylines": ()}
 
         section_profile = self._get_hosted_opening_plan_frame(shape, cut_z, base_z)
         if not section_profile:
-            return []
+            return {"symbol_polylines": (), "guide_polylines": ()}
 
-        polylines = list(self._get_symbol_footprint_polylines(section_profile, base_z))
-        vmin = section_profile["vmin"]
-        vmax = section_profile["vmax"]
+        symbol_polylines = tuple(
+            tuple(polyline or ())
+            for polyline in self._get_symbol_footprint_polylines(section_profile, base_z)
+        )
+        guide_polylines = tuple(
+            tuple(polyline or ())
+            for polyline in self._get_plan_overlay_guide_polylines(section_profile, base_z)
+        )
+        return {
+            "symbol_polylines": symbol_polylines,
+            "guide_polylines": guide_polylines,
+        }
 
-        if vmax > vmin:
-            mid_v = (vmin + vmax) * 0.5
-            origin = section_profile["origin"]
-            axis_u = section_profile["axis_u"]
-            axis_v = section_profile["axis_v"]
-            start = origin.add(FreeCAD.Vector(axis_u).multiply(section_profile["umin"])).add(
-                FreeCAD.Vector(axis_v).multiply(mid_v)
-            )
-            end = origin.add(FreeCAD.Vector(axis_u).multiply(section_profile["umax"])).add(
-                FreeCAD.Vector(axis_v).multiply(mid_v)
-            )
-            start.z = base_z
-            end.z = base_z
-            polylines.append([start, end])
+    def get_plan_overlay_polylines(self):
+        """Return global-space plan overlay polylines for selection highlighting."""
 
-        return polylines
+        geometry = self.get_plan_overlay_geometry()
+        return list(geometry["symbol_polylines"] + geometry["guide_polylines"])
 
     def get_plan_move_preview_state(self, point, anchor="center"):
         """Return visible preview geometry for moving the opening along its host."""

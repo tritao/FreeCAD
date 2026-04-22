@@ -5,6 +5,7 @@
 import FreeCAD
 import FreeCADGui
 
+from . import geometry as overlay_geometry
 from . import manager as overlay_manager
 
 
@@ -128,7 +129,7 @@ def sync_hovered_opening_overlay(session):
         except ImportError:
             session._clear_hovered_opening_overlay()
             return
-        segments = session._get_opening_overlay_segments(opening)
+        segments = overlay_geometry.get_opening_overlay_segments(session, opening)
         session._plan_perf_count("hovered_opening_overlay_segments", len(segments))
         if len(session._opening_hover_trackers) != len(segments):
             session._clear_hovered_opening_overlay()
@@ -162,13 +163,20 @@ def invalidate_hovered_opening_overlay_cache(session):
     session._hovered_opening_overlay_dirty = True
 
 
-def create_opening_overlay_trackers(session, opening, color, width, tracker_store):
+def create_opening_overlay_trackers(
+    session, opening, color, width, tracker_store, include_guides=False
+):
     try:
         import draftguitools.gui_trackers as DraftTrackers
     except ImportError:
         return
 
-    for polyline in session._get_opening_overlay_polylines(opening):
+    if include_guides:
+        polylines = overlay_geometry.get_opening_combined_overlay_polylines(session, opening)
+    else:
+        polylines = overlay_geometry.get_opening_overlay_polylines(session, opening)
+
+    for polyline in polylines:
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
@@ -209,7 +217,7 @@ def sync_selected_opening_overlay(session):
         except ImportError:
             session._clear_selected_opening_overlay()
             return
-        segments = session._get_opening_overlay_segments(opening)
+        segments = overlay_geometry.get_opening_combined_overlay_segments(session, opening)
         session._plan_perf_count("selected_opening_overlay_segments", len(segments))
         (
             session._opening_overlay_trackers,

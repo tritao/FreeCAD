@@ -81,9 +81,18 @@ def get_cached_plan_overlay_geometry(session, kind, obj, field_name, compute):
     value = compute(semantic_obj)
     if field_name == "footprint_faces":
         value = tuple(value or ())
-    elif field_name == "overlay_polylines":
+    elif field_name.endswith("overlay_polylines"):
         value = tuple(tuple(polyline or ()) for polyline in (value or ()))
-    elif field_name == "overlay_segments":
+    elif field_name == "overlay_geometry":
+        value = {
+            "symbol_polylines": tuple(
+                tuple(polyline or ()) for polyline in ((value or {}).get("symbol_polylines") or ())
+            ),
+            "guide_polylines": tuple(
+                tuple(polyline or ()) for polyline in ((value or {}).get("guide_polylines") or ())
+            ),
+        }
+    elif field_name.endswith("overlay_segments"):
         value = tuple(value or ())
     entry[field_name] = value
     return value
@@ -189,25 +198,51 @@ def get_region_overlay_polylines(session, region):
     )
 
 
+def _compute_opening_overlay_geometry(opening_obj):
+    view_object = getattr(opening_obj, "ViewObject", None)
+    proxy = getattr(view_object, "Proxy", None)
+    if not proxy:
+        return {"symbol_polylines": (), "guide_polylines": ()}
+    try:
+        if hasattr(proxy, "get_plan_overlay_geometry"):
+            return proxy.get_plan_overlay_geometry() or {}
+        if hasattr(proxy, "get_plan_overlay_polylines"):
+            return {
+                "symbol_polylines": proxy.get_plan_overlay_polylines() or (),
+                "guide_polylines": (),
+            }
+    except Exception:
+        return {"symbol_polylines": (), "guide_polylines": ()}
+    return {"symbol_polylines": (), "guide_polylines": ()}
+
+
 def get_opening_overlay_polylines(session, opening):
     if not session._is_hosted_opening_object(opening):
         return ()
 
-    def compute(opening_obj):
-        view_object = getattr(opening_obj, "ViewObject", None)
-        proxy = getattr(view_object, "Proxy", None)
-        if not proxy or not hasattr(proxy, "get_plan_overlay_polylines"):
-            return ()
-        try:
-            return proxy.get_plan_overlay_polylines() or ()
-        except Exception:
-            return ()
+    geometry = session._get_cached_plan_overlay_geometry(
+        "opening",
+        opening,
+        "overlay_geometry",
+        _compute_opening_overlay_geometry,
+    )
+    return tuple(geometry.get("symbol_polylines", ()))
+
+
+def get_opening_guide_polylines(session, opening):
+    if not session._is_hosted_opening_object(opening):
+        return ()
 
     return session._get_cached_plan_overlay_geometry(
         "opening",
         opening,
-        "overlay_polylines",
-        compute,
+        "guide_overlay_polylines",
+        lambda opening_obj: session._get_cached_plan_overlay_geometry(
+            "opening",
+            opening_obj,
+            "overlay_geometry",
+            _compute_opening_overlay_geometry,
+        ).get("guide_polylines", ()),
     )
 
 
@@ -229,7 +264,7 @@ def get_opening_overlay_screen_polylines(session, opening):
         return cached
 
     projected_polylines = []
-    for polyline in session._get_opening_overlay_polylines(opening):
+    for polyline in get_opening_pick_polylines(session, opening):
         if len(polyline) < 2:
             continue
         projected = []
@@ -278,8 +313,44 @@ def get_opening_overlay_segments(session, opening):
     return session._get_cached_plan_overlay_geometry(
         "opening",
         opening,
-        "overlay_segments",
+        "symbol_overlay_segments",
         lambda opening_obj: session._build_overlay_segments_from_polylines(
             session._get_opening_overlay_polylines(opening_obj)
         ),
+    )
+
+
+def get_opening_combined_overlay_polylines(session, opening):
+    if not session._is_hosted_opening_object(opening):
+        return ()
+    return session._get_cached_plan_overlay_geometry(
+        "opening",
+        opening,
+        "combined_overlay_polylines",
+        lambda opening_obj: tuple(session._get_opening_overlay_polylines(opening_obj))
+        + tuple(get_opening_guide_polylines(session, opening_obj)),
+    )
+
+
+def get_opening_combined_overlay_segments(session, opening):
+    if not session._is_hosted_opening_object(opening):
+        return ()
+    return session._get_cached_plan_overlay_geometry(
+        "opening",
+        opening,
+        "combined_overlay_segments",
+        lambda opening_obj: session._build_overlay_segments_from_polylines(
+            get_opening_combined_overlay_polylines(session, opening_obj)
+        ),
+    )
+
+
+def get_opening_pick_polylines(session, opening):
+    if not session._is_hosted_opening_object(opening):
+        return ()
+    return session._get_cached_plan_overlay_geometry(
+        "opening",
+        opening,
+        "pick_overlay_polylines",
+        lambda opening_obj: get_opening_combined_overlay_polylines(session, opening_obj),
     )
