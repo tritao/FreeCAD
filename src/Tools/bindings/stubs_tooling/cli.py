@@ -2,7 +2,7 @@
 
 This module is intentionally thin. Its job is to expose a stable user-facing
 entrypoint, resolve repository-relative paths, and dispatch to the generator in
-either ``generate`` or ``check`` mode.
+either ``generate``, ``check``, or ``lint-docs`` mode.
 
 Keep policy and parsing logic out of this file:
 - binding discovery belongs in ``generator``
@@ -20,6 +20,7 @@ from pathlib import Path
 import subprocess
 import sys
 
+from .doc_lint import lint_curated_stub_docs
 from .generator import (
     collect_binding_classes,
     collect_methods,
@@ -28,7 +29,7 @@ from .generator import (
     markdown_report,
     write_outputs,
 )
-from .model import DEFAULT_OVERLAY_DIR, DEFAULT_OVERRIDE_DIR
+from .model import DEFAULT_OVERLAY_DIR
 from .parsing import iter_source_files
 
 DESCRIPTION = """Generate type-checker stubs for FreeCAD Python bindings.
@@ -86,14 +87,6 @@ def add_generation_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
-        "--override-dir",
-        type=Path,
-        help=(
-            "Curated PyCXX class-method signature override directory for generated skeletons. "
-            f"Defaults to {DEFAULT_OVERRIDE_DIR} when that directory exists."
-        ),
-    )
-    parser.add_argument(
         "--no-overlays",
         action="store_true",
         help="Do not apply curated stub overlays to the merged output.",
@@ -112,6 +105,28 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             help="Optional directory for individual generator and checker logs.",
         )
         parser.set_defaults(command="check")
+        return parser.parse_args(argv[1:])
+
+    if argv and argv[0] == "lint-docs":
+        parser = argparse.ArgumentParser(
+            description="Lint documentation coverage in curated source-adjacent stub inputs."
+        )
+        add_common_path_args(parser)
+        parser.add_argument(
+            "--log-dir",
+            type=Path,
+            help="Optional directory for the documentation lint log.",
+        )
+        parser.add_argument(
+            "paths",
+            nargs="*",
+            type=Path,
+            help=(
+                "Optional file or directory paths to lint. Paths are resolved relative to "
+                "--root unless absolute."
+            ),
+        )
+        parser.set_defaults(command="lint-docs")
         return parser.parse_args(argv[1:])
 
     parser = argparse.ArgumentParser(description=DESCRIPTION)
@@ -157,11 +172,9 @@ def run_generate(args: argparse.Namespace) -> int:
     type_registrations = collect_type_registrations(root, list(iter_source_files(root, source_dir)))
     methods = collect_methods(root, source_dir)
     classes = collect_binding_classes(root, source_dir, type_registrations)
-    override_dir = resolve_optional_dir(root, args.override_dir, DEFAULT_OVERRIDE_DIR)
     stub_signature_overrides = load_stub_signature_overrides(
         root,
         source_dir,
-        override_dir,
         methods,
         type_registrations,
     )
@@ -176,6 +189,7 @@ def run_generate(args: argparse.Namespace) -> int:
         overlay_count = write_outputs(
             out_dir,
             root,
+            source_dir,
             methods,
             classes,
             type_registrations,
@@ -229,8 +243,39 @@ def run_check(args: argparse.Namespace) -> int:
     return 0 if pyright_code == 0 and pyrefly_code == 0 else 1
 
 
+def run_lint_docs(args: argparse.Namespace) -> int:
+    root = args.root.resolve()
+    source_dir = args.source_dir if args.source_dir.is_absolute() else root / args.source_dir
+    if not source_dir.exists():
+        sys.stderr.write(f"source directory does not exist: {source_dir}\n")
+        return 2
+
+    selected_paths = tuple(
+        path.resolve() if path.is_absolute() else (root / path).resolve() for path in args.paths
+    )
+    report = lint_curated_stub_docs(root, source_dir, selected_paths)
+    output = report.render(root)
+
+    if getattr(args, "log_dir", None):
+        log_dir = args.log_dir.resolve()
+        write_log(log_dir / "python-stubs-docs.log", output)
+
+    if report.files_checked == 0:
+        sys.stderr.write("No curated source-adjacent stub files matched the requested paths.\n")
+        return 2
+
+    if report.ok:
+        sys.stdout.write(output)
+        return 0
+
+    sys.stderr.write(output)
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     if args.command == "check":
         return run_check(args)
+    if args.command == "lint-docs":
+        return run_lint_docs(args)
     return run_generate(args)

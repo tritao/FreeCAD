@@ -75,6 +75,7 @@ from .parsing import (
     iter_binding_pyi_files,
     iter_module_stub_pyi_files,
     iter_source_files,
+    iter_type_stub_pyi_files,
     line_number,
     normalize_doc,
     normalize_expr,
@@ -676,6 +677,22 @@ def format_signature(parameters: str, class_method: bool) -> str:
     return f"({parameters})" if parameters else "()"
 
 
+def render_docstring_lines(doc: str) -> tuple[str, ...]:
+    doc = doc.strip()
+    if not doc:
+        return ()
+    if '"""' in doc:
+        return (f"    {ast.unparse(ast.Constant(value=doc))}",)
+
+    if "\n" not in doc:
+        return (f'    """{doc}"""',)
+
+    lines = ['    """']
+    lines.extend(f"    {line}" if line else "    " for line in doc.splitlines())
+    lines.append('    """')
+    return tuple(lines)
+
+
 def valid_identifier(name: str) -> bool:
     return name.isidentifier() and not keyword.iskeyword(name)
 
@@ -708,7 +725,12 @@ def render_stub_lines(
                 signature_text = format_signature(parameters, class_method)
                 if use_overload:
                     rendered.append("@overload")
-                rendered.append(f"def {method.python_name}{signature_text} -> {returns}: ...")
+                if known_signature.doc:
+                    rendered.append(f"def {method.python_name}{signature_text} -> {returns}:")
+                    rendered.extend(render_docstring_lines(known_signature.doc))
+                    rendered.append("    ...")
+                else:
+                    rendered.append(f"def {method.python_name}{signature_text} -> {returns}: ...")
             return tuple(rendered)
         return (f"def {method.python_name}{signature(method, class_method)} -> Any: ...",)
     return (f"# TODO: invalid Python identifier from binding table: {method.python_name!r}",)
@@ -849,7 +871,7 @@ def stub_signature_from_function_node(
         parameters = parameters.removeprefix("self,").lstrip()
     else:
         raise ValueError(f"{path}: {class_symbol}.{node.name} must be an instance method")
-    return StubSignature(parameters, returns, class_symbol)
+    return StubSignature(parameters, returns, class_symbol, ast.get_docstring(node, clean=True))
 
 
 def module_stub_signature_from_function_node(
@@ -876,49 +898,7 @@ def module_stub_signature_from_function_node(
     parameters = parameters.strip()
     if parameters.startswith(("self", "cls")):
         raise ValueError(f"{path}: {module_name}.{node.name} must not declare self or cls")
-    return StubSignature(parameters, returns)
-
-
-def parse_stub_signature_overrides(
-    override_dir: Path,
-) -> dict[tuple[str, str, str], tuple[StubSignatureGroup, Path]]:
-    signatures: dict[tuple[str, str, str], tuple[StubSignatureGroup, Path]] = {}
-    pycxx_override_dir = (
-        override_dir / "pycxx" if (override_dir / "pycxx").exists() else override_dir
-    )
-    if not pycxx_override_dir.exists():
-        return signatures
-
-    for path in sorted(pycxx_override_dir.rglob("*.pyi")):
-        relative = path.relative_to(pycxx_override_dir)
-        if relative.parts and relative.parts[0] == "modules":
-            continue
-        module_name = ".".join(relative.parent.parts)
-        if not module_name:
-            raise ValueError(f"{path}: PyCXX override files must live below a module directory")
-        source = path.read_text(encoding="utf-8")
-        try:
-            tree = ast.parse(source, filename=str(path))
-        except SyntaxError as exc:
-            raise ValueError(f"{path}: invalid stub override syntax: {exc}") from exc
-
-        for node in tree.body:
-            if not isinstance(node, ast.ClassDef):
-                continue
-            for item in node.body:
-                if not isinstance(item, ast.FunctionDef):
-                    continue
-                key = (module_name, node.name, item.name)
-                signature = stub_signature_from_function_node(path, source, node.name, item)
-                if key in signatures:
-                    _, earlier_path = signatures[key]
-                    raise ValueError(
-                        f"{path}: duplicate signature for {module_name}.{node.name}.{item.name}; "
-                        f"already defined in {earlier_path}"
-                    )
-                signatures[key] = ((signature,), path)
-
-    return signatures
+    return StubSignature(parameters, returns, doc=ast.get_docstring(node, clean=True))
 
 
 def parse_module_stub_signature_overrides(
@@ -957,14 +937,67 @@ def parse_module_stub_signature_overrides(
     return signatures
 
 
+def parse_type_stub_target(path: Path) -> tuple[str, str]:
+    target = path.stem
+    if not target or "." not in target:
+        raise ValueError(f"{path}: invalid type stub filename")
+    module_name, class_symbol = target.rsplit(".", 1)
+    if not module_name or not class_symbol:
+        raise ValueError(f"{path}: invalid type stub filename")
+    if not all(valid_identifier(part) for part in module_name.split(".")):
+        raise ValueError(f"{path}: invalid module name in type stub filename")
+    if not valid_identifier(class_symbol):
+        raise ValueError(f"{path}: invalid class symbol in type stub filename")
+    return module_name, class_symbol
+
+
+def parse_source_type_stub_signature_overrides(
+    root: Path,
+    source_dir: Path,
+) -> dict[tuple[str, str, str], tuple[StubSignatureGroup, Path]]:
+    signatures: dict[tuple[str, str, str], tuple[StubSignatureGroup, Path]] = {}
+    for path in sorted(iter_type_stub_pyi_files(root, source_dir)):
+        module_name, class_symbol = parse_type_stub_target(path)
+        source = path.read_text(encoding="utf-8")
+        try:
+            tree = ast.parse(source, filename=str(path))
+        except SyntaxError as exc:
+            raise ValueError(f"{path}: invalid type stub syntax: {exc}") from exc
+
+        class_nodes = [
+            node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_symbol
+        ]
+        if not class_nodes:
+            raise ValueError(f"{path}: missing class {class_symbol!r} for type stub file")
+        if len(class_nodes) > 1:
+            raise ValueError(f"{path}: duplicate class {class_symbol!r} in type stub file")
+
+        for item in class_nodes[0].body:
+            if not isinstance(item, ast.FunctionDef):
+                continue
+            key = (module_name, class_symbol, item.name)
+            signature = stub_signature_from_function_node(path, source, class_symbol, item)
+            if key in signatures:
+                earlier_group, earlier_path = signatures[key]
+                if earlier_path != path:
+                    raise ValueError(
+                        f"{path}: duplicate signature for {module_name}.{class_symbol}.{item.name}; "
+                        f"already defined in {earlier_path}"
+                    )
+                signatures[key] = (earlier_group + (signature,), path)
+                continue
+            signatures[key] = ((signature,), path)
+
+    return signatures
+
+
 def load_stub_signature_overrides(
     root: Path,
     source_dir: Path,
-    override_dir: Path | None,
     methods: list[BindingMethod],
     type_registrations: dict[str, list[str]],
 ) -> StubSignatureOverrides:
-    public_signatures = parse_stub_signature_overrides(override_dir) if override_dir else {}
+    public_signatures = parse_source_type_stub_signature_overrides(root, source_dir)
     public_module_signatures = parse_module_stub_signature_overrides(root, source_dir)
     if not public_signatures and not public_module_signatures:
         return {}
@@ -1017,8 +1050,8 @@ def load_stub_signature_overrides(
     for public_key, (signature_override, path) in sorted(public_module_signatures.items()):
         matched_keys = module_method_index.get(public_key, [])
         if not matched_keys:
-            module_name, function_name = public_key
-            errors.append(f"{path}: {module_name}.{function_name} is not registered in the inventory")
+            # Source-adjacent module stubs can also add small manual functions
+            # that are not discovered in the generated binding inventory.
             continue
 
         for override_key in matched_keys:
@@ -1029,7 +1062,7 @@ def load_stub_signature_overrides(
             overrides[override_key] = signature_override
 
     if errors:
-        raise ValueError("invalid PyCXX stub signature overrides:\n  " + "\n  ".join(errors))
+        raise ValueError("invalid stub signature overrides:\n  " + "\n  ".join(errors))
     return overrides
 
 
@@ -1343,6 +1376,25 @@ def public_stub_symbols(source: str) -> set[str]:
     return symbols
 
 
+def class_body_defined_symbols(body: list[ast.stmt]) -> set[str]:
+    symbols: set[str] = set()
+    for node in body:
+        match node:
+            case (
+                ast.ClassDef(name=name)
+                | ast.FunctionDef(name=name)
+                | ast.AsyncFunctionDef(name=name)
+            ):
+                symbols.add(name)
+            case ast.AnnAssign(target=ast.Name(id=name)):
+                symbols.add(name)
+            case ast.Assign(targets=targets):
+                symbols.update(target.id for target in targets if isinstance(target, ast.Name))
+            case _:
+                pass
+    return symbols
+
+
 def keep_public_stub_decorator(decorator: ast.expr) -> bool:
     name = decorator_name(decorator).split(".", 1)[-1]
     return name in PUBLIC_STUB_DECORATORS
@@ -1385,22 +1437,7 @@ class PublicClassStubTransformer(ast.NodeTransformer):
 
     @staticmethod
     def top_level_class_member_names(body: list[ast.stmt]) -> set[str]:
-        names: set[str] = set()
-        for item in body:
-            match item:
-                case (
-                    ast.ClassDef(name=name)
-                    | ast.FunctionDef(name=name)
-                    | ast.AsyncFunctionDef(name=name)
-                ):
-                    names.add(name)
-                case ast.AnnAssign(target=ast.Name(id=name)):
-                    names.add(name)
-                case ast.Assign(targets=targets):
-                    names.update(target.id for target in targets if isinstance(target, ast.Name))
-                case _:
-                    pass
-        return names
+        return class_body_defined_symbols(body)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> ast.ClassDef:
         is_public_class = self.class_depth == 0
@@ -2102,6 +2139,13 @@ def copy_overlay_stubs(
     return count
 
 
+def top_level_defined_symbols(body: list[ast.stmt]) -> set[str]:
+    symbols: set[str] = set()
+    for node in body:
+        symbols.update(top_level_symbol_names(node))
+    return symbols
+
+
 def leading_comment_block(source: str) -> str:
     lines = source.splitlines()
     leading: list[str] = []
@@ -2140,6 +2184,12 @@ def overlay_symbol_groups(body: list[ast.stmt]) -> list[tuple[set[str], list[ast
     return groups
 
 
+def support_definition_group(group: list[ast.stmt]) -> bool:
+    if not group:
+        return False
+    return all(isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) for node in group)
+
+
 def overlay_insertion_index(body: list[ast.stmt]) -> int:
     insertion_index = 0
     while insertion_index < len(body):
@@ -2152,6 +2202,24 @@ def overlay_insertion_index(body: list[ast.stmt]) -> int:
             insertion_index += 1
             continue
         if isinstance(current, (ast.Import, ast.ImportFrom, ast.Assign, ast.AnnAssign)):
+            insertion_index += 1
+            continue
+        break
+    return insertion_index
+
+
+def class_support_insertion_index(body: list[ast.stmt]) -> int:
+    insertion_index = 0
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        insertion_index = 1
+    while insertion_index < len(body):
+        current = body[insertion_index]
+        if isinstance(current, (ast.Assign, ast.AnnAssign)):
             insertion_index += 1
             continue
         break
@@ -2180,6 +2248,219 @@ def normalize_future_imports(body: list[ast.stmt]) -> list[ast.stmt]:
 
     rest = [node for node in body[docstring_end:] if not is_future_import(node)]
     return body[:docstring_end] + future_imports + rest
+
+
+def filtered_module_support_node(
+    node: ast.stmt,
+    existing_symbols: set[str],
+) -> ast.stmt | None:
+    match node:
+        case ast.ClassDef(name=name) | ast.FunctionDef(name=name) | ast.AsyncFunctionDef(name=name):
+            if name in existing_symbols:
+                return None
+            existing_symbols.add(name)
+            return copy.deepcopy(node)
+        case ast.Import(names=names):
+            kept = []
+            for alias in names:
+                exposed = alias.asname or alias.name.split(".", 1)[0]
+                if exposed in existing_symbols:
+                    continue
+                kept.append(copy.deepcopy(alias))
+                existing_symbols.add(exposed)
+            return ast.Import(names=kept) if kept else None
+        case ast.ImportFrom(module="__future__"):
+            return None
+        case ast.ImportFrom(module=module, names=names, level=level):
+            kept = []
+            for alias in names:
+                if alias.name == "*":
+                    continue
+                exposed = alias.asname or alias.name
+                if exposed in existing_symbols:
+                    continue
+                kept.append(copy.deepcopy(alias))
+                existing_symbols.add(exposed)
+            return ast.ImportFrom(module=module, names=kept, level=level) if kept else None
+        case ast.Assign() | ast.AnnAssign():
+            names = top_level_symbol_names(node)
+            if not names or names.issubset(existing_symbols):
+                return None
+            existing_symbols.update(names)
+            return copy.deepcopy(node)
+        case ast.If(test=test, body=body, orelse=[]):
+            if not type_checking_test(test):
+                return None
+            filtered_body = filtered_module_support_nodes(body, existing_symbols)
+            if not filtered_body:
+                return None
+            return ast.If(test=copy.deepcopy(test), body=filtered_body, orelse=[])
+        case _:
+            return None
+
+
+def filtered_module_support_nodes(
+    body: list[ast.stmt],
+    existing_symbols: set[str],
+) -> list[ast.stmt]:
+    filtered_nodes: list[ast.stmt] = []
+    for names, group in overlay_symbol_groups(body):
+        if names and support_definition_group(group):
+            if names.issubset(existing_symbols):
+                continue
+            existing_symbols.update(names)
+            filtered_nodes.extend(copy.deepcopy(node) for node in group)
+            continue
+        for node in group:
+            filtered = filtered_module_support_node(node, existing_symbols)
+            if filtered is None:
+                continue
+            filtered_nodes.append(filtered)
+    return filtered_nodes
+
+
+def filtered_type_class_support_node(
+    node: ast.stmt,
+    existing_symbols: set[str],
+) -> ast.stmt | None:
+    match node:
+        case ast.FunctionDef() | ast.AsyncFunctionDef():
+            return None
+        case ast.ClassDef(name=name):
+            if name in existing_symbols:
+                return None
+            existing_symbols.add(name)
+            return copy.deepcopy(node)
+        case ast.Assign() | ast.AnnAssign():
+            names = class_body_defined_symbols([node])
+            if not names or names.issubset(existing_symbols):
+                return None
+            existing_symbols.update(names)
+            return copy.deepcopy(node)
+        case ast.If(test=test, body=body, orelse=[]):
+            if not type_checking_test(test):
+                return None
+            filtered_body = filtered_type_class_support_nodes(body, existing_symbols)
+            if not filtered_body:
+                return None
+            return ast.If(test=copy.deepcopy(test), body=filtered_body, orelse=[])
+        case _:
+            return None
+
+
+def filtered_type_class_support_nodes(
+    body: list[ast.stmt],
+    existing_symbols: set[str],
+) -> list[ast.stmt]:
+    filtered_nodes: list[ast.stmt] = []
+    for node in body:
+        filtered = filtered_type_class_support_node(node, existing_symbols)
+        if filtered is None:
+            continue
+        filtered_nodes.append(filtered)
+    return filtered_nodes
+
+
+def module_support_source(source: str) -> str:
+    tree = ast.parse(source)
+    support_nodes = filtered_module_support_nodes(tree.body, top_level_defined_symbols([]))
+    return ast.unparse(ast.Module(body=support_nodes, type_ignores=[])).rstrip() + "\n" if support_nodes else ""
+
+
+def type_stub_support_sources(source: str, class_symbol: str) -> tuple[str, str]:
+    tree = ast.parse(source)
+    target_class: ast.ClassDef | None = None
+    module_body: list[ast.stmt] = []
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name == class_symbol and target_class is None:
+            target_class = node
+            continue
+        module_body.append(node)
+
+    module_support_nodes = filtered_module_support_nodes(module_body, top_level_defined_symbols([]))
+    module_support_source = (
+        ast.unparse(ast.Module(body=module_support_nodes, type_ignores=[])).rstrip() + "\n"
+        if module_support_nodes
+        else ""
+    )
+
+    if target_class is None:
+        return module_support_source, ""
+
+    class_support_nodes = filtered_type_class_support_nodes(
+        target_class.body,
+        class_body_defined_symbols([]),
+    )
+    class_support_source = (
+        ast.unparse(ast.Module(body=class_support_nodes, type_ignores=[])).rstrip() + "\n"
+        if class_support_nodes
+        else ""
+    )
+    return module_support_source, class_support_source
+
+
+def merge_module_support_nodes(target_source: str, support_source: str) -> str:
+    if not support_source.strip():
+        return target_source
+
+    target_tree = ast.parse(target_source)
+    support_tree = ast.parse(support_source)
+    target_body = target_tree.body
+    existing_symbols = top_level_defined_symbols(target_body)
+    support_nodes = filtered_module_support_nodes(support_tree.body, existing_symbols)
+    if not support_nodes:
+        return target_source
+
+    insertion_index = overlay_insertion_index(target_body)
+    target_tree.body = normalize_future_imports(
+        target_body[:insertion_index] + support_nodes + target_body[insertion_index:]
+    )
+
+    merged = ast.unparse(target_tree).rstrip() + "\n"
+    preamble = leading_comment_block(target_source)
+    if preamble:
+        return f"{preamble}\n\n{merged}"
+    return merged
+
+
+def merge_type_class_support_nodes(
+    target_source: str,
+    class_symbol: str,
+    support_source: str,
+) -> str:
+    if not support_source.strip():
+        return target_source
+
+    target_tree = ast.parse(target_source)
+    support_tree = ast.parse(support_source)
+    target_class = next(
+        (
+            node
+            for node in target_tree.body
+            if isinstance(node, ast.ClassDef) and node.name == class_symbol
+        ),
+        None,
+    )
+    if target_class is None:
+        return target_source
+
+    existing_symbols = class_body_defined_symbols(target_class.body)
+    support_nodes = filtered_type_class_support_nodes(support_tree.body, existing_symbols)
+    if not support_nodes:
+        return target_source
+
+    insertion_index = class_support_insertion_index(target_class.body)
+    target_class.body = (
+        target_class.body[:insertion_index]
+        + support_nodes
+        + target_class.body[insertion_index:]
+    )
+
+    merged = ast.unparse(target_tree).rstrip() + "\n"
+    preamble = leading_comment_block(target_source)
+    if preamble:
+        return f"{preamble}\n\n{merged}"
+    return merged
 
 
 def merge_overlay_module(target_source: str, overlay_source: str) -> str:
@@ -2211,6 +2492,63 @@ def merge_overlay_module(target_source: str, overlay_source: str) -> str:
     if preamble:
         return f"{preamble}\n\n{merged}"
     return merged
+
+
+def copy_module_support_stubs(
+    root: Path,
+    source_dir: Path,
+    target_dir: Path,
+    module_names: set[str] | None = None,
+) -> int:
+    count = 0
+    for source in sorted(iter_module_stub_pyi_files(root, source_dir)):
+        module_name = source.name.removesuffix(MODULE_STUB_PYI_SUFFIX)
+        target = (
+            module_stub_path(target_dir, module_name, module_names)
+            if module_names and module_name
+            else target_dir / source.name
+        )
+        if not target.exists():
+            continue
+        support_source = module_support_source(source.read_text(encoding="utf-8"))
+        if not support_source.strip():
+            continue
+        merged = merge_module_support_nodes(target.read_text(encoding="utf-8"), support_source)
+        target.write_text(merged, encoding="utf-8")
+        count += 1
+    return count
+
+
+def copy_type_support_stubs(
+    root: Path,
+    source_dir: Path,
+    target_dir: Path,
+    module_names: set[str] | None = None,
+) -> int:
+    count = 0
+    for source in sorted(iter_type_stub_pyi_files(root, source_dir)):
+        module_name, class_symbol = parse_type_stub_target(source)
+        target = (
+            module_stub_path(target_dir, module_name, module_names)
+            if module_names and module_name
+            else target_dir / source.name
+        )
+        if not target.exists():
+            continue
+        module_support_source, class_support_source = type_stub_support_sources(
+            source.read_text(encoding="utf-8"),
+            class_symbol,
+        )
+        merged = target.read_text(encoding="utf-8")
+        if module_support_source.strip():
+            merged = merge_module_support_nodes(merged, module_support_source)
+        if class_support_source.strip():
+            merged = merge_type_class_support_nodes(merged, class_symbol, class_support_source)
+        if merged == target.read_text(encoding="utf-8"):
+            continue
+        target.write_text(merged, encoding="utf-8")
+        count += 1
+    return count
 
 
 def markdown_report(methods: list[BindingMethod]) -> str:
@@ -2254,6 +2592,7 @@ def markdown_report(methods: list[BindingMethod]) -> str:
 def write_outputs(
     out_dir: Path,
     root: Path,
+    source_dir: Path,
     methods: list[BindingMethod],
     classes: list[BindingClass],
     type_registrations: dict[str, list[str]],
@@ -2280,6 +2619,7 @@ def write_outputs(
     overlay_count = (
         copy_overlay_stubs(overlay_dir, out_dir / "stubs", module_names) if overlay_dir else 0
     )
+    copy_module_support_stubs(root, source_dir, out_dir / "stubs", module_names)
     append_type_stubs(
         out_dir / "stubs",
         methods,
@@ -2288,4 +2628,5 @@ def write_outputs(
         module_names,
     )
     append_class_stubs(out_dir / "stubs", root, classes, module_names)
+    copy_type_support_stubs(root, source_dir, out_dir / "stubs", module_names)
     return overlay_count

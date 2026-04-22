@@ -35,14 +35,16 @@ That command writes:
   is not committed.
 
 Keep hand-written public module overlays under `inputs/overlays/`. Keep
-generated PyCXX type signature inputs under `inputs/pycxx-overrides/`, using
-public import names such as `inputs/pycxx-overrides/FreeCADGui/_View3DInventor.pyi`
-for class methods. Keep stub-only module function signatures in source-adjacent
-`*.module.pyi` files such as `src/App/FreeCAD.module.pyi` or
-`src/Base/FreeCAD.Console.module.pyi`. These module stub files are consumed by
-`stubs_tooling` only; the legacy binding generator does not read them. Do not
-edit generated output directly; use it as input for curated overlays or source
-signature overrides.
+source-adjacent PyCXX type signature inputs in plain `.pyi` files such as
+`src/Gui/FreeCADGui._MainWindow.pyi` when curated type signatures should live
+next to the wrapper source. Keep stub-only module function signatures in
+source-adjacent `*.module.pyi` files such as `src/App/FreeCAD.module.pyi` or
+`src/Base/FreeCAD.Console.module.pyi`. These source-adjacent stub files are
+consumed by `stubs_tooling` only; the legacy binding generator does not read
+them. Plain type-stub `.pyi` files can also contribute top-level support nodes such as
+imports, helper aliases, helper protocols, and non-method class members to the
+merged public stub output. Do not edit generated output directly; use it as
+input for curated overlays or source signature overrides.
 
 Use package-shaped overlay paths that mirror the public import tree, such as
 `inputs/overlays/Part/__init__.pyi` or `inputs/overlays/Part/Geom2d.pyi`.
@@ -52,14 +54,28 @@ stubs are ready to be maintained or generated at the package source.
 Public module overlays merge top-level symbols into generated modules instead of
 replacing the whole file. Keep overlays focused on aliases, helper types, and
 manual APIs that the generator still cannot model. Use source-adjacent
-`*.module.pyi` files for module function signatures and keep overlays focused
-on the remaining helper definitions and synthetic public APIs.
+`*.module.pyi` files for module function signatures, helper support nodes, and
+small explicit module functions that are still missing from the discovered
+inventory. Keep overlays focused on the remaining helper definitions,
+synthetic public APIs, and compatibility shims.
 
 The helper also runs the smoke checks from this directory:
 
 ```sh
 python3 src/Tools/bindings/generate_stubs.py check --root . --out-dir src/Tools/bindings/stubs/generated
 ```
+
+Use the documentation linter to audit the curated source-adjacent stub files:
+
+```sh
+python3 src/Tools/bindings/generate_stubs.py lint-docs --root .
+```
+
+This lint checks the curated source files that now carry hand-written typing
+documentation, not the entire generated public stub tree. It requires module
+docstrings plus docstrings on curated top-level functions, curated classes, and
+their methods. Pass file or directory paths after `lint-docs` to audit a
+smaller slice while documentation coverage is still being filled in.
 
 ## Recommended Direction
 
@@ -73,8 +89,8 @@ symbols re-export aliases. `FreeCAD.Base` is canonical for classes sourced from
 `src/Base/`, which preserves type identity for APIs that use paths such as
 `FreeCAD.Vector`, `FreeCAD.Base.Vector`, or `Part.Precision`.
 
-Use `inputs/pycxx-overrides/` for PyCXX type method tables that the inventory
-tool can map to a public class. These fragments are source inputs to the
+Use source-adjacent plain `.pyi` files for PyCXX type method tables that the
+inventory can map to a public class. These fragments are source inputs to the
 generator, not the published stub tree. Use `@typing_only` on methods inside a
 binding `.pyi` class when extra typing-only methods belong to that class and
 should stay next to the binding source. Use class-body `if TYPE_CHECKING:`

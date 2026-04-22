@@ -18,10 +18,13 @@ belongs in ``generator`` instead of this module.
 from __future__ import annotations
 
 import ast
+from functools import lru_cache
 from pathlib import Path, PurePosixPath
+import re
 from typing import Iterable
 
 from .model import (
+    GENERATE_FROM_PY_CALL_RE,
     HELPER_PYI_FILES,
     MODULE_STUB_PYI_SUFFIX,
     SKIPPED_SOURCE_PREFIXES,
@@ -234,12 +237,24 @@ def iter_source_files(root: Path, source_dir: Path) -> Iterable[Path]:
         yield path
 
 
+@lru_cache(maxsize=None)
+def cmake_registered_binding_pyi_files(root: Path, source_dir: Path) -> tuple[Path, ...]:
+    registered: set[Path] = set()
+    for cmake_file in source_dir.rglob("CMakeLists.txt"):
+        try:
+            source = cmake_file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        source = re.sub(r"#.*", "", source)
+        for match in GENERATE_FROM_PY_CALL_RE.finditer(source):
+            candidate = (cmake_file.parent / f"{match.group('base')}.pyi").resolve()
+            if candidate.is_file():
+                registered.add(candidate)
+    return tuple(sorted(registered))
+
+
 def iter_binding_pyi_files(root: Path, source_dir: Path) -> Iterable[Path]:
-    for path in source_dir.rglob("*.pyi"):
-        if not path.is_file():
-            continue
-        if path.name.endswith(MODULE_STUB_PYI_SUFFIX):
-            continue
+    for path in cmake_registered_binding_pyi_files(root, source_dir):
         rel = path.relative_to(root).as_posix()
         if rel in HELPER_PYI_FILES:
             continue
@@ -253,6 +268,23 @@ def iter_module_stub_pyi_files(root: Path, source_dir: Path) -> Iterable[Path]:
         if not path.is_file():
             continue
         rel = path.relative_to(root).as_posix()
+        if skipped_source_path(rel):
+            continue
+        yield path
+
+
+def iter_type_stub_pyi_files(root: Path, source_dir: Path) -> Iterable[Path]:
+    registered = set(cmake_registered_binding_pyi_files(root, source_dir))
+    for path in source_dir.rglob("*.pyi"):
+        if not path.is_file():
+            continue
+        if path in registered:
+            continue
+        if path.name.endswith(MODULE_STUB_PYI_SUFFIX):
+            continue
+        rel = path.relative_to(root).as_posix()
+        if rel in HELPER_PYI_FILES:
+            continue
         if skipped_source_path(rel):
             continue
         yield path
