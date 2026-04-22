@@ -2,6 +2,8 @@
 
 """Space and region overlay helpers for BIM Plan Edit."""
 
+from . import manager as overlay_manager
+
 
 def sync_secondary_selected_overlays(session):
     session._clear_secondary_selected_overlays()
@@ -222,26 +224,18 @@ def sync_selected_space_overlay(session):
             session._selected_space_overlay_geometry_key = geometry_key
             session._selected_space_overlay_segments = segments
         session._plan_perf_count("selected_space_overlay_segments", len(segments))
-        if session._selected_space_overlay_render_state != render_state or len(
-            session._space_overlay_trackers
-        ) != len(segments):
-            session._clear_selected_space_overlay()
-            for _start, _end in segments:
-                tracker = session._make_plan_line_tracker(
-                    DraftTrackers,
-                    "selected-space-overlay:{}".format(getattr(space, "Name", "unknown")),
-                    scolor=color,
-                    swidth=width,
-                    ontop=True,
-                )
-                session._space_overlay_trackers.append(tracker)
-            session._selected_space_overlay_geometry_key = geometry_key
-            session._selected_space_overlay_segments = segments
-        for tracker, (start, end) in zip(session._space_overlay_trackers, segments):
-            tracker.setColor(color)
-            tracker.p1(start)
-            tracker.p2(end)
-            tracker.on()
+        session._space_overlay_trackers, _, _ = overlay_manager.sync_segment_overlay_trackers(
+            session,
+            DraftTrackers,
+            trackers=session._space_overlay_trackers,
+            segments=segments,
+            label="selected-space-overlay:{}".format(getattr(space, "Name", "unknown")),
+            color=color,
+            width=width,
+            clear_fn=session._clear_selected_space_overlay,
+        )
+        session._selected_space_overlay_geometry_key = geometry_key
+        session._selected_space_overlay_segments = segments
         session._selected_space_overlay_render_state = render_state
         session._selected_space_overlay_dirty = False
 
@@ -270,22 +264,16 @@ def sync_selected_region_overlay(session):
         segments = session._get_region_overlay_segments(region)
         session._plan_perf_count("selected_region_overlay_segments", len(segments))
         color = (0.12, 0.38, 0.95)
-        if len(session._region_overlay_trackers) != len(segments):
-            session._clear_selected_region_overlay()
-            for _start, _end in segments:
-                tracker = session._make_plan_line_tracker(
-                    DraftTrackers,
-                    "selected-region-overlay:{}".format(getattr(region, "Name", "unknown")),
-                    scolor=color,
-                    swidth=width,
-                    ontop=True,
-                )
-                session._region_overlay_trackers.append(tracker)
-        for tracker, (start, end) in zip(session._region_overlay_trackers, segments):
-            tracker.setColor(color)
-            tracker.p1(start)
-            tracker.p2(end)
-            tracker.on()
+        session._region_overlay_trackers, _, _ = overlay_manager.sync_segment_overlay_trackers(
+            session,
+            DraftTrackers,
+            trackers=session._region_overlay_trackers,
+            segments=segments,
+            label="selected-region-overlay:{}".format(getattr(region, "Name", "unknown")),
+            color=color,
+            width=width,
+            clear_fn=session._clear_selected_region_overlay,
+        )
 
 
 def clear_selected_region_overlay(session):

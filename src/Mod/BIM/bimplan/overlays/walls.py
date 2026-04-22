@@ -5,6 +5,8 @@
 import FreeCAD
 import FreeCADGui
 
+from . import manager as overlay_manager
+
 
 def retarget_edit_tracker(tracker, obj, index):
     selnode = getattr(tracker, "selnode", None)
@@ -195,39 +197,27 @@ def sync_selected_wall_overlay(session):
             session._get_wall_overlay_polylines(wall)
         )
         session._plan_perf_count("selected_wall_overlay_segments", len(segments))
-        transferred_trackers = False
-        if len(session._wall_overlay_trackers) != len(segments):
-            if (
-                not session._wall_overlay_trackers
-                and session.hovered_wall == wall
-                and len(session._wall_hover_trackers) == len(segments)
-            ):
-                session._wall_overlay_trackers = session._wall_hover_trackers
-                session._wall_hover_trackers = []
-                transferred_trackers = True
-                session._plan_perf_count("selected_wall_overlay_tracker_transfers")
-            else:
-                session._clear_selected_wall_overlay()
-                try:
-                    import draftguitools.gui_trackers as DraftTrackers
-                except ImportError:
-                    return
-                for _start, _end in segments:
-                    tracker = session._make_plan_line_tracker(
-                        DraftTrackers,
-                        "selected-wall-overlay:{}".format(getattr(wall, "Name", "unknown")),
-                        scolor=color,
-                        swidth=width,
-                        ontop=True,
-                    )
-                    session._wall_overlay_trackers.append(tracker)
-        for tracker, (start, end) in zip(session._wall_overlay_trackers, segments):
-            session._set_plan_line_tracker_width(tracker, width)
-            tracker.setColor(color)
-            if not transferred_trackers:
-                tracker.p1(start)
-                tracker.p2(end)
-                tracker.on()
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            session._clear_selected_wall_overlay()
+            return
+        (
+            session._wall_overlay_trackers,
+            session._wall_hover_trackers,
+            _,
+        ) = overlay_manager.sync_segment_overlay_trackers(
+            session,
+            DraftTrackers,
+            trackers=session._wall_overlay_trackers,
+            hover_trackers=session._wall_hover_trackers,
+            segments=segments,
+            label="selected-wall-overlay:{}".format(getattr(wall, "Name", "unknown")),
+            color=color,
+            width=width,
+            clear_fn=session._clear_selected_wall_overlay,
+            transfer_perf_key="selected_wall_overlay_tracker_transfers",
+        )
 
 
 def clear_selected_wall_overlay(session):
