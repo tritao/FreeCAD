@@ -996,10 +996,38 @@ class BIMWorkbench(Workbench):
             def __del__(self):
                 self._detach_controls()
 
+            def _set_taskwatcher_context_visible(self, visible):
+                task_view = None
+                try:
+                    task_view = FreeCADGui.Control.taskPanel()
+                except Exception:
+                    task_view = None
+                if task_view is None:
+                    return
+                try:
+                    context_panel = task_view.findChild(QtGui.QWidget, "TaskWatcherContextPanel")
+                except Exception:
+                    context_panel = None
+                if context_panel is None:
+                    return
+                try:
+                    context_panel.setVisible(bool(visible))
+                except Exception:
+                    pass
+                try:
+                    context_panel.updateGeometry()
+                except Exception:
+                    pass
+                try:
+                    task_view.updateGeometry()
+                except Exception:
+                    pass
+
             def _detach_controls(self):
                 widget = self._widget
                 self._session = None
                 self._widget = None
+                self._set_taskwatcher_context_visible(True)
                 if widget is None:
                     return
                 try:
@@ -1040,6 +1068,7 @@ class BIMWorkbench(Workbench):
                     return False
                 if not self._ensure_controls(session):
                     return False
+                self._set_taskwatcher_context_visible(False)
                 try:
                     session.task_panel.refresh_from_session()
                 except Exception:
