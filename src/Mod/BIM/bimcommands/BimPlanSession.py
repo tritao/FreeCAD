@@ -270,6 +270,7 @@ class PlanEditSession:
         self._wall_grip_sync_queued = False
         self._wall_grip_sync_generation = 0
         self._wall_hover_trackers = []
+        self._wall_overlay_trackers = []
         self._junction_node_trackers = []
         self._hovered_wall_opening_context_trackers = []
         self._opening_hover_trackers = []
@@ -859,6 +860,7 @@ class PlanEditSession:
         self._clear_junction_node_overlays()
         self._clear_hovered_wall_opening_context_overlay()
         self._clear_wall_grips()
+        self._clear_selected_wall_overlay()
         self._clear_hovered_opening_overlay()
         self._clear_hovered_symbol_overlay()
         self._clear_hovered_provider_overlay()
@@ -1025,6 +1027,7 @@ class PlanEditSession:
             self._clear_junction_node_overlays()
             self._clear_hovered_wall_opening_context_overlay()
             self._clear_wall_grips()
+            self._clear_selected_wall_overlay()
             self._clear_hovered_opening_overlay()
             self._clear_hovered_symbol_overlay()
             self._clear_hovered_provider_overlay()
@@ -1254,6 +1257,7 @@ class PlanEditSession:
         self._clear_plan_relation_status()
         self._set_selected_plan_target()
         self._clear_wall_grips()
+        self._clear_selected_wall_overlay()
         self._clear_selected_wall_opening_context_overlay()
         self._clear_selected_space_overlay()
         self._clear_secondary_selected_overlays()
@@ -1272,6 +1276,7 @@ class PlanEditSession:
         self._clear_plan_relation_status()
         self._set_selected_plan_target()
         self._clear_wall_grips()
+        self._clear_selected_wall_overlay()
         self._clear_selected_wall_opening_context_overlay()
         self._clear_selected_space_overlay()
         self._clear_secondary_selected_overlays()
@@ -1301,6 +1306,7 @@ class PlanEditSession:
         self._cancel_pending_edit()
         self._clear_plan_relation_status()
         self._clear_wall_grips()
+        self._clear_selected_wall_overlay()
         self._clear_selected_wall_opening_context_overlay()
         self._clear_selected_opening_overlay()
         self._clear_selected_opening_handles()
@@ -1331,6 +1337,7 @@ class PlanEditSession:
         self._set_hovered_space(None)
         self._set_hovered_region(None)
         self._clear_wall_grips()
+        self._clear_selected_wall_overlay()
         self._clear_selected_wall_opening_context_overlay()
         self._clear_selected_region_overlay()
         self._clear_selected_space_overlay()
@@ -1360,6 +1367,7 @@ class PlanEditSession:
         self._clear_plan_relation_status()
         self._set_selected_plan_target()
         self._clear_wall_grips()
+        self._clear_selected_wall_overlay()
         self._clear_selected_wall_opening_context_overlay()
         self._clear_selected_space_overlay()
         self._clear_secondary_selected_overlays()
@@ -1403,6 +1411,7 @@ class PlanEditSession:
         self._cancel_pending_edit()
         self._clear_plan_relation_status()
         self._clear_wall_grips()
+        self._clear_selected_wall_overlay()
         self._start_embedded_tool("Move", gui_move.Move())
 
     def activate_join_tool(self):
@@ -1419,6 +1428,7 @@ class PlanEditSession:
         self._cancel_pending_edit()
         self._clear_plan_relation_status()
         self._clear_wall_grips()
+        self._clear_selected_wall_overlay()
         self._set_hovered_opening(None)
         self._set_hovered_wall(None)
         self._set_hovered_symbol(None)
@@ -3119,6 +3129,7 @@ class PlanEditSession:
         self._set_hovered_space(None)
         self._set_hovered_region(None)
         self._clear_wall_grips()
+        self._clear_selected_wall_overlay()
         self._clear_selected_wall_opening_context_overlay()
         self._clear_selected_opening_handles()
         self._clear_selected_symbol_handles()
@@ -3500,6 +3511,7 @@ class PlanEditSession:
         if not wall:
             return
         self._clear_wall_grips()
+        self._clear_selected_wall_overlay()
         self._clear_selected_plan_target_if_matches("wall", wall)
         self._set_gui_selection([])
         self._refresh_task_panel_status()
@@ -3517,6 +3529,7 @@ class PlanEditSession:
             return
         self._pending_selected_wall_reset = False
         self._clear_wall_grips()
+        self._clear_selected_wall_overlay()
         self._clear_selected_plan_target_if_matches("wall", wall)
         if clear_gui_selection:
             self._set_gui_selection([])
@@ -3530,6 +3543,11 @@ class PlanEditSession:
 
     def _sync_primary_selected_plan_target_visuals(self, previous_kind=None, previous_obj=None):
         with self._plan_perf_trace_span("sync_primary_selected_plan_target_visuals"):
+            if self.current_tool != "Select" or self._selected_plan_target_changed(
+                previous_kind, previous_obj, "wall"
+            ):
+                with self._plan_perf_trace_span("sync_selected_wall_overlay"):
+                    self._sync_selected_wall_overlay()
             with self._plan_perf_trace_span("sync_selected_wall_opening_context_overlay"):
                 self._sync_selected_wall_opening_context_overlay()
             with self._plan_perf_trace_span("sync_hovered_wall_overlay"):
@@ -4268,6 +4286,7 @@ class PlanEditSession:
         self._set_hovered_symbol(None)
         self._set_hovered_provider(None)
         self._set_selected_plan_target("wall", wall)
+        self._clear_selected_wall_overlay()
         self._clear_selected_wall_opening_context_overlay()
         self._wall_edit_modal_active = True
         self._edit_wall = wall
@@ -4284,6 +4303,7 @@ class PlanEditSession:
         except Exception:
             self._edit_wall_visibility = None
         self._clear_wall_grips()
+        self._clear_selected_wall_overlay()
         self._sync_wall_edit_preview(self._preview_points)
         self._refresh_task_panel_status()
         self._resume_wall_edit_point_pick()
@@ -5514,6 +5534,7 @@ class PlanEditSession:
                                 _kind, obj, role = node
                                 self._set_selected_plan_target_state("symbol", obj)
                                 self._clear_wall_grips()
+                                self._clear_selected_wall_overlay()
                                 self._activate_symbol_handle(obj, role)
                             elif node_kind in ("provider_overlay_point", "provider_overlay_target"):
                                 if not self._activate_provider_overlay_target_node(
@@ -5658,6 +5679,7 @@ class PlanEditSession:
                 self._sync_hovered_wall_overlay()
                 self._sync_hovered_wall_opening_context_overlay()
             if self._is_selected_plan_target("wall"):
+                self._sync_selected_wall_overlay()
                 self._sync_selected_wall_opening_context_overlay()
                 self._sync_wall_grips()
             if self.hovered_opening:
@@ -5715,6 +5737,7 @@ class PlanEditSession:
             self._clear_selected_symbol_handles()
             self._clear_selected_wall_opening_context_overlay()
             self._clear_wall_grips()
+            self._clear_selected_wall_overlay()
             return
         if self.current_tool == "Region":
             self._clear_junction_node_overlays()
@@ -5737,6 +5760,7 @@ class PlanEditSession:
             self._clear_selected_symbol_handles()
             self._clear_selected_wall_opening_context_overlay()
             self._clear_wall_grips()
+            self._clear_selected_wall_overlay()
             return
         if self.current_tool == "Set Space Text":
             self._clear_junction_node_overlays()
@@ -5758,6 +5782,7 @@ class PlanEditSession:
             self._clear_selected_symbol_handles()
             self._clear_selected_wall_opening_context_overlay()
             self._clear_wall_grips()
+            self._clear_selected_wall_overlay()
             if self._is_selected_plan_target("space") and (
                 refresh_all or _PLAN_VISUAL_SELECTED_SPACE in dirty
             ):
@@ -5782,6 +5807,7 @@ class PlanEditSession:
             self._clear_selected_symbol_handles()
             self._clear_selected_wall_opening_context_overlay()
             self._clear_wall_grips()
+            self._clear_selected_wall_overlay()
             if (
                 refresh_all
                 or _PLAN_VISUAL_SECONDARY_SELECTION in dirty
@@ -5809,6 +5835,7 @@ class PlanEditSession:
             self._clear_selected_symbol_handles()
             self._clear_selected_wall_opening_context_overlay()
             self._clear_wall_grips()
+            self._clear_selected_wall_overlay()
             if refresh_all or _PLAN_VISUAL_PROVIDER_OVERLAYS in dirty:
                 self._sync_provider_overlays()
             self._sync_provider_point_preview()
@@ -5834,6 +5861,7 @@ class PlanEditSession:
             self._clear_selected_symbol_handles()
             self._clear_selected_wall_opening_context_overlay()
             self._clear_wall_grips()
+            self._clear_selected_wall_overlay()
             return
         if self.current_tool == "Select":
             self._clear_space_region_pick_overlays()
@@ -5867,6 +5895,7 @@ class PlanEditSession:
             if refresh_all or _PLAN_VISUAL_SPACE_REGION_PICK in dirty:
                 self._clear_space_region_pick_overlays()
             if refresh_all or _PLAN_VISUAL_WALL_GRIPS in dirty:
+                self._sync_selected_wall_overlay()
                 self._sync_wall_grips()
             if refresh_all or _PLAN_VISUAL_PROVIDER_OVERLAYS in dirty:
                 self._sync_provider_overlays()
@@ -7840,9 +7869,11 @@ class PlanEditSession:
             if defer_wall_grips:
                 self._schedule_wall_grip_sync()
             else:
+                self._sync_selected_wall_overlay()
                 self._sync_wall_grips()
         else:
             self._clear_wall_grips()
+            self._clear_selected_wall_overlay()
         if self._selected_plan_target_changed(previous_kind, previous_obj, "opening"):
             self._sync_selected_opening_overlay()
             self._sync_selected_opening_handles()
@@ -8333,6 +8364,12 @@ class PlanEditSession:
     def _clear_hovered_wall_overlay(self):
         return wall_overlays.clear_hovered_wall_overlay(self)
 
+    def _sync_selected_wall_overlay(self):
+        return wall_overlays.sync_selected_wall_overlay(self)
+
+    def _clear_selected_wall_overlay(self):
+        return wall_overlays.clear_selected_wall_overlay(self)
+
     def _get_plan_context_junctions(self):
         return wall_overlays.get_plan_context_junctions(self)
 
@@ -8725,6 +8762,7 @@ class PlanEditSession:
                 self._set_hovered_region(None)
             with self._plan_perf_trace_span("clear_plan_selection_wall_grips"):
                 self._clear_wall_grips()
+                self._clear_selected_wall_overlay()
             with self._plan_perf_trace_span("clear_plan_selection_secondary_overlays"):
                 self._sync_secondary_selected_overlays()
             with self._plan_perf_trace_span("clear_plan_selection_opening_overlay"):
