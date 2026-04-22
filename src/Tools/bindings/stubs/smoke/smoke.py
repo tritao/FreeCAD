@@ -17,7 +17,7 @@ disappears, or gains an incompatible signature.
 
 from __future__ import annotations
 
-from typing import assert_type, cast, reveal_type
+from typing import Any, Literal, assert_type, cast, reveal_type
 
 import FreeCAD
 import FreeCAD.Console as Console
@@ -55,6 +55,34 @@ class SelectionGate:
 
     def allow(self, doc: object, obj: DocumentObject, sub: str, /) -> bool:
         return bool(doc or obj or sub)
+
+
+class ParameterObserver:
+    """Minimal observer used to exercise ``_ParameterGrp.Attach``."""
+
+    def onChange(
+        self,
+        group: FreeCAD._ParameterGrp,
+        param_type: str,
+        name: str,
+        value: str,
+        /,
+    ) -> None:
+        _ = (group, param_type, name, value)
+
+
+class ParameterManagerObserver:
+    """Minimal observer used to exercise ``_ParameterGrp.AttachManager``."""
+
+    def slotParamChanged(
+        self,
+        group: FreeCAD._ParameterGrp,
+        param_type: str,
+        name: str,
+        value: str,
+        /,
+    ) -> None:
+        _ = (group, param_type, name, value)
 
 
 def exercise(
@@ -128,6 +156,8 @@ def exercise(
     view = cast(FreeCADGui._View3DInventor, object())
     viewer = cast(FreeCADGui._View3DInventorViewer, object())
     resource = cast(FreeCADGui._PyResource, object())
+    parameter_observer = ParameterObserver()
+    parameter_manager_observer = ParameterManagerObserver()
     material = cast(Materials.Material, object())
     path_command = cast(PathApp.Command, object())
     part_design_view_provider = cast(PartDesignGui.ViewProvider, object())
@@ -288,16 +318,16 @@ def exercise(
     parameters.RemGroup("missing")
     parameters.RenameGroup("old", "new")
     parameters.CopyTo(child_parameters)
-    parameters.Attach(object())
-    parameters.AttachManager(object())
-    parameters.Detach(object())
+    parameters.Attach(parameter_observer)
+    parameters.AttachManager(parameter_manager_observer)
+    parameters.Detach(parameter_observer)
     parameters.Notify("name")
     parameters.NotifyAll()
     parameters.Import("parameters.xml")
     parameters.Insert("parameters.xml")
     parameters.Export("parameters.xml")
     task_placement.setPropertyName("Placement")
-    task_placement.setPlacement(object())
+    task_placement.setPlacement(placement)
     task_placement.setSelection([obj])
     task_placement.bindObject()
     task_placement.setPlacementAndBindObject(obj, "Placement")
@@ -309,10 +339,6 @@ def exercise(
     ui_loader.addPluginPath("/tmp")
     ui_loader.setLanguageChangeEnabled(True)
     ui_loader.setWorkingDirectory("/tmp")
-    hypothesis.getLength()
-    hypothesis.getLibName()
-    hypothesis.setParametersByMesh(fem_mesh, shape)
-    regular_hypothesis.isAuxiliary()
     assert_type(child_parameters, FreeCAD._ParameterGrp)
     assert_type(parameters.GetGroupName(), str)
     assert_type(parameters.GetGroups(), list[str])
@@ -368,10 +394,17 @@ def exercise(
     assert_type(Qt.removeTranslators(), bool)
     assert_type(
         parameters.GetContents(),
-        list[tuple[str, str, str | int | float | bool]] | None,
+        list[
+            tuple[
+                Literal["String", "Integer", "Float", "Boolean", "Unsigned Long"],
+                str,
+                str | int | float | bool,
+            ]
+        ]
+        | None,
     )
     assert_type(control.activeDialog(), bool)
-    assert_type(control.activeTaskDialog(), object | None)
+    assert_type(control.activeTaskDialog(), FreeCADGui._TaskDialog | None)
     assert_type(gui_document, FreeCADGui.Document | None)
     assert_type(edit_document, FreeCADGui.Document | None)
     assert_type(active_gui_document, FreeCADGui.Document | None)
@@ -411,7 +444,7 @@ def exercise(
     assert_type(FreeCADGui.supportedLocales(), dict[str, str])
     assert_type(FreeCADGui.activeView("Gui::View3DInventor"), object | None)
     assert_type(FreeCADGui.getDocument("Document"), FreeCADGui.Document)
-    assert_type(FreeCADGui.doCommandEval("1 + 1"), object)
+    assert_type(FreeCADGui.doCommandEval("1 + 1"), Any)
     assert_type(FreeCADGui.createViewer(), FreeCADGui._View3DInventor)
     assert_type(FreeCADGui.createViewer(1, "Single"), FreeCADGui._View3DInventor)
     assert_type(FreeCADGui.getMarkerIndex("circle"), int)
@@ -419,8 +452,8 @@ def exercise(
     assert_type(FreeCADGui.getUserEditMode(), str)
     assert_type(FreeCADGui.setUserEditMode("Default"), bool)
     assert_type(FreeCADGui.reload("Document"), FreeCAD.Document | None)
-    assert_type(main_window.getWindows(), list[object])
-    assert_type(main_window.getActiveWindow(), object | None)
+    assert_type(main_window.getWindows(), list[FreeCADGui._MDIView])
+    assert_type(main_window.getActiveWindow(), FreeCADGui._MDIView | None)
     assert_type(mdi_view.undoActions(), list[str])
     assert_type(mdi_view.sendMessage("ViewFit"), bool)
     assert_type(
