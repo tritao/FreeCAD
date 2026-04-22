@@ -1835,9 +1835,15 @@ class PlanEditControlsWidget:
                     sections = tuple(self.session.get_plan_provider_inspector_sections())
             queue_overlay_refresh = getattr(
                 self.session,
-                "queue_plan_provider_overlay_refresh",
+                "queue_plan_provider_overlay_sync",
                 None,
             )
+            if not callable(queue_overlay_refresh):
+                queue_overlay_refresh = getattr(
+                    self.session,
+                    "queue_plan_provider_overlay_refresh",
+                    None,
+                )
             if callable(queue_overlay_refresh):
                 queue_overlay_refresh()
             tools = self._sort_provider_tools(tools)
