@@ -28,60 +28,110 @@ SKIPPED_SOURCE_PREFIXES = (
 )
 DEFAULT_OVERLAY_DIR = Path("src/Tools/bindings/stubs/inputs/overlays")
 MODULE_STUB_PYI_SUFFIX = ".module.pyi"
+
+# Match CMake bindings registrations like:
+#   generate_from_py(BaseClass)
 GENERATE_FROM_PY_CALL_RE = re.compile(r"\bgenerate_from_py_?\s*\(\s*(?P<base>[^\s)]+)\s*\)")
 
+# Match PyCXX method registrations like:
+#   add_varargs_method("name", &Type::method, "doc")
 ADD_METHOD_RE = re.compile(r"\b(?P<kind>add_(?:varargs|keyword|noargs)_method)\s*\(")
+
+# Match behavior naming such as:
+#   behaviors().name("Vector")
 BEHAVIOR_NAME_RE = re.compile(r"\bbehaviors\s*\(\s*\)\s*\.\s*name\s*\(\s*\"([^\"]+)\"\s*\)")
+
+CPP_IDENTIFIER = r"[A-Za-z_]\w*"
+CPP_QUALIFIED_NAME = rf"(?:{CPP_IDENTIFIER}\s*::\s*)*{CPP_IDENTIFIER}"
+CPP_TABLE_REFERENCE = rf"(?:{CPP_IDENTIFIER}::)*{CPP_IDENTIFIER}"
+
+# Match PyCXX extension module declarations like:
+#   Py::ExtensionModule<BaseModule>("FreeCAD")
 EXTENSION_MODULE_RE = re.compile(
-    r"\bPy::ExtensionModule\s*<\s*(?P<cpp_name>[\w:]+)\s*>\s*"
+    rf"\bPy::ExtensionModule\s*<\s*(?P<cpp_name>{CPP_QUALIFIED_NAME})\s*>\s*"
     r"\(\s*\"(?P<python_name>[^\"]+)\"\s*\)"
 )
+
+# Match PyMethodDef tables like:
+#   static PyMethodDef MyModule_methods[] = {
 PYMETHODDEF_RE = re.compile(
     r"(?:static\s+)?(?:const\s+)?(?:struct\s+)?PyMethodDef\s+"
-    r"(?P<table>(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\[\s*\]\s*=\s*\{"
+    rf"(?P<table>{CPP_TABLE_REFERENCE})\s*\[\s*\]\s*=\s*\{{"
 )
+
+# Match PyModuleDef definitions like:
+#   static PyModuleDef moduledef = {
 PYMODULEDEF_RE = re.compile(
-    r"(?:static\s+)?(?:struct\s+)?PyModuleDef\s+" r"(?P<definition>[A-Za-z_]\w*)\s*=\s*\{"
+    rf"(?:static\s+)?(?:struct\s+)?PyModuleDef\s+(?P<definition>{CPP_IDENTIFIER})\s*=\s*\{{"
 )
+
+# Match module creation assignments like:
+#   PyObject* mod = PyModule_Create(&moduledef)
 PYMODULE_CREATE_RE = re.compile(
-    r"(?:PyObject\s*\*\s*)?(?P<variable>[A-Za-z_]\w*)\s*=\s*"
-    r"PyModule_Create\s*\(\s*&(?P<definition>[A-Za-z_]\w*)\s*\)"
+    rf"(?:PyObject\s*\*\s*)?(?P<variable>{CPP_IDENTIFIER})\s*=\s*"
+    rf"PyModule_Create\s*\(\s*&(?P<definition>{CPP_IDENTIFIER})\s*\)"
 )
+
+# Match module imports like:
+#   PyObject* part = PyImport_ImportModule("Part")
 PYMODULE_IMPORT_RE = re.compile(
-    r"(?:PyObject\s*\*\s*)?(?P<variable>[A-Za-z_]\w*)\s*=\s*"
+    rf"(?:PyObject\s*\*\s*)?(?P<variable>{CPP_IDENTIFIER})\s*=\s*"
     r"PyImport_ImportModule\s*\(\s*\"(?P<module>[^\"]+)\"\s*\)"
 )
+
+# Match nested module wiring like:
+#   PyModule_AddObject(parent, "Geom2d", child)
 PYMODULE_ADD_OBJECT_RE = re.compile(
-    r"PyModule_AddObject\s*\(\s*(?P<parent>[A-Za-z_]\w*)\s*,\s*"
-    r"\"(?P<name>[^\"]+)\"\s*,\s*(?P<child>[A-Za-z_]\w*)\s*\)"
+    rf"PyModule_AddObject\s*\(\s*(?P<parent>{CPP_IDENTIFIER})\s*,\s*"
+    rf"\"(?P<name>[^\"]+)\"\s*,\s*(?P<child>{CPP_IDENTIFIER})\s*\)"
 )
+
+# Match table attachment like:
+#   PyModule_AddFunctions(module, SomeType::Methods)
 PYMODULE_ADD_FUNCTIONS_RE = re.compile(
-    r"PyModule_AddFunctions\s*\(\s*(?P<module>[A-Za-z_]\w*)\s*,\s*"
-    r"(?P<table>(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\)"
+    rf"PyModule_AddFunctions\s*\(\s*(?P<module>{CPP_IDENTIFIER})\s*,\s*"
+    rf"(?P<table>{CPP_TABLE_REFERENCE})\s*\)"
 )
+
+# Match local table aliases like:
+#   auto methods = SomeType::Methods;
 PYMETHOD_ALIAS_RE = re.compile(
-    r"\b(?P<alias>[A-Za-z_]\w*)\s*=\s*" r"(?P<table>(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*;"
+    rf"\b(?P<alias>{CPP_IDENTIFIER})\s*=\s*(?P<table>{CPP_TABLE_REFERENCE})\s*;"
 )
+
+# Match C/C++ string literals, including wide or UTF-prefixed forms like:
+#   "doc", u8"name", L"label"
 STRING_LITERAL_RE = re.compile(r'(?:u8|u|U|L)?("(?:\\.|[^"\\])*")')
+
+# Match init helpers like:
+#   PyObject* mod = Base::initModule()
 INIT_MODULE_RE = re.compile(
-    r"(?:PyObject\s*\*\s*)?(?P<variable>[A-Za-z_]\w*)\s*=\s*"
-    r"(?P<namespace>[A-Za-z_]\w*)::initModule\s*\(\s*\)"
+    rf"(?:PyObject\s*\*\s*)?(?P<variable>{CPP_IDENTIFIER})\s*=\s*"
+    rf"(?P<namespace>{CPP_IDENTIFIER})::initModule\s*\(\s*\)"
 )
+
+# Match Py::Object wrappers around module variables like:
+#   Py::Object wrapper(module)
 PY_OBJECT_WRAPPER_RE = re.compile(
-    r"Py::Object\s+(?P<variable>[A-Za-z_]\w*)\s*\(\s*(?P<source>[A-Za-z_]\w*)\s*\)"
+    rf"Py::Object\s+(?P<variable>{CPP_IDENTIFIER})\s*\(\s*(?P<source>{CPP_IDENTIFIER})\s*\)"
 )
+
+# Match module creation without import like:
+#   PyObject* gui = PyImport_AddModule("FreeCADGui")
 PYIMPORT_ADD_MODULE_RE = re.compile(
-    r"(?:PyObject\s*\*\s*)?(?P<variable>[A-Za-z_]\w*)\s*=\s*"
+    rf"(?:PyObject\s*\*\s*)?(?P<variable>{CPP_IDENTIFIER})\s*=\s*"
     r"PyImport_AddModule\s*\(\s*\"(?P<module>[^\"]+)\"\s*\)"
 )
+
+# Match module attribute fetches like:
+#   PyObject* sub(gui.getAttr("Selection").ptr())
 GETATTR_MODULE_RE = re.compile(
-    r"PyObject\s*\*\s*(?P<variable>[A-Za-z_]\w*)\s*"
-    r"\(\s*(?P<owner>[A-Za-z_]\w*)\.getAttr\s*\(\s*\"(?P<name>[^\"]+)\"\s*\)\.ptr\s*\(\s*\)\s*\)"
+    rf"PyObject\s*\*\s*(?P<variable>{CPP_IDENTIFIER})\s*"
+    rf"\(\s*(?P<owner>{CPP_IDENTIFIER})\.getAttr\s*\(\s*\"(?P<name>[^\"]+)\"\s*\)\.ptr\s*\(\s*\)\s*\)"
 )
-ADDTYPE_RE = re.compile(
-    r"\baddType\s*\(\s*(?P<type>.+?)\s*,\s*(?P<module>[A-Za-z_]\w*)\s*,\s*" r"\"(?P<name>[^\"]+)\"",
-    re.DOTALL,
-)
+
+# Match class type objects referenced as:
+#   Base::VectorPy::Type
 CPP_TYPE_NAME_RE = re.compile(r"((?:[A-Za-z_]\w*\s*::\s*)*[A-Za-z_]\w*)\s*::\s*Type\b")
 HELPER_PYI_FILES = {
     "src/Base/Metadata.pyi",

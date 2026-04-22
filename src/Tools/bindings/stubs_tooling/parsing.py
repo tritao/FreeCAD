@@ -1,8 +1,8 @@
 """Low-level parsing helpers for the stub generation pipeline.
 
 This module deals with syntax, not policy. It provides the small building
-blocks used by the generator to read C++ source and binding ``.pyi`` files
-without deciding which symbols should become public stubs.
+blocks used by the generator to read C++ source, CMake fragments, and binding
+``.pyi`` files without deciding which symbols should become public stubs.
 
 Typical responsibilities here are:
 - stripping comments while preserving source offsets
@@ -10,6 +10,10 @@ Typical responsibilities here are:
 - splitting top-level comma-separated expressions safely
 - scanning the repository for relevant source and helper ``.pyi`` files
 - reading Python AST fragments from binding specs
+
+The manual scanners here exist for raw C++ and CMake text that Python's
+``ast`` cannot parse. Python inputs already use ``ast`` through
+``parse_python_source`` and the helper functions below.
 
 If a change affects what gets published or how names are mapped, it usually
 belongs in ``generator`` instead of this module.
@@ -176,6 +180,52 @@ def split_top_level(expression: str) -> list[str]:
     if tail:
         parts.append(tail)
     return parts
+
+
+def add_type_calls(source: str) -> Iterable[tuple[int, str, str, str]]:
+    """Yield parsed ``addType(...)`` registrations from stripped C++ source.
+
+    Example source shape:
+        addType(SomeNamespace::Thing::Type, module, "Thing");
+
+    The return values are ``(byte_offset, type_expr, module_var, export_name)``.
+    Parsing is balanced rather than regex-based because the first argument can
+    contain nested calls or template syntax.
+    """
+
+    start = 0
+    marker = "addType"
+    while True:
+        index = source.find(marker, start)
+        if index == -1:
+            return
+
+        prefix = source[index - 1] if index > 0 else ""
+        suffix_index = index + len(marker)
+        suffix = source[suffix_index] if suffix_index < len(source) else ""
+        if (prefix.isalnum() or prefix == "_") or (suffix.isalnum() or suffix == "_"):
+            start = suffix_index
+            continue
+
+        paren_index = suffix_index
+        while paren_index < len(source) and source[paren_index].isspace():
+            paren_index += 1
+        if paren_index >= len(source) or source[paren_index] != "(":
+            start = suffix_index
+            continue
+
+        try:
+            body, end = extract_balanced(source, paren_index, "(", ")")
+        except ValueError:
+            start = paren_index + 1
+            continue
+
+        fields = split_top_level(body)
+        if len(fields) >= 3:
+            name = first_string_literal(fields[2])
+            if name:
+                yield index, fields[0], fields[1], name
+        start = end
 
 
 def string_literals(expression: str) -> list[str]:

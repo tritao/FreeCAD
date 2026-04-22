@@ -32,7 +32,6 @@ import shutil
 from typing import Iterable
 
 from .model import (
-    ADDTYPE_RE,
     ADD_METHOD_RE,
     BEHAVIOR_NAME_RE,
     BindingClass,
@@ -67,6 +66,7 @@ from .model import (
     StubSignatureOverrides,
 )
 from .parsing import (
+    add_type_calls,
     decorator_kwargs,
     decorator_name,
     extract_balanced,
@@ -265,12 +265,12 @@ def collect_type_registrations(root: Path, files: Iterable[Path]) -> dict[str, l
             if parent_module and child_module:
                 module_vars[match.group("child")] = f"{parent_module}.{match.group('name')}"
 
-        for match in ADDTYPE_RE.finditer(source):
-            module_name = module_vars.get(match.group("module"))
-            type_name = cpp_type_name(match.group("type"))
+        for _, type_expr, module_var, export_name in add_type_calls(source):
+            module_name = module_vars.get(normalize_expr(module_var))
+            type_name = cpp_type_name(type_expr)
             if not module_name or not type_name:
                 continue
-            public_name = f"{module_name}.{match.group('name')}"
+            public_name = f"{module_name}.{export_name}"
             keys = [type_name]
             context_name = contextual_cpp_type_name(rel, type_name)
             if context_name:
