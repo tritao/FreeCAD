@@ -113,3 +113,53 @@ def set_plan_line_tracker_width(tracker, width):
             drawstyle.lineWidth = width
     except Exception:
         return
+
+
+def sync_segment_overlay_trackers(
+    session,
+    DraftTrackers,
+    *,
+    trackers,
+    segments,
+    label,
+    color,
+    width,
+    clear_fn,
+    hover_trackers=None,
+    transfer_perf_key="",
+):
+    transferred = False
+    current_trackers = trackers if trackers is not None else []
+    current_hover_trackers = hover_trackers if hover_trackers is not None else None
+    if len(current_trackers) != len(segments):
+        if (
+            hover_trackers is not None
+            and not current_trackers
+            and current_hover_trackers is not None
+            and len(current_hover_trackers) == len(segments)
+        ):
+            current_trackers = current_hover_trackers
+            current_hover_trackers = []
+            transferred = True
+            if transfer_perf_key:
+                session._plan_perf_count(transfer_perf_key)
+        else:
+            clear_fn()
+            current_trackers = []
+            for _start, _end in segments:
+                tracker = session._make_plan_line_tracker(
+                    DraftTrackers,
+                    label,
+                    scolor=color,
+                    swidth=width,
+                    ontop=True,
+                )
+                current_trackers.append(tracker)
+    for tracker, (start, end) in zip(current_trackers, segments):
+        session._set_plan_line_tracker_width(tracker, width)
+        tracker.setColor(color)
+        if not transferred:
+            tracker.p1(start)
+            tracker.p2(end)
+            tracker.on()
+    return current_trackers, current_hover_trackers, transferred

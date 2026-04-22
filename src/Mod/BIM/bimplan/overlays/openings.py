@@ -5,6 +5,8 @@
 import FreeCAD
 import FreeCADGui
 
+from . import manager as overlay_manager
+
 
 def get_opening_handle_markers(session, marker_size=None):
     from draftutils import params
@@ -209,36 +211,24 @@ def sync_selected_opening_overlay(session):
             return
         segments = session._get_opening_overlay_segments(opening)
         session._plan_perf_count("selected_opening_overlay_segments", len(segments))
-        transferred_trackers = False
-        if len(session._opening_overlay_trackers) != len(segments):
-            if (
-                not session._opening_overlay_trackers
-                and session.hovered_opening == opening
-                and len(session._opening_hover_trackers) == len(segments)
-            ):
-                session._opening_overlay_trackers = session._opening_hover_trackers
-                session._opening_hover_trackers = []
-                session._hovered_opening_overlay_render_state = None
-                transferred_trackers = True
-                session._plan_perf_count("selected_opening_overlay_tracker_transfers")
-            else:
-                session._clear_selected_opening_overlay()
-                for _start, _end in segments:
-                    tracker = session._make_plan_line_tracker(
-                        DraftTrackers,
-                        "selected-opening-overlay:{}".format(getattr(opening, "Name", "unknown")),
-                        scolor=color,
-                        swidth=width,
-                        ontop=True,
-                    )
-                    session._opening_overlay_trackers.append(tracker)
-        for tracker, (start, end) in zip(session._opening_overlay_trackers, segments):
-            session._set_plan_line_tracker_width(tracker, width)
-            tracker.setColor(color)
-            if not transferred_trackers:
-                tracker.p1(start)
-                tracker.p2(end)
-                tracker.on()
+        (
+            session._opening_overlay_trackers,
+            session._opening_hover_trackers,
+            transferred_trackers,
+        ) = overlay_manager.sync_segment_overlay_trackers(
+            session,
+            DraftTrackers,
+            trackers=session._opening_overlay_trackers,
+            hover_trackers=session._opening_hover_trackers,
+            segments=segments,
+            label="selected-opening-overlay:{}".format(getattr(opening, "Name", "unknown")),
+            color=color,
+            width=width,
+            clear_fn=session._clear_selected_opening_overlay,
+            transfer_perf_key="selected_opening_overlay_tracker_transfers",
+        )
+        if transferred_trackers:
+            session._hovered_opening_overlay_render_state = None
         session._selected_opening_overlay_render_state = render_state
         session._selected_opening_overlay_dirty = False
 
