@@ -224,6 +224,7 @@ SET(bimplan_SRCS
     bimplan/overlays/walls.py
     bimplan/performance.py
     bimplan/picking.py
+    bimplan/provider_edit.py
     bimplan/provider_runtime.py
     bimplan/provider_targets.py
     bimplan/providers.py

@@ -180,6 +180,106 @@ def clear_selected_provider_overlay(session):
     session._selected_provider_overlay_render_state = None
 
 
+def get_selected_provider_handle_specs(session, provider_obj):
+    try:
+        from draftutils import params
+    except ImportError:
+        return []
+    if not session._is_selected_plan_target("provider", provider_obj):
+        return []
+    marker_size = session._scaled_marker_size(params.get_param_view("MarkerSize"))
+    specs = []
+    for idx, handle in enumerate(session._get_selected_provider_edit_handles(provider_obj)):
+        point = _to_vector(getattr(handle, "point", None))
+        if point is None:
+            continue
+        marker = _get_provider_handle_marker(getattr(handle, "marker_kind", None), marker_size)
+        specs.append((idx, handle, point, marker))
+    return specs
+
+
+def sync_selected_provider_handles(session):
+    with session._plan_perf_trace_span("sync_selected_provider_handles"):
+        provider_obj = session._get_selected_plan_target_object("provider")
+        if session.current_tool != "Select":
+            session._clear_selected_provider_handles()
+            return
+        if not session._is_plan_provider_target_object(provider_obj):
+            session._clear_selected_provider_handles()
+            return
+        specs = tuple(session._get_selected_provider_handle_specs(provider_obj))
+        render_state = (
+            session._get_document_object_key(provider_obj),
+            tuple(
+                (
+                    int(idx),
+                    str(getattr(handle, "key", "") or ""),
+                    round(float(point.x), 6),
+                    round(float(point.y), 6),
+                    round(float(point.z), 6),
+                    -1 if marker is None else int(marker),
+                )
+                for idx, handle, point, marker in specs
+            ),
+        )
+        if session._selected_provider_handle_render_state == render_state and len(
+            session._provider_handle_trackers
+        ) == len(specs):
+            session._plan_perf_count("selected_provider_handle_cache_hits")
+            return
+        try:
+            import draftguitools.gui_trackers as DraftTrackers
+        except ImportError:
+            session._clear_selected_provider_handles()
+            return
+        session._clear_selected_provider_handles()
+        for idx, _handle, point, marker in specs:
+            kwargs = dict(
+                pos=point,
+                idx=idx,
+                inactive=True,
+            )
+            if marker is not None:
+                kwargs["marker"] = marker
+            tracker = DraftTrackers.editTracker(**kwargs)
+            tracker.on()
+            session._provider_handle_trackers.append(tracker)
+        session._selected_provider_handle_render_state = render_state
+
+
+def clear_selected_provider_handles(session):
+    session._finalize_trackers(session._provider_handle_trackers)
+    session._provider_handle_trackers = []
+    session._selected_provider_handle_render_state = None
+
+
+def pick_selected_provider_handle(session, mouse_pos, radius_px=10):
+    provider_obj = session._get_selected_plan_target_object("provider")
+    if not session._is_plan_provider_target_object(provider_obj) or not session.view:
+        return None
+    try:
+        cursor_x = int(mouse_pos[0])
+        cursor_y = int(mouse_pos[1])
+    except Exception:
+        return None
+    best_index = None
+    best_distance_sq = None
+    for idx, _handle, point, _marker in session._get_selected_provider_handle_specs(provider_obj):
+        try:
+            screen_x, screen_y = session.view.getPointOnScreen(point)
+        except Exception:
+            continue
+        dx = float(screen_x) - float(cursor_x)
+        dy = float(screen_y) - float(cursor_y)
+        distance_sq = dx * dx + dy * dy
+        if distance_sq > radius_px * radius_px:
+            continue
+        if best_distance_sq is None or distance_sq < best_distance_sq:
+            best_index = idx
+            best_distance_sq = distance_sq
+    return best_index
+
+
 def sync_provider_point_preview(session):
     if session.current_tool != "Provider Point" or session._provider_point_preview_point is None:
         clear_provider_point_preview(session)
@@ -384,6 +484,25 @@ def _get_point_marker_segment_specs(
         dotted=dotted,
         marker_size=marker_size,
     )
+
+
+def _get_provider_handle_marker(marker_kind, marker_size):
+    try:
+        import FreeCADGui
+    except Exception:
+        return None
+    marker_name = {
+        PlanOverlayMarkerKind.CIRCLE: "CIRCLE_FILLED",
+        PlanOverlayMarkerKind.CIRCLE_CROSS: "CIRCLE_FILLED",
+        PlanOverlayMarkerKind.CROSS: "CROSS",
+        PlanOverlayMarkerKind.DIAMOND: "DIAMOND_FILLED",
+        PlanOverlayMarkerKind.HOURGLASS: "DIAMOND_FILLED",
+        PlanOverlayMarkerKind.SQUARE: "SQUARE_FILLED",
+    }.get(marker_kind, "DIAMOND_FILLED")
+    try:
+        return FreeCADGui.getMarkerIndex(marker_name, marker_size)
+    except Exception:
+        return None
 
 
 def _get_cross_marker_segment_specs(point, *, label, color, width, dotted, marker_size):

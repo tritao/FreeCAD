@@ -41,6 +41,7 @@ from bimplan import snap as plan_snap
 from bimplan import spaces as plan_spaces
 from bimplan import symbol_edit as plan_symbol_edit
 from bimplan import opening_edit as plan_opening_edit
+from bimplan import provider_edit as plan_provider_edit
 from bimplan import targets as plan_targets
 from bimplan import view as plan_view
 from bimplan import window_create as plan_window_create
@@ -309,6 +310,8 @@ class PlanEditSession:
         self._provider_overlay_trackers = []
         self._provider_overlay_state = None
         self._selected_provider_overlay_render_state = None
+        self._provider_handle_trackers = []
+        self._selected_provider_handle_render_state = None
         self._provider_overlay_visibility = {}
         self._provider_overlay_mode = _PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
         self._provider_selected_objects = []
@@ -381,6 +384,9 @@ class PlanEditSession:
         self._edit_symbol_handle_role = None
         self._edit_symbol_start_placement = None
         self._edit_symbol_reference_point = None
+        self._edit_provider = None
+        self._edit_provider_handle_index = None
+        self._edit_provider_handle = None
         self._edit_space = None
         self._ignore_selection_changes = False
         self._mouse_moved_cb = None
@@ -807,6 +813,9 @@ class PlanEditSession:
 
     def finish(self, cont=False, close_dialog=True, closed=False):
         del cont, closed
+        if self.current_tool == "Move Provider":
+            self._cancel_provider_handle_point_pick()
+            return True
         if self.current_tool in ("Move Symbol", "Rotate Symbol"):
             self._cancel_symbol_handle_point_pick()
             return True
@@ -850,6 +859,8 @@ class PlanEditSession:
         self._cancel_provider_point_tool(refresh=False)
         self._cancel_wall_edit(restore=False, refresh=False)
         self._cancel_pending_edit()
+        if self.current_tool == "Move Provider":
+            self._cancel_provider_handle_point_pick()
         if self.current_tool in ("Move Symbol", "Rotate Symbol"):
             self._cancel_symbol_handle_point_pick()
         if self.current_tool == "Set Space Text":
@@ -870,6 +881,7 @@ class PlanEditSession:
         self._clear_hovered_space_overlay()
         self._clear_hovered_region_overlay()
         self._clear_selected_provider_overlay()
+        self._clear_selected_provider_handles()
         self._clear_selected_opening_overlay()
         self._clear_selected_symbol_overlay()
         self._clear_selected_space_overlay()
@@ -2854,6 +2866,9 @@ class PlanEditSession:
     def _normalize_plan_provider_tool(self, provider_id, tool):
         return plan_provider_runtime.normalize_plan_provider_tool(provider_id, tool)
 
+    def _normalize_plan_provider_edit_handle(self, provider_id, handle):
+        return plan_provider_runtime.normalize_plan_provider_edit_handle(provider_id, handle)
+
     def _normalize_plan_provider_issue(self, provider_id, issue):
         return plan_provider_runtime.normalize_plan_provider_issue(self, provider_id, issue)
 
@@ -2914,6 +2929,9 @@ class PlanEditSession:
             "get_tools",
             self._normalize_plan_provider_tool,
         )
+
+    def get_plan_provider_edit_handles(self):
+        return plan_provider_runtime.get_plan_provider_edit_handles(self)
 
     def get_plan_provider_inspector_sections(self):
         return self._collect_plan_provider_contributions(
@@ -3589,6 +3607,8 @@ class PlanEditSession:
                 self._sync_hovered_provider_overlay()
             with self._plan_perf_trace_span("sync_selected_provider_overlay"):
                 self._sync_selected_provider_overlay()
+            with self._plan_perf_trace_span("sync_selected_provider_handles"):
+                self._sync_selected_provider_handles()
             with self._plan_perf_trace_span("sync_hovered_opening_overlay"):
                 self._sync_hovered_opening_overlay()
             with self._plan_perf_trace_span("sync_hovered_space_overlay"):
@@ -3673,6 +3693,7 @@ class PlanEditSession:
         self._sync_selected_opening_handles()
         self._sync_selected_space_overlay()
         self._sync_selected_provider_overlay()
+        self._sync_selected_provider_handles()
 
     def _cancel_join_tool(self, refresh=True):
         if self.current_tool != "Join":
@@ -3812,6 +3833,7 @@ class PlanEditSession:
         self._sync_selected_opening_handles()
         self._sync_selected_space_overlay()
         self._sync_selected_provider_overlay()
+        self._sync_selected_provider_handles()
         return True
 
     def _get_rect_wall_corners(self, point):
@@ -3977,6 +3999,7 @@ class PlanEditSession:
         self._sync_selected_region_overlay()
         self._sync_selected_space_overlay()
         self._sync_selected_provider_overlay()
+        self._sync_selected_provider_handles()
         return True
 
     def _get_plan_region_close_tolerance(self):
@@ -4132,6 +4155,7 @@ class PlanEditSession:
         self._sync_selected_opening_handles()
         self._sync_selected_space_overlay()
         self._sync_selected_provider_overlay()
+        self._sync_selected_provider_handles()
         return True
 
     def _update_space_separator_preview(self, point, info):
@@ -5349,6 +5373,20 @@ class PlanEditSession:
                 result=node,
             )
             return node
+        provider_handle_index = self._pick_selected_provider_handle(mouse_pos)
+        if provider_handle_index is not None:
+            node = (
+                "provider_handle",
+                self._get_selected_plan_target_object("provider"),
+                provider_handle_index,
+            )
+            self._plan_pick_debug_event(
+                "get_edit_node",
+                mouse_pos=mouse_pos,
+                source="selected_provider_handle",
+                result=node,
+            )
+            return node
         target_kind, target_obj = self._pick_provider_overlay_target_from_objects_info(mouse_pos)
         if target_obj is not None:
             node = ("provider_overlay_target", target_kind, target_obj)
@@ -5541,6 +5579,12 @@ class PlanEditSession:
                                 self._select_opening_for_plan_edit(obj)
                                 self._set_gui_selection_object(obj)
                                 self._activate_opening_handle(obj, index)
+                            elif node_kind == "provider_handle":
+                                _kind, obj, index = node
+                                self._set_selected_plan_target_state("provider", obj)
+                                self._clear_wall_grips()
+                                self._clear_selected_wall_overlay()
+                                self._activate_provider_handle(obj, index)
                             elif node_kind == "symbol_handle":
                                 _kind, obj, role = node
                                 self._set_selected_plan_target_state("symbol", obj)
@@ -5741,6 +5785,7 @@ class PlanEditSession:
             self._clear_hovered_region_overlay()
             self._clear_space_region_pick_overlays()
             self._clear_selected_provider_overlay()
+            self._clear_selected_provider_handles()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
             self._clear_selected_space_overlay()
@@ -5765,6 +5810,7 @@ class PlanEditSession:
             self._clear_hovered_region_overlay()
             self._clear_space_region_pick_overlays()
             self._clear_selected_provider_overlay()
+            self._clear_selected_provider_handles()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
             self._clear_selected_space_overlay()
@@ -5789,6 +5835,7 @@ class PlanEditSession:
             self._clear_hovered_region_overlay()
             self._clear_space_region_pick_overlays()
             self._clear_selected_provider_overlay()
+            self._clear_selected_provider_handles()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
             self._clear_selected_region_overlay()
@@ -5815,6 +5862,7 @@ class PlanEditSession:
             self._clear_hovered_space_overlay()
             self._clear_hovered_region_overlay()
             self._clear_selected_provider_overlay()
+            self._clear_selected_provider_handles()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
             self._clear_selected_space_overlay()
@@ -5845,6 +5893,7 @@ class PlanEditSession:
             self._clear_hovered_region_overlay()
             self._clear_space_region_pick_overlays()
             self._clear_selected_provider_overlay()
+            self._clear_selected_provider_handles()
             self._clear_selected_opening_overlay()
             self._clear_selected_symbol_overlay()
             self._clear_selected_space_overlay()
@@ -5922,6 +5971,7 @@ class PlanEditSession:
                 self._sync_provider_overlays()
             if provider_overlays_dirty or refresh_all or _PLAN_VISUAL_SELECTED_PROVIDER in dirty:
                 self._sync_selected_provider_overlay()
+                self._sync_selected_provider_handles()
             self._clear_provider_point_preview()
             return
 
@@ -5976,6 +6026,9 @@ class PlanEditSession:
         if self.current_tool == "Provider Point" and key == coin.SoKeyboardEvent.ESCAPE:
             self._cancel_provider_point_tool()
             return
+        if self.current_tool == "Move Provider" and key == coin.SoKeyboardEvent.ESCAPE:
+            self._cancel_provider_handle_point_pick()
+            return
         if self.current_tool == "Window" and key == coin.SoKeyboardEvent.ESCAPE:
             self._cancel_window_tool()
             return
@@ -6004,6 +6057,9 @@ class PlanEditSession:
             return
         if self.current_tool == "Move Opening":
             self._cancel_opening_handle_point_pick()
+            return
+        if self.current_tool == "Move Provider":
+            self._cancel_provider_handle_point_pick()
             return
         if self.current_tool in ("Move Symbol", "Rotate Symbol"):
             self._cancel_symbol_handle_point_pick()
@@ -7067,6 +7123,15 @@ class PlanEditSession:
             action = translate("BIM_PlanEdit", "Click target point")
             return title, "{}\n{}".format(context, action)
 
+        if self.current_tool == "Move Provider":
+            context = (
+                selected_context
+                if selected_kind == "provider" and selected_obj is not None
+                else translate("BIM_PlanEdit", "Integration move")
+            )
+            action = translate("BIM_PlanEdit", "Click target point")
+            return title, "{}\n{}".format(context, action)
+
         if self.current_tool == "Rotate Symbol":
             context = (
                 selected_context
@@ -7242,9 +7307,19 @@ class PlanEditSession:
                     additive_hint,
                 )
             if selected_kind == "provider":
+                provider_handles = tuple(
+                    self._get_selected_provider_edit_handles(_selected_obj) or ()
+                )
                 return (
                     (
-                        translate("BIM_PlanEdit", "%1 select another integration target"),
+                        translate(
+                            "BIM_PlanEdit",
+                            (
+                                "%1 pick integration handle"
+                                if provider_handles
+                                else "%1 select another integration target"
+                            ),
+                        ),
                         ui.MouseLeft,
                     ),
                     additive_hint,
@@ -7310,6 +7385,18 @@ class PlanEditSession:
                     translate("BIM_PlanEdit", "%1 place point for {tool}").format(
                         tool=self._get_provider_point_tool_label()
                     ),
+                    ui.MouseLeft,
+                ),
+                (
+                    translate("BIM_PlanEdit", "%1 cancel"),
+                    ui.KeyEscape,
+                ),
+            )
+
+        if self.current_tool == "Move Provider":
+            return (
+                (
+                    translate("BIM_PlanEdit", "%1 place target"),
                     ui.MouseLeft,
                 ),
                 (
@@ -7866,6 +7953,7 @@ class PlanEditSession:
     ):
         validators = {
             "opening": self._is_hosted_opening_object,
+            "provider": self._is_plan_provider_target_object,
             "symbol": self._is_plan_symbol_instance,
             "region": self._is_plan_region_object,
             "space": self._is_plan_space_object,
@@ -7910,6 +7998,9 @@ class PlanEditSession:
             self._sync_selected_region_overlay()
         if self._selected_plan_target_changed(previous_kind, previous_obj, "space"):
             self._sync_selected_space_overlay()
+        if self._selected_plan_target_changed(previous_kind, previous_obj, "provider"):
+            self._sync_selected_provider_overlay()
+            self._sync_selected_provider_handles()
         self._sync_secondary_selected_overlays()
         self._refresh_task_panel_status(selection_only=self.current_tool == "Select")
         if queue_restore:
@@ -8498,6 +8589,22 @@ class PlanEditSession:
     def _clear_selected_provider_overlay(self):
         return provider_overlays.clear_selected_provider_overlay(self)
 
+    def _get_selected_provider_handle_specs(self, provider_obj):
+        return provider_overlays.get_selected_provider_handle_specs(self, provider_obj)
+
+    def _sync_selected_provider_handles(self):
+        return provider_overlays.sync_selected_provider_handles(self)
+
+    def _clear_selected_provider_handles(self):
+        return provider_overlays.clear_selected_provider_handles(self)
+
+    def _pick_selected_provider_handle(self, mouse_pos, radius_px=10):
+        return provider_overlays.pick_selected_provider_handle(
+            self,
+            mouse_pos,
+            radius_px=radius_px,
+        )
+
     def _sync_provider_point_preview(self):
         return provider_overlays.sync_provider_point_preview(self)
 
@@ -8672,6 +8779,45 @@ class PlanEditSession:
     def _clear_symbol_edit_preview(self):
         return symbol_overlays.clear_symbol_edit_preview(self)
 
+    def _get_selected_provider_edit_handles(self, provider_obj):
+        return plan_provider_edit.get_selected_provider_edit_handles(self, provider_obj)
+
+    def _can_move_provider_target_by_placement(self, provider_obj):
+        return plan_provider_edit.can_move_provider_target_by_placement(self, provider_obj)
+
+    def _activate_provider_handle(self, provider_obj, handle_index):
+        return plan_provider_edit.activate_provider_handle(self, provider_obj, handle_index)
+
+    def _activate_provider_handle_now(self, provider_obj, handle_index):
+        return plan_provider_edit.activate_provider_handle_now(self, provider_obj, handle_index)
+
+    def _start_provider_handle_point_pick(self, provider_obj, handle_index, handle):
+        return plan_provider_edit.start_provider_handle_point_pick(
+            self,
+            provider_obj,
+            handle_index,
+            handle,
+        )
+
+    def _update_provider_handle_point_pick(self, point=None, snap_info=None):
+        return plan_provider_edit.update_provider_handle_point_pick(
+            self,
+            point=point,
+            snap_info=snap_info,
+        )
+
+    def _finish_provider_handle_point_pick(self, point=None, obj=None):
+        return plan_provider_edit.finish_provider_handle_point_pick(self, point=point, obj=obj)
+
+    def _cancel_provider_handle_point_pick(self):
+        return plan_provider_edit.cancel_provider_handle_point_pick(self)
+
+    def _restore_selected_provider(self, provider_obj):
+        return plan_provider_edit.restore_selected_provider(self, provider_obj)
+
+    def _queue_restore_selected_provider(self, provider_obj):
+        return plan_provider_edit.queue_restore_selected_provider(self, provider_obj)
+
     def _get_symbol_handle_placement(self, symbol, handle_role, point):
         return plan_symbol_edit.get_symbol_handle_placement(self, symbol, handle_role, point)
 
@@ -8809,6 +8955,7 @@ class PlanEditSession:
                 self._sync_selected_space_overlay()
             with self._plan_perf_trace_span("clear_plan_selection_provider_overlay"):
                 self._sync_selected_provider_overlay()
+                self._sync_selected_provider_handles()
             with self._plan_perf_trace_span("clear_plan_selection_task_status"):
                 self._refresh_task_panel_status(selection_only=self.current_tool == "Select")
             selected_kind, selected_obj = self._get_selected_plan_target()
