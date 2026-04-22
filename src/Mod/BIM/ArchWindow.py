@@ -1480,10 +1480,10 @@ class _HostedOpeningPlanGeometry:
 
         hosts = getattr(self.Object, "Hosts", None) or []
         if hosts:
-            # Prefer the base profile for interactive plan geometry. It avoids
-            # rebuilding transient section topology from the host cut volume on
-            # every query while still preserving the opening width and host
-            # thickness through the host-aligned frame computed downstream.
+            # Prefer the base profile for interactive plan geometry. Hosted
+            # openings often keep their authored base wire in the same local
+            # frame used for plan editing, even when the host itself is moved
+            # or rotated in world space.
             profile = self._get_base_opening_profile(base_z)
             if profile is not None:
                 return profile
@@ -1491,13 +1491,21 @@ class _HostedOpeningPlanGeometry:
             profile = self._get_hosted_subvolume_section_profile(cut_z)
             if profile is not None:
                 return profile
-
         if shape and not shape.isNull():
             profile = self._get_opening_section_profile(shape, cut_z)
             if profile is not None:
                 return profile
 
         return self._get_base_opening_profile(base_z)
+
+    def _host_plan_vectors_align(self, first, second, tolerance=1e-6):
+        first = FreeCAD.Vector(first.x, first.y, 0)
+        second = FreeCAD.Vector(second.x, second.y, 0)
+        if first.Length <= tolerance or second.Length <= tolerance:
+            return False
+        first.normalize()
+        second.normalize()
+        return abs(abs(first.dot(second)) - 1.0) <= tolerance
 
     def _get_host_plan_basis_from_endpoints(self):
         """Return a stable host-wall basis anchored at the wall start point."""
@@ -1545,9 +1553,20 @@ class _HostedOpeningPlanGeometry:
             .add(FreeCAD.Vector(source_profile["axis_u"]).multiply(source_center_u))
             .add(FreeCAD.Vector(source_profile["axis_v"]).multiply(source_center_v))
         )
-        center_delta = source_center.sub(origin)
-        center_u = center_delta.dot(axis_u)
-        center_v = center_delta.dot(axis_v)
+        source_axis_u = FreeCAD.Vector(source_profile["axis_u"])
+        source_axis_v = FreeCAD.Vector(source_profile["axis_v"])
+        if self._host_plan_vectors_align(source_axis_u, axis_u) and self._host_plan_vectors_align(
+            source_axis_v, axis_v
+        ):
+            center_delta = source_center.sub(origin)
+            center_u = center_delta.dot(axis_u)
+            center_v = center_delta.dot(axis_v)
+        else:
+            # Some hosted bases stay in the local wall XY frame even after the
+            # host rotates in world space. Treat those coordinates as host-local
+            # instead of projecting them as if they were already global.
+            center_u = source_center.x
+            center_v = source_center.y
 
         half_width_u = max(source_profile["umax"] - source_profile["umin"], 0.0) * 0.5
         half_width_v = max(source_profile["vmax"] - source_profile["vmin"], 0.0) * 0.5
@@ -1556,11 +1575,16 @@ class _HostedOpeningPlanGeometry:
         source_vmin = center_v - half_width_v
         source_vmax = center_v + half_width_v
 
-        host_v_bounds = self._get_host_plan_v_bounds_from_thickness(center_v)
+        host_v_bounds = self._get_host_plan_v_bounds(origin, axis_u, axis_v)
         if host_v_bounds is None:
-            host_v_bounds = self._get_host_plan_v_bounds(origin, axis_u, axis_v)
+            host_v_bounds = self._get_host_plan_v_bounds_from_thickness(center_v)
         if host_v_bounds is not None:
             vmin, vmax = host_v_bounds
+            host_span_v = max(vmax - vmin, 0.0)
+            source_span_v = max(source_vmax - source_vmin, 0.0)
+            if host_span_v > 0.0 and source_span_v + 1e-6 >= host_span_v:
+                source_vmin = vmin
+                source_vmax = vmax
         else:
             vmin = source_vmin
             vmax = source_vmax
@@ -2879,6 +2903,23 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             if polyline
         ]
 
+    def _get_door_symbol_v_bounds(self, section_profile):
+        if not section_profile:
+            return 0.0, 0.0
+
+        source_vmin = section_profile.get("source_vmin")
+        source_vmax = section_profile.get("source_vmax")
+        if source_vmin is not None and source_vmax is not None:
+            source_vmin = float(source_vmin)
+            source_vmax = float(source_vmax)
+            if source_vmax > source_vmin:
+                return source_vmin, source_vmax
+
+        return (
+            float(section_profile.get("vmin", 0.0)),
+            float(section_profile.get("vmax", 0.0)),
+        )
+
     def _get_symbol_footprint_polylines(self, section_profile, base_z):
         if not section_profile:
             return []
@@ -2891,22 +2932,15 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
         vmin = section_profile["vmin"]
         vmax = section_profile["vmax"]
         width_u = max(umax - umin, 0.0)
-        width_v = max(vmax - vmin, 0.0)
         if width_u <= 0.0:
             return []
 
-        symbol_inset = min(width_v * 0.25, 30.0)
-        symbol_vmin = vmin + symbol_inset
-        symbol_vmax = vmax - symbol_inset
-        if symbol_vmax <= symbol_vmin:
-            symbol_vmin = vmin
-            symbol_vmax = vmax
-
         if self._get_effective_opening_kind() == "Door":
+            door_vmin, door_vmax = self._get_door_symbol_v_bounds(section_profile)
             hinge_at_min, swing_sign = self._get_door_symbol_style()
             hinge_u = umin if hinge_at_min else umax
             closed_u = umax if hinge_at_min else umin
-            hinge_v = symbol_vmin if swing_sign < 0 else symbol_vmax
+            hinge_v = door_vmin if swing_sign < 0 else door_vmax
             closed_v = hinge_v
             swing_v = hinge_v + (swing_sign * width_u)
 
@@ -2934,6 +2968,14 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
             return self._clamp_symbol_polylines_u(
                 [closed_leaf, leaf, arc], origin, axis_u, axis_v, umin, umax
             )
+
+        width_v = max(vmax - vmin, 0.0)
+        symbol_inset = min(width_v * 0.25, 30.0)
+        symbol_vmin = vmin + symbol_inset
+        symbol_vmax = vmax - symbol_inset
+        if symbol_vmax <= symbol_vmin:
+            symbol_vmin = vmin
+            symbol_vmax = vmax
 
         center_u = (umin + umax) * 0.5
         offset = min(width_u * 0.2, 60.0)
@@ -3106,10 +3148,11 @@ class _ViewProviderWindow(ArchComponent.ViewProviderComponent):
 
         capabilities = self._get_plan_edit_capabilities()
         if capabilities["can_flip_opening"]:
+            door_vmin, door_vmax = self._get_door_symbol_v_bounds(section_profile)
             hinge_at_min, swing_sign = self._get_door_symbol_style()
             hinge_u = umin if hinge_at_min else umax
-            hinge_v = symbol_vmin if swing_sign < 0 else symbol_vmax
-            flip_open_v = symbol_vmax if swing_sign < 0 else symbol_vmin
+            hinge_v = door_vmin if swing_sign < 0 else door_vmax
+            flip_open_v = door_vmax if swing_sign < 0 else door_vmin
             flip_open = origin.add(FreeCAD.Vector(axis_u).multiply(mid_u)).add(
                 FreeCAD.Vector(axis_v).multiply(flip_open_v)
             )

@@ -410,18 +410,62 @@ class TestArchFootprintGui(TestArchBaseGui.TestArchBaseGui):
         cut_z, base_z = proxy._get_footprint_cut_context()
         profile = proxy._get_hosted_opening_plan_frame(door.Shape, cut_z, base_z)
         self.assertIsNotNone(profile)
+        hinge = polylines[0][0]
+        hinge_v = hinge.sub(profile["origin"]).dot(profile["axis_v"])
+        _hinge_at_min, swing_sign = proxy._get_door_symbol_style()
+        source_vmin = float(profile.get("source_vmin", profile["vmin"]))
+        source_vmax = float(profile.get("source_vmax", profile["vmax"]))
+        expected_hinge_v = source_vmin if swing_sign < 0 else source_vmax
+        self.assertAlmostEqual(hinge_v, expected_hinge_v, delta=1e-6)
+
+    def test_rotated_wall_door_footprint_stays_in_host_frame(self):
+        """Hosted door symbols should use the real host frame on rotated walls."""
+
+        previous_cut_height = params.get_param_arch("FootprintCutHeight")
+        params.set_param_arch("FootprintCutHeight", 1000.0)
+        self.addCleanup(params.set_param_arch, "FootprintCutHeight", previous_cut_height)
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        wall.Placement.Base = FreeCAD.Vector(1200, 800, 0)
+        wall.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), 35)
+        self.document.recompute()
+
+        door = self._make_hosted_door(
+            wall,
+            "RotatedFootprintDoor",
+            x_start=900,
+            z_start=0,
+            width=900.0,
+            height=2100.0,
+        )
+        self.pump_gui_events()
+
+        proxy = door.ViewObject.Proxy
+        polylines = self._get_line_polylines(proxy)
+        self.assertEqual(len(polylines), 3)
+
+        cut_z, base_z = proxy._get_footprint_cut_context()
+        profile = proxy._get_hosted_opening_plan_frame(door.Shape, cut_z, base_z)
+        self.assertIsNotNone(profile)
+
         host_bounds = proxy._get_host_plan_v_bounds(
             profile["origin"], profile["axis_u"], profile["axis_v"]
         )
         self.assertIsNotNone(host_bounds)
         host_vmin, host_vmax = host_bounds
+        self.assertAlmostEqual(float(profile["vmin"]), host_vmin, delta=1e-6)
+        self.assertAlmostEqual(float(profile["vmax"]), host_vmax, delta=1e-6)
+
+        source_vmin = float(profile.get("source_vmin", profile["vmin"]))
+        source_vmax = float(profile.get("source_vmax", profile["vmax"]))
+        self.assertGreaterEqual(source_vmin, host_vmin - 1e-6)
+        self.assertLessEqual(source_vmax, host_vmax + 1e-6)
+
         hinge = polylines[0][0]
         hinge_v = hinge.sub(profile["origin"]).dot(profile["axis_v"])
-        thickness = host_vmax - host_vmin
-        expected_inset = min(thickness * 0.25, 30.0)
-        self.assertGreater(hinge_v, host_vmin)
-        self.assertLess(hinge_v, host_vmax)
-        self.assertAlmostEqual(hinge_v - host_vmin, expected_inset, delta=1e-6)
+        _hinge_at_min, swing_sign = proxy._get_door_symbol_style()
+        expected_hinge_v = source_vmin if swing_sign < 0 else source_vmax
+        self.assertAlmostEqual(hinge_v, expected_hinge_v, delta=1e-4)
 
     def test_legacy_opening_element_door_populates_for_cut_opening(self):
         """Legacy hosted openings with door-like WindowParts should still render as doors."""
