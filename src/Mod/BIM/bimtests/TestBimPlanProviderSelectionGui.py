@@ -30,7 +30,12 @@ import FreeCADGui
 from bimcommands import BimPlanSession
 from bimplan import selection as plan_selection
 from bimplan import targets as plan_targets
-from bimplan.providers import PlanProviderTargetSpec
+from bimplan.providers import (
+    PlanOverlaySpec,
+    PlanOverlayTargetKind,
+    PlanOverlayTargetSpec,
+    PlanProviderTargetSpec,
+)
 from bimtests.ArchWallGuiTestUtils import ArchWallGuiTestCase
 from unittest.mock import patch
 
@@ -47,6 +52,23 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             semantic_object_name=obj.Name,
             category=category,
             role=role,
+        )
+
+    def _make_provider_overlay_spec(self, obj, category="electrical"):
+        point = FreeCAD.Vector(getattr(getattr(obj, "Placement", None), "Base", FreeCAD.Vector()))
+        return PlanOverlaySpec(
+            key="{}-overlay-{}".format(category, obj.Name),
+            label=obj.Label,
+            provider_id="test-provider-{}".format(category),
+            category=category,
+            points=((point.x, point.y, point.z),),
+            point_targets=(
+                PlanOverlayTargetSpec(
+                    document_name=self.document.Name,
+                    object_name=obj.Name,
+                    target_kind=PlanOverlayTargetKind.PROVIDER,
+                ),
+            ),
         )
 
     def test_plan_edit_hidden_provider_target_is_excluded_from_pick_resolution(self):
@@ -214,6 +236,45 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
                 ("provider", marker),
                 plan_targets.get_plan_pick_target_for_object(session, marker),
             )
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_selected_provider_target_shows_selection_overlay(self):
+        """Selected provider targets should render a distinct selection overlay."""
+
+        marker = Draft.makePoint(FreeCAD.Vector(100, 200, 0))
+        marker.Label = "Electrical Marker"
+        self.document.recompute()
+        FreeCADGui.Selection.clearSelection()
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        with (
+            patch.object(
+                session,
+                "get_plan_provider_targets",
+                return_value=(self._make_provider_target_spec(marker),),
+            ),
+            patch.object(
+                session,
+                "get_plan_provider_overlays",
+                return_value=(self._make_provider_overlay_spec(marker),),
+            ),
+        ):
+            self.assertTrue(session.set_plan_provider_overlay_mode("electrical"))
+            session._sync_provider_overlays()
+            self.assertGreater(len(session._provider_overlay_trackers), 0)
+
+            session._set_gui_selection_object(marker)
+            session._refresh_primary_selected_plan_target()
+            self.pump_gui_events()
+
+            self.assertEqual(("provider", marker), session._get_selected_plan_target())
+            self.assertGreater(len(session._provider_selected_trackers), 0)
+            self.assertEqual([], session._provider_hover_trackers)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
