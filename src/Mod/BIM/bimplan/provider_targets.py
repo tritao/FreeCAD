@@ -122,11 +122,30 @@ def format_plan_provider_target_help(session, obj) -> str:
     if not is_plan_provider_target_object(session, obj):
         return ""
     role = get_plan_provider_target_role_key(session, obj).replace("_", " ").lower()
+    get_handles = getattr(session, "_get_selected_provider_edit_handles", None)
+    has_handles = False
+    if callable(get_handles) and getattr(session, "_is_selected_plan_target", None):
+        try:
+            has_handles = bool(session._is_selected_plan_target("provider", obj)) and bool(
+                tuple(get_handles(obj) or ())
+            )
+        except Exception:
+            has_handles = False
     if role:
+        if has_handles:
+            return translate(
+                "BIM_PlanEdit",
+                "Use in-view handles or the integration details below for the selected {role}.",
+            ).format(role=role)
         return translate(
             "BIM_PlanEdit",
             "Use the integration details and actions below for the selected {role}.",
         ).format(role=role)
+    if has_handles:
+        return translate(
+            "BIM_PlanEdit",
+            "Use in-view handles or the integration details below for the selected object.",
+        )
     return translate(
         "BIM_PlanEdit",
         "Use the integration details and actions below for the selected object.",
