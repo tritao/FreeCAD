@@ -2977,19 +2977,16 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         proxy = getattr(door.ViewObject, "Proxy", None)
         self.assertIsNotNone(proxy)
-        polylines = list(proxy.get_plan_overlay_polylines() or [])
-        self.assertTrue(polylines)
-        self.assertGreaterEqual(len(polylines[0]), 2)
+        projected_polylines = list(session._get_opening_overlay_screen_polylines(door) or [])
+        self.assertTrue(projected_polylines)
+        self.assertGreaterEqual(len(projected_polylines[0]), 2)
 
-        start = polylines[0][0]
-        end = polylines[0][1]
-        mid = FreeCAD.Vector(
-            (start.x + end.x) * 0.5,
-            (start.y + end.y) * 0.5,
-            (start.z + end.z) * 0.5,
+        start = projected_polylines[0][0]
+        end = projected_polylines[0][1]
+        mouse_pos = (
+            int((float(start[0]) + float(end[0])) * 0.5),
+            int((float(start[1]) + float(end[1])) * 0.5),
         )
-        screen_pos = session.view.getPointOnScreen(mid)
-        mouse_pos = (int(screen_pos[0]), int(screen_pos[1]))
 
         move = self._make_fake_mouse_move_event(*mouse_pos)
         session._on_mouse_moved(move)
@@ -3020,6 +3017,52 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(len(session._grip_trackers), 0)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertEqual(len(session._opening_handle_trackers), 3)
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+    def test_plan_edit_opening_overlay_geometry_separates_symbol_and_guides(self):
+        """Hovered openings should render only symbol geometry while selection keeps guides."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="OverlayGeometryDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        proxy = getattr(door.ViewObject, "Proxy", None)
+        self.assertIsNotNone(proxy)
+
+        overlay_geometry = proxy.get_plan_overlay_geometry()
+        symbol_polylines = tuple(overlay_geometry.get("symbol_polylines", ()))
+        guide_polylines = tuple(overlay_geometry.get("guide_polylines", ()))
+        self.assertEqual(len(symbol_polylines), 3)
+        self.assertEqual(len(guide_polylines), 1)
+
+        symbol_segments = sum(max(len(polyline) - 1, 0) for polyline in symbol_polylines)
+        combined_segments = sum(
+            max(len(polyline) - 1, 0)
+            for polyline in tuple(proxy.get_plan_overlay_polylines() or ())
+        )
+        self.assertEqual(combined_segments, symbol_segments + 1)
+
+        session._set_hovered_opening(door)
+        self.pump_gui_events()
+        self.assertEqual(len(session._opening_hover_trackers), symbol_segments)
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
+        self.pump_gui_events()
+        session._refresh_primary_selected_plan_target()
+        self.assertEqual(len(session._opening_overlay_trackers), combined_segments)
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
