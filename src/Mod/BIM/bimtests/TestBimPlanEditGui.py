@@ -1355,6 +1355,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         main_window = FreeCADGui.getMainWindow()
         self.assertIsNone(main_window.findChild(QtGui.QWidget, "BIMPlanEditContextControls"))
+        watcher_context = main_window.findChild(QtGui.QWidget, "TaskWatcherContextPanel")
+        self.assertIsNotNone(watcher_context)
+        self.assertTrue(watcher_context.isVisible())
 
         session = BimPlanSession.start_session()
         self.assertIsNotNone(session)
@@ -1363,11 +1366,15 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         context_controls = main_window.findChild(QtGui.QWidget, "BIMPlanEditContextControls")
         self.assertIsNotNone(context_controls)
         self.assertTrue(context_controls.isVisible())
+        self.assertFalse(watcher_context.isVisible())
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events(timeout_ms=400)
 
         self.assertIsNone(main_window.findChild(QtGui.QWidget, "BIMPlanEditContextControls"))
+        watcher_context = main_window.findChild(QtGui.QWidget, "TaskWatcherContextPanel")
+        self.assertIsNotNone(watcher_context)
+        self.assertTrue(watcher_context.isVisible())
 
     def test_plan_edit_disables_external_command_actions(self):
         """External commands should not stay available while Plan Edit owns interaction."""
