@@ -2,13 +2,11 @@
 
 """Selection state helpers for BIM Plan Edit."""
 
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 
 import FreeCADGui
 from bimplan.providers import runtime as plan_provider_runtime
-from . import selection_additive as plan_selection_additive
-from . import selection_observer as plan_selection_observer
 from . import target_dispatch as plan_target_dispatch
 from . import target_kinds as plan_target_kinds
 
@@ -58,7 +56,15 @@ def _call_legacy_selection_method(session, method_name, *args):
 
 
 def clear_hidden_provider_preselection(session):
-    return plan_selection_observer.clear_hidden_provider_preselection(session)
+    if session._tearing_down:
+        return False
+    preselected_obj = _get_gui_preselection_object(session)
+    if preselected_obj is None:
+        return False
+    if not _should_filter_hidden_provider_preselection_for_object(session, preselected_obj):
+        return False
+    session._plan_perf_count("provider_preselection_cleared_for_mode")
+    return _clear_gui_preselection()
 
 
 def resolve_selected_target_for_gui_object(
@@ -70,22 +76,44 @@ def resolve_selected_target_for_gui_object(
     preserved_kind=None,
     preserved_target=None,
 ):
-    return plan_selection_observer.resolve_selected_target_for_gui_object(
+    if selected is None:
+        return (None, None)
+    if selected == pending_target and session._is_valid_plan_target(pending_kind, pending_target):
+        return (pending_kind, pending_target)
+    if _should_preserve_provider_selected_target(
         session,
+        preserved_kind,
+        preserved_target,
         selected,
-        pending_kind=pending_kind,
-        pending_target=pending_target,
-        preserved_kind=preserved_kind,
-        preserved_target=preserved_target,
-    )
+    ):
+        return (preserved_kind, preserved_target)
+    return session._get_plan_target_for_object(selected)
 
 
 def _get_gui_preselection_object(session):
-    return plan_selection_observer._get_gui_preselection_object(session)
+    try:
+        preselection = FreeCADGui.Selection.getPreselection()
+    except Exception:
+        return None
+    try:
+        obj = getattr(preselection, "Object", None)
+    except Exception:
+        obj = None
+    if obj is not None:
+        return obj
+    return _resolve_document_object(
+        session,
+        getattr(preselection, "DocumentName", ""),
+        getattr(preselection, "ObjectName", ""),
+    )
 
 
 def _clear_gui_preselection():
-    return plan_selection_observer._clear_gui_preselection()
+    try:
+        FreeCADGui.Selection.clearPreselection()
+        return True
+    except Exception:
+        return False
 
 
 def _choose_primary_selected_target(selected_targets, pending_kind=None, pending_target=None):
@@ -169,15 +197,13 @@ def _collect_selected_targets_from_gui_selection(session, selection, previous_ki
     )
     with provider_refresh_scope:
         for selected in selection:
-            target_kind, target_obj = (
-                plan_selection_observer.resolve_selected_target_for_gui_object(
-                    session,
-                    selected,
-                    pending_kind=pending_kind,
-                    pending_target=pending_target,
-                    preserved_kind=preserved_kind,
-                    preserved_target=preserved_target,
-                )
+            target_kind, target_obj = resolve_selected_target_for_gui_object(
+                session,
+                selected,
+                pending_kind=pending_kind,
+                pending_target=pending_target,
+                preserved_kind=preserved_kind,
+                preserved_target=preserved_target,
             )
             if target_kind:
                 selected_targets.append((target_kind, target_obj))
@@ -515,7 +541,20 @@ def normalize_gui_object_selection(session, selection):
         if selection_api is not None:
             return selection_api.normalize_gui_object_selection(selection)
     del session
-    return plan_selection_additive.normalize_gui_object_selection(selection)
+    normalized_selection = []
+    seen = set()
+    for selected in selection or ():
+        if not selected:
+            continue
+        key = (
+            getattr(getattr(selected, "Document", None), "Name", None),
+            getattr(selected, "Name", None),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized_selection.append(selected)
+    return normalized_selection
 
 
 def get_plan_target_object_from_state(state_kind, state_obj, kind):
@@ -1098,3 +1137,395 @@ def clear_plan_selection_state(session):
             ),
             clear_selection_cleared_wall=bool(previous_kind == "wall" and not selected_kind),
         )
+
+
+def is_plan_additive_selection_active(session):
+    if session.current_tool != "Select":
+        return False
+    try:
+        from PySide import QtCore, QtGui
+
+        modifiers = QtGui.QApplication.keyboardModifiers()
+        return bool(modifiers & QtCore.Qt.ControlModifier)
+    except Exception:
+        return False
+
+
+def activate_provider_overlay_target_node(session, node, event_callback=None):
+    target_kind, target_obj = session._get_provider_overlay_target_from_edit_node(node)
+    if target_obj is None:
+        return False
+    if session._is_valid_plan_target(target_kind, target_obj):
+        session._provider_selected_objects = []
+        session._set_pending_selected_plan_target(target_kind, target_obj)
+    else:
+        session._provider_selected_objects = [target_obj]
+        session._set_pending_selected_plan_target()
+    plan_target_dispatch.clear_hovered_targets(session)
+    session._set_gui_selection_object(target_obj)
+    session._refresh_primary_selected_plan_target()
+    session._claim_left_button_click(event_callback)
+    return True
+
+
+def toggle_raw_plan_object_selection(session, obj, event_callback=None):
+    if obj is None:
+        return False
+
+    primary_kind, primary_obj = session.selection.get_selected_plan_target()
+    selection = session._get_gui_selection()
+    if primary_obj is not None and primary_obj not in selection:
+        selection = [primary_obj] + selection
+    selection = normalize_gui_object_selection(session, selection)
+
+    provider_selection = normalize_gui_object_selection(session, session._provider_selected_objects)
+    if obj in provider_selection:
+        provider_selection = [selected for selected in provider_selection if selected != obj]
+    else:
+        provider_selection.append(obj)
+    session._provider_selected_objects = normalize_gui_object_selection(session, provider_selection)
+    new_selection = normalize_gui_object_selection(
+        session,
+        [selected for selected in selection if session._get_plan_target_for_object(selected)[0]],
+    )
+
+    if primary_obj is not None and primary_obj in new_selection:
+        next_kind, next_obj = primary_kind, primary_obj
+    else:
+        next_kind, next_obj = session.selection.get_first_plan_target_from_selection(new_selection)
+
+    session._set_pending_selected_plan_target(next_kind, next_obj)
+    plan_target_dispatch.clear_hovered_targets(session)
+    session._set_gui_selection(new_selection)
+    session._refresh_primary_selected_plan_target()
+    session._claim_left_button_click(event_callback)
+    return True
+
+
+def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=None):
+    node = session._get_edit_node(mouse_pos)
+    if node and node[0] in ("provider_overlay_point", "provider_overlay_target"):
+        target_kind, target_obj = session._get_provider_overlay_target_from_edit_node(node)
+        if target_obj is not None and not session._is_valid_plan_target(
+            target_kind,
+            target_obj,
+        ):
+            return session._toggle_raw_plan_object_selection(target_obj, event_callback)
+    else:
+        target_kind, target_obj = session._get_plan_target_from_edit_node(node)
+    if target_kind is None:
+        target_kind, target_obj = session._get_plan_target_at_position(mouse_pos)
+    if not target_kind or not target_obj:
+        return False
+
+    primary_kind, primary_obj = session.selection.get_selected_plan_target()
+    selection = session._get_gui_selection()
+    if primary_obj is not None and primary_obj not in selection:
+        selection = [primary_obj] + selection
+
+    selection = normalize_gui_object_selection(session, selection)
+
+    was_selected = target_obj in selection
+    if was_selected:
+        new_selection = [selected for selected in selection if selected != target_obj]
+        if primary_obj == target_obj:
+            next_kind, next_obj = session.selection.get_first_plan_target_from_selection(
+                new_selection
+            )
+        elif primary_obj is not None and primary_obj in new_selection:
+            next_kind, next_obj = primary_kind, primary_obj
+        else:
+            next_kind, next_obj = session.selection.get_first_plan_target_from_selection(
+                new_selection
+            )
+    else:
+        new_selection = list(selection)
+        new_selection.append(target_obj)
+        if primary_obj is not None and primary_obj in new_selection and primary_obj != target_obj:
+            next_kind, next_obj = primary_kind, primary_obj
+        else:
+            next_kind, next_obj = target_kind, target_obj
+
+    session._set_pending_selected_plan_target(next_kind, next_obj)
+    plan_target_dispatch.clear_hovered_targets(session)
+    session._set_gui_selection(new_selection)
+    session._refresh_primary_selected_plan_target()
+    session._claim_left_button_click(event_callback)
+    return True
+
+
+@contextmanager
+def selection_changes_suppressed(session):
+    previous_ignore = session._ignore_selection_changes
+    session._ignore_selection_changes = True
+    try:
+        yield
+    finally:
+        session._ignore_selection_changes = previous_ignore
+
+
+def get_gui_selection_ex():
+    try:
+        return list(FreeCADGui.Selection.getSelectionEx() or [])
+    except (ReferenceError, RuntimeError):
+        return []
+
+
+def get_gui_selection():
+    try:
+        return list(FreeCADGui.Selection.getSelection() or [])
+    except (ReferenceError, RuntimeError):
+        return []
+
+
+def add_gui_selection_object(obj):
+    if not obj:
+        return
+    doc_name = getattr(getattr(obj, "Document", None), "Name", None)
+    obj_name = getattr(obj, "Name", None)
+    try:
+        if doc_name and obj_name:
+            FreeCADGui.Selection.addSelection(doc_name, obj_name)
+        else:
+            FreeCADGui.Selection.addSelection(obj)
+    except Exception:
+        if doc_name and obj_name:
+            try:
+                FreeCADGui.Selection.addSelection(obj)
+            except Exception:
+                pass
+
+
+def set_gui_selection(session, selection):
+    session._gui_selection_sync_queued = False
+    session._gui_selection_sync_generation += 1
+    session._queued_gui_selection_object = None
+    with session._plan_perf_trace_span("set_gui_selection"):
+        with session._selection_changes_suppressed():
+            try:
+                with session._plan_perf_trace_span("set_gui_selection_clear"):
+                    FreeCADGui.Selection.clearSelection()
+                seen = set()
+                for obj in selection or []:
+                    if not obj:
+                        continue
+                    key = (
+                        getattr(getattr(obj, "Document", None), "Name", None),
+                        getattr(obj, "Name", None),
+                    )
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    with session._plan_perf_trace_span("set_gui_selection_add"):
+                        session._add_gui_selection_object(obj)
+            except Exception:
+                pass
+        with session._plan_perf_trace_span("set_gui_selection_secondary_targets"):
+            session._sync_secondary_selected_plan_targets_from_selection(selection)
+
+
+def set_gui_selection_object(session, obj):
+    if not obj:
+        return
+    session._set_gui_selection([obj])
+
+
+def schedule_gui_selection_object(session, obj, delay_ms=80):
+    if session._tearing_down or not obj:
+        return
+    session._gui_selection_sync_queued = True
+    session._gui_selection_sync_generation += 1
+    session._queued_gui_selection_object = obj
+    generation = session._gui_selection_sync_generation
+    try:
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(
+            delay_ms,
+            lambda generation=generation: session._run_scheduled_gui_selection_sync(generation),
+        )
+    except Exception:
+        session._run_scheduled_gui_selection_sync(generation)
+
+
+def run_scheduled_gui_selection_sync(session, generation=None):
+    if not session._gui_selection_sync_queued:
+        return
+    if generation is not None and generation != session._gui_selection_sync_generation:
+        return
+    obj = session._queued_gui_selection_object
+    if obj is None:
+        session._gui_selection_sync_queued = False
+        return
+    with session._plan_perf_trace_event("scheduled_gui_selection_sync"):
+        if session._tearing_down:
+            session._gui_selection_sync_queued = False
+            session._queued_gui_selection_object = None
+            return
+        set_gui_selection_object(session, obj)
+
+
+def attach_selection_observer(session):
+    if not session._selection_observer_added:
+        FreeCADGui.Selection.addObserver(session)
+        session._selection_observer_added = True
+
+
+def detach_selection_observer(session):
+    if session._selection_observer_added:
+        FreeCADGui.Selection.removeObserver(session)
+        session._selection_observer_added = False
+
+
+def schedule_selection_refresh(session):
+    if session._tearing_down or session._ignore_selection_changes:
+        return
+    if session._selection_refresh_queued:
+        return
+    session._selection_refresh_queued = True
+    try:
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(0, session._run_scheduled_selection_refresh)
+    except Exception:
+        session._run_scheduled_selection_refresh()
+
+
+def run_scheduled_selection_refresh(session):
+    if not session._selection_refresh_queued:
+        return
+    session._selection_refresh_queued = False
+    with session._plan_perf_trace_event("selection_observer_refresh"):
+        if session._tearing_down or session._ignore_selection_changes:
+            return
+        session._refresh_primary_selected_plan_target()
+
+
+def selection_observer_add(session, doc, obj, sub, point):
+    with session._plan_perf_trace_event(
+        "selection_observer_add",
+        selection_document=doc,
+        selection_object=obj,
+        selection_subelement=sub,
+    ):
+        session._plan_perf_count("selection_observer_callbacks")
+        if session._tearing_down:
+            return
+        if session._ignore_selection_changes:
+            return
+        if sub in ("EditNode0", "EditNode1", "EditNode2"):
+            return
+        del doc, obj, sub, point
+        session._schedule_selection_refresh()
+
+
+def selection_observer_remove(session, doc, obj, sub):
+    with session._plan_perf_trace_event(
+        "selection_observer_remove",
+        selection_document=doc,
+        selection_object=obj,
+        selection_subelement=sub,
+    ):
+        session._plan_perf_count("selection_observer_callbacks")
+        if session._tearing_down:
+            return
+        if session._ignore_selection_changes:
+            return
+        del doc, obj, sub
+        session._schedule_selection_refresh()
+
+
+def selection_observer_set(session, doc):
+    with session._plan_perf_trace_event("selection_observer_set", selection_document=doc):
+        session._plan_perf_count("selection_observer_callbacks")
+        if session._tearing_down:
+            return
+        if session._ignore_selection_changes:
+            return
+        del doc
+        session._schedule_selection_refresh()
+
+
+def selection_observer_clear(session, doc):
+    selected_kind, selected_obj = session.selection.get_selected_plan_target()
+    with session._plan_perf_trace_event(
+        "selection_observer_clear",
+        selection_document=doc,
+        selected_before_clear=session._plan_perf_describe_target(selected_kind, selected_obj),
+        selected_before_clear_kind=selected_kind or "none",
+    ):
+        session._plan_perf_count("selection_observer_callbacks")
+        if session._tearing_down:
+            return
+        if session._ignore_selection_changes:
+            return
+        del doc
+        session._schedule_selection_refresh()
+
+
+def selection_observer_set_preselection(session, doc, obj, sub):
+    with session._plan_perf_trace_event(
+        "selection_observer_set_preselection",
+        selection_document=doc,
+        selection_object=obj,
+        selection_subelement=sub,
+    ):
+        session._plan_perf_count("selection_observer_callbacks")
+        if session._tearing_down:
+            return
+        if not _should_filter_hidden_provider_preselection(session, doc, obj):
+            return
+        session._plan_perf_count("provider_preselection_filtered")
+        _clear_gui_preselection()
+
+
+def selection_observer_remove_preselection(session, doc, obj, sub):
+    with session._plan_perf_trace_event(
+        "selection_observer_remove_preselection",
+        selection_document=doc,
+        selection_object=obj,
+        selection_subelement=sub,
+    ):
+        session._plan_perf_count("selection_observer_callbacks")
+
+
+def _should_filter_hidden_provider_preselection(session, doc_name, obj_name):
+    preselected_obj = _resolve_document_object(session, doc_name, obj_name)
+    if preselected_obj is None:
+        return False
+    return _should_filter_hidden_provider_preselection_for_object(session, preselected_obj)
+
+
+def _should_filter_hidden_provider_preselection_for_object(session, obj):
+    if not plan_provider_runtime.is_plan_provider_target_object(session, obj):
+        return False
+    return not plan_provider_runtime.is_plan_provider_target_visible_for_mode(session, obj)
+
+
+def _should_preserve_provider_selected_target(session, kind, obj, selected):
+    if kind != "provider" or obj is None or selected != obj:
+        return False
+    if not session._is_valid_plan_target(kind, obj):
+        return False
+    return bool(plan_provider_runtime.is_plan_provider_target_visible_for_mode(session, obj))
+
+
+def _resolve_document_object(session, document_name, object_name):
+    object_name = str(object_name or "").strip()
+    if not object_name:
+        return None
+    document_name = str(document_name or "").strip()
+    doc = None
+    if document_name:
+        try:
+            doc = FreeCAD.getDocument(document_name)
+        except Exception:
+            doc = None
+    if doc is None:
+        doc = getattr(session, "doc", None)
+    if doc is None:
+        return None
+    try:
+        return doc.getObject(object_name)
+    except Exception:
+        return None
