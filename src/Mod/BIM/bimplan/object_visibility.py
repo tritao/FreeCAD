@@ -78,7 +78,7 @@ def register_plan_objects(session, objects):
     session._apply_storey_visibility()
     for obj in registered:
         session._refresh_plan_object_footprint_display(obj, request_redraw=False)
-    session._request_view_redraw()
+    session.viewport.request_view_redraw()
 
 
 def restore_object_view_state(session):

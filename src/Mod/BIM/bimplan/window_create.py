@@ -53,7 +53,7 @@ def activate_window_tool(session):
         title=translate("BIM_PlanEdit", "Window location"),
         noTracker=True,
     )
-    session._queue_focus_plan_view()
+    session.viewport.queue_focus_plan_view()
     session._refresh_task_panel_status()
     return True
 

@@ -180,7 +180,7 @@ def refresh_selected_opening_visuals(session):
     session._sync_selected_opening_overlay()
     session._sync_selected_opening_handles()
     session._sync_selected_wall_opening_context_overlay()
-    session._request_view_redraw()
+    session.viewport.request_view_redraw()
 
 
 def is_symbol_visual_dependency(session, symbol, obj):
@@ -259,7 +259,7 @@ def refresh_plan_object_footprint_display(session, obj, *, request_redraw=True):
     if not refreshed:
         return
     if request_redraw:
-        session._request_view_redraw()
+        session.viewport.request_view_redraw()
 
 
 def refresh_opening_footprint_display(session, opening):
@@ -322,7 +322,7 @@ def queue_hard_refresh_selected_opening_visuals(session):
     session._selected_opening_hard_refresh_queued = True
     session._clear_selected_opening_overlay()
     session._clear_selected_opening_handles()
-    session._request_view_redraw()
+    session.viewport.request_view_redraw()
     try:
         from PySide import QtCore
 
@@ -340,7 +340,7 @@ def flush_hard_refresh_selected_opening_visuals(session):
         return
     session._sync_selected_opening_overlay()
     session._sync_selected_opening_handles()
-    session._request_view_redraw()
+    session.viewport.request_view_redraw()
 
 
 def slot_created_object(session, obj):

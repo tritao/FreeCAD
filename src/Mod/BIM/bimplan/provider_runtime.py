@@ -647,5 +647,5 @@ def execute_plan_provider_action(
     session._refresh_primary_selected_plan_target()
     session._invalidate_document_dependent_plan_visuals()
     session._refresh_task_panel_status()
-    session._focus_plan_view()
+    session.viewport.focus_plan_view()
     return True

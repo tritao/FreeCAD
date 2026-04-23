@@ -604,7 +604,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 return
             if session._grip_trackers or session._is_selected_plan_target("wall"):
                 session._sync_wall_grips()
-            session._request_view_redraw()
+            session.viewport.request_view_redraw()
 
         _trace_direct_operation(session, "hover_pick_resolve", spec.name, resolve)
 

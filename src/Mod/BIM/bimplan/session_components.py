@@ -26,6 +26,7 @@
 
 from functools import wraps
 
+from bimplan import selection_additive as plan_selection_additive
 from bimplan import selection as plan_selection
 from bimplan import status_text as plan_status_text
 from bimplan import spaces as plan_spaces
@@ -141,6 +142,9 @@ class PlanSelectionAPI(_SessionAPI):
         plan_selection.get_plan_target_object_from_state
     )
     get_plan_target_state_key = staticmethod(plan_selection.get_plan_target_state_key)
+    normalize_gui_object_selection = staticmethod(
+        plan_selection_additive.normalize_gui_object_selection
+    )
 
     def get_selected_plan_target_state(self):
         return plan_selection.get_selected_plan_target_state(

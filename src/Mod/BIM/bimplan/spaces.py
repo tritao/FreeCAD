@@ -1409,7 +1409,7 @@ def start_space_text_position_pick(session):
         title=translate("BIM_PlanEdit", "Pick space text position"),
         noTracker=True,
     )
-    session._queue_focus_plan_view()
+    session.viewport.queue_focus_plan_view()
     return True
 
 

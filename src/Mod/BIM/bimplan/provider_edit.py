@@ -150,7 +150,7 @@ def start_provider_handle_point_pick(session, provider_obj, handle_index, handle
         title=_get_provider_handle_prompt(handle),
         noTracker=True,
     )
-    session._queue_focus_plan_view()
+    session.viewport.queue_focus_plan_view()
 
 
 def update_provider_handle_point_pick(session, point=None, snap_info=None):
