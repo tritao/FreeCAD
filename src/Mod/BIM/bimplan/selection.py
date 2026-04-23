@@ -675,3 +675,592 @@ def get_selected_plan_targets(session):
         seen.add(key)
         targets.append((target_kind, target_obj))
     return targets
+
+
+def get_plan_target_object_from_state(state_kind, state_obj, kind):
+    if state_kind == kind:
+        return state_obj
+    return None
+
+
+def selected_plan_target_changed(session, previous_kind, previous_obj, kind=None):
+    current_kind, current_obj = session._get_selected_plan_target()
+    if kind is None:
+        return previous_kind != current_kind or previous_obj != current_obj
+    previous_target = session._get_plan_target_object_from_state(previous_kind, previous_obj, kind)
+    current_target = session._get_plan_target_object_from_state(current_kind, current_obj, kind)
+    return previous_target != current_target
+
+
+def set_selected_plan_target(
+    session,
+    kind=None,
+    obj=None,
+    pending_restore=False,
+    preserve_hovered_symbol_overlay=False,
+):
+    if session._is_valid_plan_target(kind, obj):
+        session._set_selected_plan_target_state(kind, obj)
+    else:
+        session._set_selected_plan_target_state()
+        kind = None
+        obj = None
+    session._sync_secondary_selected_plan_targets_from_gui_selection(
+        primary_kind=kind,
+        primary_obj=obj,
+    )
+    session._clear_plan_relation_status()
+    session._sync_active_plan_target_object()
+    if pending_restore:
+        session._set_pending_selected_plan_target(kind, obj)
+    else:
+        session._set_pending_selected_plan_target()
+    if not session._tearing_down:
+        session._sync_junction_node_overlays()
+        session._sync_selected_wall_opening_context_overlay()
+        session._sync_hovered_wall_opening_context_overlay()
+        session._sync_hovered_opening_overlay()
+        if not preserve_hovered_symbol_overlay:
+            session._sync_hovered_symbol_overlay()
+        session._sync_hovered_space_overlay()
+        session._sync_hovered_region_overlay()
+
+
+def schedule_selected_wall_reset(session, reason, obj):
+    del reason, obj
+    if session._pending_selected_wall_reset or session._tearing_down:
+        return
+    session._pending_selected_wall_reset = True
+    try:
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(0, session._reset_selected_wall_after_change)
+    except Exception:
+        session._reset_selected_wall_after_change()
+
+
+def reset_selected_wall_after_change(session):
+    session._pending_selected_wall_reset = False
+    if session._tearing_down or session.current_tool != "Select":
+        return
+    wall = session._get_selected_plan_target_object("wall")
+    if not wall:
+        return
+    session._clear_wall_grips()
+    session._clear_selected_wall_overlay()
+    session._clear_selected_plan_target_if_matches("wall", wall)
+    session._set_gui_selection([])
+    session._refresh_task_panel_status()
+
+
+def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
+    if session._tearing_down:
+        return
+    if wall is None:
+        wall = session._get_selected_plan_target_object("wall")
+    if wall is None:
+        return
+    if not session._is_selected_plan_target("wall", wall):
+        return
+    session._pending_selected_wall_reset = False
+    session._clear_wall_grips()
+    session._clear_selected_wall_overlay()
+    session._clear_selected_plan_target_if_matches("wall", wall)
+    if clear_gui_selection:
+        session._set_gui_selection([])
+    session._refresh_task_panel_status(selection_only=True)
+
+
+def sync_primary_selected_plan_target_visuals(session, previous_kind=None, previous_obj=None):
+    with session._plan_perf_trace_span("sync_primary_selected_plan_target_visuals"):
+        if session.current_tool != "Select" or session._selected_plan_target_changed(
+            previous_kind, previous_obj, "wall"
+        ):
+            with session._plan_perf_trace_span("sync_selected_wall_overlay"):
+                session._sync_selected_wall_overlay()
+        with session._plan_perf_trace_span("sync_selected_wall_opening_context_overlay"):
+            session._sync_selected_wall_opening_context_overlay()
+        with session._plan_perf_trace_span("sync_hovered_wall_overlay"):
+            session._sync_hovered_wall_overlay()
+        with session._plan_perf_trace_span("sync_hovered_wall_opening_context_overlay"):
+            session._sync_hovered_wall_opening_context_overlay()
+        if session.current_tool != "Select" or session._selected_plan_target_changed(
+            previous_kind, previous_obj, "opening"
+        ):
+            with session._plan_perf_trace_span("sync_selected_opening_overlay"):
+                session._sync_selected_opening_overlay()
+            with session._plan_perf_trace_span("sync_selected_opening_handles"):
+                session._sync_selected_opening_handles()
+        if session.current_tool != "Select" or session._selected_plan_target_changed(
+            previous_kind, previous_obj, "symbol"
+        ):
+            with session._plan_perf_trace_span("sync_selected_symbol_overlay"):
+                session._sync_selected_symbol_overlay()
+            with session._plan_perf_trace_span("sync_selected_symbol_handles"):
+                session._sync_selected_symbol_handles()
+        if session.current_tool != "Select" or session._selected_plan_target_changed(
+            previous_kind, previous_obj, "region"
+        ):
+            with session._plan_perf_trace_span("sync_selected_region_overlay"):
+                session._sync_selected_region_overlay()
+        if session.current_tool != "Select" or session._selected_plan_target_changed(
+            previous_kind, previous_obj, "space"
+        ):
+            with session._plan_perf_trace_span("sync_selected_space_overlay"):
+                session._sync_selected_space_overlay()
+        with session._plan_perf_trace_span("sync_hovered_symbol_overlay"):
+            session._sync_hovered_symbol_overlay()
+        with session._plan_perf_trace_span("sync_hovered_provider_overlay"):
+            session._sync_hovered_provider_overlay()
+        with session._plan_perf_trace_span("sync_selected_provider_overlay"):
+            session._sync_selected_provider_overlay()
+        with session._plan_perf_trace_span("sync_selected_provider_handles"):
+            session._sync_selected_provider_handles()
+        with session._plan_perf_trace_span("sync_hovered_opening_overlay"):
+            session._sync_hovered_opening_overlay()
+        with session._plan_perf_trace_span("sync_hovered_space_overlay"):
+            session._sync_hovered_space_overlay()
+        with session._plan_perf_trace_span("sync_hovered_region_overlay"):
+            session._sync_hovered_region_overlay()
+        with session._plan_perf_trace_span("sync_secondary_selected_overlays"):
+            session._sync_secondary_selected_overlays()
+        with session._plan_perf_trace_span("sync_active_plan_target_object"):
+            session._sync_active_plan_target_object()
+        session._refresh_task_panel_status(selection_only=session.current_tool == "Select")
+
+
+def refresh_primary_selected_plan_target(session):
+    session._refresh_selected_plan_target()
+
+
+def set_hovered_wall(session, wall):
+    if session._is_selected_plan_target("wall", wall):
+        wall = None
+    if session.hovered_wall == wall:
+        return
+    session.hovered_wall = wall
+    session._sync_junction_node_overlays()
+    session._sync_hovered_wall_overlay()
+    session._sync_hovered_wall_opening_context_overlay()
+    if session.current_tool == "Join":
+        session._refresh_task_panel_status(
+            selection_only=session.current_tool == "Select"
+            and session._is_selected_plan_target("wall")
+        )
+
+
+def set_hovered_opening(session, opening):
+    if session._is_selected_plan_target("opening", opening):
+        opening = None
+    if session.hovered_opening == opening:
+        return
+    session.hovered_opening = opening
+    session._sync_selected_wall_opening_context_overlay()
+    session._sync_hovered_opening_overlay()
+
+
+def set_hovered_symbol(session, symbol):
+    if session._is_selected_plan_target("symbol", symbol):
+        symbol = None
+    if session.hovered_symbol == symbol:
+        return
+    session.hovered_symbol = symbol
+    session._sync_hovered_symbol_overlay()
+
+
+def set_hovered_provider(session, provider):
+    if session._is_selected_plan_target("provider", provider):
+        provider = None
+    if session.hovered_provider == provider:
+        return
+    session.hovered_provider = provider
+    session._sync_hovered_provider_overlay()
+
+
+def set_hovered_space(session, space):
+    if session._is_selected_plan_target("space", space):
+        space = None
+    if session.hovered_space == space:
+        return
+    session.hovered_space = space
+    session._sync_hovered_space_overlay()
+
+
+def set_hovered_region(session, region):
+    if session._is_selected_plan_target("region", region):
+        region = None
+    if session.hovered_region == region:
+        return
+    session.hovered_region = region
+    session._sync_hovered_region_overlay()
+
+
+def queue_restore_selected_plan_target(session, kind, obj):
+    if not obj:
+        return
+    queue_restore = {
+        "opening": session._queue_restore_selected_opening,
+        "symbol": session._queue_restore_selected_symbol,
+        "region": session._queue_restore_selected_region,
+        "space": session._queue_restore_selected_space,
+    }.get(kind)
+    if queue_restore is not None:
+        queue_restore(obj)
+
+
+def select_plan_target_for_plan_edit(
+    session,
+    kind,
+    obj,
+    queue_restore=False,
+    sync_gui_selection=False,
+    defer_gui_selection=False,
+    defer_wall_grips=False,
+):
+    validators = {
+        "opening": session._is_hosted_opening_object,
+        "provider": session._is_plan_provider_target_object,
+        "symbol": session._is_plan_symbol_instance,
+        "region": session._is_plan_region_object,
+        "space": session._is_plan_space_object,
+        "wall": session._is_plan_selectable_wall,
+    }
+    validator = validators.get(kind)
+    if validator is None or not validator(obj):
+        return False
+    previous_kind, previous_obj = session._get_selected_plan_target()
+    session.current_tool = "Select"
+    session._provider_selected_objects = []
+    preserve_hovered_symbol_overlay = (
+        kind == "symbol" and session.hovered_symbol == obj and bool(session._symbol_hover_trackers)
+    )
+    session._set_selected_plan_target(
+        kind,
+        obj,
+        pending_restore=queue_restore,
+        preserve_hovered_symbol_overlay=preserve_hovered_symbol_overlay,
+    )
+    if sync_gui_selection:
+        if defer_gui_selection:
+            session._schedule_gui_selection_object(obj)
+        else:
+            session._set_gui_selection_object(obj)
+    if kind == "wall":
+        if defer_wall_grips:
+            session._schedule_wall_grip_sync()
+        else:
+            session._sync_selected_wall_overlay()
+            session._sync_wall_grips()
+    else:
+        session._clear_wall_grips()
+        session._clear_selected_wall_overlay()
+    if session._selected_plan_target_changed(previous_kind, previous_obj, "opening"):
+        session._sync_selected_opening_overlay()
+        session._sync_selected_opening_handles()
+    if session._selected_plan_target_changed(previous_kind, previous_obj, "symbol"):
+        session._sync_selected_symbol_overlay()
+        session._sync_selected_symbol_handles()
+    if session._selected_plan_target_changed(previous_kind, previous_obj, "region"):
+        session._sync_selected_region_overlay()
+    if session._selected_plan_target_changed(previous_kind, previous_obj, "space"):
+        session._sync_selected_space_overlay()
+    if session._selected_plan_target_changed(previous_kind, previous_obj, "provider"):
+        session._sync_selected_provider_overlay()
+        session._sync_selected_provider_handles()
+    session._sync_secondary_selected_overlays()
+    session._refresh_task_panel_status(selection_only=session.current_tool == "Select")
+    if queue_restore:
+        session._queue_restore_selected_plan_target(kind, obj)
+    return True
+
+
+def select_opening_for_plan_edit(
+    session,
+    opening,
+    queue_restore=False,
+    sync_gui_selection=False,
+    defer_gui_selection=False,
+    defer_wall_grips=False,
+):
+    return session._select_plan_target_for_plan_edit(
+        "opening",
+        opening,
+        queue_restore=queue_restore,
+        sync_gui_selection=sync_gui_selection,
+        defer_gui_selection=defer_gui_selection,
+        defer_wall_grips=defer_wall_grips,
+    )
+
+
+def select_symbol_for_plan_edit(
+    session,
+    symbol,
+    queue_restore=False,
+    sync_gui_selection=False,
+    defer_gui_selection=False,
+    defer_wall_grips=False,
+):
+    return session._select_plan_target_for_plan_edit(
+        "symbol",
+        symbol,
+        queue_restore=queue_restore,
+        sync_gui_selection=sync_gui_selection,
+        defer_gui_selection=defer_gui_selection,
+        defer_wall_grips=defer_wall_grips,
+    )
+
+
+def select_region_for_plan_edit(
+    session,
+    region,
+    queue_restore=False,
+    sync_gui_selection=False,
+    defer_gui_selection=False,
+    defer_wall_grips=False,
+):
+    return session._select_plan_target_for_plan_edit(
+        "region",
+        region,
+        queue_restore=queue_restore,
+        sync_gui_selection=sync_gui_selection,
+        defer_gui_selection=defer_gui_selection,
+        defer_wall_grips=defer_wall_grips,
+    )
+
+
+def select_space_for_plan_edit(
+    session,
+    space,
+    queue_restore=False,
+    sync_gui_selection=False,
+    defer_gui_selection=False,
+    defer_wall_grips=False,
+):
+    return session._select_plan_target_for_plan_edit(
+        "space",
+        space,
+        queue_restore=queue_restore,
+        sync_gui_selection=sync_gui_selection,
+        defer_gui_selection=defer_gui_selection,
+        defer_wall_grips=defer_wall_grips,
+    )
+
+
+def select_wall_for_plan_edit(
+    session,
+    wall,
+    queue_restore=False,
+    sync_gui_selection=False,
+    defer_gui_selection=False,
+    defer_wall_grips=False,
+):
+    return session._select_plan_target_for_plan_edit(
+        "wall",
+        wall,
+        queue_restore=queue_restore,
+        sync_gui_selection=sync_gui_selection,
+        defer_gui_selection=defer_gui_selection,
+        defer_wall_grips=defer_wall_grips,
+    )
+
+
+def activate_plan_target(
+    session,
+    kind,
+    mouse_pos,
+    event_callback=None,
+    sync_gui_selection=False,
+    clear_hovered_kinds=None,
+    resolved_target=None,
+    defer_gui_selection=False,
+    defer_wall_grips=False,
+):
+    if resolved_target is None:
+        target_kind, target_obj = session._get_plan_target_at_position(mouse_pos)
+    else:
+        target_kind, target_obj = resolved_target
+    with session._plan_perf_trace_span(
+        f"activate_plan_target_{kind}", requested_kind=kind, mouse_pos=mouse_pos
+    ):
+        session._plan_perf_count(f"activate_plan_target_attempts_{kind}")
+        session._plan_perf_set_fields(
+            resolved_target=session._plan_perf_describe_target(target_kind, target_obj)
+        )
+        if target_kind != kind:
+            target_obj = None
+        select_target = {
+            "opening": session._select_opening_for_plan_edit,
+            "symbol": session._select_symbol_for_plan_edit,
+            "region": session._select_region_for_plan_edit,
+            "space": session._select_space_for_plan_edit,
+            "wall": session._select_wall_for_plan_edit,
+        }.get(kind)
+        if select_target is None or not select_target(
+            target_obj,
+            queue_restore=True,
+            sync_gui_selection=sync_gui_selection,
+            defer_gui_selection=defer_gui_selection,
+            defer_wall_grips=defer_wall_grips,
+        ):
+            session._plan_perf_set_fields(activate_plan_target_result=False)
+            return False
+        session._clear_hovered_plan_targets(clear_hovered_kinds)
+        session._claim_left_button_click(event_callback)
+        session._plan_perf_set_fields(
+            activate_plan_target_result=True,
+            activated_target=session._plan_perf_describe_target(kind, target_obj),
+        )
+        return True
+
+
+def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
+    target_kind, target_obj = session._get_hovered_plan_target()
+    if target_obj is None or session._hover_pick_dirty:
+        target_kind, target_obj = session._get_plan_target_at_position(mouse_pos)
+        source = "picked_after_throttled_hover" if session._hover_pick_dirty else "picked"
+        session._hover_pick_dirty = False
+        session._plan_perf_count(f"semantic_target_source_{source}")
+        session._plan_perf_set_fields(semantic_target_source=source)
+    else:
+        session._plan_perf_count("semantic_target_source_hovered")
+        session._plan_perf_set_fields(
+            semantic_target_source="hovered",
+            hovered_target=session._plan_perf_describe_target(target_kind, target_obj),
+        )
+    activate_target = {
+        "opening": session._activate_opening_target,
+        "symbol": session._activate_symbol_target,
+        "region": session._activate_region_target,
+        "space": session._activate_space_target,
+        "wall": session._activate_wall_target,
+    }.get(target_kind)
+    if activate_target is None:
+        return False
+    if target_kind == "wall":
+        return activate_target(
+            mouse_pos,
+            event_callback=event_callback,
+            resolved_target=(target_kind, target_obj),
+            defer_gui_selection=True,
+            defer_wall_grips=True,
+        )
+    return activate_target(
+        mouse_pos,
+        event_callback=event_callback,
+        resolved_target=(target_kind, target_obj),
+    )
+
+
+def activate_opening_target(session, mouse_pos, event_callback=None, resolved_target=None):
+    return session._activate_plan_target(
+        "opening",
+        mouse_pos,
+        event_callback=event_callback,
+        sync_gui_selection=True,
+        clear_hovered_kinds=("wall", "opening", "symbol", "space", "region"),
+        resolved_target=resolved_target,
+    )
+
+
+def activate_symbol_target(session, mouse_pos, event_callback=None, resolved_target=None):
+    return session._activate_plan_target(
+        "symbol",
+        mouse_pos,
+        event_callback=event_callback,
+        sync_gui_selection=True,
+        clear_hovered_kinds=("wall", "opening", "symbol", "space", "region"),
+        resolved_target=resolved_target,
+    )
+
+
+def activate_region_target(session, mouse_pos, event_callback=None, resolved_target=None):
+    return session._activate_plan_target(
+        "region",
+        mouse_pos,
+        event_callback=event_callback,
+        sync_gui_selection=True,
+        clear_hovered_kinds=("wall", "opening", "symbol", "space", "region"),
+        resolved_target=resolved_target,
+    )
+
+
+def activate_space_target(session, mouse_pos, event_callback=None, resolved_target=None):
+    return session._activate_plan_target(
+        "space",
+        mouse_pos,
+        event_callback=event_callback,
+        sync_gui_selection=True,
+        clear_hovered_kinds=("wall", "opening", "symbol", "region"),
+        resolved_target=resolved_target,
+    )
+
+
+def activate_wall_target(
+    session,
+    mouse_pos,
+    event_callback=None,
+    resolved_target=None,
+    defer_gui_selection=False,
+    defer_wall_grips=False,
+):
+    return session._activate_plan_target(
+        "wall",
+        mouse_pos,
+        event_callback=event_callback,
+        sync_gui_selection=True,
+        clear_hovered_kinds=("wall", "symbol", "space", "region"),
+        resolved_target=resolved_target,
+        defer_gui_selection=defer_gui_selection,
+        defer_wall_grips=defer_wall_grips,
+    )
+
+
+def clear_plan_selection_state(session):
+    previous_kind, previous_obj = session._get_selected_plan_target()
+    with session._plan_perf_trace_event(
+        "clear_plan_selection_state",
+        clear_selection_started_kind=previous_kind or "none",
+        clear_selection_started_target=session._plan_perf_describe_target(
+            previous_kind, previous_obj
+        ),
+    ):
+        with session._plan_perf_trace_span("clear_plan_selection_gui_selection"):
+            session._set_gui_selection([])
+        with session._plan_perf_trace_span("clear_plan_selection_target_state"):
+            session._set_selected_plan_target()
+            session._provider_selected_objects = []
+        with session._plan_perf_trace_span("clear_plan_selection_hover_state"):
+            session._set_hovered_wall(None)
+            session._set_hovered_opening(None)
+            session._set_hovered_symbol(None)
+            session._set_hovered_provider(None)
+            session._set_hovered_space(None)
+            session._set_hovered_region(None)
+        with session._plan_perf_trace_span("clear_plan_selection_wall_grips"):
+            session._clear_wall_grips()
+            session._clear_selected_wall_overlay()
+        with session._plan_perf_trace_span("clear_plan_selection_secondary_overlays"):
+            session._sync_secondary_selected_overlays()
+        with session._plan_perf_trace_span("clear_plan_selection_opening_overlay"):
+            session._sync_selected_opening_overlay()
+            session._sync_selected_opening_handles()
+        with session._plan_perf_trace_span("clear_plan_selection_symbol_overlay"):
+            session._sync_selected_symbol_overlay()
+            session._sync_selected_symbol_handles()
+        with session._plan_perf_trace_span("clear_plan_selection_region_overlay"):
+            session._sync_selected_region_overlay()
+        with session._plan_perf_trace_span("clear_plan_selection_space_overlay"):
+            session._sync_selected_space_overlay()
+        with session._plan_perf_trace_span("clear_plan_selection_provider_overlay"):
+            session._sync_selected_provider_overlay()
+            session._sync_selected_provider_handles()
+        with session._plan_perf_trace_span("clear_plan_selection_task_status"):
+            session._refresh_task_panel_status(selection_only=session.current_tool == "Select")
+        selected_kind, selected_obj = session._get_selected_plan_target()
+        session._plan_perf_set_fields(
+            clear_selection_ended_kind=selected_kind or "none",
+            clear_selection_ended_target=session._plan_perf_describe_target(
+                selected_kind, selected_obj
+            ),
+            clear_selection_cleared_wall=bool(previous_kind == "wall" and not selected_kind),
+        )
