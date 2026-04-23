@@ -128,6 +128,10 @@ from bimplan.ui.controls import PlanEditControlsWidget
 from bimplan.task_panel_view_model import (
     build_action_context_view_model,
     build_integration_panel_view_model,
+    build_region_editor_view_model,
+    build_space_editor_view_model,
+    build_status_text_view_model,
+    build_window_editor_view_model,
     filter_provider_overlay_legend_items_for_mode,
 )
 
@@ -568,6 +572,80 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertTrue(view_model.unjoin_button_enabled)
         self.assertTrue(view_model.show_window_button)
         self.assertTrue(view_model.window_button_enabled)
+
+    def test_build_status_text_view_model_derives_wall_guidance(self):
+        wall = SimpleNamespace(Name="Wall001", Label="Wall 001")
+        selection = SimpleNamespace(
+            get_selected_plan_target=lambda: ("wall", wall),
+            get_selected_plan_targets=lambda: (("wall", wall),),
+        )
+        session = SimpleNamespace(
+            current_tool="Select",
+            selection=selection,
+            _format_plan_target_selection_state=lambda kind, obj: f"{kind}:{obj.Label}",
+            _format_provider_selected_object_state=lambda: "",
+            is_selected_wall_endpoint_editable=lambda: True,
+            _get_plan_selection_summary_text=lambda: "1 target selected",
+            _plan_relation_status_message="Relation status",
+        )
+
+        view_model = build_status_text_view_model(session)
+
+        self.assertIn("wall:Wall 001", view_model.text)
+        self.assertIn("Use wall grips in the viewport", view_model.text)
+        self.assertIn("Ctrl-click adds or removes targets", view_model.text)
+        self.assertIn("Relation status", view_model.text)
+
+    def test_build_space_and_region_editor_view_models_follow_selection(self):
+        space = SimpleNamespace(Name="Space001")
+        region = SimpleNamespace(Name="Region001")
+
+        space_session = SimpleNamespace(
+            current_tool="Set Space Text",
+            selection=SimpleNamespace(get_selected_plan_target=lambda: ("space", space)),
+        )
+        region_session = SimpleNamespace(
+            current_tool="Select",
+            selection=SimpleNamespace(get_selected_plan_target=lambda: ("region", region)),
+        )
+
+        space_view_model = build_space_editor_view_model(space_session)
+        region_view_model = build_region_editor_view_model(region_session)
+
+        self.assertTrue(space_view_model.show_editor)
+        self.assertIs(space, space_view_model.space)
+        self.assertTrue(region_view_model.show_editor)
+        self.assertIs(region, region_view_model.region)
+
+    def test_build_window_editor_view_model_derives_editor_state(self):
+        window = SimpleNamespace(Name="Window001", Document=SimpleNamespace(Name="Doc"))
+        session = SimpleNamespace(
+            current_tool="Select",
+            selection=SimpleNamespace(get_selected_plan_target=lambda: ("opening", window)),
+            _can_edit_window_width=lambda obj: obj is window,
+            _can_edit_window_height=lambda obj: False,
+            _can_apply_window_style_preset=lambda obj: obj is window,
+            _get_selected_window_style_preset=lambda: "Preset A",
+            _get_selected_window_width_text=lambda: "1200 mm",
+            _get_selected_window_height_text=lambda: "1500 mm",
+            _get_window_style_preset_options=lambda: ("Preset A", "Preset B"),
+        )
+
+        view_model = build_window_editor_view_model(session)
+
+        self.assertTrue(view_model.show_editor)
+        self.assertIs(window, view_model.window)
+        self.assertEqual(("Doc", "Window001"), view_model.state_key[0])
+        self.assertEqual(
+            (("Preset A", "Preset A"), ("Preset B", "Preset B")), view_model.combo_items
+        )
+        self.assertEqual("Preset A", view_model.current_style)
+        self.assertEqual("1200 mm", view_model.current_width_text)
+        self.assertEqual("1500 mm", view_model.current_height_text)
+        self.assertTrue(view_model.can_edit_width)
+        self.assertFalse(view_model.can_edit_height)
+        self.assertTrue(view_model.can_apply_style)
+        self.assertIn("Current style: Preset A", view_model.note_text)
 
     def test_plan_selection_api_uses_primary_target_kind_policy(self):
         from bimplan import target_kinds as plan_target_kinds

@@ -2364,162 +2364,6 @@ class PlanEditControlsWidget:
         self.status.setText(text)
         self._status_text_state = text
 
-    def _build_status_text(self):
-        tool = self.session.current_tool
-        selected_kind, selected_obj = self.session.selection.get_selected_plan_target()
-        selected_state = self.session._format_plan_target_selection_state(
-            selected_kind, selected_obj
-        )
-        provider_state = self.session._format_provider_selected_object_state()
-        if tool == "Join" and selected_kind == "wall" and selected_obj is not None:
-            target_wall, joint, detail = self.session._get_plan_join_candidate_state()
-            selection_state = translate("BIM_PlanEdit", "Source wall: {label}").format(
-                label=self.session._get_plan_target_display_label(selected_obj)
-            )
-            selection_help = translate(
-                "BIM_PlanEdit",
-                "Join type: {joint_type}\n{pair_state}\n{action}",
-            ).format(
-                joint_type=self.session.get_plan_join_type_label(),
-                pair_state=detail or translate("BIM_PlanEdit", "Candidate wall: none"),
-                action=self.session._get_plan_join_mode_action_text(target_wall, joint),
-            )
-        elif tool == "Pick Space Region":
-            selection_state = translate("BIM_PlanEdit", "Space creation: pick region")
-            selection_help = translate(
-                "BIM_PlanEdit",
-                "Multiple enclosed regions were found. Hover a dashed outline, then click to create that space.",
-            )
-            targets = self.session.selection.get_selected_plan_targets()
-            if targets:
-                selection_help = "{}\n{}".format(
-                    selection_help,
-                    translate("BIM_PlanEdit", "Boundary candidates: {summary}").format(
-                        summary=self.session._summarize_plan_targets(targets)
-                    ),
-                )
-            candidate_count = len(self.session._space_region_candidates)
-            if candidate_count:
-                selection_help = "{}\n{}".format(
-                    selection_help,
-                    translate("BIM_PlanEdit", "{count} enclosed regions are available.").format(
-                        count=candidate_count
-                    ),
-                )
-            hovered_candidate = self.session._hovered_space_region_candidate
-            if hovered_candidate:
-                selection_help = "{}\n{}".format(
-                    selection_help,
-                    translate("BIM_PlanEdit", "Hovered region area: {area}").format(
-                        area=self.session._format_space_region_candidate_area(hovered_candidate)
-                    ),
-                )
-        elif tool == "Region":
-            selection_state = translate("BIM_PlanEdit", "Region: draw polygon")
-            selection_help = translate(
-                "BIM_PlanEdit",
-                "Click polygon points to define a semantic plan region. Press Enter to finish, or click near the first point to close.",
-            )
-            if self.session._is_plan_space_object(self.session._plan_region_parent_space):
-                selection_help = "{}\n{}".format(
-                    selection_help,
-                    translate("BIM_PlanEdit", "Parent space: {label}").format(
-                        label=self.session._plan_region_parent_space.Label
-                    ),
-                )
-        elif tool == "Separator":
-            selection_state = translate("BIM_PlanEdit", "Separator: place divider")
-            selection_help = translate(
-                "BIM_PlanEdit",
-                "Click two points to place a room divider that can split Arch Spaces.",
-            )
-        elif tool == "Window":
-            selection_state = translate("BIM_PlanEdit", "Window: place on wall")
-            selection_help = translate(
-                "BIM_PlanEdit",
-                "Click along the selected or hovered wall to place a hosted window.",
-            )
-        elif tool == "Provider Point":
-            selection_state = self.session._get_provider_point_tool_label()
-            selection_help = self.session._get_provider_point_tool_prompt()
-        elif selected_kind == "opening" and selected_obj is not None:
-            selection_state = selected_state
-            selection_help = self.session._format_opening_selection_help(selected_obj)
-        elif selected_kind == "symbol" and selected_obj is not None:
-            selection_state = selected_state
-            if self.session.current_tool == "Rotate Symbol":
-                if self.session._symbol_rotation_snap_enabled():
-                    selection_help = translate(
-                        "BIM_PlanEdit",
-                        "Use in-view handles to rotate the selected symbol instance. Rotation snaps to {snap} by default; hold Shift for free angle.",
-                    ).format(snap=self.session._format_symbol_rotation_snap_label())
-                else:
-                    selection_help = translate(
-                        "BIM_PlanEdit",
-                        "Use in-view handles to rotate the selected symbol instance.",
-                    )
-            else:
-                selection_help = translate(
-                    "BIM_PlanEdit",
-                    "Use in-view handles to move or rotate the selected symbol instance.",
-                )
-        elif selected_kind == "region" and selected_obj is not None:
-            selection_state = selected_state
-            selection_help = translate(
-                "BIM_PlanEdit",
-                "Use the region controls below to edit label, scheme, type, and parent space.",
-            )
-        elif selected_kind == "space" and selected_obj is not None:
-            selection_state = selected_state
-            selection_help = translate(
-                "BIM_PlanEdit",
-                "Use the space controls below to edit label, type, boundaries, and text position.",
-            )
-        elif selected_kind == "provider" and selected_obj is not None:
-            selection_state = selected_state
-            selection_help = self.session._format_provider_target_help(selected_obj)
-        elif selected_kind == "wall" and selected_obj is not None:
-            selection_state = selected_state
-            if self.session.is_selected_wall_endpoint_editable():
-                selection_help = translate(
-                    "BIM_PlanEdit",
-                    "Use wall grips in the viewport to stretch or move the selected wall.",
-                )
-            else:
-                selection_help = translate(
-                    "BIM_PlanEdit",
-                    "This wall can be reviewed in plan, but grip editing is unavailable.",
-                )
-        elif provider_state:
-            selection_state = provider_state
-            selection_help = self.session._format_provider_selected_object_help()
-        else:
-            selection_state = translate("BIM_PlanEdit", "No target selected")
-            selection_help = translate(
-                "BIM_PlanEdit",
-                "Click a wall, opening, symbol, integration target, region, or space. Use create tools to add plan geometry.",
-            )
-        selection_summary = self.session._get_plan_selection_summary_text()
-        if selection_summary:
-            selection_help = "{}\n{}".format(selection_help, selection_summary)
-        if self.session.current_tool == "Select":
-            selection_help = "{}\n{}".format(
-                selection_help,
-                translate(
-                    "BIM_PlanEdit",
-                    "Ctrl-click adds or removes targets without replacing the current editor target.",
-                ),
-            )
-        if self.session._plan_relation_status_message:
-            selection_help = "{}\n{}".format(
-                selection_help,
-                self.session._plan_relation_status_message,
-            )
-        return "{selection_state}\n{selection_help}".format(
-            selection_state=selection_state,
-            selection_help=selection_help,
-        )
-
     def _set_widget_tooltip(self, widget, text):
         if widget is None:
             return
@@ -2574,7 +2418,9 @@ class PlanEditControlsWidget:
             if self.form is None or self.status is None or self.exit_button is None:
                 return
             self._sync_join_type_combo_from_session()
-            self._set_status_text(self._build_status_text())
+            self._set_status_text(
+                plan_task_panel_view_model.build_status_text_view_model(self.session).text
+            )
             self._refresh_action_context()
             if refresh_integrations:
                 self._refresh_integration_panel(defer=defer_integrations)
@@ -2591,7 +2437,9 @@ class PlanEditControlsWidget:
             if self.session.current_tool != "Select" or selected_kind != "wall":
                 self.refresh_from_session(defer_integrations=True)
                 return
-            self._set_status_text(self._build_status_text())
+            self._set_status_text(
+                plan_task_panel_view_model.build_status_text_view_model(self.session).text
+            )
             self._refresh_action_context()
             self._refresh_integration_panel(defer=True)
             self._hide_space_editor()
@@ -2616,12 +2464,11 @@ class PlanEditControlsWidget:
         with self.session._plan_perf_trace_span("refresh_space_editor"):
             if self.space_editor is None:
                 return
-            selected_kind, selected_obj = self.session.selection.get_selected_plan_target()
-            space = selected_obj if selected_kind == "space" else None
-            show_editor = bool(space and self.session.current_tool in ("Select", "Set Space Text"))
-            if not show_editor:
+            space_editor_vm = plan_task_panel_view_model.build_space_editor_view_model(self.session)
+            if not space_editor_vm.show_editor:
                 self._hide_space_editor()
                 return
+            space = space_editor_vm.space
             try:
                 self.space_editor.setVisible(True)
             except Exception:
@@ -2682,12 +2529,13 @@ class PlanEditControlsWidget:
         with self.session._plan_perf_trace_span("refresh_region_editor"):
             if self.region_editor is None:
                 return
-            selected_kind, selected_obj = self.session.selection.get_selected_plan_target()
-            region = selected_obj if selected_kind == "region" else None
-            show_editor = bool(region and self.session.current_tool == "Select")
-            if not show_editor:
+            region_editor_vm = plan_task_panel_view_model.build_region_editor_view_model(
+                self.session
+            )
+            if not region_editor_vm.show_editor:
                 self._hide_region_editor()
                 return
+            region = region_editor_vm.region
             try:
                 self.region_editor.setVisible(True)
             except Exception:
@@ -2713,15 +2561,6 @@ class PlanEditControlsWidget:
                         self.region_parent_space_combo.blockSignals(False)
             finally:
                 self._refreshing_region_editor = False
-
-    def _get_window_preset_combo_items(self, current_style):
-        items = []
-        current_style = str(current_style or "").strip()
-        if not current_style:
-            items.append(("", translate("BIM_PlanEdit", "Custom / Current")))
-        for preset in self.session._get_window_style_preset_options():
-            items.append((str(preset or ""), str(preset or "")))
-        return tuple(items)
 
     def _find_combo_data_index(self, combo, value):
         if combo is None:
@@ -2755,93 +2594,6 @@ class PlanEditControlsWidget:
             return float(FreeCAD.Units.Quantity(text).Value)
         except Exception:
             return None
-
-    def _get_window_editor_target(self):
-        selected_kind, selected_obj = self.session.selection.get_selected_plan_target()
-        if (
-            selected_kind != "opening"
-            or selected_obj is None
-            or self.session.current_tool != "Select"
-        ):
-            return None
-        if (
-            self.session._can_edit_window_width(selected_obj)
-            or self.session._can_edit_window_height(selected_obj)
-            or self.session._can_apply_window_style_preset(selected_obj)
-        ):
-            return selected_obj
-        return None
-
-    def _format_window_editor_note(
-        self,
-        current_style,
-        current_width_text,
-        current_height_text,
-        can_edit_width,
-        can_edit_height,
-        can_apply_style,
-    ):
-        current_style = str(current_style or "").strip()
-        style_text = (
-            translate("BIM_PlanEdit", "Current style: {style}").format(style=current_style)
-            if current_style
-            else translate("BIM_PlanEdit", "Current style: Custom")
-        )
-        width_text = (
-            translate("BIM_PlanEdit", "Current width: {width}").format(
-                width=current_width_text,
-            )
-            if current_width_text
-            else translate("BIM_PlanEdit", "Current width: unresolved")
-        )
-        height_text = (
-            translate("BIM_PlanEdit", "Current height: {height}").format(
-                height=current_height_text,
-            )
-            if current_height_text
-            else translate("BIM_PlanEdit", "Current height: unresolved")
-        )
-        if can_edit_width and can_edit_height and can_apply_style:
-            hint_text = translate(
-                "BIM_PlanEdit",
-                "Change the width or height directly or apply a built-in preset while keeping the hosted position.",
-            )
-        elif can_edit_width and can_apply_style:
-            hint_text = translate(
-                "BIM_PlanEdit",
-                "Change the width directly or apply a built-in preset while keeping the hosted position.",
-            )
-        elif can_edit_height and can_apply_style:
-            hint_text = translate(
-                "BIM_PlanEdit",
-                "Change the height directly or apply a built-in preset while keeping the hosted position.",
-            )
-        elif can_edit_width and can_edit_height:
-            hint_text = translate(
-                "BIM_PlanEdit",
-                "Change the width or height directly while keeping the hosted position.",
-            )
-        elif can_edit_width:
-            hint_text = translate(
-                "BIM_PlanEdit",
-                "Change the width directly while keeping the hosted position.",
-            )
-        elif can_edit_height:
-            hint_text = translate(
-                "BIM_PlanEdit",
-                "Change the height directly while keeping the hosted position.",
-            )
-        elif can_apply_style:
-            hint_text = translate(
-                "BIM_PlanEdit",
-                "Apply a built-in preset while keeping the hosted position, width, height, frame depth, and frame offset.",
-            )
-        else:
-            hint_text = translate(
-                "BIM_PlanEdit",
-                "Window editing is unavailable for the current selection.",
-            )
-        return "{}\n{}\n{}\n{}".format(style_text, width_text, height_text, hint_text)
 
     def _update_window_size_apply_state(self, modal_active=None):
         if (
@@ -2885,7 +2637,7 @@ class PlanEditControlsWidget:
         if self.window_preset_combo is None or self.window_preset_apply_button is None:
             return
 
-        window = self._get_window_editor_target()
+        window = plan_task_panel_view_model.get_window_editor_target(self.session)
         can_apply_style = bool(window and self.session._can_apply_window_style_preset(window))
         if modal_active is None:
             modal_active = self.session._is_modal_plan_interaction_active()
@@ -2926,11 +2678,13 @@ class PlanEditControlsWidget:
             if self.window_editor is None:
                 return
 
-            window = self._get_window_editor_target()
-            show_editor = bool(window)
-            if not show_editor:
+            window_editor_vm = plan_task_panel_view_model.build_window_editor_view_model(
+                self.session
+            )
+            if not window_editor_vm.show_editor:
                 self._hide_window_editor()
                 return
+            window = window_editor_vm.window
 
             try:
                 self.window_editor.setVisible(True)
@@ -2939,37 +2693,20 @@ class PlanEditControlsWidget:
 
             self._refreshing_window_editor = True
             try:
-                window_key = self._get_editor_object_key(window)
-                can_edit_width = self.session._can_edit_window_width(window)
-                can_edit_height = self.session._can_edit_window_height(window)
-                can_apply_style = self.session._can_apply_window_style_preset(window)
-                current_style = self.session._get_selected_window_style_preset()
-                current_width_text = self.session._get_selected_window_width_text()
-                current_height_text = self.session._get_selected_window_height_text()
-                combo_items = self._get_window_preset_combo_items(current_style)
-                state = (
-                    window_key,
-                    combo_items,
-                    str(current_style or ""),
-                    str(current_width_text or ""),
-                    str(current_height_text or ""),
-                    bool(can_edit_width),
-                    bool(can_edit_height),
-                    bool(can_apply_style),
-                )
+                state = window_editor_vm.state_key
                 if state != self._window_editor_state:
                     self.window_width_edit.blockSignals(True)
                     self.window_height_edit.blockSignals(True)
                     self.window_preset_combo.blockSignals(True)
                     try:
-                        self.window_width_edit.setText(str(current_width_text or ""))
-                        self.window_height_edit.setText(str(current_height_text or ""))
+                        self.window_width_edit.setText(window_editor_vm.current_width_text)
+                        self.window_height_edit.setText(window_editor_vm.current_height_text)
                         self.window_preset_combo.clear()
-                        for item_data, item_label in combo_items:
+                        for item_data, item_label in window_editor_vm.combo_items:
                             self.window_preset_combo.addItem(item_label, item_data)
                         current_index = self._find_combo_data_index(
                             self.window_preset_combo,
-                            current_style,
+                            window_editor_vm.current_style,
                         )
                         self.window_preset_combo.setCurrentIndex(
                             current_index if current_index >= 0 else 0
@@ -2979,21 +2716,21 @@ class PlanEditControlsWidget:
                         self.window_height_edit.blockSignals(False)
                         self.window_preset_combo.blockSignals(False)
 
-                    self.window_preset_note.setText(
-                        self._format_window_editor_note(
-                            current_style,
-                            current_width_text,
-                            current_height_text,
-                            can_edit_width,
-                            can_edit_height,
-                            can_apply_style,
-                        )
-                    )
+                    self.window_preset_note.setText(window_editor_vm.note_text)
                     self._window_editor_state = state
 
-                self._set_widget_enabled(self.window_width_edit, bool(can_edit_width))
-                self._set_widget_enabled(self.window_height_edit, bool(can_edit_height))
-                self._set_widget_enabled(self.window_preset_combo, bool(can_apply_style))
+                self._set_widget_enabled(
+                    self.window_width_edit,
+                    window_editor_vm.can_edit_width,
+                )
+                self._set_widget_enabled(
+                    self.window_height_edit,
+                    window_editor_vm.can_edit_height,
+                )
+                self._set_widget_enabled(
+                    self.window_preset_combo,
+                    window_editor_vm.can_apply_style,
+                )
             finally:
                 self._refreshing_window_editor = False
 
