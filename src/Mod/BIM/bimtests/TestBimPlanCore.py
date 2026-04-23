@@ -539,7 +539,7 @@ class TestBimPlanCore(unittest.TestCase):
             self.assertTrue(session.wall_edit.has_active_wall_edit())
             self.assertEqual(
                 ("Plan Edit", "Select\nWork directly in the viewport"),
-                session._get_status_chip_text(),
+                session.status_text.get_status_chip_text(),
             )
             self.assertEqual("Preset A", session._get_selected_window_style_preset())
             self.assertEqual("Provider A", session.get_plan_provider_display_name("provider-a"))
