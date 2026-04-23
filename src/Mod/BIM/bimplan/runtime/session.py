@@ -42,20 +42,28 @@ from bimplan import object_visibility as plan_object_visibility
 from bimplan import performance as plan_performance
 from bimplan.providers import point as plan_provider_point
 from bimplan.providers import runtime as plan_provider_runtime
-from bimplan.runtime import session_components as plan_session_components
 from bimplan import snap as plan_snap
 from bimplan.runtime import session_state as plan_session_state
+from bimplan.runtime.session_state import PlanInteractionAPI
 from bimplan import storeys as plan_storeys
 from bimplan import task_panel as plan_task_panel
 from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection.selection import PlanSelectionAPI
 from bimplan.tools import symbol_edit as plan_symbol_edit
+from bimplan.tools.symbol_edit import PlanSymbolsAPI
 from bimplan.tools import opening_edit as plan_opening_edit
 from bimplan.providers import edit as plan_provider_edit
+from bimplan.providers.runtime import PlanProvidersAPI
 from bimplan.selection import targets as plan_targets
 from bimplan.tools import wall_create as plan_wall_create
 from bimplan.tools import wall_relations as plan_wall_relations
+from bimplan.tools.wall_relations import PlanWallRelationsAPI
+from bimplan.tools.wall_edit import PlanWallEditAPI
 from bimplan.tools import window_create as plan_window_create
+from bimplan.tools.window_create import PlanWindowsAPI
+from bimplan.tools.spaces import PlanSpacesAPI
 from bimplan.providers import PlanEditContext
+from bimplan.runtime.view import PlanViewportAPI
 from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
 from bimplan.overlays import openings as opening_overlays
@@ -64,6 +72,7 @@ from bimplan.overlays import spaces as space_overlays
 from bimplan.overlays import symbols as symbol_overlays
 from bimplan.overlays import walls as wall_overlays
 from bimplan.providers import get_plan_edit_registry
+from bimplan.status_text import PlanStatusTextAPI
 from bimplan.ui.controls import PlanEditControlsWidget
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
@@ -612,16 +621,16 @@ class PlanEditSession:
         self._ensure_interaction_state().edit_space = value
 
     def __init__(self):
-        self.selection = plan_session_components.PlanSelectionAPI(self)
-        self.spaces = plan_session_components.PlanSpacesAPI(self)
-        self.wall_relations = plan_session_components.PlanWallRelationsAPI(self)
-        self.interaction = plan_session_components.PlanInteractionAPI(self)
-        self.symbols = plan_session_components.PlanSymbolsAPI(self)
-        self.windows = plan_session_components.PlanWindowsAPI(self)
-        self.viewport = plan_session_components.PlanViewportAPI(self)
-        self.wall_edit = plan_session_components.PlanWallEditAPI(self)
-        self.providers = plan_session_components.PlanProvidersAPI(self)
-        self.status_text = plan_session_components.PlanStatusTextAPI(self)
+        self.selection = PlanSelectionAPI(self)
+        self.spaces = PlanSpacesAPI(self)
+        self.wall_relations = PlanWallRelationsAPI(self)
+        self.interaction = PlanInteractionAPI(self)
+        self.symbols = PlanSymbolsAPI(self)
+        self.windows = PlanWindowsAPI(self)
+        self.viewport = PlanViewportAPI(self)
+        self.wall_edit = PlanWallEditAPI(self)
+        self.providers = PlanProvidersAPI(self)
+        self.status_text = PlanStatusTextAPI(self)
         plan_session_state.initialize_session_state(self)
 
     def _connect_teardown_signal(self, signal):
@@ -2442,7 +2451,7 @@ class PlanEditSession:
 
     @staticmethod
     def _clip_preview_polygon_to_plane(polygon, plane_placement, ref_point, tol=1e-7):
-        return plan_session_components.PlanWallEditAPI.clip_preview_polygon_to_plane(
+        return PlanWallEditAPI.clip_preview_polygon_to_plane(
             polygon,
             plane_placement,
             ref_point,
