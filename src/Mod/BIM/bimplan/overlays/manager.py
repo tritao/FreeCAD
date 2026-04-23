@@ -2,6 +2,25 @@
 
 """Shared overlay management helpers for BIM Plan Edit."""
 
+_PLAN_VISUAL_HOVERED_WALL = "hovered_wall"
+_PLAN_VISUAL_HOVERED_OPENING = "hovered_opening"
+_PLAN_VISUAL_HOVERED_SYMBOL = "hovered_symbol"
+_PLAN_VISUAL_HOVERED_PROVIDER = "hovered_provider"
+_PLAN_VISUAL_HOVERED_SPACE = "hovered_space"
+_PLAN_VISUAL_HOVERED_REGION = "hovered_region"
+_PLAN_VISUAL_SELECTED_PROVIDER = "selected_provider"
+_PLAN_VISUAL_SELECTED_OPENING = "selected_opening"
+_PLAN_VISUAL_SELECTED_SYMBOL = "selected_symbol"
+_PLAN_VISUAL_SELECTED_SPACE = "selected_space"
+_PLAN_VISUAL_SELECTED_REGION = "selected_region"
+_PLAN_VISUAL_SECONDARY_SELECTION = "secondary_selection"
+_PLAN_VISUAL_SPACE_REGION_PICK = "space_region_pick"
+_PLAN_VISUAL_WALL_GRIPS = "wall_grips"
+_PLAN_VISUAL_WALL_EDIT_PREVIEW = "wall_edit_preview"
+_PLAN_VISUAL_PROVIDER_OVERLAYS = "provider_overlays"
+_PLAN_VISUAL_VIEW_SCALE = "view_scale"
+_PLAN_VISUAL_ALL = "all"
+
 
 def _session_is_inactive(session):
     if session._tearing_down or getattr(session, "_finishing", False):
@@ -78,6 +97,278 @@ def flush_view_scale_overlay_refresh(session):
     if not dirty:
         return
     session._refresh_plan_overlay_visuals(dirty)
+
+
+def refresh_plan_overlay_view_scale(session):
+    with session._plan_perf_trace_span("refresh_plan_overlay_view_scale"):
+        if session.current_tool == "Join":
+            session._sync_junction_node_overlays()
+            if session.hovered_wall:
+                session._sync_hovered_wall_overlay()
+            return
+        if session.current_tool == "Set Space Text":
+            if session._is_selected_plan_target("space"):
+                session._sync_selected_space_overlay()
+            return
+        if session.current_tool == "Pick Space Region":
+            if session._space_region_candidates:
+                session._sync_space_region_pick_overlays()
+            if session._get_selected_plan_targets():
+                session._sync_secondary_selected_overlays()
+            return
+        if session.current_tool == "Provider Point":
+            session._sync_provider_overlays()
+            session._sync_provider_point_preview()
+            return
+        if session.current_tool != "Select":
+            return
+        if session.hovered_wall or session._is_selected_plan_target("wall"):
+            session._sync_junction_node_overlays()
+        if session.hovered_wall:
+            session._sync_hovered_wall_overlay()
+            session._sync_hovered_wall_opening_context_overlay()
+        if session._is_selected_plan_target("wall"):
+            session._sync_selected_wall_overlay()
+            session._sync_selected_wall_opening_context_overlay()
+            session._sync_wall_grips()
+        if session.hovered_opening:
+            session._sync_hovered_opening_overlay()
+        if session._is_selected_plan_target("opening"):
+            session._sync_selected_opening_overlay()
+            session._sync_selected_opening_handles()
+        if session.hovered_symbol:
+            session._sync_hovered_symbol_overlay()
+        session._sync_provider_overlays()
+        if session.hovered_provider:
+            session._sync_hovered_provider_overlay()
+        if session._is_selected_plan_target("provider") or session._get_provider_selected_objects():
+            session._sync_selected_provider_overlay()
+        if session._is_selected_plan_target("symbol"):
+            session._sync_selected_symbol_overlay()
+            session._sync_selected_symbol_handles()
+        if session.hovered_space:
+            session._sync_hovered_space_overlay()
+        if session._is_selected_plan_target("space"):
+            session._sync_selected_space_overlay()
+        if session.hovered_region:
+            session._sync_hovered_region_overlay()
+        if session._is_selected_plan_target("region"):
+            session._sync_selected_region_overlay()
+        if session._get_secondary_selected_plan_targets():
+            session._sync_secondary_selected_overlays()
+
+
+def refresh_plan_overlay_visuals(session, dirty=None):
+    if session._tearing_down or session._finishing or not session._document_is_alive():
+        return
+    dirty = set(dirty or {_PLAN_VISUAL_ALL})
+    refresh_all = _PLAN_VISUAL_ALL in dirty
+    if not refresh_all and _PLAN_VISUAL_VIEW_SCALE in dirty:
+        session._refresh_plan_overlay_view_scale()
+        dirty.discard(_PLAN_VISUAL_VIEW_SCALE)
+        if not dirty:
+            return
+    if session.current_tool == "Join":
+        if refresh_all or _PLAN_VISUAL_HOVERED_WALL in dirty:
+            session._sync_hovered_wall_overlay()
+        session._sync_junction_node_overlays()
+        session._clear_hovered_wall_opening_context_overlay()
+        session._clear_hovered_opening_overlay()
+        session._clear_hovered_symbol_overlay()
+        session._clear_hovered_provider_overlay()
+        session._clear_hovered_space_overlay()
+        session._clear_hovered_region_overlay()
+        session._clear_space_region_pick_overlays()
+        session._clear_selected_provider_overlay()
+        session._clear_selected_provider_handles()
+        session._clear_selected_opening_overlay()
+        session._clear_selected_symbol_overlay()
+        session._clear_selected_space_overlay()
+        session._clear_selected_region_overlay()
+        session._clear_provider_overlays()
+        session._clear_provider_point_preview()
+        session._clear_secondary_selected_overlays()
+        session._clear_selected_opening_handles()
+        session._clear_selected_symbol_handles()
+        session._clear_selected_wall_opening_context_overlay()
+        session._clear_wall_grips()
+        session._clear_selected_wall_overlay()
+        return
+    if session.current_tool == "Region":
+        session._clear_junction_node_overlays()
+        session._clear_hovered_wall_overlay()
+        session._clear_hovered_wall_opening_context_overlay()
+        session._clear_hovered_opening_overlay()
+        session._clear_hovered_symbol_overlay()
+        session._clear_hovered_provider_overlay()
+        session._clear_hovered_space_overlay()
+        session._clear_hovered_region_overlay()
+        session._clear_space_region_pick_overlays()
+        session._clear_selected_provider_overlay()
+        session._clear_selected_provider_handles()
+        session._clear_selected_opening_overlay()
+        session._clear_selected_symbol_overlay()
+        session._clear_selected_space_overlay()
+        session._clear_selected_region_overlay()
+        session._clear_provider_overlays()
+        session._clear_provider_point_preview()
+        session._clear_secondary_selected_overlays()
+        session._clear_selected_opening_handles()
+        session._clear_selected_symbol_handles()
+        session._clear_selected_wall_opening_context_overlay()
+        session._clear_wall_grips()
+        session._clear_selected_wall_overlay()
+        return
+    if session.current_tool == "Set Space Text":
+        session._clear_junction_node_overlays()
+        session._clear_hovered_wall_overlay()
+        session._clear_hovered_wall_opening_context_overlay()
+        session._clear_hovered_opening_overlay()
+        session._clear_hovered_symbol_overlay()
+        session._clear_hovered_provider_overlay()
+        session._clear_hovered_space_overlay()
+        session._clear_hovered_region_overlay()
+        session._clear_space_region_pick_overlays()
+        session._clear_selected_provider_overlay()
+        session._clear_selected_provider_handles()
+        session._clear_selected_opening_overlay()
+        session._clear_selected_symbol_overlay()
+        session._clear_selected_region_overlay()
+        session._clear_provider_overlays()
+        session._clear_provider_point_preview()
+        session._clear_secondary_selected_overlays()
+        session._clear_selected_opening_handles()
+        session._clear_selected_symbol_handles()
+        session._clear_selected_wall_opening_context_overlay()
+        session._clear_wall_grips()
+        session._clear_selected_wall_overlay()
+        if session._is_selected_plan_target("space") and (
+            refresh_all or _PLAN_VISUAL_SELECTED_SPACE in dirty
+        ):
+            session._refresh_selected_space_visuals()
+        return
+    if session.current_tool == "Pick Space Region":
+        session._clear_junction_node_overlays()
+        session._clear_hovered_wall_overlay()
+        session._clear_hovered_wall_opening_context_overlay()
+        session._clear_hovered_opening_overlay()
+        session._clear_hovered_symbol_overlay()
+        session._clear_hovered_provider_overlay()
+        session._clear_hovered_space_overlay()
+        session._clear_hovered_region_overlay()
+        session._clear_selected_provider_overlay()
+        session._clear_selected_provider_handles()
+        session._clear_selected_opening_overlay()
+        session._clear_selected_symbol_overlay()
+        session._clear_selected_space_overlay()
+        session._clear_selected_region_overlay()
+        session._clear_provider_overlays()
+        session._clear_provider_point_preview()
+        session._clear_selected_opening_handles()
+        session._clear_selected_symbol_handles()
+        session._clear_selected_wall_opening_context_overlay()
+        session._clear_wall_grips()
+        session._clear_selected_wall_overlay()
+        if (
+            refresh_all
+            or _PLAN_VISUAL_SECONDARY_SELECTION in dirty
+            or _PLAN_VISUAL_SPACE_REGION_PICK in dirty
+        ):
+            session._sync_secondary_selected_overlays()
+            session._sync_space_region_pick_overlays()
+        return
+    if session.current_tool == "Provider Point":
+        session._clear_junction_node_overlays()
+        session._clear_hovered_wall_overlay()
+        session._clear_hovered_wall_opening_context_overlay()
+        session._clear_hovered_opening_overlay()
+        session._clear_hovered_symbol_overlay()
+        session._clear_hovered_provider_overlay()
+        session._clear_hovered_space_overlay()
+        session._clear_hovered_region_overlay()
+        session._clear_space_region_pick_overlays()
+        session._clear_selected_provider_overlay()
+        session._clear_selected_provider_handles()
+        session._clear_selected_opening_overlay()
+        session._clear_selected_symbol_overlay()
+        session._clear_selected_space_overlay()
+        session._clear_selected_region_overlay()
+        session._clear_secondary_selected_overlays()
+        session._clear_selected_opening_handles()
+        session._clear_selected_symbol_handles()
+        session._clear_selected_wall_opening_context_overlay()
+        session._clear_wall_grips()
+        session._clear_selected_wall_overlay()
+        if refresh_all or _PLAN_VISUAL_PROVIDER_OVERLAYS in dirty:
+            session._sync_provider_overlays()
+        session._sync_provider_point_preview()
+        return
+    if session.current_tool == "Window":
+        session._clear_junction_node_overlays()
+        session._clear_hovered_wall_overlay()
+        session._clear_hovered_wall_opening_context_overlay()
+        session._clear_hovered_opening_overlay()
+        session._clear_hovered_symbol_overlay()
+        session._clear_hovered_provider_overlay()
+        session._clear_hovered_space_overlay()
+        session._clear_hovered_region_overlay()
+        session._clear_space_region_pick_overlays()
+        session._clear_selected_provider_overlay()
+        session._clear_selected_opening_overlay()
+        session._clear_selected_symbol_overlay()
+        session._clear_selected_space_overlay()
+        session._clear_selected_region_overlay()
+        session._clear_provider_overlays()
+        session._clear_provider_point_preview()
+        session._clear_secondary_selected_overlays()
+        session._clear_selected_opening_handles()
+        session._clear_selected_symbol_handles()
+        session._clear_selected_wall_opening_context_overlay()
+        session._clear_wall_grips()
+        session._clear_selected_wall_overlay()
+        return
+    if session.current_tool == "Select":
+        session._clear_space_region_pick_overlays()
+        session._sync_junction_node_overlays()
+        if refresh_all or _PLAN_VISUAL_HOVERED_WALL in dirty:
+            session._sync_hovered_wall_overlay()
+        session._sync_selected_wall_opening_context_overlay()
+        session._sync_hovered_wall_opening_context_overlay()
+        if refresh_all or _PLAN_VISUAL_HOVERED_OPENING in dirty:
+            session._sync_hovered_opening_overlay()
+        if refresh_all or _PLAN_VISUAL_HOVERED_SYMBOL in dirty:
+            session._sync_hovered_symbol_overlay()
+        if refresh_all or _PLAN_VISUAL_HOVERED_PROVIDER in dirty:
+            session._sync_hovered_provider_overlay()
+        if refresh_all or _PLAN_VISUAL_HOVERED_SPACE in dirty:
+            session._sync_hovered_space_overlay()
+        if refresh_all or _PLAN_VISUAL_HOVERED_REGION in dirty:
+            session._sync_hovered_region_overlay()
+        if refresh_all or _PLAN_VISUAL_SELECTED_OPENING in dirty:
+            session._sync_selected_opening_overlay()
+            session._sync_selected_opening_handles()
+        if refresh_all or _PLAN_VISUAL_SELECTED_SYMBOL in dirty:
+            session._sync_selected_symbol_overlay()
+            session._sync_selected_symbol_handles()
+        if refresh_all or _PLAN_VISUAL_SELECTED_REGION in dirty:
+            session._sync_selected_region_overlay()
+        if refresh_all or _PLAN_VISUAL_SELECTED_SPACE in dirty:
+            session._sync_selected_space_overlay()
+        if refresh_all or _PLAN_VISUAL_SECONDARY_SELECTION in dirty:
+            session._sync_secondary_selected_overlays()
+        if refresh_all or _PLAN_VISUAL_SPACE_REGION_PICK in dirty:
+            session._clear_space_region_pick_overlays()
+        if refresh_all or _PLAN_VISUAL_WALL_GRIPS in dirty:
+            session._sync_selected_wall_overlay()
+            session._sync_wall_grips()
+        provider_overlays_dirty = refresh_all or _PLAN_VISUAL_PROVIDER_OVERLAYS in dirty
+        if provider_overlays_dirty:
+            session._sync_provider_overlays()
+        if provider_overlays_dirty or refresh_all or _PLAN_VISUAL_SELECTED_PROVIDER in dirty:
+            session._sync_selected_provider_overlay()
+            session._sync_selected_provider_handles()
+        session._clear_provider_point_preview()
+        return
 
 
 def finalize_trackers(trackers):
