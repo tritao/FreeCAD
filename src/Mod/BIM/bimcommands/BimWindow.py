@@ -28,6 +28,7 @@ import os
 
 import FreeCAD
 import FreeCADGui
+from bimplan import selection_access as plan_selection_access
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -91,7 +92,7 @@ class Arch_Window:
         session = BimPlanSession.get_active_session()
         if session and self.sel:
             try:
-                selected = session._get_selected_plan_target_object("wall")
+                selected = plan_selection_access.get_selected_plan_target_object(session, "wall")
                 if selected and self.sel[0] == selected:
                     session.suspend_selected_wall_state(selected)
             except Exception:

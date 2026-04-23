@@ -262,9 +262,6 @@ class PlanEditSession:
     def _set_selected_plan_target_state(self, kind=None, obj=None):
         return self.selection.set_selected_plan_target_state(kind=kind, obj=obj)
 
-    def _get_selected_plan_target_object(self, kind=None):
-        return self.selection.get_selected_plan_target_object(kind=kind)
-
     def _is_selected_plan_target(self, kind, obj=None):
         return self.selection.is_selected_plan_target(kind, obj=obj)
 
@@ -481,7 +478,7 @@ class PlanEditSession:
         try:
             yield None
         finally:
-            selected_after = self._get_selected_plan_target()
+            selected_after = self.selection.get_selected_plan_target()
             self._plan_pick_debug_event(
                 f"{name}_end",
                 selected_after=self._plan_perf_describe_target(
@@ -920,7 +917,7 @@ class PlanEditSession:
         self._start_wall_edit("Move")
 
     def is_selected_wall_endpoint_editable(self):
-        wall = self._get_selected_plan_target_object("wall")
+        wall = self.selection.get_selected_plan_target_object("wall")
         if not wall:
             return False
         proxy = getattr(wall, "Proxy", None)
@@ -936,7 +933,7 @@ class PlanEditSession:
             return False
 
     def is_selected_wall_baseless(self):
-        wall = self._get_selected_plan_target_object("wall")
+        wall = self.selection.get_selected_plan_target_object("wall")
         if not wall:
             return False
         return not getattr(wall, "Base", None) and self.is_selected_wall_endpoint_editable()
@@ -1148,7 +1145,7 @@ class PlanEditSession:
     def _sync_active_plan_target_object(self):
         if not self.view:
             return
-        target_kind, target_obj = self._get_selected_plan_target()
+        target_kind, target_obj = self.selection.get_selected_plan_target()
         del target_kind
         if target_obj is not None:
             self._set_active_object(target_obj)
@@ -1384,9 +1381,6 @@ class PlanEditSession:
     def _consume_pending_selected_plan_target(self):
         return self.selection.consume_pending_selected_plan_target()
 
-    def _get_selected_plan_target(self):
-        return self.selection.get_selected_plan_target()
-
     def _get_first_plan_target_from_selection(self, selection):
         return self.selection.get_first_plan_target_from_selection(selection)
 
@@ -1446,9 +1440,6 @@ class PlanEditSession:
     def _add_gui_selection_object(self, obj):
         return plan_selection_observer.add_gui_selection_object(obj)
 
-    def _get_secondary_selected_plan_targets(self):
-        return self.selection.get_secondary_selected_plan_targets()
-
     def _format_plan_target_count_label(self, kind, count):
         return self.status_text.format_plan_target_count_label(kind, count)
 
@@ -1464,9 +1455,6 @@ class PlanEditSession:
 
     def _summarize_plan_targets(self, targets):
         return self.status_text.summarize_plan_targets(targets)
-
-    def _get_selected_plan_targets(self):
-        return self.selection.get_selected_plan_targets()
 
     def _get_plan_text_property(self, obj, property_names, default=""):
         return plan_targets.get_plan_text_property(obj, property_names, default=default)
@@ -2879,17 +2867,17 @@ class PlanEditSession:
 
     def _can_apply_window_style_preset(self, window=None):
         if window is None:
-            window = self._get_selected_plan_target_object("opening")
+            window = self.selection.get_selected_plan_target_object("opening")
         return plan_window_edit.can_edit_window_style_preset(window)
 
     def _can_edit_window_width(self, window=None):
         if window is None:
-            window = self._get_selected_plan_target_object("opening")
+            window = self.selection.get_selected_plan_target_object("opening")
         return plan_window_edit.can_edit_window_width(window)
 
     def _can_edit_window_height(self, window=None):
         if window is None:
-            window = self._get_selected_plan_target_object("opening")
+            window = self.selection.get_selected_plan_target_object("opening")
         return plan_window_edit.can_edit_window_height(window)
 
     def _can_apply_selected_window_style_preset(self):
