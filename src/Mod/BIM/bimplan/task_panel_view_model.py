@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 import FreeCAD
 
+from bimplan import task_panel_context as plan_task_panel_context
 from bimplan.providers import (
     PlanContextPanelState,
     PlanContextSubjectKind,
@@ -271,7 +272,8 @@ def sort_provider_tools(tools):
     )
 
 
-def build_provider_overlay_legend_items(session, overlays):
+def build_provider_overlay_legend_items(session_or_context, overlays):
+    context = plan_task_panel_context.as_task_panel_context(session_or_context)
     items = []
     seen = set()
     for overlay in tuple(overlays or ()):
@@ -286,20 +288,20 @@ def build_provider_overlay_legend_items(session, overlays):
             continue
         seen.add(identity)
         label = str(getattr(overlay, "label", "") or "").strip() or overlay_key
-        provider_label = session.get_plan_provider_display_name(provider_id)
+        provider_label = context.get_plan_provider_display_name(provider_id)
         if provider_label:
             label = translate("BIM_PlanEdit", "{provider}: {label}").format(
                 provider=provider_label,
                 label=label,
             )
-        category = session.get_plan_provider_overlay_category(overlay)
+        category = context.get_plan_provider_overlay_category(overlay)
         items.append(
             (
                 provider_id,
                 overlay_key,
                 label,
                 tuple(getattr(overlay, "color", ()) or ()),
-                session.is_plan_provider_overlay_enabled(overlay),
+                context.is_plan_provider_overlay_enabled(overlay),
                 category,
             )
         )
@@ -343,10 +345,11 @@ def build_integration_panel_summary_text(
     return translate("BIM_PlanEdit", "Plan guidance: {details}.").format(details=", ".join(parts))
 
 
-def build_integration_panel_view_model(session, snapshot):
+def build_integration_panel_view_model(session_or_context, snapshot):
+    context = plan_task_panel_context.as_task_panel_context(session_or_context)
     tools = sort_provider_tools(getattr(snapshot, "tools", ()))
-    overlay_items = build_provider_overlay_legend_items(session, getattr(snapshot, "overlays", ()))
-    overlay_mode = str(session.get_plan_provider_overlay_mode() or "architecture")
+    overlay_items = build_provider_overlay_legend_items(context, getattr(snapshot, "overlays", ()))
+    overlay_mode = context.get_plan_provider_overlay_mode()
     active_overlay_items = filter_provider_overlay_legend_items_for_mode(
         overlay_items,
         active_mode=overlay_mode,
@@ -418,18 +421,19 @@ def build_integration_panel_view_model(session, snapshot):
     )
 
 
-def build_action_context_view_model(session, modal_active=None):
+def build_action_context_view_model(session_or_context, modal_active=None):
+    context = plan_task_panel_context.as_task_panel_context(session_or_context)
     if modal_active is None:
-        modal_active = session._is_modal_plan_interaction_active()
-    selected_kind, selected_obj = session.selection.get_selected_plan_target()
-    current_tool = str(session.current_tool or "")
+        modal_active = context.is_modal_plan_interaction_active()
+    selected_kind, selected_obj = context.get_selected_plan_target()
+    current_tool = context.get_current_tool()
     has_wall = selected_kind == "wall" and selected_obj is not None
-    can_place_window = session.can_place_plan_window()
+    can_place_window = context.can_place_plan_window()
     in_join_mode = current_tool == "Join"
-    join_candidate = session._get_plan_candidate_joint() is not None if in_join_mode else False
+    join_candidate = context.has_plan_candidate_joint() if in_join_mode else False
     enabled = not bool(modal_active)
     mode_label = (
-        session._get_provider_point_tool_label()
+        context.get_provider_point_tool_label()
         if current_tool == "Provider Point"
         else current_tool
     )
@@ -501,26 +505,27 @@ def _append_status_help_line(text, line):
     return "{}\n{}".format(text, line)
 
 
-def build_status_text_view_model(session):
-    tool = str(session.current_tool or "")
-    selected_kind, selected_obj = session.selection.get_selected_plan_target()
-    selected_state = session._format_plan_target_selection_state(
+def build_status_text_view_model(session_or_context):
+    context = plan_task_panel_context.as_task_panel_context(session_or_context)
+    tool = context.get_current_tool()
+    selected_kind, selected_obj = context.get_selected_plan_target()
+    selected_state = context.format_plan_target_selection_state(
         selected_kind,
         selected_obj,
     )
-    provider_state = session._format_provider_selected_object_state()
+    provider_state = context.format_provider_selected_object_state()
     if tool == "Join" and selected_kind == "wall" and selected_obj is not None:
-        target_wall, joint, detail = session._get_plan_join_candidate_state()
+        target_wall, joint, detail = context.get_plan_join_candidate_state()
         selection_state = translate("BIM_PlanEdit", "Source wall: {label}").format(
-            label=session._get_plan_target_display_label(selected_obj)
+            label=context.get_plan_target_display_label(selected_obj)
         )
         selection_help = translate(
             "BIM_PlanEdit",
             "Join type: {joint_type}\n{pair_state}\n{action}",
         ).format(
-            joint_type=session.get_plan_join_type_label(),
+            joint_type=context.get_plan_join_type_label(),
             pair_state=detail or translate("BIM_PlanEdit", "Candidate wall: none"),
-            action=session._get_plan_join_mode_action_text(target_wall, joint),
+            action=context.get_plan_join_mode_action_text(target_wall, joint),
         )
     elif tool == "Pick Space Region":
         selection_state = translate("BIM_PlanEdit", "Space creation: pick region")
@@ -528,15 +533,15 @@ def build_status_text_view_model(session):
             "BIM_PlanEdit",
             "Multiple enclosed regions were found. Hover a dashed outline, then click to create that space.",
         )
-        targets = session.selection.get_selected_plan_targets()
+        targets = context.get_selected_plan_targets()
         if targets:
             selection_help = _append_status_help_line(
                 selection_help,
                 translate("BIM_PlanEdit", "Boundary candidates: {summary}").format(
-                    summary=session._summarize_plan_targets(targets)
+                    summary=context.summarize_plan_targets(targets)
                 ),
             )
-        candidate_count = len(getattr(session, "_space_region_candidates", ()) or ())
+        candidate_count = context.get_space_region_candidate_count()
         if candidate_count:
             selection_help = _append_status_help_line(
                 selection_help,
@@ -544,12 +549,12 @@ def build_status_text_view_model(session):
                     count=candidate_count
                 ),
             )
-        hovered_candidate = getattr(session, "_hovered_space_region_candidate", None)
+        hovered_candidate = context.get_hovered_space_region_candidate()
         if hovered_candidate:
             selection_help = _append_status_help_line(
                 selection_help,
                 translate("BIM_PlanEdit", "Hovered region area: {area}").format(
-                    area=session._format_space_region_candidate_area(hovered_candidate)
+                    area=context.format_space_region_candidate_area(hovered_candidate)
                 ),
             )
     elif tool == "Region":
@@ -558,8 +563,8 @@ def build_status_text_view_model(session):
             "BIM_PlanEdit",
             "Click polygon points to define a semantic plan region. Press Enter to finish, or click near the first point to close.",
         )
-        parent_space = getattr(session, "_plan_region_parent_space", None)
-        if session._is_plan_space_object(parent_space):
+        parent_space = context.get_plan_region_parent_space()
+        if context.is_plan_space_object(parent_space):
             selection_help = _append_status_help_line(
                 selection_help,
                 translate("BIM_PlanEdit", "Parent space: {label}").format(label=parent_space.Label),
@@ -577,19 +582,19 @@ def build_status_text_view_model(session):
             "Click along the selected or hovered wall to place a hosted window.",
         )
     elif tool == "Provider Point":
-        selection_state = session._get_provider_point_tool_label()
-        selection_help = session._get_provider_point_tool_prompt()
+        selection_state = context.get_provider_point_tool_label()
+        selection_help = context.get_provider_point_tool_prompt()
     elif selected_kind == "opening" and selected_obj is not None:
         selection_state = selected_state
-        selection_help = session._format_opening_selection_help(selected_obj)
+        selection_help = context.format_opening_selection_help(selected_obj)
     elif selected_kind == "symbol" and selected_obj is not None:
         selection_state = selected_state
         if tool == "Rotate Symbol":
-            if session._symbol_rotation_snap_enabled():
+            if context.symbol_rotation_snap_enabled():
                 selection_help = translate(
                     "BIM_PlanEdit",
                     "Use in-view handles to rotate the selected symbol instance. Rotation snaps to {snap} by default; hold Shift for free angle.",
-                ).format(snap=session._format_symbol_rotation_snap_label())
+                ).format(snap=context.format_symbol_rotation_snap_label())
             else:
                 selection_help = translate(
                     "BIM_PlanEdit",
@@ -614,10 +619,10 @@ def build_status_text_view_model(session):
         )
     elif selected_kind == "provider" and selected_obj is not None:
         selection_state = selected_state
-        selection_help = session._format_provider_target_help(selected_obj)
+        selection_help = context.format_provider_target_help(selected_obj)
     elif selected_kind == "wall" and selected_obj is not None:
         selection_state = selected_state
-        if session.is_selected_wall_endpoint_editable():
+        if context.is_selected_wall_endpoint_editable():
             selection_help = translate(
                 "BIM_PlanEdit",
                 "Use wall grips in the viewport to stretch or move the selected wall.",
@@ -629,7 +634,7 @@ def build_status_text_view_model(session):
             )
     elif provider_state:
         selection_state = provider_state
-        selection_help = session._format_provider_selected_object_help()
+        selection_help = context.format_provider_selected_object_help()
     else:
         selection_state = translate("BIM_PlanEdit", "No target selected")
         selection_help = translate(
@@ -637,7 +642,7 @@ def build_status_text_view_model(session):
             "Click a wall, opening, symbol, integration target, region, or space. Use create tools to add plan geometry.",
         )
 
-    selection_summary = session._get_plan_selection_summary_text()
+    selection_summary = context.get_plan_selection_summary_text()
     if selection_summary:
         selection_help = _append_status_help_line(selection_help, selection_summary)
     if tool == "Select":
@@ -648,7 +653,7 @@ def build_status_text_view_model(session):
                 "Ctrl-click adds or removes targets without replacing the current editor target.",
             ),
         )
-    relation_status = str(getattr(session, "_plan_relation_status_message", "") or "").strip()
+    relation_status = context.get_plan_relation_status_message()
     if relation_status:
         selection_help = _append_status_help_line(selection_help, relation_status)
     return PlanStatusTextViewModel(
@@ -659,30 +664,33 @@ def build_status_text_view_model(session):
     )
 
 
-def build_space_editor_view_model(session):
-    selected_kind, selected_obj = session.selection.get_selected_plan_target()
+def build_space_editor_view_model(session_or_context):
+    context = plan_task_panel_context.as_task_panel_context(session_or_context)
+    selected_kind, selected_obj = context.get_selected_plan_target()
     space = selected_obj if selected_kind == "space" else None
     return PlanSpaceEditorViewModel(
-        show_editor=bool(space and session.current_tool in ("Select", "Set Space Text")),
+        show_editor=bool(space and context.get_current_tool() in ("Select", "Set Space Text")),
         space=space,
     )
 
 
-def build_region_editor_view_model(session):
-    selected_kind, selected_obj = session.selection.get_selected_plan_target()
+def build_region_editor_view_model(session_or_context):
+    context = plan_task_panel_context.as_task_panel_context(session_or_context)
+    selected_kind, selected_obj = context.get_selected_plan_target()
     region = selected_obj if selected_kind == "region" else None
     return PlanRegionEditorViewModel(
-        show_editor=bool(region and session.current_tool == "Select"),
+        show_editor=bool(region and context.get_current_tool() == "Select"),
         region=region,
     )
 
 
-def get_window_preset_combo_items(session, current_style):
+def get_window_preset_combo_items(session_or_context, current_style):
+    context = plan_task_panel_context.as_task_panel_context(session_or_context)
     items = []
     current_style = str(current_style or "").strip()
     if not current_style:
         items.append(("", translate("BIM_PlanEdit", "Custom / Current")))
-    for preset in session._get_window_style_preset_options():
+    for preset in context.get_window_style_preset_options():
         items.append((str(preset or ""), str(preset or "")))
     return tuple(items)
 
@@ -758,31 +766,33 @@ def format_window_editor_note(
     return "{}\n{}\n{}\n{}".format(style_text, width_text, height_text, hint_text)
 
 
-def get_window_editor_target(session):
-    selected_kind, selected_obj = session.selection.get_selected_plan_target()
-    if selected_kind != "opening" or selected_obj is None or session.current_tool != "Select":
+def get_window_editor_target(session_or_context):
+    context = plan_task_panel_context.as_task_panel_context(session_or_context)
+    selected_kind, selected_obj = context.get_selected_plan_target()
+    if selected_kind != "opening" or selected_obj is None or context.get_current_tool() != "Select":
         return None
     if (
-        session._can_edit_window_width(selected_obj)
-        or session._can_edit_window_height(selected_obj)
-        or session._can_apply_window_style_preset(selected_obj)
+        context.can_edit_window_width(selected_obj)
+        or context.can_edit_window_height(selected_obj)
+        or context.can_apply_window_style_preset(selected_obj)
     ):
         return selected_obj
     return None
 
 
-def build_window_editor_view_model(session):
-    window = get_window_editor_target(session)
+def build_window_editor_view_model(session_or_context):
+    context = plan_task_panel_context.as_task_panel_context(session_or_context)
+    window = get_window_editor_target(context)
     if window is None:
         return PlanWindowEditorViewModel()
 
-    can_edit_width = bool(session._can_edit_window_width(window))
-    can_edit_height = bool(session._can_edit_window_height(window))
-    can_apply_style = bool(session._can_apply_window_style_preset(window))
-    current_style = str(session._get_selected_window_style_preset() or "")
-    current_width_text = str(session._get_selected_window_width_text() or "")
-    current_height_text = str(session._get_selected_window_height_text() or "")
-    combo_items = get_window_preset_combo_items(session, current_style)
+    can_edit_width = context.can_edit_window_width(window)
+    can_edit_height = context.can_edit_window_height(window)
+    can_apply_style = context.can_apply_window_style_preset(window)
+    current_style = context.get_selected_window_style_preset()
+    current_width_text = context.get_selected_window_width_text()
+    current_height_text = context.get_selected_window_height_text()
+    combo_items = get_window_preset_combo_items(context, current_style)
     return PlanWindowEditorViewModel(
         show_editor=True,
         window=window,
