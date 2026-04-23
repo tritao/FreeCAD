@@ -1019,7 +1019,7 @@ class PlanEditSession:
             return False
 
     def _discard_runtime_references(self):
-        self._clear_viewport_status_chip()
+        self.viewport.clear_viewport_status_chip()
         self._restore_preselection_state()
         self.doc = None
         self.gui_doc = None
@@ -2767,15 +2767,6 @@ class PlanEditSession:
     def _is_modal_plan_interaction_active(self):
         return self.interaction.is_modal_plan_interaction_active()
 
-    def _focus_plan_view(self):
-        return self.viewport.focus_plan_view()
-
-    def _queue_focus_plan_view(self):
-        return self.viewport.queue_focus_plan_view()
-
-    def _get_plan_view_widget(self):
-        return self.viewport.get_plan_view_widget()
-
     def _get_plan_target_display_label(self, obj):
         return self.status_text.get_plan_target_display_label(obj)
 
@@ -2806,17 +2797,11 @@ class PlanEditSession:
     def _format_provider_selected_object_help(self):
         return self.status_text.format_provider_selected_object_help()
 
-    def _ensure_viewport_status_chip(self):
-        return self.viewport.ensure_viewport_status_chip()
-
-    def _refresh_viewport_status_chip(self):
-        return self.viewport.refresh_viewport_status_chip()
+    def _clear_input_hints(self):
+        return self.status_text.clear_input_hints()
 
     def _clear_viewport_status_chip(self):
         return self.viewport.clear_viewport_status_chip()
-
-    def _clear_input_hints(self):
-        return self.status_text.clear_input_hints()
 
     def _request_view_redraw(self):
         return self.viewport.request_view_redraw()
