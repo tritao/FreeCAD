@@ -3,8 +3,294 @@
 """Space boundary helpers for BIM Plan Edit."""
 
 import FreeCAD
+import FreeCADGui
 
 translate = FreeCAD.Qt.translate
+
+_MIN_WALL_LENGTH = 10.0
+
+
+def has_active_space_separator_tool(session):
+    return session._space_separator_start is not None or session.current_tool == "Separator"
+
+
+def has_active_plan_region_tool(session):
+    return bool(session._plan_region_points) or session.current_tool == "Region"
+
+
+def clear_plan_region_preview(session):
+    session._finalize_trackers(session._plan_region_preview_trackers)
+    session._plan_region_preview_trackers = []
+
+
+def cancel_plan_region_tool(session, refresh=True):
+    if not session._has_active_plan_region_tool():
+        return False
+    session._stop_snapper()
+    session._clear_plan_region_preview()
+    session._plan_region_points = []
+    session._plan_region_parent_space = None
+    FreeCAD.activeDraftCommand = None
+    session.current_tool = "Select"
+    if refresh:
+        session._refresh_task_panel_status()
+    session._sync_selected_region_overlay()
+    session._sync_selected_space_overlay()
+    session._sync_selected_provider_overlay()
+    session._sync_selected_provider_handles()
+    return True
+
+
+def get_plan_region_close_tolerance(session):
+    units_per_pixel = session._get_plan_view_units_per_pixel()
+    if units_per_pixel is None:
+        return 120.0
+    return max(120.0, float(units_per_pixel) * 12.0)
+
+
+def get_plan_region_preview_segments(session, point=None):
+    points = [FreeCAD.Vector(item) for item in (session._plan_region_points or [])]
+    if point is not None:
+        point = session._project_plan_point(point)
+        if point is not None and (not points or point.distanceToPoint(points[-1]) > 0.000001):
+            points.append(point)
+    segments = []
+    for start, end in zip(points, points[1:]):
+        if start.distanceToPoint(end) <= 0.000001:
+            continue
+        segments.append((start, end, False))
+    if len(points) >= 3 and points[-1].distanceToPoint(points[0]) > 0.000001:
+        segments.append((points[-1], points[0], True))
+    return segments
+
+
+def update_plan_region_preview(session, point, info):
+    del info
+    segments = session._get_plan_region_preview_segments(point)
+    session._clear_plan_region_preview()
+    if not segments:
+        return
+    try:
+        import draftguitools.gui_trackers as DraftTrackers
+    except Exception:
+        return
+
+    color = (0.86, 0.48, 0.12)
+    width = session._scaled_line_width(2)
+    for index, (start, end, dotted) in enumerate(segments):
+        tracker = session._make_plan_line_tracker(
+            DraftTrackers,
+            "plan_region_preview:{}".format(index),
+            dotted=dotted,
+            scolor=color,
+            swidth=width,
+            ontop=True,
+        )
+        tracker.p1(start)
+        tracker.p2(end)
+        tracker.on()
+        session._plan_region_preview_trackers.append(tracker)
+
+
+def create_plan_region(session, points):
+    import Arch
+
+    region = None
+    session.doc.openTransaction(translate("BIM_PlanEdit", "Create Plan Region"))
+    try:
+        region = Arch.makePlanRegion(
+            points=points,
+            parent_space=session._plan_region_parent_space,
+        )
+        if not region:
+            raise RuntimeError("Unable to create plan region")
+        session._add_object_to_active_storey(region)
+        session.doc.recompute()
+        if not session._get_region_footprint_faces(region):
+            raise RuntimeError("Plan region has no valid footprint")
+        session.doc.commitTransaction()
+    except Exception:
+        try:
+            session.doc.abortTransaction()
+        except Exception:
+            pass
+        raise
+    return region
+
+
+def finalize_plan_region(session):
+    if len(session._plan_region_points) < 3:
+        FreeCAD.Console.PrintWarning(
+            translate(
+                "BIM_PlanEdit",
+                "Place at least three points before finishing the region.\n",
+            )
+        )
+        return False
+    try:
+        region = session._create_plan_region(session._plan_region_points)
+    except Exception:
+        FreeCAD.Console.PrintError(translate("BIM_PlanEdit", "Failed to create the plan region.\n"))
+        return False
+
+    session._register_plan_object(region)
+    session._cancel_plan_region_tool(refresh=False)
+    session._restore_selected_region(region)
+    return True
+
+
+def handle_plan_region_point(session, point=None, obj=None):
+    del obj
+    if point is None:
+        session._cancel_plan_region_tool()
+        return
+
+    point = session._project_plan_point(point)
+    if point is None:
+        session._cancel_plan_region_tool()
+        return
+
+    if session._plan_region_points:
+        if point.distanceToPoint(session._plan_region_points[-1]) <= 0.000001:
+            FreeCADGui.Snapper.getPoint(
+                callback=session._handle_plan_region_point,
+                movecallback=session._update_plan_region_preview,
+                last=session._plan_region_points[-1],
+                title=translate("BIM_PlanEdit", "Next region point"),
+                mode="line",
+            )
+            return
+        if (
+            len(session._plan_region_points) >= 3
+            and point.distanceToPoint(session._plan_region_points[0])
+            <= session._get_plan_region_close_tolerance()
+        ):
+            session._finalize_plan_region()
+            return
+
+    session._plan_region_points.append(point)
+    session._update_plan_region_preview(None, None)
+    FreeCADGui.Snapper.getPoint(
+        callback=session._handle_plan_region_point,
+        movecallback=session._update_plan_region_preview,
+        last=point,
+        title=translate("BIM_PlanEdit", "Next region point"),
+        mode="line",
+    )
+
+
+def clear_space_separator_preview(session):
+    session._finalize_trackers(session._space_separator_preview_trackers)
+    session._space_separator_preview_trackers = []
+
+
+def cancel_space_separator_tool(session, refresh=True):
+    if not session._has_active_space_separator_tool():
+        return False
+    session._stop_snapper()
+    session._clear_space_separator_preview()
+    session._space_separator_start = None
+    session._space_separator_height = None
+    FreeCAD.activeDraftCommand = None
+    session.current_tool = "Select"
+    if refresh:
+        session._refresh_task_panel_status()
+    session._sync_selected_opening_overlay()
+    session._sync_selected_opening_handles()
+    session._sync_selected_space_overlay()
+    session._sync_selected_provider_overlay()
+    session._sync_selected_provider_handles()
+    return True
+
+
+def update_space_separator_preview(session, point, info):
+    del info
+    start = session._space_separator_start
+    if start is None or point is None:
+        return
+    end = session._project_plan_point(point)
+    if end is None or end.sub(start).Length < _MIN_WALL_LENGTH:
+        return
+    try:
+        import draftguitools.gui_trackers as DraftTrackers
+    except Exception:
+        return
+
+    if not session._space_separator_preview_trackers:
+        tracker = session._make_plan_line_tracker(
+            DraftTrackers,
+            "space_separator_preview",
+            dotted=True,
+            ontop=True,
+        )
+        session._space_separator_preview_trackers.append(tracker)
+    tracker = session._space_separator_preview_trackers[0]
+    tracker.p1(start)
+    tracker.p2(end)
+    tracker.on()
+
+
+def create_space_separator(session, start, end):
+    import Arch
+
+    separator = None
+    session.doc.openTransaction(translate("BIM_PlanEdit", "Create Space Separator"))
+    try:
+        separator = Arch.makeSpaceSeparator(
+            start=start,
+            end=end,
+            height=session._space_separator_height,
+        )
+        if not separator:
+            raise RuntimeError("Unable to create space separator")
+        session._add_object_to_active_storey(separator)
+        session.doc.recompute()
+        session.doc.commitTransaction()
+    except Exception:
+        try:
+            session.doc.abortTransaction()
+        except Exception:
+            pass
+        raise
+    return separator
+
+
+def handle_space_separator_point(session, point=None, obj=None):
+    del obj
+    if point is None:
+        session._cancel_space_separator_tool()
+        return
+
+    point = session._project_plan_point(point)
+    if session._space_separator_start is None:
+        session._space_separator_start = point
+        FreeCADGui.Snapper.getPoint(
+            callback=session._handle_space_separator_point,
+            movecallback=session._update_space_separator_preview,
+            last=point,
+            title=translate("BIM_PlanEdit", "Separator end point"),
+            mode="line",
+        )
+        return
+
+    if point.sub(session._space_separator_start).Length < _MIN_WALL_LENGTH:
+        session._cancel_space_separator_tool()
+        return
+
+    try:
+        separator = session._create_space_separator(session._space_separator_start, point)
+    except Exception:
+        session._cancel_space_separator_tool()
+        FreeCAD.Console.PrintError(
+            translate("BIM_PlanEdit", "Failed to create the space separator.\n")
+        )
+        return
+
+    session._register_plan_object(separator)
+    session._cancel_space_separator_tool(refresh=False)
+    session.current_tool = "Select"
+    session._refresh_primary_selected_plan_target()
+    session._refresh_task_panel_status()
 
 
 def get_space_reference_point(session, space):
