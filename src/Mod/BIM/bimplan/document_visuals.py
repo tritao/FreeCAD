@@ -2,6 +2,57 @@
 
 """Document-driven visual refresh helpers for BIM Plan Edit."""
 
+_OPENING_VISUAL_PROPERTIES = {
+    "Shape",
+    "Placement",
+    "Base",
+    "Hosts",
+    "WindowParts",
+    "IfcType",
+}
+_WALL_VISUAL_PROPERTIES = {"Shape", "Additions", "Subtractions", "Hosts"}
+_SYMBOL_VISUAL_PROPERTIES = {
+    "Shape",
+    "Placement",
+    "Base",
+    "PlanSymbols",
+    "LinkedObject",
+}
+_SPACE_VISUAL_PROPERTIES = {
+    "Shape",
+    "Placement",
+    "Label",
+    "Boundaries",
+}
+_REGION_VISUAL_PROPERTIES = {
+    "Shape",
+    "Placement",
+    "Label",
+    "Points",
+    "Scheme",
+    "RegionType",
+    "ParentSpace",
+}
+OPENING_VISUAL_PROPERTIES = _OPENING_VISUAL_PROPERTIES
+WALL_VISUAL_PROPERTIES = _WALL_VISUAL_PROPERTIES
+SYMBOL_VISUAL_PROPERTIES = _SYMBOL_VISUAL_PROPERTIES
+SPACE_VISUAL_PROPERTIES = _SPACE_VISUAL_PROPERTIES
+REGION_VISUAL_PROPERTIES = _REGION_VISUAL_PROPERTIES
+_PLAN_VISUAL_HOVERED_WALL = "hovered_wall"
+_PLAN_VISUAL_HOVERED_OPENING = "hovered_opening"
+_PLAN_VISUAL_HOVERED_SYMBOL = "hovered_symbol"
+_PLAN_VISUAL_HOVERED_PROVIDER = "hovered_provider"
+_PLAN_VISUAL_HOVERED_SPACE = "hovered_space"
+_PLAN_VISUAL_HOVERED_REGION = "hovered_region"
+_PLAN_VISUAL_SELECTED_PROVIDER = "selected_provider"
+_PLAN_VISUAL_SELECTED_OPENING = "selected_opening"
+_PLAN_VISUAL_SELECTED_SYMBOL = "selected_symbol"
+_PLAN_VISUAL_SELECTED_SPACE = "selected_space"
+_PLAN_VISUAL_SELECTED_REGION = "selected_region"
+_PLAN_VISUAL_SECONDARY_SELECTION = "secondary_selection"
+_PLAN_VISUAL_WALL_GRIPS = "wall_grips"
+_PLAN_VISUAL_PROVIDER_OVERLAYS = "provider_overlays"
+
 
 def is_opening_visual_dependency(opening, obj):
     if not opening or not obj:
@@ -178,3 +229,302 @@ def flush_hard_refresh_selected_opening_visuals(session):
     session._sync_selected_opening_overlay()
     session._sync_selected_opening_handles()
     session._request_view_redraw()
+
+
+def slot_created_object(session, obj):
+    if session._tearing_down:
+        return
+    session._invalidate_plan_provider_document_cache()
+    session._provider_overlay_state = None
+    session._invalidate_plan_classification_cache()
+    session._invalidate_wall_hosted_openings_cache()
+    session._queue_created_plan_object(obj)
+
+
+def slot_changed_object(session, obj, prop):
+    if session._tearing_down:
+        return
+    session._invalidate_plan_provider_document_cache()
+    session._provider_overlay_state = None
+    session._invalidate_plan_classification_cache()
+    session._invalidate_wall_hosted_openings_cache()
+    if session._are_document_visual_updates_deferred():
+        session._defer_document_visual_refresh()
+        return
+    if session.current_tool != "Select":
+        return
+    session._sanitize_plan_target_references()
+    selected_wall = session._get_selected_plan_target_object("wall")
+    selected_opening = session._get_selected_plan_target_object("opening")
+    selected_symbol = session._get_selected_plan_target_object("symbol")
+    selected_region = session._get_selected_plan_target_object("region")
+    selected_space = session._get_selected_plan_target_object("space")
+    if selected_region and obj == selected_region and prop in _REGION_VISUAL_PROPERTIES:
+        session._refresh_plan_object_footprint_display(selected_region)
+        session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_REGION)
+        session._refresh_task_panel_status()
+        return
+    if (
+        session.hovered_region
+        and not session._is_selected_plan_target("region", session.hovered_region)
+        and obj == session.hovered_region
+        and prop in _REGION_VISUAL_PROPERTIES
+    ):
+        session._refresh_plan_object_footprint_display(session.hovered_region)
+        session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_REGION)
+        return
+    if selected_space and obj == selected_space and prop in _SPACE_VISUAL_PROPERTIES:
+        session._refresh_plan_object_footprint_display(selected_space)
+        session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_SPACE)
+        session._refresh_task_panel_status()
+        return
+    if (
+        session.hovered_space
+        and not session._is_selected_plan_target("space", session.hovered_space)
+        and obj == session.hovered_space
+        and prop in _SPACE_VISUAL_PROPERTIES
+    ):
+        session._refresh_plan_object_footprint_display(session.hovered_space)
+        session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_SPACE)
+        return
+    secondary_overlay_refresh = False
+    for target_kind, target_obj in session._get_secondary_selected_plan_targets():
+        if target_kind == "region" and obj == target_obj and prop in _REGION_VISUAL_PROPERTIES:
+            session._refresh_plan_object_footprint_display(target_obj)
+            secondary_overlay_refresh = True
+        elif target_kind == "space" and obj == target_obj and prop in _SPACE_VISUAL_PROPERTIES:
+            session._refresh_plan_object_footprint_display(target_obj)
+            secondary_overlay_refresh = True
+        elif (
+            target_kind == "symbol"
+            and session._is_symbol_visual_dependency(target_obj, obj)
+            and prop in _SYMBOL_VISUAL_PROPERTIES
+        ):
+            session._refresh_plan_object_footprint_display(target_obj)
+            secondary_overlay_refresh = True
+        elif (
+            target_kind == "opening"
+            and session._is_opening_visual_dependency(target_obj, obj)
+            and prop in _OPENING_VISUAL_PROPERTIES
+        ):
+            session._refresh_opening_footprint_display(target_obj)
+            session._refresh_opening_host_footprint_displays(target_obj)
+            secondary_overlay_refresh = True
+        elif target_kind == "wall" and obj == target_obj and prop in _WALL_VISUAL_PROPERTIES:
+            secondary_overlay_refresh = True
+    if secondary_overlay_refresh:
+        session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SECONDARY_SELECTION)
+        return
+    if (
+        session._is_symbol_visual_dependency(selected_symbol, obj)
+        and prop in _SYMBOL_VISUAL_PROPERTIES
+    ):
+        session._refresh_plan_object_footprint_display(selected_symbol)
+        session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_SYMBOL)
+        return
+    if (
+        session._is_symbol_visual_dependency(session.hovered_symbol, obj)
+        and prop in _SYMBOL_VISUAL_PROPERTIES
+    ):
+        session._refresh_plan_object_footprint_display(session.hovered_symbol)
+        session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_SYMBOL)
+        return
+    if (
+        session._is_opening_visual_dependency(selected_opening, obj)
+        and prop in _OPENING_VISUAL_PROPERTIES
+    ):
+        session._refresh_opening_footprint_display(selected_opening)
+        session._refresh_opening_host_footprint_displays(selected_opening)
+        session._queue_plan_overlay_visual_refresh(
+            _PLAN_VISUAL_SELECTED_OPENING,
+            _PLAN_VISUAL_HOVERED_OPENING,
+        )
+        return
+    if (
+        session._is_opening_visual_dependency(session.hovered_opening, obj)
+        and prop in _OPENING_VISUAL_PROPERTIES
+    ):
+        session._refresh_opening_footprint_display(session.hovered_opening)
+        session._refresh_opening_host_footprint_displays(session.hovered_opening)
+        session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_OPENING)
+        return
+    if (
+        session.hovered_wall
+        and obj in session._get_wall_hosted_openings(session.hovered_wall)
+        and prop in _OPENING_VISUAL_PROPERTIES
+    ):
+        session._refresh_opening_footprint_display(obj)
+        session._refresh_opening_host_footprint_displays(obj)
+        session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_WALL)
+        return
+    if (
+        selected_wall
+        and obj in session._get_wall_hosted_openings(selected_wall)
+        and prop in _OPENING_VISUAL_PROPERTIES
+    ):
+        session._refresh_opening_footprint_display(obj)
+        session._refresh_opening_host_footprint_displays(obj)
+        session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_WALL_GRIPS)
+        return
+    if obj == session.hovered_wall and prop in _WALL_VISUAL_PROPERTIES:
+        session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_WALL)
+        return
+    if obj != selected_wall:
+        return
+    if prop not in _WALL_VISUAL_PROPERTIES:
+        return
+    session._refresh_wall_hosted_opening_footprints(obj)
+    session._schedule_selected_wall_reset(prop, obj)
+
+
+def slot_deleted_object(session, obj):
+    if session._tearing_down:
+        return
+    session._invalidate_plan_provider_document_cache()
+    session._provider_overlay_state = None
+    session._invalidate_plan_classification_cache()
+    session._invalidate_wall_hosted_openings_cache()
+    session._invalidate_plan_overlay_geometry_cache(obj)
+    if session._are_document_visual_updates_deferred():
+        session._defer_document_visual_refresh()
+        return
+    if obj == session.hovered_wall:
+        session.hovered_wall = None
+        session._clear_hovered_wall_overlay()
+    if obj == session.hovered_opening:
+        session.hovered_opening = None
+        session._clear_hovered_opening_overlay()
+    if obj == session.hovered_symbol:
+        session.hovered_symbol = None
+        session._clear_hovered_symbol_overlay()
+    if obj == session.hovered_provider:
+        session.hovered_provider = None
+        session._clear_hovered_provider_overlay()
+    if obj == session.hovered_space:
+        session.hovered_space = None
+        session._clear_hovered_space_overlay()
+    if obj == session.hovered_region:
+        session.hovered_region = None
+        session._clear_hovered_region_overlay()
+    if session._clear_selected_plan_target_if_matches("opening", obj):
+        session._refresh_selected_opening_visuals()
+        return
+    if session._clear_selected_plan_target_if_matches("symbol", obj):
+        session._refresh_selected_symbol_visuals()
+        return
+    if session._clear_selected_plan_target_if_matches("region", obj):
+        session._refresh_selected_region_visuals()
+        session._refresh_task_panel_status()
+        return
+    if session._clear_selected_plan_target_if_matches("space", obj):
+        session._refresh_selected_space_visuals()
+        session._refresh_task_panel_status()
+        return
+    if not session._is_selected_plan_target("wall", obj):
+        return
+    session._schedule_selected_wall_reset("Deleted", obj)
+
+
+def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=False):
+    if session._tearing_down or session._finishing or not session._document_is_alive():
+        return
+    session._invalidate_plan_provider_document_cache()
+    session._invalidate_plan_classification_cache()
+    session._invalidate_wall_hosted_openings_cache()
+    session._invalidate_plan_overlay_geometry_cache()
+    session._sanitize_plan_target_references()
+    selected_symbol = session._get_selected_plan_target_object("symbol")
+    selected_region = session._get_selected_plan_target_object("region")
+    selected_space = session._get_selected_plan_target_object("space")
+    selected_opening = session._get_selected_plan_target_object("opening")
+    selected_provider = session._get_selected_plan_target_object("provider")
+    if selected_symbol:
+        session._refresh_plan_object_footprint_display(selected_symbol)
+    if session.hovered_symbol and not session._is_selected_plan_target(
+        "symbol", session.hovered_symbol
+    ):
+        session._refresh_plan_object_footprint_display(session.hovered_symbol)
+    if selected_region:
+        session._refresh_plan_object_footprint_display(selected_region)
+    if session.hovered_region and not session._is_selected_plan_target(
+        "region", session.hovered_region
+    ):
+        session._refresh_plan_object_footprint_display(session.hovered_region)
+    if selected_space:
+        session._refresh_plan_object_footprint_display(selected_space)
+    if session.hovered_space and not session._is_selected_plan_target(
+        "space", session.hovered_space
+    ):
+        session._refresh_plan_object_footprint_display(session.hovered_space)
+    secondary_targets = session._get_secondary_selected_plan_targets()
+    for target_kind, target_obj in secondary_targets:
+        if target_kind in ("symbol", "region", "space"):
+            session._refresh_plan_object_footprint_display(target_obj)
+        elif target_kind == "opening":
+            session._refresh_opening_footprint_display(target_obj)
+            session._refresh_opening_host_footprint_displays(target_obj)
+    if selected_opening:
+        session._refresh_opening_footprint_display(selected_opening)
+        session._refresh_opening_host_footprint_displays(selected_opening)
+        session._queue_hard_refresh_selected_opening_visuals()
+    if session.hovered_opening and not session._is_selected_plan_target(
+        "opening", session.hovered_opening
+    ):
+        session._refresh_opening_footprint_display(session.hovered_opening)
+        session._refresh_opening_host_footprint_displays(session.hovered_opening)
+    if recompute_opening_hosts:
+        session._queue_recompute_opening_hosts(selected_opening, session.hovered_opening)
+    visual_args = [
+        _PLAN_VISUAL_SELECTED_SYMBOL,
+        _PLAN_VISUAL_HOVERED_SYMBOL,
+        _PLAN_VISUAL_HOVERED_PROVIDER,
+        _PLAN_VISUAL_HOVERED_OPENING,
+        _PLAN_VISUAL_HOVERED_WALL,
+        _PLAN_VISUAL_WALL_GRIPS,
+        _PLAN_VISUAL_PROVIDER_OVERLAYS,
+    ]
+    if selected_region:
+        visual_args.append(_PLAN_VISUAL_SELECTED_REGION)
+    if session.hovered_region and not session._is_selected_plan_target(
+        "region", session.hovered_region
+    ):
+        visual_args.append(_PLAN_VISUAL_HOVERED_REGION)
+    if selected_space:
+        visual_args.append(_PLAN_VISUAL_SELECTED_SPACE)
+    if session.hovered_space and not session._is_selected_plan_target(
+        "space", session.hovered_space
+    ):
+        visual_args.append(_PLAN_VISUAL_HOVERED_SPACE)
+    if selected_opening:
+        visual_args.append(_PLAN_VISUAL_SELECTED_OPENING)
+    if selected_provider or session._get_provider_selected_objects():
+        visual_args.append(_PLAN_VISUAL_SELECTED_PROVIDER)
+    if secondary_targets:
+        visual_args.append(_PLAN_VISUAL_SECONDARY_SELECTION)
+    session._queue_plan_overlay_visual_refresh(*visual_args)
+
+
+def slot_undo_document(session, doc):
+    del doc
+    session._invalidate_document_dependent_plan_visuals(recompute_opening_hosts=True)
+
+
+def slot_redo_document(session, doc):
+    del doc
+    session._invalidate_document_dependent_plan_visuals(recompute_opening_hosts=True)
+
+
+def slot_recomputed_document(session, doc):
+    del doc
+    if session._are_document_visual_updates_deferred():
+        session._defer_document_visual_refresh()
+        return
+    session._invalidate_document_dependent_plan_visuals()
+
+
+def slot_deleted_document(session, doc):
+    del doc
+    if session._tearing_down:
+        return
+    session.begin_teardown()
+    session.shutdown(close_dialog=False, teardown=True)

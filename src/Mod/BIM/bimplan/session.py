@@ -90,37 +90,11 @@ _OPENING_MOVE_SNAP_SET = {
 }
 _OPENING_MOVE_ANCHORS = ("center", "left", "right")
 _PRIMARY_PLAN_TARGET_KINDS = ("wall", "opening", "symbol", "provider", "region", "space")
-_OPENING_VISUAL_PROPERTIES = {
-    "Shape",
-    "Placement",
-    "Base",
-    "Hosts",
-    "WindowParts",
-    "IfcType",
-}
-_WALL_VISUAL_PROPERTIES = {"Shape", "Additions", "Subtractions", "Hosts"}
-_SYMBOL_VISUAL_PROPERTIES = {
-    "Shape",
-    "Placement",
-    "Base",
-    "PlanSymbols",
-    "LinkedObject",
-}
-_SPACE_VISUAL_PROPERTIES = {
-    "Shape",
-    "Placement",
-    "Label",
-    "Boundaries",
-}
-_REGION_VISUAL_PROPERTIES = {
-    "Shape",
-    "Placement",
-    "Label",
-    "Points",
-    "Scheme",
-    "RegionType",
-    "ParentSpace",
-}
+_OPENING_VISUAL_PROPERTIES = plan_document_visuals.OPENING_VISUAL_PROPERTIES
+_WALL_VISUAL_PROPERTIES = plan_document_visuals.WALL_VISUAL_PROPERTIES
+_SYMBOL_VISUAL_PROPERTIES = plan_document_visuals.SYMBOL_VISUAL_PROPERTIES
+_SPACE_VISUAL_PROPERTIES = plan_document_visuals.SPACE_VISUAL_PROPERTIES
+_REGION_VISUAL_PROPERTIES = plan_document_visuals.REGION_VISUAL_PROPERTIES
 _PLAN_VISUAL_HOVERED_WALL = "hovered_wall"
 _PLAN_VISUAL_HOVERED_OPENING = "hovered_opening"
 _PLAN_VISUAL_HOVERED_SYMBOL = "hovered_symbol"
@@ -4503,285 +4477,31 @@ class PlanEditSession:
         return plan_document_visuals.flush_hard_refresh_selected_opening_visuals(self)
 
     def slotCreatedObject(self, obj):
-        if self._tearing_down:
-            return
-        self._invalidate_plan_provider_document_cache()
-        self._provider_overlay_state = None
-        self._invalidate_plan_classification_cache()
-        self._invalidate_wall_hosted_openings_cache()
-        self._queue_created_plan_object(obj)
+        return plan_document_visuals.slot_created_object(self, obj)
 
     def slotChangedObject(self, obj, prop):
-        if self._tearing_down:
-            return
-        self._invalidate_plan_provider_document_cache()
-        self._provider_overlay_state = None
-        self._invalidate_plan_classification_cache()
-        self._invalidate_wall_hosted_openings_cache()
-        if self._are_document_visual_updates_deferred():
-            self._defer_document_visual_refresh()
-            return
-        if self.current_tool != "Select":
-            return
-        self._sanitize_plan_target_references()
-        selected_wall = self._get_selected_plan_target_object("wall")
-        selected_opening = self._get_selected_plan_target_object("opening")
-        selected_symbol = self._get_selected_plan_target_object("symbol")
-        selected_region = self._get_selected_plan_target_object("region")
-        selected_space = self._get_selected_plan_target_object("space")
-        if selected_region and obj == selected_region and prop in _REGION_VISUAL_PROPERTIES:
-            self._refresh_plan_object_footprint_display(selected_region)
-            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_REGION)
-            self._refresh_task_panel_status()
-            return
-        if (
-            self.hovered_region
-            and not self._is_selected_plan_target("region", self.hovered_region)
-            and obj == self.hovered_region
-            and prop in _REGION_VISUAL_PROPERTIES
-        ):
-            self._refresh_plan_object_footprint_display(self.hovered_region)
-            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_REGION)
-            return
-        if selected_space and obj == selected_space and prop in _SPACE_VISUAL_PROPERTIES:
-            self._refresh_plan_object_footprint_display(selected_space)
-            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_SPACE)
-            self._refresh_task_panel_status()
-            return
-        if (
-            self.hovered_space
-            and not self._is_selected_plan_target("space", self.hovered_space)
-            and obj == self.hovered_space
-            and prop in _SPACE_VISUAL_PROPERTIES
-        ):
-            self._refresh_plan_object_footprint_display(self.hovered_space)
-            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_SPACE)
-            return
-        secondary_overlay_refresh = False
-        for target_kind, target_obj in self._get_secondary_selected_plan_targets():
-            if target_kind == "region" and obj == target_obj and prop in _REGION_VISUAL_PROPERTIES:
-                self._refresh_plan_object_footprint_display(target_obj)
-                secondary_overlay_refresh = True
-            elif target_kind == "space" and obj == target_obj and prop in _SPACE_VISUAL_PROPERTIES:
-                self._refresh_plan_object_footprint_display(target_obj)
-                secondary_overlay_refresh = True
-            elif (
-                target_kind == "symbol"
-                and self._is_symbol_visual_dependency(target_obj, obj)
-                and prop in _SYMBOL_VISUAL_PROPERTIES
-            ):
-                self._refresh_plan_object_footprint_display(target_obj)
-                secondary_overlay_refresh = True
-            elif (
-                target_kind == "opening"
-                and self._is_opening_visual_dependency(target_obj, obj)
-                and prop in _OPENING_VISUAL_PROPERTIES
-            ):
-                self._refresh_opening_footprint_display(target_obj)
-                self._refresh_opening_host_footprint_displays(target_obj)
-                secondary_overlay_refresh = True
-            elif target_kind == "wall" and obj == target_obj and prop in _WALL_VISUAL_PROPERTIES:
-                secondary_overlay_refresh = True
-        if secondary_overlay_refresh:
-            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SECONDARY_SELECTION)
-            return
-        if (
-            self._is_symbol_visual_dependency(selected_symbol, obj)
-            and prop in _SYMBOL_VISUAL_PROPERTIES
-        ):
-            self._refresh_plan_object_footprint_display(selected_symbol)
-            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_SYMBOL)
-            return
-        if (
-            self._is_symbol_visual_dependency(self.hovered_symbol, obj)
-            and prop in _SYMBOL_VISUAL_PROPERTIES
-        ):
-            self._refresh_plan_object_footprint_display(self.hovered_symbol)
-            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_SYMBOL)
-            return
-        if (
-            self._is_opening_visual_dependency(selected_opening, obj)
-            and prop in _OPENING_VISUAL_PROPERTIES
-        ):
-            self._refresh_opening_footprint_display(selected_opening)
-            self._refresh_opening_host_footprint_displays(selected_opening)
-            self._queue_plan_overlay_visual_refresh(
-                _PLAN_VISUAL_SELECTED_OPENING,
-                _PLAN_VISUAL_HOVERED_OPENING,
-            )
-            return
-        if (
-            self._is_opening_visual_dependency(self.hovered_opening, obj)
-            and prop in _OPENING_VISUAL_PROPERTIES
-        ):
-            self._refresh_opening_footprint_display(self.hovered_opening)
-            self._refresh_opening_host_footprint_displays(self.hovered_opening)
-            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_OPENING)
-            return
-        if (
-            self.hovered_wall
-            and obj in self._get_wall_hosted_openings(self.hovered_wall)
-            and prop in _OPENING_VISUAL_PROPERTIES
-        ):
-            self._refresh_opening_footprint_display(obj)
-            self._refresh_opening_host_footprint_displays(obj)
-            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_WALL)
-            return
-        if (
-            selected_wall
-            and obj in self._get_wall_hosted_openings(selected_wall)
-            and prop in _OPENING_VISUAL_PROPERTIES
-        ):
-            self._refresh_opening_footprint_display(obj)
-            self._refresh_opening_host_footprint_displays(obj)
-            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_WALL_GRIPS)
-            return
-        if obj == self.hovered_wall and prop in _WALL_VISUAL_PROPERTIES:
-            self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_WALL)
-            return
-        if obj != selected_wall:
-            return
-        if prop not in _WALL_VISUAL_PROPERTIES:
-            return
-        self._refresh_wall_hosted_opening_footprints(obj)
-        self._schedule_selected_wall_reset(prop, obj)
+        return plan_document_visuals.slot_changed_object(self, obj, prop)
 
     def slotDeletedObject(self, obj):
-        if self._tearing_down:
-            return
-        self._invalidate_plan_provider_document_cache()
-        self._provider_overlay_state = None
-        self._invalidate_plan_classification_cache()
-        self._invalidate_wall_hosted_openings_cache()
-        self._invalidate_plan_overlay_geometry_cache(obj)
-        if self._are_document_visual_updates_deferred():
-            self._defer_document_visual_refresh()
-            return
-        if obj == self.hovered_wall:
-            self.hovered_wall = None
-            self._clear_hovered_wall_overlay()
-        if obj == self.hovered_opening:
-            self.hovered_opening = None
-            self._clear_hovered_opening_overlay()
-        if obj == self.hovered_symbol:
-            self.hovered_symbol = None
-            self._clear_hovered_symbol_overlay()
-        if obj == self.hovered_provider:
-            self.hovered_provider = None
-            self._clear_hovered_provider_overlay()
-        if obj == self.hovered_space:
-            self.hovered_space = None
-            self._clear_hovered_space_overlay()
-        if obj == self.hovered_region:
-            self.hovered_region = None
-            self._clear_hovered_region_overlay()
-        if self._clear_selected_plan_target_if_matches("opening", obj):
-            self._refresh_selected_opening_visuals()
-            return
-        if self._clear_selected_plan_target_if_matches("symbol", obj):
-            self._refresh_selected_symbol_visuals()
-            return
-        if self._clear_selected_plan_target_if_matches("region", obj):
-            self._refresh_selected_region_visuals()
-            self._refresh_task_panel_status()
-            return
-        if self._clear_selected_plan_target_if_matches("space", obj):
-            self._refresh_selected_space_visuals()
-            self._refresh_task_panel_status()
-            return
-        if not self._is_selected_plan_target("wall", obj):
-            return
-        self._schedule_selected_wall_reset("Deleted", obj)
+        return plan_document_visuals.slot_deleted_object(self, obj)
 
     def _invalidate_document_dependent_plan_visuals(self, recompute_opening_hosts=False):
-        if self._tearing_down or self._finishing or not self._document_is_alive():
-            return
-        self._invalidate_plan_provider_document_cache()
-        self._invalidate_plan_classification_cache()
-        self._invalidate_wall_hosted_openings_cache()
-        self._invalidate_plan_overlay_geometry_cache()
-        self._sanitize_plan_target_references()
-        selected_symbol = self._get_selected_plan_target_object("symbol")
-        selected_region = self._get_selected_plan_target_object("region")
-        selected_space = self._get_selected_plan_target_object("space")
-        selected_opening = self._get_selected_plan_target_object("opening")
-        selected_provider = self._get_selected_plan_target_object("provider")
-        if selected_symbol:
-            self._refresh_plan_object_footprint_display(selected_symbol)
-        if self.hovered_symbol and not self._is_selected_plan_target("symbol", self.hovered_symbol):
-            self._refresh_plan_object_footprint_display(self.hovered_symbol)
-        if selected_region:
-            self._refresh_plan_object_footprint_display(selected_region)
-        if self.hovered_region and not self._is_selected_plan_target("region", self.hovered_region):
-            self._refresh_plan_object_footprint_display(self.hovered_region)
-        if selected_space:
-            self._refresh_plan_object_footprint_display(selected_space)
-        if self.hovered_space and not self._is_selected_plan_target("space", self.hovered_space):
-            self._refresh_plan_object_footprint_display(self.hovered_space)
-        secondary_targets = self._get_secondary_selected_plan_targets()
-        for target_kind, target_obj in secondary_targets:
-            if target_kind in ("symbol", "region", "space"):
-                self._refresh_plan_object_footprint_display(target_obj)
-            elif target_kind == "opening":
-                self._refresh_opening_footprint_display(target_obj)
-                self._refresh_opening_host_footprint_displays(target_obj)
-        if selected_opening:
-            self._refresh_opening_footprint_display(selected_opening)
-            self._refresh_opening_host_footprint_displays(selected_opening)
-            self._queue_hard_refresh_selected_opening_visuals()
-        if self.hovered_opening and not self._is_selected_plan_target(
-            "opening", self.hovered_opening
-        ):
-            self._refresh_opening_footprint_display(self.hovered_opening)
-            self._refresh_opening_host_footprint_displays(self.hovered_opening)
-        if recompute_opening_hosts:
-            self._queue_recompute_opening_hosts(selected_opening, self.hovered_opening)
-        visual_args = [
-            _PLAN_VISUAL_SELECTED_SYMBOL,
-            _PLAN_VISUAL_HOVERED_SYMBOL,
-            _PLAN_VISUAL_HOVERED_PROVIDER,
-            _PLAN_VISUAL_HOVERED_OPENING,
-            _PLAN_VISUAL_HOVERED_WALL,
-            _PLAN_VISUAL_WALL_GRIPS,
-            _PLAN_VISUAL_PROVIDER_OVERLAYS,
-        ]
-        if selected_region:
-            visual_args.append(_PLAN_VISUAL_SELECTED_REGION)
-        if self.hovered_region and not self._is_selected_plan_target("region", self.hovered_region):
-            visual_args.append(_PLAN_VISUAL_HOVERED_REGION)
-        if selected_space:
-            visual_args.append(_PLAN_VISUAL_SELECTED_SPACE)
-        if self.hovered_space and not self._is_selected_plan_target("space", self.hovered_space):
-            visual_args.append(_PLAN_VISUAL_HOVERED_SPACE)
-        if selected_opening:
-            visual_args.append(_PLAN_VISUAL_SELECTED_OPENING)
-        if selected_provider or self._get_provider_selected_objects():
-            visual_args.append(_PLAN_VISUAL_SELECTED_PROVIDER)
-        if secondary_targets:
-            visual_args.append(_PLAN_VISUAL_SECONDARY_SELECTION)
-        self._queue_plan_overlay_visual_refresh(*visual_args)
+        return plan_document_visuals.invalidate_document_dependent_plan_visuals(
+            self,
+            recompute_opening_hosts=recompute_opening_hosts,
+        )
 
     def slotUndoDocument(self, doc):
-        del doc
-        self._invalidate_document_dependent_plan_visuals(recompute_opening_hosts=True)
+        return plan_document_visuals.slot_undo_document(self, doc)
 
     def slotRedoDocument(self, doc):
-        del doc
-        self._invalidate_document_dependent_plan_visuals(recompute_opening_hosts=True)
+        return plan_document_visuals.slot_redo_document(self, doc)
 
     def slotRecomputedDocument(self, doc):
-        del doc
-        if self._are_document_visual_updates_deferred():
-            self._defer_document_visual_refresh()
-            return
-        self._invalidate_document_dependent_plan_visuals()
+        return plan_document_visuals.slot_recomputed_document(self, doc)
 
     def slotDeletedDocument(self, doc):
-        del doc
-        if self._tearing_down:
-            return
-        self.begin_teardown()
-        self.shutdown(close_dialog=False, teardown=True)
+        return plan_document_visuals.slot_deleted_document(self, doc)
 
     def attach_task_panel(self, panel):
         return plan_task_panel.attach_task_panel(self, panel)
