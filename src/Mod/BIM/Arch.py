@@ -2288,6 +2288,49 @@ def validateWindowResize(window, width=None, height=None):
     return ArchWindow.validateWindowResize(window, width=width, height=height)
 
 
+def canRehostObject(obj, host=None):
+    """Return ``True`` when an object supports host reassignment."""
+
+    if obj is None:
+        return False
+    if host is obj:
+        return False
+
+    obj_doc = getattr(obj, "Document", None)
+    host_doc = getattr(host, "Document", None)
+    if host is not None and obj_doc and host_doc and obj_doc != host_doc:
+        return False
+
+    return hasattr(obj, "Host") or hasattr(obj, "Hosts")
+
+
+def rehostObject(obj, host, preserve_world_position=False, raise_on_error=False):
+    """Assign a new host to an object exposing ``Host`` or ``Hosts``."""
+
+    if not canRehostObject(obj, host):
+        if raise_on_error:
+            raise ValueError("Object does not support reassignment to the requested host")
+        return False
+
+    pose_snapshot = _snapshotRehostObjectPose(obj) if preserve_world_position else None
+    try:
+        if hasattr(obj, "Host"):
+            obj.Host = host
+        elif hasattr(obj, "Hosts"):
+            obj.Hosts = [host] if host is not None else []
+        else:
+            if raise_on_error:
+                raise ValueError("Object has no host property")
+            return False
+        if pose_snapshot is not None:
+            _restoreRehostObjectPose(obj, pose_snapshot)
+    except Exception:
+        if raise_on_error:
+            raise
+        return False
+    return True
+
+
 def applyWindowPreset(window, preset_name, preserve_anchor=True, raise_on_error=False):
     """Apply a built-in preset to an existing Arch opening object."""
 
@@ -2339,6 +2382,46 @@ def setWindowHeight(window, value, preserve_anchor=True, raise_on_error=False):
         preserve_anchor=preserve_anchor,
         raise_on_error=raise_on_error,
     )
+
+
+def _snapshotRehostObjectPose(obj):
+    if obj is None:
+        return None
+    placement = getattr(obj, "Placement", None)
+    if placement is not None:
+        try:
+            return ("placement", FreeCAD.Placement(placement))
+        except Exception:
+            pass
+    if hasattr(obj, "X") and hasattr(obj, "Y"):
+        try:
+            return (
+                "xyz",
+                (
+                    float(getattr(obj, "X")),
+                    float(getattr(obj, "Y")),
+                    float(getattr(obj, "Z", 0.0) or 0.0),
+                    bool(hasattr(obj, "Z")),
+                ),
+            )
+        except Exception:
+            pass
+    return None
+
+
+def _restoreRehostObjectPose(obj, snapshot):
+    if obj is None or snapshot is None:
+        return
+    kind, value = snapshot
+    if kind == "placement":
+        obj.Placement = FreeCAD.Placement(value)
+        return
+    if kind == "xyz":
+        x_value, y_value, z_value, has_z = value
+        obj.X = x_value
+        obj.Y = y_value
+        if has_z:
+            obj.Z = z_value
 
 
 def is_debasable(wall):
