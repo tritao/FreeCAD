@@ -2202,11 +2202,41 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         self.assertTrue(door.ViewObject.Visibility)
-        self.assertTrue(door.ViewObject.Selectable)
+        self.assertFalse(door.ViewObject.Selectable)
         self.assertTrue(hasattr(door.ViewObject.Proxy, "lcoords"))
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
+
+        self.assertTrue(door.ViewObject.Selectable)
+
+    def test_plan_edit_hosted_openings_are_custom_pick_only(self):
+        """Hosted openings should rely on Plan Edit picking instead of native overlap selection."""
+
+        level = Arch.makeFloor(name="Level 0")
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        level.addObject(wall)
+        self.document.recompute()
+
+        door = self._make_hosted_door(wall, name="CustomPickDoor")
+
+        FreeCADGui.Selection.clearSelection()
+        FreeCADGui.Selection.addSelection(level)
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(door.ViewObject.Visibility)
+        self.assertFalse(
+            door.ViewObject.Selectable,
+            "Hosted openings should be selected through Plan Edit, not native wall overlap hits.",
+        )
+
+        session.shutdown(close_dialog=False)
+        self.pump_gui_events()
+
+        self.assertTrue(door.ViewObject.Selectable)
 
     def test_plan_edit_hosted_door_populates_footprint_lines(self):
         """Hosted doors should have committed footprint line data while Plan Edit is active."""
@@ -2228,7 +2258,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         proxy = door.ViewObject.Proxy
         self.assertTrue(door.ViewObject.Visibility)
-        self.assertTrue(door.ViewObject.Selectable)
+        self.assertFalse(door.ViewObject.Selectable)
         self.assertTrue(hasattr(proxy, "lcoords"))
         self.assertTrue(hasattr(proxy, "lset"))
         self.assertGreater(proxy.lcoords.point.getNum(), 0)
@@ -2251,7 +2281,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(door.ViewObject.Selectable)
+        self.assertFalse(door.ViewObject.Selectable)
 
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
