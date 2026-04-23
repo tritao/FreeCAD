@@ -955,6 +955,156 @@ def get_plan_target_from_edit_node(session, node):
     return session._get_plan_target_for_object(obj)
 
 
+def get_edit_node(session, mouse_pos):
+    symbol_handle_role = session._pick_selected_symbol_handle(mouse_pos)
+    if symbol_handle_role is not None:
+        node = (
+            "symbol_handle",
+            session._get_selected_plan_target_object("symbol"),
+            symbol_handle_role,
+        )
+        session._plan_pick_debug_event(
+            "get_edit_node",
+            mouse_pos=mouse_pos,
+            source="selected_symbol_handle",
+            result=node,
+        )
+        return node
+    opening_handle_index = session._pick_selected_opening_handle(mouse_pos)
+    if opening_handle_index is not None:
+        node = (
+            "opening_handle",
+            session._get_selected_plan_target_object("opening"),
+            opening_handle_index,
+        )
+        session._plan_pick_debug_event(
+            "get_edit_node",
+            mouse_pos=mouse_pos,
+            source="selected_opening_handle",
+            result=node,
+        )
+        return node
+    provider_handle_index = session._pick_selected_provider_handle(mouse_pos)
+    if provider_handle_index is not None:
+        node = (
+            "provider_handle",
+            session._get_selected_plan_target_object("provider"),
+            provider_handle_index,
+        )
+        session._plan_pick_debug_event(
+            "get_edit_node",
+            mouse_pos=mouse_pos,
+            source="selected_provider_handle",
+            result=node,
+        )
+        return node
+    target_kind, target_obj = session._pick_provider_overlay_target_from_objects_info(mouse_pos)
+    if target_obj is not None:
+        node = ("provider_overlay_target", target_kind, target_obj)
+        session._plan_pick_debug_event(
+            "get_edit_node",
+            mouse_pos=mouse_pos,
+            source="provider_overlay_objects_info",
+            result=node,
+        )
+        return node
+    target_kind, target_obj = session._pick_provider_overlay_target_from_overlays(mouse_pos)
+    if target_obj is not None:
+        node = ("provider_overlay_target", target_kind, target_obj)
+        session._plan_pick_debug_event(
+            "get_edit_node",
+            mouse_pos=mouse_pos,
+            source="provider_overlay_overlays",
+            result=node,
+        )
+        return node
+    if not session._render_manager:
+        session._plan_pick_debug_event(
+            "get_edit_node",
+            mouse_pos=mouse_pos,
+            source="no_render_manager",
+            result=None,
+        )
+        return None
+    try:
+        from pivy import coin
+    except Exception:
+        session._plan_pick_debug_event(
+            "get_edit_node",
+            mouse_pos=mouse_pos,
+            source="coin_import_failed",
+            result=None,
+        )
+        return None
+
+    ray_pick = coin.SoRayPickAction(session._render_manager.getViewportRegion())
+    ray_pick.setPoint(coin.SbVec2s(*mouse_pos))
+    ray_pick.setRadius(8)
+    ray_pick.setPickAll(True)
+    ray_pick.apply(session._render_manager.getSceneGraph())
+    picked_points = ray_pick.getPickedPointList()
+    if picked_points:
+        for picked_point in picked_points:
+            path = picked_point.getPath()
+            point = path.getNode(path.getLength() - 2)
+            try:
+                sub_element = str(point.subElementName.getValue())
+            except Exception:
+                continue
+            if is_provider_overlay_point_subname(sub_element):
+                node = ("provider_overlay_point", point)
+                session._plan_pick_debug_event(
+                    "get_edit_node",
+                    mouse_pos=mouse_pos,
+                    source="ray_pick_provider_overlay_point",
+                    result=node,
+                )
+                return node
+            if "EditNode" in sub_element:
+                node = ("edit_node", point)
+                session._plan_pick_debug_event(
+                    "get_edit_node",
+                    mouse_pos=mouse_pos,
+                    source="ray_pick_edit_node",
+                    result=node,
+                )
+                return node
+    session._plan_pick_debug_event(
+        "get_edit_node",
+        mouse_pos=mouse_pos,
+        source="no_edit_node",
+        result=None,
+    )
+    return None
+
+
+def pick_selected_opening_handle(session, mouse_pos, radius_px=10):
+    opening = session._get_selected_plan_target_object("opening")
+    if not session._is_hosted_opening_object(opening) or not session.view:
+        return None
+    try:
+        cursor_x = int(mouse_pos[0])
+        cursor_y = int(mouse_pos[1])
+    except Exception:
+        return None
+    best_index = None
+    best_distance_sq = None
+    for idx, _role, point, _marker in session._get_selected_opening_handle_specs(opening):
+        try:
+            screen_x, screen_y = session.view.getPointOnScreen(point)
+        except Exception:
+            continue
+        dx = float(screen_x) - float(cursor_x)
+        dy = float(screen_y) - float(cursor_y)
+        distance_sq = dx * dx + dy * dy
+        if distance_sq > radius_px * radius_px:
+            continue
+        if best_distance_sq is None or distance_sq < best_distance_sq:
+            best_index = idx
+            best_distance_sq = distance_sq
+    return best_index
+
+
 def get_provider_overlay_target_from_edit_node(session, node):
     if not node:
         return (None, None)
