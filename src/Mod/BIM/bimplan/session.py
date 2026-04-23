@@ -1964,21 +1964,7 @@ class PlanEditSession:
         return plan_selection.get_secondary_selected_plan_targets(self)
 
     def _format_plan_target_count_label(self, kind, count):
-        labels = {
-            "wall": (translate("BIM_PlanEdit", "wall"), translate("BIM_PlanEdit", "walls")),
-            "opening": (
-                translate("BIM_PlanEdit", "opening"),
-                translate("BIM_PlanEdit", "openings"),
-            ),
-            "symbol": (translate("BIM_PlanEdit", "symbol"), translate("BIM_PlanEdit", "symbols")),
-            "region": (translate("BIM_PlanEdit", "region"), translate("BIM_PlanEdit", "regions")),
-            "space": (translate("BIM_PlanEdit", "space"), translate("BIM_PlanEdit", "spaces")),
-        }
-        singular, plural = labels.get(
-            kind,
-            (translate("BIM_PlanEdit", "item"), translate("BIM_PlanEdit", "items")),
-        )
-        return "{} {}".format(count, singular if count == 1 else plural)
+        return plan_task_panel.format_plan_target_count_label(kind, count)
 
     def _format_space_region_candidate_area(self, candidate):
         area = float((candidate or {}).get("area", 0.0) or 0.0)
@@ -1991,15 +1977,7 @@ class PlanEditSession:
             return "{:.3f} m^2".format(area / 1000000.0)
 
     def _summarize_plan_targets(self, targets):
-        counts = {}
-        for target_kind, _target_obj in targets or []:
-            counts[target_kind] = counts.get(target_kind, 0) + 1
-        parts = [
-            self._format_plan_target_count_label(kind, counts[kind])
-            for kind in plan_target_kinds.SUMMARY_PLAN_TARGET_KINDS
-            if counts.get(kind)
-        ]
-        return ", ".join(parts)
+        return plan_task_panel.summarize_plan_targets(targets)
 
     def _get_selected_plan_targets(self):
         return plan_selection.get_selected_plan_targets(self)
