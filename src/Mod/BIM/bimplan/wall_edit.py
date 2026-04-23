@@ -4,7 +4,7 @@
 
 import FreeCAD
 import FreeCADGui
-from bimplan import selection_access as plan_selection_access
+from bimplan import selection as plan_selection
 
 translate = FreeCAD.Qt.translate
 
@@ -20,7 +20,7 @@ def is_wall_edit_modal_active(session):
 
 
 def is_selected_wall_endpoint_editable(session):
-    wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
+    wall = plan_selection.get_selected_plan_target_object(session, "wall")
     if not wall:
         return False
     proxy = getattr(wall, "Proxy", None)
@@ -70,7 +70,7 @@ def start_wall_edit(session, mode):
                 )
                 return
 
-            wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
+            wall = plan_selection.get_selected_plan_target_object(session, "wall")
             proxy = getattr(wall, "Proxy", None)
             if (
                 not proxy
@@ -329,7 +329,7 @@ def start_wall_grip_edit(session, grip_index):
 
 def activate_wall_grip(session, grip_index, wall=None):
     if wall is None:
-        wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
+        wall = plan_selection.get_selected_plan_target_object(session, "wall")
     try:
         from PySide import QtCore
     except ImportError:

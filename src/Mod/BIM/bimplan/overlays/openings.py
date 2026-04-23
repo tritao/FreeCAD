@@ -7,7 +7,7 @@ import FreeCADGui
 
 from . import geometry as overlay_geometry
 from . import manager as overlay_manager
-from .. import selection_access as plan_selection_access
+from .. import selection as plan_selection
 
 
 def get_opening_handle_markers(session, marker_size=None):
@@ -209,7 +209,7 @@ def create_opening_overlay_trackers(
 
 def sync_selected_opening_overlay(session):
     with session._plan_perf_trace_span("sync_selected_opening_overlay"):
-        opening = plan_selection_access.get_selected_plan_target_object(session, "opening")
+        opening = plan_selection.get_selected_plan_target_object(session, "opening")
         if session.current_tool != "Select" or not session._is_hosted_opening_object(opening):
             session._clear_selected_opening_overlay()
             return
@@ -268,7 +268,7 @@ def invalidate_selected_opening_overlay_cache(session):
 
 def sync_selected_wall_opening_context_overlay(session):
     session._clear_selected_wall_opening_context_overlay()
-    wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
+    wall = plan_selection.get_selected_plan_target_object(session, "wall")
     if session.current_tool != "Select" or not wall or session._is_selected_plan_target("opening"):
         return
     color = (0.46, 0.58, 0.82)
@@ -306,7 +306,7 @@ def sync_selected_opening_handles(session):
     with session._plan_perf_trace_span("sync_selected_opening_handles"):
         from draftutils import params
 
-        opening = plan_selection_access.get_selected_plan_target_object(session, "opening")
+        opening = plan_selection.get_selected_plan_target_object(session, "opening")
         if session.current_tool != "Select":
             session._clear_selected_opening_handles()
             return

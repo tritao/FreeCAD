@@ -4,7 +4,7 @@
 
 import FreeCAD
 
-from . import selection_access as plan_selection_access
+from . import selection as plan_selection
 
 
 def on_mouse_pressed(session, event_callback):
@@ -55,7 +55,7 @@ def on_mouse_pressed(session, event_callback):
                         target_kind, target_wall = session._get_plan_target_at_position(
                             (pos[0], pos[1])
                         )
-                        source_wall = plan_selection_access.get_selected_plan_target_object(
+                        source_wall = plan_selection.get_selected_plan_target_object(
                             session, "wall"
                         )
                         if (

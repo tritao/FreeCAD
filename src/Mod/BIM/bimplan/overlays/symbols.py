@@ -6,7 +6,7 @@ import math
 
 import FreeCAD
 import FreeCADGui
-from .. import selection_access as plan_selection_access
+from .. import selection as plan_selection
 
 
 def get_symbol_global_placement(session, symbol, placement=None):
@@ -222,7 +222,7 @@ def clear_hovered_symbol_overlay(session):
 
 def sync_selected_symbol_overlay(session):
     with session._plan_perf_trace_span("sync_selected_symbol_overlay"):
-        symbol = plan_selection_access.get_selected_plan_target_object(session, "symbol")
+        symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
         if session.current_tool != "Select" or not session._is_plan_symbol_instance(symbol):
             session._clear_selected_symbol_overlay()
             return
@@ -462,7 +462,7 @@ def get_selected_symbol_handle_specs(session, symbol):
 
 def sync_selected_symbol_handles(session):
     with session._plan_perf_trace_span("sync_selected_symbol_handles"):
-        symbol = plan_selection_access.get_selected_plan_target_object(session, "symbol")
+        symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
         if session.current_tool != "Select":
             session._clear_selected_symbol_handles()
             return
@@ -493,7 +493,7 @@ def clear_selected_symbol_handles(session):
 
 
 def pick_selected_symbol_handle(session, mouse_pos, radius_px=10):
-    symbol = plan_selection_access.get_selected_plan_target_object(session, "symbol")
+    symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
     if not session._is_plan_symbol_instance(symbol) or not session.view:
         return None
     try:

@@ -63,7 +63,7 @@ if "draftguitools.gui_base" not in sys.modules:
     sys.modules["draftguitools.gui_base"] = gui_base_module
     draftguitools_module.gui_base = gui_base_module
 
-from bimplan.context import PlanEditContext, PlanProviderActionContext
+from bimplan.providers import PlanEditContext, PlanProviderActionContext
 from bimplan.lifecycle import (
     activate_plan_region_tool,
     activate_select_tool,
@@ -85,7 +85,7 @@ from bimplan.provider_runtime import (
     get_plan_provider_target_for_object,
     normalize_plan_provider_overlay,
 )
-from bimplan.provider_snapshot import PlanProviderSnapshot, collect_plan_provider_snapshot
+from bimplan.provider_runtime import PlanProviderSnapshot, collect_plan_provider_snapshot
 from bimplan.providers import (
     PlanActionSpec,
     PlanContextPanelSpec,
@@ -253,7 +253,7 @@ class _SnapshotProvider(PlanEditProvider):
 class TestBimPlanCore(unittest.TestCase):
     def test_initialize_session_read_state_creates_typed_buckets(self):
         from bimplan import session_state as plan_session_state
-        from bimplan.session_state_models import (
+        from bimplan.session_state import (
             PlanInteractionState,
             PlanProviderOverlayReadState,
             PlanSelectionState,
@@ -281,7 +281,7 @@ class TestBimPlanCore(unittest.TestCase):
 
     def test_plan_edit_session_read_state_properties_bridge_typed_buckets(self):
         from bimplan.session import PlanEditSession
-        from bimplan.session_state_models import (
+        from bimplan.session_state import (
             PlanInteractionState,
             PlanProviderOverlayReadState,
             PlanSelectionState,
@@ -870,7 +870,7 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIn("Current style: Preset A", view_model.note_text)
 
     def test_task_panel_context_uses_selection_access_fallback(self):
-        from bimplan.task_panel_context import PlanTaskPanelContext
+        from bimplan.task_panel_view_model import PlanTaskPanelContext
 
         wall = SimpleNamespace(Name="Wall001")
         session = SimpleNamespace(
@@ -884,7 +884,7 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual((("wall", wall),), context.get_selected_plan_targets())
 
     def test_as_task_panel_context_preserves_context_like_objects(self):
-        from bimplan.task_panel_context import as_task_panel_context
+        from bimplan.task_panel_view_model import as_task_panel_context
 
         context = SimpleNamespace(
             get_current_tool=lambda: "Select",
@@ -895,7 +895,7 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIs(context, as_task_panel_context(context))
 
     def test_task_panel_context_prefers_provider_and_status_components(self):
-        from bimplan.task_panel_context import PlanTaskPanelContext
+        from bimplan.task_panel_view_model import PlanTaskPanelContext
 
         provider = SimpleNamespace(
             get_provider_point_tool_label=lambda: "Socket",
@@ -967,7 +967,7 @@ class TestBimPlanCore(unittest.TestCase):
     def test_task_panel_context_prefers_relations_interaction_symbols_spaces_windows_and_wall_edit_components(
         self,
     ):
-        from bimplan.task_panel_context import PlanTaskPanelContext
+        from bimplan.task_panel_view_model import PlanTaskPanelContext
 
         parent_space = SimpleNamespace(Name="Space001")
         hovered_candidate = {"area": 2500000.0}

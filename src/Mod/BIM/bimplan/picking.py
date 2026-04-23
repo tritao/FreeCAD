@@ -6,7 +6,7 @@ import FreeCAD
 import math
 from bimplan import hover_picking as plan_hover_picking
 from bimplan import provider_overlay_state as plan_provider_overlay_state
-from bimplan import selection_access as plan_selection_access
+from bimplan import selection as plan_selection
 from bimplan import targets as plan_targets
 from bimplan.providers import PlanOverlayMarkerKind
 
@@ -961,7 +961,7 @@ def get_edit_node(session, mouse_pos):
     if symbol_handle_role is not None:
         node = (
             "symbol_handle",
-            plan_selection_access.get_selected_plan_target_object(session, "symbol"),
+            plan_selection.get_selected_plan_target_object(session, "symbol"),
             symbol_handle_role,
         )
         session._plan_pick_debug_event(
@@ -975,7 +975,7 @@ def get_edit_node(session, mouse_pos):
     if opening_handle_index is not None:
         node = (
             "opening_handle",
-            plan_selection_access.get_selected_plan_target_object(session, "opening"),
+            plan_selection.get_selected_plan_target_object(session, "opening"),
             opening_handle_index,
         )
         session._plan_pick_debug_event(
@@ -989,7 +989,7 @@ def get_edit_node(session, mouse_pos):
     if provider_handle_index is not None:
         node = (
             "provider_handle",
-            plan_selection_access.get_selected_plan_target_object(session, "provider"),
+            plan_selection.get_selected_plan_target_object(session, "provider"),
             provider_handle_index,
         )
         session._plan_pick_debug_event(
@@ -1080,7 +1080,7 @@ def get_edit_node(session, mouse_pos):
 
 
 def pick_selected_opening_handle(session, mouse_pos, radius_px=10):
-    opening = plan_selection_access.get_selected_plan_target_object(session, "opening")
+    opening = plan_selection.get_selected_plan_target_object(session, "opening")
     if not session._is_hosted_opening_object(opening) or not session.view:
         return None
     try:

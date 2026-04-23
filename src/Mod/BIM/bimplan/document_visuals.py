@@ -4,7 +4,7 @@
 
 from contextlib import contextmanager
 
-from bimplan import selection_access as plan_selection_access
+from bimplan import selection as plan_selection
 from bimplan import target_kinds as plan_target_kinds
 from bimplan import visual_keys as plan_visual_keys
 
@@ -336,7 +336,7 @@ def flush_hard_refresh_selected_opening_visuals(session):
     session._selected_opening_hard_refresh_queued = False
     if session._tearing_down or session.current_tool != "Select":
         return
-    opening = plan_selection_access.get_selected_plan_target_object(session, "opening")
+    opening = plan_selection.get_selected_plan_target_object(session, "opening")
     if not session._is_hosted_opening_object(opening):
         return
     session._sync_selected_opening_overlay()
@@ -367,11 +367,11 @@ def slot_changed_object(session, obj, prop):
     if session.current_tool != "Select":
         return
     session._sanitize_plan_target_references()
-    selected_wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
-    selected_opening = plan_selection_access.get_selected_plan_target_object(session, "opening")
-    selected_symbol = plan_selection_access.get_selected_plan_target_object(session, "symbol")
-    selected_region = plan_selection_access.get_selected_plan_target_object(session, "region")
-    selected_space = plan_selection_access.get_selected_plan_target_object(session, "space")
+    selected_wall = plan_selection.get_selected_plan_target_object(session, "wall")
+    selected_opening = plan_selection.get_selected_plan_target_object(session, "opening")
+    selected_symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
+    selected_region = plan_selection.get_selected_plan_target_object(session, "region")
+    selected_space = plan_selection.get_selected_plan_target_object(session, "space")
     if selected_region and obj == selected_region and prop in _REGION_VISUAL_PROPERTIES:
         session._refresh_plan_object_footprint_display(selected_region)
         session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_REGION)
@@ -401,9 +401,7 @@ def slot_changed_object(session, obj, prop):
         session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_SPACE)
         return
     secondary_overlay_refresh = False
-    for target_kind, target_obj in plan_selection_access.get_secondary_selected_plan_targets(
-        session
-    ):
+    for target_kind, target_obj in plan_selection.get_secondary_selected_plan_targets(session):
         if target_kind == "region" and obj == target_obj and prop in _REGION_VISUAL_PROPERTIES:
             session._refresh_plan_object_footprint_display(target_obj)
             secondary_overlay_refresh = True
@@ -548,11 +546,11 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
     session._invalidate_wall_hosted_openings_cache()
     session._invalidate_plan_overlay_geometry_cache()
     session._sanitize_plan_target_references()
-    selected_symbol = plan_selection_access.get_selected_plan_target_object(session, "symbol")
-    selected_region = plan_selection_access.get_selected_plan_target_object(session, "region")
-    selected_space = plan_selection_access.get_selected_plan_target_object(session, "space")
-    selected_opening = plan_selection_access.get_selected_plan_target_object(session, "opening")
-    selected_provider = plan_selection_access.get_selected_plan_target_object(session, "provider")
+    selected_symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
+    selected_region = plan_selection.get_selected_plan_target_object(session, "region")
+    selected_space = plan_selection.get_selected_plan_target_object(session, "space")
+    selected_opening = plan_selection.get_selected_plan_target_object(session, "opening")
+    selected_provider = plan_selection.get_selected_plan_target_object(session, "provider")
     if selected_symbol:
         session._refresh_plan_object_footprint_display(selected_symbol)
     if session.hovered_symbol and not session._is_selected_plan_target(
@@ -571,7 +569,7 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
         "space", session.hovered_space
     ):
         session._refresh_plan_object_footprint_display(session.hovered_space)
-    secondary_targets = plan_selection_access.get_secondary_selected_plan_targets(session)
+    secondary_targets = plan_selection.get_secondary_selected_plan_targets(session)
     for target_kind, target_obj in secondary_targets:
         if target_kind in plan_target_kinds.FOOTPRINT_PLAN_TARGET_KINDS:
             session._refresh_plan_object_footprint_display(target_obj)

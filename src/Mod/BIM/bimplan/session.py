@@ -43,14 +43,12 @@ from bimplan import performance as plan_performance
 from bimplan import provider_overlay_state as plan_provider_overlay_state
 from bimplan import provider_point as plan_provider_point
 from bimplan import provider_runtime as plan_provider_runtime
-from bimplan import provider_snapshot as plan_provider_snapshot
 from bimplan import provider_targets as plan_provider_targets
 from bimplan import selection_additive as plan_selection_additive
 from bimplan import selection_observer as plan_selection_observer
 from bimplan import session_components as plan_session_components
 from bimplan import snap as plan_snap
 from bimplan import session_state as plan_session_state
-from bimplan import session_state_models as plan_session_state_models
 from bimplan import storeys as plan_storeys
 from bimplan import task_panel as plan_task_panel
 from bimplan import target_kinds as plan_target_kinds
@@ -63,7 +61,7 @@ from bimplan import wall_create as plan_wall_create
 from bimplan import wall_relations as plan_wall_relations
 from bimplan import window_create as plan_window_create
 from bimplan import window_edit as plan_window_edit
-from bimplan.context import PlanEditContext
+from bimplan.providers import PlanEditContext
 from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
 from bimplan.overlays import openings as opening_overlays
@@ -219,35 +217,35 @@ class PlanEditSession:
     def _ensure_task_panel_state(self):
         state = self.__dict__.get("task_panel_state")
         if state is None:
-            state = plan_session_state_models.PlanTaskPanelState()
+            state = plan_session_state.PlanTaskPanelState()
             self.__dict__["task_panel_state"] = state
         return state
 
     def _ensure_provider_overlay_read_state(self):
         state = self.__dict__.get("provider_overlay_read_state")
         if state is None:
-            state = plan_session_state_models.PlanProviderOverlayReadState()
+            state = plan_session_state.PlanProviderOverlayReadState()
             self.__dict__["provider_overlay_read_state"] = state
         return state
 
     def _ensure_interaction_state(self):
         state = self.__dict__.get("interaction_state")
         if state is None:
-            state = plan_session_state_models.PlanInteractionState()
+            state = plan_session_state.PlanInteractionState()
             self.__dict__["interaction_state"] = state
         return state
 
     def _ensure_selection_state(self):
         state = self.__dict__.get("selection_state")
         if state is None:
-            state = plan_session_state_models.PlanSelectionState()
+            state = plan_session_state.PlanSelectionState()
             self.__dict__["selection_state"] = state
         return state
 
     def _ensure_wall_edit_state(self):
         state = self.__dict__.get("wall_edit_state")
         if state is None:
-            state = plan_session_state_models.PlanWallEditState()
+            state = plan_session_state.PlanWallEditState()
             self.__dict__["wall_edit_state"] = state
         return state
 
@@ -1980,11 +1978,11 @@ class PlanEditSession:
     def get_plan_provider_snapshot(self):
         if self._tearing_down or self._finishing or not self._document_is_alive():
             self._plan_perf_count("plan_provider_inactive_session")
-            return plan_provider_snapshot.PlanProviderSnapshot()
+            return plan_provider_runtime.PlanProviderSnapshot()
         if self._plan_provider_integrations_disabled():
             self._plan_perf_count("plan_provider_integrations_disabled")
-            return plan_provider_snapshot.PlanProviderSnapshot()
-        return plan_provider_snapshot.collect_plan_provider_snapshot(self)
+            return plan_provider_runtime.PlanProviderSnapshot()
+        return plan_provider_runtime.collect_plan_provider_snapshot(self)
 
     def get_plan_provider_edit_handles(self):
         return plan_provider_runtime.get_plan_provider_edit_handles(self)
