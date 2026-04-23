@@ -40,6 +40,27 @@ class TargetActivationBehavior:
     defer_wall_grips: bool = False
 
 
+def _make_select_plan_target_function(kind):
+    def _select_plan_target(
+        session,
+        obj,
+        queue_restore=False,
+        sync_gui_selection=False,
+        defer_gui_selection=False,
+        defer_wall_grips=False,
+    ):
+        return session._select_plan_target_for_plan_edit(
+            kind,
+            obj,
+            queue_restore=queue_restore,
+            sync_gui_selection=sync_gui_selection,
+            defer_gui_selection=defer_gui_selection,
+            defer_wall_grips=defer_wall_grips,
+        )
+
+    return _select_plan_target
+
+
 def _supports_native_selection_state(session):
     return callable(getattr(session, "_sanitize_plan_target_references", None))
 
@@ -814,94 +835,25 @@ def select_plan_target_for_plan_edit(
     return True
 
 
-def select_opening_for_plan_edit(
-    session,
-    opening,
-    queue_restore=False,
-    sync_gui_selection=False,
-    defer_gui_selection=False,
-    defer_wall_grips=False,
-):
-    return session._select_plan_target_for_plan_edit(
-        plan_target_kinds.PLAN_TARGET_OPENING,
-        opening,
-        queue_restore=queue_restore,
-        sync_gui_selection=sync_gui_selection,
-        defer_gui_selection=defer_gui_selection,
-        defer_wall_grips=defer_wall_grips,
-    )
+select_opening_for_plan_edit = _make_select_plan_target_function(
+    plan_target_kinds.PLAN_TARGET_OPENING
+)
 
 
-def select_symbol_for_plan_edit(
-    session,
-    symbol,
-    queue_restore=False,
-    sync_gui_selection=False,
-    defer_gui_selection=False,
-    defer_wall_grips=False,
-):
-    return session._select_plan_target_for_plan_edit(
-        plan_target_kinds.PLAN_TARGET_SYMBOL,
-        symbol,
-        queue_restore=queue_restore,
-        sync_gui_selection=sync_gui_selection,
-        defer_gui_selection=defer_gui_selection,
-        defer_wall_grips=defer_wall_grips,
-    )
+select_symbol_for_plan_edit = _make_select_plan_target_function(
+    plan_target_kinds.PLAN_TARGET_SYMBOL
+)
 
 
-def select_region_for_plan_edit(
-    session,
-    region,
-    queue_restore=False,
-    sync_gui_selection=False,
-    defer_gui_selection=False,
-    defer_wall_grips=False,
-):
-    return session._select_plan_target_for_plan_edit(
-        plan_target_kinds.PLAN_TARGET_REGION,
-        region,
-        queue_restore=queue_restore,
-        sync_gui_selection=sync_gui_selection,
-        defer_gui_selection=defer_gui_selection,
-        defer_wall_grips=defer_wall_grips,
-    )
+select_region_for_plan_edit = _make_select_plan_target_function(
+    plan_target_kinds.PLAN_TARGET_REGION
+)
 
 
-def select_space_for_plan_edit(
-    session,
-    space,
-    queue_restore=False,
-    sync_gui_selection=False,
-    defer_gui_selection=False,
-    defer_wall_grips=False,
-):
-    return session._select_plan_target_for_plan_edit(
-        plan_target_kinds.PLAN_TARGET_SPACE,
-        space,
-        queue_restore=queue_restore,
-        sync_gui_selection=sync_gui_selection,
-        defer_gui_selection=defer_gui_selection,
-        defer_wall_grips=defer_wall_grips,
-    )
+select_space_for_plan_edit = _make_select_plan_target_function(plan_target_kinds.PLAN_TARGET_SPACE)
 
 
-def select_wall_for_plan_edit(
-    session,
-    wall,
-    queue_restore=False,
-    sync_gui_selection=False,
-    defer_gui_selection=False,
-    defer_wall_grips=False,
-):
-    return session._select_plan_target_for_plan_edit(
-        plan_target_kinds.PLAN_TARGET_WALL,
-        wall,
-        queue_restore=queue_restore,
-        sync_gui_selection=sync_gui_selection,
-        defer_gui_selection=defer_gui_selection,
-        defer_wall_grips=defer_wall_grips,
-    )
+select_wall_for_plan_edit = _make_select_plan_target_function(plan_target_kinds.PLAN_TARGET_WALL)
 
 
 _TARGET_ACTIVATION_BEHAVIORS = {
