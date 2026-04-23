@@ -30,16 +30,17 @@ from bimplan.providers import runtime as plan_provider_runtime
 from bimplan.providers import point as plan_provider_point
 from bimplan.selection import selection_additive as plan_selection_additive
 from bimplan import selection as plan_selection
-from bimplan.overlays import symbols as symbol_overlays
-from bimplan import status_text as plan_status_text
+from bimplan.runtime.session_state import PlanInteractionAPI
 from bimplan.tools import spaces as plan_spaces
 from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.selection import targets as plan_targets
 from bimplan.runtime import view as plan_view
 from bimplan import document_visuals as plan_document_visuals
-from bimplan.tools import wall_relations as plan_wall_relations
+from bimplan.status_text import PlanStatusTextAPI
+from bimplan.tools.symbol_edit import PlanSymbolsAPI
 from bimplan.tools import wall_edit as plan_wall_edit
-from bimplan.tools import window_create as plan_window_create
+from bimplan.tools.wall_relations import PlanWallRelationsAPI
+from bimplan.tools.window_create import PlanWindowsAPI
 from bimplan.task_panel import _PlanEditViewportStatusChip
 
 
@@ -304,86 +305,6 @@ class PlanSpacesAPI(_SessionAPI):
         )
 
 
-class PlanWallRelationsAPI(_SessionAPI):
-    """Owned session surface for Plan Edit wall relation and join reads."""
-
-    __slots__ = ()
-
-    get_plan_join_type_label = _bind_session_call(plan_wall_relations.get_plan_join_type_label)
-    get_plan_candidate_joint = _bind_session_call(plan_wall_relations.get_plan_candidate_joint)
-    get_plan_join_candidate_state = _bind_session_call(
-        plan_wall_relations.get_plan_join_candidate_state
-    )
-    get_plan_join_mode_action_text = _bind_session_call(
-        plan_wall_relations.get_plan_join_mode_action_text
-    )
-    get_plan_relation_status_message = _bind_session_call(
-        plan_wall_relations.get_plan_relation_status_message
-    )
-
-
-class PlanInteractionAPI(_SessionAPI):
-    """Owned session surface for Plan Edit interaction-state reads."""
-
-    __slots__ = ()
-
-    _MODAL_TOOLS = frozenset(
-        ("Move Opening", "Move Symbol", "Rotate Symbol", "Set Space Text", "Window")
-    )
-
-    def is_modal_plan_interaction_active(self):
-        return bool(
-            self.session.wall_edit.is_wall_edit_modal_active()
-            or self.session.current_tool in self._MODAL_TOOLS
-        )
-
-
-class PlanSymbolsAPI(_SessionAPI):
-    """Owned session surface for Plan Edit symbol read helpers."""
-
-    __slots__ = ()
-
-    symbol_rotation_snap_enabled = _bind_session_call(symbol_overlays.symbol_rotation_snap_enabled)
-    format_symbol_rotation_snap_label = _bind_session_call(
-        symbol_overlays.format_symbol_rotation_snap_label
-    )
-
-
-class PlanWindowsAPI(_SessionAPI):
-    """Owned session surface for Plan Edit window placement and editor reads."""
-
-    __slots__ = ()
-
-    can_place_window = _bind_session_call(plan_window_create.can_place_window)
-    get_selected_window_style_preset = _bind_session_call(
-        plan_window_create.get_selected_window_style_preset
-    )
-    get_selected_window_width_text = _bind_session_call(
-        plan_window_create.get_selected_window_width_text
-    )
-    get_selected_window_height_text = _bind_session_call(
-        plan_window_create.get_selected_window_height_text
-    )
-    get_window_style_preset_options = staticmethod(
-        plan_window_create.get_window_style_preset_options
-    )
-
-    def can_apply_window_style_preset(self, window=None):
-        if window is None:
-            window = self.session.selection.get_selected_plan_target_object("opening")
-        return plan_window_create.can_edit_window_style_preset(window)
-
-    def can_edit_window_width(self, window=None):
-        if window is None:
-            window = self.session.selection.get_selected_plan_target_object("opening")
-        return plan_window_create.can_edit_window_width(window)
-
-    def can_edit_window_height(self, window=None):
-        if window is None:
-            window = self.session.selection.get_selected_plan_target_object("opening")
-        return plan_window_create.can_edit_window_height(window)
-
-
 class PlanViewportAPI(_SessionAPI):
     """Owned session surface for Plan Edit view and viewport behavior."""
 
@@ -612,45 +533,3 @@ class PlanProvidersAPI(_SessionAPI):
     get_plan_provider_overlay_category = staticmethod(
         plan_provider_runtime.get_plan_provider_overlay_category
     )
-
-
-class PlanStatusTextAPI(_SessionAPI):
-    """Owned session surface for Plan Edit status text and input hints."""
-
-    __slots__ = ()
-
-    get_plan_selection_summary_text = _bind_session_call(
-        plan_status_text.get_plan_selection_summary_text
-    )
-    format_provider_target_role_label = _bind_session_call(
-        plan_status_text.format_provider_target_role_label
-    )
-    format_provider_target_help = _bind_session_call(plan_status_text.format_provider_target_help)
-    get_opening_display_kind_key = _bind_session_call(plan_status_text.get_opening_display_kind_key)
-    get_opening_display_kind = _bind_session_call(plan_status_text.get_opening_display_kind)
-    format_opening_selection_help = _bind_session_call(
-        plan_status_text.format_opening_selection_help
-    )
-    format_plan_target_selection_state = _bind_session_call(
-        plan_status_text.format_plan_target_selection_state
-    )
-    get_provider_selected_objects = _bind_session_call(
-        plan_status_text.get_provider_selected_objects
-    )
-    format_provider_selected_object_state = _bind_session_call(
-        plan_status_text.format_provider_selected_object_state
-    )
-    format_provider_selected_object_help = _bind_session_call(
-        plan_status_text.format_provider_selected_object_help
-    )
-    get_status_chip_text = _bind_session_call(plan_status_text.get_status_chip_text)
-    get_input_hint_specs = _bind_session_call(plan_status_text.get_input_hint_specs)
-    get_input_hints = _bind_session_call(plan_status_text.get_input_hints)
-    update_input_hints = _bind_session_call(plan_status_text.update_input_hints)
-
-    format_plan_target_count_label = staticmethod(plan_status_text.format_plan_target_count_label)
-    summarize_plan_targets = staticmethod(plan_status_text.summarize_plan_targets)
-    format_status_chip_action = staticmethod(plan_status_text.format_status_chip_action)
-    get_plan_target_display_label = staticmethod(plan_status_text.get_plan_target_display_label)
-    clear_input_hints = staticmethod(plan_status_text.clear_input_hints)
-    make_input_hint = staticmethod(plan_status_text.make_input_hint)

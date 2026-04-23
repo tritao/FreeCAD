@@ -10,6 +10,85 @@ from bimplan.selection import target_kinds as plan_target_kinds
 translate = FreeCAD.Qt.translate
 
 
+class PlanStatusTextAPI:
+    """Owned session surface for Plan Edit status text and input hints."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def get_plan_selection_summary_text(self):
+        return get_plan_selection_summary_text(self.session)
+
+    def format_provider_target_role_label(self, obj):
+        return format_provider_target_role_label(self.session, obj)
+
+    def format_provider_target_help(self, obj):
+        return format_provider_target_help(self.session, obj)
+
+    def get_opening_display_kind_key(self, opening):
+        return get_opening_display_kind_key(self.session, opening)
+
+    def get_opening_display_kind(self, opening):
+        return get_opening_display_kind(self.session, opening)
+
+    def format_opening_selection_help(self, opening):
+        return format_opening_selection_help(self.session, opening)
+
+    def format_plan_target_selection_state(self, kind, obj):
+        return format_plan_target_selection_state(self.session, kind, obj)
+
+    def get_provider_selected_objects(self):
+        return get_provider_selected_objects(self.session)
+
+    def format_provider_selected_object_state(self):
+        return format_provider_selected_object_state(self.session)
+
+    def format_provider_selected_object_help(self):
+        return format_provider_selected_object_help(self.session)
+
+    def get_status_chip_text(self):
+        return get_status_chip_text(self.session)
+
+    def get_input_hint_specs(self):
+        return get_input_hint_specs(self.session)
+
+    def get_input_hints(self):
+        return get_input_hints(self.session)
+
+    def update_input_hints(self):
+        return update_input_hints(self.session)
+
+    def format_plan_target_count_label(self, kind, count):
+        del self
+        return format_plan_target_count_label(kind, count)
+
+    def summarize_plan_targets(self, targets):
+        del self
+        return summarize_plan_targets(targets)
+
+    def format_status_chip_action(self, message):
+        del self
+        return format_status_chip_action(message)
+
+    def get_plan_target_display_label(self, obj):
+        del self
+        return get_plan_target_display_label(obj)
+
+    def clear_input_hints(self):
+        del self
+        return clear_input_hints()
+
+    def make_input_hint(self, label, value, interactive=False):
+        del self
+        return make_input_hint(label, value, interactive=interactive)
+
+
 def get_plan_selection_summary_text(session):
     if session.current_tool != "Select":
         return ""
