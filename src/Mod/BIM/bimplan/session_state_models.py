@@ -36,3 +36,17 @@ class PlanInteractionState:
     edit_provider_handle_index: object = None
     edit_provider_handle: object = None
     edit_space: object = None
+
+
+@dataclass
+class PlanSelectionState:
+    selected_plan_target_kind: str | None = None
+    selected_plan_target_obj: object = None
+    hovered_wall: object = None
+    hovered_opening: object = None
+    hovered_symbol: object = None
+    hovered_provider: object = None
+    hovered_space: object = None
+    hovered_region: object = None
+    pending_selected_plan_target: object = None
+    secondary_selected_plan_targets_state: list = field(default_factory=list)

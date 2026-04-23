@@ -36,6 +36,7 @@ def initialize_session_read_state(session):
         mode=plan_provider_overlay_state.PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
     )
     session.interaction_state = plan_session_state_models.PlanInteractionState()
+    session.selection_state = plan_session_state_models.PlanSelectionState()
 
 
 def initialize_session_state(session):
@@ -54,21 +55,11 @@ def initialize_session_state(session):
     session._plan_join_type = "Miter"
     session.storeys = []
     session.active_storey = None
-    session._selected_plan_target_kind = None
-    session._selected_plan_target_obj = None
-    session.hovered_wall = None
-    session.hovered_opening = None
-    session.hovered_symbol = None
-    session.hovered_provider = None
-    session.hovered_space = None
-    session.hovered_region = None
     session._hover_pick_dirty = False
     session._hover_pick_last_time = 0.0
     session._hover_pick_last_mouse_pos = None
     session._space_region_pick_boundaries = []
     session._space_region_pick_seed_space = None
-    session._pending_selected_plan_target = None
-    session._secondary_selected_plan_targets_state = []
     session._grip_trackers = []
     session._wall_grip_state = None
     session._wall_grip_sync_queued = False
