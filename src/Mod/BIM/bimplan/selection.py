@@ -532,16 +532,7 @@ def clear_selected_plan_target_if_matches(session, kind, obj):
 
 
 def is_valid_plan_target(session, kind, obj):
-    validators = {
-        plan_target_kinds.PLAN_TARGET_OPENING: session._is_hosted_opening_object,
-        plan_target_kinds.PLAN_TARGET_SYMBOL: session._is_plan_symbol_instance,
-        plan_target_kinds.PLAN_TARGET_PROVIDER: session._is_plan_provider_target_object,
-        plan_target_kinds.PLAN_TARGET_REGION: session._is_plan_region_object,
-        plan_target_kinds.PLAN_TARGET_SPACE: session._is_plan_space_object,
-        plan_target_kinds.PLAN_TARGET_WALL: session._is_plan_selectable_wall,
-    }
-    validator = validators.get(kind)
-    return bool(validator is not None and validator(obj))
+    return plan_target_dispatch.validate_plan_target(session, kind, obj)
 
 
 def set_pending_selected_plan_target(session, kind=None, obj=None):
@@ -721,11 +712,22 @@ def set_selected_plan_target(
         session._sync_junction_node_overlays()
         session._sync_selected_wall_opening_context_overlay()
         session._sync_hovered_wall_opening_context_overlay()
-        session._sync_hovered_opening_overlay()
+        plan_target_dispatch.sync_hovered_target_visuals(
+            session,
+            kinds=(plan_target_kinds.PLAN_TARGET_OPENING,),
+        )
         if not preserve_hovered_symbol_overlay:
-            session._sync_hovered_symbol_overlay()
-        session._sync_hovered_space_overlay()
-        session._sync_hovered_region_overlay()
+            plan_target_dispatch.sync_hovered_target_visuals(
+                session,
+                kinds=(plan_target_kinds.PLAN_TARGET_SYMBOL,),
+            )
+        plan_target_dispatch.sync_hovered_target_visuals(
+            session,
+            kinds=(
+                plan_target_kinds.PLAN_TARGET_SPACE,
+                plan_target_kinds.PLAN_TARGET_REGION,
+            ),
+        )
 
 
 def schedule_selected_wall_reset(session, reason, obj):
@@ -786,44 +788,41 @@ def sync_primary_selected_plan_target_visuals(session, previous_kind=None, previ
             session._sync_hovered_wall_overlay()
         with session._plan_perf_trace_span("sync_hovered_wall_opening_context_overlay"):
             session._sync_hovered_wall_opening_context_overlay()
-        if session.current_tool != "Select" or session._selected_plan_target_changed(
-            previous_kind, previous_obj, "opening"
-        ):
-            with session._plan_perf_trace_span("sync_selected_opening_overlay"):
-                session._sync_selected_opening_overlay()
-            with session._plan_perf_trace_span("sync_selected_opening_handles"):
-                session._sync_selected_opening_handles()
-        if session.current_tool != "Select" or session._selected_plan_target_changed(
-            previous_kind, previous_obj, "symbol"
-        ):
-            with session._plan_perf_trace_span("sync_selected_symbol_overlay"):
-                session._sync_selected_symbol_overlay()
-            with session._plan_perf_trace_span("sync_selected_symbol_handles"):
-                session._sync_selected_symbol_handles()
-        if session.current_tool != "Select" or session._selected_plan_target_changed(
-            previous_kind, previous_obj, "region"
-        ):
-            with session._plan_perf_trace_span("sync_selected_region_overlay"):
-                session._sync_selected_region_overlay()
-        if session.current_tool != "Select" or session._selected_plan_target_changed(
-            previous_kind, previous_obj, "space"
-        ):
-            with session._plan_perf_trace_span("sync_selected_space_overlay"):
-                session._sync_selected_space_overlay()
-        with session._plan_perf_trace_span("sync_hovered_symbol_overlay"):
-            session._sync_hovered_symbol_overlay()
-        with session._plan_perf_trace_span("sync_hovered_provider_overlay"):
-            session._sync_hovered_provider_overlay()
-        with session._plan_perf_trace_span("sync_selected_provider_overlay"):
-            session._sync_selected_provider_overlay()
-        with session._plan_perf_trace_span("sync_selected_provider_handles"):
-            session._sync_selected_provider_handles()
-        with session._plan_perf_trace_span("sync_hovered_opening_overlay"):
-            session._sync_hovered_opening_overlay()
-        with session._plan_perf_trace_span("sync_hovered_space_overlay"):
-            session._sync_hovered_space_overlay()
-        with session._plan_perf_trace_span("sync_hovered_region_overlay"):
-            session._sync_hovered_region_overlay()
+        plan_target_dispatch.sync_selected_target_visuals(
+            session,
+            kinds=(
+                plan_target_kinds.PLAN_TARGET_OPENING,
+                plan_target_kinds.PLAN_TARGET_SYMBOL,
+                plan_target_kinds.PLAN_TARGET_REGION,
+                plan_target_kinds.PLAN_TARGET_SPACE,
+            ),
+            previous_kind=previous_kind,
+            previous_obj=previous_obj,
+            trace_style="by_method",
+        )
+        plan_target_dispatch.sync_hovered_target_visuals(
+            session,
+            kinds=(
+                plan_target_kinds.PLAN_TARGET_SYMBOL,
+                plan_target_kinds.PLAN_TARGET_PROVIDER,
+            ),
+            trace_style="by_method",
+        )
+        plan_target_dispatch.sync_selected_target_visuals(
+            session,
+            kinds=(plan_target_kinds.PLAN_TARGET_PROVIDER,),
+            force=True,
+            trace_style="by_method",
+        )
+        plan_target_dispatch.sync_hovered_target_visuals(
+            session,
+            kinds=(
+                plan_target_kinds.PLAN_TARGET_OPENING,
+                plan_target_kinds.PLAN_TARGET_SPACE,
+                plan_target_kinds.PLAN_TARGET_REGION,
+            ),
+            trace_style="by_method",
+        )
         with session._plan_perf_trace_span("sync_secondary_selected_overlays"):
             session._sync_secondary_selected_overlays()
         with session._plan_perf_trace_span("sync_active_plan_target_object"):
@@ -852,62 +851,31 @@ def set_hovered_wall(session, wall):
 
 
 def set_hovered_opening(session, opening):
-    if session._is_selected_plan_target("opening", opening):
-        opening = None
-    if session.hovered_opening == opening:
-        return
-    session.hovered_opening = opening
-    session._sync_selected_wall_opening_context_overlay()
-    session._sync_hovered_opening_overlay()
+    plan_target_dispatch.set_hovered_target(session, plan_target_kinds.PLAN_TARGET_OPENING, opening)
 
 
 def set_hovered_symbol(session, symbol):
-    if session._is_selected_plan_target("symbol", symbol):
-        symbol = None
-    if session.hovered_symbol == symbol:
-        return
-    session.hovered_symbol = symbol
-    session._sync_hovered_symbol_overlay()
+    plan_target_dispatch.set_hovered_target(session, plan_target_kinds.PLAN_TARGET_SYMBOL, symbol)
 
 
 def set_hovered_provider(session, provider):
-    if session._is_selected_plan_target("provider", provider):
-        provider = None
-    if session.hovered_provider == provider:
-        return
-    session.hovered_provider = provider
-    session._sync_hovered_provider_overlay()
+    plan_target_dispatch.set_hovered_target(
+        session,
+        plan_target_kinds.PLAN_TARGET_PROVIDER,
+        provider,
+    )
 
 
 def set_hovered_space(session, space):
-    if session._is_selected_plan_target("space", space):
-        space = None
-    if session.hovered_space == space:
-        return
-    session.hovered_space = space
-    session._sync_hovered_space_overlay()
+    plan_target_dispatch.set_hovered_target(session, plan_target_kinds.PLAN_TARGET_SPACE, space)
 
 
 def set_hovered_region(session, region):
-    if session._is_selected_plan_target("region", region):
-        region = None
-    if session.hovered_region == region:
-        return
-    session.hovered_region = region
-    session._sync_hovered_region_overlay()
+    plan_target_dispatch.set_hovered_target(session, plan_target_kinds.PLAN_TARGET_REGION, region)
 
 
 def queue_restore_selected_plan_target(session, kind, obj):
-    if not obj:
-        return
-    queue_restore = {
-        plan_target_kinds.PLAN_TARGET_OPENING: session._queue_restore_selected_opening,
-        plan_target_kinds.PLAN_TARGET_SYMBOL: session._queue_restore_selected_symbol,
-        plan_target_kinds.PLAN_TARGET_REGION: session._queue_restore_selected_region,
-        plan_target_kinds.PLAN_TARGET_SPACE: session._queue_restore_selected_space,
-    }.get(kind)
-    if queue_restore is not None:
-        queue_restore(obj)
+    plan_target_dispatch.queue_restore_selected_target(session, kind, obj)
 
 
 def select_plan_target_for_plan_edit(
@@ -919,16 +887,7 @@ def select_plan_target_for_plan_edit(
     defer_gui_selection=False,
     defer_wall_grips=False,
 ):
-    validators = {
-        plan_target_kinds.PLAN_TARGET_OPENING: session._is_hosted_opening_object,
-        plan_target_kinds.PLAN_TARGET_PROVIDER: session._is_plan_provider_target_object,
-        plan_target_kinds.PLAN_TARGET_SYMBOL: session._is_plan_symbol_instance,
-        plan_target_kinds.PLAN_TARGET_REGION: session._is_plan_region_object,
-        plan_target_kinds.PLAN_TARGET_SPACE: session._is_plan_space_object,
-        plan_target_kinds.PLAN_TARGET_WALL: session._is_plan_selectable_wall,
-    }
-    validator = validators.get(kind)
-    if validator is None or not validator(obj):
+    if not plan_target_dispatch.validate_plan_target(session, kind, obj):
         return False
     previous_kind, previous_obj = session._get_selected_plan_target()
     session.current_tool = "Select"
@@ -958,19 +917,18 @@ def select_plan_target_for_plan_edit(
     else:
         session._clear_wall_grips()
         session._clear_selected_wall_overlay()
-    if session._selected_plan_target_changed(previous_kind, previous_obj, "opening"):
-        session._sync_selected_opening_overlay()
-        session._sync_selected_opening_handles()
-    if session._selected_plan_target_changed(previous_kind, previous_obj, "symbol"):
-        session._sync_selected_symbol_overlay()
-        session._sync_selected_symbol_handles()
-    if session._selected_plan_target_changed(previous_kind, previous_obj, "region"):
-        session._sync_selected_region_overlay()
-    if session._selected_plan_target_changed(previous_kind, previous_obj, "space"):
-        session._sync_selected_space_overlay()
-    if session._selected_plan_target_changed(previous_kind, previous_obj, "provider"):
-        session._sync_selected_provider_overlay()
-        session._sync_selected_provider_handles()
+    plan_target_dispatch.sync_selected_target_visuals(
+        session,
+        kinds=(
+            plan_target_kinds.PLAN_TARGET_OPENING,
+            plan_target_kinds.PLAN_TARGET_SYMBOL,
+            plan_target_kinds.PLAN_TARGET_REGION,
+            plan_target_kinds.PLAN_TARGET_SPACE,
+            plan_target_kinds.PLAN_TARGET_PROVIDER,
+        ),
+        previous_kind=previous_kind,
+        previous_obj=previous_obj,
+    )
     session._sync_secondary_selected_overlays()
     session._refresh_task_panel_status(selection_only=session.current_tool == "Select")
     if queue_restore:
@@ -1240,19 +1198,19 @@ def clear_plan_selection_state(session):
             session._clear_selected_wall_overlay()
         with session._plan_perf_trace_span("clear_plan_selection_secondary_overlays"):
             session._sync_secondary_selected_overlays()
-        with session._plan_perf_trace_span("clear_plan_selection_opening_overlay"):
-            session._sync_selected_opening_overlay()
-            session._sync_selected_opening_handles()
-        with session._plan_perf_trace_span("clear_plan_selection_symbol_overlay"):
-            session._sync_selected_symbol_overlay()
-            session._sync_selected_symbol_handles()
-        with session._plan_perf_trace_span("clear_plan_selection_region_overlay"):
-            session._sync_selected_region_overlay()
-        with session._plan_perf_trace_span("clear_plan_selection_space_overlay"):
-            session._sync_selected_space_overlay()
-        with session._plan_perf_trace_span("clear_plan_selection_provider_overlay"):
-            session._sync_selected_provider_overlay()
-            session._sync_selected_provider_handles()
+        plan_target_dispatch.sync_selected_target_visuals(
+            session,
+            kinds=(
+                plan_target_kinds.PLAN_TARGET_OPENING,
+                plan_target_kinds.PLAN_TARGET_SYMBOL,
+                plan_target_kinds.PLAN_TARGET_REGION,
+                plan_target_kinds.PLAN_TARGET_SPACE,
+                plan_target_kinds.PLAN_TARGET_PROVIDER,
+            ),
+            force=True,
+            trace_style="by_kind",
+            trace_prefix="clear_plan_selection",
+        )
         with session._plan_perf_trace_span("clear_plan_selection_task_status"):
             session._refresh_task_panel_status(selection_only=session.current_tool == "Select")
         selected_kind, selected_obj = session._get_selected_plan_target()
@@ -1287,12 +1245,7 @@ def activate_provider_overlay_target_node(session, node, event_callback=None):
     else:
         session._provider_selected_objects = [target_obj]
         session._set_pending_selected_plan_target()
-    session._set_hovered_wall(None)
-    session._set_hovered_opening(None)
-    session._set_hovered_symbol(None)
-    session._set_hovered_provider(None)
-    session._set_hovered_space(None)
-    session._set_hovered_region(None)
+    plan_target_dispatch.clear_hovered_targets(session)
     session._set_gui_selection_object(target_obj)
     session._refresh_primary_selected_plan_target()
     session._claim_left_button_click(event_callback)
@@ -1342,12 +1295,7 @@ def toggle_raw_plan_object_selection(session, obj, event_callback=None):
         next_kind, next_obj = session._get_first_plan_target_from_selection(new_selection)
 
     session._set_pending_selected_plan_target(next_kind, next_obj)
-    session._set_hovered_wall(None)
-    session._set_hovered_opening(None)
-    session._set_hovered_symbol(None)
-    session._set_hovered_provider(None)
-    session._set_hovered_space(None)
-    session._set_hovered_region(None)
+    plan_target_dispatch.clear_hovered_targets(session)
     session._set_gui_selection(new_selection)
     session._refresh_primary_selected_plan_target()
     session._claim_left_button_click(event_callback)
@@ -1395,12 +1343,7 @@ def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=
             next_kind, next_obj = target_kind, target_obj
 
     session._set_pending_selected_plan_target(next_kind, next_obj)
-    session._set_hovered_wall(None)
-    session._set_hovered_opening(None)
-    session._set_hovered_symbol(None)
-    session._set_hovered_provider(None)
-    session._set_hovered_space(None)
-    session._set_hovered_region(None)
+    plan_target_dispatch.clear_hovered_targets(session)
     session._set_gui_selection(new_selection)
     session._refresh_primary_selected_plan_target()
     session._claim_left_button_click(event_callback)

@@ -5,6 +5,8 @@
 import FreeCAD
 import FreeCADGui
 
+from . import target_dispatch as plan_target_dispatch
+
 translate = FreeCAD.Qt.translate
 
 _MIN_WALL_LENGTH = 10.0
@@ -34,10 +36,11 @@ def cancel_plan_region_tool(session, refresh=True):
     session.current_tool = "Select"
     if refresh:
         session._refresh_task_panel_status()
-    session._sync_selected_region_overlay()
-    session._sync_selected_space_overlay()
-    session._sync_selected_provider_overlay()
-    session._sync_selected_provider_handles()
+    plan_target_dispatch.sync_selected_target_visuals(
+        session,
+        kinds=("region", "space", "provider"),
+        force=True,
+    )
     return True
 
 
@@ -195,11 +198,11 @@ def cancel_space_separator_tool(session, refresh=True):
     session.current_tool = "Select"
     if refresh:
         session._refresh_task_panel_status()
-    session._sync_selected_opening_overlay()
-    session._sync_selected_opening_handles()
-    session._sync_selected_space_overlay()
-    session._sync_selected_provider_overlay()
-    session._sync_selected_provider_handles()
+    plan_target_dispatch.sync_selected_target_visuals(
+        session,
+        kinds=("opening", "space", "provider"),
+        force=True,
+    )
     return True
 
 
@@ -762,10 +765,7 @@ def begin_space_region_pick(session, boundaries, label=None, seed_space=None, re
     session._hovered_space_region_candidate = None
     session._space_region_pick_seed_space = seed_space
     session._clear_wall_grips()
-    session._set_hovered_wall(None)
-    session._set_hovered_opening(None)
-    session._set_hovered_symbol(None)
-    session._set_hovered_space(None)
+    session._clear_hovered_plan_targets(kinds=("wall", "opening", "symbol", "space"))
     session._refresh_primary_selected_plan_target()
     FreeCAD.Console.PrintMessage(
         translate(
@@ -1231,10 +1231,7 @@ def start_space_text_position_pick(session):
 
     session.current_tool = "Set Space Text"
     session._edit_space = space
-    session._set_hovered_wall(None)
-    session._set_hovered_opening(None)
-    session._set_hovered_symbol(None)
-    session._set_hovered_space(None)
+    session._clear_hovered_plan_targets(kinds=("wall", "opening", "symbol", "space"))
     session._sync_secondary_selected_overlays()
     session._refresh_task_panel_status()
     FreeCAD.activeDraftCommand = session
