@@ -727,12 +727,24 @@ def report_space_region_candidate_failure(report):
     )
 
 
-def _clear_space_region_pick_state(session):
-    session._space_region_pick_boundaries = []
-    session._space_region_candidates = []
-    session._hovered_space_region_candidate = None
-    session._space_region_pick_seed_space = None
-    session._clear_space_region_pick_overlays()
+def set_space_region_pick_state(
+    session,
+    boundaries=None,
+    candidates=None,
+    *,
+    seed_space=None,
+    hovered_candidate=None,
+):
+    session._space_region_pick_boundaries = list(boundaries or [])
+    session._space_region_candidates = list(candidates or [])
+    session._hovered_space_region_candidate = hovered_candidate
+    session._space_region_pick_seed_space = seed_space
+
+
+def reset_space_region_pick_state(session, clear_overlays=True):
+    set_space_region_pick_state(session)
+    if clear_overlays:
+        session._clear_space_region_pick_overlays()
 
 
 def _finish_created_space(session, space, event_callback=None, claim_click=False):
@@ -797,7 +809,7 @@ def _create_and_finish_space_region_candidate(
     if not space:
         return False
     if clear_region_pick_state:
-        _clear_space_region_pick_state(session)
+        reset_space_region_pick_state(session)
     return _finish_created_space(
         session,
         space,
@@ -808,10 +820,12 @@ def _create_and_finish_space_region_candidate(
 
 def _start_space_region_pick_mode(session, boundaries, candidates, seed_space=None):
     session.current_tool = "Pick Space Region"
-    session._space_region_pick_boundaries = list(boundaries)
-    session._space_region_candidates = list(candidates)
-    session._hovered_space_region_candidate = None
-    session._space_region_pick_seed_space = seed_space
+    set_space_region_pick_state(
+        session,
+        boundaries=boundaries,
+        candidates=candidates,
+        seed_space=seed_space,
+    )
     session._clear_wall_grips()
     session._clear_hovered_plan_targets(kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS)
     session._refresh_primary_selected_plan_target()
@@ -979,7 +993,7 @@ def cancel_space_region_pick(session, refresh=True):
     was_active = session.current_tool == "Pick Space Region" or bool(
         session._space_region_candidates
     )
-    _clear_space_region_pick_state(session)
+    reset_space_region_pick_state(session)
     if session.current_tool == "Pick Space Region":
         session.current_tool = "Select"
     if was_active:
