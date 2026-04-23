@@ -57,7 +57,6 @@ from bimplan import symbol_edit as plan_symbol_edit
 from bimplan import opening_edit as plan_opening_edit
 from bimplan import provider_edit as plan_provider_edit
 from bimplan import targets as plan_targets
-from bimplan import view as plan_view
 from bimplan import visual_keys as plan_visual_keys
 from bimplan import wall_create as plan_wall_create
 from bimplan import wall_edit as plan_wall_edit
@@ -74,7 +73,6 @@ from bimplan.overlays import symbols as symbol_overlays
 from bimplan.overlays import walls as wall_overlays
 from bimplan.registry import get_plan_edit_registry
 from bimplan.ui.controls import PlanEditControlsWidget
-from bimplan.ui.status_chip import _PlanEditViewportStatusChip
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
 translate = FreeCAD.Qt.translate
@@ -219,9 +217,10 @@ class PlanEditSession:
     """Owns the viewer state and control dock for Plan Edit mode."""
 
     def __init__(self):
-        plan_session_state.initialize_session_state(self)
         self.selection = plan_session_components.PlanSelectionAPI(self)
         self.spaces = plan_session_components.PlanSpacesAPI(self)
+        self.viewport = plan_session_components.PlanViewportAPI(self)
+        plan_session_state.initialize_session_state(self)
 
     def _connect_teardown_signal(self, signal):
         try:
@@ -674,49 +673,49 @@ class PlanEditSession:
         self._embedded_tool_name = None
 
     def _get_navigation_style(self):
-        return plan_view.get_navigation_style(self)
+        return self.viewport.get_navigation_style()
 
     def _get_main_window(self):
-        return plan_view.get_main_window(self)
+        return self.viewport.get_main_window()
 
     def _find_main_window_action(self, command_name):
-        return plan_view.find_main_window_action(self, command_name)
+        return self.viewport.find_main_window_action(command_name)
 
     def _capture_view_action_state(self):
-        return plan_view.capture_view_action_state(self, _PLAN_VIEW_LOCKED_ACTIONS)
+        return self.viewport.capture_view_action_state()
 
     def _apply_locked_view_actions(self):
-        return plan_view.apply_locked_view_actions(self, _PLAN_VIEW_LOCKED_ACTIONS)
+        return self.viewport.apply_locked_view_actions()
 
     def _restore_locked_view_actions(self):
-        return plan_view.restore_locked_view_actions(self)
+        return self.viewport.restore_locked_view_actions()
 
     def _capture_navigation_flag(self, target, getter_name, state_key):
-        return plan_view.capture_navigation_flag(self, target, getter_name, state_key)
+        return self.viewport.capture_navigation_flag(target, getter_name, state_key)
 
     def _apply_navigation_flag(self, target, setter_name, state_key, enabled):
-        return plan_view.apply_navigation_flag(self, target, setter_name, state_key, enabled)
+        return self.viewport.apply_navigation_flag(target, setter_name, state_key, enabled)
 
     def _capture_navigation_state(self):
-        return plan_view.capture_navigation_state(self)
+        return self.viewport.capture_navigation_state()
 
     def _apply_plan_background_override(self):
-        return plan_view.apply_plan_background_override(self, _PLAN_PAPER_RGB)
+        return self.viewport.apply_plan_background_override()
 
     def _clear_plan_background_override(self):
-        return plan_view.clear_plan_background_override(self)
+        return self.viewport.clear_plan_background_override()
 
     def _apply_plan_navigation_profile(self):
-        return plan_view.apply_plan_navigation_profile(self, _PLAN_VIEW_LOCKED_ACTIONS)
+        return self.viewport.apply_plan_navigation_profile()
 
     def _restore_navigation_state(self):
-        return plan_view.restore_navigation_state(self)
+        return self.viewport.restore_navigation_state()
 
     def _force_plan_preselection(self):
-        return plan_view.force_plan_preselection(self)
+        return self.viewport.force_plan_preselection()
 
     def _restore_preselection_state(self):
-        return plan_view.restore_preselection_state(self)
+        return self.viewport.restore_preselection_state()
 
     def shutdown(self, close_dialog=True, teardown=False):
         global _active_session
@@ -943,40 +942,40 @@ class PlanEditSession:
         return not getattr(wall, "Base", None) and self.is_selected_wall_endpoint_editable()
 
     def apply_plan_view(self, fit=True):
-        return plan_view.apply_plan_view(self, fit=fit)
+        return self.viewport.apply_plan_view(fit=fit)
 
     def restore_state(self):
-        return plan_view.restore_state(self)
+        return self.viewport.restore_state()
 
     def _capture_state(self):
-        return plan_view.capture_state(self)
+        return self.viewport.capture_state()
 
     def get_interaction_plane(self):
-        return plan_view.get_interaction_plane(self)
+        return self.viewport.get_interaction_plane()
 
     def _project_plan_point(self, point):
-        return plan_view.project_plan_point(self, point)
+        return self.viewport.project_plan_point(point)
 
     def _get_wall_defaults(self):
         return plan_wall_create.get_wall_defaults(self)
 
     def _get_plan_view_height(self):
-        return plan_view.get_plan_view_height(self)
+        return self.viewport.get_plan_view_height()
 
     def _get_plan_overlay_scale(self):
-        return plan_view.get_plan_overlay_scale(self)
+        return self.viewport.get_plan_overlay_scale()
 
     def _scaled_line_width(self, base_width):
-        return plan_view.scaled_line_width(self, base_width)
+        return self.viewport.scaled_line_width(base_width)
 
     def _scaled_marker_size(self, base_size):
-        return plan_view.scaled_marker_size(self, base_size)
+        return self.viewport.scaled_marker_size(base_size)
 
     def _get_plan_view_units_per_pixel(self):
-        return plan_view.get_plan_view_units_per_pixel(self)
+        return self.viewport.get_plan_view_units_per_pixel()
 
     def _get_plan_projection_cache_key(self):
-        return plan_view.get_plan_projection_cache_key(self)
+        return self.viewport.get_plan_projection_cache_key()
 
     def _invalidate_opening_overlay_screen_cache(self):
         return overlay_geometry.invalidate_opening_overlay_screen_cache(self)
@@ -1812,10 +1811,10 @@ class PlanEditSession:
         )
 
     def _register_edit_callbacks(self):
-        return plan_view.register_edit_callbacks(self)
+        return self.viewport.register_edit_callbacks()
 
     def _unregister_edit_callbacks(self):
-        return plan_view.unregister_edit_callbacks(self)
+        return self.viewport.unregister_edit_callbacks()
 
     def _sync_primary_selected_plan_target_visuals(self, previous_kind=None, previous_obj=None):
         return self.selection.sync_primary_selected_plan_target_visuals(
@@ -2392,13 +2391,13 @@ class PlanEditSession:
         )
 
     def _focus_plan_view(self):
-        return plan_view.focus_plan_view(self)
+        return self.viewport.focus_plan_view()
 
     def _queue_focus_plan_view(self):
-        return plan_view.queue_focus_plan_view(self)
+        return self.viewport.queue_focus_plan_view()
 
     def _get_plan_view_widget(self):
-        return plan_view.get_plan_view_widget(self)
+        return self.viewport.get_plan_view_widget()
 
     def _format_status_chip_action(self, message):
         return plan_status_text.format_status_chip_action(message)
@@ -2437,19 +2436,19 @@ class PlanEditSession:
         return plan_status_text.get_status_chip_text(self)
 
     def _ensure_viewport_status_chip(self):
-        return plan_view.ensure_viewport_status_chip(self, _PlanEditViewportStatusChip)
+        return self.viewport.ensure_viewport_status_chip()
 
     def _refresh_viewport_status_chip(self):
-        return plan_view.refresh_viewport_status_chip(self, _PlanEditViewportStatusChip)
+        return self.viewport.refresh_viewport_status_chip()
 
     def _clear_viewport_status_chip(self):
-        return plan_view.clear_viewport_status_chip(self)
+        return self.viewport.clear_viewport_status_chip()
 
     def _clear_input_hints(self):
         return plan_status_text.clear_input_hints()
 
     def _request_view_redraw(self):
-        return plan_view.request_view_redraw(self)
+        return self.viewport.request_view_redraw()
 
     def _make_input_hint(self, message, *sequences):
         return plan_status_text.make_input_hint(message, *sequences)
