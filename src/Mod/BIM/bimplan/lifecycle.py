@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import FreeCAD
 import FreeCADGui
 from bimplan import command_gate as plan_command_gate
+from bimplan import selection_access as plan_selection_access
 from bimplan import spaces as plan_spaces
 from bimplan import window_create as plan_window_create
 from bimplan import target_dispatch as plan_target_dispatch
@@ -330,7 +331,10 @@ def _apply_cleanup_profile(session, profile):
 
 
 def _capture_selected_space(session):
-    return session._get_selected_plan_target_object(plan_target_kinds.PLAN_TARGET_SPACE)
+    return plan_selection_access.get_selected_plan_target_object(
+        session,
+        plan_target_kinds.PLAN_TARGET_SPACE,
+    )
 
 
 def _prepare_window_tool(session, context):

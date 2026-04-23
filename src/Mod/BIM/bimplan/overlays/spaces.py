@@ -3,6 +3,7 @@
 """Space and region overlay helpers for BIM Plan Edit."""
 
 from . import manager as overlay_manager
+from .. import selection_access as plan_selection_access
 
 
 def sync_secondary_selected_overlays(session):
@@ -190,7 +191,7 @@ def invalidate_selected_space_overlay_cache(session):
 
 def sync_selected_space_overlay(session):
     with session._plan_perf_trace_span("sync_selected_space_overlay"):
-        space = session._get_selected_plan_target_object("space")
+        space = plan_selection_access.get_selected_plan_target_object(session, "space")
         if session.current_tool not in (
             "Select",
             "Set Space Text",
@@ -251,7 +252,7 @@ def clear_selected_space_overlay(session):
 
 def sync_selected_region_overlay(session):
     with session._plan_perf_trace_span("sync_selected_region_overlay"):
-        region = session._get_selected_plan_target_object("region")
+        region = plan_selection_access.get_selected_plan_target_object(session, "region")
         if session.current_tool != "Select" or not session._is_plan_region_object(region):
             session._clear_selected_region_overlay()
             return

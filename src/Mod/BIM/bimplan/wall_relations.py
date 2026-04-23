@@ -4,6 +4,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimplan import selection_access as plan_selection_access
 
 translate = FreeCAD.Qt.translate
 
@@ -32,7 +33,7 @@ def activate_join_tool(session):
     session._set_hovered_space(None)
     session._set_hovered_region(None)
 
-    wall = session._get_selected_plan_target_object("wall")
+    wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
     if not session._is_plan_selectable_wall(wall):
         selection = []
         try:
@@ -145,7 +146,7 @@ def get_plan_join_candidate_wall(session):
 def get_plan_candidate_joint(session, target_wall=None):
     import ArchWallJoinUtils
 
-    source_wall = session._get_selected_plan_target_object("wall")
+    source_wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
     target_wall = target_wall or session._get_plan_join_candidate_wall()
     if not session._is_plan_selectable_wall(source_wall):
         return None
@@ -238,7 +239,7 @@ def unjoin_plan_wall_pair(session, source_wall, target_wall):
 
 
 def unjoin_current_plan_wall_pair(session):
-    source_wall = session._get_selected_plan_target_object("wall")
+    source_wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
     target_wall = session._get_plan_join_candidate_wall()
     if not session._unjoin_plan_wall_pair(source_wall, target_wall):
         FreeCAD.Console.PrintWarning(
@@ -408,7 +409,7 @@ def update_wall_relation_status(session, wall):
 def cancel_join_tool(session, refresh=True):
     if session.current_tool != "Join":
         return False
-    selected_wall = session._get_selected_plan_target_object("wall")
+    selected_wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
     session.current_tool = "Select"
     session._set_hovered_wall(None)
     session._set_hovered_opening(None)

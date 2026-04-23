@@ -7,6 +7,7 @@ from contextlib import nullcontext
 import FreeCAD
 import FreeCADGui
 from bimplan.providers import PlanEditHandleSpec, PlanOverlayMarkerKind, PlanToolInteraction
+from bimplan import selection_access as plan_selection_access
 
 translate = FreeCAD.Qt.translate
 
@@ -14,7 +15,7 @@ translate = FreeCAD.Qt.translate
 def get_selected_provider_edit_handles(session, provider_obj):
     if provider_obj is None:
         return []
-    selected_provider = session._get_selected_plan_target_object("provider")
+    selected_provider = plan_selection_access.get_selected_plan_target_object(session, "provider")
     editing_provider = getattr(session, "_edit_provider", None)
     if provider_obj != selected_provider and provider_obj != editing_provider:
         return []

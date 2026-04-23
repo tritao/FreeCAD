@@ -5,6 +5,7 @@
 import FreeCAD
 import FreeCADGui
 from bimplan import hosted_openings as plan_hosted_openings
+from bimplan import selection_access as plan_selection_access
 
 translate = FreeCAD.Qt.translate
 
@@ -20,7 +21,7 @@ def can_place_window(session):
 
 
 def get_window_host_wall(session):
-    wall = session._get_selected_plan_target_object("wall")
+    wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
     if session._is_plan_selectable_wall(wall):
         return wall
     wall = getattr(session, "hovered_wall", None)
