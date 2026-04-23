@@ -40,6 +40,7 @@ from bimplan import provider_targets as plan_provider_targets
 from bimplan import selection as plan_selection
 from bimplan import snap as plan_snap
 from bimplan import spaces as plan_spaces
+from bimplan import task_panel as plan_task_panel
 from bimplan import symbol_edit as plan_symbol_edit
 from bimplan import opening_edit as plan_opening_edit
 from bimplan import provider_edit as plan_provider_edit
@@ -6763,140 +6764,25 @@ class PlanEditSession:
         self.shutdown(close_dialog=False, teardown=True)
 
     def attach_task_panel(self, panel):
-        if self.task_panel is panel:
-            return
-        self.task_panel = panel
+        return plan_task_panel.attach_task_panel(self, panel)
 
     def attach_aux_task_panel(self, panel):
-        if panel is None or panel in self._aux_task_panels:
-            return
-        self._aux_task_panels.append(panel)
-        try:
-            panel.refresh()
-        except (AttributeError, RuntimeError):
-            self.detach_aux_task_panel(panel)
+        return plan_task_panel.attach_aux_task_panel(self, panel)
 
     def detach_aux_task_panel(self, panel):
-        if panel is None:
-            return
-        self._aux_task_panels = [item for item in self._aux_task_panels if item is not panel]
+        return plan_task_panel.detach_aux_task_panel(self, panel)
 
     def detach_task_panel(self):
-        panel = self.task_panel
-        self.task_panel = None
-        if panel:
-            try:
-                mark_closed = getattr(panel, "mark_closed", None)
-                if callable(mark_closed):
-                    mark_closed()
-            except Exception:
-                pass
-            try:
-                detach = getattr(panel, "detach", None)
-                if callable(detach):
-                    detach()
-                else:
-                    dispose = getattr(panel, "dispose", None)
-                    if callable(dispose):
-                        dispose()
-            except Exception:
-                pass
-        return panel
+        return plan_task_panel.detach_task_panel(self)
 
     def on_panel_closed(self, panel):
-        if self.task_panel is panel:
-            self.task_panel = None
-            if not self._finishing:
-                self.shutdown(close_dialog=False, teardown=self._tearing_down)
-            return
-        try:
-            mark_closed = getattr(panel, "mark_closed", None)
-            if callable(mark_closed):
-                mark_closed()
-        except Exception:
-            pass
-        try:
-            detach = getattr(panel, "detach", None)
-            if callable(detach):
-                detach()
-            else:
-                dispose = getattr(panel, "dispose", None)
-                if callable(dispose):
-                    dispose()
-        except Exception:
-            pass
+        return plan_task_panel.on_panel_closed(self, panel)
 
     def _refresh_task_panel_status(self, selection_only=False):
-        with self._plan_perf_trace_span(
-            "refresh_task_panel_status",
-            selection_only=bool(selection_only),
-        ):
-            if self._tearing_down or not self._document_is_alive():
-                return
-            self._sanitize_plan_target_references()
-            self._update_input_hints()
-            self._refresh_viewport_status_chip()
-            panel = self.task_panel
-            if panel:
-                try:
-                    refresh = None
-                    if selection_only:
-                        refresh = getattr(panel, "refresh_selection_from_session", None)
-                    if not callable(refresh):
-                        refresh = getattr(panel, "refresh_from_session", None)
-                    if callable(refresh):
-                        refresh()
-                except (AttributeError, RuntimeError):
-                    self.on_panel_closed(panel)
-            stale_panels = []
-            for extra_panel in list(self._aux_task_panels):
-                if extra_panel is panel:
-                    continue
-                try:
-                    refresh = None
-                    if selection_only:
-                        refresh = getattr(extra_panel, "refresh_selection_from_session", None)
-                    if not callable(refresh):
-                        refresh = getattr(extra_panel, "refresh_from_session", None)
-                    if callable(refresh):
-                        refresh()
-                except (AttributeError, RuntimeError):
-                    stale_panels.append(extra_panel)
-            for extra_panel in stale_panels:
-                self.detach_aux_task_panel(extra_panel)
+        return plan_task_panel.refresh_task_panel_status(self, selection_only=selection_only)
 
     def _refresh_provider_overlay_mode_panels(self):
-        with self._plan_perf_trace_span("refresh_provider_overlay_mode_panels"):
-            if self._tearing_down or not self._document_is_alive():
-                return
-            panel = self.task_panel
-            if panel:
-                try:
-                    refresh = getattr(panel, "refresh_provider_overlay_mode_from_session", None)
-                    if not callable(refresh):
-                        refresh = getattr(panel, "refresh_from_session", None)
-                    if callable(refresh):
-                        refresh()
-                except (AttributeError, RuntimeError):
-                    self.on_panel_closed(panel)
-            stale_panels = []
-            for extra_panel in list(self._aux_task_panels):
-                if extra_panel is panel:
-                    continue
-                try:
-                    refresh = getattr(
-                        extra_panel,
-                        "refresh_provider_overlay_mode_from_session",
-                        None,
-                    )
-                    if not callable(refresh):
-                        refresh = getattr(extra_panel, "refresh_from_session", None)
-                    if callable(refresh):
-                        refresh()
-                except (AttributeError, RuntimeError):
-                    stale_panels.append(extra_panel)
-            for extra_panel in stale_panels:
-                self.detach_aux_task_panel(extra_panel)
+        return plan_task_panel.refresh_provider_overlay_mode_panels(self)
 
     def _is_modal_plan_interaction_active(self):
         return bool(
