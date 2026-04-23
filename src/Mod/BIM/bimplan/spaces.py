@@ -67,6 +67,22 @@ def clear_plan_region_preview(session):
     session._plan_region_preview_trackers = []
 
 
+def set_plan_region_tool_state(session, points=None, parent_space=None):
+    session._plan_region_points = list(points or [])
+    session._plan_region_parent_space = parent_space
+
+
+def reset_plan_region_tool_state(session, clear_preview=True):
+    set_plan_region_tool_state(session)
+    if clear_preview:
+        session._clear_plan_region_preview()
+
+
+def prepare_plan_region_tool_state(session, parent_space=None):
+    reset_plan_region_tool_state(session)
+    session._plan_region_parent_space = parent_space
+
+
 def _cancel_snap_tool(session, *, is_active, clear_preview, reset_state, sync_kinds, refresh=True):
     if not is_active():
         return False
@@ -86,15 +102,11 @@ def _cancel_snap_tool(session, *, is_active, clear_preview, reset_state, sync_ki
 
 
 def cancel_plan_region_tool(session, refresh=True):
-    def reset_state():
-        session._plan_region_points = []
-        session._plan_region_parent_space = None
-
     return _cancel_snap_tool(
         session,
         is_active=session._has_active_plan_region_tool,
         clear_preview=session._clear_plan_region_preview,
-        reset_state=reset_state,
+        reset_state=lambda: reset_plan_region_tool_state(session, clear_preview=False),
         sync_kinds=plan_target_kinds.PLAN_REGION_CANCEL_VISUAL_KINDS,
         refresh=refresh,
     )
@@ -243,16 +255,28 @@ def clear_space_separator_preview(session):
     session._space_separator_preview_trackers = []
 
 
-def cancel_space_separator_tool(session, refresh=True):
-    def reset_state():
-        session._space_separator_start = None
-        session._space_separator_height = None
+def set_space_separator_tool_state(session, start=None, height=None):
+    session._space_separator_start = start
+    session._space_separator_height = height
 
+
+def reset_space_separator_tool_state(session, clear_preview=True):
+    set_space_separator_tool_state(session)
+    if clear_preview:
+        session._clear_space_separator_preview()
+
+
+def prepare_space_separator_tool_state(session, height=None):
+    reset_space_separator_tool_state(session)
+    session._space_separator_height = height
+
+
+def cancel_space_separator_tool(session, refresh=True):
     return _cancel_snap_tool(
         session,
         is_active=session._has_active_space_separator_tool,
         clear_preview=session._clear_space_separator_preview,
-        reset_state=reset_state,
+        reset_state=lambda: reset_space_separator_tool_state(session, clear_preview=False),
         sync_kinds=plan_target_kinds.SPACE_SEPARATOR_CANCEL_VISUAL_KINDS,
         refresh=refresh,
     )
