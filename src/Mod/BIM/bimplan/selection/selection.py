@@ -1621,13 +1621,17 @@ class PlanSelectionAPI(_SessionAPI):
     normalize_gui_object_selection = _bind_session_call(normalize_gui_object_selection)
 
     def get_selected_plan_target_state(self):
-        return get_selected_plan_target_state(
+        from bimplan.runtime import session_components as plan_session_components
+
+        return plan_session_components.plan_selection.get_selected_plan_target_state(
             self.session,
             plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS,
         )
 
     def set_selected_plan_target_state(self, kind=None, obj=None):
-        return set_selected_plan_target_state(
+        from bimplan.runtime import session_components as plan_session_components
+
+        return plan_session_components.plan_selection.set_selected_plan_target_state(
             self.session,
             plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS,
             kind=kind,

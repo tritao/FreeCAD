@@ -1681,8 +1681,10 @@ class PlanSpacesAPI(_SessionAPI):
         return getattr(self.session, "_plan_region_parent_space", None)
 
     def set_hovered_space_region_candidate(self, candidate):
-        return set_hovered_space_region_candidate(
+        from bimplan.runtime import session_components as plan_session_components
+
+        return plan_session_components.plan_spaces.set_hovered_space_region_candidate(
             self.session,
             candidate,
-            session_visual_key=plan_document_visuals.PLAN_VISUAL_SPACE_REGION_PICK,
+            plan_document_visuals.PLAN_VISUAL_SPACE_REGION_PICK,
         )
