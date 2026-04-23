@@ -35,6 +35,7 @@ def initialize_session_read_state(session):
     session.provider_overlay_read_state = plan_session_state_models.PlanProviderOverlayReadState(
         mode=plan_provider_overlay_state.PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
     )
+    session.interaction_state = plan_session_state_models.PlanInteractionState()
 
 
 def initialize_session_state(session):
@@ -180,16 +181,8 @@ def initialize_session_state(session):
     session._plan_region_points = []
     session._plan_region_preview_trackers = []
     session._edit_wall_visibility = None
-    session._edit_opening = None
-    session._edit_opening_handle_index = None
-    session._edit_symbol = None
-    session._edit_symbol_handle_role = None
     session._edit_symbol_start_placement = None
     session._edit_symbol_reference_point = None
-    session._edit_provider = None
-    session._edit_provider_handle_index = None
-    session._edit_provider_handle = None
-    session._edit_space = None
     session._ignore_selection_changes = False
     session._mouse_moved_cb = None
     session._mouse_wheel_cb = None
@@ -211,10 +204,6 @@ def initialize_session_state(session):
     session._saved_object_view_state = {}
     session._working_plane = None
     session._interaction_plane = None
-    session._embedded_host = None
-    session._embedded_tool = None
-    session._embedded_tool_name = None
-    session._provider_point_tool = None
     session._finishing = False
     session._tearing_down = False
     session._teardown_signal_sources = []

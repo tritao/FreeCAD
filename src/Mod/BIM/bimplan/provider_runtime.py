@@ -555,20 +555,26 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
         return contributions
 
 
-def _execute_plan_provider_action_callback(execute_action, action_key, context, session, payload):
+def _execute_plan_provider_action_callback(
+    execute_action,
+    action_key,
+    context,
+    action_context,
+    payload,
+):
     if payload is None:
-        return execute_action(action_key, context=context, session=session)
+        return execute_action(action_key, context=context, session=action_context)
     try:
         signature = inspect.signature(execute_action)
     except (TypeError, ValueError):
-        return execute_action(action_key, context=context, session=session)
+        return execute_action(action_key, context=context, session=action_context)
     parameters = signature.parameters
     accepts_payload = "payload" in parameters or any(
         parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()
     )
     if accepts_payload:
-        return execute_action(action_key, context=context, session=session, payload=payload)
-    return execute_action(action_key, context=context, session=session)
+        return execute_action(action_key, context=context, session=action_context, payload=payload)
+    return execute_action(action_key, context=context, session=action_context)
 
 
 def execute_plan_provider_action(
@@ -589,6 +595,7 @@ def execute_plan_provider_action(
         return False
 
     context = session.get_plan_edit_context()
+    action_context = session.get_plan_provider_action_context(payload=payload)
     transaction_label = str(transaction_label or "").strip()
     defer_updates = getattr(session, "defer_document_visual_updates", None)
     visual_update_context = defer_updates() if callable(defer_updates) else nullcontext()
@@ -600,7 +607,7 @@ def execute_plan_provider_action(
                         execute_action,
                         action_key,
                         context,
-                        session,
+                        action_context,
                         payload,
                     )
             else:
@@ -608,7 +615,7 @@ def execute_plan_provider_action(
                     execute_action,
                     action_key,
                     context,
-                    session,
+                    action_context,
                     payload,
                 )
             if handled is not False:

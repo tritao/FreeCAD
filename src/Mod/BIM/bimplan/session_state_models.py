@@ -20,3 +20,19 @@ class PlanProviderOverlayReadState:
     mode: str = "architecture"
     visibility: dict = field(default_factory=dict)
     render_state: object = None
+
+
+@dataclass
+class PlanInteractionState:
+    embedded_host: object = None
+    embedded_tool: object = None
+    embedded_tool_name: str | None = None
+    provider_point_tool: object = None
+    edit_opening: object = None
+    edit_opening_handle_index: object = None
+    edit_symbol: object = None
+    edit_symbol_handle_role: object = None
+    edit_provider: object = None
+    edit_provider_handle_index: object = None
+    edit_provider_handle: object = None
+    edit_space: object = None

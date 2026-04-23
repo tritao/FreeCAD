@@ -292,19 +292,13 @@ def _resolve_selected_wall(context):
         for target in tuple(getattr(context, "get_selected_targets", lambda: ())() or ())
         if target is not primary
     )
-    session = getattr(context, "session", None)
     for target in targets:
         if str(getattr(target, "kind", "") or "").strip() != "wall":
             continue
         obj = _resolve_target_object(context, target)
-        checker = getattr(session, "_is_plan_selectable_wall", None)
-        if callable(checker):
-            try:
-                if checker(obj):
-                    return obj
-            except Exception:
-                pass
-        elif _is_wall_object(obj):
+        if getattr(context, "is_selectable_wall", lambda _obj: False)(obj):
+            return obj
+        if _is_wall_object(obj):
             return obj
     return None
 
@@ -321,16 +315,10 @@ def _is_wall_object(obj):
 
 
 def _get_window_host_wall(context, window):
-    session = getattr(context, "session", None)
-    checker = getattr(session, "_is_plan_selectable_wall", None)
     for host in tuple(getattr(window, "Hosts", None) or ()):
-        if callable(checker):
-            try:
-                if checker(host):
-                    return host
-            except Exception:
-                continue
-        elif _is_wall_object(host):
+        if getattr(context, "is_selectable_wall", lambda _obj: False)(host):
+            return host
+        if _is_wall_object(host):
             return host
     return None
 
@@ -338,14 +326,8 @@ def _get_window_host_wall(context, window):
 def _get_wall_windows(context, wall):
     if wall is None:
         return ()
-    session = getattr(context, "session", None)
-    getter = getattr(session, "_get_wall_hosted_openings", None)
-    if callable(getter):
-        try:
-            openings = tuple(getter(wall) or ())
-        except Exception:
-            openings = ()
-    else:
+    openings = tuple(getattr(context, "get_wall_hosted_openings", lambda _wall: ())(wall) or ())
+    if not openings:
         openings = _scan_wall_windows_from_document(context, wall)
     return tuple(opening for opening in openings if _is_window_object(context, opening))
 
@@ -353,7 +335,7 @@ def _get_wall_windows(context, wall):
 def _scan_wall_windows_from_document(context, wall):
     doc = getattr(wall, "Document", None)
     if doc is None:
-        doc = getattr(getattr(context, "session", None), "doc", None)
+        doc = getattr(context, "get_document", lambda: None)()
     windows = []
     for obj in tuple(getattr(doc, "Objects", ()) or ()):
         if wall in tuple(getattr(obj, "Hosts", None) or ()) and _is_window_object(context, obj):
@@ -372,15 +354,11 @@ def _has_valid_shape(obj):
 
 
 def _get_opening_plan_proxy(context, window, *attrs):
-    session = getattr(context, "session", None)
-    getter = getattr(session, "_get_opening_plan_proxy", None)
+    getter = getattr(context, "get_opening_plan_proxy", None)
     if callable(getter):
-        try:
-            proxy = getter(window, *attrs)
-            if proxy is not None:
-                return proxy
-        except Exception:
-            pass
+        proxy = getter(window, *attrs)
+        if proxy is not None:
+            return proxy
     proxy = getattr(window, "Proxy", None)
     if proxy and all(hasattr(proxy, attr) for attr in attrs):
         return proxy
@@ -600,38 +578,35 @@ def _center_on_host_action():
     )
 
 
-def _recompute_window_host(session, window):
+def _recompute_window_host(commands, window):
     if window is None:
         return False
-    recompute_hosts = getattr(session, "_queue_recompute_opening_hosts", None)
-    if callable(recompute_hosts):
-        recompute_hosts(window)
+    if getattr(commands, "queue_recompute_opening_hosts", lambda _opening: False)(window):
+        pass
     else:
         for host in tuple(getattr(window, "Hosts", None) or ()):
             try:
                 host.touch()
             except Exception:
                 pass
-        doc = getattr(window, "Document", None) or getattr(session, "doc", None)
-        if doc is not None:
-            try:
-                doc.recompute()
-            except Exception:
-                pass
-    _refresh_window_visuals(session, window)
+        doc = getattr(window, "Document", None) or getattr(commands, "doc", None)
+        getattr(commands, "recompute_document", lambda _doc=None: False)(doc)
+    _refresh_window_visuals(commands, window)
     return True
 
 
-def _select_window_host(session, host):
+def _select_window_host(commands, host):
     if host is None:
         return False
-    selector = getattr(session, "_select_wall_for_plan_edit", None)
-    if callable(selector):
-        return bool(selector(host, sync_gui_selection=True))
-    return False
+    return bool(
+        getattr(commands, "select_wall_for_plan_edit", lambda _host, **_kwargs: False)(
+            host,
+            sync_gui_selection=True,
+        )
+    )
 
 
-def _center_window_on_host(context, session, window, host):
+def _center_window_on_host(context, commands, window, host):
     if window is None or host is None:
         return False
     wall_context = _get_wall_axis_context(host)
@@ -651,20 +626,14 @@ def _center_window_on_host(context, session, window, host):
         moved = False
     if not moved:
         return False
-    _refresh_window_visuals(session, window)
+    _refresh_window_visuals(commands, window)
     return True
 
 
-def _refresh_window_visuals(session, window):
-    invalidate_cache = getattr(session, "_invalidate_wall_hosted_openings_cache", None)
-    if callable(invalidate_cache):
-        invalidate_cache()
-    refresh_hosts = getattr(session, "_refresh_opening_host_footprint_displays", None)
-    if callable(refresh_hosts):
-        refresh_hosts(window)
-    refresh_window = getattr(session, "_refresh_opening_footprint_display", None)
-    if callable(refresh_window):
-        refresh_window(window)
+def _refresh_window_visuals(commands, window):
+    refresher = getattr(commands, "refresh_opening_visuals", None)
+    if callable(refresher):
+        refresher(window)
 
 
 def _point_tuple(point):
