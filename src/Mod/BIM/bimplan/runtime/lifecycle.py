@@ -83,7 +83,7 @@ def clear_transient_visuals(
 def detach_runtime_observers(session):
     session._detach_selection_observer()
     session._detach_document_observer()
-    session._unregister_edit_callbacks()
+    session.viewport.unregister_edit_callbacks()
 
 
 def _clear_space_text_pick_state(session):

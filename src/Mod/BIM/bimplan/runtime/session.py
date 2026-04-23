@@ -644,7 +644,7 @@ class PlanEditSession:
         app = QtGui.QApplication.instance()
         if app:
             self._connect_teardown_signal(app.aboutToQuit)
-        main_window = self._get_main_window()
+        main_window = self.viewport.get_main_window()
         if main_window:
             try:
                 signal = main_window.mainWindowClosed
@@ -935,9 +935,9 @@ class PlanEditSession:
                     return False
 
             with self._plan_perf_trace_span("capture_plan_edit_state"):
-                self._capture_state()
+                self.viewport.capture_state()
             with self._plan_perf_trace_span("force_plan_preselection"):
-                self._force_plan_preselection()
+                self.viewport.force_plan_preselection()
 
             with self._plan_perf_trace_span("collect_storeys"):
                 self.storeys = self.collect_storeys()
@@ -959,7 +959,7 @@ class PlanEditSession:
             with self._plan_perf_trace_span("attach_document_observer"):
                 self._attach_document_observer()
             with self._plan_perf_trace_span("register_edit_callbacks"):
-                self._register_edit_callbacks()
+                self.viewport.register_edit_callbacks()
             with self._plan_perf_trace_span("refresh_primary_selected_plan_target_on_enter"):
                 self._refresh_primary_selected_plan_target()
 
@@ -1020,7 +1020,7 @@ class PlanEditSession:
 
     def _discard_runtime_references(self):
         self.viewport.clear_viewport_status_chip()
-        self._restore_preselection_state()
+        self.viewport.restore_preselection_state()
         self.doc = None
         self.gui_doc = None
         self.view = None
@@ -1080,9 +1080,6 @@ class PlanEditSession:
     def _get_navigation_style(self):
         return self.viewport.get_navigation_style()
 
-    def _get_main_window(self):
-        return self.viewport.get_main_window()
-
     def _find_main_window_action(self, command_name):
         return self.viewport.find_main_window_action(command_name)
 
@@ -1115,12 +1112,6 @@ class PlanEditSession:
 
     def _restore_navigation_state(self):
         return self.viewport.restore_navigation_state()
-
-    def _force_plan_preselection(self):
-        return self.viewport.force_plan_preselection()
-
-    def _restore_preselection_state(self):
-        return self.viewport.restore_preselection_state()
 
     def shutdown(self, close_dialog=True, teardown=False):
         global _active_session
@@ -1346,9 +1337,6 @@ class PlanEditSession:
 
     def restore_state(self):
         return self.viewport.restore_state()
-
-    def _capture_state(self):
-        return self.viewport.capture_state()
 
     def get_interaction_plane(self):
         return self.viewport.get_interaction_plane()
@@ -2199,12 +2187,6 @@ class PlanEditSession:
             wall=wall,
             clear_gui_selection=clear_gui_selection,
         )
-
-    def _register_edit_callbacks(self):
-        return self.viewport.register_edit_callbacks()
-
-    def _unregister_edit_callbacks(self):
-        return self.viewport.unregister_edit_callbacks()
 
     def _sync_primary_selected_plan_target_visuals(self, previous_kind=None, previous_obj=None):
         return self.selection.sync_primary_selected_plan_target_visuals(
