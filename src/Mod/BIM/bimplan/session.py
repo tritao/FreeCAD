@@ -52,6 +52,7 @@ from bimplan import opening_edit as plan_opening_edit
 from bimplan import provider_edit as plan_provider_edit
 from bimplan import targets as plan_targets
 from bimplan import view as plan_view
+from bimplan import visual_keys as plan_visual_keys
 from bimplan import wall_create as plan_wall_create
 from bimplan import wall_edit as plan_wall_edit
 from bimplan import wall_relations as plan_wall_relations
@@ -100,24 +101,24 @@ _WALL_VISUAL_PROPERTIES = plan_document_visuals.WALL_VISUAL_PROPERTIES
 _SYMBOL_VISUAL_PROPERTIES = plan_document_visuals.SYMBOL_VISUAL_PROPERTIES
 _SPACE_VISUAL_PROPERTIES = plan_document_visuals.SPACE_VISUAL_PROPERTIES
 _REGION_VISUAL_PROPERTIES = plan_document_visuals.REGION_VISUAL_PROPERTIES
-_PLAN_VISUAL_HOVERED_WALL = "hovered_wall"
-_PLAN_VISUAL_HOVERED_OPENING = "hovered_opening"
-_PLAN_VISUAL_HOVERED_SYMBOL = "hovered_symbol"
-_PLAN_VISUAL_HOVERED_PROVIDER = "hovered_provider"
-_PLAN_VISUAL_HOVERED_SPACE = "hovered_space"
-_PLAN_VISUAL_HOVERED_REGION = "hovered_region"
-_PLAN_VISUAL_SELECTED_PROVIDER = "selected_provider"
-_PLAN_VISUAL_SELECTED_OPENING = "selected_opening"
-_PLAN_VISUAL_SELECTED_SYMBOL = "selected_symbol"
-_PLAN_VISUAL_SELECTED_SPACE = "selected_space"
-_PLAN_VISUAL_SELECTED_REGION = "selected_region"
-_PLAN_VISUAL_SECONDARY_SELECTION = "secondary_selection"
-_PLAN_VISUAL_SPACE_REGION_PICK = "space_region_pick"
-_PLAN_VISUAL_WALL_GRIPS = "wall_grips"
-_PLAN_VISUAL_WALL_EDIT_PREVIEW = "wall_edit_preview"
-_PLAN_VISUAL_PROVIDER_OVERLAYS = "provider_overlays"
-_PLAN_VISUAL_VIEW_SCALE = "view_scale"
-_PLAN_VISUAL_ALL = "all"
+_PLAN_VISUAL_HOVERED_WALL = plan_visual_keys.PLAN_VISUAL_HOVERED_WALL
+_PLAN_VISUAL_HOVERED_OPENING = plan_visual_keys.PLAN_VISUAL_HOVERED_OPENING
+_PLAN_VISUAL_HOVERED_SYMBOL = plan_visual_keys.PLAN_VISUAL_HOVERED_SYMBOL
+_PLAN_VISUAL_HOVERED_PROVIDER = plan_visual_keys.PLAN_VISUAL_HOVERED_PROVIDER
+_PLAN_VISUAL_HOVERED_SPACE = plan_visual_keys.PLAN_VISUAL_HOVERED_SPACE
+_PLAN_VISUAL_HOVERED_REGION = plan_visual_keys.PLAN_VISUAL_HOVERED_REGION
+_PLAN_VISUAL_SELECTED_PROVIDER = plan_visual_keys.PLAN_VISUAL_SELECTED_PROVIDER
+_PLAN_VISUAL_SELECTED_OPENING = plan_visual_keys.PLAN_VISUAL_SELECTED_OPENING
+_PLAN_VISUAL_SELECTED_SYMBOL = plan_visual_keys.PLAN_VISUAL_SELECTED_SYMBOL
+_PLAN_VISUAL_SELECTED_SPACE = plan_visual_keys.PLAN_VISUAL_SELECTED_SPACE
+_PLAN_VISUAL_SELECTED_REGION = plan_visual_keys.PLAN_VISUAL_SELECTED_REGION
+_PLAN_VISUAL_SECONDARY_SELECTION = plan_visual_keys.PLAN_VISUAL_SECONDARY_SELECTION
+_PLAN_VISUAL_SPACE_REGION_PICK = plan_visual_keys.PLAN_VISUAL_SPACE_REGION_PICK
+_PLAN_VISUAL_WALL_GRIPS = plan_visual_keys.PLAN_VISUAL_WALL_GRIPS
+_PLAN_VISUAL_WALL_EDIT_PREVIEW = plan_visual_keys.PLAN_VISUAL_WALL_EDIT_PREVIEW
+_PLAN_VISUAL_PROVIDER_OVERLAYS = plan_visual_keys.PLAN_VISUAL_PROVIDER_OVERLAYS
+_PLAN_VISUAL_VIEW_SCALE = plan_visual_keys.PLAN_VISUAL_VIEW_SCALE
+_PLAN_VISUAL_ALL = plan_visual_keys.PLAN_VISUAL_ALL
 _PLAN_PROVIDER_OVERLAY_MODE_ALL = plan_provider_overlay_state.PLAN_PROVIDER_OVERLAY_MODE_ALL
 _PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE = (
     plan_provider_overlay_state.PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE

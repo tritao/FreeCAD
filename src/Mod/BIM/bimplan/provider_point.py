@@ -5,9 +5,11 @@
 import FreeCAD
 import FreeCADGui
 
+from bimplan import visual_keys as plan_visual_keys
+
 translate = FreeCAD.Qt.translate
 
-_PLAN_VISUAL_ALL = "all"
+_PLAN_VISUAL_ALL = plan_visual_keys.PLAN_VISUAL_ALL
 
 
 def has_active_provider_point_tool(session):

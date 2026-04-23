@@ -5,12 +5,13 @@
 from __future__ import annotations
 
 from . import selection as plan_selection
+from . import visual_keys as plan_visual_keys
 
 PLAN_PROVIDER_OVERLAY_MODE_ALL = "all"
 PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE = "architecture"
 PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL = "electrical"
 PLAN_PROVIDER_OVERLAY_MODE_PLUMBING = "plumbing"
-_PLAN_VISUAL_PROVIDER_OVERLAYS = "provider_overlays"
+_PLAN_VISUAL_PROVIDER_OVERLAYS = plan_visual_keys.PLAN_VISUAL_PROVIDER_OVERLAYS
 
 
 def get_plan_provider_overlay_visibility_key(provider_id, overlay_key):
