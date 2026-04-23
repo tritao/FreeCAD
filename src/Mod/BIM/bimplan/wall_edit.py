@@ -19,6 +19,23 @@ def is_wall_edit_modal_active(session):
     return bool(session._wall_edit_modal_active and session._edit_wall)
 
 
+def is_selected_wall_endpoint_editable(session):
+    wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
+    if not wall:
+        return False
+    proxy = getattr(wall, "Proxy", None)
+    if not (hasattr(proxy, "calc_endpoints") and hasattr(proxy, "set_from_endpoints")):
+        return False
+    if not getattr(wall, "Base", None):
+        return True
+    try:
+        import Draft
+
+        return Draft.getType(getattr(wall, "Base", None)) == "BezCurve"
+    except Exception:
+        return False
+
+
 def cancel_wall_edit(session, restore=True, refresh=True):
     del restore
     if not session._has_active_wall_edit():

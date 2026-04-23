@@ -34,9 +34,13 @@ from bimplan import selection as plan_selection
 from bimplan import status_text as plan_status_text
 from bimplan import spaces as plan_spaces
 from bimplan import target_kinds as plan_target_kinds
+from bimplan import targets as plan_targets
 from bimplan import view as plan_view
 from bimplan import visual_keys as plan_visual_keys
+from bimplan import wall_relations as plan_wall_relations
 from bimplan import wall_edit as plan_wall_edit
+from bimplan import window_create as plan_window_create
+from bimplan import window_edit as plan_window_edit
 from bimplan.ui.status_chip import _PlanEditViewportStatusChip
 
 
@@ -265,8 +269,21 @@ class PlanSpacesAPI(_SessionAPI):
     report_space_region_candidate_failure = staticmethod(
         plan_spaces.report_space_region_candidate_failure
     )
+    format_space_region_candidate_area = staticmethod(
+        plan_spaces.format_space_region_candidate_area
+    )
     format_space_preflight_text = staticmethod(plan_spaces.format_space_preflight_text)
     report_space_creation_failure = staticmethod(plan_spaces.report_space_creation_failure)
+    is_plan_space_object = _bind_session_call(plan_targets.is_plan_space_object)
+
+    def get_space_region_candidate_count(self):
+        return len(getattr(self.session, "_space_region_candidates", ()) or ())
+
+    def get_hovered_space_region_candidate(self):
+        return getattr(self.session, "_hovered_space_region_candidate", None)
+
+    def get_plan_region_parent_space(self):
+        return getattr(self.session, "_plan_region_parent_space", None)
 
     def set_hovered_space_region_candidate(self, candidate):
         return plan_spaces.set_hovered_space_region_candidate(
@@ -274,6 +291,54 @@ class PlanSpacesAPI(_SessionAPI):
             candidate,
             plan_visual_keys.PLAN_VISUAL_SPACE_REGION_PICK,
         )
+
+
+class PlanWallRelationsAPI(_SessionAPI):
+    """Owned session surface for Plan Edit wall relation and join reads."""
+
+    __slots__ = ()
+
+    get_plan_join_type_label = _bind_session_call(plan_wall_relations.get_plan_join_type_label)
+    get_plan_candidate_joint = _bind_session_call(plan_wall_relations.get_plan_candidate_joint)
+    get_plan_join_candidate_state = _bind_session_call(
+        plan_wall_relations.get_plan_join_candidate_state
+    )
+    get_plan_join_mode_action_text = _bind_session_call(
+        plan_wall_relations.get_plan_join_mode_action_text
+    )
+
+
+class PlanWindowsAPI(_SessionAPI):
+    """Owned session surface for Plan Edit window placement and editor reads."""
+
+    __slots__ = ()
+
+    can_place_window = _bind_session_call(plan_window_create.can_place_window)
+    get_selected_window_style_preset = _bind_session_call(
+        plan_window_edit.get_selected_window_style_preset
+    )
+    get_selected_window_width_text = _bind_session_call(
+        plan_window_edit.get_selected_window_width_text
+    )
+    get_selected_window_height_text = _bind_session_call(
+        plan_window_edit.get_selected_window_height_text
+    )
+    get_window_style_preset_options = staticmethod(plan_window_edit.get_window_style_preset_options)
+
+    def can_apply_window_style_preset(self, window=None):
+        if window is None:
+            window = self.session.selection.get_selected_plan_target_object("opening")
+        return plan_window_edit.can_edit_window_style_preset(window)
+
+    def can_edit_window_width(self, window=None):
+        if window is None:
+            window = self.session.selection.get_selected_plan_target_object("opening")
+        return plan_window_edit.can_edit_window_width(window)
+
+    def can_edit_window_height(self, window=None):
+        if window is None:
+            window = self.session.selection.get_selected_plan_target_object("opening")
+        return plan_window_edit.can_edit_window_height(window)
 
 
 class PlanViewportAPI(_SessionAPI):
@@ -354,6 +419,9 @@ class PlanWallEditAPI(_SessionAPI):
 
     has_active_wall_edit = _bind_session_call(plan_wall_edit.has_active_wall_edit)
     is_wall_edit_modal_active = _bind_session_call(plan_wall_edit.is_wall_edit_modal_active)
+    is_selected_wall_endpoint_editable = _bind_session_call(
+        plan_wall_edit.is_selected_wall_endpoint_editable
+    )
     cancel_wall_edit = _bind_session_call(plan_wall_edit.cancel_wall_edit)
     cancel_wall_subtool = _bind_session_call(plan_wall_edit.cancel_wall_subtool)
     start_wall_edit = _bind_session_call(plan_wall_edit.start_wall_edit)
