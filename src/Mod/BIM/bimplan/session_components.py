@@ -26,6 +26,9 @@
 
 from functools import wraps
 
+from bimplan import provider_overlay_state as plan_provider_overlay_state
+from bimplan import provider_point as plan_provider_point
+from bimplan import provider_runtime as plan_provider_runtime
 from bimplan import selection_additive as plan_selection_additive
 from bimplan import selection as plan_selection
 from bimplan import status_text as plan_status_text
@@ -472,6 +475,32 @@ class PlanWallEditAPI(_SessionAPI):
     )
 
     clip_preview_polygon_to_plane = staticmethod(plan_wall_edit.clip_preview_polygon_to_plane)
+
+
+class PlanProvidersAPI(_SessionAPI):
+    """Owned session surface for Plan Edit provider read helpers."""
+
+    __slots__ = ()
+
+    get_plan_provider_display_name = _bind_session_call(
+        plan_provider_runtime.get_plan_provider_display_name
+    )
+    get_plan_provider_overlay_mode = _bind_session_call(
+        plan_provider_overlay_state.get_plan_provider_overlay_mode
+    )
+    is_plan_provider_overlay_enabled = _bind_session_call(
+        plan_provider_overlay_state.is_plan_provider_overlay_enabled
+    )
+    get_provider_point_tool_label = _bind_session_call(
+        plan_provider_point.get_provider_point_tool_label
+    )
+    get_provider_point_tool_prompt = _bind_session_call(
+        plan_provider_point.get_provider_point_tool_prompt
+    )
+
+    get_plan_provider_overlay_category = staticmethod(
+        plan_provider_overlay_state.get_plan_provider_overlay_category
+    )
 
 
 class PlanStatusTextAPI(_SessionAPI):
