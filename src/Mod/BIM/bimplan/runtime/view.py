@@ -9,6 +9,143 @@ _VIEW_PREFERENCES_PATH = "User parameter:BaseApp/Preferences/View"
 _ENABLE_PRESELECTION_PARAM = "EnablePreselection"
 
 
+class PlanViewportAPI:
+    """Owned session surface for Plan Edit view and viewport behavior."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def get_navigation_style(self):
+        return get_navigation_style(self.session)
+
+    def get_main_window(self):
+        return get_main_window(self.session)
+
+    def find_main_window_action(self, command_name):
+        return find_main_window_action(self.session, command_name)
+
+    def capture_navigation_flag(self, target, getter_name, state_key):
+        return capture_navigation_flag(self.session, target, getter_name, state_key)
+
+    def apply_navigation_flag(self, target, setter_name, state_key, enabled):
+        return apply_navigation_flag(self.session, target, setter_name, state_key, enabled)
+
+    def capture_navigation_state(self):
+        return capture_navigation_state(self.session)
+
+    def clear_plan_background_override(self):
+        return clear_plan_background_override(self.session)
+
+    def restore_navigation_state(self):
+        return restore_navigation_state(self.session)
+
+    def force_plan_preselection(self):
+        return force_plan_preselection(self.session)
+
+    def restore_preselection_state(self):
+        return restore_preselection_state(self.session)
+
+    def apply_plan_view(self, fit=True):
+        return apply_plan_view(self.session, fit=fit)
+
+    def restore_state(self):
+        return restore_state(self.session)
+
+    def capture_state(self):
+        return capture_state(self.session)
+
+    def get_interaction_plane(self):
+        return get_interaction_plane(self.session)
+
+    def project_plan_point(self, point, plane=None):
+        return project_plan_point(self.session, point, plane=plane)
+
+    def get_plan_view_height(self):
+        return get_plan_view_height(self.session)
+
+    def get_plan_overlay_scale(self):
+        return get_plan_overlay_scale(self.session)
+
+    def scaled_line_width(self, width):
+        return scaled_line_width(self.session, width)
+
+    def scaled_marker_size(self, size):
+        return scaled_marker_size(self.session, size)
+
+    def get_plan_view_units_per_pixel(self):
+        return get_plan_view_units_per_pixel(self.session)
+
+    def get_plan_projection_cache_key(self):
+        return get_plan_projection_cache_key(self.session)
+
+    def register_edit_callbacks(self):
+        return register_edit_callbacks(self.session)
+
+    def unregister_edit_callbacks(self):
+        return unregister_edit_callbacks(self.session)
+
+    def focus_plan_view(self):
+        return focus_plan_view(self.session)
+
+    def queue_focus_plan_view(self):
+        return queue_focus_plan_view(self.session)
+
+    def get_plan_view_widget(self):
+        return get_plan_view_widget(self.session)
+
+    def clear_viewport_status_chip(self):
+        return clear_viewport_status_chip(self.session)
+
+    def request_view_redraw(self):
+        return request_view_redraw(self.session)
+
+    def capture_view_action_state(self):
+        return capture_view_action_state(
+            self.session,
+            self.session._plan_view_locked_actions,
+        )
+
+    def apply_locked_view_actions(self):
+        return apply_locked_view_actions(
+            self.session,
+            self.session._plan_view_locked_actions,
+        )
+
+    def apply_plan_background_override(self):
+        return apply_plan_background_override(
+            self.session,
+            self.session._plan_paper_rgb,
+        )
+
+    def apply_plan_navigation_profile(self):
+        return apply_plan_navigation_profile(
+            self.session,
+            self.session._plan_view_locked_actions,
+        )
+
+    def ensure_viewport_status_chip(self):
+        from bimplan.task_panel import _PlanEditViewportStatusChip
+
+        return ensure_viewport_status_chip(
+            self.session,
+            _PlanEditViewportStatusChip,
+        )
+
+    def refresh_viewport_status_chip(self):
+        from bimplan.task_panel import _PlanEditViewportStatusChip
+
+        return refresh_viewport_status_chip(
+            self.session,
+            _PlanEditViewportStatusChip,
+        )
+
+
 def _copy_plane(plane):
     import WorkingPlane
 
