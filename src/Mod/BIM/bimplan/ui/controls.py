@@ -2676,7 +2676,7 @@ class PlanEditControlsWidget:
 
     def _build_status_text(self):
         tool = self.session.current_tool
-        selected_kind, selected_obj = self.session._get_selected_plan_target()
+        selected_kind, selected_obj = self.session.selection.get_selected_plan_target()
         selected_state = self.session._format_plan_target_selection_state(
             selected_kind, selected_obj
         )
@@ -2700,7 +2700,7 @@ class PlanEditControlsWidget:
                 "BIM_PlanEdit",
                 "Multiple enclosed regions were found. Hover a dashed outline, then click to create that space.",
             )
-            targets = self.session._get_selected_plan_targets()
+            targets = self.session.selection.get_selected_plan_targets()
             if targets:
                 selection_help = "{}\n{}".format(
                     selection_help,
@@ -2857,7 +2857,7 @@ class PlanEditControlsWidget:
     def _refresh_action_context(self, modal_active=None):
         if modal_active is None:
             modal_active = self.session._is_modal_plan_interaction_active()
-        selected_kind, selected_obj = self.session._get_selected_plan_target()
+        selected_kind, selected_obj = self.session.selection.get_selected_plan_target()
         current_tool = self.session.current_tool
         has_wall = selected_kind == "wall" and selected_obj is not None
         can_place_window = self.session.can_place_plan_window()
@@ -2939,7 +2939,7 @@ class PlanEditControlsWidget:
         with self.session._plan_perf_trace_span("refresh_task_panel_selection_widget"):
             if self.form is None or self.status is None or self.exit_button is None:
                 return
-            selected_kind, _selected_obj = self.session._get_selected_plan_target()
+            selected_kind, _selected_obj = self.session.selection.get_selected_plan_target()
             if self.session.current_tool != "Select" or selected_kind != "wall":
                 self.refresh_from_session(defer_integrations=True)
                 return
@@ -2968,7 +2968,7 @@ class PlanEditControlsWidget:
         with self.session._plan_perf_trace_span("refresh_space_editor"):
             if self.space_editor is None:
                 return
-            selected_kind, selected_obj = self.session._get_selected_plan_target()
+            selected_kind, selected_obj = self.session.selection.get_selected_plan_target()
             space = selected_obj if selected_kind == "space" else None
             show_editor = bool(space and self.session.current_tool in ("Select", "Set Space Text"))
             if not show_editor:
@@ -3034,7 +3034,7 @@ class PlanEditControlsWidget:
         with self.session._plan_perf_trace_span("refresh_region_editor"):
             if self.region_editor is None:
                 return
-            selected_kind, selected_obj = self.session._get_selected_plan_target()
+            selected_kind, selected_obj = self.session.selection.get_selected_plan_target()
             region = selected_obj if selected_kind == "region" else None
             show_editor = bool(region and self.session.current_tool == "Select")
             if not show_editor:
@@ -3109,7 +3109,7 @@ class PlanEditControlsWidget:
             return None
 
     def _get_window_editor_target(self):
-        selected_kind, selected_obj = self.session._get_selected_plan_target()
+        selected_kind, selected_obj = self.session.selection.get_selected_plan_target()
         if (
             selected_kind != "opening"
             or selected_obj is None
@@ -3355,7 +3355,7 @@ class PlanEditControlsWidget:
     def _apply_modal_interaction_state(self, modal_active):
         from PySide import QtCore
 
-        selected_kind, _selected_obj = self.session._get_selected_plan_target()
+        selected_kind, _selected_obj = self.session.selection.get_selected_plan_target()
         join_candidate = (
             self.session._get_plan_candidate_joint() is not None
             if self.session.current_tool == "Join"
