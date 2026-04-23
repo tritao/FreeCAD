@@ -170,9 +170,9 @@ class _DummyProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
-    def test_plan_edit_session_owns_selection_and_spaces_components(self):
+    def test_plan_edit_session_owns_selection_spaces_and_viewport_components(self):
         from bimplan.session import PlanEditSession
-        from bimplan.session_components import PlanSelectionAPI, PlanSpacesAPI
+        from bimplan.session_components import PlanSelectionAPI, PlanSpacesAPI, PlanViewportAPI
 
         with patch("bimplan.session.plan_session_state.initialize_session_state"):
             session = PlanEditSession()
@@ -181,10 +181,16 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIs(session.selection.session, session)
         self.assertIsInstance(session.spaces, PlanSpacesAPI)
         self.assertIs(session.spaces.session, session)
+        self.assertIsInstance(session.viewport, PlanViewportAPI)
+        self.assertIs(session.viewport.session, session)
 
     def test_plan_edit_session_wrappers_delegate_to_owned_components(self):
         from bimplan.session import PlanEditSession
-        from bimplan.session_components import PlanSelectionAPI, PlanSpacesAPI
+        from bimplan.session_components import (
+            PlanSelectionAPI,
+            PlanSpacesAPI,
+            PlanViewportAPI,
+        )
 
         wall = SimpleNamespace(Name="Wall001")
         targets = [("wall", wall)]
@@ -202,15 +208,22 @@ class TestBimPlanCore(unittest.TestCase):
             "get_space_preflight_report",
             autospec=True,
             return_value={"ready": True},
-        ) as get_space_preflight_report:
+        ) as get_space_preflight_report, patch.object(
+            PlanViewportAPI,
+            "get_plan_view_height",
+            autospec=True,
+            return_value=4200.0,
+        ) as get_plan_view_height:
             self.assertIs(wall, session._get_selected_target_for_kind("wall"))
             self.assertEqual(
                 {"ready": True},
                 session._get_space_preflight_report(targets=targets),
             )
+            self.assertEqual(4200.0, session._get_plan_view_height())
 
         get_selected_target_for_kind.assert_called_once_with(session.selection, "wall")
         get_space_preflight_report.assert_called_once_with(session.spaces, targets=targets)
+        get_plan_view_height.assert_called_once_with(session.viewport)
 
     def test_plan_selection_api_uses_primary_target_kind_policy(self):
         from bimplan import target_kinds as plan_target_kinds
@@ -248,6 +261,34 @@ class TestBimPlanCore(unittest.TestCase):
             session,
             candidate,
             plan_visual_keys.PLAN_VISUAL_SPACE_REGION_PICK,
+        )
+
+    def test_plan_viewport_api_uses_view_policies(self):
+        from bimplan.session_components import PlanViewportAPI
+
+        session = SimpleNamespace(
+            _plan_view_locked_actions=("Std_ViewTop", "Std_ViewFront"),
+            _plan_paper_rgb=(1.0, 1.0, 1.0),
+        )
+        viewport = PlanViewportAPI(session)
+
+        with patch(
+            "bimplan.session_components.plan_view.capture_view_action_state",
+            return_value=True,
+        ) as capture_view_action_state, patch(
+            "bimplan.session_components.plan_view.apply_plan_background_override",
+            return_value=True,
+        ) as apply_plan_background_override:
+            self.assertTrue(viewport.capture_view_action_state())
+            self.assertTrue(viewport.apply_plan_background_override())
+
+        capture_view_action_state.assert_called_once_with(
+            session,
+            session._plan_view_locked_actions,
+        )
+        apply_plan_background_override.assert_called_once_with(
+            session,
+            session._plan_paper_rgb,
         )
 
     def test_activate_plan_region_tool_uses_shared_space_setup(self):

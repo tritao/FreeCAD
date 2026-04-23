@@ -48,7 +48,7 @@ def get_main_window(_session):
 def find_main_window_action(session, command_name):
     from PySide import QtGui
 
-    main_window = session._get_main_window()
+    main_window = get_main_window(session)
     if not main_window:
         return None
     try:
@@ -61,7 +61,7 @@ def capture_view_action_state(session, locked_actions):
     for command_name in locked_actions:
         if command_name in session._saved_view_action_state:
             continue
-        action = session._find_main_window_action(command_name)
+        action = find_main_window_action(session, command_name)
         if action is None:
             continue
         try:
@@ -71,9 +71,9 @@ def capture_view_action_state(session, locked_actions):
 
 
 def apply_locked_view_actions(session, locked_actions):
-    session._capture_view_action_state()
+    capture_view_action_state(session, locked_actions)
     for command_name in locked_actions:
-        action = session._find_main_window_action(command_name)
+        action = find_main_window_action(session, command_name)
         if action is None:
             continue
         try:
@@ -84,7 +84,7 @@ def apply_locked_view_actions(session, locked_actions):
 
 def restore_locked_view_actions(session):
     for command_name, enabled in session._saved_view_action_state.items():
-        action = session._find_main_window_action(command_name)
+        action = find_main_window_action(session, command_name)
         if action is None:
             continue
         try:
@@ -118,14 +118,24 @@ def apply_navigation_flag(session, target, setter_name, state_key, enabled):
 
 
 def capture_navigation_state(session):
-    nav_style = session._get_navigation_style()
+    nav_style = get_navigation_style(session)
     if nav_style:
         session._saved_navigation_style = nav_style
-    session._capture_navigation_flag(nav_style, "isRotationEnabled", "rotation_enabled")
-    session._capture_navigation_flag(nav_style, "isOrientationLocked", "orientation_locked")
+    capture_navigation_flag(session, nav_style, "isRotationEnabled", "rotation_enabled")
+    capture_navigation_flag(session, nav_style, "isOrientationLocked", "orientation_locked")
     if session._get_runtime_attr(session.viewer, "setNaviCubeEnabledOverride") is None:
-        session._capture_navigation_flag(session.viewer, "isEnabledNaviCube", "navicube_enabled")
-    session._capture_navigation_flag(session.view, "isCornerCrossVisible", "corner_cross_visible")
+        capture_navigation_flag(
+            session,
+            session.viewer,
+            "isEnabledNaviCube",
+            "navicube_enabled",
+        )
+    capture_navigation_flag(
+        session,
+        session.view,
+        "isCornerCrossVisible",
+        "corner_cross_visible",
+    )
 
 
 def apply_plan_background_override(session, paper_rgb):
@@ -153,10 +163,22 @@ def clear_plan_background_override(session):
 
 
 def apply_plan_navigation_profile(session, locked_actions):
-    session._capture_navigation_state()
-    nav_style = session._saved_navigation_style or session._get_navigation_style()
-    session._apply_navigation_flag(nav_style, "setRotationEnabled", "rotation_enabled", False)
-    session._apply_navigation_flag(nav_style, "setOrientationLocked", "orientation_locked", True)
+    capture_navigation_state(session)
+    nav_style = session._saved_navigation_style or get_navigation_style(session)
+    apply_navigation_flag(
+        session,
+        nav_style,
+        "setRotationEnabled",
+        "rotation_enabled",
+        False,
+    )
+    apply_navigation_flag(
+        session,
+        nav_style,
+        "setOrientationLocked",
+        "orientation_locked",
+        True,
+    )
     set_navicube_override = session._get_runtime_attr(session.viewer, "setNaviCubeEnabledOverride")
     if set_navicube_override is not None:
         try:
@@ -164,24 +186,26 @@ def apply_plan_navigation_profile(session, locked_actions):
         except (AttributeError, ReferenceError, RuntimeError):
             session._discard_stale_runtime_object(session.viewer)
     else:
-        session._apply_navigation_flag(
-            session.viewer, "setEnabledNaviCube", "navicube_enabled", False
+        apply_navigation_flag(
+            session, session.viewer, "setEnabledNaviCube", "navicube_enabled", False
         )
-    session._apply_navigation_flag(
-        session.view, "setCornerCrossVisible", "corner_cross_visible", False
+    apply_navigation_flag(
+        session, session.view, "setCornerCrossVisible", "corner_cross_visible", False
     )
-    session._apply_locked_view_actions()
+    apply_locked_view_actions(session, locked_actions)
 
 
 def restore_navigation_state(session):
-    nav_style = session._saved_navigation_style or session._get_navigation_style()
-    session._apply_navigation_flag(
+    nav_style = session._saved_navigation_style or get_navigation_style(session)
+    apply_navigation_flag(
+        session,
         nav_style,
         "setRotationEnabled",
         "rotation_enabled",
         session._saved_navigation_state.get("rotation_enabled"),
     )
-    session._apply_navigation_flag(
+    apply_navigation_flag(
+        session,
         nav_style,
         "setOrientationLocked",
         "orientation_locked",
@@ -196,19 +220,21 @@ def restore_navigation_state(session):
         except (AttributeError, ReferenceError, RuntimeError):
             session._discard_stale_runtime_object(session.viewer)
     else:
-        session._apply_navigation_flag(
+        apply_navigation_flag(
+            session,
             session.viewer,
             "setEnabledNaviCube",
             "navicube_enabled",
             session._saved_navigation_state.get("navicube_enabled"),
         )
-    session._apply_navigation_flag(
+    apply_navigation_flag(
+        session,
         session.view,
         "setCornerCrossVisible",
         "corner_cross_visible",
         session._saved_navigation_state.get("corner_cross_visible"),
     )
-    session._restore_locked_view_actions()
+    restore_locked_view_actions(session)
 
 
 def _get_view_preferences():
@@ -274,7 +300,7 @@ def apply_plan_view(session, fit=True):
         with session._plan_perf_trace_span("apply_plan_view_footprint_override"):
             try:
                 session.viewer.setOverrideMode("Footprint")
-                session._apply_plan_background_override()
+                apply_plan_background_override(session, session._plan_paper_rgb)
             except RuntimeError:
                 session.viewer = None
 
@@ -295,7 +321,7 @@ def apply_plan_view(session, fit=True):
             session._set_active_object(session.active_storey)
 
     with session._plan_perf_trace_span("apply_plan_view_navigation_profile"):
-        session._apply_plan_navigation_profile()
+        apply_plan_navigation_profile(session, session._plan_view_locked_actions)
 
     if fit and session.view:
         with session._plan_perf_trace_span("apply_plan_view_fit_all"):
@@ -308,7 +334,7 @@ def apply_plan_view(session, fit=True):
 def restore_state(session):
     import WorkingPlane
 
-    session._restore_preselection_state()
+    restore_preselection_state(session)
     session._restore_object_view_state()
     session._restore_snap_profile()
     session._interaction_plane = None
@@ -316,7 +342,7 @@ def restore_state(session):
     if session.viewer:
         try:
             session.viewer.setOverrideMode("As Is")
-            session._clear_plan_background_override()
+            clear_plan_background_override(session)
         except RuntimeError:
             session.viewer = None
 
@@ -339,7 +365,7 @@ def restore_state(session):
         except RuntimeError:
             pass
 
-    session._restore_navigation_state()
+    restore_navigation_state(session)
 
 
 def capture_state(session):
@@ -598,14 +624,14 @@ def get_plan_view_widget(session):
 
 
 def ensure_viewport_status_chip(session, chip_factory):
-    widget = session._get_plan_view_widget()
+    widget = get_plan_view_widget(session)
     if widget is None:
-        session._clear_viewport_status_chip()
+        clear_viewport_status_chip(session)
         return None
     chip = session._viewport_status_chip
     if chip is not None and getattr(chip, "host_widget", None) is widget:
         return chip
-    session._clear_viewport_status_chip()
+    clear_viewport_status_chip(session)
     try:
         chip = chip_factory(session, widget)
     except Exception:
@@ -617,14 +643,14 @@ def ensure_viewport_status_chip(session, chip_factory):
 def refresh_viewport_status_chip(session, chip_factory):
     if session._tearing_down:
         return
-    chip = session._ensure_viewport_status_chip()
+    chip = ensure_viewport_status_chip(session, chip_factory)
     if chip is None:
         return
     title, body = session._get_status_chip_text()
     try:
         chip.set_texts(title, body)
     except Exception:
-        session._clear_viewport_status_chip()
+        clear_viewport_status_chip(session)
 
 
 def clear_viewport_status_chip(session):

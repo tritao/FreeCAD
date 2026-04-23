@@ -29,7 +29,9 @@ from functools import wraps
 from bimplan import selection as plan_selection
 from bimplan import spaces as plan_spaces
 from bimplan import target_kinds as plan_target_kinds
+from bimplan import view as plan_view
 from bimplan import visual_keys as plan_visual_keys
+from bimplan.ui.status_chip import _PlanEditViewportStatusChip
 
 
 def _bind_session_call(func):
@@ -262,4 +264,75 @@ class PlanSpacesAPI(_SessionAPI):
             self.session,
             candidate,
             plan_visual_keys.PLAN_VISUAL_SPACE_REGION_PICK,
+        )
+
+
+class PlanViewportAPI(_SessionAPI):
+    """Owned session surface for Plan Edit view and viewport behavior."""
+
+    __slots__ = ()
+
+    get_navigation_style = _bind_session_call(plan_view.get_navigation_style)
+    get_main_window = _bind_session_call(plan_view.get_main_window)
+    find_main_window_action = _bind_session_call(plan_view.find_main_window_action)
+    capture_navigation_flag = _bind_session_call(plan_view.capture_navigation_flag)
+    apply_navigation_flag = _bind_session_call(plan_view.apply_navigation_flag)
+    capture_navigation_state = _bind_session_call(plan_view.capture_navigation_state)
+    clear_plan_background_override = _bind_session_call(plan_view.clear_plan_background_override)
+    restore_navigation_state = _bind_session_call(plan_view.restore_navigation_state)
+    force_plan_preselection = _bind_session_call(plan_view.force_plan_preselection)
+    restore_preselection_state = _bind_session_call(plan_view.restore_preselection_state)
+    apply_plan_view = _bind_session_call(plan_view.apply_plan_view)
+    restore_state = _bind_session_call(plan_view.restore_state)
+    capture_state = _bind_session_call(plan_view.capture_state)
+    get_interaction_plane = _bind_session_call(plan_view.get_interaction_plane)
+    project_plan_point = _bind_session_call(plan_view.project_plan_point)
+    get_plan_view_height = _bind_session_call(plan_view.get_plan_view_height)
+    get_plan_overlay_scale = _bind_session_call(plan_view.get_plan_overlay_scale)
+    scaled_line_width = _bind_session_call(plan_view.scaled_line_width)
+    scaled_marker_size = _bind_session_call(plan_view.scaled_marker_size)
+    get_plan_view_units_per_pixel = _bind_session_call(plan_view.get_plan_view_units_per_pixel)
+    get_plan_projection_cache_key = _bind_session_call(plan_view.get_plan_projection_cache_key)
+    register_edit_callbacks = _bind_session_call(plan_view.register_edit_callbacks)
+    unregister_edit_callbacks = _bind_session_call(plan_view.unregister_edit_callbacks)
+    focus_plan_view = _bind_session_call(plan_view.focus_plan_view)
+    queue_focus_plan_view = _bind_session_call(plan_view.queue_focus_plan_view)
+    get_plan_view_widget = _bind_session_call(plan_view.get_plan_view_widget)
+    clear_viewport_status_chip = _bind_session_call(plan_view.clear_viewport_status_chip)
+    request_view_redraw = _bind_session_call(plan_view.request_view_redraw)
+
+    def capture_view_action_state(self):
+        return plan_view.capture_view_action_state(
+            self.session,
+            self.session._plan_view_locked_actions,
+        )
+
+    def apply_locked_view_actions(self):
+        return plan_view.apply_locked_view_actions(
+            self.session,
+            self.session._plan_view_locked_actions,
+        )
+
+    def apply_plan_background_override(self):
+        return plan_view.apply_plan_background_override(
+            self.session,
+            self.session._plan_paper_rgb,
+        )
+
+    def apply_plan_navigation_profile(self):
+        return plan_view.apply_plan_navigation_profile(
+            self.session,
+            self.session._plan_view_locked_actions,
+        )
+
+    def ensure_viewport_status_chip(self):
+        return plan_view.ensure_viewport_status_chip(
+            self.session,
+            _PlanEditViewportStatusChip,
+        )
+
+    def refresh_viewport_status_chip(self):
+        return plan_view.refresh_viewport_status_chip(
+            self.session,
+            _PlanEditViewportStatusChip,
         )
