@@ -2725,12 +2725,6 @@ class PlanEditSession:
     def _clear_input_hints(self):
         return self.status_text.clear_input_hints()
 
-    def _clear_viewport_status_chip(self):
-        return self.viewport.clear_viewport_status_chip()
-
-    def _request_view_redraw(self):
-        return self.viewport.request_view_redraw()
-
     def _retarget_edit_tracker(self, tracker, obj, index):
         return wall_overlays.retarget_edit_tracker(tracker, obj, index)
 
@@ -3223,11 +3217,11 @@ class PlanEditSession:
     def _refresh_selected_space_visuals(self):
         self._invalidate_selected_space_overlay_cache()
         self._sync_selected_space_overlay()
-        self._request_view_redraw()
+        self.viewport.request_view_redraw()
 
     def _refresh_selected_region_visuals(self):
         self._sync_selected_region_overlay()
-        self._request_view_redraw()
+        self.viewport.request_view_redraw()
 
     def _restore_selected_semantic_target(self, kind, obj, *, clear_edit_space=False):
         sync_method = {
