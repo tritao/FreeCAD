@@ -6,6 +6,7 @@ import FreeCAD
 import FreeCADGui
 
 from . import target_dispatch as plan_target_dispatch
+from . import target_kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
 
@@ -25,23 +26,37 @@ def clear_plan_region_preview(session):
     session._plan_region_preview_trackers = []
 
 
-def cancel_plan_region_tool(session, refresh=True):
-    if not session._has_active_plan_region_tool():
+def _cancel_snap_tool(session, *, is_active, clear_preview, reset_state, sync_kinds, refresh=True):
+    if not is_active():
         return False
     session._stop_snapper()
-    session._clear_plan_region_preview()
-    session._plan_region_points = []
-    session._plan_region_parent_space = None
+    clear_preview()
+    reset_state()
     FreeCAD.activeDraftCommand = None
     session.current_tool = "Select"
     if refresh:
         session._refresh_task_panel_status()
     plan_target_dispatch.sync_selected_target_visuals(
         session,
-        kinds=("region", "space", "provider"),
+        kinds=sync_kinds,
         force=True,
     )
     return True
+
+
+def cancel_plan_region_tool(session, refresh=True):
+    def reset_state():
+        session._plan_region_points = []
+        session._plan_region_parent_space = None
+
+    return _cancel_snap_tool(
+        session,
+        is_active=session._has_active_plan_region_tool,
+        clear_preview=session._clear_plan_region_preview,
+        reset_state=reset_state,
+        sync_kinds=plan_target_kinds.PLAN_REGION_CANCEL_VISUAL_KINDS,
+        refresh=refresh,
+    )
 
 
 def get_plan_region_close_tolerance(session):
@@ -188,22 +203,18 @@ def clear_space_separator_preview(session):
 
 
 def cancel_space_separator_tool(session, refresh=True):
-    if not session._has_active_space_separator_tool():
-        return False
-    session._stop_snapper()
-    session._clear_space_separator_preview()
-    session._space_separator_start = None
-    session._space_separator_height = None
-    FreeCAD.activeDraftCommand = None
-    session.current_tool = "Select"
-    if refresh:
-        session._refresh_task_panel_status()
-    plan_target_dispatch.sync_selected_target_visuals(
+    def reset_state():
+        session._space_separator_start = None
+        session._space_separator_height = None
+
+    return _cancel_snap_tool(
         session,
-        kinds=("opening", "space", "provider"),
-        force=True,
+        is_active=session._has_active_space_separator_tool,
+        clear_preview=session._clear_space_separator_preview,
+        reset_state=reset_state,
+        sync_kinds=plan_target_kinds.SPACE_SEPARATOR_CANCEL_VISUAL_KINDS,
+        refresh=refresh,
     )
-    return True
 
 
 def update_space_separator_preview(session, point, info):
@@ -765,7 +776,7 @@ def begin_space_region_pick(session, boundaries, label=None, seed_space=None, re
     session._hovered_space_region_candidate = None
     session._space_region_pick_seed_space = seed_space
     session._clear_wall_grips()
-    session._clear_hovered_plan_targets(kinds=("wall", "opening", "symbol", "space"))
+    session._clear_hovered_plan_targets(kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS)
     session._refresh_primary_selected_plan_target()
     FreeCAD.Console.PrintMessage(
         translate(
@@ -1231,7 +1242,7 @@ def start_space_text_position_pick(session):
 
     session.current_tool = "Set Space Text"
     session._edit_space = space
-    session._clear_hovered_plan_targets(kinds=("wall", "opening", "symbol", "space"))
+    session._clear_hovered_plan_targets(kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS)
     session._sync_secondary_selected_overlays()
     session._refresh_task_panel_status()
     FreeCAD.activeDraftCommand = session

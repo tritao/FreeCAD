@@ -82,27 +82,55 @@ def detach_runtime_observers(session):
     session._unregister_edit_callbacks()
 
 
+def _clear_space_text_pick_state(session):
+    session._edit_space = None
+
+
+def _clear_space_region_pick_state(session):
+    session._space_region_pick_boundaries = []
+    session._space_region_candidates = []
+    session._hovered_space_region_candidate = None
+    session._space_region_pick_seed_space = None
+
+
+def _dispatch_current_tool(session, handler_specs):
+    handler_spec = handler_specs.get(session.current_tool)
+    if handler_spec is None:
+        return False
+    if isinstance(handler_spec, str):
+        getattr(session, handler_spec)()
+    else:
+        handler_spec(session)
+    return True
+
+
+_FINISH_TOOL_HANDLER_SPECS = {
+    "Move Provider": "_cancel_provider_handle_point_pick",
+    "Move Opening": "_cancel_opening_handle_point_pick",
+    "Move Symbol": "_cancel_symbol_handle_point_pick",
+    "Rotate Symbol": "_cancel_symbol_handle_point_pick",
+    "Pick Space Region": "_cancel_space_region_pick",
+    "Region": "_cancel_plan_region_tool",
+    "Set Space Text": "_cancel_space_text_position_pick",
+    "Window": "_cancel_window_tool",
+}
+
+_BEGIN_TEARDOWN_TOOL_HANDLER_SPECS = {
+    "Move Provider": "_cancel_provider_handle_point_pick",
+    "Move Symbol": "_cancel_symbol_handle_point_pick",
+    "Rotate Symbol": "_cancel_symbol_handle_point_pick",
+    "Set Space Text": _clear_space_text_pick_state,
+    "Pick Space Region": _clear_space_region_pick_state,
+}
+
+_SHUTDOWN_TOOL_HANDLER_SPECS = {
+    "Move Symbol": "_cancel_symbol_handle_point_pick",
+    "Rotate Symbol": "_cancel_symbol_handle_point_pick",
+}
+
+
 def finish(session, close_dialog=True):
-    if session.current_tool == "Move Provider":
-        session._cancel_provider_handle_point_pick()
-        return True
-    if session.current_tool == "Move Opening":
-        session._cancel_opening_handle_point_pick()
-        return True
-    if session.current_tool in ("Move Symbol", "Rotate Symbol"):
-        session._cancel_symbol_handle_point_pick()
-        return True
-    if session.current_tool == "Pick Space Region":
-        session._cancel_space_region_pick()
-        return True
-    if session.current_tool == "Region":
-        session._cancel_plan_region_tool()
-        return True
-    if session.current_tool == "Set Space Text":
-        session._cancel_space_text_position_pick()
-        return True
-    if session.current_tool == "Window":
-        session._cancel_window_tool()
+    if _dispatch_current_tool(session, _FINISH_TOOL_HANDLER_SPECS):
         return True
     if session._has_active_provider_point_tool():
         session._cancel_provider_point_tool()
@@ -133,17 +161,7 @@ def begin_teardown(session):
     session._cancel_provider_point_tool(refresh=False)
     session._cancel_wall_edit(restore=False, refresh=False)
     session._cancel_pending_edit()
-    if session.current_tool == "Move Provider":
-        session._cancel_provider_handle_point_pick()
-    if session.current_tool in ("Move Symbol", "Rotate Symbol"):
-        session._cancel_symbol_handle_point_pick()
-    if session.current_tool == "Set Space Text":
-        session._edit_space = None
-    if session.current_tool == "Pick Space Region":
-        session._space_region_pick_boundaries = []
-        session._space_region_candidates = []
-        session._hovered_space_region_candidate = None
-        session._space_region_pick_seed_space = None
+    _dispatch_current_tool(session, _BEGIN_TEARDOWN_TOOL_HANDLER_SPECS)
     clear_hover_visuals(
         session,
         include_junction_nodes=True,
@@ -185,8 +203,7 @@ def shutdown(session, close_dialog=True, teardown=False):
     session._cancel_space_separator_tool(refresh=False)
     session._cancel_wall_edit(restore=not teardown, refresh=False)
     session._cancel_pending_edit()
-    if session.current_tool in ("Move Symbol", "Rotate Symbol"):
-        session._cancel_symbol_handle_point_pick()
+    _dispatch_current_tool(session, _SHUTDOWN_TOOL_HANDLER_SPECS)
     session._clear_viewport_status_chip()
     session._clear_input_hints()
     clear_hover_visuals(
@@ -444,13 +461,7 @@ def start_embedded_tool(session, tool_name, command, host_class=None):
     session.current_tool = tool_name
     plan_target_dispatch.clear_hovered_targets(
         session,
-        kinds=(
-            plan_target_kinds.PLAN_TARGET_WALL,
-            plan_target_kinds.PLAN_TARGET_OPENING,
-            plan_target_kinds.PLAN_TARGET_SYMBOL,
-            plan_target_kinds.PLAN_TARGET_PROVIDER,
-            plan_target_kinds.PLAN_TARGET_REGION,
-        ),
+        kinds=plan_target_kinds.EMBEDDED_TOOL_CLEAR_HOVERED_KINDS,
     )
     session._sync_secondary_selected_overlays()
     session._refresh_task_panel_status()
@@ -500,11 +511,7 @@ def cancel_pending_edit(session):
     session._sync_wall_grips()
     plan_target_dispatch.sync_selected_target_visuals(
         session,
-        kinds=(
-            plan_target_kinds.PLAN_TARGET_OPENING,
-            plan_target_kinds.PLAN_TARGET_SPACE,
-            plan_target_kinds.PLAN_TARGET_PROVIDER,
-        ),
+        kinds=plan_target_kinds.PENDING_EDIT_VISUAL_SYNC_KINDS,
         force=True,
     )
 

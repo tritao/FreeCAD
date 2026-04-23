@@ -3,12 +3,32 @@
 """Selection state helpers for BIM Plan Edit."""
 
 from contextlib import nullcontext
+from dataclasses import dataclass
 
 import FreeCADGui
 from . import provider_targets as plan_provider_targets
 from . import selection_observer as plan_selection_observer
 from . import target_dispatch as plan_target_dispatch
 from . import target_kinds as plan_target_kinds
+
+_PRIMARY_SELECTED_TARGET_PRIORITY = {
+    kind: index
+    for index, kind in enumerate(plan_target_kinds.PRIMARY_SELECTED_TARGET_PRIORITY_KINDS)
+}
+_GUI_SELECTION_TOOL_NAMES = ("Select", "Pick Space Region")
+_PENDING_TARGET_UNCHANGED = object()
+_WALL_GRIP_NONE = "none"
+_WALL_GRIP_CLEAR = "clear"
+_WALL_GRIP_SYNC = "sync"
+
+
+@dataclass(frozen=True)
+class SelectionRefreshResult:
+    primary_kind: object = None
+    primary_obj: object = None
+    secondary_targets: tuple = ()
+    pending_target: object = _PENDING_TARGET_UNCHANGED
+    wall_grip_action: str = _WALL_GRIP_NONE
 
 
 def clear_hidden_provider_preselection(session):
@@ -42,6 +62,138 @@ def _clear_gui_preselection():
     return plan_selection_observer._clear_gui_preselection()
 
 
+def _choose_primary_selected_target(selected_targets, pending_kind=None, pending_target=None):
+    if pending_kind is not None and pending_target is not None:
+        for target_kind, target_obj in selected_targets:
+            if target_kind == pending_kind and target_obj == pending_target:
+                return (target_kind, target_obj)
+    if not selected_targets:
+        return (None, None)
+    target_kind, target_obj = min(
+        selected_targets,
+        key=lambda item: _PRIMARY_SELECTED_TARGET_PRIORITY.get(
+            item[0], len(_PRIMARY_SELECTED_TARGET_PRIORITY)
+        ),
+    )
+    return (target_kind, target_obj)
+
+
+def _apply_selection_refresh_result(session, refresh_result):
+    session._set_selected_plan_target_state(
+        refresh_result.primary_kind,
+        refresh_result.primary_obj,
+    )
+    session._set_secondary_selected_plan_targets(
+        refresh_result.secondary_targets,
+        primary_kind=refresh_result.primary_kind,
+        primary_obj=refresh_result.primary_obj,
+    )
+    if refresh_result.pending_target is not _PENDING_TARGET_UNCHANGED:
+        if refresh_result.pending_target is None:
+            session._set_pending_selected_plan_target()
+        else:
+            session._set_pending_selected_plan_target(*refresh_result.pending_target)
+    if refresh_result.wall_grip_action == _WALL_GRIP_CLEAR:
+        session._clear_wall_grips()
+    elif refresh_result.wall_grip_action == _WALL_GRIP_SYNC:
+        session._sync_wall_grips()
+
+
+def _resolve_direct_selection_refresh_result(session, previous_wall):
+    if session._is_wall_edit_modal_active():
+        return SelectionRefreshResult(
+            primary_kind=plan_target_kinds.PLAN_TARGET_WALL,
+            primary_obj=session._edit_wall,
+            wall_grip_action=_WALL_GRIP_SYNC,
+        )
+    if session.current_tool == "Set Space Text":
+        return SelectionRefreshResult(
+            primary_kind=plan_target_kinds.PLAN_TARGET_SPACE,
+            primary_obj=(
+                session._edit_space if session._is_plan_space_object(session._edit_space) else None
+            ),
+            wall_grip_action=_WALL_GRIP_CLEAR,
+        )
+    if session.current_tool == "Join":
+        wall = previous_wall
+        if not session._is_plan_selectable_wall(wall):
+            session.current_tool = "Select"
+            wall = None
+        return SelectionRefreshResult(
+            primary_kind=plan_target_kinds.PLAN_TARGET_WALL,
+            primary_obj=wall,
+            wall_grip_action=_WALL_GRIP_CLEAR,
+        )
+    if session.current_tool not in _GUI_SELECTION_TOOL_NAMES:
+        return SelectionRefreshResult(pending_target=None)
+    return None
+
+
+def _collect_selected_targets_from_gui_selection(session, selection, previous_kind, previous_obj):
+    selected_targets = []
+    pending_kind, pending_target = session._pending_selected_plan_target or (None, None)
+    preserved_kind = (
+        previous_kind if previous_kind == plan_target_kinds.PLAN_TARGET_PROVIDER else None
+    )
+    preserved_target = previous_obj if preserved_kind else None
+    provider_refresh_scope = (
+        session._plan_provider_refresh_cache_scope()
+        if hasattr(session, "_plan_provider_refresh_cache_scope")
+        else nullcontext()
+    )
+    with provider_refresh_scope:
+        for selected in selection:
+            target_kind, target_obj = (
+                plan_selection_observer.resolve_selected_target_for_gui_object(
+                    session,
+                    selected,
+                    pending_kind=pending_kind,
+                    pending_target=pending_target,
+                    preserved_kind=preserved_kind,
+                    preserved_target=preserved_target,
+                )
+            )
+            if target_kind:
+                selected_targets.append((target_kind, target_obj))
+    session._plan_perf_count("selected_targets_considered", len(selected_targets))
+    return selected_targets, pending_kind, pending_target
+
+
+def _resolve_gui_selection_refresh_result(session, selection, previous_kind, previous_obj):
+    if not selection:
+        pending_kind, pending_target = session._consume_pending_selected_plan_target()
+        return SelectionRefreshResult(
+            primary_kind=pending_kind,
+            primary_obj=pending_target,
+        )
+
+    selected_targets, pending_kind, pending_target = _collect_selected_targets_from_gui_selection(
+        session,
+        selection,
+        previous_kind,
+        previous_obj,
+    )
+    target_kind, target_obj = _choose_primary_selected_target(
+        selected_targets,
+        pending_kind=pending_kind,
+        pending_target=pending_target,
+    )
+    if target_kind is None:
+        return SelectionRefreshResult(pending_target=None)
+    pending_selection = (target_kind, target_obj)
+    if len(selection) == 1 and target_kind not in (
+        plan_target_kinds.PLAN_TARGET_SPACE,
+        plan_target_kinds.PLAN_TARGET_REGION,
+    ):
+        pending_selection = None
+    return SelectionRefreshResult(
+        primary_kind=target_kind,
+        primary_obj=target_obj,
+        secondary_targets=tuple(selected_targets),
+        pending_target=pending_selection,
+    )
+
+
 def refresh_selected_plan_target(session):
     with session._plan_perf_trace_span("refresh_selected_plan_target"):
         session._plan_perf_count("selection_refreshes")
@@ -56,109 +208,36 @@ def refresh_selected_plan_target(session):
             selected_before_kind=previous_kind or "none",
         )
         previous_wall = session._get_plan_target_object_from_state(
-            previous_kind, previous_obj, "wall"
+            previous_kind,
+            previous_obj,
+            plan_target_kinds.PLAN_TARGET_WALL,
         )
-        if session._is_wall_edit_modal_active():
-            session._set_selected_plan_target_state("wall", session._edit_wall)
-            session._set_secondary_selected_plan_targets([])
-            if session._selected_plan_target_changed(previous_kind, previous_obj, "wall"):
-                session._sync_wall_grips()
-            session._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
-            return
-        if session.current_tool == "Set Space Text":
-            session._set_selected_plan_target_state(
-                "space",
-                session._edit_space if session._is_plan_space_object(session._edit_space) else None,
-            )
-            session._set_secondary_selected_plan_targets([])
-            session._clear_wall_grips()
-            session._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
-            return
-        if session.current_tool == "Join":
-            wall = previous_wall
-            if not session._is_plan_selectable_wall(wall):
-                session.current_tool = "Select"
-                wall = None
-            session._set_selected_plan_target_state("wall", wall)
-            session._set_secondary_selected_plan_targets([])
-            session._clear_wall_grips()
-            session._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
-            return
-        session._set_selected_plan_target_state()
-        try:
-            selection = FreeCADGui.Selection.getSelection()
-        except (ReferenceError, RuntimeError):
-            return
-        session._plan_perf_count("gui_selection_size", len(selection or []))
-        if session.current_tool in ("Select", "Pick Space Region") and selection:
-            selected_targets = []
-            pending_kind, pending_target = session._pending_selected_plan_target or (None, None)
-            preserved_kind = previous_kind if previous_kind == "provider" else None
-            preserved_target = previous_obj if preserved_kind else None
-            provider_refresh_scope = (
-                session._plan_provider_refresh_cache_scope()
-                if hasattr(session, "_plan_provider_refresh_cache_scope")
-                else nullcontext()
-            )
-            with provider_refresh_scope:
-                for selected in selection:
-                    target_kind, target_obj = (
-                        plan_selection_observer.resolve_selected_target_for_gui_object(
-                            session,
-                            selected,
-                            pending_kind=pending_kind,
-                            pending_target=pending_target,
-                            preserved_kind=preserved_kind,
-                            preserved_target=preserved_target,
-                        )
-                    )
-                    if target_kind:
-                        selected_targets.append((target_kind, target_obj))
-            session._plan_perf_count("selected_targets_considered", len(selected_targets))
 
-            matched_target = None
-            if pending_target is not None:
-                for target_kind, selected in selected_targets:
-                    if selected == pending_target and target_kind == pending_kind:
-                        matched_target = (target_kind, selected)
-                        break
-            if matched_target is None:
-                for preferred_kind in ("opening", "symbol", "wall", "provider", "region", "space"):
-                    matched_target = next(
-                        (
-                            (target_kind, selected)
-                            for target_kind, selected in selected_targets
-                            if target_kind == preferred_kind
-                        ),
-                        None,
-                    )
-                    if matched_target is not None:
-                        break
+        refresh_result = _resolve_direct_selection_refresh_result(session, previous_wall)
+        if refresh_result is None:
+            try:
+                selection = FreeCADGui.Selection.getSelection()
+            except (ReferenceError, RuntimeError):
+                session._set_selected_plan_target_state()
+                return
+            session._plan_perf_count("gui_selection_size", len(selection or []))
+            refresh_result = _resolve_gui_selection_refresh_result(
+                session,
+                selection,
+                previous_kind,
+                previous_obj,
+            )
 
-            if matched_target is not None:
-                target_kind, selected = matched_target
-                session._set_selected_plan_target_state(target_kind, selected)
-                session._set_secondary_selected_plan_targets(
-                    selected_targets,
-                    primary_kind=target_kind,
-                    primary_obj=selected,
-                )
-                if len(selection) == 1 and target_kind not in ("space", "region"):
-                    session._set_pending_selected_plan_target()
-                else:
-                    session._set_pending_selected_plan_target(target_kind, selected)
-            else:
-                session._set_secondary_selected_plan_targets([])
-                session._set_pending_selected_plan_target()
-        elif session.current_tool in ("Select", "Pick Space Region") and not selection:
-            pending_kind, pending_target = session._consume_pending_selected_plan_target()
-            session._set_selected_plan_target_state(pending_kind, pending_target)
-            session._set_secondary_selected_plan_targets([])
-        else:
-            session._set_secondary_selected_plan_targets([])
-            session._set_pending_selected_plan_target()
-        if session._selected_plan_target_changed(previous_kind, previous_obj, "wall"):
-            if session._get_selected_plan_target_object("wall"):
+        _apply_selection_refresh_result(session, refresh_result)
+        if (
+            refresh_result.wall_grip_action == _WALL_GRIP_NONE
+            and session._selected_plan_target_changed(
+                previous_kind,
+                previous_obj,
+                plan_target_kinds.PLAN_TARGET_WALL,
+            )
+        ):
+            if session._get_selected_plan_target_object(plan_target_kinds.PLAN_TARGET_WALL):
                 session._schedule_wall_grip_sync()
             else:
                 session._clear_wall_grips()
@@ -473,7 +552,9 @@ def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
 def sync_primary_selected_plan_target_visuals(session, previous_kind=None, previous_obj=None):
     with session._plan_perf_trace_span("sync_primary_selected_plan_target_visuals"):
         if session.current_tool != "Select" or session._selected_plan_target_changed(
-            previous_kind, previous_obj, "wall"
+            previous_kind,
+            previous_obj,
+            plan_target_kinds.PLAN_TARGET_WALL,
         ):
             with session._plan_perf_trace_span("sync_selected_wall_overlay"):
                 session._sync_selected_wall_overlay()
@@ -485,12 +566,7 @@ def sync_primary_selected_plan_target_visuals(session, previous_kind=None, previ
             session._sync_hovered_wall_opening_context_overlay()
         plan_target_dispatch.sync_selected_target_visuals(
             session,
-            kinds=(
-                plan_target_kinds.PLAN_TARGET_OPENING,
-                plan_target_kinds.PLAN_TARGET_SYMBOL,
-                plan_target_kinds.PLAN_TARGET_REGION,
-                plan_target_kinds.PLAN_TARGET_SPACE,
-            ),
+            kinds=plan_target_kinds.PRIMARY_SELECTED_VISUAL_SYNC_KINDS,
             previous_kind=previous_kind,
             previous_obj=previous_obj,
             trace_style="by_method",
@@ -603,7 +679,7 @@ def select_plan_target_for_plan_edit(
             session._schedule_gui_selection_object(obj)
         else:
             session._set_gui_selection_object(obj)
-    if kind == "wall":
+    if kind == plan_target_kinds.PLAN_TARGET_WALL:
         if defer_wall_grips:
             session._schedule_wall_grip_sync()
         else:
@@ -614,13 +690,7 @@ def select_plan_target_for_plan_edit(
         session._clear_selected_wall_overlay()
     plan_target_dispatch.sync_selected_target_visuals(
         session,
-        kinds=(
-            plan_target_kinds.PLAN_TARGET_OPENING,
-            plan_target_kinds.PLAN_TARGET_SYMBOL,
-            plan_target_kinds.PLAN_TARGET_REGION,
-            plan_target_kinds.PLAN_TARGET_SPACE,
-            plan_target_kinds.PLAN_TARGET_PROVIDER,
-        ),
+        kinds=plan_target_kinds.CLEAR_PLAN_SELECTION_VISUAL_KINDS,
         previous_kind=previous_kind,
         previous_obj=previous_obj,
     )
@@ -640,7 +710,7 @@ def select_opening_for_plan_edit(
     defer_wall_grips=False,
 ):
     return session._select_plan_target_for_plan_edit(
-        "opening",
+        plan_target_kinds.PLAN_TARGET_OPENING,
         opening,
         queue_restore=queue_restore,
         sync_gui_selection=sync_gui_selection,
@@ -658,7 +728,7 @@ def select_symbol_for_plan_edit(
     defer_wall_grips=False,
 ):
     return session._select_plan_target_for_plan_edit(
-        "symbol",
+        plan_target_kinds.PLAN_TARGET_SYMBOL,
         symbol,
         queue_restore=queue_restore,
         sync_gui_selection=sync_gui_selection,
@@ -676,7 +746,7 @@ def select_region_for_plan_edit(
     defer_wall_grips=False,
 ):
     return session._select_plan_target_for_plan_edit(
-        "region",
+        plan_target_kinds.PLAN_TARGET_REGION,
         region,
         queue_restore=queue_restore,
         sync_gui_selection=sync_gui_selection,
@@ -694,7 +764,7 @@ def select_space_for_plan_edit(
     defer_wall_grips=False,
 ):
     return session._select_plan_target_for_plan_edit(
-        "space",
+        plan_target_kinds.PLAN_TARGET_SPACE,
         space,
         queue_restore=queue_restore,
         sync_gui_selection=sync_gui_selection,
@@ -712,7 +782,7 @@ def select_wall_for_plan_edit(
     defer_wall_grips=False,
 ):
     return session._select_plan_target_for_plan_edit(
-        "wall",
+        plan_target_kinds.PLAN_TARGET_WALL,
         wall,
         queue_restore=queue_restore,
         sync_gui_selection=sync_gui_selection,
@@ -810,44 +880,44 @@ def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
 
 def activate_opening_target(session, mouse_pos, event_callback=None, resolved_target=None):
     return session._activate_plan_target(
-        "opening",
+        plan_target_kinds.PLAN_TARGET_OPENING,
         mouse_pos,
         event_callback=event_callback,
         sync_gui_selection=True,
-        clear_hovered_kinds=("wall", "opening", "symbol", "space", "region"),
+        clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
         resolved_target=resolved_target,
     )
 
 
 def activate_symbol_target(session, mouse_pos, event_callback=None, resolved_target=None):
     return session._activate_plan_target(
-        "symbol",
+        plan_target_kinds.PLAN_TARGET_SYMBOL,
         mouse_pos,
         event_callback=event_callback,
         sync_gui_selection=True,
-        clear_hovered_kinds=("wall", "opening", "symbol", "space", "region"),
+        clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
         resolved_target=resolved_target,
     )
 
 
 def activate_region_target(session, mouse_pos, event_callback=None, resolved_target=None):
     return session._activate_plan_target(
-        "region",
+        plan_target_kinds.PLAN_TARGET_REGION,
         mouse_pos,
         event_callback=event_callback,
         sync_gui_selection=True,
-        clear_hovered_kinds=("wall", "opening", "symbol", "space", "region"),
+        clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
         resolved_target=resolved_target,
     )
 
 
 def activate_space_target(session, mouse_pos, event_callback=None, resolved_target=None):
     return session._activate_plan_target(
-        "space",
+        plan_target_kinds.PLAN_TARGET_SPACE,
         mouse_pos,
         event_callback=event_callback,
         sync_gui_selection=True,
-        clear_hovered_kinds=("wall", "opening", "symbol", "region"),
+        clear_hovered_kinds=plan_target_kinds.SPACE_TARGET_CLEAR_HOVERED_KINDS,
         resolved_target=resolved_target,
     )
 
@@ -861,11 +931,11 @@ def activate_wall_target(
     defer_wall_grips=False,
 ):
     return session._activate_plan_target(
-        "wall",
+        plan_target_kinds.PLAN_TARGET_WALL,
         mouse_pos,
         event_callback=event_callback,
         sync_gui_selection=True,
-        clear_hovered_kinds=("wall", "symbol", "space", "region"),
+        clear_hovered_kinds=plan_target_kinds.WALL_TARGET_CLEAR_HOVERED_KINDS,
         resolved_target=resolved_target,
         defer_gui_selection=defer_gui_selection,
         defer_wall_grips=defer_wall_grips,
@@ -895,13 +965,7 @@ def clear_plan_selection_state(session):
             session._sync_secondary_selected_overlays()
         plan_target_dispatch.sync_selected_target_visuals(
             session,
-            kinds=(
-                plan_target_kinds.PLAN_TARGET_OPENING,
-                plan_target_kinds.PLAN_TARGET_SYMBOL,
-                plan_target_kinds.PLAN_TARGET_REGION,
-                plan_target_kinds.PLAN_TARGET_SPACE,
-                plan_target_kinds.PLAN_TARGET_PROVIDER,
-            ),
+            kinds=plan_target_kinds.CLEAR_PLAN_SELECTION_VISUAL_KINDS,
             force=True,
             trace_style="by_kind",
             trace_prefix="clear_plan_selection",
