@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 
 import FreeCAD
 import FreeCADGui
-from bimplan import provider_runtime as plan_provider_runtime
+from bimplan.providers import runtime as plan_provider_runtime
 
 
 @dataclass

@@ -1380,7 +1380,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         """External commands should not stay available while Plan Edit owns interaction."""
 
         from PySide import QtGui
-        from bimplan import command_gate
+        from bimplan.runtime import command_gate
 
         main_window = FreeCADGui.getMainWindow()
         action = QtGui.QAction(main_window)

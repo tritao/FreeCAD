@@ -5,7 +5,7 @@
 import ArchWindow
 import FreeCAD
 import FreeCADGui
-from bimplan import hosted_openings as plan_hosted_openings
+from bimplan.tools import hosted_openings as plan_hosted_openings
 from bimplan import selection as plan_selection
 
 translate = FreeCAD.Qt.translate

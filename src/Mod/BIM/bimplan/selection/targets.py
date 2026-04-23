@@ -7,9 +7,9 @@ from dataclasses import dataclass
 
 import FreeCAD
 
-from . import provider_runtime as plan_provider_runtime
+from bimplan.providers import runtime as plan_provider_runtime
 from . import target_kinds as plan_target_kinds
-from .provider_runtime import resolve_plan_provider_target_display_fields
+from bimplan.providers.runtime import resolve_plan_provider_target_display_fields
 
 
 @dataclass(frozen=True)

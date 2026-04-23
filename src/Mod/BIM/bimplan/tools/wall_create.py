@@ -5,7 +5,7 @@
 import FreeCAD
 import FreeCADGui
 
-from bimplan.hosted_openings import _PlanEditWallHost
+from bimplan.tools.hosted_openings import _PlanEditWallHost
 
 translate = FreeCAD.Qt.translate
 

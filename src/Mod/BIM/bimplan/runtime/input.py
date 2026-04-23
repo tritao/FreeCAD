@@ -4,7 +4,7 @@
 
 import FreeCAD
 
-from . import selection as plan_selection
+from bimplan import selection as plan_selection
 
 
 def on_mouse_pressed(session, event_callback):

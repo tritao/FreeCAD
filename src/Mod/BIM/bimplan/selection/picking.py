@@ -4,10 +4,10 @@
 
 import FreeCAD
 import math
-from bimplan import hover_picking as plan_hover_picking
-from bimplan import provider_runtime as plan_provider_runtime
+from bimplan.selection import hover_picking as plan_hover_picking
+from bimplan.providers import runtime as plan_provider_runtime
 from bimplan import selection as plan_selection
-from bimplan import targets as plan_targets
+from bimplan.selection import targets as plan_targets
 from bimplan.providers import PlanOverlayMarkerKind
 
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"

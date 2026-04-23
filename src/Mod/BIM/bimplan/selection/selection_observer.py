@@ -7,11 +7,11 @@ from contextlib import contextmanager
 import FreeCAD
 import FreeCADGui
 
-from . import provider_runtime as plan_provider_runtime
+from bimplan.providers import runtime as plan_provider_runtime
 
 
 def _get_selection_compat_module():
-    from . import selection as plan_selection
+    from bimplan import selection as plan_selection
 
     return plan_selection
 

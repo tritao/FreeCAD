@@ -4,8 +4,8 @@
 
 import time
 
-from bimplan import provider_runtime as plan_provider_runtime
-from bimplan import target_dispatch as plan_target_dispatch
+from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.selection import target_dispatch as plan_target_dispatch
 
 _HOVER_PICK_INTERVAL_MS = 80
 

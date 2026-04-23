@@ -210,10 +210,6 @@ SET(bimcommands_SRCS
 SET(bimplan_SRCS
     bimplan/__init__.py
     bimplan/benchmark.py
-    bimplan/command_gate.py
-    bimplan/hosted_openings.py
-    bimplan/input.py
-    bimplan/opening_edit.py
     bimplan/overlays/__init__.py
     bimplan/overlays/geometry.py
     bimplan/overlays/manager.py
@@ -223,26 +219,42 @@ SET(bimplan_SRCS
     bimplan/overlays/symbols.py
     bimplan/overlays/walls.py
     bimplan/performance.py
-    bimplan/picking.py
-    bimplan/provider_edit.py
-    bimplan/provider_runtime.py
-    bimplan/providers.py
+    bimplan/providers/__init__.py
+    bimplan/providers/edit.py
+    bimplan/providers/point.py
+    bimplan/providers/runtime.py
+    bimplan/runtime/__init__.py
+    bimplan/runtime/command_gate.py
+    bimplan/runtime/input.py
+    bimplan/runtime/lifecycle.py
+    bimplan/runtime/session.py
+    bimplan/runtime/session_components.py
+    bimplan/runtime/session_state.py
+    bimplan/runtime/view.py
+    bimplan/selection/__init__.py
+    bimplan/selection/hover_picking.py
+    bimplan/selection/picking.py
+    bimplan/selection/selection.py
+    bimplan/selection/selection_additive.py
+    bimplan/selection/selection_observer.py
+    bimplan/selection/target_dispatch.py
+    bimplan/selection/target_kinds.py
+    bimplan/selection/targets.py
     bimplan/semantics.py
-    bimplan/selection.py
-    bimplan/session.py
     bimplan/snap.py
-    bimplan/spaces.py
-    bimplan/symbol_edit.py
-    bimplan/targets.py
     bimplan/task_panel.py
+    bimplan/tools/__init__.py
+    bimplan/tools/hosted_openings.py
+    bimplan/tools/opening_edit.py
+    bimplan/tools/spaces.py
+    bimplan/tools/symbol_edit.py
+    bimplan/tools/wall_create.py
+    bimplan/tools/wall_edit.py
+    bimplan/tools/wall_relations.py
+    bimplan/tools/window_create.py
     bimplan/transactions.py
     bimplan/ui/__init__.py
     bimplan/ui/controls.py
-    bimplan/view.py
-    bimplan/wall_create.py
-    bimplan/wall_edit.py
-    bimplan/wall_relations.py
-    bimplan/window_create.py
 )
 
 SET(BIM_templates

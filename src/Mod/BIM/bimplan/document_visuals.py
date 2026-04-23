@@ -5,7 +5,7 @@
 from contextlib import contextmanager
 
 from bimplan import selection as plan_selection
-from bimplan import target_kinds as plan_target_kinds
+from bimplan.selection import target_kinds as plan_target_kinds
 
 _OPENING_VISUAL_PROPERTIES = {
     "Shape",

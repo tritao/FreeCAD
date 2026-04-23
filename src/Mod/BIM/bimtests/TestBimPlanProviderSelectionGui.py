@@ -30,7 +30,7 @@ import FreeCAD
 import FreeCADGui
 from bimcommands import BimPlanSession
 from bimplan import selection as plan_selection
-from bimplan import targets as plan_targets
+from bimplan.selection import targets as plan_targets
 from bimplan.providers import (
     PlanEditHandleSpec,
     PlanEditProvider,

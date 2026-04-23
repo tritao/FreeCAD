@@ -4,8 +4,8 @@
 
 import FreeCAD
 import FreeCADGui
-from bimplan import provider_runtime as plan_provider_runtime
-from bimplan import target_kinds as plan_target_kinds
+from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.selection import target_kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
 
