@@ -47,6 +47,7 @@ from bimplan import snap as plan_snap
 from bimplan import spaces as plan_spaces
 from bimplan import storeys as plan_storeys
 from bimplan import task_panel as plan_task_panel
+from bimplan import target_kinds as plan_target_kinds
 from bimplan import symbol_edit as plan_symbol_edit
 from bimplan import opening_edit as plan_opening_edit
 from bimplan import provider_edit as plan_provider_edit
@@ -95,7 +96,7 @@ _OPENING_MOVE_SNAP_SET = {
     "WorkingPlane",
 }
 _OPENING_MOVE_ANCHORS = ("center", "left", "right")
-_PRIMARY_PLAN_TARGET_KINDS = ("wall", "opening", "symbol", "provider", "region", "space")
+_PRIMARY_PLAN_TARGET_KINDS = plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS
 _OPENING_VISUAL_PROPERTIES = plan_document_visuals.OPENING_VISUAL_PROPERTIES
 _WALL_VISUAL_PROPERTIES = plan_document_visuals.WALL_VISUAL_PROPERTIES
 _SYMBOL_VISUAL_PROPERTIES = plan_document_visuals.SYMBOL_VISUAL_PROPERTIES
@@ -1995,7 +1996,7 @@ class PlanEditSession:
             counts[target_kind] = counts.get(target_kind, 0) + 1
         parts = [
             self._format_plan_target_count_label(kind, counts[kind])
-            for kind in ("wall", "opening", "symbol", "region", "space")
+            for kind in plan_target_kinds.SUMMARY_PLAN_TARGET_KINDS
             if counts.get(kind)
         ]
         return ", ".join(parts)
