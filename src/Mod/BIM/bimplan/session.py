@@ -36,6 +36,7 @@ from bimplan import document_visuals as plan_document_visuals
 from bimplan import hosted_openings as plan_hosted_openings
 from bimplan import input as plan_input
 from bimplan import performance as plan_performance
+from bimplan import provider_overlay_state as plan_provider_overlay_state
 from bimplan import provider_point as plan_provider_point
 from bimplan import provider_runtime as plan_provider_runtime
 from bimplan import provider_targets as plan_provider_targets
@@ -114,10 +115,16 @@ _PLAN_VISUAL_WALL_EDIT_PREVIEW = "wall_edit_preview"
 _PLAN_VISUAL_PROVIDER_OVERLAYS = "provider_overlays"
 _PLAN_VISUAL_VIEW_SCALE = "view_scale"
 _PLAN_VISUAL_ALL = "all"
-_PLAN_PROVIDER_OVERLAY_MODE_ALL = "all"
-_PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE = "architecture"
-_PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL = "electrical"
-_PLAN_PROVIDER_OVERLAY_MODE_PLUMBING = "plumbing"
+_PLAN_PROVIDER_OVERLAY_MODE_ALL = plan_provider_overlay_state.PLAN_PROVIDER_OVERLAY_MODE_ALL
+_PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE = (
+    plan_provider_overlay_state.PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
+)
+_PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL = (
+    plan_provider_overlay_state.PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL
+)
+_PLAN_PROVIDER_OVERLAY_MODE_PLUMBING = (
+    plan_provider_overlay_state.PLAN_PROVIDER_OVERLAY_MODE_PLUMBING
+)
 _PLAN_GUI_SELECTION_SYNC_DELAY_MS = 80
 _PLAN_WALL_GRIP_REFRESH_DELAY_MS = 120
 _PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
@@ -2551,88 +2558,49 @@ class PlanEditSession:
         return plan_provider_targets.is_plan_provider_target_object(self, obj)
 
     def get_plan_provider_overlay_visibility_key(self, provider_id, overlay_key):
-        provider_id = str(provider_id or "").strip()
-        overlay_key = str(overlay_key or "").strip()
-        if not provider_id or not overlay_key:
-            return None
-        return (provider_id, overlay_key)
+        return plan_provider_overlay_state.get_plan_provider_overlay_visibility_key(
+            provider_id,
+            overlay_key,
+        )
 
     def _normalize_plan_provider_overlay_mode(self, mode):
-        normalized = str(mode or "").strip().lower()
-        if normalized == _PLAN_PROVIDER_OVERLAY_MODE_ALL:
-            return _PLAN_PROVIDER_OVERLAY_MODE_ALL
-        if normalized == _PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL:
-            return _PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL
-        if normalized == _PLAN_PROVIDER_OVERLAY_MODE_PLUMBING:
-            return _PLAN_PROVIDER_OVERLAY_MODE_PLUMBING
-        return _PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
+        return plan_provider_overlay_state.normalize_plan_provider_overlay_mode(mode)
 
     def get_plan_provider_overlay_mode(self):
-        return self._normalize_plan_provider_overlay_mode(
-            getattr(self, "_provider_overlay_mode", _PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE)
-        )
+        return plan_provider_overlay_state.get_plan_provider_overlay_mode(self)
 
     def set_plan_provider_overlay_mode(self, mode):
-        normalized = self._normalize_plan_provider_overlay_mode(mode)
-        if normalized == self.get_plan_provider_overlay_mode():
-            return False
-        self._provider_overlay_mode = normalized
-        self._provider_overlay_state = None
-        plan_selection.clear_hidden_provider_preselection(self)
-        self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_PROVIDER_OVERLAYS)
-        self._refresh_provider_overlay_mode_panels()
-        return True
+        return plan_provider_overlay_state.set_plan_provider_overlay_mode(self, mode)
 
     def get_plan_provider_overlay_category(self, overlay):
-        category = str(getattr(overlay, "category", "") or "").strip().lower()
-        if category == _PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL:
-            return _PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL
-        if category == _PLAN_PROVIDER_OVERLAY_MODE_PLUMBING:
-            return _PLAN_PROVIDER_OVERLAY_MODE_PLUMBING
-        return _PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
+        return plan_provider_overlay_state.get_plan_provider_overlay_category(overlay)
 
     def is_plan_provider_overlay_enabled(self, overlay):
-        key = self.get_plan_provider_overlay_visibility_key(
-            getattr(overlay, "provider_id", ""),
-            getattr(overlay, "key", ""),
-        )
-        if key is None:
-            return True
-        return self._provider_overlay_visibility.get(key, True)
+        return plan_provider_overlay_state.is_plan_provider_overlay_enabled(self, overlay)
 
     def is_plan_provider_overlay_visible_for_mode(self, overlay, mode=None):
-        overlay_mode = self._normalize_plan_provider_overlay_mode(
-            self.get_plan_provider_overlay_mode() if mode is None else mode
+        return plan_provider_overlay_state.is_plan_provider_overlay_visible_for_mode(
+            self,
+            overlay,
+            mode=mode,
         )
-        if overlay_mode == _PLAN_PROVIDER_OVERLAY_MODE_ALL:
-            return True
-        return self.get_plan_provider_overlay_category(overlay) == overlay_mode
 
     def is_plan_provider_overlay_visible(self, overlay):
-        if not bool(getattr(overlay, "visible", True)):
-            return False
-        if not self.is_plan_provider_overlay_enabled(overlay):
-            return False
-        return self.is_plan_provider_overlay_visible_for_mode(overlay)
+        return plan_provider_overlay_state.is_plan_provider_overlay_visible(self, overlay)
 
     def set_plan_provider_overlay_visible(self, provider_id, overlay_key, visible):
-        key = self.get_plan_provider_overlay_visibility_key(provider_id, overlay_key)
-        if key is None:
-            return
-        visible = bool(visible)
-        if visible:
-            self._provider_overlay_visibility.pop(key, None)
-        else:
-            self._provider_overlay_visibility[key] = False
-        self._provider_overlay_state = None
-        self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_PROVIDER_OVERLAYS)
+        return plan_provider_overlay_state.set_plan_provider_overlay_visible(
+            self,
+            provider_id,
+            overlay_key,
+            visible,
+        )
 
     def queue_plan_provider_overlay_refresh(self):
-        self._provider_overlay_state = None
-        self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_PROVIDER_OVERLAYS)
+        return plan_provider_overlay_state.queue_plan_provider_overlay_refresh(self)
 
     def queue_plan_provider_overlay_sync(self):
-        self._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_PROVIDER_OVERLAYS)
+        return plan_provider_overlay_state.queue_plan_provider_overlay_sync(self)
 
     def execute_plan_provider_action(
         self,
