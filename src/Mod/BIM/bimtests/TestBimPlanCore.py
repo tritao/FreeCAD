@@ -170,11 +170,14 @@ class _DummyProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
-    def test_plan_edit_session_owns_selection_spaces_viewport_and_wall_components(self):
+    def test_plan_edit_session_owns_selection_spaces_viewport_wall_and_status_components(
+        self,
+    ):
         from bimplan.session import PlanEditSession
         from bimplan.session_components import (
             PlanSelectionAPI,
             PlanSpacesAPI,
+            PlanStatusTextAPI,
             PlanViewportAPI,
             PlanWallEditAPI,
         )
@@ -190,12 +193,15 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIs(session.viewport.session, session)
         self.assertIsInstance(session.wall_edit, PlanWallEditAPI)
         self.assertIs(session.wall_edit.session, session)
+        self.assertIsInstance(session.status_text, PlanStatusTextAPI)
+        self.assertIs(session.status_text.session, session)
 
     def test_plan_edit_session_wrappers_delegate_to_owned_components(self):
         from bimplan.session import PlanEditSession
         from bimplan.session_components import (
             PlanSelectionAPI,
             PlanSpacesAPI,
+            PlanStatusTextAPI,
             PlanViewportAPI,
             PlanWallEditAPI,
         )
@@ -217,6 +223,11 @@ class TestBimPlanCore(unittest.TestCase):
             autospec=True,
             return_value={"ready": True},
         ) as get_space_preflight_report, patch.object(
+            PlanStatusTextAPI,
+            "get_status_chip_text",
+            autospec=True,
+            return_value=("Plan Edit", "Select\nWork directly in the viewport"),
+        ) as get_status_chip_text, patch.object(
             PlanViewportAPI,
             "get_plan_view_height",
             autospec=True,
@@ -239,12 +250,17 @@ class TestBimPlanCore(unittest.TestCase):
             self.assertEqual(4200.0, session._get_plan_view_height())
             self.assertTrue(session._has_active_wall_edit())
             self.assertEqual(
+                ("Plan Edit", "Select\nWork directly in the viewport"),
+                session._get_status_chip_text(),
+            )
+            self.assertEqual(
                 ("clipped",),
                 session._clip_preview_polygon_to_plane("polygon", "plane", "ref"),
             )
 
         get_selected_target_for_kind.assert_called_once_with(session.selection, "wall")
         get_space_preflight_report.assert_called_once_with(session.spaces, targets=targets)
+        get_status_chip_text.assert_called_once_with(session.status_text)
         get_plan_view_height.assert_called_once_with(session.viewport)
         has_active_wall_edit.assert_called_once_with(session.wall_edit)
         clip_preview_polygon_to_plane.assert_called_once_with(
