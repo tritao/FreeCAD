@@ -147,6 +147,46 @@ def _describe_pick_overlay(overlay):
     }
 
 
+def _get_cached_plan_instances(session, cache_attr, is_target, count_name, span_name):
+    if not session.doc:
+        return ()
+    doc_name = getattr(session.doc, "Name", None)
+    cache_record = getattr(session, cache_attr, None)
+    if cache_record is not None and cache_record[0] == doc_name:
+        session._plan_perf_count(f"{cache_attr[1:]}_hits")
+        return cache_record[1]
+
+    instances = []
+    with session._plan_perf_trace_span(span_name):
+        for obj in getattr(session.doc, "Objects", []) or []:
+            session._plan_perf_count(count_name)
+            if is_target(obj):
+                instances.append(obj)
+    result = tuple(instances)
+    setattr(session, cache_attr, (doc_name, result))
+    return result
+
+
+def get_plan_space_instances(session):
+    return _get_cached_plan_instances(
+        session,
+        "_plan_space_instances_cache",
+        session._is_plan_space_object,
+        "plan_space_instance_objects_scanned",
+        "build_plan_space_instances_cache",
+    )
+
+
+def get_plan_region_instances(session):
+    return _get_cached_plan_instances(
+        session,
+        "_plan_region_instances_cache",
+        session._is_plan_region_object,
+        "plan_region_instance_objects_scanned",
+        "build_plan_region_instances_cache",
+    )
+
+
 def get_screen_distance_sq_to_segment(session, mouse_pos, start, end):
     if not session.view or not mouse_pos:
         return None
@@ -514,7 +554,7 @@ def pick_plan_space_target_from_overlays(session, mouse_pos, radius_px=10):
     best_space = None
     best_distance_sq = None
     seen = set()
-    for obj in getattr(session.doc, "Objects", []) or []:
+    for obj in session._get_plan_space_instances():
         if not session._is_plan_space_object(obj):
             continue
         name = getattr(obj, "Name", None)
@@ -541,7 +581,7 @@ def pick_plan_region_target_from_overlays(session, mouse_pos, radius_px=10):
     best_region = None
     best_distance_sq = None
     seen = set()
-    for obj in getattr(session.doc, "Objects", []) or []:
+    for obj in session._get_plan_region_instances():
         if not session._is_plan_region_object(obj):
             continue
         name = getattr(obj, "Name", None)
@@ -628,44 +668,46 @@ def xy_point_in_polygon(point, polyline, tolerance=1e-9):
 
 
 def pick_plan_region_target_from_polylines(session, mouse_pos):
-    if not session.doc or not mouse_pos:
-        return None
+    with session._plan_perf_trace_span("pick_region_target_from_polylines", mouse_pos=mouse_pos):
+        if not session.doc or not mouse_pos:
+            return None
 
-    point = session._get_plan_point_from_mouse_pos(mouse_pos)
-    if point is None:
-        return None
+        point = session._get_plan_point_from_mouse_pos(mouse_pos)
+        if point is None:
+            return None
 
-    best_region = None
-    best_area = None
-    seen = set()
-    for obj in getattr(session.doc, "Objects", []) or []:
-        if not session._is_plan_region_object(obj):
-            continue
-        name = getattr(obj, "Name", None)
-        if not name or name in seen:
-            continue
-        seen.add(name)
-        view_object = getattr(obj, "ViewObject", None)
-        if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
-            continue
-
-        containing_area = None
-        for polyline in session._get_region_pick_polylines(obj):
-            if not session._xy_point_in_polygon(point, polyline):
+        best_region = None
+        best_area = None
+        seen = set()
+        for obj in session._get_plan_region_instances():
+            session._plan_perf_count("region_polyline_pick_objects_scanned")
+            if not session._is_plan_region_object(obj):
                 continue
-            area = session._xy_polygon_area(polyline)
-            if area <= 0.0:
+            name = getattr(obj, "Name", None)
+            if not name or name in seen:
                 continue
-            if containing_area is None or area < containing_area:
-                containing_area = area
+            seen.add(name)
+            view_object = getattr(obj, "ViewObject", None)
+            if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
+                continue
 
-        if containing_area is None:
-            continue
-        if best_area is None or containing_area < best_area:
-            best_region = obj
-            best_area = containing_area
+            containing_area = None
+            for polyline in session._get_region_pick_polylines(obj):
+                if not session._xy_point_in_polygon(point, polyline):
+                    continue
+                area = session._xy_polygon_area(polyline)
+                if area <= 0.0:
+                    continue
+                if containing_area is None or area < containing_area:
+                    containing_area = area
 
-    return best_region
+            if containing_area is None:
+                continue
+            if best_area is None or containing_area < best_area:
+                best_region = obj
+                best_area = containing_area
+
+        return best_region
 
 
 def pick_plan_target_from_footprint_faces(
@@ -683,7 +725,13 @@ def pick_plan_target_from_footprint_faces(
         best_target = None
         best_area = None
         seen = set()
-        for obj in getattr(session.doc, "Objects", []) or []:
+        objects = getattr(session.doc, "Objects", []) or []
+        if target_label == "space" and hasattr(session, "_get_plan_space_instances"):
+            objects = session._get_plan_space_instances()
+        elif target_label == "region" and hasattr(session, "_get_plan_region_instances"):
+            objects = session._get_plan_region_instances()
+
+        for obj in objects or []:
             session._plan_perf_count(f"{target_label}_objects_scanned")
             if not is_target(obj):
                 continue

@@ -97,61 +97,72 @@ def activate_symbol_handle(session, symbol, handle_role):
 
 
 def activate_symbol_handle_now(session, symbol, handle_role):
-    if session._tearing_down or not session._is_plan_symbol_instance(symbol):
-        return
-    if handle_role not in {"move", "rotate"}:
-        return
-    session._set_selected_plan_target("symbol", symbol)
-    session._clear_wall_grips()
-    session._start_symbol_handle_point_pick(symbol, handle_role)
+    with session._plan_perf_trace_span("activate_symbol_handle_now"):
+        if session._tearing_down or not session._is_plan_symbol_instance(symbol):
+            return
+        if handle_role not in {"move", "rotate"}:
+            return
+        with session._plan_perf_trace_span("activate_symbol_handle_set_target"):
+            session._set_selected_plan_target("symbol", symbol)
+            session._clear_wall_grips()
+        with session._plan_perf_trace_span("activate_symbol_handle_start_point_pick"):
+            session._start_symbol_handle_point_pick(symbol, handle_role)
 
 
 def start_symbol_handle_point_pick(session, symbol, handle_role):
-    if not session._is_plan_symbol_instance(symbol):
-        return
-    handle_points = {
-        role: point for role, point, _marker in session._get_selected_symbol_handle_specs(symbol)
-    }
-    start_point = handle_points.get(handle_role)
-    if start_point is None:
-        return
-    session.current_tool = "Move Symbol" if handle_role == "move" else "Rotate Symbol"
-    session._set_hovered_wall(None)
-    session._set_hovered_opening(None)
-    session._set_hovered_symbol(None)
-    session._sync_secondary_selected_overlays()
-    session._edit_symbol = symbol
-    session._edit_symbol_handle_role = handle_role
-    session._edit_symbol_start_placement = session._copy_placement(
-        getattr(symbol, "Placement", None)
-    )
-    session._edit_symbol_reference_point = FreeCAD.Vector(start_point)
-    session._clear_selected_symbol_overlay()
-    session._clear_selected_symbol_handles()
-    anchor = session._get_symbol_anchor_point(
-        symbol, placement=session._edit_symbol_start_placement
-    )
-    session._sync_symbol_edit_preview(
-        symbol,
-        session._edit_symbol_start_placement,
-        guide_start=anchor,
-        guide_end=start_point,
-    )
-    session._refresh_task_panel_status()
-    FreeCAD.activeDraftCommand = session
-    session._set_draft_point_focus_suppressed(True)
-    FreeCADGui.Snapper.getPoint(
-        last=start_point,
-        callback=session._finish_symbol_handle_point_pick,
-        movecallback=session._update_symbol_handle_point_pick,
-        title=(
-            translate("BIM_PlanEdit", "Pick new symbol position")
-            if handle_role == "move"
-            else translate("BIM_PlanEdit", "Pick new symbol rotation")
-        ),
-        noTracker=True,
-    )
-    session._queue_focus_plan_view()
+    with session._plan_perf_trace_span("start_symbol_handle_point_pick"):
+        if not session._is_plan_symbol_instance(symbol):
+            return
+        with session._plan_perf_trace_span("start_symbol_handle_get_handles"):
+            handle_points = {
+                role: point
+                for role, point, _marker in session._get_selected_symbol_handle_specs(symbol)
+            }
+            start_point = handle_points.get(handle_role)
+        if start_point is None:
+            return
+        with session._plan_perf_trace_span("start_symbol_handle_state"):
+            session.current_tool = "Move Symbol" if handle_role == "move" else "Rotate Symbol"
+            session._set_hovered_wall(None)
+            session._set_hovered_opening(None)
+            session._set_hovered_symbol(None)
+            session._sync_secondary_selected_overlays()
+            session._edit_symbol = symbol
+            session._edit_symbol_handle_role = handle_role
+            session._edit_symbol_start_placement = session._copy_placement(
+                getattr(symbol, "Placement", None)
+            )
+            session._edit_symbol_reference_point = FreeCAD.Vector(start_point)
+            session._clear_selected_symbol_overlay()
+            session._clear_selected_symbol_handles()
+        with session._plan_perf_trace_span("start_symbol_handle_preview"):
+            anchor = session._get_symbol_anchor_point(
+                symbol, placement=session._edit_symbol_start_placement
+            )
+            session._sync_symbol_edit_preview(
+                symbol,
+                session._edit_symbol_start_placement,
+                guide_start=anchor,
+                guide_end=start_point,
+            )
+        session._refresh_task_panel_status(selection_only=True)
+        FreeCAD.activeDraftCommand = session
+        with session._plan_perf_trace_span("symbol_handle_focus_suppression"):
+            session._set_draft_point_focus_suppressed(True)
+        with session._plan_perf_trace_span("symbol_handle_snapper_get_point"):
+            FreeCADGui.Snapper.getPoint(
+                last=start_point,
+                callback=session._finish_symbol_handle_point_pick,
+                movecallback=session._update_symbol_handle_point_pick,
+                title=(
+                    translate("BIM_PlanEdit", "Pick new symbol position")
+                    if handle_role == "move"
+                    else translate("BIM_PlanEdit", "Pick new symbol rotation")
+                ),
+                noTracker=True,
+            )
+        with session._plan_perf_trace_span("symbol_handle_queue_focus_plan_view"):
+            session._queue_focus_plan_view()
 
 
 def update_symbol_handle_point_pick(session, point=None, snap_info=None):
