@@ -205,6 +205,11 @@ _ACTION_CANCEL_PROVIDER_POINT_TOOL_AND_RETURN = ActivationActionSpec(
     predicate_name="_has_active_provider_point_tool",
     stop_after=True,
 )
+_ACTION_CANCEL_EMBEDDED_TOOL_AND_RETURN = ActivationActionSpec(
+    "_cancel_embedded_tool",
+    predicate_name="_has_active_embedded_tool",
+    stop_after=True,
+)
 _ACTION_CANCEL_EMBEDDED_TOOL = ActivationActionSpec(
     "_cancel_embedded_tool",
     predicate_name="_has_active_embedded_tool",
@@ -216,6 +221,11 @@ _ACTION_CANCEL_SYMBOL_HANDLE_PICK_AND_RETURN = ActivationActionSpec(
 )
 _ACTION_CANCEL_PENDING_EDIT = ActivationActionSpec("_cancel_pending_edit")
 _ACTION_CANCEL_WALL_EDIT = ActivationActionSpec("_cancel_wall_edit")
+_ACTION_CANCEL_WALL_EDIT_AND_RETURN = ActivationActionSpec(
+    "_cancel_wall_edit",
+    predicate_name="_has_active_wall_edit",
+    stop_after=True,
+)
 _ACTION_CANCEL_WALL_EDIT_NO_REFRESH = ActivationActionSpec(
     "_cancel_wall_edit",
     kwargs=(("refresh", False),),
@@ -452,21 +462,22 @@ _MOVE_TOOL_ACTIVATION_PROFILE = ToolActivationProfile(
     start=_start_move_tool,
 )
 
+_FINISH_FALLBACK_ACTION_SPECS = (
+    _ACTION_CANCEL_PROVIDER_POINT_TOOL_AND_RETURN,
+    _ACTION_CANCEL_EMBEDDED_TOOL_AND_RETURN,
+    ActivationActionSpec(
+        "_cancel_rect_wall_tool",
+        predicate_name="_has_active_rect_wall_tool",
+        stop_after=True,
+    ),
+    _ACTION_CANCEL_WALL_EDIT_AND_RETURN,
+)
+
 
 def finish(session, close_dialog=True):
     if _dispatch_current_tool(session, _FINISH_TOOL_HANDLER_SPECS):
         return True
-    if session._has_active_provider_point_tool():
-        session._cancel_provider_point_tool()
-        return True
-    if session._has_active_embedded_tool():
-        session._cancel_embedded_tool()
-        return True
-    if session._has_active_rect_wall_tool():
-        session._cancel_rect_wall_tool()
-        return True
-    if session._has_active_wall_edit():
-        session._cancel_wall_edit()
+    if _run_activation_action_specs(session, _FINISH_FALLBACK_ACTION_SPECS):
         return True
     return session.shutdown(close_dialog=close_dialog)
 
