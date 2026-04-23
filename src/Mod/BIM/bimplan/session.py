@@ -34,6 +34,7 @@ from bimplan import picking as plan_picking
 from bimplan import command_gate as plan_command_gate
 from bimplan import document_visuals as plan_document_visuals
 from bimplan import hosted_openings as plan_hosted_openings
+from bimplan import hover_picking as plan_hover_picking
 from bimplan import input as plan_input
 from bimplan import object_classification as plan_object_classification
 from bimplan import object_visibility as plan_object_visibility
@@ -2676,10 +2677,10 @@ class PlanEditSession:
         return plan_hosted_openings.prime_wall_hosted_openings_cache(self)
 
     def _queue_prime_hover_pick_caches(self):
-        return plan_picking.queue_prime_hover_pick_caches(self)
+        return plan_hover_picking.queue_prime_hover_pick_caches(self)
 
     def _prime_hover_pick_caches(self):
-        return plan_picking.prime_hover_pick_caches(self)
+        return plan_hover_picking.prime_hover_pick_caches(self)
 
     def _build_wall_hosted_openings_cache(self):
         return plan_hosted_openings.build_wall_hosted_openings_cache(self)
@@ -2924,10 +2925,10 @@ class PlanEditSession:
         return plan_picking.get_plan_region_instances(self)
 
     def _should_skip_hover_pick(self, mouse_pos, force=False):
-        return plan_picking.should_skip_hover_pick(self, mouse_pos, force=force)
+        return plan_hover_picking.should_skip_hover_pick(self, mouse_pos, force=force)
 
     def _update_hovered_plan_target(self, mouse_pos, force=False):
-        return plan_picking.update_hovered_plan_target(self, mouse_pos, force=force)
+        return plan_hover_picking.update_hovered_plan_target(self, mouse_pos, force=force)
 
     def _is_plan_additive_selection_active(self):
         return plan_selection.is_plan_additive_selection_active(self)
@@ -2963,10 +2964,10 @@ class PlanEditSession:
         )
 
     def _clear_hovered_plan_targets(self, kinds=None):
-        return plan_picking.clear_hovered_plan_targets(self, kinds=kinds)
+        return plan_hover_picking.clear_hovered_plan_targets(self, kinds=kinds)
 
     def _get_hovered_plan_target(self):
-        return plan_picking.get_hovered_plan_target(self)
+        return plan_hover_picking.get_hovered_plan_target(self)
 
     def _set_event_handled(self, event_callback):
         if event_callback and hasattr(event_callback, "setHandled"):
