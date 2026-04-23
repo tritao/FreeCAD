@@ -81,11 +81,18 @@ from bimplan.picking import (
     pick_provider_overlay_target_from_overlays,
 )
 from bimplan.provider_runtime import (
+    collect_plan_provider_contributions,
     get_plan_provider_target_for_object,
     normalize_plan_provider_overlay,
 )
+from bimplan.provider_snapshot import collect_plan_provider_snapshot
 from bimplan.providers import (
+    PlanContextPanelSpec,
+    PlanContextPanelState,
+    PlanContextRowSpec,
+    PlanContextSubjectKind,
     PlanEditProvider,
+    PlanInspectorSection,
     PlanIssueSpec,
     PlanIssueSeverity,
     PlanOverlaySpec,
@@ -93,6 +100,7 @@ from bimplan.providers import (
     PlanOverlayTargetSpec,
     PlanOverlayTargetKind,
     PlanProviderTargetSpec,
+    PlanToolSpec,
 )
 from bimplan.registry import PlanEditRegistry
 from bimplan.semantics import PlanSemanticRecord
@@ -167,6 +175,63 @@ class _DummyDoc:
 class _DummyProvider(PlanEditProvider):
     def __init__(self, provider_id):
         self.provider_id = provider_id
+
+
+class _SnapshotProvider(PlanEditProvider):
+    provider_id = "snapshot-provider"
+
+    def __init__(self):
+        self.calls = []
+        self.context_ids = []
+
+    def _record_call(self, name, context):
+        self.calls.append(name)
+        self.context_ids.append(id(context))
+
+    def get_tools(self, context):
+        self._record_call("get_tools", context)
+        return (PlanToolSpec(key="provider-tool", label="Provider Tool"),)
+
+    def get_overlays(self, context):
+        self._record_call("get_overlays", context)
+        return (
+            PlanOverlaySpec(
+                key="provider-overlay",
+                label="Provider Overlay",
+                points=((1.0, 2.0, 0.0),),
+            ),
+        )
+
+    def get_issues(self, context):
+        self._record_call("get_issues", context)
+        return (
+            PlanIssueSpec(
+                key="provider-issue",
+                title="Provider Issue",
+                severity=PlanIssueSeverity.WARNING,
+            ),
+        )
+
+    def get_context_panels(self, context):
+        self._record_call("get_context_panels", context)
+        return (
+            PlanContextPanelSpec(
+                key="provider-context",
+                title="Provider Context",
+                state=PlanContextPanelState.SINGLE_OBJECT,
+                subject_kind=PlanContextSubjectKind.SCOPE,
+                summary_rows=(PlanContextRowSpec(label="State", value="Ready"),),
+            ),
+        )
+
+    def get_inspector_sections(self, context):
+        self._record_call("get_inspector_sections", context)
+        return (
+            PlanInspectorSection(
+                key="provider-section",
+                title="Provider Section",
+            ),
+        )
 
 
 class TestBimPlanCore(unittest.TestCase):
@@ -269,6 +334,76 @@ class TestBimPlanCore(unittest.TestCase):
             "ref",
             tol=1e-7,
         )
+
+    def test_collect_plan_provider_snapshot_builds_panel_surfaces_in_one_pass(self):
+        registry = PlanEditRegistry()
+        provider = _SnapshotProvider()
+        registry.register_provider(provider)
+
+        context_calls = []
+        context = SimpleNamespace(name="snapshot-context")
+        perf_counts = []
+
+        def _get_plan_edit_context():
+            context_calls.append("context")
+            return context
+
+        session = SimpleNamespace(
+            _document_is_alive=lambda: True,
+            _plan_provider_refresh_cache={},
+            _plan_perf_trace_span=lambda _name: nullcontext(),
+            _plan_perf_count=lambda name, value=1: perf_counts.append((name, value)),
+            get_plan_edit_context=_get_plan_edit_context,
+            get_plan_provider_registry=lambda: registry,
+            _get_plan_provider_id=lambda current_provider: current_provider.get_provider_id(),
+            _coerce_plan_provider_results=lambda provided: tuple(provided or ()),
+            _normalize_plan_provider_tool=lambda provider_id, tool: tool.__class__(
+                **{**tool.__dict__, "provider_id": provider_id}
+            ),
+            _normalize_plan_provider_overlay=lambda provider_id, overlay: normalize_plan_provider_overlay(
+                provider_id,
+                overlay,
+            ),
+            _normalize_plan_provider_issue=lambda provider_id, issue: issue.__class__(
+                **{**issue.__dict__, "provider_id": provider_id}
+            ),
+            _normalize_plan_provider_context_panel=lambda provider_id, panel: panel.__class__(
+                **{**panel.__dict__, "provider_id": provider_id}
+            ),
+            _normalize_plan_provider_section=lambda provider_id, section: section.__class__(
+                **{**section.__dict__, "provider_id": provider_id}
+            ),
+        )
+
+        snapshot = collect_plan_provider_snapshot(session)
+
+        self.assertEqual(["context"], context_calls)
+        self.assertEqual(
+            [
+                "get_tools",
+                "get_overlays",
+                "get_issues",
+                "get_context_panels",
+                "get_inspector_sections",
+            ],
+            provider.calls,
+        )
+        self.assertEqual({id(context)}, set(provider.context_ids))
+        self.assertEqual("snapshot-provider", snapshot.tools[0].provider_id)
+        self.assertEqual("snapshot-provider", snapshot.overlays[0].provider_id)
+        self.assertEqual("snapshot-provider", snapshot.issues[0].provider_id)
+        self.assertEqual("snapshot-provider", snapshot.context_panels[0].provider_id)
+        self.assertEqual("snapshot-provider", snapshot.inspector_sections[0].provider_id)
+        self.assertEqual(
+            snapshot.tools,
+            collect_plan_provider_contributions(
+                session,
+                "get_tools",
+                session._normalize_plan_provider_tool,
+            ),
+        )
+        self.assertEqual(1, provider.calls.count("get_tools"))
+        self.assertIs(snapshot, collect_plan_provider_snapshot(session))
 
     def test_plan_selection_api_uses_primary_target_kind_policy(self):
         from bimplan import target_kinds as plan_target_kinds

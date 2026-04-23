@@ -43,6 +43,7 @@ from bimplan import performance as plan_performance
 from bimplan import provider_overlay_state as plan_provider_overlay_state
 from bimplan import provider_point as plan_provider_point
 from bimplan import provider_runtime as plan_provider_runtime
+from bimplan import provider_snapshot as plan_provider_snapshot
 from bimplan import provider_targets as plan_provider_targets
 from bimplan import selection_additive as plan_selection_additive
 from bimplan import selection_observer as plan_selection_observer
@@ -1578,6 +1579,15 @@ class PlanEditSession:
             "get_tools",
             self._normalize_plan_provider_tool,
         )
+
+    def get_plan_provider_snapshot(self):
+        if self._tearing_down or self._finishing or not self._document_is_alive():
+            self._plan_perf_count("plan_provider_inactive_session")
+            return plan_provider_snapshot.PlanProviderSnapshot()
+        if self._plan_provider_integrations_disabled():
+            self._plan_perf_count("plan_provider_integrations_disabled")
+            return plan_provider_snapshot.PlanProviderSnapshot()
+        return plan_provider_snapshot.collect_plan_provider_snapshot(self)
 
     def get_plan_provider_edit_handles(self):
         return plan_provider_runtime.get_plan_provider_edit_handles(self)
