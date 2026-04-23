@@ -5,23 +5,13 @@
 import time
 
 from bimplan import provider_overlay_state as plan_provider_overlay_state
-from bimplan import target_kinds as plan_target_kinds
+from bimplan import target_dispatch as plan_target_dispatch
 
 _HOVER_PICK_INTERVAL_MS = 80
 
 
 def get_hovered_plan_target(session):
-    for kind, obj in (
-        (plan_target_kinds.PLAN_TARGET_OPENING, session.hovered_opening),
-        (plan_target_kinds.PLAN_TARGET_PROVIDER, session.hovered_provider),
-        (plan_target_kinds.PLAN_TARGET_SYMBOL, session.hovered_symbol),
-        (plan_target_kinds.PLAN_TARGET_WALL, session.hovered_wall),
-        (plan_target_kinds.PLAN_TARGET_REGION, session.hovered_region),
-        (plan_target_kinds.PLAN_TARGET_SPACE, session.hovered_space),
-    ):
-        if obj is not None:
-            return (kind, obj)
-    return (None, None)
+    return plan_target_dispatch.get_hovered_target(session)
 
 
 def queue_prime_hover_pick_caches(session):
@@ -93,65 +83,7 @@ def should_skip_hover_pick(session, mouse_pos, force=False):
 
 
 def clear_hovered_plan_targets(session, kinds=None):
-    clearers = {
-        plan_target_kinds.PLAN_TARGET_WALL: session._set_hovered_wall,
-        plan_target_kinds.PLAN_TARGET_OPENING: session._set_hovered_opening,
-        plan_target_kinds.PLAN_TARGET_SYMBOL: session._set_hovered_symbol,
-        plan_target_kinds.PLAN_TARGET_PROVIDER: session._set_hovered_provider,
-        plan_target_kinds.PLAN_TARGET_SPACE: session._set_hovered_space,
-        plan_target_kinds.PLAN_TARGET_REGION: session._set_hovered_region,
-    }
-    for kind in kinds or plan_target_kinds.HOVERED_PLAN_TARGET_KINDS:
-        clear_hovered = clearers.get(kind)
-        if clear_hovered is not None:
-            clear_hovered(None)
-
-
-def _set_only_hovered_target(session, target_kind, target_obj):
-    if target_kind == "opening":
-        session._set_hovered_wall(None)
-        session._set_hovered_opening(target_obj)
-        session._set_hovered_symbol(None)
-        session._set_hovered_provider(None)
-        session._set_hovered_space(None)
-        session._set_hovered_region(None)
-    elif target_kind == "provider":
-        session._set_hovered_wall(None)
-        session._set_hovered_opening(None)
-        session._set_hovered_symbol(None)
-        session._set_hovered_provider(target_obj)
-        session._set_hovered_space(None)
-        session._set_hovered_region(None)
-    elif target_kind == "symbol":
-        session._set_hovered_wall(None)
-        session._set_hovered_opening(None)
-        session._set_hovered_symbol(target_obj)
-        session._set_hovered_provider(None)
-        session._set_hovered_space(None)
-        session._set_hovered_region(None)
-    elif target_kind == "wall":
-        session._set_hovered_wall(target_obj)
-        session._set_hovered_opening(None)
-        session._set_hovered_symbol(None)
-        session._set_hovered_provider(None)
-        session._set_hovered_space(None)
-        session._set_hovered_region(None)
-    elif target_kind == "region":
-        session._set_hovered_wall(None)
-        session._set_hovered_opening(None)
-        session._set_hovered_symbol(None)
-        session._set_hovered_provider(None)
-        session._set_hovered_space(None)
-        session._set_hovered_region(target_obj)
-    elif target_kind == "space":
-        session._set_hovered_wall(None)
-        session._set_hovered_opening(None)
-        session._set_hovered_symbol(None)
-        session._set_hovered_provider(None)
-        session._set_hovered_region(None)
-        session._set_hovered_space(target_obj)
-    else:
-        clear_hovered_plan_targets(session)
+    return plan_target_dispatch.clear_hovered_targets(session, kinds=kinds)
 
 
 def update_hovered_plan_target(session, mouse_pos, force=False):
@@ -163,14 +95,9 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
             target_kind, target_obj = session._get_plan_target_at_position(mouse_pos)
         session._hover_pick_dirty = False
         if target_kind == "wall" and not session._is_selected_plan_target("wall", target_obj):
-            session._set_hovered_wall(target_obj)
+            plan_target_dispatch.set_only_hovered_target(session, target_kind, target_obj)
         else:
-            session._set_hovered_wall(None)
-        session._set_hovered_opening(None)
-        session._set_hovered_symbol(None)
-        session._set_hovered_provider(None)
-        session._set_hovered_space(None)
-        session._set_hovered_region(None)
+            plan_target_dispatch.set_only_hovered_target(session, None, None)
         return True
     if session.current_tool != "Select":
         session._hover_pick_dirty = False
@@ -189,5 +116,5 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
             include_space_fallback=include_space_fallback,
         )
     session._hover_pick_dirty = False
-    _set_only_hovered_target(session, target_kind, target_obj)
+    plan_target_dispatch.set_only_hovered_target(session, target_kind, target_obj)
     return True

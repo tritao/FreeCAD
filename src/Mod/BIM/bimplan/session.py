@@ -36,6 +36,7 @@ from bimplan import document_visuals as plan_document_visuals
 from bimplan import hosted_openings as plan_hosted_openings
 from bimplan import hover_picking as plan_hover_picking
 from bimplan import input as plan_input
+from bimplan import lifecycle as plan_lifecycle
 from bimplan import object_classification as plan_object_classification
 from bimplan import object_visibility as plan_object_visibility
 from bimplan import performance as plan_performance
@@ -665,36 +666,33 @@ class PlanEditSession:
             self._space_region_candidates = []
             self._hovered_space_region_candidate = None
             self._space_region_pick_seed_space = None
-        self._clear_hovered_wall_overlay()
-        self._clear_junction_node_overlays()
-        self._clear_hovered_wall_opening_context_overlay()
-        self._clear_wall_grips()
-        self._clear_selected_wall_overlay()
-        self._clear_hovered_opening_overlay()
-        self._clear_hovered_symbol_overlay()
-        self._clear_hovered_provider_overlay()
-        self._clear_hovered_space_overlay()
-        self._clear_hovered_region_overlay()
-        self._clear_selected_provider_overlay()
-        self._clear_selected_provider_handles()
-        self._clear_selected_opening_overlay()
-        self._clear_selected_symbol_overlay()
-        self._clear_selected_space_overlay()
-        self._clear_selected_region_overlay()
-        self._clear_provider_overlays()
-        self._clear_provider_point_preview()
-        self._clear_space_region_pick_overlays()
-        self._clear_secondary_selected_overlays()
-        self._clear_selected_wall_opening_context_overlay()
-        self._clear_selected_opening_handles()
-        self._discard_opening_handle_tracker_pool()
-        self._clear_selected_symbol_handles()
-        self._clear_opening_move_preview()
-        self._clear_symbol_edit_preview()
-        self._clear_plan_region_preview()
-        self._detach_selection_observer()
-        self._detach_document_observer()
-        self._unregister_edit_callbacks()
+        plan_lifecycle.clear_hover_visuals(
+            self,
+            include_junction_nodes=True,
+            include_hovered_wall_opening_context=True,
+        )
+        plan_lifecycle.clear_selection_visuals(
+            self,
+            clear_handle_kinds=(
+                plan_target_kinds.PLAN_TARGET_PROVIDER,
+                plan_target_kinds.PLAN_TARGET_OPENING,
+                plan_target_kinds.PLAN_TARGET_SYMBOL,
+            ),
+            include_wall_grips=True,
+            include_selected_wall_opening_context=True,
+            include_secondary_selection=True,
+        )
+        plan_lifecycle.clear_transient_visuals(
+            self,
+            include_provider_overlays=True,
+            include_provider_point_preview=True,
+            include_space_region_pick=True,
+            include_opening_handle_pool=True,
+            include_opening_move_preview=True,
+            include_symbol_edit_preview=True,
+            include_plan_region_preview=True,
+        )
+        plan_lifecycle.detach_runtime_observers(self)
 
     def _document_is_alive(self):
         doc = self.doc
@@ -834,30 +832,35 @@ class PlanEditSession:
                 self._cancel_symbol_handle_point_pick()
             self._clear_viewport_status_chip()
             self._clear_input_hints()
-            self._clear_hovered_wall_overlay()
-            self._clear_junction_node_overlays()
-            self._clear_hovered_wall_opening_context_overlay()
-            self._clear_wall_grips()
-            self._clear_selected_wall_overlay()
-            self._clear_hovered_opening_overlay()
-            self._clear_hovered_symbol_overlay()
-            self._clear_hovered_provider_overlay()
-            self._clear_selected_provider_overlay()
-            self._clear_selected_opening_overlay()
-            self._clear_selected_symbol_overlay()
-            self._clear_selected_space_overlay()
-            self._clear_selected_region_overlay()
-            self._clear_provider_overlays()
-            self._clear_provider_point_preview()
-            self._clear_selected_wall_opening_context_overlay()
-            self._clear_selected_opening_handles()
-            self._discard_opening_handle_tracker_pool()
-            self._clear_selected_symbol_handles()
-            self._clear_opening_move_preview()
-            self._clear_symbol_edit_preview()
-            self._detach_selection_observer()
-            self._detach_document_observer()
-            self._unregister_edit_callbacks()
+            plan_lifecycle.clear_hover_visuals(
+                self,
+                kinds=(
+                    plan_target_kinds.PLAN_TARGET_WALL,
+                    plan_target_kinds.PLAN_TARGET_OPENING,
+                    plan_target_kinds.PLAN_TARGET_SYMBOL,
+                    plan_target_kinds.PLAN_TARGET_PROVIDER,
+                ),
+                include_junction_nodes=True,
+                include_hovered_wall_opening_context=True,
+            )
+            plan_lifecycle.clear_selection_visuals(
+                self,
+                clear_handle_kinds=(
+                    plan_target_kinds.PLAN_TARGET_OPENING,
+                    plan_target_kinds.PLAN_TARGET_SYMBOL,
+                ),
+                include_wall_grips=True,
+                include_selected_wall_opening_context=True,
+            )
+            plan_lifecycle.clear_transient_visuals(
+                self,
+                include_provider_overlays=True,
+                include_provider_point_preview=True,
+                include_opening_handle_pool=True,
+                include_opening_move_preview=True,
+                include_symbol_edit_preview=True,
+            )
+            plan_lifecycle.detach_runtime_observers(self)
             if panel:
                 try:
                     mark_closed = getattr(panel, "mark_closed", None)
@@ -1033,15 +1036,20 @@ class PlanEditSession:
         self._cancel_wall_edit()
         self._cancel_pending_edit()
         self._clear_plan_relation_status()
-        self._clear_wall_grips()
-        self._clear_selected_wall_overlay()
-        self._clear_selected_wall_opening_context_overlay()
-        self._clear_selected_opening_overlay()
-        self._clear_selected_opening_handles()
-        self._clear_selected_symbol_overlay()
-        self._clear_selected_space_overlay()
-        self._clear_selected_region_overlay()
-        self._clear_secondary_selected_overlays()
+        plan_lifecycle.clear_selection_visuals(
+            self,
+            kinds=(
+                plan_target_kinds.PLAN_TARGET_WALL,
+                plan_target_kinds.PLAN_TARGET_OPENING,
+                plan_target_kinds.PLAN_TARGET_SYMBOL,
+                plan_target_kinds.PLAN_TARGET_SPACE,
+                plan_target_kinds.PLAN_TARGET_REGION,
+            ),
+            clear_handle_kinds=(plan_target_kinds.PLAN_TARGET_OPENING,),
+            include_wall_grips=True,
+            include_selected_wall_opening_context=True,
+            include_secondary_selection=True,
+        )
         self._clear_window_preview()
         return plan_window_create.activate_window_tool(self)
 
@@ -1058,18 +1066,18 @@ class PlanEditSession:
         self._cancel_pending_edit()
         self._clear_plan_relation_status()
         self._set_selected_plan_target()
-        self._set_hovered_wall(None)
-        self._set_hovered_opening(None)
-        self._set_hovered_symbol(None)
-        self._set_hovered_provider(None)
-        self._set_hovered_space(None)
-        self._set_hovered_region(None)
-        self._clear_wall_grips()
-        self._clear_selected_wall_overlay()
-        self._clear_selected_wall_opening_context_overlay()
-        self._clear_selected_region_overlay()
-        self._clear_selected_space_overlay()
-        self._clear_secondary_selected_overlays()
+        self._clear_hovered_plan_targets()
+        plan_lifecycle.clear_selection_visuals(
+            self,
+            kinds=(
+                plan_target_kinds.PLAN_TARGET_WALL,
+                plan_target_kinds.PLAN_TARGET_REGION,
+                plan_target_kinds.PLAN_TARGET_SPACE,
+            ),
+            include_wall_grips=True,
+            include_selected_wall_opening_context=True,
+            include_secondary_selection=True,
+        )
         self._clear_plan_region_preview()
         self._plan_region_points = []
         self._plan_region_parent_space = parent_space
@@ -1094,11 +1102,16 @@ class PlanEditSession:
         self._cancel_pending_edit()
         self._clear_plan_relation_status()
         self._set_selected_plan_target()
-        self._clear_wall_grips()
-        self._clear_selected_wall_overlay()
-        self._clear_selected_wall_opening_context_overlay()
-        self._clear_selected_space_overlay()
-        self._clear_secondary_selected_overlays()
+        plan_lifecycle.clear_selection_visuals(
+            self,
+            kinds=(
+                plan_target_kinds.PLAN_TARGET_WALL,
+                plan_target_kinds.PLAN_TARGET_SPACE,
+            ),
+            include_wall_grips=True,
+            include_selected_wall_opening_context=True,
+            include_secondary_selection=True,
+        )
         self._clear_space_separator_preview()
         self._space_separator_start = None
         self._space_separator_height = self._get_wall_defaults()["height"]
@@ -1138,8 +1151,11 @@ class PlanEditSession:
         self._cancel_wall_edit()
         self._cancel_pending_edit()
         self._clear_plan_relation_status()
-        self._clear_wall_grips()
-        self._clear_selected_wall_overlay()
+        plan_lifecycle.clear_selection_visuals(
+            self,
+            kinds=(plan_target_kinds.PLAN_TARGET_WALL,),
+            include_wall_grips=True,
+        )
         self._start_embedded_tool("Move", gui_move.Move())
 
     def activate_join_tool(self):
