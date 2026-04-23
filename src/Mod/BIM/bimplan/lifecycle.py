@@ -112,6 +112,7 @@ class ActivationActionSpec:
     kwargs: tuple = ()
     predicate_name: str | None = None
     current_tools: tuple = ()
+    stop_after: bool = False
 
 
 @dataclass(frozen=True)
@@ -158,29 +159,60 @@ _ACTION_CANCEL_SPACE_REGION_PICK = ActivationActionSpec(
     "_cancel_space_region_pick",
     kwargs=(("refresh", False),),
 )
+_ACTION_CANCEL_SPACE_REGION_PICK_AND_RETURN = ActivationActionSpec(
+    "_cancel_space_region_pick",
+    current_tools=("Pick Space Region",),
+    stop_after=True,
+)
 _ACTION_CANCEL_PLAN_REGION_TOOL = ActivationActionSpec(
     "_cancel_plan_region_tool",
     kwargs=(("refresh", False),),
+)
+_ACTION_CANCEL_PLAN_REGION_TOOL_IF_ACTIVE = ActivationActionSpec(
+    "_cancel_plan_region_tool",
+    predicate_name="_has_active_plan_region_tool",
 )
 _ACTION_CANCEL_RECT_WALL_TOOL = ActivationActionSpec(
     "_cancel_rect_wall_tool",
     kwargs=(("refresh", False),),
 )
+_ACTION_CANCEL_RECT_WALL_TOOL_IF_ACTIVE = ActivationActionSpec(
+    "_cancel_rect_wall_tool",
+    predicate_name="_has_active_rect_wall_tool",
+)
 _ACTION_CANCEL_WINDOW_TOOL = ActivationActionSpec(
     "_cancel_window_tool",
     kwargs=(("refresh", False),),
+)
+_ACTION_CANCEL_WINDOW_TOOL_IF_ACTIVE = ActivationActionSpec(
+    "_cancel_window_tool",
+    predicate_name="_has_active_window_tool",
 )
 _ACTION_CANCEL_SPACE_SEPARATOR_TOOL = ActivationActionSpec(
     "_cancel_space_separator_tool",
     kwargs=(("refresh", False),),
 )
+_ACTION_CANCEL_SPACE_SEPARATOR_TOOL_IF_ACTIVE = ActivationActionSpec(
+    "_cancel_space_separator_tool",
+    predicate_name="_has_active_space_separator_tool",
+)
 _ACTION_CANCEL_PROVIDER_POINT_TOOL = ActivationActionSpec(
     "_cancel_provider_point_tool",
     kwargs=(("refresh", False),),
 )
+_ACTION_CANCEL_PROVIDER_POINT_TOOL_AND_RETURN = ActivationActionSpec(
+    "_cancel_provider_point_tool",
+    predicate_name="_has_active_provider_point_tool",
+    stop_after=True,
+)
 _ACTION_CANCEL_EMBEDDED_TOOL = ActivationActionSpec(
     "_cancel_embedded_tool",
     predicate_name="_has_active_embedded_tool",
+)
+_ACTION_CANCEL_SYMBOL_HANDLE_PICK_AND_RETURN = ActivationActionSpec(
+    "_cancel_symbol_handle_point_pick",
+    current_tools=("Move Symbol", "Rotate Symbol"),
+    stop_after=True,
 )
 _ACTION_CANCEL_PENDING_EDIT = ActivationActionSpec("_cancel_pending_edit")
 _ACTION_CANCEL_WALL_EDIT = ActivationActionSpec("_cancel_wall_edit")
@@ -192,6 +224,7 @@ _ACTION_CANCEL_SPACE_TEXT_PICK = ActivationActionSpec(
     "_cancel_space_text_position_pick",
     current_tools=("Set Space Text",),
 )
+_ACTION_CANCEL_JOIN_TOOL = ActivationActionSpec("_cancel_join_tool")
 
 _WINDOW_TOOL_SELECTION_KINDS = (
     plan_target_kinds.PLAN_TARGET_WALL,
@@ -223,6 +256,9 @@ def _run_activation_action_specs(session, action_specs):
             continue
         kwargs = dict(action_spec.kwargs)
         getattr(session, action_spec.method_name)(**kwargs)
+        if action_spec.stop_after:
+            return True
+    return False
 
 
 def _activate_tool_with_profile(session, profile):
@@ -584,27 +620,21 @@ def on_embedded_command_finished(session, tool_name, command=None):
 
 
 def activate_select_tool(session):
-    if session.current_tool in ("Move Symbol", "Rotate Symbol"):
-        session._cancel_symbol_handle_point_pick()
-        return
-    if session.current_tool == "Pick Space Region":
-        session._cancel_space_region_pick()
-        return
-    if session._has_active_provider_point_tool():
-        session._cancel_provider_point_tool()
-        return
-    if session._has_active_embedded_tool():
-        session._cancel_embedded_tool()
-    if session._has_active_rect_wall_tool():
-        session._cancel_rect_wall_tool()
-    if session._has_active_window_tool():
-        session._cancel_window_tool()
-    if session._has_active_plan_region_tool():
-        session._cancel_plan_region_tool()
-    if session._has_active_space_separator_tool():
-        session._cancel_space_separator_tool()
-    session._cancel_wall_edit()
-    session._cancel_join_tool()
+    _run_activation_action_specs(
+        session,
+        (
+            _ACTION_CANCEL_SYMBOL_HANDLE_PICK_AND_RETURN,
+            _ACTION_CANCEL_SPACE_REGION_PICK_AND_RETURN,
+            _ACTION_CANCEL_PROVIDER_POINT_TOOL_AND_RETURN,
+            _ACTION_CANCEL_EMBEDDED_TOOL,
+            _ACTION_CANCEL_RECT_WALL_TOOL_IF_ACTIVE,
+            _ACTION_CANCEL_WINDOW_TOOL_IF_ACTIVE,
+            _ACTION_CANCEL_PLAN_REGION_TOOL_IF_ACTIVE,
+            _ACTION_CANCEL_SPACE_SEPARATOR_TOOL_IF_ACTIVE,
+            _ACTION_CANCEL_WALL_EDIT,
+            _ACTION_CANCEL_JOIN_TOOL,
+        ),
+    )
 
 
 def activate_window_tool(session):

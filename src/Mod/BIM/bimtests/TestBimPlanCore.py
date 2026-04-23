@@ -32,6 +32,11 @@ if not hasattr(sys.modules["FreeCAD"], "Vector"):
 
     sys.modules["FreeCAD"].Vector = _FakeVector
 
+if "FreeCADGui" not in sys.modules:
+    freecadgui_module = ModuleType("FreeCADGui")
+    freecadgui_module.Snapper = SimpleNamespace(getPoint=lambda **_kwargs: None)
+    sys.modules["FreeCADGui"] = freecadgui_module
+
 if "draftguitools.gui_base" not in sys.modules:
     draftguitools_module = sys.modules.setdefault(
         "draftguitools",
@@ -58,6 +63,7 @@ if "draftguitools.gui_base" not in sys.modules:
     draftguitools_module.gui_base = gui_base_module
 
 from bimplan.context import PlanEditContext
+from bimplan.lifecycle import activate_select_tool
 from bimplan.overlays import providers as provider_overlays
 from bimplan.picking import (
     get_hovered_plan_target,
@@ -140,6 +146,61 @@ class _DummyProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
+    def test_activate_select_tool_stops_after_current_tool_cancel(self):
+        calls = []
+        session = SimpleNamespace(
+            current_tool="Move Symbol",
+            _cancel_symbol_handle_point_pick=lambda: calls.append("symbol"),
+            _cancel_space_region_pick=lambda: calls.append("space-region"),
+            _has_active_provider_point_tool=lambda: True,
+            _cancel_provider_point_tool=lambda: calls.append("provider-point"),
+            _has_active_embedded_tool=lambda: True,
+            _cancel_embedded_tool=lambda: calls.append("embedded"),
+            _has_active_rect_wall_tool=lambda: True,
+            _cancel_rect_wall_tool=lambda: calls.append("rect-wall"),
+            _has_active_window_tool=lambda: True,
+            _cancel_window_tool=lambda: calls.append("window"),
+            _has_active_plan_region_tool=lambda: True,
+            _cancel_plan_region_tool=lambda: calls.append("plan-region"),
+            _has_active_space_separator_tool=lambda: True,
+            _cancel_space_separator_tool=lambda: calls.append("separator"),
+            _cancel_wall_edit=lambda: calls.append("wall-edit"),
+            _cancel_join_tool=lambda: calls.append("join"),
+        )
+
+        activate_select_tool(session)
+
+        self.assertEqual(["symbol"], calls)
+
+    def test_activate_select_tool_runs_ordered_cleanup_actions(self):
+        calls = []
+        session = SimpleNamespace(
+            current_tool="Select",
+            _cancel_symbol_handle_point_pick=lambda: calls.append("symbol"),
+            _cancel_space_region_pick=lambda: calls.append("space-region"),
+            _has_active_provider_point_tool=lambda: False,
+            _cancel_provider_point_tool=lambda: calls.append("provider-point"),
+            _has_active_embedded_tool=lambda: True,
+            _cancel_embedded_tool=lambda: calls.append("embedded"),
+            _has_active_rect_wall_tool=lambda: True,
+            _cancel_rect_wall_tool=lambda: calls.append("rect-wall"),
+            _has_active_window_tool=lambda: False,
+            _cancel_window_tool=lambda: calls.append("window"),
+            _has_active_plan_region_tool=lambda: True,
+            _cancel_plan_region_tool=lambda: calls.append("plan-region"),
+            _has_active_space_separator_tool=lambda: True,
+            _cancel_space_separator_tool=lambda: calls.append("separator"),
+            _cancel_wall_edit=lambda: calls.append("wall-edit"),
+            _cancel_join_tool=lambda: calls.append("join"),
+        )
+
+        activate_select_tool(session)
+
+        self.assertEqual(
+            ["embedded", "rect-wall", "plan-region", "separator", "wall-edit", "join"],
+            calls,
+        )
+
     def test_plan_edit_context_proxies_session_helpers(self):
         target = PlanTarget(
             kind="space",
