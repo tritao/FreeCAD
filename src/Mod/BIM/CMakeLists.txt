@@ -238,6 +238,7 @@ SET(bimplan_SRCS
     bimplan/spaces.py
     bimplan/symbol_edit.py
     bimplan/targets.py
+    bimplan/task_panel.py
     bimplan/transactions.py
     bimplan/ui/__init__.py
     bimplan/ui/controls.py
