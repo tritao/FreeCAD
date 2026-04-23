@@ -89,6 +89,11 @@ from bimplan.providers import (
 from bimplan.registry import PlanEditRegistry
 from bimplan.semantics import PlanSemanticRecord
 from bimplan.selection import resolve_selected_target_for_gui_object
+from bimplan.target_dispatch import (
+    queue_restore_selected_target,
+    set_hovered_target,
+    validate_plan_target,
+)
 from bimplan.targets import PlanTarget, get_plan_target_for_object, make_plan_target_record
 from bimplan.transactions import PlanEditTransaction
 from bimplan.ui.controls import PlanEditControlsWidget
@@ -146,6 +151,33 @@ class _DummyProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
+    def test_target_dispatch_uses_policy_for_validation_and_restore(self):
+        restored = []
+        target = SimpleNamespace(Name="Space001")
+        session = SimpleNamespace(
+            _is_plan_space_object=lambda obj: obj is target,
+            _queue_restore_selected_space=lambda obj: restored.append(obj),
+        )
+
+        self.assertTrue(validate_plan_target(session, "space", target))
+        self.assertTrue(queue_restore_selected_target(session, "space", target))
+        self.assertEqual([target], restored)
+
+    def test_target_dispatch_uses_policy_for_hover_sync(self):
+        calls = []
+        target = SimpleNamespace(Name="Opening001")
+        session = SimpleNamespace(
+            hovered_opening=None,
+            _is_selected_plan_target=lambda kind, obj=None: False,
+            _sync_selected_wall_opening_context_overlay=lambda: calls.append("context"),
+            _sync_hovered_opening_overlay=lambda: calls.append("hover"),
+        )
+
+        self.assertTrue(set_hovered_target(session, "opening", target))
+        self.assertIs(session.hovered_opening, target)
+        self.assertEqual(["context", "hover"], calls)
+        self.assertFalse(set_hovered_target(session, "opening", target))
+
     def test_finish_uses_current_tool_dispatch_before_fallback_actions(self):
         calls = []
         session = SimpleNamespace(
