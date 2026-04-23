@@ -40,9 +40,12 @@ from bimplan import lifecycle as plan_lifecycle
 from bimplan import object_classification as plan_object_classification
 from bimplan import object_visibility as plan_object_visibility
 from bimplan import performance as plan_performance
+from bimplan import provider_overlay_state as plan_provider_overlay_state
 from bimplan import provider_point as plan_provider_point
 from bimplan import provider_runtime as plan_provider_runtime
 from bimplan import provider_targets as plan_provider_targets
+from bimplan import selection_additive as plan_selection_additive
+from bimplan import selection_observer as plan_selection_observer
 from bimplan import selection as plan_selection
 from bimplan import snap as plan_snap
 from bimplan import spaces as plan_spaces
@@ -1167,16 +1170,16 @@ class PlanEditSession:
         self._set_active_object(None)
 
     def _attach_selection_observer(self):
-        return plan_selection.attach_selection_observer(self)
+        return plan_selection_observer.attach_selection_observer(self)
 
     def _detach_selection_observer(self):
-        return plan_selection.detach_selection_observer(self)
+        return plan_selection_observer.detach_selection_observer(self)
 
     def _schedule_selection_refresh(self):
-        return plan_selection.schedule_selection_refresh(self)
+        return plan_selection_observer.schedule_selection_refresh(self)
 
     def _run_scheduled_selection_refresh(self):
-        return plan_selection.run_scheduled_selection_refresh(self)
+        return plan_selection_observer.run_scheduled_selection_refresh(self)
 
     def _attach_document_observer(self):
         if not self._document_observer_added:
@@ -1207,10 +1210,10 @@ class PlanEditSession:
         return plan_targets.is_plan_region_object(self, obj)
 
     def _get_gui_selection_ex(self):
-        return plan_selection.get_gui_selection_ex()
+        return plan_selection_observer.get_gui_selection_ex()
 
     def _get_gui_selection(self):
-        return plan_selection.get_gui_selection()
+        return plan_selection_observer.get_gui_selection()
 
     def _get_space_reference_point(self, space):
         return plan_spaces.get_space_reference_point(self, space)
@@ -1444,23 +1447,23 @@ class PlanEditSession:
 
     @contextmanager
     def _selection_changes_suppressed(self):
-        with plan_selection.selection_changes_suppressed(self):
+        with plan_selection_observer.selection_changes_suppressed(self):
             yield
 
     def _set_gui_selection(self, selection):
-        return plan_selection.set_gui_selection(self, selection)
+        return plan_selection_observer.set_gui_selection(self, selection)
 
     def _set_gui_selection_object(self, obj):
-        return plan_selection.set_gui_selection_object(self, obj)
+        return plan_selection_observer.set_gui_selection_object(self, obj)
 
     def _schedule_gui_selection_object(self, obj, delay_ms=_PLAN_GUI_SELECTION_SYNC_DELAY_MS):
-        return plan_selection.schedule_gui_selection_object(self, obj, delay_ms=delay_ms)
+        return plan_selection_observer.schedule_gui_selection_object(self, obj, delay_ms=delay_ms)
 
     def _run_scheduled_gui_selection_sync(self, generation=None):
-        return plan_selection.run_scheduled_gui_selection_sync(self, generation=generation)
+        return plan_selection_observer.run_scheduled_gui_selection_sync(self, generation=generation)
 
     def _add_gui_selection_object(self, obj):
-        return plan_selection.add_gui_selection_object(obj)
+        return plan_selection_observer.add_gui_selection_object(obj)
 
     def _get_secondary_selected_plan_targets(self):
         return plan_selection.get_secondary_selected_plan_targets(self)
@@ -2262,22 +2265,22 @@ class PlanEditSession:
     # Selection observer interface
 
     def addSelection(self, doc, obj, sub, point):
-        return plan_selection.selection_observer_add(self, doc, obj, sub, point)
+        return plan_selection_observer.selection_observer_add(self, doc, obj, sub, point)
 
     def removeSelection(self, doc, obj, sub):
-        return plan_selection.selection_observer_remove(self, doc, obj, sub)
+        return plan_selection_observer.selection_observer_remove(self, doc, obj, sub)
 
     def setSelection(self, doc):
-        return plan_selection.selection_observer_set(self, doc)
+        return plan_selection_observer.selection_observer_set(self, doc)
 
     def clearSelection(self, doc):
-        return plan_selection.selection_observer_clear(self, doc)
+        return plan_selection_observer.selection_observer_clear(self, doc)
 
     def setPreselection(self, doc, obj, sub):
-        return plan_selection.selection_observer_set_preselection(self, doc, obj, sub)
+        return plan_selection_observer.selection_observer_set_preselection(self, doc, obj, sub)
 
     def removePreselection(self, doc, obj, sub):
-        return plan_selection.selection_observer_remove_preselection(self, doc, obj, sub)
+        return plan_selection_observer.selection_observer_remove_preselection(self, doc, obj, sub)
 
     # Document observer interface
 
@@ -2567,7 +2570,7 @@ class PlanEditSession:
         return plan_hover_picking.update_hovered_plan_target(self, mouse_pos, force=force)
 
     def _is_plan_additive_selection_active(self):
-        return plan_selection.is_plan_additive_selection_active(self)
+        return plan_selection_additive.is_plan_additive_selection_active(self)
 
     def _get_plan_target_from_edit_node(self, node):
         return plan_picking.get_plan_target_from_edit_node(self, node)
@@ -2576,24 +2579,24 @@ class PlanEditSession:
         return plan_picking.get_provider_overlay_target_from_edit_node(self, node)
 
     def _activate_provider_overlay_target_node(self, node, event_callback=None):
-        return plan_selection.activate_provider_overlay_target_node(
+        return plan_selection_additive.activate_provider_overlay_target_node(
             self,
             node,
             event_callback=event_callback,
         )
 
     def _normalize_gui_object_selection(self, selection):
-        return plan_selection.normalize_gui_object_selection(selection)
+        return plan_selection_additive.normalize_gui_object_selection(selection)
 
     def _toggle_raw_plan_object_selection(self, obj, event_callback=None):
-        return plan_selection.toggle_raw_plan_object_selection(
+        return plan_selection_additive.toggle_raw_plan_object_selection(
             self,
             obj,
             event_callback=event_callback,
         )
 
     def _toggle_plan_target_selection_at_position(self, mouse_pos, event_callback=None):
-        return plan_selection.toggle_plan_target_selection_at_position(
+        return plan_selection_additive.toggle_plan_target_selection_at_position(
             self,
             mouse_pos,
             event_callback=event_callback,
