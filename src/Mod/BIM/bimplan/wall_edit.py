@@ -873,6 +873,148 @@ def clear_wall_hosted_opening_preview(session):
     session._wall_edit_opening_preview_trackers = []
 
 
+def refresh_wall_hosted_opening_footprints(session, wall):
+    for opening in session._get_wall_hosted_openings(wall):
+        session._refresh_opening_footprint_display(opening)
+
+
+def compute_wall_hosted_opening_layout(session, wall, endpoints):
+    if not wall:
+        return []
+    if not endpoints or len(endpoints) != 2:
+        return []
+    wall_origin = FreeCAD.Vector(endpoints[0])
+    wall_end = FreeCAD.Vector(endpoints[1])
+    wall_axis_u = wall_end.sub(wall_origin)
+    wall_length = wall_axis_u.Length
+    if wall_length < 1e-9:
+        return None
+    wall_axis_u.normalize()
+    session._ensure_wall_edit_opening_clearances(wall, endpoints)
+
+    openings = []
+    for opening in session._get_wall_hosted_openings(wall):
+        proxy = session._get_opening_plan_proxy(
+            opening, "get_plan_move_context", "move_along_host", "get_plan_center_point"
+        )
+        if not proxy:
+            continue
+        context = proxy.get_plan_move_context()
+        if not context:
+            continue
+        current_center = proxy.get_plan_center_point()
+        if current_center is None:
+            continue
+        current = FreeCAD.Vector(current_center)
+        delta = current.sub(wall_origin)
+        half_width = float(context.get("opening_half_width_u") or 0.0)
+        desired_u = delta.dot(wall_axis_u)
+        clearance_seed = session._wall_edit_opening_clearances.get(getattr(opening, "Name", ""))
+        if clearance_seed:
+            if session._edit_endpoint == "Start":
+                desired_u = max(
+                    desired_u,
+                    half_width + float(clearance_seed.get("left_clearance") or 0.0),
+                )
+            elif session._edit_endpoint == "End":
+                desired_u = min(
+                    desired_u,
+                    wall_length - half_width - float(clearance_seed.get("right_clearance") or 0.0),
+                )
+        low = half_width
+        high = wall_length - half_width
+        if low > high:
+            midpoint = wall_length * 0.5
+            low = midpoint
+            high = midpoint
+        item = {
+            "opening": opening,
+            "proxy": proxy,
+            "current": current,
+            "desired_u": desired_u,
+            "low": low,
+            "high": high,
+            "half_width": half_width,
+            "clearance_seed": clearance_seed,
+        }
+        openings.append(item)
+
+    if not openings:
+        return []
+
+    openings.sort(key=lambda item: (item["desired_u"], getattr(item["opening"], "Name", "")))
+
+    left = []
+    for index, item in enumerate(openings):
+        minimum = item["low"]
+        if index > 0:
+            minimum = max(
+                minimum,
+                left[index - 1] + openings[index - 1]["half_width"] + item["half_width"],
+            )
+        if minimum > item["high"] + 1e-6:
+            return None
+        left.append(minimum)
+
+    right = [0.0] * len(openings)
+    for index in range(len(openings) - 1, -1, -1):
+        maximum = openings[index]["high"]
+        if index < len(openings) - 1:
+            maximum = min(
+                maximum,
+                right[index + 1]
+                - openings[index]["half_width"]
+                - openings[index + 1]["half_width"],
+            )
+        if maximum < openings[index]["low"] - 1e-6:
+            return None
+        right[index] = maximum
+
+    resolved = []
+    for index, item in enumerate(openings):
+        center_u = min(max(item["desired_u"], left[index]), right[index])
+        if index > 0:
+            center_u = max(
+                center_u,
+                resolved[index - 1] + openings[index - 1]["half_width"] + item["half_width"],
+            )
+        if center_u > right[index] + 1e-6:
+            return None
+        resolved.append(center_u)
+
+    layout = []
+    for item, center_u in zip(openings, resolved):
+        target_point = wall_origin.add(FreeCAD.Vector(wall_axis_u).multiply(center_u))
+        target_point.z = item["current"].z
+        layout.append(
+            {
+                **item,
+                "target_center_u": center_u,
+                "target_point": target_point,
+            }
+        )
+
+    return layout
+
+
+def resolve_wall_hosted_opening_layout(session, wall):
+    wall_proxy = getattr(wall, "Proxy", None)
+    if not wall_proxy or not hasattr(wall_proxy, "calc_endpoints"):
+        return True
+    try:
+        endpoints = wall_proxy.calc_endpoints(wall)
+    except Exception:
+        return True
+    layout = session._compute_wall_hosted_opening_layout(wall, endpoints)
+    if layout is None:
+        return False
+    for item in layout:
+        if not item["proxy"].move_along_host(item["target_point"]):
+            return False
+
+    return True
+
+
 def get_wall_edit_readout_specs(session, points):
     if not points or len(points) != 2 or not session._edit_endpoints:
         return []
