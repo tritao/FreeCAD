@@ -38,7 +38,6 @@ from bimplan import input as plan_input
 from bimplan import object_classification as plan_object_classification
 from bimplan import object_visibility as plan_object_visibility
 from bimplan import performance as plan_performance
-from bimplan import provider_overlay_state as plan_provider_overlay_state
 from bimplan import provider_point as plan_provider_point
 from bimplan import provider_runtime as plan_provider_runtime
 from bimplan import provider_targets as plan_provider_targets
@@ -46,6 +45,7 @@ from bimplan import selection as plan_selection
 from bimplan import snap as plan_snap
 from bimplan import spaces as plan_spaces
 from bimplan import status_text as plan_status_text
+from bimplan import session_state as plan_session_state
 from bimplan import storeys as plan_storeys
 from bimplan import task_panel as plan_task_panel
 from bimplan import target_kinds as plan_target_kinds
@@ -121,16 +121,6 @@ _PLAN_VISUAL_WALL_EDIT_PREVIEW = plan_visual_keys.PLAN_VISUAL_WALL_EDIT_PREVIEW
 _PLAN_VISUAL_PROVIDER_OVERLAYS = plan_visual_keys.PLAN_VISUAL_PROVIDER_OVERLAYS
 _PLAN_VISUAL_VIEW_SCALE = plan_visual_keys.PLAN_VISUAL_VIEW_SCALE
 _PLAN_VISUAL_ALL = plan_visual_keys.PLAN_VISUAL_ALL
-_PLAN_PROVIDER_OVERLAY_MODE_ALL = plan_provider_overlay_state.PLAN_PROVIDER_OVERLAY_MODE_ALL
-_PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE = (
-    plan_provider_overlay_state.PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
-)
-_PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL = (
-    plan_provider_overlay_state.PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL
-)
-_PLAN_PROVIDER_OVERLAY_MODE_PLUMBING = (
-    plan_provider_overlay_state.PLAN_PROVIDER_OVERLAY_MODE_PLUMBING
-)
 _PLAN_GUI_SELECTION_SYNC_DELAY_MS = 80
 _PLAN_WALL_GRIP_REFRESH_DELAY_MS = 120
 _PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
@@ -228,205 +218,7 @@ class PlanEditSession:
     """Owns the viewer state and control dock for Plan Edit mode."""
 
     def __init__(self):
-        from PySide import QtCore, QtGui
-
-        self.doc = FreeCAD.ActiveDocument
-        self.gui_doc = FreeCADGui.ActiveDocument
-        self.view = None
-        self.viewer = None
-        self.task_panel = None
-        self._aux_task_panels = []
-        self._viewport_status_chip = None
-        self.current_tool = "Select"
-        self._plan_join_type = "Miter"
-        self._plan_relation_status_message = None
-        self.storeys = []
-        self.active_storey = None
-        self._selected_plan_target_kind = None
-        self._selected_plan_target_obj = None
-        self.hovered_wall = None
-        self.hovered_opening = None
-        self.hovered_symbol = None
-        self.hovered_provider = None
-        self.hovered_space = None
-        self.hovered_region = None
-        self._hover_pick_dirty = False
-        self._hover_pick_last_time = 0.0
-        self._hover_pick_last_mouse_pos = None
-        self._space_region_pick_boundaries = []
-        self._space_region_candidates = []
-        self._hovered_space_region_candidate = None
-        self._space_region_pick_seed_space = None
-        self._pending_selected_plan_target = None
-        self._secondary_selected_plan_targets_state = []
-        self._grip_trackers = []
-        self._wall_grip_state = None
-        self._wall_grip_sync_queued = False
-        self._wall_grip_sync_generation = 0
-        self._wall_hover_trackers = []
-        self._wall_overlay_trackers = []
-        self._junction_node_trackers = []
-        self._hovered_wall_opening_context_trackers = []
-        self._opening_hover_trackers = []
-        self._symbol_hover_trackers = []
-        self._provider_hover_trackers = []
-        self._provider_selected_trackers = []
-        self._space_hover_trackers = []
-        self._region_hover_trackers = []
-        self._plan_overlay_geometry_cache = {
-            "opening": {},
-            "space": {},
-            "region": {},
-        }
-        self._plan_semantic_object_cache = {}
-        self._plan_object_storeys_cache = {}
-        self._plan_symbol_instances_cache = None
-        self._plan_space_instances_cache = None
-        self._plan_region_instances_cache = None
-        self._plan_opening_instances_cache = None
-        self._wall_hosted_openings_cache = None
-        self._wall_hosted_openings_cache_queued = False
-        self._plan_hover_pick_cache_queued = False
-        self._opening_overlay_screen_cache = {}
-        self._opening_overlay_screen_cache_projection_key = None
-        self._symbol_overlay_screen_cache = {}
-        self._opening_overlay_trackers = []
-        self._hovered_opening_overlay_dirty = False
-        self._hovered_opening_overlay_render_state = None
-        self._selected_opening_overlay_dirty = False
-        self._selected_opening_overlay_render_state = None
-        self._symbol_overlay_trackers = []
-        self._space_overlay_trackers = []
-        self._selected_space_overlay_dirty = True
-        self._selected_space_overlay_geometry_key = None
-        self._selected_space_overlay_segments = ()
-        self._selected_space_overlay_render_state = None
-        self._region_overlay_trackers = []
-        self._provider_overlay_trackers = []
-        self._provider_overlay_state = None
-        self._selected_provider_overlay_render_state = None
-        self._provider_handle_trackers = []
-        self._selected_provider_handle_render_state = None
-        self._provider_overlay_visibility = {}
-        self._provider_overlay_mode = _PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
-        self._provider_selected_objects = []
-        self._provider_point_host_target = None
-        self._provider_point_host_source = ""
-        self._provider_point_preview_trackers = []
-        self._provider_point_preview_render_state = None
-        self._provider_point_preview_style_state = None
-        self._provider_point_preview_source_point = None
-        self._provider_point_preview_point = None
-        self._provider_point_preview_host_target = None
-        self._provider_point_preview_host_source = ""
-        self._secondary_selection_trackers = []
-        self._space_region_pick_trackers = []
-        self._selected_wall_opening_context_trackers = []
-        self._opening_handle_trackers = []
-        self._opening_handle_tracker_pool = []
-        self._opening_handle_tracker_pool_queued = False
-        self._selected_opening_handle_render_state = None
-        self._symbol_handle_trackers = []
-        self._selected_opening_hard_refresh_queued = False
-        self._opening_host_recompute_queued = False
-        self._opening_host_recompute_running = False
-        self._opening_move_preview_trackers = []
-        self._symbol_edit_preview_trackers = []
-        self._opening_move_snap_profile_pushed = False
-        self._edit_opening_move_anchor = "center"
-        self._edit_opening_move_raw_point = None
-        self._selection_observer_added = False
-        self._selection_refresh_queued = False
-        self._gui_selection_sync_queued = False
-        self._gui_selection_sync_generation = 0
-        self._queued_gui_selection_object = None
-        self._document_observer_added = False
-        self._pending_created_plan_objects = {}
-        self._created_plan_objects_flush_queued = False
-        self._created_plan_objects_flush_deferred = False
-        self._document_visual_update_defer_depth = 0
-        self._document_visual_refresh_deferred = False
-        self._pending_selected_wall_reset = False
-        self._wall_edit_modal_active = False
-        self._edit_wall = None
-        self._edit_endpoint = None
-        self._edit_endpoints = None
-        self._wall_edit_opening_clearances = {}
-        self._wall_edit_opening_clearances_queued = False
-        self._wall_edit_task_panel_refresh_queued = False
-        self._preview_points = None
-        self._preview_line_tracker = None
-        self._preview_footprint_trackers = []
-        self._preview_grip_trackers = []
-        self._wall_edit_readout_trackers = []
-        self._wall_edit_opening_preview_trackers = []
-        self._wall_edit_active_readout_tracker = None
-        self._wall_edit_active_readout_mode = None
-        self._wall_edit_length_edit_queued = False
-        self._rect_wall_start = None
-        self._rect_wall_params = None
-        self._rect_wall_preview_trackers = []
-        self._space_separator_start = None
-        self._space_separator_height = None
-        self._space_separator_preview_trackers = []
-        self._window_host_wall = None
-        self._window_preview_trackers = []
-        self._plan_region_points = []
-        self._plan_region_parent_space = None
-        self._plan_region_preview_trackers = []
-        self._edit_wall_visibility = None
-        self._edit_opening = None
-        self._edit_opening_handle_index = None
-        self._edit_symbol = None
-        self._edit_symbol_handle_role = None
-        self._edit_symbol_start_placement = None
-        self._edit_symbol_reference_point = None
-        self._edit_provider = None
-        self._edit_provider_handle_index = None
-        self._edit_provider_handle = None
-        self._edit_space = None
-        self._ignore_selection_changes = False
-        self._mouse_moved_cb = None
-        self._mouse_wheel_cb = None
-        self._mouse_wheel_event_type = None
-        self._mouse_pressed_cb = None
-        self._consume_left_button_release = False
-        self._key_pressed_cb = None
-        self._overlay_refresh_queued = False
-        self._view_scale_overlay_refresh_queued = False
-        self._dirty_plan_visuals = set()
-        self._render_manager = None
-        self._saved_camera = None
-        self._saved_camera_type = None
-        self._saved_navigation_style = None
-        self._saved_navigation_state = {}
-        self._saved_view_action_state = {}
-        self._saved_preselection_state = None
-        self._plan_preselection_forced = False
-        self._saved_object_view_state = {}
-        self._working_plane = None
-        self._interaction_plane = None
-        self._embedded_host = None
-        self._embedded_tool = None
-        self._embedded_tool_name = None
-        self._provider_point_tool = None
-        self._finishing = False
-        self._tearing_down = False
-        self._teardown_signal_sources = []
-        self._plan_edit_params = FreeCAD.ParamGet(
-            "User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit"
-        )
-        self._plan_perf_log_path = self._resolve_plan_perf_log_path()
-        self._plan_pick_debug_log_path = self._resolve_plan_pick_debug_log_path()
-        self._plan_perf_current_event = None
-        self._plan_perf_sequence = 0
-        self._plan_pick_debug_sequence = 0
-        self._plan_pick_debug_scope_depth = 0
-        self._plan_pick_debug_scope_name = ""
-        self._plan_provider_refresh_cache = None
-        self._plan_provider_document_cache = {}
-        self._plan_provider_target_collection_depth = 0
-        self._connect_teardown_signals(QtGui)
+        plan_session_state.initialize_session_state(self)
 
     def _connect_teardown_signal(self, signal):
         try:
