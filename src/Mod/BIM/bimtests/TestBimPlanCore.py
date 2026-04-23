@@ -63,7 +63,7 @@ if "draftguitools.gui_base" not in sys.modules:
     draftguitools_module.gui_base = gui_base_module
 
 from bimplan.context import PlanEditContext
-from bimplan.lifecycle import activate_select_tool
+from bimplan.lifecycle import activate_select_tool, finish
 from bimplan.overlays import providers as provider_overlays
 from bimplan.picking import (
     get_hovered_plan_target,
@@ -146,6 +146,61 @@ class _DummyProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
+    def test_finish_uses_current_tool_dispatch_before_fallback_actions(self):
+        calls = []
+        session = SimpleNamespace(
+            current_tool="Move Provider",
+            _cancel_provider_handle_point_pick=lambda: calls.append("move-provider"),
+            _has_active_provider_point_tool=lambda: True,
+            _cancel_provider_point_tool=lambda: calls.append("provider-point"),
+            _has_active_embedded_tool=lambda: True,
+            _cancel_embedded_tool=lambda: calls.append("embedded"),
+            _has_active_rect_wall_tool=lambda: True,
+            _cancel_rect_wall_tool=lambda: calls.append("rect-wall"),
+            _has_active_wall_edit=lambda: True,
+            _cancel_wall_edit=lambda: calls.append("wall-edit"),
+            shutdown=lambda close_dialog=True: calls.append(("shutdown", close_dialog)),
+        )
+
+        self.assertTrue(finish(session))
+        self.assertEqual(["move-provider"], calls)
+
+    def test_finish_stops_after_first_matching_fallback_action(self):
+        calls = []
+        session = SimpleNamespace(
+            current_tool="Select",
+            _has_active_provider_point_tool=lambda: True,
+            _cancel_provider_point_tool=lambda: calls.append("provider-point"),
+            _has_active_embedded_tool=lambda: True,
+            _cancel_embedded_tool=lambda: calls.append("embedded"),
+            _has_active_rect_wall_tool=lambda: True,
+            _cancel_rect_wall_tool=lambda: calls.append("rect-wall"),
+            _has_active_wall_edit=lambda: True,
+            _cancel_wall_edit=lambda: calls.append("wall-edit"),
+            shutdown=lambda close_dialog=True: calls.append(("shutdown", close_dialog)),
+        )
+
+        self.assertTrue(finish(session))
+        self.assertEqual(["provider-point"], calls)
+
+    def test_finish_calls_shutdown_when_no_cleanup_applies(self):
+        calls = []
+        session = SimpleNamespace(
+            current_tool="Select",
+            _has_active_provider_point_tool=lambda: False,
+            _cancel_provider_point_tool=lambda: calls.append("provider-point"),
+            _has_active_embedded_tool=lambda: False,
+            _cancel_embedded_tool=lambda: calls.append("embedded"),
+            _has_active_rect_wall_tool=lambda: False,
+            _cancel_rect_wall_tool=lambda: calls.append("rect-wall"),
+            _has_active_wall_edit=lambda: False,
+            _cancel_wall_edit=lambda: calls.append("wall-edit"),
+            shutdown=lambda close_dialog=True: ("shutdown", close_dialog),
+        )
+
+        self.assertEqual(("shutdown", False), finish(session, close_dialog=False))
+        self.assertEqual([], calls)
+
     def test_activate_select_tool_stops_after_current_tool_cancel(self):
         calls = []
         session = SimpleNamespace(
