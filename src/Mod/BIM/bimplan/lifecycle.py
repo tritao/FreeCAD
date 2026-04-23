@@ -442,11 +442,16 @@ def activate_move_tool(session):
 
 def start_embedded_tool(session, tool_name, command, host_class=None):
     session.current_tool = tool_name
-    session._set_hovered_wall(None)
-    session._set_hovered_opening(None)
-    session._set_hovered_symbol(None)
-    session._set_hovered_provider(None)
-    session._set_hovered_region(None)
+    plan_target_dispatch.clear_hovered_targets(
+        session,
+        kinds=(
+            plan_target_kinds.PLAN_TARGET_WALL,
+            plan_target_kinds.PLAN_TARGET_OPENING,
+            plan_target_kinds.PLAN_TARGET_SYMBOL,
+            plan_target_kinds.PLAN_TARGET_PROVIDER,
+            plan_target_kinds.PLAN_TARGET_REGION,
+        ),
+    )
     session._sync_secondary_selected_overlays()
     session._refresh_task_panel_status()
     session._embedded_tool = command
@@ -493,11 +498,15 @@ def cancel_pending_edit(session):
     _reset_pending_edit_state(session, clear_opening_edit=True)
     session._clear_plan_relation_status()
     session._sync_wall_grips()
-    session._sync_selected_opening_overlay()
-    session._sync_selected_opening_handles()
-    session._sync_selected_space_overlay()
-    session._sync_selected_provider_overlay()
-    session._sync_selected_provider_handles()
+    plan_target_dispatch.sync_selected_target_visuals(
+        session,
+        kinds=(
+            plan_target_kinds.PLAN_TARGET_OPENING,
+            plan_target_kinds.PLAN_TARGET_SPACE,
+            plan_target_kinds.PLAN_TARGET_PROVIDER,
+        ),
+        force=True,
+    )
 
 
 def cancel_embedded_tool(session, tool_name=None):
