@@ -2776,9 +2776,6 @@ class PlanEditSession:
     def _get_plan_view_widget(self):
         return self.viewport.get_plan_view_widget()
 
-    def _format_status_chip_action(self, message):
-        return self.status_text.format_status_chip_action(message)
-
     def _get_plan_target_display_label(self, obj):
         return self.status_text.get_plan_target_display_label(obj)
 
@@ -2809,9 +2806,6 @@ class PlanEditSession:
     def _format_provider_selected_object_help(self):
         return self.status_text.format_provider_selected_object_help()
 
-    def _get_status_chip_text(self):
-        return self.status_text.get_status_chip_text()
-
     def _ensure_viewport_status_chip(self):
         return self.viewport.ensure_viewport_status_chip()
 
@@ -2826,18 +2820,6 @@ class PlanEditSession:
 
     def _request_view_redraw(self):
         return self.viewport.request_view_redraw()
-
-    def _make_input_hint(self, message, *sequences):
-        return self.status_text.make_input_hint(message, *sequences)
-
-    def _get_input_hint_specs(self):
-        return self.status_text.get_input_hint_specs()
-
-    def _get_input_hints(self):
-        return self.status_text.get_input_hints()
-
-    def _update_input_hints(self):
-        return self.status_text.update_input_hints()
 
     def _retarget_edit_tracker(self, tracker, obj, index):
         return wall_overlays.retarget_edit_tracker(tracker, obj, index)
