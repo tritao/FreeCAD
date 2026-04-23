@@ -1515,6 +1515,58 @@ def _bind_session_call(func):
     return method
 
 
+_PLAN_SELECTION_API_BOUND_METHODS = (
+    "get_selected_target_for_kind",
+    "set_selected_target_for_kind",
+    "get_selected_plan_target_object",
+    "is_selected_plan_target",
+    "clear_selected_plan_target_if_matches",
+    "clear_hidden_provider_preselection",
+    "selected_plan_target_changed",
+    "set_pending_selected_plan_target",
+    "consume_pending_selected_plan_target",
+    "get_selected_plan_target",
+    "get_first_plan_target_from_selection",
+    "is_valid_plan_target",
+    "normalize_plan_target_list",
+    "normalize_plan_targets_from_selection",
+    "set_secondary_selected_plan_targets",
+    "sync_secondary_selected_plan_targets_from_selection",
+    "sync_secondary_selected_plan_targets_from_gui_selection",
+    "get_secondary_selected_plan_targets",
+    "get_selected_plan_targets",
+    "set_selected_plan_target",
+    "schedule_selected_wall_reset",
+    "reset_selected_wall_after_change",
+    "suspend_selected_wall_state",
+    "sync_primary_selected_plan_target_visuals",
+    "refresh_selected_plan_target",
+    "refresh_primary_selected_plan_target",
+    "set_hovered_wall",
+    "set_hovered_opening",
+    "set_hovered_symbol",
+    "set_hovered_provider",
+    "set_hovered_space",
+    "set_hovered_region",
+    "queue_restore_selected_plan_target",
+    "select_plan_target_for_plan_edit",
+    "select_opening_for_plan_edit",
+    "select_symbol_for_plan_edit",
+    "select_region_for_plan_edit",
+    "select_space_for_plan_edit",
+    "select_wall_for_plan_edit",
+    "activate_plan_target",
+    "activate_semantic_plan_target",
+    "activate_opening_target",
+    "activate_symbol_target",
+    "activate_region_target",
+    "activate_space_target",
+    "activate_wall_target",
+    "clear_plan_selection_state",
+    "normalize_gui_object_selection",
+)
+
+
 class _SessionAPI:
     __slots__ = ("_session",)
 
@@ -1531,67 +1583,8 @@ class PlanSelectionAPI(_SessionAPI):
 
     __slots__ = ()
 
-    get_selected_target_for_kind = _bind_session_call(get_selected_target_for_kind)
-    set_selected_target_for_kind = _bind_session_call(set_selected_target_for_kind)
-    get_selected_plan_target_object = _bind_session_call(get_selected_plan_target_object)
-    is_selected_plan_target = _bind_session_call(is_selected_plan_target)
-    clear_selected_plan_target_if_matches = _bind_session_call(
-        clear_selected_plan_target_if_matches
-    )
-    clear_hidden_provider_preselection = _bind_session_call(clear_hidden_provider_preselection)
-    selected_plan_target_changed = _bind_session_call(selected_plan_target_changed)
-    set_pending_selected_plan_target = _bind_session_call(set_pending_selected_plan_target)
-    consume_pending_selected_plan_target = _bind_session_call(consume_pending_selected_plan_target)
-    get_selected_plan_target = _bind_session_call(get_selected_plan_target)
-    get_first_plan_target_from_selection = _bind_session_call(get_first_plan_target_from_selection)
-    is_valid_plan_target = _bind_session_call(is_valid_plan_target)
-    normalize_plan_target_list = _bind_session_call(normalize_plan_target_list)
-    normalize_plan_targets_from_selection = _bind_session_call(
-        normalize_plan_targets_from_selection
-    )
-    set_secondary_selected_plan_targets = _bind_session_call(set_secondary_selected_plan_targets)
-    sync_secondary_selected_plan_targets_from_selection = _bind_session_call(
-        sync_secondary_selected_plan_targets_from_selection
-    )
-    sync_secondary_selected_plan_targets_from_gui_selection = _bind_session_call(
-        sync_secondary_selected_plan_targets_from_gui_selection
-    )
-    get_secondary_selected_plan_targets = _bind_session_call(get_secondary_selected_plan_targets)
-    get_selected_plan_targets = _bind_session_call(get_selected_plan_targets)
-    set_selected_plan_target = _bind_session_call(set_selected_plan_target)
-    schedule_selected_wall_reset = _bind_session_call(schedule_selected_wall_reset)
-    reset_selected_wall_after_change = _bind_session_call(reset_selected_wall_after_change)
-    suspend_selected_wall_state = _bind_session_call(suspend_selected_wall_state)
-    sync_primary_selected_plan_target_visuals = _bind_session_call(
-        sync_primary_selected_plan_target_visuals
-    )
-    refresh_selected_plan_target = _bind_session_call(refresh_selected_plan_target)
-    refresh_primary_selected_plan_target = _bind_session_call(refresh_primary_selected_plan_target)
-    set_hovered_wall = _bind_session_call(set_hovered_wall)
-    set_hovered_opening = _bind_session_call(set_hovered_opening)
-    set_hovered_symbol = _bind_session_call(set_hovered_symbol)
-    set_hovered_provider = _bind_session_call(set_hovered_provider)
-    set_hovered_space = _bind_session_call(set_hovered_space)
-    set_hovered_region = _bind_session_call(set_hovered_region)
-    queue_restore_selected_plan_target = _bind_session_call(queue_restore_selected_plan_target)
-    select_plan_target_for_plan_edit = _bind_session_call(select_plan_target_for_plan_edit)
-    select_opening_for_plan_edit = _bind_session_call(select_opening_for_plan_edit)
-    select_symbol_for_plan_edit = _bind_session_call(select_symbol_for_plan_edit)
-    select_region_for_plan_edit = _bind_session_call(select_region_for_plan_edit)
-    select_space_for_plan_edit = _bind_session_call(select_space_for_plan_edit)
-    select_wall_for_plan_edit = _bind_session_call(select_wall_for_plan_edit)
-    activate_plan_target = _bind_session_call(activate_plan_target)
-    activate_semantic_plan_target = _bind_session_call(activate_semantic_plan_target)
-    activate_opening_target = _bind_session_call(activate_opening_target)
-    activate_symbol_target = _bind_session_call(activate_symbol_target)
-    activate_region_target = _bind_session_call(activate_region_target)
-    activate_space_target = _bind_session_call(activate_space_target)
-    activate_wall_target = _bind_session_call(activate_wall_target)
-    clear_plan_selection_state = _bind_session_call(clear_plan_selection_state)
-
     get_plan_target_object_from_state = staticmethod(get_plan_target_object_from_state)
     get_plan_target_state_key = staticmethod(get_plan_target_state_key)
-    normalize_gui_object_selection = _bind_session_call(normalize_gui_object_selection)
 
     def get_selected_plan_target_state(self):
         from bimplan.runtime import session_components as plan_session_components
@@ -1610,3 +1603,7 @@ class PlanSelectionAPI(_SessionAPI):
             kind=kind,
             obj=obj,
         )
+
+
+for _method_name in _PLAN_SELECTION_API_BOUND_METHODS:
+    setattr(PlanSelectionAPI, _method_name, _bind_session_call(globals()[_method_name]))
