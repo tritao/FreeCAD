@@ -3008,50 +3008,62 @@ class PlanEditSession:
         self._sync_selected_region_overlay()
         self._request_view_redraw()
 
-    def _restore_selected_region(self, region):
+    def _restore_selected_semantic_target(self, kind, obj, *, clear_edit_space=False):
+        sync_method = {
+            plan_target_kinds.PLAN_TARGET_REGION: self._sync_selected_region_overlay,
+            plan_target_kinds.PLAN_TARGET_SPACE: self._sync_selected_space_overlay,
+        }.get(kind)
+        if sync_method is None:
+            return
         self.current_tool = "Select"
-        if region:
-            self._set_selected_plan_target("region", region, pending_restore=True)
+        if clear_edit_space:
+            self._edit_space = None
+        if obj:
+            self._set_selected_plan_target(kind, obj, pending_restore=True)
+            self._set_gui_selection_object(obj)
         else:
             self._set_selected_plan_target()
-        if not region:
-            self._sync_selected_region_overlay()
-            self._refresh_task_panel_status()
-            return
-        self._set_gui_selection_object(region)
-        self._sync_selected_region_overlay()
+        sync_method()
         self._refresh_task_panel_status()
+
+    def _queue_restore_selected_semantic_target(self, kind, obj, *, clear_edit_space=False):
+        try:
+            from PySide import QtCore
+        except ImportError:
+            self._restore_selected_semantic_target(
+                kind,
+                obj,
+                clear_edit_space=clear_edit_space,
+            )
+            return
+        QtCore.QTimer.singleShot(
+            0,
+            lambda: self._restore_selected_semantic_target(
+                kind,
+                obj,
+                clear_edit_space=clear_edit_space,
+            ),
+        )
+
+    def _restore_selected_region(self, region):
+        self._restore_selected_semantic_target(plan_target_kinds.PLAN_TARGET_REGION, region)
 
     def _queue_restore_selected_region(self, region):
-        try:
-            from PySide import QtCore
-        except ImportError:
-            self._restore_selected_region(region)
-            return
-        QtCore.QTimer.singleShot(0, lambda: self._restore_selected_region(region))
+        self._queue_restore_selected_semantic_target(plan_target_kinds.PLAN_TARGET_REGION, region)
 
     def _restore_selected_space(self, space):
-        self.current_tool = "Select"
-        self._edit_space = None
-        if space:
-            self._set_selected_plan_target("space", space, pending_restore=True)
-        else:
-            self._set_selected_plan_target()
-        if not space:
-            self._sync_selected_space_overlay()
-            self._refresh_task_panel_status()
-            return
-        self._set_gui_selection_object(space)
-        self._sync_selected_space_overlay()
-        self._refresh_task_panel_status()
+        self._restore_selected_semantic_target(
+            plan_target_kinds.PLAN_TARGET_SPACE,
+            space,
+            clear_edit_space=True,
+        )
 
     def _queue_restore_selected_space(self, space):
-        try:
-            from PySide import QtCore
-        except ImportError:
-            self._restore_selected_space(space)
-            return
-        QtCore.QTimer.singleShot(0, lambda: self._restore_selected_space(space))
+        self._queue_restore_selected_semantic_target(
+            plan_target_kinds.PLAN_TARGET_SPACE,
+            space,
+            clear_edit_space=True,
+        )
 
     def _sync_secondary_selected_overlays(self):
         return space_overlays.sync_secondary_selected_overlays(self)
