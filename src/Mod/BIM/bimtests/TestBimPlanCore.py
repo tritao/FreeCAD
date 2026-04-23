@@ -93,6 +93,11 @@ from bimplan.selection import (
     activate_semantic_plan_target,
     resolve_selected_target_for_gui_object,
 )
+from bimplan.spaces import (
+    get_space_creation_request,
+    get_space_region_seed_targets,
+    should_run_space_preflight_for_targets,
+)
 from bimplan.target_dispatch import (
     queue_restore_selected_target,
     set_hovered_target,
@@ -155,6 +160,68 @@ class _DummyProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
+    def test_space_creation_request_uses_wall_boundary_selection_shape(self):
+        wall_a = SimpleNamespace(Name="WallA")
+        wall_b = SimpleNamespace(Name="WallB")
+        boundaries = ((wall_a, ("Face1",)), (wall_b, ("Face2",)))
+        session = SimpleNamespace(
+            _get_selected_plan_targets=lambda: [("wall", wall_a), ("wall", wall_b)],
+            _get_selected_space_boundary_links=lambda fallback_space=None: (
+                boundaries if fallback_space is None else ()
+            ),
+        )
+
+        request = get_space_creation_request(session)
+
+        self.assertTrue(
+            should_run_space_preflight_for_targets([("wall", wall_a), ("wall", wall_b)])
+        )
+        self.assertEqual(boundaries, tuple(request["boundaries"]))
+        self.assertIsNone(request["region_seed_space"])
+
+    def test_space_region_seed_targets_require_boundaries_for_single_space(self):
+        space = SimpleNamespace(Name="Space001", Label="Living Room")
+        boundary = (SimpleNamespace(Name="Divider"), ("Face1",))
+
+        empty_session = SimpleNamespace(
+            _get_selected_plan_targets=lambda: [("space", space)],
+            _get_selected_space_boundary_links=lambda fallback_space=None: [],
+        )
+        self.assertEqual((None, []), get_space_region_seed_targets(empty_session))
+        self.assertIsNone(get_space_creation_request(empty_session))
+
+        seeded_session = SimpleNamespace(
+            _get_selected_plan_targets=lambda: [("space", space)],
+            _get_selected_space_boundary_links=lambda fallback_space=None: (
+                [boundary] if fallback_space is space else []
+            ),
+        )
+        self.assertEqual((space, []), get_space_region_seed_targets(seeded_session))
+        request = get_space_creation_request(seeded_session)
+        self.assertIsNotNone(request)
+        self.assertEqual("Living Room", request["label"])
+        self.assertIs(space, request["region_seed_space"])
+        self.assertEqual([boundary], request["boundaries"])
+
+    def test_space_region_seed_targets_preserve_wall_seed_selection(self):
+        space = SimpleNamespace(Name="Space001", Label="Seed Space")
+        wall = SimpleNamespace(Name="Wall001")
+        boundary = (wall, ("Face1",))
+        targets = [("space", space), ("wall", wall)]
+        session = SimpleNamespace(
+            _get_selected_plan_targets=lambda: targets,
+            _get_selected_space_boundary_links=lambda fallback_space=None: (
+                [boundary] if fallback_space is space else []
+            ),
+        )
+
+        self.assertTrue(should_run_space_preflight_for_targets(targets))
+        self.assertEqual((space, [("wall", wall)]), get_space_region_seed_targets(session))
+        request = get_space_creation_request(session)
+        self.assertIsNotNone(request)
+        self.assertIs(space, request["region_seed_space"])
+        self.assertEqual([boundary], request["boundaries"])
+
     def test_activate_opening_target_uses_behavior_policy(self):
         calls = []
         target = SimpleNamespace(Name="Opening001")

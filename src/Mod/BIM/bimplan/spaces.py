@@ -2,6 +2,8 @@
 
 """Space boundary helpers for BIM Plan Edit."""
 
+from dataclasses import dataclass
+
 import FreeCAD
 import FreeCADGui
 
@@ -11,6 +13,45 @@ from . import target_kinds as plan_target_kinds
 translate = FreeCAD.Qt.translate
 
 _MIN_WALL_LENGTH = 10.0
+_SPACE_SELECTION_NONE = "none"
+_SPACE_SELECTION_WALL_BOUNDARIES = "wall_boundaries"
+_SPACE_SELECTION_SEEDED_REGION = "seeded_region"
+_SPACE_SELECTION_SINGLE_SPACE = "single_space"
+
+
+@dataclass(frozen=True)
+class SpaceSelectionShape:
+    targets: tuple = ()
+    mode: str = _SPACE_SELECTION_NONE
+    region_seed_space: object = None
+    wall_targets: tuple = ()
+
+    @property
+    def should_run_preflight(self):
+        if len(self.targets) <= 1:
+            return False
+        return self.mode in (
+            _SPACE_SELECTION_WALL_BOUNDARIES,
+            _SPACE_SELECTION_SEEDED_REGION,
+        )
+
+
+@dataclass(frozen=True)
+class SpaceCreationRequest:
+    targets: tuple = ()
+    mode: str = _SPACE_SELECTION_NONE
+    label: object = None
+    region_seed_space: object = None
+    wall_targets: tuple = ()
+    boundaries: tuple = ()
+
+    def to_dict(self):
+        return {
+            "targets": list(self.targets),
+            "label": self.label,
+            "region_seed_space": self.region_seed_space,
+            "boundaries": list(self.boundaries),
+        }
 
 
 def has_active_space_separator_tool(session):
@@ -409,28 +450,98 @@ def get_selected_space_boundary_links(session, fallback_space=None):
     )
 
 
-def get_space_region_seed_targets(session, targets=None):
-    targets = list(targets if targets is not None else session._get_selected_plan_targets())
+def _resolve_space_selection_shape(targets):
+    targets = tuple(targets or ())
     if not targets:
-        return (None, [])
+        return SpaceSelectionShape()
 
-    space_targets = [target_obj for target_kind, target_obj in targets if target_kind == "space"]
-    if len(space_targets) != 1:
-        return (None, [])
+    wall_targets = tuple(
+        (target_kind, target_obj)
+        for target_kind, target_obj in targets
+        if target_kind == plan_target_kinds.PLAN_TARGET_WALL
+    )
+    if len(wall_targets) == len(targets):
+        return SpaceSelectionShape(
+            targets=targets,
+            mode=_SPACE_SELECTION_WALL_BOUNDARIES,
+            wall_targets=wall_targets,
+        )
 
-    if len(targets) == 1:
-        boundary_links = session._get_selected_space_boundary_links(fallback_space=space_targets[0])
-        if boundary_links:
-            return (space_targets[0], [])
-        return (None, [])
-
-    wall_targets = [
-        (target_kind, target_obj) for target_kind, target_obj in targets if target_kind == "wall"
+    space_targets = [
+        target_obj
+        for target_kind, target_obj in targets
+        if target_kind == plan_target_kinds.PLAN_TARGET_SPACE
     ]
-    if len(wall_targets) != len(targets) - 1:
-        return (None, [])
+    if len(space_targets) != 1:
+        return SpaceSelectionShape(targets=targets)
 
-    return (space_targets[0], wall_targets)
+    region_seed_space = space_targets[0]
+    if len(targets) == 1:
+        return SpaceSelectionShape(
+            targets=targets,
+            mode=_SPACE_SELECTION_SINGLE_SPACE,
+            region_seed_space=region_seed_space,
+        )
+
+    if len(wall_targets) != len(targets) - 1:
+        return SpaceSelectionShape(targets=targets)
+
+    return SpaceSelectionShape(
+        targets=targets,
+        mode=_SPACE_SELECTION_SEEDED_REGION,
+        region_seed_space=region_seed_space,
+        wall_targets=wall_targets,
+    )
+
+
+def _resolve_space_creation_request(session, targets=None):
+    targets = tuple(targets if targets is not None else session._get_selected_plan_targets())
+    if not targets:
+        return None
+
+    selection_shape = _resolve_space_selection_shape(targets)
+    if selection_shape.mode == _SPACE_SELECTION_WALL_BOUNDARIES:
+        return SpaceCreationRequest(
+            targets=selection_shape.targets,
+            mode=selection_shape.mode,
+            wall_targets=selection_shape.wall_targets,
+            boundaries=tuple(session._get_selected_space_boundary_links()),
+        )
+
+    if selection_shape.mode not in (
+        _SPACE_SELECTION_SEEDED_REGION,
+        _SPACE_SELECTION_SINGLE_SPACE,
+    ):
+        return None
+
+    region_seed_space = selection_shape.region_seed_space
+    boundaries = tuple(session._get_selected_space_boundary_links(fallback_space=region_seed_space))
+    if selection_shape.mode == _SPACE_SELECTION_SINGLE_SPACE and not boundaries:
+        return None
+
+    return SpaceCreationRequest(
+        targets=selection_shape.targets,
+        mode=_SPACE_SELECTION_SEEDED_REGION,
+        label=getattr(region_seed_space, "Label", None),
+        region_seed_space=region_seed_space,
+        wall_targets=selection_shape.wall_targets,
+        boundaries=boundaries,
+    )
+
+
+def get_space_region_seed_targets(session, targets=None):
+    targets = tuple(targets if targets is not None else session._get_selected_plan_targets())
+    selection_shape = _resolve_space_selection_shape(targets)
+    if selection_shape.mode == _SPACE_SELECTION_SEEDED_REGION:
+        return (selection_shape.region_seed_space, list(selection_shape.wall_targets))
+    if selection_shape.mode != _SPACE_SELECTION_SINGLE_SPACE:
+        return (None, [])
+    boundary_links = session._get_selected_space_boundary_links(
+        fallback_space=selection_shape.region_seed_space
+    )
+    if boundary_links:
+        return (selection_shape.region_seed_space, [])
+    return (None, [])
 
 
 def get_selected_space_region_seed(session, targets=None):
@@ -451,39 +562,12 @@ def copy_shape_without_element_map(shape):
 
 
 def get_space_creation_request(session, targets=None):
-    targets = list(targets if targets is not None else session._get_selected_plan_targets())
-    if not targets:
-        return None
-
-    label = None
-    region_seed_space = session._get_selected_space_region_seed(targets)
-    if region_seed_space is not None:
-        boundaries = session._get_selected_space_boundary_links(fallback_space=region_seed_space)
-        label = getattr(region_seed_space, "Label", None)
-    elif all(target_kind == "wall" for target_kind, _target_obj in targets):
-        boundaries = session._get_selected_space_boundary_links()
-    else:
-        return None
-
-    return {
-        "targets": targets,
-        "label": label,
-        "region_seed_space": region_seed_space,
-        "boundaries": boundaries,
-    }
+    request = _resolve_space_creation_request(session, targets=targets)
+    return request.to_dict() if request else None
 
 
 def should_run_space_preflight_for_targets(targets):
-    targets = list(targets or [])
-    if len(targets) <= 1:
-        return False
-
-    kinds = [target_kind for target_kind, _target_obj in targets]
-    if all(kind == "wall" for kind in kinds):
-        return True
-    if kinds.count("space") == 1 and all(kind in ("space", "wall") for kind in kinds):
-        return True
-    return False
+    return _resolve_space_selection_shape(targets).should_run_preflight
 
 
 def get_existing_space_region_filter_spaces(session, exclude=None):
@@ -875,7 +959,7 @@ def create_space_from_current_selection(session):
     import Arch
     import ArchSpace
 
-    request = session._get_space_creation_request()
+    request = _resolve_space_creation_request(session)
     if not request:
         FreeCAD.Console.PrintWarning(
             translate(
@@ -885,8 +969,8 @@ def create_space_from_current_selection(session):
         )
         return False
 
-    boundaries = list(request["boundaries"] or [])
-    region_seed_space = request["region_seed_space"]
+    boundaries = list(request.boundaries or [])
+    region_seed_space = request.region_seed_space
     if not boundaries:
         FreeCAD.Console.PrintWarning(
             translate(
@@ -899,7 +983,7 @@ def create_space_from_current_selection(session):
     if region_seed_space is not None:
         report = session._get_space_region_candidate_report(
             boundaries,
-            label=request["label"],
+            label=request.label,
             seed_space=region_seed_space,
         )
         candidate_count = int(report.get("candidate_count", 0) or 0)
@@ -1308,16 +1392,16 @@ def get_space_preflight_report(session, targets=None):
     if not should_run_space_preflight_for_targets(targets):
         return None
 
-    request = session._get_space_creation_request(targets=targets)
+    request = _resolve_space_creation_request(session, targets=targets)
     if not request:
         return None
 
     import ArchSpace
 
     return ArchSpace.analyzeBoundaryLinks(
-        request["boundaries"],
-        label=request["label"],
-        seed_space=request["region_seed_space"],
+        request.boundaries,
+        label=request.label,
+        seed_space=request.region_seed_space,
     )
 
 
