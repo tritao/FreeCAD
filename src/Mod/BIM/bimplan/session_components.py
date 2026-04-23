@@ -36,12 +36,11 @@ from bimplan import spaces as plan_spaces
 from bimplan import target_kinds as plan_target_kinds
 from bimplan import targets as plan_targets
 from bimplan import view as plan_view
-from bimplan import visual_keys as plan_visual_keys
+from bimplan import document_visuals as plan_document_visuals
 from bimplan import wall_relations as plan_wall_relations
 from bimplan import wall_edit as plan_wall_edit
 from bimplan import window_create as plan_window_create
-from bimplan import window_edit as plan_window_edit
-from bimplan.ui.status_chip import _PlanEditViewportStatusChip
+from bimplan.task_panel import _PlanEditViewportStatusChip
 
 
 def _bind_session_call(func):
@@ -301,7 +300,7 @@ class PlanSpacesAPI(_SessionAPI):
         return plan_spaces.set_hovered_space_region_candidate(
             self.session,
             candidate,
-            plan_visual_keys.PLAN_VISUAL_SPACE_REGION_PICK,
+            plan_document_visuals.PLAN_VISUAL_SPACE_REGION_PICK,
         )
 
 
@@ -357,30 +356,32 @@ class PlanWindowsAPI(_SessionAPI):
 
     can_place_window = _bind_session_call(plan_window_create.can_place_window)
     get_selected_window_style_preset = _bind_session_call(
-        plan_window_edit.get_selected_window_style_preset
+        plan_window_create.get_selected_window_style_preset
     )
     get_selected_window_width_text = _bind_session_call(
-        plan_window_edit.get_selected_window_width_text
+        plan_window_create.get_selected_window_width_text
     )
     get_selected_window_height_text = _bind_session_call(
-        plan_window_edit.get_selected_window_height_text
+        plan_window_create.get_selected_window_height_text
     )
-    get_window_style_preset_options = staticmethod(plan_window_edit.get_window_style_preset_options)
+    get_window_style_preset_options = staticmethod(
+        plan_window_create.get_window_style_preset_options
+    )
 
     def can_apply_window_style_preset(self, window=None):
         if window is None:
             window = self.session.selection.get_selected_plan_target_object("opening")
-        return plan_window_edit.can_edit_window_style_preset(window)
+        return plan_window_create.can_edit_window_style_preset(window)
 
     def can_edit_window_width(self, window=None):
         if window is None:
             window = self.session.selection.get_selected_plan_target_object("opening")
-        return plan_window_edit.can_edit_window_width(window)
+        return plan_window_create.can_edit_window_width(window)
 
     def can_edit_window_height(self, window=None):
         if window is None:
             window = self.session.selection.get_selected_plan_target_object("opening")
-        return plan_window_edit.can_edit_window_height(window)
+        return plan_window_create.can_edit_window_height(window)
 
 
 class PlanViewportAPI(_SessionAPI):

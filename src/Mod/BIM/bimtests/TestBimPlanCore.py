@@ -1086,7 +1086,7 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
     def test_plan_spaces_api_uses_space_region_pick_visual_key(self):
-        from bimplan import visual_keys as plan_visual_keys
+        from bimplan import document_visuals as plan_document_visuals
         from bimplan.session_components import PlanSpacesAPI
 
         session = object()
@@ -1102,7 +1102,7 @@ class TestBimPlanCore(unittest.TestCase):
         set_hovered_space_region_candidate.assert_called_once_with(
             session,
             candidate,
-            plan_visual_keys.PLAN_VISUAL_SPACE_REGION_PICK,
+            plan_document_visuals.PLAN_VISUAL_SPACE_REGION_PICK,
         )
 
     def test_plan_viewport_api_uses_view_policies(self):

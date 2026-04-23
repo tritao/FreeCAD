@@ -8,7 +8,7 @@ from typing import TypedDict
 
 import FreeCAD
 
-from . import visual_keys as plan_visual_keys
+from . import document_visuals as plan_document_visuals
 from .providers import (
     PlanActionSpec,
     PlanContextDetailSpec,
@@ -297,7 +297,7 @@ def set_plan_provider_overlay_mode(session, mode):
     session._provider_overlay_mode = normalized
     session._provider_overlay_state = None
     session.selection.clear_hidden_provider_preselection()
-    session._queue_plan_overlay_visual_refresh(plan_visual_keys.PLAN_VISUAL_PROVIDER_OVERLAYS)
+    session._queue_plan_overlay_visual_refresh(plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS)
     session._refresh_provider_overlay_mode_panels()
     return True
 
@@ -354,16 +354,16 @@ def set_plan_provider_overlay_visible(session, provider_id, overlay_key, visible
     else:
         session._provider_overlay_visibility[key] = False
     session._provider_overlay_state = None
-    session._queue_plan_overlay_visual_refresh(plan_visual_keys.PLAN_VISUAL_PROVIDER_OVERLAYS)
+    session._queue_plan_overlay_visual_refresh(plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS)
 
 
 def queue_plan_provider_overlay_refresh(session):
     session._provider_overlay_state = None
-    session._queue_plan_overlay_visual_refresh(plan_visual_keys.PLAN_VISUAL_PROVIDER_OVERLAYS)
+    session._queue_plan_overlay_visual_refresh(plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS)
 
 
 def queue_plan_provider_overlay_sync(session):
-    session._queue_plan_overlay_visual_refresh(plan_visual_keys.PLAN_VISUAL_PROVIDER_OVERLAYS)
+    session._queue_plan_overlay_visual_refresh(plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS)
 
 
 def normalize_plan_provider_target(
