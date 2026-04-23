@@ -5,9 +5,8 @@
 import weakref
 
 import FreeCAD
+from bimplan import task_panel_view_model as plan_task_panel_view_model
 from bimplan.providers import (
-    PlanContextPanelState,
-    PlanContextSubjectKind,
     PlanIssueSeverity,
     PlanToolInteraction,
 )
@@ -497,52 +496,6 @@ class PlanEditControlsWidget:
         self._set_integration_style_property(title_label, "planCardTitle", "true")
         layout.addWidget(title_label)
 
-    def _get_action_identity(self, action):
-        return (
-            str(getattr(action, "provider_id", "") or "").strip(),
-            str(getattr(action, "key", "") or "").strip(),
-            str(getattr(action, "label", "") or "").strip(),
-        )
-
-    def _collect_action_identities(self, actions):
-        identities = []
-        seen = set()
-        for action in tuple(actions or ()):
-            identity = self._get_action_identity(action)
-            if identity in seen:
-                continue
-            seen.add(identity)
-            identities.append(identity)
-        return tuple(identities)
-
-    def _collect_action_labels(self, actions):
-        labels = []
-        seen = set()
-        for action in tuple(actions or ()):
-            label = str(getattr(action, "label", "") or "").strip()
-            if not label or label in seen:
-                continue
-            seen.add(label)
-            labels.append(label)
-        return tuple(labels)
-
-    def _filter_integration_actions(
-        self,
-        actions,
-        hidden_action_ids=(),
-        hidden_action_labels=(),
-    ):
-        hidden = set(tuple(hidden_action_ids or ()))
-        hidden_labels = {str(label or "").strip() for label in tuple(hidden_action_labels or ())}
-        visible = []
-        for action in tuple(actions or ()):
-            if self._get_action_identity(action) in hidden:
-                continue
-            if str(getattr(action, "label", "") or "").strip() in hidden_labels:
-                continue
-            visible.append(action)
-        return tuple(visible)
-
     def _build_detail_toggle_text(self, expanded, detail_title):
         detail_text = str(detail_title or "").strip() or translate("BIM_PlanEdit", "Details")
         if expanded:
@@ -712,7 +665,7 @@ class PlanEditControlsWidget:
         grid_columns=0,
         default_role="secondary",
     ):
-        actions = self._filter_integration_actions(
+        actions = plan_task_panel_view_model.filter_integration_actions(
             actions,
             hidden_action_ids=hidden_action_ids,
             hidden_action_labels=hidden_action_labels,
@@ -1134,22 +1087,6 @@ class PlanEditControlsWidget:
                 actions.append(action)
         return tuple(actions)
 
-    def _group_provider_issues(self, issues):
-        grouped = []
-        groups_by_key = {}
-        for issue in tuple(issues or ()):
-            group_key = self._get_provider_issue_group_key(issue)
-            if not group_key:
-                grouped.append([issue])
-                continue
-            group = groups_by_key.get(group_key)
-            if group is None:
-                group = []
-                groups_by_key[group_key] = group
-                grouped.append(group)
-            group.append(issue)
-        return tuple(tuple(group) for group in grouped if group)
-
     def _make_provider_issue_block(self, QtGui, issues, hidden_action_ids=()):
         issues = tuple(issues or ())
         if not issues:
@@ -1202,92 +1139,8 @@ class PlanEditControlsWidget:
             title=title,
         )
 
-    def _get_provider_section_role(self, section):
-        return str(getattr(section, "role", "") or "").strip().lower()
-
     def _is_provider_section_collapsed(self, section):
         return bool(getattr(section, "collapsed", False))
-
-    def _partition_provider_sections(self, sections):
-        summary_sections = []
-        detail_sections = []
-        regular_sections = []
-        for section in tuple(sections or ()):
-            role = self._get_provider_section_role(section)
-            if role == "summary":
-                summary_sections.append(section)
-            elif role == "details":
-                detail_sections.append(section)
-            else:
-                regular_sections.append(section)
-        return (
-            tuple(summary_sections),
-            tuple(regular_sections),
-            tuple(detail_sections),
-        )
-
-    def _get_provider_context_panel_state_rank(self, panel):
-        return {
-            PlanContextPanelState.ACTIVE_TOOL: 0,
-            PlanContextPanelState.GEOMETRY_REVIEW: 1,
-            PlanContextPanelState.SINGLE_OBJECT: 2,
-            PlanContextPanelState.MULTI_SELECTION: 3,
-            PlanContextPanelState.EMPTY: 4,
-        }.get(getattr(panel, "state", None), 5)
-
-    def _resolve_provider_context_panel(self, panels):
-        ranked = []
-        for index, panel in enumerate(tuple(panels or ())):
-            if not panel:
-                continue
-            ranked.append((self._get_provider_context_panel_state_rank(panel), index, panel))
-        if not ranked:
-            return None
-        ranked.sort(key=lambda entry: (entry[0], entry[1]))
-        return ranked[0][2]
-
-    def _get_provider_context_panel_heading(self, panel):
-        state = getattr(panel, "state", None)
-        subject_kind = getattr(panel, "subject_kind", None)
-        if (
-            state == PlanContextPanelState.ACTIVE_TOOL
-            or subject_kind == PlanContextSubjectKind.INTERACTION
-        ):
-            return translate("BIM_PlanEdit", "Current Tool")
-        if (
-            state == PlanContextPanelState.GEOMETRY_REVIEW
-            or subject_kind == PlanContextSubjectKind.GEOMETRY
-        ):
-            return translate("BIM_PlanEdit", "Geometry")
-        if state in (
-            PlanContextPanelState.SINGLE_OBJECT,
-            PlanContextPanelState.MULTI_SELECTION,
-        ) or subject_kind in (
-            PlanContextSubjectKind.ENDPOINT,
-            PlanContextSubjectKind.NETWORK,
-            PlanContextSubjectKind.DISTRIBUTION,
-        ):
-            return translate("BIM_PlanEdit", "Selection")
-        return translate("BIM_PlanEdit", "Context")
-
-    def _collect_provider_context_panel_actions(self, panel):
-        actions = []
-        seen = set()
-        primary_action = getattr(panel, "primary_action", None)
-        has_primary = bool(primary_action and getattr(primary_action, "enabled", False))
-        if has_primary:
-            identity = self._get_action_identity(primary_action)
-            seen.add(identity)
-            actions.append(primary_action)
-        for action in tuple(getattr(panel, "secondary_actions", ()) or ()):
-            if not bool(getattr(action, "enabled", False)):
-                continue
-            identity = self._get_action_identity(action)
-            if identity in seen:
-                continue
-            seen.add(identity)
-            actions.append(action)
-        return tuple(actions), has_primary
 
     def _make_provider_context_panel_detail(self, QtGui, parent, layout, detail):
         detail_title = str(getattr(detail, "title", "") or "").strip()
@@ -1375,7 +1228,9 @@ class PlanEditControlsWidget:
         if message:
             layout.addWidget(self._make_wrapped_plain_label(QtGui, message, block))
 
-        actions, has_primary = self._collect_provider_context_panel_actions(panel)
+        actions, has_primary = plan_task_panel_view_model.collect_provider_context_panel_actions(
+            panel
+        )
         self._add_integration_action_row(
             QtGui,
             block,
@@ -1452,53 +1307,6 @@ class PlanEditControlsWidget:
             pass
         return group
 
-    def _sort_provider_tools(self, tools):
-        return tuple(
-            sorted(
-                tuple(tools or ()),
-                key=lambda tool: (
-                    str(getattr(tool, "group", "") or ""),
-                    int(getattr(tool, "priority", 0) or 0),
-                    str(getattr(tool, "label", "") or ""),
-                    str(getattr(tool, "key", "") or ""),
-                ),
-            )
-        )
-
-    def _build_provider_overlay_legend_items(self, overlays):
-        items = []
-        seen = set()
-        for overlay in tuple(overlays or ()):
-            if not bool(getattr(overlay, "visible", True)):
-                continue
-            provider_id = str(getattr(overlay, "provider_id", "") or "").strip()
-            overlay_key = str(getattr(overlay, "key", "") or "").strip()
-            if not provider_id or not overlay_key:
-                continue
-            identity = (provider_id, overlay_key)
-            if identity in seen:
-                continue
-            seen.add(identity)
-            label = str(getattr(overlay, "label", "") or "").strip() or overlay_key
-            provider_label = self.session.get_plan_provider_display_name(provider_id)
-            if provider_label:
-                label = translate("BIM_PlanEdit", "{provider}: {label}").format(
-                    provider=provider_label,
-                    label=label,
-                )
-            category = self.session.get_plan_provider_overlay_category(overlay)
-            items.append(
-                (
-                    provider_id,
-                    overlay_key,
-                    label,
-                    tuple(getattr(overlay, "color", ()) or ()),
-                    self.session.is_plan_provider_overlay_enabled(overlay),
-                    category,
-                )
-            )
-        return tuple(items)
-
     def _get_provider_overlay_mode_options(self):
         return (
             ("architecture", translate("BIM_PlanEdit", "Architecture")),
@@ -1514,25 +1322,10 @@ class PlanEditControlsWidget:
                 return option_label
         return translate("BIM_PlanEdit", "Architecture")
 
-    def _filter_provider_overlay_legend_items_for_mode(self, items, active_mode=None):
-        mode_key = (
-            str(
-                active_mode
-                or getattr(self.session, "get_plan_provider_overlay_mode", lambda: "architecture")()
-            )
-            .strip()
-            .lower()
-        )
-        if mode_key == "all":
-            return tuple(items or ())
-        return tuple(
-            item for item in tuple(items or ()) if len(item) > 5 and str(item[5] or "") == mode_key
-        )
-
     def _group_provider_overlay_legend_items(self, items, active_mode=None):
         grouped = []
         groups_by_key = {}
-        for item in self._filter_provider_overlay_legend_items_for_mode(
+        for item in plan_task_panel_view_model.filter_provider_overlay_legend_items_for_mode(
             items, active_mode=active_mode
         ):
             category = str(item[5] or "").strip().lower() if len(item) > 5 else "architecture"
@@ -1628,50 +1421,10 @@ class PlanEditControlsWidget:
         self._clear_layout(self.integration_content_layout)
         self._set_integration_panel_visible(False)
 
-    def _set_integration_summary_text(
-        self,
-        issues,
-        sections,
-        tools=(),
-        overlay_items=(),
-        summary_sections=(),
-        context_panel=None,
-    ):
+    def _set_integration_summary_text(self, summary):
         if self.integration_summary is None:
             return
-        if tuple(summary_sections or ()) or context_panel is not None:
-            self.integration_summary.clear()
-            try:
-                self.integration_summary.setVisible(False)
-            except Exception:
-                pass
-            return
-        parts = []
-        issue_count = len(issues or ())
-        section_count = len(sections or ())
-        tool_count = len(tools or ())
-        overlay_count = len(overlay_items or ())
-        if issue_count:
-            parts.append(translate("BIM_PlanEdit", "{count} issue(s)").format(count=issue_count))
-        if tool_count:
-            parts.append(translate("BIM_PlanEdit", "{count} tool(s)").format(count=tool_count))
-        if overlay_count:
-            parts.append(
-                translate("BIM_PlanEdit", "{count} overlay(s)").format(count=overlay_count)
-            )
-        if section_count:
-            parts.append(
-                translate("BIM_PlanEdit", "{count} section(s)").format(count=section_count)
-            )
-        summary = (
-            translate(
-                "BIM_PlanEdit",
-                "Plan guidance: {details}.",
-            ).format(details=", ".join(parts))
-            if parts
-            else ""
-        )
-        self.integration_summary.setText(summary)
+        self.integration_summary.setText(str(summary or ""))
         try:
             self.integration_summary.setVisible(bool(summary))
         except Exception:
@@ -1836,6 +1589,10 @@ class PlanEditControlsWidget:
             self._integration_refresh_generation += 1
             with self.session._plan_provider_refresh_cache_scope():
                 snapshot = self.session.get_plan_provider_snapshot()
+                integration_vm = plan_task_panel_view_model.build_integration_panel_view_model(
+                    self.session,
+                    snapshot,
+                )
             queue_overlay_refresh = getattr(
                 self.session,
                 "queue_plan_provider_overlay_sync",
@@ -1849,35 +1606,12 @@ class PlanEditControlsWidget:
                 )
             if callable(queue_overlay_refresh):
                 queue_overlay_refresh()
-            tools = self._sort_provider_tools(snapshot.tools)
-            overlay_items = self._build_provider_overlay_legend_items(snapshot.overlays)
-            overlay_mode = self.session.get_plan_provider_overlay_mode()
-            self._set_provider_overlay_mode_combo_value(overlay_mode)
-            active_overlay_items = self._filter_provider_overlay_legend_items_for_mode(
-                overlay_items,
-                active_mode=overlay_mode,
-            )
-            summary_sections, regular_sections, detail_sections = self._partition_provider_sections(
-                snapshot.inspector_sections
-            )
-            context_panel = self._resolve_provider_context_panel(snapshot.context_panels)
-            context_panel_actions, _has_context_primary = (
-                self._collect_provider_context_panel_actions(context_panel)
-                if context_panel is not None
-                else ((), False)
-            )
-            state = snapshot
-            if snapshot.is_empty():
+            self._set_provider_overlay_mode_combo_value(integration_vm.overlay_mode)
+            state = integration_vm.state_key
+            if not integration_vm.has_content:
                 self._hide_integration_panel()
                 return
-            self._set_integration_summary_text(
-                snapshot.issues,
-                snapshot.inspector_sections,
-                tools=tools,
-                overlay_items=active_overlay_items,
-                summary_sections=summary_sections,
-                context_panel=context_panel,
-            )
+            self._set_integration_summary_text(integration_vm.summary_text)
             if state != self._integration_panel_state:
                 self._integration_panel_state = state
                 self._integration_action_buttons = []
@@ -1886,47 +1620,18 @@ class PlanEditControlsWidget:
                 self._clear_layout(self.integration_content_layout)
                 from PySide import QtGui
 
-                grouped_issue_sets = self._group_provider_issues(snapshot.issues)
-                promoted_action_ids = self._collect_action_identities(
-                    action
-                    for section in summary_sections
-                    for action in tuple(getattr(section, "actions", ()) or ())
-                )
-                hidden_tool_action_labels = self._collect_action_labels(
-                    tuple(
-                        action
-                        for section in summary_sections
-                        for action in tuple(getattr(section, "actions", ()) or ())
-                    )
-                    + tuple(
-                        action
-                        for issue_group in grouped_issue_sets
-                        for action in tuple(
-                            self._filter_integration_actions(
-                                self._collect_provider_issue_group_actions(issue_group),
-                                hidden_action_ids=promoted_action_ids,
-                            )
-                        )
-                    )
-                    + tuple(
-                        action
-                        for section in regular_sections
-                        for action in tuple(getattr(section, "actions", ()) or ())
-                    )
-                    + tuple(context_panel_actions)
-                )
-                for section in summary_sections:
+                for section in integration_vm.summary_sections:
                     block = self._make_summary_section_block(QtGui, section)
                     self.integration_content_layout.addWidget(block)
-                if context_panel is not None:
+                if integration_vm.context_panel is not None:
                     self.integration_content_layout.addWidget(
                         self._make_integration_group_heading(
                             QtGui,
-                            self._get_provider_context_panel_heading(context_panel),
+                            integration_vm.context_panel_heading,
                         )
                     )
                     self.integration_content_layout.addWidget(
-                        self._make_provider_context_panel_block(QtGui, context_panel)
+                        self._make_provider_context_panel_block(QtGui, integration_vm.context_panel)
                     )
                 if snapshot.issues:
                     self.integration_content_layout.addWidget(
@@ -1935,69 +1640,69 @@ class PlanEditControlsWidget:
                             translate("BIM_PlanEdit", "Action Needed"),
                         )
                     )
-                for issue_group in grouped_issue_sets:
+                for issue_group in integration_vm.grouped_issue_sets:
                     block = self._make_provider_issue_block(
                         QtGui,
                         issue_group,
-                        hidden_action_ids=promoted_action_ids,
+                        hidden_action_ids=integration_vm.promoted_action_ids,
                     )
                     if block is not None:
                         self.integration_content_layout.addWidget(block)
-                if tools or overlay_items:
+                if integration_vm.tools or integration_vm.overlay_items:
                     self.integration_content_layout.addWidget(
                         self._make_integration_group_heading(
                             QtGui,
                             translate("BIM_PlanEdit", "Utilities"),
                         )
                     )
-                if tools:
+                if integration_vm.tools:
                     block = self._make_integration_block(
                         QtGui,
                         translate("BIM_PlanEdit", "Tools"),
-                        actions=tools,
+                        actions=integration_vm.tools,
                         card_role="utility",
-                        hidden_action_ids=promoted_action_ids,
-                        hidden_action_labels=hidden_tool_action_labels,
+                        hidden_action_ids=integration_vm.promoted_action_ids,
+                        hidden_action_labels=integration_vm.hidden_tool_action_labels,
                         action_columns=3,
                         default_action_role="utility",
                     )
                     self.integration_content_layout.addWidget(block)
-                if overlay_items:
+                if integration_vm.overlay_items:
                     block = self._make_provider_overlay_legend_block(
                         QtGui,
-                        overlay_items,
-                        active_mode=overlay_mode,
+                        integration_vm.overlay_items,
+                        active_mode=integration_vm.overlay_mode,
                     )
                     if block is not None:
                         self.integration_content_layout.addWidget(block)
-                if regular_sections or detail_sections:
+                if integration_vm.regular_sections or integration_vm.detail_sections:
                     self.integration_content_layout.addWidget(
                         self._make_integration_group_heading(
                             QtGui,
                             translate("BIM_PlanEdit", "More Context"),
                         )
                     )
-                for section in regular_sections:
+                for section in integration_vm.regular_sections:
                     block = self._make_integration_block(
                         QtGui,
                         self._format_provider_section_title(section),
                         body=getattr(section, "body", ""),
                         actions=section.actions,
                         card_role="detail",
-                        hidden_action_ids=promoted_action_ids,
+                        hidden_action_ids=integration_vm.promoted_action_ids,
                     )
                     self.integration_content_layout.addWidget(block)
-                if detail_sections:
+                if integration_vm.detail_sections:
                     group = self._make_integration_details_group(
                         QtGui,
-                        detail_sections,
+                        integration_vm.detail_sections,
                     )
                     self.integration_content_layout.addWidget(group)
                 self.integration_content_layout.addStretch(1)
-            elif overlay_items:
+            elif integration_vm.overlay_items:
                 self._refresh_provider_overlay_legend_block(
-                    overlay_items,
-                    active_mode=overlay_mode,
+                    integration_vm.overlay_items,
+                    active_mode=integration_vm.overlay_mode,
                 )
             self._set_integration_panel_visible(True)
 
@@ -2840,71 +2545,29 @@ class PlanEditControlsWidget:
             pass
 
     def _refresh_action_context(self, modal_active=None):
-        if modal_active is None:
-            modal_active = self.session._is_modal_plan_interaction_active()
-        selected_kind, selected_obj = self.session.selection.get_selected_plan_target()
-        current_tool = self.session.current_tool
-        has_wall = selected_kind == "wall" and selected_obj is not None
-        can_place_window = self.session.can_place_plan_window()
-        in_join_mode = current_tool == "Join"
-        join_candidate = (
-            self.session._get_plan_candidate_joint() is not None if in_join_mode else False
+        action_context_vm = plan_task_panel_view_model.build_action_context_view_model(
+            self.session,
+            modal_active=modal_active,
         )
-        enabled = not bool(modal_active)
 
         if self.header_mode_label is not None:
-            mode_label = current_tool
-            if current_tool == "Provider Point":
-                mode_label = self.session._get_provider_point_tool_label()
             self.header_mode_label.setText(
-                translate("BIM_PlanEdit", "{tool} mode").format(tool=mode_label)
+                translate("BIM_PlanEdit", "{tool} mode").format(tool=action_context_vm.mode_label)
             )
 
-        self._set_widget_enabled(self.join_button, enabled and has_wall)
-        self._set_widget_tooltip(
-            self.join_button,
-            (
-                translate("BIM_PlanEdit", "Select a wall before using Join.")
-                if not has_wall
-                else translate("BIM_PlanEdit", "Join the selected wall to another wall.")
-            ),
-        )
-
-        show_join_options = has_wall or in_join_mode
-        self._set_widget_visible(self.join_type_widget, show_join_options)
-        self._set_widget_enabled(self.join_type_combo, enabled and show_join_options)
+        self._set_widget_enabled(self.join_button, action_context_vm.join_button_enabled)
+        self._set_widget_tooltip(self.join_button, action_context_vm.join_button_tooltip)
+        self._set_widget_visible(self.join_type_widget, action_context_vm.show_join_options)
+        self._set_widget_enabled(self.join_type_combo, action_context_vm.join_type_enabled)
         self._set_widget_tooltip(
             self.join_type_combo,
-            translate("BIM_PlanEdit", "Joint type used when joining wall pairs."),
+            action_context_vm.join_type_tooltip,
         )
-
-        self._set_widget_enabled(self.unjoin_button, enabled and in_join_mode and join_candidate)
-        if not in_join_mode:
-            unjoin_tip = translate(
-                "BIM_PlanEdit",
-                "Start Join mode and hover an existing joined wall pair.",
-            )
-        elif not join_candidate:
-            unjoin_tip = translate(
-                "BIM_PlanEdit",
-                "Hover an existing joined wall pair before using Unjoin.",
-            )
-        else:
-            unjoin_tip = translate("BIM_PlanEdit", "Remove the hovered existing wall joint.")
-        self._set_widget_tooltip(self.unjoin_button, unjoin_tip)
-        self._set_widget_visible(self.window_button, can_place_window or current_tool == "Window")
-        self._set_widget_enabled(self.window_button, enabled and can_place_window)
-        self._set_widget_tooltip(
-            self.window_button,
-            (
-                translate(
-                    "BIM_PlanEdit",
-                    "Place a hosted window on the selected or hovered wall.",
-                )
-                if can_place_window
-                else translate("BIM_PlanEdit", "Select or hover a wall before placing a window.")
-            ),
-        )
+        self._set_widget_enabled(self.unjoin_button, action_context_vm.unjoin_button_enabled)
+        self._set_widget_tooltip(self.unjoin_button, action_context_vm.unjoin_button_tooltip)
+        self._set_widget_visible(self.window_button, action_context_vm.show_window_button)
+        self._set_widget_enabled(self.window_button, action_context_vm.window_button_enabled)
+        self._set_widget_tooltip(self.window_button, action_context_vm.window_button_tooltip)
 
     def refresh_from_session(self, defer_integrations=False, refresh_integrations=True):
         with self.session._plan_perf_trace_span("refresh_task_panel_widget"):
