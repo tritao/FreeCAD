@@ -2532,7 +2532,7 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
         with patch(
-            "bimplan.selection.plan_provider_targets.is_plan_provider_target_visible_for_mode",
+            "bimplan.selection.plan_provider_runtime.is_plan_provider_target_visible_for_mode",
             return_value=True,
         ):
             self.assertEqual(

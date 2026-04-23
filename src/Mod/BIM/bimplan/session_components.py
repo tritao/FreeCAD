@@ -26,9 +26,8 @@
 
 from functools import wraps
 
-from bimplan import provider_overlay_state as plan_provider_overlay_state
-from bimplan import provider_point as plan_provider_point
 from bimplan import provider_runtime as plan_provider_runtime
+from bimplan import provider_point as plan_provider_point
 from bimplan import selection_additive as plan_selection_additive
 from bimplan import selection as plan_selection
 from bimplan.overlays import symbols as symbol_overlays
@@ -77,6 +76,9 @@ class PlanSelectionAPI(_SessionAPI):
     is_selected_plan_target = _bind_session_call(plan_selection.is_selected_plan_target)
     clear_selected_plan_target_if_matches = _bind_session_call(
         plan_selection.clear_selected_plan_target_if_matches
+    )
+    clear_hidden_provider_preselection = _bind_session_call(
+        plan_selection.clear_hidden_provider_preselection
     )
     selected_plan_target_changed = _bind_session_call(plan_selection.selected_plan_target_changed)
     set_pending_selected_plan_target = _bind_session_call(
@@ -594,10 +596,10 @@ class PlanProvidersAPI(_SessionAPI):
         plan_provider_runtime.get_plan_provider_display_name
     )
     get_plan_provider_overlay_mode = _bind_session_call(
-        plan_provider_overlay_state.get_plan_provider_overlay_mode
+        plan_provider_runtime.get_plan_provider_overlay_mode
     )
     is_plan_provider_overlay_enabled = _bind_session_call(
-        plan_provider_overlay_state.is_plan_provider_overlay_enabled
+        plan_provider_runtime.is_plan_provider_overlay_enabled
     )
     get_provider_point_tool_label = _bind_session_call(
         plan_provider_point.get_provider_point_tool_label
@@ -607,7 +609,7 @@ class PlanProvidersAPI(_SessionAPI):
     )
 
     get_plan_provider_overlay_category = staticmethod(
-        plan_provider_overlay_state.get_plan_provider_overlay_category
+        plan_provider_runtime.get_plan_provider_overlay_category
     )
 
 

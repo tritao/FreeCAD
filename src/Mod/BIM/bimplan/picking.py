@@ -5,7 +5,7 @@
 import FreeCAD
 import math
 from bimplan import hover_picking as plan_hover_picking
-from bimplan import provider_overlay_state as plan_provider_overlay_state
+from bimplan import provider_runtime as plan_provider_runtime
 from bimplan import selection as plan_selection
 from bimplan import targets as plan_targets
 from bimplan.providers import PlanOverlayMarkerKind
@@ -31,7 +31,7 @@ def _get_plan_provider_overlay_pick_mode(session):
 
 
 def _should_prioritize_provider_targets_for_mode(session):
-    return plan_provider_overlay_state.is_focused_provider_overlay_pick_mode(
+    return plan_provider_runtime.is_focused_provider_overlay_pick_mode(
         _get_plan_provider_overlay_pick_mode(session)
     )
 

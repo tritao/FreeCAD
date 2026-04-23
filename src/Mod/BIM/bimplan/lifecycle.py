@@ -12,7 +12,7 @@ from bimplan import spaces as plan_spaces
 from bimplan import window_create as plan_window_create
 from bimplan import target_dispatch as plan_target_dispatch
 from bimplan import target_kinds as plan_target_kinds
-from bimplan.hosts import _PlanEditCommandHost, _PlanEditWallHost
+from bimplan.hosted_openings import _PlanEditCommandHost, _PlanEditWallHost
 
 translate = FreeCAD.Qt.translate
 

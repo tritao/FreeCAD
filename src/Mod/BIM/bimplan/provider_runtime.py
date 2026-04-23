@@ -4,15 +4,11 @@
 
 from contextlib import nullcontext
 from dataclasses import dataclass, replace
+from typing import TypedDict
 
 import FreeCAD
 
-from .provider_targets import (
-    get_plan_provider_target_for_object as _get_plan_provider_target_for_object,
-    get_plan_provider_targets as _get_plan_provider_targets,
-    is_plan_provider_target_object as _is_plan_provider_target_object,
-    normalize_plan_provider_target as _normalize_plan_provider_target,
-)
+from . import visual_keys as plan_visual_keys
 from .providers import (
     PlanActionSpec,
     PlanContextDetailSpec,
@@ -28,15 +24,38 @@ from .providers import (
     PlanOverlayMarkerKind,
     PlanOverlayTargetSpec,
     PlanOverlayTargetKind,
+    PlanProviderTargetSpec,
     PlanSuggestionSpec,
     PlanToolSpec,
     PlanToolInteraction,
 )
 from .semantics import PlanSemanticRecord
-from .targets import PlanTarget
 from .transactions import PlanEditTransaction
 
 translate = FreeCAD.Qt.translate
+
+PLAN_PROVIDER_OVERLAY_MODE_ALL = "all"
+PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE = "architecture"
+PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL = "electrical"
+PLAN_PROVIDER_OVERLAY_MODE_PLUMBING = "plumbing"
+FOCUSED_PROVIDER_OVERLAY_PICK_MODES = frozenset(
+    (
+        PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL,
+        PLAN_PROVIDER_OVERLAY_MODE_PLUMBING,
+    )
+)
+
+
+class _PlanProviderTargetDisplayFields(TypedDict):
+    label: str
+    provider_id: str
+    target_key: str
+    category: str
+    role: str
+    semantic_document_name: str
+    semantic_object_name: str
+    semantic_label: str
+
 
 _PLAN_PROVIDER_SNAPSHOT_CACHE_KEY = ("provider_snapshot", "panel")
 
@@ -238,6 +257,290 @@ def get_plan_provider_display_name(session, provider_id):
     return provider_name or str(provider_id or "").strip()
 
 
+def get_plan_provider_overlay_visibility_key(provider_id, overlay_key):
+    provider_id = str(provider_id or "").strip()
+    overlay_key = str(overlay_key or "").strip()
+    if not provider_id or not overlay_key:
+        return None
+    return (provider_id, overlay_key)
+
+
+def normalize_plan_provider_overlay_mode(mode):
+    normalized = str(mode or "").strip().lower()
+    if normalized == PLAN_PROVIDER_OVERLAY_MODE_ALL:
+        return PLAN_PROVIDER_OVERLAY_MODE_ALL
+    if normalized == PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL:
+        return PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL
+    if normalized == PLAN_PROVIDER_OVERLAY_MODE_PLUMBING:
+        return PLAN_PROVIDER_OVERLAY_MODE_PLUMBING
+    return PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
+
+
+def get_plan_provider_overlay_mode(session):
+    state = getattr(session, "provider_overlay_read_state", None)
+    mode = (
+        getattr(state, "mode", PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE)
+        if state is not None
+        else getattr(session, "_provider_overlay_mode", PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE)
+    )
+    return normalize_plan_provider_overlay_mode(mode)
+
+
+def is_focused_provider_overlay_pick_mode(mode):
+    return normalize_plan_provider_overlay_mode(mode) in FOCUSED_PROVIDER_OVERLAY_PICK_MODES
+
+
+def set_plan_provider_overlay_mode(session, mode):
+    normalized = normalize_plan_provider_overlay_mode(mode)
+    if normalized == get_plan_provider_overlay_mode(session):
+        return False
+    session._provider_overlay_mode = normalized
+    session._provider_overlay_state = None
+    session.selection.clear_hidden_provider_preselection()
+    session._queue_plan_overlay_visual_refresh(plan_visual_keys.PLAN_VISUAL_PROVIDER_OVERLAYS)
+    session._refresh_provider_overlay_mode_panels()
+    return True
+
+
+def get_plan_provider_overlay_category(overlay):
+    category = str(getattr(overlay, "category", "") or "").strip().lower()
+    if category == PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL:
+        return PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL
+    if category == PLAN_PROVIDER_OVERLAY_MODE_PLUMBING:
+        return PLAN_PROVIDER_OVERLAY_MODE_PLUMBING
+    return PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
+
+
+def is_plan_provider_overlay_enabled(session, overlay):
+    key = get_plan_provider_overlay_visibility_key(
+        getattr(overlay, "provider_id", ""),
+        getattr(overlay, "key", ""),
+    )
+    if key is None:
+        return True
+    state = getattr(session, "provider_overlay_read_state", None)
+    visibility = (
+        getattr(state, "visibility", {})
+        if state is not None
+        else getattr(session, "_provider_overlay_visibility", {})
+    )
+    return visibility.get(key, True)
+
+
+def is_plan_provider_overlay_visible_for_mode(session, overlay, mode=None):
+    overlay_mode = normalize_plan_provider_overlay_mode(
+        get_plan_provider_overlay_mode(session) if mode is None else mode
+    )
+    if overlay_mode == PLAN_PROVIDER_OVERLAY_MODE_ALL:
+        return True
+    return get_plan_provider_overlay_category(overlay) == overlay_mode
+
+
+def is_plan_provider_overlay_visible(session, overlay):
+    if not bool(getattr(overlay, "visible", True)):
+        return False
+    if not is_plan_provider_overlay_enabled(session, overlay):
+        return False
+    return is_plan_provider_overlay_visible_for_mode(session, overlay)
+
+
+def set_plan_provider_overlay_visible(session, provider_id, overlay_key, visible):
+    key = get_plan_provider_overlay_visibility_key(provider_id, overlay_key)
+    if key is None:
+        return
+    visible = bool(visible)
+    if visible:
+        session._provider_overlay_visibility.pop(key, None)
+    else:
+        session._provider_overlay_visibility[key] = False
+    session._provider_overlay_state = None
+    session._queue_plan_overlay_visual_refresh(plan_visual_keys.PLAN_VISUAL_PROVIDER_OVERLAYS)
+
+
+def queue_plan_provider_overlay_refresh(session):
+    session._provider_overlay_state = None
+    session._queue_plan_overlay_visual_refresh(plan_visual_keys.PLAN_VISUAL_PROVIDER_OVERLAYS)
+
+
+def queue_plan_provider_overlay_sync(session):
+    session._queue_plan_overlay_visual_refresh(plan_visual_keys.PLAN_VISUAL_PROVIDER_OVERLAYS)
+
+
+def normalize_plan_provider_target(
+    provider_id: str,
+    target: object,
+) -> PlanProviderTargetSpec | None:
+    if not isinstance(target, PlanProviderTargetSpec):
+        return None
+    key = _normalize_plan_provider_target_text(target.key)
+    object_name = _normalize_plan_provider_target_text(target.object_name)
+    if not key or not object_name:
+        return None
+    replacements = {}
+    normalized_provider_id = _normalize_plan_provider_target_text(provider_id)
+    if target.provider_id != normalized_provider_id:
+        replacements["provider_id"] = normalized_provider_id
+    label = _normalize_plan_provider_target_text(target.label)
+    if label != target.label:
+        replacements["label"] = label
+    document_name = _normalize_plan_provider_target_text(target.document_name)
+    if document_name != target.document_name:
+        replacements["document_name"] = document_name
+    if object_name != target.object_name:
+        replacements["object_name"] = object_name
+    semantic_document_name = _normalize_plan_provider_target_text(target.semantic_document_name)
+    if semantic_document_name != target.semantic_document_name:
+        replacements["semantic_document_name"] = semantic_document_name
+    semantic_object_name = _normalize_plan_provider_target_text(target.semantic_object_name)
+    if semantic_object_name != target.semantic_object_name:
+        replacements["semantic_object_name"] = semantic_object_name
+    category = _normalize_plan_provider_target_text(target.category)
+    if category != target.category:
+        replacements["category"] = category
+    role = _normalize_plan_provider_target_text(target.role)
+    if role != target.role:
+        replacements["role"] = role
+    if key != target.key:
+        replacements["key"] = key
+    if not replacements:
+        return target
+    return replace(target, **replacements)
+
+
+def get_plan_provider_targets(session) -> tuple[PlanProviderTargetSpec, ...]:
+    depth = int(getattr(session, "_plan_provider_target_collection_depth", 0) or 0)
+    if depth > 0:
+        return ()
+    session._plan_provider_target_collection_depth = depth + 1
+    try:
+        return session._collect_plan_provider_contributions(
+            "get_targets",
+            session._normalize_plan_provider_target,
+        )
+    finally:
+        session._plan_provider_target_collection_depth = depth
+
+
+def get_plan_provider_target_for_object(session, obj) -> PlanProviderTargetSpec | None:
+    if obj is None:
+        return None
+    object_key = _make_plan_provider_target_object_key(
+        getattr(getattr(obj, "Document", None), "Name", "")
+        or _get_default_plan_provider_target_document_name(session),
+        getattr(obj, "Name", ""),
+    )
+    if object_key is None:
+        return None
+    return _get_plan_provider_target_lookup(session).get(object_key)
+
+
+def is_plan_provider_target_object(session, obj) -> bool:
+    return get_plan_provider_target_for_object(session, obj) is not None
+
+
+def is_plan_provider_target_visible_for_mode(session, obj, mode=None) -> bool:
+    target = get_plan_provider_target_for_object(session, obj)
+    if target is None:
+        return False
+    return bool(session.is_plan_provider_overlay_visible_for_mode(target, mode=mode))
+
+
+def get_plan_provider_target_role_key(session, obj) -> str:
+    target = get_plan_provider_target_for_object(session, obj)
+    if target is None:
+        return ""
+    return str(target.role or "").strip()
+
+
+def get_plan_provider_target_role_label(session, obj) -> str:
+    role = get_plan_provider_target_role_key(session, obj)
+    if not role:
+        return translate("BIM_PlanEdit", "Object")
+    return role.replace("_", " ").title()
+
+
+def format_plan_provider_target_help(session, obj) -> str:
+    if not is_plan_provider_target_object(session, obj):
+        return ""
+    role = get_plan_provider_target_role_key(session, obj).replace("_", " ").lower()
+    get_handles = getattr(session, "_get_selected_provider_edit_handles", None)
+    has_handles = False
+    if callable(get_handles) and getattr(session, "_is_selected_plan_target", None):
+        try:
+            has_handles = bool(session._is_selected_plan_target("provider", obj)) and bool(
+                tuple(get_handles(obj) or ())
+            )
+        except Exception:
+            has_handles = False
+    if role:
+        if has_handles:
+            return translate(
+                "BIM_PlanEdit",
+                "Use in-view handles or the integration details below for the selected {role}.",
+            ).format(role=role)
+        return translate(
+            "BIM_PlanEdit",
+            "Use the integration details and actions below for the selected {role}.",
+        ).format(role=role)
+    if has_handles:
+        return translate(
+            "BIM_PlanEdit",
+            "Use in-view handles or the integration details below for the selected object.",
+        )
+    return translate(
+        "BIM_PlanEdit",
+        "Use the integration details and actions below for the selected object.",
+    )
+
+
+def resolve_plan_provider_target_display_fields(
+    session,
+    semantic_obj,
+    provider_target: PlanProviderTargetSpec | None,
+    fallback_label,
+) -> _PlanProviderTargetDisplayFields:
+    semantic_resolved = None
+    if provider_target is not None:
+        semantic_resolved = session.resolve_plan_semantic_object(provider_target)
+        if semantic_resolved is not None:
+            semantic_obj = semantic_resolved
+
+    semantic_doc = getattr(semantic_obj, "Document", None)
+    fields = {
+        "label": str(fallback_label or ""),
+        "provider_id": "",
+        "target_key": "",
+        "category": "",
+        "role": "",
+        "semantic_document_name": str(getattr(semantic_doc, "Name", "") or ""),
+        "semantic_object_name": str(getattr(semantic_obj, "Name", "") or ""),
+        "semantic_label": str(
+            getattr(semantic_obj, "Label", getattr(semantic_obj, "Name", "")) or ""
+        ),
+    }
+    if provider_target is None:
+        return fields
+
+    provider_label = str(provider_target.label or "").strip()
+    if provider_label:
+        fields["label"] = provider_label
+    fields["provider_id"] = str(provider_target.provider_id or "").strip()
+    fields["target_key"] = str(provider_target.key or "").strip()
+    fields["category"] = str(provider_target.category or "").strip()
+    fields["role"] = str(provider_target.role or "").strip()
+    fields["semantic_document_name"] = str(
+        provider_target.semantic_document_name or fields["semantic_document_name"]
+    ).strip()
+    fields["semantic_object_name"] = str(
+        provider_target.semantic_object_name or fields["semantic_object_name"]
+    ).strip()
+    if semantic_resolved is not None:
+        fields["semantic_label"] = str(
+            getattr(semantic_resolved, "Label", getattr(semantic_resolved, "Name", "")) or ""
+        )
+    return fields
+
+
 def build_plan_semantic_record(session, target_kind, target_obj):
     if not target_kind or target_obj is None:
         return None
@@ -287,6 +590,8 @@ def build_plan_semantic_record(session, target_kind, target_obj):
 
 
 def get_plan_semantic_records(session, targets=None):
+    from .targets import PlanTarget
+
     if targets is None:
         targets = session.get_plan_targets(selected_only=True)
     records = []
@@ -619,27 +924,11 @@ def normalize_plan_provider_overlay(provider_id, overlay):
     return replace(overlay, **replacements)
 
 
-def normalize_plan_provider_target(provider_id, target):
-    return _normalize_plan_provider_target(provider_id, target)
-
-
-def get_plan_provider_targets(session):
-    return _get_plan_provider_targets(session)
-
-
 def get_plan_provider_edit_handles(session):
     return session._collect_plan_provider_contributions(
         "get_edit_handles",
         session._normalize_plan_provider_edit_handle,
     )
-
-
-def get_plan_provider_target_for_object(session, obj):
-    return _get_plan_provider_target_for_object(session, obj)
-
-
-def is_plan_provider_target_object(session, obj):
-    return _is_plan_provider_target_object(session, obj)
 
 
 def _normalize_plan_overlay_target(target):
@@ -807,3 +1096,46 @@ def execute_plan_provider_action(
     session._refresh_task_panel_status()
     session.viewport.focus_plan_view()
     return True
+
+
+def _normalize_plan_provider_target_text(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _get_default_plan_provider_target_document_name(session) -> str:
+    return _normalize_plan_provider_target_text(getattr(getattr(session, "doc", None), "Name", ""))
+
+
+def _make_plan_provider_target_object_key(
+    document_name: object,
+    object_name: object,
+) -> tuple[str, str] | None:
+    normalized_object_name = _normalize_plan_provider_target_text(object_name)
+    if not normalized_object_name:
+        return None
+    return (
+        _normalize_plan_provider_target_text(document_name),
+        normalized_object_name,
+    )
+
+
+def _get_plan_provider_target_lookup(session) -> dict[tuple[str, str], PlanProviderTargetSpec]:
+    refresh_cache = getattr(session, "_plan_provider_refresh_cache", None)
+    cache_key = ("provider_targets", "by_object")
+    if isinstance(refresh_cache, dict) and cache_key in refresh_cache:
+        return refresh_cache[cache_key]
+
+    default_document_name = _get_default_plan_provider_target_document_name(session)
+    targets_by_object = {}
+    for target in tuple(session.get_plan_provider_targets() or ()):
+        target_key = _make_plan_provider_target_object_key(
+            target.document_name or default_document_name,
+            target.object_name,
+        )
+        if target_key is None or target_key in targets_by_object:
+            continue
+        targets_by_object[target_key] = target
+
+    if isinstance(refresh_cache, dict):
+        refresh_cache[cache_key] = targets_by_object
+    return targets_by_object

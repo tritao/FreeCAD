@@ -6,7 +6,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass
 
 import FreeCADGui
-from . import provider_targets as plan_provider_targets
+from . import provider_runtime as plan_provider_runtime
 from . import selection_additive as plan_selection_additive
 from . import selection_observer as plan_selection_observer
 from . import target_dispatch as plan_target_dispatch

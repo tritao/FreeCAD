@@ -212,7 +212,6 @@ SET(bimplan_SRCS
     bimplan/benchmark.py
     bimplan/command_gate.py
     bimplan/hosted_openings.py
-    bimplan/hosts.py
     bimplan/input.py
     bimplan/opening_edit.py
     bimplan/overlays/__init__.py
@@ -227,7 +226,6 @@ SET(bimplan_SRCS
     bimplan/picking.py
     bimplan/provider_edit.py
     bimplan/provider_runtime.py
-    bimplan/provider_targets.py
     bimplan/providers.py
     bimplan/registry.py
     bimplan/semantics.py
