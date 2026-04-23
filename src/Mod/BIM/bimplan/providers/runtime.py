@@ -60,6 +60,42 @@ class _PlanProviderTargetDisplayFields(TypedDict):
 _PLAN_PROVIDER_SNAPSHOT_CACHE_KEY = ("provider_snapshot", "panel")
 
 
+class PlanProvidersAPI:
+    """Owned session surface for Plan Edit provider read helpers."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def get_plan_provider_display_name(self, provider_id):
+        return get_plan_provider_display_name(self.session, provider_id)
+
+    def get_plan_provider_overlay_mode(self):
+        return get_plan_provider_overlay_mode(self.session)
+
+    def is_plan_provider_overlay_enabled(self, category):
+        return is_plan_provider_overlay_enabled(self.session, category)
+
+    def get_provider_point_tool_label(self):
+        from bimplan.providers import point as plan_provider_point
+
+        return plan_provider_point.get_provider_point_tool_label(self.session)
+
+    def get_provider_point_tool_prompt(self):
+        from bimplan.providers import point as plan_provider_point
+
+        return plan_provider_point.get_provider_point_tool_prompt(self.session)
+
+    def get_plan_provider_overlay_category(self, provider_id):
+        del self
+        return get_plan_provider_overlay_category(provider_id)
+
+
 @dataclass(frozen=True)
 class _PlanProviderSnapshotSurfaceSpec:
     field_name: str
