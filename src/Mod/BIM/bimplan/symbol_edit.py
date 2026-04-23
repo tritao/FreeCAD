@@ -162,7 +162,7 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
                 noTracker=True,
             )
         with session._plan_perf_trace_span("symbol_handle_queue_focus_plan_view"):
-            session._queue_focus_plan_view()
+            session.viewport.queue_focus_plan_view()
 
 
 def update_symbol_handle_point_pick(session, point=None, snap_info=None):

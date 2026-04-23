@@ -171,7 +171,7 @@ def get_symbol_overlay_screen_polylines(session, symbol):
 def refresh_selected_symbol_visuals(session):
     session._sync_selected_symbol_overlay()
     session._sync_selected_symbol_handles()
-    session._request_view_redraw()
+    session.viewport.request_view_redraw()
 
 
 def create_symbol_overlay_trackers(session, symbol, color, width, tracker_store, placement=None):

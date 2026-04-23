@@ -37,7 +37,7 @@ def get_provider_point_tool_prompt(session):
     if prompt:
         return prompt
     return translate("BIM_PlanEdit", "Click a plan point for {tool}").format(
-        tool=session._get_provider_point_tool_label()
+        tool=get_provider_point_tool_label(session)
     )
 
 
@@ -57,13 +57,13 @@ def arm_provider_point_tool(session):
         snapper.getPoint(
             callback=session._handle_provider_point_tool_point,
             movecallback=session._update_provider_point_tool_preview,
-            title=session._get_provider_point_tool_prompt(),
+            title=get_provider_point_tool_prompt(session),
             noTracker=True,
         )
     except Exception:
         session._set_draft_point_focus_suppressed(False)
         return False
-    session._queue_focus_plan_view()
+    session.viewport.queue_focus_plan_view()
     return True
 
 

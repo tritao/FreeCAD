@@ -80,8 +80,8 @@ def refresh_task_panel_status(session, selection_only=False):
         if session._tearing_down or not session._document_is_alive():
             return
         session._sanitize_plan_target_references()
-        session._update_input_hints()
-        session._refresh_viewport_status_chip()
+        session.status_text.update_input_hints()
+        session.viewport.refresh_viewport_status_chip()
         panel = session.task_panel
         if panel:
             try:

@@ -131,7 +131,7 @@ def resume_wall_edit_point_pick(session):
                 noTracker=True,
             )
         with session._plan_perf_trace_span("wall_edit_queue_focus_plan_view"):
-            session._queue_focus_plan_view()
+            session.viewport.queue_focus_plan_view()
 
 
 def snapshot_wall_hosted_opening_clearances(session, wall, endpoints):

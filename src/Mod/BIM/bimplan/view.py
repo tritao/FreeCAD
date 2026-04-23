@@ -611,7 +611,7 @@ def queue_focus_plan_view(session):
     except Exception:
         focus_plan_view(session)
         return
-    QtCore.QTimer.singleShot(0, session._focus_plan_view)
+    QtCore.QTimer.singleShot(0, lambda: focus_plan_view(session))
 
 
 def get_plan_view_widget(session):
@@ -646,7 +646,7 @@ def refresh_viewport_status_chip(session, chip_factory):
     chip = ensure_viewport_status_chip(session, chip_factory)
     if chip is None:
         return
-    title, body = session._get_status_chip_text()
+    title, body = session.status_text.get_status_chip_text()
     try:
         chip.set_texts(title, body)
     except Exception:

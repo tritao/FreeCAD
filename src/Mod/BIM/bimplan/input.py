@@ -175,7 +175,7 @@ def on_mouse_moved(session, event_callback):
             return
         if session._grip_trackers or session._is_selected_plan_target("wall"):
             session._sync_wall_grips()
-        session._request_view_redraw()
+        session.viewport.request_view_redraw()
         hovered_after = session._get_hovered_plan_target()
         session._plan_perf_set_fields(
             hovered_after=session._plan_perf_describe_target(hovered_after[0], hovered_after[1])

@@ -249,7 +249,7 @@ def start_opening_handle_point_pick(session, opening, handle_index, handle):
                 noTracker=True,
             )
         with session._plan_perf_trace_span("opening_handle_queue_focus_plan_view"):
-            session._queue_focus_plan_view()
+            session.viewport.queue_focus_plan_view()
 
 
 def update_opening_handle_point_pick(session, point=None, snap_info=None):

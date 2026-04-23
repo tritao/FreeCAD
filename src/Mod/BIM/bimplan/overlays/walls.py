@@ -155,7 +155,7 @@ def run_scheduled_wall_grip_sync(session, generation=None):
         if session._tearing_down:
             return
         sync_wall_grips(session)
-        session._request_view_redraw()
+        session.viewport.request_view_redraw()
 
 
 def clear_wall_grips(session):
