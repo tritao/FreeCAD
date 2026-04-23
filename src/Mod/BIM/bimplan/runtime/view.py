@@ -2,11 +2,53 @@
 
 """View and viewport helpers for BIM Plan Edit."""
 
+from functools import wraps
+
 import FreeCAD
 import FreeCADGui
 
 _VIEW_PREFERENCES_PATH = "User parameter:BaseApp/Preferences/View"
 _ENABLE_PRESELECTION_PARAM = "EnablePreselection"
+
+
+def _bind_viewport_call(func):
+    @wraps(func)
+    def method(self, *args, **kwargs):
+        return func(self.session, *args, **kwargs)
+
+    return method
+
+
+_PLAN_VIEWPORT_API_BOUND_METHODS = (
+    "get_navigation_style",
+    "get_main_window",
+    "find_main_window_action",
+    "capture_navigation_flag",
+    "apply_navigation_flag",
+    "capture_navigation_state",
+    "clear_plan_background_override",
+    "restore_navigation_state",
+    "force_plan_preselection",
+    "restore_preselection_state",
+    "apply_plan_view",
+    "restore_state",
+    "capture_state",
+    "get_interaction_plane",
+    "project_plan_point",
+    "get_plan_view_height",
+    "get_plan_overlay_scale",
+    "scaled_line_width",
+    "scaled_marker_size",
+    "get_plan_view_units_per_pixel",
+    "get_plan_projection_cache_key",
+    "register_edit_callbacks",
+    "unregister_edit_callbacks",
+    "focus_plan_view",
+    "queue_focus_plan_view",
+    "get_plan_view_widget",
+    "clear_viewport_status_chip",
+    "request_view_redraw",
+)
 
 
 class PlanViewportAPI:
@@ -20,90 +62,6 @@ class PlanViewportAPI:
     @property
     def session(self):
         return self._session
-
-    def get_navigation_style(self):
-        return get_navigation_style(self.session)
-
-    def get_main_window(self):
-        return get_main_window(self.session)
-
-    def find_main_window_action(self, command_name):
-        return find_main_window_action(self.session, command_name)
-
-    def capture_navigation_flag(self, target, getter_name, state_key):
-        return capture_navigation_flag(self.session, target, getter_name, state_key)
-
-    def apply_navigation_flag(self, target, setter_name, state_key, enabled):
-        return apply_navigation_flag(self.session, target, setter_name, state_key, enabled)
-
-    def capture_navigation_state(self):
-        return capture_navigation_state(self.session)
-
-    def clear_plan_background_override(self):
-        return clear_plan_background_override(self.session)
-
-    def restore_navigation_state(self):
-        return restore_navigation_state(self.session)
-
-    def force_plan_preselection(self):
-        return force_plan_preselection(self.session)
-
-    def restore_preselection_state(self):
-        return restore_preselection_state(self.session)
-
-    def apply_plan_view(self, fit=True):
-        return apply_plan_view(self.session, fit=fit)
-
-    def restore_state(self):
-        return restore_state(self.session)
-
-    def capture_state(self):
-        return capture_state(self.session)
-
-    def get_interaction_plane(self):
-        return get_interaction_plane(self.session)
-
-    def project_plan_point(self, point, plane=None):
-        return project_plan_point(self.session, point, plane=plane)
-
-    def get_plan_view_height(self):
-        return get_plan_view_height(self.session)
-
-    def get_plan_overlay_scale(self):
-        return get_plan_overlay_scale(self.session)
-
-    def scaled_line_width(self, width):
-        return scaled_line_width(self.session, width)
-
-    def scaled_marker_size(self, size):
-        return scaled_marker_size(self.session, size)
-
-    def get_plan_view_units_per_pixel(self):
-        return get_plan_view_units_per_pixel(self.session)
-
-    def get_plan_projection_cache_key(self):
-        return get_plan_projection_cache_key(self.session)
-
-    def register_edit_callbacks(self):
-        return register_edit_callbacks(self.session)
-
-    def unregister_edit_callbacks(self):
-        return unregister_edit_callbacks(self.session)
-
-    def focus_plan_view(self):
-        return focus_plan_view(self.session)
-
-    def queue_focus_plan_view(self):
-        return queue_focus_plan_view(self.session)
-
-    def get_plan_view_widget(self):
-        return get_plan_view_widget(self.session)
-
-    def clear_viewport_status_chip(self):
-        return clear_viewport_status_chip(self.session)
-
-    def request_view_redraw(self):
-        return request_view_redraw(self.session)
 
     def capture_view_action_state(self):
         return capture_view_action_state(
@@ -144,6 +102,10 @@ class PlanViewportAPI:
             self.session,
             _PlanEditViewportStatusChip,
         )
+
+
+for _method_name in _PLAN_VIEWPORT_API_BOUND_METHODS:
+    setattr(PlanViewportAPI, _method_name, _bind_viewport_call(globals()[_method_name]))
 
 
 def _copy_plane(plane):
