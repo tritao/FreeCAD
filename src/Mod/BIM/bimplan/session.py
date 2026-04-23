@@ -2258,103 +2258,28 @@ class PlanEditSession:
         return plan_picking.pick_plan_region_target_from_footprints(self, mouse_pos)
 
     def _has_direct_true_property(self, obj, prop_name):
-        if not obj:
-            return False
-        try:
-            if prop_name not in (getattr(obj, "PropertiesList", []) or []):
-                return False
-            return bool(getattr(obj, prop_name))
-        except Exception:
-            return False
+        return plan_document_visuals.has_direct_true_property(obj, prop_name)
 
     def _is_hidden_library_definition_object(self, obj):
-        if not obj:
-            return False
-        if self._has_direct_true_property(obj, "IsLibraryDefinition"):
-            return True
-        for parent in getattr(obj, "InListRecursive", []) or getattr(obj, "InList", []):
-            if self._has_direct_true_property(parent, "IsLibraryDefinition"):
-                return True
-        return False
+        return plan_document_visuals.is_hidden_library_definition_object(obj)
 
     def _should_register_created_plan_object(self, obj):
-        if self._tearing_down or not obj or not self.doc:
-            return False
-        try:
-            if getattr(obj, "Document", None) != self.doc:
-                return False
-            if self._is_hidden_library_definition_object(obj):
-                return False
-            return self._is_supported_plan_object(obj)
-        except ReferenceError:
-            return False
+        return plan_document_visuals.should_register_created_plan_object(self, obj)
 
     def _queue_created_plan_object(self, obj):
-        if not obj or not getattr(obj, "Name", None):
-            return
-        self._pending_created_plan_objects[obj.Name] = obj
-        if self._are_document_visual_updates_deferred():
-            self._created_plan_objects_flush_deferred = True
-            return
-        if self._created_plan_objects_flush_queued:
-            return
-        self._created_plan_objects_flush_queued = True
-        try:
-            from PySide import QtCore
-
-            QtCore.QTimer.singleShot(0, self._flush_created_plan_objects)
-        except Exception:
-            self._flush_created_plan_objects()
+        return plan_document_visuals.queue_created_plan_object(self, obj)
 
     def _flush_created_plan_objects(self, force=False):
-        self._created_plan_objects_flush_queued = False
-        if self._are_document_visual_updates_deferred() and not force:
-            self._created_plan_objects_flush_deferred = True
-            return
-        self._created_plan_objects_flush_deferred = False
-        pending = list(self._pending_created_plan_objects.values())
-        self._pending_created_plan_objects.clear()
-        eligible = []
-        for obj in pending:
-            if not self._should_register_created_plan_object(obj):
-                continue
-            eligible.append(obj)
-        self._register_plan_objects(eligible)
+        return plan_document_visuals.flush_created_plan_objects(self, force=force)
 
     def _are_document_visual_updates_deferred(self):
-        return self._document_visual_update_defer_depth > 0
+        return plan_document_visuals.are_document_visual_updates_deferred(self)
 
     def _defer_document_visual_refresh(self):
-        self._document_visual_refresh_deferred = True
+        return plan_document_visuals.defer_document_visual_refresh(self)
 
-    @contextmanager
     def defer_document_visual_updates(self):
-        """Batch document observer visual work while an external command mutates the model."""
-
-        self._document_visual_update_defer_depth += 1
-        try:
-            yield
-        finally:
-            self._document_visual_update_defer_depth = max(
-                0,
-                self._document_visual_update_defer_depth - 1,
-            )
-            if self._document_visual_update_defer_depth or self._tearing_down:
-                return
-            if self._created_plan_objects_flush_deferred or self._pending_created_plan_objects:
-                self._created_plan_objects_flush_deferred = False
-                self._document_visual_update_defer_depth = 1
-                try:
-                    self._flush_created_plan_objects(force=True)
-                finally:
-                    self._document_visual_update_defer_depth = 0
-            if self._document_visual_refresh_deferred:
-                self._document_visual_refresh_deferred = False
-                if not self._document_is_alive():
-                    return
-                self._invalidate_document_dependent_plan_visuals()
-                self._refresh_primary_selected_plan_target()
-                self._refresh_task_panel_status(selection_only=True)
+        return plan_document_visuals.defer_document_visual_updates(self)
 
     def _set_pending_selected_plan_target(self, kind=None, obj=None):
         return plan_selection.set_pending_selected_plan_target(self, kind=kind, obj=obj)
