@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import FreeCAD
 
 from . import provider_targets as plan_provider_targets
+from . import target_kinds as plan_target_kinds
 from .provider_targets import resolve_plan_provider_target_display_fields
 
 
@@ -30,17 +31,17 @@ class PlanTarget:
 
 def get_plan_target_kind_for_object(session, obj):
     if session._is_hosted_opening_object(obj):
-        return "opening"
+        return plan_target_kinds.PLAN_TARGET_OPENING
     if session._is_plan_symbol_instance(obj):
-        return "symbol"
+        return plan_target_kinds.PLAN_TARGET_SYMBOL
     if session._is_plan_provider_target_object(obj):
-        return "provider"
+        return plan_target_kinds.PLAN_TARGET_PROVIDER
     if session._is_plan_region_object(obj):
-        return "region"
+        return plan_target_kinds.PLAN_TARGET_REGION
     if session._is_plan_selectable_wall(obj):
-        return "wall"
+        return plan_target_kinds.PLAN_TARGET_WALL
     if session._is_plan_space_object(obj):
-        return "space"
+        return plan_target_kinds.PLAN_TARGET_SPACE
     return None
 
 
@@ -80,7 +81,7 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
             seen.add(name)
         target_kind = session._get_plan_target_kind_for_object(candidate)
         if (
-            target_kind == "provider"
+            target_kind == plan_target_kinds.PLAN_TARGET_PROVIDER
             and not plan_provider_targets.is_plan_provider_target_visible_for_mode(
                 session,
                 candidate,
@@ -95,7 +96,7 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
     if semantic_obj and semantic_name not in seen:
         target_kind = session._get_plan_target_kind_for_object(semantic_obj)
         if (
-            target_kind == "provider"
+            target_kind == plan_target_kinds.PLAN_TARGET_PROVIDER
             and not plan_provider_targets.is_plan_provider_target_visible_for_mode(
                 session,
                 semantic_obj,
@@ -239,7 +240,9 @@ def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=
     if not kind or obj is None:
         return None
     provider_target = (
-        session._get_plan_provider_target_for_object(obj) if kind == "provider" else None
+        session._get_plan_provider_target_for_object(obj)
+        if kind == plan_target_kinds.PLAN_TARGET_PROVIDER
+        else None
     )
     semantic_obj = session._get_plan_semantic_object(obj)
     doc = getattr(obj, "Document", None)

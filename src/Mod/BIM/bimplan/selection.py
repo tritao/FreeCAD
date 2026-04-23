@@ -7,6 +7,7 @@ from contextlib import contextmanager, nullcontext
 import FreeCAD
 import FreeCADGui
 from . import provider_targets as plan_provider_targets
+from . import target_kinds as plan_target_kinds
 
 
 def get_gui_selection_ex():
@@ -531,12 +532,12 @@ def clear_selected_plan_target_if_matches(session, kind, obj):
 
 def is_valid_plan_target(session, kind, obj):
     validators = {
-        "opening": session._is_hosted_opening_object,
-        "symbol": session._is_plan_symbol_instance,
-        "provider": session._is_plan_provider_target_object,
-        "region": session._is_plan_region_object,
-        "space": session._is_plan_space_object,
-        "wall": session._is_plan_selectable_wall,
+        plan_target_kinds.PLAN_TARGET_OPENING: session._is_hosted_opening_object,
+        plan_target_kinds.PLAN_TARGET_SYMBOL: session._is_plan_symbol_instance,
+        plan_target_kinds.PLAN_TARGET_PROVIDER: session._is_plan_provider_target_object,
+        plan_target_kinds.PLAN_TARGET_REGION: session._is_plan_region_object,
+        plan_target_kinds.PLAN_TARGET_SPACE: session._is_plan_space_object,
+        plan_target_kinds.PLAN_TARGET_WALL: session._is_plan_selectable_wall,
     }
     validator = validators.get(kind)
     return bool(validator is not None and validator(obj))
@@ -899,10 +900,10 @@ def queue_restore_selected_plan_target(session, kind, obj):
     if not obj:
         return
     queue_restore = {
-        "opening": session._queue_restore_selected_opening,
-        "symbol": session._queue_restore_selected_symbol,
-        "region": session._queue_restore_selected_region,
-        "space": session._queue_restore_selected_space,
+        plan_target_kinds.PLAN_TARGET_OPENING: session._queue_restore_selected_opening,
+        plan_target_kinds.PLAN_TARGET_SYMBOL: session._queue_restore_selected_symbol,
+        plan_target_kinds.PLAN_TARGET_REGION: session._queue_restore_selected_region,
+        plan_target_kinds.PLAN_TARGET_SPACE: session._queue_restore_selected_space,
     }.get(kind)
     if queue_restore is not None:
         queue_restore(obj)
@@ -918,12 +919,12 @@ def select_plan_target_for_plan_edit(
     defer_wall_grips=False,
 ):
     validators = {
-        "opening": session._is_hosted_opening_object,
-        "provider": session._is_plan_provider_target_object,
-        "symbol": session._is_plan_symbol_instance,
-        "region": session._is_plan_region_object,
-        "space": session._is_plan_space_object,
-        "wall": session._is_plan_selectable_wall,
+        plan_target_kinds.PLAN_TARGET_OPENING: session._is_hosted_opening_object,
+        plan_target_kinds.PLAN_TARGET_PROVIDER: session._is_plan_provider_target_object,
+        plan_target_kinds.PLAN_TARGET_SYMBOL: session._is_plan_symbol_instance,
+        plan_target_kinds.PLAN_TARGET_REGION: session._is_plan_region_object,
+        plan_target_kinds.PLAN_TARGET_SPACE: session._is_plan_space_object,
+        plan_target_kinds.PLAN_TARGET_WALL: session._is_plan_selectable_wall,
     }
     validator = validators.get(kind)
     if validator is None or not validator(obj):
@@ -932,7 +933,9 @@ def select_plan_target_for_plan_edit(
     session.current_tool = "Select"
     session._provider_selected_objects = []
     preserve_hovered_symbol_overlay = (
-        kind == "symbol" and session.hovered_symbol == obj and bool(session._symbol_hover_trackers)
+        kind == plan_target_kinds.PLAN_TARGET_SYMBOL
+        and session.hovered_symbol == obj
+        and bool(session._symbol_hover_trackers)
     )
     session._set_selected_plan_target(
         kind,

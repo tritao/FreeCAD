@@ -6,6 +6,7 @@ import FreeCAD
 import math
 import time
 from bimplan import provider_targets as plan_provider_targets
+from bimplan import target_kinds as plan_target_kinds
 from bimplan import targets as plan_targets
 from bimplan.providers import PlanOverlayMarkerKind
 
@@ -1343,12 +1344,12 @@ def _has_provider_overlay_target_identity(target):
 
 def get_hovered_plan_target(session):
     for kind, obj in (
-        ("opening", session.hovered_opening),
-        ("provider", session.hovered_provider),
-        ("symbol", session.hovered_symbol),
-        ("wall", session.hovered_wall),
-        ("region", session.hovered_region),
-        ("space", session.hovered_space),
+        (plan_target_kinds.PLAN_TARGET_OPENING, session.hovered_opening),
+        (plan_target_kinds.PLAN_TARGET_PROVIDER, session.hovered_provider),
+        (plan_target_kinds.PLAN_TARGET_SYMBOL, session.hovered_symbol),
+        (plan_target_kinds.PLAN_TARGET_WALL, session.hovered_wall),
+        (plan_target_kinds.PLAN_TARGET_REGION, session.hovered_region),
+        (plan_target_kinds.PLAN_TARGET_SPACE, session.hovered_space),
     ):
         if obj is not None:
             return (kind, obj)
@@ -1425,14 +1426,14 @@ def should_skip_hover_pick(session, mouse_pos, force=False):
 
 def clear_hovered_plan_targets(session, kinds=None):
     clearers = {
-        "wall": session._set_hovered_wall,
-        "opening": session._set_hovered_opening,
-        "symbol": session._set_hovered_symbol,
-        "provider": session._set_hovered_provider,
-        "space": session._set_hovered_space,
-        "region": session._set_hovered_region,
+        plan_target_kinds.PLAN_TARGET_WALL: session._set_hovered_wall,
+        plan_target_kinds.PLAN_TARGET_OPENING: session._set_hovered_opening,
+        plan_target_kinds.PLAN_TARGET_SYMBOL: session._set_hovered_symbol,
+        plan_target_kinds.PLAN_TARGET_PROVIDER: session._set_hovered_provider,
+        plan_target_kinds.PLAN_TARGET_SPACE: session._set_hovered_space,
+        plan_target_kinds.PLAN_TARGET_REGION: session._set_hovered_region,
     }
-    for kind in kinds or ("wall", "opening", "symbol", "provider", "space", "region"):
+    for kind in kinds or plan_target_kinds.HOVERED_PLAN_TARGET_KINDS:
         clear_hovered = clearers.get(kind)
         if clear_hovered is not None:
             clear_hovered(None)

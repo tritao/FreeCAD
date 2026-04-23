@@ -4,6 +4,7 @@
 
 from contextlib import contextmanager
 
+from bimplan import target_kinds as plan_target_kinds
 from bimplan import visual_keys as plan_visual_keys
 
 _OPENING_VISUAL_PROPERTIES = {
@@ -569,9 +570,9 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
         session._refresh_plan_object_footprint_display(session.hovered_space)
     secondary_targets = session._get_secondary_selected_plan_targets()
     for target_kind, target_obj in secondary_targets:
-        if target_kind in ("symbol", "region", "space"):
+        if target_kind in plan_target_kinds.FOOTPRINT_PLAN_TARGET_KINDS:
             session._refresh_plan_object_footprint_display(target_obj)
-        elif target_kind == "opening":
+        elif target_kind == plan_target_kinds.PLAN_TARGET_OPENING:
             session._refresh_opening_footprint_display(target_obj)
             session._refresh_opening_host_footprint_displays(target_obj)
     if selected_opening:
