@@ -7,9 +7,11 @@ from dataclasses import dataclass
 import FreeCAD
 import FreeCADGui
 
+from bimplan import document_visuals as plan_document_visuals
 from bimplan import selection as plan_selection
 from bimplan.selection import target_dispatch as plan_target_dispatch
 from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection import targets as plan_targets
 
 translate = FreeCAD.Qt.translate
 
@@ -1568,3 +1570,119 @@ def format_space_preflight_text(report):
     if details:
         return "{}\n{}".format(status, details[0])
     return status
+
+
+from functools import wraps
+
+
+def _bind_session_call(func):
+    @wraps(func)
+    def method(self, *args, **kwargs):
+        return func(self.session, *args, **kwargs)
+
+    return method
+
+
+class _SessionAPI:
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+
+class PlanSpacesAPI(_SessionAPI):
+    """Owned session surface for Plan Edit space and region behavior."""
+
+    __slots__ = ()
+
+    get_space_reference_point = _bind_session_call(get_space_reference_point)
+    get_space_boundary_reference_point = _bind_session_call(get_space_boundary_reference_point)
+    get_space_boundary_entries = _bind_session_call(get_space_boundary_entries)
+    get_selected_space_boundary_links = _bind_session_call(get_selected_space_boundary_links)
+    get_space_region_seed_targets = _bind_session_call(get_space_region_seed_targets)
+    get_selected_space_region_seed = _bind_session_call(get_selected_space_region_seed)
+    get_space_creation_request = _bind_session_call(get_space_creation_request)
+    get_existing_space_region_filter_spaces = _bind_session_call(
+        get_existing_space_region_filter_spaces
+    )
+    is_space_region_candidate_claimed = _bind_session_call(is_space_region_candidate_claimed)
+    filter_claimed_space_region_candidates = _bind_session_call(
+        filter_claimed_space_region_candidates
+    )
+    get_space_region_candidate_report = _bind_session_call(get_space_region_candidate_report)
+    get_space_preflight_report = _bind_session_call(get_space_preflight_report)
+    has_active_space_separator_tool = _bind_session_call(has_active_space_separator_tool)
+    has_active_plan_region_tool = _bind_session_call(has_active_plan_region_tool)
+    clear_plan_region_preview = _bind_session_call(clear_plan_region_preview)
+    cancel_plan_region_tool = _bind_session_call(cancel_plan_region_tool)
+    get_plan_region_close_tolerance = _bind_session_call(get_plan_region_close_tolerance)
+    get_plan_region_preview_segments = _bind_session_call(get_plan_region_preview_segments)
+    update_plan_region_preview = _bind_session_call(update_plan_region_preview)
+    create_plan_region = _bind_session_call(create_plan_region)
+    finalize_plan_region = _bind_session_call(finalize_plan_region)
+    handle_plan_region_point = _bind_session_call(handle_plan_region_point)
+    clear_space_separator_preview = _bind_session_call(clear_space_separator_preview)
+    cancel_space_separator_tool = _bind_session_call(cancel_space_separator_tool)
+    update_space_separator_preview = _bind_session_call(update_space_separator_preview)
+    create_space_separator = _bind_session_call(create_space_separator)
+    handle_space_separator_point = _bind_session_call(handle_space_separator_point)
+    get_space_region_candidate_polylines = _bind_session_call(get_space_region_candidate_polylines)
+    get_space_region_candidate_segments = _bind_session_call(get_space_region_candidate_segments)
+    pick_space_region_candidate = _bind_session_call(pick_space_region_candidate)
+    create_space_region_base_object = _bind_session_call(create_space_region_base_object)
+    begin_space_region_pick = _bind_session_call(begin_space_region_pick)
+    cancel_space_region_pick = _bind_session_call(cancel_space_region_pick)
+    create_space_from_region_candidate = _bind_session_call(create_space_from_region_candidate)
+    activate_space_region_candidate = _bind_session_call(activate_space_region_candidate)
+    create_space_from_current_selection = _bind_session_call(create_space_from_current_selection)
+    space_has_valid_geometry = _bind_session_call(space_has_valid_geometry)
+    set_selected_space_label = _bind_session_call(set_selected_space_label)
+    set_selected_space_type = _bind_session_call(set_selected_space_type)
+    set_selected_region_label = _bind_session_call(set_selected_region_label)
+    set_selected_region_scheme = _bind_session_call(set_selected_region_scheme)
+    set_selected_region_type = _bind_session_call(set_selected_region_type)
+    set_selected_region_parent_space = _bind_session_call(set_selected_region_parent_space)
+    set_space_boundaries = _bind_session_call(set_space_boundaries)
+    add_boundaries_to_selected_space = _bind_session_call(add_boundaries_to_selected_space)
+    remove_selected_space_boundaries = _bind_session_call(remove_selected_space_boundaries)
+    start_space_text_position_pick = _bind_session_call(start_space_text_position_pick)
+    finish_space_text_position_pick = _bind_session_call(finish_space_text_position_pick)
+    cancel_space_text_position_pick = _bind_session_call(cancel_space_text_position_pick)
+
+    copy_shape_without_element_map = staticmethod(copy_shape_without_element_map)
+    space_boundary_key = staticmethod(space_boundary_key)
+    get_xy_bound_box_iou = staticmethod(get_xy_bound_box_iou)
+    report_space_region_candidate_failure = staticmethod(report_space_region_candidate_failure)
+    format_space_region_candidate_area = staticmethod(format_space_region_candidate_area)
+    format_space_preflight_text = staticmethod(format_space_preflight_text)
+    report_space_creation_failure = staticmethod(report_space_creation_failure)
+    is_plan_space_object = _bind_session_call(plan_targets.is_plan_space_object)
+
+    def get_space_region_candidate_count(self):
+        state = getattr(self.session, "task_panel_state", None)
+        if state is not None:
+            return len(getattr(state, "space_region_candidates", ()) or ())
+        return len(getattr(self.session, "_space_region_candidates", ()) or ())
+
+    def get_hovered_space_region_candidate(self):
+        state = getattr(self.session, "task_panel_state", None)
+        if state is not None:
+            return getattr(state, "hovered_space_region_candidate", None)
+        return getattr(self.session, "_hovered_space_region_candidate", None)
+
+    def get_plan_region_parent_space(self):
+        state = getattr(self.session, "task_panel_state", None)
+        if state is not None:
+            return getattr(state, "plan_region_parent_space", None)
+        return getattr(self.session, "_plan_region_parent_space", None)
+
+    def set_hovered_space_region_candidate(self, candidate):
+        return set_hovered_space_region_candidate(
+            self.session,
+            candidate,
+            session_visual_key=plan_document_visuals.PLAN_VISUAL_SPACE_REGION_PICK,
+        )
