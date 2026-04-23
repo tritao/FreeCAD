@@ -154,7 +154,7 @@ def _apply_selection_refresh_result(session, refresh_result):
 
 
 def _resolve_direct_selection_refresh_result(session, previous_wall):
-    if session._is_wall_edit_modal_active():
+    if session.wall_edit.is_wall_edit_modal_active():
         return SelectionRefreshResult(
             primary_kind=plan_target_kinds.PLAN_TARGET_WALL,
             primary_obj=session._edit_wall,

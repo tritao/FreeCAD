@@ -524,10 +524,10 @@ class TestBimPlanCore(unittest.TestCase):
             "clip_preview_polygon_to_plane",
             return_value=("clipped",),
         ) as clip_preview_polygon_to_plane:
-            self.assertIs(wall, session._get_selected_target_for_kind("wall"))
+            self.assertIs(wall, session.selection.get_selected_target_for_kind("wall"))
             self.assertEqual(
                 {"ready": True},
-                session._get_space_preflight_report(targets=targets),
+                session.spaces.get_space_preflight_report(targets=targets),
             )
             self.assertTrue(session.can_place_plan_window())
             self.assertTrue(session._is_modal_plan_interaction_active())
@@ -536,7 +536,7 @@ class TestBimPlanCore(unittest.TestCase):
             self.assertEqual("Miter", session.get_plan_join_type_label())
             self.assertIs(joint, session._get_plan_candidate_joint())
             self.assertEqual(4200.0, session._get_plan_view_height())
-            self.assertTrue(session._has_active_wall_edit())
+            self.assertTrue(session.wall_edit.has_active_wall_edit())
             self.assertEqual(
                 ("Plan Edit", "Select\nWork directly in the viewport"),
                 session._get_status_chip_text(),

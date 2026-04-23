@@ -12,7 +12,7 @@ _MIN_WALL_LENGTH = 10.0
 
 
 def has_active_wall_edit(session):
-    return session._is_wall_edit_modal_active() or session._embedded_tool_name == "Wall"
+    return session.wall_edit.is_wall_edit_modal_active() or session._embedded_tool_name == "Wall"
 
 
 def is_wall_edit_modal_active(session):
@@ -38,7 +38,7 @@ def is_selected_wall_endpoint_editable(session):
 
 def cancel_wall_edit(session, restore=True, refresh=True):
     del restore
-    if not session._has_active_wall_edit():
+    if not session.wall_edit.has_active_wall_edit():
         if refresh:
             session.current_tool = "Select"
             session._refresh_task_panel_status()
@@ -121,7 +121,7 @@ def start_wall_edit(session, mode):
 
 def resume_wall_edit_point_pick(session):
     with session._plan_perf_trace_span("resume_wall_edit_point_pick"):
-        if not session._is_wall_edit_modal_active():
+        if not session.wall_edit.is_wall_edit_modal_active():
             return
         mode = session._edit_endpoint
         title = {
@@ -240,7 +240,7 @@ def queue_wall_edit_task_panel_refresh(session):
 
 def flush_wall_edit_task_panel_refresh(session):
     session._wall_edit_task_panel_refresh_queued = False
-    if session._tearing_down or not session._is_wall_edit_modal_active():
+    if session._tearing_down or not session.wall_edit.is_wall_edit_modal_active():
         return
     with session._plan_perf_trace_event("queued_wall_edit_task_panel_refresh"):
         session._refresh_task_panel_status(selection_only=True)
@@ -716,7 +716,7 @@ def update_wall_edit_preview_geometry(session, points):
         session._plan_relation_status_message = translate(
             "BIM_PlanEdit", "Preview warning: {label} ({status})"
         ).format(label=label, status=status)
-    elif session._is_wall_edit_modal_active():
+    elif session.wall_edit.is_wall_edit_modal_active():
         session._clear_plan_relation_status()
 
     segments = []
