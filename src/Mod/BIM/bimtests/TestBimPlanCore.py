@@ -3,6 +3,7 @@
 from contextlib import nullcontext
 import unittest
 import sys
+import weakref
 from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
@@ -816,6 +817,144 @@ class TestBimPlanCore(unittest.TestCase):
             items,
             widget._filter_provider_overlay_legend_items_for_mode(items, active_mode="all"),
         )
+
+    def test_integration_refresh_timer_uses_weak_panel_reference(self):
+        callbacks = []
+
+        class _Timer:
+            @staticmethod
+            def singleShot(_delay, callback):
+                callbacks.append(callback)
+
+        widget = object.__new__(PlanEditControlsWidget)
+        widget.form = object()
+        widget.session = SimpleNamespace()
+        widget._integration_refresh_queued = False
+        widget._integration_refresh_generation = 0
+
+        with patch.dict(
+            sys.modules,
+            {"PySide": SimpleNamespace(QtCore=SimpleNamespace(QTimer=_Timer))},
+        ):
+            widget._queue_integration_panel_refresh()
+
+        self.assertEqual(1, len(callbacks))
+        callback = callbacks[0]
+        callback_refs = list(callback.__defaults__ or ())
+        if callback.__closure__:
+            callback_refs.extend(cell.cell_contents for cell in callback.__closure__)
+
+        self.assertNotIn(widget, callback_refs)
+        self.assertTrue(
+            any(isinstance(ref, weakref.ReferenceType) and ref() is widget for ref in callback_refs)
+        )
+
+    def test_plan_controls_dispose_detaches_without_deferred_delete(self):
+        class _Signal:
+            def __init__(self):
+                self.disconnected = False
+
+            def disconnect(self):
+                self.disconnected = True
+
+        class _Button:
+            def __init__(self):
+                self.clicked = _Signal()
+                self.toggled = _Signal()
+
+        class _Combo:
+            def __init__(self):
+                self.currentIndexChanged = _Signal()
+
+        class _LineEdit:
+            def __init__(self):
+                self.editingFinished = _Signal()
+                self.returnPressed = _Signal()
+                self.textChanged = _Signal()
+
+        class _Layout:
+            def __init__(self):
+                self.removed = None
+
+            def removeWidget(self, widget):
+                self.removed = widget
+
+        class _Parent:
+            def __init__(self, layout):
+                self._layout = layout
+
+            def layout(self):
+                return self._layout
+
+        class _Form:
+            def __init__(self, parent, button, combo, line_edit):
+                self._parent = parent
+                self._children = {
+                    _Button: [button],
+                    _Combo: [combo],
+                    _LineEdit: [line_edit],
+                }
+                self.hidden = False
+                self.parent_set_to = object()
+                self.delete_later_called = False
+
+            def findChildren(self, child_type):
+                return list(self._children.get(child_type, ()))
+
+            def parentWidget(self):
+                return self._parent
+
+            def hide(self):
+                self.hidden = True
+
+            def setParent(self, parent):
+                self.parent_set_to = parent
+
+            def deleteLater(self):
+                self.delete_later_called = True
+
+        button = _Button()
+        combo = _Combo()
+        line_edit = _LineEdit()
+        layout = _Layout()
+        form = _Form(_Parent(layout), button, combo, line_edit)
+
+        widget = object.__new__(PlanEditControlsWidget)
+        widget.form = form
+        widget.session = SimpleNamespace()
+        widget._integration_refresh_queued = True
+        widget._integration_refresh_generation = 0
+        widget._space_type_completer = None
+
+        with patch.dict(
+            sys.modules,
+            {
+                "PySide": SimpleNamespace(
+                    QtGui=SimpleNamespace(
+                        QAbstractButton=_Button,
+                        QComboBox=_Combo,
+                        QLineEdit=_LineEdit,
+                    )
+                )
+            },
+        ):
+            widget.dispose()
+
+        self.assertFalse(widget._integration_refresh_queued)
+        self.assertEqual(1, widget._integration_refresh_generation)
+        self.assertTrue(button.clicked.disconnected)
+        self.assertTrue(button.toggled.disconnected)
+        self.assertTrue(combo.currentIndexChanged.disconnected)
+        self.assertTrue(line_edit.editingFinished.disconnected)
+        self.assertTrue(line_edit.returnPressed.disconnected)
+        self.assertTrue(line_edit.textChanged.disconnected)
+        self.assertIs(layout.removed, form)
+        self.assertTrue(form.hidden)
+        self.assertIsNone(form.parent_set_to)
+        self.assertFalse(form.delete_later_called)
+        self.assertIsNone(widget.form)
+        self.assertIsNone(widget.session)
+        widget._run_queued_integration_panel_refresh(widget._integration_refresh_generation)
 
     def test_provider_target_record_uses_provider_metadata(self):
         marker = SimpleNamespace(

@@ -2,6 +2,8 @@
 
 """Task-panel controls for BIM Plan Edit."""
 
+import weakref
+
 import FreeCAD
 from bimplan.providers import (
     PlanContextPanelState,
@@ -11,6 +13,12 @@ from bimplan.providers import (
 )
 
 translate = FreeCAD.Qt.translate
+
+
+def _run_queued_integration_panel_refresh(panel_ref, generation):
+    panel = panel_ref()
+    if panel is not None:
+        panel._run_queued_integration_panel_refresh(generation)
 
 
 class PlanEditControlsWidget:
@@ -75,13 +83,16 @@ class PlanEditControlsWidget:
         return tuple(self._modal_focus_widgets)
 
     def _session_is_inactive(self):
-        if getattr(self.session, "_tearing_down", False) or getattr(
-            self.session,
+        session = getattr(self, "session", None)
+        if session is None:
+            return True
+        if getattr(session, "_tearing_down", False) or getattr(
+            session,
             "_finishing",
             False,
         ):
             return True
-        document_is_alive = getattr(self.session, "_document_is_alive", None)
+        document_is_alive = getattr(session, "_document_is_alive", None)
         if callable(document_is_alive):
             return not document_is_alive()
         return False
@@ -1677,24 +1688,25 @@ class PlanEditControlsWidget:
         try:
             from PySide import QtCore
 
+            panel_ref = weakref.ref(self)
             QtCore.QTimer.singleShot(
                 int(delay_ms),
-                lambda generation=generation: self._run_queued_integration_panel_refresh(
-                    generation
+                lambda generation=generation, panel_ref=panel_ref: (
+                    _run_queued_integration_panel_refresh(panel_ref, generation)
                 ),
             )
         except Exception:
             self._run_queued_integration_panel_refresh(generation)
 
     def _run_queued_integration_panel_refresh(self, generation=None):
+        if not self._integration_refresh_queued:
+            return
+        if generation is not None and generation != self._integration_refresh_generation:
+            return
+        if self._session_is_inactive():
+            self._integration_refresh_queued = False
+            return
         with self.session._plan_perf_trace_event("queued_integration_panel_refresh"):
-            if not self._integration_refresh_queued:
-                return
-            if generation is not None and generation != self._integration_refresh_generation:
-                return
-            if self._session_is_inactive():
-                self._integration_refresh_queued = False
-                return
             self._integration_refresh_queued = False
             self._refresh_integration_panel(defer=False)
 
@@ -2419,11 +2431,74 @@ class PlanEditControlsWidget:
             except Exception:
                 pass
 
-    def dispose(self):
+    def mark_closed(self):
         self._integration_refresh_queued = False
         self._integration_refresh_generation += 1
+
+    def _disconnect_signal(self, signal):
+        if signal is None:
+            return
+        try:
+            import warnings
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                signal.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        except Exception:
+            pass
+
+    def _disconnect_widget_signals(self, form):
+        if form is None:
+            return
+        try:
+            from PySide import QtGui
+        except Exception:
+            return
+
+        try:
+            buttons = form.findChildren(QtGui.QAbstractButton)
+        except Exception:
+            buttons = []
+        for button in buttons:
+            self._disconnect_signal(getattr(button, "clicked", None))
+            self._disconnect_signal(getattr(button, "toggled", None))
+
+        try:
+            combos = form.findChildren(QtGui.QComboBox)
+        except Exception:
+            combos = []
+        for combo in combos:
+            self._disconnect_signal(getattr(combo, "currentIndexChanged", None))
+
+        try:
+            line_edits = form.findChildren(QtGui.QLineEdit)
+        except Exception:
+            line_edits = []
+        for line_edit in line_edits:
+            self._disconnect_signal(getattr(line_edit, "editingFinished", None))
+            self._disconnect_signal(getattr(line_edit, "returnPressed", None))
+            self._disconnect_signal(getattr(line_edit, "textChanged", None))
+
+        completer = self._space_type_completer
+        if completer is not None:
+            try:
+                self._disconnect_signal(completer.activated[str])
+            except Exception:
+                self._disconnect_signal(getattr(completer, "activated", None))
+
+    def detach(self):
+        self.dispose()
+
+    def close(self):
+        self.dispose()
+
+    def dispose(self):
+        self.mark_closed()
         form = self.form
         if form is not None:
+            self._disconnect_widget_signals(form)
             try:
                 parent = form.parentWidget()
                 if parent is not None and hasattr(parent, "layout"):
@@ -2440,11 +2515,8 @@ class PlanEditControlsWidget:
                 form.setParent(None)
             except Exception:
                 pass
-            try:
-                form.deleteLater()
-            except Exception:
-                pass
         self.form = None
+        self.session = None
         self.status = None
         self.header_mode_label = None
         self.status_group = None
