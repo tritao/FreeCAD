@@ -271,14 +271,14 @@ def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=
 
 
 def get_plan_targets(session, selected_only=False):
-    selected_targets = session._get_selected_plan_targets()
+    selected_targets = session.selection.get_selected_plan_targets()
     selected_keys = {
         session._get_plan_target_state_key(target_kind, target_obj)
         for target_kind, target_obj in selected_targets
     }
     selected_keys.discard(None)
     primary_key = None
-    primary_kind, primary_obj = session._get_selected_plan_target()
+    primary_kind, primary_obj = session.selection.get_selected_plan_target()
     if primary_kind and primary_obj:
         primary_key = session._get_plan_target_state_key(primary_kind, primary_obj)
 

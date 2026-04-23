@@ -55,26 +55,26 @@ def toggle_raw_plan_object_selection(session, obj, event_callback=None):
     if obj is None:
         return False
 
-    primary_kind, primary_obj = session._get_selected_plan_target()
+    primary_kind, primary_obj = session.selection.get_selected_plan_target()
     selection = session._get_gui_selection()
     if primary_obj is not None and primary_obj not in selection:
         selection = [primary_obj] + selection
-    selection = session._normalize_gui_object_selection(selection)
+    selection = normalize_gui_object_selection(selection)
 
-    provider_selection = session._normalize_gui_object_selection(session._provider_selected_objects)
+    provider_selection = normalize_gui_object_selection(session._provider_selected_objects)
     if obj in provider_selection:
         provider_selection = [selected for selected in provider_selection if selected != obj]
     else:
         provider_selection.append(obj)
-    session._provider_selected_objects = session._normalize_gui_object_selection(provider_selection)
-    new_selection = session._normalize_gui_object_selection(
+    session._provider_selected_objects = normalize_gui_object_selection(provider_selection)
+    new_selection = normalize_gui_object_selection(
         [selected for selected in selection if session._get_plan_target_for_object(selected)[0]]
     )
 
     if primary_obj is not None and primary_obj in new_selection:
         next_kind, next_obj = primary_kind, primary_obj
     else:
-        next_kind, next_obj = session._get_first_plan_target_from_selection(new_selection)
+        next_kind, next_obj = session.selection.get_first_plan_target_from_selection(new_selection)
 
     session._set_pending_selected_plan_target(next_kind, next_obj)
     plan_target_dispatch.clear_hovered_targets(session)
@@ -100,22 +100,26 @@ def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=
     if not target_kind or not target_obj:
         return False
 
-    primary_kind, primary_obj = session._get_selected_plan_target()
+    primary_kind, primary_obj = session.selection.get_selected_plan_target()
     selection = session._get_gui_selection()
     if primary_obj is not None and primary_obj not in selection:
         selection = [primary_obj] + selection
 
-    selection = session._normalize_gui_object_selection(selection)
+    selection = normalize_gui_object_selection(selection)
 
     was_selected = target_obj in selection
     if was_selected:
         new_selection = [selected for selected in selection if selected != target_obj]
         if primary_obj == target_obj:
-            next_kind, next_obj = session._get_first_plan_target_from_selection(new_selection)
+            next_kind, next_obj = session.selection.get_first_plan_target_from_selection(
+                new_selection
+            )
         elif primary_obj is not None and primary_obj in new_selection:
             next_kind, next_obj = primary_kind, primary_obj
         else:
-            next_kind, next_obj = session._get_first_plan_target_from_selection(new_selection)
+            next_kind, next_obj = session.selection.get_first_plan_target_from_selection(
+                new_selection
+            )
     else:
         new_selection = list(selection)
         new_selection.append(target_obj)

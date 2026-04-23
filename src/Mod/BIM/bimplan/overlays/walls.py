@@ -315,7 +315,7 @@ def sync_hovered_wall_opening_context_overlay(session):
         return
     if not session.hovered_wall or session._is_selected_plan_target("wall", session.hovered_wall):
         return
-    selected_kind, _selected_obj = session._get_selected_plan_target()
+    selected_kind, _selected_obj = session.selection.get_selected_plan_target()
     if selected_kind in ("wall", "opening", "region", "space"):
         return
     color = (0.64, 0.70, 0.84)

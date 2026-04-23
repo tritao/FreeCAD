@@ -211,7 +211,7 @@ def refresh_selected_plan_target(session):
         if session._ignore_selection_changes:
             return
 
-        previous_kind, previous_obj = session._get_selected_plan_target()
+        previous_kind, previous_obj = get_selected_plan_target(session)
         session._plan_perf_set_fields(
             selected_before=session._plan_perf_describe_target(previous_kind, previous_obj),
             selected_before_kind=previous_kind or "none",
@@ -251,7 +251,7 @@ def refresh_selected_plan_target(session):
             else:
                 session._clear_wall_grips()
         session._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
-        selected_kind, selected_obj = session._get_selected_plan_target()
+        selected_kind, selected_obj = get_selected_plan_target(session)
         session._plan_perf_set_fields(
             selected_after=session._plan_perf_describe_target(selected_kind, selected_obj),
             selected_after_kind=selected_kind or "none",
@@ -292,14 +292,14 @@ def set_selected_plan_target_state(session, primary_kinds, kind=None, obj=None):
 
 
 def get_selected_plan_target_object(session, kind=None):
-    selected_kind, selected_obj = session._get_selected_plan_target()
+    selected_kind, selected_obj = get_selected_plan_target(session)
     if kind is not None and selected_kind != kind:
         return None
     return selected_obj
 
 
 def is_selected_plan_target(session, kind, obj=None):
-    selected_kind, selected_obj = session._get_selected_plan_target()
+    selected_kind, selected_obj = get_selected_plan_target(session)
     if selected_kind != kind:
         return False
     if obj is None:
@@ -338,7 +338,7 @@ def consume_pending_selected_plan_target(session):
 
 def get_selected_plan_target(session):
     session._sanitize_plan_target_references()
-    kind, obj = session._get_selected_plan_target_state()
+    kind, obj = get_selected_plan_target_state(session, plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS)
     if session._is_valid_plan_target(kind, obj):
         return (kind, obj)
     if kind is not None or obj is not None:
@@ -396,7 +396,7 @@ def normalize_plan_targets_from_selection(session, selection):
 
 def set_secondary_selected_plan_targets(session, targets, primary_kind=None, primary_obj=None):
     if primary_kind is None and primary_obj is None:
-        primary_kind, primary_obj = session._get_selected_plan_target()
+        primary_kind, primary_obj = get_selected_plan_target(session)
     normalized = []
     for target_kind, target_obj in session._normalize_plan_target_list(targets):
         if target_kind == primary_kind and target_obj == primary_obj:
@@ -427,7 +427,7 @@ def sync_secondary_selected_plan_targets_from_gui_selection(
 
 def get_secondary_selected_plan_targets(session):
     session._sanitize_plan_target_references()
-    primary_kind, primary_obj = session._get_selected_plan_target()
+    primary_kind, primary_obj = get_selected_plan_target(session)
     session._set_secondary_selected_plan_targets(
         getattr(session, "_secondary_selected_plan_targets_state", []),
         primary_kind=primary_kind,
@@ -437,14 +437,14 @@ def get_secondary_selected_plan_targets(session):
 
 
 def get_selected_plan_targets(session):
-    primary_kind, primary_obj = session._get_selected_plan_target()
+    primary_kind, primary_obj = get_selected_plan_target(session)
     targets = []
     seen = set()
     if primary_kind and primary_obj:
         key = session._get_plan_target_state_key(primary_kind, primary_obj)
         seen.add(key)
         targets.append((primary_kind, primary_obj))
-    for target_kind, target_obj in session._get_secondary_selected_plan_targets():
+    for target_kind, target_obj in get_secondary_selected_plan_targets(session):
         key = session._get_plan_target_state_key(target_kind, target_obj)
         if key in seen:
             continue
@@ -460,7 +460,7 @@ def get_plan_target_object_from_state(state_kind, state_obj, kind):
 
 
 def selected_plan_target_changed(session, previous_kind, previous_obj, kind=None):
-    current_kind, current_obj = session._get_selected_plan_target()
+    current_kind, current_obj = get_selected_plan_target(session)
     if kind is None:
         return previous_kind != current_kind or previous_obj != current_obj
     previous_target = session._get_plan_target_object_from_state(previous_kind, previous_obj, kind)
@@ -669,7 +669,7 @@ def select_plan_target_for_plan_edit(
 ):
     if not plan_target_dispatch.validate_plan_target(session, kind, obj):
         return False
-    previous_kind, previous_obj = session._get_selected_plan_target()
+    previous_kind, previous_obj = get_selected_plan_target(session)
     session.current_tool = "Select"
     session._provider_selected_objects = []
     preserve_hovered_symbol_overlay = (
@@ -996,7 +996,7 @@ def activate_wall_target(
 
 
 def clear_plan_selection_state(session):
-    previous_kind, previous_obj = session._get_selected_plan_target()
+    previous_kind, previous_obj = get_selected_plan_target(session)
     with session._plan_perf_trace_event(
         "clear_plan_selection_state",
         clear_selection_started_kind=previous_kind or "none",
@@ -1025,7 +1025,7 @@ def clear_plan_selection_state(session):
         )
         with session._plan_perf_trace_span("clear_plan_selection_task_status"):
             session._refresh_task_panel_status(selection_only=session.current_tool == "Select")
-        selected_kind, selected_obj = session._get_selected_plan_target()
+        selected_kind, selected_obj = get_selected_plan_target(session)
         session._plan_perf_set_fields(
             clear_selection_ended_kind=selected_kind or "none",
             clear_selection_ended_target=session._plan_perf_describe_target(

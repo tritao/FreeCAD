@@ -209,7 +209,7 @@ def selection_observer_set(session, doc):
 
 
 def selection_observer_clear(session, doc):
-    selected_kind, selected_obj = session._get_selected_plan_target()
+    selected_kind, selected_obj = session.selection.get_selected_plan_target()
     with session._plan_perf_trace_event(
         "selection_observer_clear",
         selection_document=doc,

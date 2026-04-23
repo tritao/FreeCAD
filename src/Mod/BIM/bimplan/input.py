@@ -20,7 +20,7 @@ def on_mouse_pressed(session, event_callback):
         mouse_pos = (pos[0], pos[1])
     except Exception:
         mouse_pos = None
-    selected_before = session._get_selected_plan_target()
+    selected_before = session.selection.get_selected_plan_target()
     with session._plan_perf_trace_event(
         "mouse_pressed",
         button=str(event.getButton()),
@@ -130,7 +130,7 @@ def on_mouse_pressed(session, event_callback):
                                 session._activate_wall_grip(index, wall=obj)
                         session._claim_left_button_click(event_callback)
             finally:
-                selected_after = session._get_selected_plan_target()
+                selected_after = session.selection.get_selected_plan_target()
                 session._plan_perf_set_fields(
                     handled=bool(getattr(event_callback, "_handled", False)),
                     selected_after=session._plan_perf_describe_target(

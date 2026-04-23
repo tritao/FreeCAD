@@ -518,8 +518,29 @@ def _resolve_space_selection_shape(targets):
     )
 
 
+def _get_selected_plan_targets(session):
+    selection_api = getattr(session, "selection", None)
+    if selection_api is not None:
+        return selection_api.get_selected_plan_targets()
+    return session._get_selected_plan_targets()
+
+
+def _get_selected_plan_target_object(session, kind=None):
+    selection_api = getattr(session, "selection", None)
+    if selection_api is not None:
+        return selection_api.get_selected_plan_target_object(kind)
+    return session._get_selected_plan_target_object(kind)
+
+
+def _get_selected_space_boundary_links(session, fallback_space=None):
+    spaces_api = getattr(session, "spaces", None)
+    if spaces_api is not None:
+        return spaces_api.get_selected_space_boundary_links(fallback_space=fallback_space)
+    return session._get_selected_space_boundary_links(fallback_space=fallback_space)
+
+
 def _resolve_space_creation_request(session, targets=None):
-    targets = tuple(targets if targets is not None else session._get_selected_plan_targets())
+    targets = tuple(targets if targets is not None else _get_selected_plan_targets(session))
     if not targets:
         return None
 
@@ -529,7 +550,7 @@ def _resolve_space_creation_request(session, targets=None):
             targets=selection_shape.targets,
             mode=selection_shape.mode,
             wall_targets=selection_shape.wall_targets,
-            boundaries=tuple(session._get_selected_space_boundary_links()),
+            boundaries=tuple(_get_selected_space_boundary_links(session)),
         )
 
     if selection_shape.mode not in (
@@ -539,7 +560,9 @@ def _resolve_space_creation_request(session, targets=None):
         return None
 
     region_seed_space = selection_shape.region_seed_space
-    boundaries = tuple(session._get_selected_space_boundary_links(fallback_space=region_seed_space))
+    boundaries = tuple(
+        _get_selected_space_boundary_links(session, fallback_space=region_seed_space)
+    )
     if selection_shape.mode == _SPACE_SELECTION_SINGLE_SPACE and not boundaries:
         return None
 
@@ -554,14 +577,15 @@ def _resolve_space_creation_request(session, targets=None):
 
 
 def get_space_region_seed_targets(session, targets=None):
-    targets = tuple(targets if targets is not None else session._get_selected_plan_targets())
+    targets = tuple(targets if targets is not None else _get_selected_plan_targets(session))
     selection_shape = _resolve_space_selection_shape(targets)
     if selection_shape.mode == _SPACE_SELECTION_SEEDED_REGION:
         return (selection_shape.region_seed_space, list(selection_shape.wall_targets))
     if selection_shape.mode != _SPACE_SELECTION_SINGLE_SPACE:
         return (None, [])
-    boundary_links = session._get_selected_space_boundary_links(
-        fallback_space=selection_shape.region_seed_space
+    boundary_links = _get_selected_space_boundary_links(
+        session,
+        fallback_space=selection_shape.region_seed_space,
     )
     if boundary_links:
         return (selection_shape.region_seed_space, [])
@@ -569,7 +593,7 @@ def get_space_region_seed_targets(session, targets=None):
 
 
 def get_selected_space_region_seed(session, targets=None):
-    region_seed_space, _wall_targets = session._get_space_region_seed_targets(targets)
+    region_seed_space, _wall_targets = get_space_region_seed_targets(session, targets)
     return region_seed_space
 
 
@@ -1444,7 +1468,7 @@ def finish_space_text_position_pick(session, point=None, obj=None):
 
 
 def cancel_space_text_position_pick(session):
-    space = session._edit_space or session._get_selected_plan_target_object("space")
+    space = session._edit_space or _get_selected_plan_target_object(session, "space")
     reset_space_text_pick_state(session)
     session._stop_snapper()
     FreeCAD.activeDraftCommand = None
@@ -1460,7 +1484,7 @@ def get_space_preflight_report(session, targets=None):
     if session.current_tool != "Select":
         return None
 
-    targets = list(targets if targets is not None else session._get_selected_plan_targets())
+    targets = list(targets if targets is not None else _get_selected_plan_targets(session))
     if not should_run_space_preflight_for_targets(targets):
         return None
 
