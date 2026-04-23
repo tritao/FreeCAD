@@ -100,7 +100,7 @@ def sync_opening_move_preview(session, opening, point):
                 DraftTrackers,
                 "opening-move-preview:{}".format(getattr(opening, "Name", "unknown")),
                 scolor=preview_color,
-                swidth=session._scaled_line_width(3),
+                swidth=session.viewport.scaled_line_width(3),
                 ontop=True,
             )
             tracker.p1(start)
@@ -118,7 +118,7 @@ def sync_opening_move_preview(session, opening, point):
         "opening-move-guide:{}".format(getattr(opening, "Name", "unknown")),
         dotted=True,
         scolor=preview_color,
-        swidth=session._scaled_line_width(1),
+        swidth=session.viewport.scaled_line_width(1),
         ontop=True,
     )
     guide.p1(guide_start)

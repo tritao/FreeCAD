@@ -383,10 +383,9 @@ def _get_provider_rehost_point(session, provider_obj):
     if point is None:
         return None
     offset = 150.0
-    get_units_per_pixel = getattr(session, "_get_plan_view_units_per_pixel", None)
-    if callable(get_units_per_pixel):
+    if session.viewport is not None:
         try:
-            units_per_pixel = float(get_units_per_pixel() or 0.0)
+            units_per_pixel = float(session.viewport.get_plan_view_units_per_pixel() or 0.0)
         except Exception:
             units_per_pixel = 0.0
         if units_per_pixel > 0.0:

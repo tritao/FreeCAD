@@ -14,7 +14,7 @@ def get_opening_handle_markers(session, marker_size=None):
     from draftutils import params
 
     if marker_size is None:
-        marker_size = session._scaled_marker_size(params.get_param_view("MarkerSize"))
+        marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
     return {
         "move": FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size),
         "flip_hinge": FreeCADGui.getMarkerIndex("CIRCLE_FILLED", marker_size),
@@ -112,7 +112,7 @@ def sync_hovered_opening_overlay(session):
         if session._is_selected_plan_target("opening", opening):
             session._clear_hovered_opening_overlay()
             return
-        width = session._scaled_line_width(2)
+        width = session.viewport.scaled_line_width(2)
         color = (0.38, 0.62, 0.96)
         render_state = (
             session._get_document_object_key(opening),
@@ -213,7 +213,7 @@ def sync_selected_opening_overlay(session):
         if session.current_tool != "Select" or not session._is_hosted_opening_object(opening):
             session._clear_selected_opening_overlay()
             return
-        width = session._scaled_line_width(3)
+        width = session.viewport.scaled_line_width(3)
         color = (0.12, 0.38, 0.95)
         render_state = (
             session._get_document_object_key(opening),
@@ -272,7 +272,7 @@ def sync_selected_wall_opening_context_overlay(session):
     if session.current_tool != "Select" or not wall or session._is_selected_plan_target("opening"):
         return
     color = (0.46, 0.58, 0.82)
-    width = session._scaled_line_width(2)
+    width = session.viewport.scaled_line_width(2)
     for opening in session._get_wall_hosted_openings(wall):
         if opening == session.hovered_opening:
             continue
@@ -293,7 +293,7 @@ def get_selected_opening_handle_specs(session, opening):
     from draftutils import params
 
     handle_specs = []
-    marker_size = session._scaled_marker_size(params.get_param_view("MarkerSize"))
+    marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
     markers = session._get_opening_handle_markers(marker_size)
     for idx, handle in enumerate(session._get_selected_opening_edit_handles(opening)):
         if handle.role not in markers or handle.point is None:
@@ -314,7 +314,7 @@ def sync_selected_opening_handles(session):
             session._clear_selected_opening_handles()
             return
         specs = tuple(session._get_selected_opening_handle_specs(opening))
-        marker_size = session._scaled_marker_size(params.get_param_view("MarkerSize"))
+        marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
         handle_entries = tuple(
             (
                 int(idx),

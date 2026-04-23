@@ -249,7 +249,7 @@ def get_opening_guide_polylines(session, opening):
 def get_opening_overlay_screen_polylines(session, opening):
     if not session._is_hosted_opening_object(opening) or not session.view:
         return ()
-    projection_key = session._get_plan_projection_cache_key()
+    projection_key = session.viewport.get_plan_projection_cache_key()
     if projection_key is None:
         return ()
     if projection_key != session._opening_overlay_screen_cache_projection_key:

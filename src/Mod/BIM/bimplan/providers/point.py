@@ -143,7 +143,7 @@ def handle_provider_point_tool_point(session, point=None, obj=None):
     if point is None:
         session._cancel_provider_point_tool()
         return
-    plan_point = session._project_plan_point(point)
+    plan_point = session.viewport.project_plan_point(point)
     if plan_point is None:
         session._clear_provider_point_preview()
         session._arm_provider_point_tool()
@@ -176,7 +176,7 @@ def update_provider_point_tool_preview(session, point=None, obj=None):
     if point is None:
         session._clear_provider_point_preview()
         return
-    plan_point = session._project_plan_point(point)
+    plan_point = session.viewport.project_plan_point(point)
     if plan_point is None:
         session._clear_provider_point_preview()
         return

@@ -11,7 +11,7 @@ def sync_secondary_selected_overlays(session):
     if session.current_tool not in ("Select", "Pick Space Region"):
         return
     color = (0.12, 0.72, 0.68)
-    width = session._scaled_line_width(2)
+    width = session.viewport.scaled_line_width(2)
     selected_targets = (
         session.selection.get_selected_plan_targets()
         if session.current_tool == "Pick Space Region"
@@ -72,7 +72,7 @@ def sync_space_region_pick_overlays(session):
     for candidate in session._space_region_candidates:
         hovered = candidate is session._hovered_space_region_candidate
         color = (0.90, 0.52, 0.10) if hovered else (0.22, 0.44, 0.88)
-        width = session._scaled_line_width(3 if hovered else 2)
+        width = session.viewport.scaled_line_width(3 if hovered else 2)
         dotted = not hovered
         for polyline in session._get_space_region_candidate_polylines(candidate):
             if len(polyline) < 2:
@@ -154,7 +154,7 @@ def sync_hovered_space_overlay(session):
     session._create_space_overlay_trackers(
         session.hovered_space,
         color=(0.38, 0.62, 0.96),
-        width=session._scaled_line_width(2),
+        width=session.viewport.scaled_line_width(2),
         tracker_store=session._space_hover_trackers,
     )
 
@@ -175,7 +175,7 @@ def sync_hovered_region_overlay(session):
     session._create_region_overlay_trackers(
         session.hovered_region,
         color=(0.38, 0.62, 0.96),
-        width=session._scaled_line_width(2),
+        width=session.viewport.scaled_line_width(2),
         tracker_store=session._region_hover_trackers,
     )
 
@@ -198,7 +198,7 @@ def sync_selected_space_overlay(session):
         ) or not session._is_plan_space_object(space):
             session._clear_selected_space_overlay()
             return
-        width = session._scaled_line_width(3)
+        width = session.viewport.scaled_line_width(3)
         try:
             import draftguitools.gui_trackers as DraftTrackers
         except ImportError:
@@ -256,7 +256,7 @@ def sync_selected_region_overlay(session):
         if session.current_tool != "Select" or not session._is_plan_region_object(region):
             session._clear_selected_region_overlay()
             return
-        width = session._scaled_line_width(3)
+        width = session.viewport.scaled_line_width(3)
         try:
             import draftguitools.gui_trackers as DraftTrackers
         except ImportError:

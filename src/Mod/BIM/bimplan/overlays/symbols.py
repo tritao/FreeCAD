@@ -138,7 +138,7 @@ def _get_symbol_screen_geometry_key(session, symbol):
 def get_symbol_overlay_screen_polylines(session, symbol):
     if not session._is_plan_symbol_instance(symbol) or not session.view:
         return ()
-    projection_key = session._get_plan_projection_cache_key()
+    projection_key = session.viewport.get_plan_projection_cache_key()
     if projection_key is None:
         return ()
     symbol_key = session._get_document_object_key(symbol)
@@ -210,7 +210,7 @@ def sync_hovered_symbol_overlay(session):
         session._create_symbol_overlay_trackers(
             session.hovered_symbol,
             color=(0.38, 0.62, 0.96),
-            width=session._scaled_line_width(2),
+            width=session.viewport.scaled_line_width(2),
             tracker_store=session._symbol_hover_trackers,
         )
 
@@ -226,7 +226,7 @@ def sync_selected_symbol_overlay(session):
         if session.current_tool != "Select" or not session._is_plan_symbol_instance(symbol):
             session._clear_selected_symbol_overlay()
             return
-        width = session._scaled_line_width(3)
+        width = session.viewport.scaled_line_width(3)
         try:
             import draftguitools.gui_trackers as DraftTrackers
         except ImportError:
@@ -428,7 +428,7 @@ def get_symbol_handle_radius(session, symbol, placement=None):
                 radius,
                 math.hypot(float(point.x) - float(anchor.x), float(point.y) - float(anchor.y)),
             )
-    units_per_pixel = session._get_plan_view_units_per_pixel() or 10.0
+    units_per_pixel = session.viewport.get_plan_view_units_per_pixel() or 10.0
     return max(radius * 1.2, 28.0 * units_per_pixel, 300.0)
 
 
@@ -445,7 +445,7 @@ def get_selected_symbol_handle_specs(session, symbol):
     if rotate_direction.Length < 0.001:
         rotate_direction = FreeCAD.Vector(1, 0, 0)
     rotate_offset = rotate_direction.multiply(radius)
-    marker_size = session._scaled_marker_size(params.get_param_view("MarkerSize"))
+    marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
     return [
         (
             "move",
@@ -534,7 +534,7 @@ def sync_symbol_edit_preview(session, symbol, placement, guide_start=None, guide
     session._create_symbol_overlay_trackers(
         symbol,
         color=preview_color,
-        width=session._scaled_line_width(3),
+        width=session.viewport.scaled_line_width(3),
         tracker_store=session._symbol_edit_preview_trackers,
         placement=placement,
     )
@@ -545,7 +545,7 @@ def sync_symbol_edit_preview(session, symbol, placement, guide_start=None, guide
         "symbol-edit-guide:{}".format(getattr(symbol, "Name", "unknown")),
         dotted=True,
         scolor=preview_color,
-        swidth=session._scaled_line_width(1),
+        swidth=session.viewport.scaled_line_width(1),
         ontop=True,
     )
     guide.p1(guide_start)

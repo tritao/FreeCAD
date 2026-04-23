@@ -66,7 +66,7 @@ def sync_wall_grips(session):
             return
 
         with session._plan_perf_trace_span("wall_grips_marker_lookup"):
-            marker_size = session._scaled_marker_size(params.get_param_view("MarkerSize"))
+            marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
             midpoint_marker = FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size)
         wall_state = (
             marker_size,
@@ -176,7 +176,7 @@ def sync_hovered_wall_overlay(session):
     session._create_wall_overlay_trackers(
         session.hovered_wall,
         color=(0.42, 0.62, 0.9),
-        width=session._scaled_line_width(2),
+        width=session.viewport.scaled_line_width(2),
         tracker_store=session._wall_hover_trackers,
     )
 
@@ -192,7 +192,7 @@ def sync_selected_wall_overlay(session):
         if session.current_tool != "Select" or not session._is_plan_selectable_wall(wall):
             session._clear_selected_wall_overlay()
             return
-        width = session._scaled_line_width(4)
+        width = session.viewport.scaled_line_width(4)
         color = (0.12, 0.38, 0.95)
         segments = session._build_overlay_segments_from_polylines(
             session._get_wall_overlay_polylines(wall)
@@ -260,7 +260,7 @@ def create_junction_node_trackers(session, junction, color, width, tracker_store
     intersection = getattr(junction, "Intersection", None)
     if intersection is None:
         return
-    units_per_pixel = session._get_plan_view_units_per_pixel() or 1.0
+    units_per_pixel = session.viewport.get_plan_view_units_per_pixel() or 1.0
     half_size = max(units_per_pixel * 8.0, 20.0)
     center = FreeCAD.Vector(intersection)
     offsets = (
@@ -293,10 +293,10 @@ def sync_junction_node_overlays(session):
     for junction in session._get_plan_context_junctions():
         if selected_wall and selected_wall in (getattr(junction, "Walls", None) or []):
             color = (0.92, 0.58, 0.12)
-            width = session._scaled_line_width(2)
+            width = session.viewport.scaled_line_width(2)
         else:
             color = (0.82, 0.70, 0.32)
-            width = session._scaled_line_width(1)
+            width = session.viewport.scaled_line_width(1)
         session._create_junction_node_trackers(
             junction,
             color=color,
@@ -320,7 +320,7 @@ def sync_hovered_wall_opening_context_overlay(session):
     if selected_kind in ("wall", "opening", "region", "space"):
         return
     color = (0.64, 0.70, 0.84)
-    width = session._scaled_line_width(1)
+    width = session.viewport.scaled_line_width(1)
     for opening in session._get_wall_hosted_openings(session.hovered_wall):
         session._create_opening_overlay_trackers(
             opening,

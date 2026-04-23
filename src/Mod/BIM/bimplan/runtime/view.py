@@ -566,7 +566,7 @@ def get_plan_view_height(session):
 
 
 def get_plan_overlay_scale(session):
-    height = session._get_plan_view_height()
+    height = get_plan_view_height(session)
     if not height or height <= 0:
         return 1.0
     if height <= 5000.0:
@@ -578,15 +578,15 @@ def get_plan_overlay_scale(session):
 
 
 def scaled_line_width(session, base_width):
-    return max(1.0, base_width * session._get_plan_overlay_scale())
+    return max(1.0, base_width * get_plan_overlay_scale(session))
 
 
 def scaled_marker_size(session, base_size):
-    return max(4, int(round(base_size * session._get_plan_overlay_scale())))
+    return max(4, int(round(base_size * get_plan_overlay_scale(session))))
 
 
 def get_plan_view_units_per_pixel(session):
-    height = session._get_plan_view_height()
+    height = get_plan_view_height(session)
     get_size = session._get_runtime_attr(session.view, "getSize")
     if not height or height <= 0 or get_size is None:
         return None
@@ -624,7 +624,7 @@ def get_plan_projection_cache_key(session):
         )
     except Exception:
         position_key = (None, None, None)
-    height = session._get_plan_view_height()
+    height = get_plan_view_height(session)
     if height is None:
         return None
     return size_key + (round(float(height), 6),) + position_key

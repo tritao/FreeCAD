@@ -111,7 +111,7 @@ def get_rect_wall_corners(session, point):
     start = session._rect_wall_start
     if start is None or point is None:
         return None
-    end = session._project_plan_point(point)
+    end = session.viewport.project_plan_point(point)
     if end is None:
         return None
     x1, y1 = start.x, start.y
@@ -195,7 +195,7 @@ def handle_rect_wall_point(session, point=None, obj=None):
         session._cancel_rect_wall_tool()
         return
 
-    point = session._project_plan_point(point)
+    point = session.viewport.project_plan_point(point)
     if session._rect_wall_start is None:
         session._rect_wall_start = point
         FreeCADGui.Snapper.getPoint(
