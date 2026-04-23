@@ -344,9 +344,7 @@ def _start_window_tool(session, context):
 
 
 def _prepare_plan_region_tool(session, parent_space):
-    session._clear_plan_region_preview()
-    session._plan_region_points = []
-    session._plan_region_parent_space = parent_space
+    plan_spaces.prepare_plan_region_tool_state(session, parent_space=parent_space)
 
 
 def _start_snap_tool(session, tool_name, callback, title, *, movecallback=None):
@@ -374,9 +372,10 @@ def _start_plan_region_tool(session, context):
 
 def _prepare_space_separator_tool(session, context):
     del context
-    session._clear_space_separator_preview()
-    session._space_separator_start = None
-    session._space_separator_height = session._get_wall_defaults()["height"]
+    plan_spaces.prepare_space_separator_tool_state(
+        session,
+        height=session._get_wall_defaults()["height"],
+    )
 
 
 def _start_space_separator_tool(session, context):

@@ -63,7 +63,14 @@ if "draftguitools.gui_base" not in sys.modules:
     draftguitools_module.gui_base = gui_base_module
 
 from bimplan.context import PlanEditContext
-from bimplan.lifecycle import activate_select_tool, begin_teardown, finish, shutdown
+from bimplan.lifecycle import (
+    activate_plan_region_tool,
+    activate_select_tool,
+    activate_space_separator_tool,
+    begin_teardown,
+    finish,
+    shutdown,
+)
 from bimplan.overlays import providers as provider_overlays
 from bimplan.picking import (
     get_hovered_plan_target,
@@ -162,6 +169,66 @@ class _DummyProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
+    def test_activate_plan_region_tool_uses_shared_space_setup(self):
+        parent_space = SimpleNamespace(Name="Space001")
+        session = SimpleNamespace(
+            current_tool="Select",
+            _cancel_space_region_pick=lambda refresh=False: None,
+            _cancel_rect_wall_tool=lambda refresh=False: None,
+            _cancel_window_tool=lambda refresh=False: None,
+            _cancel_space_separator_tool=lambda refresh=False: None,
+            _cancel_provider_point_tool=lambda refresh=False: None,
+            _has_active_embedded_tool=lambda: False,
+            _cancel_embedded_tool=lambda: None,
+            _cancel_wall_edit=lambda restore=True, refresh=True: None,
+            _cancel_pending_edit=lambda: None,
+            _clear_plan_relation_status=lambda: None,
+            _set_selected_plan_target=lambda *args, **kwargs: None,
+            _clear_hovered_plan_targets=lambda *args, **kwargs: None,
+            _get_selected_plan_target_object=lambda kind: parent_space if kind == "space" else None,
+            _handle_plan_region_point=lambda *args, **kwargs: None,
+            _update_plan_region_preview=lambda *args, **kwargs: None,
+            _refresh_task_panel_status=lambda: None,
+        )
+
+        with patch(
+            "bimplan.lifecycle.plan_spaces.prepare_plan_region_tool_state"
+        ) as prepare, patch("bimplan.lifecycle.clear_selection_visuals"), patch(
+            "bimplan.lifecycle._start_snap_tool", return_value=True
+        ):
+            self.assertTrue(activate_plan_region_tool(session))
+
+        prepare.assert_called_once_with(session, parent_space=parent_space)
+
+    def test_activate_space_separator_tool_uses_shared_space_setup(self):
+        session = SimpleNamespace(
+            current_tool="Select",
+            _cancel_space_region_pick=lambda refresh=False: None,
+            _cancel_plan_region_tool=lambda refresh=False: None,
+            _cancel_rect_wall_tool=lambda refresh=False: None,
+            _cancel_window_tool=lambda refresh=False: None,
+            _cancel_provider_point_tool=lambda refresh=False: None,
+            _has_active_embedded_tool=lambda: False,
+            _cancel_embedded_tool=lambda: None,
+            _cancel_wall_edit=lambda restore=True, refresh=True: None,
+            _cancel_pending_edit=lambda: None,
+            _clear_plan_relation_status=lambda: None,
+            _set_selected_plan_target=lambda *args, **kwargs: None,
+            _get_wall_defaults=lambda: {"height": 2500},
+            _handle_space_separator_point=lambda *args, **kwargs: None,
+            _refresh_task_panel_status=lambda: None,
+        )
+
+        with patch(
+            "bimplan.lifecycle.plan_spaces.prepare_space_separator_tool_state"
+        ) as prepare, patch("bimplan.lifecycle.clear_selection_visuals"), patch(
+            "bimplan.lifecycle._start_snap_tool",
+            return_value=True,
+        ):
+            self.assertTrue(activate_space_separator_tool(session))
+
+        prepare.assert_called_once_with(session, height=2500)
+
     def test_create_space_from_current_selection_finalizes_direct_boundary_space(self):
         wall_a = SimpleNamespace(Name="WallA")
         wall_b = SimpleNamespace(Name="WallB")
