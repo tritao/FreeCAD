@@ -63,7 +63,6 @@ from bimplan import wall_relations as plan_wall_relations
 from bimplan import window_create as plan_window_create
 from bimplan import window_edit as plan_window_edit
 from bimplan.context import PlanEditContext
-from bimplan.hosts import _PlanEditCommandHost, _PlanEditWallHost
 from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
 from bimplan.overlays import openings as opening_overlays
@@ -606,93 +605,10 @@ class PlanEditSession:
 
     def finish(self, cont=False, close_dialog=True, closed=False):
         del cont, closed
-        if self.current_tool == "Move Provider":
-            self._cancel_provider_handle_point_pick()
-            return True
-        if self.current_tool == "Move Opening":
-            self._cancel_opening_handle_point_pick()
-            return True
-        if self.current_tool in ("Move Symbol", "Rotate Symbol"):
-            self._cancel_symbol_handle_point_pick()
-            return True
-        if self.current_tool == "Pick Space Region":
-            self._cancel_space_region_pick()
-            return True
-        if self.current_tool == "Region":
-            self._cancel_plan_region_tool()
-            return True
-        if self.current_tool == "Set Space Text":
-            self._cancel_space_text_position_pick()
-            return True
-        if self.current_tool == "Window":
-            self._cancel_window_tool()
-            return True
-        if self._has_active_provider_point_tool():
-            self._cancel_provider_point_tool()
-            return True
-        if self._has_active_embedded_tool():
-            self._cancel_embedded_tool()
-            return True
-        if self._has_active_rect_wall_tool():
-            self._cancel_rect_wall_tool()
-            return True
-        if self._has_active_wall_edit():
-            self._cancel_wall_edit()
-            return True
-        return self.shutdown(close_dialog=close_dialog)
+        return plan_lifecycle.finish(self, close_dialog=close_dialog)
 
     def begin_teardown(self):
-        if self._tearing_down:
-            return
-        self._tearing_down = True
-        plan_command_gate.uninstall(self)
-        self._clear_viewport_status_chip()
-        self._clear_input_hints()
-        self._cancel_embedded_tool()
-        self._cancel_rect_wall_tool(refresh=False)
-        self._cancel_window_tool(refresh=False)
-        self._cancel_plan_region_tool(refresh=False)
-        self._cancel_provider_point_tool(refresh=False)
-        self._cancel_wall_edit(restore=False, refresh=False)
-        self._cancel_pending_edit()
-        if self.current_tool == "Move Provider":
-            self._cancel_provider_handle_point_pick()
-        if self.current_tool in ("Move Symbol", "Rotate Symbol"):
-            self._cancel_symbol_handle_point_pick()
-        if self.current_tool == "Set Space Text":
-            self._edit_space = None
-        if self.current_tool == "Pick Space Region":
-            self._space_region_pick_boundaries = []
-            self._space_region_candidates = []
-            self._hovered_space_region_candidate = None
-            self._space_region_pick_seed_space = None
-        plan_lifecycle.clear_hover_visuals(
-            self,
-            include_junction_nodes=True,
-            include_hovered_wall_opening_context=True,
-        )
-        plan_lifecycle.clear_selection_visuals(
-            self,
-            clear_handle_kinds=(
-                plan_target_kinds.PLAN_TARGET_PROVIDER,
-                plan_target_kinds.PLAN_TARGET_OPENING,
-                plan_target_kinds.PLAN_TARGET_SYMBOL,
-            ),
-            include_wall_grips=True,
-            include_selected_wall_opening_context=True,
-            include_secondary_selection=True,
-        )
-        plan_lifecycle.clear_transient_visuals(
-            self,
-            include_provider_overlays=True,
-            include_provider_point_preview=True,
-            include_space_region_pick=True,
-            include_opening_handle_pool=True,
-            include_opening_move_preview=True,
-            include_symbol_edit_preview=True,
-            include_plan_region_preview=True,
-        )
-        plan_lifecycle.detach_runtime_observers(self)
+        return plan_lifecycle.begin_teardown(self)
 
     def _document_is_alive(self):
         doc = self.doc
@@ -817,85 +733,7 @@ class PlanEditSession:
         self._finishing = True
 
         try:
-            plan_command_gate.uninstall(self)
-            if not self._document_is_alive():
-                self.begin_teardown()
-            teardown = teardown or self._tearing_down
-            panel = self.task_panel
-            self.task_panel = None
-            self._cancel_embedded_tool()
-            self._cancel_rect_wall_tool(refresh=False)
-            self._cancel_space_separator_tool(refresh=False)
-            self._cancel_wall_edit(restore=not teardown, refresh=False)
-            self._cancel_pending_edit()
-            if self.current_tool in ("Move Symbol", "Rotate Symbol"):
-                self._cancel_symbol_handle_point_pick()
-            self._clear_viewport_status_chip()
-            self._clear_input_hints()
-            plan_lifecycle.clear_hover_visuals(
-                self,
-                kinds=(
-                    plan_target_kinds.PLAN_TARGET_WALL,
-                    plan_target_kinds.PLAN_TARGET_OPENING,
-                    plan_target_kinds.PLAN_TARGET_SYMBOL,
-                    plan_target_kinds.PLAN_TARGET_PROVIDER,
-                ),
-                include_junction_nodes=True,
-                include_hovered_wall_opening_context=True,
-            )
-            plan_lifecycle.clear_selection_visuals(
-                self,
-                clear_handle_kinds=(
-                    plan_target_kinds.PLAN_TARGET_OPENING,
-                    plan_target_kinds.PLAN_TARGET_SYMBOL,
-                ),
-                include_wall_grips=True,
-                include_selected_wall_opening_context=True,
-            )
-            plan_lifecycle.clear_transient_visuals(
-                self,
-                include_provider_overlays=True,
-                include_provider_point_preview=True,
-                include_opening_handle_pool=True,
-                include_opening_move_preview=True,
-                include_symbol_edit_preview=True,
-            )
-            plan_lifecycle.detach_runtime_observers(self)
-            if panel:
-                try:
-                    mark_closed = getattr(panel, "mark_closed", None)
-                    if callable(mark_closed):
-                        mark_closed()
-                except Exception:
-                    pass
-                if close_dialog and not teardown:
-                    try:
-                        close = getattr(panel, "close", None)
-                        if callable(close):
-                            close()
-                    except Exception:
-                        pass
-                else:
-                    try:
-                        detach = getattr(panel, "detach", None)
-                        if callable(detach):
-                            detach()
-                    except Exception:
-                        pass
-            if teardown:
-                self._discard_runtime_references()
-            else:
-                self.restore_state()
-                if self.doc:
-                    try:
-                        self.doc.recompute()
-                    except ReferenceError:
-                        self.doc = None
-                    except RuntimeError:
-                        self.doc = None
-                FreeCAD.Console.PrintMessage(
-                    translate("BIM_PlanEdit", "Exited BIM Plan Edit mode.\n")
-                )
+            plan_lifecycle.shutdown(self, close_dialog=close_dialog, teardown=teardown)
         finally:
             self._disconnect_teardown_signals()
             self._tearing_down = True
@@ -972,49 +810,21 @@ class PlanEditSession:
         )
 
     def _on_embedded_command_started(self, tool_name, command=None):
-        if self._tearing_down:
-            return
-        self._embedded_tool_name = tool_name
-        if command is not None:
-            self._embedded_tool = command
-        self.current_tool = tool_name
-        self._sync_selected_wall_opening_context_overlay()
-        self._refresh_task_panel_status()
+        return plan_lifecycle.on_embedded_command_started(
+            self,
+            tool_name,
+            command=command,
+        )
 
     def _on_embedded_command_finished(self, tool_name, command=None):
-        if self._tearing_down:
-            return
-        if command is None or self._embedded_tool is command:
-            self._embedded_host = None
-            self._embedded_tool = None
-            self._embedded_tool_name = None
-        if self.current_tool == tool_name:
-            self.current_tool = "Select"
-            self._sync_selected_wall_opening_context_overlay()
-            self._refresh_task_panel_status()
+        return plan_lifecycle.on_embedded_command_finished(
+            self,
+            tool_name,
+            command=command,
+        )
 
     def activate_select_tool(self):
-        if self.current_tool in ("Move Symbol", "Rotate Symbol"):
-            self._cancel_symbol_handle_point_pick()
-            return
-        if self.current_tool == "Pick Space Region":
-            self._cancel_space_region_pick()
-            return
-        if self._has_active_provider_point_tool():
-            self._cancel_provider_point_tool()
-            return
-        if self._has_active_embedded_tool():
-            self._cancel_embedded_tool()
-        if self._has_active_rect_wall_tool():
-            self._cancel_rect_wall_tool()
-        if self._has_active_window_tool():
-            self._cancel_window_tool()
-        if self._has_active_plan_region_tool():
-            self._cancel_plan_region_tool()
-        if self._has_active_space_separator_tool():
-            self._cancel_space_separator_tool()
-        self._cancel_wall_edit()
-        self._cancel_join_tool()
+        return plan_lifecycle.activate_select_tool(self)
 
     def activate_wall_tool(self):
         return plan_wall_create.activate_wall_tool(self)
@@ -1026,137 +836,19 @@ class PlanEditSession:
         return plan_window_create.can_place_window(self)
 
     def activate_window_tool(self):
-        self._cancel_space_region_pick(refresh=False)
-        self._cancel_plan_region_tool(refresh=False)
-        self._cancel_rect_wall_tool(refresh=False)
-        self._cancel_space_separator_tool(refresh=False)
-        self._cancel_provider_point_tool(refresh=False)
-        if self._has_active_embedded_tool():
-            self._cancel_embedded_tool()
-        self._cancel_wall_edit()
-        self._cancel_pending_edit()
-        self._clear_plan_relation_status()
-        plan_lifecycle.clear_selection_visuals(
-            self,
-            kinds=(
-                plan_target_kinds.PLAN_TARGET_WALL,
-                plan_target_kinds.PLAN_TARGET_OPENING,
-                plan_target_kinds.PLAN_TARGET_SYMBOL,
-                plan_target_kinds.PLAN_TARGET_SPACE,
-                plan_target_kinds.PLAN_TARGET_REGION,
-            ),
-            clear_handle_kinds=(plan_target_kinds.PLAN_TARGET_OPENING,),
-            include_wall_grips=True,
-            include_selected_wall_opening_context=True,
-            include_secondary_selection=True,
-        )
-        self._clear_window_preview()
-        return plan_window_create.activate_window_tool(self)
+        return plan_lifecycle.activate_window_tool(self)
 
     def activate_plan_region_tool(self):
-        parent_space = self._get_selected_plan_target_object("space")
-        self._cancel_space_region_pick(refresh=False)
-        self._cancel_rect_wall_tool(refresh=False)
-        self._cancel_window_tool(refresh=False)
-        self._cancel_space_separator_tool(refresh=False)
-        self._cancel_provider_point_tool(refresh=False)
-        if self._has_active_embedded_tool():
-            self._cancel_embedded_tool()
-        self._cancel_wall_edit()
-        self._cancel_pending_edit()
-        self._clear_plan_relation_status()
-        self._set_selected_plan_target()
-        self._clear_hovered_plan_targets()
-        plan_lifecycle.clear_selection_visuals(
-            self,
-            kinds=(
-                plan_target_kinds.PLAN_TARGET_WALL,
-                plan_target_kinds.PLAN_TARGET_REGION,
-                plan_target_kinds.PLAN_TARGET_SPACE,
-            ),
-            include_wall_grips=True,
-            include_selected_wall_opening_context=True,
-            include_secondary_selection=True,
-        )
-        self._clear_plan_region_preview()
-        self._plan_region_points = []
-        self._plan_region_parent_space = parent_space
-        self.current_tool = "Region"
-        FreeCAD.activeDraftCommand = self
-        FreeCADGui.Snapper.getPoint(
-            callback=self._handle_plan_region_point,
-            movecallback=self._update_plan_region_preview,
-            title=translate("BIM_PlanEdit", "First region point"),
-        )
-        self._refresh_task_panel_status()
+        return plan_lifecycle.activate_plan_region_tool(self)
 
     def activate_space_separator_tool(self):
-        self._cancel_space_region_pick(refresh=False)
-        self._cancel_plan_region_tool(refresh=False)
-        self._cancel_rect_wall_tool(refresh=False)
-        self._cancel_window_tool(refresh=False)
-        self._cancel_provider_point_tool(refresh=False)
-        if self._has_active_embedded_tool():
-            self._cancel_embedded_tool()
-        self._cancel_wall_edit()
-        self._cancel_pending_edit()
-        self._clear_plan_relation_status()
-        self._set_selected_plan_target()
-        plan_lifecycle.clear_selection_visuals(
-            self,
-            kinds=(
-                plan_target_kinds.PLAN_TARGET_WALL,
-                plan_target_kinds.PLAN_TARGET_SPACE,
-            ),
-            include_wall_grips=True,
-            include_selected_wall_opening_context=True,
-            include_secondary_selection=True,
-        )
-        self._clear_space_separator_preview()
-        self._space_separator_start = None
-        self._space_separator_height = self._get_wall_defaults()["height"]
-        self.current_tool = "Separator"
-        FreeCAD.activeDraftCommand = self
-        FreeCADGui.Snapper.getPoint(
-            callback=self._handle_space_separator_point,
-            title=translate("BIM_PlanEdit", "Separator start point"),
-        )
-        self._refresh_task_panel_status()
+        return plan_lifecycle.activate_space_separator_tool(self)
 
     def activate_space_tool(self):
-        self._cancel_space_region_pick(refresh=False)
-        self._cancel_plan_region_tool(refresh=False)
-        if self.current_tool == "Set Space Text":
-            self._cancel_space_text_position_pick()
-        self._cancel_rect_wall_tool(refresh=False)
-        self._cancel_window_tool(refresh=False)
-        self._cancel_space_separator_tool(refresh=False)
-        self._cancel_provider_point_tool(refresh=False)
-        if self._has_active_embedded_tool():
-            self._cancel_embedded_tool()
-        self._cancel_wall_edit(refresh=False)
-        self._cancel_pending_edit()
-        self._clear_plan_relation_status()
-        return self._create_space_from_current_selection()
+        return plan_lifecycle.activate_space_tool(self)
 
     def activate_move_tool(self):
-        from draftguitools import gui_move
-
-        self._cancel_space_region_pick(refresh=False)
-        self._cancel_plan_region_tool(refresh=False)
-        self._cancel_rect_wall_tool(refresh=False)
-        self._cancel_window_tool(refresh=False)
-        self._cancel_space_separator_tool(refresh=False)
-        self._cancel_provider_point_tool(refresh=False)
-        self._cancel_wall_edit()
-        self._cancel_pending_edit()
-        self._clear_plan_relation_status()
-        plan_lifecycle.clear_selection_visuals(
-            self,
-            kinds=(plan_target_kinds.PLAN_TARGET_WALL,),
-            include_wall_grips=True,
-        )
-        self._start_embedded_tool("Move", gui_move.Move())
+        return plan_lifecycle.activate_move_tool(self)
 
     def activate_join_tool(self):
         return plan_wall_relations.activate_join_tool(self)
@@ -2159,73 +1851,16 @@ class PlanEditSession:
         # Compatibility wrapper for older tests and callers.
         return self._refresh_primary_selected_plan_target()
 
-    def _start_embedded_tool(self, tool_name, command, host_class=_PlanEditCommandHost):
-        self.current_tool = tool_name
-        self._set_hovered_wall(None)
-        self._set_hovered_opening(None)
-        self._set_hovered_symbol(None)
-        self._set_hovered_provider(None)
-        self._set_hovered_region(None)
-        self._sync_secondary_selected_overlays()
-        self._refresh_task_panel_status()
-        self._embedded_tool = command
-        self._embedded_tool_name = tool_name
-        if host_class is _PlanEditWallHost:
-            self._embedded_host = host_class(self, command)
-        else:
-            self._embedded_host = host_class(self, tool_name, command)
-        command.Activated(host=self._embedded_host)
+    def _start_embedded_tool(self, tool_name, command, host_class=None):
+        return plan_lifecycle.start_embedded_tool(
+            self,
+            tool_name,
+            command,
+            host_class=host_class,
+        )
 
     def _cancel_pending_edit(self):
-        if self._tearing_down:
-            self._wall_edit_modal_active = False
-            self._restore_edit_wall_visibility()
-            self._clear_wall_edit_preview()
-            self._edit_wall = None
-            self._edit_endpoint = None
-            self._edit_endpoints = None
-            self._wall_edit_opening_clearances = {}
-            self._wall_edit_opening_clearances_queued = False
-            self._wall_edit_task_panel_refresh_queued = False
-            self._preview_points = None
-            self._wall_edit_length_edit_queued = False
-            self._ignore_selection_changes = False
-            self._embedded_host = None
-            self._embedded_tool = None
-            self._embedded_tool_name = None
-            self._edit_opening_move_anchor = "center"
-            self._edit_opening_move_raw_point = None
-            self._clear_plan_relation_status()
-            return
-        self._stop_snapper()
-        self._pop_opening_move_snap_profile()
-        FreeCAD.activeDraftCommand = None
-        self._wall_edit_modal_active = False
-        self._restore_edit_wall_visibility()
-        self._clear_wall_edit_preview()
-        self._edit_wall = None
-        self._edit_endpoint = None
-        self._edit_endpoints = None
-        self._wall_edit_opening_clearances = {}
-        self._wall_edit_opening_clearances_queued = False
-        self._wall_edit_task_panel_refresh_queued = False
-        self._preview_points = None
-        self._wall_edit_length_edit_queued = False
-        self._ignore_selection_changes = False
-        self._embedded_host = None
-        self._embedded_tool = None
-        self._embedded_tool_name = None
-        self._edit_opening = None
-        self._edit_opening_handle_index = None
-        self._edit_opening_move_anchor = "center"
-        self._edit_opening_move_raw_point = None
-        self._clear_plan_relation_status()
-        self._sync_wall_grips()
-        self._sync_selected_opening_overlay()
-        self._sync_selected_opening_handles()
-        self._sync_selected_space_overlay()
-        self._sync_selected_provider_overlay()
-        self._sync_selected_provider_handles()
+        return plan_lifecycle.cancel_pending_edit(self)
 
     def _cancel_join_tool(self, refresh=True):
         return plan_wall_relations.cancel_join_tool(self, refresh=refresh)
@@ -2369,22 +2004,7 @@ class PlanEditSession:
         return self._embedded_tool is not None
 
     def _cancel_embedded_tool(self, tool_name=None):
-        if self._tearing_down or self._embedded_tool is None:
-            return
-        if tool_name is not None and self._embedded_tool_name != tool_name:
-            return
-        tool = self._embedded_tool
-        if hasattr(tool, "cancel_interactive"):
-            try:
-                tool.cancel_interactive()
-                return
-            except Exception:
-                pass
-        if hasattr(tool, "finish"):
-            try:
-                tool.finish(cont=False)
-            except Exception:
-                pass
+        return plan_lifecycle.cancel_embedded_tool(self, tool_name=tool_name)
 
     def _cancel_wall_edit(self, restore=True, refresh=True):
         return plan_wall_edit.cancel_wall_edit(self, restore=restore, refresh=refresh)
