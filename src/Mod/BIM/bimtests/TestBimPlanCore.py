@@ -95,6 +95,7 @@ from bimplan.selection import (
 )
 from bimplan.spaces import (
     begin_space_region_pick,
+    create_space_from_current_selection,
     get_space_creation_request,
     get_space_region_seed_targets,
     should_run_space_preflight_for_targets,
@@ -161,6 +162,55 @@ class _DummyProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
+    def test_create_space_from_current_selection_finalizes_direct_boundary_space(self):
+        wall_a = SimpleNamespace(Name="WallA")
+        wall_b = SimpleNamespace(Name="WallB")
+        boundaries = [(wall_a, ("Face1",)), (wall_b, ("Face2",))]
+        created_space = SimpleNamespace(Name="Space001")
+        events = []
+        doc = SimpleNamespace(
+            openTransaction=lambda label: events.append(("open", label)),
+            commitTransaction=lambda: events.append(("commit", None)),
+            abortTransaction=lambda: events.append(("abort", None)),
+            recompute=lambda: events.append(("recompute", None)),
+        )
+        session = SimpleNamespace(
+            doc=doc,
+            _get_selected_plan_targets=lambda: [("wall", wall_a), ("wall", wall_b)],
+            _get_selected_space_boundary_links=lambda fallback_space=None: (
+                boundaries if fallback_space is None else []
+            ),
+            _add_object_to_active_storey=lambda space: events.append(("add-storey", space)),
+            _space_has_valid_geometry=lambda space: True,
+            _report_space_creation_failure=lambda space: events.append(("report-failure", space))
+            or False,
+            _register_plan_object=lambda space: events.append(("register", space)),
+            _restore_selected_space=lambda space: events.append(("restore", space)),
+        )
+        arch_module = SimpleNamespace(
+            makeSpace=lambda value: events.append(("make-space", value)) or created_space
+        )
+        archspace_module = SimpleNamespace(
+            analyzeBoundaryLinks=lambda value: events.append(("analyze", value)) or {}
+        )
+
+        with patch.dict(sys.modules, {"Arch": arch_module, "ArchSpace": archspace_module}):
+            self.assertTrue(create_space_from_current_selection(session))
+
+        self.assertEqual(
+            [
+                ("analyze", boundaries),
+                ("open", "Create Space"),
+                ("make-space", boundaries),
+                ("add-storey", created_space),
+                ("recompute", None),
+                ("commit", None),
+                ("register", created_space),
+                ("restore", created_space),
+            ],
+            events,
+        )
+
     def test_begin_space_region_pick_auto_creates_single_remaining_candidate(self):
         candidate = {"area": 12.0}
         created_space = SimpleNamespace(Name="Space001")

@@ -743,6 +743,42 @@ def _finish_created_space(session, space, event_callback=None, claim_click=False
     return True
 
 
+def _create_space_in_transaction(
+    session,
+    *,
+    create_space,
+    boundaries=None,
+    keep_boundaries=False,
+):
+    boundaries = list(boundaries or [])
+    space = None
+    reported_failure = False
+    try:
+        session.doc.openTransaction(translate("BIM_PlanEdit", "Create Space"))
+        space = create_space()
+        if not space:
+            raise RuntimeError("Unable to create space")
+        if keep_boundaries and boundaries:
+            space.Boundaries = boundaries
+        session._add_object_to_active_storey(space)
+        session.doc.recompute()
+        if not session._space_has_valid_geometry(space):
+            reported_failure = session._report_space_creation_failure(space)
+            raise RuntimeError("Unable to create space")
+        session.doc.commitTransaction()
+    except Exception:
+        try:
+            session.doc.abortTransaction()
+        except Exception:
+            pass
+        if not reported_failure:
+            FreeCAD.Console.PrintError(
+                translate("BIM_PlanEdit", "Failed to create the selected space.\n")
+            )
+        return None
+    return space
+
+
 def _create_and_finish_space_region_candidate(
     session,
     candidate,
@@ -958,38 +994,19 @@ def create_space_from_region_candidate(session, candidate, boundaries=None, keep
 
     if not isinstance(candidate, dict):
         return None
-    boundaries = list(boundaries or [])
 
-    space = None
-    reported_failure = False
-    try:
-        session.doc.openTransaction(translate("BIM_PlanEdit", "Create Space"))
+    def create_space():
         base = session._create_space_region_base_object(candidate)
         if not base:
-            raise RuntimeError("Unable to create space base")
-        space = Arch.makeSpace(base)
-        if not space:
-            raise RuntimeError("Unable to create space")
-        if keep_boundaries and boundaries:
-            space.Boundaries = boundaries
-        session._add_object_to_active_storey(space)
-        session.doc.recompute()
-        if not session._space_has_valid_geometry(space):
-            reported_failure = session._report_space_creation_failure(space)
-            raise RuntimeError("Unable to create space")
-        session.doc.commitTransaction()
-    except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
-        if not reported_failure:
-            FreeCAD.Console.PrintError(
-                translate("BIM_PlanEdit", "Failed to create the selected space.\n")
-            )
-        return None
+            return None
+        return Arch.makeSpace(base)
 
-    return space
+    return _create_space_in_transaction(
+        session,
+        create_space=create_space,
+        boundaries=boundaries,
+        keep_boundaries=keep_boundaries,
+    )
 
 
 def activate_space_region_candidate(session, candidate, event_callback=None):
@@ -1063,28 +1080,11 @@ def create_space_from_current_selection(session):
             keep_boundaries=True,
         )
 
-    space = None
-    reported_failure = False
-    try:
-        session.doc.openTransaction(translate("BIM_PlanEdit", "Create Space"))
-        space = Arch.makeSpace(boundaries)
-        if not space:
-            raise RuntimeError("Unable to create space")
-        session._add_object_to_active_storey(space)
-        session.doc.recompute()
-        if not session._space_has_valid_geometry(space):
-            reported_failure = session._report_space_creation_failure(space)
-            raise RuntimeError("Unable to create space")
-        session.doc.commitTransaction()
-    except Exception:
-        try:
-            session.doc.abortTransaction()
-        except Exception:
-            pass
-        if not reported_failure:
-            FreeCAD.Console.PrintError(
-                translate("BIM_PlanEdit", "Failed to create the selected space.\n")
-            )
+    space = _create_space_in_transaction(
+        session,
+        create_space=lambda: Arch.makeSpace(boundaries),
+    )
+    if not space:
         return False
 
     return _finish_created_space(session, space)
