@@ -258,6 +258,7 @@ class TestBimPlanCore(unittest.TestCase):
             PlanProviderOverlayReadState,
             PlanSelectionState,
             PlanTaskPanelState,
+            PlanWallEditState,
         )
 
         session = SimpleNamespace()
@@ -268,12 +269,15 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIsInstance(session.provider_overlay_read_state, PlanProviderOverlayReadState)
         self.assertIsInstance(session.interaction_state, PlanInteractionState)
         self.assertIsInstance(session.selection_state, PlanSelectionState)
+        self.assertIsInstance(session.wall_edit_state, PlanWallEditState)
         self.assertEqual([], session.task_panel_state.space_region_candidates)
         self.assertEqual("architecture", session.provider_overlay_read_state.mode)
         self.assertEqual({}, session.provider_overlay_read_state.visibility)
         self.assertIsNone(session.interaction_state.embedded_tool)
         self.assertIsNone(session.selection_state.selected_plan_target_kind)
         self.assertEqual([], session.selection_state.secondary_selected_plan_targets_state)
+        self.assertFalse(session.wall_edit_state.wall_edit_modal_active)
+        self.assertEqual({}, session.wall_edit_state.wall_edit_opening_clearances)
 
     def test_plan_edit_session_read_state_properties_bridge_typed_buckets(self):
         from bimplan.session import PlanEditSession
@@ -282,6 +286,7 @@ class TestBimPlanCore(unittest.TestCase):
             PlanProviderOverlayReadState,
             PlanSelectionState,
             PlanTaskPanelState,
+            PlanWallEditState,
         )
 
         session = object.__new__(PlanEditSession)
@@ -289,6 +294,7 @@ class TestBimPlanCore(unittest.TestCase):
         session.provider_overlay_read_state = PlanProviderOverlayReadState()
         session.interaction_state = PlanInteractionState()
         session.selection_state = PlanSelectionState()
+        session.wall_edit_state = PlanWallEditState()
 
         candidate = {"area": 12.0}
         parent_space = SimpleNamespace(Name="Space001")
@@ -297,6 +303,8 @@ class TestBimPlanCore(unittest.TestCase):
         provider_point_tool = object()
         hovered_wall = SimpleNamespace(Name="Wall001")
         secondary_targets = [("space", parent_space)]
+        preview_tracker = object()
+        readout_tracker = object()
 
         session._plan_relation_status_message = "Relation status"
         session._space_region_candidates = (candidate,)
@@ -314,6 +322,23 @@ class TestBimPlanCore(unittest.TestCase):
         session.hovered_wall = hovered_wall
         session._pending_selected_plan_target = ("space", parent_space)
         session._secondary_selected_plan_targets_state = secondary_targets
+        session._wall_edit_modal_active = True
+        session._edit_wall = hovered_wall
+        session._edit_endpoint = "Move"
+        session._edit_endpoints = ("start", "end")
+        session._wall_edit_opening_clearances = {"Opening001": {"left_clearance": 100.0}}
+        session._wall_edit_opening_clearances_queued = True
+        session._wall_edit_task_panel_refresh_queued = True
+        session._preview_points = ("preview-a", "preview-b")
+        session._preview_line_tracker = preview_tracker
+        session._preview_footprint_trackers = (preview_tracker,)
+        session._preview_grip_trackers = (preview_tracker,)
+        session._wall_edit_readout_trackers = (readout_tracker,)
+        session._wall_edit_opening_preview_trackers = (preview_tracker,)
+        session._wall_edit_active_readout_tracker = readout_tracker
+        session._wall_edit_active_readout_mode = 1
+        session._wall_edit_length_edit_queued = True
+        session._edit_wall_visibility = False
 
         self.assertEqual("Relation status", session.task_panel_state.relation_status_message)
         self.assertEqual([candidate], session.task_panel_state.space_region_candidates)
@@ -338,6 +363,29 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(
             secondary_targets, session.selection_state.secondary_selected_plan_targets_state
         )
+        self.assertTrue(session.wall_edit_state.wall_edit_modal_active)
+        self.assertIs(hovered_wall, session.wall_edit_state.edit_wall)
+        self.assertEqual("Move", session.wall_edit_state.edit_endpoint)
+        self.assertEqual(("start", "end"), session.wall_edit_state.edit_endpoints)
+        self.assertEqual(
+            {"Opening001": {"left_clearance": 100.0}},
+            session.wall_edit_state.wall_edit_opening_clearances,
+        )
+        self.assertTrue(session.wall_edit_state.wall_edit_opening_clearances_queued)
+        self.assertTrue(session.wall_edit_state.wall_edit_task_panel_refresh_queued)
+        self.assertEqual(("preview-a", "preview-b"), session.wall_edit_state.preview_points)
+        self.assertIs(preview_tracker, session.wall_edit_state.preview_line_tracker)
+        self.assertEqual([preview_tracker], session.wall_edit_state.preview_footprint_trackers)
+        self.assertEqual([preview_tracker], session.wall_edit_state.preview_grip_trackers)
+        self.assertEqual([readout_tracker], session.wall_edit_state.wall_edit_readout_trackers)
+        self.assertEqual(
+            [preview_tracker],
+            session.wall_edit_state.wall_edit_opening_preview_trackers,
+        )
+        self.assertIs(readout_tracker, session.wall_edit_state.wall_edit_active_readout_tracker)
+        self.assertEqual(1, session.wall_edit_state.wall_edit_active_readout_mode)
+        self.assertTrue(session.wall_edit_state.wall_edit_length_edit_queued)
+        self.assertFalse(session.wall_edit_state.edit_wall_visibility)
 
     def test_plan_edit_session_owns_selection_spaces_relations_interaction_symbols_windows_viewport_wall_provider_and_status_components(
         self,

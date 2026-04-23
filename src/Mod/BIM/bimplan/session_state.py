@@ -37,6 +37,7 @@ def initialize_session_read_state(session):
     )
     session.interaction_state = plan_session_state_models.PlanInteractionState()
     session.selection_state = plan_session_state_models.PlanSelectionState()
+    session.wall_edit_state = plan_session_state_models.PlanWallEditState()
 
 
 def initialize_session_state(session):
@@ -145,22 +146,6 @@ def initialize_session_state(session):
     session._document_visual_update_defer_depth = 0
     session._document_visual_refresh_deferred = False
     session._pending_selected_wall_reset = False
-    session._wall_edit_modal_active = False
-    session._edit_wall = None
-    session._edit_endpoint = None
-    session._edit_endpoints = None
-    session._wall_edit_opening_clearances = {}
-    session._wall_edit_opening_clearances_queued = False
-    session._wall_edit_task_panel_refresh_queued = False
-    session._preview_points = None
-    session._preview_line_tracker = None
-    session._preview_footprint_trackers = []
-    session._preview_grip_trackers = []
-    session._wall_edit_readout_trackers = []
-    session._wall_edit_opening_preview_trackers = []
-    session._wall_edit_active_readout_tracker = None
-    session._wall_edit_active_readout_mode = None
-    session._wall_edit_length_edit_queued = False
     session._rect_wall_start = None
     session._rect_wall_params = None
     session._rect_wall_preview_trackers = []
@@ -171,7 +156,6 @@ def initialize_session_state(session):
     session._window_preview_trackers = []
     session._plan_region_points = []
     session._plan_region_preview_trackers = []
-    session._edit_wall_visibility = None
     session._edit_symbol_start_placement = None
     session._edit_symbol_reference_point = None
     session._ignore_selection_changes = False

@@ -244,6 +244,13 @@ class PlanEditSession:
             self.__dict__["selection_state"] = state
         return state
 
+    def _ensure_wall_edit_state(self):
+        state = self.__dict__.get("wall_edit_state")
+        if state is None:
+            state = plan_session_state_models.PlanWallEditState()
+            self.__dict__["wall_edit_state"] = state
+        return state
+
     @property
     def _plan_relation_status_message(self):
         return self._ensure_task_panel_state().relation_status_message
@@ -379,6 +386,142 @@ class PlanEditSession:
     @_secondary_selected_plan_targets_state.setter
     def _secondary_selected_plan_targets_state(self, value):
         self._ensure_selection_state().secondary_selected_plan_targets_state = list(value or [])
+
+    @property
+    def _wall_edit_modal_active(self):
+        return self._ensure_wall_edit_state().wall_edit_modal_active
+
+    @_wall_edit_modal_active.setter
+    def _wall_edit_modal_active(self, value):
+        self._ensure_wall_edit_state().wall_edit_modal_active = bool(value)
+
+    @property
+    def _edit_wall(self):
+        return self._ensure_wall_edit_state().edit_wall
+
+    @_edit_wall.setter
+    def _edit_wall(self, value):
+        self._ensure_wall_edit_state().edit_wall = value
+
+    @property
+    def _edit_endpoint(self):
+        return self._ensure_wall_edit_state().edit_endpoint
+
+    @_edit_endpoint.setter
+    def _edit_endpoint(self, value):
+        self._ensure_wall_edit_state().edit_endpoint = value
+
+    @property
+    def _edit_endpoints(self):
+        return self._ensure_wall_edit_state().edit_endpoints
+
+    @_edit_endpoints.setter
+    def _edit_endpoints(self, value):
+        self._ensure_wall_edit_state().edit_endpoints = value
+
+    @property
+    def _wall_edit_opening_clearances(self):
+        return self._ensure_wall_edit_state().wall_edit_opening_clearances
+
+    @_wall_edit_opening_clearances.setter
+    def _wall_edit_opening_clearances(self, value):
+        self._ensure_wall_edit_state().wall_edit_opening_clearances = dict(value or {})
+
+    @property
+    def _wall_edit_opening_clearances_queued(self):
+        return self._ensure_wall_edit_state().wall_edit_opening_clearances_queued
+
+    @_wall_edit_opening_clearances_queued.setter
+    def _wall_edit_opening_clearances_queued(self, value):
+        self._ensure_wall_edit_state().wall_edit_opening_clearances_queued = bool(value)
+
+    @property
+    def _wall_edit_task_panel_refresh_queued(self):
+        return self._ensure_wall_edit_state().wall_edit_task_panel_refresh_queued
+
+    @_wall_edit_task_panel_refresh_queued.setter
+    def _wall_edit_task_panel_refresh_queued(self, value):
+        self._ensure_wall_edit_state().wall_edit_task_panel_refresh_queued = bool(value)
+
+    @property
+    def _preview_points(self):
+        return self._ensure_wall_edit_state().preview_points
+
+    @_preview_points.setter
+    def _preview_points(self, value):
+        self._ensure_wall_edit_state().preview_points = value
+
+    @property
+    def _preview_line_tracker(self):
+        return self._ensure_wall_edit_state().preview_line_tracker
+
+    @_preview_line_tracker.setter
+    def _preview_line_tracker(self, value):
+        self._ensure_wall_edit_state().preview_line_tracker = value
+
+    @property
+    def _preview_footprint_trackers(self):
+        return self._ensure_wall_edit_state().preview_footprint_trackers
+
+    @_preview_footprint_trackers.setter
+    def _preview_footprint_trackers(self, value):
+        self._ensure_wall_edit_state().preview_footprint_trackers = list(value or [])
+
+    @property
+    def _preview_grip_trackers(self):
+        return self._ensure_wall_edit_state().preview_grip_trackers
+
+    @_preview_grip_trackers.setter
+    def _preview_grip_trackers(self, value):
+        self._ensure_wall_edit_state().preview_grip_trackers = list(value or [])
+
+    @property
+    def _wall_edit_readout_trackers(self):
+        return self._ensure_wall_edit_state().wall_edit_readout_trackers
+
+    @_wall_edit_readout_trackers.setter
+    def _wall_edit_readout_trackers(self, value):
+        self._ensure_wall_edit_state().wall_edit_readout_trackers = list(value or [])
+
+    @property
+    def _wall_edit_opening_preview_trackers(self):
+        return self._ensure_wall_edit_state().wall_edit_opening_preview_trackers
+
+    @_wall_edit_opening_preview_trackers.setter
+    def _wall_edit_opening_preview_trackers(self, value):
+        self._ensure_wall_edit_state().wall_edit_opening_preview_trackers = list(value or [])
+
+    @property
+    def _wall_edit_active_readout_tracker(self):
+        return self._ensure_wall_edit_state().wall_edit_active_readout_tracker
+
+    @_wall_edit_active_readout_tracker.setter
+    def _wall_edit_active_readout_tracker(self, value):
+        self._ensure_wall_edit_state().wall_edit_active_readout_tracker = value
+
+    @property
+    def _wall_edit_active_readout_mode(self):
+        return self._ensure_wall_edit_state().wall_edit_active_readout_mode
+
+    @_wall_edit_active_readout_mode.setter
+    def _wall_edit_active_readout_mode(self, value):
+        self._ensure_wall_edit_state().wall_edit_active_readout_mode = value
+
+    @property
+    def _wall_edit_length_edit_queued(self):
+        return self._ensure_wall_edit_state().wall_edit_length_edit_queued
+
+    @_wall_edit_length_edit_queued.setter
+    def _wall_edit_length_edit_queued(self, value):
+        self._ensure_wall_edit_state().wall_edit_length_edit_queued = bool(value)
+
+    @property
+    def _edit_wall_visibility(self):
+        return self._ensure_wall_edit_state().edit_wall_visibility
+
+    @_edit_wall_visibility.setter
+    def _edit_wall_visibility(self, value):
+        self._ensure_wall_edit_state().edit_wall_visibility = value
 
     @property
     def _embedded_host(self):

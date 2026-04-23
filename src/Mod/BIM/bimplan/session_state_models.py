@@ -50,3 +50,24 @@ class PlanSelectionState:
     hovered_region: object = None
     pending_selected_plan_target: object = None
     secondary_selected_plan_targets_state: list = field(default_factory=list)
+
+
+@dataclass
+class PlanWallEditState:
+    wall_edit_modal_active: bool = False
+    edit_wall: object = None
+    edit_endpoint: object = None
+    edit_endpoints: object = None
+    wall_edit_opening_clearances: dict = field(default_factory=dict)
+    wall_edit_opening_clearances_queued: bool = False
+    wall_edit_task_panel_refresh_queued: bool = False
+    preview_points: object = None
+    preview_line_tracker: object = None
+    preview_footprint_trackers: list = field(default_factory=list)
+    preview_grip_trackers: list = field(default_factory=list)
+    wall_edit_readout_trackers: list = field(default_factory=list)
+    wall_edit_opening_preview_trackers: list = field(default_factory=list)
+    wall_edit_active_readout_tracker: object = None
+    wall_edit_active_readout_mode: object = None
+    wall_edit_length_edit_queued: bool = False
+    edit_wall_visibility: object = None
