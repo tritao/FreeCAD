@@ -14,6 +14,11 @@ from .provider_targets import (
     is_plan_provider_target_object as _is_plan_provider_target_object,
     normalize_plan_provider_target as _normalize_plan_provider_target,
 )
+from .provider_snapshot import (
+    _collect_provider_surface_contributions,
+    _get_cached_provider_contributions,
+    _set_cached_provider_contributions,
+)
 from .providers import (
     PlanActionSpec,
     PlanContextDetailSpec,
@@ -523,10 +528,9 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
         document_is_alive = getattr(session, "_document_is_alive", None)
         if callable(document_is_alive) and not document_is_alive():
             return ()
-        refresh_cache = getattr(session, "_plan_provider_refresh_cache", None)
-        cache_key = ("provider_contributions", str(method_name or ""))
-        if isinstance(refresh_cache, dict) and cache_key in refresh_cache:
-            return refresh_cache[cache_key]
+        cached_contributions = _get_cached_provider_contributions(session, method_name)
+        if cached_contributions is not None:
+            return cached_contributions
         try:
             context = session.get_plan_edit_context()
         except (ReferenceError, RuntimeError):
@@ -536,37 +540,18 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
             provider_id = session._get_plan_provider_id(provider)
             if not provider_id:
                 continue
-            method = getattr(provider, method_name, None)
-            if not callable(method):
-                continue
-            span_name = "plan_provider_{}_{}".format(
-                provider_id.replace(" ", "_"),
-                method_name,
-            )
-            with session._plan_perf_trace_span(span_name):
-                try:
-                    provided = method(context)
-                except Exception as exc:
-                    FreeCAD.Console.PrintError(
-                        translate(
-                            "BIM_PlanEdit",
-                            "Plan Edit provider '{provider}' failed in {method}: {error}\n",
-                        ).format(provider=provider_id, method=method_name, error=exc)
-                    )
-                    continue
-            contribution_count = 0
-            for contribution in session._coerce_plan_provider_results(provided):
-                normalized = normalizer(provider_id, contribution)
-                if normalized is not None:
-                    results.append(normalized)
-                    contribution_count += 1
-            session._plan_perf_count(
-                "plan_provider_{}_{}_contributions".format(provider_id, method_name),
-                contribution_count,
+            results.extend(
+                _collect_provider_surface_contributions(
+                    session,
+                    provider,
+                    provider_id,
+                    context,
+                    method_name,
+                    normalizer,
+                )
             )
         contributions = tuple(results)
-        if isinstance(refresh_cache, dict):
-            refresh_cache[cache_key] = contributions
+        _set_cached_provider_contributions(session, method_name, contributions)
         return contributions
 
 

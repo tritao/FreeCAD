@@ -1835,16 +1835,7 @@ class PlanEditControlsWidget:
             self._integration_refresh_queued = False
             self._integration_refresh_generation += 1
             with self.session._plan_provider_refresh_cache_scope():
-                with self.session._plan_perf_trace_span("collect_plan_provider_tools"):
-                    tools = tuple(self.session.get_plan_provider_tools())
-                with self.session._plan_perf_trace_span("collect_plan_provider_overlays"):
-                    overlays = tuple(self.session.get_plan_provider_overlays())
-                with self.session._plan_perf_trace_span("collect_plan_provider_issues"):
-                    issues = tuple(self.session.get_plan_provider_issues())
-                with self.session._plan_perf_trace_span("collect_plan_provider_context_panels"):
-                    context_panels = tuple(self.session.get_plan_provider_context_panels())
-                with self.session._plan_perf_trace_span("collect_plan_provider_inspector_sections"):
-                    sections = tuple(self.session.get_plan_provider_inspector_sections())
+                snapshot = self.session.get_plan_provider_snapshot()
             queue_overlay_refresh = getattr(
                 self.session,
                 "queue_plan_provider_overlay_sync",
@@ -1858,8 +1849,8 @@ class PlanEditControlsWidget:
                 )
             if callable(queue_overlay_refresh):
                 queue_overlay_refresh()
-            tools = self._sort_provider_tools(tools)
-            overlay_items = self._build_provider_overlay_legend_items(overlays)
+            tools = self._sort_provider_tools(snapshot.tools)
+            overlay_items = self._build_provider_overlay_legend_items(snapshot.overlays)
             overlay_mode = self.session.get_plan_provider_overlay_mode()
             self._set_provider_overlay_mode_combo_value(overlay_mode)
             active_overlay_items = self._filter_provider_overlay_legend_items_for_mode(
@@ -1867,27 +1858,21 @@ class PlanEditControlsWidget:
                 active_mode=overlay_mode,
             )
             summary_sections, regular_sections, detail_sections = self._partition_provider_sections(
-                sections
+                snapshot.inspector_sections
             )
-            context_panel = self._resolve_provider_context_panel(context_panels)
+            context_panel = self._resolve_provider_context_panel(snapshot.context_panels)
             context_panel_actions, _has_context_primary = (
                 self._collect_provider_context_panel_actions(context_panel)
                 if context_panel is not None
                 else ((), False)
             )
-            state = (tools, overlay_items, issues, sections, context_panel)
-            if (
-                not tools
-                and not overlay_items
-                and not issues
-                and not sections
-                and context_panel is None
-            ):
+            state = snapshot
+            if snapshot.is_empty():
                 self._hide_integration_panel()
                 return
             self._set_integration_summary_text(
-                issues,
-                sections,
+                snapshot.issues,
+                snapshot.inspector_sections,
                 tools=tools,
                 overlay_items=active_overlay_items,
                 summary_sections=summary_sections,
@@ -1901,7 +1886,7 @@ class PlanEditControlsWidget:
                 self._clear_layout(self.integration_content_layout)
                 from PySide import QtGui
 
-                grouped_issue_sets = self._group_provider_issues(issues)
+                grouped_issue_sets = self._group_provider_issues(snapshot.issues)
                 promoted_action_ids = self._collect_action_identities(
                     action
                     for section in summary_sections
@@ -1943,7 +1928,7 @@ class PlanEditControlsWidget:
                     self.integration_content_layout.addWidget(
                         self._make_provider_context_panel_block(QtGui, context_panel)
                     )
-                if issues:
+                if snapshot.issues:
                     self.integration_content_layout.addWidget(
                         self._make_integration_group_heading(
                             QtGui,
