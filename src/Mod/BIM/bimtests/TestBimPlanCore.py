@@ -14,6 +14,7 @@ if "FreeCAD" not in sys.modules:
         freecad_module = ModuleType("FreeCAD")
         freecad_module.Qt = SimpleNamespace(
             translate=lambda _context, text: text,
+            QT_TRANSLATE_NOOP=lambda _context, text: text,
         )
         sys.modules["FreeCAD"] = freecad_module
 
@@ -169,6 +170,86 @@ class _DummyProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
+    def test_plan_edit_session_owns_selection_and_spaces_components(self):
+        from bimplan.session import PlanEditSession
+        from bimplan.session_components import PlanSelectionAPI, PlanSpacesAPI
+
+        with patch("bimplan.session.plan_session_state.initialize_session_state"):
+            session = PlanEditSession()
+
+        self.assertIsInstance(session.selection, PlanSelectionAPI)
+        self.assertIs(session.selection.session, session)
+        self.assertIsInstance(session.spaces, PlanSpacesAPI)
+        self.assertIs(session.spaces.session, session)
+
+    def test_plan_edit_session_wrappers_delegate_to_owned_components(self):
+        from bimplan.session import PlanEditSession
+        from bimplan.session_components import PlanSelectionAPI, PlanSpacesAPI
+
+        wall = SimpleNamespace(Name="Wall001")
+        targets = [("wall", wall)]
+
+        with patch("bimplan.session.plan_session_state.initialize_session_state"):
+            session = PlanEditSession()
+
+        with patch.object(
+            PlanSelectionAPI,
+            "get_selected_target_for_kind",
+            autospec=True,
+            return_value=wall,
+        ) as get_selected_target_for_kind, patch.object(
+            PlanSpacesAPI,
+            "get_space_preflight_report",
+            autospec=True,
+            return_value={"ready": True},
+        ) as get_space_preflight_report:
+            self.assertIs(wall, session._get_selected_target_for_kind("wall"))
+            self.assertEqual(
+                {"ready": True},
+                session._get_space_preflight_report(targets=targets),
+            )
+
+        get_selected_target_for_kind.assert_called_once_with(session.selection, "wall")
+        get_space_preflight_report.assert_called_once_with(session.spaces, targets=targets)
+
+    def test_plan_selection_api_uses_primary_target_kind_policy(self):
+        from bimplan import target_kinds as plan_target_kinds
+        from bimplan.session_components import PlanSelectionAPI
+
+        session = object()
+        selection = PlanSelectionAPI(session)
+
+        with patch(
+            "bimplan.session_components.plan_selection.get_selected_plan_target_state",
+            return_value=("wall", "Wall001"),
+        ) as get_selected_plan_target_state:
+            self.assertEqual(("wall", "Wall001"), selection.get_selected_plan_target_state())
+
+        get_selected_plan_target_state.assert_called_once_with(
+            session,
+            plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS,
+        )
+
+    def test_plan_spaces_api_uses_space_region_pick_visual_key(self):
+        from bimplan import visual_keys as plan_visual_keys
+        from bimplan.session_components import PlanSpacesAPI
+
+        session = object()
+        candidate = {"area": 12.0}
+        spaces = PlanSpacesAPI(session)
+
+        with patch(
+            "bimplan.session_components.plan_spaces.set_hovered_space_region_candidate",
+            return_value=True,
+        ) as set_hovered_space_region_candidate:
+            self.assertTrue(spaces.set_hovered_space_region_candidate(candidate))
+
+        set_hovered_space_region_candidate.assert_called_once_with(
+            session,
+            candidate,
+            plan_visual_keys.PLAN_VISUAL_SPACE_REGION_PICK,
+        )
+
     def test_activate_plan_region_tool_uses_shared_space_setup(self):
         parent_space = SimpleNamespace(Name="Space001")
         session = SimpleNamespace(

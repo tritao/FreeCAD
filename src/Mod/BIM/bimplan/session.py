@@ -46,9 +46,8 @@ from bimplan import provider_runtime as plan_provider_runtime
 from bimplan import provider_targets as plan_provider_targets
 from bimplan import selection_additive as plan_selection_additive
 from bimplan import selection_observer as plan_selection_observer
-from bimplan import selection as plan_selection
+from bimplan import session_components as plan_session_components
 from bimplan import snap as plan_snap
-from bimplan import spaces as plan_spaces
 from bimplan import status_text as plan_status_text
 from bimplan import session_state as plan_session_state
 from bimplan import storeys as plan_storeys
@@ -101,7 +100,6 @@ _OPENING_MOVE_SNAP_SET = {
     "WorkingPlane",
 }
 _OPENING_MOVE_ANCHORS = ("center", "left", "right")
-_PRIMARY_PLAN_TARGET_KINDS = plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS
 _OPENING_VISUAL_PROPERTIES = plan_document_visuals.OPENING_VISUAL_PROPERTIES
 _WALL_VISUAL_PROPERTIES = plan_document_visuals.WALL_VISUAL_PROPERTIES
 _SYMBOL_VISUAL_PROPERTIES = plan_document_visuals.SYMBOL_VISUAL_PROPERTIES
@@ -119,7 +117,6 @@ _PLAN_VISUAL_SELECTED_SYMBOL = plan_visual_keys.PLAN_VISUAL_SELECTED_SYMBOL
 _PLAN_VISUAL_SELECTED_SPACE = plan_visual_keys.PLAN_VISUAL_SELECTED_SPACE
 _PLAN_VISUAL_SELECTED_REGION = plan_visual_keys.PLAN_VISUAL_SELECTED_REGION
 _PLAN_VISUAL_SECONDARY_SELECTION = plan_visual_keys.PLAN_VISUAL_SECONDARY_SELECTION
-_PLAN_VISUAL_SPACE_REGION_PICK = plan_visual_keys.PLAN_VISUAL_SPACE_REGION_PICK
 _PLAN_VISUAL_WALL_GRIPS = plan_visual_keys.PLAN_VISUAL_WALL_GRIPS
 _PLAN_VISUAL_WALL_EDIT_PREVIEW = plan_visual_keys.PLAN_VISUAL_WALL_EDIT_PREVIEW
 _PLAN_VISUAL_PROVIDER_OVERLAYS = plan_visual_keys.PLAN_VISUAL_PROVIDER_OVERLAYS
@@ -223,6 +220,8 @@ class PlanEditSession:
 
     def __init__(self):
         plan_session_state.initialize_session_state(self)
+        self.selection = plan_session_components.PlanSelectionAPI(self)
+        self.spaces = plan_session_components.PlanSpacesAPI(self)
 
     def _connect_teardown_signal(self, signal):
         try:
@@ -253,40 +252,31 @@ class PlanEditSession:
         self._teardown_signal_sources = []
 
     def _get_selected_target_for_kind(self, kind):
-        return plan_selection.get_selected_target_for_kind(self, kind)
+        return self.selection.get_selected_target_for_kind(kind)
 
     def _set_selected_target_for_kind(self, kind, obj):
-        return plan_selection.set_selected_target_for_kind(self, kind, obj)
+        return self.selection.set_selected_target_for_kind(kind, obj)
 
     def _get_selected_plan_target_state(self):
-        return plan_selection.get_selected_plan_target_state(
-            self,
-            _PRIMARY_PLAN_TARGET_KINDS,
-        )
+        return self.selection.get_selected_plan_target_state()
 
     def _set_selected_plan_target_state(self, kind=None, obj=None):
-        return plan_selection.set_selected_plan_target_state(
-            self,
-            _PRIMARY_PLAN_TARGET_KINDS,
-            kind=kind,
-            obj=obj,
-        )
+        return self.selection.set_selected_plan_target_state(kind=kind, obj=obj)
 
     def _get_selected_plan_target_object(self, kind=None):
-        return plan_selection.get_selected_plan_target_object(self, kind=kind)
+        return self.selection.get_selected_plan_target_object(kind=kind)
 
     def _is_selected_plan_target(self, kind, obj=None):
-        return plan_selection.is_selected_plan_target(self, kind, obj=obj)
+        return self.selection.is_selected_plan_target(kind, obj=obj)
 
     def _clear_selected_plan_target_if_matches(self, kind, obj):
-        return plan_selection.clear_selected_plan_target_if_matches(self, kind, obj)
+        return self.selection.clear_selected_plan_target_if_matches(kind, obj)
 
     def _get_plan_target_object_from_state(self, state_kind, state_obj, kind):
-        return plan_selection.get_plan_target_object_from_state(state_kind, state_obj, kind)
+        return self.selection.get_plan_target_object_from_state(state_kind, state_obj, kind)
 
     def _selected_plan_target_changed(self, previous_kind, previous_obj, kind=None):
-        return plan_selection.selected_plan_target_changed(
-            self,
+        return self.selection.selected_plan_target_changed(
             previous_kind,
             previous_obj,
             kind=kind,
@@ -1216,56 +1206,52 @@ class PlanEditSession:
         return plan_selection_observer.get_gui_selection()
 
     def _get_space_reference_point(self, space):
-        return plan_spaces.get_space_reference_point(self, space)
+        return self.spaces.get_space_reference_point(space)
 
     def _get_space_boundary_reference_point(self, selection_ex, fallback_space=None):
-        return plan_spaces.get_space_boundary_reference_point(
-            self,
+        return self.spaces.get_space_boundary_reference_point(
             selection_ex,
             fallback_space=fallback_space,
         )
 
     def _get_space_boundary_entries(self, space):
-        return plan_spaces.get_space_boundary_entries(self, space)
+        return self.spaces.get_space_boundary_entries(space)
 
     def _space_boundary_key(self, boundary):
-        return plan_spaces.space_boundary_key(boundary)
+        return self.spaces.space_boundary_key(boundary)
 
     def _get_selected_space_boundary_links(self, fallback_space=None):
-        return plan_spaces.get_selected_space_boundary_links(
-            self,
+        return self.spaces.get_selected_space_boundary_links(
             fallback_space=fallback_space,
         )
 
     def _get_space_region_seed_targets(self, targets=None):
-        return plan_spaces.get_space_region_seed_targets(self, targets=targets)
+        return self.spaces.get_space_region_seed_targets(targets=targets)
 
     def _get_selected_space_region_seed(self, targets=None):
-        return plan_spaces.get_selected_space_region_seed(self, targets=targets)
+        return self.spaces.get_selected_space_region_seed(targets=targets)
 
     def _copy_shape_without_element_map(self, shape):
-        return plan_spaces.copy_shape_without_element_map(shape)
+        return self.spaces.copy_shape_without_element_map(shape)
 
     def _get_space_creation_request(self, targets=None):
-        return plan_spaces.get_space_creation_request(self, targets=targets)
+        return self.spaces.get_space_creation_request(targets=targets)
 
     def _get_existing_space_region_filter_spaces(self, exclude=None):
-        return plan_spaces.get_existing_space_region_filter_spaces(self, exclude=exclude)
+        return self.spaces.get_existing_space_region_filter_spaces(exclude=exclude)
 
     def _get_xy_bound_box_iou(self, first_shape, second_shape):
-        return plan_spaces.get_xy_bound_box_iou(first_shape, second_shape)
+        return self.spaces.get_xy_bound_box_iou(first_shape, second_shape)
 
     def _is_space_region_candidate_claimed(self, candidate, spaces, overlap_iou_tolerance=0.9):
-        return plan_spaces.is_space_region_candidate_claimed(
-            self,
+        return self.spaces.is_space_region_candidate_claimed(
             candidate,
             spaces,
             overlap_iou_tolerance=overlap_iou_tolerance,
         )
 
     def _filter_claimed_space_region_candidates(self, candidates, exclude_space=None):
-        return plan_spaces.filter_claimed_space_region_candidates(
-            self,
+        return self.spaces.filter_claimed_space_region_candidates(
             candidates,
             exclude_space=exclude_space,
         )
@@ -1276,15 +1262,14 @@ class PlanEditSession:
         label=None,
         seed_space=None,
     ):
-        return plan_spaces.get_space_region_candidate_report(
-            self,
+        return self.spaces.get_space_region_candidate_report(
             boundaries,
             label=label,
             seed_space=seed_space,
         )
 
     def _report_space_region_candidate_failure(self, report):
-        return plan_spaces.report_space_region_candidate_failure(report)
+        return self.spaces.report_space_region_candidate_failure(report)
 
     def _get_plan_target_kind_for_object(self, obj):
         return plan_targets.get_plan_target_kind_for_object(self, obj)
@@ -1395,32 +1380,31 @@ class PlanEditSession:
         return plan_document_visuals.defer_document_visual_updates(self)
 
     def _set_pending_selected_plan_target(self, kind=None, obj=None):
-        return plan_selection.set_pending_selected_plan_target(self, kind=kind, obj=obj)
+        return self.selection.set_pending_selected_plan_target(kind=kind, obj=obj)
 
     def _consume_pending_selected_plan_target(self):
-        return plan_selection.consume_pending_selected_plan_target(self)
+        return self.selection.consume_pending_selected_plan_target()
 
     def _get_selected_plan_target(self):
-        return plan_selection.get_selected_plan_target(self)
+        return self.selection.get_selected_plan_target()
 
     def _get_first_plan_target_from_selection(self, selection):
-        return plan_selection.get_first_plan_target_from_selection(self, selection)
+        return self.selection.get_first_plan_target_from_selection(selection)
 
     def _is_valid_plan_target(self, kind, obj):
-        return plan_selection.is_valid_plan_target(self, kind, obj)
+        return self.selection.is_valid_plan_target(kind, obj)
 
     def _get_plan_target_state_key(self, kind, obj):
-        return plan_selection.get_plan_target_state_key(kind, obj)
+        return self.selection.get_plan_target_state_key(kind, obj)
 
     def _normalize_plan_target_list(self, targets):
-        return plan_selection.normalize_plan_target_list(self, targets)
+        return self.selection.normalize_plan_target_list(targets)
 
     def _normalize_plan_targets_from_selection(self, selection):
-        return plan_selection.normalize_plan_targets_from_selection(self, selection)
+        return self.selection.normalize_plan_targets_from_selection(selection)
 
     def _set_secondary_selected_plan_targets(self, targets, primary_kind=None, primary_obj=None):
-        return plan_selection.set_secondary_selected_plan_targets(
-            self,
+        return self.selection.set_secondary_selected_plan_targets(
             targets,
             primary_kind=primary_kind,
             primary_obj=primary_obj,
@@ -1429,8 +1413,7 @@ class PlanEditSession:
     def _sync_secondary_selected_plan_targets_from_selection(
         self, selection, primary_kind=None, primary_obj=None
     ):
-        return plan_selection.sync_secondary_selected_plan_targets_from_selection(
-            self,
+        return self.selection.sync_secondary_selected_plan_targets_from_selection(
             selection,
             primary_kind=primary_kind,
             primary_obj=primary_obj,
@@ -1439,8 +1422,7 @@ class PlanEditSession:
     def _sync_secondary_selected_plan_targets_from_gui_selection(
         self, primary_kind=None, primary_obj=None
     ):
-        return plan_selection.sync_secondary_selected_plan_targets_from_gui_selection(
-            self,
+        return self.selection.sync_secondary_selected_plan_targets_from_gui_selection(
             primary_kind=primary_kind,
             primary_obj=primary_obj,
         )
@@ -1466,7 +1448,7 @@ class PlanEditSession:
         return plan_selection_observer.add_gui_selection_object(obj)
 
     def _get_secondary_selected_plan_targets(self):
-        return plan_selection.get_secondary_selected_plan_targets(self)
+        return self.selection.get_secondary_selected_plan_targets()
 
     def _format_plan_target_count_label(self, kind, count):
         return plan_status_text.format_plan_target_count_label(kind, count)
@@ -1485,7 +1467,7 @@ class PlanEditSession:
         return plan_status_text.summarize_plan_targets(targets)
 
     def _get_selected_plan_targets(self):
-        return plan_selection.get_selected_plan_targets(self)
+        return self.selection.get_selected_plan_targets()
 
     def _get_plan_text_property(self, obj, property_names, default=""):
         return plan_targets.get_plan_text_property(obj, property_names, default=default)
@@ -1786,10 +1768,10 @@ class PlanEditSession:
         )
 
     def _get_space_preflight_report(self, targets=None):
-        return plan_spaces.get_space_preflight_report(self, targets=targets)
+        return self.spaces.get_space_preflight_report(targets=targets)
 
     def _format_space_preflight_text(self, report):
-        return plan_spaces.format_space_preflight_text(report)
+        return self.spaces.format_space_preflight_text(report)
 
     def _get_plan_selection_summary_text(self):
         return plan_status_text.get_plan_selection_summary_text(self)
@@ -1810,8 +1792,7 @@ class PlanEditSession:
         pending_restore=False,
         preserve_hovered_symbol_overlay=False,
     ):
-        return plan_selection.set_selected_plan_target(
-            self,
+        return self.selection.set_selected_plan_target(
             kind=kind,
             obj=obj,
             pending_restore=pending_restore,
@@ -1819,14 +1800,13 @@ class PlanEditSession:
         )
 
     def _schedule_selected_wall_reset(self, reason, obj):
-        return plan_selection.schedule_selected_wall_reset(self, reason, obj)
+        return self.selection.schedule_selected_wall_reset(reason, obj)
 
     def _reset_selected_wall_after_change(self):
-        return plan_selection.reset_selected_wall_after_change(self)
+        return self.selection.reset_selected_wall_after_change()
 
     def suspend_selected_wall_state(self, wall=None, clear_gui_selection=True):
-        return plan_selection.suspend_selected_wall_state(
-            self,
+        return self.selection.suspend_selected_wall_state(
             wall=wall,
             clear_gui_selection=clear_gui_selection,
         )
@@ -1838,17 +1818,16 @@ class PlanEditSession:
         return plan_view.unregister_edit_callbacks(self)
 
     def _sync_primary_selected_plan_target_visuals(self, previous_kind=None, previous_obj=None):
-        return plan_selection.sync_primary_selected_plan_target_visuals(
-            self,
+        return self.selection.sync_primary_selected_plan_target_visuals(
             previous_kind=previous_kind,
             previous_obj=previous_obj,
         )
 
     def _refresh_selected_plan_target(self):
-        return plan_selection.refresh_selected_plan_target(self)
+        return self.selection.refresh_selected_plan_target()
 
     def _refresh_primary_selected_plan_target(self):
-        return plan_selection.refresh_primary_selected_plan_target(self)
+        return self.selection.refresh_primary_selected_plan_target()
 
     def _refresh_selected_wall(self):
         # Compatibility wrapper for older tests and callers.
@@ -1953,49 +1932,49 @@ class PlanEditSession:
         return plan_window_create.handle_window_tool_point(self, point=point, obj=obj)
 
     def _has_active_space_separator_tool(self):
-        return plan_spaces.has_active_space_separator_tool(self)
+        return self.spaces.has_active_space_separator_tool()
 
     def _has_active_plan_region_tool(self):
-        return plan_spaces.has_active_plan_region_tool(self)
+        return self.spaces.has_active_plan_region_tool()
 
     def _clear_plan_region_preview(self):
-        return plan_spaces.clear_plan_region_preview(self)
+        return self.spaces.clear_plan_region_preview()
 
     def _cancel_plan_region_tool(self, refresh=True):
-        return plan_spaces.cancel_plan_region_tool(self, refresh=refresh)
+        return self.spaces.cancel_plan_region_tool(refresh=refresh)
 
     def _get_plan_region_close_tolerance(self):
-        return plan_spaces.get_plan_region_close_tolerance(self)
+        return self.spaces.get_plan_region_close_tolerance()
 
     def _get_plan_region_preview_segments(self, point=None):
-        return plan_spaces.get_plan_region_preview_segments(self, point=point)
+        return self.spaces.get_plan_region_preview_segments(point=point)
 
     def _update_plan_region_preview(self, point, info):
-        return plan_spaces.update_plan_region_preview(self, point, info)
+        return self.spaces.update_plan_region_preview(point, info)
 
     def _create_plan_region(self, points):
-        return plan_spaces.create_plan_region(self, points)
+        return self.spaces.create_plan_region(points)
 
     def _finalize_plan_region(self):
-        return plan_spaces.finalize_plan_region(self)
+        return self.spaces.finalize_plan_region()
 
     def _handle_plan_region_point(self, point=None, obj=None):
-        return plan_spaces.handle_plan_region_point(self, point=point, obj=obj)
+        return self.spaces.handle_plan_region_point(point=point, obj=obj)
 
     def _clear_space_separator_preview(self):
-        return plan_spaces.clear_space_separator_preview(self)
+        return self.spaces.clear_space_separator_preview()
 
     def _cancel_space_separator_tool(self, refresh=True):
-        return plan_spaces.cancel_space_separator_tool(self, refresh=refresh)
+        return self.spaces.cancel_space_separator_tool(refresh=refresh)
 
     def _update_space_separator_preview(self, point, info):
-        return plan_spaces.update_space_separator_preview(self, point, info)
+        return self.spaces.update_space_separator_preview(point, info)
 
     def _create_space_separator(self, start, end):
-        return plan_spaces.create_space_separator(self, start, end)
+        return self.spaces.create_space_separator(start, end)
 
     def _handle_space_separator_point(self, point=None, obj=None):
-        return plan_spaces.handle_space_separator_point(self, point=point, obj=obj)
+        return self.spaces.handle_space_separator_point(point=point, obj=obj)
 
     def _has_active_wall_edit(self):
         return plan_wall_edit.has_active_wall_edit(self)
@@ -2623,25 +2602,25 @@ class PlanEditSession:
         self._set_event_handled(event_callback)
 
     def _set_hovered_wall(self, wall):
-        return plan_selection.set_hovered_wall(self, wall)
+        return self.selection.set_hovered_wall(wall)
 
     def _set_hovered_opening(self, opening):
-        return plan_selection.set_hovered_opening(self, opening)
+        return self.selection.set_hovered_opening(opening)
 
     def _set_hovered_symbol(self, symbol):
-        return plan_selection.set_hovered_symbol(self, symbol)
+        return self.selection.set_hovered_symbol(symbol)
 
     def _set_hovered_provider(self, provider):
-        return plan_selection.set_hovered_provider(self, provider)
+        return self.selection.set_hovered_provider(provider)
 
     def _set_hovered_space(self, space):
-        return plan_selection.set_hovered_space(self, space)
+        return self.selection.set_hovered_space(space)
 
     def _set_hovered_region(self, region):
-        return plan_selection.set_hovered_region(self, region)
+        return self.selection.set_hovered_region(region)
 
     def _queue_restore_selected_plan_target(self, kind, obj):
-        return plan_selection.queue_restore_selected_plan_target(self, kind, obj)
+        return self.selection.queue_restore_selected_plan_target(kind, obj)
 
     def _select_plan_target_for_plan_edit(
         self,
@@ -2652,8 +2631,7 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return plan_selection.select_plan_target_for_plan_edit(
-            self,
+        return self.selection.select_plan_target_for_plan_edit(
             kind,
             obj,
             queue_restore=queue_restore,
@@ -2670,8 +2648,7 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return plan_selection.select_opening_for_plan_edit(
-            self,
+        return self.selection.select_opening_for_plan_edit(
             opening,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
@@ -2687,8 +2664,7 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return plan_selection.select_symbol_for_plan_edit(
-            self,
+        return self.selection.select_symbol_for_plan_edit(
             symbol,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
@@ -2704,8 +2680,7 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return plan_selection.select_region_for_plan_edit(
-            self,
+        return self.selection.select_region_for_plan_edit(
             region,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
@@ -2721,8 +2696,7 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return plan_selection.select_space_for_plan_edit(
-            self,
+        return self.selection.select_space_for_plan_edit(
             space,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
@@ -2738,8 +2712,7 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return plan_selection.select_wall_for_plan_edit(
-            self,
+        return self.selection.select_wall_for_plan_edit(
             wall,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
@@ -2758,8 +2731,7 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return plan_selection.activate_plan_target(
-            self,
+        return self.selection.activate_plan_target(
             kind,
             mouse_pos,
             event_callback=event_callback,
@@ -2771,39 +2743,34 @@ class PlanEditSession:
         )
 
     def _activate_semantic_plan_target(self, mouse_pos, event_callback=None):
-        return plan_selection.activate_semantic_plan_target(
-            self,
+        return self.selection.activate_semantic_plan_target(
             mouse_pos,
             event_callback=event_callback,
         )
 
     def _activate_opening_target(self, mouse_pos, event_callback=None, resolved_target=None):
-        return plan_selection.activate_opening_target(
-            self,
+        return self.selection.activate_opening_target(
             mouse_pos,
             event_callback=event_callback,
             resolved_target=resolved_target,
         )
 
     def _activate_symbol_target(self, mouse_pos, event_callback=None, resolved_target=None):
-        return plan_selection.activate_symbol_target(
-            self,
+        return self.selection.activate_symbol_target(
             mouse_pos,
             event_callback=event_callback,
             resolved_target=resolved_target,
         )
 
     def _activate_region_target(self, mouse_pos, event_callback=None, resolved_target=None):
-        return plan_selection.activate_region_target(
-            self,
+        return self.selection.activate_region_target(
             mouse_pos,
             event_callback=event_callback,
             resolved_target=resolved_target,
         )
 
     def _activate_space_target(self, mouse_pos, event_callback=None, resolved_target=None):
-        return plan_selection.activate_space_target(
-            self,
+        return self.selection.activate_space_target(
             mouse_pos,
             event_callback=event_callback,
             resolved_target=resolved_target,
@@ -2817,8 +2784,7 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return plan_selection.activate_wall_target(
-            self,
+        return self.selection.activate_wall_target(
             mouse_pos,
             event_callback=event_callback,
             resolved_target=resolved_target,
@@ -2844,27 +2810,22 @@ class PlanEditSession:
         return self._project_plan_point(point)
 
     def _get_space_region_candidate_polylines(self, candidate):
-        return plan_spaces.get_space_region_candidate_polylines(self, candidate)
+        return self.spaces.get_space_region_candidate_polylines(candidate)
 
     def _get_space_region_candidate_segments(self, candidate):
-        return plan_spaces.get_space_region_candidate_segments(self, candidate)
+        return self.spaces.get_space_region_candidate_segments(candidate)
 
     def _pick_space_region_candidate(self, mouse_pos, radius_px=10):
-        return plan_spaces.pick_space_region_candidate(self, mouse_pos, radius_px=radius_px)
+        return self.spaces.pick_space_region_candidate(mouse_pos, radius_px=radius_px)
 
     def _set_hovered_space_region_candidate(self, candidate):
-        return plan_spaces.set_hovered_space_region_candidate(
-            self,
-            candidate,
-            _PLAN_VISUAL_SPACE_REGION_PICK,
-        )
+        return self.spaces.set_hovered_space_region_candidate(candidate)
 
     def _create_space_region_base_object(self, candidate):
-        return plan_spaces.create_space_region_base_object(self, candidate)
+        return self.spaces.create_space_region_base_object(candidate)
 
     def _begin_space_region_pick(self, boundaries, label=None, seed_space=None, report=None):
-        return plan_spaces.begin_space_region_pick(
-            self,
+        return self.spaces.begin_space_region_pick(
             boundaries,
             label=label,
             seed_space=seed_space,
@@ -2872,37 +2833,35 @@ class PlanEditSession:
         )
 
     def _cancel_space_region_pick(self, refresh=True):
-        return plan_spaces.cancel_space_region_pick(self, refresh=refresh)
+        return self.spaces.cancel_space_region_pick(refresh=refresh)
 
     def _create_space_from_region_candidate(self, candidate, boundaries=None, keep_boundaries=True):
-        return plan_spaces.create_space_from_region_candidate(
-            self,
+        return self.spaces.create_space_from_region_candidate(
             candidate,
             boundaries=boundaries,
             keep_boundaries=keep_boundaries,
         )
 
     def _activate_space_region_candidate(self, candidate, event_callback=None):
-        return plan_spaces.activate_space_region_candidate(
-            self,
+        return self.spaces.activate_space_region_candidate(
             candidate,
             event_callback=event_callback,
         )
 
     def _create_space_from_current_selection(self):
-        return plan_spaces.create_space_from_current_selection(self)
+        return self.spaces.create_space_from_current_selection()
 
     def _space_has_valid_geometry(self, space):
-        return plan_spaces.space_has_valid_geometry(self, space)
+        return self.spaces.space_has_valid_geometry(space)
 
     def _report_space_creation_failure(self, space):
-        return plan_spaces.report_space_creation_failure(space)
+        return self.spaces.report_space_creation_failure(space)
 
     def _set_selected_space_label(self, label):
-        return plan_spaces.set_selected_space_label(self, label)
+        return self.spaces.set_selected_space_label(label)
 
     def _set_selected_space_type(self, space_type):
-        return plan_spaces.set_selected_space_type(self, space_type)
+        return self.spaces.set_selected_space_type(space_type)
 
     def _get_window_style_preset_options(self):
         return plan_window_edit.get_window_style_preset_options()
@@ -2970,34 +2929,34 @@ class PlanEditSession:
         )
 
     def _set_selected_region_label(self, label):
-        return plan_spaces.set_selected_region_label(self, label)
+        return self.spaces.set_selected_region_label(label)
 
     def _set_selected_region_scheme(self, scheme):
-        return plan_spaces.set_selected_region_scheme(self, scheme)
+        return self.spaces.set_selected_region_scheme(scheme)
 
     def _set_selected_region_type(self, region_type):
-        return plan_spaces.set_selected_region_type(self, region_type)
+        return self.spaces.set_selected_region_type(region_type)
 
     def _set_selected_region_parent_space(self, space):
-        return plan_spaces.set_selected_region_parent_space(self, space)
+        return self.spaces.set_selected_region_parent_space(space)
 
     def _set_space_boundaries(self, space, boundaries):
-        return plan_spaces.set_space_boundaries(self, space, boundaries)
+        return self.spaces.set_space_boundaries(space, boundaries)
 
     def _add_boundaries_to_selected_space(self):
-        return plan_spaces.add_boundaries_to_selected_space(self)
+        return self.spaces.add_boundaries_to_selected_space()
 
     def _remove_selected_space_boundaries(self, row_indexes=None):
-        return plan_spaces.remove_selected_space_boundaries(self, row_indexes=row_indexes)
+        return self.spaces.remove_selected_space_boundaries(row_indexes=row_indexes)
 
     def _start_space_text_position_pick(self):
-        return plan_spaces.start_space_text_position_pick(self)
+        return self.spaces.start_space_text_position_pick()
 
     def _finish_space_text_position_pick(self, point=None, obj=None):
-        return plan_spaces.finish_space_text_position_pick(self, point=point, obj=obj)
+        return self.spaces.finish_space_text_position_pick(point=point, obj=obj)
 
     def _cancel_space_text_position_pick(self):
-        return plan_spaces.cancel_space_text_position_pick(self)
+        return self.spaces.cancel_space_text_position_pick()
 
     def _refresh_selected_space_visuals(self):
         self._invalidate_selected_space_overlay_cache()
@@ -3520,7 +3479,7 @@ class PlanEditSession:
         return plan_opening_edit.queue_restore_selected_opening(self, opening)
 
     def _clear_plan_selection_state(self):
-        return plan_selection.clear_plan_selection_state(self)
+        return self.selection.clear_plan_selection_state()
 
     def _execute_selected_opening_handle(self, opening, handle_index, handle):
         return plan_opening_edit.execute_selected_opening_handle(
