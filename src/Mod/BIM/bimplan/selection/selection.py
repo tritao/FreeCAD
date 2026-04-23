@@ -961,6 +961,27 @@ def _activate_configured_plan_target(
     )
 
 
+def activate_plan_target_for_kind(
+    session,
+    kind,
+    mouse_pos,
+    event_callback=None,
+    resolved_target=None,
+    *,
+    defer_gui_selection=None,
+    defer_wall_grips=None,
+):
+    return _activate_configured_plan_target(
+        session,
+        kind,
+        mouse_pos,
+        event_callback=event_callback,
+        resolved_target=resolved_target,
+        defer_gui_selection=defer_gui_selection,
+        defer_wall_grips=defer_wall_grips,
+    )
+
+
 def activate_plan_target(
     session,
     kind,
@@ -1041,7 +1062,7 @@ def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
 
 
 def activate_opening_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return _activate_configured_plan_target(
+    return activate_plan_target_for_kind(
         session,
         plan_target_kinds.PLAN_TARGET_OPENING,
         mouse_pos,
@@ -1051,7 +1072,7 @@ def activate_opening_target(session, mouse_pos, event_callback=None, resolved_ta
 
 
 def activate_symbol_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return _activate_configured_plan_target(
+    return activate_plan_target_for_kind(
         session,
         plan_target_kinds.PLAN_TARGET_SYMBOL,
         mouse_pos,
@@ -1061,7 +1082,7 @@ def activate_symbol_target(session, mouse_pos, event_callback=None, resolved_tar
 
 
 def activate_region_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return _activate_configured_plan_target(
+    return activate_plan_target_for_kind(
         session,
         plan_target_kinds.PLAN_TARGET_REGION,
         mouse_pos,
@@ -1071,7 +1092,7 @@ def activate_region_target(session, mouse_pos, event_callback=None, resolved_tar
 
 
 def activate_space_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return _activate_configured_plan_target(
+    return activate_plan_target_for_kind(
         session,
         plan_target_kinds.PLAN_TARGET_SPACE,
         mouse_pos,
@@ -1088,7 +1109,7 @@ def activate_wall_target(
     defer_gui_selection=False,
     defer_wall_grips=False,
 ):
-    return _activate_configured_plan_target(
+    return activate_plan_target_for_kind(
         session,
         plan_target_kinds.PLAN_TARGET_WALL,
         mouse_pos,

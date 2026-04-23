@@ -535,7 +535,7 @@ def get_interaction_plane(session):
 
 
 def project_plan_point(session, point):
-    plane = session.get_interaction_plane()
+    plane = get_interaction_plane(session)
     if plane and hasattr(plane, "project_point"):
         try:
             return plane.project_point(point)

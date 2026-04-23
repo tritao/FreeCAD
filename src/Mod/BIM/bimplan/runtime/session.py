@@ -950,7 +950,7 @@ class PlanEditSession:
             with self._plan_perf_trace_span("capture_object_view_state"):
                 self._capture_object_view_state()
             with self._plan_perf_trace_span("apply_plan_view"):
-                self.apply_plan_view(fit=False)
+                self.viewport.apply_plan_view(fit=False)
             with self._plan_perf_trace_span("apply_plan_snap_profile"):
                 self._apply_plan_snap_profile()
             self._apply_storey_visibility()
@@ -1295,15 +1295,6 @@ class PlanEditSession:
         if not wall:
             return False
         return not getattr(wall, "Base", None) and self.is_selected_wall_endpoint_editable()
-
-    def apply_plan_view(self, fit=True):
-        return self.viewport.apply_plan_view(fit=fit)
-
-    def restore_state(self):
-        return self.viewport.restore_state()
-
-    def get_interaction_plane(self):
-        return self.viewport.get_interaction_plane()
 
     def _get_wall_defaults(self):
         return plan_wall_create.get_wall_defaults(self)
@@ -2884,6 +2875,24 @@ class PlanEditSession:
     def _queue_restore_selected_plan_target(self, kind, obj):
         return self.selection.queue_restore_selected_plan_target(kind, obj)
 
+    def _select_plan_target_by_method(
+        self,
+        method_name,
+        obj,
+        *,
+        queue_restore=False,
+        sync_gui_selection=False,
+        defer_gui_selection=False,
+        defer_wall_grips=False,
+    ):
+        return getattr(self.selection, method_name)(
+            obj,
+            queue_restore=queue_restore,
+            sync_gui_selection=sync_gui_selection,
+            defer_gui_selection=defer_gui_selection,
+            defer_wall_grips=defer_wall_grips,
+        )
+
     def _select_plan_target_for_plan_edit(
         self,
         kind,
@@ -2910,7 +2919,8 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return self.selection.select_opening_for_plan_edit(
+        return self._select_plan_target_by_method(
+            "select_opening_for_plan_edit",
             opening,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
@@ -2926,7 +2936,8 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return self.selection.select_symbol_for_plan_edit(
+        return self._select_plan_target_by_method(
+            "select_symbol_for_plan_edit",
             symbol,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
@@ -2942,7 +2953,8 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return self.selection.select_region_for_plan_edit(
+        return self._select_plan_target_by_method(
+            "select_region_for_plan_edit",
             region,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
@@ -2958,7 +2970,8 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return self.selection.select_space_for_plan_edit(
+        return self._select_plan_target_by_method(
+            "select_space_for_plan_edit",
             space,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
@@ -2974,10 +2987,30 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return self.selection.select_wall_for_plan_edit(
+        return self._select_plan_target_by_method(
+            "select_wall_for_plan_edit",
             wall,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
+            defer_gui_selection=defer_gui_selection,
+            defer_wall_grips=defer_wall_grips,
+        )
+
+    def _activate_plan_target_by_kind(
+        self,
+        kind,
+        mouse_pos,
+        *,
+        event_callback=None,
+        resolved_target=None,
+        defer_gui_selection=None,
+        defer_wall_grips=None,
+    ):
+        return self.selection.activate_plan_target_for_kind(
+            kind,
+            mouse_pos,
+            event_callback=event_callback,
+            resolved_target=resolved_target,
             defer_gui_selection=defer_gui_selection,
             defer_wall_grips=defer_wall_grips,
         )
@@ -3011,28 +3044,32 @@ class PlanEditSession:
         )
 
     def _activate_opening_target(self, mouse_pos, event_callback=None, resolved_target=None):
-        return self.selection.activate_opening_target(
+        return self._activate_plan_target_by_kind(
+            plan_target_kinds.PLAN_TARGET_OPENING,
             mouse_pos,
             event_callback=event_callback,
             resolved_target=resolved_target,
         )
 
     def _activate_symbol_target(self, mouse_pos, event_callback=None, resolved_target=None):
-        return self.selection.activate_symbol_target(
+        return self._activate_plan_target_by_kind(
+            plan_target_kinds.PLAN_TARGET_SYMBOL,
             mouse_pos,
             event_callback=event_callback,
             resolved_target=resolved_target,
         )
 
     def _activate_region_target(self, mouse_pos, event_callback=None, resolved_target=None):
-        return self.selection.activate_region_target(
+        return self._activate_plan_target_by_kind(
+            plan_target_kinds.PLAN_TARGET_REGION,
             mouse_pos,
             event_callback=event_callback,
             resolved_target=resolved_target,
         )
 
     def _activate_space_target(self, mouse_pos, event_callback=None, resolved_target=None):
-        return self.selection.activate_space_target(
+        return self._activate_plan_target_by_kind(
+            plan_target_kinds.PLAN_TARGET_SPACE,
             mouse_pos,
             event_callback=event_callback,
             resolved_target=resolved_target,
@@ -3046,7 +3083,8 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return self.selection.activate_wall_target(
+        return self._activate_plan_target_by_kind(
+            plan_target_kinds.PLAN_TARGET_WALL,
             mouse_pos,
             event_callback=event_callback,
             resolved_target=resolved_target,
