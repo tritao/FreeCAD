@@ -232,6 +232,7 @@ SET(bimplan_SRCS
     bimplan/registry.py
     bimplan/semantics.py
     bimplan/selection.py
+    bimplan/session.py
     bimplan/snap.py
     bimplan/spaces.py
     bimplan/symbol_edit.py
