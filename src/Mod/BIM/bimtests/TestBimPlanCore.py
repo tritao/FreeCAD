@@ -85,8 +85,9 @@ from bimplan.provider_runtime import (
     get_plan_provider_target_for_object,
     normalize_plan_provider_overlay,
 )
-from bimplan.provider_snapshot import collect_plan_provider_snapshot
+from bimplan.provider_snapshot import PlanProviderSnapshot, collect_plan_provider_snapshot
 from bimplan.providers import (
+    PlanActionSpec,
     PlanContextPanelSpec,
     PlanContextPanelState,
     PlanContextRowSpec,
@@ -124,6 +125,11 @@ from bimplan.target_dispatch import (
 from bimplan.targets import PlanTarget, get_plan_target_for_object, make_plan_target_record
 from bimplan.transactions import PlanEditTransaction
 from bimplan.ui.controls import PlanEditControlsWidget
+from bimplan.task_panel_view_model import (
+    build_action_context_view_model,
+    build_integration_panel_view_model,
+    filter_provider_overlay_legend_items_for_mode,
+)
 
 
 class _DummySession:
@@ -404,6 +410,164 @@ class TestBimPlanCore(unittest.TestCase):
         )
         self.assertEqual(1, provider.calls.count("get_tools"))
         self.assertIs(snapshot, collect_plan_provider_snapshot(session))
+
+    def test_build_integration_panel_view_model_derives_panel_state(self):
+        summary_action = PlanActionSpec(
+            key="summary-action",
+            label="Summary Action",
+            provider_id="provider-a",
+        )
+        context_action = PlanActionSpec(
+            key="context-action",
+            label="Context Action",
+            provider_id="provider-a",
+            enabled=True,
+        )
+        snapshot = PlanProviderSnapshot(
+            tools=(
+                PlanToolSpec(
+                    key="tool-b",
+                    label="Tool B",
+                    provider_id="provider-a",
+                    group="z",
+                    priority=20,
+                ),
+                PlanToolSpec(
+                    key="tool-a",
+                    label="Tool A",
+                    provider_id="provider-a",
+                    group="a",
+                    priority=10,
+                ),
+            ),
+            overlays=(
+                PlanOverlaySpec(
+                    key="arch-overlay",
+                    label="Arch Overlay",
+                    provider_id="provider-a",
+                    category="architecture",
+                    color=(1.0, 0.0, 0.0),
+                ),
+                PlanOverlaySpec(
+                    key="elec-overlay",
+                    label="Elec Overlay",
+                    provider_id="provider-a",
+                    category="electrical",
+                    color=(0.0, 1.0, 0.0),
+                ),
+            ),
+            issues=(
+                PlanIssueSpec(
+                    key="issue-a",
+                    title="Issue A",
+                    provider_id="provider-a",
+                    group_key="workflow",
+                    actions=(summary_action,),
+                ),
+                PlanIssueSpec(
+                    key="issue-b",
+                    title="Issue B",
+                    provider_id="provider-a",
+                    group_key="workflow",
+                ),
+            ),
+            context_panels=(
+                PlanContextPanelSpec(
+                    key="empty-panel",
+                    title="Empty",
+                    state=PlanContextPanelState.EMPTY,
+                    subject_kind=PlanContextSubjectKind.SCOPE,
+                ),
+                PlanContextPanelSpec(
+                    key="selection-panel",
+                    title="Selection",
+                    provider_id="provider-a",
+                    state=PlanContextPanelState.SINGLE_OBJECT,
+                    subject_kind=PlanContextSubjectKind.ENDPOINT,
+                    primary_action=context_action,
+                ),
+            ),
+            inspector_sections=(
+                PlanInspectorSection(
+                    key="summary-section",
+                    title="Summary",
+                    provider_id="provider-a",
+                    role="summary",
+                    actions=(summary_action,),
+                ),
+                PlanInspectorSection(
+                    key="detail-section",
+                    title="Detail",
+                    provider_id="provider-a",
+                ),
+                PlanInspectorSection(
+                    key="notes-section",
+                    title="Notes",
+                    provider_id="provider-a",
+                    role="details",
+                ),
+            ),
+        )
+        session = SimpleNamespace(
+            get_plan_provider_overlay_mode=lambda: "electrical",
+            get_plan_provider_display_name=lambda provider_id: (
+                "Provider A" if provider_id == "provider-a" else provider_id
+            ),
+            get_plan_provider_overlay_category=lambda overlay: str(
+                getattr(overlay, "category", "") or "architecture"
+            ),
+            is_plan_provider_overlay_enabled=lambda overlay: overlay.key != "arch-overlay",
+        )
+
+        view_model = build_integration_panel_view_model(session, snapshot)
+
+        self.assertTrue(view_model.has_content)
+        self.assertEqual(("tool-a", "tool-b"), tuple(tool.key for tool in view_model.tools))
+        self.assertEqual("electrical", view_model.overlay_mode)
+        self.assertEqual(
+            ("elec-overlay",), tuple(item[1] for item in view_model.active_overlay_items)
+        )
+        self.assertEqual(1, len(view_model.grouped_issue_sets))
+        self.assertEqual(
+            ("summary-section",), tuple(section.key for section in view_model.summary_sections)
+        )
+        self.assertEqual(
+            ("detail-section",), tuple(section.key for section in view_model.regular_sections)
+        )
+        self.assertEqual(
+            ("notes-section",), tuple(section.key for section in view_model.detail_sections)
+        )
+        self.assertEqual("selection-panel", view_model.context_panel.key)
+        self.assertEqual("Selection", view_model.context_panel_heading)
+        self.assertEqual((context_action,), view_model.context_panel_actions)
+        self.assertEqual(
+            (("provider-a", "summary-action", "Summary Action"),),
+            view_model.promoted_action_ids,
+        )
+        self.assertEqual(("Summary Action", "Context Action"), view_model.hidden_tool_action_labels)
+        self.assertEqual("", view_model.summary_text)
+
+    def test_build_action_context_view_model_derives_tool_controls(self):
+        wall = SimpleNamespace(Name="Wall001")
+        selection = SimpleNamespace(get_selected_plan_target=lambda: ("wall", wall))
+        session = SimpleNamespace(
+            current_tool="Join",
+            selection=selection,
+            can_place_plan_window=lambda: True,
+            _get_plan_candidate_joint=lambda: object(),
+            _get_provider_point_tool_label=lambda: "Provider Point",
+            _is_modal_plan_interaction_active=lambda: False,
+        )
+
+        view_model = build_action_context_view_model(session)
+
+        self.assertEqual("Join", view_model.mode_label)
+        self.assertTrue(view_model.show_join_options)
+        self.assertTrue(view_model.join_button_enabled)
+        self.assertTrue(view_model.join_type_enabled)
+        self.assertTrue(view_model.unjoin_button_enabled)
+        self.assertTrue(view_model.show_window_button)
+        self.assertTrue(view_model.window_button_enabled)
 
     def test_plan_selection_api_uses_primary_target_kind_policy(self):
         from bimplan import target_kinds as plan_target_kinds
@@ -1783,8 +1947,6 @@ class TestBimPlanCore(unittest.TestCase):
             )
 
     def test_provider_overlay_legend_items_filter_by_mode(self):
-        widget = object.__new__(PlanEditControlsWidget)
-        widget.session = SimpleNamespace(get_plan_provider_overlay_mode=lambda: "architecture")
         items = (
             (
                 "test-provider",
@@ -1806,15 +1968,24 @@ class TestBimPlanCore(unittest.TestCase):
 
         self.assertEqual(
             (items[0],),
-            widget._filter_provider_overlay_legend_items_for_mode(items),
+            filter_provider_overlay_legend_items_for_mode(
+                items,
+                active_mode="architecture",
+            ),
         )
         self.assertEqual(
             (items[1],),
-            widget._filter_provider_overlay_legend_items_for_mode(items, active_mode="electrical"),
+            filter_provider_overlay_legend_items_for_mode(
+                items,
+                active_mode="electrical",
+            ),
         )
         self.assertEqual(
             items,
-            widget._filter_provider_overlay_legend_items_for_mode(items, active_mode="all"),
+            filter_provider_overlay_legend_items_for_mode(
+                items,
+                active_mode="all",
+            ),
         )
 
     def test_integration_refresh_timer_uses_weak_panel_reference(self):
