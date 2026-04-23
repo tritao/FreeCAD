@@ -53,11 +53,9 @@ from bimplan import symbol_edit as plan_symbol_edit
 from bimplan import opening_edit as plan_opening_edit
 from bimplan import provider_edit as plan_provider_edit
 from bimplan import targets as plan_targets
-from bimplan import visual_keys as plan_visual_keys
 from bimplan import wall_create as plan_wall_create
 from bimplan import wall_relations as plan_wall_relations
 from bimplan import window_create as plan_window_create
-from bimplan import window_edit as plan_window_edit
 from bimplan.providers import PlanEditContext
 from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
@@ -98,23 +96,23 @@ _WALL_VISUAL_PROPERTIES = plan_document_visuals.WALL_VISUAL_PROPERTIES
 _SYMBOL_VISUAL_PROPERTIES = plan_document_visuals.SYMBOL_VISUAL_PROPERTIES
 _SPACE_VISUAL_PROPERTIES = plan_document_visuals.SPACE_VISUAL_PROPERTIES
 _REGION_VISUAL_PROPERTIES = plan_document_visuals.REGION_VISUAL_PROPERTIES
-_PLAN_VISUAL_HOVERED_WALL = plan_visual_keys.PLAN_VISUAL_HOVERED_WALL
-_PLAN_VISUAL_HOVERED_OPENING = plan_visual_keys.PLAN_VISUAL_HOVERED_OPENING
-_PLAN_VISUAL_HOVERED_SYMBOL = plan_visual_keys.PLAN_VISUAL_HOVERED_SYMBOL
-_PLAN_VISUAL_HOVERED_PROVIDER = plan_visual_keys.PLAN_VISUAL_HOVERED_PROVIDER
-_PLAN_VISUAL_HOVERED_SPACE = plan_visual_keys.PLAN_VISUAL_HOVERED_SPACE
-_PLAN_VISUAL_HOVERED_REGION = plan_visual_keys.PLAN_VISUAL_HOVERED_REGION
-_PLAN_VISUAL_SELECTED_PROVIDER = plan_visual_keys.PLAN_VISUAL_SELECTED_PROVIDER
-_PLAN_VISUAL_SELECTED_OPENING = plan_visual_keys.PLAN_VISUAL_SELECTED_OPENING
-_PLAN_VISUAL_SELECTED_SYMBOL = plan_visual_keys.PLAN_VISUAL_SELECTED_SYMBOL
-_PLAN_VISUAL_SELECTED_SPACE = plan_visual_keys.PLAN_VISUAL_SELECTED_SPACE
-_PLAN_VISUAL_SELECTED_REGION = plan_visual_keys.PLAN_VISUAL_SELECTED_REGION
-_PLAN_VISUAL_SECONDARY_SELECTION = plan_visual_keys.PLAN_VISUAL_SECONDARY_SELECTION
-_PLAN_VISUAL_WALL_GRIPS = plan_visual_keys.PLAN_VISUAL_WALL_GRIPS
-_PLAN_VISUAL_WALL_EDIT_PREVIEW = plan_visual_keys.PLAN_VISUAL_WALL_EDIT_PREVIEW
-_PLAN_VISUAL_PROVIDER_OVERLAYS = plan_visual_keys.PLAN_VISUAL_PROVIDER_OVERLAYS
-_PLAN_VISUAL_VIEW_SCALE = plan_visual_keys.PLAN_VISUAL_VIEW_SCALE
-_PLAN_VISUAL_ALL = plan_visual_keys.PLAN_VISUAL_ALL
+_PLAN_VISUAL_HOVERED_WALL = plan_document_visuals.PLAN_VISUAL_HOVERED_WALL
+_PLAN_VISUAL_HOVERED_OPENING = plan_document_visuals.PLAN_VISUAL_HOVERED_OPENING
+_PLAN_VISUAL_HOVERED_SYMBOL = plan_document_visuals.PLAN_VISUAL_HOVERED_SYMBOL
+_PLAN_VISUAL_HOVERED_PROVIDER = plan_document_visuals.PLAN_VISUAL_HOVERED_PROVIDER
+_PLAN_VISUAL_HOVERED_SPACE = plan_document_visuals.PLAN_VISUAL_HOVERED_SPACE
+_PLAN_VISUAL_HOVERED_REGION = plan_document_visuals.PLAN_VISUAL_HOVERED_REGION
+_PLAN_VISUAL_SELECTED_PROVIDER = plan_document_visuals.PLAN_VISUAL_SELECTED_PROVIDER
+_PLAN_VISUAL_SELECTED_OPENING = plan_document_visuals.PLAN_VISUAL_SELECTED_OPENING
+_PLAN_VISUAL_SELECTED_SYMBOL = plan_document_visuals.PLAN_VISUAL_SELECTED_SYMBOL
+_PLAN_VISUAL_SELECTED_SPACE = plan_document_visuals.PLAN_VISUAL_SELECTED_SPACE
+_PLAN_VISUAL_SELECTED_REGION = plan_document_visuals.PLAN_VISUAL_SELECTED_REGION
+_PLAN_VISUAL_SECONDARY_SELECTION = plan_document_visuals.PLAN_VISUAL_SECONDARY_SELECTION
+_PLAN_VISUAL_WALL_GRIPS = plan_document_visuals.PLAN_VISUAL_WALL_GRIPS
+_PLAN_VISUAL_WALL_EDIT_PREVIEW = plan_document_visuals.PLAN_VISUAL_WALL_EDIT_PREVIEW
+_PLAN_VISUAL_PROVIDER_OVERLAYS = plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
+_PLAN_VISUAL_VIEW_SCALE = plan_document_visuals.PLAN_VISUAL_VIEW_SCALE
+_PLAN_VISUAL_ALL = plan_document_visuals.PLAN_VISUAL_ALL
 _PLAN_GUI_SELECTION_SYNC_DELAY_MS = 80
 _PLAN_WALL_GRIP_REFRESH_DELAY_MS = 120
 _PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
@@ -3252,13 +3250,13 @@ class PlanEditSession:
         return self.windows.get_selected_window_style_preset()
 
     def _get_selected_window_width_mm(self):
-        return plan_window_edit.get_selected_window_width_mm(self)
+        return plan_window_create.get_selected_window_width_mm(self)
 
     def _get_selected_window_width_text(self):
         return self.windows.get_selected_window_width_text()
 
     def _get_selected_window_height_mm(self):
-        return plan_window_edit.get_selected_window_height_mm(self)
+        return plan_window_create.get_selected_window_height_mm(self)
 
     def _get_selected_window_height_text(self):
         return self.windows.get_selected_window_height_text()
@@ -3273,32 +3271,32 @@ class PlanEditSession:
         return self.windows.can_edit_window_height(window)
 
     def _can_apply_selected_window_style_preset(self):
-        return plan_window_edit.can_apply_selected_window_style_preset(self)
+        return plan_window_create.can_apply_selected_window_style_preset(self)
 
     def _can_apply_selected_window_width(self):
-        return plan_window_edit.can_apply_selected_window_width(self)
+        return plan_window_create.can_apply_selected_window_width(self)
 
     def _can_apply_selected_window_height(self):
-        return plan_window_edit.can_apply_selected_window_height(self)
+        return plan_window_create.can_apply_selected_window_height(self)
 
     def _can_apply_selected_window_size(self, width_value=None, height_value=None):
-        return plan_window_edit.can_apply_selected_window_size(
+        return plan_window_create.can_apply_selected_window_size(
             self,
             width_value=width_value,
             height_value=height_value,
         )
 
     def _apply_selected_window_style_preset(self, preset_name):
-        return plan_window_edit.apply_selected_window_style_preset(self, preset_name)
+        return plan_window_create.apply_selected_window_style_preset(self, preset_name)
 
     def _set_selected_window_width(self, value):
-        return plan_window_edit.set_selected_window_width(self, value)
+        return plan_window_create.set_selected_window_width(self, value)
 
     def _set_selected_window_height(self, value):
-        return plan_window_edit.set_selected_window_height(self, value)
+        return plan_window_create.set_selected_window_height(self, value)
 
     def _set_selected_window_size(self, width_value=None, height_value=None):
-        return plan_window_edit.set_selected_window_size(
+        return plan_window_create.set_selected_window_size(
             self,
             width_value=width_value,
             height_value=height_value,

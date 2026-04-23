@@ -239,13 +239,11 @@ SET(bimplan_SRCS
     bimplan/transactions.py
     bimplan/ui/__init__.py
     bimplan/ui/controls.py
-    bimplan/ui/status_chip.py
     bimplan/view.py
     bimplan/wall_create.py
     bimplan/wall_edit.py
     bimplan/wall_relations.py
     bimplan/window_create.py
-    bimplan/window_edit.py
     bimplan/window_provider.py
 )
 
