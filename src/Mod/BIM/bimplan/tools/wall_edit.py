@@ -656,7 +656,7 @@ def get_preview_footprint_polylines(session, points):
 def get_readout_base_gap(session):
     from draftutils import params
 
-    units_per_pixel = session._get_plan_view_units_per_pixel() or 0.0
+    units_per_pixel = session.viewport.get_plan_view_units_per_pixel() or 0.0
     text_height_pixels = float(params.get_param_view("MarkerSize") or 0.0) * 2.0 * 96.0 / 72.0
     return max(100.0, text_height_pixels * units_per_pixel * 1.25)
 
@@ -702,7 +702,7 @@ def update_wall_edit_preview_geometry(session, points):
         session._preview_line_tracker = session._make_plan_line_tracker(
             DraftTrackers,
             "wall-edit-preview-axis",
-            swidth=session._scaled_line_width(2),
+            swidth=session.viewport.scaled_line_width(2),
             ontop=True,
         )
         session._preview_line_tracker.on()
@@ -726,7 +726,7 @@ def update_wall_edit_preview_geometry(session, points):
         segments.extend(zip(polyline, polyline[1:]))
 
     color = (0.22, 0.53, 0.98)
-    width = session._scaled_line_width(2)
+    width = session.viewport.scaled_line_width(2)
     if len(session._preview_footprint_trackers) != len(segments):
         session._finalize_trackers(session._preview_footprint_trackers)
         session._preview_footprint_trackers = []
@@ -750,7 +750,7 @@ def update_wall_edit_preview_geometry(session, points):
         session._refresh_task_panel_status()
 
     midpoint = (points[0] + points[1]) * 0.5
-    marker_size = session._scaled_marker_size(params.get_param_view("MarkerSize"))
+    marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
     midpoint_marker = FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size)
 
     grip_specs = (
@@ -866,7 +866,7 @@ def sync_wall_hosted_opening_preview(session, points):
         return
 
     color = (0.12, 0.38, 0.95)
-    width = session._scaled_line_width(2)
+    width = session.viewport.scaled_line_width(2)
     if len(session._wall_edit_opening_preview_trackers) != len(segments):
         session._clear_wall_hosted_opening_preview()
         for _start, _end in segments:

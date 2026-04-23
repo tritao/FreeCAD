@@ -1077,42 +1077,6 @@ class PlanEditSession:
         self._embedded_tool = None
         self._embedded_tool_name = None
 
-    def _get_navigation_style(self):
-        return self.viewport.get_navigation_style()
-
-    def _find_main_window_action(self, command_name):
-        return self.viewport.find_main_window_action(command_name)
-
-    def _capture_view_action_state(self):
-        return self.viewport.capture_view_action_state()
-
-    def _apply_locked_view_actions(self):
-        return self.viewport.apply_locked_view_actions()
-
-    def _restore_locked_view_actions(self):
-        return self.viewport.restore_locked_view_actions()
-
-    def _capture_navigation_flag(self, target, getter_name, state_key):
-        return self.viewport.capture_navigation_flag(target, getter_name, state_key)
-
-    def _apply_navigation_flag(self, target, setter_name, state_key, enabled):
-        return self.viewport.apply_navigation_flag(target, setter_name, state_key, enabled)
-
-    def _capture_navigation_state(self):
-        return self.viewport.capture_navigation_state()
-
-    def _apply_plan_background_override(self):
-        return self.viewport.apply_plan_background_override()
-
-    def _clear_plan_background_override(self):
-        return self.viewport.clear_plan_background_override()
-
-    def _apply_plan_navigation_profile(self):
-        return self.viewport.apply_plan_navigation_profile()
-
-    def _restore_navigation_state(self):
-        return self.viewport.restore_navigation_state()
-
     def shutdown(self, close_dialog=True, teardown=False):
         global _active_session
 
@@ -1341,29 +1305,8 @@ class PlanEditSession:
     def get_interaction_plane(self):
         return self.viewport.get_interaction_plane()
 
-    def _project_plan_point(self, point):
-        return self.viewport.project_plan_point(point)
-
     def _get_wall_defaults(self):
         return plan_wall_create.get_wall_defaults(self)
-
-    def _get_plan_view_height(self):
-        return self.viewport.get_plan_view_height()
-
-    def _get_plan_overlay_scale(self):
-        return self.viewport.get_plan_overlay_scale()
-
-    def _scaled_line_width(self, base_width):
-        return self.viewport.scaled_line_width(base_width)
-
-    def _scaled_marker_size(self, base_size):
-        return self.viewport.scaled_marker_size(base_size)
-
-    def _get_plan_view_units_per_pixel(self):
-        return self.viewport.get_plan_view_units_per_pixel()
-
-    def _get_plan_projection_cache_key(self):
-        return self.viewport.get_plan_projection_cache_key()
 
     def _invalidate_opening_overlay_screen_cache(self):
         return overlay_geometry.invalidate_opening_overlay_screen_cache(self)
@@ -3132,7 +3075,7 @@ class PlanEditSession:
                 return None
         except Exception:
             return None
-        return self._project_plan_point(point)
+        return self.viewport.project_plan_point(point)
 
     def _get_space_region_candidate_polylines(self, candidate):
         return self.spaces.get_space_region_candidate_polylines(candidate)

@@ -481,7 +481,7 @@ def update_window_tool_preview(session, point=None, info=None):
     except Exception:
         return
     color = (0.12, 0.38, 0.95)
-    width = session._scaled_line_width(2)
+    width = session.viewport.scaled_line_width(2)
     for index, (start, end) in enumerate(zip(points, points[1:] + points[:1])):
         tracker = session._make_plan_line_tracker(
             DraftTrackers,

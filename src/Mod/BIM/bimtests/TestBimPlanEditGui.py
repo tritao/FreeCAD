@@ -904,7 +904,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             raw_point = FreeCAD.Vector(120.0, 340.0, 999.0)
             captured["movecallback"](raw_point, None)
 
-            plan_point = session._project_plan_point(raw_point)
+            plan_point = session.viewport.project_plan_point(raw_point)
             expected_placement = session._project_provider_point_to_host(plan_point, wall)
             self.assertIsNotNone(expected_placement)
             self.assertEqual(("wall", wall), session._provider_point_preview_host_target)
@@ -951,7 +951,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             raw_point = FreeCAD.Vector(120.0, 340.0, 999.0)
             captured["movecallback"](raw_point, None)
 
-            plan_point = session._project_plan_point(raw_point)
+            plan_point = session.viewport.project_plan_point(raw_point)
             self.assertEqual((None, None), session._provider_point_preview_host_target)
             self.assertEqual("", session._provider_point_preview_host_source)
             self.assertAlmostEqual(plan_point.x, session._provider_point_preview_point.x)
@@ -4637,10 +4637,10 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        with patch.object(session, "_get_plan_view_units_per_pixel", return_value=1.0):
+        with patch.object(session.viewport, "get_plan_view_units_per_pixel", return_value=1.0):
             close_offset = session._get_aligned_readout_offset_for_wall(wall)
 
-        with patch.object(session, "_get_plan_view_units_per_pixel", return_value=40.0):
+        with patch.object(session.viewport, "get_plan_view_units_per_pixel", return_value=40.0):
             far_offset = session._get_aligned_readout_offset_for_wall(wall)
 
         self.assertGreater(far_offset, close_offset)
@@ -4662,11 +4662,11 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         initially_disabled.setEnabled(False)
 
         with patch.object(FreeCADGui, "getMainWindow", return_value=main_window):
-            session._apply_locked_view_actions()
+            session.viewport.apply_locked_view_actions()
             self.assertFalse(initially_enabled.isEnabled())
             self.assertFalse(initially_disabled.isEnabled())
 
-            session._restore_locked_view_actions()
+            session.viewport.restore_locked_view_actions()
             self.assertTrue(initially_enabled.isEnabled())
             self.assertFalse(initially_disabled.isEnabled())
 
@@ -4724,14 +4724,14 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.viewer = viewer
         session.view = view
 
-        with patch.object(session, "_get_navigation_style", return_value=nav_style):
-            session._apply_plan_navigation_profile()
+        with patch.object(session.viewport, "get_navigation_style", return_value=nav_style):
+            session.viewport.apply_plan_navigation_profile()
             self.assertFalse(nav_style.rotation_enabled)
             self.assertTrue(nav_style.orientation_locked)
             self.assertFalse(viewer.navicube_override)
             self.assertFalse(view.corner_cross_visible)
 
-            session._restore_navigation_state()
+            session.viewport.restore_navigation_state()
             self.assertTrue(nav_style.rotation_enabled)
             self.assertFalse(nav_style.orientation_locked)
             self.assertIsNone(viewer.navicube_override)
@@ -4750,10 +4750,10 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.view = DeletedView()
         session.viewer = object()
 
-        self.assertIsNone(session._get_plan_view_height())
+        self.assertIsNone(session.viewport.get_plan_view_height())
         self.assertIsNone(session.view)
         self.assertIsNone(session.viewer)
-        self.assertEqual(session._scaled_line_width(3), 3.0)
+        self.assertEqual(session.viewport.scaled_line_width(3), 3.0)
 
     def test_plan_edit_uses_viewer_background_override_api(self):
         """Plan Edit should use the viewer override API for its paper background."""
@@ -4771,7 +4771,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session = BimPlanSession.PlanEditSession()
         session.viewer = FakeViewer()
 
-        session._apply_plan_background_override()
+        session.viewport.apply_plan_background_override()
         self.assertEqual(
             session.viewer.calls[0],
             (
@@ -4783,7 +4783,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ),
         )
 
-        session._clear_plan_background_override()
+        session.viewport.clear_plan_background_override()
         self.assertEqual(session.viewer.calls[1], ("clear",))
 
     def test_plan_edit_session_hides_navicube_and_restores_it_on_exit(self):
@@ -5907,8 +5907,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertTrue(session._select_space_for_plan_edit(space, sync_gui_selection=True))
         with patch.object(
-            session,
-            "_get_plan_view_height",
+            session.viewport,
+            "get_plan_view_height",
             return_value=5000.0,
         ):
             session._sync_selected_space_overlay()
@@ -5921,8 +5921,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 wraps=session._get_space_overlay_segments,
             ) as get_segments,
             patch.object(
-                session,
-                "_get_plan_view_height",
+                session.viewport,
+                "get_plan_view_height",
                 return_value=20000.0,
             ),
         ):

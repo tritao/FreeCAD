@@ -124,7 +124,7 @@ def cancel_plan_region_tool(session, refresh=True):
 
 
 def get_plan_region_close_tolerance(session):
-    units_per_pixel = session._get_plan_view_units_per_pixel()
+    units_per_pixel = session.viewport.get_plan_view_units_per_pixel()
     if units_per_pixel is None:
         return 120.0
     return max(120.0, float(units_per_pixel) * 12.0)
@@ -144,7 +144,7 @@ def format_space_region_candidate_area(candidate):
 def get_plan_region_preview_segments(session, point=None):
     points = [FreeCAD.Vector(item) for item in (session._plan_region_points or [])]
     if point is not None:
-        point = session._project_plan_point(point)
+        point = session.viewport.project_plan_point(point)
         if point is not None and (not points or point.distanceToPoint(points[-1]) > 0.000001):
             points.append(point)
     segments = []
@@ -169,7 +169,7 @@ def update_plan_region_preview(session, point, info):
         return
 
     color = (0.86, 0.48, 0.12)
-    width = session._scaled_line_width(2)
+    width = session.viewport.scaled_line_width(2)
     for index, (start, end, dotted) in enumerate(segments):
         tracker = session._make_plan_line_tracker(
             DraftTrackers,
@@ -238,7 +238,7 @@ def handle_plan_region_point(session, point=None, obj=None):
         session._cancel_plan_region_tool()
         return
 
-    point = session._project_plan_point(point)
+    point = session.viewport.project_plan_point(point)
     if point is None:
         session._cancel_plan_region_tool()
         return
@@ -309,7 +309,7 @@ def update_space_separator_preview(session, point, info):
     start = session._space_separator_start
     if start is None or point is None:
         return
-    end = session._project_plan_point(point)
+    end = session.viewport.project_plan_point(point)
     if end is None or end.sub(start).Length < _MIN_WALL_LENGTH:
         return
     try:
@@ -362,7 +362,7 @@ def handle_space_separator_point(session, point=None, obj=None):
         session._cancel_space_separator_tool()
         return
 
-    point = session._project_plan_point(point)
+    point = session.viewport.project_plan_point(point)
     if session._space_separator_start is None:
         session._space_separator_start = point
         FreeCADGui.Snapper.getPoint(
@@ -400,13 +400,13 @@ def get_space_reference_point(session, space):
     shape = getattr(space, "Shape", None)
     if shape and hasattr(shape, "CenterOfMass"):
         try:
-            return session._project_plan_point(shape.CenterOfMass)
+            return session.viewport.project_plan_point(shape.CenterOfMass)
         except Exception:
             pass
     placement = getattr(space, "Placement", None)
     if placement is not None:
         try:
-            return session._project_plan_point(placement.Base)
+            return session.viewport.project_plan_point(placement.Base)
         except Exception:
             pass
     return None
@@ -1475,7 +1475,7 @@ def finish_space_text_position_pick(session, point=None, obj=None):
         session._refresh_task_panel_status()
         return
 
-    point = session._project_plan_point(point)
+    point = session.viewport.project_plan_point(point)
     try:
         session.doc.openTransaction(translate("BIM_PlanEdit", "Set Space Text Position"))
         space.ViewObject.TextPosition = space.Placement.inverse().multVec(point)

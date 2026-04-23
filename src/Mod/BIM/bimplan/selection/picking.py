@@ -253,7 +253,7 @@ def should_skip_opening_by_plan_bounds(session, opening, plan_point, radius_px):
 
     try:
         max_span = max(float(bound_box.XLength), float(bound_box.YLength))
-        units_per_px = session._get_plan_view_units_per_pixel()
+        units_per_px = session.viewport.get_plan_view_units_per_pixel()
         pick_margin = float(radius_px) * float(units_per_px or 0.0) * 4.0
         margin = max(max_span * 2.0, pick_margin, 1500.0)
         point_x = float(plan_point.x)

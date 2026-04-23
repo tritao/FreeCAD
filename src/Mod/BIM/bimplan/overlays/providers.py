@@ -45,7 +45,7 @@ def sync_provider_overlays(session):
             )
         render_state = (
             overlays,
-            round(float(session._get_plan_overlay_scale()), 4),
+            round(float(session.viewport.get_plan_overlay_scale()), 4),
         )
         if render_state == session._provider_overlay_state:
             session._plan_perf_count("provider_overlay_cache_hits")
@@ -188,7 +188,7 @@ def get_selected_provider_handle_specs(session, provider_obj):
         return []
     if not session._is_selected_plan_target("provider", provider_obj):
         return []
-    marker_size = session._scaled_marker_size(params.get_param_view("MarkerSize"))
+    marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
     specs = []
     for idx, handle in enumerate(session._get_selected_provider_edit_handles(provider_obj)):
         point = _to_vector(getattr(handle, "point", None))
@@ -361,7 +361,7 @@ def _get_provider_point_preview_segment_specs(session):
     preview_color = (
         _PROVIDER_POINT_PREVIEW_HOSTED_COLOR if hosted else _PROVIDER_POINT_PREVIEW_UNHOSTED_COLOR
     )
-    width = session._scaled_line_width(2)
+    width = session.viewport.scaled_line_width(2)
     specs = []
     specs.extend(
         _get_point_marker_segment_specs(
@@ -370,7 +370,7 @@ def _get_provider_point_preview_segment_specs(session):
             color=preview_color,
             width=width,
             dotted=not hosted,
-            marker_size=session._scaled_marker_size(_PROVIDER_POINT_PREVIEW_MARKER_SIZE),
+            marker_size=session.viewport.scaled_marker_size(_PROVIDER_POINT_PREVIEW_MARKER_SIZE),
             marker_kind=PlanOverlayMarkerKind.CROSS,
         )
     )
@@ -380,7 +380,7 @@ def _get_provider_point_preview_segment_specs(session):
                 session,
                 host_obj,
                 color=_PROVIDER_POINT_PREVIEW_HOST_COLOR,
-                width=session._scaled_line_width(2),
+                width=session.viewport.scaled_line_width(2),
             )
         )
         if FreeCAD.Vector(source).sub(point).Length > 1e-6:
@@ -390,7 +390,7 @@ def _get_provider_point_preview_segment_specs(session):
                     "start": source,
                     "end": point,
                     "color": preview_color,
-                    "width": session._scaled_line_width(1),
+                    "width": session.viewport.scaled_line_width(1),
                     "dotted": True,
                 }
             )
@@ -593,7 +593,7 @@ def _get_provider_point_host_segment_specs(session, host_wall, *, color, width):
 
 def _get_provider_segment_render_state(session, specs):
     return (
-        round(float(session._get_plan_overlay_scale()), 4),
+        round(float(session.viewport.get_plan_overlay_scale()), 4),
         tuple(
             (
                 spec["label"],
@@ -638,10 +638,10 @@ def _get_selected_provider_segment_specs(session, selected_objects):
     specs = []
     for overlay in _get_visible_provider_overlays(session):
         key = str(getattr(overlay, "key", "") or "overlay")
-        marker_size = session._scaled_marker_size(
+        marker_size = session.viewport.scaled_marker_size(
             float(getattr(overlay, "marker_size", 160.0) or 160.0) * _PROVIDER_SELECTED_MARKER_SCALE
         )
-        width = session._scaled_line_width(
+        width = session.viewport.scaled_line_width(
             max(2.0, float(getattr(overlay, "line_width", 2.0) or 2.0))
             + _PROVIDER_SELECTED_WIDTH_DELTA
         )
@@ -675,10 +675,10 @@ def _get_hovered_provider_segment_specs(session):
     specs = []
     for overlay in _get_visible_provider_overlays(session):
         key = str(getattr(overlay, "key", "") or "overlay")
-        marker_size = session._scaled_marker_size(
+        marker_size = session.viewport.scaled_marker_size(
             float(getattr(overlay, "marker_size", 160.0) or 160.0) * _PROVIDER_HOVER_MARKER_SCALE
         )
-        width = session._scaled_line_width(
+        width = session.viewport.scaled_line_width(
             max(2.0, float(getattr(overlay, "line_width", 2.0) or 2.0))
             + _PROVIDER_HOVER_WIDTH_DELTA
         )
@@ -719,7 +719,7 @@ def _get_visible_provider_overlays(session):
 
 def _create_provider_overlay_trackers(session, DraftTrackers, overlay):
     color = tuple(getattr(overlay, "color", (0.2, 0.55, 0.85)) or (0.2, 0.55, 0.85))
-    width = session._scaled_line_width(float(getattr(overlay, "line_width", 2.0) or 2.0))
+    width = session.viewport.scaled_line_width(float(getattr(overlay, "line_width", 2.0) or 2.0))
     dotted = bool(getattr(overlay, "dotted", False))
     key = str(getattr(overlay, "key", "") or "overlay")
     for polyline in tuple(getattr(overlay, "polylines", ()) or ()):
@@ -833,7 +833,9 @@ def _create_target_pick_tracker(
             int(
                 max(
                     4.0,
-                    session._scaled_marker_size(marker_size * _PROVIDER_OVERLAY_PICK_TRACKER_SCALE),
+                    session.viewport.scaled_marker_size(
+                        marker_size * _PROVIDER_OVERLAY_PICK_TRACKER_SCALE
+                    ),
                 )
             ),
         )

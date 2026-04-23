@@ -535,7 +535,7 @@ class TestBimPlanCore(unittest.TestCase):
             self.assertEqual("15°", session._format_symbol_rotation_snap_label())
             self.assertEqual("Miter", session.get_plan_join_type_label())
             self.assertIs(joint, session._get_plan_candidate_joint())
-            self.assertEqual(4200.0, session._get_plan_view_height())
+            self.assertEqual(4200.0, session.viewport.get_plan_view_height())
             self.assertTrue(session.wall_edit.has_active_wall_edit())
             self.assertEqual(
                 ("Plan Edit", "Select\nWork directly in the viewport"),
@@ -2003,6 +2003,10 @@ class TestBimPlanCore(unittest.TestCase):
             Document=SimpleNamespace(Name="PlanDoc"),
         )
         session = SimpleNamespace(
+            viewport=SimpleNamespace(
+                scaled_line_width=lambda width: float(width),
+                scaled_marker_size=lambda size: float(size),
+            ),
             current_tool="Select",
             hovered_provider=provider,
             doc=provider.Document,
@@ -2026,8 +2030,6 @@ class TestBimPlanCore(unittest.TestCase):
                 getattr(getattr(obj, "Document", None), "Name", None),
                 getattr(obj, "Name", None),
             ),
-            _scaled_line_width=lambda width: float(width),
-            _scaled_marker_size=lambda size: float(size),
         )
 
         specs = provider_overlays._get_hovered_provider_segment_specs(session)
