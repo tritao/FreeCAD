@@ -172,7 +172,7 @@ def _refresh_contextual_task_watchers():
 
 def _register_builtin_plan_edit_integrations():
     try:
-        from bimplan.window_provider import register_plan_edit_providers
+        from bimplan.providers import register_plan_edit_providers
 
         register_plan_edit_providers()
     except Exception as exc:
