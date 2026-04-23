@@ -2,6 +2,8 @@
 
 """Document-driven visual refresh helpers for BIM Plan Edit."""
 
+from contextlib import contextmanager
+
 _OPENING_VISUAL_PROPERTIES = {
     "Shape",
     "Placement",
@@ -52,6 +54,113 @@ _PLAN_VISUAL_SELECTED_REGION = "selected_region"
 _PLAN_VISUAL_SECONDARY_SELECTION = "secondary_selection"
 _PLAN_VISUAL_WALL_GRIPS = "wall_grips"
 _PLAN_VISUAL_PROVIDER_OVERLAYS = "provider_overlays"
+
+
+def has_direct_true_property(obj, prop_name):
+    if not obj:
+        return False
+    try:
+        if prop_name not in (getattr(obj, "PropertiesList", []) or []):
+            return False
+        return bool(getattr(obj, prop_name))
+    except Exception:
+        return False
+
+
+def is_hidden_library_definition_object(obj):
+    if not obj:
+        return False
+    if has_direct_true_property(obj, "IsLibraryDefinition"):
+        return True
+    for parent in getattr(obj, "InListRecursive", []) or getattr(obj, "InList", []):
+        if has_direct_true_property(parent, "IsLibraryDefinition"):
+            return True
+    return False
+
+
+def should_register_created_plan_object(session, obj):
+    if session._tearing_down or not obj or not session.doc:
+        return False
+    try:
+        if getattr(obj, "Document", None) != session.doc:
+            return False
+        if session._is_hidden_library_definition_object(obj):
+            return False
+        return session._is_supported_plan_object(obj)
+    except ReferenceError:
+        return False
+
+
+def queue_created_plan_object(session, obj):
+    if not obj or not getattr(obj, "Name", None):
+        return
+    session._pending_created_plan_objects[obj.Name] = obj
+    if session._are_document_visual_updates_deferred():
+        session._created_plan_objects_flush_deferred = True
+        return
+    if session._created_plan_objects_flush_queued:
+        return
+    session._created_plan_objects_flush_queued = True
+    try:
+        from PySide import QtCore
+
+        QtCore.QTimer.singleShot(0, session._flush_created_plan_objects)
+    except Exception:
+        session._flush_created_plan_objects()
+
+
+def flush_created_plan_objects(session, force=False):
+    session._created_plan_objects_flush_queued = False
+    if session._are_document_visual_updates_deferred() and not force:
+        session._created_plan_objects_flush_deferred = True
+        return
+    session._created_plan_objects_flush_deferred = False
+    pending = list(session._pending_created_plan_objects.values())
+    session._pending_created_plan_objects.clear()
+    eligible = []
+    for obj in pending:
+        if not session._should_register_created_plan_object(obj):
+            continue
+        eligible.append(obj)
+    session._register_plan_objects(eligible)
+
+
+def are_document_visual_updates_deferred(session):
+    return session._document_visual_update_defer_depth > 0
+
+
+def defer_document_visual_refresh(session):
+    session._document_visual_refresh_deferred = True
+
+
+@contextmanager
+def defer_document_visual_updates(session):
+    """Batch document observer visual work while an external command mutates the model."""
+
+    session._document_visual_update_defer_depth += 1
+    try:
+        yield
+    finally:
+        session._document_visual_update_defer_depth = max(
+            0,
+            session._document_visual_update_defer_depth - 1,
+        )
+        if session._document_visual_update_defer_depth or session._tearing_down:
+            return
+        if session._created_plan_objects_flush_deferred or session._pending_created_plan_objects:
+            session._created_plan_objects_flush_deferred = False
+            session._document_visual_update_defer_depth = 1
+            try:
+                session._flush_created_plan_objects(force=True)
+            finally:
+                session._document_visual_update_defer_depth = 0
+        if session._document_visual_refresh_deferred:
+            session._document_visual_refresh_deferred = False
+            if not session._document_is_alive():
+                return
+            session._invalidate_document_dependent_plan_visuals()
+            session._refresh_primary_selected_plan_target()
+            session._refresh_task_panel_status(selection_only=True)
 
 
 def is_opening_visual_dependency(opening, obj):
