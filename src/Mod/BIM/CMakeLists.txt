@@ -235,8 +235,6 @@ SET(bimplan_SRCS
     bimplan/selection/hover_picking.py
     bimplan/selection/picking.py
     bimplan/selection/selection.py
-    bimplan/selection/selection_additive.py
-    bimplan/selection/selection_observer.py
     bimplan/selection/target_dispatch.py
     bimplan/selection/target_kinds.py
     bimplan/selection/targets.py
