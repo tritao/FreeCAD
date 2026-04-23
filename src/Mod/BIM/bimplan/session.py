@@ -43,6 +43,7 @@ from bimplan import provider_targets as plan_provider_targets
 from bimplan import selection as plan_selection
 from bimplan import snap as plan_snap
 from bimplan import spaces as plan_spaces
+from bimplan import storeys as plan_storeys
 from bimplan import task_panel as plan_task_panel
 from bimplan import symbol_edit as plan_symbol_edit
 from bimplan import opening_edit as plan_opening_edit
@@ -1105,61 +1106,19 @@ class PlanEditSession:
         return True
 
     def collect_storeys(self):
-        import Draft
-
-        storeys = []
-        for obj in self.doc.Objects:
-            obj_type = Draft.getType(obj)
-            if obj_type == "Floor":
-                storeys.append(obj)
-            elif obj_type == "BuildingPart" and getattr(obj, "IfcType", "") == "Building Storey":
-                storeys.append(obj)
-
-        storeys.sort(key=lambda obj: self.get_storey_elevation(obj))
-        return storeys
+        return plan_storeys.collect_storeys(self)
 
     def find_initial_storey(self):
-        import Draft
-
-        for obj in FreeCADGui.Selection.getSelection():
-            obj_type = Draft.getType(obj)
-            if obj_type == "Floor":
-                return obj
-            if obj_type == "BuildingPart" and getattr(obj, "IfcType", "") == "Building Storey":
-                return obj
-        if self.storeys:
-            return self.storeys[0]
-        return None
+        return plan_storeys.find_initial_storey(self)
 
     def get_storey_elevation(self, obj):
-        try:
-            placement = getattr(obj, "Placement", None)
-        except Exception:
-            return 0.0
-        if placement is not None:
-            try:
-                return placement.Base.z
-            except Exception:
-                return 0.0
-        return 0.0
+        return plan_storeys.get_storey_elevation(obj)
 
     def get_storey_label(self, obj):
-        if obj is None:
-            return translate("BIM_PlanEdit", "Global XY (Z=0)")
-        elevation = FreeCAD.Units.Quantity(
-            self.get_storey_elevation(obj), FreeCAD.Units.Length
-        ).UserString
-        try:
-            label = str(getattr(obj, "Label", "") or getattr(obj, "Name", "") or "")
-        except Exception:
-            return translate("BIM_PlanEdit", "Global XY (Z=0)")
-        return f"{label} [{elevation}]"
+        return plan_storeys.get_storey_label(obj)
 
     def set_active_storey(self, storey):
-        self.active_storey = storey
-        self.apply_plan_view(fit=False)
-        self._apply_storey_visibility()
-        self._refresh_task_panel_status()
+        return plan_storeys.set_active_storey(self, storey)
 
     def get_plan_provider_registry(self):
         return get_plan_edit_registry()
