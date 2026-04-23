@@ -4,6 +4,8 @@
 
 import FreeCAD
 
+from . import selection_access as plan_selection_access
+
 
 def on_mouse_pressed(session, event_callback):
     if session._tearing_down:
@@ -53,7 +55,9 @@ def on_mouse_pressed(session, event_callback):
                         target_kind, target_wall = session._get_plan_target_at_position(
                             (pos[0], pos[1])
                         )
-                        source_wall = session._get_selected_plan_target_object("wall")
+                        source_wall = plan_selection_access.get_selected_plan_target_object(
+                            session, "wall"
+                        )
                         if (
                             target_kind == "wall"
                             and session._is_plan_selectable_wall(target_wall)

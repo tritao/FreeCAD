@@ -246,7 +246,7 @@ def refresh_selected_plan_target(session):
                 plan_target_kinds.PLAN_TARGET_WALL,
             )
         ):
-            if session._get_selected_plan_target_object(plan_target_kinds.PLAN_TARGET_WALL):
+            if get_selected_plan_target_object(session, plan_target_kinds.PLAN_TARGET_WALL):
                 session._schedule_wall_grip_sync()
             else:
                 session._clear_wall_grips()
@@ -530,7 +530,7 @@ def reset_selected_wall_after_change(session):
     session._pending_selected_wall_reset = False
     if session._tearing_down or session.current_tool != "Select":
         return
-    wall = session._get_selected_plan_target_object("wall")
+    wall = get_selected_plan_target_object(session, "wall")
     if not wall:
         return
     session._clear_wall_grips()
@@ -544,7 +544,7 @@ def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
     if session._tearing_down:
         return
     if wall is None:
-        wall = session._get_selected_plan_target_object("wall")
+        wall = get_selected_plan_target_object(session, "wall")
     if wall is None:
         return
     if not session._is_selected_plan_target("wall", wall):

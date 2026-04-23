@@ -156,7 +156,7 @@ def refresh_plan_overlay_view_scale(session):
             session._sync_hovered_region_overlay()
         if session._is_selected_plan_target("region"):
             session._sync_selected_region_overlay()
-        if session._get_secondary_selected_plan_targets():
+        if session.selection.get_secondary_selected_plan_targets():
             session._sync_secondary_selected_overlays()
 
 

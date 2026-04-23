@@ -6,6 +6,7 @@ import FreeCAD
 import FreeCADGui
 
 from . import manager as overlay_manager
+from .. import selection_access as plan_selection_access
 
 
 def retarget_edit_tracker(tracker, obj, index):
@@ -43,7 +44,7 @@ def sync_wall_grips(session):
                 session._clear_wall_grips()
                 return
 
-        wall = session._get_selected_plan_target_object("wall")
+        wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
         proxy = getattr(wall, "Proxy", None)
         if not proxy or not hasattr(proxy, "calc_endpoints"):
             session._clear_wall_grips()
@@ -187,7 +188,7 @@ def clear_hovered_wall_overlay(session):
 
 def sync_selected_wall_overlay(session):
     with session._plan_perf_trace_span("sync_selected_wall_overlay"):
-        wall = session._get_selected_plan_target_object("wall")
+        wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
         if session.current_tool != "Select" or not session._is_plan_selectable_wall(wall):
             session._clear_selected_wall_overlay()
             return
@@ -233,7 +234,7 @@ def get_plan_context_junctions(session):
 
     junctions = []
     seen = set()
-    selected_wall = session._get_selected_plan_target_object("wall")
+    selected_wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
     for wall in (selected_wall, session.hovered_wall):
         if not session._is_plan_selectable_wall(wall):
             continue
@@ -288,7 +289,7 @@ def create_junction_node_trackers(session, junction, color, width, tracker_store
 
 def sync_junction_node_overlays(session):
     session._clear_junction_node_overlays()
-    selected_wall = session._get_selected_plan_target_object("wall")
+    selected_wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
     for junction in session._get_plan_context_junctions():
         if selected_wall and selected_wall in (getattr(junction, "Walls", None) or []):
             color = (0.92, 0.58, 0.12)

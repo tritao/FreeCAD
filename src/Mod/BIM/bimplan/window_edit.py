@@ -4,6 +4,7 @@
 
 import ArchWindow
 import FreeCAD
+from bimplan import selection_access as plan_selection_access
 
 translate = FreeCAD.Qt.translate
 
@@ -49,7 +50,7 @@ def get_window_height_user_string(window):
 
 
 def get_selected_window_style_preset(session):
-    window = session._get_selected_plan_target_object("opening")
+    window = plan_selection_access.get_selected_plan_target_object(session, "opening")
     if not ArchWindow.isWindowObject(window):
         return ""
     preset_name = ArchWindow.getWindowPresetName(window)
@@ -59,42 +60,42 @@ def get_selected_window_style_preset(session):
 
 
 def can_apply_selected_window_style_preset(session):
-    window = session._get_selected_plan_target_object("opening")
+    window = plan_selection_access.get_selected_plan_target_object(session, "opening")
     return can_edit_window_style_preset(window)
 
 
 def get_selected_window_width_mm(session):
-    window = session._get_selected_plan_target_object("opening")
+    window = plan_selection_access.get_selected_plan_target_object(session, "opening")
     return get_window_width_mm(window)
 
 
 def get_selected_window_width_text(session):
-    window = session._get_selected_plan_target_object("opening")
+    window = plan_selection_access.get_selected_plan_target_object(session, "opening")
     return get_window_width_user_string(window)
 
 
 def get_selected_window_height_mm(session):
-    window = session._get_selected_plan_target_object("opening")
+    window = plan_selection_access.get_selected_plan_target_object(session, "opening")
     return get_window_height_mm(window)
 
 
 def get_selected_window_height_text(session):
-    window = session._get_selected_plan_target_object("opening")
+    window = plan_selection_access.get_selected_plan_target_object(session, "opening")
     return get_window_height_user_string(window)
 
 
 def can_apply_selected_window_width(session):
-    window = session._get_selected_plan_target_object("opening")
+    window = plan_selection_access.get_selected_plan_target_object(session, "opening")
     return can_edit_window_width(window)
 
 
 def can_apply_selected_window_height(session):
-    window = session._get_selected_plan_target_object("opening")
+    window = plan_selection_access.get_selected_plan_target_object(session, "opening")
     return can_edit_window_height(window)
 
 
 def can_apply_selected_window_size(session, width_value=None, height_value=None):
-    window = session._get_selected_plan_target_object("opening")
+    window = plan_selection_access.get_selected_plan_target_object(session, "opening")
     resize_targets = _resolve_window_resize_targets(
         window,
         width_value=width_value,
@@ -113,7 +114,7 @@ def can_apply_selected_window_size(session, width_value=None, height_value=None)
 
 
 def apply_selected_window_style_preset(session, preset_name):
-    window = session._get_selected_plan_target_object("opening")
+    window = plan_selection_access.get_selected_plan_target_object(session, "opening")
     if not can_edit_window_style_preset(window):
         return False
 
@@ -164,7 +165,7 @@ def _set_selected_window_size(
     height_value=None,
     transaction_label=None,
 ):
-    window = session._get_selected_plan_target_object("opening")
+    window = plan_selection_access.get_selected_plan_target_object(session, "opening")
     resize_targets = _resolve_window_resize_targets(
         window,
         width_value=width_value,

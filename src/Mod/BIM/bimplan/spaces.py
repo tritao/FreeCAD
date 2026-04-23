@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import FreeCAD
 import FreeCADGui
 
+from . import selection_access as plan_selection_access
 from . import target_dispatch as plan_target_dispatch
 from . import target_kinds as plan_target_kinds
 
@@ -518,20 +519,6 @@ def _resolve_space_selection_shape(targets):
     )
 
 
-def _get_selected_plan_targets(session):
-    selection_api = getattr(session, "selection", None)
-    if selection_api is not None:
-        return selection_api.get_selected_plan_targets()
-    return session._get_selected_plan_targets()
-
-
-def _get_selected_plan_target_object(session, kind=None):
-    selection_api = getattr(session, "selection", None)
-    if selection_api is not None:
-        return selection_api.get_selected_plan_target_object(kind)
-    return session._get_selected_plan_target_object(kind)
-
-
 def _get_selected_space_boundary_links(session, fallback_space=None):
     spaces_api = getattr(session, "spaces", None)
     if spaces_api is not None:
@@ -540,7 +527,9 @@ def _get_selected_space_boundary_links(session, fallback_space=None):
 
 
 def _resolve_space_creation_request(session, targets=None):
-    targets = tuple(targets if targets is not None else _get_selected_plan_targets(session))
+    targets = tuple(
+        targets if targets is not None else plan_selection_access.get_selected_plan_targets(session)
+    )
     if not targets:
         return None
 
@@ -577,7 +566,9 @@ def _resolve_space_creation_request(session, targets=None):
 
 
 def get_space_region_seed_targets(session, targets=None):
-    targets = tuple(targets if targets is not None else _get_selected_plan_targets(session))
+    targets = tuple(
+        targets if targets is not None else plan_selection_access.get_selected_plan_targets(session)
+    )
     selection_shape = _resolve_space_selection_shape(targets)
     if selection_shape.mode == _SPACE_SELECTION_SEEDED_REGION:
         return (selection_shape.region_seed_space, list(selection_shape.wall_targets))
@@ -1202,7 +1193,7 @@ def report_space_creation_failure(space):
 
 
 def set_selected_space_label(session, label):
-    space = session._get_selected_plan_target_object("space")
+    space = plan_selection_access.get_selected_plan_target_object(session, "space")
     if not session._is_plan_space_object(space):
         return False
     label = str(label or "").strip()
@@ -1224,7 +1215,7 @@ def set_selected_space_label(session, label):
 
 
 def set_selected_space_type(session, space_type):
-    space = session._get_selected_plan_target_object("space")
+    space = plan_selection_access.get_selected_plan_target_object(session, "space")
     if not session._is_plan_space_object(space):
         return False
     space_type = str(space_type or "")
@@ -1246,7 +1237,7 @@ def set_selected_space_type(session, space_type):
 
 
 def set_selected_region_label(session, label):
-    region = session._get_selected_plan_target_object("region")
+    region = plan_selection_access.get_selected_plan_target_object(session, "region")
     if not session._is_plan_region_object(region):
         return False
     label = str(label or "").strip()
@@ -1268,7 +1259,7 @@ def set_selected_region_label(session, label):
 
 
 def set_selected_region_scheme(session, scheme):
-    region = session._get_selected_plan_target_object("region")
+    region = plan_selection_access.get_selected_plan_target_object(session, "region")
     if not session._is_plan_region_object(region):
         return False
     scheme = str(scheme or "").strip()
@@ -1290,7 +1281,7 @@ def set_selected_region_scheme(session, scheme):
 
 
 def set_selected_region_type(session, region_type):
-    region = session._get_selected_plan_target_object("region")
+    region = plan_selection_access.get_selected_plan_target_object(session, "region")
     if not session._is_plan_region_object(region):
         return False
     region_type = str(region_type or "").strip()
@@ -1312,7 +1303,7 @@ def set_selected_region_type(session, region_type):
 
 
 def set_selected_region_parent_space(session, space):
-    region = session._get_selected_plan_target_object("region")
+    region = plan_selection_access.get_selected_plan_target_object(session, "region")
     if not session._is_plan_region_object(region):
         return False
     space = session._get_plan_semantic_object(space) if space else None
@@ -1362,7 +1353,7 @@ def set_space_boundaries(session, space, boundaries):
 
 
 def add_boundaries_to_selected_space(session):
-    space = session._get_selected_plan_target_object("space")
+    space = plan_selection_access.get_selected_plan_target_object(session, "space")
     if not session._is_plan_space_object(space):
         return False
     existing = session._get_space_boundary_entries(space)
@@ -1380,7 +1371,7 @@ def add_boundaries_to_selected_space(session):
 
 
 def remove_selected_space_boundaries(session, row_indexes=None):
-    space = session._get_selected_plan_target_object("space")
+    space = plan_selection_access.get_selected_plan_target_object(session, "space")
     if not session._is_plan_space_object(space):
         return False
     existing = session._get_space_boundary_entries(space)
@@ -1415,7 +1406,7 @@ def remove_selected_space_boundaries(session, row_indexes=None):
 
 
 def start_space_text_position_pick(session):
-    space = session._get_selected_plan_target_object("space")
+    space = plan_selection_access.get_selected_plan_target_object(session, "space")
     if not session._is_plan_space_object(space):
         return False
     import FreeCADGui
@@ -1468,7 +1459,9 @@ def finish_space_text_position_pick(session, point=None, obj=None):
 
 
 def cancel_space_text_position_pick(session):
-    space = session._edit_space or _get_selected_plan_target_object(session, "space")
+    space = session._edit_space or plan_selection_access.get_selected_plan_target_object(
+        session, "space"
+    )
     reset_space_text_pick_state(session)
     session._stop_snapper()
     FreeCAD.activeDraftCommand = None
@@ -1484,7 +1477,9 @@ def get_space_preflight_report(session, targets=None):
     if session.current_tool != "Select":
         return None
 
-    targets = list(targets if targets is not None else _get_selected_plan_targets(session))
+    targets = list(
+        targets if targets is not None else plan_selection_access.get_selected_plan_targets(session)
+    )
     if not should_run_space_preflight_for_targets(targets):
         return None
 

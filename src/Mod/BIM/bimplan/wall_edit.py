@@ -4,6 +4,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimplan import selection_access as plan_selection_access
 
 translate = FreeCAD.Qt.translate
 
@@ -52,7 +53,7 @@ def start_wall_edit(session, mode):
                 )
                 return
 
-            wall = session._get_selected_plan_target_object("wall")
+            wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
             proxy = getattr(wall, "Proxy", None)
             if (
                 not proxy
@@ -311,7 +312,7 @@ def start_wall_grip_edit(session, grip_index):
 
 def activate_wall_grip(session, grip_index, wall=None):
     if wall is None:
-        wall = session._get_selected_plan_target_object("wall")
+        wall = plan_selection_access.get_selected_plan_target_object(session, "wall")
     try:
         from PySide import QtCore
     except ImportError:
