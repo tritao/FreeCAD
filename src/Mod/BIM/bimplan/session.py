@@ -46,6 +46,7 @@ from bimplan import opening_edit as plan_opening_edit
 from bimplan import provider_edit as plan_provider_edit
 from bimplan import targets as plan_targets
 from bimplan import view as plan_view
+from bimplan import wall_create as plan_wall_create
 from bimplan import wall_edit as plan_wall_edit
 from bimplan import window_create as plan_window_create
 from bimplan import window_edit as plan_window_edit
@@ -1276,52 +1277,10 @@ class PlanEditSession:
         self._cancel_join_tool()
 
     def activate_wall_tool(self):
-        from bimcommands import BimWall
-
-        self._cancel_space_region_pick(refresh=False)
-        self._cancel_plan_region_tool(refresh=False)
-        self._cancel_rect_wall_tool(refresh=False)
-        self._cancel_window_tool(refresh=False)
-        self._cancel_space_separator_tool(refresh=False)
-        self._cancel_provider_point_tool(refresh=False)
-        self._cancel_wall_edit()
-        self._cancel_pending_edit()
-        self._clear_plan_relation_status()
-        self._set_selected_plan_target()
-        self._clear_wall_grips()
-        self._clear_selected_wall_overlay()
-        self._clear_selected_wall_opening_context_overlay()
-        self._clear_selected_space_overlay()
-        self._clear_secondary_selected_overlays()
-        self._set_gui_selection([])
-        self._start_embedded_tool("Wall", BimWall.Arch_Wall(), host_class=_PlanEditWallHost)
+        return plan_wall_create.activate_wall_tool(self)
 
     def activate_rect_wall_tool(self):
-        self._cancel_space_region_pick(refresh=False)
-        self._cancel_plan_region_tool(refresh=False)
-        self._cancel_window_tool(refresh=False)
-        self._cancel_space_separator_tool(refresh=False)
-        self._cancel_provider_point_tool(refresh=False)
-        self._cancel_embedded_tool()
-        self._cancel_wall_edit()
-        self._cancel_pending_edit()
-        self._clear_plan_relation_status()
-        self._set_selected_plan_target()
-        self._clear_wall_grips()
-        self._clear_selected_wall_overlay()
-        self._clear_selected_wall_opening_context_overlay()
-        self._clear_selected_space_overlay()
-        self._clear_secondary_selected_overlays()
-        self._clear_rect_wall_preview()
-        self._rect_wall_start = None
-        self._rect_wall_params = self._get_wall_defaults()
-        self.current_tool = "Rect Wall"
-        FreeCAD.activeDraftCommand = self
-        FreeCADGui.Snapper.getPoint(
-            callback=self._handle_rect_wall_point,
-            title=translate("BIM_PlanEdit", "First rectangle corner"),
-        )
-        self._refresh_task_panel_status()
+        return plan_wall_create.activate_rect_wall_tool(self)
 
     def can_place_plan_window(self):
         return plan_window_create.can_place_window(self)
@@ -1822,14 +1781,7 @@ class PlanEditSession:
         return plan_view.project_plan_point(self, point)
 
     def _get_wall_defaults(self):
-        from draftutils import params
-
-        return {
-            "align": ["Center", "Left", "Right"][params.get_param_arch("WallAlignment")],
-            "width": params.get_param_arch("WallWidth"),
-            "height": params.get_param_arch("WallHeight"),
-            "offset": params.get_param_arch("WallOffset"),
-        }
+        return plan_wall_create.get_wall_defaults(self)
 
     def _get_plan_view_height(self):
         return plan_view.get_plan_view_height(self)
@@ -3831,154 +3783,25 @@ class PlanEditSession:
                 pass
 
     def _has_active_rect_wall_tool(self):
-        return self._rect_wall_start is not None or self.current_tool == "Rect Wall"
+        return plan_wall_create.has_active_rect_wall_tool(self)
 
     def _clear_rect_wall_preview(self):
-        for tracker in self._rect_wall_preview_trackers:
-            try:
-                tracker.finalize()
-            except Exception:
-                pass
-        self._rect_wall_preview_trackers = []
+        return plan_wall_create.clear_rect_wall_preview(self)
 
     def _cancel_rect_wall_tool(self, refresh=True):
-        if not self._has_active_rect_wall_tool():
-            return False
-        self._stop_snapper()
-        self._clear_rect_wall_preview()
-        self._rect_wall_start = None
-        self._rect_wall_params = None
-        FreeCAD.activeDraftCommand = None
-        self.current_tool = "Select"
-        if refresh:
-            self._refresh_task_panel_status()
-        self._sync_selected_opening_overlay()
-        self._sync_selected_opening_handles()
-        self._sync_selected_space_overlay()
-        self._sync_selected_provider_overlay()
-        self._sync_selected_provider_handles()
-        return True
+        return plan_wall_create.cancel_rect_wall_tool(self, refresh=refresh)
 
     def _get_rect_wall_corners(self, point):
-        start = self._rect_wall_start
-        if start is None or point is None:
-            return None
-        end = self._project_plan_point(point)
-        if end is None:
-            return None
-        x1, y1 = start.x, start.y
-        x2, y2 = end.x, end.y
-        z = start.z
-        if abs(x2 - x1) < _MIN_WALL_LENGTH or abs(y2 - y1) < _MIN_WALL_LENGTH:
-            return None
-        return [
-            FreeCAD.Vector(x1, y1, z),
-            FreeCAD.Vector(x2, y1, z),
-            FreeCAD.Vector(x2, y2, z),
-            FreeCAD.Vector(x1, y2, z),
-        ]
+        return plan_wall_create.get_rect_wall_corners(self, point)
 
     def _update_rect_wall_preview(self, point, info):
-        del info
-        corners = self._get_rect_wall_corners(point)
-        if not corners:
-            return
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except Exception:
-            return
-
-        segments = list(zip(corners, corners[1:] + corners[:1]))
-        if not self._rect_wall_preview_trackers:
-            for start, end in segments:
-                tracker = DraftTrackers.rectangleTracker(face=True)
-                self._rect_wall_preview_trackers.append(tracker)
-        for tracker, (start, end) in zip(self._rect_wall_preview_trackers, segments):
-            footprint = self._get_preview_footprint(
-                [start, end],
-                width=self._rect_wall_params["width"],
-                align=self._rect_wall_params["align"],
-            )
-            if not footprint:
-                continue
-            axis = end.sub(start)
-            if axis.Length < _MIN_WALL_LENGTH:
-                continue
-            axis.normalize()
-            rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), axis)
-            perp = rotation.multVec(FreeCAD.Vector(0, 1, 0))
-            tracker.setPlane(axis, perp)
-            tracker.setorigin(footprint[0])
-            tracker.update(footprint[2])
-            tracker.on()
+        return plan_wall_create.update_rect_wall_preview(self, point, info)
 
     def _create_rect_wall_run(self, corners):
-        from bimcommands import BimWall
-
-        walls = []
-        self.doc.openTransaction(translate("BIM_PlanEdit", "Create Rectangular Wall Run"))
-        try:
-            walls = BimWall.create_wall_run_from_points(
-                corners,
-                width=self._rect_wall_params["width"],
-                height=self._rect_wall_params["height"],
-                align=self._rect_wall_params["align"],
-                offset=self._rect_wall_params["offset"],
-                closed=True,
-                on_created=self._register_plan_object,
-            )
-            BimWall.autojoin_wall_run(walls, closed=True)
-            self.doc.commitTransaction()
-            self.doc.recompute()
-        except Exception:
-            try:
-                self.doc.abortTransaction()
-            except Exception:
-                pass
-            raise
-        return walls
+        return plan_wall_create.create_rect_wall_run(self, corners)
 
     def _handle_rect_wall_point(self, point=None, obj=None):
-        del obj
-        if point is None:
-            self._cancel_rect_wall_tool()
-            return
-
-        point = self._project_plan_point(point)
-        if self._rect_wall_start is None:
-            self._rect_wall_start = point
-            FreeCADGui.Snapper.getPoint(
-                callback=self._handle_rect_wall_point,
-                movecallback=self._update_rect_wall_preview,
-                last=point,
-                title=translate("BIM_PlanEdit", "Opposite rectangle corner"),
-                mode="line",
-            )
-            return
-
-        corners = self._get_rect_wall_corners(point)
-        if not corners:
-            self._cancel_rect_wall_tool()
-            return
-
-        try:
-            walls = self._create_rect_wall_run(corners)
-        except Exception:
-            self._cancel_rect_wall_tool()
-            FreeCAD.Console.PrintError(
-                translate("BIM_PlanEdit", "Failed to create the rectangular wall run.\n")
-            )
-            return
-
-        try:
-            self._set_gui_selection(walls)
-        except Exception:
-            pass
-
-        self._cancel_rect_wall_tool(refresh=False)
-        self.current_tool = "Select"
-        self._refresh_primary_selected_plan_target()
-        self._refresh_task_panel_status()
+        return plan_wall_create.handle_rect_wall_point(self, point=point, obj=obj)
 
     def _has_active_window_tool(self):
         return plan_window_create.has_active_window_tool(self)
