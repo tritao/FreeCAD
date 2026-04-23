@@ -2709,26 +2709,7 @@ class PlanEditSession:
         return plan_spaces.format_space_preflight_text(report)
 
     def _get_plan_selection_summary_text(self):
-        if self.current_tool != "Select":
-            return ""
-        targets = self._get_selected_plan_targets()
-        preflight_text = self._format_space_preflight_text(
-            self._get_space_preflight_report(targets)
-        )
-        if len(targets) <= 1:
-            return preflight_text
-        region_seed_space, wall_targets = self._get_space_region_seed_targets(targets)
-        if region_seed_space is not None and wall_targets:
-            summary = translate("BIM_PlanEdit", "Boundary candidates: {summary}").format(
-                summary=self._summarize_plan_targets(wall_targets)
-            )
-        else:
-            summary = translate("BIM_PlanEdit", "Selection set: {summary}").format(
-                summary=self._summarize_plan_targets(targets)
-            )
-        if preflight_text:
-            return "{}\n{}".format(summary, preflight_text)
-        return summary
+        return plan_task_panel.get_plan_selection_summary_text(self)
 
     def _clear_plan_relation_status(self):
         return plan_wall_relations.clear_plan_relation_status(self)

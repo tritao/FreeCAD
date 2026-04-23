@@ -152,6 +152,29 @@ def refresh_provider_overlay_mode_panels(session):
             session.detach_aux_task_panel(extra_panel)
 
 
+def get_plan_selection_summary_text(session):
+    if session.current_tool != "Select":
+        return ""
+    targets = session._get_selected_plan_targets()
+    preflight_text = session._format_space_preflight_text(
+        session._get_space_preflight_report(targets)
+    )
+    if len(targets) <= 1:
+        return preflight_text
+    region_seed_space, wall_targets = session._get_space_region_seed_targets(targets)
+    if region_seed_space is not None and wall_targets:
+        summary = translate("BIM_PlanEdit", "Boundary candidates: {summary}").format(
+            summary=session._summarize_plan_targets(wall_targets)
+        )
+    else:
+        summary = translate("BIM_PlanEdit", "Selection set: {summary}").format(
+            summary=session._summarize_plan_targets(targets)
+        )
+    if preflight_text:
+        return "{}\n{}".format(summary, preflight_text)
+    return summary
+
+
 def format_status_chip_action(message):
     if not message:
         return ""
@@ -421,7 +444,7 @@ def get_status_chip_text(session):
             label=session.get_storey_label(session.active_storey)
         )
 
-    selection_summary = session._get_plan_selection_summary_text()
+    selection_summary = get_plan_selection_summary_text(session)
     if selection_summary:
         context = "{}\n{}".format(context, selection_summary)
 
