@@ -4,10 +4,12 @@
 
 import FreeCAD
 import math
+import time
 from bimplan import provider_targets as plan_provider_targets
 from bimplan import targets as plan_targets
 from bimplan.providers import PlanOverlayMarkerKind
 
+_HOVER_PICK_INTERVAL_MS = 80
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
 _FOCUSED_PROVIDER_OVERLAY_PICK_MODES = frozenset(("electrical", "plumbing"))
 _PROVIDER_OVERLAY_PICK_RADIUS_PX = 12.0
@@ -1201,3 +1203,169 @@ def get_hovered_plan_target(session):
         if obj is not None:
             return (kind, obj)
     return (None, None)
+
+
+def queue_prime_hover_pick_caches(session):
+    if session._tearing_down or session._plan_hover_pick_cache_queued or not session.doc:
+        return
+    try:
+        from PySide import QtCore
+    except ImportError:
+        return
+    session._plan_hover_pick_cache_queued = True
+    QtCore.QTimer.singleShot(0, session._prime_hover_pick_caches)
+
+
+def prime_hover_pick_caches(session):
+    session._plan_hover_pick_cache_queued = False
+    if session._tearing_down or not session.doc:
+        return
+    with session._plan_perf_trace_event("prime_hover_pick_caches"):
+        with session._plan_perf_trace_span("prime_hover_pick_symbol_instances"):
+            symbols = tuple(session._get_plan_symbol_instances())
+        for symbol in symbols:
+            session._plan_perf_count("prime_hover_pick_symbols")
+            with session._plan_perf_trace_span("prime_hover_pick_symbol_geometry"):
+                session._get_symbol_overlay_segments(symbol)
+                session._get_symbol_overlay_screen_polylines(symbol)
+
+        for obj in getattr(session.doc, "Objects", []) or []:
+            if session._is_hosted_opening_object(obj):
+                session._plan_perf_count("prime_hover_pick_openings")
+                with session._plan_perf_trace_span("prime_hover_pick_opening_geometry"):
+                    session._get_opening_overlay_polylines(obj)
+                    session._get_opening_overlay_segments(obj)
+                    session._get_opening_overlay_screen_polylines(obj)
+            if session._is_plan_space_object(obj):
+                session._plan_perf_count("prime_hover_pick_spaces")
+                with session._plan_perf_trace_span("prime_hover_pick_space_geometry"):
+                    session._get_space_footprint_faces(obj)
+                    session._get_space_overlay_polylines(obj)
+                    session._get_space_overlay_segments(obj)
+            if session._is_plan_region_object(obj):
+                session._plan_perf_count("prime_hover_pick_regions")
+                with session._plan_perf_trace_span("prime_hover_pick_region_geometry"):
+                    session._get_region_footprint_faces(obj)
+                    session._get_region_overlay_polylines(obj)
+                    session._get_region_overlay_segments(obj)
+
+        with session._plan_perf_trace_span("prime_hover_pick_provider_contributions"):
+            with session._plan_provider_refresh_cache_scope():
+                tuple(session.get_plan_provider_overlays())
+                tuple(session.get_plan_provider_targets())
+
+
+def should_skip_hover_pick(session, mouse_pos, force=False):
+    if force or mouse_pos is None:
+        return False
+    try:
+        now = time.monotonic()
+    except Exception:
+        return False
+    elapsed_ms = (now - float(session._hover_pick_last_time or 0.0)) * 1000.0
+    if elapsed_ms >= _HOVER_PICK_INTERVAL_MS:
+        session._hover_pick_last_time = now
+        session._hover_pick_last_mouse_pos = (float(mouse_pos[0]), float(mouse_pos[1]))
+        return False
+    session._hover_pick_dirty = True
+    session._hover_pick_last_mouse_pos = (float(mouse_pos[0]), float(mouse_pos[1]))
+    session._plan_perf_count("hover_pick_skipped")
+    return True
+
+
+def clear_hovered_plan_targets(session, kinds=None):
+    clearers = {
+        "wall": session._set_hovered_wall,
+        "opening": session._set_hovered_opening,
+        "symbol": session._set_hovered_symbol,
+        "provider": session._set_hovered_provider,
+        "space": session._set_hovered_space,
+        "region": session._set_hovered_region,
+    }
+    for kind in kinds or ("wall", "opening", "symbol", "provider", "space", "region"):
+        clear_hovered = clearers.get(kind)
+        if clear_hovered is not None:
+            clear_hovered(None)
+
+
+def _set_only_hovered_target(session, target_kind, target_obj):
+    if target_kind == "opening":
+        session._set_hovered_wall(None)
+        session._set_hovered_opening(target_obj)
+        session._set_hovered_symbol(None)
+        session._set_hovered_provider(None)
+        session._set_hovered_space(None)
+        session._set_hovered_region(None)
+    elif target_kind == "provider":
+        session._set_hovered_wall(None)
+        session._set_hovered_opening(None)
+        session._set_hovered_symbol(None)
+        session._set_hovered_provider(target_obj)
+        session._set_hovered_space(None)
+        session._set_hovered_region(None)
+    elif target_kind == "symbol":
+        session._set_hovered_wall(None)
+        session._set_hovered_opening(None)
+        session._set_hovered_symbol(target_obj)
+        session._set_hovered_provider(None)
+        session._set_hovered_space(None)
+        session._set_hovered_region(None)
+    elif target_kind == "wall":
+        session._set_hovered_wall(target_obj)
+        session._set_hovered_opening(None)
+        session._set_hovered_symbol(None)
+        session._set_hovered_provider(None)
+        session._set_hovered_space(None)
+        session._set_hovered_region(None)
+    elif target_kind == "region":
+        session._set_hovered_wall(None)
+        session._set_hovered_opening(None)
+        session._set_hovered_symbol(None)
+        session._set_hovered_provider(None)
+        session._set_hovered_space(None)
+        session._set_hovered_region(target_obj)
+    elif target_kind == "space":
+        session._set_hovered_wall(None)
+        session._set_hovered_opening(None)
+        session._set_hovered_symbol(None)
+        session._set_hovered_provider(None)
+        session._set_hovered_region(None)
+        session._set_hovered_space(target_obj)
+    else:
+        clear_hovered_plan_targets(session)
+
+
+def update_hovered_plan_target(session, mouse_pos, force=False):
+    if session.current_tool == "Join":
+        if session._should_skip_hover_pick(mouse_pos, force=force):
+            return False
+        session._plan_perf_count("hover_pick_resolved")
+        with session._plan_perf_trace_span("hover_pick_resolve"):
+            target_kind, target_obj = session._get_plan_target_at_position(mouse_pos)
+        session._hover_pick_dirty = False
+        if target_kind == "wall" and not session._is_selected_plan_target("wall", target_obj):
+            session._set_hovered_wall(target_obj)
+        else:
+            session._set_hovered_wall(None)
+        session._set_hovered_opening(None)
+        session._set_hovered_symbol(None)
+        session._set_hovered_provider(None)
+        session._set_hovered_space(None)
+        session._set_hovered_region(None)
+        return True
+    if session.current_tool != "Select":
+        session._hover_pick_dirty = False
+        clear_hovered_plan_targets(session)
+        return True
+    if session._should_skip_hover_pick(mouse_pos, force=force):
+        return False
+    session._plan_perf_count("hover_pick_resolved")
+    with session._plan_perf_trace_span("hover_pick_resolve"):
+        target_kind, target_obj = session._get_plan_target_at_position(
+            mouse_pos,
+            include_space_fallback=session.get_plan_provider_overlay_mode()
+            not in _FOCUSED_PROVIDER_OVERLAY_PICK_MODES,
+        )
+    session._hover_pick_dirty = False
+    _set_only_hovered_target(session, target_kind, target_obj)
+    return True
