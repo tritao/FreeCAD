@@ -50,6 +50,7 @@ from bimplan import selection_observer as plan_selection_observer
 from bimplan import session_components as plan_session_components
 from bimplan import snap as plan_snap
 from bimplan import session_state as plan_session_state
+from bimplan import session_state_models as plan_session_state_models
 from bimplan import storeys as plan_storeys
 from bimplan import task_panel as plan_task_panel
 from bimplan import target_kinds as plan_target_kinds
@@ -214,6 +215,76 @@ def start_session():
 
 class PlanEditSession:
     """Owns the viewer state and control dock for Plan Edit mode."""
+
+    def _ensure_task_panel_state(self):
+        state = self.__dict__.get("task_panel_state")
+        if state is None:
+            state = plan_session_state_models.PlanTaskPanelState()
+            self.__dict__["task_panel_state"] = state
+        return state
+
+    def _ensure_provider_overlay_read_state(self):
+        state = self.__dict__.get("provider_overlay_read_state")
+        if state is None:
+            state = plan_session_state_models.PlanProviderOverlayReadState()
+            self.__dict__["provider_overlay_read_state"] = state
+        return state
+
+    @property
+    def _plan_relation_status_message(self):
+        return self._ensure_task_panel_state().relation_status_message
+
+    @_plan_relation_status_message.setter
+    def _plan_relation_status_message(self, value):
+        self._ensure_task_panel_state().relation_status_message = value
+
+    @property
+    def _space_region_candidates(self):
+        return self._ensure_task_panel_state().space_region_candidates
+
+    @_space_region_candidates.setter
+    def _space_region_candidates(self, value):
+        self._ensure_task_panel_state().space_region_candidates = list(value or [])
+
+    @property
+    def _hovered_space_region_candidate(self):
+        return self._ensure_task_panel_state().hovered_space_region_candidate
+
+    @_hovered_space_region_candidate.setter
+    def _hovered_space_region_candidate(self, value):
+        self._ensure_task_panel_state().hovered_space_region_candidate = value
+
+    @property
+    def _plan_region_parent_space(self):
+        return self._ensure_task_panel_state().plan_region_parent_space
+
+    @_plan_region_parent_space.setter
+    def _plan_region_parent_space(self, value):
+        self._ensure_task_panel_state().plan_region_parent_space = value
+
+    @property
+    def _provider_overlay_mode(self):
+        return self._ensure_provider_overlay_read_state().mode
+
+    @_provider_overlay_mode.setter
+    def _provider_overlay_mode(self, value):
+        self._ensure_provider_overlay_read_state().mode = str(value or "architecture")
+
+    @property
+    def _provider_overlay_visibility(self):
+        return self._ensure_provider_overlay_read_state().visibility
+
+    @_provider_overlay_visibility.setter
+    def _provider_overlay_visibility(self, value):
+        self._ensure_provider_overlay_read_state().visibility = dict(value or {})
+
+    @property
+    def _provider_overlay_state(self):
+        return self._ensure_provider_overlay_read_state().render_state
+
+    @_provider_overlay_state.setter
+    def _provider_overlay_state(self, value):
+        self._ensure_provider_overlay_read_state().render_state = value
 
     def __init__(self):
         self.selection = plan_session_components.PlanSelectionAPI(self)

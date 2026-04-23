@@ -278,12 +278,21 @@ class PlanSpacesAPI(_SessionAPI):
     is_plan_space_object = _bind_session_call(plan_targets.is_plan_space_object)
 
     def get_space_region_candidate_count(self):
+        state = getattr(self.session, "task_panel_state", None)
+        if state is not None:
+            return len(getattr(state, "space_region_candidates", ()) or ())
         return len(getattr(self.session, "_space_region_candidates", ()) or ())
 
     def get_hovered_space_region_candidate(self):
+        state = getattr(self.session, "task_panel_state", None)
+        if state is not None:
+            return getattr(state, "hovered_space_region_candidate", None)
         return getattr(self.session, "_hovered_space_region_candidate", None)
 
     def get_plan_region_parent_space(self):
+        state = getattr(self.session, "task_panel_state", None)
+        if state is not None:
+            return getattr(state, "plan_region_parent_space", None)
         return getattr(self.session, "_plan_region_parent_space", None)
 
     def set_hovered_space_region_candidate(self, candidate):

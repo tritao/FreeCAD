@@ -27,6 +27,14 @@
 import FreeCAD
 import FreeCADGui
 from bimplan import provider_overlay_state as plan_provider_overlay_state
+from bimplan import session_state_models as plan_session_state_models
+
+
+def initialize_session_read_state(session):
+    session.task_panel_state = plan_session_state_models.PlanTaskPanelState()
+    session.provider_overlay_read_state = plan_session_state_models.PlanProviderOverlayReadState(
+        mode=plan_provider_overlay_state.PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
+    )
 
 
 def initialize_session_state(session):
@@ -39,10 +47,10 @@ def initialize_session_state(session):
     session.viewer = None
     session.task_panel = None
     session._aux_task_panels = []
+    initialize_session_read_state(session)
     session._viewport_status_chip = None
     session.current_tool = "Select"
     session._plan_join_type = "Miter"
-    session._plan_relation_status_message = None
     session.storeys = []
     session.active_storey = None
     session._selected_plan_target_kind = None
@@ -57,8 +65,6 @@ def initialize_session_state(session):
     session._hover_pick_last_time = 0.0
     session._hover_pick_last_mouse_pos = None
     session._space_region_pick_boundaries = []
-    session._space_region_candidates = []
-    session._hovered_space_region_candidate = None
     session._space_region_pick_seed_space = None
     session._pending_selected_plan_target = None
     session._secondary_selected_plan_targets_state = []
@@ -106,14 +112,9 @@ def initialize_session_state(session):
     session._selected_space_overlay_render_state = None
     session._region_overlay_trackers = []
     session._provider_overlay_trackers = []
-    session._provider_overlay_state = None
     session._selected_provider_overlay_render_state = None
     session._provider_handle_trackers = []
     session._selected_provider_handle_render_state = None
-    session._provider_overlay_visibility = {}
-    session._provider_overlay_mode = (
-        plan_provider_overlay_state.PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
-    )
     session._provider_selected_objects = []
     session._provider_point_host_target = None
     session._provider_point_host_source = ""
@@ -177,7 +178,6 @@ def initialize_session_state(session):
     session._window_host_wall = None
     session._window_preview_trackers = []
     session._plan_region_points = []
-    session._plan_region_parent_space = None
     session._plan_region_preview_trackers = []
     session._edit_wall_visibility = None
     session._edit_opening = None

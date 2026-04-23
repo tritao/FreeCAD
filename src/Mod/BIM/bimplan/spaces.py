@@ -70,7 +70,11 @@ def clear_plan_region_preview(session):
 
 def set_plan_region_tool_state(session, points=None, parent_space=None):
     session._plan_region_points = list(points or [])
-    session._plan_region_parent_space = parent_space
+    state = getattr(session, "task_panel_state", None)
+    if state is not None:
+        state.plan_region_parent_space = parent_space
+    else:
+        session._plan_region_parent_space = parent_space
 
 
 def reset_plan_region_tool_state(session, clear_preview=True):
@@ -81,7 +85,11 @@ def reset_plan_region_tool_state(session, clear_preview=True):
 
 def prepare_plan_region_tool_state(session, parent_space=None):
     reset_plan_region_tool_state(session)
-    session._plan_region_parent_space = parent_space
+    state = getattr(session, "task_panel_state", None)
+    if state is not None:
+        state.plan_region_parent_space = parent_space
+    else:
+        session._plan_region_parent_space = parent_space
 
 
 def _cancel_snap_tool(session, *, is_active, clear_preview, reset_state, sync_kinds, refresh=True):
@@ -786,8 +794,13 @@ def set_space_region_pick_state(
     hovered_candidate=None,
 ):
     session._space_region_pick_boundaries = list(boundaries or [])
-    session._space_region_candidates = list(candidates or [])
-    session._hovered_space_region_candidate = hovered_candidate
+    state = getattr(session, "task_panel_state", None)
+    if state is not None:
+        state.space_region_candidates = list(candidates or [])
+        state.hovered_space_region_candidate = hovered_candidate
+    else:
+        session._space_region_candidates = list(candidates or [])
+        session._hovered_space_region_candidate = hovered_candidate
     session._space_region_pick_seed_space = seed_space
 
 
@@ -987,9 +1000,18 @@ def pick_space_region_candidate(session, mouse_pos, radius_px=10):
 
 
 def set_hovered_space_region_candidate(session, candidate, visual_key):
-    if session._hovered_space_region_candidate is candidate:
+    state = getattr(session, "task_panel_state", None)
+    current_candidate = (
+        getattr(state, "hovered_space_region_candidate", None)
+        if state is not None
+        else session._hovered_space_region_candidate
+    )
+    if current_candidate is candidate:
         return
-    session._hovered_space_region_candidate = candidate
+    if state is not None:
+        state.hovered_space_region_candidate = candidate
+    else:
+        session._hovered_space_region_candidate = candidate
     session._queue_plan_overlay_visual_refresh(visual_key)
     session._refresh_task_panel_status()
 
