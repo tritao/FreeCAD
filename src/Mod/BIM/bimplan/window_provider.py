@@ -215,15 +215,9 @@ def _object_key(obj, suffix):
 
 
 def _get_semantic_object(context, obj):
-    session = getattr(context, "session", None)
-    getter = getattr(session, "_get_plan_semantic_object", None)
+    getter = getattr(context, "get_semantic_object", None)
     if callable(getter):
-        try:
-            semantic_obj = getter(obj)
-            if semantic_obj is not None:
-                return semantic_obj
-        except Exception:
-            pass
+        return getter(obj)
     return obj
 
 

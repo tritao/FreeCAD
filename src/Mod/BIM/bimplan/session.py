@@ -237,6 +237,13 @@ class PlanEditSession:
             self.__dict__["interaction_state"] = state
         return state
 
+    def _ensure_selection_state(self):
+        state = self.__dict__.get("selection_state")
+        if state is None:
+            state = plan_session_state_models.PlanSelectionState()
+            self.__dict__["selection_state"] = state
+        return state
+
     @property
     def _plan_relation_status_message(self):
         return self._ensure_task_panel_state().relation_status_message
@@ -292,6 +299,86 @@ class PlanEditSession:
     @_provider_overlay_state.setter
     def _provider_overlay_state(self, value):
         self._ensure_provider_overlay_read_state().render_state = value
+
+    @property
+    def _selected_plan_target_kind(self):
+        return self._ensure_selection_state().selected_plan_target_kind
+
+    @_selected_plan_target_kind.setter
+    def _selected_plan_target_kind(self, value):
+        self._ensure_selection_state().selected_plan_target_kind = value
+
+    @property
+    def _selected_plan_target_obj(self):
+        return self._ensure_selection_state().selected_plan_target_obj
+
+    @_selected_plan_target_obj.setter
+    def _selected_plan_target_obj(self, value):
+        self._ensure_selection_state().selected_plan_target_obj = value
+
+    @property
+    def hovered_wall(self):
+        return self._ensure_selection_state().hovered_wall
+
+    @hovered_wall.setter
+    def hovered_wall(self, value):
+        self._ensure_selection_state().hovered_wall = value
+
+    @property
+    def hovered_opening(self):
+        return self._ensure_selection_state().hovered_opening
+
+    @hovered_opening.setter
+    def hovered_opening(self, value):
+        self._ensure_selection_state().hovered_opening = value
+
+    @property
+    def hovered_symbol(self):
+        return self._ensure_selection_state().hovered_symbol
+
+    @hovered_symbol.setter
+    def hovered_symbol(self, value):
+        self._ensure_selection_state().hovered_symbol = value
+
+    @property
+    def hovered_provider(self):
+        return self._ensure_selection_state().hovered_provider
+
+    @hovered_provider.setter
+    def hovered_provider(self, value):
+        self._ensure_selection_state().hovered_provider = value
+
+    @property
+    def hovered_space(self):
+        return self._ensure_selection_state().hovered_space
+
+    @hovered_space.setter
+    def hovered_space(self, value):
+        self._ensure_selection_state().hovered_space = value
+
+    @property
+    def hovered_region(self):
+        return self._ensure_selection_state().hovered_region
+
+    @hovered_region.setter
+    def hovered_region(self, value):
+        self._ensure_selection_state().hovered_region = value
+
+    @property
+    def _pending_selected_plan_target(self):
+        return self._ensure_selection_state().pending_selected_plan_target
+
+    @_pending_selected_plan_target.setter
+    def _pending_selected_plan_target(self, value):
+        self._ensure_selection_state().pending_selected_plan_target = value
+
+    @property
+    def _secondary_selected_plan_targets_state(self):
+        return self._ensure_selection_state().secondary_selected_plan_targets_state
+
+    @_secondary_selected_plan_targets_state.setter
+    def _secondary_selected_plan_targets_state(self, value):
+        self._ensure_selection_state().secondary_selected_plan_targets_state = list(value or [])
 
     @property
     def _embedded_host(self):

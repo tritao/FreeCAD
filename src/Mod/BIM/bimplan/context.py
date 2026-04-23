@@ -66,6 +66,17 @@ class PlanEditContext:
             return resolver(target)
         return None
 
+    def get_semantic_object(self, obj):
+        getter = getattr(self.session, "_get_plan_semantic_object", None)
+        if callable(getter):
+            try:
+                semantic_obj = getter(obj)
+                if semantic_obj is not None:
+                    return semantic_obj
+            except Exception:
+                pass
+        return obj
+
     def get_document(self):
         return getattr(self.session, "doc", None)
 

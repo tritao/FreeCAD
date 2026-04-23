@@ -167,6 +167,9 @@ class _DummySession:
     def resolve_plan_semantic_object(self, target):
         return f"semantic:{target.semantic_object_name}"
 
+    def _get_plan_semantic_object(self, obj):
+        return f"semantic:{obj}"
+
 
 class _DummyDoc:
     def __init__(self):
@@ -253,6 +256,7 @@ class TestBimPlanCore(unittest.TestCase):
         from bimplan.session_state_models import (
             PlanInteractionState,
             PlanProviderOverlayReadState,
+            PlanSelectionState,
             PlanTaskPanelState,
         )
 
@@ -263,16 +267,20 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIsInstance(session.task_panel_state, PlanTaskPanelState)
         self.assertIsInstance(session.provider_overlay_read_state, PlanProviderOverlayReadState)
         self.assertIsInstance(session.interaction_state, PlanInteractionState)
+        self.assertIsInstance(session.selection_state, PlanSelectionState)
         self.assertEqual([], session.task_panel_state.space_region_candidates)
         self.assertEqual("architecture", session.provider_overlay_read_state.mode)
         self.assertEqual({}, session.provider_overlay_read_state.visibility)
         self.assertIsNone(session.interaction_state.embedded_tool)
+        self.assertIsNone(session.selection_state.selected_plan_target_kind)
+        self.assertEqual([], session.selection_state.secondary_selected_plan_targets_state)
 
     def test_plan_edit_session_read_state_properties_bridge_typed_buckets(self):
         from bimplan.session import PlanEditSession
         from bimplan.session_state_models import (
             PlanInteractionState,
             PlanProviderOverlayReadState,
+            PlanSelectionState,
             PlanTaskPanelState,
         )
 
@@ -280,12 +288,15 @@ class TestBimPlanCore(unittest.TestCase):
         session.task_panel_state = PlanTaskPanelState()
         session.provider_overlay_read_state = PlanProviderOverlayReadState()
         session.interaction_state = PlanInteractionState()
+        session.selection_state = PlanSelectionState()
 
         candidate = {"area": 12.0}
         parent_space = SimpleNamespace(Name="Space001")
         render_state = object()
         embedded_tool = object()
         provider_point_tool = object()
+        hovered_wall = SimpleNamespace(Name="Wall001")
+        secondary_targets = [("space", parent_space)]
 
         session._plan_relation_status_message = "Relation status"
         session._space_region_candidates = (candidate,)
@@ -298,6 +309,11 @@ class TestBimPlanCore(unittest.TestCase):
         session._embedded_tool = embedded_tool
         session._provider_point_tool = provider_point_tool
         session._edit_space = parent_space
+        session._selected_plan_target_kind = "wall"
+        session._selected_plan_target_obj = hovered_wall
+        session.hovered_wall = hovered_wall
+        session._pending_selected_plan_target = ("space", parent_space)
+        session._secondary_selected_plan_targets_state = secondary_targets
 
         self.assertEqual("Relation status", session.task_panel_state.relation_status_message)
         self.assertEqual([candidate], session.task_panel_state.space_region_candidates)
@@ -313,6 +329,15 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIs(embedded_tool, session.interaction_state.embedded_tool)
         self.assertIs(provider_point_tool, session.interaction_state.provider_point_tool)
         self.assertIs(parent_space, session.interaction_state.edit_space)
+        self.assertEqual("wall", session.selection_state.selected_plan_target_kind)
+        self.assertIs(hovered_wall, session.selection_state.selected_plan_target_obj)
+        self.assertIs(hovered_wall, session.selection_state.hovered_wall)
+        self.assertEqual(
+            ("space", parent_space), session.selection_state.pending_selected_plan_target
+        )
+        self.assertEqual(
+            secondary_targets, session.selection_state.secondary_selected_plan_targets_state
+        )
 
     def test_plan_edit_session_owns_selection_spaces_relations_interaction_symbols_windows_viewport_wall_provider_and_status_components(
         self,
@@ -1774,6 +1799,7 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(semantic_record, context.get_primary_semantic_record())
         self.assertEqual("target:Space001", context.resolve_object(target))
         self.assertEqual("semantic:Space001", context.resolve_semantic_object(target))
+        self.assertEqual("semantic:raw-object", context.get_semantic_object("raw-object"))
 
     def test_plan_provider_action_context_proxies_limited_session_commands(self):
         doc = _DummyDoc()
