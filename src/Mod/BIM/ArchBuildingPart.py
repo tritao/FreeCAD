@@ -412,7 +412,9 @@ class BuildingPart(ArchIFC.IfcProduct):
         obj.MaterialsTable = materialstable
         if obj.ViewObject:
             # update the autogroup box if needed
-            obj.ViewObject.Proxy.onChanged(obj.ViewObject, "AutoGroupBox")
+            proxy = getattr(obj.ViewObject, "Proxy", None)
+            if hasattr(proxy, "onChanged"):
+                proxy.onChanged(obj.ViewObject, "AutoGroupBox")
 
     def getMovableChildren(self, obj):
         "recursively get movable children"
