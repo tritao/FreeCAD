@@ -51,7 +51,7 @@ from bimplan.providers import (
     PlanToolSpec,
     PlanToolInteraction,
 )
-from bimplan.registry import get_plan_edit_registry
+from bimplan.providers import get_plan_edit_registry
 from bimtests.ArchWallGuiTestUtils import (
     ArchWallGuiTestCase,
     MockTracker,

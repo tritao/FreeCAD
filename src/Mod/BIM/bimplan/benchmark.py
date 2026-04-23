@@ -418,7 +418,7 @@ def _register_benchmark_provider(scene, scenario_name):
         PlanOverlaySpec,
         PlanToolSpec,
     )
-    from bimplan.registry import get_plan_edit_registry
+    from bimplan.providers import get_plan_edit_registry
 
     class _BenchmarkPlanProvider(PlanEditProvider):
         provider_id = "benchmark-plan-provider-{}".format(scenario_name)
@@ -755,7 +755,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
 def _run_scenario(spec, iteration, operations_handle, settle_ms, timer_settle_ms, keep_documents):
     FreeCAD, FreeCADGui = _require_freecad_gui()
     from bimcommands import BimPlanSession
-    from bimplan.registry import get_plan_edit_registry
+    from bimplan.providers import get_plan_edit_registry
 
     active_session = BimPlanSession.get_active_session()
     if active_session:

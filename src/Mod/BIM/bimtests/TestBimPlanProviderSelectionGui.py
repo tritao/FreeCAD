@@ -39,7 +39,7 @@ from bimplan.providers import (
     PlanOverlayTargetSpec,
     PlanProviderTargetSpec,
 )
-from bimplan.registry import get_plan_edit_registry
+from bimplan.providers import get_plan_edit_registry
 from bimtests.ArchWallGuiTestUtils import ArchWallGuiTestCase
 from unittest.mock import patch
 

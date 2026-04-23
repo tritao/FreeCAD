@@ -14,7 +14,7 @@ from bimplan.providers import (
     PlanOverlayTargetSpec,
     PlanOverlayTargetKind,
 )
-from bimplan.registry import get_plan_edit_registry
+from bimplan.providers import get_plan_edit_registry
 
 _PROVIDER_ID = "bim-window"
 _RECOMPUTE_HOST_ACTION_KEY = "bim_window_recompute_host"

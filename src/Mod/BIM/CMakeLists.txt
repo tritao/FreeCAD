@@ -227,7 +227,6 @@ SET(bimplan_SRCS
     bimplan/provider_edit.py
     bimplan/provider_runtime.py
     bimplan/providers.py
-    bimplan/registry.py
     bimplan/semantics.py
     bimplan/selection.py
     bimplan/session.py

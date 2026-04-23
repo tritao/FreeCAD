@@ -64,7 +64,7 @@ from bimplan.overlays import providers as provider_overlays
 from bimplan.overlays import spaces as space_overlays
 from bimplan.overlays import symbols as symbol_overlays
 from bimplan.overlays import walls as wall_overlays
-from bimplan.registry import get_plan_edit_registry
+from bimplan.providers import get_plan_edit_registry
 from bimplan.ui.controls import PlanEditControlsWidget
 
 QT_TRANSLATE_NOOP = FreeCAD.Qt.QT_TRANSLATE_NOOP
