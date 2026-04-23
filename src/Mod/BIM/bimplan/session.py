@@ -499,17 +499,15 @@ class PlanEditSession:
         return plan_selection.clear_selected_plan_target_if_matches(self, kind, obj)
 
     def _get_plan_target_object_from_state(self, state_kind, state_obj, kind):
-        if state_kind == kind:
-            return state_obj
-        return None
+        return plan_selection.get_plan_target_object_from_state(state_kind, state_obj, kind)
 
     def _selected_plan_target_changed(self, previous_kind, previous_obj, kind=None):
-        current_kind, current_obj = self._get_selected_plan_target()
-        if kind is None:
-            return previous_kind != current_kind or previous_obj != current_obj
-        previous_target = self._get_plan_target_object_from_state(previous_kind, previous_obj, kind)
-        current_target = self._get_plan_target_object_from_state(current_kind, current_obj, kind)
-        return previous_target != current_target
+        return plan_selection.selected_plan_target_changed(
+            self,
+            previous_kind,
+            previous_obj,
+            kind=kind,
+        )
 
     @property
     def selected_wall(self):
@@ -3151,74 +3149,26 @@ class PlanEditSession:
         pending_restore=False,
         preserve_hovered_symbol_overlay=False,
     ):
-        if self._is_valid_plan_target(kind, obj):
-            self._set_selected_plan_target_state(kind, obj)
-        else:
-            self._set_selected_plan_target_state()
-            kind = None
-            obj = None
-        self._sync_secondary_selected_plan_targets_from_gui_selection(
-            primary_kind=kind,
-            primary_obj=obj,
+        return plan_selection.set_selected_plan_target(
+            self,
+            kind=kind,
+            obj=obj,
+            pending_restore=pending_restore,
+            preserve_hovered_symbol_overlay=preserve_hovered_symbol_overlay,
         )
-        self._clear_plan_relation_status()
-        self._sync_active_plan_target_object()
-        if pending_restore:
-            self._set_pending_selected_plan_target(kind, obj)
-        else:
-            self._set_pending_selected_plan_target()
-        if not self._tearing_down:
-            self._sync_junction_node_overlays()
-            self._sync_selected_wall_opening_context_overlay()
-            self._sync_hovered_wall_opening_context_overlay()
-            self._sync_hovered_opening_overlay()
-            if not preserve_hovered_symbol_overlay:
-                self._sync_hovered_symbol_overlay()
-            self._sync_hovered_space_overlay()
-            self._sync_hovered_region_overlay()
 
     def _schedule_selected_wall_reset(self, reason, obj):
-        if self._pending_selected_wall_reset or self._tearing_down:
-            return
-        self._pending_selected_wall_reset = True
-        try:
-            from PySide import QtCore
-
-            QtCore.QTimer.singleShot(0, self._reset_selected_wall_after_change)
-        except Exception:
-            self._reset_selected_wall_after_change()
+        return plan_selection.schedule_selected_wall_reset(self, reason, obj)
 
     def _reset_selected_wall_after_change(self):
-        self._pending_selected_wall_reset = False
-        if self._tearing_down or self.current_tool != "Select":
-            return
-        wall = self._get_selected_plan_target_object("wall")
-        if not wall:
-            return
-        self._clear_wall_grips()
-        self._clear_selected_wall_overlay()
-        self._clear_selected_plan_target_if_matches("wall", wall)
-        self._set_gui_selection([])
-        self._refresh_task_panel_status()
+        return plan_selection.reset_selected_wall_after_change(self)
 
     def suspend_selected_wall_state(self, wall=None, clear_gui_selection=True):
-        """Drop current selected-wall UI state before another tool mutates the host wall."""
-
-        if self._tearing_down:
-            return
-        if wall is None:
-            wall = self._get_selected_plan_target_object("wall")
-        if wall is None:
-            return
-        if not self._is_selected_plan_target("wall", wall):
-            return
-        self._pending_selected_wall_reset = False
-        self._clear_wall_grips()
-        self._clear_selected_wall_overlay()
-        self._clear_selected_plan_target_if_matches("wall", wall)
-        if clear_gui_selection:
-            self._set_gui_selection([])
-        self._refresh_task_panel_status(selection_only=True)
+        return plan_selection.suspend_selected_wall_state(
+            self,
+            wall=wall,
+            clear_gui_selection=clear_gui_selection,
+        )
 
     def _register_edit_callbacks(self):
         return plan_view.register_edit_callbacks(self)
@@ -3227,71 +3177,21 @@ class PlanEditSession:
         return plan_view.unregister_edit_callbacks(self)
 
     def _sync_primary_selected_plan_target_visuals(self, previous_kind=None, previous_obj=None):
-        with self._plan_perf_trace_span("sync_primary_selected_plan_target_visuals"):
-            if self.current_tool != "Select" or self._selected_plan_target_changed(
-                previous_kind, previous_obj, "wall"
-            ):
-                with self._plan_perf_trace_span("sync_selected_wall_overlay"):
-                    self._sync_selected_wall_overlay()
-            with self._plan_perf_trace_span("sync_selected_wall_opening_context_overlay"):
-                self._sync_selected_wall_opening_context_overlay()
-            with self._plan_perf_trace_span("sync_hovered_wall_overlay"):
-                self._sync_hovered_wall_overlay()
-            with self._plan_perf_trace_span("sync_hovered_wall_opening_context_overlay"):
-                self._sync_hovered_wall_opening_context_overlay()
-            if self.current_tool != "Select" or self._selected_plan_target_changed(
-                previous_kind, previous_obj, "opening"
-            ):
-                with self._plan_perf_trace_span("sync_selected_opening_overlay"):
-                    self._sync_selected_opening_overlay()
-                with self._plan_perf_trace_span("sync_selected_opening_handles"):
-                    self._sync_selected_opening_handles()
-            if self.current_tool != "Select" or self._selected_plan_target_changed(
-                previous_kind, previous_obj, "symbol"
-            ):
-                with self._plan_perf_trace_span("sync_selected_symbol_overlay"):
-                    self._sync_selected_symbol_overlay()
-                with self._plan_perf_trace_span("sync_selected_symbol_handles"):
-                    self._sync_selected_symbol_handles()
-            if self.current_tool != "Select" or self._selected_plan_target_changed(
-                previous_kind, previous_obj, "region"
-            ):
-                with self._plan_perf_trace_span("sync_selected_region_overlay"):
-                    self._sync_selected_region_overlay()
-            if self.current_tool != "Select" or self._selected_plan_target_changed(
-                previous_kind, previous_obj, "space"
-            ):
-                with self._plan_perf_trace_span("sync_selected_space_overlay"):
-                    self._sync_selected_space_overlay()
-            with self._plan_perf_trace_span("sync_hovered_symbol_overlay"):
-                self._sync_hovered_symbol_overlay()
-            with self._plan_perf_trace_span("sync_hovered_provider_overlay"):
-                self._sync_hovered_provider_overlay()
-            with self._plan_perf_trace_span("sync_selected_provider_overlay"):
-                self._sync_selected_provider_overlay()
-            with self._plan_perf_trace_span("sync_selected_provider_handles"):
-                self._sync_selected_provider_handles()
-            with self._plan_perf_trace_span("sync_hovered_opening_overlay"):
-                self._sync_hovered_opening_overlay()
-            with self._plan_perf_trace_span("sync_hovered_space_overlay"):
-                self._sync_hovered_space_overlay()
-            with self._plan_perf_trace_span("sync_hovered_region_overlay"):
-                self._sync_hovered_region_overlay()
-            with self._plan_perf_trace_span("sync_secondary_selected_overlays"):
-                self._sync_secondary_selected_overlays()
-            with self._plan_perf_trace_span("sync_active_plan_target_object"):
-                self._sync_active_plan_target_object()
-            self._refresh_task_panel_status(selection_only=self.current_tool == "Select")
+        return plan_selection.sync_primary_selected_plan_target_visuals(
+            self,
+            previous_kind=previous_kind,
+            previous_obj=previous_obj,
+        )
 
     def _refresh_selected_plan_target(self):
         return plan_selection.refresh_selected_plan_target(self)
 
     def _refresh_primary_selected_plan_target(self):
-        self._refresh_selected_plan_target()
+        return plan_selection.refresh_primary_selected_plan_target(self)
 
     def _refresh_selected_wall(self):
         # Compatibility wrapper for older tests and callers.
-        self._refresh_primary_selected_plan_target()
+        return self._refresh_primary_selected_plan_target()
 
     def _start_embedded_tool(self, tool_name, command, host_class=_PlanEditCommandHost):
         self.current_tool = tool_name
@@ -6038,72 +5938,25 @@ class PlanEditSession:
         self._set_event_handled(event_callback)
 
     def _set_hovered_wall(self, wall):
-        if self._is_selected_plan_target("wall", wall):
-            wall = None
-        if self.hovered_wall == wall:
-            return
-        self.hovered_wall = wall
-        self._sync_junction_node_overlays()
-        self._sync_hovered_wall_overlay()
-        self._sync_hovered_wall_opening_context_overlay()
-        if self.current_tool == "Join":
-            self._refresh_task_panel_status(
-                selection_only=self.current_tool == "Select"
-                and self._is_selected_plan_target("wall")
-            )
+        return plan_selection.set_hovered_wall(self, wall)
 
     def _set_hovered_opening(self, opening):
-        if self._is_selected_plan_target("opening", opening):
-            opening = None
-        if self.hovered_opening == opening:
-            return
-        self.hovered_opening = opening
-        self._sync_selected_wall_opening_context_overlay()
-        self._sync_hovered_opening_overlay()
+        return plan_selection.set_hovered_opening(self, opening)
 
     def _set_hovered_symbol(self, symbol):
-        if self._is_selected_plan_target("symbol", symbol):
-            symbol = None
-        if self.hovered_symbol == symbol:
-            return
-        self.hovered_symbol = symbol
-        self._sync_hovered_symbol_overlay()
+        return plan_selection.set_hovered_symbol(self, symbol)
 
     def _set_hovered_provider(self, provider):
-        if self._is_selected_plan_target("provider", provider):
-            provider = None
-        if self.hovered_provider == provider:
-            return
-        self.hovered_provider = provider
-        self._sync_hovered_provider_overlay()
+        return plan_selection.set_hovered_provider(self, provider)
 
     def _set_hovered_space(self, space):
-        if self._is_selected_plan_target("space", space):
-            space = None
-        if self.hovered_space == space:
-            return
-        self.hovered_space = space
-        self._sync_hovered_space_overlay()
+        return plan_selection.set_hovered_space(self, space)
 
     def _set_hovered_region(self, region):
-        if self._is_selected_plan_target("region", region):
-            region = None
-        if self.hovered_region == region:
-            return
-        self.hovered_region = region
-        self._sync_hovered_region_overlay()
+        return plan_selection.set_hovered_region(self, region)
 
     def _queue_restore_selected_plan_target(self, kind, obj):
-        if not obj:
-            return
-        queue_restore = {
-            "opening": self._queue_restore_selected_opening,
-            "symbol": self._queue_restore_selected_symbol,
-            "region": self._queue_restore_selected_region,
-            "space": self._queue_restore_selected_space,
-        }.get(kind)
-        if queue_restore is not None:
-            queue_restore(obj)
+        return plan_selection.queue_restore_selected_plan_target(self, kind, obj)
 
     def _select_plan_target_for_plan_edit(
         self,
@@ -6114,61 +5967,15 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        validators = {
-            "opening": self._is_hosted_opening_object,
-            "provider": self._is_plan_provider_target_object,
-            "symbol": self._is_plan_symbol_instance,
-            "region": self._is_plan_region_object,
-            "space": self._is_plan_space_object,
-            "wall": self._is_plan_selectable_wall,
-        }
-        validator = validators.get(kind)
-        if validator is None or not validator(obj):
-            return False
-        previous_kind, previous_obj = self._get_selected_plan_target()
-        self.current_tool = "Select"
-        self._provider_selected_objects = []
-        preserve_hovered_symbol_overlay = (
-            kind == "symbol" and self.hovered_symbol == obj and bool(self._symbol_hover_trackers)
-        )
-        self._set_selected_plan_target(
+        return plan_selection.select_plan_target_for_plan_edit(
+            self,
             kind,
             obj,
-            pending_restore=queue_restore,
-            preserve_hovered_symbol_overlay=preserve_hovered_symbol_overlay,
+            queue_restore=queue_restore,
+            sync_gui_selection=sync_gui_selection,
+            defer_gui_selection=defer_gui_selection,
+            defer_wall_grips=defer_wall_grips,
         )
-        if sync_gui_selection:
-            if defer_gui_selection:
-                self._schedule_gui_selection_object(obj)
-            else:
-                self._set_gui_selection_object(obj)
-        if kind == "wall":
-            if defer_wall_grips:
-                self._schedule_wall_grip_sync()
-            else:
-                self._sync_selected_wall_overlay()
-                self._sync_wall_grips()
-        else:
-            self._clear_wall_grips()
-            self._clear_selected_wall_overlay()
-        if self._selected_plan_target_changed(previous_kind, previous_obj, "opening"):
-            self._sync_selected_opening_overlay()
-            self._sync_selected_opening_handles()
-        if self._selected_plan_target_changed(previous_kind, previous_obj, "symbol"):
-            self._sync_selected_symbol_overlay()
-            self._sync_selected_symbol_handles()
-        if self._selected_plan_target_changed(previous_kind, previous_obj, "region"):
-            self._sync_selected_region_overlay()
-        if self._selected_plan_target_changed(previous_kind, previous_obj, "space"):
-            self._sync_selected_space_overlay()
-        if self._selected_plan_target_changed(previous_kind, previous_obj, "provider"):
-            self._sync_selected_provider_overlay()
-            self._sync_selected_provider_handles()
-        self._sync_secondary_selected_overlays()
-        self._refresh_task_panel_status(selection_only=self.current_tool == "Select")
-        if queue_restore:
-            self._queue_restore_selected_plan_target(kind, obj)
-        return True
 
     def _select_opening_for_plan_edit(
         self,
@@ -6178,8 +5985,8 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return self._select_plan_target_for_plan_edit(
-            "opening",
+        return plan_selection.select_opening_for_plan_edit(
+            self,
             opening,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
@@ -6195,8 +6002,8 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return self._select_plan_target_for_plan_edit(
-            "symbol",
+        return plan_selection.select_symbol_for_plan_edit(
+            self,
             symbol,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
@@ -6212,8 +6019,8 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return self._select_plan_target_for_plan_edit(
-            "region",
+        return plan_selection.select_region_for_plan_edit(
+            self,
             region,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
@@ -6229,8 +6036,8 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return self._select_plan_target_for_plan_edit(
-            "space",
+        return plan_selection.select_space_for_plan_edit(
+            self,
             space,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
@@ -6246,8 +6053,8 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return self._select_plan_target_for_plan_edit(
-            "wall",
+        return plan_selection.select_wall_for_plan_edit(
+            self,
             wall,
             queue_restore=queue_restore,
             sync_gui_selection=sync_gui_selection,
@@ -6266,117 +6073,54 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        if resolved_target is None:
-            target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
-        else:
-            target_kind, target_obj = resolved_target
-        with self._plan_perf_trace_span(
-            f"activate_plan_target_{kind}", requested_kind=kind, mouse_pos=mouse_pos
-        ):
-            self._plan_perf_count(f"activate_plan_target_attempts_{kind}")
-            self._plan_perf_set_fields(
-                resolved_target=self._plan_perf_describe_target(target_kind, target_obj)
-            )
-            if target_kind != kind:
-                target_obj = None
-            select_target = {
-                "opening": self._select_opening_for_plan_edit,
-                "symbol": self._select_symbol_for_plan_edit,
-                "region": self._select_region_for_plan_edit,
-                "space": self._select_space_for_plan_edit,
-                "wall": self._select_wall_for_plan_edit,
-            }.get(kind)
-            if select_target is None or not select_target(
-                target_obj,
-                queue_restore=True,
-                sync_gui_selection=sync_gui_selection,
-                defer_gui_selection=defer_gui_selection,
-                defer_wall_grips=defer_wall_grips,
-            ):
-                self._plan_perf_set_fields(activate_plan_target_result=False)
-                return False
-            self._clear_hovered_plan_targets(clear_hovered_kinds)
-            self._claim_left_button_click(event_callback)
-            self._plan_perf_set_fields(
-                activate_plan_target_result=True,
-                activated_target=self._plan_perf_describe_target(kind, target_obj),
-            )
-            return True
-
-    def _activate_semantic_plan_target(self, mouse_pos, event_callback=None):
-        target_kind, target_obj = self._get_hovered_plan_target()
-        if target_obj is None or self._hover_pick_dirty:
-            target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
-            source = "picked_after_throttled_hover" if self._hover_pick_dirty else "picked"
-            self._hover_pick_dirty = False
-            self._plan_perf_count(f"semantic_target_source_{source}")
-            self._plan_perf_set_fields(semantic_target_source=source)
-        else:
-            self._plan_perf_count("semantic_target_source_hovered")
-            self._plan_perf_set_fields(
-                semantic_target_source="hovered",
-                hovered_target=self._plan_perf_describe_target(target_kind, target_obj),
-            )
-        activate_target = {
-            "opening": self._activate_opening_target,
-            "symbol": self._activate_symbol_target,
-            "region": self._activate_region_target,
-            "space": self._activate_space_target,
-            "wall": self._activate_wall_target,
-        }.get(target_kind)
-        if activate_target is None:
-            return False
-        if target_kind == "wall":
-            return activate_target(
-                mouse_pos,
-                event_callback=event_callback,
-                resolved_target=(target_kind, target_obj),
-                defer_gui_selection=True,
-                defer_wall_grips=True,
-            )
-        return activate_target(
+        return plan_selection.activate_plan_target(
+            self,
+            kind,
             mouse_pos,
             event_callback=event_callback,
-            resolved_target=(target_kind, target_obj),
+            sync_gui_selection=sync_gui_selection,
+            clear_hovered_kinds=clear_hovered_kinds,
+            resolved_target=resolved_target,
+            defer_gui_selection=defer_gui_selection,
+            defer_wall_grips=defer_wall_grips,
+        )
+
+    def _activate_semantic_plan_target(self, mouse_pos, event_callback=None):
+        return plan_selection.activate_semantic_plan_target(
+            self,
+            mouse_pos,
+            event_callback=event_callback,
         )
 
     def _activate_opening_target(self, mouse_pos, event_callback=None, resolved_target=None):
-        return self._activate_plan_target(
-            "opening",
+        return plan_selection.activate_opening_target(
+            self,
             mouse_pos,
             event_callback=event_callback,
-            sync_gui_selection=True,
-            clear_hovered_kinds=("wall", "opening", "symbol", "space", "region"),
             resolved_target=resolved_target,
         )
 
     def _activate_symbol_target(self, mouse_pos, event_callback=None, resolved_target=None):
-        return self._activate_plan_target(
-            "symbol",
+        return plan_selection.activate_symbol_target(
+            self,
             mouse_pos,
             event_callback=event_callback,
-            sync_gui_selection=True,
-            clear_hovered_kinds=("wall", "opening", "symbol", "space", "region"),
             resolved_target=resolved_target,
         )
 
     def _activate_region_target(self, mouse_pos, event_callback=None, resolved_target=None):
-        return self._activate_plan_target(
-            "region",
+        return plan_selection.activate_region_target(
+            self,
             mouse_pos,
             event_callback=event_callback,
-            sync_gui_selection=True,
-            clear_hovered_kinds=("wall", "opening", "symbol", "space", "region"),
             resolved_target=resolved_target,
         )
 
     def _activate_space_target(self, mouse_pos, event_callback=None, resolved_target=None):
-        return self._activate_plan_target(
-            "space",
+        return plan_selection.activate_space_target(
+            self,
             mouse_pos,
             event_callback=event_callback,
-            sync_gui_selection=True,
-            clear_hovered_kinds=("wall", "opening", "symbol", "region"),
             resolved_target=resolved_target,
         )
 
@@ -6388,12 +6132,10 @@ class PlanEditSession:
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return self._activate_plan_target(
-            "wall",
+        return plan_selection.activate_wall_target(
+            self,
             mouse_pos,
             event_callback=event_callback,
-            sync_gui_selection=True,
-            clear_hovered_kinds=("wall", "symbol", "space", "region"),
             resolved_target=resolved_target,
             defer_gui_selection=defer_gui_selection,
             defer_wall_grips=defer_wall_grips,
@@ -7081,54 +6823,7 @@ class PlanEditSession:
         return plan_opening_edit.queue_restore_selected_opening(self, opening)
 
     def _clear_plan_selection_state(self):
-        previous_kind, previous_obj = self._get_selected_plan_target()
-        with self._plan_perf_trace_event(
-            "clear_plan_selection_state",
-            clear_selection_started_kind=previous_kind or "none",
-            clear_selection_started_target=self._plan_perf_describe_target(
-                previous_kind, previous_obj
-            ),
-        ):
-            with self._plan_perf_trace_span("clear_plan_selection_gui_selection"):
-                self._set_gui_selection([])
-            with self._plan_perf_trace_span("clear_plan_selection_target_state"):
-                self._set_selected_plan_target()
-                self._provider_selected_objects = []
-            with self._plan_perf_trace_span("clear_plan_selection_hover_state"):
-                self._set_hovered_wall(None)
-                self._set_hovered_opening(None)
-                self._set_hovered_symbol(None)
-                self._set_hovered_provider(None)
-                self._set_hovered_space(None)
-                self._set_hovered_region(None)
-            with self._plan_perf_trace_span("clear_plan_selection_wall_grips"):
-                self._clear_wall_grips()
-                self._clear_selected_wall_overlay()
-            with self._plan_perf_trace_span("clear_plan_selection_secondary_overlays"):
-                self._sync_secondary_selected_overlays()
-            with self._plan_perf_trace_span("clear_plan_selection_opening_overlay"):
-                self._sync_selected_opening_overlay()
-                self._sync_selected_opening_handles()
-            with self._plan_perf_trace_span("clear_plan_selection_symbol_overlay"):
-                self._sync_selected_symbol_overlay()
-                self._sync_selected_symbol_handles()
-            with self._plan_perf_trace_span("clear_plan_selection_region_overlay"):
-                self._sync_selected_region_overlay()
-            with self._plan_perf_trace_span("clear_plan_selection_space_overlay"):
-                self._sync_selected_space_overlay()
-            with self._plan_perf_trace_span("clear_plan_selection_provider_overlay"):
-                self._sync_selected_provider_overlay()
-                self._sync_selected_provider_handles()
-            with self._plan_perf_trace_span("clear_plan_selection_task_status"):
-                self._refresh_task_panel_status(selection_only=self.current_tool == "Select")
-            selected_kind, selected_obj = self._get_selected_plan_target()
-            self._plan_perf_set_fields(
-                clear_selection_ended_kind=selected_kind or "none",
-                clear_selection_ended_target=self._plan_perf_describe_target(
-                    selected_kind, selected_obj
-                ),
-                clear_selection_cleared_wall=bool(previous_kind == "wall" and not selected_kind),
-            )
+        return plan_selection.clear_plan_selection_state(self)
 
     def _execute_selected_opening_handle(self, opening, handle_index, handle):
         return plan_opening_edit.execute_selected_opening_handle(
