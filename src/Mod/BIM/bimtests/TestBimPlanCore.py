@@ -1854,11 +1854,12 @@ class TestBimPlanCore(unittest.TestCase):
         class _ActionProvider(PlanEditProvider):
             provider_id = "action-provider"
 
-            def execute_action(self, action_key, context, session):
+            def execute_action(self, action_key, context, commands, payload=None):
                 captured["action_key"] = action_key
                 captured["context"] = context
-                captured["command_context"] = session
-                captured["payload"] = session.get_action_payload()
+                captured["command_context"] = commands
+                captured["payload"] = payload
+                captured["payload_from_commands"] = commands.get_action_payload()
                 return True
 
         registry = PlanEditRegistry()
@@ -1897,6 +1898,7 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIs(plan_context, captured["context"])
         self.assertIs(action_context, captured["command_context"])
         self.assertEqual({"key": "value"}, captured["payload"])
+        self.assertEqual({"key": "value"}, captured["payload_from_commands"])
         self.assertIn(("recompute", None), doc.events)
 
     def test_plan_overlay_spec_carries_normalized_point_targets(self):

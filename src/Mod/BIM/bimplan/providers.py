@@ -337,6 +337,6 @@ class PlanEditProvider:
         del context
         return ()
 
-    def execute_action(self, action_key, context, session):
-        del action_key, context, session
+    def execute_action(self, action_key, context, commands, payload=None):
+        del action_key, context, commands, payload
         return False

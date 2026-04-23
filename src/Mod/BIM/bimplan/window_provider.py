@@ -167,7 +167,8 @@ class BIMWindowPlanEditProvider(PlanEditProvider):
             ),
         )
 
-    def execute_action(self, action_key, context, session):
+    def execute_action(self, action_key, context, commands, payload=None):
+        del payload
         normalized_key = _normalize_text(action_key)
         window = _resolve_selected_window(context)
         if window is None:
@@ -175,11 +176,11 @@ class BIMWindowPlanEditProvider(PlanEditProvider):
         host = _get_window_host_wall(context, window)
 
         if normalized_key == _RECOMPUTE_HOST_ACTION_KEY:
-            return _recompute_window_host(session, window)
+            return _recompute_window_host(commands, window)
         if normalized_key == _SELECT_HOST_ACTION_KEY:
-            return _select_window_host(session, host)
+            return _select_window_host(commands, host)
         if normalized_key == _CENTER_ON_HOST_ACTION_KEY:
-            return _center_window_on_host(context, session, window, host)
+            return _center_window_on_host(context, commands, window, host)
         return False
 
 

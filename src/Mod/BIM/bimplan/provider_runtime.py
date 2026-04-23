@@ -4,7 +4,6 @@
 
 from contextlib import nullcontext
 from dataclasses import replace
-import inspect
 
 import FreeCAD
 
@@ -563,18 +562,8 @@ def _execute_plan_provider_action_callback(
     payload,
 ):
     if payload is None:
-        return execute_action(action_key, context=context, session=action_context)
-    try:
-        signature = inspect.signature(execute_action)
-    except (TypeError, ValueError):
-        return execute_action(action_key, context=context, session=action_context)
-    parameters = signature.parameters
-    accepts_payload = "payload" in parameters or any(
-        parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()
-    )
-    if accepts_payload:
-        return execute_action(action_key, context=context, session=action_context, payload=payload)
-    return execute_action(action_key, context=context, session=action_context)
+        return execute_action(action_key, context, action_context)
+    return execute_action(action_key, context, action_context, payload)
 
 
 def execute_plan_provider_action(
