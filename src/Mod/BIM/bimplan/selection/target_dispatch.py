@@ -4,7 +4,7 @@
 
 from dataclasses import dataclass
 
-from bimplan import target_kinds as plan_target_kinds
+from bimplan.selection import target_kinds as plan_target_kinds
 
 
 @dataclass(frozen=True)

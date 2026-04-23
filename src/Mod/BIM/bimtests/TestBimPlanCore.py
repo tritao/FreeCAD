@@ -64,7 +64,7 @@ if "draftguitools.gui_base" not in sys.modules:
     draftguitools_module.gui_base = gui_base_module
 
 from bimplan.providers import PlanEditContext, PlanProviderActionContext
-from bimplan.lifecycle import (
+from bimplan.runtime.lifecycle import (
     activate_plan_region_tool,
     activate_select_tool,
     activate_space_separator_tool,
@@ -73,19 +73,19 @@ from bimplan.lifecycle import (
     shutdown,
 )
 from bimplan.overlays import providers as provider_overlays
-from bimplan.picking import (
+from bimplan.selection.picking import (
     get_hovered_plan_target,
     get_plan_target_at_position,
     get_provider_overlay_target_from_edit_node,
     pick_provider_overlay_target_from_objects_info,
     pick_provider_overlay_target_from_overlays,
 )
-from bimplan.provider_runtime import (
+from bimplan.providers.runtime import (
     collect_plan_provider_contributions,
     get_plan_provider_target_for_object,
     normalize_plan_provider_overlay,
 )
-from bimplan.provider_runtime import PlanProviderSnapshot, collect_plan_provider_snapshot
+from bimplan.providers.runtime import PlanProviderSnapshot, collect_plan_provider_snapshot
 from bimplan.providers import (
     PlanActionSpec,
     PlanContextPanelSpec,
@@ -110,19 +110,23 @@ from bimplan.selection import (
     activate_semantic_plan_target,
     resolve_selected_target_for_gui_object,
 )
-from bimplan.spaces import (
+from bimplan.tools.spaces import (
     begin_space_region_pick,
     create_space_from_current_selection,
     get_space_creation_request,
     get_space_region_seed_targets,
     should_run_space_preflight_for_targets,
 )
-from bimplan.target_dispatch import (
+from bimplan.selection.target_dispatch import (
     queue_restore_selected_target,
     set_hovered_target,
     validate_plan_target,
 )
-from bimplan.targets import PlanTarget, get_plan_target_for_object, make_plan_target_record
+from bimplan.selection.targets import (
+    PlanTarget,
+    get_plan_target_for_object,
+    make_plan_target_record,
+)
 from bimplan.transactions import PlanEditTransaction
 from bimplan.ui.controls import PlanEditControlsWidget
 from bimplan.task_panel_view_model import (
@@ -252,8 +256,8 @@ class _SnapshotProvider(PlanEditProvider):
 
 class TestBimPlanCore(unittest.TestCase):
     def test_initialize_session_read_state_creates_typed_buckets(self):
-        from bimplan import session_state as plan_session_state
-        from bimplan.session_state import (
+        from bimplan.runtime import session_state as plan_session_state
+        from bimplan.runtime.session_state import (
             PlanInteractionState,
             PlanProviderOverlayReadState,
             PlanSelectionState,
@@ -280,8 +284,8 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual({}, session.wall_edit_state.wall_edit_opening_clearances)
 
     def test_plan_edit_session_read_state_properties_bridge_typed_buckets(self):
-        from bimplan.session import PlanEditSession
-        from bimplan.session_state import (
+        from bimplan.runtime.session import PlanEditSession
+        from bimplan.runtime.session_state import (
             PlanInteractionState,
             PlanProviderOverlayReadState,
             PlanSelectionState,
@@ -390,8 +394,8 @@ class TestBimPlanCore(unittest.TestCase):
     def test_plan_edit_session_owns_selection_spaces_relations_interaction_symbols_windows_viewport_wall_provider_and_status_components(
         self,
     ):
-        from bimplan.session import PlanEditSession
-        from bimplan.session_components import (
+        from bimplan.runtime.session import PlanEditSession
+        from bimplan.runtime.session_components import (
             PlanInteractionAPI,
             PlanProvidersAPI,
             PlanWallRelationsAPI,
@@ -429,8 +433,8 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIs(session.status_text.session, session)
 
     def test_plan_edit_session_wrappers_delegate_to_owned_components(self):
-        from bimplan.session import PlanEditSession
-        from bimplan.session_components import (
+        from bimplan.runtime.session import PlanEditSession
+        from bimplan.runtime.session_components import (
             PlanInteractionAPI,
             PlanProvidersAPI,
             PlanWallRelationsAPI,
@@ -1068,8 +1072,8 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual("1500 mm", context.get_selected_window_height_text())
 
     def test_plan_selection_api_uses_primary_target_kind_policy(self):
-        from bimplan import target_kinds as plan_target_kinds
-        from bimplan.session_components import PlanSelectionAPI
+        from bimplan.selection import target_kinds as plan_target_kinds
+        from bimplan.runtime.session_components import PlanSelectionAPI
 
         session = object()
         selection = PlanSelectionAPI(session)
@@ -1087,7 +1091,7 @@ class TestBimPlanCore(unittest.TestCase):
 
     def test_plan_spaces_api_uses_space_region_pick_visual_key(self):
         from bimplan import document_visuals as plan_document_visuals
-        from bimplan.session_components import PlanSpacesAPI
+        from bimplan.runtime.session_components import PlanSpacesAPI
 
         session = object()
         candidate = {"area": 12.0}
@@ -1106,7 +1110,7 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
     def test_plan_viewport_api_uses_view_policies(self):
-        from bimplan.session_components import PlanViewportAPI
+        from bimplan.runtime.session_components import PlanViewportAPI
 
         session = SimpleNamespace(
             _plan_view_locked_actions=("Std_ViewTop", "Std_ViewFront"),
@@ -1894,7 +1898,7 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIn(("recompute", None), doc.events)
 
     def test_execute_plan_provider_action_passes_action_context_proxy(self):
-        from bimplan.provider_runtime import execute_plan_provider_action
+        from bimplan.providers.runtime import execute_plan_provider_action
         from bimplan.providers import PlanEditRegistry
 
         captured = {}

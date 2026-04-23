@@ -26,20 +26,20 @@
 
 from functools import wraps
 
-from bimplan import provider_runtime as plan_provider_runtime
-from bimplan import provider_point as plan_provider_point
-from bimplan import selection_additive as plan_selection_additive
+from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.providers import point as plan_provider_point
+from bimplan.selection import selection_additive as plan_selection_additive
 from bimplan import selection as plan_selection
 from bimplan.overlays import symbols as symbol_overlays
 from bimplan import status_text as plan_status_text
-from bimplan import spaces as plan_spaces
-from bimplan import target_kinds as plan_target_kinds
-from bimplan import targets as plan_targets
-from bimplan import view as plan_view
+from bimplan.tools import spaces as plan_spaces
+from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.selection import targets as plan_targets
+from bimplan.runtime import view as plan_view
 from bimplan import document_visuals as plan_document_visuals
-from bimplan import wall_relations as plan_wall_relations
-from bimplan import wall_edit as plan_wall_edit
-from bimplan import window_create as plan_window_create
+from bimplan.tools import wall_relations as plan_wall_relations
+from bimplan.tools import wall_edit as plan_wall_edit
+from bimplan.tools import window_create as plan_window_create
 from bimplan.task_panel import _PlanEditViewportStatusChip
 
 

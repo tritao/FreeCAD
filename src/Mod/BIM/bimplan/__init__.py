@@ -2,7 +2,7 @@
 
 """BIM-owned Plan Edit integration primitives."""
 
-from .hosted_openings import (
+from .tools.hosted_openings import (
     _PlanEditCommandHost,
     _PlanEditWallHost,
     create_hosted_opening,
@@ -31,8 +31,18 @@ from .providers import (
     PlanToolInteraction,
 )
 from .providers import PlanEditRegistry, get_plan_edit_registry
+from .runtime import (
+    command_gate,
+    input,
+    lifecycle,
+    session,
+    session_components,
+    session_state,
+    view,
+)
+from .selection import picking
 from .semantics import PlanSemanticRecord
-from .targets import PlanTarget
+from .selection.targets import PlanTarget
 from .transactions import PlanEditTransaction
 
 __all__ = [
@@ -64,5 +74,13 @@ __all__ = [
     "PlanTarget",
     "PlanToolSpec",
     "PlanToolInteraction",
+    "command_gate",
     "get_plan_edit_registry",
+    "input",
+    "lifecycle",
+    "picking",
+    "session",
+    "session_components",
+    "session_state",
+    "view",
 ]

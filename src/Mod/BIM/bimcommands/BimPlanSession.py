@@ -2,7 +2,7 @@
 
 """Compatibility shim for the Plan Edit session implementation."""
 
-from bimplan import session as _session
+from bimplan.runtime import session as _session
 
 for _name in dir(_session):
     if not _name.startswith("__"):

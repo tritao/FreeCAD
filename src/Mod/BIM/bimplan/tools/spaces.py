@@ -7,9 +7,9 @@ from dataclasses import dataclass
 import FreeCAD
 import FreeCADGui
 
-from . import selection as plan_selection
-from . import target_dispatch as plan_target_dispatch
-from . import target_kinds as plan_target_kinds
+from bimplan import selection as plan_selection
+from bimplan.selection import target_dispatch as plan_target_dispatch
+from bimplan.selection import target_kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
 

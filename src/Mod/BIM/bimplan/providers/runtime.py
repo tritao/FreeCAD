@@ -8,8 +8,8 @@ from typing import TypedDict
 
 import FreeCAD
 
-from . import document_visuals as plan_document_visuals
-from .providers import (
+from bimplan import document_visuals as plan_document_visuals
+from . import (
     PlanActionSpec,
     PlanContextDetailSpec,
     PlanContextPanelSpec,
@@ -29,8 +29,8 @@ from .providers import (
     PlanToolSpec,
     PlanToolInteraction,
 )
-from .semantics import PlanSemanticRecord
-from .transactions import PlanEditTransaction
+from bimplan.semantics import PlanSemanticRecord
+from bimplan.transactions import PlanEditTransaction
 
 translate = FreeCAD.Qt.translate
 
@@ -590,7 +590,7 @@ def build_plan_semantic_record(session, target_kind, target_obj):
 
 
 def get_plan_semantic_records(session, targets=None):
-    from .targets import PlanTarget
+    from bimplan.selection.targets import PlanTarget
 
     if targets is None:
         targets = session.get_plan_targets(selected_only=True)

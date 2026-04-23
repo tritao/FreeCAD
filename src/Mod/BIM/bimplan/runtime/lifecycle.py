@@ -6,13 +6,13 @@ from dataclasses import dataclass
 
 import FreeCAD
 import FreeCADGui
-from bimplan import command_gate as plan_command_gate
+from bimplan.runtime import command_gate as plan_command_gate
 from bimplan import selection as plan_selection
-from bimplan import spaces as plan_spaces
-from bimplan import window_create as plan_window_create
-from bimplan import target_dispatch as plan_target_dispatch
-from bimplan import target_kinds as plan_target_kinds
-from bimplan.hosted_openings import _PlanEditCommandHost, _PlanEditWallHost
+from bimplan.tools import spaces as plan_spaces
+from bimplan.tools import window_create as plan_window_create
+from bimplan.selection import target_dispatch as plan_target_dispatch
+from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.tools.hosted_openings import _PlanEditCommandHost, _PlanEditWallHost
 
 translate = FreeCAD.Qt.translate
 
