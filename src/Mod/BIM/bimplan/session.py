@@ -45,6 +45,7 @@ from bimplan import provider_targets as plan_provider_targets
 from bimplan import selection as plan_selection
 from bimplan import snap as plan_snap
 from bimplan import spaces as plan_spaces
+from bimplan import status_text as plan_status_text
 from bimplan import storeys as plan_storeys
 from bimplan import task_panel as plan_task_panel
 from bimplan import target_kinds as plan_target_kinds
@@ -1964,7 +1965,7 @@ class PlanEditSession:
         return plan_selection.get_secondary_selected_plan_targets(self)
 
     def _format_plan_target_count_label(self, kind, count):
-        return plan_task_panel.format_plan_target_count_label(kind, count)
+        return plan_status_text.format_plan_target_count_label(kind, count)
 
     def _format_space_region_candidate_area(self, candidate):
         area = float((candidate or {}).get("area", 0.0) or 0.0)
@@ -1977,7 +1978,7 @@ class PlanEditSession:
             return "{:.3f} m^2".format(area / 1000000.0)
 
     def _summarize_plan_targets(self, targets):
-        return plan_task_panel.summarize_plan_targets(targets)
+        return plan_status_text.summarize_plan_targets(targets)
 
     def _get_selected_plan_targets(self):
         return plan_selection.get_selected_plan_targets(self)
@@ -2287,7 +2288,7 @@ class PlanEditSession:
         return plan_spaces.format_space_preflight_text(report)
 
     def _get_plan_selection_summary_text(self):
-        return plan_task_panel.get_plan_selection_summary_text(self)
+        return plan_status_text.get_plan_selection_summary_text(self)
 
     def _clear_plan_relation_status(self):
         return plan_wall_relations.clear_plan_relation_status(self)
@@ -2989,40 +2990,40 @@ class PlanEditSession:
         return plan_view.get_plan_view_widget(self)
 
     def _format_status_chip_action(self, message):
-        return plan_task_panel.format_status_chip_action(message)
+        return plan_status_text.format_status_chip_action(message)
 
     def _get_plan_target_display_label(self, obj):
-        return plan_task_panel.get_plan_target_display_label(obj)
+        return plan_status_text.get_plan_target_display_label(obj)
 
     def _format_provider_target_role_label(self, obj):
-        return plan_task_panel.format_provider_target_role_label(self, obj)
+        return plan_status_text.format_provider_target_role_label(self, obj)
 
     def _format_provider_target_help(self, obj):
-        return plan_task_panel.format_provider_target_help(self, obj)
+        return plan_status_text.format_provider_target_help(self, obj)
 
     def _get_opening_display_kind_key(self, opening):
-        return plan_task_panel.get_opening_display_kind_key(self, opening)
+        return plan_status_text.get_opening_display_kind_key(self, opening)
 
     def _get_opening_display_kind(self, opening):
-        return plan_task_panel.get_opening_display_kind(self, opening)
+        return plan_status_text.get_opening_display_kind(self, opening)
 
     def _format_opening_selection_help(self, opening):
-        return plan_task_panel.format_opening_selection_help(self, opening)
+        return plan_status_text.format_opening_selection_help(self, opening)
 
     def _format_plan_target_selection_state(self, kind, obj):
-        return plan_task_panel.format_plan_target_selection_state(self, kind, obj)
+        return plan_status_text.format_plan_target_selection_state(self, kind, obj)
 
     def _get_provider_selected_objects(self):
-        return plan_task_panel.get_provider_selected_objects(self)
+        return plan_status_text.get_provider_selected_objects(self)
 
     def _format_provider_selected_object_state(self):
-        return plan_task_panel.format_provider_selected_object_state(self)
+        return plan_status_text.format_provider_selected_object_state(self)
 
     def _format_provider_selected_object_help(self):
-        return plan_task_panel.format_provider_selected_object_help(self)
+        return plan_status_text.format_provider_selected_object_help(self)
 
     def _get_status_chip_text(self):
-        return plan_task_panel.get_status_chip_text(self)
+        return plan_status_text.get_status_chip_text(self)
 
     def _ensure_viewport_status_chip(self):
         return plan_view.ensure_viewport_status_chip(self, _PlanEditViewportStatusChip)
@@ -3034,22 +3035,22 @@ class PlanEditSession:
         return plan_view.clear_viewport_status_chip(self)
 
     def _clear_input_hints(self):
-        return plan_task_panel.clear_input_hints()
+        return plan_status_text.clear_input_hints()
 
     def _request_view_redraw(self):
         return plan_view.request_view_redraw(self)
 
     def _make_input_hint(self, message, *sequences):
-        return plan_task_panel.make_input_hint(message, *sequences)
+        return plan_status_text.make_input_hint(message, *sequences)
 
     def _get_input_hint_specs(self):
-        return plan_task_panel.get_input_hint_specs(self)
+        return plan_status_text.get_input_hint_specs(self)
 
     def _get_input_hints(self):
-        return plan_task_panel.get_input_hints(self)
+        return plan_status_text.get_input_hints(self)
 
     def _update_input_hints(self):
-        return plan_task_panel.update_input_hints(self)
+        return plan_status_text.update_input_hints(self)
 
     def _retarget_edit_tracker(self, tracker, obj, index):
         return wall_overlays.retarget_edit_tracker(tracker, obj, index)
