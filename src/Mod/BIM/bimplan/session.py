@@ -59,7 +59,6 @@ from bimplan import provider_edit as plan_provider_edit
 from bimplan import targets as plan_targets
 from bimplan import visual_keys as plan_visual_keys
 from bimplan import wall_create as plan_wall_create
-from bimplan import wall_edit as plan_wall_edit
 from bimplan import wall_relations as plan_wall_relations
 from bimplan import window_create as plan_window_create
 from bimplan import window_edit as plan_window_edit
@@ -220,6 +219,7 @@ class PlanEditSession:
         self.selection = plan_session_components.PlanSelectionAPI(self)
         self.spaces = plan_session_components.PlanSpacesAPI(self)
         self.viewport = plan_session_components.PlanViewportAPI(self)
+        self.wall_edit = plan_session_components.PlanWallEditAPI(self)
         plan_session_state.initialize_session_state(self)
 
     def _connect_teardown_signal(self, signal):
@@ -1976,10 +1976,10 @@ class PlanEditSession:
         return self.spaces.handle_space_separator_point(point=point, obj=obj)
 
     def _has_active_wall_edit(self):
-        return plan_wall_edit.has_active_wall_edit(self)
+        return self.wall_edit.has_active_wall_edit()
 
     def _is_wall_edit_modal_active(self):
-        return plan_wall_edit.is_wall_edit_modal_active(self)
+        return self.wall_edit.is_wall_edit_modal_active()
 
     def _has_active_embedded_tool(self):
         return self._embedded_tool is not None
@@ -1988,74 +1988,74 @@ class PlanEditSession:
         return plan_lifecycle.cancel_embedded_tool(self, tool_name=tool_name)
 
     def _cancel_wall_edit(self, restore=True, refresh=True):
-        return plan_wall_edit.cancel_wall_edit(self, restore=restore, refresh=refresh)
+        return self.wall_edit.cancel_wall_edit(restore=restore, refresh=refresh)
 
     def _cancel_wall_subtool(self):
-        return plan_wall_edit.cancel_wall_subtool(self)
+        return self.wall_edit.cancel_wall_subtool()
 
     def _start_wall_edit(self, mode):
-        return plan_wall_edit.start_wall_edit(self, mode)
+        return self.wall_edit.start_wall_edit(mode)
 
     def _resume_wall_edit_point_pick(self):
-        return plan_wall_edit.resume_wall_edit_point_pick(self)
+        return self.wall_edit.resume_wall_edit_point_pick()
 
     def _snapshot_wall_hosted_opening_clearances(self, wall, endpoints):
-        return plan_wall_edit.snapshot_wall_hosted_opening_clearances(self, wall, endpoints)
+        return self.wall_edit.snapshot_wall_hosted_opening_clearances(wall, endpoints)
 
     def _queue_wall_edit_opening_clearances(self):
-        return plan_wall_edit.queue_wall_edit_opening_clearances(self)
+        return self.wall_edit.queue_wall_edit_opening_clearances()
 
     def _prime_wall_edit_opening_clearances(self):
-        return plan_wall_edit.prime_wall_edit_opening_clearances(self)
+        return self.wall_edit.prime_wall_edit_opening_clearances()
 
     def _ensure_wall_edit_opening_clearances(self, wall, endpoints):
-        return plan_wall_edit.ensure_wall_edit_opening_clearances(self, wall, endpoints)
+        return self.wall_edit.ensure_wall_edit_opening_clearances(wall, endpoints)
 
     def _queue_wall_edit_task_panel_refresh(self):
-        return plan_wall_edit.queue_wall_edit_task_panel_refresh(self)
+        return self.wall_edit.queue_wall_edit_task_panel_refresh()
 
     def _flush_wall_edit_task_panel_refresh(self):
-        return plan_wall_edit.flush_wall_edit_task_panel_refresh(self)
+        return self.wall_edit.flush_wall_edit_task_panel_refresh()
 
     def _finish_wall_edit(self, point=None, obj=None):
-        return plan_wall_edit.finish_wall_edit(self, point=point, obj=obj)
+        return self.wall_edit.finish_wall_edit(point=point, obj=obj)
 
     def _commit_wall_edit_points(self, wall, endpoint, proxy, new_points):
-        return plan_wall_edit.commit_wall_edit_points(self, wall, endpoint, proxy, new_points)
+        return self.wall_edit.commit_wall_edit_points(wall, endpoint, proxy, new_points)
 
     def _start_wall_grip_edit(self, grip_index):
-        return plan_wall_edit.start_wall_grip_edit(self, grip_index)
+        return self.wall_edit.start_wall_grip_edit(grip_index)
 
     def _activate_wall_grip(self, grip_index, wall=None):
-        return plan_wall_edit.activate_wall_grip(self, grip_index, wall=wall)
+        return self.wall_edit.activate_wall_grip(grip_index, wall=wall)
 
     def _activate_wall_grip_now(self, grip_index, wall=None):
-        return plan_wall_edit.activate_wall_grip_now(self, grip_index, wall=wall)
+        return self.wall_edit.activate_wall_grip_now(grip_index, wall=wall)
 
     def _get_wall_edit_reference_point(self):
-        return plan_wall_edit.get_wall_edit_reference_point(self)
+        return self.wall_edit.get_wall_edit_reference_point()
 
     def _compute_wall_edit_points(self, point):
-        return plan_wall_edit.compute_wall_edit_points(self, point)
+        return self.wall_edit.compute_wall_edit_points(point)
 
     def _compute_wall_edit_points_from_length(self, length):
-        return plan_wall_edit.compute_wall_edit_points_from_length(self, length)
+        return self.wall_edit.compute_wall_edit_points_from_length(length)
 
     def _get_preview_footprint(self, points, width=None, align=None):
-        return plan_wall_edit.get_preview_footprint(self, points, width=width, align=align)
+        return self.wall_edit.get_preview_footprint(points, width=width, align=align)
 
     def _make_preview_wall_adapter(self, wall, endpoints):
-        return plan_wall_edit.make_preview_wall_adapter(self, wall, endpoints)
+        return self.wall_edit.make_preview_wall_adapter(wall, endpoints)
 
     def _solve_preview_wall_relation(self, relation, wall, preview_wall):
-        return plan_wall_edit.solve_preview_wall_relation(self, relation, wall, preview_wall)
+        return self.wall_edit.solve_preview_wall_relation(relation, wall, preview_wall)
 
     def _collect_preview_wall_relation_data(self, wall, points):
-        return plan_wall_edit.collect_preview_wall_relation_data(self, wall, points)
+        return self.wall_edit.collect_preview_wall_relation_data(wall, points)
 
     @staticmethod
     def _clip_preview_polygon_to_plane(polygon, plane_placement, ref_point, tol=1e-7):
-        return plan_wall_edit.clip_preview_polygon_to_plane(
+        return plan_session_components.PlanWallEditAPI.clip_preview_polygon_to_plane(
             polygon,
             plane_placement,
             ref_point,
@@ -2063,130 +2063,127 @@ class PlanEditSession:
         )
 
     def _get_preview_footprint_polylines(self, points):
-        return plan_wall_edit.get_preview_footprint_polylines(self, points)
+        return self.wall_edit.get_preview_footprint_polylines(points)
 
     def _get_readout_base_gap(self):
-        return plan_wall_edit.get_readout_base_gap(self)
+        return self.wall_edit.get_readout_base_gap()
 
     def _get_aligned_readout_offset_for_wall(self, wall):
-        return plan_wall_edit.get_aligned_readout_offset_for_wall(self, wall)
+        return self.wall_edit.get_aligned_readout_offset_for_wall(wall)
 
     def _get_wall_edit_readout_offset(self, mode):
-        return plan_wall_edit.get_wall_edit_readout_offset(self, mode)
+        return self.wall_edit.get_wall_edit_readout_offset(mode)
 
     def _get_opening_move_readout_offset(self, opening):
-        return plan_wall_edit.get_opening_move_readout_offset(self, opening)
+        return self.wall_edit.get_opening_move_readout_offset(opening)
 
     def _update_wall_edit_preview_geometry(self, points):
-        return plan_wall_edit.update_wall_edit_preview_geometry(self, points)
+        return self.wall_edit.update_wall_edit_preview_geometry(points)
 
     def _sync_wall_edit_preview(self, points, include_opening_preview=True):
-        return plan_wall_edit.sync_wall_edit_preview(
-            self,
+        return self.wall_edit.sync_wall_edit_preview(
             points,
             include_opening_preview=include_opening_preview,
         )
 
     def _is_wall_move_edit_active(self):
-        return plan_wall_edit.is_wall_move_edit_active(self)
+        return self.wall_edit.is_wall_move_edit_active()
 
     def _is_wall_stretch_edit_active(self):
-        return plan_wall_edit.is_wall_stretch_edit_active(self)
+        return self.wall_edit.is_wall_stretch_edit_active()
 
     def _is_wall_readout_edit_active(self):
-        return plan_wall_edit.is_wall_readout_edit_active(self)
+        return self.wall_edit.is_wall_readout_edit_active()
 
     def _clear_wall_edit_preview(self):
-        return plan_wall_edit.clear_wall_edit_preview(self)
+        return self.wall_edit.clear_wall_edit_preview()
 
     def _get_wall_hosted_opening_preview_segments(self, wall, points):
-        return plan_wall_edit.get_wall_hosted_opening_preview_segments(self, wall, points)
+        return self.wall_edit.get_wall_hosted_opening_preview_segments(wall, points)
 
     def _sync_wall_hosted_opening_preview(self, points):
-        return plan_wall_edit.sync_wall_hosted_opening_preview(self, points)
+        return self.wall_edit.sync_wall_hosted_opening_preview(points)
 
     def _clear_wall_hosted_opening_preview(self):
-        return plan_wall_edit.clear_wall_hosted_opening_preview(self)
+        return self.wall_edit.clear_wall_hosted_opening_preview()
 
     def _get_wall_edit_readout_specs(self, points):
-        return plan_wall_edit.get_wall_edit_readout_specs(self, points)
+        return self.wall_edit.get_wall_edit_readout_specs(points)
 
     def _get_default_wall_edit_readout_mode(self, specs):
-        return plan_wall_edit.get_default_wall_edit_readout_mode(self, specs)
+        return self.wall_edit.get_default_wall_edit_readout_mode(specs)
 
     def _bind_wall_edit_readout_callbacks(self, dim, mode):
-        return plan_wall_edit.bind_wall_edit_readout_callbacks(self, dim, mode)
+        return self.wall_edit.bind_wall_edit_readout_callbacks(dim, mode)
 
     def _update_wall_edit_readouts_in_place(self, points, active_mode=None):
-        return plan_wall_edit.update_wall_edit_readouts_in_place(
-            self,
+        return self.wall_edit.update_wall_edit_readouts_in_place(
             points,
             active_mode=active_mode,
         )
 
     def _sync_wall_edit_readout(self, points):
-        return plan_wall_edit.sync_wall_edit_readout(self, points)
+        return self.wall_edit.sync_wall_edit_readout(points)
 
     def _clear_wall_edit_readout(self):
-        return plan_wall_edit.clear_wall_edit_readout(self)
+        return self.wall_edit.clear_wall_edit_readout()
 
     def _get_wall_edit_readout_tracker(self, mode):
-        return plan_wall_edit.get_wall_edit_readout_tracker(self, mode)
+        return self.wall_edit.get_wall_edit_readout_tracker(mode)
 
     def _cycle_wall_move_readout_mode(self):
-        return plan_wall_edit.cycle_wall_move_readout_mode(self)
+        return self.wall_edit.cycle_wall_move_readout_mode()
 
     def _start_wall_readout_edit(self, cycle=False):
-        return plan_wall_edit.start_wall_readout_edit(self, cycle=cycle)
+        return self.wall_edit.start_wall_readout_edit(cycle=cycle)
 
     def _start_wall_stretch_length_edit(self):
-        return plan_wall_edit.start_wall_stretch_length_edit(self)
+        return self.wall_edit.start_wall_stretch_length_edit()
 
     def _start_wall_readout_edit_now(self, tracker, value):
-        return plan_wall_edit.start_wall_readout_edit_now(self, tracker, value)
+        return self.wall_edit.start_wall_readout_edit_now(tracker, value)
 
     def _on_wall_stretch_length_changed(self, value):
-        return plan_wall_edit.on_wall_stretch_length_changed(self, value)
+        return self.wall_edit.on_wall_stretch_length_changed(value)
 
     def _on_wall_stretch_length_finished(self, value):
-        return plan_wall_edit.on_wall_stretch_length_finished(self, value)
+        return self.wall_edit.on_wall_stretch_length_finished(value)
 
     def _on_wall_stretch_length_canceled(self, value):
-        return plan_wall_edit.on_wall_stretch_length_canceled(self, value)
+        return self.wall_edit.on_wall_stretch_length_canceled(value)
 
     def _compute_wall_edit_points_from_move_delta(self, mode, value):
-        return plan_wall_edit.compute_wall_edit_points_from_move_delta(self, mode, value)
+        return self.wall_edit.compute_wall_edit_points_from_move_delta(mode, value)
 
     def _on_wall_move_delta_changed(self, mode, value):
-        return plan_wall_edit.on_wall_move_delta_changed(self, mode, value)
+        return self.wall_edit.on_wall_move_delta_changed(mode, value)
 
     def _on_wall_move_delta_finished(self, mode, value):
-        return plan_wall_edit.on_wall_move_delta_finished(self, mode, value)
+        return self.wall_edit.on_wall_move_delta_finished(mode, value)
 
     def _on_wall_move_delta_canceled(self, mode, value):
-        return plan_wall_edit.on_wall_move_delta_canceled(self, mode, value)
+        return self.wall_edit.on_wall_move_delta_canceled(mode, value)
 
     def _schedule_wall_edit_readout_cancel(self):
-        return plan_wall_edit.schedule_wall_edit_readout_cancel(self)
+        return self.wall_edit.schedule_wall_edit_readout_cancel()
 
     def _finish_wall_edit_readout_canceled(self, preview_points):
-        return plan_wall_edit.finish_wall_edit_readout_canceled(self, preview_points)
+        return self.wall_edit.finish_wall_edit_readout_canceled(preview_points)
 
     def _restore_edit_wall_visibility(self):
-        return plan_wall_edit.restore_edit_wall_visibility(self)
+        return self.wall_edit.restore_edit_wall_visibility()
 
     def _update_wall_edit_preview(self, point):
-        return plan_wall_edit.update_wall_edit_preview(self, point)
+        return self.wall_edit.update_wall_edit_preview(point)
 
     def _update_wall_edit_point_pick(self, point=None, snap_info=None):
-        return plan_wall_edit.update_wall_edit_point_pick(
-            self,
+        return self.wall_edit.update_wall_edit_point_pick(
             point=point,
             snap_info=snap_info,
         )
 
     def _cancel_wall_edit_point_pick(self):
-        return plan_wall_edit.cancel_wall_edit_point_pick(self)
+        return self.wall_edit.cancel_wall_edit_point_pick()
 
     def _get_edit_node(self, mouse_pos):
         return plan_picking.get_edit_node(self, mouse_pos)
@@ -2312,13 +2309,13 @@ class PlanEditSession:
         return plan_hosted_openings.get_wall_hosted_openings(self, wall)
 
     def _refresh_wall_hosted_opening_footprints(self, wall):
-        return plan_wall_edit.refresh_wall_hosted_opening_footprints(self, wall)
+        return self.wall_edit.refresh_wall_hosted_opening_footprints(wall)
 
     def _compute_wall_hosted_opening_layout(self, wall, endpoints):
-        return plan_wall_edit.compute_wall_hosted_opening_layout(self, wall, endpoints)
+        return self.wall_edit.compute_wall_hosted_opening_layout(wall, endpoints)
 
     def _resolve_wall_hosted_opening_layout(self, wall):
-        return plan_wall_edit.resolve_wall_hosted_opening_layout(self, wall)
+        return self.wall_edit.resolve_wall_hosted_opening_layout(wall)
 
     def _refresh_opening_host_footprint_displays(self, opening):
         return plan_document_visuals.refresh_opening_host_footprint_displays(self, opening)
