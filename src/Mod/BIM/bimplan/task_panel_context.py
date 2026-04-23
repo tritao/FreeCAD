@@ -63,7 +63,15 @@ class PlanTaskPanelContext:
         return plan_selection_access.get_selected_plan_targets(self.session)
 
     def is_modal_plan_interaction_active(self):
-        return bool(self.session._is_modal_plan_interaction_active())
+        return bool(
+            _read_component_or_session(
+                self.session,
+                "interaction",
+                "is_modal_plan_interaction_active",
+                session_method_name="_is_modal_plan_interaction_active",
+                default=False,
+            )
+        )
 
     def can_place_plan_window(self):
         return bool(
@@ -278,10 +286,24 @@ class PlanTaskPanelContext:
         )
 
     def symbol_rotation_snap_enabled(self):
-        return bool(self.session._symbol_rotation_snap_enabled())
+        return bool(
+            _read_component_or_session(
+                self.session,
+                "symbols",
+                "symbol_rotation_snap_enabled",
+                session_method_name="_symbol_rotation_snap_enabled",
+                default=False,
+            )
+        )
 
     def format_symbol_rotation_snap_label(self):
-        return self.session._format_symbol_rotation_snap_label()
+        return _read_component_or_session(
+            self.session,
+            "symbols",
+            "format_symbol_rotation_snap_label",
+            session_method_name="_format_symbol_rotation_snap_label",
+            default="",
+        )
 
     def format_provider_target_help(self, obj):
         return _read_component_or_session(
@@ -323,7 +345,15 @@ class PlanTaskPanelContext:
         )
 
     def get_plan_relation_status_message(self):
-        return str(getattr(self.session, "_plan_relation_status_message", "") or "").strip()
+        return str(
+            _read_component_or_session(
+                self.session,
+                "wall_relations",
+                "get_plan_relation_status_message",
+                default=getattr(self.session, "_plan_relation_status_message", ""),
+            )
+            or ""
+        ).strip()
 
     def get_window_style_preset_options(self):
         return tuple(

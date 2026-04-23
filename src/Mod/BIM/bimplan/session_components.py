@@ -31,6 +31,7 @@ from bimplan import provider_point as plan_provider_point
 from bimplan import provider_runtime as plan_provider_runtime
 from bimplan import selection_additive as plan_selection_additive
 from bimplan import selection as plan_selection
+from bimplan.overlays import symbols as symbol_overlays
 from bimplan import status_text as plan_status_text
 from bimplan import spaces as plan_spaces
 from bimplan import target_kinds as plan_target_kinds
@@ -305,6 +306,36 @@ class PlanWallRelationsAPI(_SessionAPI):
     )
     get_plan_join_mode_action_text = _bind_session_call(
         plan_wall_relations.get_plan_join_mode_action_text
+    )
+    get_plan_relation_status_message = _bind_session_call(
+        plan_wall_relations.get_plan_relation_status_message
+    )
+
+
+class PlanInteractionAPI(_SessionAPI):
+    """Owned session surface for Plan Edit interaction-state reads."""
+
+    __slots__ = ()
+
+    _MODAL_TOOLS = frozenset(
+        ("Move Opening", "Move Symbol", "Rotate Symbol", "Set Space Text", "Window")
+    )
+
+    def is_modal_plan_interaction_active(self):
+        return bool(
+            self.session.wall_edit.is_wall_edit_modal_active()
+            or self.session.current_tool in self._MODAL_TOOLS
+        )
+
+
+class PlanSymbolsAPI(_SessionAPI):
+    """Owned session surface for Plan Edit symbol read helpers."""
+
+    __slots__ = ()
+
+    symbol_rotation_snap_enabled = _bind_session_call(symbol_overlays.symbol_rotation_snap_enabled)
+    format_symbol_rotation_snap_label = _bind_session_call(
+        symbol_overlays.format_symbol_rotation_snap_label
     )
 
 

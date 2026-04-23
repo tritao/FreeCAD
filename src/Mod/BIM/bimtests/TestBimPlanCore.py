@@ -245,16 +245,18 @@ class _SnapshotProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
-    def test_plan_edit_session_owns_selection_spaces_relations_windows_viewport_wall_provider_and_status_components(
+    def test_plan_edit_session_owns_selection_spaces_relations_interaction_symbols_windows_viewport_wall_provider_and_status_components(
         self,
     ):
         from bimplan.session import PlanEditSession
         from bimplan.session_components import (
+            PlanInteractionAPI,
             PlanProvidersAPI,
             PlanWallRelationsAPI,
             PlanSelectionAPI,
             PlanSpacesAPI,
             PlanStatusTextAPI,
+            PlanSymbolsAPI,
             PlanViewportAPI,
             PlanWallEditAPI,
             PlanWindowsAPI,
@@ -269,6 +271,10 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIs(session.spaces.session, session)
         self.assertIsInstance(session.wall_relations, PlanWallRelationsAPI)
         self.assertIs(session.wall_relations.session, session)
+        self.assertIsInstance(session.interaction, PlanInteractionAPI)
+        self.assertIs(session.interaction.session, session)
+        self.assertIsInstance(session.symbols, PlanSymbolsAPI)
+        self.assertIs(session.symbols.session, session)
         self.assertIsInstance(session.windows, PlanWindowsAPI)
         self.assertIs(session.windows.session, session)
         self.assertIsInstance(session.viewport, PlanViewportAPI)
@@ -283,11 +289,13 @@ class TestBimPlanCore(unittest.TestCase):
     def test_plan_edit_session_wrappers_delegate_to_owned_components(self):
         from bimplan.session import PlanEditSession
         from bimplan.session_components import (
+            PlanInteractionAPI,
             PlanProvidersAPI,
             PlanWallRelationsAPI,
             PlanSelectionAPI,
             PlanSpacesAPI,
             PlanStatusTextAPI,
+            PlanSymbolsAPI,
             PlanViewportAPI,
             PlanWallEditAPI,
             PlanWindowsAPI,
@@ -321,6 +329,21 @@ class TestBimPlanCore(unittest.TestCase):
             autospec=True,
             return_value=4200.0,
         ) as get_plan_view_height, patch.object(
+            PlanInteractionAPI,
+            "is_modal_plan_interaction_active",
+            autospec=True,
+            return_value=True,
+        ) as is_modal_plan_interaction_active, patch.object(
+            PlanSymbolsAPI,
+            "symbol_rotation_snap_enabled",
+            autospec=True,
+            return_value=True,
+        ) as symbol_rotation_snap_enabled, patch.object(
+            PlanSymbolsAPI,
+            "format_symbol_rotation_snap_label",
+            autospec=True,
+            return_value="15°",
+        ) as format_symbol_rotation_snap_label, patch.object(
             PlanWallRelationsAPI,
             "get_plan_join_type_label",
             autospec=True,
@@ -361,6 +384,9 @@ class TestBimPlanCore(unittest.TestCase):
                 session._get_space_preflight_report(targets=targets),
             )
             self.assertTrue(session.can_place_plan_window())
+            self.assertTrue(session._is_modal_plan_interaction_active())
+            self.assertTrue(session._symbol_rotation_snap_enabled())
+            self.assertEqual("15°", session._format_symbol_rotation_snap_label())
             self.assertEqual("Miter", session.get_plan_join_type_label())
             self.assertIs(joint, session._get_plan_candidate_joint())
             self.assertEqual(4200.0, session._get_plan_view_height())
@@ -380,6 +406,9 @@ class TestBimPlanCore(unittest.TestCase):
         get_space_preflight_report.assert_called_once_with(session.spaces, targets=targets)
         get_status_chip_text.assert_called_once_with(session.status_text)
         get_plan_view_height.assert_called_once_with(session.viewport)
+        is_modal_plan_interaction_active.assert_called_once_with(session.interaction)
+        symbol_rotation_snap_enabled.assert_called_once_with(session.symbols)
+        format_symbol_rotation_snap_label.assert_called_once_with(session.symbols)
         get_plan_join_type_label.assert_called_once_with(session.wall_relations, join_type=None)
         get_plan_candidate_joint.assert_called_once_with(session.wall_relations, target_wall=None)
         can_place_window.assert_called_once_with(session.windows)
@@ -793,7 +822,9 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual("Opening help", context.format_opening_selection_help(obj))
         self.assertEqual("Summary", context.get_plan_selection_summary_text())
 
-    def test_task_panel_context_prefers_relations_spaces_windows_and_wall_edit_components(self):
+    def test_task_panel_context_prefers_relations_interaction_symbols_spaces_windows_and_wall_edit_components(
+        self,
+    ):
         from bimplan.task_panel_context import PlanTaskPanelContext
 
         parent_space = SimpleNamespace(Name="Space001")
@@ -803,6 +834,12 @@ class TestBimPlanCore(unittest.TestCase):
             get_plan_join_candidate_state=lambda: ("Wall002", "joint", "Existing joint"),
             get_plan_join_type_label=lambda join_type=None: "Miter",
             get_plan_join_mode_action_text=lambda target_wall=None, joint=None: "Join action",
+            get_plan_relation_status_message=lambda: "Relation status",
+        )
+        interaction = SimpleNamespace(is_modal_plan_interaction_active=lambda: True)
+        symbols = SimpleNamespace(
+            symbol_rotation_snap_enabled=lambda: True,
+            format_symbol_rotation_snap_label=lambda: "15°",
         )
         spaces = SimpleNamespace(
             get_space_region_candidate_count=lambda: 2,
@@ -824,9 +861,14 @@ class TestBimPlanCore(unittest.TestCase):
         wall_edit = SimpleNamespace(is_selected_wall_endpoint_editable=lambda: True)
         session = SimpleNamespace(
             wall_relations=wall_relations,
+            interaction=interaction,
+            symbols=symbols,
             spaces=spaces,
             windows=windows,
             wall_edit=wall_edit,
+            _is_modal_plan_interaction_active=lambda: (_ for _ in ()).throw(AssertionError()),
+            _symbol_rotation_snap_enabled=lambda: (_ for _ in ()).throw(AssertionError()),
+            _format_symbol_rotation_snap_label=lambda: (_ for _ in ()).throw(AssertionError()),
             can_place_plan_window=lambda: (_ for _ in ()).throw(AssertionError()),
             _get_plan_candidate_joint=lambda: (_ for _ in ()).throw(AssertionError()),
             _get_plan_join_candidate_state=lambda: (_ for _ in ()).throw(AssertionError()),
@@ -834,6 +876,7 @@ class TestBimPlanCore(unittest.TestCase):
             _get_plan_join_mode_action_text=lambda target_wall, joint: (_ for _ in ()).throw(
                 AssertionError()
             ),
+            _plan_relation_status_message="legacy relation status",
             _format_space_region_candidate_area=lambda candidate: (_ for _ in ()).throw(
                 AssertionError()
             ),
@@ -853,6 +896,9 @@ class TestBimPlanCore(unittest.TestCase):
 
         context = PlanTaskPanelContext(session)
 
+        self.assertTrue(context.is_modal_plan_interaction_active())
+        self.assertTrue(context.symbol_rotation_snap_enabled())
+        self.assertEqual("15°", context.format_symbol_rotation_snap_label())
         self.assertTrue(context.can_place_plan_window())
         self.assertTrue(context.has_plan_candidate_joint())
         self.assertEqual(
@@ -861,6 +907,7 @@ class TestBimPlanCore(unittest.TestCase):
         )
         self.assertEqual("Miter", context.get_plan_join_type_label())
         self.assertEqual("Join action", context.get_plan_join_mode_action_text("Wall002", "joint"))
+        self.assertEqual("Relation status", context.get_plan_relation_status_message())
         self.assertEqual(2, context.get_space_region_candidate_count())
         self.assertIs(hovered_candidate, context.get_hovered_space_region_candidate())
         self.assertEqual("2.500 m^2", context.format_space_region_candidate_area(hovered_candidate))
