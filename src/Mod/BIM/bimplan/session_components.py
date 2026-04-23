@@ -27,6 +27,7 @@
 from functools import wraps
 
 from bimplan import selection as plan_selection
+from bimplan import status_text as plan_status_text
 from bimplan import spaces as plan_spaces
 from bimplan import target_kinds as plan_target_kinds
 from bimplan import view as plan_view
@@ -467,3 +468,45 @@ class PlanWallEditAPI(_SessionAPI):
     )
 
     clip_preview_polygon_to_plane = staticmethod(plan_wall_edit.clip_preview_polygon_to_plane)
+
+
+class PlanStatusTextAPI(_SessionAPI):
+    """Owned session surface for Plan Edit status text and input hints."""
+
+    __slots__ = ()
+
+    get_plan_selection_summary_text = _bind_session_call(
+        plan_status_text.get_plan_selection_summary_text
+    )
+    format_provider_target_role_label = _bind_session_call(
+        plan_status_text.format_provider_target_role_label
+    )
+    format_provider_target_help = _bind_session_call(plan_status_text.format_provider_target_help)
+    get_opening_display_kind_key = _bind_session_call(plan_status_text.get_opening_display_kind_key)
+    get_opening_display_kind = _bind_session_call(plan_status_text.get_opening_display_kind)
+    format_opening_selection_help = _bind_session_call(
+        plan_status_text.format_opening_selection_help
+    )
+    format_plan_target_selection_state = _bind_session_call(
+        plan_status_text.format_plan_target_selection_state
+    )
+    get_provider_selected_objects = _bind_session_call(
+        plan_status_text.get_provider_selected_objects
+    )
+    format_provider_selected_object_state = _bind_session_call(
+        plan_status_text.format_provider_selected_object_state
+    )
+    format_provider_selected_object_help = _bind_session_call(
+        plan_status_text.format_provider_selected_object_help
+    )
+    get_status_chip_text = _bind_session_call(plan_status_text.get_status_chip_text)
+    get_input_hint_specs = _bind_session_call(plan_status_text.get_input_hint_specs)
+    get_input_hints = _bind_session_call(plan_status_text.get_input_hints)
+    update_input_hints = _bind_session_call(plan_status_text.update_input_hints)
+
+    format_plan_target_count_label = staticmethod(plan_status_text.format_plan_target_count_label)
+    summarize_plan_targets = staticmethod(plan_status_text.summarize_plan_targets)
+    format_status_chip_action = staticmethod(plan_status_text.format_status_chip_action)
+    get_plan_target_display_label = staticmethod(plan_status_text.get_plan_target_display_label)
+    clear_input_hints = staticmethod(plan_status_text.clear_input_hints)
+    make_input_hint = staticmethod(plan_status_text.make_input_hint)
