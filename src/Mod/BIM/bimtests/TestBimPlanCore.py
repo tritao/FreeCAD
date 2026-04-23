@@ -63,7 +63,7 @@ if "draftguitools.gui_base" not in sys.modules:
     sys.modules["draftguitools.gui_base"] = gui_base_module
     draftguitools_module.gui_base = gui_base_module
 
-from bimplan.context import PlanEditContext
+from bimplan.context import PlanEditContext, PlanProviderActionContext
 from bimplan.lifecycle import (
     activate_plan_region_tool,
     activate_select_tool,
@@ -181,6 +181,9 @@ class _DummyDoc:
     def abortTransaction(self):
         self.events.append(("abort", None))
 
+    def recompute(self):
+        self.events.append(("recompute", None))
+
 
 class _DummyProvider(PlanEditProvider):
     def __init__(self, provider_id):
@@ -248,6 +251,7 @@ class TestBimPlanCore(unittest.TestCase):
     def test_initialize_session_read_state_creates_typed_buckets(self):
         from bimplan import session_state as plan_session_state
         from bimplan.session_state_models import (
+            PlanInteractionState,
             PlanProviderOverlayReadState,
             PlanTaskPanelState,
         )
@@ -258,13 +262,16 @@ class TestBimPlanCore(unittest.TestCase):
 
         self.assertIsInstance(session.task_panel_state, PlanTaskPanelState)
         self.assertIsInstance(session.provider_overlay_read_state, PlanProviderOverlayReadState)
+        self.assertIsInstance(session.interaction_state, PlanInteractionState)
         self.assertEqual([], session.task_panel_state.space_region_candidates)
         self.assertEqual("architecture", session.provider_overlay_read_state.mode)
         self.assertEqual({}, session.provider_overlay_read_state.visibility)
+        self.assertIsNone(session.interaction_state.embedded_tool)
 
     def test_plan_edit_session_read_state_properties_bridge_typed_buckets(self):
         from bimplan.session import PlanEditSession
         from bimplan.session_state_models import (
+            PlanInteractionState,
             PlanProviderOverlayReadState,
             PlanTaskPanelState,
         )
@@ -272,10 +279,13 @@ class TestBimPlanCore(unittest.TestCase):
         session = object.__new__(PlanEditSession)
         session.task_panel_state = PlanTaskPanelState()
         session.provider_overlay_read_state = PlanProviderOverlayReadState()
+        session.interaction_state = PlanInteractionState()
 
         candidate = {"area": 12.0}
         parent_space = SimpleNamespace(Name="Space001")
         render_state = object()
+        embedded_tool = object()
+        provider_point_tool = object()
 
         session._plan_relation_status_message = "Relation status"
         session._space_region_candidates = (candidate,)
@@ -284,6 +294,10 @@ class TestBimPlanCore(unittest.TestCase):
         session._provider_overlay_mode = "electrical"
         session._provider_overlay_visibility = {("provider", "overlay"): False}
         session._provider_overlay_state = render_state
+        session._embedded_tool_name = "Move"
+        session._embedded_tool = embedded_tool
+        session._provider_point_tool = provider_point_tool
+        session._edit_space = parent_space
 
         self.assertEqual("Relation status", session.task_panel_state.relation_status_message)
         self.assertEqual([candidate], session.task_panel_state.space_region_candidates)
@@ -295,6 +309,10 @@ class TestBimPlanCore(unittest.TestCase):
             session.provider_overlay_read_state.visibility,
         )
         self.assertIs(render_state, session.provider_overlay_read_state.render_state)
+        self.assertEqual("Move", session.interaction_state.embedded_tool_name)
+        self.assertIs(embedded_tool, session.interaction_state.embedded_tool)
+        self.assertIs(provider_point_tool, session.interaction_state.provider_point_tool)
+        self.assertIs(parent_space, session.interaction_state.edit_space)
 
     def test_plan_edit_session_owns_selection_spaces_relations_interaction_symbols_windows_viewport_wall_provider_and_status_components(
         self,
@@ -1756,6 +1774,104 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(semantic_record, context.get_primary_semantic_record())
         self.assertEqual("target:Space001", context.resolve_object(target))
         self.assertEqual("semantic:Space001", context.resolve_semantic_object(target))
+
+    def test_plan_provider_action_context_proxies_limited_session_commands(self):
+        doc = _DummyDoc()
+        opening = SimpleNamespace(Document=doc)
+        wall = SimpleNamespace(Name="Wall001")
+        calls = []
+        session = SimpleNamespace(
+            doc=doc,
+            _select_wall_for_plan_edit=lambda obj, sync_gui_selection=True: calls.append(
+                ("select", obj, sync_gui_selection)
+            )
+            or True,
+            _queue_recompute_opening_hosts=lambda obj: calls.append(("recompute-hosts", obj)),
+            _invalidate_wall_hosted_openings_cache=lambda: calls.append(("invalidate", None)),
+            _refresh_opening_host_footprint_displays=lambda obj: calls.append(
+                ("refresh-hosts", obj)
+            ),
+            _refresh_opening_footprint_display=lambda obj: calls.append(("refresh-opening", obj)),
+        )
+
+        context = PlanProviderActionContext(
+            _session=session,
+            payload={"point": (1.0, 2.0, 0.0)},
+            document_name="PlanDoc",
+            current_tool="Provider Point",
+        )
+
+        self.assertEqual({"point": (1.0, 2.0, 0.0)}, context.get_action_payload())
+        self.assertTrue(context.select_wall_for_plan_edit(wall))
+        self.assertTrue(context.queue_recompute_opening_hosts(opening))
+        self.assertTrue(context.recompute_document())
+        context.refresh_opening_visuals(opening)
+
+        self.assertEqual(
+            [
+                ("select", wall, True),
+                ("recompute-hosts", opening),
+                ("invalidate", None),
+                ("refresh-hosts", opening),
+                ("refresh-opening", opening),
+            ],
+            calls,
+        )
+        self.assertIn(("recompute", None), doc.events)
+
+    def test_execute_plan_provider_action_passes_action_context_proxy(self):
+        from bimplan.provider_runtime import execute_plan_provider_action
+        from bimplan.registry import PlanEditRegistry
+
+        captured = {}
+
+        class _ActionProvider(PlanEditProvider):
+            provider_id = "action-provider"
+
+            def execute_action(self, action_key, context, session):
+                captured["action_key"] = action_key
+                captured["context"] = context
+                captured["command_context"] = session
+                captured["payload"] = session.get_action_payload()
+                return True
+
+        registry = PlanEditRegistry()
+        provider = _ActionProvider()
+        registry.register_provider(provider)
+        doc = _DummyDoc()
+        plan_context = SimpleNamespace(name="plan-context")
+        action_context = PlanProviderActionContext(
+            _session=SimpleNamespace(doc=doc),
+            payload={"key": "value"},
+            document_name="PlanDoc",
+            current_tool="Provider Point",
+        )
+        session = SimpleNamespace(
+            doc=doc,
+            viewport=SimpleNamespace(focus_plan_view=lambda: None),
+            _document_is_alive=lambda: True,
+            get_plan_provider_registry=lambda: registry,
+            get_plan_edit_context=lambda: plan_context,
+            get_plan_provider_action_context=lambda payload=None: action_context,
+            defer_document_visual_updates=lambda: nullcontext(),
+            _refresh_primary_selected_plan_target=lambda: None,
+            _invalidate_document_dependent_plan_visuals=lambda: None,
+            _refresh_task_panel_status=lambda: None,
+        )
+
+        self.assertTrue(
+            execute_plan_provider_action(
+                session,
+                "action-provider",
+                "do-work",
+                payload={"key": "value"},
+            )
+        )
+        self.assertEqual("do-work", captured["action_key"])
+        self.assertIs(plan_context, captured["context"])
+        self.assertIs(action_context, captured["command_context"])
+        self.assertEqual({"key": "value"}, captured["payload"])
+        self.assertIn(("recompute", None), doc.events)
 
     def test_plan_overlay_spec_carries_normalized_point_targets(self):
         overlay = PlanOverlaySpec(

@@ -230,6 +230,13 @@ class PlanEditSession:
             self.__dict__["provider_overlay_read_state"] = state
         return state
 
+    def _ensure_interaction_state(self):
+        state = self.__dict__.get("interaction_state")
+        if state is None:
+            state = plan_session_state_models.PlanInteractionState()
+            self.__dict__["interaction_state"] = state
+        return state
+
     @property
     def _plan_relation_status_message(self):
         return self._ensure_task_panel_state().relation_status_message
@@ -285,6 +292,102 @@ class PlanEditSession:
     @_provider_overlay_state.setter
     def _provider_overlay_state(self, value):
         self._ensure_provider_overlay_read_state().render_state = value
+
+    @property
+    def _embedded_host(self):
+        return self._ensure_interaction_state().embedded_host
+
+    @_embedded_host.setter
+    def _embedded_host(self, value):
+        self._ensure_interaction_state().embedded_host = value
+
+    @property
+    def _embedded_tool(self):
+        return self._ensure_interaction_state().embedded_tool
+
+    @_embedded_tool.setter
+    def _embedded_tool(self, value):
+        self._ensure_interaction_state().embedded_tool = value
+
+    @property
+    def _embedded_tool_name(self):
+        return self._ensure_interaction_state().embedded_tool_name
+
+    @_embedded_tool_name.setter
+    def _embedded_tool_name(self, value):
+        self._ensure_interaction_state().embedded_tool_name = str(value or "") or None
+
+    @property
+    def _provider_point_tool(self):
+        return self._ensure_interaction_state().provider_point_tool
+
+    @_provider_point_tool.setter
+    def _provider_point_tool(self, value):
+        self._ensure_interaction_state().provider_point_tool = value
+
+    @property
+    def _edit_opening(self):
+        return self._ensure_interaction_state().edit_opening
+
+    @_edit_opening.setter
+    def _edit_opening(self, value):
+        self._ensure_interaction_state().edit_opening = value
+
+    @property
+    def _edit_opening_handle_index(self):
+        return self._ensure_interaction_state().edit_opening_handle_index
+
+    @_edit_opening_handle_index.setter
+    def _edit_opening_handle_index(self, value):
+        self._ensure_interaction_state().edit_opening_handle_index = value
+
+    @property
+    def _edit_symbol(self):
+        return self._ensure_interaction_state().edit_symbol
+
+    @_edit_symbol.setter
+    def _edit_symbol(self, value):
+        self._ensure_interaction_state().edit_symbol = value
+
+    @property
+    def _edit_symbol_handle_role(self):
+        return self._ensure_interaction_state().edit_symbol_handle_role
+
+    @_edit_symbol_handle_role.setter
+    def _edit_symbol_handle_role(self, value):
+        self._ensure_interaction_state().edit_symbol_handle_role = value
+
+    @property
+    def _edit_provider(self):
+        return self._ensure_interaction_state().edit_provider
+
+    @_edit_provider.setter
+    def _edit_provider(self, value):
+        self._ensure_interaction_state().edit_provider = value
+
+    @property
+    def _edit_provider_handle_index(self):
+        return self._ensure_interaction_state().edit_provider_handle_index
+
+    @_edit_provider_handle_index.setter
+    def _edit_provider_handle_index(self, value):
+        self._ensure_interaction_state().edit_provider_handle_index = value
+
+    @property
+    def _edit_provider_handle(self):
+        return self._ensure_interaction_state().edit_provider_handle
+
+    @_edit_provider_handle.setter
+    def _edit_provider_handle(self, value):
+        self._ensure_interaction_state().edit_provider_handle = value
+
+    @property
+    def _edit_space(self):
+        return self._ensure_interaction_state().edit_space
+
+    @_edit_space.setter
+    def _edit_space(self, value):
+        self._ensure_interaction_state().edit_space = value
 
     def __init__(self):
         self.selection = plan_session_components.PlanSelectionAPI(self)
@@ -872,6 +975,15 @@ class PlanEditSession:
             document_name=self._safe_plan_object_name(doc),
             active_storey_name=active_storey_name,
             active_storey_label=str(self.get_storey_label(active_storey) or ""),
+            current_tool=str(self.current_tool or ""),
+        )
+
+    def get_plan_provider_action_context(self, payload=None):
+        doc = self.doc if self._document_is_alive() else None
+        return PlanEditContext.make_action_context(
+            self,
+            payload=payload,
+            document_name=self._safe_plan_object_name(doc),
             current_tool=str(self.current_tool or ""),
         )
 
