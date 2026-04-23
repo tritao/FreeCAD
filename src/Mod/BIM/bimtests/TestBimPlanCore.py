@@ -245,6 +245,57 @@ class _SnapshotProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
+    def test_initialize_session_read_state_creates_typed_buckets(self):
+        from bimplan import session_state as plan_session_state
+        from bimplan.session_state_models import (
+            PlanProviderOverlayReadState,
+            PlanTaskPanelState,
+        )
+
+        session = SimpleNamespace()
+
+        plan_session_state.initialize_session_read_state(session)
+
+        self.assertIsInstance(session.task_panel_state, PlanTaskPanelState)
+        self.assertIsInstance(session.provider_overlay_read_state, PlanProviderOverlayReadState)
+        self.assertEqual([], session.task_panel_state.space_region_candidates)
+        self.assertEqual("architecture", session.provider_overlay_read_state.mode)
+        self.assertEqual({}, session.provider_overlay_read_state.visibility)
+
+    def test_plan_edit_session_read_state_properties_bridge_typed_buckets(self):
+        from bimplan.session import PlanEditSession
+        from bimplan.session_state_models import (
+            PlanProviderOverlayReadState,
+            PlanTaskPanelState,
+        )
+
+        session = object.__new__(PlanEditSession)
+        session.task_panel_state = PlanTaskPanelState()
+        session.provider_overlay_read_state = PlanProviderOverlayReadState()
+
+        candidate = {"area": 12.0}
+        parent_space = SimpleNamespace(Name="Space001")
+        render_state = object()
+
+        session._plan_relation_status_message = "Relation status"
+        session._space_region_candidates = (candidate,)
+        session._hovered_space_region_candidate = candidate
+        session._plan_region_parent_space = parent_space
+        session._provider_overlay_mode = "electrical"
+        session._provider_overlay_visibility = {("provider", "overlay"): False}
+        session._provider_overlay_state = render_state
+
+        self.assertEqual("Relation status", session.task_panel_state.relation_status_message)
+        self.assertEqual([candidate], session.task_panel_state.space_region_candidates)
+        self.assertIs(candidate, session.task_panel_state.hovered_space_region_candidate)
+        self.assertIs(parent_space, session.task_panel_state.plan_region_parent_space)
+        self.assertEqual("electrical", session.provider_overlay_read_state.mode)
+        self.assertEqual(
+            {("provider", "overlay"): False},
+            session.provider_overlay_read_state.visibility,
+        )
+        self.assertIs(render_state, session.provider_overlay_read_state.render_state)
+
     def test_plan_edit_session_owns_selection_spaces_relations_interaction_symbols_windows_viewport_wall_provider_and_status_components(
         self,
     ):

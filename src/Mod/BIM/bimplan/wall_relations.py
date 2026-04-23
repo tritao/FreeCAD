@@ -360,10 +360,17 @@ def apply_plan_wall_junction_promotion(session, doc, source_wall, target_wall):
 
 
 def clear_plan_relation_status(session):
+    state = getattr(session, "task_panel_state", None)
+    if state is not None:
+        state.relation_status_message = None
+        return
     session._plan_relation_status_message = None
 
 
 def get_plan_relation_status_message(session):
+    state = getattr(session, "task_panel_state", None)
+    if state is not None:
+        return str(getattr(state, "relation_status_message", "") or "").strip()
     return str(getattr(session, "_plan_relation_status_message", "") or "").strip()
 
 
@@ -404,7 +411,11 @@ def update_wall_relation_status(session, wall):
             "BIM_PlanEdit", "Relation warnings: {count} relations need attention"
         ).format(count=len(warnings))
 
-    session._plan_relation_status_message = summary
+    state = getattr(session, "task_panel_state", None)
+    if state is not None:
+        state.relation_status_message = summary
+    else:
+        session._plan_relation_status_message = summary
     FreeCAD.Console.PrintWarning(summary + "\n")
     for _relation, label, _status, detail in warnings:
         FreeCAD.Console.PrintWarning(f"  - {label}: {detail}\n")

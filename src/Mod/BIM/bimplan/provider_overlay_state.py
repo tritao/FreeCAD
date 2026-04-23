@@ -40,9 +40,13 @@ def normalize_plan_provider_overlay_mode(mode):
 
 
 def get_plan_provider_overlay_mode(session):
-    return normalize_plan_provider_overlay_mode(
-        getattr(session, "_provider_overlay_mode", PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE)
+    state = getattr(session, "provider_overlay_read_state", None)
+    mode = (
+        getattr(state, "mode", PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE)
+        if state is not None
+        else getattr(session, "_provider_overlay_mode", PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE)
     )
+    return normalize_plan_provider_overlay_mode(mode)
 
 
 def is_focused_provider_overlay_pick_mode(mode):
@@ -77,7 +81,13 @@ def is_plan_provider_overlay_enabled(session, overlay):
     )
     if key is None:
         return True
-    return getattr(session, "_provider_overlay_visibility", {}).get(key, True)
+    state = getattr(session, "provider_overlay_read_state", None)
+    visibility = (
+        getattr(state, "visibility", {})
+        if state is not None
+        else getattr(session, "_provider_overlay_visibility", {})
+    )
+    return visibility.get(key, True)
 
 
 def is_plan_provider_overlay_visible_for_mode(session, overlay, mode=None):
