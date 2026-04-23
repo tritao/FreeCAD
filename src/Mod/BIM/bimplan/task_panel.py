@@ -5,6 +5,7 @@
 import FreeCAD
 import FreeCADGui
 from bimplan import provider_targets as plan_provider_targets
+from bimplan import target_kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
 
@@ -164,15 +165,57 @@ def get_plan_selection_summary_text(session):
     region_seed_space, wall_targets = session._get_space_region_seed_targets(targets)
     if region_seed_space is not None and wall_targets:
         summary = translate("BIM_PlanEdit", "Boundary candidates: {summary}").format(
-            summary=session._summarize_plan_targets(wall_targets)
+            summary=summarize_plan_targets(wall_targets)
         )
     else:
         summary = translate("BIM_PlanEdit", "Selection set: {summary}").format(
-            summary=session._summarize_plan_targets(targets)
+            summary=summarize_plan_targets(targets)
         )
     if preflight_text:
         return "{}\n{}".format(summary, preflight_text)
     return summary
+
+
+def format_plan_target_count_label(kind, count):
+    labels = {
+        plan_target_kinds.PLAN_TARGET_WALL: (
+            translate("BIM_PlanEdit", "wall"),
+            translate("BIM_PlanEdit", "walls"),
+        ),
+        plan_target_kinds.PLAN_TARGET_OPENING: (
+            translate("BIM_PlanEdit", "opening"),
+            translate("BIM_PlanEdit", "openings"),
+        ),
+        plan_target_kinds.PLAN_TARGET_SYMBOL: (
+            translate("BIM_PlanEdit", "symbol"),
+            translate("BIM_PlanEdit", "symbols"),
+        ),
+        plan_target_kinds.PLAN_TARGET_REGION: (
+            translate("BIM_PlanEdit", "region"),
+            translate("BIM_PlanEdit", "regions"),
+        ),
+        plan_target_kinds.PLAN_TARGET_SPACE: (
+            translate("BIM_PlanEdit", "space"),
+            translate("BIM_PlanEdit", "spaces"),
+        ),
+    }
+    singular, plural = labels.get(
+        kind,
+        (translate("BIM_PlanEdit", "item"), translate("BIM_PlanEdit", "items")),
+    )
+    return "{} {}".format(count, singular if count == 1 else plural)
+
+
+def summarize_plan_targets(targets):
+    counts = {}
+    for target_kind, _target_obj in targets or []:
+        counts[target_kind] = counts.get(target_kind, 0) + 1
+    parts = [
+        format_plan_target_count_label(kind, counts[kind])
+        for kind in plan_target_kinds.SUMMARY_PLAN_TARGET_KINDS
+        if counts.get(kind)
+    ]
+    return ", ".join(parts)
 
 
 def format_status_chip_action(message):
