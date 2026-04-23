@@ -32,6 +32,7 @@ import FreeCAD
 import FreeCADGui
 from bimplan import picking as plan_picking
 from bimplan import command_gate as plan_command_gate
+from bimplan import document_visuals as plan_document_visuals
 from bimplan import hosted_openings as plan_hosted_openings
 from bimplan import input as plan_input
 from bimplan import performance as plan_performance
@@ -4429,106 +4430,26 @@ class PlanEditSession:
     # Document observer interface
 
     def _is_opening_visual_dependency(self, opening, obj):
-        if not opening or not obj:
-            return False
-        if obj == opening:
-            return True
-        if obj == getattr(opening, "Base", None):
-            return True
-        return obj in (getattr(opening, "Hosts", None) or [])
+        return plan_document_visuals.is_opening_visual_dependency(opening, obj)
 
     def _refresh_selected_opening_visuals(self):
-        self._sync_selected_opening_overlay()
-        self._sync_selected_opening_handles()
-        self._sync_selected_wall_opening_context_overlay()
-        self._request_view_redraw()
+        return plan_document_visuals.refresh_selected_opening_visuals(self)
 
     def _is_symbol_visual_dependency(self, symbol, obj):
-        if not self._is_plan_symbol_instance(symbol) or not obj:
-            return False
-        if obj == symbol:
-            return True
-        semantic_obj = self._get_plan_semantic_object(symbol)
-        if obj == semantic_obj:
-            return True
-        if obj == getattr(semantic_obj, "Base", None):
-            return True
-        return obj in (getattr(semantic_obj, "PlanSymbols", None) or [])
+        return plan_document_visuals.is_symbol_visual_dependency(self, symbol, obj)
 
     def _refresh_plan_object_footprint_display(self, obj, *, request_redraw=True):
-        if not self._is_supported_plan_object(obj):
-            return
-        self._invalidate_plan_overlay_geometry_cache(obj)
-        semantic_obj = self._get_plan_semantic_object(obj)
-        refresh_targets = []
-        for candidate in (semantic_obj, obj):
-            if not candidate:
-                continue
-            name = getattr(candidate, "Name", None)
-            if not name or any(getattr(target, "Name", None) == name for target in refresh_targets):
-                continue
-            refresh_targets.append(candidate)
-
-        refreshed = False
-        for candidate in refresh_targets:
-            view_object = getattr(candidate, "ViewObject", None)
-            proxy = getattr(view_object, "Proxy", None) if view_object else None
-            if not proxy:
-                continue
-            if (
-                not hasattr(proxy, "ensureFootprintGroup")
-                and not hasattr(proxy, "updateFootprint")
-                and not hasattr(proxy, "refreshFootprint")
-            ):
-                continue
-            try:
-                if hasattr(proxy, "refreshFootprint"):
-                    proxy.refreshFootprint()
-                else:
-                    if hasattr(proxy, "ensureFootprintGroup"):
-                        proxy.ensureFootprintGroup(view_object)
-                    if hasattr(proxy, "updateFootprint"):
-                        proxy.updateFootprint()
-                if hasattr(view_object, "update"):
-                    view_object.update()
-                refreshed = True
-            except TypeError:
-                try:
-                    if hasattr(proxy, "refreshFootprint"):
-                        proxy.refreshFootprint(view_object)
-                    else:
-                        if hasattr(proxy, "ensureFootprintGroup"):
-                            proxy.ensureFootprintGroup(view_object)
-                        if hasattr(proxy, "updateFootprint"):
-                            proxy.updateFootprint()
-                    if hasattr(view_object, "update"):
-                        view_object.update()
-                    refreshed = True
-                except Exception:
-                    continue
-            except Exception:
-                continue
-
-        view_object = getattr(obj, "ViewObject", None)
-        if view_object and hasattr(view_object, "update"):
-            try:
-                view_object.update()
-            except Exception:
-                pass
-        if not refreshed:
-            return
-        if request_redraw:
-            self._request_view_redraw()
+        return plan_document_visuals.refresh_plan_object_footprint_display(
+            self,
+            obj,
+            request_redraw=request_redraw,
+        )
 
     def _refresh_opening_footprint_display(self, opening):
-        if not self._is_hosted_opening_object(opening):
-            return
-        self._refresh_plan_object_footprint_display(opening)
+        return plan_document_visuals.refresh_opening_footprint_display(self, opening)
 
     def _refresh_wall_footprint_display(self, wall):
-        if not wall:
-            return
-        self._refresh_plan_object_footprint_display(wall)
+        return plan_document_visuals.refresh_wall_footprint_display(self, wall)
 
     def _invalidate_wall_hosted_openings_cache(self):
         return plan_hosted_openings.invalidate_wall_hosted_openings_cache(self)
@@ -4567,68 +4488,19 @@ class PlanEditSession:
         return plan_wall_edit.resolve_wall_hosted_opening_layout(self, wall)
 
     def _refresh_opening_host_footprint_displays(self, opening):
-        if not self._is_hosted_opening_object(opening):
-            return
-        for host in getattr(opening, "Hosts", None) or []:
-            self._refresh_wall_footprint_display(host)
+        return plan_document_visuals.refresh_opening_host_footprint_displays(self, opening)
 
     def _queue_recompute_opening_hosts(self, *openings):
-        if (
-            self._tearing_down
-            or self._opening_host_recompute_queued
-            or self._opening_host_recompute_running
-        ):
-            return
-        hosts = []
-        for opening in openings:
-            if not self._is_hosted_opening_object(opening):
-                continue
-            hosts.extend(getattr(opening, "Hosts", None) or [])
-        hosts = [host for host in dict.fromkeys(hosts) if host]
-        if not hosts:
-            return
-        self._opening_host_recompute_queued = True
-        self._flush_recompute_opening_hosts(hosts)
+        return plan_document_visuals.queue_recompute_opening_hosts(self, *openings)
 
     def _flush_recompute_opening_hosts(self, hosts):
-        self._opening_host_recompute_queued = False
-        if self._tearing_down or self._opening_host_recompute_running or not self.doc:
-            return
-        self._opening_host_recompute_running = True
-        try:
-            for host in hosts:
-                try:
-                    host.touch()
-                except Exception:
-                    continue
-            self.doc.recompute()
-        finally:
-            self._opening_host_recompute_running = False
+        return plan_document_visuals.flush_recompute_opening_hosts(self, hosts)
 
     def _queue_hard_refresh_selected_opening_visuals(self):
-        if self._tearing_down or self._selected_opening_hard_refresh_queued:
-            return
-        self._selected_opening_hard_refresh_queued = True
-        self._clear_selected_opening_overlay()
-        self._clear_selected_opening_handles()
-        self._request_view_redraw()
-        try:
-            from PySide import QtCore
-
-            QtCore.QTimer.singleShot(0, self._flush_hard_refresh_selected_opening_visuals)
-        except Exception:
-            self._flush_hard_refresh_selected_opening_visuals()
+        return plan_document_visuals.queue_hard_refresh_selected_opening_visuals(self)
 
     def _flush_hard_refresh_selected_opening_visuals(self):
-        self._selected_opening_hard_refresh_queued = False
-        if self._tearing_down or self.current_tool != "Select":
-            return
-        opening = self._get_selected_plan_target_object("opening")
-        if not self._is_hosted_opening_object(opening):
-            return
-        self._sync_selected_opening_overlay()
-        self._sync_selected_opening_handles()
-        self._request_view_redraw()
+        return plan_document_visuals.flush_hard_refresh_selected_opening_visuals(self)
 
     def slotCreatedObject(self, obj):
         if self._tearing_down:
