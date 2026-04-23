@@ -105,6 +105,14 @@ def _dispatch_current_tool(session, handler_specs):
     return True
 
 
+def _resolve_action_callable(session, method_name):
+    target = session
+    parts = str(method_name or "").split(".")
+    for part in parts:
+        target = getattr(target, part)
+    return target
+
+
 @dataclass(frozen=True)
 class ActivationActionSpec:
     method_name: str
@@ -245,7 +253,7 @@ _ACTION_CANCEL_SPACE_TEXT_PICK = ActivationActionSpec(
     current_tools=("Set Space Text",),
 )
 _ACTION_CANCEL_JOIN_TOOL = ActivationActionSpec("_cancel_join_tool")
-_ACTION_CLEAR_VIEWPORT_STATUS_CHIP = ActivationActionSpec("_clear_viewport_status_chip")
+_ACTION_CLEAR_VIEWPORT_STATUS_CHIP = ActivationActionSpec("viewport.clear_viewport_status_chip")
 _ACTION_CLEAR_INPUT_HINTS = ActivationActionSpec("_clear_input_hints")
 _ACTION_CANCEL_WALL_EDIT_NO_RESTORE_NO_REFRESH = ActivationActionSpec(
     "_cancel_wall_edit",
@@ -285,7 +293,7 @@ def _run_activation_action_specs(session, action_specs):
         if action_spec.predicate_name and not getattr(session, action_spec.predicate_name)():
             continue
         kwargs = dict(action_spec.kwargs)
-        getattr(session, action_spec.method_name)(**kwargs)
+        _resolve_action_callable(session, action_spec.method_name)(**kwargs)
         if action_spec.stop_after:
             return True
     return False
