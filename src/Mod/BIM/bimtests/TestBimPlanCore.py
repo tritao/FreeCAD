@@ -647,6 +647,31 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertTrue(view_model.can_apply_style)
         self.assertIn("Current style: Preset A", view_model.note_text)
 
+    def test_task_panel_context_uses_selection_access_fallback(self):
+        from bimplan.task_panel_context import PlanTaskPanelContext
+
+        wall = SimpleNamespace(Name="Wall001")
+        session = SimpleNamespace(
+            _get_selected_plan_target=lambda: ("wall", wall),
+            _get_selected_plan_targets=lambda: (("wall", wall),),
+        )
+
+        context = PlanTaskPanelContext(session)
+
+        self.assertEqual(("wall", wall), context.get_selected_plan_target())
+        self.assertEqual((("wall", wall),), context.get_selected_plan_targets())
+
+    def test_as_task_panel_context_preserves_context_like_objects(self):
+        from bimplan.task_panel_context import as_task_panel_context
+
+        context = SimpleNamespace(
+            get_current_tool=lambda: "Select",
+            get_selected_plan_target=lambda: (None, None),
+            get_selected_plan_targets=lambda: (),
+        )
+
+        self.assertIs(context, as_task_panel_context(context))
+
     def test_plan_selection_api_uses_primary_target_kind_policy(self):
         from bimplan import target_kinds as plan_target_kinds
         from bimplan.session_components import PlanSelectionAPI
