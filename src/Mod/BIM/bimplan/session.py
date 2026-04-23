@@ -48,6 +48,7 @@ from bimplan import targets as plan_targets
 from bimplan import view as plan_view
 from bimplan import wall_create as plan_wall_create
 from bimplan import wall_edit as plan_wall_edit
+from bimplan import wall_relations as plan_wall_relations
 from bimplan import window_create as plan_window_create
 from bimplan import window_edit as plan_window_edit
 from bimplan.context import PlanEditContext
@@ -87,7 +88,6 @@ _OPENING_MOVE_SNAP_SET = {
     "WorkingPlane",
 }
 _OPENING_MOVE_ANCHORS = ("center", "left", "right")
-_PLAN_JOIN_TYPES = ("Miter", "Butt", "Tee")
 _PRIMARY_PLAN_TARGET_KINDS = ("wall", "opening", "symbol", "provider", "region", "space")
 _OPENING_VISUAL_PROPERTIES = {
     "Shape",
@@ -1406,336 +1406,75 @@ class PlanEditSession:
         self._start_embedded_tool("Move", gui_move.Move())
 
     def activate_join_tool(self):
-        self._cancel_space_region_pick(refresh=False)
-        self._cancel_plan_region_tool(refresh=False)
-        self._cancel_rect_wall_tool(refresh=False)
-        self._cancel_window_tool(refresh=False)
-        self._cancel_space_separator_tool(refresh=False)
-        self._cancel_provider_point_tool(refresh=False)
-
-        if self._has_active_embedded_tool():
-            self._cancel_embedded_tool()
-        self._cancel_wall_edit()
-        self._cancel_pending_edit()
-        self._clear_plan_relation_status()
-        self._clear_wall_grips()
-        self._clear_selected_wall_overlay()
-        self._set_hovered_opening(None)
-        self._set_hovered_wall(None)
-        self._set_hovered_symbol(None)
-        self._set_hovered_provider(None)
-        self._set_hovered_space(None)
-        self._set_hovered_region(None)
-
-        wall = self._get_selected_plan_target_object("wall")
-        if not self._is_plan_selectable_wall(wall):
-            selection = []
-            try:
-                selection = FreeCADGui.Selection.getSelection()
-            except (ReferenceError, RuntimeError):
-                selection = []
-            if len(selection) == 1 and self._is_plan_selectable_wall(selection[0]):
-                wall = selection[0]
-
-        if not self._is_plan_selectable_wall(wall):
-            FreeCAD.Console.PrintWarning(
-                translate("BIM_PlanEdit", "Select a wall before using Join.\n")
-            )
-            return
-
-        self.current_tool = "Join"
-        self._set_selected_plan_target("wall", wall)
-        self._restore_gui_selection(wall)
-        self._sync_secondary_selected_overlays()
-        self._refresh_task_panel_status()
+        return plan_wall_relations.activate_join_tool(self)
 
     def get_plan_join_type(self):
-        return self._plan_join_type
+        return plan_wall_relations.get_plan_join_type(self)
 
     def get_plan_join_types(self):
-        return _PLAN_JOIN_TYPES
+        return plan_wall_relations.get_plan_join_types(self)
 
     def _normalize_plan_join_type(self, join_type):
-        if join_type in _PLAN_JOIN_TYPES:
-            return join_type
-        try:
-            join_type = str(join_type)
-        except Exception:
-            return "Miter"
-        if join_type in _PLAN_JOIN_TYPES:
-            return join_type
-        return "Miter"
+        return plan_wall_relations.normalize_plan_join_type(self, join_type)
 
     def get_plan_join_type_label(self, join_type=None):
-        join_type = self._normalize_plan_join_type(join_type or self._plan_join_type)
-        return {
-            "Miter": translate("BIM_PlanEdit", "Miter"),
-            "Butt": translate("BIM_PlanEdit", "Butt"),
-            "Tee": translate("BIM_PlanEdit", "Tee"),
-        }[join_type]
+        return plan_wall_relations.get_plan_join_type_label(self, join_type=join_type)
 
     def _get_plan_join_type_phrase(self, join_type=None):
-        join_type = self._normalize_plan_join_type(join_type or self._plan_join_type)
-        return {
-            "Miter": translate("BIM_PlanEdit", "miter"),
-            "Butt": translate("BIM_PlanEdit", "butt"),
-            "Tee": translate("BIM_PlanEdit", "tee"),
-        }[join_type]
+        return plan_wall_relations.get_plan_join_type_phrase(self, join_type=join_type)
 
     def _get_plan_join_action_text(self, join_type=None):
-        return translate(
-            "BIM_PlanEdit", "Click another wall to create a {joint_type} joint"
-        ).format(joint_type=self._get_plan_join_type_phrase(join_type))
+        return plan_wall_relations.get_plan_join_action_text(self, join_type=join_type)
 
     def set_plan_join_type(self, join_type, refresh=True):
-        join_type = self._normalize_plan_join_type(join_type)
-        if self._plan_join_type == join_type:
-            if refresh:
-                self._refresh_task_panel_status()
-            return False
-        self._plan_join_type = join_type
-        if refresh:
-            self._refresh_task_panel_status()
-        return True
+        return plan_wall_relations.set_plan_join_type(self, join_type, refresh=refresh)
 
     def _cycle_plan_join_type(self):
-        try:
-            current_index = _PLAN_JOIN_TYPES.index(self._plan_join_type)
-        except ValueError:
-            current_index = 0
-        next_join_type = _PLAN_JOIN_TYPES[(current_index + 1) % len(_PLAN_JOIN_TYPES)]
-        self.set_plan_join_type(next_join_type)
-        return True
+        return plan_wall_relations.cycle_plan_join_type(self)
 
     def _get_plan_join_command(self):
-        from bimcommands.BimJoin import BIM_Join_Butt, BIM_Join_Miter, BIM_Join_Tee
-
-        return {
-            "Miter": BIM_Join_Miter,
-            "Butt": BIM_Join_Butt,
-            "Tee": BIM_Join_Tee,
-        }.get(self._normalize_plan_join_type(self._plan_join_type), BIM_Join_Miter)()
+        return plan_wall_relations.get_plan_join_command(self)
 
     def _get_plan_join_candidate_wall(self):
-        if self.current_tool != "Join":
-            return None
-        wall = self.hovered_wall
-        if not self._is_plan_selectable_wall(wall) or self._is_selected_plan_target("wall", wall):
-            return None
-        return wall
+        return plan_wall_relations.get_plan_join_candidate_wall(self)
 
     def _get_plan_candidate_joint(self, target_wall=None):
-        import ArchWallJoinUtils
-
-        source_wall = self._get_selected_plan_target_object("wall")
-        target_wall = target_wall or self._get_plan_join_candidate_wall()
-        if not self._is_plan_selectable_wall(source_wall):
-            return None
-        if not self._is_plan_selectable_wall(target_wall):
-            return None
-        doc = getattr(source_wall, "Document", None) or self.doc
-        if doc is None:
-            return None
-        return ArchWallJoinUtils.find_existing_joint(doc, source_wall, target_wall)
+        return plan_wall_relations.get_plan_candidate_joint(self, target_wall=target_wall)
 
     def _get_plan_join_candidate_state(self):
-        target_wall = self._get_plan_join_candidate_wall()
-        if not target_wall:
-            return None, None, ""
-
-        joint = self._get_plan_candidate_joint(target_wall)
-        if not joint:
-            return (
-                target_wall,
-                None,
-                translate("BIM_PlanEdit", "Candidate wall: {label}").format(
-                    label=target_wall.Label
-                ),
-            )
-
-        summary = translate("BIM_PlanEdit", "Existing joint with {label}: {joint_type}").format(
-            label=target_wall.Label,
-            joint_type=self.get_plan_join_type_label(getattr(joint, "JointType", "Miter")),
-        )
-        status = getattr(joint, "Status", "")
-        if status not in ("", "OK"):
-            summary = translate("BIM_PlanEdit", "{summary} ({status})").format(
-                summary=summary,
-                status=status,
-            )
-        return target_wall, joint, summary
+        return plan_wall_relations.get_plan_join_candidate_state(self)
 
     def _get_plan_join_mode_action_text(self, target_wall=None, joint=None):
-        target_wall = target_wall or self._get_plan_join_candidate_wall()
-        joint = joint or self._get_plan_candidate_joint(target_wall)
-        if joint:
-            current_type = self._normalize_plan_join_type(getattr(joint, "JointType", "Miter"))
-            if current_type == self._plan_join_type:
-                return translate(
-                    "BIM_PlanEdit",
-                    "Press Delete to unjoin this pair, or Tab to choose a different joint type",
-                )
-            return translate(
-                "BIM_PlanEdit",
-                "Click wall to change it to a {joint_type} joint",
-            ).format(joint_type=self._get_plan_join_type_phrase())
-        if target_wall:
-            return self._get_plan_join_action_text()
-        return translate(
-            "BIM_PlanEdit",
-            "Hover another wall, then click to create a {joint_type} joint",
-        ).format(joint_type=self._get_plan_join_type_phrase())
+        return plan_wall_relations.get_plan_join_mode_action_text(
+            self,
+            target_wall=target_wall,
+            joint=joint,
+        )
 
     def _unjoin_plan_wall_pair(self, source_wall, target_wall):
-        import ArchWallJoinUtils
-
-        if not self._is_plan_selectable_wall(source_wall):
-            return False
-        if not self._is_plan_selectable_wall(target_wall):
-            return False
-
-        doc = getattr(source_wall, "Document", None) or self.doc
-        if doc is None:
-            return False
-        joint = ArchWallJoinUtils.find_existing_joint(doc, source_wall, target_wall)
-        if not joint:
-            return False
-
-        doc.openTransaction(translate("BIM_PlanEdit", "Unjoin walls"))
-        try:
-            doc.removeObject(joint.Name)
-            doc.commitTransaction()
-            doc.recompute()
-        except Exception:
-            try:
-                doc.abortTransaction()
-            except Exception:
-                pass
-            return False
-
-        self._clear_plan_relation_status()
-        self._refresh_task_panel_status()
-        return True
+        return plan_wall_relations.unjoin_plan_wall_pair(self, source_wall, target_wall)
 
     def _unjoin_current_plan_wall_pair(self):
-        source_wall = self._get_selected_plan_target_object("wall")
-        target_wall = self._get_plan_join_candidate_wall()
-        if not self._unjoin_plan_wall_pair(source_wall, target_wall):
-            FreeCAD.Console.PrintWarning(
-                translate("BIM_PlanEdit", "Hover a joined wall pair before using Unjoin.\n")
-            )
-            return False
-        return True
+        return plan_wall_relations.unjoin_current_plan_wall_pair(self)
 
     @staticmethod
     def _iter_unique_wall_sets(source_wall, target_wall, extra_walls):
-        import itertools
-
-        base = [source_wall, target_wall]
-        extras = sorted(
-            [wall for wall in extra_walls if wall not in base],
-            key=lambda wall: getattr(wall, "Name", ""),
-        )
-        seen = set()
-        for size in range(len(extras), 0, -1):
-            for combo in itertools.combinations(extras, size):
-                walls = base + list(combo)
-                signature = tuple(sorted(getattr(wall, "Name", "") for wall in walls if wall))
-                if signature in seen:
-                    continue
-                seen.add(signature)
-                yield walls
+        return plan_wall_relations.iter_unique_wall_sets(source_wall, target_wall, extra_walls)
 
     def _find_plan_junction_promotion(self, source_wall, target_wall):
-        import ArchWallJoinUtils
-        import ArchWallJunctionUtils
-
-        if not self._is_plan_selectable_wall(source_wall):
-            return None
-        if not self._is_plan_selectable_wall(target_wall):
-            return None
-
-        candidate_walls = {
-            getattr(source_wall, "Name", ""): source_wall,
-            getattr(target_wall, "Name", ""): target_wall,
-        }
-        candidate_relations = []
-        seen_relations = set()
-        for wall in (source_wall, target_wall):
-            for relation in ArchWallJoinUtils.iter_wall_relations(wall):
-                relation_name = getattr(relation, "Name", None)
-                if not relation_name or relation_name in seen_relations:
-                    continue
-                seen_relations.add(relation_name)
-                candidate_relations.append(relation)
-                for linked_wall in ArchWallJoinUtils.get_relation_walls(relation):
-                    if self._is_plan_selectable_wall(linked_wall):
-                        candidate_walls[getattr(linked_wall, "Name", "")] = linked_wall
-
-        if len(candidate_walls) < 3:
-            return None
-
-        extra_walls = [
-            wall
-            for name, wall in candidate_walls.items()
-            if wall not in (source_wall, target_wall) and name
-        ]
-        for walls in self._iter_unique_wall_sets(source_wall, target_wall, extra_walls):
-            solution = ArchWallJunctionUtils.solve_wall_junction_inputs(walls)
-            if solution.is_ok():
-                return walls, solution, candidate_relations
-        return None
+        return plan_wall_relations.find_plan_junction_promotion(self, source_wall, target_wall)
 
     @staticmethod
     def _find_reusable_plan_junction(candidate_relations, walls):
-        wall_names = {getattr(wall, "Name", "") for wall in walls if wall}
-        best_relation = None
-        best_overlap = 0
-        for relation in candidate_relations:
-            if getattr(getattr(relation, "Proxy", None), "Type", None) != "WallJunction":
-                continue
-            relation_names = {
-                getattr(wall, "Name", "")
-                for wall in list(getattr(relation, "Walls", []) or [])
-                if wall
-            }
-            overlap = len(wall_names.intersection(relation_names))
-            if overlap > best_overlap:
-                best_relation = relation
-                best_overlap = overlap
-        return best_relation if best_overlap >= 2 else None
+        return plan_wall_relations.find_reusable_plan_junction(candidate_relations, walls)
 
     def _apply_plan_wall_junction_promotion(self, doc, source_wall, target_wall):
-        import Arch
-        import ArchWallJoinUtils
-
-        promotion = self._find_plan_junction_promotion(source_wall, target_wall)
-        if not promotion:
-            return None
-
-        walls, solution, candidate_relations = promotion
-        wall_names = {getattr(wall, "Name", "") for wall in walls if wall}
-        junction = self._find_reusable_plan_junction(candidate_relations, walls)
-
-        for relation in candidate_relations:
-            if not ArchWallJoinUtils.is_wall_joint(relation):
-                continue
-            relation_walls = {
-                getattr(wall, "Name", "")
-                for wall in ArchWallJoinUtils.get_relation_walls(relation)
-                if wall
-            }
-            if relation_walls and relation_walls.issubset(wall_names):
-                doc.removeObject(relation.Name)
-
-        if junction:
-            junction.Walls = list(walls)
-            junction.CarrierMode = "Explicit"
-            junction.CarrierWall = solution.carrier_wall
-            junction.Enabled = True
-            return junction
-
-        return Arch.makeWallJunction(list(walls), carrier_wall=solution.carrier_wall)
+        return plan_wall_relations.apply_plan_wall_junction_promotion(
+            self,
+            doc,
+            source_wall,
+            target_wall,
+        )
 
     def stretch_selected_wall(self, endpoint):
         self._start_wall_edit(endpoint)
@@ -3410,48 +3149,13 @@ class PlanEditSession:
         return summary
 
     def _clear_plan_relation_status(self):
-        self._plan_relation_status_message = None
+        return plan_wall_relations.clear_plan_relation_status(self)
 
     def _collect_wall_relation_warnings(self, wall):
-        if not wall:
-            return []
-        import ArchWallJoinUtils
-
-        warnings = []
-        seen = set()
-        for relation in ArchWallJoinUtils.iter_wall_relations(wall):
-            if not relation or relation.Name in seen or not getattr(relation, "Enabled", True):
-                continue
-            seen.add(relation.Name)
-            status = getattr(relation, "Status", "")
-            if status in ("", "OK", "Disabled"):
-                continue
-            label = getattr(relation, "Label", getattr(relation, "Name", ""))
-            detail = str(getattr(relation, "StatusMessage", "") or status).strip()
-            warnings.append((relation, label, status, detail))
-        return warnings
+        return plan_wall_relations.collect_wall_relation_warnings(self, wall)
 
     def _update_wall_relation_status(self, wall):
-        warnings = self._collect_wall_relation_warnings(wall)
-        if not warnings:
-            self._clear_plan_relation_status()
-            return
-
-        if len(warnings) == 1:
-            _relation, label, status, _detail = warnings[0]
-            summary = translate("BIM_PlanEdit", "Relation warning: {label} ({status})").format(
-                label=label,
-                status=status,
-            )
-        else:
-            summary = translate(
-                "BIM_PlanEdit", "Relation warnings: {count} relations need attention"
-            ).format(count=len(warnings))
-
-        self._plan_relation_status_message = summary
-        FreeCAD.Console.PrintWarning(summary + "\n")
-        for _relation, label, _status, detail in warnings:
-            FreeCAD.Console.PrintWarning(f"  - {label}: {detail}\n")
+        return plan_wall_relations.update_wall_relation_status(self, wall)
 
     def _set_selected_plan_target(
         self,
@@ -3671,20 +3375,7 @@ class PlanEditSession:
         self._sync_selected_provider_handles()
 
     def _cancel_join_tool(self, refresh=True):
-        if self.current_tool != "Join":
-            return False
-        selected_wall = self._get_selected_plan_target_object("wall")
-        self.current_tool = "Select"
-        self._set_hovered_wall(None)
-        self._set_hovered_opening(None)
-        self._set_hovered_symbol(None)
-        self._set_hovered_provider(None)
-        if selected_wall:
-            self._select_wall_for_plan_edit(selected_wall)
-            return True
-        if refresh:
-            self._refresh_task_panel_status()
-        return True
+        return plan_wall_relations.cancel_join_tool(self, refresh=refresh)
 
     def _restore_gui_selection(self, obj):
         if not obj:
@@ -3692,58 +3383,7 @@ class PlanEditSession:
         self._set_gui_selection_object(obj)
 
     def _apply_plan_wall_join(self, source_wall, target_wall):
-        if not self._is_plan_selectable_wall(source_wall):
-            return False
-        if not self._is_plan_selectable_wall(target_wall):
-            return False
-        if source_wall == target_wall:
-            return False
-
-        import Arch
-        import ArchWallJoinUtils
-
-        join_command = self._get_plan_join_command()
-        created = False
-        doc = getattr(source_wall, "Document", None) or self.doc
-        if doc is None:
-            return False
-
-        doc.openTransaction(translate("BIM_PlanEdit", "Join walls"))
-        try:
-            relation = self._apply_plan_wall_junction_promotion(doc, source_wall, target_wall)
-            if relation is None:
-                relation = ArchWallJoinUtils.find_existing_joint(doc, source_wall, target_wall)
-                if not relation:
-                    relation = Arch.makeWallJoint(source_wall, target_wall, join_command.JointType)
-                    created = True
-                if not relation:
-                    raise RuntimeError("Unable to create wall joint")
-                if not join_command._configure_joint(relation, source_wall, target_wall):
-                    raise RuntimeError("Unable to configure wall joint")
-            doc.commitTransaction()
-            doc.recompute()
-        except Exception:
-            try:
-                doc.abortTransaction()
-            except Exception:
-                pass
-            return False
-
-        if getattr(getattr(relation, "Proxy", None), "Type", None) == "WallJoint":
-            if created or getattr(relation, "Status", "OK") != "OK":
-                join_command._report_joint_status(relation)
-        elif getattr(relation, "Status", "OK") != "OK":
-            message = str(getattr(relation, "StatusMessage", "") or getattr(relation, "Status", ""))
-            if message:
-                FreeCAD.Console.PrintWarning(message + "\n")
-        self.current_tool = "Select"
-        self._set_hovered_wall(None)
-        self._set_hovered_opening(None)
-        self._set_hovered_symbol(None)
-        self._set_hovered_provider(None)
-        self._select_wall_for_plan_edit(source_wall)
-        self._restore_gui_selection(source_wall)
-        return True
+        return plan_wall_relations.apply_plan_wall_join(self, source_wall, target_wall)
 
     def _stop_snapper(self):
         snapper = getattr(FreeCADGui, "Snapper", None)
