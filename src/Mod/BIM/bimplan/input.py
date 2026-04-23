@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
-"""Pointer event routing for BIM Plan Edit."""
+"""Input event routing for BIM Plan Edit."""
 
 import FreeCAD
 
@@ -194,3 +194,111 @@ def on_mouse_wheel(session, event_callback):
         return
     with session._plan_perf_trace_event("mouse_wheel", event_type=event_type_name):
         session._queue_plan_overlay_view_scale_refresh()
+
+
+def on_key_pressed(session, event_callback):
+    if session._tearing_down:
+        return
+    try:
+        from pivy import coin
+    except Exception:
+        return
+    event = event_callback.getEvent()
+    key = event.getKey()
+    if session.current_tool == "Move Opening" and key == coin.SoKeyboardEvent.A:
+        if session._cycle_opening_move_anchor():
+            session._refresh_opening_move_preview_from_raw_point()
+            session._refresh_task_panel_status()
+        return
+    if (
+        session.current_tool in ("Move Symbol", "Rotate Symbol")
+        and key == coin.SoKeyboardEvent.ESCAPE
+    ):
+        session._cancel_symbol_handle_point_pick()
+        return
+    if session.current_tool == "Join" and key == coin.SoKeyboardEvent.TAB:
+        if session._cycle_plan_join_type() and hasattr(event_callback, "setHandled"):
+            event_callback.setHandled()
+        return
+    if session.current_tool == "Join" and key in (
+        getattr(coin.SoKeyboardEvent, "DELETE", None),
+        getattr(coin.SoKeyboardEvent, "BACKSPACE", None),
+    ):
+        if session._unjoin_current_plan_wall_pair() and hasattr(event_callback, "setHandled"):
+            event_callback.setHandled()
+        return
+    if session.current_tool == "Join" and key == coin.SoKeyboardEvent.ESCAPE:
+        session._cancel_join_tool()
+        return
+    if session.current_tool == "Pick Space Region" and key == coin.SoKeyboardEvent.ESCAPE:
+        session._cancel_space_region_pick()
+        return
+    if session.current_tool == "Region" and key in (
+        coin.SoKeyboardEvent.RETURN,
+        coin.SoKeyboardEvent.ENTER,
+    ):
+        if session._finalize_plan_region():
+            if hasattr(event_callback, "setHandled"):
+                event_callback.setHandled()
+        return
+    if session.current_tool == "Region" and key == coin.SoKeyboardEvent.ESCAPE:
+        session._cancel_plan_region_tool()
+        return
+    if session.current_tool == "Provider Point" and key == coin.SoKeyboardEvent.ESCAPE:
+        session._cancel_provider_point_tool()
+        return
+    if session.current_tool == "Move Provider" and key == coin.SoKeyboardEvent.ESCAPE:
+        session._cancel_provider_handle_point_pick()
+        return
+    if session.current_tool == "Window" and key == coin.SoKeyboardEvent.ESCAPE:
+        session._cancel_window_tool()
+        return
+    if session._is_wall_move_edit_active() and key == coin.SoKeyboardEvent.TAB:
+        if session._start_wall_readout_edit(cycle=True):
+            if hasattr(event_callback, "setHandled"):
+                event_callback.setHandled()
+        return
+    if session._is_wall_readout_edit_active() and key in (
+        coin.SoKeyboardEvent.RETURN,
+        coin.SoKeyboardEvent.ENTER,
+    ):
+        if session._start_wall_readout_edit():
+            if hasattr(event_callback, "setHandled"):
+                event_callback.setHandled()
+        return
+    if session._is_wall_stretch_edit_active() and key == coin.SoKeyboardEvent.TAB:
+        if session._start_wall_readout_edit():
+            if hasattr(event_callback, "setHandled"):
+                event_callback.setHandled()
+        return
+    if key != coin.SoKeyboardEvent.ESCAPE:
+        return
+    if session._edit_wall and session.current_tool != "Select":
+        session._cancel_wall_edit_point_pick()
+        return
+    if session.current_tool == "Move Opening":
+        session._cancel_opening_handle_point_pick()
+        return
+    if session.current_tool == "Move Provider":
+        session._cancel_provider_handle_point_pick()
+        return
+    if session.current_tool in ("Move Symbol", "Rotate Symbol"):
+        session._cancel_symbol_handle_point_pick()
+        return
+    if session.current_tool == "Set Space Text":
+        session._cancel_space_text_position_pick()
+        return
+    if session._has_active_provider_point_tool():
+        session._cancel_provider_point_tool()
+        return
+    if session._has_active_window_tool():
+        session._cancel_window_tool()
+        return
+    if session._has_active_rect_wall_tool():
+        session._cancel_rect_wall_tool()
+        return
+    if session._has_active_plan_region_tool():
+        session._cancel_plan_region_tool()
+        return
+    if session._has_active_space_separator_tool():
+        session._cancel_space_separator_tool()
