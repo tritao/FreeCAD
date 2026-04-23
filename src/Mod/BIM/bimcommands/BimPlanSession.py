@@ -3525,6 +3525,7 @@ class PlanEditSession:
             self._sync_junction_node_overlays()
             self._sync_selected_wall_opening_context_overlay()
             self._sync_hovered_wall_opening_context_overlay()
+            self._sync_hovered_opening_overlay()
             if not preserve_hovered_symbol_overlay:
                 self._sync_hovered_symbol_overlay()
             self._sync_hovered_space_overlay()
@@ -8054,6 +8055,7 @@ class PlanEditSession:
         if self.hovered_opening == opening:
             return
         self.hovered_opening = opening
+        self._sync_selected_wall_opening_context_overlay()
         self._sync_hovered_opening_overlay()
 
     def _set_hovered_symbol(self, symbol):

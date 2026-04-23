@@ -122,6 +122,13 @@ def sync_hovered_opening_overlay(session):
             not session._hovered_opening_overlay_dirty
             and session._hovered_opening_overlay_render_state == render_state
         ):
+            for tracker in session._opening_hover_trackers:
+                try:
+                    raise_tracker = getattr(tracker, "raiseTracker", None)
+                    if callable(raise_tracker):
+                        raise_tracker()
+                except Exception:
+                    pass
             session._plan_perf_count("hovered_opening_overlay_cache_hits")
             return
         try:
@@ -148,6 +155,12 @@ def sync_hovered_opening_overlay(session):
             tracker.p1(start)
             tracker.p2(end)
             tracker.on()
+            try:
+                raise_tracker = getattr(tracker, "raiseTracker", None)
+                if callable(raise_tracker):
+                    raise_tracker()
+            except Exception:
+                pass
         session._hovered_opening_overlay_render_state = render_state
         session._hovered_opening_overlay_dirty = False
 
@@ -260,6 +273,8 @@ def sync_selected_wall_opening_context_overlay(session):
     color = (0.46, 0.58, 0.82)
     width = session._scaled_line_width(2)
     for opening in session._get_wall_hosted_openings(wall):
+        if opening == session.hovered_opening:
+            continue
         session._create_opening_overlay_trackers(
             opening,
             color=color,
