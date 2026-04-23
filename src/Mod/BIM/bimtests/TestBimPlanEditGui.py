@@ -3674,6 +3674,44 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertGreater(len(session._opening_overlay_trackers), 0)
         self.assertEqual(len(session._opening_handle_trackers), 3)
 
+    def test_plan_edit_hovered_opening_replaces_selected_wall_context_overlay(self):
+        """Hovered openings should not be hidden by selected-wall context overlays."""
+
+        wall = Arch.makeWall(length=3000, width=200, height=2500)
+        self.document.recompute()
+        door = self._make_hosted_door(wall, name="HoverContextDoor")
+
+        session = BimPlanSession.start_session()
+        self.assertIsNotNone(session)
+        self.pump_gui_events()
+
+        self.assertTrue(session._select_wall_for_plan_edit(wall))
+        self.assertGreater(len(session._selected_wall_opening_context_trackers), 0)
+        self.assertEqual(len(session._opening_hover_trackers), 0)
+
+        session._set_hovered_opening(door)
+
+        self.assertIs(session.hovered_opening, door)
+        self.assertGreater(len(session._opening_hover_trackers), 0)
+        self.assertEqual(len(session._selected_wall_opening_context_trackers), 0)
+
+        with patch.object(
+            session,
+            "_sync_hovered_opening_overlay",
+            wraps=session._sync_hovered_opening_overlay,
+        ) as sync_hover:
+            session._set_selected_plan_target("wall", wall)
+
+        self.assertGreater(sync_hover.call_count, 0)
+        self.assertGreater(len(session._opening_hover_trackers), 0)
+        self.assertEqual(len(session._selected_wall_opening_context_trackers), 0)
+
+        session._set_hovered_opening(None)
+
+        self.assertIsNone(session.hovered_opening)
+        self.assertEqual(len(session._opening_hover_trackers), 0)
+        self.assertGreater(len(session._selected_wall_opening_context_trackers), 0)
+
     def test_plan_edit_join_mode_hover_tracks_candidate_wall(self):
         """Join mode should keep a hovered candidate wall visible for joining."""
 
