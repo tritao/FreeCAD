@@ -244,6 +244,7 @@ SET(bimplan_SRCS
     bimplan/ui/controls.py
     bimplan/ui/status_chip.py
     bimplan/view.py
+    bimplan/wall_edit.py
     bimplan/window_create.py
     bimplan/window_edit.py
     bimplan/window_provider.py

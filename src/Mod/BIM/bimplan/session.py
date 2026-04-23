@@ -46,6 +46,7 @@ from bimplan import opening_edit as plan_opening_edit
 from bimplan import provider_edit as plan_provider_edit
 from bimplan import targets as plan_targets
 from bimplan import view as plan_view
+from bimplan import wall_edit as plan_wall_edit
 from bimplan import window_create as plan_window_create
 from bimplan import window_edit as plan_window_edit
 from bimplan.context import PlanEditContext
@@ -4268,10 +4269,10 @@ class PlanEditSession:
         self._refresh_task_panel_status()
 
     def _has_active_wall_edit(self):
-        return self._is_wall_edit_modal_active() or self._embedded_tool_name == "Wall"
+        return plan_wall_edit.has_active_wall_edit(self)
 
     def _is_wall_edit_modal_active(self):
-        return bool(self._wall_edit_modal_active and self._edit_wall)
+        return plan_wall_edit.is_wall_edit_modal_active(self)
 
     def _has_active_embedded_tool(self):
         return self._embedded_tool is not None
@@ -4295,358 +4296,58 @@ class PlanEditSession:
                 pass
 
     def _cancel_wall_edit(self, restore=True, refresh=True):
-        if not self._has_active_wall_edit():
-            if refresh:
-                self.current_tool = "Select"
-                self._refresh_task_panel_status()
-            return False
-
-        self._cancel_wall_subtool()
-
-        self.current_tool = "Select"
-        self._cancel_pending_edit()
-        self._sync_selected_wall_opening_context_overlay()
-        if refresh:
-            self._refresh_task_panel_status()
-        return True
+        return plan_wall_edit.cancel_wall_edit(self, restore=restore, refresh=refresh)
 
     def _cancel_wall_subtool(self):
-        self._cancel_embedded_tool("Wall")
+        return plan_wall_edit.cancel_wall_subtool(self)
 
     def _start_wall_edit(self, mode):
-        with self._plan_perf_trace_span("start_wall_edit"):
-            with self._plan_perf_trace_span("start_wall_edit_validate"):
-                if not self.is_selected_wall_endpoint_editable():
-                    FreeCAD.Console.PrintError(
-                        translate(
-                            "BIM_PlanEdit",
-                            "Select a straight wall before using wall grips.\n",
-                        )
-                    )
-                    return
-
-                wall = self._get_selected_plan_target_object("wall")
-                proxy = getattr(wall, "Proxy", None)
-                if (
-                    not proxy
-                    or not hasattr(proxy, "calc_endpoints")
-                    or not hasattr(proxy, "set_from_endpoints")
-                ):
-                    return
-
-                endpoints = proxy.calc_endpoints(wall)
-                if len(endpoints) != 2:
-                    return
-
-            with self._plan_perf_trace_span("start_wall_edit_state"):
-                self._clear_plan_relation_status()
-                self.current_tool = "Move Wall" if mode == "Move" else f"Stretch {mode}"
-                self._set_hovered_wall(None)
-                self._set_hovered_opening(None)
-                self._set_hovered_symbol(None)
-                self._set_hovered_provider(None)
-                if not self._is_selected_plan_target("wall", wall):
-                    self._set_selected_plan_target("wall", wall)
-                self._clear_selected_wall_overlay()
-                self._clear_selected_wall_opening_context_overlay()
-                self._wall_edit_modal_active = True
-                self._edit_wall = wall
-                self._edit_endpoint = mode
-                self._edit_endpoints = endpoints
-
-            with self._plan_perf_trace_span("start_wall_edit_queue_opening_clearances"):
-                self._wall_edit_opening_clearances = {}
-                self._queue_wall_edit_opening_clearances()
-
-            with self._plan_perf_trace_span("start_wall_edit_preview"):
-                self._preview_points = list(endpoints)
-                self._edit_wall_visibility = None
-                try:
-                    self._edit_wall_visibility = wall.ViewObject.Visibility
-                    wall.ViewObject.Visibility = False
-                except Exception:
-                    self._edit_wall_visibility = None
-                self._clear_wall_grips()
-                self._clear_selected_wall_overlay()
-                self._sync_wall_edit_preview(self._preview_points, include_opening_preview=False)
-
-            self._queue_wall_edit_task_panel_refresh()
-            self._resume_wall_edit_point_pick()
+        return plan_wall_edit.start_wall_edit(self, mode)
 
     def _resume_wall_edit_point_pick(self):
-        with self._plan_perf_trace_span("resume_wall_edit_point_pick"):
-            if not self._is_wall_edit_modal_active():
-                return
-            mode = self._edit_endpoint
-            title = {
-                "Start": translate("BIM_PlanEdit", "Pick new start point"),
-                "End": translate("BIM_PlanEdit", "Pick new end point"),
-                "Move": translate("BIM_PlanEdit", "Pick new wall midpoint"),
-            }.get(mode, translate("BIM_PlanEdit", "Pick wall point"))
-            last = self._get_wall_edit_reference_point()
-
-            FreeCAD.activeDraftCommand = self
-            if getattr(FreeCADGui, "Snapper", None):
-                try:
-                    with self._plan_perf_trace_span("wall_edit_snapper_set_select_mode"):
-                        FreeCADGui.Snapper.setSelectMode(False)
-                except Exception:
-                    pass
-            with self._plan_perf_trace_span("wall_edit_focus_suppression"):
-                self._set_draft_point_focus_suppressed(True)
-            with self._plan_perf_trace_span("wall_edit_snapper_get_point"):
-                FreeCADGui.Snapper.getPoint(
-                    callback=self._finish_wall_edit,
-                    movecallback=self._update_wall_edit_point_pick,
-                    last=last,
-                    title=title,
-                    noTracker=True,
-                )
-            with self._plan_perf_trace_span("wall_edit_queue_focus_plan_view"):
-                self._queue_focus_plan_view()
+        return plan_wall_edit.resume_wall_edit_point_pick(self)
 
     def _snapshot_wall_hosted_opening_clearances(self, wall, endpoints):
-        if not wall or not endpoints or len(endpoints) != 2:
-            return {}
-
-        wall_origin = FreeCAD.Vector(endpoints[0])
-        wall_axis_u = FreeCAD.Vector(endpoints[1]).sub(wall_origin)
-        wall_length = wall_axis_u.Length
-        if wall_length < 1e-9:
-            return {}
-        wall_axis_u.normalize()
-
-        snapshot = {}
-        for opening in self._get_wall_hosted_openings(wall):
-            proxy = self._get_opening_plan_proxy(
-                opening, "get_plan_move_context", "get_plan_center_point"
-            )
-            if not proxy:
-                continue
-            context = proxy.get_plan_move_context()
-            center = proxy.get_plan_center_point()
-            if not context or center is None:
-                continue
-            half_width = float(context.get("opening_half_width_u") or 0.0)
-            center_u = FreeCAD.Vector(center).sub(wall_origin).dot(wall_axis_u)
-            snapshot[getattr(opening, "Name", "")] = {
-                "center_u": center_u,
-                "left_clearance": max(0.0, center_u - half_width),
-                "right_clearance": max(0.0, wall_length - (center_u + half_width)),
-            }
-        return snapshot
+        return plan_wall_edit.snapshot_wall_hosted_opening_clearances(self, wall, endpoints)
 
     def _queue_wall_edit_opening_clearances(self):
-        if (
-            self._tearing_down
-            or self._wall_edit_opening_clearances
-            or self._wall_edit_opening_clearances_queued
-            or self._edit_endpoint not in ("Start", "End")
-        ):
-            return
-        try:
-            from PySide import QtCore
-        except ImportError:
-            return
-        self._wall_edit_opening_clearances_queued = True
-        QtCore.QTimer.singleShot(0, self._prime_wall_edit_opening_clearances)
+        return plan_wall_edit.queue_wall_edit_opening_clearances(self)
 
     def _prime_wall_edit_opening_clearances(self):
-        self._wall_edit_opening_clearances_queued = False
-        if (
-            self._tearing_down
-            or not self._is_wall_stretch_edit_active()
-            or self._wall_edit_opening_clearances
-        ):
-            return
-        with self._plan_perf_trace_event("queued_wall_edit_opening_clearances"):
-            self._wall_edit_opening_clearances = self._snapshot_wall_hosted_opening_clearances(
-                self._edit_wall,
-                self._edit_endpoints,
-            )
+        return plan_wall_edit.prime_wall_edit_opening_clearances(self)
 
     def _ensure_wall_edit_opening_clearances(self, wall, endpoints):
-        if self._wall_edit_opening_clearances or self._edit_endpoint not in ("Start", "End"):
-            return
-        self._wall_edit_opening_clearances_queued = False
-        with self._plan_perf_trace_span("ensure_wall_edit_opening_clearances"):
-            self._wall_edit_opening_clearances = self._snapshot_wall_hosted_opening_clearances(
-                wall,
-                endpoints,
-            )
+        return plan_wall_edit.ensure_wall_edit_opening_clearances(self, wall, endpoints)
 
     def _queue_wall_edit_task_panel_refresh(self):
-        if self._tearing_down or self._wall_edit_task_panel_refresh_queued:
-            return
-        try:
-            from PySide import QtCore
-        except ImportError:
-            self._refresh_task_panel_status(selection_only=True)
-            return
-        self._wall_edit_task_panel_refresh_queued = True
-        QtCore.QTimer.singleShot(0, self._flush_wall_edit_task_panel_refresh)
+        return plan_wall_edit.queue_wall_edit_task_panel_refresh(self)
 
     def _flush_wall_edit_task_panel_refresh(self):
-        self._wall_edit_task_panel_refresh_queued = False
-        if self._tearing_down or not self._is_wall_edit_modal_active():
-            return
-        with self._plan_perf_trace_event("queued_wall_edit_task_panel_refresh"):
-            self._refresh_task_panel_status(selection_only=True)
+        return plan_wall_edit.flush_wall_edit_task_panel_refresh(self)
 
     def _finish_wall_edit(self, point=None, obj=None):
-        del obj
-
-        wall = self._edit_wall
-        endpoint = self._edit_endpoint
-        new_points = self._compute_wall_edit_points(point)
-
-        if point is None or not wall or not endpoint or not new_points:
-            self.current_tool = "Select"
-            self._cancel_pending_edit()
-            self._refresh_task_panel_status()
-            return
-
-        proxy = getattr(wall, "Proxy", None)
-        if (
-            not proxy
-            or not hasattr(proxy, "calc_endpoints")
-            or not hasattr(proxy, "set_from_endpoints")
-        ):
-            self.current_tool = "Select"
-            self._cancel_pending_edit()
-            self._refresh_task_panel_status()
-            return
-
-        self._commit_wall_edit_points(wall, endpoint, proxy, new_points)
+        return plan_wall_edit.finish_wall_edit(self, point=point, obj=obj)
 
     def _commit_wall_edit_points(self, wall, endpoint, proxy, new_points):
-        if not wall or not endpoint or not proxy or not new_points:
-            self.current_tool = "Select"
-            self._cancel_pending_edit()
-            self._refresh_task_panel_status()
-            return
-
-        transaction_name = (
-            translate("BIM_PlanEdit", "Move Wall")
-            if endpoint == "Move"
-            else translate("BIM_PlanEdit", "Stretch Wall Endpoint")
-        )
-        openings_fit = True
-
-        try:
-            self.doc.openTransaction(transaction_name)
-            proxy.set_from_endpoints(wall, new_points)
-            self.doc.recompute()
-            openings_fit = self._resolve_wall_hosted_opening_layout(wall)
-            if not openings_fit:
-                raise RuntimeError("Hosted openings no longer fit within resized wall")
-            self.doc.commitTransaction()
-            self.doc.recompute()
-        except Exception:
-            try:
-                self.doc.abortTransaction()
-            except Exception:
-                pass
-            if not openings_fit:
-                FreeCAD.Console.PrintError(
-                    translate(
-                        "BIM_PlanEdit",
-                        "The resized wall cannot contain its hosted openings.\n",
-                    )
-                )
-            self.current_tool = "Select"
-            self._cancel_pending_edit()
-            return
-        self._refresh_wall_hosted_opening_footprints(wall)
-        self._set_gui_selection_object(wall)
-        self.current_tool = "Select"
-        self._cancel_pending_edit()
-        self._set_selected_plan_target("wall", wall, pending_restore=True)
-        self._update_wall_relation_status(wall)
-        self._sync_wall_grips()
-        self._refresh_task_panel_status()
+        return plan_wall_edit.commit_wall_edit_points(self, wall, endpoint, proxy, new_points)
 
     def _start_wall_grip_edit(self, grip_index):
-        if grip_index not in (0, 1, 2) or not self.is_selected_wall_endpoint_editable():
-            return
-        self._start_wall_edit({0: "Start", 1: "End", 2: "Move"}[grip_index])
+        return plan_wall_edit.start_wall_grip_edit(self, grip_index)
 
     def _activate_wall_grip(self, grip_index, wall=None):
-        if wall is None:
-            wall = self._get_selected_plan_target_object("wall")
-        try:
-            from PySide import QtCore
-        except ImportError:
-            self._activate_wall_grip_now(grip_index, wall)
-            return
-
-        QtCore.QTimer.singleShot(
-            0,
-            lambda wall=wall, grip_index=grip_index: self._activate_wall_grip_now(grip_index, wall),
-        )
+        return plan_wall_edit.activate_wall_grip(self, grip_index, wall=wall)
 
     def _activate_wall_grip_now(self, grip_index, wall=None):
-        with self._plan_perf_trace_span("activate_wall_grip_now"):
-            if self._tearing_down or self.current_tool != "Select" or not wall:
-                return
-            with self._plan_perf_trace_span("activate_wall_grip_set_target"):
-                if not self._is_selected_plan_target("wall", wall):
-                    self._set_selected_plan_target("wall", wall)
-            with self._plan_perf_trace_span("activate_wall_grip_start_edit"):
-                self._start_wall_grip_edit(grip_index)
+        return plan_wall_edit.activate_wall_grip_now(self, grip_index, wall=wall)
 
     def _get_wall_edit_reference_point(self):
-        if not self._edit_endpoints or len(self._edit_endpoints) != 2:
-            return None
-        if self._edit_endpoint == "Move":
-            return (self._edit_endpoints[0] + self._edit_endpoints[1]) * 0.5
-        if self._edit_endpoint == "Start":
-            return self._edit_endpoints[0]
-        if self._edit_endpoint == "End":
-            return self._edit_endpoints[1]
-        return None
+        return plan_wall_edit.get_wall_edit_reference_point(self)
 
     def _compute_wall_edit_points(self, point):
-        endpoint = self._edit_endpoint
-        original_endpoints = self._edit_endpoints
-        if point is None or not endpoint or not original_endpoints:
-            return None
-
-        if endpoint == "Start":
-            axis = original_endpoints[1].sub(original_endpoints[0]).normalize()
-            projected = axis.dot(point.sub(original_endpoints[1]))
-            if projected > -_MIN_WALL_LENGTH:
-                return None
-            return [original_endpoints[1].add(axis.multiply(projected)), original_endpoints[1]]
-        elif endpoint == "End":
-            axis = original_endpoints[1].sub(original_endpoints[0]).normalize()
-            projected = axis.dot(point.sub(original_endpoints[0]))
-            if projected < _MIN_WALL_LENGTH:
-                return None
-            return [original_endpoints[0], original_endpoints[0].add(axis.multiply(projected))]
-
-        original_midpoint = (original_endpoints[0] + original_endpoints[1]) * 0.5
-        delta = point.sub(original_midpoint)
-        return [original_endpoints[0].add(delta), original_endpoints[1].add(delta)]
+        return plan_wall_edit.compute_wall_edit_points(self, point)
 
     def _compute_wall_edit_points_from_length(self, length):
-        endpoint = self._edit_endpoint
-        original_endpoints = self._edit_endpoints
-        if endpoint not in ("Start", "End") or not original_endpoints:
-            return None
-
-        length = max(float(length), _MIN_WALL_LENGTH)
-        axis = original_endpoints[1].sub(original_endpoints[0])
-        if axis.Length < _MIN_WALL_LENGTH:
-            return None
-        axis.normalize()
-
-        if endpoint == "Start":
-            end = original_endpoints[1]
-            return [end.sub(FreeCAD.Vector(axis).multiply(length)), end]
-
-        start = original_endpoints[0]
-        return [start, start.add(FreeCAD.Vector(axis).multiply(length))]
+        return plan_wall_edit.compute_wall_edit_points_from_length(self, length)
 
     def _get_preview_footprint(self, points, width=None, align=None):
         wall = self._edit_wall
