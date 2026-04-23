@@ -2923,7 +2923,7 @@ class PlanEditControlsWidget:
         self.session._unjoin_current_plan_wall_pair()
 
     def on_reapply_clicked(self):
-        self.session.apply_plan_view(fit=False)
+        self.session.viewport.apply_plan_view(fit=False)
         self.refresh_from_session()
 
     def on_space_label_edited(self):

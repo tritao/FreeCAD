@@ -25,10 +25,10 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
         self.session._on_embedded_command_finished("Wall", command or self.command)
 
     def get_working_plane(self):
-        return self.session.get_interaction_plane()
+        return self.session.viewport.get_interaction_plane()
 
     def get_interaction_plane(self):
-        return self.session.get_interaction_plane()
+        return self.session.viewport.get_interaction_plane()
 
     def request_point(
         self,

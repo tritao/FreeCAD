@@ -668,7 +668,7 @@ def shutdown(session, close_dialog=True, teardown=False):
     if teardown:
         session._discard_runtime_references()
     else:
-        session.restore_state()
+        session.viewport.restore_state()
         if session.doc:
             try:
                 session.doc.recompute()

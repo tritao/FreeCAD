@@ -1199,7 +1199,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session._embedded_tool, "Wall tool should be embedded in Plan Edit.")
         self.assertIsInstance(session._embedded_tool, current_arch_wall_class())
 
-        self.assertPlaneIsSaneTop(session.get_interaction_plane())
+        self.assertPlaneIsSaneTop(session.viewport.get_interaction_plane())
         self.assertPlaneIsSaneTop(session._embedded_tool._plane)
 
         session.shutdown(close_dialog=False)

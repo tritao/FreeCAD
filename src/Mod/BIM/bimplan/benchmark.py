@@ -795,7 +795,7 @@ def _run_scenario(spec, iteration, operations_handle, settle_ms, timer_settle_ms
         if session is None:
             raise RuntimeError("Plan Edit session did not start.")
         try:
-            session.apply_plan_view(fit=True)
+            session.viewport.apply_plan_view(fit=True)
         except Exception:
             try:
                 session.view.fitAll()
