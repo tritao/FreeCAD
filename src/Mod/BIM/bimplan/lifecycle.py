@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import FreeCAD
 import FreeCADGui
 from bimplan import command_gate as plan_command_gate
+from bimplan import spaces as plan_spaces
 from bimplan import window_create as plan_window_create
 from bimplan import target_dispatch as plan_target_dispatch
 from bimplan import target_kinds as plan_target_kinds
@@ -89,10 +90,7 @@ def _clear_space_text_pick_state(session):
 
 
 def _clear_space_region_pick_state(session):
-    session._space_region_pick_boundaries = []
-    session._space_region_candidates = []
-    session._hovered_space_region_candidate = None
-    session._space_region_pick_seed_space = None
+    plan_spaces.reset_space_region_pick_state(session, clear_overlays=False)
 
 
 def _dispatch_current_tool(session, handler_specs):
