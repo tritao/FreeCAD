@@ -7,6 +7,7 @@ from contextlib import contextmanager, nullcontext
 import FreeCAD
 import FreeCADGui
 from . import provider_targets as plan_provider_targets
+from . import target_dispatch as plan_target_dispatch
 from . import target_kinds as plan_target_kinds
 
 
@@ -1233,12 +1234,7 @@ def clear_plan_selection_state(session):
             session._set_selected_plan_target()
             session._provider_selected_objects = []
         with session._plan_perf_trace_span("clear_plan_selection_hover_state"):
-            session._set_hovered_wall(None)
-            session._set_hovered_opening(None)
-            session._set_hovered_symbol(None)
-            session._set_hovered_provider(None)
-            session._set_hovered_space(None)
-            session._set_hovered_region(None)
+            plan_target_dispatch.clear_hovered_targets(session)
         with session._plan_perf_trace_span("clear_plan_selection_wall_grips"):
             session._clear_wall_grips()
             session._clear_selected_wall_overlay()
