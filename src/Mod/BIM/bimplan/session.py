@@ -4362,284 +4362,40 @@ class PlanEditSession:
         return plan_view.get_plan_view_widget(self)
 
     def _format_status_chip_action(self, message):
-        if not message:
-            return ""
-        text = str(message)
-        if text.startswith("%1 "):
-            text = text[3:]
-        elif text.startswith("%1"):
-            text = text[2:]
-        text = text.strip()
-        if not text:
-            return ""
-        return text[0].upper() + text[1:]
+        return plan_task_panel.format_status_chip_action(message)
 
     def _get_plan_target_display_label(self, obj):
-        return getattr(obj, "Label", getattr(obj, "Name", ""))
+        return plan_task_panel.get_plan_target_display_label(obj)
 
     def _format_provider_target_role_label(self, obj):
-        return plan_provider_targets.get_plan_provider_target_role_label(self, obj)
+        return plan_task_panel.format_provider_target_role_label(self, obj)
 
     def _format_provider_target_help(self, obj):
-        return plan_provider_targets.format_plan_provider_target_help(self, obj)
+        return plan_task_panel.format_provider_target_help(self, obj)
 
     def _get_opening_display_kind_key(self, opening):
-        if not opening:
-            return "Opening"
-        semantic_obj = self._get_plan_semantic_object(opening)
-        ifc_type = getattr(semantic_obj, "IfcType", "") if semantic_obj else ""
-        if ifc_type in {"Window", "Door"}:
-            return ifc_type
-        try:
-            import Draft
-
-            if Draft.getType(semantic_obj) == "Window":
-                return "Window"
-        except Exception:
-            pass
-        return "Opening"
+        return plan_task_panel.get_opening_display_kind_key(self, opening)
 
     def _get_opening_display_kind(self, opening):
-        return translate("BIM_PlanEdit", self._get_opening_display_kind_key(opening))
+        return plan_task_panel.get_opening_display_kind(self, opening)
 
     def _format_opening_selection_help(self, opening):
-        opening_kind = self._get_opening_display_kind_key(opening)
-        if opening_kind == "Door":
-            return translate(
-                "BIM_PlanEdit",
-                "Use in-view handles to move or flip the selected door.",
-            )
-        if opening_kind == "Window":
-            help_text = translate(
-                "BIM_PlanEdit",
-                "Use the in-view handle to move the selected window along its host wall.",
-            )
-            can_edit_width = self._can_edit_window_width(opening)
-            can_edit_height = self._can_edit_window_height(opening)
-            can_apply_style = self._can_apply_window_style_preset(opening)
-            if (can_edit_width or can_edit_height) and can_apply_style:
-                help_text = "{} {}".format(
-                    help_text,
-                    translate(
-                        "BIM_PlanEdit",
-                        "Use the window controls below to change its width, height, or style.",
-                    ),
-                )
-            elif can_edit_width and can_edit_height:
-                help_text = "{} {}".format(
-                    help_text,
-                    translate(
-                        "BIM_PlanEdit",
-                        "Use the window controls below to change its width or height.",
-                    ),
-                )
-            elif can_edit_width:
-                help_text = "{} {}".format(
-                    help_text,
-                    translate(
-                        "BIM_PlanEdit",
-                        "Use the window controls below to change its width.",
-                    ),
-                )
-            elif can_edit_height:
-                help_text = "{} {}".format(
-                    help_text,
-                    translate(
-                        "BIM_PlanEdit",
-                        "Use the window controls below to change its height.",
-                    ),
-                )
-            elif can_apply_style:
-                help_text = "{} {}".format(
-                    help_text,
-                    translate(
-                        "BIM_PlanEdit",
-                        "Use the window controls below to change its style.",
-                    ),
-                )
-            return help_text
-        return translate(
-            "BIM_PlanEdit",
-            "Use in-view handles to move or flip the selected opening.",
-        )
+        return plan_task_panel.format_opening_selection_help(self, opening)
 
     def _format_plan_target_selection_state(self, kind, obj):
-        if not kind or not obj:
-            return ""
-        if kind == "opening":
-            return translate("BIM_PlanEdit", "{kind}: {label}").format(
-                kind=self._get_opening_display_kind(obj),
-                label=self._get_plan_target_display_label(obj),
-            )
-        templates = {
-            "symbol": translate("BIM_PlanEdit", "Symbol: {label}"),
-            "region": translate("BIM_PlanEdit", "Region: {label}"),
-            "space": translate("BIM_PlanEdit", "Space: {label}"),
-            "wall": translate("BIM_PlanEdit", "Wall: {label}"),
-        }
-        if kind == "provider":
-            return translate("BIM_PlanEdit", "{kind}: {label}").format(
-                kind=self._format_provider_target_role_label(obj),
-                label=self._get_plan_target_display_label(obj),
-            )
-        template = templates.get(kind)
-        if not template:
-            return ""
-        return template.format(label=self._get_plan_target_display_label(obj))
+        return plan_task_panel.format_plan_target_selection_state(self, kind, obj)
 
     def _get_provider_selected_objects(self):
-        return tuple(self._normalize_gui_object_selection(self._provider_selected_objects))
+        return plan_task_panel.get_provider_selected_objects(self)
 
     def _format_provider_selected_object_state(self):
-        objects = self._get_provider_selected_objects()
-        if not objects:
-            return ""
-        if len(objects) == 1:
-            return translate("BIM_PlanEdit", "Object: {label}").format(
-                label=self._get_plan_target_display_label(objects[0])
-            )
-        return translate("BIM_PlanEdit", "{count} integration objects selected").format(
-            count=len(objects)
-        )
+        return plan_task_panel.format_provider_selected_object_state(self)
 
     def _format_provider_selected_object_help(self):
-        if not self._get_provider_selected_objects():
-            return ""
-        return translate(
-            "BIM_PlanEdit",
-            "Use the integration details and actions below for the selected object.",
-        )
+        return plan_task_panel.format_provider_selected_object_help(self)
 
     def _get_status_chip_text(self):
-        title = translate("BIM_PlanEdit", "Plan Edit · {tool}").format(tool=self.current_tool)
-        selected_kind, selected_obj = self._get_selected_plan_target()
-        selected_context = self._format_plan_target_selection_state(selected_kind, selected_obj)
-        provider_context = self._format_provider_selected_object_state()
-        provider_action = self._format_provider_selected_object_help()
-
-        if self.current_tool == "Provider Point":
-            title = translate("BIM_PlanEdit", "Plan Edit · {tool}").format(
-                tool=self._get_provider_point_tool_label()
-            )
-            return title, self._get_provider_point_tool_prompt()
-
-        if self.current_tool == "Move Opening":
-            context = (
-                selected_context
-                if selected_kind == "opening" and selected_obj is not None
-                else translate("BIM_PlanEdit", "Opening move")
-            )
-            action = translate("BIM_PlanEdit", "Click target point")
-            return title, "{}\n{}".format(context, action)
-
-        if self.current_tool == "Move Symbol":
-            context = (
-                selected_context
-                if selected_kind == "symbol" and selected_obj is not None
-                else translate("BIM_PlanEdit", "Symbol move")
-            )
-            action = translate("BIM_PlanEdit", "Click target point")
-            return title, "{}\n{}".format(context, action)
-
-        if self.current_tool == "Move Provider":
-            context = (
-                selected_context
-                if selected_kind == "provider" and selected_obj is not None
-                else translate("BIM_PlanEdit", "Integration move")
-            )
-            action = translate("BIM_PlanEdit", "Click target point")
-            return title, "{}\n{}".format(context, action)
-
-        if self.current_tool == "Rotate Symbol":
-            context = (
-                selected_context
-                if selected_kind == "symbol" and selected_obj is not None
-                else translate("BIM_PlanEdit", "Symbol rotation")
-            )
-            if self._symbol_rotation_snap_enabled():
-                action = translate(
-                    "BIM_PlanEdit", "Click target angle ({snap} snap, Shift = free)"
-                ).format(snap=self._format_symbol_rotation_snap_label())
-            else:
-                action = translate("BIM_PlanEdit", "Click target angle")
-            return title, "{}\n{}".format(context, action)
-
-        if self.current_tool == "Move Wall":
-            context = (
-                selected_context
-                if selected_kind == "wall" and selected_obj is not None
-                else translate("BIM_PlanEdit", "Wall move")
-            )
-            action = translate("BIM_PlanEdit", "Click target point")
-            return title, "{}\n{}".format(context, action)
-
-        if self.current_tool == "Join":
-            target_wall, joint, detail = self._get_plan_join_candidate_state()
-            context = (
-                translate("BIM_PlanEdit", "Source wall: {label}").format(
-                    label=self._get_plan_target_display_label(selected_obj)
-                )
-                if selected_kind == "wall" and selected_obj is not None
-                else translate("BIM_PlanEdit", "Wall join")
-            )
-            action = self._get_plan_join_mode_action_text(target_wall, joint)
-            if detail:
-                return title, "{}\n{}\n{}".format(context, detail, action)
-            return title, "{}\n{}".format(context, action)
-
-        if self.current_tool.startswith("Stretch "):
-            context = (
-                selected_context
-                if selected_kind == "wall" and selected_obj is not None
-                else translate("BIM_PlanEdit", "Wall stretch")
-            )
-            action = translate("BIM_PlanEdit", "Click endpoint or press Enter to type a value")
-            return title, "{}\n{}".format(context, action)
-
-        if self.current_tool == "Region":
-            context = (
-                translate("BIM_PlanEdit", "Parent space: {label}").format(
-                    label=self._plan_region_parent_space.Label
-                )
-                if self._is_plan_space_object(self._plan_region_parent_space)
-                else translate("BIM_PlanEdit", "Plan region")
-            )
-            action = translate(
-                "BIM_PlanEdit",
-                "Click polygon points, press Enter to finish, or click near the first point to close",
-            )
-            return title, "{}\n{}".format(context, action)
-
-        if selected_context:
-            context = selected_context
-        elif provider_context:
-            context = provider_context
-        else:
-            context = translate("BIM_PlanEdit", "Storey: {label}").format(
-                label=self.get_storey_label(self.active_storey)
-            )
-
-        selection_summary = self._get_plan_selection_summary_text()
-        if selection_summary:
-            context = "{}\n{}".format(context, selection_summary)
-
-        hints = self._get_input_hint_specs()
-        action = self._format_status_chip_action(hints[0][0]) if hints else ""
-        if selected_kind == "region" and self.current_tool == "Select":
-            action = translate(
-                "BIM_PlanEdit",
-                "Edit label, scheme, type, and parent space in the task panel",
-            )
-        if (selected_kind == "provider" or provider_context) and self.current_tool == "Select":
-            if selected_kind == "provider":
-                action = self._format_provider_target_help(selected_obj)
-            else:
-                action = provider_action
-        if self._plan_relation_status_message:
-            action = self._plan_relation_status_message
-        if not action:
-            action = translate("BIM_PlanEdit", "Work directly in the viewport")
-        return title, "{}\n{}".format(context, action)
+        return plan_task_panel.get_status_chip_text(self)
 
     def _ensure_viewport_status_chip(self):
         return plan_view.ensure_viewport_status_chip(self, _PlanEditViewportStatusChip)
