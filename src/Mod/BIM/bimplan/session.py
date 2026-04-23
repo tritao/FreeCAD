@@ -218,6 +218,8 @@ class PlanEditSession:
     def __init__(self):
         self.selection = plan_session_components.PlanSelectionAPI(self)
         self.spaces = plan_session_components.PlanSpacesAPI(self)
+        self.wall_relations = plan_session_components.PlanWallRelationsAPI(self)
+        self.windows = plan_session_components.PlanWindowsAPI(self)
         self.viewport = plan_session_components.PlanViewportAPI(self)
         self.wall_edit = plan_session_components.PlanWallEditAPI(self)
         self.providers = plan_session_components.PlanProvidersAPI(self)
@@ -824,7 +826,7 @@ class PlanEditSession:
         return plan_wall_create.activate_rect_wall_tool(self)
 
     def can_place_plan_window(self):
-        return plan_window_create.can_place_window(self)
+        return self.windows.can_place_window()
 
     def activate_window_tool(self):
         return plan_lifecycle.activate_window_tool(self)
@@ -854,7 +856,7 @@ class PlanEditSession:
         return plan_wall_relations.normalize_plan_join_type(self, join_type)
 
     def get_plan_join_type_label(self, join_type=None):
-        return plan_wall_relations.get_plan_join_type_label(self, join_type=join_type)
+        return self.wall_relations.get_plan_join_type_label(join_type=join_type)
 
     def _get_plan_join_type_phrase(self, join_type=None):
         return plan_wall_relations.get_plan_join_type_phrase(self, join_type=join_type)
@@ -875,14 +877,13 @@ class PlanEditSession:
         return plan_wall_relations.get_plan_join_candidate_wall(self)
 
     def _get_plan_candidate_joint(self, target_wall=None):
-        return plan_wall_relations.get_plan_candidate_joint(self, target_wall=target_wall)
+        return self.wall_relations.get_plan_candidate_joint(target_wall=target_wall)
 
     def _get_plan_join_candidate_state(self):
-        return plan_wall_relations.get_plan_join_candidate_state(self)
+        return self.wall_relations.get_plan_join_candidate_state()
 
     def _get_plan_join_mode_action_text(self, target_wall=None, joint=None):
-        return plan_wall_relations.get_plan_join_mode_action_text(
-            self,
+        return self.wall_relations.get_plan_join_mode_action_text(
             target_wall=target_wall,
             joint=joint,
         )
@@ -919,20 +920,7 @@ class PlanEditSession:
         self._start_wall_edit("Move")
 
     def is_selected_wall_endpoint_editable(self):
-        wall = self.selection.get_selected_plan_target_object("wall")
-        if not wall:
-            return False
-        proxy = getattr(wall, "Proxy", None)
-        if not (hasattr(proxy, "calc_endpoints") and hasattr(proxy, "set_from_endpoints")):
-            return False
-        if not getattr(wall, "Base", None):
-            return True
-        try:
-            import Arch
-
-            return Arch.is_debasable(wall)
-        except Exception:
-            return False
+        return self.wall_edit.is_selected_wall_endpoint_editable()
 
     def is_selected_wall_baseless(self):
         wall = self.selection.get_selected_plan_target_object("wall")
@@ -1186,7 +1174,7 @@ class PlanEditSession:
         return plan_targets.is_plan_selectable_wall(self, obj)
 
     def _is_plan_space_object(self, obj):
-        return plan_targets.is_plan_space_object(self, obj)
+        return self.spaces.is_plan_space_object(obj)
 
     def _is_plan_custom_pick_only_object(self, obj):
         return plan_targets.is_plan_custom_pick_only_object(self, obj)
@@ -1446,14 +1434,7 @@ class PlanEditSession:
         return self.status_text.format_plan_target_count_label(kind, count)
 
     def _format_space_region_candidate_area(self, candidate):
-        area = float((candidate or {}).get("area", 0.0) or 0.0)
-        if area <= 0.0:
-            return ""
-        try:
-            quantity = FreeCAD.Units.Quantity(area, "mm^2")
-            return quantity.UserString
-        except Exception:
-            return "{:.3f} m^2".format(area / 1000000.0)
+        return self.spaces.format_space_region_candidate_area(candidate)
 
     def _summarize_plan_targets(self, targets):
         return self.status_text.summarize_plan_targets(targets)
@@ -2859,37 +2840,31 @@ class PlanEditSession:
         return self.spaces.set_selected_space_type(space_type)
 
     def _get_window_style_preset_options(self):
-        return plan_window_edit.get_window_style_preset_options()
+        return self.windows.get_window_style_preset_options()
 
     def _get_selected_window_style_preset(self):
-        return plan_window_edit.get_selected_window_style_preset(self)
+        return self.windows.get_selected_window_style_preset()
 
     def _get_selected_window_width_mm(self):
         return plan_window_edit.get_selected_window_width_mm(self)
 
     def _get_selected_window_width_text(self):
-        return plan_window_edit.get_selected_window_width_text(self)
+        return self.windows.get_selected_window_width_text()
 
     def _get_selected_window_height_mm(self):
         return plan_window_edit.get_selected_window_height_mm(self)
 
     def _get_selected_window_height_text(self):
-        return plan_window_edit.get_selected_window_height_text(self)
+        return self.windows.get_selected_window_height_text()
 
     def _can_apply_window_style_preset(self, window=None):
-        if window is None:
-            window = self.selection.get_selected_plan_target_object("opening")
-        return plan_window_edit.can_edit_window_style_preset(window)
+        return self.windows.can_apply_window_style_preset(window)
 
     def _can_edit_window_width(self, window=None):
-        if window is None:
-            window = self.selection.get_selected_plan_target_object("opening")
-        return plan_window_edit.can_edit_window_width(window)
+        return self.windows.can_edit_window_width(window)
 
     def _can_edit_window_height(self, window=None):
-        if window is None:
-            window = self.selection.get_selected_plan_target_object("opening")
-        return plan_window_edit.can_edit_window_height(window)
+        return self.windows.can_edit_window_height(window)
 
     def _can_apply_selected_window_style_preset(self):
         return plan_window_edit.can_apply_selected_window_style_preset(self)

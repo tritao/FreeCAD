@@ -120,6 +120,17 @@ def get_plan_region_close_tolerance(session):
     return max(120.0, float(units_per_pixel) * 12.0)
 
 
+def format_space_region_candidate_area(candidate):
+    area = float((candidate or {}).get("area", 0.0) or 0.0)
+    if area <= 0.0:
+        return ""
+    try:
+        quantity = FreeCAD.Units.Quantity(area, "mm^2")
+        return quantity.UserString
+    except Exception:
+        return "{:.3f} m^2".format(area / 1000000.0)
+
+
 def get_plan_region_preview_segments(session, point=None):
     points = [FreeCAD.Vector(item) for item in (session._plan_region_points or [])]
     if point is not None:
