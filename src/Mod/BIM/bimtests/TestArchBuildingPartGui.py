@@ -77,3 +77,14 @@ class TestArchBuildingPartGui(TestArchBaseGui):
         FreeCADGui.runCommand("Std_ToggleVisibility", 0)
         App.ActiveDocument.recompute()
         assert wall.Visibility
+
+    def testBuildingPartRecomputeToleratesInvalidViewProxy(self):
+        """Recompute should ignore a malformed restored view proxy."""
+
+        bp = Arch.makeBuildingPart()
+        App.ActiveDocument.recompute()
+
+        bp.ViewObject.Proxy = 1
+        App.ActiveDocument.recompute()
+
+        self.assertEqual(1, bp.ViewObject.Proxy)
