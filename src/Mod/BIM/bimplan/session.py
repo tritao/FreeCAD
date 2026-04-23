@@ -33,6 +33,7 @@ import FreeCAD
 import FreeCADGui
 from bimplan import picking as plan_picking
 from bimplan import command_gate as plan_command_gate
+from bimplan import hosted_openings as plan_hosted_openings
 from bimplan import input as plan_input
 from bimplan import performance as plan_performance
 from bimplan import provider_runtime as plan_provider_runtime
@@ -1875,21 +1876,7 @@ class PlanEditSession:
         return False
 
     def _is_hosted_opening_object(self, obj):
-        if not obj:
-            return False
-        semantic_obj = self._get_plan_semantic_object(obj)
-        if not getattr(semantic_obj, "Hosts", None):
-            return False
-
-        if getattr(semantic_obj, "IfcType", "") in {"Window", "Door"}:
-            return True
-
-        try:
-            import Draft
-
-            return Draft.getType(semantic_obj) == "Window"
-        except Exception:
-            return False
+        return plan_hosted_openings.is_hosted_opening_object(self, obj)
 
     def _get_supported_plan_visibility(self, obj, state):
         if self._is_component_addition_object(obj):
@@ -4646,36 +4633,13 @@ class PlanEditSession:
         self._refresh_plan_object_footprint_display(wall)
 
     def _invalidate_wall_hosted_openings_cache(self):
-        self._wall_hosted_openings_cache = None
-        self._plan_opening_instances_cache = None
-        self._wall_hosted_openings_cache_queued = False
+        return plan_hosted_openings.invalidate_wall_hosted_openings_cache(self)
 
     def _queue_prime_wall_hosted_openings_cache(self):
-        if (
-            self._tearing_down
-            or self._wall_hosted_openings_cache is not None
-            or self._wall_hosted_openings_cache_queued
-            or not self.doc
-        ):
-            return
-        try:
-            from PySide import QtCore
-        except ImportError:
-            return
-        self._wall_hosted_openings_cache_queued = True
-        QtCore.QTimer.singleShot(0, self._prime_wall_hosted_openings_cache)
+        return plan_hosted_openings.queue_prime_wall_hosted_openings_cache(self)
 
     def _prime_wall_hosted_openings_cache(self):
-        self._wall_hosted_openings_cache_queued = False
-        if self._tearing_down or self._wall_hosted_openings_cache is not None or not self.doc:
-            return
-        doc_name = getattr(self.doc, "Name", None)
-        cache = self._build_wall_hosted_openings_cache()
-        self._wall_hosted_openings_cache = (doc_name, cache)
-        self._plan_opening_instances_cache = (
-            doc_name,
-            self._collect_opening_instances_from_host_cache(cache),
-        )
+        return plan_hosted_openings.prime_wall_hosted_openings_cache(self)
 
     def _queue_prime_hover_pick_caches(self):
         if self._tearing_down or self._plan_hover_pick_cache_queued or not self.doc:
@@ -4726,72 +4690,16 @@ class PlanEditSession:
                     tuple(self.get_plan_provider_targets())
 
     def _build_wall_hosted_openings_cache(self):
-        cache = {}
-        if not self.doc:
-            return cache
-        with self._plan_perf_trace_span("build_wall_hosted_openings_cache"):
-            for obj in getattr(self.doc, "Objects", []) or []:
-                if not self._is_hosted_opening_object(obj):
-                    continue
-                for host in getattr(obj, "Hosts", None) or []:
-                    host_key = self._get_document_object_key(host)
-                    if host_key is None:
-                        continue
-                    cache.setdefault(host_key, []).append(obj)
-        return cache
+        return plan_hosted_openings.build_wall_hosted_openings_cache(self)
 
     def _collect_opening_instances_from_host_cache(self, host_cache):
-        openings = []
-        seen = set()
-        for hosted_openings in (host_cache or {}).values():
-            for opening in hosted_openings:
-                opening_key = self._get_document_object_key(opening)
-                if opening_key is None or opening_key in seen:
-                    continue
-                seen.add(opening_key)
-                openings.append(opening)
-        return tuple(openings)
+        return plan_hosted_openings.collect_opening_instances_from_host_cache(self, host_cache)
 
     def _get_plan_opening_instances(self):
-        if not self.doc:
-            return ()
-        doc_name = getattr(self.doc, "Name", None)
-        cache_record = self._plan_opening_instances_cache
-        if cache_record is not None and cache_record[0] == doc_name:
-            self._plan_perf_count("plan_opening_instances_cache_hits")
-            return cache_record[1]
-
-        wall_cache_record = self._wall_hosted_openings_cache
-        if wall_cache_record is None or wall_cache_record[0] != doc_name:
-            host_cache = self._build_wall_hosted_openings_cache()
-            self._wall_hosted_openings_cache = (doc_name, host_cache)
-        else:
-            self._plan_perf_count("wall_hosted_openings_cache_hits")
-            host_cache = wall_cache_record[1]
-
-        openings = self._collect_opening_instances_from_host_cache(host_cache)
-        self._plan_opening_instances_cache = (doc_name, openings)
-        return openings
+        return plan_hosted_openings.get_plan_opening_instances(self)
 
     def _get_wall_hosted_openings(self, wall):
-        if not wall or not self.doc:
-            return []
-        wall_key = self._get_document_object_key(wall)
-        if wall_key is None:
-            return []
-        doc_name = getattr(self.doc, "Name", None)
-        cache_record = self._wall_hosted_openings_cache
-        if cache_record is None or cache_record[0] != doc_name:
-            host_cache = self._build_wall_hosted_openings_cache()
-            cache_record = (doc_name, host_cache)
-            self._wall_hosted_openings_cache = cache_record
-            self._plan_opening_instances_cache = (
-                doc_name,
-                self._collect_opening_instances_from_host_cache(host_cache),
-            )
-        else:
-            self._plan_perf_count("wall_hosted_openings_cache_hits")
-        return list(cache_record[1].get(wall_key, ()))
+        return plan_hosted_openings.get_wall_hosted_openings(self, wall)
 
     def _refresh_wall_hosted_opening_footprints(self, wall):
         return plan_wall_edit.refresh_wall_hosted_opening_footprints(self, wall)
