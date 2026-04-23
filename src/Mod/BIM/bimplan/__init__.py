@@ -30,7 +30,7 @@ from .providers import (
     PlanToolSpec,
     PlanToolInteraction,
 )
-from .registry import PlanEditRegistry, get_plan_edit_registry
+from .providers import PlanEditRegistry, get_plan_edit_registry
 from .semantics import PlanSemanticRecord
 from .targets import PlanTarget
 from .transactions import PlanEditTransaction

@@ -103,7 +103,7 @@ from bimplan.providers import (
     PlanProviderTargetSpec,
     PlanToolSpec,
 )
-from bimplan.registry import PlanEditRegistry
+from bimplan.providers import PlanEditRegistry
 from bimplan.semantics import PlanSemanticRecord
 from bimplan.selection import (
     activate_opening_target,
@@ -1895,7 +1895,7 @@ class TestBimPlanCore(unittest.TestCase):
 
     def test_execute_plan_provider_action_passes_action_context_proxy(self):
         from bimplan.provider_runtime import execute_plan_provider_action
-        from bimplan.registry import PlanEditRegistry
+        from bimplan.providers import PlanEditRegistry
 
         captured = {}
 
