@@ -727,6 +727,106 @@ def report_space_region_candidate_failure(report):
     )
 
 
+def _clear_space_region_pick_state(session):
+    session._space_region_pick_boundaries = []
+    session._space_region_candidates = []
+    session._hovered_space_region_candidate = None
+    session._space_region_pick_seed_space = None
+    session._clear_space_region_pick_overlays()
+
+
+def _finish_created_space(session, space, event_callback=None, claim_click=False):
+    session._register_plan_object(space)
+    session._restore_selected_space(space)
+    if claim_click:
+        session._claim_left_button_click(event_callback)
+    return True
+
+
+def _create_and_finish_space_region_candidate(
+    session,
+    candidate,
+    *,
+    boundaries,
+    keep_boundaries,
+    event_callback=None,
+    claim_click=False,
+    clear_region_pick_state=False,
+):
+    space = session._create_space_from_region_candidate(
+        candidate,
+        boundaries=boundaries,
+        keep_boundaries=keep_boundaries,
+    )
+    if not space:
+        return False
+    if clear_region_pick_state:
+        _clear_space_region_pick_state(session)
+    return _finish_created_space(
+        session,
+        space,
+        event_callback=event_callback,
+        claim_click=claim_click,
+    )
+
+
+def _start_space_region_pick_mode(session, boundaries, candidates, seed_space=None):
+    session.current_tool = "Pick Space Region"
+    session._space_region_pick_boundaries = list(boundaries)
+    session._space_region_candidates = list(candidates)
+    session._hovered_space_region_candidate = None
+    session._space_region_pick_seed_space = seed_space
+    session._clear_wall_grips()
+    session._clear_hovered_plan_targets(kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS)
+    session._refresh_primary_selected_plan_target()
+    FreeCAD.Console.PrintMessage(
+        translate(
+            "BIM_PlanEdit",
+            "Multiple enclosed regions found. Hover a dashed region and click to create that space.\n",
+        )
+    )
+    return True
+
+
+def _consume_space_region_candidate_report(
+    session,
+    boundaries,
+    report,
+    *,
+    seed_space=None,
+    keep_boundaries=True,
+    announce_skipped_claimed=False,
+):
+    candidates = list(report.get("candidates", []) or [])
+    if not candidates:
+        session._report_space_region_candidate_failure(report)
+        return False
+
+    skipped_claimed = int(report.get("skipped_claimed_candidate_count", 0) or 0)
+    if announce_skipped_claimed and skipped_claimed:
+        FreeCAD.Console.PrintMessage(
+            translate(
+                "BIM_PlanEdit",
+                "Ignoring {count} enclosed region(s) already covered by existing spaces.\n",
+            ).format(count=skipped_claimed)
+        )
+
+    if len(candidates) == 1:
+        return _create_and_finish_space_region_candidate(
+            session,
+            candidates[0],
+            boundaries=boundaries,
+            keep_boundaries=keep_boundaries,
+        )
+
+    return _start_space_region_pick_mode(
+        session,
+        boundaries,
+        candidates,
+        seed_space=seed_space,
+    )
+
+
 def get_space_region_candidate_polylines(session, candidate):
     face = candidate.get("face") if isinstance(candidate, dict) else None
     if not face:
@@ -829,57 +929,21 @@ def begin_space_region_pick(session, boundaries, label=None, seed_space=None, re
             label=label,
             seed_space=seed_space,
         )
-    candidates = list(report.get("candidates", []) or [])
-    if not candidates:
-        session._report_space_region_candidate_failure(report)
-        return False
-
-    skipped_claimed = int(report.get("skipped_claimed_candidate_count", 0) or 0)
-    if skipped_claimed:
-        FreeCAD.Console.PrintMessage(
-            translate(
-                "BIM_PlanEdit",
-                "Ignoring {count} enclosed region(s) already covered by existing spaces.\n",
-            ).format(count=skipped_claimed)
-        )
-    if skipped_claimed and len(candidates) == 1:
-        space = session._create_space_from_region_candidate(
-            candidates[0],
-            boundaries=boundaries,
-            keep_boundaries=seed_space is None,
-        )
-        if not space:
-            return False
-        session._register_plan_object(space)
-        session._restore_selected_space(space)
-        return True
-
-    session.current_tool = "Pick Space Region"
-    session._space_region_pick_boundaries = list(boundaries)
-    session._space_region_candidates = candidates
-    session._hovered_space_region_candidate = None
-    session._space_region_pick_seed_space = seed_space
-    session._clear_wall_grips()
-    session._clear_hovered_plan_targets(kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS)
-    session._refresh_primary_selected_plan_target()
-    FreeCAD.Console.PrintMessage(
-        translate(
-            "BIM_PlanEdit",
-            "Multiple enclosed regions found. Hover a dashed region and click to create that space.\n",
-        )
+    return _consume_space_region_candidate_report(
+        session,
+        boundaries,
+        report,
+        seed_space=seed_space,
+        keep_boundaries=seed_space is None,
+        announce_skipped_claimed=True,
     )
-    return True
 
 
 def cancel_space_region_pick(session, refresh=True):
     was_active = session.current_tool == "Pick Space Region" or bool(
         session._space_region_candidates
     )
-    session._space_region_pick_boundaries = []
-    session._space_region_candidates = []
-    session._hovered_space_region_candidate = None
-    session._space_region_pick_seed_space = None
-    session._clear_space_region_pick_overlays()
+    _clear_space_region_pick_state(session)
     if session.current_tool == "Pick Space Region":
         session.current_tool = "Select"
     if was_active:
@@ -936,23 +1000,15 @@ def activate_space_region_candidate(session, candidate, event_callback=None):
     if not boundaries and session._space_region_pick_seed_space is None:
         return False
 
-    space = session._create_space_from_region_candidate(
+    return _create_and_finish_space_region_candidate(
+        session,
         candidate,
         boundaries=boundaries,
         keep_boundaries=session._space_region_pick_seed_space is None,
+        event_callback=event_callback,
+        claim_click=True,
+        clear_region_pick_state=True,
     )
-    if not space:
-        return False
-
-    session._space_region_pick_boundaries = []
-    session._space_region_candidates = []
-    session._hovered_space_region_candidate = None
-    session._space_region_pick_seed_space = None
-    session._clear_space_region_pick_overlays()
-    session._register_plan_object(space)
-    session._restore_selected_space(space)
-    session._claim_left_button_click(event_callback)
-    return True
 
 
 def create_space_from_current_selection(session):
@@ -986,27 +1042,13 @@ def create_space_from_current_selection(session):
             label=request.label,
             seed_space=region_seed_space,
         )
-        candidate_count = int(report.get("candidate_count", 0) or 0)
-        if candidate_count > 1:
-            return session._begin_space_region_pick(
-                boundaries,
-                label=report.get("label"),
-                seed_space=region_seed_space,
-                report=report,
-            )
-        if candidate_count == 1:
-            space = session._create_space_from_region_candidate(
-                report["candidates"][0],
-                boundaries=boundaries,
-                keep_boundaries=False,
-            )
-            if not space:
-                return False
-            session._register_plan_object(space)
-            session._restore_selected_space(space)
-            return True
-        session._report_space_region_candidate_failure(report)
-        return False
+        return _consume_space_region_candidate_report(
+            session,
+            boundaries,
+            report,
+            seed_space=region_seed_space,
+            keep_boundaries=False,
+        )
 
     report = ArchSpace.analyzeBoundaryLinks(boundaries)
     if report.get("code") == "multiple_regions":
@@ -1014,26 +1056,12 @@ def create_space_from_current_selection(session):
             boundaries,
             label=report.get("label"),
         )
-        candidate_count = int(region_report.get("candidate_count", 0) or 0)
-        if candidate_count > 1:
-            return session._begin_space_region_pick(
-                boundaries,
-                label=report.get("label"),
-                report=region_report,
-            )
-        if candidate_count == 1:
-            space = session._create_space_from_region_candidate(
-                region_report["candidates"][0],
-                boundaries=boundaries,
-                keep_boundaries=True,
-            )
-            if not space:
-                return False
-            session._register_plan_object(space)
-            session._restore_selected_space(space)
-            return True
-        session._report_space_region_candidate_failure(region_report)
-        return False
+        return _consume_space_region_candidate_report(
+            session,
+            boundaries,
+            region_report,
+            keep_boundaries=True,
+        )
 
     space = None
     reported_failure = False
@@ -1059,9 +1087,7 @@ def create_space_from_current_selection(session):
             )
         return False
 
-    session._register_plan_object(space)
-    session._restore_selected_space(space)
-    return True
+    return _finish_created_space(session, space)
 
 
 def space_has_valid_geometry(session, space):

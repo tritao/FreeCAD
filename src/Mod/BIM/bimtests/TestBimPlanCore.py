@@ -94,6 +94,7 @@ from bimplan.selection import (
     resolve_selected_target_for_gui_object,
 )
 from bimplan.spaces import (
+    begin_space_region_pick,
     get_space_creation_request,
     get_space_region_seed_targets,
     should_run_space_preflight_for_targets,
@@ -160,6 +161,52 @@ class _DummyProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
+    def test_begin_space_region_pick_auto_creates_single_remaining_candidate(self):
+        candidate = {"area": 12.0}
+        created_space = SimpleNamespace(Name="Space001")
+        calls = []
+        session = SimpleNamespace(
+            current_tool="Select",
+            _space_region_pick_boundaries=[],
+            _space_region_candidates=[],
+            _hovered_space_region_candidate=None,
+            _space_region_pick_seed_space=None,
+            _clear_space_region_pick_overlays=lambda: calls.append("clear-pick-overlays"),
+            _create_space_from_region_candidate=lambda *args, **kwargs: (
+                calls.append(("create", args, kwargs)) or created_space
+            ),
+            _register_plan_object=lambda space: calls.append(("register", space)),
+            _restore_selected_space=lambda space: calls.append(("restore", space)),
+            _clear_wall_grips=lambda: calls.append("clear-wall-grips"),
+            _clear_hovered_plan_targets=lambda **kwargs: calls.append(("clear-hovered", kwargs)),
+            _refresh_primary_selected_plan_target=lambda: calls.append("refresh-primary"),
+        )
+        boundaries = [("Boundary001", ("Face1",))]
+        report = {
+            "candidates": [candidate],
+            "candidate_count": 1,
+            "skipped_claimed_candidate_count": 1,
+        }
+
+        with patch("FreeCAD.Console.PrintMessage") as print_message:
+            self.assertTrue(begin_space_region_pick(session, boundaries, report=report))
+
+        self.assertEqual("Select", session.current_tool)
+        self.assertEqual(
+            [call.args[0] for call in print_message.call_args_list],
+            [
+                "Ignoring 1 enclosed region(s) already covered by existing spaces.\n",
+            ],
+        )
+        self.assertEqual(
+            [
+                ("create", (candidate,), {"boundaries": boundaries, "keep_boundaries": True}),
+                ("register", created_space),
+                ("restore", created_space),
+            ],
+            calls,
+        )
+
     def test_space_creation_request_uses_wall_boundary_selection_shape(self):
         wall_a = SimpleNamespace(Name="WallA")
         wall_b = SimpleNamespace(Name="WallB")
