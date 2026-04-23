@@ -661,9 +661,6 @@ class PlanEditSession:
                 pass
         self._teardown_signal_sources = []
 
-    def _get_selected_target_for_kind(self, kind):
-        return self.selection.get_selected_target_for_kind(kind)
-
     def _set_selected_target_for_kind(self, kind, obj):
         return self.selection.set_selected_target_for_kind(kind, obj)
 
@@ -691,7 +688,7 @@ class PlanEditSession:
 
     @property
     def selected_wall(self):
-        return self._get_selected_target_for_kind("wall")
+        return self.selection.get_selected_target_for_kind("wall")
 
     @selected_wall.setter
     def selected_wall(self, wall):
@@ -699,7 +696,7 @@ class PlanEditSession:
 
     @property
     def selected_opening(self):
-        return self._get_selected_target_for_kind("opening")
+        return self.selection.get_selected_target_for_kind("opening")
 
     @selected_opening.setter
     def selected_opening(self, opening):
@@ -707,7 +704,7 @@ class PlanEditSession:
 
     @property
     def selected_symbol(self):
-        return self._get_selected_target_for_kind("symbol")
+        return self.selection.get_selected_target_for_kind("symbol")
 
     @selected_symbol.setter
     def selected_symbol(self, symbol):
@@ -715,7 +712,7 @@ class PlanEditSession:
 
     @property
     def selected_region(self):
-        return self._get_selected_target_for_kind("region")
+        return self.selection.get_selected_target_for_kind("region")
 
     @selected_region.setter
     def selected_region(self, region):
@@ -723,7 +720,7 @@ class PlanEditSession:
 
     @property
     def selected_space(self):
-        return self._get_selected_target_for_kind("space")
+        return self.selection.get_selected_target_for_kind("space")
 
     @selected_space.setter
     def selected_space(self, space):
@@ -2162,9 +2159,6 @@ class PlanEditSession:
             snap_info=snap_info,
         )
 
-    def _get_space_preflight_report(self, targets=None):
-        return self.spaces.get_space_preflight_report(targets=targets)
-
     def _format_space_preflight_text(self, report):
         return self.spaces.format_space_preflight_text(report)
 
@@ -2370,12 +2364,6 @@ class PlanEditSession:
 
     def _handle_space_separator_point(self, point=None, obj=None):
         return self.spaces.handle_space_separator_point(point=point, obj=obj)
-
-    def _has_active_wall_edit(self):
-        return self.wall_edit.has_active_wall_edit()
-
-    def _is_wall_edit_modal_active(self):
-        return self.wall_edit.is_wall_edit_modal_active()
 
     def _has_active_embedded_tool(self):
         return self._embedded_tool is not None
