@@ -243,7 +243,6 @@ SET(bimplan_SRCS
     bimplan/wall_edit.py
     bimplan/wall_relations.py
     bimplan/window_create.py
-    bimplan/window_provider.py
 )
 
 SET(BIM_templates
