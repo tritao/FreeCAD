@@ -11,6 +11,12 @@ PLAN_PROVIDER_OVERLAY_MODE_ALL = "all"
 PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE = "architecture"
 PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL = "electrical"
 PLAN_PROVIDER_OVERLAY_MODE_PLUMBING = "plumbing"
+FOCUSED_PROVIDER_OVERLAY_PICK_MODES = frozenset(
+    (
+        PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL,
+        PLAN_PROVIDER_OVERLAY_MODE_PLUMBING,
+    )
+)
 _PLAN_VISUAL_PROVIDER_OVERLAYS = plan_visual_keys.PLAN_VISUAL_PROVIDER_OVERLAYS
 
 
@@ -37,6 +43,10 @@ def get_plan_provider_overlay_mode(session):
     return normalize_plan_provider_overlay_mode(
         getattr(session, "_provider_overlay_mode", PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE)
     )
+
+
+def is_focused_provider_overlay_pick_mode(mode):
+    return normalize_plan_provider_overlay_mode(mode) in FOCUSED_PROVIDER_OVERLAY_PICK_MODES
 
 
 def set_plan_provider_overlay_mode(session, mode):
