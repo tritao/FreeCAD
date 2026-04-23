@@ -482,6 +482,35 @@ class TestBimPlanCore(unittest.TestCase):
             clear_overlays=False,
         )
 
+    def test_begin_teardown_uses_shared_space_text_pick_reset(self):
+        session = SimpleNamespace(
+            _tearing_down=False,
+            current_tool="Set Space Text",
+            _edit_space="Space001",
+            _clear_viewport_status_chip=lambda: None,
+            _clear_input_hints=lambda: None,
+            _cancel_embedded_tool=lambda: None,
+            _cancel_rect_wall_tool=lambda refresh=True: None,
+            _cancel_window_tool=lambda refresh=True: None,
+            _cancel_plan_region_tool=lambda refresh=True: None,
+            _cancel_provider_point_tool=lambda refresh=True: None,
+            _cancel_wall_edit=lambda restore=True, refresh=True: None,
+            _cancel_pending_edit=lambda: None,
+        )
+
+        with patch("bimplan.lifecycle.plan_command_gate.uninstall"), patch(
+            "bimplan.lifecycle.plan_spaces.reset_space_text_pick_state"
+        ) as reset_space_text_pick_state, patch("bimplan.lifecycle.clear_hover_visuals"), patch(
+            "bimplan.lifecycle.clear_selection_visuals"
+        ), patch(
+            "bimplan.lifecycle.clear_transient_visuals"
+        ), patch(
+            "bimplan.lifecycle.detach_runtime_observers"
+        ):
+            begin_teardown(session)
+
+        reset_space_text_pick_state.assert_called_once_with(session)
+
     def test_shutdown_uses_cleanup_profile(self):
         calls = []
         panel = SimpleNamespace(

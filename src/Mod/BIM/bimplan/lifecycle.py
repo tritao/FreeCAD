@@ -86,7 +86,7 @@ def detach_runtime_observers(session):
 
 
 def _clear_space_text_pick_state(session):
-    session._edit_space = None
+    plan_spaces.reset_space_text_pick_state(session)
 
 
 def _clear_space_region_pick_state(session):
