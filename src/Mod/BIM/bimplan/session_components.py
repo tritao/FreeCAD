@@ -31,6 +31,7 @@ from bimplan import spaces as plan_spaces
 from bimplan import target_kinds as plan_target_kinds
 from bimplan import view as plan_view
 from bimplan import visual_keys as plan_visual_keys
+from bimplan import wall_edit as plan_wall_edit
 from bimplan.ui.status_chip import _PlanEditViewportStatusChip
 
 
@@ -336,3 +337,133 @@ class PlanViewportAPI(_SessionAPI):
             self.session,
             _PlanEditViewportStatusChip,
         )
+
+
+class PlanWallEditAPI(_SessionAPI):
+    """Owned session surface for Plan Edit wall edit behavior."""
+
+    __slots__ = ()
+
+    has_active_wall_edit = _bind_session_call(plan_wall_edit.has_active_wall_edit)
+    is_wall_edit_modal_active = _bind_session_call(plan_wall_edit.is_wall_edit_modal_active)
+    cancel_wall_edit = _bind_session_call(plan_wall_edit.cancel_wall_edit)
+    cancel_wall_subtool = _bind_session_call(plan_wall_edit.cancel_wall_subtool)
+    start_wall_edit = _bind_session_call(plan_wall_edit.start_wall_edit)
+    resume_wall_edit_point_pick = _bind_session_call(plan_wall_edit.resume_wall_edit_point_pick)
+    snapshot_wall_hosted_opening_clearances = _bind_session_call(
+        plan_wall_edit.snapshot_wall_hosted_opening_clearances
+    )
+    queue_wall_edit_opening_clearances = _bind_session_call(
+        plan_wall_edit.queue_wall_edit_opening_clearances
+    )
+    prime_wall_edit_opening_clearances = _bind_session_call(
+        plan_wall_edit.prime_wall_edit_opening_clearances
+    )
+    ensure_wall_edit_opening_clearances = _bind_session_call(
+        plan_wall_edit.ensure_wall_edit_opening_clearances
+    )
+    queue_wall_edit_task_panel_refresh = _bind_session_call(
+        plan_wall_edit.queue_wall_edit_task_panel_refresh
+    )
+    flush_wall_edit_task_panel_refresh = _bind_session_call(
+        plan_wall_edit.flush_wall_edit_task_panel_refresh
+    )
+    finish_wall_edit = _bind_session_call(plan_wall_edit.finish_wall_edit)
+    commit_wall_edit_points = _bind_session_call(plan_wall_edit.commit_wall_edit_points)
+    start_wall_grip_edit = _bind_session_call(plan_wall_edit.start_wall_grip_edit)
+    activate_wall_grip = _bind_session_call(plan_wall_edit.activate_wall_grip)
+    activate_wall_grip_now = _bind_session_call(plan_wall_edit.activate_wall_grip_now)
+    get_wall_edit_reference_point = _bind_session_call(plan_wall_edit.get_wall_edit_reference_point)
+    compute_wall_edit_points = _bind_session_call(plan_wall_edit.compute_wall_edit_points)
+    compute_wall_edit_points_from_length = _bind_session_call(
+        plan_wall_edit.compute_wall_edit_points_from_length
+    )
+    get_preview_footprint = _bind_session_call(plan_wall_edit.get_preview_footprint)
+    make_preview_wall_adapter = _bind_session_call(plan_wall_edit.make_preview_wall_adapter)
+    solve_preview_wall_relation = _bind_session_call(plan_wall_edit.solve_preview_wall_relation)
+    collect_preview_wall_relation_data = _bind_session_call(
+        plan_wall_edit.collect_preview_wall_relation_data
+    )
+    get_preview_footprint_polylines = _bind_session_call(
+        plan_wall_edit.get_preview_footprint_polylines
+    )
+    get_readout_base_gap = _bind_session_call(plan_wall_edit.get_readout_base_gap)
+    get_aligned_readout_offset_for_wall = _bind_session_call(
+        plan_wall_edit.get_aligned_readout_offset_for_wall
+    )
+    get_wall_edit_readout_offset = _bind_session_call(plan_wall_edit.get_wall_edit_readout_offset)
+    get_opening_move_readout_offset = _bind_session_call(
+        plan_wall_edit.get_opening_move_readout_offset
+    )
+    update_wall_edit_preview_geometry = _bind_session_call(
+        plan_wall_edit.update_wall_edit_preview_geometry
+    )
+    sync_wall_edit_preview = _bind_session_call(plan_wall_edit.sync_wall_edit_preview)
+    is_wall_move_edit_active = _bind_session_call(plan_wall_edit.is_wall_move_edit_active)
+    is_wall_stretch_edit_active = _bind_session_call(plan_wall_edit.is_wall_stretch_edit_active)
+    is_wall_readout_edit_active = _bind_session_call(plan_wall_edit.is_wall_readout_edit_active)
+    clear_wall_edit_preview = _bind_session_call(plan_wall_edit.clear_wall_edit_preview)
+    get_wall_hosted_opening_preview_segments = _bind_session_call(
+        plan_wall_edit.get_wall_hosted_opening_preview_segments
+    )
+    sync_wall_hosted_opening_preview = _bind_session_call(
+        plan_wall_edit.sync_wall_hosted_opening_preview
+    )
+    clear_wall_hosted_opening_preview = _bind_session_call(
+        plan_wall_edit.clear_wall_hosted_opening_preview
+    )
+    get_wall_edit_readout_specs = _bind_session_call(plan_wall_edit.get_wall_edit_readout_specs)
+    get_default_wall_edit_readout_mode = _bind_session_call(
+        plan_wall_edit.get_default_wall_edit_readout_mode
+    )
+    bind_wall_edit_readout_callbacks = _bind_session_call(
+        plan_wall_edit.bind_wall_edit_readout_callbacks
+    )
+    update_wall_edit_readouts_in_place = _bind_session_call(
+        plan_wall_edit.update_wall_edit_readouts_in_place
+    )
+    sync_wall_edit_readout = _bind_session_call(plan_wall_edit.sync_wall_edit_readout)
+    clear_wall_edit_readout = _bind_session_call(plan_wall_edit.clear_wall_edit_readout)
+    get_wall_edit_readout_tracker = _bind_session_call(plan_wall_edit.get_wall_edit_readout_tracker)
+    cycle_wall_move_readout_mode = _bind_session_call(plan_wall_edit.cycle_wall_move_readout_mode)
+    start_wall_readout_edit = _bind_session_call(plan_wall_edit.start_wall_readout_edit)
+    start_wall_stretch_length_edit = _bind_session_call(
+        plan_wall_edit.start_wall_stretch_length_edit
+    )
+    start_wall_readout_edit_now = _bind_session_call(plan_wall_edit.start_wall_readout_edit_now)
+    on_wall_stretch_length_changed = _bind_session_call(
+        plan_wall_edit.on_wall_stretch_length_changed
+    )
+    on_wall_stretch_length_finished = _bind_session_call(
+        plan_wall_edit.on_wall_stretch_length_finished
+    )
+    on_wall_stretch_length_canceled = _bind_session_call(
+        plan_wall_edit.on_wall_stretch_length_canceled
+    )
+    compute_wall_edit_points_from_move_delta = _bind_session_call(
+        plan_wall_edit.compute_wall_edit_points_from_move_delta
+    )
+    on_wall_move_delta_changed = _bind_session_call(plan_wall_edit.on_wall_move_delta_changed)
+    on_wall_move_delta_finished = _bind_session_call(plan_wall_edit.on_wall_move_delta_finished)
+    on_wall_move_delta_canceled = _bind_session_call(plan_wall_edit.on_wall_move_delta_canceled)
+    schedule_wall_edit_readout_cancel = _bind_session_call(
+        plan_wall_edit.schedule_wall_edit_readout_cancel
+    )
+    finish_wall_edit_readout_canceled = _bind_session_call(
+        plan_wall_edit.finish_wall_edit_readout_canceled
+    )
+    restore_edit_wall_visibility = _bind_session_call(plan_wall_edit.restore_edit_wall_visibility)
+    update_wall_edit_preview = _bind_session_call(plan_wall_edit.update_wall_edit_preview)
+    update_wall_edit_point_pick = _bind_session_call(plan_wall_edit.update_wall_edit_point_pick)
+    cancel_wall_edit_point_pick = _bind_session_call(plan_wall_edit.cancel_wall_edit_point_pick)
+    refresh_wall_hosted_opening_footprints = _bind_session_call(
+        plan_wall_edit.refresh_wall_hosted_opening_footprints
+    )
+    compute_wall_hosted_opening_layout = _bind_session_call(
+        plan_wall_edit.compute_wall_hosted_opening_layout
+    )
+    resolve_wall_hosted_opening_layout = _bind_session_call(
+        plan_wall_edit.resolve_wall_hosted_opening_layout
+    )
+
+    clip_preview_polygon_to_plane = staticmethod(plan_wall_edit.clip_preview_polygon_to_plane)

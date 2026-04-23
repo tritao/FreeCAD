@@ -170,9 +170,14 @@ class _DummyProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
-    def test_plan_edit_session_owns_selection_spaces_and_viewport_components(self):
+    def test_plan_edit_session_owns_selection_spaces_viewport_and_wall_components(self):
         from bimplan.session import PlanEditSession
-        from bimplan.session_components import PlanSelectionAPI, PlanSpacesAPI, PlanViewportAPI
+        from bimplan.session_components import (
+            PlanSelectionAPI,
+            PlanSpacesAPI,
+            PlanViewportAPI,
+            PlanWallEditAPI,
+        )
 
         with patch("bimplan.session.plan_session_state.initialize_session_state"):
             session = PlanEditSession()
@@ -183,6 +188,8 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIs(session.spaces.session, session)
         self.assertIsInstance(session.viewport, PlanViewportAPI)
         self.assertIs(session.viewport.session, session)
+        self.assertIsInstance(session.wall_edit, PlanWallEditAPI)
+        self.assertIs(session.wall_edit.session, session)
 
     def test_plan_edit_session_wrappers_delegate_to_owned_components(self):
         from bimplan.session import PlanEditSession
@@ -190,6 +197,7 @@ class TestBimPlanCore(unittest.TestCase):
             PlanSelectionAPI,
             PlanSpacesAPI,
             PlanViewportAPI,
+            PlanWallEditAPI,
         )
 
         wall = SimpleNamespace(Name="Wall001")
@@ -213,17 +221,38 @@ class TestBimPlanCore(unittest.TestCase):
             "get_plan_view_height",
             autospec=True,
             return_value=4200.0,
-        ) as get_plan_view_height:
+        ) as get_plan_view_height, patch.object(
+            PlanWallEditAPI,
+            "has_active_wall_edit",
+            autospec=True,
+            return_value=True,
+        ) as has_active_wall_edit, patch.object(
+            PlanWallEditAPI,
+            "clip_preview_polygon_to_plane",
+            return_value=("clipped",),
+        ) as clip_preview_polygon_to_plane:
             self.assertIs(wall, session._get_selected_target_for_kind("wall"))
             self.assertEqual(
                 {"ready": True},
                 session._get_space_preflight_report(targets=targets),
             )
             self.assertEqual(4200.0, session._get_plan_view_height())
+            self.assertTrue(session._has_active_wall_edit())
+            self.assertEqual(
+                ("clipped",),
+                session._clip_preview_polygon_to_plane("polygon", "plane", "ref"),
+            )
 
         get_selected_target_for_kind.assert_called_once_with(session.selection, "wall")
         get_space_preflight_report.assert_called_once_with(session.spaces, targets=targets)
         get_plan_view_height.assert_called_once_with(session.viewport)
+        has_active_wall_edit.assert_called_once_with(session.wall_edit)
+        clip_preview_polygon_to_plane.assert_called_once_with(
+            "polygon",
+            "plane",
+            "ref",
+            tol=1e-7,
+        )
 
     def test_plan_selection_api_uses_primary_target_kind_policy(self):
         from bimplan import target_kinds as plan_target_kinds
