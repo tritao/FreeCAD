@@ -363,6 +363,10 @@ def clear_plan_relation_status(session):
     session._plan_relation_status_message = None
 
 
+def get_plan_relation_status_message(session):
+    return str(getattr(session, "_plan_relation_status_message", "") or "").strip()
+
+
 def collect_wall_relation_warnings(session, wall):
     if not wall:
         return []

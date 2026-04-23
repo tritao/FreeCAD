@@ -219,6 +219,8 @@ class PlanEditSession:
         self.selection = plan_session_components.PlanSelectionAPI(self)
         self.spaces = plan_session_components.PlanSpacesAPI(self)
         self.wall_relations = plan_session_components.PlanWallRelationsAPI(self)
+        self.interaction = plan_session_components.PlanInteractionAPI(self)
+        self.symbols = plan_session_components.PlanSymbolsAPI(self)
         self.windows = plan_session_components.PlanWindowsAPI(self)
         self.viewport = plan_session_components.PlanViewportAPI(self)
         self.wall_edit = plan_session_components.PlanWallEditAPI(self)
@@ -2361,11 +2363,7 @@ class PlanEditSession:
         return plan_task_panel.refresh_provider_overlay_mode_panels(self)
 
     def _is_modal_plan_interaction_active(self):
-        return bool(
-            self._is_wall_edit_modal_active()
-            or self.current_tool
-            in ("Move Opening", "Move Symbol", "Rotate Symbol", "Set Space Text", "Window")
-        )
+        return self.interaction.is_modal_plan_interaction_active()
 
     def _focus_plan_view(self):
         return self.viewport.focus_plan_view()
@@ -3260,7 +3258,7 @@ class PlanEditSession:
         return symbol_overlays.get_symbol_facing_vector(self, symbol, placement=placement)
 
     def _symbol_rotation_snap_enabled(self):
-        return symbol_overlays.symbol_rotation_snap_enabled(self)
+        return self.symbols.symbol_rotation_snap_enabled()
 
     def _get_symbol_rotation_snap_increment_degrees(self):
         return symbol_overlays.get_symbol_rotation_snap_increment_degrees(self)
@@ -3269,7 +3267,7 @@ class PlanEditSession:
         return symbol_overlays.get_symbol_rotation_snap_step_radians(self)
 
     def _format_symbol_rotation_snap_label(self):
-        return symbol_overlays.format_symbol_rotation_snap_label(self)
+        return self.symbols.format_symbol_rotation_snap_label()
 
     def _symbol_rotation_free_angle_override_active(self):
         return symbol_overlays.symbol_rotation_free_angle_override_active(self)
