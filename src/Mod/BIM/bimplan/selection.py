@@ -31,6 +31,15 @@ class SelectionRefreshResult:
     wall_grip_action: str = _WALL_GRIP_NONE
 
 
+@dataclass(frozen=True)
+class TargetActivationBehavior:
+    select_method_name: str
+    clear_hovered_kinds: tuple[str, ...]
+    sync_gui_selection: bool = True
+    defer_gui_selection: bool = False
+    defer_wall_grips: bool = False
+
+
 def clear_hidden_provider_preselection(session):
     return plan_selection_observer.clear_hidden_provider_preselection(session)
 
@@ -791,6 +800,63 @@ def select_wall_for_plan_edit(
     )
 
 
+_TARGET_ACTIVATION_BEHAVIORS = {
+    plan_target_kinds.PLAN_TARGET_OPENING: TargetActivationBehavior(
+        select_method_name="_select_opening_for_plan_edit",
+        clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
+    ),
+    plan_target_kinds.PLAN_TARGET_SYMBOL: TargetActivationBehavior(
+        select_method_name="_select_symbol_for_plan_edit",
+        clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
+    ),
+    plan_target_kinds.PLAN_TARGET_REGION: TargetActivationBehavior(
+        select_method_name="_select_region_for_plan_edit",
+        clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
+    ),
+    plan_target_kinds.PLAN_TARGET_SPACE: TargetActivationBehavior(
+        select_method_name="_select_space_for_plan_edit",
+        clear_hovered_kinds=plan_target_kinds.SPACE_TARGET_CLEAR_HOVERED_KINDS,
+    ),
+    plan_target_kinds.PLAN_TARGET_WALL: TargetActivationBehavior(
+        select_method_name="_select_wall_for_plan_edit",
+        clear_hovered_kinds=plan_target_kinds.WALL_TARGET_CLEAR_HOVERED_KINDS,
+    ),
+}
+
+
+def _get_target_activation_behavior(kind):
+    return _TARGET_ACTIVATION_BEHAVIORS.get(kind)
+
+
+def _activate_configured_plan_target(
+    session,
+    kind,
+    mouse_pos,
+    event_callback=None,
+    resolved_target=None,
+    *,
+    defer_gui_selection=None,
+    defer_wall_grips=None,
+):
+    behavior = _get_target_activation_behavior(kind)
+    if behavior is None:
+        return False
+    if defer_gui_selection is None:
+        defer_gui_selection = behavior.defer_gui_selection
+    if defer_wall_grips is None:
+        defer_wall_grips = behavior.defer_wall_grips
+    return session._activate_plan_target(
+        kind,
+        mouse_pos,
+        event_callback=event_callback,
+        sync_gui_selection=behavior.sync_gui_selection,
+        clear_hovered_kinds=behavior.clear_hovered_kinds,
+        resolved_target=resolved_target,
+        defer_gui_selection=defer_gui_selection,
+        defer_wall_grips=defer_wall_grips,
+    )
+
+
 def activate_plan_target(
     session,
     kind,
@@ -815,13 +881,8 @@ def activate_plan_target(
         )
         if target_kind != kind:
             target_obj = None
-        select_target = {
-            "opening": session._select_opening_for_plan_edit,
-            "symbol": session._select_symbol_for_plan_edit,
-            "region": session._select_region_for_plan_edit,
-            "space": session._select_space_for_plan_edit,
-            "wall": session._select_wall_for_plan_edit,
-        }.get(kind)
+        behavior = _get_target_activation_behavior(kind)
+        select_target = getattr(session, behavior.select_method_name, None) if behavior else None
         if select_target is None or not select_target(
             target_obj,
             queue_restore=True,
@@ -854,24 +915,21 @@ def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
             semantic_target_source="hovered",
             hovered_target=session._plan_perf_describe_target(target_kind, target_obj),
         )
-    activate_target = {
-        "opening": session._activate_opening_target,
-        "symbol": session._activate_symbol_target,
-        "region": session._activate_region_target,
-        "space": session._activate_space_target,
-        "wall": session._activate_wall_target,
-    }.get(target_kind)
-    if activate_target is None:
+    if _get_target_activation_behavior(target_kind) is None:
         return False
-    if target_kind == "wall":
-        return activate_target(
+    if target_kind == plan_target_kinds.PLAN_TARGET_WALL:
+        return _activate_configured_plan_target(
+            session,
+            target_kind,
             mouse_pos,
             event_callback=event_callback,
             resolved_target=(target_kind, target_obj),
             defer_gui_selection=True,
             defer_wall_grips=True,
         )
-    return activate_target(
+    return _activate_configured_plan_target(
+        session,
+        target_kind,
         mouse_pos,
         event_callback=event_callback,
         resolved_target=(target_kind, target_obj),
@@ -879,45 +937,41 @@ def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
 
 
 def activate_opening_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return session._activate_plan_target(
+    return _activate_configured_plan_target(
+        session,
         plan_target_kinds.PLAN_TARGET_OPENING,
         mouse_pos,
         event_callback=event_callback,
-        sync_gui_selection=True,
-        clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
         resolved_target=resolved_target,
     )
 
 
 def activate_symbol_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return session._activate_plan_target(
+    return _activate_configured_plan_target(
+        session,
         plan_target_kinds.PLAN_TARGET_SYMBOL,
         mouse_pos,
         event_callback=event_callback,
-        sync_gui_selection=True,
-        clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
         resolved_target=resolved_target,
     )
 
 
 def activate_region_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return session._activate_plan_target(
+    return _activate_configured_plan_target(
+        session,
         plan_target_kinds.PLAN_TARGET_REGION,
         mouse_pos,
         event_callback=event_callback,
-        sync_gui_selection=True,
-        clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
         resolved_target=resolved_target,
     )
 
 
 def activate_space_target(session, mouse_pos, event_callback=None, resolved_target=None):
-    return session._activate_plan_target(
+    return _activate_configured_plan_target(
+        session,
         plan_target_kinds.PLAN_TARGET_SPACE,
         mouse_pos,
         event_callback=event_callback,
-        sync_gui_selection=True,
-        clear_hovered_kinds=plan_target_kinds.SPACE_TARGET_CLEAR_HOVERED_KINDS,
         resolved_target=resolved_target,
     )
 
@@ -930,12 +984,11 @@ def activate_wall_target(
     defer_gui_selection=False,
     defer_wall_grips=False,
 ):
-    return session._activate_plan_target(
+    return _activate_configured_plan_target(
+        session,
         plan_target_kinds.PLAN_TARGET_WALL,
         mouse_pos,
         event_callback=event_callback,
-        sync_gui_selection=True,
-        clear_hovered_kinds=plan_target_kinds.WALL_TARGET_CLEAR_HOVERED_KINDS,
         resolved_target=resolved_target,
         defer_gui_selection=defer_gui_selection,
         defer_wall_grips=defer_wall_grips,

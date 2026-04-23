@@ -88,7 +88,11 @@ from bimplan.providers import (
 )
 from bimplan.registry import PlanEditRegistry
 from bimplan.semantics import PlanSemanticRecord
-from bimplan.selection import resolve_selected_target_for_gui_object
+from bimplan.selection import (
+    activate_opening_target,
+    activate_semantic_plan_target,
+    resolve_selected_target_for_gui_object,
+)
 from bimplan.target_dispatch import (
     queue_restore_selected_target,
     set_hovered_target,
@@ -151,6 +155,65 @@ class _DummyProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
+    def test_activate_opening_target_uses_behavior_policy(self):
+        calls = []
+        target = SimpleNamespace(Name="Opening001")
+        session = SimpleNamespace(
+            _activate_plan_target=lambda *args, **kwargs: calls.append((args, kwargs)) or True
+        )
+
+        self.assertTrue(
+            activate_opening_target(session, (100, 200), resolved_target=("opening", target))
+        )
+
+        self.assertEqual(
+            [
+                (
+                    ("opening", (100, 200)),
+                    {
+                        "event_callback": None,
+                        "sync_gui_selection": True,
+                        "clear_hovered_kinds": ("wall", "opening", "symbol", "space", "region"),
+                        "resolved_target": ("opening", target),
+                        "defer_gui_selection": False,
+                        "defer_wall_grips": False,
+                    },
+                )
+            ],
+            calls,
+        )
+
+    def test_activate_semantic_plan_target_uses_wall_behavior_overrides(self):
+        calls = []
+        target = SimpleNamespace(Name="Wall001")
+        session = SimpleNamespace(
+            _get_hovered_plan_target=lambda: ("wall", target),
+            _hover_pick_dirty=False,
+            _plan_perf_count=lambda *_args, **_kwargs: None,
+            _plan_perf_set_fields=lambda **_kwargs: None,
+            _plan_perf_describe_target=lambda kind, obj: (kind, getattr(obj, "Name", None)),
+            _activate_plan_target=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
+        )
+
+        self.assertTrue(activate_semantic_plan_target(session, (50, 60)))
+
+        self.assertEqual(
+            [
+                (
+                    ("wall", (50, 60)),
+                    {
+                        "event_callback": None,
+                        "sync_gui_selection": True,
+                        "clear_hovered_kinds": ("wall", "symbol", "space", "region"),
+                        "resolved_target": ("wall", target),
+                        "defer_gui_selection": True,
+                        "defer_wall_grips": True,
+                    },
+                )
+            ],
+            calls,
+        )
+
     def test_begin_teardown_uses_cleanup_profile(self):
         calls = []
         session = SimpleNamespace(
