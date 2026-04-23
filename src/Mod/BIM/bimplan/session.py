@@ -35,6 +35,7 @@ from bimplan import command_gate as plan_command_gate
 from bimplan import document_visuals as plan_document_visuals
 from bimplan import hosted_openings as plan_hosted_openings
 from bimplan import input as plan_input
+from bimplan import object_classification as plan_object_classification
 from bimplan import object_visibility as plan_object_visibility
 from bimplan import performance as plan_performance
 from bimplan import provider_overlay_state as plan_provider_overlay_state
@@ -1578,34 +1579,34 @@ class PlanEditSession:
         return plan_object_visibility.restore_object_view_state(self)
 
     def _is_storey_object(self, obj):
-        return plan_object_visibility.is_storey_object(obj)
+        return plan_object_classification.is_storey_object(obj)
 
     def _is_plan_container_object(self, obj):
-        return plan_object_visibility.is_plan_container_object(obj)
+        return plan_object_classification.is_plan_container_object(obj)
 
     def _is_plan_background_object(self, obj):
-        return plan_object_visibility.is_plan_background_object(self, obj)
+        return plan_object_classification.is_plan_background_object(self, obj)
 
     def _is_plan_equipment_object(self, obj):
-        return plan_object_visibility.is_plan_equipment_object(self, obj)
+        return plan_object_classification.is_plan_equipment_object(self, obj)
 
     def _is_cabinetry_plan_context_object(self, obj):
-        return plan_object_visibility.is_cabinetry_plan_context_object(obj)
+        return plan_object_classification.is_cabinetry_plan_context_object(obj)
 
     def _has_direct_plan_symbols(self, obj):
-        return plan_object_visibility.has_direct_plan_symbols(obj)
+        return plan_object_classification.has_direct_plan_symbols(obj)
 
     def _is_plan_symbol_instance(self, obj):
-        return plan_object_visibility.is_plan_symbol_instance(self, obj)
+        return plan_object_classification.is_plan_symbol_instance(self, obj)
 
     def _is_plan_context_only_object(self, obj):
-        return plan_object_visibility.is_plan_context_only_object(self, obj)
+        return plan_object_classification.is_plan_context_only_object(self, obj)
 
     def _is_component_addition_object(self, obj):
-        return plan_object_visibility.is_component_addition_object(obj)
+        return plan_object_classification.is_component_addition_object(obj)
 
     def _is_supported_plan_object(self, obj):
-        return plan_object_visibility.is_supported_plan_object(self, obj)
+        return plan_object_classification.is_supported_plan_object(self, obj)
 
     def _is_hosted_opening_object(self, obj):
         return plan_hosted_openings.is_hosted_opening_object(self, obj)
@@ -1624,7 +1625,7 @@ class PlanEditSession:
         return plan_object_visibility.apply_hidden_object_state(view_object)
 
     def _get_object_storeys(self, obj):
-        return plan_object_visibility.get_object_storeys(self, obj)
+        return plan_object_classification.get_object_storeys(self, obj)
 
     def _apply_storey_visibility(self):
         return plan_object_visibility.apply_storey_visibility(self)
