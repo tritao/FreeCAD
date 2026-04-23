@@ -115,7 +115,7 @@ def refresh_plan_overlay_view_scale(session):
         if session.current_tool == "Pick Space Region":
             if session._space_region_candidates:
                 session._sync_space_region_pick_overlays()
-            if session._get_selected_plan_targets():
+            if session.selection.get_selected_plan_targets():
                 session._sync_secondary_selected_overlays()
             return
         if session.current_tool == "Provider Point":

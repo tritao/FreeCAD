@@ -12,9 +12,9 @@ def sync_secondary_selected_overlays(session):
     color = (0.12, 0.72, 0.68)
     width = session._scaled_line_width(2)
     selected_targets = (
-        session._get_selected_plan_targets()
+        session.selection.get_selected_plan_targets()
         if session.current_tool == "Pick Space Region"
-        else session._get_secondary_selected_plan_targets()
+        else session.selection.get_secondary_selected_plan_targets()
     )
     for target_kind, target_obj in selected_targets:
         if target_kind == "wall":
