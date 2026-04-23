@@ -220,6 +220,7 @@ class PlanEditSession:
         self.spaces = plan_session_components.PlanSpacesAPI(self)
         self.viewport = plan_session_components.PlanViewportAPI(self)
         self.wall_edit = plan_session_components.PlanWallEditAPI(self)
+        self.providers = plan_session_components.PlanProvidersAPI(self)
         self.status_text = plan_session_components.PlanStatusTextAPI(self)
         plan_session_state.initialize_session_state(self)
 
@@ -774,7 +775,7 @@ class PlanEditSession:
             return False
 
     def get_plan_provider_display_name(self, provider_id):
-        return plan_provider_runtime.get_plan_provider_display_name(self, provider_id)
+        return self.providers.get_plan_provider_display_name(provider_id)
 
     def _safe_plan_object_name(self, obj):
         if obj is None:
@@ -1629,16 +1630,16 @@ class PlanEditSession:
         return plan_provider_overlay_state.normalize_plan_provider_overlay_mode(mode)
 
     def get_plan_provider_overlay_mode(self):
-        return plan_provider_overlay_state.get_plan_provider_overlay_mode(self)
+        return self.providers.get_plan_provider_overlay_mode()
 
     def set_plan_provider_overlay_mode(self, mode):
         return plan_provider_overlay_state.set_plan_provider_overlay_mode(self, mode)
 
     def get_plan_provider_overlay_category(self, overlay):
-        return plan_provider_overlay_state.get_plan_provider_overlay_category(overlay)
+        return self.providers.get_plan_provider_overlay_category(overlay)
 
     def is_plan_provider_overlay_enabled(self, overlay):
-        return plan_provider_overlay_state.is_plan_provider_overlay_enabled(self, overlay)
+        return self.providers.is_plan_provider_overlay_enabled(overlay)
 
     def is_plan_provider_overlay_visible_for_mode(self, overlay, mode=None):
         return plan_provider_overlay_state.is_plan_provider_overlay_visible_for_mode(
@@ -1687,10 +1688,10 @@ class PlanEditSession:
         return plan_provider_point.has_active_provider_point_tool(self)
 
     def _get_provider_point_tool_label(self):
-        return plan_provider_point.get_provider_point_tool_label(self)
+        return self.providers.get_provider_point_tool_label()
 
     def _get_provider_point_tool_prompt(self):
-        return plan_provider_point.get_provider_point_tool_prompt(self)
+        return self.providers.get_provider_point_tool_prompt()
 
     def _arm_provider_point_tool(self):
         return plan_provider_point.arm_provider_point_tool(self)

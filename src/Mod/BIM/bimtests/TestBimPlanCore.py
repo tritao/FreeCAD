@@ -245,11 +245,12 @@ class _SnapshotProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
-    def test_plan_edit_session_owns_selection_spaces_viewport_wall_and_status_components(
+    def test_plan_edit_session_owns_selection_spaces_viewport_wall_provider_and_status_components(
         self,
     ):
         from bimplan.session import PlanEditSession
         from bimplan.session_components import (
+            PlanProvidersAPI,
             PlanSelectionAPI,
             PlanSpacesAPI,
             PlanStatusTextAPI,
@@ -268,12 +269,15 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIs(session.viewport.session, session)
         self.assertIsInstance(session.wall_edit, PlanWallEditAPI)
         self.assertIs(session.wall_edit.session, session)
+        self.assertIsInstance(session.providers, PlanProvidersAPI)
+        self.assertIs(session.providers.session, session)
         self.assertIsInstance(session.status_text, PlanStatusTextAPI)
         self.assertIs(session.status_text.session, session)
 
     def test_plan_edit_session_wrappers_delegate_to_owned_components(self):
         from bimplan.session import PlanEditSession
         from bimplan.session_components import (
+            PlanProvidersAPI,
             PlanSelectionAPI,
             PlanSpacesAPI,
             PlanStatusTextAPI,
@@ -308,6 +312,11 @@ class TestBimPlanCore(unittest.TestCase):
             autospec=True,
             return_value=4200.0,
         ) as get_plan_view_height, patch.object(
+            PlanProvidersAPI,
+            "get_plan_provider_display_name",
+            autospec=True,
+            return_value="Provider A",
+        ) as get_plan_provider_display_name, patch.object(
             PlanWallEditAPI,
             "has_active_wall_edit",
             autospec=True,
@@ -328,6 +337,7 @@ class TestBimPlanCore(unittest.TestCase):
                 ("Plan Edit", "Select\nWork directly in the viewport"),
                 session._get_status_chip_text(),
             )
+            self.assertEqual("Provider A", session.get_plan_provider_display_name("provider-a"))
             self.assertEqual(
                 ("clipped",),
                 session._clip_preview_polygon_to_plane("polygon", "plane", "ref"),
@@ -337,6 +347,10 @@ class TestBimPlanCore(unittest.TestCase):
         get_space_preflight_report.assert_called_once_with(session.spaces, targets=targets)
         get_status_chip_text.assert_called_once_with(session.status_text)
         get_plan_view_height.assert_called_once_with(session.viewport)
+        get_plan_provider_display_name.assert_called_once_with(
+            session.providers,
+            "provider-a",
+        )
         has_active_wall_edit.assert_called_once_with(session.wall_edit)
         clip_preview_polygon_to_plane.assert_called_once_with(
             "polygon",
@@ -671,6 +685,76 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
         self.assertIs(context, as_task_panel_context(context))
+
+    def test_task_panel_context_prefers_provider_and_status_components(self):
+        from bimplan.task_panel_context import PlanTaskPanelContext
+
+        provider = SimpleNamespace(
+            get_provider_point_tool_label=lambda: "Socket",
+            get_provider_point_tool_prompt=lambda: "Click socket point",
+            get_plan_provider_display_name=lambda provider_id: provider_id.upper(),
+            get_plan_provider_overlay_category=lambda overlay: "electrical",
+            is_plan_provider_overlay_enabled=lambda overlay: True,
+            get_plan_provider_overlay_mode=lambda: "electrical",
+        )
+        status_text = SimpleNamespace(
+            format_provider_selected_object_state=lambda: "Object: Socket",
+            format_provider_target_help=lambda obj: "Provider target help",
+            format_provider_selected_object_help=lambda: "Provider object help",
+            format_plan_target_selection_state=lambda kind, obj: f"{kind}:{obj.Name}",
+            get_plan_target_display_label=lambda obj: obj.Name,
+            summarize_plan_targets=lambda targets: "1 target",
+            format_opening_selection_help=lambda obj: "Opening help",
+            get_plan_selection_summary_text=lambda: "Summary",
+        )
+        session = SimpleNamespace(
+            providers=provider,
+            status_text=status_text,
+            _get_provider_point_tool_label=lambda: (_ for _ in ()).throw(AssertionError()),
+            _get_provider_point_tool_prompt=lambda: (_ for _ in ()).throw(AssertionError()),
+            get_plan_provider_display_name=lambda provider_id: (_ for _ in ()).throw(
+                AssertionError()
+            ),
+            get_plan_provider_overlay_category=lambda overlay: (_ for _ in ()).throw(
+                AssertionError()
+            ),
+            is_plan_provider_overlay_enabled=lambda overlay: (_ for _ in ()).throw(
+                AssertionError()
+            ),
+            get_plan_provider_overlay_mode=lambda: (_ for _ in ()).throw(AssertionError()),
+            _format_provider_selected_object_state=lambda: (_ for _ in ()).throw(AssertionError()),
+            _format_provider_target_help=lambda obj: (_ for _ in ()).throw(AssertionError()),
+            _format_provider_selected_object_help=lambda: (_ for _ in ()).throw(AssertionError()),
+            _format_plan_target_selection_state=lambda kind, obj: (_ for _ in ()).throw(
+                AssertionError()
+            ),
+            _get_plan_target_display_label=lambda obj: (_ for _ in ()).throw(AssertionError()),
+            _summarize_plan_targets=lambda targets: (_ for _ in ()).throw(AssertionError()),
+            _format_opening_selection_help=lambda obj: (_ for _ in ()).throw(AssertionError()),
+            _get_plan_selection_summary_text=lambda: (_ for _ in ()).throw(AssertionError()),
+        )
+
+        context = PlanTaskPanelContext(session)
+        overlay = SimpleNamespace(key="socket")
+        obj = SimpleNamespace(Name="Socket001")
+
+        self.assertEqual("Socket", context.get_provider_point_tool_label())
+        self.assertEqual("Click socket point", context.get_provider_point_tool_prompt())
+        self.assertEqual("PROVIDER-A", context.get_plan_provider_display_name("provider-a"))
+        self.assertEqual("electrical", context.get_plan_provider_overlay_category(overlay))
+        self.assertTrue(context.is_plan_provider_overlay_enabled(overlay))
+        self.assertEqual("electrical", context.get_plan_provider_overlay_mode())
+        self.assertEqual("Object: Socket", context.format_provider_selected_object_state())
+        self.assertEqual("Provider target help", context.format_provider_target_help(obj))
+        self.assertEqual("Provider object help", context.format_provider_selected_object_help())
+        self.assertEqual(
+            "provider:Socket001",
+            context.format_plan_target_selection_state("provider", obj),
+        )
+        self.assertEqual("Socket001", context.get_plan_target_display_label(obj))
+        self.assertEqual("1 target", context.summarize_plan_targets((("provider", obj),)))
+        self.assertEqual("Opening help", context.format_opening_selection_help(obj))
+        self.assertEqual("Summary", context.get_plan_selection_summary_text())
 
     def test_plan_selection_api_uses_primary_target_kind_policy(self):
         from bimplan import target_kinds as plan_target_kinds
