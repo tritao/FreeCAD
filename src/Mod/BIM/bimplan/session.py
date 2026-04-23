@@ -4350,799 +4350,151 @@ class PlanEditSession:
         return plan_wall_edit.compute_wall_edit_points_from_length(self, length)
 
     def _get_preview_footprint(self, points, width=None, align=None):
-        wall = self._edit_wall
-        if not points or len(points) != 2:
-            return None
-
-        if width is None and wall:
-            width = getattr(getattr(wall, "Width", None), "Value", 0.0) or 0.0
-        if width <= 0:
-            return None
-
-        axis = points[1].sub(points[0])
-        if axis.Length < _MIN_WALL_LENGTH:
-            return None
-        axis.normalize()
-        rotation = FreeCAD.Rotation(FreeCAD.Vector(1, 0, 0), axis)
-        perp = rotation.multVec(FreeCAD.Vector(0, 1, 0))
-
-        if align is None:
-            align = getattr(wall, "Align", "Center") if wall else "Center"
-        if align == "Center":
-            y_min = -width / 2
-            y_max = width / 2
-        elif align == "Left":
-            y_min = -width
-            y_max = 0.0
-        else:
-            y_min = 0.0
-            y_max = width
-
-        return [
-            points[0].add(FreeCAD.Vector(perp).multiply(y_min)),
-            points[1].add(FreeCAD.Vector(perp).multiply(y_min)),
-            points[1].add(FreeCAD.Vector(perp).multiply(y_max)),
-            points[0].add(FreeCAD.Vector(perp).multiply(y_max)),
-        ]
+        return plan_wall_edit.get_preview_footprint(self, points, width=width, align=align)
 
     def _make_preview_wall_adapter(self, wall, endpoints):
-        if not wall or not endpoints or len(endpoints) != 2:
-            return None
-
-        real_proxy = getattr(wall, "Proxy", None)
-        preview_points = [FreeCAD.Vector(point) for point in endpoints]
-
-        class _PreviewWallProxy:
-            def __init__(self, wrapped_proxy):
-                self._wrapped_proxy = wrapped_proxy
-                self.Type = getattr(wrapped_proxy, "Type", None)
-
-            def calc_endpoints(self, _obj):
-                return [FreeCAD.Vector(point) for point in preview_points]
-
-            def get_width(self, _obj, widths=False):
-                if self._wrapped_proxy and hasattr(self._wrapped_proxy, "get_width"):
-                    return self._wrapped_proxy.get_width(wall, widths=widths)
-                width = getattr(getattr(wall, "Width", None), "Value", getattr(wall, "Width", None))
-                return width
-
-            def get_layers(self, _obj):
-                if self._wrapped_proxy and hasattr(self._wrapped_proxy, "get_layers"):
-                    return self._wrapped_proxy.get_layers(wall)
-                return None
-
-        class _PreviewWall:
-            def __init__(self):
-                self._wall = wall
-                self.Proxy = _PreviewWallProxy(real_proxy)
-                self.Label = getattr(wall, "Label", getattr(wall, "Name", ""))
-                self.Name = getattr(wall, "Name", "")
-                self.Document = getattr(wall, "Document", None)
-                self.InList = getattr(wall, "InList", [])
-                # Force solver helpers to read the transient preview endpoints
-                # instead of the original baseline object.
-                self.Base = None
-                self.Width = getattr(wall, "Width", None)
-                self.Align = getattr(wall, "Align", "Center")
-
-            def __getattr__(self, attr):
-                return getattr(self._wall, attr)
-
-        return _PreviewWall()
+        return plan_wall_edit.make_preview_wall_adapter(self, wall, endpoints)
 
     def _solve_preview_wall_relation(self, relation, wall, preview_wall):
-        if not relation or not wall or not preview_wall:
-            return None
-
-        import ArchWallJoinUtils
-        import ArchWallJunctionUtils
-
-        if ArchWallJoinUtils.is_wall_joint(relation):
-            wall_a = preview_wall if getattr(relation, "WallA", None) == wall else relation.WallA
-            wall_b = preview_wall if getattr(relation, "WallB", None) == wall else relation.WallB
-            return ArchWallJoinUtils.solve_wall_joint_inputs(
-                wall_a,
-                wall_b,
-                getattr(relation, "JointType", "Miter"),
-                getattr(relation, "ButtTrimmed", "Auto"),
-                getattr(relation, "TeeStem", "Auto"),
-                getattr(relation, "EndA", "Auto"),
-                getattr(relation, "EndB", "Auto"),
-            )
-
-        if ArchWallJoinUtils.is_wall_junction(relation):
-            walls = [
-                preview_wall if linked_wall == wall else linked_wall
-                for linked_wall in list(getattr(relation, "Walls", []) or [])
-            ]
-            carrier_wall = (
-                preview_wall
-                if getattr(relation, "CarrierWall", None) == wall
-                else relation.CarrierWall
-            )
-            return ArchWallJunctionUtils.solve_wall_junction_inputs(
-                walls,
-                getattr(relation, "CarrierMode", "Auto"),
-                carrier_wall,
-            )
-
-        return None
+        return plan_wall_edit.solve_preview_wall_relation(self, relation, wall, preview_wall)
 
     def _collect_preview_wall_relation_data(self, wall, points):
-        if not wall or not points or len(points) != 2:
-            return {"Start": None, "End": None, "Conflicts": set()}, []
-
-        preview_wall = self._make_preview_wall_adapter(wall, points)
-        if not preview_wall:
-            return {"Start": None, "End": None, "Conflicts": set()}, []
-
-        import ArchWallJoinUtils
-
-        claims = {"Start": [], "End": []}
-        warnings = []
-        for relation in ArchWallJoinUtils.iter_wall_relations(wall):
-            solution = self._solve_preview_wall_relation(relation, wall, preview_wall)
-            if not solution:
-                continue
-            if not solution.is_ok():
-                warnings.append(
-                    (
-                        getattr(relation, "Label", getattr(relation, "Name", "")),
-                        getattr(solution, "status", "SolverError"),
-                        str(getattr(solution, "status_message", "") or "").strip(),
-                    )
-                )
-                continue
-            end_name, plane = ArchWallJoinUtils.get_trim_for_wall(solution, preview_wall)
-            if end_name and plane:
-                claims[end_name].append((relation, plane))
-
-        result = {"Start": None, "End": None, "Conflicts": set()}
-        for end_name, entries in claims.items():
-            if len(entries) == 1:
-                result[end_name] = entries[0][1]
-            elif len(entries) > 1:
-                result["Conflicts"].add(end_name)
-                warnings.append(
-                    (
-                        translate("BIM_PlanEdit", "{end_name} preview trims").format(
-                            end_name=end_name
-                        ),
-                        "Conflict",
-                        translate(
-                            "BIM_PlanEdit",
-                            "Multiple wall relations trim the same wall end in preview.",
-                        ),
-                    )
-                )
-        return result, warnings
+        return plan_wall_edit.collect_preview_wall_relation_data(self, wall, points)
 
     @staticmethod
     def _clip_preview_polygon_to_plane(polygon, plane_placement, ref_point, tol=1e-7):
-        if not polygon or len(polygon) < 3 or plane_placement is None or ref_point is None:
-            return polygon
-
-        plane_origin = FreeCAD.Vector(plane_placement.Base)
-        plane_normal = plane_placement.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
-        if plane_normal.Length <= tol:
-            return polygon
-        plane_normal.normalize()
-
-        ref_distance = plane_normal.dot(FreeCAD.Vector(ref_point).sub(plane_origin))
-
-        def signed_distance(point):
-            return plane_normal.dot(FreeCAD.Vector(point).sub(plane_origin))
-
-        def is_inside(distance):
-            if ref_distance >= 0:
-                return distance >= -tol
-            return distance <= tol
-
-        def intersect(prev_point, curr_point, prev_distance, curr_distance):
-            denom = prev_distance - curr_distance
-            if abs(denom) <= tol:
-                return FreeCAD.Vector(curr_point)
-            factor = prev_distance / denom
-            segment = FreeCAD.Vector(curr_point).sub(prev_point)
-            return FreeCAD.Vector(prev_point).add(segment.multiply(factor))
-
-        result = []
-        prev_point = FreeCAD.Vector(polygon[-1])
-        prev_distance = signed_distance(prev_point)
-        prev_inside = is_inside(prev_distance)
-        for current_point in polygon:
-            current_point = FreeCAD.Vector(current_point)
-            current_distance = signed_distance(current_point)
-            current_inside = is_inside(current_distance)
-            if current_inside:
-                if not prev_inside:
-                    result.append(
-                        intersect(prev_point, current_point, prev_distance, current_distance)
-                    )
-                result.append(current_point)
-            elif prev_inside:
-                result.append(intersect(prev_point, current_point, prev_distance, current_distance))
-            prev_point = current_point
-            prev_distance = current_distance
-            prev_inside = current_inside
-        return result
+        return plan_wall_edit.clip_preview_polygon_to_plane(
+            polygon,
+            plane_placement,
+            ref_point,
+            tol=tol,
+        )
 
     def _get_preview_footprint_polylines(self, points):
-        footprint = self._get_preview_footprint(points)
-        if not footprint or len(footprint) < 3:
-            return [], []
-
-        relation_endings, warnings = self._collect_preview_wall_relation_data(
-            self._edit_wall, points
-        )
-        polygon = [FreeCAD.Vector(point) for point in footprint]
-        for end_name in ("Start", "End"):
-            plane = relation_endings.get(end_name)
-            if plane is None or end_name in relation_endings.get("Conflicts", set()):
-                continue
-            ref_point = points[1] if end_name == "Start" else points[0]
-            polygon = self._clip_preview_polygon_to_plane(polygon, plane, ref_point)
-            if not polygon or len(polygon) < 3:
-                break
-
-        if not polygon or len(polygon) < 3:
-            return [], warnings
-
-        closed = list(polygon)
-        closed.append(FreeCAD.Vector(closed[0]))
-        return [closed], warnings
+        return plan_wall_edit.get_preview_footprint_polylines(self, points)
 
     def _get_readout_base_gap(self):
-        from draftutils import params
-
-        units_per_pixel = self._get_plan_view_units_per_pixel() or 0.0
-        text_height_pixels = float(params.get_param_view("MarkerSize") or 0.0) * 2.0 * 96.0 / 72.0
-        return max(100.0, text_height_pixels * units_per_pixel * 1.25)
+        return plan_wall_edit.get_readout_base_gap(self)
 
     def _get_aligned_readout_offset_for_wall(self, wall):
-        width = getattr(getattr(wall, "Width", None), "Value", 0.0) if wall else 0.0
-        width = float(width or 0.0)
-        base_gap = max(width * 0.25, self._get_readout_base_gap())
-        if width <= 0:
-            return base_gap
-        align = getattr(wall, "Align", "Center") if wall else "Center"
-        if align == "Left":
-            return base_gap
-        if align == "Right":
-            return -(base_gap)
-        return width * 0.5 + base_gap
+        return plan_wall_edit.get_aligned_readout_offset_for_wall(self, wall)
 
     def _get_wall_edit_readout_offset(self, mode):
-        if mode in (2, 3):
-            return self._get_readout_base_gap()
-        if mode != 1:
-            return None
-        return self._get_aligned_readout_offset_for_wall(self._edit_wall)
+        return plan_wall_edit.get_wall_edit_readout_offset(self, mode)
 
     def _get_opening_move_readout_offset(self, opening):
-        host = next(iter(getattr(opening, "Hosts", None) or []), None) if opening else None
-        return self._get_aligned_readout_offset_for_wall(host)
+        return plan_wall_edit.get_opening_move_readout_offset(self, opening)
 
     def _update_wall_edit_preview_geometry(self, points):
-        if not points or len(points) != 2:
-            return
-
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-            from draftutils import params
-        except Exception:
-            return
-
-        if self._preview_line_tracker is None:
-            self._preview_line_tracker = self._make_plan_line_tracker(
-                DraftTrackers,
-                "wall-edit-preview-axis",
-                swidth=self._scaled_line_width(2),
-                ontop=True,
-            )
-            self._preview_line_tracker.on()
-        self._preview_line_tracker.p1(points[0])
-        self._preview_line_tracker.p2(points[1])
-
-        previous_relation_status = self._plan_relation_status_message
-        polylines, relation_warnings = self._get_preview_footprint_polylines(points)
-        if relation_warnings:
-            label, status, _detail = relation_warnings[0]
-            self._plan_relation_status_message = translate(
-                "BIM_PlanEdit", "Preview warning: {label} ({status})"
-            ).format(label=label, status=status)
-        elif self._is_wall_edit_modal_active():
-            self._clear_plan_relation_status()
-
-        segments = []
-        for polyline in polylines:
-            if len(polyline) < 2:
-                continue
-            segments.extend(zip(polyline, polyline[1:]))
-
-        color = (0.22, 0.53, 0.98)
-        width = self._scaled_line_width(2)
-        if len(self._preview_footprint_trackers) != len(segments):
-            self._finalize_trackers(self._preview_footprint_trackers)
-            self._preview_footprint_trackers = []
-            for _start, _end in segments:
-                tracker = self._make_plan_line_tracker(
-                    DraftTrackers,
-                    "wall-edit-preview-footprint",
-                    scolor=color,
-                    swidth=width,
-                    ontop=True,
-                )
-                self._preview_footprint_trackers.append(tracker)
-
-        for tracker, (start, end) in zip(self._preview_footprint_trackers, segments):
-            tracker.setColor(color)
-            tracker.p1(start)
-            tracker.p2(end)
-            tracker.on()
-
-        if previous_relation_status != self._plan_relation_status_message:
-            self._refresh_task_panel_status()
-
-        midpoint = (points[0] + points[1]) * 0.5
-        marker_size = self._scaled_marker_size(params.get_param_view("MarkerSize"))
-        midpoint_marker = FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size)
-
-        grip_specs = (
-            (points[0], 0, None),
-            (points[1], 1, None),
-            (midpoint, 2, midpoint_marker),
-        )
-        if not self._preview_grip_trackers:
-            for position, idx, marker in grip_specs:
-                tracker = DraftTrackers.editTracker(
-                    pos=position,
-                    idx=idx,
-                    marker=marker,
-                    inactive=True,
-                )
-                tracker.on()
-                self._preview_grip_trackers.append(tracker)
-            return
-
-        for tracker, (position, _idx, _marker) in zip(self._preview_grip_trackers, grip_specs):
-            tracker.set(position)
-            tracker.on()
+        return plan_wall_edit.update_wall_edit_preview_geometry(self, points)
 
     def _sync_wall_edit_preview(self, points, include_opening_preview=True):
-        self._update_wall_edit_preview_geometry(points)
-        self._sync_wall_edit_readout(points)
-        if include_opening_preview:
-            self._sync_wall_hosted_opening_preview(points)
-        else:
-            self._clear_wall_hosted_opening_preview()
+        return plan_wall_edit.sync_wall_edit_preview(
+            self,
+            points,
+            include_opening_preview=include_opening_preview,
+        )
 
     def _is_wall_move_edit_active(self):
-        return bool(
-            self._edit_wall and self._edit_endpoint == "Move" and self.current_tool == "Move Wall"
-        )
+        return plan_wall_edit.is_wall_move_edit_active(self)
 
     def _is_wall_stretch_edit_active(self):
-        return bool(
-            self._edit_wall
-            and self._edit_endpoint in ("Start", "End")
-            and self.current_tool in ("Stretch Start", "Stretch End")
-        )
+        return plan_wall_edit.is_wall_stretch_edit_active(self)
 
     def _is_wall_readout_edit_active(self):
-        return bool(self._is_wall_move_edit_active() or self._is_wall_stretch_edit_active())
+        return plan_wall_edit.is_wall_readout_edit_active(self)
 
     def _clear_wall_edit_preview(self):
-        if self._preview_line_tracker:
-            try:
-                self._preview_line_tracker.finalize()
-            except Exception:
-                pass
-        self._preview_line_tracker = None
-
-        self._finalize_trackers(self._preview_footprint_trackers)
-        self._preview_footprint_trackers = []
-
-        for tracker in self._preview_grip_trackers:
-            try:
-                tracker.finalize()
-            except Exception:
-                pass
-        self._preview_grip_trackers = []
-        self._clear_wall_edit_readout()
-        self._clear_wall_hosted_opening_preview()
+        return plan_wall_edit.clear_wall_edit_preview(self)
 
     def _get_wall_hosted_opening_preview_segments(self, wall, points):
-        if not wall or not points or len(points) != 2:
-            return []
-        if self._edit_endpoint not in ("Start", "End"):
-            return []
-
-        layout = self._compute_wall_hosted_opening_layout(wall, points)
-        if layout is None:
-            return []
-
-        segments = []
-        for item in layout:
-            delta = FreeCAD.Vector(item["target_point"]).sub(item["current"])
-            if delta.Length < 1e-6:
-                continue
-            for polyline in self._get_opening_overlay_polylines(item["opening"]):
-                if len(polyline) < 2:
-                    continue
-                translated = [FreeCAD.Vector(point).add(delta) for point in polyline]
-                segments.extend(zip(translated, translated[1:]))
-        return segments
+        return plan_wall_edit.get_wall_hosted_opening_preview_segments(self, wall, points)
 
     def _sync_wall_hosted_opening_preview(self, points):
-        wall = self._edit_wall
-        if self.current_tool not in ("Stretch Start", "Stretch End") or not wall:
-            self._clear_wall_hosted_opening_preview()
-            return
-
-        segments = self._get_wall_hosted_opening_preview_segments(wall, points)
-        if not segments:
-            self._clear_wall_hosted_opening_preview()
-            return
-
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except ImportError:
-            self._clear_wall_hosted_opening_preview()
-            return
-
-        color = (0.12, 0.38, 0.95)
-        width = self._scaled_line_width(2)
-        if len(self._wall_edit_opening_preview_trackers) != len(segments):
-            self._clear_wall_hosted_opening_preview()
-            for _start, _end in segments:
-                tracker = self._make_plan_line_tracker(
-                    DraftTrackers,
-                    "wall-edit-opening-preview",
-                    scolor=color,
-                    swidth=width,
-                    ontop=True,
-                )
-                self._wall_edit_opening_preview_trackers.append(tracker)
-
-        for tracker, (start, end) in zip(self._wall_edit_opening_preview_trackers, segments):
-            tracker.setColor(color)
-            tracker.p1(start)
-            tracker.p2(end)
-            tracker.on()
+        return plan_wall_edit.sync_wall_hosted_opening_preview(self, points)
 
     def _clear_wall_hosted_opening_preview(self):
-        self._finalize_trackers(self._wall_edit_opening_preview_trackers)
-        self._wall_edit_opening_preview_trackers = []
+        return plan_wall_edit.clear_wall_hosted_opening_preview(self)
 
     def _get_wall_edit_readout_specs(self, points):
-        if not points or len(points) != 2 or not self._edit_endpoints:
-            return []
-
-        original_points = self._edit_endpoints
-        if self._edit_endpoint == "Move":
-            original_midpoint = (original_points[0] + original_points[1]) * 0.5
-            new_midpoint = (points[0] + points[1]) * 0.5
-            return [
-                (2, original_midpoint, new_midpoint),
-                (3, original_midpoint, new_midpoint),
-            ]
-
-        return [(1, points[0], points[1])]
+        return plan_wall_edit.get_wall_edit_readout_specs(self, points)
 
     def _get_default_wall_edit_readout_mode(self, specs):
-        modes = [mode for mode, _start, _end in specs]
-        if not modes:
-            return None
-        if self._is_wall_move_edit_active():
-            if self._wall_edit_active_readout_mode in modes:
-                return self._wall_edit_active_readout_mode
-            if 2 in modes:
-                return 2
-        if 1 in modes:
-            return 1
-        return modes[0]
+        return plan_wall_edit.get_default_wall_edit_readout_mode(self, specs)
 
     def _bind_wall_edit_readout_callbacks(self, dim, mode):
-        if mode == 1:
-            dim.setValueChangedCallback(self._on_wall_stretch_length_changed)
-            dim.setEditingFinishedCallback(self._on_wall_stretch_length_finished)
-            if hasattr(dim, "setEditingCanceledCallback"):
-                dim.setEditingCanceledCallback(self._on_wall_stretch_length_canceled)
-            return
-
-        dim.setValueChangedCallback(
-            lambda value, delta_mode=mode: self._on_wall_move_delta_changed(delta_mode, value)
-        )
-        dim.setEditingFinishedCallback(
-            lambda value, delta_mode=mode: self._on_wall_move_delta_finished(delta_mode, value)
-        )
-        if hasattr(dim, "setEditingCanceledCallback"):
-            dim.setEditingCanceledCallback(
-                lambda value, delta_mode=mode: self._on_wall_move_delta_canceled(delta_mode, value)
-            )
+        return plan_wall_edit.bind_wall_edit_readout_callbacks(self, dim, mode)
 
     def _update_wall_edit_readouts_in_place(self, points, active_mode=None):
-        specs = {
-            mode: (start, end) for mode, start, end in self._get_wall_edit_readout_specs(points)
-        }
-        for tracker in self._wall_edit_readout_trackers:
-            mode = getattr(tracker, "mode", None)
-            if mode not in specs:
-                continue
-            start, end = specs[mode]
-            if hasattr(tracker, "updatePoints"):
-                tracker.updatePoints(start, end, sync_spinbox=(mode != active_mode))
-            else:
-                tracker.p1(start)
-                tracker.p2(end)
-            tracker.on()
+        return plan_wall_edit.update_wall_edit_readouts_in_place(
+            self,
+            points,
+            active_mode=active_mode,
+        )
 
     def _sync_wall_edit_readout(self, points):
-        self._clear_wall_edit_readout()
-        if not points or len(points) != 2 or not self._edit_endpoints:
-            return
-        try:
-            import draftguitools.gui_trackers as DraftTrackers
-        except Exception:
-            return
-
-        readout_color = (0.12, 0.38, 0.95)
-        dims = self._get_wall_edit_readout_specs(points)
-        active_mode = self._get_default_wall_edit_readout_mode(dims)
-        self._wall_edit_active_readout_mode = active_mode
-
-        for mode, start, end in dims:
-            try:
-                if self._is_wall_readout_edit_active():
-                    dim = DraftTrackers.editableArchDimTracker(mode=mode)
-                else:
-                    dim = DraftTrackers.archDimTracker(mode=mode)
-            except Exception:
-                continue
-            try:
-                if hasattr(dim, "dimnode"):
-                    dim.dimnode.textColor.setValue(readout_color)
-                else:
-                    dim.setColor(readout_color)
-            except Exception:
-                pass
-            offset = self._get_wall_edit_readout_offset(mode)
-            if offset is not None:
-                dim.offset = offset
-            dim.p1(start)
-            dim.p2(end)
-            dim.on()
-            if self._is_wall_readout_edit_active() and hasattr(dim, "setValueChangedCallback"):
-                self._bind_wall_edit_readout_callbacks(dim, mode)
-                if mode == active_mode:
-                    self._wall_edit_active_readout_mode = mode
-                    self._wall_edit_active_readout_tracker = dim
-            if self._wall_edit_active_readout_tracker is None:
-                self._wall_edit_active_readout_tracker = dim
-            self._wall_edit_readout_trackers.append(dim)
+        return plan_wall_edit.sync_wall_edit_readout(self, points)
 
     def _clear_wall_edit_readout(self):
-        self._finalize_trackers(self._wall_edit_readout_trackers)
-        self._wall_edit_readout_trackers = []
-        self._wall_edit_active_readout_tracker = None
-        self._wall_edit_active_readout_mode = None
-        self._wall_edit_length_edit_queued = False
+        return plan_wall_edit.clear_wall_edit_readout(self)
 
     def _get_wall_edit_readout_tracker(self, mode):
-        for tracker in self._wall_edit_readout_trackers:
-            if getattr(tracker, "mode", None) == mode:
-                return tracker
-        return None
+        return plan_wall_edit.get_wall_edit_readout_tracker(self, mode)
 
     def _cycle_wall_move_readout_mode(self):
-        if not self._is_wall_move_edit_active():
-            return False
-        modes = [
-            getattr(tracker, "mode", None)
-            for tracker in self._wall_edit_readout_trackers
-            if getattr(tracker, "mode", None) in (2, 3)
-        ]
-        modes = [mode for mode in modes if mode is not None]
-        if not modes:
-            return False
-        current_mode = (
-            self._wall_edit_active_readout_mode
-            if self._wall_edit_active_readout_mode in modes
-            else modes[0]
-        )
-        next_mode = modes[(modes.index(current_mode) + 1) % len(modes)]
-        self._wall_edit_active_readout_mode = next_mode
-        tracker = self._get_wall_edit_readout_tracker(next_mode)
-        if tracker is not None:
-            self._wall_edit_active_readout_tracker = tracker
-        return True
+        return plan_wall_edit.cycle_wall_move_readout_mode(self)
 
     def _start_wall_readout_edit(self, cycle=False):
-        tracker = self._wall_edit_active_readout_tracker
-        if not self._is_wall_readout_edit_active():
-            return False
-        if cycle and self._is_wall_move_edit_active():
-            if (
-                tracker is not None
-                and hasattr(tracker, "isInEdit")
-                and tracker.isInEdit()
-                and hasattr(tracker, "stopEdit")
-            ):
-                tracker.stopEdit()
-            if not self._cycle_wall_move_readout_mode():
-                return False
-            tracker = self._wall_edit_active_readout_tracker
-        if tracker is None:
-            return False
-        if not hasattr(tracker, "startEdit"):
-            return False
-        if hasattr(tracker, "isInEdit") and tracker.isInEdit():
-            if hasattr(tracker, "label"):
-                tracker.label.setFocusToSpinbox()
-            return True
-        if self._wall_edit_length_edit_queued:
-            return True
-        self._wall_edit_length_edit_queued = True
-        self._stop_snapper()
-        try:
-            from PySide import QtCore
-        except ImportError:
-            self._wall_edit_length_edit_queued = False
-            tracker.startEdit(tracker.Distance)
-            return True
-        QtCore.QTimer.singleShot(
-            0, lambda: self._start_wall_readout_edit_now(tracker, tracker.Distance)
-        )
-        return True
+        return plan_wall_edit.start_wall_readout_edit(self, cycle=cycle)
 
     def _start_wall_stretch_length_edit(self):
-        return self._start_wall_readout_edit(cycle=False)
+        return plan_wall_edit.start_wall_stretch_length_edit(self)
 
     def _start_wall_readout_edit_now(self, tracker, value):
-        self._wall_edit_length_edit_queued = False
-        if not self._is_wall_readout_edit_active():
-            return
-        if tracker is None or tracker is not self._wall_edit_active_readout_tracker:
-            return
-        if not hasattr(tracker, "startEdit"):
-            return
-        if hasattr(tracker, "isInEdit") and tracker.isInEdit():
-            if hasattr(tracker, "label"):
-                tracker.label.setFocusToSpinbox()
-            return
-        try:
-            tracker.startEdit(value)
-        except Exception:
-            return
+        return plan_wall_edit.start_wall_readout_edit_now(self, tracker, value)
 
     def _on_wall_stretch_length_changed(self, value):
-        if not self._is_wall_stretch_edit_active():
-            return
-        new_points = self._compute_wall_edit_points_from_length(value)
-        tracker = self._wall_edit_active_readout_tracker
-        if not new_points or tracker is None:
-            return
-        self._preview_points = new_points
-        self._update_wall_edit_preview_geometry(new_points)
-        self._update_wall_edit_readouts_in_place(new_points, active_mode=1)
-        self._sync_wall_hosted_opening_preview(new_points)
+        return plan_wall_edit.on_wall_stretch_length_changed(self, value)
 
     def _on_wall_stretch_length_finished(self, value):
-        if not self._is_wall_stretch_edit_active():
-            return
-        wall = self._edit_wall
-        endpoint = self._edit_endpoint
-        proxy = getattr(wall, "Proxy", None)
-        new_points = self._compute_wall_edit_points_from_length(value)
-        if not new_points or not proxy:
-            return
-        self._preview_points = new_points
-        self._commit_wall_edit_points(wall, endpoint, proxy, new_points)
+        return plan_wall_edit.on_wall_stretch_length_finished(self, value)
 
     def _on_wall_stretch_length_canceled(self, value):
-        del value
-        if not self._is_wall_stretch_edit_active():
-            return
-        self._schedule_wall_edit_readout_cancel()
+        return plan_wall_edit.on_wall_stretch_length_canceled(self, value)
 
     def _compute_wall_edit_points_from_move_delta(self, mode, value):
-        if not self._is_wall_move_edit_active() or not self._edit_endpoints:
-            return None
-        original_endpoints = self._edit_endpoints
-        original_midpoint = (original_endpoints[0] + original_endpoints[1]) * 0.5
-        preview_points = self._preview_points if self._preview_points else original_endpoints
-        current_midpoint = (preview_points[0] + preview_points[1]) * 0.5
-        target_midpoint = FreeCAD.Vector(current_midpoint)
-        if mode == 2:
-            target_midpoint.x = original_midpoint.x + float(value)
-        elif mode == 3:
-            target_midpoint.y = original_midpoint.y + float(value)
-        else:
-            return None
-        delta = target_midpoint.sub(original_midpoint)
-        return [original_endpoints[0].add(delta), original_endpoints[1].add(delta)]
+        return plan_wall_edit.compute_wall_edit_points_from_move_delta(self, mode, value)
 
     def _on_wall_move_delta_changed(self, mode, value):
-        if not self._is_wall_move_edit_active():
-            return
-        new_points = self._compute_wall_edit_points_from_move_delta(mode, value)
-        if not new_points:
-            return
-        self._preview_points = new_points
-        self._update_wall_edit_preview_geometry(new_points)
-        self._update_wall_edit_readouts_in_place(new_points, active_mode=mode)
-        self._sync_wall_hosted_opening_preview(new_points)
+        return plan_wall_edit.on_wall_move_delta_changed(self, mode, value)
 
     def _on_wall_move_delta_finished(self, mode, value):
-        if not self._is_wall_move_edit_active():
-            return
-        wall = self._edit_wall
-        endpoint = self._edit_endpoint
-        proxy = getattr(wall, "Proxy", None)
-        new_points = self._compute_wall_edit_points_from_move_delta(mode, value)
-        if not new_points or not proxy:
-            return
-        self._preview_points = new_points
-        self._commit_wall_edit_points(wall, endpoint, proxy, new_points)
+        return plan_wall_edit.on_wall_move_delta_finished(self, mode, value)
 
     def _on_wall_move_delta_canceled(self, mode, value):
-        del mode, value
-        if not self._is_wall_move_edit_active():
-            return
-        self._schedule_wall_edit_readout_cancel()
+        return plan_wall_edit.on_wall_move_delta_canceled(self, mode, value)
 
     def _schedule_wall_edit_readout_cancel(self):
-        preview_points = None
-        if self._preview_points:
-            preview_points = [FreeCAD.Vector(point) for point in self._preview_points]
-        elif self._edit_endpoints:
-            preview_points = [FreeCAD.Vector(point) for point in self._edit_endpoints]
-        try:
-            from PySide import QtCore
-        except ImportError:
-            self._finish_wall_edit_readout_canceled(preview_points)
-            return
-        QtCore.QTimer.singleShot(
-            0, lambda pts=preview_points: self._finish_wall_edit_readout_canceled(pts)
-        )
+        return plan_wall_edit.schedule_wall_edit_readout_cancel(self)
 
     def _finish_wall_edit_readout_canceled(self, preview_points):
-        if not self._is_wall_readout_edit_active():
-            return
-        if preview_points:
-            self._sync_wall_edit_preview(preview_points)
-        self._resume_wall_edit_point_pick()
+        return plan_wall_edit.finish_wall_edit_readout_canceled(self, preview_points)
 
     def _restore_edit_wall_visibility(self):
-        wall = self._edit_wall
-        if wall is not None and self._edit_wall_visibility is not None:
-            try:
-                wall.ViewObject.Visibility = self._edit_wall_visibility
-            except Exception:
-                pass
-        self._edit_wall_visibility = None
+        return plan_wall_edit.restore_edit_wall_visibility(self)
 
     def _update_wall_edit_preview(self, point):
-        new_points = self._compute_wall_edit_points(point)
-        if not new_points:
-            return
-        self._preview_points = new_points
-        self._sync_wall_edit_preview(new_points)
+        return plan_wall_edit.update_wall_edit_preview(self, point)
 
     def _update_wall_edit_point_pick(self, point=None, snap_info=None):
-        del snap_info
-        if self._wall_edit_active_readout_tracker and hasattr(
-            self._wall_edit_active_readout_tracker, "isInEdit"
-        ):
-            if self._wall_edit_active_readout_tracker.isInEdit():
-                return
-        self._update_wall_edit_preview(point)
+        return plan_wall_edit.update_wall_edit_point_pick(
+            self,
+            point=point,
+            snap_info=snap_info,
+        )
 
     def _cancel_wall_edit_point_pick(self):
-        self.current_tool = "Select"
-        self._cancel_pending_edit()
-        self._refresh_task_panel_status()
+        return plan_wall_edit.cancel_wall_edit_point_pick(self)
 
     def _get_edit_node(self, mouse_pos):
         symbol_handle_role = self._pick_selected_symbol_handle(mouse_pos)
