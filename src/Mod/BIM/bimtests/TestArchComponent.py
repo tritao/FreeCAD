@@ -364,6 +364,53 @@ class TestArchComponent(TestArchBase.TestArchBase):
         self.assertNotIn(wall, window.Hosts, "Wall should not be in window.Hosts after removal.")
         self.assertEqual(len(window.Hosts), 0, "Window.Hosts list should be empty after removal.")
 
+    def test_rehost_object_updates_single_host_link_and_preserves_placement(self):
+        wall_a = Arch.makeWall(Draft.makeLine(App.Vector(0, 0, 0), App.Vector(3000, 0, 0)))
+        wall_b = Arch.makeWall(Draft.makeLine(App.Vector(0, 2000, 0), App.Vector(3000, 2000, 0)))
+        hosted = self.document.addObject("Part::Box", "HostedSingle")
+        hosted.addProperty("App::PropertyLink", "Host", "Component")
+        hosted.Placement.Base = App.Vector(400, 500, 600)
+        hosted.Host = wall_a
+        self.document.recompute()
+
+        original_base = hosted.Placement.Base
+
+        self.assertTrue(Arch.canRehostObject(hosted, wall_b))
+        self.assertTrue(
+            Arch.rehostObject(hosted, wall_b, preserve_world_position=True, raise_on_error=True)
+        )
+        self.document.recompute()
+
+        self.assertIs(wall_b, hosted.Host)
+        self.assertTrue(hosted.Placement.Base.isEqual(original_base, 1e-6))
+
+    def test_rehost_object_replaces_hosts_link_list_and_supports_clear(self):
+        wall_a = Arch.makeWall(Draft.makeLine(App.Vector(0, 0, 0), App.Vector(3000, 0, 0)))
+        wall_b = Arch.makeWall(Draft.makeLine(App.Vector(0, 2000, 0), App.Vector(3000, 2000, 0)))
+        hosted = self.document.addObject("Part::Box", "HostedMulti")
+        hosted.addProperty("App::PropertyLinkList", "Hosts", "Component")
+        hosted.Placement.Base = App.Vector(700, 800, 900)
+        hosted.Hosts = [wall_a]
+        self.document.recompute()
+
+        self.assertTrue(Arch.canRehostObject(hosted, wall_b))
+        self.assertTrue(Arch.rehostObject(hosted, wall_b, raise_on_error=True))
+        self.assertEqual([wall_b], list(hosted.Hosts))
+
+        self.assertTrue(Arch.canRehostObject(hosted, None))
+        self.assertTrue(Arch.rehostObject(hosted, None, raise_on_error=True))
+        self.assertEqual([], list(hosted.Hosts))
+
+    def test_can_rehost_object_rejects_invalid_targets(self):
+        wall = Arch.makeWall(Draft.makeLine(App.Vector(0, 0, 0), App.Vector(3000, 0, 0)))
+        plain = self.document.addObject("Part::Box", "PlainBox")
+        hosted = self.document.addObject("Part::Box", "Hosted")
+        hosted.addProperty("App::PropertyLinkList", "Hosts", "Component")
+        self.document.recompute()
+
+        self.assertFalse(Arch.canRehostObject(plain, wall))
+        self.assertFalse(Arch.canRehostObject(hosted, hosted))
+
     def test_if_face_vertical(self):
         """
         Test the ArchComponent.AreaCalculator.isFaceVertical method directly.
