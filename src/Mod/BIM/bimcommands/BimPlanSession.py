@@ -289,9 +289,12 @@ class PlanEditSession:
         self._plan_semantic_object_cache = {}
         self._plan_object_storeys_cache = {}
         self._plan_symbol_instances_cache = None
+        self._plan_space_instances_cache = None
+        self._plan_region_instances_cache = None
         self._plan_opening_instances_cache = None
         self._wall_hosted_openings_cache = None
         self._wall_hosted_openings_cache_queued = False
+        self._plan_hover_pick_cache_queued = False
         self._opening_overlay_screen_cache = {}
         self._opening_overlay_screen_cache_projection_key = None
         self._symbol_overlay_screen_cache = {}
@@ -357,6 +360,8 @@ class PlanEditSession:
         self._edit_endpoint = None
         self._edit_endpoints = None
         self._wall_edit_opening_clearances = {}
+        self._wall_edit_opening_clearances_queued = False
+        self._wall_edit_task_panel_refresh_queued = False
         self._preview_points = None
         self._preview_line_tracker = None
         self._preview_footprint_trackers = []
@@ -599,6 +604,8 @@ class PlanEditSession:
         self._plan_semantic_object_cache.clear()
         self._plan_object_storeys_cache.clear()
         self._plan_symbol_instances_cache = None
+        self._plan_space_instances_cache = None
+        self._plan_region_instances_cache = None
         self._symbol_overlay_screen_cache.clear()
 
     def _get_cached_plan_overlay_geometry(self, kind, obj, field_name, compute):
@@ -786,6 +793,8 @@ class PlanEditSession:
                 self._queue_prime_opening_handle_tracker_pool()
             with self._plan_perf_trace_span("queue_prime_wall_hosted_openings_cache"):
                 self._queue_prime_wall_hosted_openings_cache()
+            with self._plan_perf_trace_span("queue_prime_hover_pick_caches"):
+                self._queue_prime_hover_pick_caches()
             with self._plan_perf_trace_span("install_command_gate"):
                 plan_command_gate.install(self)
             if self._is_plan_perf_trace_enabled():
@@ -815,6 +824,9 @@ class PlanEditSession:
         del cont, closed
         if self.current_tool == "Move Provider":
             self._cancel_provider_handle_point_pick()
+            return True
+        if self.current_tool == "Move Opening":
+            self._cancel_opening_handle_point_pick()
             return True
         if self.current_tool in ("Move Symbol", "Rotate Symbol"):
             self._cancel_symbol_handle_point_pick()
@@ -3660,6 +3672,8 @@ class PlanEditSession:
             self._edit_endpoint = None
             self._edit_endpoints = None
             self._wall_edit_opening_clearances = {}
+            self._wall_edit_opening_clearances_queued = False
+            self._wall_edit_task_panel_refresh_queued = False
             self._preview_points = None
             self._wall_edit_length_edit_queued = False
             self._ignore_selection_changes = False
@@ -3680,6 +3694,8 @@ class PlanEditSession:
         self._edit_endpoint = None
         self._edit_endpoints = None
         self._wall_edit_opening_clearances = {}
+        self._wall_edit_opening_clearances_queued = False
+        self._wall_edit_task_panel_refresh_queued = False
         self._preview_points = None
         self._wall_edit_length_edit_queued = False
         self._ignore_selection_changes = False
@@ -4295,83 +4311,96 @@ class PlanEditSession:
         self._cancel_embedded_tool("Wall")
 
     def _start_wall_edit(self, mode):
-        if not self.is_selected_wall_endpoint_editable():
-            FreeCAD.Console.PrintError(
-                translate(
-                    "BIM_PlanEdit",
-                    "Select a straight wall before using wall grips.\n",
-                )
-            )
-            return
+        with self._plan_perf_trace_span("start_wall_edit"):
+            with self._plan_perf_trace_span("start_wall_edit_validate"):
+                if not self.is_selected_wall_endpoint_editable():
+                    FreeCAD.Console.PrintError(
+                        translate(
+                            "BIM_PlanEdit",
+                            "Select a straight wall before using wall grips.\n",
+                        )
+                    )
+                    return
 
-        wall = self._get_selected_plan_target_object("wall")
-        proxy = getattr(wall, "Proxy", None)
-        if (
-            not proxy
-            or not hasattr(proxy, "calc_endpoints")
-            or not hasattr(proxy, "set_from_endpoints")
-        ):
-            return
+                wall = self._get_selected_plan_target_object("wall")
+                proxy = getattr(wall, "Proxy", None)
+                if (
+                    not proxy
+                    or not hasattr(proxy, "calc_endpoints")
+                    or not hasattr(proxy, "set_from_endpoints")
+                ):
+                    return
 
-        endpoints = proxy.calc_endpoints(wall)
-        if len(endpoints) != 2:
-            return
+                endpoints = proxy.calc_endpoints(wall)
+                if len(endpoints) != 2:
+                    return
 
-        self._clear_plan_relation_status()
-        self.current_tool = "Move Wall" if mode == "Move" else f"Stretch {mode}"
-        self._set_hovered_wall(None)
-        self._set_hovered_opening(None)
-        self._set_hovered_symbol(None)
-        self._set_hovered_provider(None)
-        self._set_selected_plan_target("wall", wall)
-        self._clear_selected_wall_overlay()
-        self._clear_selected_wall_opening_context_overlay()
-        self._wall_edit_modal_active = True
-        self._edit_wall = wall
-        self._edit_endpoint = mode
-        self._edit_endpoints = endpoints
-        self._wall_edit_opening_clearances = self._snapshot_wall_hosted_opening_clearances(
-            wall, endpoints
-        )
-        self._preview_points = list(endpoints)
-        self._edit_wall_visibility = None
-        try:
-            self._edit_wall_visibility = wall.ViewObject.Visibility
-            wall.ViewObject.Visibility = False
-        except Exception:
-            self._edit_wall_visibility = None
-        self._clear_wall_grips()
-        self._clear_selected_wall_overlay()
-        self._sync_wall_edit_preview(self._preview_points)
-        self._refresh_task_panel_status()
-        self._resume_wall_edit_point_pick()
+            with self._plan_perf_trace_span("start_wall_edit_state"):
+                self._clear_plan_relation_status()
+                self.current_tool = "Move Wall" if mode == "Move" else f"Stretch {mode}"
+                self._set_hovered_wall(None)
+                self._set_hovered_opening(None)
+                self._set_hovered_symbol(None)
+                self._set_hovered_provider(None)
+                if not self._is_selected_plan_target("wall", wall):
+                    self._set_selected_plan_target("wall", wall)
+                self._clear_selected_wall_overlay()
+                self._clear_selected_wall_opening_context_overlay()
+                self._wall_edit_modal_active = True
+                self._edit_wall = wall
+                self._edit_endpoint = mode
+                self._edit_endpoints = endpoints
+
+            with self._plan_perf_trace_span("start_wall_edit_queue_opening_clearances"):
+                self._wall_edit_opening_clearances = {}
+                self._queue_wall_edit_opening_clearances()
+
+            with self._plan_perf_trace_span("start_wall_edit_preview"):
+                self._preview_points = list(endpoints)
+                self._edit_wall_visibility = None
+                try:
+                    self._edit_wall_visibility = wall.ViewObject.Visibility
+                    wall.ViewObject.Visibility = False
+                except Exception:
+                    self._edit_wall_visibility = None
+                self._clear_wall_grips()
+                self._clear_selected_wall_overlay()
+                self._sync_wall_edit_preview(self._preview_points, include_opening_preview=False)
+
+            self._queue_wall_edit_task_panel_refresh()
+            self._resume_wall_edit_point_pick()
 
     def _resume_wall_edit_point_pick(self):
-        if not self._is_wall_edit_modal_active():
-            return
-        mode = self._edit_endpoint
-        title = {
-            "Start": translate("BIM_PlanEdit", "Pick new start point"),
-            "End": translate("BIM_PlanEdit", "Pick new end point"),
-            "Move": translate("BIM_PlanEdit", "Pick new wall midpoint"),
-        }.get(mode, translate("BIM_PlanEdit", "Pick wall point"))
-        last = self._get_wall_edit_reference_point()
+        with self._plan_perf_trace_span("resume_wall_edit_point_pick"):
+            if not self._is_wall_edit_modal_active():
+                return
+            mode = self._edit_endpoint
+            title = {
+                "Start": translate("BIM_PlanEdit", "Pick new start point"),
+                "End": translate("BIM_PlanEdit", "Pick new end point"),
+                "Move": translate("BIM_PlanEdit", "Pick new wall midpoint"),
+            }.get(mode, translate("BIM_PlanEdit", "Pick wall point"))
+            last = self._get_wall_edit_reference_point()
 
-        FreeCAD.activeDraftCommand = self
-        if getattr(FreeCADGui, "Snapper", None):
-            try:
-                FreeCADGui.Snapper.setSelectMode(False)
-            except Exception:
-                pass
-        self._set_draft_point_focus_suppressed(True)
-        FreeCADGui.Snapper.getPoint(
-            callback=self._finish_wall_edit,
-            movecallback=self._update_wall_edit_point_pick,
-            last=last,
-            title=title,
-            noTracker=True,
-        )
-        self._queue_focus_plan_view()
+            FreeCAD.activeDraftCommand = self
+            if getattr(FreeCADGui, "Snapper", None):
+                try:
+                    with self._plan_perf_trace_span("wall_edit_snapper_set_select_mode"):
+                        FreeCADGui.Snapper.setSelectMode(False)
+                except Exception:
+                    pass
+            with self._plan_perf_trace_span("wall_edit_focus_suppression"):
+                self._set_draft_point_focus_suppressed(True)
+            with self._plan_perf_trace_span("wall_edit_snapper_get_point"):
+                FreeCADGui.Snapper.getPoint(
+                    callback=self._finish_wall_edit,
+                    movecallback=self._update_wall_edit_point_pick,
+                    last=last,
+                    title=title,
+                    noTracker=True,
+                )
+            with self._plan_perf_trace_span("wall_edit_queue_focus_plan_view"):
+                self._queue_focus_plan_view()
 
     def _snapshot_wall_hosted_opening_clearances(self, wall, endpoints):
         if not wall or not endpoints or len(endpoints) != 2:
@@ -4403,6 +4432,63 @@ class PlanEditSession:
                 "right_clearance": max(0.0, wall_length - (center_u + half_width)),
             }
         return snapshot
+
+    def _queue_wall_edit_opening_clearances(self):
+        if (
+            self._tearing_down
+            or self._wall_edit_opening_clearances
+            or self._wall_edit_opening_clearances_queued
+            or self._edit_endpoint not in ("Start", "End")
+        ):
+            return
+        try:
+            from PySide import QtCore
+        except ImportError:
+            return
+        self._wall_edit_opening_clearances_queued = True
+        QtCore.QTimer.singleShot(0, self._prime_wall_edit_opening_clearances)
+
+    def _prime_wall_edit_opening_clearances(self):
+        self._wall_edit_opening_clearances_queued = False
+        if (
+            self._tearing_down
+            or not self._is_wall_stretch_edit_active()
+            or self._wall_edit_opening_clearances
+        ):
+            return
+        with self._plan_perf_trace_event("queued_wall_edit_opening_clearances"):
+            self._wall_edit_opening_clearances = self._snapshot_wall_hosted_opening_clearances(
+                self._edit_wall,
+                self._edit_endpoints,
+            )
+
+    def _ensure_wall_edit_opening_clearances(self, wall, endpoints):
+        if self._wall_edit_opening_clearances or self._edit_endpoint not in ("Start", "End"):
+            return
+        self._wall_edit_opening_clearances_queued = False
+        with self._plan_perf_trace_span("ensure_wall_edit_opening_clearances"):
+            self._wall_edit_opening_clearances = self._snapshot_wall_hosted_opening_clearances(
+                wall,
+                endpoints,
+            )
+
+    def _queue_wall_edit_task_panel_refresh(self):
+        if self._tearing_down or self._wall_edit_task_panel_refresh_queued:
+            return
+        try:
+            from PySide import QtCore
+        except ImportError:
+            self._refresh_task_panel_status(selection_only=True)
+            return
+        self._wall_edit_task_panel_refresh_queued = True
+        QtCore.QTimer.singleShot(0, self._flush_wall_edit_task_panel_refresh)
+
+    def _flush_wall_edit_task_panel_refresh(self):
+        self._wall_edit_task_panel_refresh_queued = False
+        if self._tearing_down or not self._is_wall_edit_modal_active():
+            return
+        with self._plan_perf_trace_event("queued_wall_edit_task_panel_refresh"):
+            self._refresh_task_panel_status(selection_only=True)
 
     def _finish_wall_edit(self, point=None, obj=None):
         del obj
@@ -4497,10 +4583,14 @@ class PlanEditSession:
         )
 
     def _activate_wall_grip_now(self, grip_index, wall=None):
-        if self._tearing_down or self.current_tool != "Select" or not wall:
-            return
-        self._set_selected_plan_target("wall", wall)
-        self._start_wall_grip_edit(grip_index)
+        with self._plan_perf_trace_span("activate_wall_grip_now"):
+            if self._tearing_down or self.current_tool != "Select" or not wall:
+                return
+            with self._plan_perf_trace_span("activate_wall_grip_set_target"):
+                if not self._is_selected_plan_target("wall", wall):
+                    self._set_selected_plan_target("wall", wall)
+            with self._plan_perf_trace_span("activate_wall_grip_start_edit"):
+                self._start_wall_grip_edit(grip_index)
 
     def _get_wall_edit_reference_point(self):
         if not self._edit_endpoints or len(self._edit_endpoints) != 2:
@@ -4915,10 +5005,13 @@ class PlanEditSession:
             tracker.set(position)
             tracker.on()
 
-    def _sync_wall_edit_preview(self, points):
+    def _sync_wall_edit_preview(self, points, include_opening_preview=True):
         self._update_wall_edit_preview_geometry(points)
         self._sync_wall_edit_readout(points)
-        self._sync_wall_hosted_opening_preview(points)
+        if include_opening_preview:
+            self._sync_wall_hosted_opening_preview(points)
+        else:
+            self._clear_wall_hosted_opening_preview()
 
     def _is_wall_move_edit_active(self):
         return bool(
@@ -6241,6 +6334,54 @@ class PlanEditSession:
             self._collect_opening_instances_from_host_cache(cache),
         )
 
+    def _queue_prime_hover_pick_caches(self):
+        if self._tearing_down or self._plan_hover_pick_cache_queued or not self.doc:
+            return
+        try:
+            from PySide import QtCore
+        except ImportError:
+            return
+        self._plan_hover_pick_cache_queued = True
+        QtCore.QTimer.singleShot(0, self._prime_hover_pick_caches)
+
+    def _prime_hover_pick_caches(self):
+        self._plan_hover_pick_cache_queued = False
+        if self._tearing_down or not self.doc:
+            return
+        with self._plan_perf_trace_event("prime_hover_pick_caches"):
+            with self._plan_perf_trace_span("prime_hover_pick_symbol_instances"):
+                symbols = tuple(self._get_plan_symbol_instances())
+            for symbol in symbols:
+                self._plan_perf_count("prime_hover_pick_symbols")
+                with self._plan_perf_trace_span("prime_hover_pick_symbol_geometry"):
+                    self._get_symbol_overlay_segments(symbol)
+                    self._get_symbol_overlay_screen_polylines(symbol)
+
+            for obj in getattr(self.doc, "Objects", []) or []:
+                if self._is_hosted_opening_object(obj):
+                    self._plan_perf_count("prime_hover_pick_openings")
+                    with self._plan_perf_trace_span("prime_hover_pick_opening_geometry"):
+                        self._get_opening_overlay_polylines(obj)
+                        self._get_opening_overlay_segments(obj)
+                        self._get_opening_overlay_screen_polylines(obj)
+                if self._is_plan_space_object(obj):
+                    self._plan_perf_count("prime_hover_pick_spaces")
+                    with self._plan_perf_trace_span("prime_hover_pick_space_geometry"):
+                        self._get_space_footprint_faces(obj)
+                        self._get_space_overlay_polylines(obj)
+                        self._get_space_overlay_segments(obj)
+                if self._is_plan_region_object(obj):
+                    self._plan_perf_count("prime_hover_pick_regions")
+                    with self._plan_perf_trace_span("prime_hover_pick_region_geometry"):
+                        self._get_region_footprint_faces(obj)
+                        self._get_region_overlay_polylines(obj)
+                        self._get_region_overlay_segments(obj)
+
+            with self._plan_perf_trace_span("prime_hover_pick_provider_contributions"):
+                with self._plan_provider_refresh_cache_scope():
+                    tuple(self.get_plan_provider_overlays())
+                    tuple(self.get_plan_provider_targets())
+
     def _build_wall_hosted_openings_cache(self):
         cache = {}
         if not self.doc:
@@ -6325,6 +6466,7 @@ class PlanEditSession:
         if wall_length < 1e-9:
             return None
         wall_axis_u.normalize()
+        self._ensure_wall_edit_opening_clearances(wall, endpoints)
 
         openings = []
         for opening in self._get_wall_hosted_openings(wall):
@@ -7599,6 +7741,12 @@ class PlanEditSession:
             include_space_fallback=include_space_fallback,
         )
 
+    def _get_plan_space_instances(self):
+        return plan_picking.get_plan_space_instances(self)
+
+    def _get_plan_region_instances(self):
+        return plan_picking.get_plan_region_instances(self)
+
     def _should_skip_hover_pick(self, mouse_pos, force=False):
         if force or mouse_pos is None:
             return False
@@ -7620,7 +7768,9 @@ class PlanEditSession:
         if self.current_tool == "Join":
             if self._should_skip_hover_pick(mouse_pos, force=force):
                 return False
-            target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
+            self._plan_perf_count("hover_pick_resolved")
+            with self._plan_perf_trace_span("hover_pick_resolve"):
+                target_kind, target_obj = self._get_plan_target_at_position(mouse_pos)
             self._hover_pick_dirty = False
             if target_kind == "wall" and not self._is_selected_plan_target("wall", target_obj):
                 self._set_hovered_wall(target_obj)
@@ -7643,11 +7793,16 @@ class PlanEditSession:
             return True
         if self._should_skip_hover_pick(mouse_pos, force=force):
             return False
-        target_kind, target_obj = self._get_plan_target_at_position(
-            mouse_pos,
-            include_space_fallback=self.get_plan_provider_overlay_mode()
-            not in (_PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL, _PLAN_PROVIDER_OVERLAY_MODE_PLUMBING),
-        )
+        self._plan_perf_count("hover_pick_resolved")
+        with self._plan_perf_trace_span("hover_pick_resolve"):
+            target_kind, target_obj = self._get_plan_target_at_position(
+                mouse_pos,
+                include_space_fallback=self.get_plan_provider_overlay_mode()
+                not in (
+                    _PLAN_PROVIDER_OVERLAY_MODE_ELECTRICAL,
+                    _PLAN_PROVIDER_OVERLAY_MODE_PLUMBING,
+                ),
+            )
         self._hover_pick_dirty = False
         if target_kind == "opening":
             self._set_hovered_wall(None)

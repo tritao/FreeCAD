@@ -171,6 +171,19 @@ def refresh_opening_move_preview_from_raw_point(session):
     session._sync_opening_move_preview(opening, point)
 
 
+def queue_opening_move_initial_preview(session, opening, point):
+    def run_preview():
+        with session._plan_perf_trace_event("queued_opening_move_initial_preview"):
+            session._sync_opening_move_preview(opening, point)
+
+    try:
+        from PySide import QtCore
+    except ImportError:
+        run_preview()
+        return
+    QtCore.QTimer.singleShot(0, run_preview)
+
+
 def activate_opening_handle(session, opening, handle_index):
     try:
         from PySide import QtCore
@@ -185,46 +198,58 @@ def activate_opening_handle(session, opening, handle_index):
 
 
 def activate_opening_handle_now(session, opening, handle_index):
-    if session._tearing_down or not opening:
-        return
-    session._set_selected_plan_target("opening", opening)
-    session._clear_wall_grips()
-    handles = session._get_selected_opening_edit_handles(opening)
-    if handle_index < 0 or handle_index >= len(handles):
-        return
-    handle = handles[handle_index]
-    if handle.interaction == "point_pick":
-        session._start_opening_handle_point_pick(opening, handle_index, handle)
-    else:
-        session._execute_selected_opening_handle(opening, handle_index, handle)
+    with session._plan_perf_trace_span("activate_opening_handle_now"):
+        if session._tearing_down or not opening:
+            return
+        with session._plan_perf_trace_span("activate_opening_handle_set_target"):
+            session._set_selected_plan_target("opening", opening)
+            session._clear_wall_grips()
+        with session._plan_perf_trace_span("activate_opening_handle_get_handles"):
+            handles = session._get_selected_opening_edit_handles(opening)
+        if handle_index < 0 or handle_index >= len(handles):
+            return
+        handle = handles[handle_index]
+        if handle.interaction == "point_pick":
+            with session._plan_perf_trace_span("activate_opening_handle_start_point_pick"):
+                session._start_opening_handle_point_pick(opening, handle_index, handle)
+        else:
+            with session._plan_perf_trace_span("activate_opening_handle_execute"):
+                session._execute_selected_opening_handle(opening, handle_index, handle)
 
 
 def start_opening_handle_point_pick(session, opening, handle_index, handle):
-    if not opening:
-        return
-    session.current_tool = "Move Opening"
-    session._set_hovered_wall(None)
-    session._set_hovered_opening(None)
-    session._sync_secondary_selected_overlays()
-    session._edit_opening = opening
-    session._edit_opening_handle_index = handle_index
-    session._edit_opening_move_anchor = "center"
-    session._edit_opening_move_raw_point = FreeCAD.Vector(handle.point)
-    session._clear_selected_opening_overlay()
-    session._clear_selected_opening_handles()
-    session._sync_opening_move_preview(opening, handle.point)
-    session._refresh_task_panel_status()
-    FreeCAD.activeDraftCommand = session
-    session._push_opening_move_snap_profile()
-    session._set_draft_point_focus_suppressed(True)
-    FreeCADGui.Snapper.getPoint(
-        last=handle.point,
-        callback=session._finish_opening_handle_point_pick,
-        movecallback=session._update_opening_handle_point_pick,
-        title=handle.title or translate("BIM_PlanEdit", "Pick new opening position"),
-        noTracker=True,
-    )
-    session._queue_focus_plan_view()
+    with session._plan_perf_trace_span("start_opening_handle_point_pick"):
+        if not opening:
+            return
+        with session._plan_perf_trace_span("start_opening_handle_state"):
+            session.current_tool = "Move Opening"
+            session._set_hovered_wall(None)
+            session._set_hovered_opening(None)
+            session._sync_secondary_selected_overlays()
+            session._edit_opening = opening
+            session._edit_opening_handle_index = handle_index
+            session._edit_opening_move_anchor = "center"
+            session._edit_opening_move_raw_point = FreeCAD.Vector(handle.point)
+            session._clear_selected_opening_overlay()
+            session._clear_selected_opening_handles()
+        with session._plan_perf_trace_span("start_opening_handle_preview"):
+            queue_opening_move_initial_preview(session, opening, handle.point)
+        session._refresh_task_panel_status(selection_only=True)
+        FreeCAD.activeDraftCommand = session
+        with session._plan_perf_trace_span("opening_handle_push_snap_profile"):
+            session._push_opening_move_snap_profile()
+        with session._plan_perf_trace_span("opening_handle_focus_suppression"):
+            session._set_draft_point_focus_suppressed(True)
+        with session._plan_perf_trace_span("opening_handle_snapper_get_point"):
+            FreeCADGui.Snapper.getPoint(
+                last=handle.point,
+                callback=session._finish_opening_handle_point_pick,
+                movecallback=session._update_opening_handle_point_pick,
+                title=handle.title or translate("BIM_PlanEdit", "Pick new opening position"),
+                noTracker=True,
+            )
+        with session._plan_perf_trace_span("opening_handle_queue_focus_plan_view"):
+            session._queue_focus_plan_view()
 
 
 def update_opening_handle_point_pick(session, point=None, snap_info=None):
