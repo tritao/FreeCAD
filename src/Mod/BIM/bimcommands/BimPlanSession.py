@@ -2219,10 +2219,10 @@ class PlanEditSession:
             except Exception:
                 pass
             return
-        # Spaces and plan regions are selected through Plan Edit's semantic
-        # picking paths. Leaving their native 3D view objects selectable lets
-        # the viewer replace the intended target with enclosing face hits on
-        # button release, especially for nested region-in-space cases.
+        # Openings, spaces, and plan regions are selected through Plan Edit's
+        # semantic picking paths. Leaving their native 3D view objects
+        # selectable lets the viewer replace the intended target with
+        # overlapping native hits on button release.
         if self._is_plan_custom_pick_only_object(semantic_obj or obj):
             try:
                 view_object.Selectable = False
