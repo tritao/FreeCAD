@@ -33,6 +33,7 @@ import FreeCAD
 import FreeCADGui
 from bimplan import picking as plan_picking
 from bimplan import command_gate as plan_command_gate
+from bimplan import input as plan_input
 from bimplan import performance as plan_performance
 from bimplan import provider_runtime as plan_provider_runtime
 from bimplan import provider_targets as plan_provider_targets
@@ -5590,189 +5591,13 @@ class PlanEditSession:
         return best_index
 
     def _on_mouse_pressed(self, event_callback):
-        if self._tearing_down:
-            return
-        try:
-            from pivy import coin
-        except Exception:
-            return
-
-        event = event_callback.getEvent()
-        mouse_pos = None
-        try:
-            pos = event.getPosition().getValue()
-            mouse_pos = (pos[0], pos[1])
-        except Exception:
-            mouse_pos = None
-        selected_before = self._get_selected_plan_target()
-        with self._plan_perf_trace_event(
-            "mouse_pressed",
-            button=str(event.getButton()),
-            state=str(event.getState()),
-            mouse_pos=mouse_pos,
-            selected_before=self._plan_perf_describe_target(selected_before[0], selected_before[1]),
-        ):
-            if event.getButton() != coin.SoMouseButtonEvent.BUTTON1:
-                return
-            with self._plan_pick_debug_scope(
-                "mouse_pressed_pick",
-                button=str(event.getButton()),
-                state=str(event.getState()),
-                mouse_pos=mouse_pos,
-                selected_before=self._plan_perf_describe_target(
-                    selected_before[0], selected_before[1]
-                ),
-            ):
-                try:
-                    if event.getState() == coin.SoMouseButtonEvent.UP:
-                        if self._consume_left_button_release:
-                            self._consume_left_button_release = False
-                            self._set_event_handled(event_callback)
-                            return
-
-                    if event.getState() == coin.SoMouseButtonEvent.DOWN:
-                        self._consume_left_button_release = False
-                        if self.current_tool == "Join":
-                            pos = event.getPosition().getValue()
-                            target_kind, target_wall = self._get_plan_target_at_position(
-                                (pos[0], pos[1])
-                            )
-                            source_wall = self._get_selected_plan_target_object("wall")
-                            if (
-                                target_kind == "wall"
-                                and self._is_plan_selectable_wall(target_wall)
-                                and target_wall != source_wall
-                                and self._apply_plan_wall_join(source_wall, target_wall)
-                            ):
-                                self._claim_left_button_click(event_callback)
-                            return
-                        else:
-                            if self.current_tool == "Pick Space Region":
-                                pos = event.getPosition().getValue()
-                                candidate = self._pick_space_region_candidate((pos[0], pos[1]))
-                                if candidate:
-                                    self._activate_space_region_candidate(candidate, event_callback)
-                                return
-                            if self.current_tool != "Select":
-                                return
-                            pos = event.getPosition().getValue()
-                            mouse_pos = (pos[0], pos[1])
-                            if self._is_plan_additive_selection_active():
-                                if not self._toggle_plan_target_selection_at_position(
-                                    mouse_pos, event_callback
-                                ):
-                                    self._claim_left_button_click(event_callback)
-                                return
-                            node = self._get_edit_node(mouse_pos)
-                            if not node:
-                                if self._activate_semantic_plan_target(mouse_pos, event_callback):
-                                    return
-                                self._clear_plan_selection_state()
-                                self._claim_left_button_click(event_callback)
-                                return
-                            node_kind = node[0]
-                            if node_kind == "opening_handle":
-                                _kind, obj, index = node
-                                self._select_opening_for_plan_edit(obj)
-                                self._set_gui_selection_object(obj)
-                                self._activate_opening_handle(obj, index)
-                            elif node_kind == "provider_handle":
-                                _kind, obj, index = node
-                                self._set_selected_plan_target_state("provider", obj)
-                                self._clear_wall_grips()
-                                self._clear_selected_wall_overlay()
-                                self._activate_provider_handle(obj, index)
-                            elif node_kind == "symbol_handle":
-                                _kind, obj, role = node
-                                self._set_selected_plan_target_state("symbol", obj)
-                                self._clear_wall_grips()
-                                self._clear_selected_wall_overlay()
-                                self._activate_symbol_handle(obj, role)
-                            elif node_kind in ("provider_overlay_point", "provider_overlay_target"):
-                                if not self._activate_provider_overlay_target_node(
-                                    node,
-                                    event_callback,
-                                ):
-                                    return
-                            else:
-                                point = node[1]
-                                try:
-                                    doc = FreeCAD.getDocument(str(point.documentName.getValue()))
-                                    obj = doc.getObject(str(point.objectName.getValue()))
-                                    index = int(str(point.subElementName.getValue())[8:])
-                                except Exception:
-                                    return
-                                if self._is_hosted_opening_object(obj):
-                                    self._select_opening_for_plan_edit(obj)
-                                    self._set_gui_selection_object(obj)
-                                    self._activate_opening_handle(obj, index)
-                                else:
-                                    self._set_selected_plan_target_state("wall", obj)
-                                    self._activate_wall_grip(index, wall=obj)
-                            self._claim_left_button_click(event_callback)
-                finally:
-                    selected_after = self._get_selected_plan_target()
-                    self._plan_perf_set_fields(
-                        handled=bool(getattr(event_callback, "_handled", False)),
-                        selected_after=self._plan_perf_describe_target(
-                            selected_after[0], selected_after[1]
-                        ),
-                    )
+        return plan_input.on_mouse_pressed(self, event_callback)
 
     def _on_mouse_moved(self, event_callback):
-        if self._tearing_down:
-            return
-        event = event_callback.getEvent()
-        try:
-            pos = event.getPosition().getValue()
-            mouse_pos = (pos[0], pos[1])
-        except Exception:
-            mouse_pos = None
-        hovered_before = self._get_hovered_plan_target()
-        with self._plan_perf_trace_event(
-            "mouse_moved",
-            mouse_pos=mouse_pos,
-            hovered_before=self._plan_perf_describe_target(hovered_before[0], hovered_before[1]),
-        ):
-            if self.current_tool == "Pick Space Region":
-                if mouse_pos is not None:
-                    self._set_hovered_space_region_candidate(
-                        self._pick_space_region_candidate(mouse_pos)
-                    )
-                    self._refresh_plan_overlay_visuals()
-                return
-            if self.current_tool not in ("Select", "Join"):
-                self._set_hovered_wall(None)
-                self._set_hovered_opening(None)
-                self._set_hovered_symbol(None)
-                self._set_hovered_provider(None)
-                self._set_hovered_space(None)
-                self._set_hovered_region(None)
-                return
-            if mouse_pos is None:
-                return
-            if not self._update_hovered_plan_target(mouse_pos):
-                return
-            if self._grip_trackers or self._is_selected_plan_target("wall"):
-                self._sync_wall_grips()
-            self._request_view_redraw()
-            hovered_after = self._get_hovered_plan_target()
-            self._plan_perf_set_fields(
-                hovered_after=self._plan_perf_describe_target(hovered_after[0], hovered_after[1])
-            )
+        return plan_input.on_mouse_moved(self, event_callback)
 
     def _on_mouse_wheel(self, event_callback):
-        if self._tearing_down:
-            return
-        event = event_callback.getEvent()
-        try:
-            event_type_name = str(event.getTypeId().getName())
-        except Exception:
-            event_type_name = ""
-        if event_type_name != "SoMouseWheelEvent":
-            return
-        with self._plan_perf_trace_event("mouse_wheel", event_type=event_type_name):
-            self._queue_plan_overlay_view_scale_refresh()
+        return plan_input.on_mouse_wheel(self, event_callback)
 
     def _queue_plan_overlay_visual_refresh(self, *visuals):
         return overlay_manager.queue_plan_overlay_visual_refresh(
