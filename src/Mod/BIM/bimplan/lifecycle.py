@@ -131,6 +131,16 @@ class ToolActivationProfile:
     start: object = None
 
 
+@dataclass(frozen=True)
+class CleanupProfile:
+    action_specs: tuple = ()
+    current_tool_handler_specs: object = None
+    hover_visual_kwargs: tuple = ()
+    selection_visual_kwargs: tuple = ()
+    transient_visual_kwargs: tuple = ()
+    detach_observers: bool = True
+
+
 _FINISH_TOOL_HANDLER_SPECS = {
     "Move Provider": "_cancel_provider_handle_point_pick",
     "Move Opening": "_cancel_opening_handle_point_pick",
@@ -205,6 +215,7 @@ _ACTION_CANCEL_PROVIDER_POINT_TOOL_AND_RETURN = ActivationActionSpec(
     predicate_name="_has_active_provider_point_tool",
     stop_after=True,
 )
+_ACTION_CANCEL_EMBEDDED_TOOL_ALWAYS = ActivationActionSpec("_cancel_embedded_tool")
 _ACTION_CANCEL_EMBEDDED_TOOL_AND_RETURN = ActivationActionSpec(
     "_cancel_embedded_tool",
     predicate_name="_has_active_embedded_tool",
@@ -235,6 +246,16 @@ _ACTION_CANCEL_SPACE_TEXT_PICK = ActivationActionSpec(
     current_tools=("Set Space Text",),
 )
 _ACTION_CANCEL_JOIN_TOOL = ActivationActionSpec("_cancel_join_tool")
+_ACTION_CLEAR_VIEWPORT_STATUS_CHIP = ActivationActionSpec("_clear_viewport_status_chip")
+_ACTION_CLEAR_INPUT_HINTS = ActivationActionSpec("_clear_input_hints")
+_ACTION_CANCEL_WALL_EDIT_NO_RESTORE_NO_REFRESH = ActivationActionSpec(
+    "_cancel_wall_edit",
+    kwargs=(("restore", False), ("refresh", False)),
+)
+_ACTION_CANCEL_WALL_EDIT_RESTORE_NO_REFRESH = ActivationActionSpec(
+    "_cancel_wall_edit",
+    kwargs=(("restore", True), ("refresh", False)),
+)
 
 _WINDOW_TOOL_SELECTION_KINDS = (
     plan_target_kinds.PLAN_TARGET_WALL,
@@ -294,6 +315,20 @@ def _activate_tool_with_profile(session, profile):
     if callable(profile.start):
         return profile.start(session, context)
     return True
+
+
+def _apply_cleanup_profile(session, profile):
+    _run_activation_action_specs(session, profile.action_specs)
+    if profile.current_tool_handler_specs:
+        _dispatch_current_tool(session, profile.current_tool_handler_specs)
+    if profile.hover_visual_kwargs:
+        clear_hover_visuals(session, **dict(profile.hover_visual_kwargs))
+    if profile.selection_visual_kwargs:
+        clear_selection_visuals(session, **dict(profile.selection_visual_kwargs))
+    if profile.transient_visual_kwargs:
+        clear_transient_visuals(session, **dict(profile.transient_visual_kwargs))
+    if profile.detach_observers:
+        detach_runtime_observers(session)
 
 
 def _capture_selected_space(session):
@@ -473,6 +508,107 @@ _FINISH_FALLBACK_ACTION_SPECS = (
     _ACTION_CANCEL_WALL_EDIT_AND_RETURN,
 )
 
+_BEGIN_TEARDOWN_CLEANUP_PROFILE = CleanupProfile(
+    action_specs=(
+        _ACTION_CLEAR_VIEWPORT_STATUS_CHIP,
+        _ACTION_CLEAR_INPUT_HINTS,
+        _ACTION_CANCEL_EMBEDDED_TOOL_ALWAYS,
+        _ACTION_CANCEL_RECT_WALL_TOOL,
+        _ACTION_CANCEL_WINDOW_TOOL,
+        _ACTION_CANCEL_PLAN_REGION_TOOL,
+        _ACTION_CANCEL_PROVIDER_POINT_TOOL,
+        _ACTION_CANCEL_WALL_EDIT_NO_RESTORE_NO_REFRESH,
+        _ACTION_CANCEL_PENDING_EDIT,
+    ),
+    current_tool_handler_specs=_BEGIN_TEARDOWN_TOOL_HANDLER_SPECS,
+    hover_visual_kwargs=(
+        ("include_junction_nodes", True),
+        ("include_hovered_wall_opening_context", True),
+    ),
+    selection_visual_kwargs=(
+        (
+            "clear_handle_kinds",
+            (
+                plan_target_kinds.PLAN_TARGET_PROVIDER,
+                plan_target_kinds.PLAN_TARGET_OPENING,
+                plan_target_kinds.PLAN_TARGET_SYMBOL,
+            ),
+        ),
+        ("include_wall_grips", True),
+        ("include_selected_wall_opening_context", True),
+        ("include_secondary_selection", True),
+    ),
+    transient_visual_kwargs=(
+        ("include_provider_overlays", True),
+        ("include_provider_point_preview", True),
+        ("include_space_region_pick", True),
+        ("include_opening_handle_pool", True),
+        ("include_opening_move_preview", True),
+        ("include_symbol_edit_preview", True),
+        ("include_plan_region_preview", True),
+    ),
+)
+
+_SHUTDOWN_CLEANUP_PROFILE = CleanupProfile(
+    action_specs=(
+        _ACTION_CLEAR_VIEWPORT_STATUS_CHIP,
+        _ACTION_CLEAR_INPUT_HINTS,
+        _ACTION_CANCEL_EMBEDDED_TOOL_ALWAYS,
+        _ACTION_CANCEL_RECT_WALL_TOOL,
+        _ACTION_CANCEL_SPACE_SEPARATOR_TOOL,
+        _ACTION_CANCEL_WALL_EDIT_RESTORE_NO_REFRESH,
+        _ACTION_CANCEL_PENDING_EDIT,
+    ),
+    current_tool_handler_specs=_SHUTDOWN_TOOL_HANDLER_SPECS,
+    hover_visual_kwargs=(
+        (
+            "kinds",
+            (
+                plan_target_kinds.PLAN_TARGET_WALL,
+                plan_target_kinds.PLAN_TARGET_OPENING,
+                plan_target_kinds.PLAN_TARGET_SYMBOL,
+                plan_target_kinds.PLAN_TARGET_PROVIDER,
+            ),
+        ),
+        ("include_junction_nodes", True),
+        ("include_hovered_wall_opening_context", True),
+    ),
+    selection_visual_kwargs=(
+        (
+            "clear_handle_kinds",
+            (
+                plan_target_kinds.PLAN_TARGET_OPENING,
+                plan_target_kinds.PLAN_TARGET_SYMBOL,
+            ),
+        ),
+        ("include_wall_grips", True),
+        ("include_selected_wall_opening_context", True),
+    ),
+    transient_visual_kwargs=(
+        ("include_provider_overlays", True),
+        ("include_provider_point_preview", True),
+        ("include_opening_handle_pool", True),
+        ("include_opening_move_preview", True),
+        ("include_symbol_edit_preview", True),
+    ),
+)
+
+_TEARDOWN_SHUTDOWN_CLEANUP_PROFILE = CleanupProfile(
+    action_specs=(
+        _ACTION_CLEAR_VIEWPORT_STATUS_CHIP,
+        _ACTION_CLEAR_INPUT_HINTS,
+        _ACTION_CANCEL_EMBEDDED_TOOL_ALWAYS,
+        _ACTION_CANCEL_RECT_WALL_TOOL,
+        _ACTION_CANCEL_SPACE_SEPARATOR_TOOL,
+        _ACTION_CANCEL_WALL_EDIT_NO_RESTORE_NO_REFRESH,
+        _ACTION_CANCEL_PENDING_EDIT,
+    ),
+    current_tool_handler_specs=_SHUTDOWN_TOOL_HANDLER_SPECS,
+    hover_visual_kwargs=_SHUTDOWN_CLEANUP_PROFILE.hover_visual_kwargs,
+    selection_visual_kwargs=_SHUTDOWN_CLEANUP_PROFILE.selection_visual_kwargs,
+    transient_visual_kwargs=_SHUTDOWN_CLEANUP_PROFILE.transient_visual_kwargs,
+)
+
 
 def finish(session, close_dialog=True):
     if _dispatch_current_tool(session, _FINISH_TOOL_HANDLER_SPECS):
@@ -487,43 +623,7 @@ def begin_teardown(session):
         return
     session._tearing_down = True
     plan_command_gate.uninstall(session)
-    session._clear_viewport_status_chip()
-    session._clear_input_hints()
-    session._cancel_embedded_tool()
-    session._cancel_rect_wall_tool(refresh=False)
-    session._cancel_window_tool(refresh=False)
-    session._cancel_plan_region_tool(refresh=False)
-    session._cancel_provider_point_tool(refresh=False)
-    session._cancel_wall_edit(restore=False, refresh=False)
-    session._cancel_pending_edit()
-    _dispatch_current_tool(session, _BEGIN_TEARDOWN_TOOL_HANDLER_SPECS)
-    clear_hover_visuals(
-        session,
-        include_junction_nodes=True,
-        include_hovered_wall_opening_context=True,
-    )
-    clear_selection_visuals(
-        session,
-        clear_handle_kinds=(
-            plan_target_kinds.PLAN_TARGET_PROVIDER,
-            plan_target_kinds.PLAN_TARGET_OPENING,
-            plan_target_kinds.PLAN_TARGET_SYMBOL,
-        ),
-        include_wall_grips=True,
-        include_selected_wall_opening_context=True,
-        include_secondary_selection=True,
-    )
-    clear_transient_visuals(
-        session,
-        include_provider_overlays=True,
-        include_provider_point_preview=True,
-        include_space_region_pick=True,
-        include_opening_handle_pool=True,
-        include_opening_move_preview=True,
-        include_symbol_edit_preview=True,
-        include_plan_region_preview=True,
-    )
-    detach_runtime_observers(session)
+    _apply_cleanup_profile(session, _BEGIN_TEARDOWN_CLEANUP_PROFILE)
 
 
 def shutdown(session, close_dialog=True, teardown=False):
@@ -533,43 +633,8 @@ def shutdown(session, close_dialog=True, teardown=False):
     teardown = teardown or session._tearing_down
     panel = session.task_panel
     session.task_panel = None
-    session._cancel_embedded_tool()
-    session._cancel_rect_wall_tool(refresh=False)
-    session._cancel_space_separator_tool(refresh=False)
-    session._cancel_wall_edit(restore=not teardown, refresh=False)
-    session._cancel_pending_edit()
-    _dispatch_current_tool(session, _SHUTDOWN_TOOL_HANDLER_SPECS)
-    session._clear_viewport_status_chip()
-    session._clear_input_hints()
-    clear_hover_visuals(
-        session,
-        kinds=(
-            plan_target_kinds.PLAN_TARGET_WALL,
-            plan_target_kinds.PLAN_TARGET_OPENING,
-            plan_target_kinds.PLAN_TARGET_SYMBOL,
-            plan_target_kinds.PLAN_TARGET_PROVIDER,
-        ),
-        include_junction_nodes=True,
-        include_hovered_wall_opening_context=True,
-    )
-    clear_selection_visuals(
-        session,
-        clear_handle_kinds=(
-            plan_target_kinds.PLAN_TARGET_OPENING,
-            plan_target_kinds.PLAN_TARGET_SYMBOL,
-        ),
-        include_wall_grips=True,
-        include_selected_wall_opening_context=True,
-    )
-    clear_transient_visuals(
-        session,
-        include_provider_overlays=True,
-        include_provider_point_preview=True,
-        include_opening_handle_pool=True,
-        include_opening_move_preview=True,
-        include_symbol_edit_preview=True,
-    )
-    detach_runtime_observers(session)
+    profile = _TEARDOWN_SHUTDOWN_CLEANUP_PROFILE if teardown else _SHUTDOWN_CLEANUP_PROFILE
+    _apply_cleanup_profile(session, profile)
     if panel:
         try:
             mark_closed = getattr(panel, "mark_closed", None)

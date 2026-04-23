@@ -63,7 +63,7 @@ if "draftguitools.gui_base" not in sys.modules:
     draftguitools_module.gui_base = gui_base_module
 
 from bimplan.context import PlanEditContext
-from bimplan.lifecycle import activate_select_tool, finish
+from bimplan.lifecycle import activate_select_tool, begin_teardown, finish, shutdown
 from bimplan.overlays import providers as provider_overlays
 from bimplan.picking import (
     get_hovered_plan_target,
@@ -151,6 +151,201 @@ class _DummyProvider(PlanEditProvider):
 
 
 class TestBimPlanCore(unittest.TestCase):
+    def test_begin_teardown_uses_cleanup_profile(self):
+        calls = []
+        session = SimpleNamespace(
+            _tearing_down=False,
+            current_tool="Set Space Text",
+            _edit_space="Space001",
+            _clear_viewport_status_chip=lambda: calls.append("chip"),
+            _clear_input_hints=lambda: calls.append("hints"),
+            _cancel_embedded_tool=lambda: calls.append("embedded"),
+            _cancel_rect_wall_tool=lambda refresh=True: calls.append(("rect-wall", refresh)),
+            _cancel_window_tool=lambda refresh=True: calls.append(("window", refresh)),
+            _cancel_plan_region_tool=lambda refresh=True: calls.append(("plan-region", refresh)),
+            _cancel_provider_point_tool=lambda refresh=True: calls.append(
+                ("provider-point", refresh)
+            ),
+            _cancel_wall_edit=lambda restore=True, refresh=True: calls.append(
+                ("wall-edit", restore, refresh)
+            ),
+            _cancel_pending_edit=lambda: calls.append("pending"),
+        )
+
+        with patch("bimplan.lifecycle.plan_command_gate.uninstall") as uninstall, patch(
+            "bimplan.lifecycle.clear_hover_visuals"
+        ) as clear_hover_visuals, patch(
+            "bimplan.lifecycle.clear_selection_visuals"
+        ) as clear_selection_visuals, patch(
+            "bimplan.lifecycle.clear_transient_visuals"
+        ) as clear_transient_visuals, patch(
+            "bimplan.lifecycle.detach_runtime_observers"
+        ) as detach_runtime_observers:
+            begin_teardown(session)
+
+        uninstall.assert_called_once_with(session)
+        clear_hover_visuals.assert_called_once_with(
+            session,
+            include_junction_nodes=True,
+            include_hovered_wall_opening_context=True,
+        )
+        clear_selection_visuals.assert_called_once_with(
+            session,
+            clear_handle_kinds=("provider", "opening", "symbol"),
+            include_wall_grips=True,
+            include_selected_wall_opening_context=True,
+            include_secondary_selection=True,
+        )
+        clear_transient_visuals.assert_called_once_with(
+            session,
+            include_provider_overlays=True,
+            include_provider_point_preview=True,
+            include_space_region_pick=True,
+            include_opening_handle_pool=True,
+            include_opening_move_preview=True,
+            include_symbol_edit_preview=True,
+            include_plan_region_preview=True,
+        )
+        detach_runtime_observers.assert_called_once_with(session)
+        self.assertTrue(session._tearing_down)
+        self.assertIsNone(session._edit_space)
+        self.assertEqual(
+            [
+                "chip",
+                "hints",
+                "embedded",
+                ("rect-wall", False),
+                ("window", False),
+                ("plan-region", False),
+                ("provider-point", False),
+                ("wall-edit", False, False),
+                "pending",
+            ],
+            calls,
+        )
+
+    def test_shutdown_uses_cleanup_profile(self):
+        calls = []
+        panel = SimpleNamespace(
+            mark_closed=lambda: calls.append("mark_closed"),
+            detach=lambda: calls.append("detach"),
+            close=lambda: calls.append("close"),
+        )
+        session = SimpleNamespace(
+            _document_is_alive=lambda: True,
+            _tearing_down=False,
+            task_panel=panel,
+            current_tool="Move Symbol",
+            _clear_viewport_status_chip=lambda: calls.append("chip"),
+            _clear_input_hints=lambda: calls.append("hints"),
+            _cancel_embedded_tool=lambda: calls.append("embedded"),
+            _cancel_rect_wall_tool=lambda refresh=True: calls.append(("rect-wall", refresh)),
+            _cancel_space_separator_tool=lambda refresh=True: calls.append(("separator", refresh)),
+            _cancel_wall_edit=lambda restore=True, refresh=True: calls.append(
+                ("wall-edit", restore, refresh)
+            ),
+            _cancel_pending_edit=lambda: calls.append("pending"),
+            _cancel_symbol_handle_point_pick=lambda: calls.append("symbol-handle"),
+            restore_state=lambda: calls.append("restore-state"),
+            doc=SimpleNamespace(recompute=lambda: calls.append("recompute")),
+        )
+
+        with patch("bimplan.lifecycle.plan_command_gate.uninstall") as uninstall, patch(
+            "bimplan.lifecycle.clear_hover_visuals"
+        ) as clear_hover_visuals, patch(
+            "bimplan.lifecycle.clear_selection_visuals"
+        ) as clear_selection_visuals, patch(
+            "bimplan.lifecycle.clear_transient_visuals"
+        ) as clear_transient_visuals, patch(
+            "bimplan.lifecycle.detach_runtime_observers"
+        ) as detach_runtime_observers:
+            self.assertTrue(shutdown(session, close_dialog=False))
+
+        uninstall.assert_called_once_with(session)
+        clear_hover_visuals.assert_called_once_with(
+            session,
+            kinds=("wall", "opening", "symbol", "provider"),
+            include_junction_nodes=True,
+            include_hovered_wall_opening_context=True,
+        )
+        clear_selection_visuals.assert_called_once_with(
+            session,
+            clear_handle_kinds=("opening", "symbol"),
+            include_wall_grips=True,
+            include_selected_wall_opening_context=True,
+        )
+        clear_transient_visuals.assert_called_once_with(
+            session,
+            include_provider_overlays=True,
+            include_provider_point_preview=True,
+            include_opening_handle_pool=True,
+            include_opening_move_preview=True,
+            include_symbol_edit_preview=True,
+        )
+        detach_runtime_observers.assert_called_once_with(session)
+        self.assertIsNone(session.task_panel)
+        self.assertEqual(
+            [
+                "chip",
+                "hints",
+                "embedded",
+                ("rect-wall", False),
+                ("separator", False),
+                ("wall-edit", True, False),
+                "pending",
+                "symbol-handle",
+                "mark_closed",
+                "detach",
+                "restore-state",
+                "recompute",
+            ],
+            calls,
+        )
+
+    def test_shutdown_teardown_profile_disables_wall_restore(self):
+        calls = []
+        session = SimpleNamespace(
+            _document_is_alive=lambda: True,
+            _tearing_down=True,
+            task_panel=None,
+            current_tool="Move Symbol",
+            _clear_viewport_status_chip=lambda: calls.append("chip"),
+            _clear_input_hints=lambda: calls.append("hints"),
+            _cancel_embedded_tool=lambda: calls.append("embedded"),
+            _cancel_rect_wall_tool=lambda refresh=True: calls.append(("rect-wall", refresh)),
+            _cancel_space_separator_tool=lambda refresh=True: calls.append(("separator", refresh)),
+            _cancel_wall_edit=lambda restore=True, refresh=True: calls.append(
+                ("wall-edit", restore, refresh)
+            ),
+            _cancel_pending_edit=lambda: calls.append("pending"),
+            _cancel_symbol_handle_point_pick=lambda: calls.append("symbol-handle"),
+            _discard_runtime_references=lambda: calls.append("discard-runtime"),
+        )
+
+        with patch("bimplan.lifecycle.plan_command_gate.uninstall"), patch(
+            "bimplan.lifecycle.clear_hover_visuals"
+        ), patch("bimplan.lifecycle.clear_selection_visuals"), patch(
+            "bimplan.lifecycle.clear_transient_visuals"
+        ), patch(
+            "bimplan.lifecycle.detach_runtime_observers"
+        ):
+            self.assertTrue(shutdown(session, teardown=True))
+
+        self.assertEqual(
+            [
+                "chip",
+                "hints",
+                "embedded",
+                ("rect-wall", False),
+                ("separator", False),
+                ("wall-edit", False, False),
+                "pending",
+                "symbol-handle",
+                "discard-runtime",
+            ],
+            calls,
+        )
+
     def test_target_dispatch_uses_policy_for_validation_and_restore(self):
         restored = []
         target = SimpleNamespace(Name="Space001")
