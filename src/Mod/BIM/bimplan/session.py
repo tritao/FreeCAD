@@ -37,13 +37,10 @@ from bimplan import hosted_openings as plan_hosted_openings
 from bimplan import hover_picking as plan_hover_picking
 from bimplan import input as plan_input
 from bimplan import lifecycle as plan_lifecycle
-from bimplan import object_classification as plan_object_classification
 from bimplan import object_visibility as plan_object_visibility
 from bimplan import performance as plan_performance
-from bimplan import provider_overlay_state as plan_provider_overlay_state
 from bimplan import provider_point as plan_provider_point
 from bimplan import provider_runtime as plan_provider_runtime
-from bimplan import provider_targets as plan_provider_targets
 from bimplan import selection_additive as plan_selection_additive
 from bimplan import selection_observer as plan_selection_observer
 from bimplan import session_components as plan_session_components
@@ -1475,34 +1472,34 @@ class PlanEditSession:
         return plan_object_visibility.restore_object_view_state(self)
 
     def _is_storey_object(self, obj):
-        return plan_object_classification.is_storey_object(obj)
+        return plan_object_visibility.is_storey_object(obj)
 
     def _is_plan_container_object(self, obj):
-        return plan_object_classification.is_plan_container_object(obj)
+        return plan_object_visibility.is_plan_container_object(obj)
 
     def _is_plan_background_object(self, obj):
-        return plan_object_classification.is_plan_background_object(self, obj)
+        return plan_object_visibility.is_plan_background_object(self, obj)
 
     def _is_plan_equipment_object(self, obj):
-        return plan_object_classification.is_plan_equipment_object(self, obj)
+        return plan_object_visibility.is_plan_equipment_object(self, obj)
 
     def _is_cabinetry_plan_context_object(self, obj):
-        return plan_object_classification.is_cabinetry_plan_context_object(obj)
+        return plan_object_visibility.is_cabinetry_plan_context_object(obj)
 
     def _has_direct_plan_symbols(self, obj):
-        return plan_object_classification.has_direct_plan_symbols(obj)
+        return plan_object_visibility.has_direct_plan_symbols(obj)
 
     def _is_plan_symbol_instance(self, obj):
-        return plan_object_classification.is_plan_symbol_instance(self, obj)
+        return plan_object_visibility.is_plan_symbol_instance(self, obj)
 
     def _is_plan_context_only_object(self, obj):
-        return plan_object_classification.is_plan_context_only_object(self, obj)
+        return plan_object_visibility.is_plan_context_only_object(self, obj)
 
     def _is_component_addition_object(self, obj):
-        return plan_object_classification.is_component_addition_object(obj)
+        return plan_object_visibility.is_component_addition_object(obj)
 
     def _is_supported_plan_object(self, obj):
-        return plan_object_classification.is_supported_plan_object(self, obj)
+        return plan_object_visibility.is_supported_plan_object(self, obj)
 
     def _is_hosted_opening_object(self, obj):
         return plan_hosted_openings.is_hosted_opening_object(self, obj)
@@ -1521,7 +1518,7 @@ class PlanEditSession:
         return plan_object_visibility.apply_hidden_object_state(view_object)
 
     def _get_object_storeys(self, obj):
-        return plan_object_classification.get_object_storeys(self, obj)
+        return plan_object_visibility.get_object_storeys(self, obj)
 
     def _apply_storey_visibility(self):
         return plan_object_visibility.apply_storey_visibility(self)
@@ -1942,7 +1939,7 @@ class PlanEditSession:
         return plan_provider_runtime.normalize_plan_provider_overlay(provider_id, overlay)
 
     def _normalize_plan_provider_target(self, provider_id, target):
-        return plan_provider_targets.normalize_plan_provider_target(provider_id, target)
+        return plan_provider_runtime.normalize_plan_provider_target(provider_id, target)
 
     def _collect_plan_provider_contributions(self, method_name, normalizer):
         if self._tearing_down or self._finishing or not self._document_is_alive():
@@ -2006,28 +2003,28 @@ class PlanEditSession:
         )
 
     def get_plan_provider_targets(self):
-        return plan_provider_targets.get_plan_provider_targets(self)
+        return plan_provider_runtime.get_plan_provider_targets(self)
 
     def _get_plan_provider_target_for_object(self, obj):
-        return plan_provider_targets.get_plan_provider_target_for_object(self, obj)
+        return plan_provider_runtime.get_plan_provider_target_for_object(self, obj)
 
     def _is_plan_provider_target_object(self, obj):
-        return plan_provider_targets.is_plan_provider_target_object(self, obj)
+        return plan_provider_runtime.is_plan_provider_target_object(self, obj)
 
     def get_plan_provider_overlay_visibility_key(self, provider_id, overlay_key):
-        return plan_provider_overlay_state.get_plan_provider_overlay_visibility_key(
+        return plan_provider_runtime.get_plan_provider_overlay_visibility_key(
             provider_id,
             overlay_key,
         )
 
     def _normalize_plan_provider_overlay_mode(self, mode):
-        return plan_provider_overlay_state.normalize_plan_provider_overlay_mode(mode)
+        return plan_provider_runtime.normalize_plan_provider_overlay_mode(mode)
 
     def get_plan_provider_overlay_mode(self):
         return self.providers.get_plan_provider_overlay_mode()
 
     def set_plan_provider_overlay_mode(self, mode):
-        return plan_provider_overlay_state.set_plan_provider_overlay_mode(self, mode)
+        return plan_provider_runtime.set_plan_provider_overlay_mode(self, mode)
 
     def get_plan_provider_overlay_category(self, overlay):
         return self.providers.get_plan_provider_overlay_category(overlay)
@@ -2036,17 +2033,17 @@ class PlanEditSession:
         return self.providers.is_plan_provider_overlay_enabled(overlay)
 
     def is_plan_provider_overlay_visible_for_mode(self, overlay, mode=None):
-        return plan_provider_overlay_state.is_plan_provider_overlay_visible_for_mode(
+        return plan_provider_runtime.is_plan_provider_overlay_visible_for_mode(
             self,
             overlay,
             mode=mode,
         )
 
     def is_plan_provider_overlay_visible(self, overlay):
-        return plan_provider_overlay_state.is_plan_provider_overlay_visible(self, overlay)
+        return plan_provider_runtime.is_plan_provider_overlay_visible(self, overlay)
 
     def set_plan_provider_overlay_visible(self, provider_id, overlay_key, visible):
-        return plan_provider_overlay_state.set_plan_provider_overlay_visible(
+        return plan_provider_runtime.set_plan_provider_overlay_visible(
             self,
             provider_id,
             overlay_key,
@@ -2054,10 +2051,10 @@ class PlanEditSession:
         )
 
     def queue_plan_provider_overlay_refresh(self):
-        return plan_provider_overlay_state.queue_plan_provider_overlay_refresh(self)
+        return plan_provider_runtime.queue_plan_provider_overlay_refresh(self)
 
     def queue_plan_provider_overlay_sync(self):
-        return plan_provider_overlay_state.queue_plan_provider_overlay_sync(self)
+        return plan_provider_runtime.queue_plan_provider_overlay_sync(self)
 
     def execute_plan_provider_action(
         self,

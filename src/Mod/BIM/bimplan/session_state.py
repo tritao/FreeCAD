@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 
 import FreeCAD
 import FreeCADGui
-from bimplan import provider_overlay_state as plan_provider_overlay_state
+from bimplan import provider_runtime as plan_provider_runtime
 
 
 @dataclass
@@ -100,7 +100,7 @@ class PlanWallEditState:
 def initialize_session_read_state(session):
     session.task_panel_state = PlanTaskPanelState()
     session.provider_overlay_read_state = PlanProviderOverlayReadState(
-        mode=plan_provider_overlay_state.PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
+        mode=plan_provider_runtime.PLAN_PROVIDER_OVERLAY_MODE_ARCHITECTURE
     )
     session.interaction_state = PlanInteractionState()
     session.selection_state = PlanSelectionState()

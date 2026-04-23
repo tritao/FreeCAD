@@ -7,7 +7,7 @@ from contextlib import contextmanager
 import FreeCAD
 import FreeCADGui
 
-from . import provider_targets as plan_provider_targets
+from . import provider_runtime as plan_provider_runtime
 
 
 def _get_selection_compat_module():
@@ -271,9 +271,9 @@ def _should_filter_hidden_provider_preselection(session, doc_name, obj_name):
 
 
 def _should_filter_hidden_provider_preselection_for_object(session, obj):
-    if not plan_provider_targets.is_plan_provider_target_object(session, obj):
+    if not plan_provider_runtime.is_plan_provider_target_object(session, obj):
         return False
-    return not plan_provider_targets.is_plan_provider_target_visible_for_mode(session, obj)
+    return not plan_provider_runtime.is_plan_provider_target_visible_for_mode(session, obj)
 
 
 def _should_preserve_provider_selected_target(session, kind, obj, selected):
@@ -281,7 +281,7 @@ def _should_preserve_provider_selected_target(session, kind, obj, selected):
         return False
     if not session._is_valid_plan_target(kind, obj):
         return False
-    return bool(plan_provider_targets.is_plan_provider_target_visible_for_mode(session, obj))
+    return bool(plan_provider_runtime.is_plan_provider_target_visible_for_mode(session, obj))
 
 
 def resolve_selected_target_for_gui_object(

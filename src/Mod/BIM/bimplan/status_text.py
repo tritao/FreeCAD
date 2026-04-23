@@ -4,7 +4,7 @@
 
 import FreeCAD
 import FreeCADGui
-from bimplan import provider_targets as plan_provider_targets
+from bimplan import provider_runtime as plan_provider_runtime
 from bimplan import target_kinds as plan_target_kinds
 
 translate = FreeCAD.Qt.translate
@@ -94,11 +94,11 @@ def get_plan_target_display_label(obj):
 
 
 def format_provider_target_role_label(session, obj):
-    return plan_provider_targets.get_plan_provider_target_role_label(session, obj)
+    return plan_provider_runtime.get_plan_provider_target_role_label(session, obj)
 
 
 def format_provider_target_help(session, obj):
-    return plan_provider_targets.format_plan_provider_target_help(session, obj)
+    return plan_provider_runtime.format_plan_provider_target_help(session, obj)
 
 
 def get_opening_display_kind_key(session, opening):

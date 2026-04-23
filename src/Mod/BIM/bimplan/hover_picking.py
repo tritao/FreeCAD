@@ -4,7 +4,7 @@
 
 import time
 
-from bimplan import provider_overlay_state as plan_provider_overlay_state
+from bimplan import provider_runtime as plan_provider_runtime
 from bimplan import target_dispatch as plan_target_dispatch
 
 _HOVER_PICK_INTERVAL_MS = 80
@@ -107,7 +107,7 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
         return False
     session._plan_perf_count("hover_pick_resolved")
     overlay_mode = session.get_plan_provider_overlay_mode()
-    include_space_fallback = not plan_provider_overlay_state.is_focused_provider_overlay_pick_mode(
+    include_space_fallback = not plan_provider_runtime.is_focused_provider_overlay_pick_mode(
         overlay_mode
     )
     with session._plan_perf_trace_span("hover_pick_resolve"):

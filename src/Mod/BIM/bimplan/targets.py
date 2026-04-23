@@ -7,9 +7,9 @@ from dataclasses import dataclass
 
 import FreeCAD
 
-from . import provider_targets as plan_provider_targets
+from . import provider_runtime as plan_provider_runtime
 from . import target_kinds as plan_target_kinds
-from .provider_targets import resolve_plan_provider_target_display_fields
+from .provider_runtime import resolve_plan_provider_target_display_fields
 
 
 @dataclass(frozen=True)
@@ -82,7 +82,7 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
         target_kind = session._get_plan_target_kind_for_object(candidate)
         if (
             target_kind == plan_target_kinds.PLAN_TARGET_PROVIDER
-            and not plan_provider_targets.is_plan_provider_target_visible_for_mode(
+            and not plan_provider_runtime.is_plan_provider_target_visible_for_mode(
                 session,
                 candidate,
             )
@@ -97,7 +97,7 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
         target_kind = session._get_plan_target_kind_for_object(semantic_obj)
         if (
             target_kind == plan_target_kinds.PLAN_TARGET_PROVIDER
-            and not plan_provider_targets.is_plan_provider_target_visible_for_mode(
+            and not plan_provider_runtime.is_plan_provider_target_visible_for_mode(
                 session,
                 semantic_obj,
             )
