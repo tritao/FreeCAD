@@ -7,7 +7,7 @@ import math
 
 import FreeCAD
 from bimplan.providers import PlanOverlayMarkerKind
-from .. import selection_access as plan_selection_access
+from .. import selection as plan_selection
 
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
 _PROVIDER_OVERLAY_PICK_TRACKER_SCALE = 0.14
@@ -201,7 +201,7 @@ def get_selected_provider_handle_specs(session, provider_obj):
 
 def sync_selected_provider_handles(session):
     with session._plan_perf_trace_span("sync_selected_provider_handles"):
-        provider_obj = plan_selection_access.get_selected_plan_target_object(session, "provider")
+        provider_obj = plan_selection.get_selected_plan_target_object(session, "provider")
         if session.current_tool != "Select":
             session._clear_selected_provider_handles()
             return
@@ -255,7 +255,7 @@ def clear_selected_provider_handles(session):
 
 
 def pick_selected_provider_handle(session, mouse_pos, radius_px=10):
-    provider_obj = plan_selection_access.get_selected_plan_target_object(session, "provider")
+    provider_obj = plan_selection.get_selected_plan_target_object(session, "provider")
     if not session._is_plan_provider_target_object(provider_obj) or not session.view:
         return None
     try:
@@ -612,7 +612,7 @@ def _get_selected_provider_objects(session):
     selected_objects = []
     seen = set()
     for provider_obj in (
-        plan_selection_access.get_selected_plan_target_object(session, "provider"),
+        plan_selection.get_selected_plan_target_object(session, "provider"),
         *tuple(getattr(session, "_get_provider_selected_objects", lambda: ())() or ()),
     ):
         if provider_obj is None:

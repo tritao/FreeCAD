@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import FreeCADGui
 from . import provider_targets as plan_provider_targets
+from . import selection_additive as plan_selection_additive
 from . import selection_observer as plan_selection_observer
 from . import target_dispatch as plan_target_dispatch
 from . import target_kinds as plan_target_kinds
@@ -20,6 +21,7 @@ _PENDING_TARGET_UNCHANGED = object()
 _WALL_GRIP_NONE = "none"
 _WALL_GRIP_CLEAR = "clear"
 _WALL_GRIP_SYNC = "sync"
+_MISSING = object()
 
 
 @dataclass(frozen=True)
@@ -38,6 +40,21 @@ class TargetActivationBehavior:
     sync_gui_selection: bool = True
     defer_gui_selection: bool = False
     defer_wall_grips: bool = False
+
+
+def _supports_native_selection_state(session):
+    return callable(getattr(session, "_sanitize_plan_target_references", None))
+
+
+def _get_selection_api(session):
+    return getattr(session, "selection", None)
+
+
+def _call_legacy_selection_method(session, method_name, *args):
+    legacy_method = getattr(session, method_name, None)
+    if callable(legacy_method):
+        return legacy_method(*args)
+    return _MISSING
 
 
 def clear_hidden_provider_preselection(session):
@@ -292,6 +309,18 @@ def set_selected_plan_target_state(session, primary_kinds, kind=None, obj=None):
 
 
 def get_selected_plan_target_object(session, kind=None):
+    if not _supports_native_selection_state(session):
+        selection_api = _get_selection_api(session)
+        if selection_api is not None:
+            return selection_api.get_selected_plan_target_object(kind)
+        legacy_target_object = _call_legacy_selection_method(
+            session,
+            "_get_selected_plan_target_object",
+            kind,
+        )
+        if legacy_target_object is not _MISSING:
+            return legacy_target_object
+        return None
     selected_kind, selected_obj = get_selected_plan_target(session)
     if kind is not None and selected_kind != kind:
         return None
@@ -337,6 +366,14 @@ def consume_pending_selected_plan_target(session):
 
 
 def get_selected_plan_target(session):
+    if not _supports_native_selection_state(session):
+        selection_api = _get_selection_api(session)
+        if selection_api is not None:
+            return selection_api.get_selected_plan_target()
+        legacy_target = _call_legacy_selection_method(session, "_get_selected_plan_target")
+        if legacy_target is not _MISSING:
+            return legacy_target
+        return (None, None)
     session._sanitize_plan_target_references()
     kind, obj = get_selected_plan_target_state(session, plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS)
     if session._is_valid_plan_target(kind, obj):
@@ -426,6 +463,17 @@ def sync_secondary_selected_plan_targets_from_gui_selection(
 
 
 def get_secondary_selected_plan_targets(session):
+    if not _supports_native_selection_state(session):
+        selection_api = _get_selection_api(session)
+        if selection_api is not None:
+            return selection_api.get_secondary_selected_plan_targets()
+        legacy_targets = _call_legacy_selection_method(
+            session,
+            "_get_secondary_selected_plan_targets",
+        )
+        if legacy_targets is not _MISSING:
+            return legacy_targets
+        return []
     session._sanitize_plan_target_references()
     primary_kind, primary_obj = get_selected_plan_target(session)
     session._set_secondary_selected_plan_targets(
@@ -437,6 +485,14 @@ def get_secondary_selected_plan_targets(session):
 
 
 def get_selected_plan_targets(session):
+    if not _supports_native_selection_state(session):
+        selection_api = _get_selection_api(session)
+        if selection_api is not None:
+            return selection_api.get_selected_plan_targets()
+        legacy_targets = _call_legacy_selection_method(session, "_get_selected_plan_targets")
+        if legacy_targets is not _MISSING:
+            return legacy_targets
+        return []
     primary_kind, primary_obj = get_selected_plan_target(session)
     targets = []
     seen = set()
@@ -451,6 +507,15 @@ def get_selected_plan_targets(session):
         seen.add(key)
         targets.append((target_kind, target_obj))
     return targets
+
+
+def normalize_gui_object_selection(session, selection):
+    if not _supports_native_selection_state(session):
+        selection_api = _get_selection_api(session)
+        if selection_api is not None:
+            return selection_api.normalize_gui_object_selection(selection)
+    del session
+    return plan_selection_additive.normalize_gui_object_selection(selection)
 
 
 def get_plan_target_object_from_state(state_kind, state_obj, kind):
