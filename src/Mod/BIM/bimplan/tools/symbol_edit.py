@@ -10,6 +10,25 @@ import FreeCADGui
 translate = FreeCAD.Qt.translate
 
 
+class PlanSymbolsAPI:
+    """Owned session surface for Plan Edit symbol read helpers."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def symbol_rotation_snap_enabled(self):
+        return symbol_rotation_snap_enabled(self.session)
+
+    def format_symbol_rotation_snap_label(self):
+        return format_symbol_rotation_snap_label(self.session)
+
+
 def get_symbol_handle_placement(session, symbol, handle_role, point):
     if not session._is_plan_symbol_instance(symbol) or point is None or not handle_role:
         return None

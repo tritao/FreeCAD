@@ -11,6 +11,38 @@ translate = FreeCAD.Qt.translate
 _PLAN_JOIN_TYPES = ("Miter", "Butt", "Tee")
 
 
+class PlanWallRelationsAPI:
+    """Owned session surface for Plan Edit wall relation and join reads."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def get_plan_join_type_label(self, join_type=None):
+        return get_plan_join_type_label(self.session, join_type)
+
+    def get_plan_candidate_joint(self, target_wall=None):
+        return get_plan_candidate_joint(self.session, target_wall)
+
+    def get_plan_join_candidate_state(self):
+        return get_plan_join_candidate_state(self.session)
+
+    def get_plan_join_mode_action_text(self, target_wall=None, joint=None):
+        return get_plan_join_mode_action_text(
+            self.session,
+            target_wall=target_wall,
+            joint=joint,
+        )
+
+    def get_plan_relation_status_message(self):
+        return get_plan_relation_status_message(self.session)
+
+
 def activate_join_tool(session):
     session._cancel_space_region_pick(refresh=False)
     session._cancel_plan_region_tool(refresh=False)

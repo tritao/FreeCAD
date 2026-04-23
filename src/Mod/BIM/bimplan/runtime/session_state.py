@@ -31,6 +31,29 @@ import FreeCADGui
 from bimplan.providers import runtime as plan_provider_runtime
 
 
+class PlanInteractionAPI:
+    """Owned session surface for Plan Edit interaction-state reads."""
+
+    __slots__ = ("_session",)
+
+    _MODAL_TOOLS = frozenset(
+        ("Move Opening", "Move Symbol", "Rotate Symbol", "Set Space Text", "Window")
+    )
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def is_modal_plan_interaction_active(self):
+        return bool(
+            self.session.wall_edit.is_wall_edit_modal_active()
+            or self.session.current_tool in self._MODAL_TOOLS
+        )
+
+
 @dataclass
 class PlanTaskPanelState:
     relation_status_message: str | None = None

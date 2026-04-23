@@ -17,6 +17,50 @@ DEFAULT_WINDOW_FRAME_THICKNESS = 60.0
 DEFAULT_WINDOW_GLASS_THICKNESS = 10.0
 
 
+class PlanWindowsAPI:
+    """Owned session surface for Plan Edit window placement and editor reads."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def can_place_window(self):
+        return can_place_window(self.session)
+
+    def get_selected_window_style_preset(self):
+        return get_selected_window_style_preset(self.session)
+
+    def get_selected_window_width_text(self):
+        return get_selected_window_width_text(self.session)
+
+    def get_selected_window_height_text(self):
+        return get_selected_window_height_text(self.session)
+
+    def get_window_style_preset_options(self):
+        del self
+        return get_window_style_preset_options()
+
+    def can_apply_window_style_preset(self, window=None):
+        if window is None:
+            window = self.session.selection.get_selected_plan_target_object("opening")
+        return can_edit_window_style_preset(window)
+
+    def can_edit_window_width(self, window=None):
+        if window is None:
+            window = self.session.selection.get_selected_plan_target_object("opening")
+        return can_edit_window_width(window)
+
+    def can_edit_window_height(self, window=None):
+        if window is None:
+            window = self.session.selection.get_selected_plan_target_object("opening")
+        return can_edit_window_height(window)
+
+
 def get_window_style_preset_options():
     return ArchWindow.getWindowPresetNames("window")
 
