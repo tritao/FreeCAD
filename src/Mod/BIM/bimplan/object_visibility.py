@@ -5,6 +5,18 @@
 from __future__ import annotations
 
 
+def _perf_count(session, name, delta=1):
+    return session.performance.plan_perf_count(name, delta=delta)
+
+
+def _perf_trace_span(session, name, **fields):
+    return session.performance.plan_perf_trace_span(name, **fields)
+
+
+def _perf_describe_object(session, obj):
+    return session.performance.plan_perf_describe_object(obj)
+
+
 def _bind_visibility_call(method):
     def _bound(self, *args, **kwargs):
         return method(self.session, *args, **kwargs)
@@ -195,7 +207,7 @@ def get_object_storeys(session, obj):
     key = session._get_document_object_key(obj)
     cache = session.overlay_cache_state.plan_object_storeys_cache
     if key is not None and key in cache:
-        session._plan_perf_count("object_storeys_cache_hits")
+        _perf_count(session, "object_storeys_cache_hits")
         return list(cache[key])
 
     storeys = []
@@ -218,9 +230,9 @@ def capture_object_view_state(session):
     session._saved_object_view_state = {}
     if not session.doc:
         return
-    with session._plan_perf_trace_span("capture_object_view_state_objects"):
+    with _perf_trace_span(session, "capture_object_view_state_objects"):
         for obj in session.doc.Objects:
-            session._plan_perf_count("capture_view_state_objects_scanned")
+            _perf_count(session, "capture_view_state_objects_scanned")
             session.visibility.register_object_view_state(obj)
 
 
@@ -378,9 +390,10 @@ def apply_hidden_object_state(view_object):
 
 
 def apply_storey_visibility(session):
-    with session._plan_perf_trace_span(
+    with _perf_trace_span(
+        session,
         "apply_storey_visibility",
-        active_storey=session._plan_perf_describe_object(session.active_storey),
+        active_storey=_perf_describe_object(session, session.active_storey),
     ):
         if not session.doc or not session._saved_object_view_state:
             return
@@ -388,17 +401,17 @@ def apply_storey_visibility(session):
         active_storey_name = getattr(session.active_storey, "Name", None)
 
         if active_storey_name is None:
-            with session._plan_perf_trace_span("restore_object_view_state_for_global_plan"):
+            with _perf_trace_span(session, "restore_object_view_state_for_global_plan"):
                 session.visibility.restore_object_view_state()
             for obj in session.doc.Objects:
-                session._plan_perf_count("storey_visibility_objects_scanned")
+                _perf_count(session, "storey_visibility_objects_scanned")
                 view_object = getattr(obj, "ViewObject", None)
                 state = session._saved_object_view_state.get(obj.Name, {})
                 if not session.visibility.is_supported_plan_object(obj):
-                    session._plan_perf_count("storey_visibility_hidden_unsupported")
+                    _perf_count(session, "storey_visibility_hidden_unsupported")
                     session.visibility.apply_hidden_object_state(view_object)
                     continue
-                session._plan_perf_count("storey_visibility_supported")
+                _perf_count(session, "storey_visibility_supported")
                 if view_object and hasattr(view_object, "Visibility"):
                     try:
                         view_object.Visibility = session.visibility.get_supported_plan_visibility(
@@ -411,21 +424,21 @@ def apply_storey_visibility(session):
             return
 
         for obj in session.doc.Objects:
-            session._plan_perf_count("storey_visibility_objects_scanned")
+            _perf_count(session, "storey_visibility_objects_scanned")
             view_object = getattr(obj, "ViewObject", None)
             state = session._saved_object_view_state.get(obj.Name)
             if not view_object or not state:
-                session._plan_perf_count("storey_visibility_objects_skipped_no_view_state")
+                _perf_count(session, "storey_visibility_objects_skipped_no_view_state")
                 continue
 
             storeys = session.visibility.get_object_storeys(obj)
             if not storeys:
-                session._plan_perf_count("storey_visibility_global_objects")
+                _perf_count(session, "storey_visibility_global_objects")
                 if not session.visibility.is_supported_plan_object(obj):
-                    session._plan_perf_count("storey_visibility_hidden_unsupported")
+                    _perf_count(session, "storey_visibility_hidden_unsupported")
                     session.visibility.apply_hidden_object_state(view_object)
                     continue
-                session._plan_perf_count("storey_visibility_supported")
+                _perf_count(session, "storey_visibility_supported")
                 for prop, value in state.items():
                     if hasattr(view_object, prop):
                         try:
@@ -445,7 +458,7 @@ def apply_storey_visibility(session):
 
             belongs_to_active = any(parent.Name == active_storey_name for parent in storeys)
             if belongs_to_active:
-                session._plan_perf_count("storey_visibility_active_storey_objects")
+                _perf_count(session, "storey_visibility_active_storey_objects")
                 for prop, value in state.items():
                     if hasattr(view_object, prop):
                         try:
@@ -453,10 +466,10 @@ def apply_storey_visibility(session):
                         except Exception:
                             pass
                 if not session.visibility.is_supported_plan_object(obj):
-                    session._plan_perf_count("storey_visibility_hidden_unsupported")
+                    _perf_count(session, "storey_visibility_hidden_unsupported")
                     session.visibility.apply_hidden_object_state(view_object)
                     continue
-                session._plan_perf_count("storey_visibility_supported")
+                _perf_count(session, "storey_visibility_supported")
                 if hasattr(view_object, "Visibility"):
                     try:
                         view_object.Visibility = session.visibility.get_supported_plan_visibility(
@@ -468,7 +481,7 @@ def apply_storey_visibility(session):
                 session.visibility.apply_context_object_selectability(obj, view_object)
                 continue
 
-            session._plan_perf_count("storey_visibility_other_storey_objects")
+            _perf_count(session, "storey_visibility_other_storey_objects")
             if hasattr(view_object, "Visibility"):
                 try:
                     view_object.Visibility = session.visibility.get_supported_plan_visibility(
