@@ -40,6 +40,14 @@ class TargetActivationBehavior:
     defer_wall_grips: bool = False
 
 
+@dataclass(frozen=True)
+class GuiSelectionResolutionState:
+    pending_kind: object = None
+    pending_target: object = None
+    preserved_kind: object = None
+    preserved_target: object = None
+
+
 def _make_select_plan_target_function(kind):
     def _select_plan_target(
         session,
@@ -165,6 +173,31 @@ def resolve_selected_target_for_gui_object(
     return session.selection.get_plan_target_for_object(selected)
 
 
+def _get_gui_selection_resolution_state(session, previous_kind, previous_obj):
+    pending_kind, pending_target = session._pending_selected_plan_target or (None, None)
+    preserved_kind = (
+        previous_kind if previous_kind == plan_target_kinds.PLAN_TARGET_PROVIDER else None
+    )
+    preserved_target = previous_obj if preserved_kind else None
+    return GuiSelectionResolutionState(
+        pending_kind=pending_kind,
+        pending_target=pending_target,
+        preserved_kind=preserved_kind,
+        preserved_target=preserved_target,
+    )
+
+
+def _resolve_gui_selection_target(session, selected, resolution_state):
+    return resolve_selected_target_for_gui_object(
+        session,
+        selected,
+        pending_kind=resolution_state.pending_kind,
+        pending_target=resolution_state.pending_target,
+        preserved_kind=resolution_state.preserved_kind,
+        preserved_target=resolution_state.preserved_target,
+    )
+
+
 def _get_gui_preselection_object(session):
     try:
         preselection = FreeCADGui.Selection.getPreselection()
@@ -283,26 +316,17 @@ def _get_gui_selection():
 
 def _collect_selected_targets_from_gui_selection(session, selection, previous_kind, previous_obj):
     selected_targets = []
-    pending_kind, pending_target = session._pending_selected_plan_target or (None, None)
-    preserved_kind = (
-        previous_kind if previous_kind == plan_target_kinds.PLAN_TARGET_PROVIDER else None
-    )
-    preserved_target = previous_obj if preserved_kind else None
+    resolution_state = _get_gui_selection_resolution_state(session, previous_kind, previous_obj)
     provider_refresh_scope = session.providers.plan_provider_refresh_cache_scope()
     with provider_refresh_scope:
         for selected in selection:
-            target_kind, target_obj = resolve_selected_target_for_gui_object(
-                session,
-                selected,
-                pending_kind=pending_kind,
-                pending_target=pending_target,
-                preserved_kind=preserved_kind,
-                preserved_target=preserved_target,
+            target_kind, target_obj = _resolve_gui_selection_target(
+                session, selected, resolution_state
             )
             if target_kind:
                 selected_targets.append((target_kind, target_obj))
     session.performance.plan_perf_count("selected_targets_considered", len(selected_targets))
-    return selected_targets, pending_kind, pending_target
+    return selected_targets, resolution_state.pending_kind, resolution_state.pending_target
 
 
 def _resolve_gui_selection_refresh_result(session, selection, previous_kind, previous_obj):
