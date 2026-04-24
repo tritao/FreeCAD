@@ -135,6 +135,13 @@ def _make_set_hovered_target_method(method_name):
     return _set_hovered_target
 
 
+def _make_selection_observer_delegate(method_name):
+    def _selection_observer_method(self, *args):
+        return getattr(self.selection, method_name)(*args)
+
+    return _selection_observer_method
+
+
 def get_active_session():
     return _active_session
 
@@ -542,26 +549,6 @@ class PlanEditSession:
     def defer_document_visual_updates(self):
         return plan_document_visuals.defer_document_visual_updates(self)
 
-    # Selection observer interface
-
-    def addSelection(self, doc, obj, sub, point):
-        return plan_selection.selection_observer_add(self, doc, obj, sub, point)
-
-    def removeSelection(self, doc, obj, sub):
-        return plan_selection.selection_observer_remove(self, doc, obj, sub)
-
-    def setSelection(self, doc):
-        return plan_selection.selection_observer_set(self, doc)
-
-    def clearSelection(self, doc):
-        return plan_selection.selection_observer_clear(self, doc)
-
-    def setPreselection(self, doc, obj, sub):
-        return plan_selection.selection_observer_set_preselection(self, doc, obj, sub)
-
-    def removePreselection(self, doc, obj, sub):
-        return plan_selection.selection_observer_remove_preselection(self, doc, obj, sub)
-
     # Document observer interface
 
     def _is_opening_visual_dependency(self, opening, obj):
@@ -628,6 +615,18 @@ class PlanEditSession:
     _set_hovered_space = _make_set_hovered_target_method("set_hovered_space")
 
     _set_hovered_region = _make_set_hovered_target_method("set_hovered_region")
+
+    addSelection = _make_selection_observer_delegate("addSelection")
+
+    removeSelection = _make_selection_observer_delegate("removeSelection")
+
+    setSelection = _make_selection_observer_delegate("setSelection")
+
+    clearSelection = _make_selection_observer_delegate("clearSelection")
+
+    setPreselection = _make_selection_observer_delegate("setPreselection")
+
+    removePreselection = _make_selection_observer_delegate("removePreselection")
 
 
 plan_session_state.bind_session_state_accessors(PlanEditSession)

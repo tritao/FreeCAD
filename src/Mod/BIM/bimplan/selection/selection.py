@@ -1659,6 +1659,24 @@ class PlanSelectionAPI(_SessionAPI):
             obj=obj,
         )
 
+    def addSelection(self, doc, obj, sub, point):
+        return selection_observer_add(self.session, doc, obj, sub, point)
+
+    def removeSelection(self, doc, obj, sub):
+        return selection_observer_remove(self.session, doc, obj, sub)
+
+    def setSelection(self, doc):
+        return selection_observer_set(self.session, doc)
+
+    def clearSelection(self, doc):
+        return selection_observer_clear(self.session, doc)
+
+    def setPreselection(self, doc, obj, sub):
+        return selection_observer_set_preselection(self.session, doc, obj, sub)
+
+    def removePreselection(self, doc, obj, sub):
+        return selection_observer_remove_preselection(self.session, doc, obj, sub)
+
     @contextmanager
     def selection_changes_suppressed(self):
         with selection_changes_suppressed(self.session):
