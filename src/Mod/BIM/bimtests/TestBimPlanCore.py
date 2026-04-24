@@ -617,10 +617,10 @@ class TestBimPlanCore(unittest.TestCase):
                 trace_span=lambda _name: nullcontext(),
                 count=lambda name, value=1: perf_counts.append((name, value)),
             ),
-            get_plan_edit_context=_get_plan_edit_context,
             get_plan_provider_registry=lambda: registry,
         )
         session.providers = SimpleNamespace(
+            get_plan_edit_context=_get_plan_edit_context,
             plan_provider_integrations_disabled=lambda: False,
             get_plan_provider_id=lambda current_provider: current_provider.get_provider_id(),
             coerce_plan_provider_results=lambda provided: tuple(provided or ()),
@@ -2052,8 +2052,6 @@ class TestBimPlanCore(unittest.TestCase):
             viewport=SimpleNamespace(focus_plan_view=lambda: None),
             _document_is_alive=lambda: True,
             get_plan_provider_registry=lambda: registry,
-            get_plan_edit_context=lambda: plan_context,
-            get_plan_provider_action_context=lambda payload=None: action_context,
             defer_document_visual_updates=lambda: nullcontext(),
             _refresh_primary_selected_plan_target=lambda: None,
             document_visuals=SimpleNamespace(
@@ -2061,6 +2059,10 @@ class TestBimPlanCore(unittest.TestCase):
             ),
             task_panels=SimpleNamespace(
                 refresh_task_panel_status=lambda selection_only=False: None
+            ),
+            providers=SimpleNamespace(
+                get_plan_edit_context=lambda: plan_context,
+                get_plan_provider_action_context=lambda payload=None: action_context,
             ),
         )
 

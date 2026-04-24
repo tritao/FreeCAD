@@ -20,6 +20,8 @@ def _bind_viewport_call(func):
 
 
 _PLAN_VIEWPORT_API_BOUND_METHODS = (
+    "discard_stale_runtime_object",
+    "get_runtime_attr",
     "get_navigation_style",
     "get_main_window",
     "find_main_window_action",
@@ -128,15 +130,33 @@ def _copy_plane(plane):
     )
 
 
+def discard_stale_runtime_object(session, obj):
+    if obj is session.view:
+        session.view = None
+        session.viewer = None
+    elif obj is session.viewer:
+        session.viewer = None
+
+
+def get_runtime_attr(session, obj, attr_name):
+    if obj is None:
+        return None
+    try:
+        return getattr(obj, attr_name)
+    except (AttributeError, ReferenceError, RuntimeError):
+        session.viewport.discard_stale_runtime_object(obj)
+        return None
+
+
 def get_navigation_style(session):
     viewer = session.viewer
-    get_navigation_style_attr = session._get_runtime_attr(viewer, "getNavigationStyle")
+    get_navigation_style_attr = session.viewport.get_runtime_attr(viewer, "getNavigationStyle")
     if get_navigation_style_attr is None:
         return None
     try:
         return get_navigation_style_attr()
     except (AttributeError, ReferenceError, RuntimeError):
-        session._discard_stale_runtime_object(viewer)
+        session.viewport.discard_stale_runtime_object(viewer)
         return None
 
 
@@ -198,25 +218,25 @@ def restore_locked_view_actions(session):
 def capture_navigation_flag(session, target, getter_name, state_key):
     if state_key in session._saved_navigation_state:
         return
-    getter = session._get_runtime_attr(target, getter_name)
+    getter = session.viewport.get_runtime_attr(target, getter_name)
     if getter is None:
         return
     try:
         session._saved_navigation_state[state_key] = bool(getter())
     except (AttributeError, ReferenceError, RuntimeError):
-        session._discard_stale_runtime_object(target)
+        session.viewport.discard_stale_runtime_object(target)
 
 
 def apply_navigation_flag(session, target, setter_name, state_key, enabled):
     if state_key not in session._saved_navigation_state:
         return
-    setter = session._get_runtime_attr(target, setter_name)
+    setter = session.viewport.get_runtime_attr(target, setter_name)
     if setter is None:
         return
     try:
         setter(enabled)
     except (AttributeError, ReferenceError, RuntimeError):
-        session._discard_stale_runtime_object(target)
+        session.viewport.discard_stale_runtime_object(target)
 
 
 def capture_navigation_state(session):
@@ -225,7 +245,7 @@ def capture_navigation_state(session):
         session._saved_navigation_style = nav_style
     capture_navigation_flag(session, nav_style, "isRotationEnabled", "rotation_enabled")
     capture_navigation_flag(session, nav_style, "isOrientationLocked", "orientation_locked")
-    if session._get_runtime_attr(session.viewer, "setNaviCubeEnabledOverride") is None:
+    if session.viewport.get_runtime_attr(session.viewer, "setNaviCubeEnabledOverride") is None:
         capture_navigation_flag(
             session,
             session.viewer,
@@ -242,18 +262,20 @@ def capture_navigation_state(session):
 
 def apply_plan_background_override(session, paper_rgb):
     viewer = session.viewer
-    set_background_override = session._get_runtime_attr(viewer, "setBackgroundAppearanceOverride")
+    set_background_override = session.viewport.get_runtime_attr(
+        viewer, "setBackgroundAppearanceOverride"
+    )
     if set_background_override is None:
         return
     try:
         set_background_override("NONE", paper_rgb, paper_rgb, paper_rgb)
     except (AttributeError, ReferenceError, RuntimeError):
-        session._discard_stale_runtime_object(viewer)
+        session.viewport.discard_stale_runtime_object(viewer)
 
 
 def clear_plan_background_override(session):
     viewer = session.viewer
-    clear_background_override = session._get_runtime_attr(
+    clear_background_override = session.viewport.get_runtime_attr(
         viewer, "clearBackgroundAppearanceOverride"
     )
     if clear_background_override is None:
@@ -261,7 +283,7 @@ def clear_plan_background_override(session):
     try:
         clear_background_override()
     except (AttributeError, ReferenceError, RuntimeError):
-        session._discard_stale_runtime_object(viewer)
+        session.viewport.discard_stale_runtime_object(viewer)
 
 
 def apply_plan_navigation_profile(session, locked_actions):
@@ -281,12 +303,14 @@ def apply_plan_navigation_profile(session, locked_actions):
         "orientation_locked",
         True,
     )
-    set_navicube_override = session._get_runtime_attr(session.viewer, "setNaviCubeEnabledOverride")
+    set_navicube_override = session.viewport.get_runtime_attr(
+        session.viewer, "setNaviCubeEnabledOverride"
+    )
     if set_navicube_override is not None:
         try:
             set_navicube_override(False)
         except (AttributeError, ReferenceError, RuntimeError):
-            session._discard_stale_runtime_object(session.viewer)
+            session.viewport.discard_stale_runtime_object(session.viewer)
     else:
         apply_navigation_flag(
             session, session.viewer, "setEnabledNaviCube", "navicube_enabled", False
@@ -313,14 +337,14 @@ def restore_navigation_state(session):
         "orientation_locked",
         session._saved_navigation_state.get("orientation_locked"),
     )
-    clear_navicube_override = session._get_runtime_attr(
+    clear_navicube_override = session.viewport.get_runtime_attr(
         session.viewer, "clearNaviCubeEnabledOverride"
     )
     if clear_navicube_override is not None:
         try:
             clear_navicube_override()
         except (AttributeError, ReferenceError, RuntimeError):
-            session._discard_stale_runtime_object(session.viewer)
+            session.viewport.discard_stale_runtime_object(session.viewer)
     else:
         apply_navigation_flag(
             session,
@@ -473,18 +497,18 @@ def restore_state(session):
 def capture_state(session):
     import WorkingPlane
 
-    get_camera = session._get_runtime_attr(session.view, "getCamera")
+    get_camera = session.viewport.get_runtime_attr(session.view, "getCamera")
     if get_camera is not None:
         try:
             session._saved_camera = get_camera()
         except (AttributeError, ReferenceError, RuntimeError):
-            session._discard_stale_runtime_object(session.view)
-    get_camera_type = session._get_runtime_attr(session.view, "getCameraType")
+            session.viewport.discard_stale_runtime_object(session.view)
+    get_camera_type = session.viewport.get_runtime_attr(session.view, "getCameraType")
     if get_camera_type is not None:
         try:
             session._saved_camera_type = get_camera_type()
         except (AttributeError, ReferenceError, RuntimeError):
-            session._discard_stale_runtime_object(session.view)
+            session.viewport.discard_stale_runtime_object(session.view)
 
     session._working_plane = WorkingPlane.get_working_plane(update=False)
     if hasattr(session._working_plane, "save"):
@@ -512,13 +536,13 @@ def project_plan_point(session, point):
 def get_plan_view_height(session):
     if session._tearing_down or getattr(session, "_finishing", False) or not session.view:
         return None
-    get_camera_node = session._get_runtime_attr(session.view, "getCameraNode")
+    get_camera_node = session.viewport.get_runtime_attr(session.view, "getCameraNode")
     if get_camera_node is None:
         return None
     try:
         camera = get_camera_node()
     except (AttributeError, ReferenceError, RuntimeError):
-        session._discard_stale_runtime_object(session.view)
+        session.viewport.discard_stale_runtime_object(session.view)
         return None
     try:
         height_prop = getattr(camera, "height")
@@ -552,7 +576,7 @@ def scaled_marker_size(session, base_size):
 
 def get_plan_view_units_per_pixel(session):
     height = get_plan_view_height(session)
-    get_size = session._get_runtime_attr(session.view, "getSize")
+    get_size = session.viewport.get_runtime_attr(session.view, "getSize")
     if not height or height <= 0 or get_size is None:
         return None
     try:
@@ -567,8 +591,8 @@ def get_plan_view_units_per_pixel(session):
 def get_plan_projection_cache_key(session):
     if session._tearing_down or getattr(session, "_finishing", False) or not session.view:
         return None
-    get_camera_node = session._get_runtime_attr(session.view, "getCameraNode")
-    get_size = session._get_runtime_attr(session.view, "getSize")
+    get_camera_node = session.viewport.get_runtime_attr(session.view, "getCameraNode")
+    get_size = session.viewport.get_runtime_attr(session.view, "getSize")
     if get_camera_node is None or get_size is None:
         return None
     try:
@@ -598,7 +622,7 @@ def get_plan_projection_cache_key(session):
 def get_plan_point_from_mouse_pos(session, mouse_pos):
     if not session.view or not mouse_pos:
         return None
-    get_point = session._get_runtime_attr(session.view, "getPoint")
+    get_point = session.viewport.get_runtime_attr(session.view, "getPoint")
     if get_point is None:
         return None
     try:
@@ -653,19 +677,19 @@ def register_edit_callbacks(session):
     except Exception:
         return
 
-    add_event_callback = session._get_runtime_attr(session.view, "addEventCallbackPivy")
+    add_event_callback = session.viewport.get_runtime_attr(session.view, "addEventCallbackPivy")
     if add_event_callback is None:
         return
 
     try:
         viewer = session.viewer
         if viewer is None:
-            get_viewer = session._get_runtime_attr(session.view, "getViewer")
+            get_viewer = session.viewport.get_runtime_attr(session.view, "getViewer")
             if get_viewer is None:
                 return
             viewer = get_viewer()
             session.viewer = viewer
-        get_render_manager = session._get_runtime_attr(viewer, "getSoRenderManager")
+        get_render_manager = session.viewport.get_runtime_attr(viewer, "getSoRenderManager")
         session._render_manager = get_render_manager() if get_render_manager is not None else None
         if session._key_pressed_cb is None:
             session._key_pressed_cb = add_event_callback(
@@ -689,7 +713,7 @@ def register_edit_callbacks(session):
                 coin.SoMouseButtonEvent.getClassTypeId(), session._on_mouse_pressed
             )
     except (AttributeError, ReferenceError, RuntimeError):
-        session._discard_stale_runtime_object(session.view)
+        session.viewport.discard_stale_runtime_object(session.view)
         session._render_manager = None
 
 
@@ -821,10 +845,10 @@ def clear_viewport_status_chip(session):
 def request_view_redraw(session):
     if session._tearing_down:
         return
-    redraw = session._get_runtime_attr(session.view, "redraw")
+    redraw = session.viewport.get_runtime_attr(session.view, "redraw")
     if redraw is not None:
         try:
             redraw()
             return
         except Exception:
-            session._discard_stale_runtime_object(session.view)
+            session.viewport.discard_stale_runtime_object(session.view)

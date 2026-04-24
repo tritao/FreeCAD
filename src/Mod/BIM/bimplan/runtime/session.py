@@ -59,7 +59,6 @@ from bimplan.tools.wall_relations import PlanWallRelationsAPI
 from bimplan.tools.wall_edit import PlanWallEditAPI
 from bimplan.tools.window_create import PlanWindowsAPI
 from bimplan.tools.spaces import PlanSpacesAPI
-from bimplan.providers import PlanEditContext
 from bimplan.runtime.view import PlanViewportAPI
 from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
@@ -330,22 +329,6 @@ class PlanEditSession:
     def selected_space(self, space):
         self._set_selected_target_for_kind("space", space)
 
-    def _discard_stale_runtime_object(self, obj):
-        if obj is self.view:
-            self.view = None
-            self.viewer = None
-        elif obj is self.viewer:
-            self.viewer = None
-
-    def _get_runtime_attr(self, obj, attr_name):
-        if obj is None:
-            return None
-        try:
-            return getattr(obj, attr_name)
-        except (AttributeError, ReferenceError, RuntimeError):
-            self._discard_stale_runtime_object(obj)
-            return None
-
     def _get_plan_overlay_geometry_kinds_for_object(self, obj):
         return overlay_geometry.get_plan_overlay_geometry_kinds_for_object(self, obj)
 
@@ -414,7 +397,7 @@ class PlanEditSession:
 
             with self.performance.plan_perf_trace_span("enter_acquire_view"):
                 self.view = self.gui_doc.ActiveView
-                get_viewer = self._get_runtime_attr(self.view, "getViewer")
+                get_viewer = self.viewport.get_runtime_attr(self.view, "getViewer")
                 if self.view is None or get_viewer is None:
                     FreeCAD.Console.PrintError(
                         translate(
@@ -427,7 +410,7 @@ class PlanEditSession:
                 try:
                     self.viewer = get_viewer()
                 except (AttributeError, ReferenceError, RuntimeError):
-                    self._discard_stale_runtime_object(self.view)
+                    self.viewport.discard_stale_runtime_object(self.view)
                     FreeCAD.Console.PrintError(
                         translate(
                             "BIM_PlanEdit",
@@ -632,30 +615,6 @@ class PlanEditSession:
 
     def get_plan_provider_display_name(self, provider_id):
         return self.providers.get_plan_provider_display_name(provider_id)
-
-    def get_plan_edit_context(self):
-        doc = self.doc if self._document_is_alive() else None
-        active_storey = self.active_storey
-        active_storey_name = self.visibility.safe_plan_object_name(active_storey)
-        if active_storey is not None and not active_storey_name:
-            active_storey = None
-            self.active_storey = None
-        return PlanEditContext(
-            session=self,
-            document_name=self.visibility.safe_plan_object_name(doc),
-            active_storey_name=active_storey_name,
-            active_storey_label=str(self.get_storey_label(active_storey) or ""),
-            current_tool=str(self.current_tool or ""),
-        )
-
-    def get_plan_provider_action_context(self, payload=None):
-        doc = self.doc if self._document_is_alive() else None
-        return PlanEditContext.make_action_context(
-            self,
-            payload=payload,
-            document_name=self.visibility.safe_plan_object_name(doc),
-            current_tool=str(self.current_tool or ""),
-        )
 
     def can_place_plan_window(self):
         return self.windows.can_place_window()
