@@ -2282,7 +2282,7 @@ class PlanEditControlsWidget:
             self._storey_items = [None] + list(self.session.storeys)
             self.storey_combo.addItem(translate("BIM_PlanEdit", "Global XY (Z=0)"))
             for storey in self.session.storeys:
-                self.storey_combo.addItem(self.session.get_storey_label(storey))
+                self.storey_combo.addItem(self.session.storey.get_storey_label(storey))
 
             current = self.session.active_storey
             try:
@@ -2900,7 +2900,7 @@ class PlanEditControlsWidget:
 
     def on_storey_changed(self, index):
         if 0 <= index < len(self._storey_items):
-            self.session.set_active_storey(self._storey_items[index])
+            self.session.storey.set_active_storey(self._storey_items[index])
 
     def on_select_clicked(self):
         self.session.lifecycle.activate_select_tool()
