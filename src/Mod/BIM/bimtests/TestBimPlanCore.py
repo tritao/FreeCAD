@@ -2075,7 +2075,7 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=doc,
             _is_valid_plan_target=lambda _kind, _obj: False,
-            _get_plan_target_for_object=lambda _obj: (None, None),
+            selection=SimpleNamespace(get_plan_target_for_object=lambda _obj: (None, None)),
         )
         point = SimpleNamespace(
             documentName=_Field(""),
@@ -2537,7 +2537,9 @@ class TestBimPlanCore(unittest.TestCase):
         )
         session = SimpleNamespace(
             _is_valid_plan_target=lambda kind, obj: kind == "provider" and obj is marker,
-            _get_plan_target_for_object=lambda _selected: ("symbol", marker),
+            selection=SimpleNamespace(
+                get_plan_target_for_object=lambda _selected: ("symbol", marker)
+            ),
         )
 
         self.assertEqual(
@@ -2558,7 +2560,9 @@ class TestBimPlanCore(unittest.TestCase):
         )
         session = SimpleNamespace(
             _is_valid_plan_target=lambda kind, obj: kind == "provider" and obj is marker,
-            _get_plan_target_for_object=lambda _selected: ("symbol", marker),
+            selection=SimpleNamespace(
+                get_plan_target_for_object=lambda _selected: ("symbol", marker)
+            ),
         )
 
         with patch(
@@ -2773,7 +2777,9 @@ class TestBimPlanCore(unittest.TestCase):
             role="fixture",
         )
         session = SimpleNamespace(
-            _get_plan_target_kind_for_object=lambda obj: "provider" if obj is marker else None,
+            selection=SimpleNamespace(
+                get_plan_target_kind_for_object=lambda obj: "provider" if obj is marker else None
+            ),
             _get_plan_provider_target_for_object=lambda obj: (
                 provider_target if obj is marker else None
             ),

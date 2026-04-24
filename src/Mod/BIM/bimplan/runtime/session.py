@@ -1158,12 +1158,6 @@ class PlanEditSession:
     def _report_space_region_candidate_failure(self, report):
         return self.spaces.report_space_region_candidate_failure(report)
 
-    def _get_plan_target_kind_for_object(self, obj):
-        return plan_targets.get_plan_target_kind_for_object(self, obj)
-
-    def _get_plan_target_for_object(self, obj, parent_obj=None):
-        return plan_targets.get_plan_target_for_object(self, obj, parent_obj=parent_obj)
-
     def _get_screen_distance_sq_to_segment(self, mouse_pos, start, end):
         return plan_picking.get_screen_distance_sq_to_segment(self, mouse_pos, start, end)
 
@@ -2137,27 +2131,8 @@ class PlanEditSession:
     def _get_opening_overlay_screen_polylines(self, opening):
         return overlay_geometry.get_opening_overlay_screen_polylines(self, opening)
 
-    def _get_plan_target_at_position(self, mouse_pos, include_space_fallback=True):
-        return plan_picking.get_plan_target_at_position(
-            self,
-            mouse_pos,
-            include_space_fallback=include_space_fallback,
-        )
-
-    def _get_plan_space_instances(self):
-        return plan_picking.get_plan_space_instances(self)
-
-    def _get_plan_region_instances(self):
-        return plan_picking.get_plan_region_instances(self)
-
     def _is_plan_additive_selection_active(self):
         return plan_selection.is_plan_additive_selection_active(self)
-
-    def _get_plan_target_from_edit_node(self, node):
-        return plan_picking.get_plan_target_from_edit_node(self, node)
-
-    def _get_provider_overlay_target_from_edit_node(self, node):
-        return plan_picking.get_provider_overlay_target_from_edit_node(self, node)
 
     def _activate_provider_overlay_target_node(self, node, event_callback=None):
         return plan_selection.activate_provider_overlay_target_node(
