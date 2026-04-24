@@ -213,7 +213,7 @@ def sync_hovered_symbol_overlay(session):
             return
         if not session.visibility.is_plan_symbol_instance(session.hovered_symbol):
             return
-        if session._is_selected_plan_target("symbol", session.hovered_symbol):
+        if session.selection.is_selected_plan_target("symbol", session.hovered_symbol):
             return
         create_symbol_overlay_trackers(
             session,

@@ -118,7 +118,7 @@ def sync_hovered_opening_overlay(session):
         if not session.openings.is_hosted_opening_object(opening):
             clear_hovered_opening_overlay(session)
             return
-        if session._is_selected_plan_target("opening", opening):
+        if session.selection.is_selected_plan_target("opening", opening):
             clear_hovered_opening_overlay(session)
             return
         width = session.viewport.scaled_line_width(2)
@@ -280,7 +280,11 @@ def invalidate_selected_opening_overlay_cache(session):
 def sync_selected_wall_opening_context_overlay(session):
     clear_selected_wall_opening_context_overlay(session)
     wall = plan_selection.get_selected_plan_target_object(session, "wall")
-    if session.current_tool != "Select" or not wall or session._is_selected_plan_target("opening"):
+    if (
+        session.current_tool != "Select"
+        or not wall
+        or session.selection.is_selected_plan_target("opening")
+    ):
         return
     color = (0.46, 0.58, 0.82)
     width = session.viewport.scaled_line_width(2)

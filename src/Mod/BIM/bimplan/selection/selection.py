@@ -163,7 +163,7 @@ def _choose_primary_selected_target(selected_targets, pending_kind=None, pending
 
 
 def _apply_selection_refresh_result(session, refresh_result):
-    session._set_selected_plan_target_state(
+    session.selection.set_selected_plan_target_state(
         refresh_result.primary_kind,
         refresh_result.primary_obj,
     )
@@ -304,7 +304,7 @@ def refresh_selected_plan_target(session):
             try:
                 selection = FreeCADGui.Selection.getSelection()
             except (ReferenceError, RuntimeError):
-                session._set_selected_plan_target_state()
+                session.selection.set_selected_plan_target_state()
                 return
             session.performance.plan_perf_count("gui_selection_size", len(selection or []))
             refresh_result = _resolve_gui_selection_refresh_result(
@@ -317,7 +317,7 @@ def refresh_selected_plan_target(session):
         _apply_selection_refresh_result(session, refresh_result)
         if (
             refresh_result.wall_grip_action == _WALL_GRIP_NONE
-            and session._selected_plan_target_changed(
+            and session.selection.selected_plan_target_changed(
                 previous_kind,
                 previous_obj,
                 plan_target_kinds.PLAN_TARGET_WALL,
@@ -399,9 +399,9 @@ def is_selected_plan_target(session, kind, obj=None):
 
 
 def clear_selected_plan_target_if_matches(session, kind, obj):
-    if not session._is_selected_plan_target(kind, obj):
+    if not session.selection.is_selected_plan_target(kind, obj):
         return False
-    session._set_selected_plan_target_state()
+    session.selection.set_selected_plan_target_state()
     return True
 
 
@@ -441,7 +441,7 @@ def get_selected_plan_target(session):
     if session.selection.is_valid_plan_target(kind, obj):
         return (kind, obj)
     if kind is not None or obj is not None:
-        session._set_selected_plan_target_state()
+        session.selection.set_selected_plan_target_state()
     return (None, None)
 
 
@@ -625,9 +625,9 @@ def set_selected_plan_target(
     preserve_hovered_symbol_overlay=False,
 ):
     if session.selection.is_valid_plan_target(kind, obj):
-        session._set_selected_plan_target_state(kind, obj)
+        session.selection.set_selected_plan_target_state(kind, obj)
     else:
-        session._set_selected_plan_target_state()
+        session.selection.set_selected_plan_target_state()
         kind = None
         obj = None
     session.selection.sync_secondary_selected_plan_targets_from_gui_selection(
@@ -684,7 +684,7 @@ def reset_selected_wall_after_change(session):
         return
     session.overlays.clear_wall_grips()
     session.overlays.clear_selected_wall_overlay()
-    session._clear_selected_plan_target_if_matches("wall", wall)
+    session.selection.clear_selected_plan_target_if_matches("wall", wall)
     session.selection.set_gui_selection([])
     session.task_panels.refresh_task_panel_status()
 
@@ -696,12 +696,12 @@ def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
         wall = get_selected_plan_target_object(session, "wall")
     if wall is None:
         return
-    if not session._is_selected_plan_target("wall", wall):
+    if not session.selection.is_selected_plan_target("wall", wall):
         return
     session._pending_selected_wall_reset = False
     session.overlays.clear_wall_grips()
     session.overlays.clear_selected_wall_overlay()
-    session._clear_selected_plan_target_if_matches("wall", wall)
+    session.selection.clear_selected_plan_target_if_matches("wall", wall)
     if clear_gui_selection:
         session.selection.set_gui_selection([])
     session.task_panels.refresh_task_panel_status(selection_only=True)
@@ -709,7 +709,7 @@ def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
 
 def sync_primary_selected_plan_target_visuals(session, previous_kind=None, previous_obj=None):
     with session.performance.plan_perf_trace_span("sync_primary_selected_plan_target_visuals"):
-        if session.current_tool != "Select" or session._selected_plan_target_changed(
+        if session.current_tool != "Select" or session.selection.selected_plan_target_changed(
             previous_kind,
             previous_obj,
             plan_target_kinds.PLAN_TARGET_WALL,
@@ -766,7 +766,7 @@ def refresh_primary_selected_plan_target(session):
 
 
 def set_hovered_wall(session, wall):
-    if session._is_selected_plan_target("wall", wall):
+    if session.selection.is_selected_plan_target("wall", wall):
         wall = None
     if session.hovered_wall == wall:
         return
@@ -777,7 +777,7 @@ def set_hovered_wall(session, wall):
     if session.current_tool == "Join":
         session.task_panels.refresh_task_panel_status(
             selection_only=session.current_tool == "Select"
-            and session._is_selected_plan_target("wall")
+            and session.selection.is_selected_plan_target("wall")
         )
 
 

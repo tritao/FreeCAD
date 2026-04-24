@@ -119,7 +119,7 @@ def refresh_plan_overlay_view_scale(session):
                 session.overlays.sync_hovered_wall_overlay()
             return
         if session.current_tool == "Set Space Text":
-            if session._is_selected_plan_target("space"):
+            if session.selection.is_selected_plan_target("space"):
                 session.overlays.sync_selected_space_overlay()
             return
         if session.current_tool == "Pick Space Region":
@@ -134,18 +134,18 @@ def refresh_plan_overlay_view_scale(session):
             return
         if session.current_tool != "Select":
             return
-        if session.hovered_wall or session._is_selected_plan_target("wall"):
+        if session.hovered_wall or session.selection.is_selected_plan_target("wall"):
             session.overlays.sync_junction_node_overlays()
         if session.hovered_wall:
             session.overlays.sync_hovered_wall_overlay()
             session.overlays.sync_hovered_wall_opening_context_overlay()
-        if session._is_selected_plan_target("wall"):
+        if session.selection.is_selected_plan_target("wall"):
             session.overlays.sync_selected_wall_overlay()
             session.overlays.sync_selected_wall_opening_context_overlay()
             session.overlays.sync_wall_grips()
         if session.hovered_opening:
             session.overlays.sync_hovered_opening_overlay()
-        if session._is_selected_plan_target("opening"):
+        if session.selection.is_selected_plan_target("opening"):
             session.overlays.sync_selected_opening_overlay()
             session.overlays.sync_selected_opening_handles()
         if session.hovered_symbol:
@@ -154,20 +154,20 @@ def refresh_plan_overlay_view_scale(session):
         if session.hovered_provider:
             session.overlays.sync_hovered_provider_overlay()
         if (
-            session._is_selected_plan_target("provider")
+            session.selection.is_selected_plan_target("provider")
             or session.status_text.get_provider_selected_objects()
         ):
             session.overlays.sync_selected_provider_overlay()
-        if session._is_selected_plan_target("symbol"):
+        if session.selection.is_selected_plan_target("symbol"):
             session.overlays.sync_selected_symbol_overlay()
             session.overlays.sync_selected_symbol_handles()
         if session.hovered_space:
             session.overlays.sync_hovered_space_overlay()
-        if session._is_selected_plan_target("space"):
+        if session.selection.is_selected_plan_target("space"):
             session.overlays.sync_selected_space_overlay()
         if session.hovered_region:
             session.overlays.sync_hovered_region_overlay()
-        if session._is_selected_plan_target("region"):
+        if session.selection.is_selected_plan_target("region"):
             session.overlays.sync_selected_region_overlay()
         if session.selection.get_secondary_selected_plan_targets():
             session.overlays.sync_secondary_selected_overlays()
@@ -257,7 +257,7 @@ def refresh_plan_overlay_visuals(session, dirty=None):
         session.overlays.clear_selected_wall_opening_context_overlay()
         session.overlays.clear_wall_grips()
         session.overlays.clear_selected_wall_overlay()
-        if session._is_selected_plan_target("space") and (
+        if session.selection.is_selected_plan_target("space") and (
             refresh_all or _PLAN_VISUAL_SELECTED_SPACE in dirty
         ):
             session.spaces.refresh_selected_space_visuals()

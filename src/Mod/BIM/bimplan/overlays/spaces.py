@@ -159,7 +159,7 @@ def sync_hovered_space_overlay(session):
         return
     if not session.selection.is_plan_space_object(session.hovered_space):
         return
-    if session._is_selected_plan_target("space", session.hovered_space):
+    if session.selection.is_selected_plan_target("space", session.hovered_space):
         return
     create_space_overlay_trackers(
         session,
@@ -181,7 +181,7 @@ def sync_hovered_region_overlay(session):
         return
     if not session.selection.is_plan_region_object(session.hovered_region):
         return
-    if session._is_selected_plan_target("region", session.hovered_region):
+    if session.selection.is_selected_plan_target("region", session.hovered_region):
         return
     create_region_overlay_trackers(
         session,

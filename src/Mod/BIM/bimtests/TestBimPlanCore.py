@@ -1771,7 +1771,7 @@ class TestBimPlanCore(unittest.TestCase):
         target = SimpleNamespace(Name="Opening001")
         session = SimpleNamespace(
             hovered_opening=None,
-            _is_selected_plan_target=lambda kind, obj=None: False,
+            selection=SimpleNamespace(is_selected_plan_target=lambda kind, obj=None: False),
             overlays=SimpleNamespace(
                 sync_selected_wall_opening_context_overlay=lambda: calls.append("context"),
                 sync_hovered_opening_overlay=lambda: calls.append("hover"),

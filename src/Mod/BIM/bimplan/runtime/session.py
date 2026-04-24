@@ -264,68 +264,6 @@ class PlanEditSession:
                 pass
         self._teardown_signal_sources = []
 
-    def _set_selected_target_for_kind(self, kind, obj):
-        return self.selection.set_selected_target_for_kind(kind, obj)
-
-    def _get_selected_plan_target_state(self):
-        return self.selection.get_selected_plan_target_state()
-
-    def _set_selected_plan_target_state(self, kind=None, obj=None):
-        return self.selection.set_selected_plan_target_state(kind=kind, obj=obj)
-
-    def _is_selected_plan_target(self, kind, obj=None):
-        return self.selection.is_selected_plan_target(kind, obj=obj)
-
-    def _clear_selected_plan_target_if_matches(self, kind, obj):
-        return self.selection.clear_selected_plan_target_if_matches(kind, obj)
-
-    def _selected_plan_target_changed(self, previous_kind, previous_obj, kind=None):
-        return self.selection.selected_plan_target_changed(
-            previous_kind,
-            previous_obj,
-            kind=kind,
-        )
-
-    @property
-    def selected_wall(self):
-        return self.selection.get_selected_target_for_kind("wall")
-
-    @selected_wall.setter
-    def selected_wall(self, wall):
-        self._set_selected_target_for_kind("wall", wall)
-
-    @property
-    def selected_opening(self):
-        return self.selection.get_selected_target_for_kind("opening")
-
-    @selected_opening.setter
-    def selected_opening(self, opening):
-        self._set_selected_target_for_kind("opening", opening)
-
-    @property
-    def selected_symbol(self):
-        return self.selection.get_selected_target_for_kind("symbol")
-
-    @selected_symbol.setter
-    def selected_symbol(self, symbol):
-        self._set_selected_target_for_kind("symbol", symbol)
-
-    @property
-    def selected_region(self):
-        return self.selection.get_selected_target_for_kind("region")
-
-    @selected_region.setter
-    def selected_region(self, region):
-        self._set_selected_target_for_kind("region", region)
-
-    @property
-    def selected_space(self):
-        return self.selection.get_selected_target_for_kind("space")
-
-    @selected_space.setter
-    def selected_space(self, space):
-        self._set_selected_target_for_kind("space", space)
-
     def _get_plan_overlay_geometry_kinds_for_object(self, obj):
         return overlay_geometry.get_plan_overlay_geometry_kinds_for_object(self, obj)
 
@@ -355,12 +293,13 @@ class PlanEditSession:
 
     def _sanitize_plan_target_references(self):
         changed = False
+        for kind in ("wall", "opening", "symbol", "region", "space"):
+            obj = self.selection.get_selected_target_for_kind(kind)
+            if obj is None or self.visibility.is_live_document_object(obj):
+                continue
+            self.selection.set_selected_target_for_kind(kind, None)
+            changed = True
         for attr in (
-            "selected_wall",
-            "selected_opening",
-            "selected_symbol",
-            "selected_region",
-            "selected_space",
             "hovered_wall",
             "hovered_opening",
             "hovered_symbol",
@@ -514,7 +453,7 @@ class PlanEditSession:
         self._saved_view_action_state = {}
         self._saved_preselection_state = None
         self._plan_preselection_forced = False
-        self._set_selected_plan_target_state()
+        self.selection.set_selected_plan_target_state()
         self._provider_selected_objects = []
         self._provider_point_host_target = None
         self._provider_point_host_source = ""
