@@ -51,10 +51,10 @@ def activate_join_tool(session):
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.providers.cancel_provider_point_tool(refresh=False)
 
-    if session._has_active_embedded_tool():
-        session._cancel_embedded_tool()
+    if session.lifecycle.has_active_embedded_tool():
+        session.lifecycle.cancel_embedded_tool()
     session.wall_edit.cancel_wall_edit()
-    session._cancel_pending_edit()
+    session.lifecycle.cancel_pending_edit()
     session._clear_plan_relation_status()
     session.overlays.clear_wall_grips()
     session.overlays.clear_selected_wall_overlay()

@@ -52,7 +52,7 @@ def arm_provider_point_tool(session):
         snapper.setSelectMode(False)
     except Exception:
         pass
-    session._set_draft_point_focus_suppressed(True)
+    session.lifecycle.set_draft_point_focus_suppressed(True)
     try:
         snapper.getPoint(
             callback=session.providers.handle_provider_point_tool_point,
@@ -61,7 +61,7 @@ def arm_provider_point_tool(session):
             noTracker=True,
         )
     except Exception:
-        session._set_draft_point_focus_suppressed(False)
+        session.lifecycle.set_draft_point_focus_suppressed(False)
         return False
     session.viewport.queue_focus_plan_view()
     return True
@@ -71,7 +71,7 @@ def cancel_provider_point_tool(session, refresh=True):
     if not session.providers.has_active_provider_point_tool():
         session.overlays.clear_provider_point_preview()
         return False
-    session._stop_snapper()
+    session.lifecycle.stop_snapper()
     session._provider_point_tool = None
     session._provider_point_host_target = None
     session._provider_point_host_source = ""
@@ -97,10 +97,10 @@ def start_plan_provider_point_tool(session, tool):
         session.spaces.cancel_space_text_position_pick()
     if session.current_tool in ("Move Symbol", "Rotate Symbol"):
         session.symbols.cancel_symbol_handle_point_pick()
-    if session._has_active_embedded_tool():
-        session._cancel_embedded_tool()
+    if session.lifecycle.has_active_embedded_tool():
+        session.lifecycle.cancel_embedded_tool()
     session.wall_edit.cancel_wall_edit(refresh=False)
-    session._cancel_pending_edit()
+    session.lifecycle.cancel_pending_edit()
     session._clear_plan_relation_status()
     session._set_hovered_wall(None)
     session._set_hovered_opening(None)

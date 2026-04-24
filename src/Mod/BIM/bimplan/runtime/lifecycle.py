@@ -17,6 +17,38 @@ from bimplan.tools.hosted_openings import _PlanEditCommandHost, _PlanEditWallHos
 translate = FreeCAD.Qt.translate
 
 
+def _bind_lifecycle_call(func):
+    def method(self, *args, **kwargs):
+        return func(self.session, *args, **kwargs)
+
+    return method
+
+
+_PLAN_LIFECYCLE_API_BOUND_METHODS = (
+    "on_embedded_command_started",
+    "on_embedded_command_finished",
+    "start_embedded_tool",
+    "cancel_pending_edit",
+    "stop_snapper",
+    "set_draft_point_focus_suppressed",
+    "has_active_embedded_tool",
+    "cancel_embedded_tool",
+)
+
+
+class PlanLifecycleAPI:
+    """Owned session surface for Plan Edit lifecycle helpers."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+
 def clear_hover_visuals(
     session,
     kinds=None,
@@ -223,22 +255,22 @@ _ACTION_CANCEL_PROVIDER_POINT_TOOL_AND_RETURN = ActivationActionSpec(
     predicate_name="providers.has_active_provider_point_tool",
     stop_after=True,
 )
-_ACTION_CANCEL_EMBEDDED_TOOL_ALWAYS = ActivationActionSpec("_cancel_embedded_tool")
+_ACTION_CANCEL_EMBEDDED_TOOL_ALWAYS = ActivationActionSpec("lifecycle.cancel_embedded_tool")
 _ACTION_CANCEL_EMBEDDED_TOOL_AND_RETURN = ActivationActionSpec(
-    "_cancel_embedded_tool",
-    predicate_name="_has_active_embedded_tool",
+    "lifecycle.cancel_embedded_tool",
+    predicate_name="lifecycle.has_active_embedded_tool",
     stop_after=True,
 )
 _ACTION_CANCEL_EMBEDDED_TOOL = ActivationActionSpec(
-    "_cancel_embedded_tool",
-    predicate_name="_has_active_embedded_tool",
+    "lifecycle.cancel_embedded_tool",
+    predicate_name="lifecycle.has_active_embedded_tool",
 )
 _ACTION_CANCEL_SYMBOL_HANDLE_PICK_AND_RETURN = ActivationActionSpec(
     "symbols.cancel_symbol_handle_point_pick",
     current_tools=("Move Symbol", "Rotate Symbol"),
     stop_after=True,
 )
-_ACTION_CANCEL_PENDING_EDIT = ActivationActionSpec("_cancel_pending_edit")
+_ACTION_CANCEL_PENDING_EDIT = ActivationActionSpec("lifecycle.cancel_pending_edit")
 _ACTION_CANCEL_WALL_EDIT = ActivationActionSpec("wall_edit.cancel_wall_edit")
 _ACTION_CANCEL_WALL_EDIT_AND_RETURN = ActivationActionSpec(
     "wall_edit.cancel_wall_edit",
@@ -416,7 +448,7 @@ def _start_move_tool(session, context):
     del context
     from draftguitools import gui_move
 
-    return session._start_embedded_tool("Move", gui_move.Move())
+    return session.lifecycle.start_embedded_tool("Move", gui_move.Move())
 
 
 _WINDOW_TOOL_ACTIVATION_PROFILE = ToolActivationProfile(
@@ -795,7 +827,7 @@ def cancel_pending_edit(session):
         _reset_pending_edit_state(session)
         session._clear_plan_relation_status()
         return
-    session._stop_snapper()
+    stop_snapper(session)
     session._pop_opening_move_snap_profile()
     FreeCAD.activeDraftCommand = None
     _reset_pending_edit_state(session, clear_opening_edit=True)
@@ -825,3 +857,52 @@ def cancel_embedded_tool(session, tool_name=None):
             tool.finish(cont=False)
         except Exception:
             pass
+
+
+def stop_snapper(session):
+    del session
+    snapper = getattr(FreeCADGui, "Snapper", None)
+    if not snapper:
+        return
+    toolbar = getattr(FreeCADGui, "draftToolBar", None)
+    if toolbar and hasattr(toolbar, "setPointFocusSuppressed"):
+        try:
+            toolbar.setPointFocusSuppressed(False)
+        except Exception:
+            pass
+    elif toolbar and hasattr(toolbar, "suppress_point_focus"):
+        try:
+            toolbar.suppress_point_focus = False
+        except Exception:
+            pass
+    try:
+        snapper.getPoint()
+        snapper.off()
+    except Exception:
+        pass
+
+
+def set_draft_point_focus_suppressed(session, suppressed):
+    del session
+    toolbar = getattr(FreeCADGui, "draftToolBar", None)
+    if not toolbar:
+        return
+    if hasattr(toolbar, "setPointFocusSuppressed"):
+        try:
+            toolbar.setPointFocusSuppressed(bool(suppressed))
+        except Exception:
+            pass
+        return
+    if hasattr(toolbar, "suppress_point_focus"):
+        try:
+            toolbar.suppress_point_focus = bool(suppressed)
+        except Exception:
+            pass
+
+
+def has_active_embedded_tool(session):
+    return session._embedded_tool is not None
+
+
+for _method_name in _PLAN_LIFECYCLE_API_BOUND_METHODS:
+    setattr(PlanLifecycleAPI, _method_name, _bind_lifecycle_call(globals()[_method_name]))

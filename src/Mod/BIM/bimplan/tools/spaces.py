@@ -97,7 +97,7 @@ def prepare_plan_region_tool_state(session, parent_space=None):
 def _cancel_snap_tool(session, *, is_active, clear_preview, reset_state, sync_kinds, refresh=True):
     if not is_active():
         return False
-    session._stop_snapper()
+    session.lifecycle.stop_snapper()
     clear_preview()
     reset_state()
     FreeCAD.activeDraftCommand = None
@@ -1454,7 +1454,7 @@ def start_space_text_position_pick(session):
     session.overlays.sync_secondary_selected_overlays()
     session._refresh_task_panel_status()
     FreeCAD.activeDraftCommand = session
-    session._set_draft_point_focus_suppressed(True)
+    session.lifecycle.set_draft_point_focus_suppressed(True)
     FreeCADGui.Snapper.getPoint(
         callback=session.spaces.finish_space_text_position_pick,
         last=session._get_space_reference_point(space),
@@ -1470,7 +1470,7 @@ def finish_space_text_position_pick(session, point=None, obj=None):
     space = session._edit_space
     reset_space_text_pick_state(session)
     FreeCAD.activeDraftCommand = None
-    session._set_draft_point_focus_suppressed(False)
+    session.lifecycle.set_draft_point_focus_suppressed(False)
 
     if point is None or not session._is_plan_space_object(space):
         session.current_tool = "Select"
@@ -1498,9 +1498,9 @@ def finish_space_text_position_pick(session, point=None, obj=None):
 def cancel_space_text_position_pick(session):
     space = session._edit_space or plan_selection.get_selected_plan_target_object(session, "space")
     reset_space_text_pick_state(session)
-    session._stop_snapper()
+    session.lifecycle.stop_snapper()
     FreeCAD.activeDraftCommand = None
-    session._set_draft_point_focus_suppressed(False)
+    session.lifecycle.set_draft_point_focus_suppressed(False)
     session.current_tool = "Select"
     if space:
         session._set_selected_plan_target("space", space, pending_restore=True)
