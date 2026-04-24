@@ -547,35 +547,35 @@ def _get_selected_space_boundary_links(session, fallback_space=None):
     return session.spaces.get_selected_space_boundary_links(fallback_space=fallback_space)
 
 
-def _resolve_space_creation_request(session, targets=None):
-    targets = tuple(
+def _get_space_selection_targets(session, targets=None):
+    return tuple(
         targets if targets is not None else plan_selection.get_selected_plan_targets(session)
     )
-    if not targets:
-        return None
 
-    selection_shape = _resolve_space_selection_shape(targets)
-    if selection_shape.mode == _SPACE_SELECTION_WALL_BOUNDARIES:
-        return SpaceCreationRequest(
-            targets=selection_shape.targets,
-            mode=selection_shape.mode,
-            wall_targets=selection_shape.wall_targets,
-            boundaries=tuple(_get_selected_space_boundary_links(session)),
-        )
 
-    if selection_shape.mode not in (
-        _SPACE_SELECTION_SEEDED_REGION,
-        _SPACE_SELECTION_SINGLE_SPACE,
-    ):
-        return None
-
-    region_seed_space = selection_shape.region_seed_space
-    boundaries = tuple(
-        _get_selected_space_boundary_links(session, fallback_space=region_seed_space)
+def _build_wall_boundary_space_creation_request(session, selection_shape):
+    return SpaceCreationRequest(
+        targets=selection_shape.targets,
+        mode=selection_shape.mode,
+        wall_targets=selection_shape.wall_targets,
+        boundaries=tuple(_get_selected_space_boundary_links(session)),
     )
+
+
+def _get_seed_space_boundary_links(session, selection_shape):
+    return tuple(
+        _get_selected_space_boundary_links(
+            session,
+            fallback_space=selection_shape.region_seed_space,
+        )
+    )
+
+
+def _build_seeded_region_space_creation_request(session, selection_shape):
+    boundaries = _get_seed_space_boundary_links(session, selection_shape)
     if selection_shape.mode == _SPACE_SELECTION_SINGLE_SPACE and not boundaries:
         return None
-
+    region_seed_space = selection_shape.region_seed_space
     return SpaceCreationRequest(
         targets=selection_shape.targets,
         mode=_SPACE_SELECTION_SEEDED_REGION,
@@ -586,19 +586,31 @@ def _resolve_space_creation_request(session, targets=None):
     )
 
 
+def _resolve_space_creation_request(session, targets=None):
+    targets = _get_space_selection_targets(session, targets=targets)
+    if not targets:
+        return None
+
+    selection_shape = _resolve_space_selection_shape(targets)
+    if selection_shape.mode == _SPACE_SELECTION_WALL_BOUNDARIES:
+        return _build_wall_boundary_space_creation_request(session, selection_shape)
+
+    if selection_shape.mode not in (
+        _SPACE_SELECTION_SEEDED_REGION,
+        _SPACE_SELECTION_SINGLE_SPACE,
+    ):
+        return None
+    return _build_seeded_region_space_creation_request(session, selection_shape)
+
+
 def get_space_region_seed_targets(session, targets=None):
-    targets = tuple(
-        targets if targets is not None else plan_selection.get_selected_plan_targets(session)
-    )
+    targets = _get_space_selection_targets(session, targets=targets)
     selection_shape = _resolve_space_selection_shape(targets)
     if selection_shape.mode == _SPACE_SELECTION_SEEDED_REGION:
         return (selection_shape.region_seed_space, list(selection_shape.wall_targets))
     if selection_shape.mode != _SPACE_SELECTION_SINGLE_SPACE:
         return (None, [])
-    boundary_links = _get_selected_space_boundary_links(
-        session,
-        fallback_space=selection_shape.region_seed_space,
-    )
+    boundary_links = _get_seed_space_boundary_links(session, selection_shape)
     if boundary_links:
         return (selection_shape.region_seed_space, [])
     return (None, [])
