@@ -71,7 +71,10 @@ def on_mouse_pressed(session, event_callback):
                             pos = event.getPosition().getValue()
                             candidate = session._pick_space_region_candidate((pos[0], pos[1]))
                             if candidate:
-                                session._activate_space_region_candidate(candidate, event_callback)
+                                session.spaces.activate_space_region_candidate(
+                                    candidate,
+                                    event_callback,
+                                )
                             return
                         if session.current_tool != "Select":
                             return
@@ -235,18 +238,18 @@ def on_key_pressed(session, event_callback):
         session._cancel_join_tool()
         return
     if session.current_tool == "Pick Space Region" and key == coin.SoKeyboardEvent.ESCAPE:
-        session._cancel_space_region_pick()
+        session.spaces.cancel_space_region_pick()
         return
     if session.current_tool == "Region" and key in (
         coin.SoKeyboardEvent.RETURN,
         coin.SoKeyboardEvent.ENTER,
     ):
-        if session._finalize_plan_region():
+        if session.spaces.finalize_plan_region():
             if hasattr(event_callback, "setHandled"):
                 event_callback.setHandled()
         return
     if session.current_tool == "Region" and key == coin.SoKeyboardEvent.ESCAPE:
-        session._cancel_plan_region_tool()
+        session.spaces.cancel_plan_region_tool()
         return
     if session.current_tool == "Provider Point" and key == coin.SoKeyboardEvent.ESCAPE:
         session.providers.cancel_provider_point_tool()
@@ -290,7 +293,7 @@ def on_key_pressed(session, event_callback):
         session.symbols.cancel_symbol_handle_point_pick()
         return
     if session.current_tool == "Set Space Text":
-        session._cancel_space_text_position_pick()
+        session.spaces.cancel_space_text_position_pick()
         return
     if session.providers.has_active_provider_point_tool():
         session.providers.cancel_provider_point_tool()
@@ -301,8 +304,8 @@ def on_key_pressed(session, event_callback):
     if session._has_active_rect_wall_tool():
         session._cancel_rect_wall_tool()
         return
-    if session._has_active_plan_region_tool():
-        session._cancel_plan_region_tool()
+    if session.spaces.has_active_plan_region_tool():
+        session.spaces.cancel_plan_region_tool()
         return
-    if session._has_active_space_separator_tool():
-        session._cancel_space_separator_tool()
+    if session.spaces.has_active_space_separator_tool():
+        session.spaces.cancel_space_separator_tool()

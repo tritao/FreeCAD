@@ -2929,13 +2929,13 @@ class PlanEditControlsWidget:
     def on_space_label_edited(self):
         if self._refreshing_space_editor or self.space_label_edit is None:
             return
-        self.session._set_selected_space_label(self.space_label_edit.text())
+        self.session.spaces.set_selected_space_label(self.space_label_edit.text())
 
     def on_space_type_changed(self, index):
         if self._refreshing_space_editor or self.space_type_combo is None or index < 0:
             return
         value = self.space_type_combo.itemData(index) or self.space_type_combo.itemText(index)
-        self.session._set_selected_space_type(value)
+        self.session.spaces.set_selected_space_type(value)
 
     def on_space_type_completion_activated(self, value):
         if self._refreshing_space_editor or self.space_type_combo is None:
@@ -2951,38 +2951,38 @@ class PlanEditControlsWidget:
         self._commit_space_type_combo_text(line_edit.text())
 
     def on_space_add_clicked(self):
-        self.session._add_boundaries_to_selected_space()
+        self.session.spaces.add_boundaries_to_selected_space()
 
     def on_space_remove_clicked(self):
         if self.space_boundary_list is None:
             return
         rows = sorted({index.row() for index in self.space_boundary_list.selectedIndexes()})
-        self.session._remove_selected_space_boundaries(rows)
+        self.session.spaces.remove_selected_space_boundaries(rows)
 
     def on_space_text_clicked(self):
-        self.session._start_space_text_position_pick()
+        self.session.spaces.start_space_text_position_pick()
 
     def on_region_label_edited(self):
         if self._refreshing_region_editor or self.region_label_edit is None:
             return
-        self.session._set_selected_region_label(self.region_label_edit.text())
+        self.session.spaces.set_selected_region_label(self.region_label_edit.text())
 
     def on_region_scheme_edited(self):
         if self._refreshing_region_editor or self.region_scheme_edit is None:
             return
-        self.session._set_selected_region_scheme(self.region_scheme_edit.text())
+        self.session.spaces.set_selected_region_scheme(self.region_scheme_edit.text())
 
     def on_region_type_edited(self):
         if self._refreshing_region_editor or self.region_type_edit is None:
             return
-        self.session._set_selected_region_type(self.region_type_edit.text())
+        self.session.spaces.set_selected_region_type(self.region_type_edit.text())
 
     def on_region_parent_space_changed(self, index):
         if self._refreshing_region_editor or self.region_parent_space_combo is None:
             return
         if index < 0 or index >= len(self._region_parent_space_items):
             return
-        self.session._set_selected_region_parent_space(self._region_parent_space_items[index])
+        self.session.spaces.set_selected_region_parent_space(self._region_parent_space_items[index])
 
     def on_window_preset_selection_changed(self, index):
         del index

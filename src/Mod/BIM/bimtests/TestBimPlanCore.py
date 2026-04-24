@@ -1140,9 +1140,7 @@ class TestBimPlanCore(unittest.TestCase):
         parent_space = SimpleNamespace(Name="Space001")
         session = SimpleNamespace(
             current_tool="Select",
-            _cancel_space_region_pick=lambda refresh=False: None,
             _cancel_rect_wall_tool=lambda refresh=False: None,
-            _cancel_space_separator_tool=lambda refresh=False: None,
             _cancel_provider_point_tool=lambda refresh=False: None,
             _has_active_embedded_tool=lambda: False,
             _cancel_embedded_tool=lambda: None,
@@ -1151,11 +1149,15 @@ class TestBimPlanCore(unittest.TestCase):
             _set_selected_plan_target=lambda *args, **kwargs: None,
             _clear_hovered_plan_targets=lambda *args, **kwargs: None,
             _get_selected_plan_target_object=lambda kind: parent_space if kind == "space" else None,
-            _handle_plan_region_point=lambda *args, **kwargs: None,
-            _update_plan_region_preview=lambda *args, **kwargs: None,
             _refresh_task_panel_status=lambda: None,
             windows=SimpleNamespace(cancel_window_tool=lambda refresh=False: None),
             wall_edit=SimpleNamespace(cancel_wall_edit=lambda restore=True, refresh=True: None),
+            spaces=SimpleNamespace(
+                cancel_space_region_pick=lambda refresh=False: None,
+                cancel_space_separator_tool=lambda refresh=False: None,
+                handle_plan_region_point=lambda *args, **kwargs: None,
+                update_plan_region_preview=lambda *args, **kwargs: None,
+            ),
         )
 
         with patch(
@@ -1170,8 +1172,6 @@ class TestBimPlanCore(unittest.TestCase):
     def test_activate_space_separator_tool_uses_shared_space_setup(self):
         session = SimpleNamespace(
             current_tool="Select",
-            _cancel_space_region_pick=lambda refresh=False: None,
-            _cancel_plan_region_tool=lambda refresh=False: None,
             _cancel_rect_wall_tool=lambda refresh=False: None,
             _cancel_provider_point_tool=lambda refresh=False: None,
             _has_active_embedded_tool=lambda: False,
@@ -1180,10 +1180,14 @@ class TestBimPlanCore(unittest.TestCase):
             _clear_plan_relation_status=lambda: None,
             _set_selected_plan_target=lambda *args, **kwargs: None,
             _get_wall_defaults=lambda: {"height": 2500},
-            _handle_space_separator_point=lambda *args, **kwargs: None,
             _refresh_task_panel_status=lambda: None,
             windows=SimpleNamespace(cancel_window_tool=lambda refresh=False: None),
             wall_edit=SimpleNamespace(cancel_wall_edit=lambda restore=True, refresh=True: None),
+            spaces=SimpleNamespace(
+                cancel_space_region_pick=lambda refresh=False: None,
+                cancel_plan_region_tool=lambda refresh=False: None,
+                handle_space_separator_point=lambda *args, **kwargs: None,
+            ),
         )
 
         with patch(
@@ -1214,15 +1218,16 @@ class TestBimPlanCore(unittest.TestCase):
             _get_selected_space_boundary_links=lambda fallback_space=None: (
                 boundaries if fallback_space is None else []
             ),
-            _space_has_valid_geometry=lambda space: True,
-            _report_space_creation_failure=lambda space: events.append(("report-failure", space))
-            or False,
             visibility=SimpleNamespace(
                 add_object_to_active_storey=lambda space: events.append(("add-storey", space)),
                 register_plan_object=lambda space: events.append(("register", space)),
             ),
             spaces=SimpleNamespace(
-                restore_selected_space=lambda space: events.append(("restore", space))
+                restore_selected_space=lambda space: events.append(("restore", space)),
+                space_has_valid_geometry=lambda space: True,
+                report_space_creation_failure=lambda space: (
+                    events.append(("report-failure", space)) or False
+                ),
             ),
         )
         arch_module = SimpleNamespace(
@@ -1259,14 +1264,14 @@ class TestBimPlanCore(unittest.TestCase):
             _space_region_candidates=[],
             _hovered_space_region_candidate=None,
             _space_region_pick_seed_space=None,
-            _create_space_from_region_candidate=lambda *args, **kwargs: (
-                calls.append(("create", args, kwargs)) or created_space
-            ),
             _register_plan_object=lambda space: calls.append(("register", space)),
             _clear_hovered_plan_targets=lambda **kwargs: calls.append(("clear-hovered", kwargs)),
             _refresh_primary_selected_plan_target=lambda: calls.append("refresh-primary"),
             spaces=SimpleNamespace(
-                restore_selected_space=lambda space: calls.append(("restore", space))
+                restore_selected_space=lambda space: calls.append(("restore", space)),
+                create_space_from_region_candidate=lambda *args, **kwargs: (
+                    calls.append(("create", args, kwargs)) or created_space
+                ),
             ),
             overlays=SimpleNamespace(
                 clear_space_region_pick_overlays=lambda: calls.append("clear-pick-overlays"),
@@ -1430,7 +1435,6 @@ class TestBimPlanCore(unittest.TestCase):
             _clear_input_hints=lambda: calls.append("hints"),
             _cancel_embedded_tool=lambda: calls.append("embedded"),
             _cancel_rect_wall_tool=lambda refresh=True: calls.append(("rect-wall", refresh)),
-            _cancel_plan_region_tool=lambda refresh=True: calls.append(("plan-region", refresh)),
             _cancel_provider_point_tool=lambda refresh=True: calls.append(
                 ("provider-point", refresh)
             ),
@@ -1442,6 +1446,9 @@ class TestBimPlanCore(unittest.TestCase):
                 cancel_wall_edit=lambda restore=True, refresh=True: calls.append(
                     ("wall-edit", restore, refresh)
                 )
+            ),
+            spaces=SimpleNamespace(
+                cancel_plan_region_tool=lambda refresh=True: calls.append(("plan-region", refresh))
             ),
         )
 
@@ -1505,11 +1512,11 @@ class TestBimPlanCore(unittest.TestCase):
             _clear_input_hints=lambda: None,
             _cancel_embedded_tool=lambda: None,
             _cancel_rect_wall_tool=lambda refresh=True: None,
-            _cancel_plan_region_tool=lambda refresh=True: None,
             _cancel_provider_point_tool=lambda refresh=True: None,
             _cancel_pending_edit=lambda: None,
             windows=SimpleNamespace(cancel_window_tool=lambda refresh=True: None),
             wall_edit=SimpleNamespace(cancel_wall_edit=lambda restore=True, refresh=True: None),
+            spaces=SimpleNamespace(cancel_plan_region_tool=lambda refresh=True: None),
         )
 
         with patch("bimplan.lifecycle.plan_command_gate.uninstall"), patch(
@@ -1537,11 +1544,11 @@ class TestBimPlanCore(unittest.TestCase):
             _clear_input_hints=lambda: None,
             _cancel_embedded_tool=lambda: None,
             _cancel_rect_wall_tool=lambda refresh=True: None,
-            _cancel_plan_region_tool=lambda refresh=True: None,
             _cancel_provider_point_tool=lambda refresh=True: None,
             _cancel_pending_edit=lambda: None,
             windows=SimpleNamespace(cancel_window_tool=lambda refresh=True: None),
             wall_edit=SimpleNamespace(cancel_wall_edit=lambda restore=True, refresh=True: None),
+            spaces=SimpleNamespace(cancel_plan_region_tool=lambda refresh=True: None),
         )
 
         with patch("bimplan.lifecycle.plan_command_gate.uninstall"), patch(
@@ -1573,7 +1580,6 @@ class TestBimPlanCore(unittest.TestCase):
             _clear_input_hints=lambda: calls.append("hints"),
             _cancel_embedded_tool=lambda: calls.append("embedded"),
             _cancel_rect_wall_tool=lambda refresh=True: calls.append(("rect-wall", refresh)),
-            _cancel_space_separator_tool=lambda refresh=True: calls.append(("separator", refresh)),
             _cancel_pending_edit=lambda: calls.append("pending"),
             symbols=SimpleNamespace(
                 cancel_symbol_handle_point_pick=lambda: calls.append("symbol-handle")
@@ -1583,6 +1589,11 @@ class TestBimPlanCore(unittest.TestCase):
             wall_edit=SimpleNamespace(
                 cancel_wall_edit=lambda restore=True, refresh=True: calls.append(
                     ("wall-edit", restore, refresh)
+                )
+            ),
+            spaces=SimpleNamespace(
+                cancel_space_separator_tool=lambda refresh=True: calls.append(
+                    ("separator", refresh)
                 )
             ),
         )
@@ -1650,7 +1661,6 @@ class TestBimPlanCore(unittest.TestCase):
             _clear_input_hints=lambda: calls.append("hints"),
             _cancel_embedded_tool=lambda: calls.append("embedded"),
             _cancel_rect_wall_tool=lambda refresh=True: calls.append(("rect-wall", refresh)),
-            _cancel_space_separator_tool=lambda refresh=True: calls.append(("separator", refresh)),
             _cancel_pending_edit=lambda: calls.append("pending"),
             symbols=SimpleNamespace(
                 cancel_symbol_handle_point_pick=lambda: calls.append("symbol-handle")
@@ -1659,6 +1669,11 @@ class TestBimPlanCore(unittest.TestCase):
             wall_edit=SimpleNamespace(
                 cancel_wall_edit=lambda restore=True, refresh=True: calls.append(
                     ("wall-edit", restore, refresh)
+                )
+            ),
+            spaces=SimpleNamespace(
+                cancel_space_separator_tool=lambda refresh=True: calls.append(
+                    ("separator", refresh)
                 )
             ),
         )
@@ -1784,23 +1799,25 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             current_tool="Move Symbol",
             symbols=SimpleNamespace(cancel_symbol_handle_point_pick=lambda: calls.append("symbol")),
-            _cancel_space_region_pick=lambda: calls.append("space-region"),
             _has_active_provider_point_tool=lambda: True,
             _cancel_provider_point_tool=lambda: calls.append("provider-point"),
             _has_active_embedded_tool=lambda: True,
             _cancel_embedded_tool=lambda: calls.append("embedded"),
             _has_active_rect_wall_tool=lambda: True,
             _cancel_rect_wall_tool=lambda: calls.append("rect-wall"),
-            _has_active_plan_region_tool=lambda: True,
-            _cancel_plan_region_tool=lambda: calls.append("plan-region"),
-            _has_active_space_separator_tool=lambda: True,
-            _cancel_space_separator_tool=lambda: calls.append("separator"),
             _cancel_join_tool=lambda: calls.append("join"),
             windows=SimpleNamespace(
                 has_active_window_tool=lambda: True,
                 cancel_window_tool=lambda: calls.append("window"),
             ),
             wall_edit=SimpleNamespace(cancel_wall_edit=lambda: calls.append("wall-edit")),
+            spaces=SimpleNamespace(
+                cancel_space_region_pick=lambda: calls.append("space-region"),
+                has_active_plan_region_tool=lambda: True,
+                cancel_plan_region_tool=lambda: calls.append("plan-region"),
+                has_active_space_separator_tool=lambda: True,
+                cancel_space_separator_tool=lambda: calls.append("separator"),
+            ),
         )
 
         activate_select_tool(session)
@@ -1812,23 +1829,25 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             current_tool="Select",
             symbols=SimpleNamespace(cancel_symbol_handle_point_pick=lambda: calls.append("symbol")),
-            _cancel_space_region_pick=lambda: calls.append("space-region"),
             _has_active_provider_point_tool=lambda: False,
             _cancel_provider_point_tool=lambda: calls.append("provider-point"),
             _has_active_embedded_tool=lambda: True,
             _cancel_embedded_tool=lambda: calls.append("embedded"),
             _has_active_rect_wall_tool=lambda: True,
             _cancel_rect_wall_tool=lambda: calls.append("rect-wall"),
-            _has_active_plan_region_tool=lambda: True,
-            _cancel_plan_region_tool=lambda: calls.append("plan-region"),
-            _has_active_space_separator_tool=lambda: True,
-            _cancel_space_separator_tool=lambda: calls.append("separator"),
             _cancel_join_tool=lambda: calls.append("join"),
             windows=SimpleNamespace(
                 has_active_window_tool=lambda: False,
                 cancel_window_tool=lambda: calls.append("window"),
             ),
             wall_edit=SimpleNamespace(cancel_wall_edit=lambda: calls.append("wall-edit")),
+            spaces=SimpleNamespace(
+                cancel_space_region_pick=lambda: calls.append("space-region"),
+                has_active_plan_region_tool=lambda: True,
+                cancel_plan_region_tool=lambda: calls.append("plan-region"),
+                has_active_space_separator_tool=lambda: True,
+                cancel_space_separator_tool=lambda: calls.append("separator"),
+            ),
         )
 
         activate_select_tool(session)

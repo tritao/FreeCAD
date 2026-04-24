@@ -89,12 +89,12 @@ def start_plan_provider_point_tool(session, tool):
         return False
     if session._plan_provider_integrations_disabled():
         return False
-    session._cancel_space_region_pick(refresh=False)
-    session._cancel_plan_region_tool(refresh=False)
+    session.spaces.cancel_space_region_pick(refresh=False)
+    session.spaces.cancel_plan_region_tool(refresh=False)
     session._cancel_rect_wall_tool(refresh=False)
-    session._cancel_space_separator_tool(refresh=False)
+    session.spaces.cancel_space_separator_tool(refresh=False)
     if session.current_tool == "Set Space Text":
-        session._cancel_space_text_position_pick()
+        session.spaces.cancel_space_text_position_pick()
     if session.current_tool in ("Move Symbol", "Rotate Symbol"):
         session.symbols.cancel_symbol_handle_point_pick()
     if session._has_active_embedded_tool():
