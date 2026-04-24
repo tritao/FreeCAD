@@ -973,7 +973,7 @@ def pick_space_region_candidate(session, mouse_pos, radius_px=10):
     if session.current_tool != "Pick Space Region" or not session._space_region_candidates:
         return None
 
-    point = session._get_plan_point_from_mouse_pos(mouse_pos)
+    point = session.viewport.get_plan_point_from_mouse_pos(mouse_pos)
     if point is not None:
         for candidate in session._space_region_candidates:
             face = candidate.get("face")

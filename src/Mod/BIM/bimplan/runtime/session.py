@@ -918,32 +918,6 @@ class PlanEditSession:
 
     _set_hovered_region = _make_set_hovered_target_method("set_hovered_region")
 
-    def _get_plan_point_from_mouse_pos(self, mouse_pos):
-        if not self.view or not mouse_pos:
-            return None
-        get_point = self._get_runtime_attr(self.view, "getPoint")
-        if get_point is None:
-            return None
-        try:
-            point = get_point(int(mouse_pos[0]), int(mouse_pos[1]))
-        except TypeError:
-            try:
-                point = get_point((int(mouse_pos[0]), int(mouse_pos[1])))
-            except Exception:
-                return None
-        except Exception:
-            return None
-        return self.viewport.project_plan_point(point)
-
-    def _pick_space_region_candidate(self, mouse_pos, radius_px=10):
-        return self.spaces.pick_space_region_candidate(mouse_pos, radius_px=radius_px)
-
-    def _set_hovered_space_region_candidate(self, candidate):
-        return self.spaces.set_hovered_space_region_candidate(candidate)
-
-    def _create_space_region_base_object(self, candidate):
-        return self.spaces.create_space_region_base_object(candidate)
-
     def _copy_placement(self, placement):
         if placement is None:
             return FreeCAD.Placement()
