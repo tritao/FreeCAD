@@ -1633,20 +1633,12 @@ def remove_selected_space_boundaries(session, row_indexes=None):
 
 
 def start_space_text_position_pick(session):
-    space = plan_selection.get_selected_plan_target_object(session, "space")
+    space = _get_selected_space_text_target(session)
     if not session.selection.is_plan_space_object(space):
         return False
     import FreeCADGui
 
-    session.current_tool = "Set Space Text"
-    set_space_text_pick_state(session, space)
-    session.selection.clear_hovered_plan_targets(
-        kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS
-    )
-    session.overlays.sync_secondary_selected_overlays()
-    session.task_panels.refresh_task_panel_status()
-    FreeCAD.activeDraftCommand = session
-    session.lifecycle.set_draft_point_focus_suppressed(True)
+    _begin_space_text_position_pick(session, space)
     FreeCADGui.Snapper.getPoint(
         callback=session.spaces.finish_space_text_position_pick,
         last=session.spaces.get_space_reference_point(space),
@@ -1657,18 +1649,29 @@ def start_space_text_position_pick(session):
     return True
 
 
-def finish_space_text_position_pick(session, point=None, obj=None):
-    del obj
-    space = session._edit_space
+def _get_selected_space_text_target(session):
+    return plan_selection.get_selected_plan_target_object(session, "space")
+
+
+def _begin_space_text_position_pick(session, space):
+    session.current_tool = "Set Space Text"
+    set_space_text_pick_state(session, space)
+    session.selection.clear_hovered_plan_targets(
+        kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS
+    )
+    session.overlays.sync_secondary_selected_overlays()
+    session.task_panels.refresh_task_panel_status()
+    FreeCAD.activeDraftCommand = session
+    session.lifecycle.set_draft_point_focus_suppressed(True)
+
+
+def _end_space_text_position_pick(session):
     reset_space_text_pick_state(session)
     FreeCAD.activeDraftCommand = None
     session.lifecycle.set_draft_point_focus_suppressed(False)
 
-    if point is None or not session.selection.is_plan_space_object(space):
-        session.current_tool = "Select"
-        session.task_panels.refresh_task_panel_status()
-        return
 
+def _apply_space_text_position(session, space, point):
     point = session.viewport.project_plan_point(point)
     try:
         session.doc.openTransaction(translate("BIM_PlanEdit", "Set Space Text Position"))
@@ -1680,6 +1683,21 @@ def finish_space_text_position_pick(session, point=None, obj=None):
             session.doc.abortTransaction()
         except Exception:
             pass
+        return False
+    return True
+
+
+def finish_space_text_position_pick(session, point=None, obj=None):
+    del obj
+    space = session._edit_space
+    _end_space_text_position_pick(session)
+
+    if point is None or not session.selection.is_plan_space_object(space):
+        session.current_tool = "Select"
+        session.task_panels.refresh_task_panel_status()
+        return
+
+    if not _apply_space_text_position(session, space, point):
         session.spaces.restore_selected_space(space)
         return
 
@@ -1688,11 +1706,9 @@ def finish_space_text_position_pick(session, point=None, obj=None):
 
 
 def cancel_space_text_position_pick(session):
-    space = session._edit_space or plan_selection.get_selected_plan_target_object(session, "space")
-    reset_space_text_pick_state(session)
+    space = session._edit_space or _get_selected_space_text_target(session)
+    _end_space_text_position_pick(session)
     session.lifecycle.stop_snapper()
-    FreeCAD.activeDraftCommand = None
-    session.lifecycle.set_draft_point_focus_suppressed(False)
     session.current_tool = "Select"
     if space:
         session.selection.set_selected_plan_target("space", space, pending_restore=True)
