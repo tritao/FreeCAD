@@ -7,6 +7,7 @@ import json
 import os
 import tempfile
 import time
+from functools import wraps
 
 
 def resolve_plan_perf_log_path(session):
@@ -65,6 +66,10 @@ def is_plan_perf_trace_enabled(session):
 
 def is_plan_pick_debug_enabled(session):
     return bool(getattr(session, "_plan_pick_debug_log_path", None))
+
+
+def is_plan_pick_debug_active(session):
+    return bool(getattr(session, "_plan_pick_debug_scope_depth", 0))
 
 
 def plan_perf_describe_object(_session, obj):
@@ -221,6 +226,37 @@ def plan_pick_debug_event(session, name, **fields):
 
 
 @contextmanager
+def plan_pick_debug_scope(session, name, **fields):
+    if not is_plan_pick_debug_enabled(session):
+        yield None
+        return
+    previous_name = str(getattr(session, "_plan_pick_debug_scope_name", "") or "")
+    previous_depth = int(getattr(session, "_plan_pick_debug_scope_depth", 0) or 0)
+    session._plan_pick_debug_scope_name = str(name or "").strip()
+    session._plan_pick_debug_scope_depth = previous_depth + 1
+    plan_pick_debug_event(session, f"{name}_start", **fields)
+    try:
+        yield None
+    finally:
+        selected_after = session.selection.get_selected_plan_target()
+        plan_pick_debug_event(
+            session,
+            f"{name}_end",
+            selected_after=plan_perf_describe_target(
+                session,
+                selected_after[0],
+                selected_after[1],
+            ),
+            provider_selected_objects=[
+                plan_perf_describe_object(session, obj)
+                for obj in tuple(getattr(session, "_provider_selected_objects", ()) or ())
+            ],
+        )
+        session._plan_pick_debug_scope_depth = previous_depth
+        session._plan_pick_debug_scope_name = previous_name
+
+
+@contextmanager
 def plan_perf_trace_event(session, name, **fields):
     if not session._is_plan_perf_trace_enabled():
         yield None
@@ -275,3 +311,81 @@ def plan_perf_trace_span(session, name, **fields):
         span = spans.setdefault(str(name), {"ms": 0.0, "count": 0})
         span["ms"] += elapsed_ms
         span["count"] += 1
+
+
+def _bind_performance_call(func):
+    @wraps(func)
+    def method(self, *args, **kwargs):
+        return func(self.session, *args, **kwargs)
+
+    return method
+
+
+class PlanPerformanceAPI:
+    """Owned session surface for Plan Edit perf tracing and pick debug."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def plan_pick_debug_scope(self, name, **fields):
+        return plan_pick_debug_scope(self.session, name, **fields)
+
+
+for _method_name in (
+    "resolve_plan_perf_log_path",
+    "resolve_plan_pick_debug_log_path",
+    "is_plan_perf_trace_enabled",
+    "is_plan_pick_debug_enabled",
+    "is_plan_pick_debug_active",
+    "plan_perf_describe_object",
+    "plan_perf_describe_target",
+    "plan_perf_coerce_value",
+    "plan_perf_set_fields",
+    "plan_perf_count",
+    "plan_perf_note_error",
+    "plan_perf_finalize_event",
+    "plan_perf_write_event",
+    "plan_perf_trace_event",
+    "plan_perf_trace_span",
+    "plan_pick_debug_event",
+):
+    setattr(PlanPerformanceAPI, _method_name, _bind_performance_call(globals()[_method_name]))
+
+
+def _make_performance_compat_method(api_method_name):
+    def method(self, *args, **kwargs):
+        return getattr(self.performance, api_method_name)(*args, **kwargs)
+
+    return method
+
+
+_PLAN_PERFORMANCE_COMPAT_METHODS = (
+    ("_resolve_plan_perf_log_path", "resolve_plan_perf_log_path"),
+    ("_resolve_plan_pick_debug_log_path", "resolve_plan_pick_debug_log_path"),
+    ("_is_plan_perf_trace_enabled", "is_plan_perf_trace_enabled"),
+    ("_is_plan_pick_debug_enabled", "is_plan_pick_debug_enabled"),
+    ("_is_plan_pick_debug_active", "is_plan_pick_debug_active"),
+    ("_plan_perf_describe_object", "plan_perf_describe_object"),
+    ("_plan_perf_describe_target", "plan_perf_describe_target"),
+    ("_plan_perf_coerce_value", "plan_perf_coerce_value"),
+    ("_plan_perf_set_fields", "plan_perf_set_fields"),
+    ("_plan_perf_count", "plan_perf_count"),
+    ("_plan_perf_note_error", "plan_perf_note_error"),
+    ("_plan_perf_finalize_event", "plan_perf_finalize_event"),
+    ("_plan_perf_write_event", "plan_perf_write_event"),
+    ("_plan_perf_trace_event", "plan_perf_trace_event"),
+    ("_plan_perf_trace_span", "plan_perf_trace_span"),
+    ("_plan_pick_debug_event", "plan_pick_debug_event"),
+    ("_plan_pick_debug_scope", "plan_pick_debug_scope"),
+)
+
+
+def bind_session_perf_compat(session_class):
+    for method_name, api_method_name in _PLAN_PERFORMANCE_COMPAT_METHODS:
+        setattr(session_class, method_name, _make_performance_compat_method(api_method_name))
