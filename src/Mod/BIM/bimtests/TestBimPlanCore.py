@@ -611,7 +611,6 @@ class TestBimPlanCore(unittest.TestCase):
             return context
 
         session = SimpleNamespace(
-            _document_is_alive=lambda: True,
             _plan_provider_refresh_cache={},
             performance=_make_perf_stub(
                 trace_span=lambda _name: nullcontext(),
@@ -619,6 +618,7 @@ class TestBimPlanCore(unittest.TestCase):
             ),
             get_plan_provider_registry=lambda: registry,
         )
+        session.document_visuals = SimpleNamespace(document_is_alive=lambda: True)
         session.providers = SimpleNamespace(
             get_plan_edit_context=_get_plan_edit_context,
             plan_provider_integrations_disabled=lambda: False,
@@ -1620,11 +1620,11 @@ class TestBimPlanCore(unittest.TestCase):
             close=lambda: calls.append("close"),
         )
         session = SimpleNamespace(
-            _document_is_alive=lambda: True,
             _tearing_down=False,
             task_panel=panel,
             current_tool="Move Symbol",
             viewport=SimpleNamespace(clear_viewport_status_chip=lambda: calls.append("chip")),
+            document_visuals=SimpleNamespace(document_is_alive=lambda: True),
             _clear_input_hints=lambda: calls.append("hints"),
             _cancel_rect_wall_tool=lambda refresh=True: calls.append(("rect-wall", refresh)),
             lifecycle=SimpleNamespace(
@@ -1703,11 +1703,11 @@ class TestBimPlanCore(unittest.TestCase):
     def test_shutdown_teardown_profile_disables_wall_restore(self):
         calls = []
         session = SimpleNamespace(
-            _document_is_alive=lambda: True,
             _tearing_down=True,
             task_panel=None,
             current_tool="Move Symbol",
             viewport=SimpleNamespace(clear_viewport_status_chip=lambda: calls.append("chip")),
+            document_visuals=SimpleNamespace(document_is_alive=lambda: True),
             _clear_input_hints=lambda: calls.append("hints"),
             _cancel_rect_wall_tool=lambda refresh=True: calls.append(("rect-wall", refresh)),
             lifecycle=SimpleNamespace(
@@ -2050,12 +2050,12 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             doc=doc,
             viewport=SimpleNamespace(focus_plan_view=lambda: None),
-            _document_is_alive=lambda: True,
             get_plan_provider_registry=lambda: registry,
             defer_document_visual_updates=lambda: nullcontext(),
             _refresh_primary_selected_plan_target=lambda: None,
             document_visuals=SimpleNamespace(
-                invalidate_document_dependent_plan_visuals=lambda: None
+                document_is_alive=lambda: True,
+                invalidate_document_dependent_plan_visuals=lambda: None,
             ),
             task_panels=SimpleNamespace(
                 refresh_task_panel_status=lambda selection_only=False: None

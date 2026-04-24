@@ -91,10 +91,7 @@ class PlanEditControlsWidget:
             False,
         ):
             return True
-        document_is_alive = getattr(session, "_document_is_alive", None)
-        if callable(document_is_alive):
-            return not document_is_alive()
-        return False
+        return not session.document_visuals.document_is_alive()
 
     def _build_form(self, QtGui):
         outer = QtGui.QWidget()

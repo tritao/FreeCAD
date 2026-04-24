@@ -329,7 +329,11 @@ class PlanProvidersAPI:
         payload=None,
     ):
         session = self.session
-        if session._tearing_down or session._finishing or not session._document_is_alive():
+        if (
+            session._tearing_down
+            or session._finishing
+            or not session.document_visuals.document_is_alive()
+        ):
             return False
         if self.plan_provider_integrations_disabled():
             return False
@@ -403,11 +407,10 @@ _PLAN_PROVIDER_SNAPSHOT_SURFACES = (
 
 
 def _is_active_provider_session(session):
-    document_is_alive = getattr(session, "_document_is_alive", None)
     return not (
         getattr(session, "_tearing_down", False)
         or getattr(session, "_finishing", False)
-        or (callable(document_is_alive) and not document_is_alive())
+        or not session.document_visuals.document_is_alive()
     )
 
 
@@ -488,8 +491,7 @@ def _collect_provider_surface_contributions(
 
 def collect_plan_provider_snapshot(session) -> PlanProviderSnapshot:
     with _perf_trace_span(session, "collect_plan_provider_snapshot"):
-        document_is_alive = getattr(session, "_document_is_alive", None)
-        if callable(document_is_alive) and not document_is_alive():
+        if not session.document_visuals.document_is_alive():
             return PlanProviderSnapshot()
 
         refresh_cache = _get_provider_refresh_cache(session)
@@ -1410,8 +1412,7 @@ def execute_plan_provider_action(
     transaction_label="",
     payload=None,
 ):
-    document_is_alive = getattr(session, "_document_is_alive", None)
-    if callable(document_is_alive) and not document_is_alive():
+    if not session.document_visuals.document_is_alive():
         return False
     provider = session.get_plan_provider_registry().get_provider(provider_id)
     if provider is None:
@@ -1470,8 +1471,7 @@ def execute_plan_provider_action(
 
 
 def get_plan_edit_context(session):
-    document_is_alive = getattr(session, "_document_is_alive", None)
-    doc = session.doc if not callable(document_is_alive) or document_is_alive() else None
+    doc = session.doc if session.document_visuals.document_is_alive() else None
     active_storey = session.active_storey
     active_storey_name = session.visibility.safe_plan_object_name(active_storey)
     if active_storey is not None and not active_storey_name:
@@ -1487,8 +1487,7 @@ def get_plan_edit_context(session):
 
 
 def get_plan_provider_action_context(session, payload=None):
-    document_is_alive = getattr(session, "_document_is_alive", None)
-    doc = session.doc if not callable(document_is_alive) or document_is_alive() else None
+    doc = session.doc if session.document_visuals.document_is_alive() else None
     return PlanEditContext.make_action_context(
         session,
         payload=payload,

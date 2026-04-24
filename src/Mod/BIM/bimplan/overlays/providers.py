@@ -33,11 +33,10 @@ def _perf_trace_span(session, name, **fields):
 
 def sync_provider_overlays(session):
     with _perf_trace_span(session, "sync_provider_overlays"):
-        document_is_alive = getattr(session, "_document_is_alive", None)
         if (
             session._tearing_down
             or getattr(session, "_finishing", False)
-            or (callable(document_is_alive) and not document_is_alive())
+            or not session.document_visuals.document_is_alive()
             or session.current_tool not in ("Select", "Provider Point")
             or session.providers.plan_provider_integrations_disabled()
         ):
