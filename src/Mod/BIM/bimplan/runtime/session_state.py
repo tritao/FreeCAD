@@ -217,6 +217,64 @@ class PlanOpeningTransientState:
     edit_opening_move_raw_point: object = None
 
 
+@dataclass
+class PlanOverlayTrackerState:
+    grip_trackers: list = field(default_factory=list)
+    wall_hover_trackers: list = field(default_factory=list)
+    wall_overlay_trackers: list = field(default_factory=list)
+    junction_node_trackers: list = field(default_factory=list)
+    hovered_wall_opening_context_trackers: list = field(default_factory=list)
+    opening_hover_trackers: list = field(default_factory=list)
+    symbol_hover_trackers: list = field(default_factory=list)
+    provider_hover_trackers: list = field(default_factory=list)
+    provider_selected_trackers: list = field(default_factory=list)
+    space_hover_trackers: list = field(default_factory=list)
+    region_hover_trackers: list = field(default_factory=list)
+    opening_overlay_trackers: list = field(default_factory=list)
+    symbol_overlay_trackers: list = field(default_factory=list)
+    space_overlay_trackers: list = field(default_factory=list)
+    region_overlay_trackers: list = field(default_factory=list)
+    provider_overlay_trackers: list = field(default_factory=list)
+    secondary_selection_trackers: list = field(default_factory=list)
+    space_region_pick_trackers: list = field(default_factory=list)
+    selected_wall_opening_context_trackers: list = field(default_factory=list)
+    symbol_handle_trackers: list = field(default_factory=list)
+
+
+@dataclass
+class PlanOverlayCacheState:
+    plan_overlay_geometry_cache: dict = field(
+        default_factory=lambda: {
+            "opening": {},
+            "space": {},
+            "region": {},
+        }
+    )
+    plan_semantic_object_cache: dict = field(default_factory=dict)
+    plan_object_storeys_cache: dict = field(default_factory=dict)
+    plan_symbol_instances_cache: object = None
+    plan_space_instances_cache: object = None
+    plan_region_instances_cache: object = None
+    plan_opening_instances_cache: object = None
+    wall_hosted_openings_cache: object = None
+    wall_hosted_openings_cache_queued: bool = False
+    opening_overlay_screen_cache: dict = field(default_factory=dict)
+    opening_overlay_screen_cache_projection_key: object = None
+    symbol_overlay_screen_cache: dict = field(default_factory=dict)
+
+
+@dataclass
+class PlanOverlayTransientState:
+    hovered_opening_overlay_dirty: bool = False
+    hovered_opening_overlay_render_state: object = None
+    selected_opening_overlay_dirty: bool = False
+    selected_opening_overlay_render_state: object = None
+    selected_space_overlay_dirty: bool = True
+    selected_space_overlay_geometry_key: object = None
+    selected_space_overlay_segments: tuple = ()
+    selected_space_overlay_render_state: object = None
+
+
 def initialize_session_read_state(session):
     session.task_panel_state = PlanTaskPanelState()
     session.provider_overlay_read_state = PlanProviderOverlayReadState(
@@ -234,6 +292,9 @@ def initialize_session_read_state(session):
     session.document_visual_state = PlanDocumentVisualState()
     session.provider_transient_state = PlanProviderTransientState()
     session.opening_transient_state = PlanOpeningTransientState()
+    session.overlay_tracker_state = PlanOverlayTrackerState()
+    session.overlay_cache_state = PlanOverlayCacheState()
+    session.overlay_transient_state = PlanOverlayTransientState()
 
 
 def initialize_session_state(session):
@@ -253,50 +314,6 @@ def initialize_session_state(session):
     session.active_storey = None
     session._space_region_pick_boundaries = []
     session._space_region_pick_seed_space = None
-    session._grip_trackers = []
-    session._wall_hover_trackers = []
-    session._wall_overlay_trackers = []
-    session._junction_node_trackers = []
-    session._hovered_wall_opening_context_trackers = []
-    session._opening_hover_trackers = []
-    session._symbol_hover_trackers = []
-    session._provider_hover_trackers = []
-    session._provider_selected_trackers = []
-    session._space_hover_trackers = []
-    session._region_hover_trackers = []
-    session._plan_overlay_geometry_cache = {
-        "opening": {},
-        "space": {},
-        "region": {},
-    }
-    session._plan_semantic_object_cache = {}
-    session._plan_object_storeys_cache = {}
-    session._plan_symbol_instances_cache = None
-    session._plan_space_instances_cache = None
-    session._plan_region_instances_cache = None
-    session._plan_opening_instances_cache = None
-    session._wall_hosted_openings_cache = None
-    session._wall_hosted_openings_cache_queued = False
-    session._opening_overlay_screen_cache = {}
-    session._opening_overlay_screen_cache_projection_key = None
-    session._symbol_overlay_screen_cache = {}
-    session._opening_overlay_trackers = []
-    session._hovered_opening_overlay_dirty = False
-    session._hovered_opening_overlay_render_state = None
-    session._selected_opening_overlay_dirty = False
-    session._selected_opening_overlay_render_state = None
-    session._symbol_overlay_trackers = []
-    session._space_overlay_trackers = []
-    session._selected_space_overlay_dirty = True
-    session._selected_space_overlay_geometry_key = None
-    session._selected_space_overlay_segments = ()
-    session._selected_space_overlay_render_state = None
-    session._region_overlay_trackers = []
-    session._provider_overlay_trackers = []
-    session._secondary_selection_trackers = []
-    session._space_region_pick_trackers = []
-    session._selected_wall_opening_context_trackers = []
-    session._symbol_handle_trackers = []
     session._selection_observer_added = False
     session._document_observer_added = False
     session._pending_selected_wall_reset = False
