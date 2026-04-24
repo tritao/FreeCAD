@@ -25,9 +25,15 @@ def _read_component(session, component_name, method_name, *args, default=None):
     return default
 
 
-class _TaskPanelInteractionReads:
+class _TaskPanelReadsBase:
+    __slots__ = ("session",)
+
     def __init__(self, session):
         self.session = session
+
+
+class _TaskPanelInteractionReads(_TaskPanelReadsBase):
+    __slots__ = ()
 
     def is_modal_plan_interaction_active(self):
         return bool(
@@ -40,9 +46,8 @@ class _TaskPanelInteractionReads:
         )
 
 
-class _TaskPanelSelectionReads:
-    def __init__(self, session):
-        self.session = session
+class _TaskPanelSelectionReads(_TaskPanelReadsBase):
+    __slots__ = ()
 
     def get_current_tool(self):
         return str(getattr(self.session, "current_tool", "") or "")
@@ -54,9 +59,8 @@ class _TaskPanelSelectionReads:
         return plan_selection.get_selected_plan_targets(self.session)
 
 
-class _TaskPanelProviderReads:
-    def __init__(self, session):
-        self.session = session
+class _TaskPanelProviderReads(_TaskPanelReadsBase):
+    __slots__ = ()
 
     def get_provider_point_tool_label(self):
         return _read_component(
@@ -115,9 +119,8 @@ class _TaskPanelProviderReads:
         )
 
 
-class _TaskPanelStatusReads:
-    def __init__(self, session):
-        self.session = session
+class _TaskPanelStatusReads(_TaskPanelReadsBase):
+    __slots__ = ()
 
     def format_plan_target_selection_state(self, target_kind, target_obj):
         return _read_component(
@@ -190,9 +193,8 @@ class _TaskPanelStatusReads:
         )
 
 
-class _TaskPanelRelationReads:
-    def __init__(self, session):
-        self.session = session
+class _TaskPanelRelationReads(_TaskPanelReadsBase):
+    __slots__ = ()
 
     def has_plan_candidate_joint(self):
         return (
@@ -240,9 +242,8 @@ class _TaskPanelRelationReads:
         return str(value or "").strip()
 
 
-class _TaskPanelSpaceReads:
-    def __init__(self, session):
-        self.session = session
+class _TaskPanelSpaceReads(_TaskPanelReadsBase):
+    __slots__ = ()
 
     def get_space_region_candidate_count(self):
         return int(
@@ -292,9 +293,8 @@ class _TaskPanelSpaceReads:
         )
 
 
-class _TaskPanelSymbolReads:
-    def __init__(self, session):
-        self.session = session
+class _TaskPanelSymbolReads(_TaskPanelReadsBase):
+    __slots__ = ()
 
     def symbol_rotation_snap_enabled(self):
         return bool(
@@ -315,9 +315,8 @@ class _TaskPanelSymbolReads:
         )
 
 
-class _TaskPanelWallEditReads:
-    def __init__(self, session):
-        self.session = session
+class _TaskPanelWallEditReads(_TaskPanelReadsBase):
+    __slots__ = ()
 
     def is_selected_wall_endpoint_editable(self):
         return bool(
@@ -330,9 +329,8 @@ class _TaskPanelWallEditReads:
         )
 
 
-class _TaskPanelWindowReads:
-    def __init__(self, session):
-        self.session = session
+class _TaskPanelWindowReads(_TaskPanelReadsBase):
+    __slots__ = ()
 
     def can_place_plan_window(self):
         return bool(
@@ -422,20 +420,28 @@ class _TaskPanelWindowReads:
         )
 
 
+_TASK_PANEL_CONTEXT_READERS = (
+    ("selection", _TaskPanelSelectionReads),
+    ("interaction", _TaskPanelInteractionReads),
+    ("providers", _TaskPanelProviderReads),
+    ("status_text", _TaskPanelStatusReads),
+    ("wall_relations", _TaskPanelRelationReads),
+    ("spaces", _TaskPanelSpaceReads),
+    ("symbols", _TaskPanelSymbolReads),
+    ("wall_edit", _TaskPanelWallEditReads),
+    ("windows", _TaskPanelWindowReads),
+)
+
+
 class PlanTaskPanelContext:
     """Thin read-only adapter around the live Plan Edit session."""
 
+    __slots__ = ("session",) + tuple(name for name, _ in _TASK_PANEL_CONTEXT_READERS)
+
     def __init__(self, session):
         self.session = session
-        self.selection = _TaskPanelSelectionReads(session)
-        self.interaction = _TaskPanelInteractionReads(session)
-        self.providers = _TaskPanelProviderReads(session)
-        self.status_text = _TaskPanelStatusReads(session)
-        self.wall_relations = _TaskPanelRelationReads(session)
-        self.spaces = _TaskPanelSpaceReads(session)
-        self.symbols = _TaskPanelSymbolReads(session)
-        self.wall_edit = _TaskPanelWallEditReads(session)
-        self.windows = _TaskPanelWindowReads(session)
+        for name, reader_type in _TASK_PANEL_CONTEXT_READERS:
+            setattr(self, name, reader_type(session))
 
 
 def as_task_panel_context(session_or_context):
