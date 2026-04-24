@@ -3384,7 +3384,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 FreeCADGui.Snapper, "pop_snap_modes", side_effect=lambda: popped.append(True)
             ),
         ):
-            session._start_opening_handle_point_pick(door, 0, handle)
+            session.openings.start_opening_handle_point_pick(door, 0, handle)
 
             self.assertEqual(pushed_modes, [set(BimPlanSession._OPENING_MOVE_SNAP_SET)])
             self.assertEqual(session.current_tool, "Move Opening")
@@ -3523,7 +3523,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 session, "_refresh_opening_move_preview_from_raw_point", return_value=None
             ) as refresh_preview,
         ):
-            session._start_opening_handle_point_pick(door, 0, handle)
+            session.openings.start_opening_handle_point_pick(door, 0, handle)
 
             from pivy import coin
 
@@ -3544,7 +3544,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
             self.assertEqual(refresh_preview.call_count, 3)
 
-            session._cancel_opening_handle_point_pick()
+            session.openings.cancel_opening_handle_point_pick()
 
     def test_plan_edit_opening_move_updates_input_hints(self):
         """Active opening move should publish placement/cancel/anchor hints."""
@@ -3575,7 +3575,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
             patch.object(FreeCADGui.HintManager, "show") as show_hints,
         ):
-            session._start_opening_handle_point_pick(door, 0, handle)
+            session.openings.start_opening_handle_point_pick(door, 0, handle)
 
         self.assertTrue(show_hints.called)
         hints = show_hints.call_args.args

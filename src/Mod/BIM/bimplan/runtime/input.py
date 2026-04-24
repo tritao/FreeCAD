@@ -281,7 +281,7 @@ def on_key_pressed(session, event_callback):
         session._cancel_wall_edit_point_pick()
         return
     if session.current_tool == "Move Opening":
-        session._cancel_opening_handle_point_pick()
+        session.openings.cancel_opening_handle_point_pick()
         return
     if session.current_tool == "Move Provider":
         session._cancel_provider_handle_point_pick()

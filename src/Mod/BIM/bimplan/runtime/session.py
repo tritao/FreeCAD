@@ -52,6 +52,7 @@ from bimplan.selection.selection import PlanSelectionAPI
 from bimplan.tools import symbol_edit as plan_symbol_edit
 from bimplan.tools.symbol_edit import PlanSymbolsAPI
 from bimplan.tools import opening_edit as plan_opening_edit
+from bimplan.tools.opening_edit import PlanOpeningsAPI
 from bimplan.providers import edit as plan_provider_edit
 from bimplan.providers.runtime import PlanProvidersAPI
 from bimplan.selection import targets as plan_targets
@@ -260,6 +261,7 @@ class PlanEditSession:
     def __init__(self):
         self.selection = PlanSelectionAPI(self)
         self.spaces = PlanSpacesAPI(self)
+        self.openings = PlanOpeningsAPI(self)
         self.wall_relations = PlanWallRelationsAPI(self)
         self.interaction = PlanInteractionAPI(self)
         self.symbols = PlanSymbolsAPI(self)
@@ -2898,35 +2900,8 @@ class PlanEditSession:
     def _activate_opening_handle_now(self, opening, handle_index):
         return plan_opening_edit.activate_opening_handle_now(self, opening, handle_index)
 
-    def _start_opening_handle_point_pick(self, opening, handle_index, handle):
-        return plan_opening_edit.start_opening_handle_point_pick(
-            self, opening, handle_index, handle
-        )
-
-    def _update_opening_handle_point_pick(self, point=None, snap_info=None):
-        return plan_opening_edit.update_opening_handle_point_pick(
-            self, point=point, snap_info=snap_info
-        )
-
-    def _finish_opening_handle_point_pick(self, point=None, obj=None):
-        return plan_opening_edit.finish_opening_handle_point_pick(self, point=point, obj=obj)
-
-    def _cancel_opening_handle_point_pick(self):
-        return plan_opening_edit.cancel_opening_handle_point_pick(self)
-
-    def _restore_selected_opening(self, opening):
-        return plan_opening_edit.restore_selected_opening(self, opening)
-
-    def _queue_restore_selected_opening(self, opening):
-        return plan_opening_edit.queue_restore_selected_opening(self, opening)
-
     def _clear_plan_selection_state(self):
         return self.selection.clear_plan_selection_state()
-
-    def _execute_selected_opening_handle(self, opening, handle_index, handle):
-        return plan_opening_edit.execute_selected_opening_handle(
-            self, opening, handle_index, handle
-        )
 
 
 plan_session_state.bind_session_state_accessors(PlanEditSession)
