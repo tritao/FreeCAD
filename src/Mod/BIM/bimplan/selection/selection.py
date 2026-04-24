@@ -287,7 +287,7 @@ def refresh_selected_plan_target(session):
             selected_before=session._plan_perf_describe_target(previous_kind, previous_obj),
             selected_before_kind=previous_kind or "none",
         )
-        previous_wall = session._get_plan_target_object_from_state(
+        previous_wall = session.selection.get_plan_target_object_from_state(
             previous_kind,
             previous_obj,
             plan_target_kinds.PLAN_TARGET_WALL,
@@ -465,7 +465,7 @@ def normalize_plan_target_list(session, targets):
             continue
         if not session._is_valid_plan_target(target_kind, target_obj):
             continue
-        key = session._get_plan_target_state_key(target_kind, target_obj)
+        key = session.selection.get_plan_target_state_key(target_kind, target_obj)
         if key is None or key in seen:
             continue
         seen.add(key)
@@ -552,11 +552,11 @@ def get_selected_plan_targets(session):
     targets = []
     seen = set()
     if primary_kind and primary_obj:
-        key = session._get_plan_target_state_key(primary_kind, primary_obj)
+        key = session.selection.get_plan_target_state_key(primary_kind, primary_obj)
         seen.add(key)
         targets.append((primary_kind, primary_obj))
     for target_kind, target_obj in get_secondary_selected_plan_targets(session):
-        key = session._get_plan_target_state_key(target_kind, target_obj)
+        key = session.selection.get_plan_target_state_key(target_kind, target_obj)
         if key in seen:
             continue
         seen.add(key)
@@ -596,8 +596,16 @@ def selected_plan_target_changed(session, previous_kind, previous_obj, kind=None
     current_kind, current_obj = get_selected_plan_target(session)
     if kind is None:
         return previous_kind != current_kind or previous_obj != current_obj
-    previous_target = session._get_plan_target_object_from_state(previous_kind, previous_obj, kind)
-    current_target = session._get_plan_target_object_from_state(current_kind, current_obj, kind)
+    previous_target = session.selection.get_plan_target_object_from_state(
+        previous_kind,
+        previous_obj,
+        kind,
+    )
+    current_target = session.selection.get_plan_target_object_from_state(
+        current_kind,
+        current_obj,
+        kind,
+    )
     return previous_target != current_target
 
 
