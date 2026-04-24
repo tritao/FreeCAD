@@ -777,8 +777,8 @@ def initialize_session_state(session):
     session._plan_edit_params = FreeCAD.ParamGet(
         "User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit"
     )
-    session._plan_perf_log_path = session._resolve_plan_perf_log_path()
-    session._plan_pick_debug_log_path = session._resolve_plan_pick_debug_log_path()
+    session._plan_perf_log_path = session.performance.resolve_plan_perf_log_path()
+    session._plan_pick_debug_log_path = session.performance.resolve_plan_pick_debug_log_path()
     session._plan_perf_current_event = None
     session._plan_perf_sequence = 0
     session._plan_pick_debug_sequence = 0

@@ -187,7 +187,7 @@ def build_wall_hosted_openings_cache(session):
     cache = {}
     if not session.doc:
         return cache
-    with session._plan_perf_trace_span("build_wall_hosted_openings_cache"):
+    with session.performance.plan_perf_trace_span("build_wall_hosted_openings_cache"):
         for obj in getattr(session.doc, "Objects", []) or []:
             if not session._is_hosted_opening_object(obj):
                 continue
@@ -219,7 +219,7 @@ def get_plan_opening_instances(session):
     cache_state = session.overlay_cache_state
     cache_record = cache_state.plan_opening_instances_cache
     if cache_record is not None and cache_record[0] == doc_name:
-        session._plan_perf_count("plan_opening_instances_cache_hits")
+        session.performance.plan_perf_count("plan_opening_instances_cache_hits")
         return cache_record[1]
 
     wall_cache_record = cache_state.wall_hosted_openings_cache
@@ -227,7 +227,7 @@ def get_plan_opening_instances(session):
         host_cache = session.openings.build_wall_hosted_openings_cache()
         cache_state.wall_hosted_openings_cache = (doc_name, host_cache)
     else:
-        session._plan_perf_count("wall_hosted_openings_cache_hits")
+        session.performance.plan_perf_count("wall_hosted_openings_cache_hits")
         host_cache = wall_cache_record[1]
 
     openings = session.openings.collect_opening_instances_from_host_cache(host_cache)
@@ -253,7 +253,7 @@ def get_wall_hosted_openings(session, wall):
             session.openings.collect_opening_instances_from_host_cache(host_cache),
         )
     else:
-        session._plan_perf_count("wall_hosted_openings_cache_hits")
+        session.performance.plan_perf_count("wall_hosted_openings_cache_hits")
     return list(cache_record[1].get(wall_key, ()))
 
 

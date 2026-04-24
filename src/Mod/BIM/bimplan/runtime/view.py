@@ -388,7 +388,7 @@ def apply_plan_view(session, fit=True):
     import WorkingPlane
 
     if session.view:
-        with session._plan_perf_trace_span("apply_plan_view_camera_top"):
+        with session.performance.plan_perf_trace_span("apply_plan_view_camera_top"):
             try:
                 session.view.setCameraType("Orthographic")
                 session.view.viewTop()
@@ -396,14 +396,14 @@ def apply_plan_view(session, fit=True):
                 session.view = None
 
     if session.viewer:
-        with session._plan_perf_trace_span("apply_plan_view_footprint_override"):
+        with session.performance.plan_perf_trace_span("apply_plan_view_footprint_override"):
             try:
                 session.viewer.setOverrideMode("Footprint")
                 apply_plan_background_override(session, session._plan_paper_rgb)
             except RuntimeError:
                 session.viewer = None
 
-    with session._plan_perf_trace_span("apply_plan_view_working_plane"):
+    with session.performance.plan_perf_trace_span("apply_plan_view_working_plane"):
         wp = WorkingPlane.get_working_plane(update=False)
         offset = (
             session.get_storey_elevation(session.active_storey) if session.active_storey else 0.0
@@ -416,14 +416,14 @@ def apply_plan_view(session, fit=True):
         session._interaction_plane.set_to_top(offset=offset)
 
     if session.active_storey:
-        with session._plan_perf_trace_span("apply_plan_view_set_active_object"):
+        with session.performance.plan_perf_trace_span("apply_plan_view_set_active_object"):
             session._set_active_object(session.active_storey)
 
-    with session._plan_perf_trace_span("apply_plan_view_navigation_profile"):
+    with session.performance.plan_perf_trace_span("apply_plan_view_navigation_profile"):
         apply_plan_navigation_profile(session, session._plan_view_locked_actions)
 
     if fit and session.view:
-        with session._plan_perf_trace_span("apply_plan_view_fit_all"):
+        with session.performance.plan_perf_trace_span("apply_plan_view_fit_all"):
             try:
                 session.view.fitAll()
             except RuntimeError:
