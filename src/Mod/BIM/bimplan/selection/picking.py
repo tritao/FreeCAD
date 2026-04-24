@@ -1422,11 +1422,35 @@ def _coerce_overlay_point_vector(point):
 
 
 def _collect_visible_provider_overlay_targets(session):
+    targets = {}
+    for identity, target in _iter_visible_provider_overlay_targets(session):
+        if identity in targets:
+            continue
+        targets[identity] = target
+    return targets
+
+
+def _iter_provider_overlay_targets_from_info(session, info, visible_targets):
+    if not info or not visible_targets:
+        return ()
+    yielded = []
+    for obj in _get_objects_info_candidate_objects(session, info):
+        identity = _get_provider_overlay_object_identity(obj)
+        if identity is None:
+            continue
+        target = visible_targets.get(identity)
+        if target is None:
+            continue
+        yielded.append((target.target_kind.value if target.target_kind is not None else "", obj))
+    return tuple(yielded)
+
+
+def _iter_visible_provider_overlay_targets(session):
     get_overlays = getattr(session, "get_plan_provider_overlays", None)
     if not callable(get_overlays):
-        return {}
+        return ()
     is_visible = getattr(session, "is_plan_provider_overlay_visible", None)
-    targets = {}
+    yielded = []
     for overlay in tuple(get_overlays() or ()):
         if not bool(getattr(overlay, "visible", True)):
             continue
@@ -1436,33 +1460,25 @@ def _collect_visible_provider_overlay_targets(session):
             if not _has_provider_overlay_target_identity(target):
                 continue
             identity = _get_provider_overlay_target_identity(session, target)
-            if identity is None or identity in targets:
+            if identity is None:
                 continue
-            targets[identity] = target
-    return targets
-
-
-def _iter_provider_overlay_targets_from_info(session, info, visible_targets):
-    if not info or not visible_targets:
-        return ()
-    yielded = []
-    for obj in _iter_objects_info_candidate_objects(session, info):
-        if obj is None:
-            continue
-        identity = (
-            str(getattr(getattr(obj, "Document", None), "Name", "") or "").strip(),
-            str(getattr(obj, "Name", "") or "").strip(),
-        )
-        if not identity[1]:
-            continue
-        target = visible_targets.get(identity)
-        if target is None:
-            continue
-        yielded.append((target.target_kind.value if target.target_kind is not None else "", obj))
+            yielded.append((identity, target))
     return tuple(yielded)
 
 
-def _iter_objects_info_candidate_objects(session, info):
+def _get_provider_overlay_object_identity(obj):
+    if obj is None:
+        return None
+    identity = (
+        str(getattr(getattr(obj, "Document", None), "Name", "") or "").strip(),
+        str(getattr(obj, "Name", "") or "").strip(),
+    )
+    if not identity[1]:
+        return None
+    return identity
+
+
+def _get_objects_info_candidate_objects(session, info):
     if not info:
         return ()
     candidates = []
