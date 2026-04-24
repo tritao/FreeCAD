@@ -2,7 +2,6 @@
 
 """Target records exposed by BIM Plan Edit integrations."""
 
-from contextlib import nullcontext
 from dataclasses import dataclass
 
 import FreeCAD
@@ -288,11 +287,7 @@ def get_plan_targets(session, selected_only=False):
         source_targets = []
         seen = set()
         active_storey_name = getattr(session.active_storey, "Name", None)
-        provider_refresh_scope = (
-            session._plan_provider_refresh_cache_scope()
-            if hasattr(session, "_plan_provider_refresh_cache_scope")
-            else nullcontext()
-        )
+        provider_refresh_scope = session.providers.plan_provider_refresh_cache_scope()
         with provider_refresh_scope:
             for obj in getattr(session.doc, "Objects", []) or []:
                 target_kind, target_obj = session.selection.get_plan_target_for_object(obj)

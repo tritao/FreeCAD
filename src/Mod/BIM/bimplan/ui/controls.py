@@ -1589,7 +1589,7 @@ class PlanEditControlsWidget:
                 return
             self._integration_refresh_queued = False
             self._integration_refresh_generation += 1
-            with self.session._plan_provider_refresh_cache_scope():
+            with self.session.providers.plan_provider_refresh_cache_scope():
                 snapshot = self.session.providers.get_plan_provider_snapshot()
                 integration_vm = plan_task_panel_view_model.build_integration_panel_view_model(
                     self.session,

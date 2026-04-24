@@ -137,6 +137,9 @@ class PlanProvidersAPI:
     def get_plan_provider_action_context(self, payload=None):
         return get_plan_provider_action_context(self.session, payload=payload)
 
+    def plan_provider_refresh_cache_scope(self):
+        return plan_provider_refresh_cache_scope(self.session)
+
     def invalidate_plan_provider_document_cache(self):
         return invalidate_plan_provider_document_cache(self.session)
 
@@ -431,6 +434,16 @@ def plan_provider_integrations_disabled(session):
 
 def invalidate_plan_provider_document_cache(session):
     session._plan_provider_document_cache = {}
+
+
+@contextmanager
+def plan_provider_refresh_cache_scope(session):
+    previous_cache = session._plan_provider_refresh_cache
+    session._plan_provider_refresh_cache = {}
+    try:
+        yield session._plan_provider_refresh_cache
+    finally:
+        session._plan_provider_refresh_cache = previous_cache
 
 
 def _get_provider_refresh_cache(session):

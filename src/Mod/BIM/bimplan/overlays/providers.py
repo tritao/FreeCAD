@@ -43,7 +43,7 @@ def sync_provider_overlays(session):
             clear_provider_overlays(session)
             return
 
-        with session._plan_provider_refresh_cache_scope():
+        with session.providers.plan_provider_refresh_cache_scope():
             overlays = tuple(
                 overlay
                 for overlay in session.providers.get_plan_provider_overlays()
