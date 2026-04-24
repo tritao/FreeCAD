@@ -1562,6 +1562,8 @@ _PLAN_SELECTION_API_BOUND_METHODS = (
     "activate_wall_target",
     "clear_plan_selection_state",
     "normalize_gui_object_selection",
+    "queue_prime_hover_pick_caches",
+    "prime_hover_pick_caches",
 )
 
 

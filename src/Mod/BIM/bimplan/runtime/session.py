@@ -606,7 +606,7 @@ class PlanEditSession:
             with self._plan_perf_trace_span("queue_prime_wall_hosted_openings_cache"):
                 self.openings.queue_prime_wall_hosted_openings_cache()
             with self._plan_perf_trace_span("queue_prime_hover_pick_caches"):
-                self._queue_prime_hover_pick_caches()
+                self.selection.queue_prime_hover_pick_caches()
             with self._plan_perf_trace_span("install_command_gate"):
                 plan_command_gate.install(self)
             if self._is_plan_perf_trace_enabled():
@@ -2028,12 +2028,6 @@ class PlanEditSession:
 
     def _refresh_selected_opening_visuals(self):
         return plan_document_visuals.refresh_selected_opening_visuals(self)
-
-    def _queue_prime_hover_pick_caches(self):
-        return plan_hover_picking.queue_prime_hover_pick_caches(self)
-
-    def _prime_hover_pick_caches(self):
-        return plan_hover_picking.prime_hover_pick_caches(self)
 
     def slotCreatedObject(self, obj):
         return plan_document_visuals.slot_created_object(self, obj)
