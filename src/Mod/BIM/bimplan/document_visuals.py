@@ -213,7 +213,7 @@ def is_symbol_visual_dependency(session, symbol, obj):
         return False
     if obj == symbol:
         return True
-    semantic_obj = session._get_plan_semantic_object(symbol)
+    semantic_obj = session.visibility.get_plan_semantic_object(symbol)
     if obj == semantic_obj:
         return True
     if obj == getattr(semantic_obj, "Base", None):
@@ -225,7 +225,7 @@ def refresh_plan_object_footprint_display(session, obj, *, request_redraw=True):
     if not session.visibility.is_supported_plan_object(obj):
         return
     session._invalidate_plan_overlay_geometry_cache(obj)
-    semantic_obj = session._get_plan_semantic_object(obj)
+    semantic_obj = session.visibility.get_plan_semantic_object(obj)
     refresh_targets = []
     for candidate in (semantic_obj, obj):
         if not candidate:

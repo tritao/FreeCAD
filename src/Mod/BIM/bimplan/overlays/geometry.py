@@ -10,7 +10,7 @@ def _perf_count(session, name, delta=1):
 
 
 def get_plan_overlay_geometry_kinds_for_object(session, obj):
-    semantic_obj = session._get_plan_semantic_object(obj)
+    semantic_obj = session.visibility.get_plan_semantic_object(obj)
     if session._is_hosted_opening_object(semantic_obj):
         return ("opening",)
     if session._is_plan_space_object(semantic_obj):
@@ -22,7 +22,7 @@ def get_plan_overlay_geometry_kinds_for_object(session, obj):
 
 def get_plan_overlay_geometry_cache_entry(session, kind, obj, create=False):
     cache = session.overlay_cache_state.plan_overlay_geometry_cache.get(str(kind or ""))
-    semantic_obj = session._get_plan_semantic_object(obj)
+    semantic_obj = session.visibility.get_plan_semantic_object(obj)
     if cache is None or semantic_obj is None:
         return (None, None, None)
     key = session._get_document_object_key(semantic_obj)

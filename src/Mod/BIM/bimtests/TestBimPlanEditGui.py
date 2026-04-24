@@ -1786,8 +1786,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.document_visuals.refresh_plan_object_footprint_display(equipment)
         self.pump_gui_events()
 
-        self.assertIs(session._get_plan_semantic_object(plan_symbol), equipment)
-        self.assertIs(session._get_plan_semantic_object(base), equipment)
+        self.assertIs(session.visibility.get_plan_semantic_object(plan_symbol), equipment)
+        self.assertIs(session.visibility.get_plan_semantic_object(base), equipment)
         self.assertTrue(plan_symbol.ViewObject.Visibility)
         self.assertTrue(plan_symbol.ViewObject.Selectable)
 

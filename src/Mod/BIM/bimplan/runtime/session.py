@@ -873,71 +873,6 @@ class PlanEditSession:
     def _pop_opening_move_snap_profile(self):
         return plan_snap.pop_opening_move_snap_profile(self)
 
-    def _is_direct_plan_equipment_object(self, obj):
-        if not obj:
-            return False
-        try:
-            import Draft
-
-            if Draft.getType(obj) == "Equipment":
-                return True
-        except Exception:
-            pass
-        proxy = getattr(obj, "Proxy", None)
-        return getattr(proxy, "Type", None) == "Equipment"
-
-    def _get_direct_plan_symbol_owner(self, obj):
-        if not obj:
-            return None
-        for parent in getattr(obj, "InListRecursive", []) or getattr(obj, "InList", []):
-            if not self._is_direct_plan_equipment_object(parent):
-                continue
-            if obj == getattr(parent, "Base", None):
-                return parent
-            if obj in (getattr(parent, "PlanSymbols", None) or []):
-                return parent
-        return None
-
-    def _get_plan_semantic_object(self, obj):
-        key = self._get_document_object_key(obj)
-        semantic_cache = self.overlay_cache_state.plan_semantic_object_cache
-        if key is not None and key in semantic_cache:
-            self.performance.plan_perf_count("semantic_object_cache_hits")
-            return semantic_cache[key]
-
-        current = obj
-        seen = set()
-        while current:
-            if not self._is_live_document_object(current):
-                current = None
-                break
-            name = getattr(current, "Name", None)
-            if name in seen:
-                break
-            if name:
-                seen.add(name)
-            if getattr(current, "TypeId", "") != "App::Link":
-                break
-            linked = getattr(current, "LinkedObject", None)
-            if linked is None and hasattr(current, "getLinkedObject"):
-                try:
-                    linked = current.getLinkedObject(True)
-                except TypeError:
-                    try:
-                        linked = current.getLinkedObject()
-                    except Exception:
-                        linked = None
-                except Exception:
-                    linked = None
-            if not linked or linked == current:
-                break
-            current = linked
-        owner = self._get_direct_plan_symbol_owner(current)
-        result = owner or current or obj
-        if key is not None:
-            semantic_cache[key] = result
-        return result
-
     def _is_hosted_opening_object(self, obj):
         return plan_hosted_openings.is_hosted_opening_object(self, obj)
 
@@ -1156,12 +1091,6 @@ class PlanEditSession:
 
     def _summarize_plan_targets(self, targets):
         return self.status_text.summarize_plan_targets(targets)
-
-    def _get_plan_text_property(self, obj, property_names, default=""):
-        return plan_targets.get_plan_text_property(obj, property_names, default=default)
-
-    def _get_plan_float_property(self, obj, property_names):
-        return plan_targets.get_plan_float_property(obj, property_names)
 
     def _normalize_plan_requirement_tags(self, value):
         return plan_targets.normalize_plan_requirement_tags(value)

@@ -485,7 +485,7 @@ def get_selected_space_boundary_links(session, fallback_space=None):
     )
     entries = []
     for selection in selection_ex:
-        obj = session._get_plan_semantic_object(getattr(selection, "Object", None))
+        obj = session.visibility.get_plan_semantic_object(getattr(selection, "Object", None))
         if not obj:
             continue
         entries.append((obj, getattr(selection, "SubElementNames", []) or ()))
@@ -634,13 +634,13 @@ def get_existing_space_region_filter_spaces(session, exclude=None):
     if not session.doc:
         return []
     active_storey_name = getattr(session.active_storey, "Name", None)
-    exclude_space = session._get_plan_semantic_object(exclude) if exclude else None
+    exclude_space = session.visibility.get_plan_semantic_object(exclude) if exclude else None
     exclude_name = getattr(exclude_space, "Name", None)
 
     spaces = []
     seen = set()
     for obj in session.doc.Objects:
-        semantic_obj = session._get_plan_semantic_object(obj)
+        semantic_obj = session.visibility.get_plan_semantic_object(obj)
         name = getattr(semantic_obj, "Name", None)
         if not name or name in seen:
             continue
@@ -1341,12 +1341,14 @@ def set_selected_region_parent_space(session, space):
     region = plan_selection.get_selected_plan_target_object(session, "region")
     if not session._is_plan_region_object(region):
         return False
-    space = session._get_plan_semantic_object(space) if space else None
+    space = session.visibility.get_plan_semantic_object(space) if space else None
     if space is not None and not session._is_plan_space_object(space):
         return False
 
     current_parent = getattr(region, "ParentSpace", None)
-    current_parent = session._get_plan_semantic_object(current_parent) if current_parent else None
+    current_parent = (
+        session.visibility.get_plan_semantic_object(current_parent) if current_parent else None
+    )
     if current_parent == space:
         return False
 

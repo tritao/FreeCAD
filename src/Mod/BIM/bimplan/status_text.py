@@ -183,7 +183,7 @@ def format_provider_target_help(session, obj):
 def get_opening_display_kind_key(session, opening):
     if not opening:
         return "Opening"
-    semantic_obj = session._get_plan_semantic_object(opening)
+    semantic_obj = session.visibility.get_plan_semantic_object(opening)
     ifc_type = getattr(semantic_obj, "IfcType", "") if semantic_obj else ""
     if ifc_type in {"Window", "Door"}:
         return ifc_type

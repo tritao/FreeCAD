@@ -1859,7 +1859,7 @@ class PlanEditControlsWidget:
         active_storey = self.session.active_storey
 
         for obj in getattr(self.session.doc, "Objects", []) or []:
-            semantic_obj = self.session._get_plan_semantic_object(obj)
+            semantic_obj = self.session.visibility.get_plan_semantic_object(obj)
             if not self.session._is_plan_space_object(semantic_obj):
                 continue
             name = getattr(semantic_obj, "Name", None)
@@ -1868,7 +1868,7 @@ class PlanEditControlsWidget:
             seen.add(name)
             candidates.append(semantic_obj)
 
-        current_parent = self.session._get_plan_semantic_object(current_parent)
+        current_parent = self.session.visibility.get_plan_semantic_object(current_parent)
         if self.session._is_plan_space_object(current_parent):
             current_name = getattr(current_parent, "Name", None)
             if current_name and current_name not in seen:
@@ -1891,7 +1891,7 @@ class PlanEditControlsWidget:
         if self.region_parent_space_combo is None:
             return
 
-        current_parent = self.session._get_plan_semantic_object(
+        current_parent = self.session.visibility.get_plan_semantic_object(
             getattr(region, "ParentSpace", None)
         )
         candidates = self._get_region_parent_space_candidates(current_parent=current_parent)
