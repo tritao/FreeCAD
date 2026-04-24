@@ -111,12 +111,12 @@ def activate_join_tool(session):
     session.wall_relations.clear_plan_relation_status()
     session.overlays.clear_wall_grips()
     session.overlays.clear_selected_wall_overlay()
-    session._set_hovered_opening(None)
-    session._set_hovered_wall(None)
-    session._set_hovered_symbol(None)
-    session._set_hovered_provider(None)
-    session._set_hovered_space(None)
-    session._set_hovered_region(None)
+    session.selection.set_hovered_opening(None)
+    session.selection.set_hovered_wall(None)
+    session.selection.set_hovered_symbol(None)
+    session.selection.set_hovered_provider(None)
+    session.selection.set_hovered_space(None)
+    session.selection.set_hovered_region(None)
 
     wall = plan_selection.get_selected_plan_target_object(session, "wall")
     if not session.selection.is_plan_selectable_wall(wall):
@@ -524,10 +524,10 @@ def cancel_join_tool(session, refresh=True):
         return False
     selected_wall = plan_selection.get_selected_plan_target_object(session, "wall")
     session.current_tool = "Select"
-    session._set_hovered_wall(None)
-    session._set_hovered_opening(None)
-    session._set_hovered_symbol(None)
-    session._set_hovered_provider(None)
+    session.selection.set_hovered_wall(None)
+    session.selection.set_hovered_opening(None)
+    session.selection.set_hovered_symbol(None)
+    session.selection.set_hovered_provider(None)
     if selected_wall:
         session.selection.select_wall_for_plan_edit(selected_wall)
         return True
@@ -586,10 +586,10 @@ def apply_plan_wall_join(session, source_wall, target_wall):
         if message:
             FreeCAD.Console.PrintWarning(message + "\n")
     session.current_tool = "Select"
-    session._set_hovered_wall(None)
-    session._set_hovered_opening(None)
-    session._set_hovered_symbol(None)
-    session._set_hovered_provider(None)
+    session.selection.set_hovered_wall(None)
+    session.selection.set_hovered_opening(None)
+    session.selection.set_hovered_symbol(None)
+    session.selection.set_hovered_provider(None)
     session.selection.select_wall_for_plan_edit(source_wall)
     session.selection.set_gui_selection_object(source_wall)
     return True

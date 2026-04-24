@@ -128,13 +128,6 @@ _PLAN_VIEW_LOCKED_ACTIONS = (
 _active_session = None
 
 
-def _make_set_hovered_target_method(method_name):
-    def _set_hovered_target(self, obj):
-        return getattr(self.selection, method_name)(obj)
-
-    return _set_hovered_target
-
-
 def _make_selection_observer_delegate(method_name):
     def _selection_observer_method(self, *args):
         return getattr(self.selection, method_name)(*args)
@@ -469,18 +462,6 @@ class PlanEditSession:
 
     def _clear_hovered_plan_targets(self, kinds=None):
         return plan_hover_picking.clear_hovered_plan_targets(self, kinds=kinds)
-
-    _set_hovered_wall = _make_set_hovered_target_method("set_hovered_wall")
-
-    _set_hovered_opening = _make_set_hovered_target_method("set_hovered_opening")
-
-    _set_hovered_symbol = _make_set_hovered_target_method("set_hovered_symbol")
-
-    _set_hovered_provider = _make_set_hovered_target_method("set_hovered_provider")
-
-    _set_hovered_space = _make_set_hovered_target_method("set_hovered_space")
-
-    _set_hovered_region = _make_set_hovered_target_method("set_hovered_region")
 
     addSelection = _make_selection_observer_delegate("addSelection")
 

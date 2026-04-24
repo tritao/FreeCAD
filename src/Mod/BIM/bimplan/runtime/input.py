@@ -225,12 +225,12 @@ def on_mouse_moved(session, event_callback):
                 session.overlays.refresh_plan_overlay_visuals()
             return
         if session.current_tool not in ("Select", "Join"):
-            session._set_hovered_wall(None)
-            session._set_hovered_opening(None)
-            session._set_hovered_symbol(None)
-            session._set_hovered_provider(None)
-            session._set_hovered_space(None)
-            session._set_hovered_region(None)
+            session.selection.set_hovered_wall(None)
+            session.selection.set_hovered_opening(None)
+            session.selection.set_hovered_symbol(None)
+            session.selection.set_hovered_provider(None)
+            session.selection.set_hovered_space(None)
+            session.selection.set_hovered_region(None)
             return
         if mouse_pos is None:
             return

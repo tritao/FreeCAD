@@ -214,9 +214,9 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
             return
         with session.performance.plan_perf_trace_span("start_symbol_handle_state"):
             session.current_tool = "Move Symbol" if handle_role == "move" else "Rotate Symbol"
-            session._set_hovered_wall(None)
-            session._set_hovered_opening(None)
-            session._set_hovered_symbol(None)
+            session.selection.set_hovered_wall(None)
+            session.selection.set_hovered_opening(None)
+            session.selection.set_hovered_symbol(None)
             session.overlays.sync_secondary_selected_overlays()
             session._edit_symbol = symbol
             session._edit_symbol_handle_role = handle_role
