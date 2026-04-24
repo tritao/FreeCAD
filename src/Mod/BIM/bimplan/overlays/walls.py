@@ -168,12 +168,13 @@ def clear_wall_grips(session):
 
 
 def sync_hovered_wall_overlay(session):
-    session._clear_hovered_wall_overlay()
+    clear_hovered_wall_overlay(session)
     if session.current_tool not in ("Select", "Join"):
         return
     if not session.hovered_wall or session._is_selected_plan_target("wall", session.hovered_wall):
         return
-    session._create_wall_overlay_trackers(
+    create_wall_overlay_trackers(
+        session,
         session.hovered_wall,
         color=(0.42, 0.62, 0.9),
         width=session.viewport.scaled_line_width(2),
@@ -190,7 +191,7 @@ def sync_selected_wall_overlay(session):
     with session._plan_perf_trace_span("sync_selected_wall_overlay"):
         wall = plan_selection.get_selected_plan_target_object(session, "wall")
         if session.current_tool != "Select" or not session._is_plan_selectable_wall(wall):
-            session._clear_selected_wall_overlay()
+            clear_selected_wall_overlay(session)
             return
         width = session.viewport.scaled_line_width(4)
         color = (0.12, 0.38, 0.95)
@@ -201,7 +202,7 @@ def sync_selected_wall_overlay(session):
         try:
             import draftguitools.gui_trackers as DraftTrackers
         except ImportError:
-            session._clear_selected_wall_overlay()
+            clear_selected_wall_overlay(session)
             return
         (
             session._wall_overlay_trackers,
@@ -216,7 +217,7 @@ def sync_selected_wall_overlay(session):
             label="selected-wall-overlay:{}".format(getattr(wall, "Name", "unknown")),
             color=color,
             width=width,
-            clear_fn=session._clear_selected_wall_overlay,
+            clear_fn=lambda: clear_selected_wall_overlay(session),
             transfer_perf_key="selected_wall_overlay_tracker_transfers",
         )
 
@@ -288,16 +289,17 @@ def create_junction_node_trackers(session, junction, color, width, tracker_store
 
 
 def sync_junction_node_overlays(session):
-    session._clear_junction_node_overlays()
+    clear_junction_node_overlays(session)
     selected_wall = plan_selection.get_selected_plan_target_object(session, "wall")
-    for junction in session._get_plan_context_junctions():
+    for junction in get_plan_context_junctions(session):
         if selected_wall and selected_wall in (getattr(junction, "Walls", None) or []):
             color = (0.92, 0.58, 0.12)
             width = session.viewport.scaled_line_width(2)
         else:
             color = (0.82, 0.70, 0.32)
             width = session.viewport.scaled_line_width(1)
-        session._create_junction_node_trackers(
+        create_junction_node_trackers(
+            session,
             junction,
             color=color,
             width=width,
@@ -311,7 +313,7 @@ def clear_junction_node_overlays(session):
 
 
 def sync_hovered_wall_opening_context_overlay(session):
-    session._clear_hovered_wall_opening_context_overlay()
+    clear_hovered_wall_opening_context_overlay(session)
     if session.current_tool != "Select":
         return
     if not session.hovered_wall or session._is_selected_plan_target("wall", session.hovered_wall):
@@ -322,7 +324,7 @@ def sync_hovered_wall_opening_context_overlay(session):
     color = (0.64, 0.70, 0.84)
     width = session.viewport.scaled_line_width(1)
     for opening in session._get_wall_hosted_openings(session.hovered_wall):
-        session._create_opening_overlay_trackers(
+        session.overlays.create_opening_overlay_trackers(
             opening,
             color=color,
             width=width,

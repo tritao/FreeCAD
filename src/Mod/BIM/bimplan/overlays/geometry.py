@@ -291,7 +291,7 @@ def get_region_overlay_segments(session, region):
         region,
         "overlay_segments",
         lambda region_obj: session._build_overlay_segments_from_polylines(
-            session._get_region_overlay_polylines(region_obj)
+            get_region_overlay_polylines(session, region_obj)
         ),
     )
 
@@ -304,7 +304,7 @@ def get_space_overlay_segments(session, space):
         space,
         "overlay_segments",
         lambda space_obj: session._build_overlay_segments_from_polylines(
-            session._get_space_overlay_polylines(space_obj)
+            get_space_overlay_polylines(session, space_obj)
         ),
     )
 
