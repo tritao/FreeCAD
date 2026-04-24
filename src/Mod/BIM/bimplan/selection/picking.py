@@ -942,7 +942,7 @@ def get_plan_target_from_edit_node(session, node):
         return (None, None)
     if node_kind == "symbol_handle":
         symbol = node[1]
-        if session._is_plan_symbol_instance(symbol):
+        if session.visibility.is_plan_symbol_instance(symbol):
             return ("symbol", symbol)
         return (None, None)
     try:

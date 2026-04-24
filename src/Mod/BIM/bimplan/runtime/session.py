@@ -38,7 +38,7 @@ from bimplan.tools import hosted_openings as plan_hosted_openings
 from bimplan.selection import hover_picking as plan_hover_picking
 from bimplan.runtime import input as plan_input
 from bimplan.runtime import lifecycle as plan_lifecycle
-from bimplan import object_visibility as plan_object_visibility
+from bimplan.object_visibility import PlanVisibilityAPI
 from bimplan import performance as plan_performance
 from bimplan.providers import runtime as plan_provider_runtime
 from bimplan import snap as plan_snap
@@ -266,6 +266,7 @@ class PlanEditSession:
         self.viewport = PlanViewportAPI(self)
         self.overlays = PlanOverlaysAPI(self)
         self.wall_edit = PlanWallEditAPI(self)
+        self.visibility = PlanVisibilityAPI(self)
         self.providers = PlanProvidersAPI(self)
         self.status_text = PlanStatusTextAPI(self)
         plan_session_state.initialize_session_state(self)
@@ -416,15 +417,6 @@ class PlanEditSession:
             obj=obj,
             kinds=kinds,
         )
-
-    def _invalidate_plan_classification_cache(self):
-        cache_state = self.overlay_cache_state
-        cache_state.plan_semantic_object_cache.clear()
-        cache_state.plan_object_storeys_cache.clear()
-        cache_state.plan_symbol_instances_cache = None
-        cache_state.plan_space_instances_cache = None
-        cache_state.plan_region_instances_cache = None
-        cache_state.symbol_overlay_screen_cache.clear()
 
     def _get_cached_plan_overlay_geometry(self, kind, obj, field_name, compute):
         return overlay_geometry.get_cached_plan_overlay_geometry(
@@ -586,12 +578,12 @@ class PlanEditSession:
                     active_storey=self._plan_perf_describe_object(self.active_storey)
                 )
             with self._plan_perf_trace_span("capture_object_view_state"):
-                self._capture_object_view_state()
+                self.visibility.capture_object_view_state()
             with self._plan_perf_trace_span("apply_plan_view"):
                 self.viewport.apply_plan_view(fit=False)
             with self._plan_perf_trace_span("apply_plan_snap_profile"):
                 self._apply_plan_snap_profile()
-            self._apply_storey_visibility()
+            self.visibility.apply_storey_visibility()
             with self._plan_perf_trace_span("attach_selection_observer"):
                 self._attach_selection_observer()
             with self._plan_perf_trace_span("attach_document_observer"):
@@ -952,21 +944,6 @@ class PlanEditSession:
     def _pop_opening_move_snap_profile(self):
         return plan_snap.pop_opening_move_snap_profile(self)
 
-    def _capture_object_view_state(self):
-        return plan_object_visibility.capture_object_view_state(self)
-
-    def _register_object_view_state(self, obj):
-        return plan_object_visibility.register_object_view_state(self, obj)
-
-    def _add_object_to_active_storey(self, obj):
-        return plan_object_visibility.add_object_to_active_storey(self, obj)
-
-    def _register_plan_object(self, obj):
-        return plan_object_visibility.register_plan_object(self, obj)
-
-    def _register_plan_objects(self, objects):
-        return plan_object_visibility.register_plan_objects(self, objects)
-
     def _is_direct_plan_equipment_object(self, obj):
         if not obj:
             return False
@@ -1032,60 +1009,8 @@ class PlanEditSession:
             semantic_cache[key] = result
         return result
 
-    def _restore_object_view_state(self):
-        return plan_object_visibility.restore_object_view_state(self)
-
-    def _is_storey_object(self, obj):
-        return plan_object_visibility.is_storey_object(obj)
-
-    def _is_plan_container_object(self, obj):
-        return plan_object_visibility.is_plan_container_object(obj)
-
-    def _is_plan_background_object(self, obj):
-        return plan_object_visibility.is_plan_background_object(self, obj)
-
-    def _is_plan_equipment_object(self, obj):
-        return plan_object_visibility.is_plan_equipment_object(self, obj)
-
-    def _is_cabinetry_plan_context_object(self, obj):
-        return plan_object_visibility.is_cabinetry_plan_context_object(obj)
-
-    def _has_direct_plan_symbols(self, obj):
-        return plan_object_visibility.has_direct_plan_symbols(obj)
-
-    def _is_plan_symbol_instance(self, obj):
-        return plan_object_visibility.is_plan_symbol_instance(self, obj)
-
-    def _is_plan_context_only_object(self, obj):
-        return plan_object_visibility.is_plan_context_only_object(self, obj)
-
-    def _is_component_addition_object(self, obj):
-        return plan_object_visibility.is_component_addition_object(obj)
-
-    def _is_supported_plan_object(self, obj):
-        return plan_object_visibility.is_supported_plan_object(self, obj)
-
     def _is_hosted_opening_object(self, obj):
         return plan_hosted_openings.is_hosted_opening_object(self, obj)
-
-    def _get_supported_plan_visibility(self, obj, state):
-        return plan_object_visibility.get_supported_plan_visibility(self, obj, state)
-
-    def _apply_context_object_selectability(self, obj, view_object):
-        return plan_object_visibility.apply_context_object_selectability(
-            self,
-            obj,
-            view_object,
-        )
-
-    def _apply_hidden_object_state(self, view_object):
-        return plan_object_visibility.apply_hidden_object_state(view_object)
-
-    def _get_object_storeys(self, obj):
-        return plan_object_visibility.get_object_storeys(self, obj)
-
-    def _apply_storey_visibility(self):
-        return plan_object_visibility.apply_storey_visibility(self)
 
     def _set_active_object(self, obj):
         try:

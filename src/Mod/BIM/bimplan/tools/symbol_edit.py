@@ -75,7 +75,7 @@ class PlanSymbolsAPI:
 
 
 def get_symbol_handle_placement(session, symbol, handle_role, point):
-    if not session._is_plan_symbol_instance(symbol) or point is None or not handle_role:
+    if not session.visibility.is_plan_symbol_instance(symbol) or point is None or not handle_role:
         return None
     start_placement = session._edit_symbol_start_placement
     if start_placement is None:
@@ -166,7 +166,7 @@ def activate_symbol_handle(session, symbol, handle_role):
 
 def activate_symbol_handle_now(session, symbol, handle_role):
     with session._plan_perf_trace_span("activate_symbol_handle_now"):
-        if session._tearing_down or not session._is_plan_symbol_instance(symbol):
+        if session._tearing_down or not session.visibility.is_plan_symbol_instance(symbol):
             return
         if handle_role not in {"move", "rotate"}:
             return
@@ -200,7 +200,7 @@ def clear_symbol_edit_preview(session):
 
 def start_symbol_handle_point_pick(session, symbol, handle_role):
     with session._plan_perf_trace_span("start_symbol_handle_point_pick"):
-        if not session._is_plan_symbol_instance(symbol):
+        if not session.visibility.is_plan_symbol_instance(symbol):
             return
         with session._plan_perf_trace_span("start_symbol_handle_get_handles"):
             handle_points = {

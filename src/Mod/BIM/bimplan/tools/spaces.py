@@ -197,7 +197,7 @@ def create_plan_region(session, points):
         )
         if not region:
             raise RuntimeError("Unable to create plan region")
-        session._add_object_to_active_storey(region)
+        session.visibility.add_object_to_active_storey(region)
         session.doc.recompute()
         if not session._get_region_footprint_faces(region):
             raise RuntimeError("Plan region has no valid footprint")
@@ -226,7 +226,7 @@ def finalize_plan_region(session):
         FreeCAD.Console.PrintError(translate("BIM_PlanEdit", "Failed to create the plan region.\n"))
         return False
 
-    session._register_plan_object(region)
+    session.visibility.register_plan_object(region)
     session._cancel_plan_region_tool(refresh=False)
     session.spaces.restore_selected_region(region)
     return True
@@ -344,7 +344,7 @@ def create_space_separator(session, start, end):
         )
         if not separator:
             raise RuntimeError("Unable to create space separator")
-        session._add_object_to_active_storey(separator)
+        session.visibility.add_object_to_active_storey(separator)
         session.doc.recompute()
         session.doc.commitTransaction()
     except Exception:
@@ -387,7 +387,7 @@ def handle_space_separator_point(session, point=None, obj=None):
         )
         return
 
-    session._register_plan_object(separator)
+    session.visibility.register_plan_object(separator)
     session._cancel_space_separator_tool(refresh=False)
     session.current_tool = "Select"
     session._refresh_primary_selected_plan_target()
@@ -648,7 +648,7 @@ def get_existing_space_region_filter_spaces(session, exclude=None):
         if name == exclude_name or not session._is_plan_space_object(semantic_obj):
             continue
         if active_storey_name is not None:
-            storeys = session._get_object_storeys(semantic_obj)
+            storeys = session.visibility.get_object_storeys(semantic_obj)
             if storeys and not any(parent.Name == active_storey_name for parent in storeys):
                 continue
         spaces.append(semantic_obj)
@@ -821,7 +821,7 @@ def reset_space_text_pick_state(session):
 
 
 def _finish_created_space(session, space, event_callback=None, claim_click=False):
-    session._register_plan_object(space)
+    session.visibility.register_plan_object(space)
     session.spaces.restore_selected_space(space)
     if claim_click:
         session._claim_left_button_click(event_callback)
@@ -845,7 +845,7 @@ def _create_space_in_transaction(
             raise RuntimeError("Unable to create space")
         if keep_boundaries and boundaries:
             space.Boundaries = boundaries
-        session._add_object_to_active_storey(space)
+        session.visibility.add_object_to_active_storey(space)
         session.doc.recompute()
         if not session._space_has_valid_geometry(space):
             reported_failure = session._report_space_creation_failure(space)

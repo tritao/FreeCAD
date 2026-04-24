@@ -58,7 +58,7 @@ def get_symbol_semantic_proxy(session, symbol, *attrs):
 
 
 def get_symbol_overlay_polylines(session, symbol, placement=None):
-    if not session._is_plan_symbol_instance(symbol):
+    if not session.visibility.is_plan_symbol_instance(symbol):
         return []
     proxy = get_symbol_plan_proxy(session, symbol, "_collect_local_footprint_polylines")
     if not proxy:
@@ -113,7 +113,7 @@ def get_plan_symbol_instances(session):
     with session._plan_perf_trace_span("build_plan_symbol_instances_cache"):
         for obj in getattr(session.doc, "Objects", []) or []:
             session._plan_perf_count("plan_symbol_instance_objects_scanned")
-            if session._is_plan_symbol_instance(obj):
+            if session.visibility.is_plan_symbol_instance(obj):
                 symbols.append(obj)
     result = tuple(symbols)
     session.overlay_cache_state.plan_symbol_instances_cache = (doc_name, result)
@@ -136,7 +136,7 @@ def _get_symbol_screen_geometry_key(session, symbol):
 
 
 def get_symbol_overlay_screen_polylines(session, symbol):
-    if not session._is_plan_symbol_instance(symbol) or not session.view:
+    if not session.visibility.is_plan_symbol_instance(symbol) or not session.view:
         return ()
     projection_key = session.viewport.get_plan_projection_cache_key()
     if projection_key is None:
@@ -203,7 +203,7 @@ def sync_hovered_symbol_overlay(session):
         clear_hovered_symbol_overlay(session)
         if session.current_tool != "Select":
             return
-        if not session._is_plan_symbol_instance(session.hovered_symbol):
+        if not session.visibility.is_plan_symbol_instance(session.hovered_symbol):
             return
         if session._is_selected_plan_target("symbol", session.hovered_symbol):
             return
@@ -224,7 +224,9 @@ def clear_hovered_symbol_overlay(session):
 def sync_selected_symbol_overlay(session):
     with session._plan_perf_trace_span("sync_selected_symbol_overlay"):
         symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
-        if session.current_tool != "Select" or not session._is_plan_symbol_instance(symbol):
+        if session.current_tool != "Select" or not session.visibility.is_plan_symbol_instance(
+            symbol
+        ):
             clear_selected_symbol_overlay(session)
             return
         width = session.viewport.scaled_line_width(3)
@@ -436,7 +438,7 @@ def get_symbol_handle_radius(session, symbol, placement=None):
 def get_selected_symbol_handle_specs(session, symbol):
     from draftutils import params
 
-    if not session._is_plan_symbol_instance(symbol):
+    if not session.visibility.is_plan_symbol_instance(symbol):
         return []
 
     placement = session._get_plan_object_global_placement(symbol)
@@ -467,7 +469,7 @@ def sync_selected_symbol_handles(session):
         if session.current_tool != "Select":
             session.overlays.clear_selected_symbol_handles()
             return
-        if not session._is_plan_symbol_instance(symbol):
+        if not session.visibility.is_plan_symbol_instance(symbol):
             session.overlays.clear_selected_symbol_handles()
             return
         session.overlays.clear_selected_symbol_handles()
@@ -495,7 +497,7 @@ def clear_selected_symbol_handles(session):
 
 def pick_selected_symbol_handle(session, mouse_pos, radius_px=10):
     symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
-    if not session._is_plan_symbol_instance(symbol) or not session.view:
+    if not session.visibility.is_plan_symbol_instance(symbol) or not session.view:
         return None
     try:
         cursor_x = int(mouse_pos[0])
@@ -524,7 +526,7 @@ def sync_symbol_edit_preview(session, symbol, placement, guide_start=None, guide
     session.symbols.clear_symbol_edit_preview()
     if session.current_tool not in ("Move Symbol", "Rotate Symbol"):
         return
-    if not session._is_plan_symbol_instance(symbol) or placement is None:
+    if not session.visibility.is_plan_symbol_instance(symbol) or placement is None:
         return
     try:
         import draftguitools.gui_trackers as DraftTrackers

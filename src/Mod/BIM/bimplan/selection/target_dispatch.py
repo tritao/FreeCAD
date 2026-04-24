@@ -105,7 +105,7 @@ _TARGET_KIND_POLICIES = {
         ),
     ),
     plan_target_kinds.PLAN_TARGET_SYMBOL: _build_target_kind_policy(
-        validator_name="_is_plan_symbol_instance",
+        validator_name="visibility.is_plan_symbol_instance",
         queue_restore_method_name="symbols.queue_restore_selected_symbol",
         hovered_attr_name="hovered_symbol",
         hovered_setter_name="_set_hovered_symbol",
@@ -269,7 +269,13 @@ def validate_plan_target(session, kind, obj):
     validator_name = _get_target_kind_policy(kind).validator_name
     if not validator_name:
         return False
-    validator = getattr(session, validator_name, None)
+    validator = session
+    for attr_name in str(validator_name or "").split("."):
+        if not attr_name:
+            return False
+        validator = getattr(validator, attr_name, None)
+        if validator is None:
+            return False
     return bool(callable(validator) and validator(obj))
 
 
@@ -279,7 +285,13 @@ def queue_restore_selected_target(session, kind, obj):
     method_name = _get_target_kind_policy(kind).queue_restore_method_name
     if not method_name:
         return False
-    method = getattr(session, method_name, None)
+    method = session
+    for attr_name in str(method_name or "").split("."):
+        if not attr_name:
+            return False
+        method = getattr(method, attr_name, None)
+        if method is None:
+            return False
     if not callable(method):
         return False
     method(obj)
