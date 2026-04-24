@@ -512,6 +512,37 @@ def _set_cached_provider_contributions(session, method_name, contributions):
     refresh_cache[("provider_contributions", str(method_name or ""))] = contributions
 
 
+def _get_cached_provider_snapshot(session):
+    refresh_cache = _get_provider_refresh_cache(session)
+    if refresh_cache is None:
+        return None
+    cached_snapshot = refresh_cache.get(_PLAN_PROVIDER_SNAPSHOT_CACHE_KEY)
+    if isinstance(cached_snapshot, PlanProviderSnapshot):
+        return cached_snapshot
+    return None
+
+
+def _set_cached_provider_snapshot(session, snapshot):
+    refresh_cache = _get_provider_refresh_cache(session)
+    if refresh_cache is None:
+        return
+    refresh_cache[_PLAN_PROVIDER_SNAPSHOT_CACHE_KEY] = snapshot
+
+
+def _get_plan_edit_context_or_none(session):
+    try:
+        return session.providers.get_plan_edit_context()
+    except (ReferenceError, RuntimeError):
+        return None
+
+
+def _iter_named_plan_providers(session):
+    for provider in session.get_plan_provider_registry().iter_providers():
+        provider_id = session.providers.get_plan_provider_id(provider)
+        if provider_id:
+            yield provider, provider_id
+
+
 def _collect_provider_surface_contributions(
     session,
     provider,
@@ -554,45 +585,60 @@ def _collect_provider_surface_contributions(
     return tuple(results)
 
 
+def _collect_plan_provider_contributions_for_method(session, context, method_name, normalizer):
+    results = []
+    for provider, provider_id in _iter_named_plan_providers(session):
+        results.extend(
+            _collect_provider_surface_contributions(
+                session,
+                provider,
+                provider_id,
+                context,
+                method_name,
+                normalizer,
+            )
+        )
+    return tuple(results)
+
+
+def _collect_plan_provider_snapshot_surfaces(session, context, normalized_surfaces):
+    collected = {surface_spec.field_name: [] for surface_spec, _normalizer in normalized_surfaces}
+    for provider, provider_id in _iter_named_plan_providers(session):
+        for surface_spec, normalizer in normalized_surfaces:
+            contributions = _collect_provider_surface_contributions(
+                session,
+                provider,
+                provider_id,
+                context,
+                surface_spec.method_name,
+                normalizer,
+            )
+            if contributions:
+                collected[surface_spec.field_name].extend(contributions)
+    return collected
+
+
 def collect_plan_provider_snapshot(session) -> PlanProviderSnapshot:
     with _perf_trace_span(session, "collect_plan_provider_snapshot"):
         if not session.document_visuals.document_is_alive():
             return PlanProviderSnapshot()
 
-        refresh_cache = _get_provider_refresh_cache(session)
-        if refresh_cache is not None:
-            cached_snapshot = refresh_cache.get(_PLAN_PROVIDER_SNAPSHOT_CACHE_KEY)
-            if isinstance(cached_snapshot, PlanProviderSnapshot):
-                return cached_snapshot
+        cached_snapshot = _get_cached_provider_snapshot(session)
+        if cached_snapshot is not None:
+            return cached_snapshot
 
-        try:
-            context = session.providers.get_plan_edit_context()
-        except (ReferenceError, RuntimeError):
+        context = _get_plan_edit_context_or_none(session)
+        if context is None:
             return PlanProviderSnapshot()
-
-        collected = {
-            surface_spec.field_name: [] for surface_spec in _PLAN_PROVIDER_SNAPSHOT_SURFACES
-        }
         normalized_surfaces = tuple(
             (surface_spec, getattr(session.providers, surface_spec.normalizer_name))
             for surface_spec in _PLAN_PROVIDER_SNAPSHOT_SURFACES
         )
-
-        for provider in session.get_plan_provider_registry().iter_providers():
-            provider_id = session.providers.get_plan_provider_id(provider)
-            if not provider_id:
-                continue
-            for surface_spec, normalizer in normalized_surfaces:
-                contributions = _collect_provider_surface_contributions(
-                    session,
-                    provider,
-                    provider_id,
-                    context,
-                    surface_spec.method_name,
-                    normalizer,
-                )
-                if contributions:
-                    collected[surface_spec.field_name].extend(contributions)
+        collected = _collect_plan_provider_snapshot_surfaces(
+            session,
+            context,
+            normalized_surfaces,
+        )
 
         snapshot = PlanProviderSnapshot(
             tools=tuple(collected["tools"]),
@@ -601,14 +647,13 @@ def collect_plan_provider_snapshot(session) -> PlanProviderSnapshot:
             context_panels=tuple(collected["context_panels"]),
             inspector_sections=tuple(collected["inspector_sections"]),
         )
-        if refresh_cache is not None:
-            refresh_cache[_PLAN_PROVIDER_SNAPSHOT_CACHE_KEY] = snapshot
-            for surface_spec in _PLAN_PROVIDER_SNAPSHOT_SURFACES:
-                _set_cached_provider_contributions(
-                    session,
-                    surface_spec.method_name,
-                    getattr(snapshot, surface_spec.field_name),
-                )
+        _set_cached_provider_snapshot(session, snapshot)
+        for surface_spec in _PLAN_PROVIDER_SNAPSHOT_SURFACES:
+            _set_cached_provider_contributions(
+                session,
+                surface_spec.method_name,
+                getattr(snapshot, surface_spec.field_name),
+            )
         return snapshot
 
 
@@ -1361,26 +1406,15 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
         cached_contributions = _get_cached_provider_contributions(session, method_name)
         if cached_contributions is not None:
             return cached_contributions
-        try:
-            context = session.providers.get_plan_edit_context()
-        except (ReferenceError, RuntimeError):
+        context = _get_plan_edit_context_or_none(session)
+        if context is None:
             return ()
-        results = []
-        for provider in session.get_plan_provider_registry().iter_providers():
-            provider_id = session.providers.get_plan_provider_id(provider)
-            if not provider_id:
-                continue
-            results.extend(
-                _collect_provider_surface_contributions(
-                    session,
-                    provider,
-                    provider_id,
-                    context,
-                    method_name,
-                    normalizer,
-                )
-            )
-        contributions = tuple(results)
+        contributions = _collect_plan_provider_contributions_for_method(
+            session,
+            context,
+            method_name,
+            normalizer,
+        )
         _set_cached_provider_contributions(session, method_name, contributions)
         return contributions
 
