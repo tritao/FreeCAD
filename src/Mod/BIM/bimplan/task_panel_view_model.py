@@ -16,12 +16,6 @@ from bimplan.providers import (
 
 translate = FreeCAD.Qt.translate
 
-_TASK_PANEL_CONTEXT_METHODS = (
-    "get_current_tool",
-    "get_selected_plan_target",
-    "get_selected_plan_targets",
-)
-
 
 def _read_component(session, component_name, method_name, *args, default=None):
     component = getattr(session, component_name, None)
@@ -44,6 +38,20 @@ class _TaskPanelInteractionReads:
                 default=False,
             )
         )
+
+
+class _TaskPanelSelectionReads:
+    def __init__(self, session):
+        self.session = session
+
+    def get_current_tool(self):
+        return str(getattr(self.session, "current_tool", "") or "")
+
+    def get_selected_plan_target(self):
+        return plan_selection.get_selected_plan_target(self.session)
+
+    def get_selected_plan_targets(self):
+        return plan_selection.get_selected_plan_targets(self.session)
 
 
 class _TaskPanelProviderReads:
@@ -419,6 +427,7 @@ class PlanTaskPanelContext:
 
     def __init__(self, session):
         self.session = session
+        self.selection = _TaskPanelSelectionReads(session)
         self.interaction = _TaskPanelInteractionReads(session)
         self.providers = _TaskPanelProviderReads(session)
         self.status_text = _TaskPanelStatusReads(session)
@@ -428,128 +437,9 @@ class PlanTaskPanelContext:
         self.wall_edit = _TaskPanelWallEditReads(session)
         self.windows = _TaskPanelWindowReads(session)
 
-    def get_current_tool(self):
-        return str(self.session.current_tool or "")
-
-    def get_selected_plan_target(self):
-        return plan_selection.get_selected_plan_target(self.session)
-
-    def get_selected_plan_targets(self):
-        return plan_selection.get_selected_plan_targets(self.session)
-
-    def is_modal_plan_interaction_active(self):
-        return self.interaction.is_modal_plan_interaction_active()
-
-    def can_place_plan_window(self):
-        return self.windows.can_place_plan_window()
-
-    def has_plan_candidate_joint(self):
-        return self.wall_relations.has_plan_candidate_joint()
-
-    def get_provider_point_tool_label(self):
-        return self.providers.get_provider_point_tool_label()
-
-    def get_provider_point_tool_prompt(self):
-        return self.providers.get_provider_point_tool_prompt()
-
-    def get_plan_provider_display_name(self, provider_id):
-        return self.providers.get_plan_provider_display_name(provider_id)
-
-    def get_plan_provider_overlay_category(self, overlay):
-        return self.providers.get_plan_provider_overlay_category(overlay)
-
-    def is_plan_provider_overlay_enabled(self, overlay):
-        return self.providers.is_plan_provider_overlay_enabled(overlay)
-
-    def get_plan_provider_overlay_mode(self):
-        return self.providers.get_plan_provider_overlay_mode()
-
-    def format_plan_target_selection_state(self, target_kind, target_obj):
-        return self.status_text.format_plan_target_selection_state(target_kind, target_obj)
-
-    def format_provider_selected_object_state(self):
-        return self.status_text.format_provider_selected_object_state()
-
-    def get_plan_join_candidate_state(self):
-        return self.wall_relations.get_plan_join_candidate_state()
-
-    def get_plan_target_display_label(self, obj):
-        return self.status_text.get_plan_target_display_label(obj)
-
-    def get_plan_join_type_label(self):
-        return self.wall_relations.get_plan_join_type_label()
-
-    def get_plan_join_mode_action_text(self, target_wall, joint):
-        return self.wall_relations.get_plan_join_mode_action_text(target_wall, joint)
-
-    def summarize_plan_targets(self, targets):
-        return self.status_text.summarize_plan_targets(targets)
-
-    def get_space_region_candidate_count(self):
-        return self.spaces.get_space_region_candidate_count()
-
-    def get_hovered_space_region_candidate(self):
-        return self.spaces.get_hovered_space_region_candidate()
-
-    def format_space_region_candidate_area(self, candidate):
-        return self.spaces.format_space_region_candidate_area(candidate)
-
-    def get_plan_region_parent_space(self):
-        return self.spaces.get_plan_region_parent_space()
-
-    def is_plan_space_object(self, obj):
-        return self.spaces.is_plan_space_object(obj)
-
-    def format_opening_selection_help(self, obj):
-        return self.status_text.format_opening_selection_help(obj)
-
-    def symbol_rotation_snap_enabled(self):
-        return self.symbols.symbol_rotation_snap_enabled()
-
-    def format_symbol_rotation_snap_label(self):
-        return self.symbols.format_symbol_rotation_snap_label()
-
-    def format_provider_target_help(self, obj):
-        return self.status_text.format_provider_target_help(obj)
-
-    def is_selected_wall_endpoint_editable(self):
-        return self.wall_edit.is_selected_wall_endpoint_editable()
-
-    def format_provider_selected_object_help(self):
-        return self.status_text.format_provider_selected_object_help()
-
-    def get_plan_selection_summary_text(self):
-        return self.status_text.get_plan_selection_summary_text()
-
-    def get_plan_relation_status_message(self):
-        return self.wall_relations.get_plan_relation_status_message()
-
-    def get_window_style_preset_options(self):
-        return self.windows.get_window_style_preset_options()
-
-    def can_edit_window_width(self, obj):
-        return self.windows.can_edit_window_width(obj)
-
-    def can_edit_window_height(self, obj):
-        return self.windows.can_edit_window_height(obj)
-
-    def can_apply_window_style_preset(self, obj):
-        return self.windows.can_apply_window_style_preset(obj)
-
-    def get_selected_window_style_preset(self):
-        return self.windows.get_selected_window_style_preset()
-
-    def get_selected_window_width_text(self):
-        return self.windows.get_selected_window_width_text()
-
-    def get_selected_window_height_text(self):
-        return self.windows.get_selected_window_height_text()
-
 
 def as_task_panel_context(session_or_context):
-    if isinstance(session_or_context, PlanTaskPanelContext) or all(
-        hasattr(session_or_context, method_name) for method_name in _TASK_PANEL_CONTEXT_METHODS
-    ):
+    if isinstance(session_or_context, PlanTaskPanelContext):
         return session_or_context
     return PlanTaskPanelContext(session_or_context)
 
@@ -962,8 +852,8 @@ def build_action_context_view_model(session_or_context, modal_active=None):
     context = as_task_panel_context(session_or_context)
     if modal_active is None:
         modal_active = context.interaction.is_modal_plan_interaction_active()
-    selected_kind, selected_obj = context.get_selected_plan_target()
-    current_tool = context.get_current_tool()
+    selected_kind, selected_obj = context.selection.get_selected_plan_target()
+    current_tool = context.selection.get_current_tool()
     has_wall = selected_kind == "wall" and selected_obj is not None
     can_place_window = context.windows.can_place_plan_window()
     in_join_mode = current_tool == "Join"
@@ -1044,8 +934,8 @@ def _append_status_help_line(text, line):
 
 def build_status_text_view_model(session_or_context):
     context = as_task_panel_context(session_or_context)
-    tool = context.get_current_tool()
-    selected_kind, selected_obj = context.get_selected_plan_target()
+    tool = context.selection.get_current_tool()
+    selected_kind, selected_obj = context.selection.get_selected_plan_target()
     selected_state = context.status_text.format_plan_target_selection_state(
         selected_kind,
         selected_obj,
@@ -1070,7 +960,7 @@ def build_status_text_view_model(session_or_context):
             "BIM_PlanEdit",
             "Multiple enclosed regions were found. Hover a dashed outline, then click to create that space.",
         )
-        targets = context.get_selected_plan_targets()
+        targets = context.selection.get_selected_plan_targets()
         if targets:
             selection_help = _append_status_help_line(
                 selection_help,
@@ -1203,20 +1093,22 @@ def build_status_text_view_model(session_or_context):
 
 def build_space_editor_view_model(session_or_context):
     context = as_task_panel_context(session_or_context)
-    selected_kind, selected_obj = context.get_selected_plan_target()
+    selected_kind, selected_obj = context.selection.get_selected_plan_target()
     space = selected_obj if selected_kind == "space" else None
     return PlanSpaceEditorViewModel(
-        show_editor=bool(space and context.get_current_tool() in ("Select", "Set Space Text")),
+        show_editor=bool(
+            space and context.selection.get_current_tool() in ("Select", "Set Space Text")
+        ),
         space=space,
     )
 
 
 def build_region_editor_view_model(session_or_context):
     context = as_task_panel_context(session_or_context)
-    selected_kind, selected_obj = context.get_selected_plan_target()
+    selected_kind, selected_obj = context.selection.get_selected_plan_target()
     region = selected_obj if selected_kind == "region" else None
     return PlanRegionEditorViewModel(
-        show_editor=bool(region and context.get_current_tool() == "Select"),
+        show_editor=bool(region and context.selection.get_current_tool() == "Select"),
         region=region,
     )
 
@@ -1305,8 +1197,12 @@ def format_window_editor_note(
 
 def get_window_editor_target(session_or_context):
     context = as_task_panel_context(session_or_context)
-    selected_kind, selected_obj = context.get_selected_plan_target()
-    if selected_kind != "opening" or selected_obj is None or context.get_current_tool() != "Select":
+    selected_kind, selected_obj = context.selection.get_selected_plan_target()
+    if (
+        selected_kind != "opening"
+        or selected_obj is None
+        or context.selection.get_current_tool() != "Select"
+    ):
         return None
     if (
         context.windows.can_edit_window_width(selected_obj)

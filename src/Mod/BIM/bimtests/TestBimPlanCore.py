@@ -926,19 +926,18 @@ class TestBimPlanCore(unittest.TestCase):
 
         context = PlanTaskPanelContext(session)
 
-        self.assertEqual(("wall", wall), context.get_selected_plan_target())
-        self.assertEqual((("wall", wall),), context.get_selected_plan_targets())
+        self.assertEqual(("wall", wall), context.selection.get_selected_plan_target())
+        self.assertEqual((("wall", wall),), context.selection.get_selected_plan_targets())
 
-    def test_as_task_panel_context_preserves_context_like_objects(self):
-        from bimplan.task_panel_view_model import as_task_panel_context
+    def test_as_task_panel_context_wraps_sessions_and_preserves_context(self):
+        from bimplan.task_panel_view_model import PlanTaskPanelContext, as_task_panel_context
 
-        context = SimpleNamespace(
-            get_current_tool=lambda: "Select",
-            get_selected_plan_target=lambda: (None, None),
-            get_selected_plan_targets=lambda: (),
-        )
+        session = SimpleNamespace()
+        wrapped = as_task_panel_context(session)
 
-        self.assertIs(context, as_task_panel_context(context))
+        self.assertIsInstance(wrapped, PlanTaskPanelContext)
+        self.assertIs(session, wrapped.session)
+        self.assertIs(wrapped, as_task_panel_context(wrapped))
 
     def test_task_panel_context_prefers_provider_and_status_components(self):
         from bimplan.task_panel_view_model import PlanTaskPanelContext
@@ -970,23 +969,39 @@ class TestBimPlanCore(unittest.TestCase):
         overlay = SimpleNamespace(key="socket")
         obj = SimpleNamespace(Name="Socket001")
 
-        self.assertEqual("Socket", context.get_provider_point_tool_label())
-        self.assertEqual("Click socket point", context.get_provider_point_tool_prompt())
-        self.assertEqual("PROVIDER-A", context.get_plan_provider_display_name("provider-a"))
-        self.assertEqual("electrical", context.get_plan_provider_overlay_category(overlay))
-        self.assertTrue(context.is_plan_provider_overlay_enabled(overlay))
-        self.assertEqual("electrical", context.get_plan_provider_overlay_mode())
-        self.assertEqual("Object: Socket", context.format_provider_selected_object_state())
-        self.assertEqual("Provider target help", context.format_provider_target_help(obj))
-        self.assertEqual("Provider object help", context.format_provider_selected_object_help())
+        self.assertEqual("Socket", context.providers.get_provider_point_tool_label())
+        self.assertEqual("Click socket point", context.providers.get_provider_point_tool_prompt())
+        self.assertEqual(
+            "PROVIDER-A",
+            context.providers.get_plan_provider_display_name("provider-a"),
+        )
+        self.assertEqual(
+            "electrical",
+            context.providers.get_plan_provider_overlay_category(overlay),
+        )
+        self.assertTrue(context.providers.is_plan_provider_overlay_enabled(overlay))
+        self.assertEqual("electrical", context.providers.get_plan_provider_overlay_mode())
+        self.assertEqual(
+            "Object: Socket", context.status_text.format_provider_selected_object_state()
+        )
+        self.assertEqual(
+            "Provider target help", context.status_text.format_provider_target_help(obj)
+        )
+        self.assertEqual(
+            "Provider object help",
+            context.status_text.format_provider_selected_object_help(),
+        )
         self.assertEqual(
             "provider:Socket001",
-            context.format_plan_target_selection_state("provider", obj),
+            context.status_text.format_plan_target_selection_state("provider", obj),
         )
-        self.assertEqual("Socket001", context.get_plan_target_display_label(obj))
-        self.assertEqual("1 target", context.summarize_plan_targets((("provider", obj),)))
-        self.assertEqual("Opening help", context.format_opening_selection_help(obj))
-        self.assertEqual("Summary", context.get_plan_selection_summary_text())
+        self.assertEqual("Socket001", context.status_text.get_plan_target_display_label(obj))
+        self.assertEqual(
+            "1 target",
+            context.status_text.summarize_plan_targets((("provider", obj),)),
+        )
+        self.assertEqual("Opening help", context.status_text.format_opening_selection_help(obj))
+        self.assertEqual("Summary", context.status_text.get_plan_selection_summary_text())
 
     def test_task_panel_context_prefers_relations_interaction_symbols_spaces_windows_and_wall_edit_components(
         self,
@@ -1036,34 +1051,42 @@ class TestBimPlanCore(unittest.TestCase):
 
         context = PlanTaskPanelContext(session)
 
-        self.assertTrue(context.is_modal_plan_interaction_active())
-        self.assertTrue(context.symbol_rotation_snap_enabled())
-        self.assertEqual("15°", context.format_symbol_rotation_snap_label())
-        self.assertTrue(context.can_place_plan_window())
-        self.assertTrue(context.has_plan_candidate_joint())
+        self.assertTrue(context.interaction.is_modal_plan_interaction_active())
+        self.assertTrue(context.symbols.symbol_rotation_snap_enabled())
+        self.assertEqual("15°", context.symbols.format_symbol_rotation_snap_label())
+        self.assertTrue(context.windows.can_place_plan_window())
+        self.assertTrue(context.wall_relations.has_plan_candidate_joint())
         self.assertEqual(
             ("Wall002", "joint", "Existing joint"),
-            context.get_plan_join_candidate_state(),
+            context.wall_relations.get_plan_join_candidate_state(),
         )
-        self.assertEqual("Miter", context.get_plan_join_type_label())
-        self.assertEqual("Join action", context.get_plan_join_mode_action_text("Wall002", "joint"))
-        self.assertEqual("Relation status", context.get_plan_relation_status_message())
-        self.assertEqual(2, context.get_space_region_candidate_count())
-        self.assertIs(hovered_candidate, context.get_hovered_space_region_candidate())
-        self.assertEqual("2.500 m^2", context.format_space_region_candidate_area(hovered_candidate))
-        self.assertIs(parent_space, context.get_plan_region_parent_space())
-        self.assertTrue(context.is_plan_space_object(parent_space))
-        self.assertTrue(context.is_selected_wall_endpoint_editable())
+        self.assertEqual("Miter", context.wall_relations.get_plan_join_type_label())
+        self.assertEqual(
+            "Join action",
+            context.wall_relations.get_plan_join_mode_action_text("Wall002", "joint"),
+        )
+        self.assertEqual(
+            "Relation status", context.wall_relations.get_plan_relation_status_message()
+        )
+        self.assertEqual(2, context.spaces.get_space_region_candidate_count())
+        self.assertIs(hovered_candidate, context.spaces.get_hovered_space_region_candidate())
+        self.assertEqual(
+            "2.500 m^2",
+            context.spaces.format_space_region_candidate_area(hovered_candidate),
+        )
+        self.assertIs(parent_space, context.spaces.get_plan_region_parent_space())
+        self.assertTrue(context.spaces.is_plan_space_object(parent_space))
+        self.assertTrue(context.wall_edit.is_selected_wall_endpoint_editable())
         self.assertEqual(
             ("Preset A", "Preset B"),
-            context.get_window_style_preset_options(),
+            context.windows.get_window_style_preset_options(),
         )
-        self.assertTrue(context.can_edit_window_width("window"))
-        self.assertFalse(context.can_edit_window_height("window"))
-        self.assertTrue(context.can_apply_window_style_preset("window"))
-        self.assertEqual("Preset A", context.get_selected_window_style_preset())
-        self.assertEqual("1200 mm", context.get_selected_window_width_text())
-        self.assertEqual("1500 mm", context.get_selected_window_height_text())
+        self.assertTrue(context.windows.can_edit_window_width("window"))
+        self.assertFalse(context.windows.can_edit_window_height("window"))
+        self.assertTrue(context.windows.can_apply_window_style_preset("window"))
+        self.assertEqual("Preset A", context.windows.get_selected_window_style_preset())
+        self.assertEqual("1200 mm", context.windows.get_selected_window_width_text())
+        self.assertEqual("1500 mm", context.windows.get_selected_window_height_text())
 
     def test_plan_selection_api_uses_primary_target_kind_policy(self):
         from bimplan.selection import target_kinds as plan_target_kinds
