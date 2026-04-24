@@ -7,6 +7,31 @@ import FreeCAD
 from bimplan import selection as plan_selection
 
 
+class PlanInputAPI:
+    """Owned session surface for Plan Edit input event handlers."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def on_mouse_pressed(self, event_callback):
+        return on_mouse_pressed(self.session, event_callback)
+
+    def on_mouse_moved(self, event_callback):
+        return on_mouse_moved(self.session, event_callback)
+
+    def on_mouse_wheel(self, event_callback):
+        return on_mouse_wheel(self.session, event_callback)
+
+    def on_key_pressed(self, event_callback):
+        return on_key_pressed(self.session, event_callback)
+
+
 def on_mouse_pressed(session, event_callback):
     if session._tearing_down:
         return

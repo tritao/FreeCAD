@@ -219,6 +219,7 @@ class PlanEditSession:
         self.wall_relations = PlanWallRelationsAPI(self)
         self.wall_create = PlanWallCreateAPI(self)
         self.interaction = PlanInteractionAPI(self)
+        self.input = plan_input.PlanInputAPI(self)
         self.lifecycle = plan_lifecycle.PlanLifecycleAPI(self)
         self.symbols = PlanSymbolsAPI(self)
         self.windows = PlanWindowsAPI(self)
@@ -696,18 +697,6 @@ class PlanEditSession:
         if not obj:
             return
         self.selection.set_gui_selection_object(obj)
-
-    def _on_mouse_pressed(self, event_callback):
-        return plan_input.on_mouse_pressed(self, event_callback)
-
-    def _on_mouse_moved(self, event_callback):
-        return plan_input.on_mouse_moved(self, event_callback)
-
-    def _on_mouse_wheel(self, event_callback):
-        return plan_input.on_mouse_wheel(self, event_callback)
-
-    def _on_key_pressed(self, event_callback):
-        return plan_input.on_key_pressed(self, event_callback)
 
     # Selection observer interface
 

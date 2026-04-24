@@ -695,11 +695,11 @@ def register_edit_callbacks(session):
         session._render_manager = get_render_manager() if get_render_manager is not None else None
         if session._key_pressed_cb is None:
             session._key_pressed_cb = add_event_callback(
-                coin.SoKeyboardEvent.getClassTypeId(), session._on_key_pressed
+                coin.SoKeyboardEvent.getClassTypeId(), session.input.on_key_pressed
             )
         if session._mouse_moved_cb is None:
             session._mouse_moved_cb = add_event_callback(
-                coin.SoLocation2Event.getClassTypeId(), session._on_mouse_moved
+                coin.SoLocation2Event.getClassTypeId(), session.input.on_mouse_moved
             )
         if session._mouse_wheel_cb is None:
             event_type = getattr(coin, "SoMouseWheelEvent", None)
@@ -708,11 +708,11 @@ def register_edit_callbacks(session):
             else:
                 session._mouse_wheel_event_type = coin.SoEvent.getClassTypeId()
             session._mouse_wheel_cb = add_event_callback(
-                session._mouse_wheel_event_type, session._on_mouse_wheel
+                session._mouse_wheel_event_type, session.input.on_mouse_wheel
             )
         if session._mouse_pressed_cb is None:
             session._mouse_pressed_cb = add_event_callback(
-                coin.SoMouseButtonEvent.getClassTypeId(), session._on_mouse_pressed
+                coin.SoMouseButtonEvent.getClassTypeId(), session.input.on_mouse_pressed
             )
     except (AttributeError, ReferenceError, RuntimeError):
         session.viewport.discard_stale_runtime_object(session.view)
