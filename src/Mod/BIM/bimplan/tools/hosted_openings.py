@@ -88,7 +88,7 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
             return False
 
     def on_created_object(self, obj):
-        self.session._register_plan_object(obj)
+        self.session.visibility.register_plan_object(obj)
 
 
 class _PlanEditCommandHost(gui_base.DraftInteractionHost):
@@ -296,8 +296,8 @@ def create_hosted_opening(
                 raise RuntimeError("Opening did not build before hosting")
 
             _host_opening(opening, host)
-            if add_to_active_storey and hasattr(session, "_add_object_to_active_storey"):
-                session._add_object_to_active_storey(opening)
+            if add_to_active_storey and hasattr(session, "visibility"):
+                session.visibility.add_object_to_active_storey(opening)
             doc.recompute()
 
             if host not in (getattr(opening, "Hosts", None) or ()):

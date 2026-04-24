@@ -1605,7 +1605,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertTrue(link.ViewObject.Visibility)
         self.assertTrue(link.ViewObject.Selectable)
-        self.assertTrue(session._is_plan_symbol_instance(link))
+        self.assertTrue(session.visibility.is_plan_symbol_instance(link))
 
         self.assertTrue(session._select_symbol_for_plan_edit(link))
         self.pump_gui_events()
@@ -1736,7 +1736,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertTrue(equipment.ViewObject.Visibility)
         self.assertTrue(equipment.ViewObject.Selectable)
-        self.assertTrue(session._is_plan_symbol_instance(equipment))
+        self.assertTrue(session.visibility.is_plan_symbol_instance(equipment))
         self.assertEqual("symbol", session._get_plan_target_kind_for_object(equipment))
 
         self.assertTrue(session._select_symbol_for_plan_edit(equipment))

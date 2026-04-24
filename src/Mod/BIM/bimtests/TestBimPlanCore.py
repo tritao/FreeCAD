@@ -1215,11 +1215,13 @@ class TestBimPlanCore(unittest.TestCase):
             _get_selected_space_boundary_links=lambda fallback_space=None: (
                 boundaries if fallback_space is None else []
             ),
-            _add_object_to_active_storey=lambda space: events.append(("add-storey", space)),
             _space_has_valid_geometry=lambda space: True,
             _report_space_creation_failure=lambda space: events.append(("report-failure", space))
             or False,
-            _register_plan_object=lambda space: events.append(("register", space)),
+            visibility=SimpleNamespace(
+                add_object_to_active_storey=lambda space: events.append(("add-storey", space)),
+                register_plan_object=lambda space: events.append(("register", space)),
+            ),
             spaces=SimpleNamespace(
                 restore_selected_space=lambda space: events.append(("restore", space))
             ),

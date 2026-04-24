@@ -32,7 +32,7 @@ class PlanTarget:
 def get_plan_target_kind_for_object(session, obj):
     if session._is_hosted_opening_object(obj):
         return plan_target_kinds.PLAN_TARGET_OPENING
-    if session._is_plan_symbol_instance(obj):
+    if session.visibility.is_plan_symbol_instance(obj):
         return plan_target_kinds.PLAN_TARGET_SYMBOL
     if session._is_plan_provider_target_object(obj):
         return plan_target_kinds.PLAN_TARGET_PROVIDER
@@ -303,7 +303,7 @@ def get_plan_targets(session, selected_only=False):
                     continue
                 semantic_obj = session._get_plan_semantic_object(target_obj)
                 if active_storey_name is not None:
-                    storeys = session._get_object_storeys(semantic_obj or target_obj)
+                    storeys = session.visibility.get_object_storeys(semantic_obj or target_obj)
                     if storeys and not any(parent.Name == active_storey_name for parent in storeys):
                         continue
                 seen.add(state_key)

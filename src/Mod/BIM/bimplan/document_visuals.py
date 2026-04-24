@@ -107,7 +107,7 @@ def should_register_created_plan_object(session, obj):
             return False
         if session._is_hidden_library_definition_object(obj):
             return False
-        return session._is_supported_plan_object(obj)
+        return session.visibility.is_supported_plan_object(obj)
     except ReferenceError:
         return False
 
@@ -143,7 +143,7 @@ def flush_created_plan_objects(session, force=False):
         if not session._should_register_created_plan_object(obj):
             continue
         eligible.append(obj)
-    session._register_plan_objects(eligible)
+    session.visibility.register_plan_objects(eligible)
 
 
 def are_document_visual_updates_deferred(session):
@@ -202,7 +202,7 @@ def refresh_selected_opening_visuals(session):
 
 
 def is_symbol_visual_dependency(session, symbol, obj):
-    if not session._is_plan_symbol_instance(symbol) or not obj:
+    if not session.visibility.is_plan_symbol_instance(symbol) or not obj:
         return False
     if obj == symbol:
         return True
@@ -215,7 +215,7 @@ def is_symbol_visual_dependency(session, symbol, obj):
 
 
 def refresh_plan_object_footprint_display(session, obj, *, request_redraw=True):
-    if not session._is_supported_plan_object(obj):
+    if not session.visibility.is_supported_plan_object(obj):
         return
     session._invalidate_plan_overlay_geometry_cache(obj)
     semantic_obj = session._get_plan_semantic_object(obj)
@@ -366,7 +366,7 @@ def slot_created_object(session, obj):
         return
     session._invalidate_plan_provider_document_cache()
     session._provider_overlay_state = None
-    session._invalidate_plan_classification_cache()
+    session.visibility.invalidate_plan_classification_cache()
     session._invalidate_wall_hosted_openings_cache()
     session._queue_created_plan_object(obj)
 
@@ -376,7 +376,7 @@ def slot_changed_object(session, obj, prop):
         return
     session._invalidate_plan_provider_document_cache()
     session._provider_overlay_state = None
-    session._invalidate_plan_classification_cache()
+    session.visibility.invalidate_plan_classification_cache()
     session._invalidate_wall_hosted_openings_cache()
     if session._are_document_visual_updates_deferred():
         session._defer_document_visual_refresh()
@@ -512,7 +512,7 @@ def slot_deleted_object(session, obj):
         return
     session._invalidate_plan_provider_document_cache()
     session._provider_overlay_state = None
-    session._invalidate_plan_classification_cache()
+    session.visibility.invalidate_plan_classification_cache()
     session._invalidate_wall_hosted_openings_cache()
     session._invalidate_plan_overlay_geometry_cache(obj)
     if session._are_document_visual_updates_deferred():
@@ -559,7 +559,7 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
     if session._tearing_down or session._finishing or not session._document_is_alive():
         return
     session._invalidate_plan_provider_document_cache()
-    session._invalidate_plan_classification_cache()
+    session.visibility.invalidate_plan_classification_cache()
     session._invalidate_wall_hosted_openings_cache()
     session._invalidate_plan_overlay_geometry_cache()
     session._sanitize_plan_target_references()

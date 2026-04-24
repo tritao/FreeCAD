@@ -434,7 +434,7 @@ def restore_state(session):
     import WorkingPlane
 
     restore_preselection_state(session)
-    session._restore_object_view_state()
+    session.visibility.restore_object_view_state()
     session._restore_snap_profile()
     session._interaction_plane = None
 

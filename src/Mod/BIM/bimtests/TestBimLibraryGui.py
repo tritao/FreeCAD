@@ -188,8 +188,8 @@ class TestBimLibraryGui(TestArchBaseGui):
         self.pump_gui_events()
 
         self.assertIs(session._get_plan_semantic_object(stale_link), equipment)
-        self.assertTrue(session._is_plan_equipment_object(stale_link))
-        self.assertTrue(session._is_supported_plan_object(stale_link))
+        self.assertTrue(session.visibility.is_plan_equipment_object(stale_link))
+        self.assertTrue(session.visibility.is_supported_plan_object(stale_link))
 
         live_link = panel._create_symbol_link(self.document, equipment)
         self.assertFalse(session._is_hidden_library_definition_object(live_link))
