@@ -2520,7 +2520,7 @@ class PlanEditControlsWidget:
                     boundary_state = (space_key, self._get_space_boundary_signature(space))
                     if boundary_state != self._space_editor_boundary_state:
                         boundary_entries = list(
-                            self.session._get_space_boundary_entries(space) or []
+                            self.session.spaces.get_space_boundary_entries(space) or []
                         )
                         self.session.performance.plan_perf_count(
                             "space_boundary_entries", len(boundary_entries)
