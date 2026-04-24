@@ -1274,16 +1274,44 @@ def activate_provider_overlay_target_node(session, node, event_callback=None):
     return True
 
 
-def toggle_raw_plan_object_selection(session, obj, event_callback=None):
-    if obj is None:
-        return False
-
+def _get_current_additive_gui_selection(session):
     primary_kind, primary_obj = session.selection.get_selected_plan_target()
     selection = session.selection.get_gui_selection()
     if primary_obj is not None and primary_obj not in selection:
         selection = [primary_obj] + selection
-    selection = normalize_gui_object_selection(session, selection)
+    return (
+        primary_kind,
+        primary_obj,
+        session.selection.normalize_gui_object_selection(selection),
+    )
 
+
+def _resolve_next_selected_target(
+    session, selection, primary_kind, primary_obj, fallback_target=None
+):
+    if primary_obj is not None and primary_obj in selection:
+        return (primary_kind, primary_obj)
+    if fallback_target is not None:
+        fallback_kind, fallback_obj = fallback_target
+        if fallback_kind and fallback_obj and fallback_obj in selection:
+            return fallback_target
+    return session.selection.get_first_plan_target_from_selection(selection)
+
+
+def _apply_additive_selection_update(session, selection, next_kind, next_obj, event_callback=None):
+    session.selection.set_pending_selected_plan_target(next_kind, next_obj)
+    plan_target_dispatch.clear_hovered_targets(session)
+    session.selection.set_gui_selection(selection)
+    session.selection.refresh_primary_selected_plan_target()
+    session.input.claim_left_button_click(event_callback)
+    return True
+
+
+def toggle_raw_plan_object_selection(session, obj, event_callback=None):
+    if obj is None:
+        return False
+
+    primary_kind, primary_obj, selection = _get_current_additive_gui_selection(session)
     provider_selection = normalize_gui_object_selection(session, session._provider_selected_objects)
     if obj in provider_selection:
         provider_selection = [selected for selected in provider_selection if selected != obj]
@@ -1298,18 +1326,19 @@ def toggle_raw_plan_object_selection(session, obj, event_callback=None):
             if session.selection.get_plan_target_for_object(selected)[0]
         ],
     )
-
-    if primary_obj is not None and primary_obj in new_selection:
-        next_kind, next_obj = primary_kind, primary_obj
-    else:
-        next_kind, next_obj = session.selection.get_first_plan_target_from_selection(new_selection)
-
-    session.selection.set_pending_selected_plan_target(next_kind, next_obj)
-    plan_target_dispatch.clear_hovered_targets(session)
-    session.selection.set_gui_selection(new_selection)
-    session.selection.refresh_primary_selected_plan_target()
-    session.input.claim_left_button_click(event_callback)
-    return True
+    next_kind, next_obj = _resolve_next_selected_target(
+        session,
+        new_selection,
+        primary_kind,
+        primary_obj,
+    )
+    return _apply_additive_selection_update(
+        session,
+        new_selection,
+        next_kind,
+        next_obj,
+        event_callback,
+    )
 
 
 def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=None):
@@ -1328,40 +1357,37 @@ def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=
     if not target_kind or not target_obj:
         return False
 
-    primary_kind, primary_obj = session.selection.get_selected_plan_target()
-    selection = session.selection.get_gui_selection()
-    if primary_obj is not None and primary_obj not in selection:
-        selection = [primary_obj] + selection
-
-    selection = normalize_gui_object_selection(session, selection)
+    primary_kind, primary_obj, selection = _get_current_additive_gui_selection(session)
 
     was_selected = target_obj in selection
     if was_selected:
         new_selection = [selected for selected in selection if selected != target_obj]
-        if primary_obj == target_obj:
-            next_kind, next_obj = session.selection.get_first_plan_target_from_selection(
-                new_selection
-            )
-        elif primary_obj is not None and primary_obj in new_selection:
-            next_kind, next_obj = primary_kind, primary_obj
-        else:
-            next_kind, next_obj = session.selection.get_first_plan_target_from_selection(
-                new_selection
-            )
+        fallback_target = None if primary_obj == target_obj else (target_kind, target_obj)
+        next_kind, next_obj = _resolve_next_selected_target(
+            session,
+            new_selection,
+            primary_kind,
+            primary_obj,
+            fallback_target=fallback_target,
+        )
     else:
         new_selection = list(selection)
         new_selection.append(target_obj)
-        if primary_obj is not None and primary_obj in new_selection and primary_obj != target_obj:
-            next_kind, next_obj = primary_kind, primary_obj
-        else:
-            next_kind, next_obj = target_kind, target_obj
+        next_kind, next_obj = _resolve_next_selected_target(
+            session,
+            new_selection,
+            primary_kind,
+            primary_obj,
+            fallback_target=(target_kind, target_obj),
+        )
 
-    session.selection.set_pending_selected_plan_target(next_kind, next_obj)
-    plan_target_dispatch.clear_hovered_targets(session)
-    session.selection.set_gui_selection(new_selection)
-    session.selection.refresh_primary_selected_plan_target()
-    session.input.claim_left_button_click(event_callback)
-    return True
+    return _apply_additive_selection_update(
+        session,
+        new_selection,
+        next_kind,
+        next_obj,
+        event_callback,
+    )
 
 
 @contextmanager
