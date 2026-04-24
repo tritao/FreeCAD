@@ -396,7 +396,7 @@ def resolve_symbol_handle_target_point(session, symbol, handle_role, point, plac
             return None
     if handle_role != "rotate":
         return target_point
-    if not session._symbol_rotation_snap_enabled():
+    if not session.symbols.symbol_rotation_snap_enabled():
         return target_point
     if session.overlays.symbol_rotation_free_angle_override_active():
         return target_point
@@ -405,7 +405,7 @@ def resolve_symbol_handle_target_point(session, symbol, handle_role, point, plac
     if snap_step <= 1e-9:
         return target_point
 
-    anchor = session._get_symbol_anchor_point(symbol, placement=placement)
+    anchor = session.symbols.get_symbol_anchor_point(symbol, placement=placement)
     vector = FreeCAD.Vector(target_point.x - anchor.x, target_point.y - anchor.y, 0)
     radius = math.hypot(vector.x, vector.y)
     if radius < 0.001:
@@ -421,7 +421,7 @@ def resolve_symbol_handle_target_point(session, symbol, handle_role, point, plac
 
 def get_symbol_handle_radius(session, symbol, placement=None):
     placement = placement or session._get_plan_object_global_placement(symbol)
-    anchor = session._get_symbol_anchor_point(symbol, placement=placement)
+    anchor = session.symbols.get_symbol_anchor_point(symbol, placement=placement)
     radius = 0.0
     for polyline in get_symbol_overlay_polylines(session, symbol, placement=placement):
         for point in polyline:
@@ -440,9 +440,9 @@ def get_selected_symbol_handle_specs(session, symbol):
         return []
 
     placement = session._get_plan_object_global_placement(symbol)
-    anchor = session._get_symbol_anchor_point(symbol, placement=placement)
+    anchor = session.symbols.get_symbol_anchor_point(symbol, placement=placement)
     radius = session.overlays.get_symbol_handle_radius(symbol, placement=placement)
-    rotate_direction = session._get_symbol_facing_vector(symbol, placement=placement)
+    rotate_direction = session.symbols.get_symbol_facing_vector(symbol, placement=placement)
     if rotate_direction.Length < 0.001:
         rotate_direction = FreeCAD.Vector(1, 0, 0)
     rotate_offset = rotate_direction.multiply(radius)
@@ -521,7 +521,7 @@ def pick_selected_symbol_handle(session, mouse_pos, radius_px=10):
 
 
 def sync_symbol_edit_preview(session, symbol, placement, guide_start=None, guide_end=None):
-    session._clear_symbol_edit_preview()
+    session.symbols.clear_symbol_edit_preview()
     if session.current_tool not in ("Move Symbol", "Rotate Symbol"):
         return
     if not session._is_plan_symbol_instance(symbol) or placement is None:

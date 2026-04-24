@@ -28,6 +28,24 @@ class PlanSymbolsAPI:
     def format_symbol_rotation_snap_label(self):
         return format_symbol_rotation_snap_label(self.session)
 
+    def get_symbol_anchor_point(self, symbol, placement=None):
+        return get_symbol_anchor_point(self.session, symbol, placement=placement)
+
+    def get_symbol_facing_vector(self, symbol, placement=None):
+        return get_symbol_facing_vector(self.session, symbol, placement=placement)
+
+    def sync_symbol_edit_preview(self, symbol, placement, guide_start=None, guide_end=None):
+        return sync_symbol_edit_preview(
+            self.session,
+            symbol,
+            placement,
+            guide_start=guide_start,
+            guide_end=guide_end,
+        )
+
+    def clear_symbol_edit_preview(self):
+        return clear_symbol_edit_preview(self.session)
+
     def get_symbol_handle_placement(self, symbol, handle_role, point):
         return get_symbol_handle_placement(self.session, symbol, handle_role, point)
 
@@ -71,7 +89,7 @@ def get_symbol_handle_placement(session, symbol, handle_role, point):
     parent_global = session.overlays.get_symbol_parent_global_placement(
         symbol, placement=start_placement
     )
-    anchor_global = session._get_symbol_anchor_point(symbol, placement=start_placement)
+    anchor_global = session.symbols.get_symbol_anchor_point(symbol, placement=start_placement)
     local_anchor = session.overlays.get_symbol_local_anchor(symbol)
     if handle_role == "move":
         point_global = FreeCAD.Vector(point.x, point.y, anchor_global.z)
@@ -159,6 +177,27 @@ def activate_symbol_handle_now(session, symbol, handle_role):
             session.symbols.start_symbol_handle_point_pick(symbol, handle_role)
 
 
+def get_symbol_anchor_point(session, symbol, placement=None):
+    return session.overlays.get_symbol_anchor_point(symbol, placement=placement)
+
+
+def get_symbol_facing_vector(session, symbol, placement=None):
+    return session.overlays.get_symbol_facing_vector(symbol, placement=placement)
+
+
+def sync_symbol_edit_preview(session, symbol, placement, guide_start=None, guide_end=None):
+    return session.overlays.sync_symbol_edit_preview(
+        symbol,
+        placement,
+        guide_start=guide_start,
+        guide_end=guide_end,
+    )
+
+
+def clear_symbol_edit_preview(session):
+    return session.overlays.clear_symbol_edit_preview()
+
+
 def start_symbol_handle_point_pick(session, symbol, handle_role):
     with session._plan_perf_trace_span("start_symbol_handle_point_pick"):
         if not session._is_plan_symbol_instance(symbol):
@@ -188,10 +227,10 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
             session.overlays.clear_selected_symbol_overlay()
             session.overlays.clear_selected_symbol_handles()
         with session._plan_perf_trace_span("start_symbol_handle_preview"):
-            anchor = session._get_symbol_anchor_point(
+            anchor = session.symbols.get_symbol_anchor_point(
                 symbol, placement=session._edit_symbol_start_placement
             )
-            session._sync_symbol_edit_preview(
+            session.symbols.sync_symbol_edit_preview(
                 symbol,
                 session._edit_symbol_start_placement,
                 guide_start=anchor,
@@ -222,27 +261,27 @@ def update_symbol_handle_point_pick(session, point=None, snap_info=None):
     symbol = session._edit_symbol
     handle_role = session._edit_symbol_handle_role
     if not symbol or not handle_role:
-        session._clear_symbol_edit_preview()
+        session.symbols.clear_symbol_edit_preview()
         return
     target_point = session.overlays.resolve_symbol_handle_target_point(
         symbol, handle_role, point, placement=session._edit_symbol_start_placement
     )
     if target_point is None:
-        session._clear_symbol_edit_preview()
+        session.symbols.clear_symbol_edit_preview()
         return
     placement = session.symbols.get_symbol_handle_placement(symbol, handle_role, point)
     if placement is None:
-        session._clear_symbol_edit_preview()
+        session.symbols.clear_symbol_edit_preview()
         return
-    guide_start = session._get_symbol_anchor_point(
+    guide_start = session.symbols.get_symbol_anchor_point(
         symbol, placement=session._edit_symbol_start_placement
     )
     guide_end = (
-        session._get_symbol_anchor_point(symbol, placement=placement)
+        session.symbols.get_symbol_anchor_point(symbol, placement=placement)
         if handle_role == "move"
         else target_point
     )
-    session._sync_symbol_edit_preview(
+    session.symbols.sync_symbol_edit_preview(
         symbol, placement, guide_start=guide_start, guide_end=guide_end
     )
 
@@ -258,7 +297,7 @@ def finish_symbol_handle_point_pick(session, point=None, obj=None):
     session._edit_symbol_start_placement = None
     session._edit_symbol_reference_point = None
     FreeCAD.activeDraftCommand = None
-    session._clear_symbol_edit_preview()
+    session.symbols.clear_symbol_edit_preview()
 
     if point is None or not symbol or not handle_role:
         session.current_tool = "Select"
@@ -306,7 +345,7 @@ def cancel_symbol_handle_point_pick(session):
     session._edit_symbol_reference_point = None
     session._stop_snapper()
     FreeCAD.activeDraftCommand = None
-    session._clear_symbol_edit_preview()
+    session.symbols.clear_symbol_edit_preview()
     session.current_tool = "Select"
     if symbol:
         session._set_selected_plan_target("symbol", symbol, pending_restore=True)

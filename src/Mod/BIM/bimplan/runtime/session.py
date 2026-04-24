@@ -68,7 +68,6 @@ from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
 from bimplan.overlays import openings as opening_overlays
 from bimplan.overlays.runtime import PlanOverlaysAPI
-from bimplan.overlays import symbols as symbol_overlays
 from bimplan.overlays import walls as wall_overlays
 from bimplan.providers import get_plan_edit_registry
 from bimplan.status_text import PlanStatusTextAPI
@@ -2767,30 +2766,6 @@ class PlanEditSession:
             except Exception:
                 pass
         return getattr(obj, "Placement", FreeCAD.Placement())
-
-    def _get_symbol_anchor_point(self, symbol, placement=None):
-        return symbol_overlays.get_symbol_anchor_point(self, symbol, placement=placement)
-
-    def _get_symbol_facing_vector(self, symbol, placement=None):
-        return symbol_overlays.get_symbol_facing_vector(self, symbol, placement=placement)
-
-    def _symbol_rotation_snap_enabled(self):
-        return self.symbols.symbol_rotation_snap_enabled()
-
-    def _format_symbol_rotation_snap_label(self):
-        return self.symbols.format_symbol_rotation_snap_label()
-
-    def _sync_symbol_edit_preview(self, symbol, placement, guide_start=None, guide_end=None):
-        return symbol_overlays.sync_symbol_edit_preview(
-            self,
-            symbol,
-            placement,
-            guide_start=guide_start,
-            guide_end=guide_end,
-        )
-
-    def _clear_symbol_edit_preview(self):
-        return symbol_overlays.clear_symbol_edit_preview(self)
 
     def _clear_plan_selection_state(self):
         return self.selection.clear_plan_selection_state()
