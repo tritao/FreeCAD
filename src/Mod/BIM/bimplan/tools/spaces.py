@@ -1531,7 +1531,7 @@ def restore_selected_semantic_target(session, kind, obj, *, clear_edit_space=Fal
         session._edit_space = None
     if obj:
         session._set_selected_plan_target(kind, obj, pending_restore=True)
-        session._set_gui_selection_object(obj)
+        session.selection.set_gui_selection_object(obj)
     else:
         session._set_selected_plan_target()
     sync_method()

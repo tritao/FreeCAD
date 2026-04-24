@@ -96,7 +96,7 @@ def activate_provider_handle_now(session, provider_obj, handle_index):
         return
     handle = handles[handle_index]
     session._set_selected_plan_target("provider", provider_obj)
-    session._set_gui_selection_object(provider_obj)
+    session.selection.set_gui_selection_object(provider_obj)
     session.overlays.clear_wall_grips()
     if handle.interaction == PlanToolInteraction.POINT:
         session.providers.start_provider_handle_point_pick(provider_obj, handle_index, handle)
@@ -252,16 +252,16 @@ def cancel_provider_handle_point_pick(session):
     if provider_obj is not None:
         session.providers.restore_selected_provider(provider_obj)
         return
-    session._set_gui_selection([])
+    session.selection.set_gui_selection([])
     session._refresh_primary_selected_plan_target()
 
 
 def restore_selected_provider(session, provider_obj):
     session.current_tool = "Select"
     if provider_obj is not None and session._is_plan_provider_target_object(provider_obj):
-        session._set_gui_selection_object(provider_obj)
+        session.selection.set_gui_selection_object(provider_obj)
     else:
-        session._set_gui_selection([])
+        session.selection.set_gui_selection([])
     session._refresh_primary_selected_plan_target()
 
 

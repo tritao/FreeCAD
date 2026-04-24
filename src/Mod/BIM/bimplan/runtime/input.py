@@ -99,7 +99,7 @@ def on_mouse_pressed(session, event_callback):
                         if node_kind == "opening_handle":
                             _kind, obj, index = node
                             session._select_opening_for_plan_edit(obj)
-                            session._set_gui_selection_object(obj)
+                            session.selection.set_gui_selection_object(obj)
                             session.openings.activate_opening_handle(obj, index)
                         elif node_kind == "provider_handle":
                             _kind, obj, index = node
@@ -132,7 +132,7 @@ def on_mouse_pressed(session, event_callback):
                                 return
                             if session.openings.is_hosted_opening_object(obj):
                                 session._select_opening_for_plan_edit(obj)
-                                session._set_gui_selection_object(obj)
+                                session.selection.set_gui_selection_object(obj)
                                 session.openings.activate_opening_handle(obj, index)
                             else:
                                 session._set_selected_plan_target_state("wall", obj)

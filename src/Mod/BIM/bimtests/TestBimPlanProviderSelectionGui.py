@@ -343,7 +343,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             self.assertTrue(session.set_plan_provider_overlay_mode("electrical"))
             self.assertTrue(session._is_plan_provider_target_object(marker))
 
-            session._set_gui_selection_object(marker)
+            session.selection.set_gui_selection_object(marker)
             session._refresh_primary_selected_plan_target()
             self.pump_gui_events()
 
@@ -404,7 +404,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             session.overlays.sync_provider_overlays()
             self.assertGreater(len(session._provider_overlay_trackers), 0)
 
-            session._set_gui_selection_object(marker)
+            session.selection.set_gui_selection_object(marker)
             session._refresh_primary_selected_plan_target()
             self.pump_gui_events()
 
@@ -433,7 +433,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             return_value=(self._make_provider_target_spec(marker),),
         ):
             self.assertTrue(session.set_plan_provider_overlay_mode("electrical"))
-            session._set_gui_selection_object(marker)
+            session.selection.set_gui_selection_object(marker)
             session._refresh_primary_selected_plan_target()
             self.pump_gui_events()
 
@@ -466,7 +466,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             ),
         ):
             self.assertTrue(session.set_plan_provider_overlay_mode("electrical"))
-            session._set_gui_selection_object(marker)
+            session.selection.set_gui_selection_object(marker)
             session._refresh_primary_selected_plan_target()
             self.pump_gui_events()
 
@@ -518,7 +518,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             return_value=(self._make_provider_target_spec(marker),),
         ):
             self.assertTrue(session.set_plan_provider_overlay_mode("electrical"))
-            session._set_gui_selection_object(marker)
+            session.selection.set_gui_selection_object(marker)
             session._refresh_primary_selected_plan_target()
             self.pump_gui_events()
 
@@ -552,7 +552,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             return_value=(self._make_provider_target_spec(marker),),
         ):
             self.assertTrue(session.set_plan_provider_overlay_mode("electrical"))
-            session._set_gui_selection_object(marker)
+            session.selection.set_gui_selection_object(marker)
             session._refresh_primary_selected_plan_target()
             self.pump_gui_events()
 
@@ -598,7 +598,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             self.pump_gui_events()
 
             self.assertTrue(session.set_plan_provider_overlay_mode("electrical"))
-            session._set_gui_selection_object(marker)
+            session.selection.set_gui_selection_object(marker)
             session._refresh_primary_selected_plan_target()
             self.pump_gui_events()
 
@@ -654,7 +654,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             self.pump_gui_events()
 
             self.assertTrue(session.set_plan_provider_overlay_mode("electrical"))
-            session._set_gui_selection_object(marker)
+            session.selection.set_gui_selection_object(marker)
             session._refresh_primary_selected_plan_target()
             self.pump_gui_events()
 

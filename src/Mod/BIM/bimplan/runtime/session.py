@@ -119,7 +119,6 @@ _PLAN_VISUAL_WALL_EDIT_PREVIEW = plan_document_visuals.PLAN_VISUAL_WALL_EDIT_PRE
 _PLAN_VISUAL_PROVIDER_OVERLAYS = plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
 _PLAN_VISUAL_VIEW_SCALE = plan_document_visuals.PLAN_VISUAL_VIEW_SCALE
 _PLAN_VISUAL_ALL = plan_document_visuals.PLAN_VISUAL_ALL
-_PLAN_GUI_SELECTION_SYNC_DELAY_MS = 80
 _PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
 _PLAN_VIEW_LOCKED_ACTIONS = (
     "Std_ViewFront",
@@ -449,7 +448,7 @@ class PlanEditSession:
                 continue
             setattr(self, attr, None)
             changed = True
-        normalized_secondary = self._normalize_plan_target_list(
+        normalized_secondary = self.selection.normalize_plan_target_list(
             getattr(self, "_secondary_selected_plan_targets_state", [])
         )
         if normalized_secondary != getattr(self, "_secondary_selected_plan_targets_state", []):
@@ -863,68 +862,6 @@ class PlanEditSession:
     def defer_document_visual_updates(self):
         return plan_document_visuals.defer_document_visual_updates(self)
 
-    def _set_pending_selected_plan_target(self, kind=None, obj=None):
-        return self.selection.set_pending_selected_plan_target(kind=kind, obj=obj)
-
-    def _consume_pending_selected_plan_target(self):
-        return self.selection.consume_pending_selected_plan_target()
-
-    def _get_first_plan_target_from_selection(self, selection):
-        return self.selection.get_first_plan_target_from_selection(selection)
-
-    def _is_valid_plan_target(self, kind, obj):
-        return self.selection.is_valid_plan_target(kind, obj)
-
-    def _normalize_plan_target_list(self, targets):
-        return self.selection.normalize_plan_target_list(targets)
-
-    def _normalize_plan_targets_from_selection(self, selection):
-        return self.selection.normalize_plan_targets_from_selection(selection)
-
-    def _set_secondary_selected_plan_targets(self, targets, primary_kind=None, primary_obj=None):
-        return self.selection.set_secondary_selected_plan_targets(
-            targets,
-            primary_kind=primary_kind,
-            primary_obj=primary_obj,
-        )
-
-    def _sync_secondary_selected_plan_targets_from_selection(
-        self, selection, primary_kind=None, primary_obj=None
-    ):
-        return self.selection.sync_secondary_selected_plan_targets_from_selection(
-            selection,
-            primary_kind=primary_kind,
-            primary_obj=primary_obj,
-        )
-
-    def _sync_secondary_selected_plan_targets_from_gui_selection(
-        self, primary_kind=None, primary_obj=None
-    ):
-        return self.selection.sync_secondary_selected_plan_targets_from_gui_selection(
-            primary_kind=primary_kind,
-            primary_obj=primary_obj,
-        )
-
-    @contextmanager
-    def _selection_changes_suppressed(self):
-        with plan_selection.selection_changes_suppressed(self):
-            yield
-
-    def _set_gui_selection(self, selection):
-        return plan_selection.set_gui_selection(self, selection)
-
-    def _set_gui_selection_object(self, obj):
-        return plan_selection.set_gui_selection_object(self, obj)
-
-    def _schedule_gui_selection_object(self, obj, delay_ms=_PLAN_GUI_SELECTION_SYNC_DELAY_MS):
-        return plan_selection.schedule_gui_selection_object(self, obj, delay_ms=delay_ms)
-
-    def _run_scheduled_gui_selection_sync(self, generation=None):
-        return plan_selection.run_scheduled_gui_selection_sync(self, generation=generation)
-
-    def _add_gui_selection_object(self, obj):
-        return plan_selection.add_gui_selection_object(obj)
-
     def _format_plan_target_count_label(self, kind, count):
         return self.status_text.format_plan_target_count_label(kind, count)
 
@@ -1096,7 +1033,7 @@ class PlanEditSession:
     def _restore_gui_selection(self, obj):
         if not obj:
             return
-        self._set_gui_selection_object(obj)
+        self.selection.set_gui_selection_object(obj)
 
     def _apply_plan_wall_join(self, source_wall, target_wall):
         return plan_wall_relations.apply_plan_wall_join(self, source_wall, target_wall)
