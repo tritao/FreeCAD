@@ -59,8 +59,8 @@ def cancel_wall_subtool(session):
 
 
 def start_wall_edit(session, mode):
-    with session._plan_perf_trace_span("start_wall_edit"):
-        with session._plan_perf_trace_span("start_wall_edit_validate"):
+    with session.performance.plan_perf_trace_span("start_wall_edit"):
+        with session.performance.plan_perf_trace_span("start_wall_edit_validate"):
             if not session.is_selected_wall_endpoint_editable():
                 FreeCAD.Console.PrintError(
                     translate(
@@ -83,7 +83,7 @@ def start_wall_edit(session, mode):
             if len(endpoints) != 2:
                 return
 
-        with session._plan_perf_trace_span("start_wall_edit_state"):
+        with session.performance.plan_perf_trace_span("start_wall_edit_state"):
             session._clear_plan_relation_status()
             session.current_tool = "Move Wall" if mode == "Move" else f"Stretch {mode}"
             session._set_hovered_wall(None)
@@ -99,11 +99,11 @@ def start_wall_edit(session, mode):
             session._edit_endpoint = mode
             session._edit_endpoints = endpoints
 
-        with session._plan_perf_trace_span("start_wall_edit_queue_opening_clearances"):
+        with session.performance.plan_perf_trace_span("start_wall_edit_queue_opening_clearances"):
             session._wall_edit_opening_clearances = {}
             session._queue_wall_edit_opening_clearances()
 
-        with session._plan_perf_trace_span("start_wall_edit_preview"):
+        with session.performance.plan_perf_trace_span("start_wall_edit_preview"):
             session._preview_points = list(endpoints)
             session._edit_wall_visibility = None
             try:
@@ -120,7 +120,7 @@ def start_wall_edit(session, mode):
 
 
 def resume_wall_edit_point_pick(session):
-    with session._plan_perf_trace_span("resume_wall_edit_point_pick"):
+    with session.performance.plan_perf_trace_span("resume_wall_edit_point_pick"):
         if not session.wall_edit.is_wall_edit_modal_active():
             return
         mode = session._edit_endpoint
@@ -134,13 +134,13 @@ def resume_wall_edit_point_pick(session):
         FreeCAD.activeDraftCommand = session
         if getattr(FreeCADGui, "Snapper", None):
             try:
-                with session._plan_perf_trace_span("wall_edit_snapper_set_select_mode"):
+                with session.performance.plan_perf_trace_span("wall_edit_snapper_set_select_mode"):
                     FreeCADGui.Snapper.setSelectMode(False)
             except Exception:
                 pass
-        with session._plan_perf_trace_span("wall_edit_focus_suppression"):
+        with session.performance.plan_perf_trace_span("wall_edit_focus_suppression"):
             session._set_draft_point_focus_suppressed(True)
-        with session._plan_perf_trace_span("wall_edit_snapper_get_point"):
+        with session.performance.plan_perf_trace_span("wall_edit_snapper_get_point"):
             FreeCADGui.Snapper.getPoint(
                 callback=session._finish_wall_edit,
                 movecallback=session._update_wall_edit_point_pick,
@@ -148,7 +148,7 @@ def resume_wall_edit_point_pick(session):
                 title=title,
                 noTracker=True,
             )
-        with session._plan_perf_trace_span("wall_edit_queue_focus_plan_view"):
+        with session.performance.plan_perf_trace_span("wall_edit_queue_focus_plan_view"):
             session.viewport.queue_focus_plan_view()
 
 
@@ -208,7 +208,7 @@ def prime_wall_edit_opening_clearances(session):
         or session._wall_edit_opening_clearances
     ):
         return
-    with session._plan_perf_trace_event("queued_wall_edit_opening_clearances"):
+    with session.performance.plan_perf_trace_event("queued_wall_edit_opening_clearances"):
         session._wall_edit_opening_clearances = session._snapshot_wall_hosted_opening_clearances(
             session._edit_wall,
             session._edit_endpoints,
@@ -219,7 +219,7 @@ def ensure_wall_edit_opening_clearances(session, wall, endpoints):
     if session._wall_edit_opening_clearances or session._edit_endpoint not in ("Start", "End"):
         return
     session._wall_edit_opening_clearances_queued = False
-    with session._plan_perf_trace_span("ensure_wall_edit_opening_clearances"):
+    with session.performance.plan_perf_trace_span("ensure_wall_edit_opening_clearances"):
         session._wall_edit_opening_clearances = session._snapshot_wall_hosted_opening_clearances(
             wall,
             endpoints,
@@ -242,7 +242,7 @@ def flush_wall_edit_task_panel_refresh(session):
     session._wall_edit_task_panel_refresh_queued = False
     if session._tearing_down or not session.wall_edit.is_wall_edit_modal_active():
         return
-    with session._plan_perf_trace_event("queued_wall_edit_task_panel_refresh"):
+    with session.performance.plan_perf_trace_event("queued_wall_edit_task_panel_refresh"):
         session._refresh_task_panel_status(selection_only=True)
 
 
@@ -345,13 +345,13 @@ def activate_wall_grip(session, grip_index, wall=None):
 
 
 def activate_wall_grip_now(session, grip_index, wall=None):
-    with session._plan_perf_trace_span("activate_wall_grip_now"):
+    with session.performance.plan_perf_trace_span("activate_wall_grip_now"):
         if session._tearing_down or session.current_tool != "Select" or not wall:
             return
-        with session._plan_perf_trace_span("activate_wall_grip_set_target"):
+        with session.performance.plan_perf_trace_span("activate_wall_grip_set_target"):
             if not session._is_selected_plan_target("wall", wall):
                 session._set_selected_plan_target("wall", wall)
-        with session._plan_perf_trace_span("activate_wall_grip_start_edit"):
+        with session.performance.plan_perf_trace_span("activate_wall_grip_start_edit"):
             session.wall_edit.start_wall_grip_edit(grip_index)
 
 

@@ -183,7 +183,7 @@ def _call_named_method(session, method_name, trace_name=None):
     if not callable(method):
         return
     if trace_name:
-        with session._plan_perf_trace_span(trace_name):
+        with session.performance.plan_perf_trace_span(trace_name):
             method()
         return
     method()
@@ -202,7 +202,7 @@ def _call_sync_specs(session, sync_specs, trace_style=None, trace_prefix=None, t
         if trace_prefix and trace_label:
             trace_name = "{}_{}".format(trace_prefix, trace_label)
         if trace_name:
-            with session._plan_perf_trace_span(trace_name):
+            with session.performance.plan_perf_trace_span(trace_name):
                 for sync_spec in sync_specs:
                     _call_named_method(session, sync_spec.method_name)
             return

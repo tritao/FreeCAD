@@ -95,7 +95,7 @@ def plan_perf_describe_target(session, kind, obj):
     if not kind or not obj:
         return None
     result = {"kind": kind}
-    described = session._plan_perf_describe_object(obj)
+    described = plan_perf_describe_object(session, obj)
     if isinstance(described, dict):
         result.update(described)
     elif described is not None:
@@ -107,10 +107,10 @@ def plan_perf_coerce_value(session, value):
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     if isinstance(value, (list, tuple)):
-        return [session._plan_perf_coerce_value(item) for item in value]
+        return [plan_perf_coerce_value(session, item) for item in value]
     if isinstance(value, dict):
-        return {str(key): session._plan_perf_coerce_value(item) for key, item in value.items()}
-    described = session._plan_perf_describe_object(value)
+        return {str(key): plan_perf_coerce_value(session, item) for key, item in value.items()}
+    described = plan_perf_describe_object(session, value)
     if described is not None:
         return described
     return repr(value)
@@ -124,7 +124,7 @@ def plan_perf_set_fields(session, **fields):
     for key, value in fields.items():
         if value is None:
             continue
-        event_fields[str(key)] = session._plan_perf_coerce_value(value)
+        event_fields[str(key)] = plan_perf_coerce_value(session, value)
 
 
 def plan_perf_count(session, name, delta=1):
@@ -167,7 +167,7 @@ def plan_perf_finalize_event(_session, event, total_ms):
 
 
 def plan_perf_write_event(session, event, total_ms):
-    if not session._is_plan_perf_trace_enabled():
+    if not is_plan_perf_trace_enabled(session):
         return
     try:
         directory = os.path.dirname(session._plan_perf_log_path)
@@ -175,7 +175,7 @@ def plan_perf_write_event(session, event, total_ms):
             os.makedirs(directory, exist_ok=True)
         with open(session._plan_perf_log_path, "a", encoding="utf-8") as handle:
             handle.write(
-                json.dumps(session._plan_perf_finalize_event(event, total_ms), sort_keys=True)
+                json.dumps(plan_perf_finalize_event(session, event, total_ms), sort_keys=True)
             )
             handle.write("\n")
     except Exception:
@@ -183,7 +183,7 @@ def plan_perf_write_event(session, event, total_ms):
 
 
 def plan_pick_debug_event(session, name, **fields):
-    if not session._is_plan_pick_debug_enabled():
+    if not is_plan_pick_debug_enabled(session):
         return
     try:
         session._plan_pick_debug_sequence = (
@@ -258,11 +258,11 @@ def plan_pick_debug_scope(session, name, **fields):
 
 @contextmanager
 def plan_perf_trace_event(session, name, **fields):
-    if not session._is_plan_perf_trace_enabled():
+    if not is_plan_perf_trace_enabled(session):
         yield None
         return
     if session._plan_perf_current_event is not None:
-        with session._plan_perf_trace_span(name, **fields):
+        with plan_perf_trace_span(session, name, **fields):
             yield session._plan_perf_current_event
         return
     session._plan_perf_sequence += 1
@@ -278,17 +278,17 @@ def plan_perf_trace_event(session, name, **fields):
     }
     previous_event = session._plan_perf_current_event
     session._plan_perf_current_event = event
-    session._plan_perf_set_fields(**fields)
+    plan_perf_set_fields(session, **fields)
     start_time = time.perf_counter()
     try:
         yield event
     except Exception as exc:
-        session._plan_perf_note_error(name, exc)
+        plan_perf_note_error(session, name, exc)
         raise
     finally:
         total_ms = (time.perf_counter() - start_time) * 1000.0
         event["tool"] = session.current_tool
-        session._plan_perf_write_event(event, total_ms)
+        plan_perf_write_event(session, event, total_ms)
         session._plan_perf_current_event = previous_event
 
 
@@ -298,12 +298,12 @@ def plan_perf_trace_span(session, name, **fields):
     if event is None:
         yield None
         return
-    session._plan_perf_set_fields(**fields)
+    plan_perf_set_fields(session, **fields)
     start_time = time.perf_counter()
     try:
         yield event
     except Exception as exc:
-        session._plan_perf_note_error(name, exc)
+        plan_perf_note_error(session, name, exc)
         raise
     finally:
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
@@ -356,36 +356,3 @@ for _method_name in (
     "plan_pick_debug_event",
 ):
     setattr(PlanPerformanceAPI, _method_name, _bind_performance_call(globals()[_method_name]))
-
-
-def _make_performance_compat_method(api_method_name):
-    def method(self, *args, **kwargs):
-        return getattr(self.performance, api_method_name)(*args, **kwargs)
-
-    return method
-
-
-_PLAN_PERFORMANCE_COMPAT_METHODS = (
-    ("_resolve_plan_perf_log_path", "resolve_plan_perf_log_path"),
-    ("_resolve_plan_pick_debug_log_path", "resolve_plan_pick_debug_log_path"),
-    ("_is_plan_perf_trace_enabled", "is_plan_perf_trace_enabled"),
-    ("_is_plan_pick_debug_enabled", "is_plan_pick_debug_enabled"),
-    ("_is_plan_pick_debug_active", "is_plan_pick_debug_active"),
-    ("_plan_perf_describe_object", "plan_perf_describe_object"),
-    ("_plan_perf_describe_target", "plan_perf_describe_target"),
-    ("_plan_perf_coerce_value", "plan_perf_coerce_value"),
-    ("_plan_perf_set_fields", "plan_perf_set_fields"),
-    ("_plan_perf_count", "plan_perf_count"),
-    ("_plan_perf_note_error", "plan_perf_note_error"),
-    ("_plan_perf_finalize_event", "plan_perf_finalize_event"),
-    ("_plan_perf_write_event", "plan_perf_write_event"),
-    ("_plan_perf_trace_event", "plan_perf_trace_event"),
-    ("_plan_perf_trace_span", "plan_perf_trace_span"),
-    ("_plan_pick_debug_event", "plan_pick_debug_event"),
-    ("_plan_pick_debug_scope", "plan_pick_debug_scope"),
-)
-
-
-def bind_session_perf_compat(session_class):
-    for method_name, api_method_name in _PLAN_PERFORMANCE_COMPAT_METHODS:
-        setattr(session_class, method_name, _make_performance_compat_method(api_method_name))

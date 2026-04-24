@@ -165,15 +165,15 @@ def activate_symbol_handle(session, symbol, handle_role):
 
 
 def activate_symbol_handle_now(session, symbol, handle_role):
-    with session._plan_perf_trace_span("activate_symbol_handle_now"):
+    with session.performance.plan_perf_trace_span("activate_symbol_handle_now"):
         if session._tearing_down or not session.visibility.is_plan_symbol_instance(symbol):
             return
         if handle_role not in {"move", "rotate"}:
             return
-        with session._plan_perf_trace_span("activate_symbol_handle_set_target"):
+        with session.performance.plan_perf_trace_span("activate_symbol_handle_set_target"):
             session._set_selected_plan_target("symbol", symbol)
             session.overlays.clear_wall_grips()
-        with session._plan_perf_trace_span("activate_symbol_handle_start_point_pick"):
+        with session.performance.plan_perf_trace_span("activate_symbol_handle_start_point_pick"):
             session.symbols.start_symbol_handle_point_pick(symbol, handle_role)
 
 
@@ -199,10 +199,10 @@ def clear_symbol_edit_preview(session):
 
 
 def start_symbol_handle_point_pick(session, symbol, handle_role):
-    with session._plan_perf_trace_span("start_symbol_handle_point_pick"):
+    with session.performance.plan_perf_trace_span("start_symbol_handle_point_pick"):
         if not session.visibility.is_plan_symbol_instance(symbol):
             return
-        with session._plan_perf_trace_span("start_symbol_handle_get_handles"):
+        with session.performance.plan_perf_trace_span("start_symbol_handle_get_handles"):
             handle_points = {
                 role: point
                 for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(
@@ -212,7 +212,7 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
             start_point = handle_points.get(handle_role)
         if start_point is None:
             return
-        with session._plan_perf_trace_span("start_symbol_handle_state"):
+        with session.performance.plan_perf_trace_span("start_symbol_handle_state"):
             session.current_tool = "Move Symbol" if handle_role == "move" else "Rotate Symbol"
             session._set_hovered_wall(None)
             session._set_hovered_opening(None)
@@ -226,7 +226,7 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
             session._edit_symbol_reference_point = FreeCAD.Vector(start_point)
             session.overlays.clear_selected_symbol_overlay()
             session.overlays.clear_selected_symbol_handles()
-        with session._plan_perf_trace_span("start_symbol_handle_preview"):
+        with session.performance.plan_perf_trace_span("start_symbol_handle_preview"):
             anchor = session.symbols.get_symbol_anchor_point(
                 symbol, placement=session._edit_symbol_start_placement
             )
@@ -238,9 +238,9 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
             )
         session._refresh_task_panel_status(selection_only=True)
         FreeCAD.activeDraftCommand = session
-        with session._plan_perf_trace_span("symbol_handle_focus_suppression"):
+        with session.performance.plan_perf_trace_span("symbol_handle_focus_suppression"):
             session._set_draft_point_focus_suppressed(True)
-        with session._plan_perf_trace_span("symbol_handle_snapper_get_point"):
+        with session.performance.plan_perf_trace_span("symbol_handle_snapper_get_point"):
             FreeCADGui.Snapper.getPoint(
                 last=start_point,
                 callback=session.symbols.finish_symbol_handle_point_pick,
@@ -252,7 +252,7 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
                 ),
                 noTracker=True,
             )
-        with session._plan_perf_trace_span("symbol_handle_queue_focus_plan_view"):
+        with session.performance.plan_perf_trace_span("symbol_handle_queue_focus_plan_view"):
             session.viewport.queue_focus_plan_view()
 
 

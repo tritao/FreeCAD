@@ -91,7 +91,7 @@ def clear_hidden_provider_preselection(session):
         return False
     if not _should_filter_hidden_provider_preselection_for_object(session, preselected_obj):
         return False
-    session._plan_perf_count("provider_preselection_cleared_for_mode")
+    session.performance.plan_perf_count("provider_preselection_cleared_for_mode")
     return _clear_gui_preselection()
 
 
@@ -235,7 +235,7 @@ def _collect_selected_targets_from_gui_selection(session, selection, previous_ki
             )
             if target_kind:
                 selected_targets.append((target_kind, target_obj))
-    session._plan_perf_count("selected_targets_considered", len(selected_targets))
+    session.performance.plan_perf_count("selected_targets_considered", len(selected_targets))
     return selected_targets, pending_kind, pending_target
 
 
@@ -275,16 +275,18 @@ def _resolve_gui_selection_refresh_result(session, selection, previous_kind, pre
 
 
 def refresh_selected_plan_target(session):
-    with session._plan_perf_trace_span("refresh_selected_plan_target"):
-        session._plan_perf_count("selection_refreshes")
+    with session.performance.plan_perf_trace_span("refresh_selected_plan_target"):
+        session.performance.plan_perf_count("selection_refreshes")
         if session._tearing_down:
             return
         if session._ignore_selection_changes:
             return
 
         previous_kind, previous_obj = get_selected_plan_target(session)
-        session._plan_perf_set_fields(
-            selected_before=session._plan_perf_describe_target(previous_kind, previous_obj),
+        session.performance.plan_perf_set_fields(
+            selected_before=session.performance.plan_perf_describe_target(
+                previous_kind, previous_obj
+            ),
             selected_before_kind=previous_kind or "none",
         )
         previous_wall = session.selection.get_plan_target_object_from_state(
@@ -300,7 +302,7 @@ def refresh_selected_plan_target(session):
             except (ReferenceError, RuntimeError):
                 session._set_selected_plan_target_state()
                 return
-            session._plan_perf_count("gui_selection_size", len(selection or []))
+            session.performance.plan_perf_count("gui_selection_size", len(selection or []))
             refresh_result = _resolve_gui_selection_refresh_result(
                 session,
                 selection,
@@ -323,8 +325,10 @@ def refresh_selected_plan_target(session):
                 session.overlays.clear_wall_grips()
         session._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
         selected_kind, selected_obj = get_selected_plan_target(session)
-        session._plan_perf_set_fields(
-            selected_after=session._plan_perf_describe_target(selected_kind, selected_obj),
+        session.performance.plan_perf_set_fields(
+            selected_after=session.performance.plan_perf_describe_target(
+                selected_kind, selected_obj
+            ),
             selected_after_kind=selected_kind or "none",
             selection_refresh_cleared_target=bool(previous_kind and not selected_kind),
         )
@@ -700,19 +704,19 @@ def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
 
 
 def sync_primary_selected_plan_target_visuals(session, previous_kind=None, previous_obj=None):
-    with session._plan_perf_trace_span("sync_primary_selected_plan_target_visuals"):
+    with session.performance.plan_perf_trace_span("sync_primary_selected_plan_target_visuals"):
         if session.current_tool != "Select" or session._selected_plan_target_changed(
             previous_kind,
             previous_obj,
             plan_target_kinds.PLAN_TARGET_WALL,
         ):
-            with session._plan_perf_trace_span("sync_selected_wall_overlay"):
+            with session.performance.plan_perf_trace_span("sync_selected_wall_overlay"):
                 session.overlays.sync_selected_wall_overlay()
-        with session._plan_perf_trace_span("sync_selected_wall_opening_context_overlay"):
+        with session.performance.plan_perf_trace_span("sync_selected_wall_opening_context_overlay"):
             session.overlays.sync_selected_wall_opening_context_overlay()
-        with session._plan_perf_trace_span("sync_hovered_wall_overlay"):
+        with session.performance.plan_perf_trace_span("sync_hovered_wall_overlay"):
             session.overlays.sync_hovered_wall_overlay()
-        with session._plan_perf_trace_span("sync_hovered_wall_opening_context_overlay"):
+        with session.performance.plan_perf_trace_span("sync_hovered_wall_opening_context_overlay"):
             session.overlays.sync_hovered_wall_opening_context_overlay()
         plan_target_dispatch.sync_selected_target_visuals(
             session,
@@ -744,9 +748,9 @@ def sync_primary_selected_plan_target_visuals(session, previous_kind=None, previ
             ),
             trace_style="by_method",
         )
-        with session._plan_perf_trace_span("sync_secondary_selected_overlays"):
+        with session.performance.plan_perf_trace_span("sync_secondary_selected_overlays"):
             session.overlays.sync_secondary_selected_overlays()
-        with session._plan_perf_trace_span("sync_active_plan_target_object"):
+        with session.performance.plan_perf_trace_span("sync_active_plan_target_object"):
             session._sync_active_plan_target_object()
         session._refresh_task_panel_status(selection_only=session.current_tool == "Select")
 
@@ -956,12 +960,12 @@ def activate_plan_target(
         target_kind, target_obj = session.selection.get_plan_target_at_position(mouse_pos)
     else:
         target_kind, target_obj = resolved_target
-    with session._plan_perf_trace_span(
+    with session.performance.plan_perf_trace_span(
         f"activate_plan_target_{kind}", requested_kind=kind, mouse_pos=mouse_pos
     ):
-        session._plan_perf_count(f"activate_plan_target_attempts_{kind}")
-        session._plan_perf_set_fields(
-            resolved_target=session._plan_perf_describe_target(target_kind, target_obj)
+        session.performance.plan_perf_count(f"activate_plan_target_attempts_{kind}")
+        session.performance.plan_perf_set_fields(
+            resolved_target=session.performance.plan_perf_describe_target(target_kind, target_obj)
         )
         if target_kind != kind:
             target_obj = None
@@ -974,13 +978,13 @@ def activate_plan_target(
             defer_gui_selection=defer_gui_selection,
             defer_wall_grips=defer_wall_grips,
         ):
-            session._plan_perf_set_fields(activate_plan_target_result=False)
+            session.performance.plan_perf_set_fields(activate_plan_target_result=False)
             return False
         session._clear_hovered_plan_targets(clear_hovered_kinds)
         session._claim_left_button_click(event_callback)
-        session._plan_perf_set_fields(
+        session.performance.plan_perf_set_fields(
             activate_plan_target_result=True,
-            activated_target=session._plan_perf_describe_target(kind, target_obj),
+            activated_target=session.performance.plan_perf_describe_target(kind, target_obj),
         )
         return True
 
@@ -991,13 +995,13 @@ def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
         target_kind, target_obj = session.selection.get_plan_target_at_position(mouse_pos)
         source = "picked_after_throttled_hover" if session._hover_pick_dirty else "picked"
         session._hover_pick_dirty = False
-        session._plan_perf_count(f"semantic_target_source_{source}")
-        session._plan_perf_set_fields(semantic_target_source=source)
+        session.performance.plan_perf_count(f"semantic_target_source_{source}")
+        session.performance.plan_perf_set_fields(semantic_target_source=source)
     else:
-        session._plan_perf_count("semantic_target_source_hovered")
-        session._plan_perf_set_fields(
+        session.performance.plan_perf_count("semantic_target_source_hovered")
+        session.performance.plan_perf_set_fields(
             semantic_target_source="hovered",
-            hovered_target=session._plan_perf_describe_target(target_kind, target_obj),
+            hovered_target=session.performance.plan_perf_describe_target(target_kind, target_obj),
         )
     if _get_target_activation_behavior(target_kind) is None:
         return False
@@ -1081,24 +1085,24 @@ def activate_wall_target(
 
 def clear_plan_selection_state(session):
     previous_kind, previous_obj = get_selected_plan_target(session)
-    with session._plan_perf_trace_event(
+    with session.performance.plan_perf_trace_event(
         "clear_plan_selection_state",
         clear_selection_started_kind=previous_kind or "none",
-        clear_selection_started_target=session._plan_perf_describe_target(
+        clear_selection_started_target=session.performance.plan_perf_describe_target(
             previous_kind, previous_obj
         ),
     ):
-        with session._plan_perf_trace_span("clear_plan_selection_gui_selection"):
+        with session.performance.plan_perf_trace_span("clear_plan_selection_gui_selection"):
             session._set_gui_selection([])
-        with session._plan_perf_trace_span("clear_plan_selection_target_state"):
+        with session.performance.plan_perf_trace_span("clear_plan_selection_target_state"):
             session._set_selected_plan_target()
             session._provider_selected_objects = []
-        with session._plan_perf_trace_span("clear_plan_selection_hover_state"):
+        with session.performance.plan_perf_trace_span("clear_plan_selection_hover_state"):
             plan_target_dispatch.clear_hovered_targets(session)
-        with session._plan_perf_trace_span("clear_plan_selection_wall_grips"):
+        with session.performance.plan_perf_trace_span("clear_plan_selection_wall_grips"):
             session.overlays.clear_wall_grips()
             session.overlays.clear_selected_wall_overlay()
-        with session._plan_perf_trace_span("clear_plan_selection_secondary_overlays"):
+        with session.performance.plan_perf_trace_span("clear_plan_selection_secondary_overlays"):
             session.overlays.sync_secondary_selected_overlays()
         plan_target_dispatch.sync_selected_target_visuals(
             session,
@@ -1107,12 +1111,12 @@ def clear_plan_selection_state(session):
             trace_style="by_kind",
             trace_prefix="clear_plan_selection",
         )
-        with session._plan_perf_trace_span("clear_plan_selection_task_status"):
+        with session.performance.plan_perf_trace_span("clear_plan_selection_task_status"):
             session._refresh_task_panel_status(selection_only=session.current_tool == "Select")
         selected_kind, selected_obj = get_selected_plan_target(session)
-        session._plan_perf_set_fields(
+        session.performance.plan_perf_set_fields(
             clear_selection_ended_kind=selected_kind or "none",
-            clear_selection_ended_target=session._plan_perf_describe_target(
+            clear_selection_ended_target=session.performance.plan_perf_describe_target(
                 selected_kind, selected_obj
             ),
             clear_selection_cleared_wall=bool(previous_kind == "wall" and not selected_kind),
@@ -1284,10 +1288,10 @@ def set_gui_selection(session, selection):
     session._gui_selection_sync_queued = False
     session._gui_selection_sync_generation += 1
     session._queued_gui_selection_object = None
-    with session._plan_perf_trace_span("set_gui_selection"):
+    with session.performance.plan_perf_trace_span("set_gui_selection"):
         with session._selection_changes_suppressed():
             try:
-                with session._plan_perf_trace_span("set_gui_selection_clear"):
+                with session.performance.plan_perf_trace_span("set_gui_selection_clear"):
                     FreeCADGui.Selection.clearSelection()
                 seen = set()
                 for obj in selection or []:
@@ -1300,11 +1304,11 @@ def set_gui_selection(session, selection):
                     if key in seen:
                         continue
                     seen.add(key)
-                    with session._plan_perf_trace_span("set_gui_selection_add"):
+                    with session.performance.plan_perf_trace_span("set_gui_selection_add"):
                         session._add_gui_selection_object(obj)
             except Exception:
                 pass
-        with session._plan_perf_trace_span("set_gui_selection_secondary_targets"):
+        with session.performance.plan_perf_trace_span("set_gui_selection_secondary_targets"):
             session._sync_secondary_selected_plan_targets_from_selection(selection)
 
 
@@ -1341,7 +1345,7 @@ def run_scheduled_gui_selection_sync(session, generation=None):
     if obj is None:
         session._gui_selection_sync_queued = False
         return
-    with session._plan_perf_trace_event("scheduled_gui_selection_sync"):
+    with session.performance.plan_perf_trace_event("scheduled_gui_selection_sync"):
         if session._tearing_down:
             session._gui_selection_sync_queued = False
             session._queued_gui_selection_object = None
@@ -1379,20 +1383,20 @@ def run_scheduled_selection_refresh(session):
     if not session._selection_refresh_queued:
         return
     session._selection_refresh_queued = False
-    with session._plan_perf_trace_event("selection_observer_refresh"):
+    with session.performance.plan_perf_trace_event("selection_observer_refresh"):
         if session._tearing_down or session._ignore_selection_changes:
             return
         session._refresh_primary_selected_plan_target()
 
 
 def selection_observer_add(session, doc, obj, sub, point):
-    with session._plan_perf_trace_event(
+    with session.performance.plan_perf_trace_event(
         "selection_observer_add",
         selection_document=doc,
         selection_object=obj,
         selection_subelement=sub,
     ):
-        session._plan_perf_count("selection_observer_callbacks")
+        session.performance.plan_perf_count("selection_observer_callbacks")
         if session._tearing_down:
             return
         if session._ignore_selection_changes:
@@ -1404,13 +1408,13 @@ def selection_observer_add(session, doc, obj, sub, point):
 
 
 def selection_observer_remove(session, doc, obj, sub):
-    with session._plan_perf_trace_event(
+    with session.performance.plan_perf_trace_event(
         "selection_observer_remove",
         selection_document=doc,
         selection_object=obj,
         selection_subelement=sub,
     ):
-        session._plan_perf_count("selection_observer_callbacks")
+        session.performance.plan_perf_count("selection_observer_callbacks")
         if session._tearing_down:
             return
         if session._ignore_selection_changes:
@@ -1420,8 +1424,10 @@ def selection_observer_remove(session, doc, obj, sub):
 
 
 def selection_observer_set(session, doc):
-    with session._plan_perf_trace_event("selection_observer_set", selection_document=doc):
-        session._plan_perf_count("selection_observer_callbacks")
+    with session.performance.plan_perf_trace_event(
+        "selection_observer_set", selection_document=doc
+    ):
+        session.performance.plan_perf_count("selection_observer_callbacks")
         if session._tearing_down:
             return
         if session._ignore_selection_changes:
@@ -1432,13 +1438,15 @@ def selection_observer_set(session, doc):
 
 def selection_observer_clear(session, doc):
     selected_kind, selected_obj = session.selection.get_selected_plan_target()
-    with session._plan_perf_trace_event(
+    with session.performance.plan_perf_trace_event(
         "selection_observer_clear",
         selection_document=doc,
-        selected_before_clear=session._plan_perf_describe_target(selected_kind, selected_obj),
+        selected_before_clear=session.performance.plan_perf_describe_target(
+            selected_kind, selected_obj
+        ),
         selected_before_clear_kind=selected_kind or "none",
     ):
-        session._plan_perf_count("selection_observer_callbacks")
+        session.performance.plan_perf_count("selection_observer_callbacks")
         if session._tearing_down:
             return
         if session._ignore_selection_changes:
@@ -1448,29 +1456,29 @@ def selection_observer_clear(session, doc):
 
 
 def selection_observer_set_preselection(session, doc, obj, sub):
-    with session._plan_perf_trace_event(
+    with session.performance.plan_perf_trace_event(
         "selection_observer_set_preselection",
         selection_document=doc,
         selection_object=obj,
         selection_subelement=sub,
     ):
-        session._plan_perf_count("selection_observer_callbacks")
+        session.performance.plan_perf_count("selection_observer_callbacks")
         if session._tearing_down:
             return
         if not _should_filter_hidden_provider_preselection(session, doc, obj):
             return
-        session._plan_perf_count("provider_preselection_filtered")
+        session.performance.plan_perf_count("provider_preselection_filtered")
         _clear_gui_preselection()
 
 
 def selection_observer_remove_preselection(session, doc, obj, sub):
-    with session._plan_perf_trace_event(
+    with session.performance.plan_perf_trace_event(
         "selection_observer_remove_preselection",
         selection_document=doc,
         selection_object=obj,
         selection_subelement=sub,
     ):
-        session._plan_perf_count("selection_observer_callbacks")
+        session.performance.plan_perf_count("selection_observer_callbacks")
 
 
 def _should_filter_hidden_provider_preselection(session, doc_name, obj_name):

@@ -457,15 +457,17 @@ class PlanEditSession:
         return changed
 
     def enter(self):
-        with self._plan_perf_trace_event("enter_plan_edit"):
-            self._plan_perf_count("document_objects", len(getattr(self.doc, "Objects", []) or []))
+        with self.performance.plan_perf_trace_event("enter_plan_edit"):
+            self.performance.plan_perf_count(
+                "document_objects", len(getattr(self.doc, "Objects", []) or [])
+            )
             if not self.doc or not self.gui_doc:
                 FreeCAD.Console.PrintError(
                     translate("BIM_PlanEdit", "An active document and 3D view are required.\n")
                 )
                 return False
 
-            with self._plan_perf_trace_span("enter_acquire_view"):
+            with self.performance.plan_perf_trace_span("enter_acquire_view"):
                 self.view = self.gui_doc.ActiveView
                 get_viewer = self._get_runtime_attr(self.view, "getViewer")
                 if self.view is None or get_viewer is None:
@@ -489,56 +491,58 @@ class PlanEditSession:
                     )
                     return False
 
-            with self._plan_perf_trace_span("capture_plan_edit_state"):
+            with self.performance.plan_perf_trace_span("capture_plan_edit_state"):
                 self.viewport.capture_state()
-            with self._plan_perf_trace_span("force_plan_preselection"):
+            with self.performance.plan_perf_trace_span("force_plan_preselection"):
                 self.viewport.force_plan_preselection()
 
-            with self._plan_perf_trace_span("collect_storeys"):
+            with self.performance.plan_perf_trace_span("collect_storeys"):
                 self.storeys = self.collect_storeys()
-                self._plan_perf_count("storeys_found", len(self.storeys))
-            with self._plan_perf_trace_span("find_initial_storey"):
+                self.performance.plan_perf_count("storeys_found", len(self.storeys))
+            with self.performance.plan_perf_trace_span("find_initial_storey"):
                 self.active_storey = self.find_initial_storey()
-                self._plan_perf_set_fields(
-                    active_storey=self._plan_perf_describe_object(self.active_storey)
+                self.performance.plan_perf_set_fields(
+                    active_storey=self.performance.plan_perf_describe_object(self.active_storey)
                 )
-            with self._plan_perf_trace_span("capture_object_view_state"):
+            with self.performance.plan_perf_trace_span("capture_object_view_state"):
                 self.visibility.capture_object_view_state()
-            with self._plan_perf_trace_span("apply_plan_view"):
+            with self.performance.plan_perf_trace_span("apply_plan_view"):
                 self.viewport.apply_plan_view(fit=False)
-            with self._plan_perf_trace_span("apply_plan_snap_profile"):
+            with self.performance.plan_perf_trace_span("apply_plan_snap_profile"):
                 self._apply_plan_snap_profile()
             self.visibility.apply_storey_visibility()
-            with self._plan_perf_trace_span("attach_selection_observer"):
+            with self.performance.plan_perf_trace_span("attach_selection_observer"):
                 self._attach_selection_observer()
-            with self._plan_perf_trace_span("attach_document_observer"):
+            with self.performance.plan_perf_trace_span("attach_document_observer"):
                 self._attach_document_observer()
-            with self._plan_perf_trace_span("register_edit_callbacks"):
+            with self.performance.plan_perf_trace_span("register_edit_callbacks"):
                 self.viewport.register_edit_callbacks()
-            with self._plan_perf_trace_span("refresh_primary_selected_plan_target_on_enter"):
+            with self.performance.plan_perf_trace_span(
+                "refresh_primary_selected_plan_target_on_enter"
+            ):
                 self._refresh_primary_selected_plan_target()
 
-            with self._plan_perf_trace_span("build_task_panel"):
+            with self.performance.plan_perf_trace_span("build_task_panel"):
                 panel = PlanEditControlsWidget(self)
-            with self._plan_perf_trace_span("attach_task_panel"):
+            with self.performance.plan_perf_trace_span("attach_task_panel"):
                 self.attach_task_panel(panel)
-            with self._plan_perf_trace_span("task_panel_initial_refresh"):
+            with self.performance.plan_perf_trace_span("task_panel_initial_refresh"):
                 panel.refresh(refresh_integrations=False)
-            with self._plan_perf_trace_span("queue_prime_opening_handle_tracker_pool"):
+            with self.performance.plan_perf_trace_span("queue_prime_opening_handle_tracker_pool"):
                 self.overlays.queue_prime_opening_handle_tracker_pool()
-            with self._plan_perf_trace_span("queue_prime_wall_hosted_openings_cache"):
+            with self.performance.plan_perf_trace_span("queue_prime_wall_hosted_openings_cache"):
                 self.openings.queue_prime_wall_hosted_openings_cache()
-            with self._plan_perf_trace_span("queue_prime_hover_pick_caches"):
+            with self.performance.plan_perf_trace_span("queue_prime_hover_pick_caches"):
                 self.selection.queue_prime_hover_pick_caches()
-            with self._plan_perf_trace_span("install_command_gate"):
+            with self.performance.plan_perf_trace_span("install_command_gate"):
                 plan_command_gate.install(self)
-            if self._is_plan_perf_trace_enabled():
+            if self.performance.is_plan_perf_trace_enabled():
                 FreeCAD.Console.PrintMessage(
                     translate("BIM_PlanEdit", "BIM Plan Edit perf trace: {path}\n").format(
                         path=self._plan_perf_log_path
                     )
                 )
-            if self._is_plan_pick_debug_enabled():
+            if self.performance.is_plan_pick_debug_enabled():
                 FreeCAD.Console.PrintMessage(
                     translate("BIM_PlanEdit", "BIM Plan Edit pick debug: {path}\n").format(
                         path=self._plan_pick_debug_log_path
@@ -898,7 +902,7 @@ class PlanEditSession:
         key = self._get_document_object_key(obj)
         semantic_cache = self.overlay_cache_state.plan_semantic_object_cache
         if key is not None and key in semantic_cache:
-            self._plan_perf_count("semantic_object_cache_hits")
+            self.performance.plan_perf_count("semantic_object_cache_hits")
             return semantic_cache[key]
 
         current = obj
@@ -1247,10 +1251,10 @@ class PlanEditSession:
 
     def _collect_plan_provider_contributions(self, method_name, normalizer):
         if self._tearing_down or self._finishing or not self._document_is_alive():
-            self._plan_perf_count("plan_provider_inactive_session")
+            self.performance.plan_perf_count("plan_provider_inactive_session")
             return ()
         if self._plan_provider_integrations_disabled():
-            self._plan_perf_count("plan_provider_integrations_disabled")
+            self.performance.plan_perf_count("plan_provider_integrations_disabled")
             return ()
         return plan_provider_runtime.collect_plan_provider_contributions(
             self,
@@ -1278,10 +1282,10 @@ class PlanEditSession:
 
     def get_plan_provider_snapshot(self):
         if self._tearing_down or self._finishing or not self._document_is_alive():
-            self._plan_perf_count("plan_provider_inactive_session")
+            self.performance.plan_perf_count("plan_provider_inactive_session")
             return plan_provider_runtime.PlanProviderSnapshot()
         if self._plan_provider_integrations_disabled():
-            self._plan_perf_count("plan_provider_integrations_disabled")
+            self.performance.plan_perf_count("plan_provider_integrations_disabled")
             return plan_provider_runtime.PlanProviderSnapshot()
         return plan_provider_runtime.collect_plan_provider_snapshot(self)
 
@@ -2161,4 +2165,3 @@ class PlanEditSession:
 
 
 plan_session_state.bind_session_state_accessors(PlanEditSession)
-plan_performance.bind_session_perf_compat(PlanEditSession)
