@@ -242,6 +242,17 @@ def _make_state_backed_property(ensure_method_name, field_name, coerce=_coerce_i
     return property(_getter, _setter)
 
 
+def _make_ensure_state_method(slot_name, state_factory):
+    def _ensure_state(self):
+        state = self.__dict__.get(slot_name)
+        if state is None:
+            state = state_factory()
+            self.__dict__[slot_name] = state
+        return state
+
+    return _ensure_state
+
+
 def get_active_session():
     return _active_session
 
@@ -314,125 +325,6 @@ def start_session():
 
 class PlanEditSession:
     """Owns the viewer state and control dock for Plan Edit mode."""
-
-    def _ensure_task_panel_state(self):
-        state = self.__dict__.get("task_panel_state")
-        if state is None:
-            state = plan_session_state.PlanTaskPanelState()
-            self.__dict__["task_panel_state"] = state
-        return state
-
-    def _ensure_provider_overlay_read_state(self):
-        state = self.__dict__.get("provider_overlay_read_state")
-        if state is None:
-            state = plan_session_state.PlanProviderOverlayReadState()
-            self.__dict__["provider_overlay_read_state"] = state
-        return state
-
-    def _ensure_interaction_state(self):
-        state = self.__dict__.get("interaction_state")
-        if state is None:
-            state = plan_session_state.PlanInteractionState()
-            self.__dict__["interaction_state"] = state
-        return state
-
-    def _ensure_selection_state(self):
-        state = self.__dict__.get("selection_state")
-        if state is None:
-            state = plan_session_state.PlanSelectionState()
-            self.__dict__["selection_state"] = state
-        return state
-
-    def _ensure_wall_edit_state(self):
-        state = self.__dict__.get("wall_edit_state")
-        if state is None:
-            state = plan_session_state.PlanWallEditState()
-            self.__dict__["wall_edit_state"] = state
-        return state
-
-    def _ensure_hover_pick_state(self):
-        state = self.__dict__.get("hover_pick_state")
-        if state is None:
-            state = plan_session_state.PlanHoverPickState()
-            self.__dict__["hover_pick_state"] = state
-        return state
-
-    def _ensure_selection_sync_state(self):
-        state = self.__dict__.get("selection_sync_state")
-        if state is None:
-            state = plan_session_state.PlanSelectionSyncState()
-            self.__dict__["selection_sync_state"] = state
-        return state
-
-    def _ensure_input_event_state(self):
-        state = self.__dict__.get("input_event_state")
-        if state is None:
-            state = plan_session_state.PlanInputEventState()
-            self.__dict__["input_event_state"] = state
-        return state
-
-    def _ensure_overlay_refresh_state(self):
-        state = self.__dict__.get("overlay_refresh_state")
-        if state is None:
-            state = plan_session_state.PlanOverlayRefreshState()
-            self.__dict__["overlay_refresh_state"] = state
-        return state
-
-    def _ensure_wall_grip_runtime_state(self):
-        state = self.__dict__.get("wall_grip_state")
-        if state is None:
-            state = plan_session_state.PlanWallGripState()
-            self.__dict__["wall_grip_state"] = state
-        return state
-
-    def _ensure_viewport_state(self):
-        state = self.__dict__.get("viewport_state")
-        if state is None:
-            state = plan_session_state.PlanViewportState()
-            self.__dict__["viewport_state"] = state
-        return state
-
-    def _ensure_document_visual_state(self):
-        state = self.__dict__.get("document_visual_state")
-        if state is None:
-            state = plan_session_state.PlanDocumentVisualState()
-            self.__dict__["document_visual_state"] = state
-        return state
-
-    def _ensure_provider_transient_state(self):
-        state = self.__dict__.get("provider_transient_state")
-        if state is None:
-            state = plan_session_state.PlanProviderTransientState()
-            self.__dict__["provider_transient_state"] = state
-        return state
-
-    def _ensure_opening_transient_state(self):
-        state = self.__dict__.get("opening_transient_state")
-        if state is None:
-            state = plan_session_state.PlanOpeningTransientState()
-            self.__dict__["opening_transient_state"] = state
-        return state
-
-    def _ensure_overlay_tracker_state(self):
-        state = self.__dict__.get("overlay_tracker_state")
-        if state is None:
-            state = plan_session_state.PlanOverlayTrackerState()
-            self.__dict__["overlay_tracker_state"] = state
-        return state
-
-    def _ensure_overlay_cache_state(self):
-        state = self.__dict__.get("overlay_cache_state")
-        if state is None:
-            state = plan_session_state.PlanOverlayCacheState()
-            self.__dict__["overlay_cache_state"] = state
-        return state
-
-    def _ensure_overlay_transient_state(self):
-        state = self.__dict__.get("overlay_transient_state")
-        if state is None:
-            state = plan_session_state.PlanOverlayTransientState()
-            self.__dict__["overlay_transient_state"] = state
-        return state
 
     # State-backed compatibility properties are bound after class definition.
 
@@ -3834,6 +3726,71 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         ),
     ),
 )
+
+
+_PLAN_EDIT_SESSION_STATE_ENSURERS = (
+    ("_ensure_task_panel_state", "task_panel_state", plan_session_state.PlanTaskPanelState),
+    (
+        "_ensure_provider_overlay_read_state",
+        "provider_overlay_read_state",
+        plan_session_state.PlanProviderOverlayReadState,
+    ),
+    ("_ensure_interaction_state", "interaction_state", plan_session_state.PlanInteractionState),
+    ("_ensure_selection_state", "selection_state", plan_session_state.PlanSelectionState),
+    ("_ensure_wall_edit_state", "wall_edit_state", plan_session_state.PlanWallEditState),
+    ("_ensure_hover_pick_state", "hover_pick_state", plan_session_state.PlanHoverPickState),
+    (
+        "_ensure_selection_sync_state",
+        "selection_sync_state",
+        plan_session_state.PlanSelectionSyncState,
+    ),
+    ("_ensure_input_event_state", "input_event_state", plan_session_state.PlanInputEventState),
+    (
+        "_ensure_overlay_refresh_state",
+        "overlay_refresh_state",
+        plan_session_state.PlanOverlayRefreshState,
+    ),
+    ("_ensure_wall_grip_runtime_state", "wall_grip_state", plan_session_state.PlanWallGripState),
+    ("_ensure_viewport_state", "viewport_state", plan_session_state.PlanViewportState),
+    (
+        "_ensure_document_visual_state",
+        "document_visual_state",
+        plan_session_state.PlanDocumentVisualState,
+    ),
+    (
+        "_ensure_provider_transient_state",
+        "provider_transient_state",
+        plan_session_state.PlanProviderTransientState,
+    ),
+    (
+        "_ensure_opening_transient_state",
+        "opening_transient_state",
+        plan_session_state.PlanOpeningTransientState,
+    ),
+    (
+        "_ensure_overlay_tracker_state",
+        "overlay_tracker_state",
+        plan_session_state.PlanOverlayTrackerState,
+    ),
+    (
+        "_ensure_overlay_cache_state",
+        "overlay_cache_state",
+        plan_session_state.PlanOverlayCacheState,
+    ),
+    (
+        "_ensure_overlay_transient_state",
+        "overlay_transient_state",
+        plan_session_state.PlanOverlayTransientState,
+    ),
+)
+
+
+for _ensure_method_name, _slot_name, _state_factory in _PLAN_EDIT_SESSION_STATE_ENSURERS:
+    setattr(
+        PlanEditSession,
+        _ensure_method_name,
+        _make_ensure_state_method(_slot_name, _state_factory),
+    )
 
 
 for _ensure_method_name, _property_specs in _PLAN_EDIT_SESSION_STATE_PROPERTIES:
