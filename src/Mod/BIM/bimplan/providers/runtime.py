@@ -47,6 +47,14 @@ FOCUSED_PROVIDER_OVERLAY_PICK_MODES = frozenset(
 )
 
 
+def _perf_trace_span(session, name, **fields):
+    return session.performance.plan_perf_trace_span(name, **fields)
+
+
+def _perf_count(session, name, delta=1):
+    return session.performance.plan_perf_count(name, delta=delta)
+
+
 class _PlanProviderTargetDisplayFields(TypedDict):
     label: str
     provider_id: str
@@ -371,7 +379,7 @@ def _collect_provider_surface_contributions(
         str(provider_id or "").replace(" ", "_"),
         method_name,
     )
-    with session._plan_perf_trace_span(span_name):
+    with _perf_trace_span(session, span_name):
         try:
             provided = method(context)
         except Exception as exc:
@@ -389,7 +397,8 @@ def _collect_provider_surface_contributions(
         if normalized is not None:
             results.append(normalized)
 
-    session._plan_perf_count(
+    _perf_count(
+        session,
         "plan_provider_{}_{}_contributions".format(provider_id, method_name),
         len(results),
     )
@@ -397,7 +406,7 @@ def _collect_provider_surface_contributions(
 
 
 def collect_plan_provider_snapshot(session) -> PlanProviderSnapshot:
-    with session._plan_perf_trace_span("collect_plan_provider_snapshot"):
+    with _perf_trace_span(session, "collect_plan_provider_snapshot"):
         document_is_alive = getattr(session, "_document_is_alive", None)
         if callable(document_is_alive) and not document_is_alive():
             return PlanProviderSnapshot()
@@ -1208,7 +1217,7 @@ def _coerce_plan_overlay_color(color):
 
 
 def collect_plan_provider_contributions(session, method_name, normalizer):
-    with session._plan_perf_trace_span(f"collect_plan_provider_contributions_{method_name}"):
+    with _perf_trace_span(session, f"collect_plan_provider_contributions_{method_name}"):
         document_is_alive = getattr(session, "_document_is_alive", None)
         if callable(document_is_alive) and not document_is_alive():
             return ()

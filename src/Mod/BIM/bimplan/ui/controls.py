@@ -1459,7 +1459,7 @@ class PlanEditControlsWidget:
         if self._session_is_inactive():
             self._integration_refresh_queued = False
             return
-        with self.session._plan_perf_trace_event("queued_integration_panel_refresh"):
+        with self.session.performance.plan_perf_trace_event("queued_integration_panel_refresh"):
             self._integration_refresh_queued = False
             self._refresh_integration_panel(defer=False)
 
@@ -1565,7 +1565,7 @@ class PlanEditControlsWidget:
             self._refresh_widget_geometry(parent)
 
     def _refresh_integration_panel(self, defer=False):
-        with self.session._plan_perf_trace_span("refresh_integration_panel"):
+        with self.session.performance.plan_perf_trace_span("refresh_integration_panel"):
             if (
                 self.integration_panel is None
                 or self.integration_summary is None
@@ -1577,12 +1577,12 @@ class PlanEditControlsWidget:
                 self._hide_integration_panel()
                 return
             if self.session._plan_provider_integrations_disabled():
-                self.session._plan_perf_count("integration_panel_disabled")
+                self.session.performance.plan_perf_count("integration_panel_disabled")
                 self._integration_refresh_queued = False
                 self._hide_integration_panel()
                 return
             if defer:
-                self.session._plan_perf_count("integration_panel_deferred_refreshes")
+                self.session.performance.plan_perf_count("integration_panel_deferred_refreshes")
                 self._queue_integration_panel_refresh()
                 return
             self._integration_refresh_queued = False
@@ -2414,7 +2414,7 @@ class PlanEditControlsWidget:
         self._set_widget_tooltip(self.window_button, action_context_vm.window_button_tooltip)
 
     def refresh_from_session(self, defer_integrations=False, refresh_integrations=True):
-        with self.session._plan_perf_trace_span("refresh_task_panel_widget"):
+        with self.session.performance.plan_perf_trace_span("refresh_task_panel_widget"):
             if self.form is None or self.status is None or self.exit_button is None:
                 return
             self._sync_join_type_combo_from_session()
@@ -2430,7 +2430,7 @@ class PlanEditControlsWidget:
             self._apply_modal_interaction_state(self.session._is_modal_plan_interaction_active())
 
     def refresh_selection_from_session(self):
-        with self.session._plan_perf_trace_span("refresh_task_panel_selection_widget"):
+        with self.session.performance.plan_perf_trace_span("refresh_task_panel_selection_widget"):
             if self.form is None or self.status is None or self.exit_button is None:
                 return
             selected_kind, _selected_obj = self.session.selection.get_selected_plan_target()
@@ -2448,7 +2448,9 @@ class PlanEditControlsWidget:
             self._apply_modal_interaction_state(self.session._is_modal_plan_interaction_active())
 
     def refresh_provider_overlay_mode_from_session(self):
-        with self.session._plan_perf_trace_span("refresh_task_panel_provider_overlay_mode_widget"):
+        with self.session.performance.plan_perf_trace_span(
+            "refresh_task_panel_provider_overlay_mode_widget"
+        ):
             if self.form is None or self.integration_panel is None:
                 return
             self._set_widget_updates_enabled(self.integration_panel, False)
@@ -2461,7 +2463,7 @@ class PlanEditControlsWidget:
     def _refresh_space_editor(self):
         from PySide import QtGui
 
-        with self.session._plan_perf_trace_span("refresh_space_editor"):
+        with self.session.performance.plan_perf_trace_span("refresh_space_editor"):
             if self.space_editor is None:
                 return
             space_editor_vm = plan_task_panel_view_model.build_space_editor_view_model(self.session)
@@ -2489,7 +2491,10 @@ class PlanEditControlsWidget:
                 if self.space_type_combo is not None:
                     combo_state = (space_key, options, str(current_type or ""))
                     if combo_state != self._space_editor_combo_state:
-                        self.session._plan_perf_count("space_type_options", len(options))
+                        self.session.performance.plan_perf_count(
+                            "space_type_options",
+                            len(options),
+                        )
                         self.space_type_combo.blockSignals(True)
                         try:
                             self._set_space_type_combo_options(options)
@@ -2510,7 +2515,7 @@ class PlanEditControlsWidget:
                         boundary_entries = list(
                             self.session._get_space_boundary_entries(space) or []
                         )
-                        self.session._plan_perf_count(
+                        self.session.performance.plan_perf_count(
                             "space_boundary_entries", len(boundary_entries)
                         )
                         self.space_boundary_list.clear()
@@ -2526,7 +2531,7 @@ class PlanEditControlsWidget:
                 self._refreshing_space_editor = False
 
     def _refresh_region_editor(self):
-        with self.session._plan_perf_trace_span("refresh_region_editor"):
+        with self.session.performance.plan_perf_trace_span("refresh_region_editor"):
             if self.region_editor is None:
                 return
             region_editor_vm = plan_task_panel_view_model.build_region_editor_view_model(
@@ -2553,7 +2558,7 @@ class PlanEditControlsWidget:
                     self.region_parent_space_combo.blockSignals(True)
                     try:
                         self._set_region_parent_space_combo_options(region)
-                        self.session._plan_perf_count(
+                        self.session.performance.plan_perf_count(
                             "region_parent_space_candidates",
                             max(0, len(self._region_parent_space_items) - 1),
                         )
@@ -2674,7 +2679,7 @@ class PlanEditControlsWidget:
         )
 
     def _refresh_window_editor(self):
-        with self.session._plan_perf_trace_span("refresh_window_editor"):
+        with self.session.performance.plan_perf_trace_span("refresh_window_editor"):
             if self.window_editor is None:
                 return
 
