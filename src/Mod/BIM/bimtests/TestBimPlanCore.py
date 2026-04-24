@@ -140,6 +140,31 @@ from bimplan.task_panel_view_model import (
 )
 
 
+def _make_perf_stub(
+    *,
+    trace_span=None,
+    trace_event=None,
+    count=None,
+    set_fields=None,
+    describe_object=None,
+    describe_target=None,
+    pick_debug_scope=None,
+    pick_debug_event=None,
+):
+    return SimpleNamespace(
+        plan_perf_trace_span=trace_span or (lambda *_args, **_kwargs: nullcontext()),
+        plan_perf_trace_event=trace_event or (lambda *_args, **_kwargs: nullcontext()),
+        plan_perf_count=count or (lambda *_args, **_kwargs: None),
+        plan_perf_set_fields=set_fields or (lambda **_kwargs: None),
+        plan_perf_describe_object=describe_object or (lambda obj: getattr(obj, "Name", None)),
+        plan_perf_describe_target=describe_target
+        or (lambda kind, obj: (kind, getattr(obj, "Name", None))),
+        plan_pick_debug_scope=pick_debug_scope or (lambda *_args, **_kwargs: nullcontext()),
+        plan_pick_debug_event=pick_debug_event or (lambda *_args, **_kwargs: None),
+        is_plan_pick_debug_active=lambda: False,
+    )
+
+
 class _DummySession:
     def __init__(
         self,
@@ -587,8 +612,10 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             _document_is_alive=lambda: True,
             _plan_provider_refresh_cache={},
-            _plan_perf_trace_span=lambda _name: nullcontext(),
-            _plan_perf_count=lambda name, value=1: perf_counts.append((name, value)),
+            performance=_make_perf_stub(
+                trace_span=lambda _name: nullcontext(),
+                count=lambda name, value=1: perf_counts.append((name, value)),
+            ),
             get_plan_edit_context=_get_plan_edit_context,
             get_plan_provider_registry=lambda: registry,
             _get_plan_provider_id=lambda current_provider: current_provider.get_provider_id(),
@@ -1400,9 +1427,7 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             selection=SimpleNamespace(get_hovered_plan_target=lambda: ("wall", target)),
             _hover_pick_dirty=False,
-            _plan_perf_count=lambda *_args, **_kwargs: None,
-            _plan_perf_set_fields=lambda **_kwargs: None,
-            _plan_perf_describe_target=lambda kind, obj: (kind, getattr(obj, "Name", None)),
+            performance=_make_perf_stub(),
             _activate_plan_target=lambda *args, **kwargs: calls.append((args, kwargs)) or True,
         )
 
@@ -2152,10 +2177,7 @@ class TestBimPlanCore(unittest.TestCase):
                 ),
             ),
             is_plan_provider_overlay_visible=lambda _overlay: True,
-            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
-            _plan_perf_count=lambda *_args, **_kwargs: None,
-            _plan_perf_set_fields=lambda **_kwargs: None,
-            _plan_perf_describe_object=lambda obj: getattr(obj, "Name", ""),
+            performance=_make_perf_stub(),
         )
 
         self.assertEqual(
@@ -2189,10 +2211,7 @@ class TestBimPlanCore(unittest.TestCase):
                 ),
             ),
             is_plan_provider_overlay_visible=lambda _overlay: True,
-            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
-            _plan_perf_count=lambda *_args, **_kwargs: None,
-            _plan_perf_set_fields=lambda **_kwargs: None,
-            _plan_perf_describe_object=lambda obj: getattr(obj, "Name", ""),
+            performance=_make_perf_stub(),
         )
 
         self.assertEqual(
@@ -2237,10 +2256,7 @@ class TestBimPlanCore(unittest.TestCase):
                 ),
             ),
             is_plan_provider_overlay_visible=lambda _overlay: True,
-            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
-            _plan_perf_count=lambda *_args, **_kwargs: None,
-            _plan_perf_set_fields=lambda **_kwargs: None,
-            _plan_perf_describe_object=lambda obj: getattr(obj, "Name", ""),
+            performance=_make_perf_stub(),
         )
 
         self.assertEqual(
@@ -2294,13 +2310,9 @@ class TestBimPlanCore(unittest.TestCase):
                 pick_plan_space_target_from_overlays=lambda *args, **kwargs: space,
             ),
             openings=SimpleNamespace(get_wall_hosted_openings=lambda *_args, **_kwargs: ()),
-            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
-            _plan_perf_count=lambda *_args, **_kwargs: None,
-            _plan_perf_set_fields=lambda **_kwargs: None,
-            _plan_perf_describe_object=lambda obj: getattr(obj, "Name", ""),
-            _plan_perf_describe_target=lambda kind, obj: (
-                kind,
-                getattr(obj, "Name", ""),
+            performance=_make_perf_stub(
+                describe_object=lambda obj: getattr(obj, "Name", ""),
+                describe_target=lambda kind, obj: (kind, getattr(obj, "Name", "")),
             ),
         )
 
@@ -2368,12 +2380,8 @@ class TestBimPlanCore(unittest.TestCase):
                 pick_plan_space_target_from_overlays=lambda *args, **kwargs: None,
             ),
             openings=SimpleNamespace(get_wall_hosted_openings=lambda *_args, **_kwargs: ()),
-            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
-            _plan_perf_count=lambda *_args, **_kwargs: None,
-            _plan_perf_set_fields=lambda **_kwargs: None,
-            _plan_perf_describe_target=lambda kind, obj: (
-                kind,
-                getattr(obj, "Name", ""),
+            performance=_make_perf_stub(
+                describe_target=lambda kind, obj: (kind, getattr(obj, "Name", "")),
             ),
         )
 
@@ -2441,12 +2449,8 @@ class TestBimPlanCore(unittest.TestCase):
                 pick_plan_space_target_from_overlays=lambda *args, **kwargs: None,
             ),
             openings=SimpleNamespace(get_wall_hosted_openings=lambda *_args, **_kwargs: ()),
-            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
-            _plan_perf_count=lambda *_args, **_kwargs: None,
-            _plan_perf_set_fields=lambda **_kwargs: None,
-            _plan_perf_describe_target=lambda kind, obj: (
-                kind,
-                getattr(obj, "Name", ""),
+            performance=_make_perf_stub(
+                describe_target=lambda kind, obj: (kind, getattr(obj, "Name", "")),
             ),
         )
 
@@ -2497,12 +2501,8 @@ class TestBimPlanCore(unittest.TestCase):
                 pick_plan_space_target_from_overlays=lambda *args, **kwargs: space,
             ),
             openings=SimpleNamespace(get_wall_hosted_openings=lambda *_args, **_kwargs: ()),
-            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
-            _plan_perf_count=lambda *_args, **_kwargs: None,
-            _plan_perf_set_fields=lambda **_kwargs: None,
-            _plan_perf_describe_target=lambda kind, obj: (
-                kind,
-                getattr(obj, "Name", ""),
+            performance=_make_perf_stub(
+                describe_target=lambda kind, obj: (kind, getattr(obj, "Name", "")),
             ),
         )
 
@@ -2553,12 +2553,8 @@ class TestBimPlanCore(unittest.TestCase):
                 pick_plan_space_target_from_overlays=lambda *args, **kwargs: space,
             ),
             openings=SimpleNamespace(get_wall_hosted_openings=lambda *_args, **_kwargs: ()),
-            _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
-            _plan_perf_count=lambda *_args, **_kwargs: None,
-            _plan_perf_set_fields=lambda **_kwargs: None,
-            _plan_perf_describe_target=lambda kind, obj: (
-                kind,
-                getattr(obj, "Name", ""),
+            performance=_make_perf_stub(
+                describe_target=lambda kind, obj: (kind, getattr(obj, "Name", "")),
             ),
         )
 
