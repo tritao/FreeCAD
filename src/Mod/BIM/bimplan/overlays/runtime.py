@@ -31,6 +31,14 @@ def _bind_session_overlay_compat(api_method_name):
 
 _PLAN_OVERLAYS_API_MODULES = (
     (
+        overlay_manager,
+        (
+            "finalize_trackers",
+            "make_plan_line_tracker",
+            "set_plan_line_tracker_width",
+        ),
+    ),
+    (
         overlay_geometry,
         (
             "get_space_footprint_faces",
@@ -104,6 +112,11 @@ _PLAN_OVERLAYS_API_MODULES = (
     (
         opening_overlays,
         (
+            "get_opening_handle_markers",
+            "set_opening_handle_tracker_marker",
+            "discard_opening_handle_tracker_pool",
+            "queue_prime_opening_handle_tracker_pool",
+            "prime_opening_handle_tracker_pool",
             "sync_hovered_opening_overlay",
             "clear_hovered_opening_overlay",
             "invalidate_hovered_opening_overlay_cache",
@@ -156,6 +169,14 @@ for _module, _method_names in _PLAN_OVERLAYS_API_MODULES:
         _PLAN_OVERLAYS_API_BOUND_METHODS[_method_name] = getattr(_module, _method_name)
 
 _PLAN_SESSION_OVERLAY_COMPAT_METHODS = (
+    "_finalize_trackers",
+    "_make_plan_line_tracker",
+    "_set_plan_line_tracker_width",
+    "_get_opening_handle_markers",
+    "_set_opening_handle_tracker_marker",
+    "_discard_opening_handle_tracker_pool",
+    "_queue_prime_opening_handle_tracker_pool",
+    "_prime_opening_handle_tracker_pool",
     "_sync_wall_grips",
     "_schedule_wall_grip_sync",
     "_run_scheduled_wall_grip_sync",

@@ -96,7 +96,7 @@ def sync_opening_move_preview(session, opening, point):
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
-            tracker = session._make_plan_line_tracker(
+            tracker = session.overlays.make_plan_line_tracker(
                 DraftTrackers,
                 "opening-move-preview:{}".format(getattr(opening, "Name", "unknown")),
                 scolor=preview_color,
@@ -113,7 +113,7 @@ def sync_opening_move_preview(session, opening, point):
     if guide_start is None or guide_end is None:
         return
 
-    guide = session._make_plan_line_tracker(
+    guide = session.overlays.make_plan_line_tracker(
         DraftTrackers,
         "opening-move-guide:{}".format(getattr(opening, "Name", "unknown")),
         dotted=True,
@@ -139,7 +139,7 @@ def sync_opening_move_preview(session, opening, point):
 
 
 def clear_opening_move_preview(session):
-    session._finalize_trackers(session._opening_move_preview_trackers)
+    session.overlays.finalize_trackers(session._opening_move_preview_trackers)
     session._opening_move_preview_trackers = []
 
 

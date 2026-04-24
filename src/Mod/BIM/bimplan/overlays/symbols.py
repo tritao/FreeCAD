@@ -185,7 +185,7 @@ def create_symbol_overlay_trackers(session, symbol, color, width, tracker_store,
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
-            tracker = session._make_plan_line_tracker(
+            tracker = session.overlays.make_plan_line_tracker(
                 DraftTrackers,
                 "symbol-overlay:{}".format(getattr(symbol, "Name", "unknown")),
                 scolor=color,
@@ -216,7 +216,7 @@ def sync_hovered_symbol_overlay(session):
 
 
 def clear_hovered_symbol_overlay(session):
-    session._finalize_trackers(session._symbol_hover_trackers)
+    session.overlays.finalize_trackers(session._symbol_hover_trackers)
     session._symbol_hover_trackers = []
 
 
@@ -249,7 +249,7 @@ def sync_selected_symbol_overlay(session):
             else:
                 session._clear_selected_symbol_overlay()
                 for _start, _end in segments:
-                    tracker = session._make_plan_line_tracker(
+                    tracker = session.overlays.make_plan_line_tracker(
                         DraftTrackers,
                         "selected-symbol-overlay:{}".format(getattr(symbol, "Name", "unknown")),
                         scolor=color,
@@ -258,7 +258,7 @@ def sync_selected_symbol_overlay(session):
                     )
                     session._symbol_overlay_trackers.append(tracker)
         for tracker, (start, end) in zip(session._symbol_overlay_trackers, segments):
-            session._set_plan_line_tracker_width(tracker, width)
+            session.overlays.set_plan_line_tracker_width(tracker, width)
             tracker.setColor(color)
             if not transferred_trackers:
                 tracker.p1(start)
@@ -267,7 +267,7 @@ def sync_selected_symbol_overlay(session):
 
 
 def clear_selected_symbol_overlay(session):
-    session._finalize_trackers(session._symbol_overlay_trackers)
+    session.overlays.finalize_trackers(session._symbol_overlay_trackers)
     session._symbol_overlay_trackers = []
 
 
@@ -488,7 +488,7 @@ def sync_selected_symbol_handles(session):
 
 
 def clear_selected_symbol_handles(session):
-    session._finalize_trackers(session._symbol_handle_trackers)
+    session.overlays.finalize_trackers(session._symbol_handle_trackers)
     session._symbol_handle_trackers = []
 
 
@@ -540,7 +540,7 @@ def sync_symbol_edit_preview(session, symbol, placement, guide_start=None, guide
     )
     if guide_start is None or guide_end is None:
         return
-    guide = session._make_plan_line_tracker(
+    guide = session.overlays.make_plan_line_tracker(
         DraftTrackers,
         "symbol-edit-guide:{}".format(getattr(symbol, "Name", "unknown")),
         dotted=True,
@@ -555,5 +555,5 @@ def sync_symbol_edit_preview(session, symbol, placement, guide_start=None, guide
 
 
 def clear_symbol_edit_preview(session):
-    session._finalize_trackers(session._symbol_edit_preview_trackers)
+    session.overlays.finalize_trackers(session._symbol_edit_preview_trackers)
     session._symbol_edit_preview_trackers = []

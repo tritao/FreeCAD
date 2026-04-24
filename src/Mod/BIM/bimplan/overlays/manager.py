@@ -440,7 +440,7 @@ def sync_segment_overlay_trackers(
             clear_fn()
             current_trackers = []
             for _start, _end in segments:
-                tracker = session._make_plan_line_tracker(
+                tracker = session.overlays.make_plan_line_tracker(
                     DraftTrackers,
                     label,
                     scolor=color,
@@ -449,7 +449,7 @@ def sync_segment_overlay_trackers(
                 )
                 current_trackers.append(tracker)
     for tracker, (start, end) in zip(current_trackers, segments):
-        session._set_plan_line_tracker_width(tracker, width)
+        session.overlays.set_plan_line_tracker_width(tracker, width)
         tracker.setColor(color)
         if not transferred:
             tracker.p1(start)
