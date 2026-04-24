@@ -1089,7 +1089,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         selection = FreeCADGui.Selection.getSelection()
         self.assertIn(wall, selection)
         self.assertIn(marker, session._provider_selected_objects)
-        self.assertIn(marker, session.get_selected_objects())
+        self.assertIn(marker, session.selection.get_selected_objects())
         self._assert_selected_plan_target(session, "wall", wall)
 
         session.shutdown(close_dialog=False)
@@ -2499,9 +2499,11 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self._assert_selected_plan_target(session, "opening", window)
         self.assertTrue(
-            session._format_plan_target_selection_state("opening", window).startswith("Window:")
+            session.status_text.format_plan_target_selection_state("opening", window).startswith(
+                "Window:"
+            )
         )
-        self.assertIn("selected window", session._format_opening_selection_help(window))
+        self.assertIn("selected window", session.status_text.format_opening_selection_help(window))
 
     def test_plan_edit_selected_window_shows_style_editor(self):
         """Selected windows should expose preset switching in the task panel."""

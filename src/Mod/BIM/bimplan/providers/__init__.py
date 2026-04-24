@@ -34,12 +34,18 @@ class PlanEditContext:
         )
 
     def get_selected_targets(self):
+        getter = getattr(getattr(self.session, "selection", None), "get_plan_targets", None)
+        if callable(getter):
+            return tuple(getter(selected_only=True) or ())
         getter = getattr(self.session, "get_plan_targets", None)
         if callable(getter):
             return tuple(getter(selected_only=True) or ())
         return ()
 
     def get_all_targets(self):
+        getter = getattr(getattr(self.session, "selection", None), "get_plan_targets", None)
+        if callable(getter):
+            return tuple(getter(selected_only=False) or ())
         getter = getattr(self.session, "get_plan_targets", None)
         if callable(getter):
             return tuple(getter(selected_only=False) or ())
@@ -50,12 +56,20 @@ class PlanEditContext:
         return targets[0] if targets else None
 
     def get_selected_objects(self):
+        getter = getattr(getattr(self.session, "selection", None), "get_selected_objects", None)
+        if callable(getter):
+            return tuple(getter() or ())
         getter = getattr(self.session, "get_selected_objects", None)
         if callable(getter):
             return tuple(getter() or ())
         return ()
 
     def get_selected_semantic_records(self):
+        getter = getattr(
+            getattr(self.session, "providers", None), "get_plan_semantic_records", None
+        )
+        if callable(getter):
+            return tuple(getter(targets=self.get_selected_targets()) or ())
         getter = getattr(self.session, "get_plan_semantic_records", None)
         if callable(getter):
             return tuple(getter(targets=self.get_selected_targets()) or ())
@@ -66,12 +80,22 @@ class PlanEditContext:
         return records[0] if records else None
 
     def resolve_object(self, target):
+        resolver = getattr(
+            getattr(self.session, "selection", None), "resolve_plan_target_object", None
+        )
+        if callable(resolver):
+            return resolver(target)
         resolver = getattr(self.session, "resolve_plan_target_object", None)
         if callable(resolver):
             return resolver(target)
         return None
 
     def resolve_semantic_object(self, target):
+        resolver = getattr(
+            getattr(self.session, "selection", None), "resolve_plan_semantic_object", None
+        )
+        if callable(resolver):
+            return resolver(target)
         resolver = getattr(self.session, "resolve_plan_semantic_object", None)
         if callable(resolver):
             return resolver(target)

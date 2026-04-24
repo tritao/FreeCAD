@@ -151,7 +151,10 @@ def refresh_plan_overlay_view_scale(session):
         session.overlays.sync_provider_overlays()
         if session.hovered_provider:
             session.overlays.sync_hovered_provider_overlay()
-        if session._is_selected_plan_target("provider") or session._get_provider_selected_objects():
+        if (
+            session._is_selected_plan_target("provider")
+            or session.status_text.get_provider_selected_objects()
+        ):
             session.overlays.sync_selected_provider_overlay()
         if session._is_selected_plan_target("symbol"):
             session.overlays.sync_selected_symbol_overlay()

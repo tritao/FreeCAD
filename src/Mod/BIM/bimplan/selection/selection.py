@@ -1809,6 +1809,50 @@ class PlanSelectionAPI(_SessionAPI):
     def add_gui_selection_object(self, obj):
         return add_gui_selection_object(obj)
 
+    def normalize_plan_requirement_tags(self, value):
+        from . import targets as plan_targets
+
+        del self
+        return plan_targets.normalize_plan_requirement_tags(value)
+
+    def get_plan_host_ref(self, obj):
+        from . import targets as plan_targets
+
+        return plan_targets.get_plan_host_ref(self.session, obj)
+
+    def make_plan_target_record(self, kind, obj, selected_keys=None, primary_key=None):
+        from . import targets as plan_targets
+
+        return plan_targets.make_plan_target_record(
+            self.session,
+            kind,
+            obj,
+            selected_keys=selected_keys,
+            primary_key=primary_key,
+        )
+
+    def get_plan_targets(self, selected_only=False):
+        from . import targets as plan_targets
+
+        return plan_targets.get_plan_targets(self.session, selected_only=selected_only)
+
+    def get_selected_objects(self):
+        return tuple(
+            self.normalize_gui_object_selection(
+                tuple(self.get_gui_selection()) + tuple(self.session._provider_selected_objects)
+            )
+        )
+
+    def resolve_plan_target_object(self, target):
+        from . import targets as plan_targets
+
+        return plan_targets.resolve_plan_target_object(self.session, target)
+
+    def resolve_plan_semantic_object(self, target):
+        from . import targets as plan_targets
+
+        return plan_targets.resolve_plan_semantic_object(self.session, target)
+
 
 for _method_name in _PLAN_SELECTION_API_BOUND_METHODS:
     setattr(PlanSelectionAPI, _method_name, _bind_session_call(globals()[_method_name]))

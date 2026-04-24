@@ -349,7 +349,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
 
             self.assertEqual(("provider", marker), session.selection.get_selected_plan_target())
             self.assertEqual([marker], FreeCADGui.Selection.getSelection())
-            self.assertEqual((marker,), session.get_selected_objects())
+            self.assertEqual((marker,), session.selection.get_selected_objects())
             self.assertEqual(
                 ("provider", marker),
                 plan_targets.get_plan_pick_target_for_object(session, marker),
@@ -358,7 +358,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             self.assertTrue(session.set_plan_provider_overlay_mode("architecture"))
             self.assertEqual(("provider", marker), session.selection.get_selected_plan_target())
             self.assertEqual([marker], FreeCADGui.Selection.getSelection())
-            self.assertEqual((marker,), session.get_selected_objects())
+            self.assertEqual((marker,), session.selection.get_selected_objects())
             self.assertEqual(
                 (None, None),
                 plan_targets.get_plan_pick_target_for_object(session, marker),
@@ -367,7 +367,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             self.assertTrue(session.set_plan_provider_overlay_mode("electrical"))
             self.assertEqual(("provider", marker), session.selection.get_selected_plan_target())
             self.assertEqual([marker], FreeCADGui.Selection.getSelection())
-            self.assertEqual((marker,), session.get_selected_objects())
+            self.assertEqual((marker,), session.selection.get_selected_objects())
             self.assertEqual(
                 ("provider", marker),
                 plan_targets.get_plan_pick_target_for_object(session, marker),
