@@ -571,7 +571,7 @@ class TestBimPlanCore(unittest.TestCase):
             )
             self.assertEqual(
                 ("clipped",),
-                session._clip_preview_polygon_to_plane("polygon", "plane", "ref"),
+                session.wall_edit.clip_preview_polygon_to_plane("polygon", "plane", "ref"),
             )
 
         get_selected_target_for_kind.assert_called_once_with(session.selection, "wall")

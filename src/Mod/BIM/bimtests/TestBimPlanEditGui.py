@@ -4284,7 +4284,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             original_endpoints[0].add(FreeCAD.Vector(1000, 0, 0)),
         ]
 
-        session._commit_wall_edit_points(source_wall, "End", source_wall.Proxy, new_points)
+        session.wall_edit.commit_wall_edit_points(source_wall, "End", source_wall.Proxy, new_points)
         self.pump_gui_events()
         self.pump_gui_events()
 
@@ -4319,8 +4319,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         session._edit_wall = source_wall
         endpoints = source_wall.Proxy.calc_endpoints(source_wall)
-        plain = session._get_preview_footprint(endpoints)
-        polylines, warnings = session._get_preview_footprint_polylines(endpoints)
+        plain = session.wall_edit.get_preview_footprint(endpoints)
+        polylines, warnings = session.wall_edit.get_preview_footprint_polylines(endpoints)
 
         self.assertEqual(warnings, [])
         self.assertEqual(len(polylines), 1)
@@ -4371,12 +4371,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             original_endpoints[0],
             original_endpoints[0].add(FreeCAD.Vector(1000, 0, 0)),
         ]
-        session._sync_wall_edit_preview(invalid_points)
+        session.wall_edit.sync_wall_edit_preview(invalid_points)
         self.pump_gui_events()
 
         self.assertIsNone(session._plan_relation_status_message)
-        plain = session._get_preview_footprint(invalid_points)
-        polylines, warnings = session._get_preview_footprint_polylines(invalid_points)
+        plain = session.wall_edit.get_preview_footprint(invalid_points)
+        polylines, warnings = session.wall_edit.get_preview_footprint_polylines(invalid_points)
         self.assertEqual(warnings, [])
         self.assertEqual(len(polylines), 1)
         closed_plain = [FreeCAD.Vector(point) for point in plain]
@@ -4616,7 +4616,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             original_endpoints[1].add(FreeCAD.Vector(500, 250, 0)),
         ]
 
-        session._sync_wall_edit_preview(moved_points)
+        session.wall_edit.sync_wall_edit_preview(moved_points)
 
         self.assertEqual(len(session._wall_edit_readout_trackers), 2)
         self.assertTrue(
@@ -4631,7 +4631,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         )
         self.assertTrue(
             all(
-                tracker.offset == session._get_wall_edit_readout_offset(tracker.mode)
+                tracker.offset == session.wall_edit.get_wall_edit_readout_offset(tracker.mode)
                 for tracker in session._wall_edit_readout_trackers
             )
         )
@@ -4666,7 +4666,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             original_endpoints[1].add(FreeCAD.Vector(800, 0, 0)),
         ]
 
-        session._sync_wall_edit_preview(stretched_points)
+        session.wall_edit.sync_wall_edit_preview(stretched_points)
 
         self.assertEqual(len(session._wall_edit_readout_trackers), 1)
         tracker = session._wall_edit_readout_trackers[0]
@@ -4687,10 +4687,10 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         with patch.object(session.viewport, "get_plan_view_units_per_pixel", return_value=1.0):
-            close_offset = session._get_aligned_readout_offset_for_wall(wall)
+            close_offset = session.wall_edit.get_aligned_readout_offset_for_wall(wall)
 
         with patch.object(session.viewport, "get_plan_view_units_per_pixel", return_value=40.0):
-            far_offset = session._get_aligned_readout_offset_for_wall(wall)
+            far_offset = session.wall_edit.get_aligned_readout_offset_for_wall(wall)
 
         self.assertGreater(far_offset, close_offset)
 
@@ -5076,12 +5076,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._edit_endpoint = "End"
         session._edit_endpoints = original_endpoints
         session.current_tool = "Stretch End"
-        session._sync_wall_edit_preview(list(original_endpoints))
+        session.wall_edit.sync_wall_edit_preview(list(original_endpoints))
 
         tracker = session._wall_edit_active_readout_tracker
         self.assertIsNotNone(tracker)
 
-        session._on_wall_stretch_length_changed(4200.0)
+        session.wall_edit.on_wall_stretch_length_changed(4200.0)
 
         self.assertIs(session._wall_edit_active_readout_tracker, tracker)
         self.assertAlmostEqual(session._preview_points[0].x, original_endpoints[0].x, delta=1e-6)
@@ -5109,13 +5109,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._edit_endpoint = "Move"
         session._edit_endpoints = original_endpoints
         session.current_tool = "Move Wall"
-        session._sync_wall_edit_preview(list(original_endpoints))
+        session.wall_edit.sync_wall_edit_preview(list(original_endpoints))
 
         tracker = session._wall_edit_active_readout_tracker
         self.assertIsNotNone(tracker)
         self.assertEqual(tracker.mode, 2)
 
-        session._on_wall_move_delta_changed(2, 500.0)
+        session.wall_edit.on_wall_move_delta_changed(2, 500.0)
 
         self.assertIs(session._wall_edit_active_readout_tracker, tracker)
         self.assertAlmostEqual(
@@ -5145,9 +5145,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._edit_endpoint = "Move"
         session._edit_endpoints = original_endpoints
         session.current_tool = "Move Wall"
-        session._sync_wall_edit_preview(list(original_endpoints))
+        session.wall_edit.sync_wall_edit_preview(list(original_endpoints))
 
-        session._on_wall_move_delta_finished(2, 500.0)
+        session.wall_edit.on_wall_move_delta_finished(2, 500.0)
         self.pump_gui_events()
 
         endpoints = wall.Proxy.calc_endpoints(wall)
@@ -5182,7 +5182,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         ):
             session.wall_edit.start_wall_grip_edit(1)
 
-        session._on_wall_stretch_length_finished(4200.0)
+        session.wall_edit.on_wall_stretch_length_finished(4200.0)
         self.pump_gui_events()
 
         endpoints = wall.Proxy.calc_endpoints(wall)
@@ -5309,8 +5309,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._edit_wall = wall
         session._edit_endpoint = "End"
         session._edit_endpoints = original_endpoints
-        session._wall_edit_opening_clearances = session._snapshot_wall_hosted_opening_clearances(
-            wall, original_endpoints
+        session._wall_edit_opening_clearances = (
+            session.wall_edit.snapshot_wall_hosted_opening_clearances(wall, original_endpoints)
         )
         session.current_tool = "Stretch End"
 
@@ -5330,7 +5330,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertTrue(original_polylines)
         first_polyline = next(polyline for polyline in original_polylines if len(polyline) >= 2)
 
-        session._sync_wall_edit_preview(shortened_points)
+        session.wall_edit.sync_wall_edit_preview(shortened_points)
 
         expected_segment_count = sum(
             max(len(polyline) - 1, 0) for polyline in original_polylines if len(polyline) >= 2
