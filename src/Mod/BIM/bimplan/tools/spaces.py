@@ -761,6 +761,14 @@ def get_space_region_candidate_report(session, boundaries, label=None, seed_spac
         label=label,
         seed_space=seed_space,
     )
+    return _normalize_space_region_candidate_report(
+        session,
+        report,
+        seed_space=seed_space,
+    )
+
+
+def _normalize_space_region_candidate_report(session, report, *, seed_space=None):
     report = dict(report or {})
     candidates = list(report.get("candidates", []) or [])
     skipped_claimed = 0
@@ -927,6 +935,36 @@ def _start_space_region_pick_mode(session, boundaries, candidates, seed_space=No
     return True
 
 
+def _announce_skipped_claimed_space_region_candidates(report, *, enabled):
+    skipped_claimed = int(report.get("skipped_claimed_candidate_count", 0) or 0)
+    if not enabled or not skipped_claimed:
+        return
+    FreeCAD.Console.PrintMessage(
+        translate(
+            "BIM_PlanEdit",
+            "Ignoring {count} enclosed region(s) already covered by existing spaces.\n",
+        ).format(count=skipped_claimed)
+    )
+
+
+def _create_space_from_single_region_candidate(
+    session,
+    boundaries,
+    report,
+    *,
+    keep_boundaries,
+):
+    candidates = list(report.get("candidates", []) or [])
+    if len(candidates) != 1:
+        return None
+    return _create_and_finish_space_region_candidate(
+        session,
+        candidates[0],
+        boundaries=boundaries,
+        keep_boundaries=keep_boundaries,
+    )
+
+
 def _consume_space_region_candidate_report(
     session,
     boundaries,
@@ -941,22 +979,19 @@ def _consume_space_region_candidate_report(
         session.spaces.report_space_region_candidate_failure(report)
         return False
 
-    skipped_claimed = int(report.get("skipped_claimed_candidate_count", 0) or 0)
-    if announce_skipped_claimed and skipped_claimed:
-        FreeCAD.Console.PrintMessage(
-            translate(
-                "BIM_PlanEdit",
-                "Ignoring {count} enclosed region(s) already covered by existing spaces.\n",
-            ).format(count=skipped_claimed)
-        )
+    _announce_skipped_claimed_space_region_candidates(
+        report,
+        enabled=announce_skipped_claimed,
+    )
 
-    if len(candidates) == 1:
-        return _create_and_finish_space_region_candidate(
-            session,
-            candidates[0],
-            boundaries=boundaries,
-            keep_boundaries=keep_boundaries,
-        )
+    created = _create_space_from_single_region_candidate(
+        session,
+        boundaries,
+        report,
+        keep_boundaries=keep_boundaries,
+    )
+    if created is not None:
+        return created
 
     return _start_space_region_pick_mode(
         session,
