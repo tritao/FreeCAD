@@ -523,7 +523,7 @@ def get_input_hint_specs(session):
             )
         if selected_kind == "provider":
             provider_handles = tuple(
-                session._get_selected_provider_edit_handles(_selected_obj) or ()
+                session.providers.get_selected_provider_edit_handles(_selected_obj) or ()
             )
             return (
                 (

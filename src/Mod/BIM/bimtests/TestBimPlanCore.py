@@ -1707,7 +1707,9 @@ class TestBimPlanCore(unittest.TestCase):
         calls = []
         session = SimpleNamespace(
             current_tool="Move Provider",
-            _cancel_provider_handle_point_pick=lambda: calls.append("move-provider"),
+            providers=SimpleNamespace(
+                cancel_provider_handle_point_pick=lambda: calls.append("move-provider")
+            ),
             _has_active_provider_point_tool=lambda: True,
             _cancel_provider_point_tool=lambda: calls.append("provider-point"),
             _has_active_embedded_tool=lambda: True,

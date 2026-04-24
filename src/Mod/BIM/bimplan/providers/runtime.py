@@ -77,7 +77,7 @@ _PLAN_PROVIDERS_API_BOUND_METHODS = (
 
 
 class PlanProvidersAPI:
-    """Owned session surface for Plan Edit provider read helpers."""
+    """Owned session surface for Plan Edit provider behavior."""
 
     __slots__ = ("_session",)
 
@@ -97,6 +97,71 @@ class PlanProvidersAPI:
         from bimplan.providers import point as plan_provider_point
 
         return plan_provider_point.get_provider_point_tool_prompt(self.session)
+
+    def get_selected_provider_edit_handles(self, provider_obj):
+        from bimplan.providers import edit as plan_provider_edit
+
+        return plan_provider_edit.get_selected_provider_edit_handles(self.session, provider_obj)
+
+    def can_move_provider_target_by_placement(self, provider_obj):
+        from bimplan.providers import edit as plan_provider_edit
+
+        return plan_provider_edit.can_move_provider_target_by_placement(self.session, provider_obj)
+
+    def activate_provider_handle(self, provider_obj, handle_index):
+        from bimplan.providers import edit as plan_provider_edit
+
+        return plan_provider_edit.activate_provider_handle(self.session, provider_obj, handle_index)
+
+    def activate_provider_handle_now(self, provider_obj, handle_index):
+        from bimplan.providers import edit as plan_provider_edit
+
+        return plan_provider_edit.activate_provider_handle_now(
+            self.session, provider_obj, handle_index
+        )
+
+    def start_provider_handle_point_pick(self, provider_obj, handle_index, handle):
+        from bimplan.providers import edit as plan_provider_edit
+
+        return plan_provider_edit.start_provider_handle_point_pick(
+            self.session,
+            provider_obj,
+            handle_index,
+            handle,
+        )
+
+    def update_provider_handle_point_pick(self, point=None, snap_info=None):
+        from bimplan.providers import edit as plan_provider_edit
+
+        return plan_provider_edit.update_provider_handle_point_pick(
+            self.session,
+            point=point,
+            snap_info=snap_info,
+        )
+
+    def finish_provider_handle_point_pick(self, point=None, obj=None):
+        from bimplan.providers import edit as plan_provider_edit
+
+        return plan_provider_edit.finish_provider_handle_point_pick(
+            self.session,
+            point=point,
+            obj=obj,
+        )
+
+    def cancel_provider_handle_point_pick(self):
+        from bimplan.providers import edit as plan_provider_edit
+
+        return plan_provider_edit.cancel_provider_handle_point_pick(self.session)
+
+    def restore_selected_provider(self, provider_obj):
+        from bimplan.providers import edit as plan_provider_edit
+
+        return plan_provider_edit.restore_selected_provider(self.session, provider_obj)
+
+    def queue_restore_selected_provider(self, provider_obj):
+        from bimplan.providers import edit as plan_provider_edit
+
+        return plan_provider_edit.queue_restore_selected_provider(self.session, provider_obj)
 
     def get_plan_provider_overlay_category(self, provider_id):
         del self
@@ -510,7 +575,8 @@ def format_plan_provider_target_help(session, obj) -> str:
     if not is_plan_provider_target_object(session, obj):
         return ""
     role = get_plan_provider_target_role_key(session, obj).replace("_", " ").lower()
-    get_handles = getattr(session, "_get_selected_provider_edit_handles", None)
+    providers_api = getattr(session, "providers", None)
+    get_handles = getattr(providers_api, "get_selected_provider_edit_handles", None)
     has_handles = False
     if callable(get_handles) and getattr(session, "_is_selected_plan_target", None):
         try:

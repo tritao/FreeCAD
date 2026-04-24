@@ -149,7 +149,7 @@ class CleanupProfile:
 
 
 _FINISH_TOOL_HANDLER_SPECS = {
-    "Move Provider": "_cancel_provider_handle_point_pick",
+    "Move Provider": "providers.cancel_provider_handle_point_pick",
     "Move Opening": "openings.cancel_opening_handle_point_pick",
     "Move Symbol": "_cancel_symbol_handle_point_pick",
     "Rotate Symbol": "_cancel_symbol_handle_point_pick",
@@ -160,7 +160,7 @@ _FINISH_TOOL_HANDLER_SPECS = {
 }
 
 _BEGIN_TEARDOWN_TOOL_HANDLER_SPECS = {
-    "Move Provider": "_cancel_provider_handle_point_pick",
+    "Move Provider": "providers.cancel_provider_handle_point_pick",
     "Move Opening": "openings.cancel_opening_handle_point_pick",
     "Move Symbol": "_cancel_symbol_handle_point_pick",
     "Rotate Symbol": "_cancel_symbol_handle_point_pick",
