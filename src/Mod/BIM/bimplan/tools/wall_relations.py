@@ -85,7 +85,7 @@ def activate_join_tool(session):
     session._set_selected_plan_target("wall", wall)
     session._restore_gui_selection(wall)
     session.overlays.sync_secondary_selected_overlays()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
 
 
 def get_plan_join_type(session):
@@ -138,11 +138,11 @@ def set_plan_join_type(session, join_type, refresh=True):
     join_type = session._normalize_plan_join_type(join_type)
     if session._plan_join_type == join_type:
         if refresh:
-            session._refresh_task_panel_status()
+            session.task_panels.refresh_task_panel_status()
         return False
     session._plan_join_type = join_type
     if refresh:
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
     return True
 
 
@@ -266,7 +266,7 @@ def unjoin_plan_wall_pair(session, source_wall, target_wall):
         return False
 
     session._clear_plan_relation_status()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     return True
 
 
@@ -466,7 +466,7 @@ def cancel_join_tool(session, refresh=True):
         session._select_wall_for_plan_edit(selected_wall)
         return True
     if refresh:
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
     return True
 
 

@@ -188,7 +188,7 @@ def defer_document_visual_updates(session):
                 return
             session.document_visuals.invalidate_document_dependent_plan_visuals()
             session._refresh_primary_selected_plan_target()
-            session._refresh_task_panel_status(selection_only=True)
+            session.task_panels.refresh_task_panel_status(selection_only=True)
 
 
 def is_opening_visual_dependency(opening, obj):
@@ -402,7 +402,7 @@ def slot_changed_object(session, obj, prop):
     if selected_region and obj == selected_region and prop in _REGION_VISUAL_PROPERTIES:
         session.document_visuals.refresh_plan_object_footprint_display(selected_region)
         session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_REGION)
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
         return
     if (
         session.hovered_region
@@ -416,7 +416,7 @@ def slot_changed_object(session, obj, prop):
     if selected_space and obj == selected_space and prop in _SPACE_VISUAL_PROPERTIES:
         session.document_visuals.refresh_plan_object_footprint_display(selected_space)
         session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_SPACE)
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
         return
     if (
         session.hovered_space
@@ -554,11 +554,11 @@ def slot_deleted_object(session, obj):
         return
     if session._clear_selected_plan_target_if_matches("region", obj):
         session.spaces.refresh_selected_region_visuals()
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
         return
     if session._clear_selected_plan_target_if_matches("space", obj):
         session.spaces.refresh_selected_space_visuals()
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
         return
     if not session._is_selected_plan_target("wall", obj):
         return

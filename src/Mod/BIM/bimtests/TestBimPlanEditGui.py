@@ -6178,9 +6178,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 wraps=session.overlays.sync_secondary_selected_overlays,
             ) as sync_secondary,
             patch.object(
-                session,
-                "_refresh_task_panel_status",
-                wraps=session._refresh_task_panel_status,
+                session.task_panels,
+                "refresh_task_panel_status",
+                wraps=session.task_panels.refresh_task_panel_status,
             ) as refresh_panel,
         ):
             self.assertTrue(session._select_space_for_plan_edit(space, sync_gui_selection=True))
@@ -7801,8 +7801,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 "_refresh_primary_selected_plan_target",
             ) as refresh_selection,
             patch.object(
-                session,
-                "_refresh_task_panel_status",
+                session.task_panels,
+                "refresh_task_panel_status",
             ) as refresh_status,
         ):
             with session.defer_document_visual_updates():
@@ -7837,8 +7837,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 "_refresh_primary_selected_plan_target",
             ) as refresh_selection,
             patch.object(
-                session,
-                "_refresh_task_panel_status",
+                session.task_panels,
+                "refresh_task_panel_status",
             ) as refresh_status,
         ):
             register_objects.side_effect = lambda registered: [

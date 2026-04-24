@@ -202,7 +202,7 @@ def apply_selected_window_style_preset(session, preset_name):
     session.document_visuals.invalidate_document_dependent_plan_visuals(
         recompute_opening_hosts=True
     )
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     return True
 
 
@@ -270,7 +270,7 @@ def activate_window_tool(session):
         noTracker=True,
     )
     session.viewport.queue_focus_plan_view()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     return True
 
 
@@ -292,7 +292,7 @@ def cancel_window_tool(session, refresh=True):
     FreeCAD.activeDraftCommand = None
     session.current_tool = "Select"
     if refresh:
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
     return True
 
 
@@ -671,7 +671,7 @@ def handle_window_tool_point(session, point=None, obj=None):
     session.visibility.register_plan_object(window)
     cancel_window_tool(session, refresh=False)
     session.openings.restore_selected_opening(window)
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
 
 
 def _set_selected_window_size(
@@ -702,7 +702,7 @@ def _set_selected_window_size(
     session.document_visuals.invalidate_document_dependent_plan_visuals(
         recompute_opening_hosts=True
     )
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     return True
 
 

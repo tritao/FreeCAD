@@ -63,7 +63,7 @@ def activate_rect_wall_tool(session):
         callback=session._handle_rect_wall_point,
         title=translate("BIM_PlanEdit", "First rectangle corner"),
     )
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
 
 
 def get_wall_defaults(session):
@@ -102,7 +102,7 @@ def cancel_rect_wall_tool(session, refresh=True):
     FreeCAD.activeDraftCommand = None
     session.current_tool = "Select"
     if refresh:
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
     session.overlays.sync_selected_opening_overlay()
     session.overlays.sync_selected_opening_handles()
     session.overlays.sync_selected_space_overlay()
@@ -233,4 +233,4 @@ def handle_rect_wall_point(session, point=None, obj=None):
     session._cancel_rect_wall_tool(refresh=False)
     session.current_tool = "Select"
     session._refresh_primary_selected_plan_target()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()

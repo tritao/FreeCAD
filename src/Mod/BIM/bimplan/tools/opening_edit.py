@@ -238,7 +238,7 @@ def start_opening_handle_point_pick(session, opening, handle_index, handle):
             session.overlays.clear_selected_opening_handles()
         with session.performance.plan_perf_trace_span("start_opening_handle_preview"):
             queue_opening_move_initial_preview(session, opening, handle.point)
-        session._refresh_task_panel_status(selection_only=True)
+        session.task_panels.refresh_task_panel_status(selection_only=True)
         FreeCAD.activeDraftCommand = session
         with session.performance.plan_perf_trace_span("opening_handle_push_snap_profile"):
             session._push_opening_move_snap_profile()
@@ -289,14 +289,14 @@ def finish_opening_handle_point_pick(session, point=None, obj=None):
         session._edit_opening_move_anchor = "center"
         session.overlays.sync_selected_opening_overlay()
         session.overlays.sync_selected_opening_handles()
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
         return
 
     handles = session.openings.get_selected_opening_edit_handles(opening)
     if handle_index is None or handle_index < 0 or handle_index >= len(handles):
         session.current_tool = "Select"
         session._edit_opening_move_anchor = "center"
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
         return
     handle = handles[handle_index]
     point = session.openings.project_opening_handle_point(opening, handle, point)
@@ -319,7 +319,7 @@ def finish_opening_handle_point_pick(session, point=None, obj=None):
 
     session._edit_opening_move_anchor = "center"
     session.current_tool = "Select"
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     session.openings.queue_restore_selected_opening(opening)
 
 
@@ -338,7 +338,7 @@ def cancel_opening_handle_point_pick(session):
         session._set_selected_plan_target("opening", opening, pending_restore=True)
     session.overlays.sync_selected_opening_overlay()
     session.overlays.sync_selected_opening_handles()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
 
 
 def restore_selected_opening(session, opening):
@@ -350,12 +350,12 @@ def restore_selected_opening(session, opening):
     if not opening:
         session.overlays.sync_selected_opening_overlay()
         session.overlays.sync_selected_opening_handles()
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
         return
     session._set_gui_selection_object(opening)
     session.overlays.sync_selected_opening_overlay()
     session.overlays.sync_selected_opening_handles()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
 
 
 def queue_restore_selected_opening(session, opening):
