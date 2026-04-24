@@ -650,7 +650,7 @@ def handle_window_tool_point(session, point=None, obj=None):
     session._invalidate_wall_hosted_openings_cache()
     session._register_plan_object(window)
     cancel_window_tool(session, refresh=False)
-    session._restore_selected_opening(window)
+    session.openings.restore_selected_opening(window)
     session._refresh_task_panel_status()
 
 

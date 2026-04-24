@@ -2,6 +2,8 @@
 
 """Opening edit interaction helpers for BIM Plan Edit."""
 
+from functools import wraps
+
 import FreeCAD
 import FreeCADGui
 
@@ -188,12 +190,12 @@ def activate_opening_handle(session, opening, handle_index):
     try:
         from PySide import QtCore
     except ImportError:
-        session._activate_opening_handle_now(opening, handle_index)
+        session.openings.activate_opening_handle_now(opening, handle_index)
         return
 
     QtCore.QTimer.singleShot(
         0,
-        lambda: session._activate_opening_handle_now(opening, handle_index),
+        lambda: session.openings.activate_opening_handle_now(opening, handle_index),
     )
 
 
@@ -211,10 +213,10 @@ def activate_opening_handle_now(session, opening, handle_index):
         handle = handles[handle_index]
         if handle.interaction == "point_pick":
             with session._plan_perf_trace_span("activate_opening_handle_start_point_pick"):
-                session._start_opening_handle_point_pick(opening, handle_index, handle)
+                session.openings.start_opening_handle_point_pick(opening, handle_index, handle)
         else:
             with session._plan_perf_trace_span("activate_opening_handle_execute"):
-                session._execute_selected_opening_handle(opening, handle_index, handle)
+                session.openings.execute_selected_opening_handle(opening, handle_index, handle)
 
 
 def start_opening_handle_point_pick(session, opening, handle_index, handle):
@@ -243,8 +245,8 @@ def start_opening_handle_point_pick(session, opening, handle_index, handle):
         with session._plan_perf_trace_span("opening_handle_snapper_get_point"):
             FreeCADGui.Snapper.getPoint(
                 last=handle.point,
-                callback=session._finish_opening_handle_point_pick,
-                movecallback=session._update_opening_handle_point_pick,
+                callback=session.openings.finish_opening_handle_point_pick,
+                movecallback=session.openings.update_opening_handle_point_pick,
                 title=handle.title or translate("BIM_PlanEdit", "Pick new opening position"),
                 noTracker=True,
             )
@@ -310,13 +312,13 @@ def finish_opening_handle_point_pick(session, point=None, obj=None):
         except Exception:
             pass
         session._edit_opening_move_anchor = "center"
-        session._restore_selected_opening(opening)
+        session.openings.restore_selected_opening(opening)
         return
 
     session._edit_opening_move_anchor = "center"
     session.current_tool = "Select"
     session._refresh_task_panel_status()
-    session._queue_restore_selected_opening(opening)
+    session.openings.queue_restore_selected_opening(opening)
 
 
 def cancel_opening_handle_point_pick(session):
@@ -358,9 +360,9 @@ def queue_restore_selected_opening(session, opening):
     try:
         from PySide import QtCore
     except ImportError:
-        session._restore_selected_opening(opening)
+        session.openings.restore_selected_opening(opening)
         return
-    QtCore.QTimer.singleShot(0, lambda: session._restore_selected_opening(opening))
+    QtCore.QTimer.singleShot(0, lambda: session.openings.restore_selected_opening(opening))
 
 
 def execute_selected_opening_handle(session, opening, handle_index, handle):
@@ -380,3 +382,51 @@ def execute_selected_opening_handle(session, opening, handle_index, handle):
     session._set_selected_plan_target("opening", opening, pending_restore=True)
     session.overlays.sync_selected_opening_overlay()
     session.overlays.sync_selected_opening_handles()
+
+
+def _bind_session_call(func):
+    @wraps(func)
+    def method(self, *args, **kwargs):
+        return func(self.session, *args, **kwargs)
+
+    return method
+
+
+class _SessionAPI:
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+
+class PlanOpeningsAPI(_SessionAPI):
+    """Owned session surface for Plan Edit opening behavior."""
+
+    __slots__ = ()
+
+    get_selected_opening_edit_handles = _bind_session_call(get_selected_opening_edit_handles)
+    get_opening_plan_proxy = _bind_session_call(get_opening_plan_proxy)
+    get_opening_view_proxy = _bind_session_call(get_opening_view_proxy)
+    project_opening_handle_point = _bind_session_call(project_opening_handle_point)
+    get_opening_move_anchor_modes = _bind_session_call(get_opening_move_anchor_modes)
+    execute_opening_handle = _bind_session_call(execute_opening_handle)
+    get_opening_move_preview_state = _bind_session_call(get_opening_move_preview_state)
+    sync_opening_move_preview = _bind_session_call(sync_opening_move_preview)
+    clear_opening_move_preview = _bind_session_call(clear_opening_move_preview)
+    cycle_opening_move_anchor = _bind_session_call(cycle_opening_move_anchor)
+    refresh_opening_move_preview_from_raw_point = _bind_session_call(
+        refresh_opening_move_preview_from_raw_point
+    )
+    activate_opening_handle = _bind_session_call(activate_opening_handle)
+    activate_opening_handle_now = _bind_session_call(activate_opening_handle_now)
+    start_opening_handle_point_pick = _bind_session_call(start_opening_handle_point_pick)
+    update_opening_handle_point_pick = _bind_session_call(update_opening_handle_point_pick)
+    finish_opening_handle_point_pick = _bind_session_call(finish_opening_handle_point_pick)
+    cancel_opening_handle_point_pick = _bind_session_call(cancel_opening_handle_point_pick)
+    restore_selected_opening = _bind_session_call(restore_selected_opening)
+    queue_restore_selected_opening = _bind_session_call(queue_restore_selected_opening)
+    execute_selected_opening_handle = _bind_session_call(execute_selected_opening_handle)

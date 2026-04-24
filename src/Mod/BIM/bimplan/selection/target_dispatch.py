@@ -87,7 +87,7 @@ _TARGET_KIND_POLICIES = {
     ),
     plan_target_kinds.PLAN_TARGET_OPENING: _build_target_kind_policy(
         validator_name="_is_hosted_opening_object",
-        queue_restore_method_name="_queue_restore_selected_opening",
+        queue_restore_method_name="openings.queue_restore_selected_opening",
         hovered_attr_name="hovered_opening",
         hovered_setter_name="_set_hovered_opening",
         overlay_label="opening_overlay",
