@@ -390,7 +390,7 @@ def handle_space_separator_point(session, point=None, obj=None):
     session.visibility.register_plan_object(separator)
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.current_tool = "Select"
-    session._refresh_primary_selected_plan_target()
+    session.selection.refresh_primary_selected_plan_target()
     session.task_panels.refresh_task_panel_status()
 
 
@@ -903,7 +903,7 @@ def _start_space_region_pick_mode(session, boundaries, candidates, seed_space=No
     )
     session.overlays.clear_wall_grips()
     session._clear_hovered_plan_targets(kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS)
-    session._refresh_primary_selected_plan_target()
+    session.selection.refresh_primary_selected_plan_target()
     FreeCAD.Console.PrintMessage(
         translate(
             "BIM_PlanEdit",
@@ -1081,7 +1081,7 @@ def cancel_space_region_pick(session, refresh=True):
     if session.current_tool == "Pick Space Region":
         session.current_tool = "Select"
     if was_active:
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
     elif refresh:
         session.task_panels.refresh_task_panel_status()
     return was_active
@@ -1507,7 +1507,7 @@ def cancel_space_text_position_pick(session):
     session.lifecycle.set_draft_point_focus_suppressed(False)
     session.current_tool = "Select"
     if space:
-        session._set_selected_plan_target("space", space, pending_restore=True)
+        session.selection.set_selected_plan_target("space", space, pending_restore=True)
     session.overlays.sync_selected_space_overlay()
     session.task_panels.refresh_task_panel_status()
 
@@ -1534,10 +1534,10 @@ def restore_selected_semantic_target(session, kind, obj, *, clear_edit_space=Fal
     if clear_edit_space:
         session._edit_space = None
     if obj:
-        session._set_selected_plan_target(kind, obj, pending_restore=True)
+        session.selection.set_selected_plan_target(kind, obj, pending_restore=True)
         session.selection.set_gui_selection_object(obj)
     else:
-        session._set_selected_plan_target()
+        session.selection.set_selected_plan_target()
     sync_method()
     session.task_panels.refresh_task_panel_status()
 

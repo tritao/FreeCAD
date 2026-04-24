@@ -204,7 +204,7 @@ def activate_opening_handle_now(session, opening, handle_index):
         if session._tearing_down or not opening:
             return
         with session.performance.plan_perf_trace_span("activate_opening_handle_set_target"):
-            session._set_selected_plan_target("opening", opening)
+            session.selection.set_selected_plan_target("opening", opening)
             session.overlays.clear_wall_grips()
         with session.performance.plan_perf_trace_span("activate_opening_handle_get_handles"):
             handles = session.openings.get_selected_opening_edit_handles(opening)
@@ -335,7 +335,7 @@ def cancel_opening_handle_point_pick(session):
     session._edit_opening_move_raw_point = None
     session.current_tool = "Select"
     if opening:
-        session._set_selected_plan_target("opening", opening, pending_restore=True)
+        session.selection.set_selected_plan_target("opening", opening, pending_restore=True)
     session.overlays.sync_selected_opening_overlay()
     session.overlays.sync_selected_opening_handles()
     session.task_panels.refresh_task_panel_status()
@@ -344,9 +344,9 @@ def cancel_opening_handle_point_pick(session):
 def restore_selected_opening(session, opening):
     session.current_tool = "Select"
     if opening:
-        session._set_selected_plan_target("opening", opening, pending_restore=True)
+        session.selection.set_selected_plan_target("opening", opening, pending_restore=True)
     else:
-        session._set_selected_plan_target()
+        session.selection.set_selected_plan_target()
     if not opening:
         session.overlays.sync_selected_opening_overlay()
         session.overlays.sync_selected_opening_handles()
@@ -381,7 +381,7 @@ def execute_selected_opening_handle(session, opening, handle_index, handle):
         except Exception:
             pass
         return
-    session._set_selected_plan_target("opening", opening, pending_restore=True)
+    session.selection.set_selected_plan_target("opening", opening, pending_restore=True)
     session.overlays.sync_selected_opening_overlay()
     session.overlays.sync_selected_opening_handles()
 

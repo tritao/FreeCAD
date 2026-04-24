@@ -187,7 +187,7 @@ def defer_document_visual_updates(session):
             if not session._document_is_alive():
                 return
             session.document_visuals.invalidate_document_dependent_plan_visuals()
-            session._refresh_primary_selected_plan_target()
+            session.selection.refresh_primary_selected_plan_target()
             session.task_panels.refresh_task_panel_status(selection_only=True)
 
 
@@ -514,7 +514,7 @@ def slot_changed_object(session, obj, prop):
     if prop not in _WALL_VISUAL_PROPERTIES:
         return
     session.openings.refresh_wall_hosted_opening_footprints(obj)
-    session._schedule_selected_wall_reset(prop, obj)
+    session.selection.schedule_selected_wall_reset(prop, obj)
 
 
 def slot_deleted_object(session, obj):
@@ -562,7 +562,7 @@ def slot_deleted_object(session, obj):
         return
     if not session.selection.is_selected_plan_target("wall", obj):
         return
-    session._schedule_selected_wall_reset("Deleted", obj)
+    session.selection.schedule_selected_wall_reset("Deleted", obj)
 
 
 def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=False):

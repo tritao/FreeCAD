@@ -95,7 +95,7 @@ def activate_provider_handle_now(session, provider_obj, handle_index):
     if handle_index < 0 or handle_index >= len(handles):
         return
     handle = handles[handle_index]
-    session._set_selected_plan_target("provider", provider_obj)
+    session.selection.set_selected_plan_target("provider", provider_obj)
     session.selection.set_gui_selection_object(provider_obj)
     session.overlays.clear_wall_grips()
     if handle.interaction == PlanToolInteraction.POINT:
@@ -253,7 +253,7 @@ def cancel_provider_handle_point_pick(session):
         session.providers.restore_selected_provider(provider_obj)
         return
     session.selection.set_gui_selection([])
-    session._refresh_primary_selected_plan_target()
+    session.selection.refresh_primary_selected_plan_target()
 
 
 def restore_selected_provider(session, provider_obj):
@@ -262,7 +262,7 @@ def restore_selected_provider(session, provider_obj):
         session.selection.set_gui_selection_object(provider_obj)
     else:
         session.selection.set_gui_selection([])
-    session._refresh_primary_selected_plan_target()
+    session.selection.refresh_primary_selected_plan_target()
 
 
 def queue_restore_selected_provider(session, provider_obj):

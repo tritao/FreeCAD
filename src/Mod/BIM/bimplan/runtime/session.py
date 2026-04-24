@@ -384,7 +384,7 @@ class PlanEditSession:
             with self.performance.plan_perf_trace_span(
                 "refresh_primary_selected_plan_target_on_enter"
             ):
-                self._refresh_primary_selected_plan_target()
+                self.selection.refresh_primary_selected_plan_target()
 
             with self.performance.plan_perf_trace_span("build_task_panel"):
                 panel = PlanEditControlsWidget(self)
@@ -589,53 +589,6 @@ class PlanEditSession:
 
     def _update_wall_relation_status(self, wall):
         return plan_wall_relations.update_wall_relation_status(self, wall)
-
-    def _set_selected_plan_target(
-        self,
-        kind=None,
-        obj=None,
-        pending_restore=False,
-        preserve_hovered_symbol_overlay=False,
-    ):
-        return self.selection.set_selected_plan_target(
-            kind=kind,
-            obj=obj,
-            pending_restore=pending_restore,
-            preserve_hovered_symbol_overlay=preserve_hovered_symbol_overlay,
-        )
-
-    def _schedule_selected_wall_reset(self, reason, obj):
-        return self.selection.schedule_selected_wall_reset(reason, obj)
-
-    def _reset_selected_wall_after_change(self):
-        return self.selection.reset_selected_wall_after_change()
-
-    def suspend_selected_wall_state(self, wall=None, clear_gui_selection=True):
-        return self.selection.suspend_selected_wall_state(
-            wall=wall,
-            clear_gui_selection=clear_gui_selection,
-        )
-
-    def _sync_primary_selected_plan_target_visuals(self, previous_kind=None, previous_obj=None):
-        return self.selection.sync_primary_selected_plan_target_visuals(
-            previous_kind=previous_kind,
-            previous_obj=previous_obj,
-        )
-
-    def _refresh_selected_plan_target(self):
-        return self.selection.refresh_selected_plan_target()
-
-    def _refresh_primary_selected_plan_target(self):
-        return self.selection.refresh_primary_selected_plan_target()
-
-    def _refresh_selected_wall(self):
-        # Compatibility wrapper for older tests and callers.
-        return self._refresh_primary_selected_plan_target()
-
-    def _restore_gui_selection(self, obj):
-        if not obj:
-            return
-        self.selection.set_gui_selection_object(obj)
 
     # Selection observer interface
 

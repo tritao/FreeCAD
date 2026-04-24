@@ -171,7 +171,7 @@ def activate_symbol_handle_now(session, symbol, handle_role):
         if handle_role not in {"move", "rotate"}:
             return
         with session.performance.plan_perf_trace_span("activate_symbol_handle_set_target"):
-            session._set_selected_plan_target("symbol", symbol)
+            session.selection.set_selected_plan_target("symbol", symbol)
             session.overlays.clear_wall_grips()
         with session.performance.plan_perf_trace_span("activate_symbol_handle_start_point_pick"):
             session.symbols.start_symbol_handle_point_pick(symbol, handle_role)
@@ -348,7 +348,7 @@ def cancel_symbol_handle_point_pick(session):
     session.symbols.clear_symbol_edit_preview()
     session.current_tool = "Select"
     if symbol:
-        session._set_selected_plan_target("symbol", symbol, pending_restore=True)
+        session.selection.set_selected_plan_target("symbol", symbol, pending_restore=True)
     session.overlays.sync_selected_opening_overlay()
     session.overlays.sync_selected_opening_handles()
     session.overlays.sync_selected_symbol_overlay()
@@ -359,9 +359,9 @@ def cancel_symbol_handle_point_pick(session):
 def restore_selected_symbol(session, symbol):
     session.current_tool = "Select"
     if symbol:
-        session._set_selected_plan_target("symbol", symbol, pending_restore=True)
+        session.selection.set_selected_plan_target("symbol", symbol, pending_restore=True)
     else:
-        session._set_selected_plan_target()
+        session.selection.set_selected_plan_target()
     if not symbol:
         session.overlays.sync_selected_opening_overlay()
         session.overlays.sync_selected_opening_handles()

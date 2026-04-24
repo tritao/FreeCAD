@@ -1462,7 +1462,7 @@ def execute_plan_provider_action(
     if handled is False:
         return False
 
-    session._refresh_primary_selected_plan_target()
+    session.selection.refresh_primary_selected_plan_target()
     session.document_visuals.invalidate_document_dependent_plan_visuals()
     session.task_panels.refresh_task_panel_status()
     session.viewport.focus_plan_view()

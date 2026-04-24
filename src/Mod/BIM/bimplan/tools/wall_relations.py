@@ -126,8 +126,8 @@ def activate_join_tool(session):
         return
 
     session.current_tool = "Join"
-    session._set_selected_plan_target("wall", wall)
-    session._restore_gui_selection(wall)
+    session.selection.set_selected_plan_target("wall", wall)
+    session.selection.set_gui_selection_object(wall)
     session.overlays.sync_secondary_selected_overlays()
     session.task_panels.refresh_task_panel_status()
 
@@ -582,5 +582,5 @@ def apply_plan_wall_join(session, source_wall, target_wall):
     session._set_hovered_symbol(None)
     session._set_hovered_provider(None)
     session.selection.select_wall_for_plan_edit(source_wall)
-    session._restore_gui_selection(source_wall)
+    session.selection.set_gui_selection_object(source_wall)
     return True
