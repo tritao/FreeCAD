@@ -269,6 +269,71 @@ def should_skip_opening_by_plan_bounds(session, opening, plan_point, radius_px):
         return False
 
 
+def _is_pick_visible_object(obj):
+    view_object = getattr(obj, "ViewObject", None)
+    return not (view_object and hasattr(view_object, "Visibility") and not view_object.Visibility)
+
+
+def _iter_pick_objects(objects, *, unique_names=False):
+    seen = set()
+    for obj in objects or []:
+        if unique_names:
+            name = getattr(obj, "Name", None)
+            if not name or name in seen:
+                continue
+            seen.add(name)
+        if not _is_pick_visible_object(obj):
+            continue
+        yield obj
+
+
+def _pick_best_target_from_projected_polylines(
+    session,
+    objects,
+    get_projected_polylines,
+    mouse_pos,
+    radius_px,
+    *,
+    candidate_count_name,
+    segment_count_name,
+):
+    radius_sq = float(radius_px) * float(radius_px)
+    cursor_xy = (float(mouse_pos[0]), float(mouse_pos[1]))
+    best_target = None
+    best_distance_sq = None
+    for obj in objects:
+        _perf_count(session, candidate_count_name)
+        for projected in get_projected_polylines(obj):
+            for start_xy, end_xy in zip(projected, projected[1:]):
+                _perf_count(session, segment_count_name)
+                distance_sq = session.selection.get_screen_distance_sq_to_projected_segment(
+                    cursor_xy,
+                    start_xy,
+                    end_xy,
+                )
+                if distance_sq is None or distance_sq > radius_sq:
+                    continue
+                if best_distance_sq is None or distance_sq < best_distance_sq:
+                    best_target = obj
+                    best_distance_sq = distance_sq
+    return best_target
+
+
+def _pick_best_target_from_overlay_segments(session, objects, get_segments, mouse_pos, radius_px):
+    radius_sq = float(radius_px) * float(radius_px)
+    best_target = None
+    best_distance_sq = None
+    for obj in objects:
+        for start, end in get_segments(obj):
+            distance_sq = session.selection.get_screen_distance_sq_to_segment(mouse_pos, start, end)
+            if distance_sq is None or distance_sq > radius_sq:
+                continue
+            if best_distance_sq is None or distance_sq < best_distance_sq:
+                best_target = obj
+                best_distance_sq = distance_sq
+    return best_target
+
+
 def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
     with _perf_trace_span(
         session,
@@ -278,28 +343,15 @@ def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
     ):
         if not session.doc or not session.view or not mouse_pos:
             return None
-        radius_sq = float(radius_px) * float(radius_px)
-        best_symbol = None
-        best_distance_sq = None
-        cursor_xy = (float(mouse_pos[0]), float(mouse_pos[1]))
-        for obj in session.overlays.get_plan_symbol_instances():
-            _perf_count(session, "symbol_overlay_pick_candidates")
-            view_object = getattr(obj, "ViewObject", None)
-            if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
-                continue
-            for projected in session.overlays.get_symbol_overlay_screen_polylines(obj):
-                for start_xy, end_xy in zip(projected, projected[1:]):
-                    _perf_count(session, "symbol_overlay_pick_segments_scanned")
-                    distance_sq = session.selection.get_screen_distance_sq_to_projected_segment(
-                        cursor_xy,
-                        start_xy,
-                        end_xy,
-                    )
-                    if distance_sq is None or distance_sq > radius_sq:
-                        continue
-                    if best_distance_sq is None or distance_sq < best_distance_sq:
-                        best_symbol = obj
-                        best_distance_sq = distance_sq
+        best_symbol = _pick_best_target_from_projected_polylines(
+            session,
+            _iter_pick_objects(session.overlays.get_plan_symbol_instances()),
+            session.overlays.get_symbol_overlay_screen_polylines,
+            mouse_pos,
+            radius_px,
+            candidate_count_name="symbol_overlay_pick_candidates",
+            segment_count_name="symbol_overlay_pick_segments_scanned",
+        )
         _perf_set_fields(
             session, symbol_overlay_pick_result=_describe_pick_object(session, best_symbol)
         )
@@ -316,42 +368,29 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
     ):
         if not session.doc or not session.view or not mouse_pos:
             return None
-        screen_radius_sq = float(radius_px) * float(radius_px)
-        best_opening = None
-        best_distance_sq = None
-        seen = set()
-        cursor_xy = (float(mouse_pos[0]), float(mouse_pos[1]))
         plan_point = session.viewport.get_plan_point_from_mouse_pos(mouse_pos)
         if candidates is None:
             objects = session.openings.get_plan_opening_instances()
         else:
             objects = candidates
-        for obj in objects or []:
+        filtered_objects = []
+        for obj in _iter_pick_objects(objects, unique_names=True):
             _perf_count(session, "opening_overlay_pick_objects_scanned")
             if not session.openings.is_hosted_opening_object(obj):
-                continue
-            name = getattr(obj, "Name", None)
-            if not name or name in seen:
-                continue
-            seen.add(name)
-            view_object = getattr(obj, "ViewObject", None)
-            if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
                 continue
             if should_skip_opening_by_plan_bounds(session, obj, plan_point, radius_px):
                 _perf_count(session, "opening_overlay_pick_bounds_skipped")
                 continue
-            _perf_count(session, "opening_overlay_pick_candidates")
-            for projected in session.overlays.get_opening_overlay_screen_polylines(obj):
-                for start_xy, end_xy in zip(projected, projected[1:]):
-                    _perf_count(session, "opening_overlay_pick_segments_scanned")
-                    distance_sq = session.selection.get_screen_distance_sq_to_projected_segment(
-                        cursor_xy, start_xy, end_xy
-                    )
-                    if distance_sq is None or distance_sq > screen_radius_sq:
-                        continue
-                    if best_distance_sq is None or distance_sq < best_distance_sq:
-                        best_opening = obj
-                        best_distance_sq = distance_sq
+            filtered_objects.append(obj)
+        best_opening = _pick_best_target_from_projected_polylines(
+            session,
+            filtered_objects,
+            session.overlays.get_opening_overlay_screen_polylines,
+            mouse_pos,
+            radius_px,
+            candidate_count_name="opening_overlay_pick_candidates",
+            segment_count_name="opening_overlay_pick_segments_scanned",
+        )
         _perf_set_fields(
             session,
             opening_overlay_pick_mode="screen",
@@ -561,55 +600,39 @@ def pick_provider_overlay_target_from_objects_info(session, mouse_pos):
 def pick_plan_space_target_from_overlays(session, mouse_pos, radius_px=10):
     if not session.doc or not session.view or not mouse_pos:
         return None
-    radius_sq = float(radius_px) * float(radius_px)
-    best_space = None
-    best_distance_sq = None
-    seen = set()
-    for obj in session.selection.get_plan_space_instances():
-        if not session.selection.is_plan_space_object(obj):
-            continue
-        name = getattr(obj, "Name", None)
-        if not name or name in seen:
-            continue
-        seen.add(name)
-        view_object = getattr(obj, "ViewObject", None)
-        if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
-            continue
-        for start, end in session.overlays.get_space_overlay_segments(obj):
-            distance_sq = session.selection.get_screen_distance_sq_to_segment(mouse_pos, start, end)
-            if distance_sq is None or distance_sq > radius_sq:
-                continue
-            if best_distance_sq is None or distance_sq < best_distance_sq:
-                best_space = obj
-                best_distance_sq = distance_sq
-    return best_space
+    return _pick_best_target_from_overlay_segments(
+        session,
+        (
+            obj
+            for obj in _iter_pick_objects(
+                session.selection.get_plan_space_instances(),
+                unique_names=True,
+            )
+            if session.selection.is_plan_space_object(obj)
+        ),
+        session.overlays.get_space_overlay_segments,
+        mouse_pos,
+        radius_px,
+    )
 
 
 def pick_plan_region_target_from_overlays(session, mouse_pos, radius_px=10):
     if not session.doc or not session.view or not mouse_pos:
         return None
-    radius_sq = float(radius_px) * float(radius_px)
-    best_region = None
-    best_distance_sq = None
-    seen = set()
-    for obj in session.selection.get_plan_region_instances():
-        if not session.selection.is_plan_region_object(obj):
-            continue
-        name = getattr(obj, "Name", None)
-        if not name or name in seen:
-            continue
-        seen.add(name)
-        view_object = getattr(obj, "ViewObject", None)
-        if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
-            continue
-        for start, end in session.overlays.get_region_overlay_segments(obj):
-            distance_sq = session.selection.get_screen_distance_sq_to_segment(mouse_pos, start, end)
-            if distance_sq is None or distance_sq > radius_sq:
-                continue
-            if best_distance_sq is None or distance_sq < best_distance_sq:
-                best_region = obj
-                best_distance_sq = distance_sq
-    return best_region
+    return _pick_best_target_from_overlay_segments(
+        session,
+        (
+            obj
+            for obj in _iter_pick_objects(
+                session.selection.get_plan_region_instances(),
+                unique_names=True,
+            )
+            if session.selection.is_plan_region_object(obj)
+        ),
+        session.overlays.get_region_overlay_segments,
+        mouse_pos,
+        radius_px,
+    )
 
 
 def get_region_pick_polylines(session, region):
