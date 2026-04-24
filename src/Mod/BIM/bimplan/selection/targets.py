@@ -240,7 +240,7 @@ def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=
     if not kind or obj is None:
         return None
     provider_target = (
-        session._get_plan_provider_target_for_object(obj)
+        session.providers.get_plan_provider_target_for_object(obj)
         if kind == plan_target_kinds.PLAN_TARGET_PROVIDER
         else None
     )

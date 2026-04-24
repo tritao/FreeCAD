@@ -2780,8 +2780,10 @@ class TestBimPlanCore(unittest.TestCase):
             selection=SimpleNamespace(
                 get_plan_target_kind_for_object=lambda obj: "provider" if obj is marker else None
             ),
-            _get_plan_provider_target_for_object=lambda obj: (
-                provider_target if obj is marker else None
+            providers=SimpleNamespace(
+                get_plan_provider_target_for_object=lambda obj: (
+                    provider_target if obj is marker else None
+                )
             ),
             _get_plan_semantic_object=lambda obj: obj,
             resolve_plan_semantic_object=lambda target: (

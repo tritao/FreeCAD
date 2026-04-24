@@ -1143,18 +1143,6 @@ class PlanEditSession:
             exclude_space=exclude_space,
         )
 
-    def _get_space_region_candidate_report(
-        self,
-        boundaries,
-        label=None,
-        seed_space=None,
-    ):
-        return self.spaces.get_space_region_candidate_report(
-            boundaries,
-            label=label,
-            seed_space=seed_space,
-        )
-
     def _report_space_region_candidate_failure(self, report):
         return self.spaces.report_space_region_candidate_failure(report)
 
@@ -1468,9 +1456,6 @@ class PlanEditSession:
 
     def get_plan_provider_targets(self):
         return plan_provider_runtime.get_plan_provider_targets(self)
-
-    def _get_plan_provider_target_for_object(self, obj):
-        return plan_provider_runtime.get_plan_provider_target_for_object(self, obj)
 
     def _is_plan_provider_target_object(self, obj):
         return plan_provider_runtime.is_plan_provider_target_object(self, obj)
@@ -2320,12 +2305,6 @@ class PlanEditSession:
         except Exception:
             return None
         return self.viewport.project_plan_point(point)
-
-    def _get_space_region_candidate_polylines(self, candidate):
-        return self.spaces.get_space_region_candidate_polylines(candidate)
-
-    def _get_space_region_candidate_segments(self, candidate):
-        return self.spaces.get_space_region_candidate_segments(candidate)
 
     def _pick_space_region_candidate(self, mouse_pos, radius_px=10):
         return self.spaces.pick_space_region_candidate(mouse_pos, radius_px=radius_px)

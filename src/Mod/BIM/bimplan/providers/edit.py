@@ -19,7 +19,7 @@ def get_selected_provider_edit_handles(session, provider_obj):
     editing_provider = getattr(session, "_edit_provider", None)
     if provider_obj != selected_provider and provider_obj != editing_provider:
         return []
-    provider_target = session._get_plan_provider_target_for_object(provider_obj)
+    provider_target = session.providers.get_plan_provider_target_for_object(provider_obj)
     if provider_target is None:
         return []
     provider_id = str(getattr(provider_target, "provider_id", "") or "").strip()
@@ -406,7 +406,7 @@ def _resolve_provider_handle_target_point(session, provider_obj, point):
 def _build_provider_handle_payload(
     session, provider_obj, handle, *, point, raw_point, snap_object=None
 ):
-    provider_target = session._get_plan_provider_target_for_object(provider_obj)
+    provider_target = session.providers.get_plan_provider_target_for_object(provider_obj)
     get_snap_info = getattr(session.providers, "get_provider_point_snap_info", None)
     snap_info = get_snap_info() if callable(get_snap_info) else {}
     if not isinstance(snap_info, dict):
