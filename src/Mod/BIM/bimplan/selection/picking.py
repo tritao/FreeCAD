@@ -794,7 +794,7 @@ def pick_plan_space_target_from_footprints(session, mouse_pos):
     return session.selection.pick_plan_target_from_footprint_faces(
         mouse_pos,
         session._is_plan_space_object,
-        session._get_space_footprint_faces,
+        session.overlays.get_space_footprint_faces,
         target_label="space",
     )
 
@@ -803,7 +803,7 @@ def pick_plan_region_target_from_footprints(session, mouse_pos):
     return session.selection.pick_plan_target_from_footprint_faces(
         mouse_pos,
         session._is_plan_region_object,
-        session._get_region_footprint_faces,
+        session.overlays.get_region_footprint_faces,
         target_label="region",
     )
 
@@ -957,7 +957,7 @@ def get_plan_target_from_edit_node(session, node):
     node_kind = node[0]
     if node_kind in ("provider_overlay_point", "provider_overlay_target"):
         target_kind, obj = get_provider_overlay_target_from_edit_node(session, node)
-        if session._is_valid_plan_target(target_kind, obj):
+        if session.selection.is_valid_plan_target(target_kind, obj):
             return (target_kind, obj)
         return session.selection.get_plan_target_for_object(obj)
     if node_kind == "opening_handle":
@@ -1167,7 +1167,7 @@ def get_provider_overlay_target_from_edit_node(session, node):
     if obj is None:
         return (None, None)
     target_kind = _parse_provider_overlay_target_kind(subname)
-    if target_kind and session._is_valid_plan_target(target_kind, obj):
+    if target_kind and session.selection.is_valid_plan_target(target_kind, obj):
         return (target_kind, obj)
     inferred_kind, inferred_obj = session.selection.get_plan_target_for_object(obj)
     if inferred_kind and inferred_obj:

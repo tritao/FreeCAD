@@ -100,7 +100,7 @@ def sync_wall_grips(session):
             try:
                 with _perf_trace_span(session, "wall_grips_retarget_trackers"):
                     for index, tracker in enumerate(session._grip_trackers):
-                        session._retarget_edit_tracker(tracker, wall, index)
+                        session.overlays.retarget_edit_tracker(tracker, wall, index)
                 with _perf_trace_span(session, "wall_grips_position_trackers"):
                     for tracker, position in zip(session._grip_trackers, grip_positions):
                         tracker.set(position)
@@ -207,8 +207,8 @@ def sync_selected_wall_overlay(session):
             return
         width = session.viewport.scaled_line_width(4)
         color = (0.12, 0.38, 0.95)
-        segments = session._build_overlay_segments_from_polylines(
-            session._get_wall_overlay_polylines(wall)
+        segments = session.overlays.build_overlay_segments_from_polylines(
+            session.overlays.get_wall_overlay_polylines(wall)
         )
         _perf_count(session, "selected_wall_overlay_segments", len(segments))
         try:
@@ -355,7 +355,7 @@ def create_wall_overlay_trackers(session, wall, color, width, tracker_store):
     except ImportError:
         return
 
-    for polyline in session._get_wall_overlay_polylines(wall):
+    for polyline in session.overlays.get_wall_overlay_polylines(wall):
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):

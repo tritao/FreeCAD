@@ -3063,7 +3063,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         proxy = getattr(door.ViewObject, "Proxy", None)
         self.assertIsNotNone(proxy)
-        projected_polylines = list(session._get_opening_overlay_screen_polylines(door) or [])
+        projected_polylines = list(
+            session.overlays.get_opening_overlay_screen_polylines(door) or []
+        )
         self.assertTrue(projected_polylines)
         self.assertGreaterEqual(len(projected_polylines[0]), 2)
 
@@ -5326,7 +5328,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         delta = FreeCAD.Vector(item["target_point"]).sub(item["current"])
         self.assertGreater(delta.Length, 1e-6)
 
-        original_polylines = session._get_opening_overlay_polylines(door)
+        original_polylines = session.overlays.get_opening_overlay_polylines(door)
         self.assertTrue(original_polylines)
         first_polyline = next(polyline for polyline in original_polylines if len(polyline) >= 2)
 
@@ -6387,9 +6389,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         with patch.object(
-            session,
-            "_get_footprint_overlay_polylines",
-            wraps=session._get_footprint_overlay_polylines,
+            session.overlays,
+            "get_footprint_overlay_polylines",
+            wraps=session.overlays.get_footprint_overlay_polylines,
         ) as get_polylines:
             first = tuple(session.overlays.get_space_overlay_segments(space))
             second = tuple(session.overlays.get_space_overlay_segments(space))
@@ -6699,7 +6701,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         try:
             session.view = FakeView(self.document.Name, space.Name, level)
             with (
-                patch.object(session, "_get_region_footprint_faces", return_value=[]),
+                patch.object(session.overlays, "get_region_footprint_faces", return_value=[]),
                 patch.object(
                     session,
                     "_get_plan_point_from_mouse_pos",
@@ -6865,7 +6867,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         space = _FakeSpace()
         space.Proxy = _FakeSpaceProxy(face_shape.Faces)
 
-        polylines = session._get_space_overlay_polylines(space)
+        polylines = session.overlays.get_space_overlay_polylines(space)
         self.assertEqual(len(polylines), 1)
 
         polyline = polylines[0]
