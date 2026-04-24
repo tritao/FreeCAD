@@ -161,6 +161,18 @@ def defer_document_visual_refresh(session):
     session._document_visual_refresh_deferred = True
 
 
+def document_is_alive(session):
+    doc = session.doc
+    if doc is None:
+        return False
+    try:
+        _ = doc.Name
+        return True
+    except Exception:
+        session.doc = None
+        return False
+
+
 @contextmanager
 def defer_document_visual_updates(session):
     """Batch document observer visual work while an external command mutates the model."""
@@ -184,7 +196,7 @@ def defer_document_visual_updates(session):
                 session._document_visual_update_defer_depth = 0
         if session._document_visual_refresh_deferred:
             session._document_visual_refresh_deferred = False
-            if not session._document_is_alive():
+            if not session.document_visuals.document_is_alive():
                 return
             session.document_visuals.invalidate_document_dependent_plan_visuals()
             session.selection.refresh_primary_selected_plan_target()
@@ -566,7 +578,11 @@ def slot_deleted_object(session, obj):
 
 
 def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=False):
-    if session._tearing_down or session._finishing or not session._document_is_alive():
+    if (
+        session._tearing_down
+        or session._finishing
+        or not session.document_visuals.document_is_alive()
+    ):
         return
     session._invalidate_plan_provider_document_cache()
     session.visibility.invalidate_plan_classification_cache()
@@ -697,6 +713,7 @@ for _method_name in (
     "flush_created_plan_objects",
     "are_document_visual_updates_deferred",
     "defer_document_visual_refresh",
+    "document_is_alive",
     "is_opening_visual_dependency",
     "refresh_selected_opening_visuals",
     "is_symbol_visual_dependency",

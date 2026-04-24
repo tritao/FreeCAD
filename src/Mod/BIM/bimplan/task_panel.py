@@ -197,7 +197,7 @@ def refresh_task_panel_status(session, selection_only=False):
         "refresh_task_panel_status",
         selection_only=bool(selection_only),
     ):
-        if session._tearing_down or not session._document_is_alive():
+        if session._tearing_down or not session.document_visuals.document_is_alive():
             return
         session._sanitize_plan_target_references()
         session.status_text.update_input_hints()
@@ -234,7 +234,7 @@ def refresh_task_panel_status(session, selection_only=False):
 
 def refresh_provider_overlay_mode_panels(session):
     with session.performance.plan_perf_trace_span("refresh_provider_overlay_mode_panels"):
-        if session._tearing_down or not session._document_is_alive():
+        if session._tearing_down or not session.document_visuals.document_is_alive():
             return
         panel = session.task_panel
         if panel:

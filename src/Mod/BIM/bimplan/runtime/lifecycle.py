@@ -802,7 +802,7 @@ def begin_teardown(session):
 
 def shutdown(session, close_dialog=True, teardown=False):
     plan_command_gate.uninstall(session)
-    if not session._document_is_alive():
+    if not session.document_visuals.document_is_alive():
         session.begin_teardown()
     teardown = teardown or session._tearing_down
     panel = session.task_panel

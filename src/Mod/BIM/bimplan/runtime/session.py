@@ -387,17 +387,6 @@ class PlanEditSession:
     def begin_teardown(self):
         return plan_lifecycle.begin_teardown(self)
 
-    def _document_is_alive(self):
-        doc = self.doc
-        if doc is None:
-            return False
-        try:
-            _ = doc.Name
-            return True
-        except Exception:
-            self.doc = None
-            return False
-
     def shutdown(self, close_dialog=True, teardown=False):
         global _active_session
 

@@ -35,10 +35,7 @@ def _perf_trace_span(session, name, **fields):
 def _session_is_inactive(session):
     if session._tearing_down or getattr(session, "_finishing", False):
         return True
-    document_is_alive = getattr(session, "_document_is_alive", None)
-    if callable(document_is_alive):
-        return not document_is_alive()
-    return False
+    return not session.document_visuals.document_is_alive()
 
 
 def queue_plan_overlay_visual_refresh(session, visuals, visual_all, visual_selected_space):
@@ -174,7 +171,11 @@ def refresh_plan_overlay_view_scale(session):
 
 
 def refresh_plan_overlay_visuals(session, dirty=None):
-    if session._tearing_down or session._finishing or not session._document_is_alive():
+    if (
+        session._tearing_down
+        or session._finishing
+        or not session.document_visuals.document_is_alive()
+    ):
         return
     dirty = set(dirty or {_PLAN_VISUAL_ALL})
     refresh_all = _PLAN_VISUAL_ALL in dirty
