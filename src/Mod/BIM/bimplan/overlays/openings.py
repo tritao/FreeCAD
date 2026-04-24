@@ -104,13 +104,13 @@ def sync_hovered_opening_overlay(session):
     with session._plan_perf_trace_span("sync_hovered_opening_overlay"):
         opening = session.hovered_opening
         if session.current_tool != "Select":
-            session._clear_hovered_opening_overlay()
+            clear_hovered_opening_overlay(session)
             return
         if not session._is_hosted_opening_object(opening):
-            session._clear_hovered_opening_overlay()
+            clear_hovered_opening_overlay(session)
             return
         if session._is_selected_plan_target("opening", opening):
-            session._clear_hovered_opening_overlay()
+            clear_hovered_opening_overlay(session)
             return
         width = session.viewport.scaled_line_width(2)
         color = (0.38, 0.62, 0.96)
@@ -135,12 +135,12 @@ def sync_hovered_opening_overlay(session):
         try:
             import draftguitools.gui_trackers as DraftTrackers
         except ImportError:
-            session._clear_hovered_opening_overlay()
+            clear_hovered_opening_overlay(session)
             return
         segments = overlay_geometry.get_opening_overlay_segments(session, opening)
         session._plan_perf_count("hovered_opening_overlay_segments", len(segments))
         if len(session._opening_hover_trackers) != len(segments):
-            session._clear_hovered_opening_overlay()
+            clear_hovered_opening_overlay(session)
             for _start, _end in segments:
                 tracker = session.overlays.make_plan_line_tracker(
                     DraftTrackers,
@@ -211,7 +211,7 @@ def sync_selected_opening_overlay(session):
     with session._plan_perf_trace_span("sync_selected_opening_overlay"):
         opening = plan_selection.get_selected_plan_target_object(session, "opening")
         if session.current_tool != "Select" or not session._is_hosted_opening_object(opening):
-            session._clear_selected_opening_overlay()
+            clear_selected_opening_overlay(session)
             return
         width = session.viewport.scaled_line_width(3)
         color = (0.12, 0.38, 0.95)
@@ -229,7 +229,7 @@ def sync_selected_opening_overlay(session):
         try:
             import draftguitools.gui_trackers as DraftTrackers
         except ImportError:
-            session._clear_selected_opening_overlay()
+            clear_selected_opening_overlay(session)
             return
         segments = overlay_geometry.get_opening_combined_overlay_segments(session, opening)
         session._plan_perf_count("selected_opening_overlay_segments", len(segments))
@@ -246,7 +246,7 @@ def sync_selected_opening_overlay(session):
             label="selected-opening-overlay:{}".format(getattr(opening, "Name", "unknown")),
             color=color,
             width=width,
-            clear_fn=session._clear_selected_opening_overlay,
+            clear_fn=lambda: clear_selected_opening_overlay(session),
             transfer_perf_key="selected_opening_overlay_tracker_transfers",
         )
         if transferred_trackers:
@@ -267,7 +267,7 @@ def invalidate_selected_opening_overlay_cache(session):
 
 
 def sync_selected_wall_opening_context_overlay(session):
-    session._clear_selected_wall_opening_context_overlay()
+    clear_selected_wall_opening_context_overlay(session)
     wall = plan_selection.get_selected_plan_target_object(session, "wall")
     if session.current_tool != "Select" or not wall or session._is_selected_plan_target("opening"):
         return
@@ -276,7 +276,8 @@ def sync_selected_wall_opening_context_overlay(session):
     for opening in session._get_wall_hosted_openings(wall):
         if opening == session.hovered_opening:
             continue
-        session._create_opening_overlay_trackers(
+        create_opening_overlay_trackers(
+            session,
             opening,
             color=color,
             width=width,
@@ -308,12 +309,12 @@ def sync_selected_opening_handles(session):
 
         opening = plan_selection.get_selected_plan_target_object(session, "opening")
         if session.current_tool != "Select":
-            session._clear_selected_opening_handles()
+            clear_selected_opening_handles(session)
             return
         if not session._is_hosted_opening_object(opening):
-            session._clear_selected_opening_handles()
+            clear_selected_opening_handles(session)
             return
-        specs = tuple(session._get_selected_opening_handle_specs(opening))
+        specs = tuple(get_selected_opening_handle_specs(session, opening))
         marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
         handle_entries = tuple(
             (
@@ -338,7 +339,7 @@ def sync_selected_opening_handles(session):
         try:
             import draftguitools.gui_trackers as DraftTrackers
         except ImportError:
-            session._clear_selected_opening_handles()
+            clear_selected_opening_handles(session)
             return
         if len(session._opening_handle_trackers) == len(specs):
             for tracker, (_idx, _role, point, marker) in zip(
@@ -362,7 +363,7 @@ def sync_selected_opening_handles(session):
                     tracker.on()
                 session._plan_perf_count("selected_opening_handle_pool_reuses")
             else:
-                session._clear_selected_opening_handles()
+                clear_selected_opening_handles(session)
                 if session._opening_handle_tracker_pool and len(
                     session._opening_handle_tracker_pool
                 ) != len(specs):

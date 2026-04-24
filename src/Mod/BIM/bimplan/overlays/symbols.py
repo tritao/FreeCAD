@@ -207,7 +207,8 @@ def sync_hovered_symbol_overlay(session):
             return
         if session._is_selected_plan_target("symbol", session.hovered_symbol):
             return
-        session._create_symbol_overlay_trackers(
+        create_symbol_overlay_trackers(
+            session,
             session.hovered_symbol,
             color=(0.38, 0.62, 0.96),
             width=session.viewport.scaled_line_width(2),
@@ -531,7 +532,8 @@ def sync_symbol_edit_preview(session, symbol, placement, guide_start=None, guide
         return
 
     preview_color = (0.12, 0.38, 0.95)
-    session._create_symbol_overlay_trackers(
+    create_symbol_overlay_trackers(
+        session,
         symbol,
         color=preview_color,
         width=session.viewport.scaled_line_width(3),
