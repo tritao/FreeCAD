@@ -203,7 +203,7 @@ def activate_opening_handle_now(session, opening, handle_index):
             return
         with session._plan_perf_trace_span("activate_opening_handle_set_target"):
             session._set_selected_plan_target("opening", opening)
-            session._clear_wall_grips()
+            session.overlays.clear_wall_grips()
         with session._plan_perf_trace_span("activate_opening_handle_get_handles"):
             handles = session._get_selected_opening_edit_handles(opening)
         if handle_index < 0 or handle_index >= len(handles):

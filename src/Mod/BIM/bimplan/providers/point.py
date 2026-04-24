@@ -108,11 +108,11 @@ def start_plan_provider_point_tool(session, tool):
     session._set_hovered_provider(None)
     session._set_hovered_space(None)
     session._set_hovered_region(None)
-    session._clear_wall_grips()
+    session.overlays.clear_wall_grips()
     session._clear_selected_wall_overlay()
     session._clear_selected_wall_opening_context_overlay()
     session._clear_selected_opening_handles()
-    session._clear_selected_symbol_handles()
+    session.overlays.clear_selected_symbol_handles()
     session._clear_provider_point_preview()
     host_kind, host_obj, host_source = session._get_provider_point_context_host_state()
     if host_obj is None:

@@ -41,16 +41,16 @@ def clear_selection_visuals(
     include_secondary_selection=False,
 ):
     if include_wall_grips:
-        session._clear_wall_grips()
+        session.overlays.clear_wall_grips()
     plan_target_dispatch.clear_selected_target_visuals(
         session,
         kinds=kinds,
         clear_handle_kinds=clear_handle_kinds,
     )
     if include_selected_wall_opening_context:
-        session._clear_selected_wall_opening_context_overlay()
+        session.overlays.clear_selected_wall_opening_context_overlay()
     if include_secondary_selection:
-        session._clear_secondary_selected_overlays()
+        session.overlays.clear_secondary_selected_overlays()
 
 
 def clear_transient_visuals(
@@ -65,11 +65,11 @@ def clear_transient_visuals(
     include_plan_region_preview=False,
 ):
     if include_provider_overlays:
-        session._clear_provider_overlays()
+        session.overlays.clear_provider_overlays()
     if include_provider_point_preview:
-        session._clear_provider_point_preview()
+        session.overlays.clear_provider_point_preview()
     if include_space_region_pick:
-        session._clear_space_region_pick_overlays()
+        session.overlays.clear_space_region_pick_overlays()
     if include_opening_handle_pool:
         session._discard_opening_handle_tracker_pool()
     if include_opening_move_preview:
@@ -793,7 +793,7 @@ def cancel_pending_edit(session):
     FreeCAD.activeDraftCommand = None
     _reset_pending_edit_state(session, clear_opening_edit=True)
     session._clear_plan_relation_status()
-    session._sync_wall_grips()
+    session.overlays.sync_wall_grips()
     plan_target_dispatch.sync_selected_target_visuals(
         session,
         kinds=plan_target_kinds.PENDING_EDIT_VISUAL_SYNC_KINDS,

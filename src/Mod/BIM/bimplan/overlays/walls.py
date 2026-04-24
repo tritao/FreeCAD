@@ -33,7 +33,7 @@ def sync_wall_grips(session):
         session._wall_grip_sync_queued = False
         session._wall_grip_sync_generation += 1
         if not session.is_selected_wall_endpoint_editable():
-            session._clear_wall_grips()
+            session.overlays.clear_wall_grips()
             return
 
         with session._plan_perf_trace_span("wall_grips_import_trackers"):
@@ -41,19 +41,19 @@ def sync_wall_grips(session):
                 import draftguitools.gui_trackers as DraftTrackers
                 from draftutils import params
             except Exception:
-                session._clear_wall_grips()
+                session.overlays.clear_wall_grips()
                 return
 
         wall = plan_selection.get_selected_plan_target_object(session, "wall")
         proxy = getattr(wall, "Proxy", None)
         if not proxy or not hasattr(proxy, "calc_endpoints"):
-            session._clear_wall_grips()
+            session.overlays.clear_wall_grips()
             return
 
         with session._plan_perf_trace_span("wall_grips_calc_endpoints"):
             endpoints = proxy.calc_endpoints(wall)
         if len(endpoints) != 2:
-            session._clear_wall_grips()
+            session.overlays.clear_wall_grips()
             return
 
         with session._plan_perf_trace_span("wall_grips_calc_positions"):
@@ -62,7 +62,7 @@ def sync_wall_grips(session):
             else:
                 grip_positions = endpoints + [(endpoints[0] + endpoints[1]) * 0.5]
         if len(grip_positions) != 3:
-            session._clear_wall_grips()
+            session.overlays.clear_wall_grips()
             return
 
         with session._plan_perf_trace_span("wall_grips_marker_lookup"):
@@ -103,7 +103,7 @@ def sync_wall_grips(session):
                 session._wall_grip_state = wall_state
                 return
             except Exception:
-                session._clear_wall_grips()
+                session.overlays.clear_wall_grips()
 
         grip_start, grip_end, midpoint = grip_positions
         with session._plan_perf_trace_span("wall_grips_create_trackers"):

@@ -35,7 +35,7 @@ def get_symbol_handle_placement(session, symbol, handle_role, point):
     start_placement = session._edit_symbol_start_placement
     if start_placement is None:
         start_placement = session._copy_placement(getattr(symbol, "Placement", None))
-    point = session._resolve_symbol_handle_target_point(
+    point = session.overlays.resolve_symbol_handle_target_point(
         symbol, handle_role, point, placement=start_placement
     )
     if point is None:
@@ -64,7 +64,9 @@ def get_symbol_handle_placement(session, symbol, handle_role, point):
     if reference_point is None:
         specs = dict(
             (role, handle_point)
-            for role, handle_point, _marker in session._get_selected_symbol_handle_specs(symbol)
+            for role, handle_point, _marker in session.overlays.get_selected_symbol_handle_specs(
+                symbol
+            )
         )
         reference_point = specs.get("rotate")
     if reference_point is None:
@@ -123,7 +125,7 @@ def activate_symbol_handle_now(session, symbol, handle_role):
             return
         with session._plan_perf_trace_span("activate_symbol_handle_set_target"):
             session._set_selected_plan_target("symbol", symbol)
-            session._clear_wall_grips()
+            session.overlays.clear_wall_grips()
         with session._plan_perf_trace_span("activate_symbol_handle_start_point_pick"):
             session._start_symbol_handle_point_pick(symbol, handle_role)
 
@@ -135,7 +137,9 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
         with session._plan_perf_trace_span("start_symbol_handle_get_handles"):
             handle_points = {
                 role: point
-                for role, point, _marker in session._get_selected_symbol_handle_specs(symbol)
+                for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(
+                    symbol
+                )
             }
             start_point = handle_points.get(handle_role)
         if start_point is None:
@@ -153,7 +157,7 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
             )
             session._edit_symbol_reference_point = FreeCAD.Vector(start_point)
             session._clear_selected_symbol_overlay()
-            session._clear_selected_symbol_handles()
+            session.overlays.clear_selected_symbol_handles()
         with session._plan_perf_trace_span("start_symbol_handle_preview"):
             anchor = session._get_symbol_anchor_point(
                 symbol, placement=session._edit_symbol_start_placement
@@ -191,7 +195,7 @@ def update_symbol_handle_point_pick(session, point=None, snap_info=None):
     if not symbol or not handle_role:
         session._clear_symbol_edit_preview()
         return
-    target_point = session._resolve_symbol_handle_target_point(
+    target_point = session.overlays.resolve_symbol_handle_target_point(
         symbol, handle_role, point, placement=session._edit_symbol_start_placement
     )
     if target_point is None:
@@ -280,7 +284,7 @@ def cancel_symbol_handle_point_pick(session):
     session._sync_selected_opening_overlay()
     session._sync_selected_opening_handles()
     session._sync_selected_symbol_overlay()
-    session._sync_selected_symbol_handles()
+    session.overlays.sync_selected_symbol_handles()
     session._refresh_task_panel_status()
 
 
@@ -294,14 +298,14 @@ def restore_selected_symbol(session, symbol):
         session._sync_selected_opening_overlay()
         session._sync_selected_opening_handles()
         session._sync_selected_symbol_overlay()
-        session._sync_selected_symbol_handles()
+        session.overlays.sync_selected_symbol_handles()
         session._refresh_task_panel_status()
         return
     session._set_gui_selection_object(symbol)
     session._sync_selected_opening_overlay()
     session._sync_selected_opening_handles()
     session._sync_selected_symbol_overlay()
-    session._sync_selected_symbol_handles()
+    session.overlays.sync_selected_symbol_handles()
     session._refresh_task_panel_status()
 
 

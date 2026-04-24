@@ -171,7 +171,7 @@ def get_symbol_overlay_screen_polylines(session, symbol):
 
 def refresh_selected_symbol_visuals(session):
     session._sync_selected_symbol_overlay()
-    session._sync_selected_symbol_handles()
+    session.overlays.sync_selected_symbol_handles()
     session.viewport.request_view_redraw()
 
 
@@ -361,11 +361,11 @@ def get_symbol_rotation_snap_increment_degrees(session):
 
 
 def get_symbol_rotation_snap_step_radians(session):
-    return math.radians(session._get_symbol_rotation_snap_increment_degrees())
+    return math.radians(session.overlays.get_symbol_rotation_snap_increment_degrees())
 
 
 def format_symbol_rotation_snap_label(session):
-    increment = session._get_symbol_rotation_snap_increment_degrees()
+    increment = session.overlays.get_symbol_rotation_snap_increment_degrees()
     rounded = round(increment)
     if abs(increment - rounded) < 1e-9:
         return "{}°".format(int(rounded))
@@ -397,10 +397,10 @@ def resolve_symbol_handle_target_point(session, symbol, handle_role, point, plac
         return target_point
     if not session._symbol_rotation_snap_enabled():
         return target_point
-    if session._symbol_rotation_free_angle_override_active():
+    if session.overlays.symbol_rotation_free_angle_override_active():
         return target_point
 
-    snap_step = session._get_symbol_rotation_snap_step_radians()
+    snap_step = session.overlays.get_symbol_rotation_snap_step_radians()
     if snap_step <= 1e-9:
         return target_point
 
@@ -440,7 +440,7 @@ def get_selected_symbol_handle_specs(session, symbol):
 
     placement = session._get_plan_object_global_placement(symbol)
     anchor = session._get_symbol_anchor_point(symbol, placement=placement)
-    radius = session._get_symbol_handle_radius(symbol, placement=placement)
+    radius = session.overlays.get_symbol_handle_radius(symbol, placement=placement)
     rotate_direction = session._get_symbol_facing_vector(symbol, placement=placement)
     if rotate_direction.Length < 0.001:
         rotate_direction = FreeCAD.Vector(1, 0, 0)
@@ -464,17 +464,17 @@ def sync_selected_symbol_handles(session):
     with session._plan_perf_trace_span("sync_selected_symbol_handles"):
         symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
         if session.current_tool != "Select":
-            session._clear_selected_symbol_handles()
+            session.overlays.clear_selected_symbol_handles()
             return
         if not session._is_plan_symbol_instance(symbol):
-            session._clear_selected_symbol_handles()
+            session.overlays.clear_selected_symbol_handles()
             return
-        session._clear_selected_symbol_handles()
+        session.overlays.clear_selected_symbol_handles()
         try:
             import draftguitools.gui_trackers as DraftTrackers
         except ImportError:
             return
-        specs = session._get_selected_symbol_handle_specs(symbol)
+        specs = session.overlays.get_selected_symbol_handle_specs(symbol)
         session._plan_perf_count("selected_symbol_handles", len(specs))
         for idx, (_role, point, marker) in enumerate(specs):
             tracker = DraftTrackers.editTracker(
@@ -503,7 +503,7 @@ def pick_selected_symbol_handle(session, mouse_pos, radius_px=10):
         return None
     best_role = None
     best_distance_sq = None
-    for role, point, _marker in session._get_selected_symbol_handle_specs(symbol):
+    for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(symbol):
         try:
             screen_x, screen_y = session.view.getPointOnScreen(point)
         except Exception:

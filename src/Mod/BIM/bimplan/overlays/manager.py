@@ -132,7 +132,7 @@ def refresh_plan_overlay_view_scale(session):
         if session._is_selected_plan_target("wall"):
             session.overlays.sync_selected_wall_overlay()
             session.overlays.sync_selected_wall_opening_context_overlay()
-            session._sync_wall_grips()
+            session.overlays.sync_wall_grips()
         if session.hovered_opening:
             session.overlays.sync_hovered_opening_overlay()
         if session._is_selected_plan_target("opening"):
@@ -147,7 +147,7 @@ def refresh_plan_overlay_view_scale(session):
             session.overlays.sync_selected_provider_overlay()
         if session._is_selected_plan_target("symbol"):
             session.overlays.sync_selected_symbol_overlay()
-            session._sync_selected_symbol_handles()
+            session.overlays.sync_selected_symbol_handles()
         if session.hovered_space:
             session.overlays.sync_hovered_space_overlay()
         if session._is_selected_plan_target("space"):
@@ -191,9 +191,9 @@ def refresh_plan_overlay_visuals(session, dirty=None):
         session.overlays.clear_provider_point_preview()
         session.overlays.clear_secondary_selected_overlays()
         session.overlays.clear_selected_opening_handles()
-        session._clear_selected_symbol_handles()
+        session.overlays.clear_selected_symbol_handles()
         session.overlays.clear_selected_wall_opening_context_overlay()
-        session._clear_wall_grips()
+        session.overlays.clear_wall_grips()
         session.overlays.clear_selected_wall_overlay()
         return
     if session.current_tool == "Region":
@@ -216,9 +216,9 @@ def refresh_plan_overlay_visuals(session, dirty=None):
         session.overlays.clear_provider_point_preview()
         session.overlays.clear_secondary_selected_overlays()
         session.overlays.clear_selected_opening_handles()
-        session._clear_selected_symbol_handles()
+        session.overlays.clear_selected_symbol_handles()
         session.overlays.clear_selected_wall_opening_context_overlay()
-        session._clear_wall_grips()
+        session.overlays.clear_wall_grips()
         session.overlays.clear_selected_wall_overlay()
         return
     if session.current_tool == "Set Space Text":
@@ -240,9 +240,9 @@ def refresh_plan_overlay_visuals(session, dirty=None):
         session.overlays.clear_provider_point_preview()
         session.overlays.clear_secondary_selected_overlays()
         session.overlays.clear_selected_opening_handles()
-        session._clear_selected_symbol_handles()
+        session.overlays.clear_selected_symbol_handles()
         session.overlays.clear_selected_wall_opening_context_overlay()
-        session._clear_wall_grips()
+        session.overlays.clear_wall_grips()
         session.overlays.clear_selected_wall_overlay()
         if session._is_selected_plan_target("space") and (
             refresh_all or _PLAN_VISUAL_SELECTED_SPACE in dirty
@@ -267,9 +267,9 @@ def refresh_plan_overlay_visuals(session, dirty=None):
         session.overlays.clear_provider_overlays()
         session.overlays.clear_provider_point_preview()
         session.overlays.clear_selected_opening_handles()
-        session._clear_selected_symbol_handles()
+        session.overlays.clear_selected_symbol_handles()
         session.overlays.clear_selected_wall_opening_context_overlay()
-        session._clear_wall_grips()
+        session.overlays.clear_wall_grips()
         session.overlays.clear_selected_wall_overlay()
         if (
             refresh_all
@@ -297,9 +297,9 @@ def refresh_plan_overlay_visuals(session, dirty=None):
         session.overlays.clear_selected_region_overlay()
         session.overlays.clear_secondary_selected_overlays()
         session.overlays.clear_selected_opening_handles()
-        session._clear_selected_symbol_handles()
+        session.overlays.clear_selected_symbol_handles()
         session.overlays.clear_selected_wall_opening_context_overlay()
-        session._clear_wall_grips()
+        session.overlays.clear_wall_grips()
         session.overlays.clear_selected_wall_overlay()
         if refresh_all or _PLAN_VISUAL_PROVIDER_OVERLAYS in dirty:
             session.overlays.sync_provider_overlays()
@@ -324,9 +324,9 @@ def refresh_plan_overlay_visuals(session, dirty=None):
         session.overlays.clear_provider_point_preview()
         session.overlays.clear_secondary_selected_overlays()
         session.overlays.clear_selected_opening_handles()
-        session._clear_selected_symbol_handles()
+        session.overlays.clear_selected_symbol_handles()
         session.overlays.clear_selected_wall_opening_context_overlay()
-        session._clear_wall_grips()
+        session.overlays.clear_wall_grips()
         session.overlays.clear_selected_wall_overlay()
         return
     if session.current_tool == "Select":
@@ -351,7 +351,7 @@ def refresh_plan_overlay_visuals(session, dirty=None):
             session.overlays.sync_selected_opening_handles()
         if refresh_all or _PLAN_VISUAL_SELECTED_SYMBOL in dirty:
             session.overlays.sync_selected_symbol_overlay()
-            session._sync_selected_symbol_handles()
+            session.overlays.sync_selected_symbol_handles()
         if refresh_all or _PLAN_VISUAL_SELECTED_REGION in dirty:
             session.overlays.sync_selected_region_overlay()
         if refresh_all or _PLAN_VISUAL_SELECTED_SPACE in dirty:
@@ -362,7 +362,7 @@ def refresh_plan_overlay_visuals(session, dirty=None):
             session.overlays.clear_space_region_pick_overlays()
         if refresh_all or _PLAN_VISUAL_WALL_GRIPS in dirty:
             session.overlays.sync_selected_wall_overlay()
-            session._sync_wall_grips()
+            session.overlays.sync_wall_grips()
         provider_overlays_dirty = refresh_all or _PLAN_VISUAL_PROVIDER_OVERLAYS in dirty
         if provider_overlays_dirty:
             session.overlays.sync_provider_overlays()

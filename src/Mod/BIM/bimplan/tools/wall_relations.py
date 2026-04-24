@@ -56,7 +56,7 @@ def activate_join_tool(session):
     session._cancel_wall_edit()
     session._cancel_pending_edit()
     session._clear_plan_relation_status()
-    session._clear_wall_grips()
+    session.overlays.clear_wall_grips()
     session._clear_selected_wall_overlay()
     session._set_hovered_opening(None)
     session._set_hovered_wall(None)
