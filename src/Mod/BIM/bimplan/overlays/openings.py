@@ -10,6 +10,14 @@ from . import manager as overlay_manager
 from .. import selection as plan_selection
 
 
+def _perf_count(session, name, delta=1):
+    return session.performance.plan_perf_count(name, delta=delta)
+
+
+def _perf_trace_span(session, name, **fields):
+    return session.performance.plan_perf_trace_span(name, **fields)
+
+
 def get_opening_handle_markers(session, marker_size=None):
     from draftutils import params
 
@@ -97,11 +105,11 @@ def prime_opening_handle_tracker_pool(session):
         session.overlays.finalize_trackers(pooled_trackers)
         return
     session._opening_handle_tracker_pool = pooled_trackers
-    session._plan_perf_count("opening_handle_pool_primes")
+    _perf_count(session, "opening_handle_pool_primes")
 
 
 def sync_hovered_opening_overlay(session):
-    with session._plan_perf_trace_span("sync_hovered_opening_overlay"):
+    with _perf_trace_span(session, "sync_hovered_opening_overlay"):
         opening = session.hovered_opening
         if session.current_tool != "Select":
             clear_hovered_opening_overlay(session)
@@ -130,7 +138,7 @@ def sync_hovered_opening_overlay(session):
                         raise_tracker()
                 except Exception:
                     pass
-            session._plan_perf_count("hovered_opening_overlay_cache_hits")
+            _perf_count(session, "hovered_opening_overlay_cache_hits")
             return
         try:
             import draftguitools.gui_trackers as DraftTrackers
@@ -138,7 +146,7 @@ def sync_hovered_opening_overlay(session):
             clear_hovered_opening_overlay(session)
             return
         segments = overlay_geometry.get_opening_overlay_segments(session, opening)
-        session._plan_perf_count("hovered_opening_overlay_segments", len(segments))
+        _perf_count(session, "hovered_opening_overlay_segments", len(segments))
         if len(session._opening_hover_trackers) != len(segments):
             clear_hovered_opening_overlay(session)
             for _start, _end in segments:
@@ -208,7 +216,7 @@ def create_opening_overlay_trackers(
 
 
 def sync_selected_opening_overlay(session):
-    with session._plan_perf_trace_span("sync_selected_opening_overlay"):
+    with _perf_trace_span(session, "sync_selected_opening_overlay"):
         opening = plan_selection.get_selected_plan_target_object(session, "opening")
         if session.current_tool != "Select" or not session._is_hosted_opening_object(opening):
             clear_selected_opening_overlay(session)
@@ -224,7 +232,7 @@ def sync_selected_opening_overlay(session):
             not session._selected_opening_overlay_dirty
             and session._selected_opening_overlay_render_state == render_state
         ):
-            session._plan_perf_count("selected_opening_overlay_cache_hits")
+            _perf_count(session, "selected_opening_overlay_cache_hits")
             return
         try:
             import draftguitools.gui_trackers as DraftTrackers
@@ -232,7 +240,7 @@ def sync_selected_opening_overlay(session):
             clear_selected_opening_overlay(session)
             return
         segments = overlay_geometry.get_opening_combined_overlay_segments(session, opening)
-        session._plan_perf_count("selected_opening_overlay_segments", len(segments))
+        _perf_count(session, "selected_opening_overlay_segments", len(segments))
         (
             session._opening_overlay_trackers,
             session._opening_hover_trackers,
@@ -304,7 +312,7 @@ def get_selected_opening_handle_specs(session, opening):
 
 
 def sync_selected_opening_handles(session):
-    with session._plan_perf_trace_span("sync_selected_opening_handles"):
+    with _perf_trace_span(session, "sync_selected_opening_handles"):
         from draftutils import params
 
         opening = plan_selection.get_selected_plan_target_object(session, "opening")
@@ -334,7 +342,7 @@ def sync_selected_opening_handles(session):
         if session._selected_opening_handle_render_state == render_state and len(
             session._opening_handle_trackers
         ) == len(specs):
-            session._plan_perf_count("selected_opening_handle_cache_hits")
+            _perf_count(session, "selected_opening_handle_cache_hits")
             return
         try:
             import draftguitools.gui_trackers as DraftTrackers
@@ -348,7 +356,7 @@ def sync_selected_opening_handles(session):
                 session.overlays.set_opening_handle_tracker_marker(tracker, marker)
                 tracker.set(point)
                 tracker.on()
-            session._plan_perf_count("selected_opening_handle_tracker_reuses")
+            _perf_count(session, "selected_opening_handle_tracker_reuses")
         else:
             if not session._opening_handle_trackers and len(
                 session._opening_handle_tracker_pool
@@ -361,7 +369,7 @@ def sync_selected_opening_handles(session):
                     session.overlays.set_opening_handle_tracker_marker(tracker, marker)
                     tracker.set(point)
                     tracker.on()
-                session._plan_perf_count("selected_opening_handle_pool_reuses")
+                _perf_count(session, "selected_opening_handle_pool_reuses")
             else:
                 clear_selected_opening_handles(session)
                 if session._opening_handle_tracker_pool and len(

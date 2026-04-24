@@ -24,6 +24,14 @@ _PLAN_VISUAL_VIEW_SCALE = plan_document_visuals.PLAN_VISUAL_VIEW_SCALE
 _PLAN_VISUAL_ALL = plan_document_visuals.PLAN_VISUAL_ALL
 
 
+def _perf_count(session, name, delta=1):
+    return session.performance.plan_perf_count(name, delta=delta)
+
+
+def _perf_trace_span(session, name, **fields):
+    return session.performance.plan_perf_trace_span(name, **fields)
+
+
 def _session_is_inactive(session):
     if session._tearing_down or getattr(session, "_finishing", False):
         return True
@@ -102,7 +110,7 @@ def flush_view_scale_overlay_refresh(session):
 
 
 def refresh_plan_overlay_view_scale(session):
-    with session._plan_perf_trace_span("refresh_plan_overlay_view_scale"):
+    with _perf_trace_span(session, "refresh_plan_overlay_view_scale"):
         if session.current_tool == "Join":
             session.overlays.sync_junction_node_overlays()
             if session.hovered_wall:
@@ -435,7 +443,7 @@ def sync_segment_overlay_trackers(
             current_hover_trackers = []
             transferred = True
             if transfer_perf_key:
-                session._plan_perf_count(transfer_perf_key)
+                _perf_count(session, transfer_perf_key)
         else:
             clear_fn()
             current_trackers = []

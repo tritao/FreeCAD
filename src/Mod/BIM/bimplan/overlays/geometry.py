@@ -5,6 +5,10 @@
 import ArchPlanGeometry
 
 
+def _perf_count(session, name, delta=1):
+    return session.performance.plan_perf_count(name, delta=delta)
+
+
 def get_plan_overlay_geometry_kinds_for_object(session, obj):
     semantic_obj = session._get_plan_semantic_object(obj)
     if session._is_hosted_opening_object(semantic_obj):
@@ -76,7 +80,7 @@ def get_cached_plan_overlay_geometry(session, kind, obj, field_name, compute):
     if semantic_obj is None or entry is None:
         return ()
     if field_name in entry:
-        session._plan_perf_count(f"{kind}_{field_name}_cache_hits")
+        _perf_count(session, f"{kind}_{field_name}_cache_hits")
         return entry[field_name]
     value = compute(semantic_obj)
     if field_name == "footprint_faces":
@@ -262,7 +266,7 @@ def get_opening_overlay_screen_polylines(session, opening):
         return ()
     cached = cache_state.opening_overlay_screen_cache.get(opening_key)
     if cached is not None:
-        session._plan_perf_count("opening_overlay_screen_polylines_cache_hits")
+        _perf_count(session, "opening_overlay_screen_polylines_cache_hits")
         return cached
 
     projected_polylines = []
