@@ -851,7 +851,7 @@ def cancel_pending_edit(session):
         session._clear_plan_relation_status()
         return
     stop_snapper(session)
-    session._pop_opening_move_snap_profile()
+    session.snap.pop_opening_move_snap_profile()
     FreeCAD.activeDraftCommand = None
     _reset_pending_edit_state(session, clear_opening_edit=True)
     session._clear_plan_relation_status()

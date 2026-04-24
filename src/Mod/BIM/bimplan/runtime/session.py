@@ -268,6 +268,7 @@ class PlanEditSession:
         self.wall_edit = PlanWallEditAPI(self)
         self.visibility = PlanVisibilityAPI(self)
         self.providers = PlanProvidersAPI(self)
+        self.snap = plan_snap.PlanSnapAPI(self, _PLAN_EDIT_SNAP_SET, _OPENING_MOVE_SNAP_SET)
         self.performance = PlanPerformanceAPI(self)
         self.document_visuals = PlanDocumentVisualsAPI(self)
         self.status_text = PlanStatusTextAPI(self)
@@ -508,7 +509,7 @@ class PlanEditSession:
             with self.performance.plan_perf_trace_span("apply_plan_view"):
                 self.viewport.apply_plan_view(fit=False)
             with self.performance.plan_perf_trace_span("apply_plan_snap_profile"):
-                self._apply_plan_snap_profile()
+                self.snap.apply_plan_snap_profile()
             self.visibility.apply_storey_visibility()
             with self.performance.plan_perf_trace_span("attach_selection_observer"):
                 self.selection.attach_selection_observer()
@@ -736,50 +737,6 @@ class PlanEditSession:
         if not wall:
             return False
         return not getattr(wall, "Base", None) and self.is_selected_wall_endpoint_editable()
-
-    def _apply_plan_snap_profile(self):
-        return plan_snap.apply_plan_snap_profile(_PLAN_EDIT_SNAP_SET)
-
-    def _restore_snap_profile(self):
-        return plan_snap.restore_snap_profile()
-
-    def _push_opening_move_snap_profile(self):
-        return plan_snap.push_opening_move_snap_profile(self, _OPENING_MOVE_SNAP_SET)
-
-    def _pop_opening_move_snap_profile(self):
-        return plan_snap.pop_opening_move_snap_profile(self)
-
-    def _set_active_object(self, obj):
-        try:
-            self.view.setActiveObject("Arch", None)
-        except Exception:
-            pass
-        try:
-            self.view.setActiveObject("NativeIFC", None)
-        except Exception:
-            pass
-        if obj is None:
-            return
-        context = "Arch"
-        if getattr(obj, "IfcType", "") == "Building Storey":
-            context = "NativeIFC"
-        try:
-            self.view.setActiveObject(context, obj)
-        except Exception:
-            pass
-
-    def _sync_active_plan_target_object(self):
-        if not self.view:
-            return
-        target_kind, target_obj = self.selection.get_selected_plan_target()
-        del target_kind
-        if target_obj is not None:
-            self._set_active_object(target_obj)
-            return
-        if self.active_storey is not None:
-            self._set_active_object(self.active_storey)
-            return
-        self._set_active_object(None)
 
     def _attach_document_observer(self):
         if not self._document_observer_added:
