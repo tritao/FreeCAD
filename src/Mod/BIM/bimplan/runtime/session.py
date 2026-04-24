@@ -30,7 +30,6 @@ import math
 import FreeCAD
 import FreeCADGui
 from bimplan import selection as plan_selection
-from bimplan.selection import picking as plan_picking
 from bimplan.runtime import command_gate as plan_command_gate
 from bimplan import document_visuals as plan_document_visuals
 from bimplan.document_visuals import PlanDocumentVisualsAPI
@@ -539,16 +538,6 @@ class PlanEditSession:
             except Exception:
                 pass
             self._document_observer_added = False
-
-    def _get_screen_distance_sq_to_segment(self, mouse_pos, start, end):
-        return plan_picking.get_screen_distance_sq_to_segment(self, mouse_pos, start, end)
-
-    def _get_screen_distance_sq_to_projected_segment(self, cursor_xy, start_xy, end_xy):
-        return plan_picking.get_screen_distance_sq_to_projected_segment(
-            cursor_xy,
-            start_xy,
-            end_xy,
-        )
 
     def defer_document_visual_updates(self):
         return plan_document_visuals.defer_document_visual_updates(self)

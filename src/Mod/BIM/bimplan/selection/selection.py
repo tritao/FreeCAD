@@ -1676,6 +1676,26 @@ class PlanSelectionAPI(_SessionAPI):
         del self
         return plan_picking.xy_point_in_polygon(point, polyline, tolerance=tolerance)
 
+    def get_screen_distance_sq_to_segment(self, mouse_pos, start, end):
+        from . import picking as plan_picking
+
+        return plan_picking.get_screen_distance_sq_to_segment(
+            self.session,
+            mouse_pos,
+            start,
+            end,
+        )
+
+    def get_screen_distance_sq_to_projected_segment(self, cursor_xy, start_xy, end_xy):
+        from . import picking as plan_picking
+
+        del self
+        return plan_picking.get_screen_distance_sq_to_projected_segment(
+            cursor_xy,
+            start_xy,
+            end_xy,
+        )
+
     def pick_plan_symbol_target_from_overlays(self, mouse_pos, radius_px=10):
         from . import picking as plan_picking
 
