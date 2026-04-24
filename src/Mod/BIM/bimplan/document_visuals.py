@@ -377,7 +377,7 @@ def slot_created_object(session, obj):
     session._invalidate_plan_provider_document_cache()
     session._provider_overlay_state = None
     session.visibility.invalidate_plan_classification_cache()
-    session._invalidate_wall_hosted_openings_cache()
+    session.openings.invalidate_wall_hosted_openings_cache()
     session.document_visuals.queue_created_plan_object(obj)
 
 
@@ -387,7 +387,7 @@ def slot_changed_object(session, obj, prop):
     session._invalidate_plan_provider_document_cache()
     session._provider_overlay_state = None
     session.visibility.invalidate_plan_classification_cache()
-    session._invalidate_wall_hosted_openings_cache()
+    session.openings.invalidate_wall_hosted_openings_cache()
     if session.document_visuals.are_document_visual_updates_deferred():
         session.document_visuals.defer_document_visual_refresh()
         return
@@ -490,7 +490,7 @@ def slot_changed_object(session, obj, prop):
         return
     if (
         session.hovered_wall
-        and obj in session._get_wall_hosted_openings(session.hovered_wall)
+        and obj in session.openings.get_wall_hosted_openings(session.hovered_wall)
         and prop in _OPENING_VISUAL_PROPERTIES
     ):
         session.document_visuals.refresh_opening_footprint_display(obj)
@@ -499,7 +499,7 @@ def slot_changed_object(session, obj, prop):
         return
     if (
         selected_wall
-        and obj in session._get_wall_hosted_openings(selected_wall)
+        and obj in session.openings.get_wall_hosted_openings(selected_wall)
         and prop in _OPENING_VISUAL_PROPERTIES
     ):
         session.document_visuals.refresh_opening_footprint_display(obj)
@@ -513,7 +513,7 @@ def slot_changed_object(session, obj, prop):
         return
     if prop not in _WALL_VISUAL_PROPERTIES:
         return
-    session._refresh_wall_hosted_opening_footprints(obj)
+    session.openings.refresh_wall_hosted_opening_footprints(obj)
     session._schedule_selected_wall_reset(prop, obj)
 
 
@@ -523,7 +523,7 @@ def slot_deleted_object(session, obj):
     session._invalidate_plan_provider_document_cache()
     session._provider_overlay_state = None
     session.visibility.invalidate_plan_classification_cache()
-    session._invalidate_wall_hosted_openings_cache()
+    session.openings.invalidate_wall_hosted_openings_cache()
     session._invalidate_plan_overlay_geometry_cache(obj)
     if session.document_visuals.are_document_visual_updates_deferred():
         session.document_visuals.defer_document_visual_refresh()
@@ -570,7 +570,7 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
         return
     session._invalidate_plan_provider_document_cache()
     session.visibility.invalidate_plan_classification_cache()
-    session._invalidate_wall_hosted_openings_cache()
+    session.openings.invalidate_wall_hosted_openings_cache()
     session._invalidate_plan_overlay_geometry_cache()
     session._sanitize_plan_target_references()
     selected_symbol = plan_selection.get_selected_plan_target_object(session, "symbol")

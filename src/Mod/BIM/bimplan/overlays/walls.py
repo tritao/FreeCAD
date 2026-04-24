@@ -323,7 +323,7 @@ def sync_hovered_wall_opening_context_overlay(session):
         return
     color = (0.64, 0.70, 0.84)
     width = session.viewport.scaled_line_width(1)
-    for opening in session._get_wall_hosted_openings(session.hovered_wall):
+    for opening in session.openings.get_wall_hosted_openings(session.hovered_wall):
         session.overlays.create_opening_overlay_trackers(
             opening,
             color=color,

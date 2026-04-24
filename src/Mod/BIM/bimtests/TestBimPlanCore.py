@@ -1880,7 +1880,9 @@ class TestBimPlanCore(unittest.TestCase):
                 ("select", obj, sync_gui_selection)
             )
             or True,
-            _invalidate_wall_hosted_openings_cache=lambda: calls.append(("invalidate", None)),
+            openings=SimpleNamespace(
+                invalidate_wall_hosted_openings_cache=lambda: calls.append(("invalidate", None))
+            ),
             document_visuals=SimpleNamespace(
                 queue_recompute_opening_hosts=lambda obj: calls.append(("recompute-hosts", obj)),
                 refresh_opening_host_footprint_displays=lambda obj: calls.append(
@@ -2253,7 +2255,7 @@ class TestBimPlanCore(unittest.TestCase):
             _pick_plan_region_target_from_overlays=lambda *args, **kwargs: None,
             _pick_plan_space_target_from_footprints=lambda *args, **kwargs: space,
             _pick_plan_space_target_from_overlays=lambda *args, **kwargs: space,
-            _get_wall_hosted_openings=lambda *_args, **_kwargs: (),
+            openings=SimpleNamespace(get_wall_hosted_openings=lambda *_args, **_kwargs: ()),
             _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
             _plan_perf_count=lambda *_args, **_kwargs: None,
             _plan_perf_set_fields=lambda **_kwargs: None,
@@ -2325,7 +2327,7 @@ class TestBimPlanCore(unittest.TestCase):
             _pick_plan_region_target_from_overlays=lambda *args, **kwargs: None,
             _pick_plan_space_target_from_footprints=lambda *args, **kwargs: None,
             _pick_plan_space_target_from_overlays=lambda *args, **kwargs: None,
-            _get_wall_hosted_openings=lambda *_args, **_kwargs: (),
+            openings=SimpleNamespace(get_wall_hosted_openings=lambda *_args, **_kwargs: ()),
             _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
             _plan_perf_count=lambda *_args, **_kwargs: None,
             _plan_perf_set_fields=lambda **_kwargs: None,
@@ -2396,7 +2398,7 @@ class TestBimPlanCore(unittest.TestCase):
             _pick_plan_region_target_from_overlays=lambda *args, **kwargs: None,
             _pick_plan_space_target_from_footprints=lambda *args, **kwargs: None,
             _pick_plan_space_target_from_overlays=lambda *args, **kwargs: None,
-            _get_wall_hosted_openings=lambda *_args, **_kwargs: (),
+            openings=SimpleNamespace(get_wall_hosted_openings=lambda *_args, **_kwargs: ()),
             _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
             _plan_perf_count=lambda *_args, **_kwargs: None,
             _plan_perf_set_fields=lambda **_kwargs: None,
@@ -2450,7 +2452,7 @@ class TestBimPlanCore(unittest.TestCase):
             _pick_plan_region_target_from_overlays=lambda *args, **kwargs: None,
             _pick_plan_space_target_from_footprints=lambda *args, **kwargs: space,
             _pick_plan_space_target_from_overlays=lambda *args, **kwargs: space,
-            _get_wall_hosted_openings=lambda *_args, **_kwargs: (),
+            openings=SimpleNamespace(get_wall_hosted_openings=lambda *_args, **_kwargs: ()),
             _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
             _plan_perf_count=lambda *_args, **_kwargs: None,
             _plan_perf_set_fields=lambda **_kwargs: None,
@@ -2504,7 +2506,7 @@ class TestBimPlanCore(unittest.TestCase):
             _pick_plan_region_target_from_overlays=lambda *args, **kwargs: None,
             _pick_plan_space_target_from_footprints=lambda *args, **kwargs: space,
             _pick_plan_space_target_from_overlays=lambda *args, **kwargs: space,
-            _get_wall_hosted_openings=lambda *_args, **_kwargs: (),
+            openings=SimpleNamespace(get_wall_hosted_openings=lambda *_args, **_kwargs: ()),
             _plan_perf_trace_span=lambda *_args, **_kwargs: nullcontext(),
             _plan_perf_count=lambda *_args, **_kwargs: None,
             _plan_perf_set_fields=lambda **_kwargs: None,
