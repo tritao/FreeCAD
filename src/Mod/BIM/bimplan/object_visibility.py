@@ -251,9 +251,9 @@ def is_supported_plan_object(session, obj):
         return False
     if session.visibility.is_plan_symbol_instance(obj):
         return True
-    if session._is_plan_region_object(obj):
+    if session.selection.is_plan_region_object(obj):
         return True
-    if session._is_plan_space_separator_object(obj):
+    if session.selection.is_plan_space_separator_object(obj):
         return True
     if session.visibility.is_plan_context_only_object(obj):
         return True
@@ -442,7 +442,7 @@ def apply_context_object_selectability(session, obj, view_object):
     # semantic picking paths. Leaving their native 3D view objects
     # selectable lets the viewer replace the intended target with
     # overlapping native hits on button release.
-    if session._is_plan_custom_pick_only_object(semantic_obj or obj):
+    if session.selection.is_plan_custom_pick_only_object(semantic_obj or obj):
         try:
             view_object.Selectable = False
         except Exception:

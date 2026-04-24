@@ -407,7 +407,7 @@ def get_status_chip_text(session):
             translate("BIM_PlanEdit", "Parent space: {label}").format(
                 label=session._plan_region_parent_space.Label
             )
-            if session._is_plan_space_object(session._plan_region_parent_space)
+            if session.selection.is_plan_space_object(session._plan_region_parent_space)
             else translate("BIM_PlanEdit", "Plan region")
         )
         action = translate(

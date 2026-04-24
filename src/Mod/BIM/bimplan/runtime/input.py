@@ -62,7 +62,7 @@ def on_mouse_pressed(session, event_callback):
                         )
                         if (
                             target_kind == "wall"
-                            and session._is_plan_selectable_wall(target_wall)
+                            and session.selection.is_plan_selectable_wall(target_wall)
                             and target_wall != source_wall
                             and session._apply_plan_wall_join(source_wall, target_wall)
                         ):
@@ -83,7 +83,7 @@ def on_mouse_pressed(session, event_callback):
                         pos = event.getPosition().getValue()
                         mouse_pos = (pos[0], pos[1])
                         if session._is_plan_additive_selection_active():
-                            if not session._toggle_plan_target_selection_at_position(
+                            if not session.selection.toggle_plan_target_selection_at_position(
                                 mouse_pos, event_callback
                             ):
                                 session._claim_left_button_click(event_callback)
@@ -117,7 +117,7 @@ def on_mouse_pressed(session, event_callback):
                             "provider_overlay_point",
                             "provider_overlay_target",
                         ):
-                            if not session._activate_provider_overlay_target_node(
+                            if not session.selection.activate_provider_overlay_target_node(
                                 node,
                                 event_callback,
                             ):

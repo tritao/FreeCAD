@@ -192,13 +192,15 @@ def _resolve_direct_selection_refresh_result(session, previous_wall):
         return SelectionRefreshResult(
             primary_kind=plan_target_kinds.PLAN_TARGET_SPACE,
             primary_obj=(
-                session._edit_space if session._is_plan_space_object(session._edit_space) else None
+                session._edit_space
+                if session.selection.is_plan_space_object(session._edit_space)
+                else None
             ),
             wall_grip_action=_WALL_GRIP_CLEAR,
         )
     if session.current_tool == "Join":
         wall = previous_wall
-        if not session._is_plan_selectable_wall(wall):
+        if not session.selection.is_plan_selectable_wall(wall):
             session.current_tool = "Select"
             wall = None
         return SelectionRefreshResult(
@@ -515,7 +517,7 @@ def sync_secondary_selected_plan_targets_from_gui_selection(
     session, primary_kind=None, primary_obj=None
 ):
     session._sync_secondary_selected_plan_targets_from_selection(
-        session._get_gui_selection(),
+        session.selection.get_gui_selection(),
         primary_kind=primary_kind,
         primary_obj=primary_obj,
     )
@@ -1161,7 +1163,7 @@ def toggle_raw_plan_object_selection(session, obj, event_callback=None):
         return False
 
     primary_kind, primary_obj = session.selection.get_selected_plan_target()
-    selection = session._get_gui_selection()
+    selection = session.selection.get_gui_selection()
     if primary_obj is not None and primary_obj not in selection:
         selection = [primary_obj] + selection
     selection = normalize_gui_object_selection(session, selection)
@@ -1202,7 +1204,7 @@ def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=
             target_kind,
             target_obj,
         ):
-            return session._toggle_raw_plan_object_selection(target_obj, event_callback)
+            return session.selection.toggle_raw_plan_object_selection(target_obj, event_callback)
     else:
         target_kind, target_obj = session.selection.get_plan_target_from_edit_node(node)
     if target_kind is None:
@@ -1211,7 +1213,7 @@ def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=
         return False
 
     primary_kind, primary_obj = session.selection.get_selected_plan_target()
-    selection = session._get_gui_selection()
+    selection = session.selection.get_gui_selection()
     if primary_obj is not None and primary_obj not in selection:
         selection = [primary_obj] + selection
 
@@ -1378,9 +1380,9 @@ def schedule_selection_refresh(session):
     try:
         from PySide import QtCore
 
-        QtCore.QTimer.singleShot(0, session._run_scheduled_selection_refresh)
+        QtCore.QTimer.singleShot(0, session.selection.run_scheduled_selection_refresh)
     except Exception:
-        session._run_scheduled_selection_refresh()
+        session.selection.run_scheduled_selection_refresh()
 
 
 def run_scheduled_selection_refresh(session):
@@ -1408,7 +1410,7 @@ def selection_observer_add(session, doc, obj, sub, point):
         if sub in ("EditNode0", "EditNode1", "EditNode2"):
             return
         del doc, obj, sub, point
-        session._schedule_selection_refresh()
+        session.selection.schedule_selection_refresh()
 
 
 def selection_observer_remove(session, doc, obj, sub):
@@ -1424,7 +1426,7 @@ def selection_observer_remove(session, doc, obj, sub):
         if session._ignore_selection_changes:
             return
         del doc, obj, sub
-        session._schedule_selection_refresh()
+        session.selection.schedule_selection_refresh()
 
 
 def selection_observer_set(session, doc):
@@ -1437,7 +1439,7 @@ def selection_observer_set(session, doc):
         if session._ignore_selection_changes:
             return
         del doc
-        session._schedule_selection_refresh()
+        session.selection.schedule_selection_refresh()
 
 
 def selection_observer_clear(session, doc):
@@ -1456,7 +1458,7 @@ def selection_observer_clear(session, doc):
         if session._ignore_selection_changes:
             return
         del doc
-        session._schedule_selection_refresh()
+        session.selection.schedule_selection_refresh()
 
 
 def selection_observer_set_preselection(session, doc, obj, sub):
@@ -1587,6 +1589,13 @@ _PLAN_SELECTION_API_BOUND_METHODS = (
     "activate_wall_target",
     "clear_plan_selection_state",
     "normalize_gui_object_selection",
+    "activate_provider_overlay_target_node",
+    "toggle_raw_plan_object_selection",
+    "toggle_plan_target_selection_at_position",
+    "attach_selection_observer",
+    "detach_selection_observer",
+    "schedule_selection_refresh",
+    "run_scheduled_selection_refresh",
     "get_plan_target_kind_for_object",
     "get_plan_target_for_object",
     "get_plan_target_at_position",
@@ -1752,6 +1761,37 @@ class PlanSelectionAPI(_SessionAPI):
             mouse_pos,
             radius_px=radius_px,
         )
+
+    def is_plan_selectable_wall(self, obj):
+        from . import targets as plan_targets
+
+        return plan_targets.is_plan_selectable_wall(self.session, obj)
+
+    def is_plan_space_object(self, obj):
+        from . import targets as plan_targets
+
+        return plan_targets.is_plan_space_object(self.session, obj)
+
+    def is_plan_custom_pick_only_object(self, obj):
+        from . import targets as plan_targets
+
+        return plan_targets.is_plan_custom_pick_only_object(self.session, obj)
+
+    def is_plan_space_separator_object(self, obj):
+        from . import targets as plan_targets
+
+        return plan_targets.is_plan_space_separator_object(self.session, obj)
+
+    def is_plan_region_object(self, obj):
+        from . import targets as plan_targets
+
+        return plan_targets.is_plan_region_object(self.session, obj)
+
+    def get_gui_selection_ex(self):
+        return get_gui_selection_ex()
+
+    def get_gui_selection(self):
+        return get_gui_selection()
 
 
 for _method_name in _PLAN_SELECTION_API_BOUND_METHODS:
