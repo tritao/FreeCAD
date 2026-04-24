@@ -697,6 +697,7 @@ for _method_name in (
     "flush_created_plan_objects",
     "are_document_visual_updates_deferred",
     "defer_document_visual_refresh",
+    "is_opening_visual_dependency",
     "refresh_selected_opening_visuals",
     "is_symbol_visual_dependency",
     "refresh_plan_object_footprint_display",
@@ -708,6 +709,13 @@ for _method_name in (
     "queue_hard_refresh_selected_opening_visuals",
     "flush_hard_refresh_selected_opening_visuals",
     "invalidate_document_dependent_plan_visuals",
+    "slot_created_object",
+    "slot_changed_object",
+    "slot_deleted_object",
+    "slot_undo_document",
+    "slot_redo_document",
+    "slot_recomputed_document",
+    "slot_deleted_document",
 ):
     setattr(
         PlanDocumentVisualsAPI, _method_name, _bind_document_visuals_call(globals()[_method_name])

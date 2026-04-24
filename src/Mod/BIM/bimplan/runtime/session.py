@@ -142,6 +142,13 @@ def _make_selection_observer_delegate(method_name):
     return _selection_observer_method
 
 
+def _make_document_visuals_delegate(method_name):
+    def _document_visuals_method(self, *args):
+        return getattr(self.document_visuals, method_name)(*args)
+
+    return _document_visuals_method
+
+
 def get_active_session():
     return _active_session
 
@@ -549,35 +556,6 @@ class PlanEditSession:
     def defer_document_visual_updates(self):
         return plan_document_visuals.defer_document_visual_updates(self)
 
-    # Document observer interface
-
-    def _is_opening_visual_dependency(self, opening, obj):
-        return plan_document_visuals.is_opening_visual_dependency(opening, obj)
-
-    def _refresh_selected_opening_visuals(self):
-        return plan_document_visuals.refresh_selected_opening_visuals(self)
-
-    def slotCreatedObject(self, obj):
-        return plan_document_visuals.slot_created_object(self, obj)
-
-    def slotChangedObject(self, obj, prop):
-        return plan_document_visuals.slot_changed_object(self, obj, prop)
-
-    def slotDeletedObject(self, obj):
-        return plan_document_visuals.slot_deleted_object(self, obj)
-
-    def slotUndoDocument(self, doc):
-        return plan_document_visuals.slot_undo_document(self, doc)
-
-    def slotRedoDocument(self, doc):
-        return plan_document_visuals.slot_redo_document(self, doc)
-
-    def slotRecomputedDocument(self, doc):
-        return plan_document_visuals.slot_recomputed_document(self, doc)
-
-    def slotDeletedDocument(self, doc):
-        return plan_document_visuals.slot_deleted_document(self, doc)
-
     def _is_modal_plan_interaction_active(self):
         return self.interaction.is_modal_plan_interaction_active()
 
@@ -627,6 +605,26 @@ class PlanEditSession:
     setPreselection = _make_selection_observer_delegate("setPreselection")
 
     removePreselection = _make_selection_observer_delegate("removePreselection")
+
+    _is_opening_visual_dependency = _make_document_visuals_delegate("is_opening_visual_dependency")
+
+    _refresh_selected_opening_visuals = _make_document_visuals_delegate(
+        "refresh_selected_opening_visuals"
+    )
+
+    slotCreatedObject = _make_document_visuals_delegate("slot_created_object")
+
+    slotChangedObject = _make_document_visuals_delegate("slot_changed_object")
+
+    slotDeletedObject = _make_document_visuals_delegate("slot_deleted_object")
+
+    slotUndoDocument = _make_document_visuals_delegate("slot_undo_document")
+
+    slotRedoDocument = _make_document_visuals_delegate("slot_redo_document")
+
+    slotRecomputedDocument = _make_document_visuals_delegate("slot_recomputed_document")
+
+    slotDeletedDocument = _make_document_visuals_delegate("slot_deleted_document")
 
 
 plan_session_state.bind_session_state_accessors(PlanEditSession)
