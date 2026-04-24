@@ -1652,10 +1652,14 @@ def _should_filter_hidden_provider_preselection(session, doc_name, obj_name):
     return _should_filter_hidden_provider_preselection_for_object(session, preselected_obj)
 
 
-def _should_filter_hidden_provider_preselection_for_object(session, obj):
+def _is_visible_provider_target_object(session, obj):
     if not plan_provider_runtime.is_plan_provider_target_object(session, obj):
         return False
-    return not plan_provider_runtime.is_plan_provider_target_visible_for_mode(session, obj)
+    return bool(plan_provider_runtime.is_plan_provider_target_visible_for_mode(session, obj))
+
+
+def _should_filter_hidden_provider_preselection_for_object(session, obj):
+    return not _is_visible_provider_target_object(session, obj)
 
 
 def _should_preserve_provider_selected_target(session, kind, obj, selected):
@@ -1663,7 +1667,7 @@ def _should_preserve_provider_selected_target(session, kind, obj, selected):
         return False
     if not session.selection.is_valid_plan_target(kind, obj):
         return False
-    return bool(plan_provider_runtime.is_plan_provider_target_visible_for_mode(session, obj))
+    return _is_visible_provider_target_object(session, obj)
 
 
 def _resolve_document_object(session, document_name, object_name):
