@@ -66,10 +66,9 @@ from bimplan.providers import PlanEditContext
 from bimplan.runtime.view import PlanViewportAPI
 from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
+from bimplan.overlays import runtime as plan_overlay_runtime
 from bimplan.overlays import openings as opening_overlays
-from bimplan.overlays import providers as provider_overlays
 from bimplan.overlays.runtime import PlanOverlaysAPI
-from bimplan.overlays import spaces as space_overlays
 from bimplan.overlays import symbols as symbol_overlays
 from bimplan.overlays import walls as wall_overlays
 from bimplan.providers import get_plan_edit_registry
@@ -2852,190 +2851,6 @@ class PlanEditSession:
             clear_edit_space=True,
         )
 
-    def _sync_secondary_selected_overlays(self):
-        return space_overlays.sync_secondary_selected_overlays(self)
-
-    def _clear_secondary_selected_overlays(self):
-        return space_overlays.clear_secondary_selected_overlays(self)
-
-    def _sync_space_region_pick_overlays(self):
-        return space_overlays.sync_space_region_pick_overlays(self)
-
-    def _clear_space_region_pick_overlays(self):
-        return space_overlays.clear_space_region_pick_overlays(self)
-
-    def _sync_hovered_wall_overlay(self):
-        return wall_overlays.sync_hovered_wall_overlay(self)
-
-    def _clear_hovered_wall_overlay(self):
-        return wall_overlays.clear_hovered_wall_overlay(self)
-
-    def _sync_selected_wall_overlay(self):
-        return wall_overlays.sync_selected_wall_overlay(self)
-
-    def _clear_selected_wall_overlay(self):
-        return wall_overlays.clear_selected_wall_overlay(self)
-
-    def _get_plan_context_junctions(self):
-        return wall_overlays.get_plan_context_junctions(self)
-
-    def _create_junction_node_trackers(self, junction, color, width, tracker_store):
-        return wall_overlays.create_junction_node_trackers(
-            self,
-            junction,
-            color=color,
-            width=width,
-            tracker_store=tracker_store,
-        )
-
-    def _sync_junction_node_overlays(self):
-        return wall_overlays.sync_junction_node_overlays(self)
-
-    def _clear_junction_node_overlays(self):
-        return wall_overlays.clear_junction_node_overlays(self)
-
-    def _sync_hovered_wall_opening_context_overlay(self):
-        return wall_overlays.sync_hovered_wall_opening_context_overlay(self)
-
-    def _clear_hovered_wall_opening_context_overlay(self):
-        return wall_overlays.clear_hovered_wall_opening_context_overlay(self)
-
-    def _create_wall_overlay_trackers(self, wall, color, width, tracker_store):
-        return wall_overlays.create_wall_overlay_trackers(
-            self,
-            wall,
-            color=color,
-            width=width,
-            tracker_store=tracker_store,
-        )
-
-    def _create_space_overlay_trackers(self, space, color, width, tracker_store):
-        return space_overlays.create_space_overlay_trackers(
-            self,
-            space,
-            color=color,
-            width=width,
-            tracker_store=tracker_store,
-        )
-
-    def _create_region_overlay_trackers(self, region, color, width, tracker_store):
-        return space_overlays.create_region_overlay_trackers(
-            self,
-            region,
-            color=color,
-            width=width,
-            tracker_store=tracker_store,
-        )
-
-    def _get_region_overlay_segments(self, region):
-        return overlay_geometry.get_region_overlay_segments(self, region)
-
-    def _get_space_overlay_segments(self, space):
-        return overlay_geometry.get_space_overlay_segments(self, space)
-
-    def _sync_hovered_space_overlay(self):
-        return space_overlays.sync_hovered_space_overlay(self)
-
-    def _clear_hovered_space_overlay(self):
-        return space_overlays.clear_hovered_space_overlay(self)
-
-    def _sync_hovered_region_overlay(self):
-        return space_overlays.sync_hovered_region_overlay(self)
-
-    def _clear_hovered_region_overlay(self):
-        return space_overlays.clear_hovered_region_overlay(self)
-
-    def _invalidate_selected_space_overlay_cache(self):
-        return space_overlays.invalidate_selected_space_overlay_cache(self)
-
-    def _sync_selected_space_overlay(self):
-        return space_overlays.sync_selected_space_overlay(self)
-
-    def _clear_selected_space_overlay(self):
-        return space_overlays.clear_selected_space_overlay(self)
-
-    def _sync_selected_region_overlay(self):
-        return space_overlays.sync_selected_region_overlay(self)
-
-    def _clear_selected_region_overlay(self):
-        return space_overlays.clear_selected_region_overlay(self)
-
-    def _sync_provider_overlays(self):
-        return provider_overlays.sync_provider_overlays(self)
-
-    def _clear_provider_overlays(self):
-        return provider_overlays.clear_provider_overlays(self)
-
-    def _sync_hovered_provider_overlay(self):
-        return provider_overlays.sync_hovered_provider_overlay(self)
-
-    def _clear_hovered_provider_overlay(self):
-        return provider_overlays.clear_hovered_provider_overlay(self)
-
-    def _sync_selected_provider_overlay(self):
-        return provider_overlays.sync_selected_provider_overlay(self)
-
-    def _clear_selected_provider_overlay(self):
-        return provider_overlays.clear_selected_provider_overlay(self)
-
-    def _get_selected_provider_handle_specs(self, provider_obj):
-        return provider_overlays.get_selected_provider_handle_specs(self, provider_obj)
-
-    def _sync_selected_provider_handles(self):
-        return provider_overlays.sync_selected_provider_handles(self)
-
-    def _clear_selected_provider_handles(self):
-        return provider_overlays.clear_selected_provider_handles(self)
-
-    def _pick_selected_provider_handle(self, mouse_pos, radius_px=10):
-        return provider_overlays.pick_selected_provider_handle(
-            self,
-            mouse_pos,
-            radius_px=radius_px,
-        )
-
-    def _sync_provider_point_preview(self):
-        return provider_overlays.sync_provider_point_preview(self)
-
-    def _clear_provider_point_preview(self):
-        return provider_overlays.clear_provider_point_preview(self)
-
-    def _sync_hovered_opening_overlay(self):
-        return opening_overlays.sync_hovered_opening_overlay(self)
-
-    def _clear_hovered_opening_overlay(self):
-        return opening_overlays.clear_hovered_opening_overlay(self)
-
-    def _invalidate_hovered_opening_overlay_cache(self):
-        return opening_overlays.invalidate_hovered_opening_overlay_cache(self)
-
-    def _create_opening_overlay_trackers(self, opening, color, width, tracker_store):
-        return opening_overlays.create_opening_overlay_trackers(
-            self,
-            opening,
-            color=color,
-            width=width,
-            tracker_store=tracker_store,
-        )
-
-    def _get_opening_overlay_segments(self, opening):
-        return overlay_geometry.get_opening_overlay_segments(self, opening)
-
-    def _sync_selected_opening_overlay(self):
-        return opening_overlays.sync_selected_opening_overlay(self)
-
-    def _clear_selected_opening_overlay(self):
-        return opening_overlays.clear_selected_opening_overlay(self)
-
-    def _invalidate_selected_opening_overlay_cache(self):
-        return opening_overlays.invalidate_selected_opening_overlay_cache(self)
-
-    def _sync_selected_wall_opening_context_overlay(self):
-        return opening_overlays.sync_selected_wall_opening_context_overlay(self)
-
-    def _clear_selected_wall_opening_context_overlay(self):
-        return opening_overlays.clear_selected_wall_opening_context_overlay(self)
-
     def _copy_placement(self, placement):
         if placement is None:
             return FreeCAD.Placement()
@@ -3055,61 +2870,6 @@ class PlanEditSession:
             except Exception:
                 pass
         return getattr(obj, "Placement", FreeCAD.Placement())
-
-    def _get_symbol_global_placement(self, symbol, placement=None):
-        return symbol_overlays.get_symbol_global_placement(self, symbol, placement=placement)
-
-    def _get_symbol_parent_global_placement(self, symbol, placement=None):
-        return symbol_overlays.get_symbol_parent_global_placement(self, symbol, placement=placement)
-
-    def _get_symbol_plan_proxy(self, symbol, *attrs):
-        return symbol_overlays.get_symbol_plan_proxy(self, symbol, *attrs)
-
-    def _get_symbol_semantic_proxy(self, symbol, *attrs):
-        return symbol_overlays.get_symbol_semantic_proxy(self, symbol, *attrs)
-
-    def _get_symbol_overlay_polylines(self, symbol, placement=None):
-        return symbol_overlays.get_symbol_overlay_polylines(self, symbol, placement=placement)
-
-    def _get_symbol_overlay_segments(self, symbol, placement=None):
-        return symbol_overlays.get_symbol_overlay_segments(self, symbol, placement=placement)
-
-    def _get_plan_symbol_instances(self):
-        return symbol_overlays.get_plan_symbol_instances(self)
-
-    def _get_symbol_overlay_screen_polylines(self, symbol):
-        return symbol_overlays.get_symbol_overlay_screen_polylines(self, symbol)
-
-    def _refresh_selected_symbol_visuals(self):
-        return symbol_overlays.refresh_selected_symbol_visuals(self)
-
-    def _create_symbol_overlay_trackers(self, symbol, color, width, tracker_store, placement=None):
-        return symbol_overlays.create_symbol_overlay_trackers(
-            self,
-            symbol,
-            color=color,
-            width=width,
-            tracker_store=tracker_store,
-            placement=placement,
-        )
-
-    def _sync_hovered_symbol_overlay(self):
-        return symbol_overlays.sync_hovered_symbol_overlay(self)
-
-    def _clear_hovered_symbol_overlay(self):
-        return symbol_overlays.clear_hovered_symbol_overlay(self)
-
-    def _sync_selected_symbol_overlay(self):
-        return symbol_overlays.sync_selected_symbol_overlay(self)
-
-    def _clear_selected_symbol_overlay(self):
-        return symbol_overlays.clear_selected_symbol_overlay(self)
-
-    def _get_symbol_local_anchor(self, symbol):
-        return symbol_overlays.get_symbol_local_anchor(self, symbol)
-
-    def _get_symbol_local_facing(self, symbol):
-        return symbol_overlays.get_symbol_local_facing(self, symbol)
 
     def _get_symbol_anchor_point(self, symbol, placement=None):
         return symbol_overlays.get_symbol_anchor_point(self, symbol, placement=placement)
@@ -3254,15 +3014,6 @@ class PlanEditSession:
     def _execute_opening_handle(self, opening, handle_index, point=None):
         return plan_opening_edit.execute_opening_handle(self, opening, handle_index, point=point)
 
-    def _get_selected_opening_handle_specs(self, opening):
-        return opening_overlays.get_selected_opening_handle_specs(self, opening)
-
-    def _sync_selected_opening_handles(self):
-        return opening_overlays.sync_selected_opening_handles(self)
-
-    def _clear_selected_opening_handles(self):
-        return opening_overlays.clear_selected_opening_handles(self)
-
     def _get_opening_move_preview_state(self, opening, point):
         return plan_opening_edit.get_opening_move_preview_state(self, opening, point)
 
@@ -3316,3 +3067,4 @@ class PlanEditSession:
 
 
 plan_session_state.bind_session_state_accessors(PlanEditSession)
+plan_overlay_runtime.bind_session_overlay_compat(PlanEditSession)

@@ -624,9 +624,9 @@ def set_selected_plan_target(
     else:
         session._set_pending_selected_plan_target()
     if not session._tearing_down:
-        session._sync_junction_node_overlays()
-        session._sync_selected_wall_opening_context_overlay()
-        session._sync_hovered_wall_opening_context_overlay()
+        session.overlays.sync_junction_node_overlays()
+        session.overlays.sync_selected_wall_opening_context_overlay()
+        session.overlays.sync_hovered_wall_opening_context_overlay()
         plan_target_dispatch.sync_hovered_target_visuals(
             session,
             kinds=(plan_target_kinds.PLAN_TARGET_OPENING,),
@@ -666,7 +666,7 @@ def reset_selected_wall_after_change(session):
     if not wall:
         return
     session._clear_wall_grips()
-    session._clear_selected_wall_overlay()
+    session.overlays.clear_selected_wall_overlay()
     session._clear_selected_plan_target_if_matches("wall", wall)
     session._set_gui_selection([])
     session._refresh_task_panel_status()
@@ -683,7 +683,7 @@ def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
         return
     session._pending_selected_wall_reset = False
     session._clear_wall_grips()
-    session._clear_selected_wall_overlay()
+    session.overlays.clear_selected_wall_overlay()
     session._clear_selected_plan_target_if_matches("wall", wall)
     if clear_gui_selection:
         session._set_gui_selection([])
@@ -698,13 +698,13 @@ def sync_primary_selected_plan_target_visuals(session, previous_kind=None, previ
             plan_target_kinds.PLAN_TARGET_WALL,
         ):
             with session._plan_perf_trace_span("sync_selected_wall_overlay"):
-                session._sync_selected_wall_overlay()
+                session.overlays.sync_selected_wall_overlay()
         with session._plan_perf_trace_span("sync_selected_wall_opening_context_overlay"):
-            session._sync_selected_wall_opening_context_overlay()
+            session.overlays.sync_selected_wall_opening_context_overlay()
         with session._plan_perf_trace_span("sync_hovered_wall_overlay"):
-            session._sync_hovered_wall_overlay()
+            session.overlays.sync_hovered_wall_overlay()
         with session._plan_perf_trace_span("sync_hovered_wall_opening_context_overlay"):
-            session._sync_hovered_wall_opening_context_overlay()
+            session.overlays.sync_hovered_wall_opening_context_overlay()
         plan_target_dispatch.sync_selected_target_visuals(
             session,
             kinds=plan_target_kinds.PRIMARY_SELECTED_VISUAL_SYNC_KINDS,
@@ -736,7 +736,7 @@ def sync_primary_selected_plan_target_visuals(session, previous_kind=None, previ
             trace_style="by_method",
         )
         with session._plan_perf_trace_span("sync_secondary_selected_overlays"):
-            session._sync_secondary_selected_overlays()
+            session.overlays.sync_secondary_selected_overlays()
         with session._plan_perf_trace_span("sync_active_plan_target_object"):
             session._sync_active_plan_target_object()
         session._refresh_task_panel_status(selection_only=session.current_tool == "Select")
@@ -752,9 +752,9 @@ def set_hovered_wall(session, wall):
     if session.hovered_wall == wall:
         return
     session.hovered_wall = wall
-    session._sync_junction_node_overlays()
-    session._sync_hovered_wall_overlay()
-    session._sync_hovered_wall_opening_context_overlay()
+    session.overlays.sync_junction_node_overlays()
+    session.overlays.sync_hovered_wall_overlay()
+    session.overlays.sync_hovered_wall_opening_context_overlay()
     if session.current_tool == "Join":
         session._refresh_task_panel_status(
             selection_only=session.current_tool == "Select"
