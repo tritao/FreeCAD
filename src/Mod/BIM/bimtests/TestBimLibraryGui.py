@@ -192,12 +192,12 @@ class TestBimLibraryGui(TestArchBaseGui):
         self.assertTrue(session.visibility.is_supported_plan_object(stale_link))
 
         live_link = panel._create_symbol_link(self.document, equipment)
-        self.assertFalse(session._is_hidden_library_definition_object(live_link))
-        self.assertTrue(session._should_register_created_plan_object(live_link))
+        self.assertFalse(session.document_visuals.is_hidden_library_definition_object(live_link))
+        self.assertTrue(session.document_visuals.should_register_created_plan_object(live_link))
         self.document.recompute()
         self.pump_gui_events()
-        session._flush_created_plan_objects()
-        session._refresh_plan_object_footprint_display(live_link)
+        session.document_visuals.flush_created_plan_objects()
+        session.document_visuals.refresh_plan_object_footprint_display(live_link)
         self.pump_gui_events()
 
         from pivy import coin

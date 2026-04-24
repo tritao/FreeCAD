@@ -1880,12 +1880,16 @@ class TestBimPlanCore(unittest.TestCase):
                 ("select", obj, sync_gui_selection)
             )
             or True,
-            _queue_recompute_opening_hosts=lambda obj: calls.append(("recompute-hosts", obj)),
             _invalidate_wall_hosted_openings_cache=lambda: calls.append(("invalidate", None)),
-            _refresh_opening_host_footprint_displays=lambda obj: calls.append(
-                ("refresh-hosts", obj)
+            document_visuals=SimpleNamespace(
+                queue_recompute_opening_hosts=lambda obj: calls.append(("recompute-hosts", obj)),
+                refresh_opening_host_footprint_displays=lambda obj: calls.append(
+                    ("refresh-hosts", obj)
+                ),
+                refresh_opening_footprint_display=lambda obj: calls.append(
+                    ("refresh-opening", obj)
+                ),
             ),
-            _refresh_opening_footprint_display=lambda obj: calls.append(("refresh-opening", obj)),
         )
 
         context = PlanProviderActionContext(
@@ -1950,7 +1954,9 @@ class TestBimPlanCore(unittest.TestCase):
             get_plan_provider_action_context=lambda payload=None: action_context,
             defer_document_visual_updates=lambda: nullcontext(),
             _refresh_primary_selected_plan_target=lambda: None,
-            _invalidate_document_dependent_plan_visuals=lambda: None,
+            document_visuals=SimpleNamespace(
+                invalidate_document_dependent_plan_visuals=lambda: None
+            ),
             _refresh_task_panel_status=lambda: None,
         )
 

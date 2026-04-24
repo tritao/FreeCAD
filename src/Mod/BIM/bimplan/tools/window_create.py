@@ -181,7 +181,9 @@ def apply_selected_window_style_preset(session, preset_name):
     ):
         return False
 
-    session._invalidate_document_dependent_plan_visuals(recompute_opening_hosts=True)
+    session.document_visuals.invalidate_document_dependent_plan_visuals(
+        recompute_opening_hosts=True
+    )
     session._refresh_task_panel_status()
     return True
 
@@ -679,7 +681,9 @@ def _set_selected_window_size(
     ):
         return False
 
-    session._invalidate_document_dependent_plan_visuals(recompute_opening_hosts=True)
+    session.document_visuals.invalidate_document_dependent_plan_visuals(
+        recompute_opening_hosts=True
+    )
     session._refresh_task_panel_status()
     return True
 
