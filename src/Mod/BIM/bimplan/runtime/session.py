@@ -402,15 +402,6 @@ class PlanEditSession:
     def get_plan_provider_registry(self):
         return get_plan_edit_registry()
 
-    @contextmanager
-    def _plan_provider_refresh_cache_scope(self):
-        previous_cache = self._plan_provider_refresh_cache
-        self._plan_provider_refresh_cache = {}
-        try:
-            yield self._plan_provider_refresh_cache
-        finally:
-            self._plan_provider_refresh_cache = previous_cache
-
     def _attach_document_observer(self):
         if not self._document_observer_added:
             FreeCAD.addDocumentObserver(self)

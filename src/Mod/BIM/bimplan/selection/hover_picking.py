@@ -59,7 +59,7 @@ def prime_hover_pick_caches(session):
                     session.overlays.get_region_overlay_segments(obj)
 
         with session.performance.plan_perf_trace_span("prime_hover_pick_provider_contributions"):
-            with session._plan_provider_refresh_cache_scope():
+            with session.providers.plan_provider_refresh_cache_scope():
                 tuple(session.providers.get_plan_provider_overlays())
                 tuple(session.providers.get_plan_provider_targets())
 
@@ -94,7 +94,9 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
         with session.performance.plan_perf_trace_span("hover_pick_resolve"):
             target_kind, target_obj = session.selection.get_plan_target_at_position(mouse_pos)
         session._hover_pick_dirty = False
-        if target_kind == "wall" and not session._is_selected_plan_target("wall", target_obj):
+        if target_kind == "wall" and not session.selection.is_selected_plan_target(
+            "wall", target_obj
+        ):
             plan_target_dispatch.set_only_hovered_target(session, target_kind, target_obj)
         else:
             plan_target_dispatch.set_only_hovered_target(session, None, None)
