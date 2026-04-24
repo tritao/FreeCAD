@@ -49,7 +49,7 @@ def sync_provider_overlays(session):
                 overlay
                 for overlay in session.providers.get_plan_provider_overlays()
                 if bool(getattr(overlay, "visible", True))
-                and session.is_plan_provider_overlay_visible(overlay)
+                and session.providers.is_plan_provider_overlay_visible(overlay)
             )
         render_state = (
             overlays,
@@ -209,7 +209,7 @@ def sync_selected_provider_handles(session):
         if session.current_tool != "Select":
             clear_selected_provider_handles(session)
             return
-        if not session._is_plan_provider_target_object(provider_obj):
+        if not session.providers.is_plan_provider_target_object(provider_obj):
             clear_selected_provider_handles(session)
             return
         specs = tuple(get_selected_provider_handle_specs(session, provider_obj))
@@ -260,7 +260,7 @@ def clear_selected_provider_handles(session):
 
 def pick_selected_provider_handle(session, mouse_pos, radius_px=10):
     provider_obj = plan_selection.get_selected_plan_target_object(session, "provider")
-    if not session._is_plan_provider_target_object(provider_obj) or not session.view:
+    if not session.providers.is_plan_provider_target_object(provider_obj) or not session.view:
         return None
     try:
         cursor_x = int(mouse_pos[0])
@@ -718,7 +718,7 @@ def _get_visible_provider_overlays(session):
             overlay
             for overlay in session.providers.get_plan_provider_overlays()
             if bool(getattr(overlay, "visible", True))
-            and session.is_plan_provider_overlay_visible(overlay)
+            and session.providers.is_plan_provider_overlay_visible(overlay)
         )
 
 

@@ -38,7 +38,7 @@ def get_selected_provider_edit_handles(session, provider_obj):
 
 
 def can_move_provider_target_by_placement(session, provider_obj):
-    if provider_obj is None or not session._is_plan_provider_target_object(provider_obj):
+    if provider_obj is None or not session.providers.is_plan_provider_target_object(provider_obj):
         return False
     if _has_provider_coordinate_properties(provider_obj):
         return True
@@ -63,7 +63,7 @@ def can_move_provider_target_by_placement(session, provider_obj):
 
 
 def can_rehost_provider_target(session, provider_obj, host_obj=None):
-    if provider_obj is None or not session._is_plan_provider_target_object(provider_obj):
+    if provider_obj is None or not session.providers.is_plan_provider_target_object(provider_obj):
         return False
     try:
         import Arch
@@ -110,7 +110,7 @@ def activate_provider_handle_now(session, provider_obj, handle_index):
     )
     handled = False
     if str(getattr(handle, "action_key", "") or "").strip():
-        handled = session.execute_plan_provider_action(
+        handled = session.providers.execute_plan_provider_action(
             str(getattr(handle, "provider_id", "") or ""),
             str(getattr(handle, "action_key", "") or ""),
             transaction_label=str(getattr(handle, "transaction_label", "") or ""),
@@ -193,7 +193,7 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
         snap_object=obj,
     )
     if action_key and provider_id:
-        if session.execute_plan_provider_action(
+        if session.providers.execute_plan_provider_action(
             provider_id,
             action_key,
             transaction_label=str(getattr(handle, "transaction_label", "") or ""),
@@ -258,7 +258,7 @@ def cancel_provider_handle_point_pick(session):
 
 def restore_selected_provider(session, provider_obj):
     session.current_tool = "Select"
-    if provider_obj is not None and session._is_plan_provider_target_object(provider_obj):
+    if provider_obj is not None and session.providers.is_plan_provider_target_object(provider_obj):
         session.selection.set_gui_selection_object(provider_obj)
     else:
         session.selection.set_gui_selection([])

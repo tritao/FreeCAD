@@ -34,7 +34,7 @@ def get_plan_target_kind_for_object(session, obj):
         return plan_target_kinds.PLAN_TARGET_OPENING
     if session.visibility.is_plan_symbol_instance(obj):
         return plan_target_kinds.PLAN_TARGET_SYMBOL
-    if session._is_plan_provider_target_object(obj):
+    if session.providers.is_plan_provider_target_object(obj):
         return plan_target_kinds.PLAN_TARGET_PROVIDER
     if session.selection.is_plan_region_object(obj):
         return plan_target_kinds.PLAN_TARGET_REGION

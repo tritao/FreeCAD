@@ -105,7 +105,14 @@ _PLAN_PROVIDERS_API_BOUND_METHODS = (
     "get_plan_provider_overlay_visibility_key",
     "get_plan_provider_targets",
     "get_plan_provider_target_for_object",
+    "is_plan_provider_target_object",
     "is_plan_provider_overlay_enabled",
+    "set_plan_provider_overlay_mode",
+    "is_plan_provider_overlay_visible_for_mode",
+    "is_plan_provider_overlay_visible",
+    "set_plan_provider_overlay_visible",
+    "queue_plan_provider_overlay_refresh",
+    "queue_plan_provider_overlay_sync",
     "build_plan_semantic_record",
     "get_plan_semantic_records",
 )
@@ -306,6 +313,26 @@ class PlanProvidersAPI:
     def get_plan_provider_overlay_category(self, provider_id):
         del self
         return get_plan_provider_overlay_category(provider_id)
+
+    def execute_plan_provider_action(
+        self,
+        provider_id,
+        action_key,
+        transaction_label="",
+        payload=None,
+    ):
+        session = self.session
+        if session._tearing_down or session._finishing or not session._document_is_alive():
+            return False
+        if self.plan_provider_integrations_disabled():
+            return False
+        return execute_plan_provider_action(
+            session,
+            provider_id,
+            action_key,
+            transaction_label=transaction_label,
+            payload=payload,
+        )
 
 
 for _method_name in _PLAN_PROVIDERS_API_BOUND_METHODS:
@@ -713,7 +740,7 @@ def is_plan_provider_target_visible_for_mode(session, obj, mode=None) -> bool:
     target = get_plan_provider_target_for_object(session, obj)
     if target is None:
         return False
-    return bool(session.is_plan_provider_overlay_visible_for_mode(target, mode=mode))
+    return bool(session.providers.is_plan_provider_overlay_visible_for_mode(target, mode=mode))
 
 
 def get_plan_provider_target_role_key(session, obj) -> str:

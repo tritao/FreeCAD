@@ -861,64 +861,6 @@ class PlanEditSession:
     def defer_document_visual_updates(self):
         return plan_document_visuals.defer_document_visual_updates(self)
 
-    def _is_plan_provider_target_object(self, obj):
-        return plan_provider_runtime.is_plan_provider_target_object(self, obj)
-
-    def get_plan_provider_overlay_mode(self):
-        return self.providers.get_plan_provider_overlay_mode()
-
-    def set_plan_provider_overlay_mode(self, mode):
-        return plan_provider_runtime.set_plan_provider_overlay_mode(self, mode)
-
-    def get_plan_provider_overlay_category(self, overlay):
-        return self.providers.get_plan_provider_overlay_category(overlay)
-
-    def is_plan_provider_overlay_enabled(self, overlay):
-        return self.providers.is_plan_provider_overlay_enabled(overlay)
-
-    def is_plan_provider_overlay_visible_for_mode(self, overlay, mode=None):
-        return plan_provider_runtime.is_plan_provider_overlay_visible_for_mode(
-            self,
-            overlay,
-            mode=mode,
-        )
-
-    def is_plan_provider_overlay_visible(self, overlay):
-        return plan_provider_runtime.is_plan_provider_overlay_visible(self, overlay)
-
-    def set_plan_provider_overlay_visible(self, provider_id, overlay_key, visible):
-        return plan_provider_runtime.set_plan_provider_overlay_visible(
-            self,
-            provider_id,
-            overlay_key,
-            visible,
-        )
-
-    def queue_plan_provider_overlay_refresh(self):
-        return plan_provider_runtime.queue_plan_provider_overlay_refresh(self)
-
-    def queue_plan_provider_overlay_sync(self):
-        return plan_provider_runtime.queue_plan_provider_overlay_sync(self)
-
-    def execute_plan_provider_action(
-        self,
-        provider_id,
-        action_key,
-        transaction_label="",
-        payload=None,
-    ):
-        if self._tearing_down or self._finishing or not self._document_is_alive():
-            return False
-        if self.providers.plan_provider_integrations_disabled():
-            return False
-        return plan_provider_runtime.execute_plan_provider_action(
-            self,
-            provider_id,
-            action_key,
-            transaction_label=transaction_label,
-            payload=payload,
-        )
-
     def _clear_plan_relation_status(self):
         return plan_wall_relations.clear_plan_relation_status(self)
 
