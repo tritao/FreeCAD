@@ -470,20 +470,6 @@ class PlanEditSession:
     def _clear_hovered_plan_targets(self, kinds=None):
         return plan_hover_picking.clear_hovered_plan_targets(self, kinds=kinds)
 
-    def _set_event_handled(self, event_callback):
-        if event_callback and hasattr(event_callback, "setHandled"):
-            try:
-                event_callback.setHandled()
-            except Exception:
-                pass
-
-    def _claim_left_button_click(self, event_callback):
-        # Plan Edit owns overlay-driven picks, so also swallow the matching
-        # button release to prevent the base 3D view selection pass from
-        # clearing or replacing the GUI selection afterwards.
-        self._consume_left_button_release = True
-        self._set_event_handled(event_callback)
-
     _set_hovered_wall = _make_set_hovered_target_method("set_hovered_wall")
 
     _set_hovered_opening = _make_set_hovered_target_method("set_hovered_opening")
