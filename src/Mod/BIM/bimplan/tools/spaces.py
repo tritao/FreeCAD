@@ -455,55 +455,91 @@ def handle_space_separator_point(session, point=None, obj=None):
 def get_space_reference_point(session, space):
     if not session.selection.is_plan_space_object(space):
         return None
+    return _get_projected_space_shape_center(session, space) or _get_projected_space_base_point(
+        session,
+        space,
+    )
+
+
+def _get_projected_space_shape_center(session, space):
     shape = getattr(space, "Shape", None)
-    if shape and hasattr(shape, "CenterOfMass"):
-        try:
-            return session.viewport.project_plan_point(shape.CenterOfMass)
-        except Exception:
-            pass
+    if not (shape and hasattr(shape, "CenterOfMass")):
+        return None
+    try:
+        return session.viewport.project_plan_point(shape.CenterOfMass)
+    except Exception:
+        return None
+
+
+def _get_projected_space_base_point(session, space):
     placement = getattr(space, "Placement", None)
-    if placement is not None:
-        try:
-            return session.viewport.project_plan_point(placement.Base)
-        except Exception:
-            pass
-    return None
+    if placement is None:
+        return None
+    try:
+        return session.viewport.project_plan_point(placement.Base)
+    except Exception:
+        return None
 
 
 def get_space_boundary_reference_point(session, selection_ex, fallback_space=None):
+    points = _collect_space_boundary_selection_points(selection_ex, fallback_space=fallback_space)
+    if points:
+        return _average_freecad_vectors(points)
+    return session.spaces.get_space_reference_point(fallback_space)
+
+
+def _collect_space_boundary_selection_points(selection_ex, *, fallback_space=None):
     points = []
     for selection in selection_ex or []:
-        obj = getattr(selection, "Object", None)
-        if not obj or obj == fallback_space:
-            continue
-        subobjects = list(getattr(selection, "SubObjects", []) or [])
-        added_subobject_center = False
-        for subobject in subobjects:
-            center = getattr(subobject, "CenterOfMass", None)
-            if center is None:
-                continue
-            try:
-                points.append(FreeCAD.Vector(center.x, center.y, center.z))
-                added_subobject_center = True
-            except Exception:
-                continue
-        if added_subobject_center:
-            continue
-        shape = getattr(obj, "Shape", None)
-        bound_box = getattr(shape, "BoundBox", None)
-        center = getattr(bound_box, "Center", None) if bound_box is not None else None
+        points.extend(
+            _get_space_boundary_selection_points(selection, fallback_space=fallback_space)
+        )
+    return points
+
+
+def _get_space_boundary_selection_points(selection, *, fallback_space=None):
+    obj = getattr(selection, "Object", None)
+    if not obj or obj == fallback_space:
+        return []
+    subobject_points = _get_space_boundary_subobject_centers(selection)
+    if subobject_points:
+        return subobject_points
+    object_center = _get_space_boundary_object_center(obj)
+    if object_center is None:
+        return []
+    return [object_center]
+
+
+def _get_space_boundary_subobject_centers(selection):
+    points = []
+    for subobject in list(getattr(selection, "SubObjects", []) or []):
+        center = getattr(subobject, "CenterOfMass", None)
         if center is None:
             continue
         try:
             points.append(FreeCAD.Vector(center.x, center.y, center.z))
         except Exception:
             continue
-    if points:
-        total = FreeCAD.Vector()
-        for point in points:
-            total = total.add(point)
-        return total.multiply(1.0 / float(len(points)))
-    return session.spaces.get_space_reference_point(fallback_space)
+    return points
+
+
+def _get_space_boundary_object_center(obj):
+    shape = getattr(obj, "Shape", None)
+    bound_box = getattr(shape, "BoundBox", None)
+    center = getattr(bound_box, "Center", None) if bound_box is not None else None
+    if center is None:
+        return None
+    try:
+        return FreeCAD.Vector(center.x, center.y, center.z)
+    except Exception:
+        return None
+
+
+def _average_freecad_vectors(points):
+    total = FreeCAD.Vector()
+    for point in points:
+        total = total.add(point)
+    return total.multiply(1.0 / float(len(points)))
 
 
 def get_space_boundary_entries(session, space):
@@ -511,15 +547,23 @@ def get_space_boundary_entries(session, space):
         return []
     import ArchSpace
 
+    return ArchSpace.normalizeBoundaryLinks(
+        _iter_normalized_space_boundary_entries(getattr(space, "Boundaries", []) or ())
+    )
+
+
+def _iter_normalized_space_boundary_entries(boundaries):
+    import ArchSpace
+
     entries = []
-    for boundary in getattr(space, "Boundaries", []) or []:
+    for boundary in boundaries:
         try:
             obj = boundary[0]
             subnames = boundary[1]
         except Exception:
             continue
         entries.append((obj, ArchSpace.normalizeBoundarySubnames(subnames)))
-    return ArchSpace.normalizeBoundaryLinks(entries)
+    return entries
 
 
 def space_boundary_key(boundary):
@@ -536,22 +580,33 @@ def get_selected_space_boundary_links(session, fallback_space=None):
     import ArchSpace
 
     selection_ex = session.selection.get_gui_selection_ex()
-    reference_point = (
-        session.spaces.get_space_reference_point(fallback_space)
-        if fallback_space is not None
-        else session.spaces.get_space_boundary_reference_point(selection_ex)
+    reference_point = _get_selected_space_boundary_reference_point(
+        session,
+        selection_ex,
+        fallback_space=fallback_space,
     )
+    entries = _get_selected_space_boundary_link_entries(session, selection_ex)
+    return ArchSpace.resolveBoundaryLinks(
+        entries,
+        reference_point=reference_point,
+        exclude_objects=(fallback_space,) if fallback_space is not None else None,
+    )
+
+
+def _get_selected_space_boundary_reference_point(session, selection_ex, *, fallback_space=None):
+    if fallback_space is not None:
+        return session.spaces.get_space_reference_point(fallback_space)
+    return session.spaces.get_space_boundary_reference_point(selection_ex)
+
+
+def _get_selected_space_boundary_link_entries(session, selection_ex):
     entries = []
     for selection in selection_ex:
         obj = session.visibility.get_plan_semantic_object(getattr(selection, "Object", None))
         if not obj:
             continue
         entries.append((obj, getattr(selection, "SubElementNames", []) or ()))
-    return ArchSpace.resolveBoundaryLinks(
-        entries,
-        reference_point=reference_point,
-        exclude_objects=(fallback_space,) if fallback_space is not None else None,
-    )
+    return entries
 
 
 def _resolve_space_selection_shape(targets):
