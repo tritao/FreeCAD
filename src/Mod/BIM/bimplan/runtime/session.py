@@ -177,6 +177,13 @@ def _make_activate_plan_target_method(kind):
     return _activate_plan_target
 
 
+def _make_set_hovered_target_method(method_name):
+    def _set_hovered_target(self, obj):
+        return getattr(self.selection, method_name)(obj)
+
+    return _set_hovered_target
+
+
 def get_active_session():
     return _active_session
 
@@ -2887,23 +2894,17 @@ class PlanEditSession:
         self._consume_left_button_release = True
         self._set_event_handled(event_callback)
 
-    def _set_hovered_wall(self, wall):
-        return self.selection.set_hovered_wall(wall)
+    _set_hovered_wall = _make_set_hovered_target_method("set_hovered_wall")
 
-    def _set_hovered_opening(self, opening):
-        return self.selection.set_hovered_opening(opening)
+    _set_hovered_opening = _make_set_hovered_target_method("set_hovered_opening")
 
-    def _set_hovered_symbol(self, symbol):
-        return self.selection.set_hovered_symbol(symbol)
+    _set_hovered_symbol = _make_set_hovered_target_method("set_hovered_symbol")
 
-    def _set_hovered_provider(self, provider):
-        return self.selection.set_hovered_provider(provider)
+    _set_hovered_provider = _make_set_hovered_target_method("set_hovered_provider")
 
-    def _set_hovered_space(self, space):
-        return self.selection.set_hovered_space(space)
+    _set_hovered_space = _make_set_hovered_target_method("set_hovered_space")
 
-    def _set_hovered_region(self, region):
-        return self.selection.set_hovered_region(region)
+    _set_hovered_region = _make_set_hovered_target_method("set_hovered_region")
 
     def _queue_restore_selected_plan_target(self, kind, obj):
         return self.selection.queue_restore_selected_plan_target(kind, obj)

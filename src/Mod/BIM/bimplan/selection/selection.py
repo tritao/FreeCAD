@@ -61,6 +61,13 @@ def _make_select_plan_target_function(kind):
     return _select_plan_target
 
 
+def _make_set_hovered_target_function(kind):
+    def _set_hovered_target(session, obj):
+        return plan_target_dispatch.set_hovered_target(session, kind, obj)
+
+    return _set_hovered_target
+
+
 def _supports_native_selection_state(session):
     return callable(getattr(session, "_sanitize_plan_target_references", None))
 
@@ -755,28 +762,19 @@ def set_hovered_wall(session, wall):
         )
 
 
-def set_hovered_opening(session, opening):
-    plan_target_dispatch.set_hovered_target(session, plan_target_kinds.PLAN_TARGET_OPENING, opening)
+set_hovered_opening = _make_set_hovered_target_function(plan_target_kinds.PLAN_TARGET_OPENING)
 
 
-def set_hovered_symbol(session, symbol):
-    plan_target_dispatch.set_hovered_target(session, plan_target_kinds.PLAN_TARGET_SYMBOL, symbol)
+set_hovered_symbol = _make_set_hovered_target_function(plan_target_kinds.PLAN_TARGET_SYMBOL)
 
 
-def set_hovered_provider(session, provider):
-    plan_target_dispatch.set_hovered_target(
-        session,
-        plan_target_kinds.PLAN_TARGET_PROVIDER,
-        provider,
-    )
+set_hovered_provider = _make_set_hovered_target_function(plan_target_kinds.PLAN_TARGET_PROVIDER)
 
 
-def set_hovered_space(session, space):
-    plan_target_dispatch.set_hovered_target(session, plan_target_kinds.PLAN_TARGET_SPACE, space)
+set_hovered_space = _make_set_hovered_target_function(plan_target_kinds.PLAN_TARGET_SPACE)
 
 
-def set_hovered_region(session, region):
-    plan_target_dispatch.set_hovered_target(session, plan_target_kinds.PLAN_TARGET_REGION, region)
+set_hovered_region = _make_set_hovered_target_function(plan_target_kinds.PLAN_TARGET_REGION)
 
 
 def queue_restore_selected_plan_target(session, kind, obj):
