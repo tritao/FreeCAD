@@ -16,7 +16,6 @@ from bimplan.providers import (
 
 translate = FreeCAD.Qt.translate
 
-_MISSING = object()
 _TASK_PANEL_CONTEXT_METHODS = (
     "get_current_tool",
     "get_selected_plan_target",
@@ -196,25 +195,23 @@ class PlanTaskPanelContext:
         )
 
     def get_space_region_candidate_count(self):
-        value = _read_component(
-            self.session,
-            "spaces",
-            "get_space_region_candidate_count",
-            default=_MISSING,
+        return int(
+            _read_component(
+                self.session,
+                "spaces",
+                "get_space_region_candidate_count",
+                default=0,
+            )
+            or 0
         )
-        if value is _MISSING:
-            value = len(getattr(self.session, "_space_region_candidates", ()) or ())
-        return int(value or 0)
 
     def get_hovered_space_region_candidate(self):
-        value = _read_component(
+        return _read_component(
             self.session,
             "spaces",
             "get_hovered_space_region_candidate",
+            default=None,
         )
-        if value is not None:
-            return value
-        return getattr(self.session, "_hovered_space_region_candidate", None)
 
     def format_space_region_candidate_area(self, candidate):
         return _read_component(
@@ -226,14 +223,12 @@ class PlanTaskPanelContext:
         )
 
     def get_plan_region_parent_space(self):
-        value = _read_component(
+        return _read_component(
             self.session,
             "spaces",
             "get_plan_region_parent_space",
+            default=None,
         )
-        if value is not None:
-            return value
-        return getattr(self.session, "_plan_region_parent_space", None)
 
     def is_plan_space_object(self, obj):
         return bool(
@@ -313,9 +308,8 @@ class PlanTaskPanelContext:
             self.session,
             "wall_relations",
             "get_plan_relation_status_message",
+            default="",
         )
-        if value is None:
-            value = getattr(self.session, "_plan_relation_status_message", "")
         return str(value or "").strip()
 
     def get_window_style_preset_options(self):

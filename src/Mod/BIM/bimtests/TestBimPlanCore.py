@@ -840,14 +840,19 @@ class TestBimPlanCore(unittest.TestCase):
             get_selected_plan_target=lambda: ("wall", wall),
             get_selected_plan_targets=lambda: (("wall", wall),),
         )
+        status_text = SimpleNamespace(
+            format_plan_target_selection_state=lambda kind, obj: f"{kind}:{obj.Label}",
+            format_provider_selected_object_state=lambda: "",
+            get_plan_selection_summary_text=lambda: "1 target selected",
+        )
+        wall_edit = SimpleNamespace(is_selected_wall_endpoint_editable=lambda: True)
+        wall_relations = SimpleNamespace(get_plan_relation_status_message=lambda: "Relation status")
         session = SimpleNamespace(
             current_tool="Select",
             selection=selection,
-            _format_plan_target_selection_state=lambda kind, obj: f"{kind}:{obj.Label}",
-            _format_provider_selected_object_state=lambda: "",
-            is_selected_wall_endpoint_editable=lambda: True,
-            _get_plan_selection_summary_text=lambda: "1 target selected",
-            _plan_relation_status_message="Relation status",
+            status_text=status_text,
+            wall_edit=wall_edit,
+            wall_relations=wall_relations,
         )
 
         view_model = build_status_text_view_model(session)
@@ -1027,10 +1032,6 @@ class TestBimPlanCore(unittest.TestCase):
             spaces=spaces,
             windows=windows,
             wall_edit=wall_edit,
-            _plan_relation_status_message="legacy relation status",
-            _space_region_candidates=[],
-            _hovered_space_region_candidate=None,
-            _plan_region_parent_space=None,
         )
 
         context = PlanTaskPanelContext(session)
