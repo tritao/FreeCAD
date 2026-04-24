@@ -335,17 +335,36 @@ def cancel_space_separator_tool(session, refresh=True):
 
 def update_space_separator_preview(session, point, info):
     del info
-    start = session._space_separator_start
-    if start is None or point is None:
-        return
-    end = session.viewport.project_plan_point(point)
-    if end is None or end.sub(start).Length < _MIN_WALL_LENGTH:
+    start = _get_space_separator_start(session)
+    end = _coerce_space_separator_point(session, point)
+    if start is None or end is None or not _is_valid_space_separator_length(start, end):
         return
     try:
         import draftguitools.gui_trackers as DraftTrackers
     except Exception:
         return
 
+    tracker = _get_or_create_space_separator_preview_tracker(session, DraftTrackers)
+    tracker.p1(start)
+    tracker.p2(end)
+    tracker.on()
+
+
+def _get_space_separator_start(session):
+    return getattr(session, "_space_separator_start", None)
+
+
+def _coerce_space_separator_point(session, point):
+    if point is None:
+        return None
+    return session.viewport.project_plan_point(point)
+
+
+def _is_valid_space_separator_length(start, end):
+    return end.sub(start).Length >= _MIN_WALL_LENGTH
+
+
+def _get_or_create_space_separator_preview_tracker(session, DraftTrackers):
     if not session._space_separator_preview_trackers:
         tracker = session.overlays.make_plan_line_tracker(
             DraftTrackers,
@@ -354,10 +373,25 @@ def update_space_separator_preview(session, point, info):
             ontop=True,
         )
         session._space_separator_preview_trackers.append(tracker)
-    tracker = session._space_separator_preview_trackers[0]
-    tracker.p1(start)
-    tracker.p2(end)
-    tracker.on()
+    return session._space_separator_preview_trackers[0]
+
+
+def _request_space_separator_end_point(session, start):
+    FreeCADGui.Snapper.getPoint(
+        callback=session.spaces.handle_space_separator_point,
+        movecallback=session.spaces.update_space_separator_preview,
+        last=start,
+        title=translate("BIM_PlanEdit", "Separator end point"),
+        mode="line",
+    )
+
+
+def _finish_space_separator(session, separator):
+    session.visibility.register_plan_object(separator)
+    session.spaces.cancel_space_separator_tool(refresh=False)
+    session.current_tool = "Select"
+    session.selection.refresh_primary_selected_plan_target()
+    session.task_panels.refresh_task_panel_status()
 
 
 def create_space_separator(session, start, end):
@@ -391,24 +425,23 @@ def handle_space_separator_point(session, point=None, obj=None):
         session.spaces.cancel_space_separator_tool()
         return
 
-    point = session.viewport.project_plan_point(point)
-    if session._space_separator_start is None:
-        session._space_separator_start = point
-        FreeCADGui.Snapper.getPoint(
-            callback=session.spaces.handle_space_separator_point,
-            movecallback=session.spaces.update_space_separator_preview,
-            last=point,
-            title=translate("BIM_PlanEdit", "Separator end point"),
-            mode="line",
-        )
+    point = _coerce_space_separator_point(session, point)
+    if point is None:
+        session.spaces.cancel_space_separator_tool()
         return
 
-    if point.sub(session._space_separator_start).Length < _MIN_WALL_LENGTH:
+    start = _get_space_separator_start(session)
+    if start is None:
+        session._space_separator_start = point
+        _request_space_separator_end_point(session, point)
+        return
+
+    if not _is_valid_space_separator_length(start, point):
         session.spaces.cancel_space_separator_tool()
         return
 
     try:
-        separator = session.spaces.create_space_separator(session._space_separator_start, point)
+        separator = session.spaces.create_space_separator(start, point)
     except Exception:
         session.spaces.cancel_space_separator_tool()
         FreeCAD.Console.PrintError(
@@ -416,11 +449,7 @@ def handle_space_separator_point(session, point=None, obj=None):
         )
         return
 
-    session.visibility.register_plan_object(separator)
-    session.spaces.cancel_space_separator_tool(refresh=False)
-    session.current_tool = "Select"
-    session.selection.refresh_primary_selected_plan_target()
-    session.task_panels.refresh_task_panel_status()
+    _finish_space_separator(session, separator)
 
 
 def get_space_reference_point(session, space):
