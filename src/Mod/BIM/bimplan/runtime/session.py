@@ -721,35 +721,8 @@ class PlanEditSession:
             current_tool=str(self.current_tool or ""),
         )
 
-    def activate_select_tool(self):
-        return plan_lifecycle.activate_select_tool(self)
-
-    def activate_wall_tool(self):
-        return plan_wall_create.activate_wall_tool(self)
-
-    def activate_rect_wall_tool(self):
-        return plan_wall_create.activate_rect_wall_tool(self)
-
     def can_place_plan_window(self):
         return self.windows.can_place_window()
-
-    def activate_window_tool(self):
-        return plan_lifecycle.activate_window_tool(self)
-
-    def activate_plan_region_tool(self):
-        return plan_lifecycle.activate_plan_region_tool(self)
-
-    def activate_space_separator_tool(self):
-        return plan_lifecycle.activate_space_separator_tool(self)
-
-    def activate_space_tool(self):
-        return plan_lifecycle.activate_space_tool(self)
-
-    def activate_move_tool(self):
-        return plan_lifecycle.activate_move_tool(self)
-
-    def activate_join_tool(self):
-        return plan_wall_relations.activate_join_tool(self)
 
     def get_plan_join_type(self):
         return plan_wall_relations.get_plan_join_type(self)

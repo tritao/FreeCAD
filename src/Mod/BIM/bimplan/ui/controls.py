@@ -2897,31 +2897,31 @@ class PlanEditControlsWidget:
             self.session.set_active_storey(self._storey_items[index])
 
     def on_select_clicked(self):
-        self.session.activate_select_tool()
+        self.session.lifecycle.activate_select_tool()
 
     def on_wall_clicked(self):
-        self.session.activate_wall_tool()
+        self.session.lifecycle.activate_wall_tool()
 
     def on_rect_wall_clicked(self):
-        self.session.activate_rect_wall_tool()
+        self.session.lifecycle.activate_rect_wall_tool()
 
     def on_window_clicked(self):
-        self.session.activate_window_tool()
+        self.session.lifecycle.activate_window_tool()
 
     def on_space_clicked(self):
-        self.session.activate_space_tool()
+        self.session.lifecycle.activate_space_tool()
 
     def on_region_clicked(self):
-        self.session.activate_plan_region_tool()
+        self.session.lifecycle.activate_plan_region_tool()
 
     def on_separator_clicked(self):
-        self.session.activate_space_separator_tool()
+        self.session.lifecycle.activate_space_separator_tool()
 
     def on_move_clicked(self):
-        self.session.activate_move_tool()
+        self.session.lifecycle.activate_move_tool()
 
     def on_join_clicked(self):
-        self.session.activate_join_tool()
+        self.session.lifecycle.activate_join_tool()
 
     def on_join_type_changed(self, index):
         if self.join_type_combo is None or index < 0:

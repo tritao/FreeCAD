@@ -25,6 +25,12 @@ def _bind_lifecycle_call(func):
 
 
 _PLAN_LIFECYCLE_API_BOUND_METHODS = (
+    "activate_select_tool",
+    "activate_window_tool",
+    "activate_plan_region_tool",
+    "activate_space_separator_tool",
+    "activate_space_tool",
+    "activate_move_tool",
     "on_embedded_command_started",
     "on_embedded_command_finished",
     "start_embedded_tool",
@@ -47,6 +53,21 @@ class PlanLifecycleAPI:
     @property
     def session(self):
         return self._session
+
+    def activate_wall_tool(self):
+        from bimplan.tools import wall_create as plan_wall_create
+
+        return plan_wall_create.activate_wall_tool(self.session)
+
+    def activate_rect_wall_tool(self):
+        from bimplan.tools import wall_create as plan_wall_create
+
+        return plan_wall_create.activate_rect_wall_tool(self.session)
+
+    def activate_join_tool(self):
+        from bimplan.tools import wall_relations as plan_wall_relations
+
+        return plan_wall_relations.activate_join_tool(self.session)
 
 
 def clear_hover_visuals(
