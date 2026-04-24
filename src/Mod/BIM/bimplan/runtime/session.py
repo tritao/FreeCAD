@@ -320,6 +320,27 @@ class PlanEditSession:
             self.__dict__["overlay_refresh_state"] = state
         return state
 
+    def _ensure_wall_grip_runtime_state(self):
+        state = self.__dict__.get("wall_grip_state")
+        if state is None:
+            state = plan_session_state.PlanWallGripState()
+            self.__dict__["wall_grip_state"] = state
+        return state
+
+    def _ensure_viewport_state(self):
+        state = self.__dict__.get("viewport_state")
+        if state is None:
+            state = plan_session_state.PlanViewportState()
+            self.__dict__["viewport_state"] = state
+        return state
+
+    def _ensure_document_visual_state(self):
+        state = self.__dict__.get("document_visual_state")
+        if state is None:
+            state = plan_session_state.PlanDocumentVisualState()
+            self.__dict__["document_visual_state"] = state
+        return state
+
     @property
     def _plan_relation_status_message(self):
         return self._ensure_task_panel_state().relation_status_message
@@ -823,6 +844,158 @@ class PlanEditSession:
     @_dirty_plan_visuals.setter
     def _dirty_plan_visuals(self, value):
         self._ensure_overlay_refresh_state().dirty_plan_visuals = set(value or ())
+
+    @property
+    def _wall_grip_state(self):
+        return self._ensure_wall_grip_runtime_state().state
+
+    @_wall_grip_state.setter
+    def _wall_grip_state(self, value):
+        self._ensure_wall_grip_runtime_state().state = value
+
+    @property
+    def _wall_grip_sync_queued(self):
+        return self._ensure_wall_grip_runtime_state().sync_queued
+
+    @_wall_grip_sync_queued.setter
+    def _wall_grip_sync_queued(self, value):
+        self._ensure_wall_grip_runtime_state().sync_queued = bool(value)
+
+    @property
+    def _wall_grip_sync_generation(self):
+        return self._ensure_wall_grip_runtime_state().sync_generation
+
+    @_wall_grip_sync_generation.setter
+    def _wall_grip_sync_generation(self, value):
+        self._ensure_wall_grip_runtime_state().sync_generation = int(value or 0)
+
+    @property
+    def _viewport_status_chip(self):
+        return self._ensure_viewport_state().status_chip
+
+    @_viewport_status_chip.setter
+    def _viewport_status_chip(self, value):
+        self._ensure_viewport_state().status_chip = value
+
+    @property
+    def _saved_camera(self):
+        return self._ensure_viewport_state().saved_camera
+
+    @_saved_camera.setter
+    def _saved_camera(self, value):
+        self._ensure_viewport_state().saved_camera = value
+
+    @property
+    def _saved_camera_type(self):
+        return self._ensure_viewport_state().saved_camera_type
+
+    @_saved_camera_type.setter
+    def _saved_camera_type(self, value):
+        self._ensure_viewport_state().saved_camera_type = value
+
+    @property
+    def _saved_navigation_style(self):
+        return self._ensure_viewport_state().saved_navigation_style
+
+    @_saved_navigation_style.setter
+    def _saved_navigation_style(self, value):
+        self._ensure_viewport_state().saved_navigation_style = value
+
+    @property
+    def _saved_navigation_state(self):
+        return self._ensure_viewport_state().saved_navigation_state
+
+    @_saved_navigation_state.setter
+    def _saved_navigation_state(self, value):
+        self._ensure_viewport_state().saved_navigation_state = dict(value or {})
+
+    @property
+    def _saved_view_action_state(self):
+        return self._ensure_viewport_state().saved_view_action_state
+
+    @_saved_view_action_state.setter
+    def _saved_view_action_state(self, value):
+        self._ensure_viewport_state().saved_view_action_state = dict(value or {})
+
+    @property
+    def _saved_preselection_state(self):
+        return self._ensure_viewport_state().saved_preselection_state
+
+    @_saved_preselection_state.setter
+    def _saved_preselection_state(self, value):
+        self._ensure_viewport_state().saved_preselection_state = value
+
+    @property
+    def _plan_preselection_forced(self):
+        return self._ensure_viewport_state().plan_preselection_forced
+
+    @_plan_preselection_forced.setter
+    def _plan_preselection_forced(self, value):
+        self._ensure_viewport_state().plan_preselection_forced = bool(value)
+
+    @property
+    def _saved_object_view_state(self):
+        return self._ensure_viewport_state().saved_object_view_state
+
+    @_saved_object_view_state.setter
+    def _saved_object_view_state(self, value):
+        self._ensure_viewport_state().saved_object_view_state = dict(value or {})
+
+    @property
+    def _working_plane(self):
+        return self._ensure_viewport_state().working_plane
+
+    @_working_plane.setter
+    def _working_plane(self, value):
+        self._ensure_viewport_state().working_plane = value
+
+    @property
+    def _interaction_plane(self):
+        return self._ensure_viewport_state().interaction_plane
+
+    @_interaction_plane.setter
+    def _interaction_plane(self, value):
+        self._ensure_viewport_state().interaction_plane = value
+
+    @property
+    def _pending_created_plan_objects(self):
+        return self._ensure_document_visual_state().pending_created_plan_objects
+
+    @_pending_created_plan_objects.setter
+    def _pending_created_plan_objects(self, value):
+        self._ensure_document_visual_state().pending_created_plan_objects = dict(value or {})
+
+    @property
+    def _created_plan_objects_flush_queued(self):
+        return self._ensure_document_visual_state().created_plan_objects_flush_queued
+
+    @_created_plan_objects_flush_queued.setter
+    def _created_plan_objects_flush_queued(self, value):
+        self._ensure_document_visual_state().created_plan_objects_flush_queued = bool(value)
+
+    @property
+    def _created_plan_objects_flush_deferred(self):
+        return self._ensure_document_visual_state().created_plan_objects_flush_deferred
+
+    @_created_plan_objects_flush_deferred.setter
+    def _created_plan_objects_flush_deferred(self, value):
+        self._ensure_document_visual_state().created_plan_objects_flush_deferred = bool(value)
+
+    @property
+    def _document_visual_update_defer_depth(self):
+        return self._ensure_document_visual_state().document_visual_update_defer_depth
+
+    @_document_visual_update_defer_depth.setter
+    def _document_visual_update_defer_depth(self, value):
+        self._ensure_document_visual_state().document_visual_update_defer_depth = int(value or 0)
+
+    @property
+    def _document_visual_refresh_deferred(self):
+        return self._ensure_document_visual_state().document_visual_refresh_deferred
+
+    @_document_visual_refresh_deferred.setter
+    def _document_visual_refresh_deferred(self, value):
+        self._ensure_document_visual_state().document_visual_refresh_deferred = bool(value)
 
     def __init__(self):
         self.selection = PlanSelectionAPI(self)
