@@ -418,90 +418,39 @@ def pick_provider_overlay_target_from_overlays(
         except Exception:
             return (None, None)
 
-        get_overlays = getattr(session, "get_plan_provider_overlays", None)
-        if not callable(get_overlays):
+        overlays = _get_visible_provider_overlays(session)
+        if overlays is None:
             return (None, None)
-        is_visible = getattr(session, "is_plan_provider_overlay_visible", None)
 
         best_distance_sq = None
         best_target_kind = None
         best_target_obj = None
         debug_candidates = []
-        for overlay in tuple(get_overlays() or ()):
-            if not bool(getattr(overlay, "visible", True)):
-                continue
-            if callable(is_visible) and not is_visible(overlay):
-                continue
+        for overlay in overlays:
             points = tuple(getattr(overlay, "points", ()) or ())
             targets = tuple(getattr(overlay, "point_targets", ()) or ())
             for index, point in enumerate(points):
                 target = targets[index] if index < len(targets) else None
-                if not _has_provider_overlay_target_identity(target):
-                    continue
-                point_vec = _coerce_overlay_point_vector(point)
-                if point_vec is None:
-                    continue
-                try:
-                    point_x, point_y = session.view.getPointOnScreen(point_vec)
-                except Exception:
-                    continue
-                dx = float(point_x) - cursor_x
-                dy = float(point_y) - cursor_y
-                center_distance_sq = dx * dx + dy * dy
-                pick_radius_px = _get_provider_overlay_pick_radius_px(
+                candidate, debug_candidate = _evaluate_provider_overlay_point_candidate(
                     session,
                     overlay,
-                    point_vec,
+                    target,
+                    point,
+                    point_index=index,
+                    cursor_x=cursor_x,
+                    cursor_y=cursor_y,
+                    mouse_pos=mouse_pos,
                     fallback_radius_px=radius_px,
                 )
-                marker_distance_sq = _get_provider_overlay_marker_screen_distance_sq(
-                    session,
-                    mouse_pos,
-                    overlay,
-                    point_vec,
-                )
-                marker_tolerance_px = _get_provider_overlay_marker_tolerance_px(
-                    overlay,
-                    fallback_radius_px=radius_px,
-                )
-                debug_candidate = {
-                    "overlay": _describe_pick_overlay(overlay),
-                    "point_index": index,
-                    "target": _describe_pick_overlay_target(target),
-                    "center_distance_px": round(center_distance_sq**0.5, 3),
-                    "pick_radius_px": round(float(pick_radius_px), 3),
-                    "marker_tolerance_px": round(float(marker_tolerance_px), 3),
-                }
-                if marker_distance_sq is not None:
-                    debug_candidate["marker_distance_px"] = round(marker_distance_sq**0.5, 3)
-                distance_sq = center_distance_sq
-                if marker_distance_sq is not None:
-                    distance_sq = min(distance_sq, marker_distance_sq)
-                if center_distance_sq > pick_radius_px * pick_radius_px and (
-                    marker_distance_sq is None
-                    or marker_distance_sq > marker_tolerance_px * marker_tolerance_px
-                ):
-                    debug_candidate["decision"] = "outside_radius"
+                if debug_candidate is not None:
                     _append_pick_debug_item(debug_candidates, debug_candidate)
+                if candidate is None:
                     continue
-                target_obj = _resolve_document_object(
-                    session,
-                    getattr(target, "document_name", ""),
-                    getattr(target, "object_name", ""),
-                )
-                if target_obj is None:
-                    debug_candidate["decision"] = "unresolved_object"
-                    _append_pick_debug_item(debug_candidates, debug_candidate)
-                    continue
-                debug_candidate["decision"] = "candidate"
-                debug_candidate["resolved_object"] = _describe_pick_object(session, target_obj)
-                debug_candidate["distance_px"] = round(distance_sq**0.5, 3)
-                _append_pick_debug_item(debug_candidates, debug_candidate)
+                target_obj = candidate["target_obj"]
+                distance_sq = candidate["distance_sq"]
                 if best_distance_sq is None or distance_sq < best_distance_sq:
                     best_distance_sq = distance_sq
-                    best_target_kind = (
-                        target.target_kind.value if target.target_kind is not None else ""
-                    )
+                    best_target_kind = candidate["target_kind"]
                     best_target_obj = target_obj
         _perf_set_fields(
             session,
@@ -516,6 +465,120 @@ def pick_provider_overlay_target_from_overlays(
             result=_describe_pick_target(session, best_target_kind, best_target_obj),
         )
         return (best_target_kind, best_target_obj)
+
+
+def _get_visible_provider_overlays(session):
+    get_overlays = getattr(session, "get_plan_provider_overlays", None)
+    if not callable(get_overlays):
+        return None
+    is_visible = getattr(session, "is_plan_provider_overlay_visible", None)
+    return tuple(
+        overlay
+        for overlay in tuple(get_overlays() or ())
+        if bool(getattr(overlay, "visible", True))
+        and (not callable(is_visible) or is_visible(overlay))
+    )
+
+
+def _make_provider_overlay_debug_candidate(
+    overlay,
+    target,
+    *,
+    point_index,
+    center_distance_sq,
+    pick_radius_px,
+    marker_tolerance_px,
+    marker_distance_sq=None,
+):
+    debug_candidate = {
+        "overlay": _describe_pick_overlay(overlay),
+        "point_index": point_index,
+        "target": _describe_pick_overlay_target(target),
+        "center_distance_px": round(center_distance_sq**0.5, 3),
+        "pick_radius_px": round(float(pick_radius_px), 3),
+        "marker_tolerance_px": round(float(marker_tolerance_px), 3),
+    }
+    if marker_distance_sq is not None:
+        debug_candidate["marker_distance_px"] = round(marker_distance_sq**0.5, 3)
+    return debug_candidate
+
+
+def _evaluate_provider_overlay_point_candidate(
+    session,
+    overlay,
+    target,
+    point,
+    *,
+    point_index,
+    cursor_x,
+    cursor_y,
+    mouse_pos,
+    fallback_radius_px,
+):
+    if not _has_provider_overlay_target_identity(target):
+        return (None, None)
+    point_vec = _coerce_overlay_point_vector(point)
+    if point_vec is None:
+        return (None, None)
+    try:
+        point_x, point_y = session.view.getPointOnScreen(point_vec)
+    except Exception:
+        return (None, None)
+    dx = float(point_x) - cursor_x
+    dy = float(point_y) - cursor_y
+    center_distance_sq = dx * dx + dy * dy
+    pick_radius_px = _get_provider_overlay_pick_radius_px(
+        session,
+        overlay,
+        point_vec,
+        fallback_radius_px=fallback_radius_px,
+    )
+    marker_distance_sq = _get_provider_overlay_marker_screen_distance_sq(
+        session,
+        mouse_pos,
+        overlay,
+        point_vec,
+    )
+    marker_tolerance_px = _get_provider_overlay_marker_tolerance_px(
+        overlay,
+        fallback_radius_px=fallback_radius_px,
+    )
+    debug_candidate = _make_provider_overlay_debug_candidate(
+        overlay,
+        target,
+        point_index=point_index,
+        center_distance_sq=center_distance_sq,
+        pick_radius_px=pick_radius_px,
+        marker_tolerance_px=marker_tolerance_px,
+        marker_distance_sq=marker_distance_sq,
+    )
+    distance_sq = center_distance_sq
+    if marker_distance_sq is not None:
+        distance_sq = min(distance_sq, marker_distance_sq)
+    if center_distance_sq > pick_radius_px * pick_radius_px and (
+        marker_distance_sq is None or marker_distance_sq > marker_tolerance_px * marker_tolerance_px
+    ):
+        debug_candidate["decision"] = "outside_radius"
+        return (None, debug_candidate)
+    target_obj = _resolve_document_object(
+        session,
+        getattr(target, "document_name", ""),
+        getattr(target, "object_name", ""),
+    )
+    if target_obj is None:
+        debug_candidate["decision"] = "unresolved_object"
+        return (None, debug_candidate)
+    debug_candidate["decision"] = "candidate"
+    debug_candidate["resolved_object"] = _describe_pick_object(session, target_obj)
+    debug_candidate["distance_px"] = round(distance_sq**0.5, 3)
+    return (
+        {
+            "distance_sq": distance_sq,
+            "target_kind": target.target_kind.value if target.target_kind is not None else "",
+            "target_obj": target_obj,
+        },
+        debug_candidate,
+    )
 
 
 def pick_provider_overlay_target_from_objects_info(session, mouse_pos):
