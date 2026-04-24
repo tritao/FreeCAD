@@ -26,6 +26,33 @@ class PlanWallRelationsAPI:
     def get_plan_join_type_label(self, join_type=None):
         return get_plan_join_type_label(self.session, join_type)
 
+    def get_plan_join_type(self):
+        return get_plan_join_type(self.session)
+
+    def get_plan_join_types(self):
+        return get_plan_join_types(self.session)
+
+    def normalize_plan_join_type(self, join_type):
+        return normalize_plan_join_type(self.session, join_type)
+
+    def get_plan_join_type_phrase(self, join_type=None):
+        return get_plan_join_type_phrase(self.session, join_type)
+
+    def get_plan_join_action_text(self, join_type=None):
+        return get_plan_join_action_text(self.session, join_type)
+
+    def set_plan_join_type(self, join_type, refresh=True):
+        return set_plan_join_type(self.session, join_type, refresh=refresh)
+
+    def cycle_plan_join_type(self):
+        return cycle_plan_join_type(self.session)
+
+    def get_plan_join_command(self):
+        return get_plan_join_command(self.session)
+
+    def get_plan_join_candidate_wall(self):
+        return get_plan_join_candidate_wall(self.session)
+
     def get_plan_candidate_joint(self, target_wall=None):
         return get_plan_candidate_joint(self.session, target_wall)
 
@@ -37,6 +64,23 @@ class PlanWallRelationsAPI:
             self.session,
             target_wall=target_wall,
             joint=joint,
+        )
+
+    def unjoin_plan_wall_pair(self, source_wall, target_wall):
+        return unjoin_plan_wall_pair(self.session, source_wall, target_wall)
+
+    def unjoin_current_plan_wall_pair(self):
+        return unjoin_current_plan_wall_pair(self.session)
+
+    def find_plan_junction_promotion(self, source_wall, target_wall):
+        return find_plan_junction_promotion(self.session, source_wall, target_wall)
+
+    def apply_plan_wall_junction_promotion(self, doc, source_wall, target_wall):
+        return apply_plan_wall_junction_promotion(
+            self.session,
+            doc,
+            source_wall,
+            target_wall,
         )
 
     def get_plan_relation_status_message(self):
@@ -111,7 +155,9 @@ def normalize_plan_join_type(session, join_type):
 
 
 def get_plan_join_type_label(session, join_type=None):
-    join_type = session._normalize_plan_join_type(join_type or session._plan_join_type)
+    join_type = session.wall_relations.normalize_plan_join_type(
+        join_type or session._plan_join_type
+    )
     return {
         "Miter": translate("BIM_PlanEdit", "Miter"),
         "Butt": translate("BIM_PlanEdit", "Butt"),
@@ -120,7 +166,9 @@ def get_plan_join_type_label(session, join_type=None):
 
 
 def get_plan_join_type_phrase(session, join_type=None):
-    join_type = session._normalize_plan_join_type(join_type or session._plan_join_type)
+    join_type = session.wall_relations.normalize_plan_join_type(
+        join_type or session._plan_join_type
+    )
     return {
         "Miter": translate("BIM_PlanEdit", "miter"),
         "Butt": translate("BIM_PlanEdit", "butt"),
@@ -130,12 +178,12 @@ def get_plan_join_type_phrase(session, join_type=None):
 
 def get_plan_join_action_text(session, join_type=None):
     return translate("BIM_PlanEdit", "Click another wall to create a {joint_type} joint").format(
-        joint_type=session._get_plan_join_type_phrase(join_type)
+        joint_type=session.wall_relations.get_plan_join_type_phrase(join_type)
     )
 
 
 def set_plan_join_type(session, join_type, refresh=True):
-    join_type = session._normalize_plan_join_type(join_type)
+    join_type = session.wall_relations.normalize_plan_join_type(join_type)
     if session._plan_join_type == join_type:
         if refresh:
             session.task_panels.refresh_task_panel_status()
@@ -152,7 +200,7 @@ def cycle_plan_join_type(session):
     except ValueError:
         current_index = 0
     next_join_type = _PLAN_JOIN_TYPES[(current_index + 1) % len(_PLAN_JOIN_TYPES)]
-    session.set_plan_join_type(next_join_type)
+    session.wall_relations.set_plan_join_type(next_join_type)
     return True
 
 
@@ -163,7 +211,10 @@ def get_plan_join_command(session):
         "Miter": BIM_Join_Miter,
         "Butt": BIM_Join_Butt,
         "Tee": BIM_Join_Tee,
-    }.get(session._normalize_plan_join_type(session._plan_join_type), BIM_Join_Miter)()
+    }.get(
+        session.wall_relations.normalize_plan_join_type(session._plan_join_type),
+        BIM_Join_Miter,
+    )()
 
 
 def get_plan_join_candidate_wall(session):
@@ -179,7 +230,7 @@ def get_plan_candidate_joint(session, target_wall=None):
     import ArchWallJoinUtils
 
     source_wall = plan_selection.get_selected_plan_target_object(session, "wall")
-    target_wall = target_wall or session._get_plan_join_candidate_wall()
+    target_wall = target_wall or session.wall_relations.get_plan_join_candidate_wall()
     if not session._is_plan_selectable_wall(source_wall):
         return None
     if not session._is_plan_selectable_wall(target_wall):
@@ -191,11 +242,11 @@ def get_plan_candidate_joint(session, target_wall=None):
 
 
 def get_plan_join_candidate_state(session):
-    target_wall = session._get_plan_join_candidate_wall()
+    target_wall = session.wall_relations.get_plan_join_candidate_wall()
     if not target_wall:
         return None, None, ""
 
-    joint = session._get_plan_candidate_joint(target_wall)
+    joint = session.wall_relations.get_plan_candidate_joint(target_wall)
     if not joint:
         return (
             target_wall,
@@ -205,7 +256,9 @@ def get_plan_join_candidate_state(session):
 
     summary = translate("BIM_PlanEdit", "Existing joint with {label}: {joint_type}").format(
         label=target_wall.Label,
-        joint_type=session.get_plan_join_type_label(getattr(joint, "JointType", "Miter")),
+        joint_type=session.wall_relations.get_plan_join_type_label(
+            getattr(joint, "JointType", "Miter")
+        ),
     )
     status = getattr(joint, "Status", "")
     if status not in ("", "OK"):
@@ -217,10 +270,12 @@ def get_plan_join_candidate_state(session):
 
 
 def get_plan_join_mode_action_text(session, target_wall=None, joint=None):
-    target_wall = target_wall or session._get_plan_join_candidate_wall()
-    joint = joint or session._get_plan_candidate_joint(target_wall)
+    target_wall = target_wall or session.wall_relations.get_plan_join_candidate_wall()
+    joint = joint or session.wall_relations.get_plan_candidate_joint(target_wall)
     if joint:
-        current_type = session._normalize_plan_join_type(getattr(joint, "JointType", "Miter"))
+        current_type = session.wall_relations.normalize_plan_join_type(
+            getattr(joint, "JointType", "Miter")
+        )
         if current_type == session._plan_join_type:
             return translate(
                 "BIM_PlanEdit",
@@ -229,13 +284,13 @@ def get_plan_join_mode_action_text(session, target_wall=None, joint=None):
         return translate(
             "BIM_PlanEdit",
             "Click wall to change it to a {joint_type} joint",
-        ).format(joint_type=session._get_plan_join_type_phrase())
+        ).format(joint_type=session.wall_relations.get_plan_join_type_phrase())
     if target_wall:
-        return session._get_plan_join_action_text()
+        return session.wall_relations.get_plan_join_action_text()
     return translate(
         "BIM_PlanEdit",
         "Hover another wall, then click to create a {joint_type} joint",
-    ).format(joint_type=session._get_plan_join_type_phrase())
+    ).format(joint_type=session.wall_relations.get_plan_join_type_phrase())
 
 
 def unjoin_plan_wall_pair(session, source_wall, target_wall):
@@ -272,8 +327,8 @@ def unjoin_plan_wall_pair(session, source_wall, target_wall):
 
 def unjoin_current_plan_wall_pair(session):
     source_wall = plan_selection.get_selected_plan_target_object(session, "wall")
-    target_wall = session._get_plan_join_candidate_wall()
-    if not session._unjoin_plan_wall_pair(source_wall, target_wall):
+    target_wall = session.wall_relations.get_plan_join_candidate_wall()
+    if not session.wall_relations.unjoin_plan_wall_pair(source_wall, target_wall):
         FreeCAD.Console.PrintWarning(
             translate("BIM_PlanEdit", "Hover a joined wall pair before using Unjoin.\n")
         )
@@ -334,7 +389,7 @@ def find_plan_junction_promotion(session, source_wall, target_wall):
         for name, wall in candidate_walls.items()
         if wall not in (source_wall, target_wall) and name
     ]
-    for walls in session._iter_unique_wall_sets(source_wall, target_wall, extra_walls):
+    for walls in iter_unique_wall_sets(source_wall, target_wall, extra_walls):
         solution = ArchWallJunctionUtils.solve_wall_junction_inputs(walls)
         if solution.is_ok():
             return walls, solution, candidate_relations
@@ -362,13 +417,13 @@ def apply_plan_wall_junction_promotion(session, doc, source_wall, target_wall):
     import Arch
     import ArchWallJoinUtils
 
-    promotion = session._find_plan_junction_promotion(source_wall, target_wall)
+    promotion = session.wall_relations.find_plan_junction_promotion(source_wall, target_wall)
     if not promotion:
         return None
 
     walls, solution, candidate_relations = promotion
     wall_names = {getattr(wall, "Name", "") for wall in walls if wall}
-    junction = session._find_reusable_plan_junction(candidate_relations, walls)
+    junction = find_reusable_plan_junction(candidate_relations, walls)
 
     for relation in candidate_relations:
         if not ArchWallJoinUtils.is_wall_joint(relation):
@@ -427,9 +482,9 @@ def collect_wall_relation_warnings(session, wall):
 
 
 def update_wall_relation_status(session, wall):
-    warnings = session._collect_wall_relation_warnings(wall)
+    warnings = collect_wall_relation_warnings(session, wall)
     if not warnings:
-        session._clear_plan_relation_status()
+        clear_plan_relation_status(session)
         return
 
     if len(warnings) == 1:
@@ -489,7 +544,11 @@ def apply_plan_wall_join(session, source_wall, target_wall):
 
     doc.openTransaction(translate("BIM_PlanEdit", "Join walls"))
     try:
-        relation = session._apply_plan_wall_junction_promotion(doc, source_wall, target_wall)
+        relation = session.wall_relations.apply_plan_wall_junction_promotion(
+            doc,
+            source_wall,
+            target_wall,
+        )
         if relation is None:
             relation = ArchWallJoinUtils.find_existing_joint(doc, source_wall, target_wall)
             if not relation:

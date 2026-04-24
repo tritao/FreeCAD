@@ -556,8 +556,8 @@ class TestBimPlanCore(unittest.TestCase):
             self.assertTrue(session._is_modal_plan_interaction_active())
             self.assertTrue(session.symbols.symbol_rotation_snap_enabled())
             self.assertEqual("15°", session.symbols.format_symbol_rotation_snap_label())
-            self.assertEqual("Miter", session.get_plan_join_type_label())
-            self.assertIs(joint, session._get_plan_candidate_joint())
+            self.assertEqual("Miter", session.wall_relations.get_plan_join_type_label())
+            self.assertIs(joint, session.wall_relations.get_plan_candidate_joint())
             self.assertEqual(4200.0, session.viewport.get_plan_view_height())
             self.assertTrue(session.wall_edit.has_active_wall_edit())
             self.assertEqual(

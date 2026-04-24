@@ -3856,7 +3856,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._select_wall_for_plan_edit(source_wall)
         session.lifecycle.activate_join_tool()
 
-        self.assertEqual(session.get_plan_join_type(), "Miter")
+        self.assertEqual(session.wall_relations.get_plan_join_type(), "Miter")
         self.assertEqual(
             session.task_panel.join_type_combo.currentIndex(),
             session.task_panel.join_type_combo.findData("Miter"),
@@ -3867,7 +3867,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         event_callback = self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.TAB))
         session._on_key_pressed(event_callback)
 
-        self.assertEqual(session.get_plan_join_type(), "Butt")
+        self.assertEqual(session.wall_relations.get_plan_join_type(), "Butt")
         self.assertEqual(
             session.task_panel.join_type_combo.currentIndex(),
             session.task_panel.join_type_combo.findData("Butt"),
@@ -3964,7 +3964,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.task_panel.join_type_combo.setCurrentIndex(butt_index)
         self.pump_gui_events()
 
-        self.assertEqual(session.get_plan_join_type(), "Butt")
+        self.assertEqual(session.wall_relations.get_plan_join_type(), "Butt")
 
         session._select_wall_for_plan_edit(source_wall)
         session.lifecycle.activate_join_tool()
@@ -4036,7 +4036,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         session._select_wall_for_plan_edit(source_wall)
-        session.set_plan_join_type("Butt")
+        session.wall_relations.set_plan_join_type("Butt")
         session.lifecycle.activate_join_tool()
         session._set_hovered_wall(target_wall)
 
@@ -4115,7 +4115,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._set_hovered_wall(target_wall)
 
         self.assertTrue(session.task_panel.unjoin_button.isEnabled())
-        self.assertTrue(session._unjoin_current_plan_wall_pair())
+        self.assertTrue(session.wall_relations.unjoin_current_plan_wall_pair())
         self.pump_gui_events()
 
         joints = [
