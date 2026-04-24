@@ -1177,7 +1177,9 @@ class TestBimPlanCore(unittest.TestCase):
             _set_selected_plan_target=lambda *args, **kwargs: None,
             _clear_hovered_plan_targets=lambda *args, **kwargs: None,
             _get_selected_plan_target_object=lambda kind: parent_space if kind == "space" else None,
-            _refresh_task_panel_status=lambda: None,
+            task_panels=SimpleNamespace(
+                refresh_task_panel_status=lambda selection_only=False: None
+            ),
             lifecycle=SimpleNamespace(
                 has_active_embedded_tool=lambda: False,
                 cancel_embedded_tool=lambda: None,
@@ -1210,7 +1212,9 @@ class TestBimPlanCore(unittest.TestCase):
             _clear_plan_relation_status=lambda: None,
             _set_selected_plan_target=lambda *args, **kwargs: None,
             _get_wall_defaults=lambda: {"height": 2500},
-            _refresh_task_panel_status=lambda: None,
+            task_panels=SimpleNamespace(
+                refresh_task_panel_status=lambda selection_only=False: None
+            ),
             lifecycle=SimpleNamespace(
                 has_active_embedded_tool=lambda: False,
                 cancel_embedded_tool=lambda: None,
@@ -2048,7 +2052,9 @@ class TestBimPlanCore(unittest.TestCase):
             document_visuals=SimpleNamespace(
                 invalidate_document_dependent_plan_visuals=lambda: None
             ),
-            _refresh_task_panel_status=lambda: None,
+            task_panels=SimpleNamespace(
+                refresh_task_panel_status=lambda selection_only=False: None
+            ),
         )
 
         self.assertTrue(

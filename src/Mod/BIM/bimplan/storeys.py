@@ -67,4 +67,4 @@ def set_active_storey(session, storey):
     session.active_storey = storey
     session.viewport.apply_plan_view(fit=False)
     session.visibility.apply_storey_visibility()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()

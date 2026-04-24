@@ -141,7 +141,7 @@ def start_provider_handle_point_pick(session, provider_obj, handle_index, handle
     session._edit_provider_handle = handle
     session.overlays.clear_selected_provider_overlay()
     session.overlays.clear_selected_provider_handles()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     FreeCAD.activeDraftCommand = session
     session.lifecycle.set_draft_point_focus_suppressed(True)
     FreeCADGui.Snapper.getPoint(

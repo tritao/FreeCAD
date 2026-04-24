@@ -103,7 +103,7 @@ def _cancel_snap_tool(session, *, is_active, clear_preview, reset_state, sync_ki
     FreeCAD.activeDraftCommand = None
     session.current_tool = "Select"
     if refresh:
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
     plan_target_dispatch.sync_selected_target_visuals(
         session,
         kinds=sync_kinds,
@@ -391,7 +391,7 @@ def handle_space_separator_point(session, point=None, obj=None):
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.current_tool = "Select"
     session._refresh_primary_selected_plan_target()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
 
 
 def get_space_reference_point(session, space):
@@ -1015,7 +1015,7 @@ def set_hovered_space_region_candidate(session, candidate, visual_key):
     else:
         session._hovered_space_region_candidate = candidate
     session._queue_plan_overlay_visual_refresh(visual_key)
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
 
 
 def create_space_region_base_object(session, candidate):
@@ -1081,7 +1081,7 @@ def cancel_space_region_pick(session, refresh=True):
     if was_active:
         session._refresh_primary_selected_plan_target()
     elif refresh:
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
     return was_active
 
 
@@ -1245,7 +1245,7 @@ def set_selected_space_label(session, label):
         except Exception:
             pass
         return False
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     return True
 
 
@@ -1267,7 +1267,7 @@ def set_selected_space_type(session, space_type):
         except Exception:
             pass
         return False
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     return True
 
 
@@ -1289,7 +1289,7 @@ def set_selected_region_label(session, label):
         except Exception:
             pass
         return False
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     return True
 
 
@@ -1311,7 +1311,7 @@ def set_selected_region_scheme(session, scheme):
         except Exception:
             pass
         return False
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     return True
 
 
@@ -1333,7 +1333,7 @@ def set_selected_region_type(session, region_type):
         except Exception:
             pass
         return False
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     return True
 
 
@@ -1363,7 +1363,7 @@ def set_selected_region_parent_space(session, space):
         except Exception:
             pass
         return False
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     return True
 
 
@@ -1385,7 +1385,7 @@ def set_space_boundaries(session, space, boundaries):
             pass
         return False
     session.spaces.refresh_selected_space_visuals()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     return True
 
 
@@ -1452,7 +1452,7 @@ def start_space_text_position_pick(session):
     set_space_text_pick_state(session, space)
     session._clear_hovered_plan_targets(kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS)
     session.overlays.sync_secondary_selected_overlays()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     FreeCAD.activeDraftCommand = session
     session.lifecycle.set_draft_point_focus_suppressed(True)
     FreeCADGui.Snapper.getPoint(
@@ -1474,7 +1474,7 @@ def finish_space_text_position_pick(session, point=None, obj=None):
 
     if point is None or not session._is_plan_space_object(space):
         session.current_tool = "Select"
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
         return
 
     point = session.viewport.project_plan_point(point)
@@ -1505,7 +1505,7 @@ def cancel_space_text_position_pick(session):
     if space:
         session._set_selected_plan_target("space", space, pending_restore=True)
     session.overlays.sync_selected_space_overlay()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
 
 
 def refresh_selected_space_visuals(session):
@@ -1535,7 +1535,7 @@ def restore_selected_semantic_target(session, kind, obj, *, clear_edit_space=Fal
     else:
         session._set_selected_plan_target()
     sync_method()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
 
 
 def queue_restore_selected_semantic_target(session, kind, obj, *, clear_edit_space=False):

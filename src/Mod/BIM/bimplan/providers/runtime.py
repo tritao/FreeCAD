@@ -567,7 +567,7 @@ def set_plan_provider_overlay_mode(session, mode):
     session._provider_overlay_state = None
     session.selection.clear_hidden_provider_preselection()
     session._queue_plan_overlay_visual_refresh(plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS)
-    session._refresh_provider_overlay_mode_panels()
+    session.task_panels.refresh_provider_overlay_mode_panels()
     return True
 
 
@@ -1420,7 +1420,7 @@ def execute_plan_provider_action(
 
     session._refresh_primary_selected_plan_target()
     session.document_visuals.invalidate_document_dependent_plan_visuals()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     session.viewport.focus_plan_view()
     return True
 

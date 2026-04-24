@@ -3,6 +3,37 @@
 """Task panel ownership, refresh helpers, and viewport chip for BIM Plan Edit."""
 
 
+def _bind_task_panel_call(func):
+    def method(self, *args, **kwargs):
+        return func(self.session, *args, **kwargs)
+
+    return method
+
+
+_PLAN_TASK_PANELS_API_BOUND_METHODS = (
+    "attach_task_panel",
+    "attach_aux_task_panel",
+    "detach_aux_task_panel",
+    "detach_task_panel",
+    "on_panel_closed",
+    "refresh_task_panel_status",
+    "refresh_provider_overlay_mode_panels",
+)
+
+
+class PlanTaskPanelsAPI:
+    """Owned session surface for Plan Edit task-panel wiring and refresh."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+
 class _PlanEditViewportStatusChip:
     def __new__(cls, session, host_widget):
         from PySide import QtCore, QtGui
@@ -105,7 +136,7 @@ def attach_aux_task_panel(session, panel):
     try:
         panel.refresh()
     except (AttributeError, RuntimeError):
-        session.detach_aux_task_panel(panel)
+        session.task_panels.detach_aux_task_panel(panel)
 
 
 def detach_aux_task_panel(session, panel):
@@ -182,7 +213,7 @@ def refresh_task_panel_status(session, selection_only=False):
                 if callable(refresh):
                     refresh()
             except (AttributeError, RuntimeError):
-                session.on_panel_closed(panel)
+                session.task_panels.on_panel_closed(panel)
         stale_panels = []
         for extra_panel in list(session._aux_task_panels):
             if extra_panel is panel:
@@ -198,7 +229,7 @@ def refresh_task_panel_status(session, selection_only=False):
             except (AttributeError, RuntimeError):
                 stale_panels.append(extra_panel)
         for extra_panel in stale_panels:
-            session.detach_aux_task_panel(extra_panel)
+            session.task_panels.detach_aux_task_panel(extra_panel)
 
 
 def refresh_provider_overlay_mode_panels(session):
@@ -214,7 +245,7 @@ def refresh_provider_overlay_mode_panels(session):
                 if callable(refresh):
                     refresh()
             except (AttributeError, RuntimeError):
-                session.on_panel_closed(panel)
+                session.task_panels.on_panel_closed(panel)
         stale_panels = []
         for extra_panel in list(session._aux_task_panels):
             if extra_panel is panel:
@@ -232,4 +263,8 @@ def refresh_provider_overlay_mode_panels(session):
             except (AttributeError, RuntimeError):
                 stale_panels.append(extra_panel)
         for extra_panel in stale_panels:
-            session.detach_aux_task_panel(extra_panel)
+            session.task_panels.detach_aux_task_panel(extra_panel)
+
+
+for _method_name in _PLAN_TASK_PANELS_API_BOUND_METHODS:
+    setattr(PlanTaskPanelsAPI, _method_name, _bind_task_panel_call(globals()[_method_name]))

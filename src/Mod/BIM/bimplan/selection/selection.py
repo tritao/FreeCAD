@@ -682,7 +682,7 @@ def reset_selected_wall_after_change(session):
     session.overlays.clear_selected_wall_overlay()
     session._clear_selected_plan_target_if_matches("wall", wall)
     session._set_gui_selection([])
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
 
 
 def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
@@ -700,7 +700,7 @@ def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
     session._clear_selected_plan_target_if_matches("wall", wall)
     if clear_gui_selection:
         session._set_gui_selection([])
-    session._refresh_task_panel_status(selection_only=True)
+    session.task_panels.refresh_task_panel_status(selection_only=True)
 
 
 def sync_primary_selected_plan_target_visuals(session, previous_kind=None, previous_obj=None):
@@ -752,7 +752,9 @@ def sync_primary_selected_plan_target_visuals(session, previous_kind=None, previ
             session.overlays.sync_secondary_selected_overlays()
         with session.performance.plan_perf_trace_span("sync_active_plan_target_object"):
             session._sync_active_plan_target_object()
-        session._refresh_task_panel_status(selection_only=session.current_tool == "Select")
+        session.task_panels.refresh_task_panel_status(
+            selection_only=session.current_tool == "Select"
+        )
 
 
 def refresh_primary_selected_plan_target(session):
@@ -769,7 +771,7 @@ def set_hovered_wall(session, wall):
     session.overlays.sync_hovered_wall_overlay()
     session.overlays.sync_hovered_wall_opening_context_overlay()
     if session.current_tool == "Join":
-        session._refresh_task_panel_status(
+        session.task_panels.refresh_task_panel_status(
             selection_only=session.current_tool == "Select"
             and session._is_selected_plan_target("wall")
         )
@@ -840,7 +842,7 @@ def select_plan_target_for_plan_edit(
         previous_obj=previous_obj,
     )
     session.overlays.sync_secondary_selected_overlays()
-    session._refresh_task_panel_status(selection_only=session.current_tool == "Select")
+    session.task_panels.refresh_task_panel_status(selection_only=session.current_tool == "Select")
     if queue_restore:
         session._queue_restore_selected_plan_target(kind, obj)
     return True
@@ -1112,7 +1114,9 @@ def clear_plan_selection_state(session):
             trace_prefix="clear_plan_selection",
         )
         with session.performance.plan_perf_trace_span("clear_plan_selection_task_status"):
-            session._refresh_task_panel_status(selection_only=session.current_tool == "Select")
+            session.task_panels.refresh_task_panel_status(
+                selection_only=session.current_tool == "Select"
+            )
         selected_kind, selected_obj = get_selected_plan_target(session)
         session.performance.plan_perf_set_fields(
             clear_selection_ended_kind=selected_kind or "none",

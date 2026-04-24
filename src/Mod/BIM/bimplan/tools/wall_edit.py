@@ -41,7 +41,7 @@ def cancel_wall_edit(session, restore=True, refresh=True):
     if not session.wall_edit.has_active_wall_edit():
         if refresh:
             session.current_tool = "Select"
-            session._refresh_task_panel_status()
+            session.task_panels.refresh_task_panel_status()
         return False
 
     session.wall_edit.cancel_wall_subtool()
@@ -50,7 +50,7 @@ def cancel_wall_edit(session, restore=True, refresh=True):
     session.lifecycle.cancel_pending_edit()
     session.overlays.sync_selected_wall_opening_context_overlay()
     if refresh:
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
     return True
 
 
@@ -232,7 +232,7 @@ def queue_wall_edit_task_panel_refresh(session):
     try:
         from PySide import QtCore
     except ImportError:
-        session._refresh_task_panel_status(selection_only=True)
+        session.task_panels.refresh_task_panel_status(selection_only=True)
         return
     session._wall_edit_task_panel_refresh_queued = True
     QtCore.QTimer.singleShot(0, session._flush_wall_edit_task_panel_refresh)
@@ -243,7 +243,7 @@ def flush_wall_edit_task_panel_refresh(session):
     if session._tearing_down or not session.wall_edit.is_wall_edit_modal_active():
         return
     with session.performance.plan_perf_trace_event("queued_wall_edit_task_panel_refresh"):
-        session._refresh_task_panel_status(selection_only=True)
+        session.task_panels.refresh_task_panel_status(selection_only=True)
 
 
 def finish_wall_edit(session, point=None, obj=None):
@@ -256,7 +256,7 @@ def finish_wall_edit(session, point=None, obj=None):
     if point is None or not wall or not endpoint or not new_points:
         session.current_tool = "Select"
         session.lifecycle.cancel_pending_edit()
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
         return
 
     proxy = getattr(wall, "Proxy", None)
@@ -267,7 +267,7 @@ def finish_wall_edit(session, point=None, obj=None):
     ):
         session.current_tool = "Select"
         session.lifecycle.cancel_pending_edit()
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
         return
 
     session._commit_wall_edit_points(wall, endpoint, proxy, new_points)
@@ -277,7 +277,7 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
     if not wall or not endpoint or not proxy or not new_points:
         session.current_tool = "Select"
         session.lifecycle.cancel_pending_edit()
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
         return
 
     transaction_name = (
@@ -318,7 +318,7 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
     session._set_selected_plan_target("wall", wall, pending_restore=True)
     session._update_wall_relation_status(wall)
     session.overlays.sync_wall_grips()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
 
 
 def start_wall_grip_edit(session, grip_index):
@@ -749,7 +749,7 @@ def update_wall_edit_preview_geometry(session, points):
         tracker.on()
 
     if previous_relation_status != session._plan_relation_status_message:
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
 
     midpoint = (points[0] + points[1]) * 0.5
     marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
@@ -1385,7 +1385,7 @@ def update_wall_edit_point_pick(session, point=None, snap_info=None):
 def cancel_wall_edit_point_pick(session):
     session.current_tool = "Select"
     session.lifecycle.cancel_pending_edit()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
 
 
 from functools import wraps

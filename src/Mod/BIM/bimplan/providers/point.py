@@ -79,7 +79,7 @@ def cancel_provider_point_tool(session, refresh=True):
     FreeCAD.activeDraftCommand = None
     session.current_tool = "Select"
     if refresh:
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
     session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_ALL)
     return True
 
@@ -125,7 +125,7 @@ def start_plan_provider_point_tool(session, tool):
     session._provider_point_host_source = host_source
     session._provider_point_tool = tool
     session.current_tool = "Provider Point"
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     session._queue_plan_overlay_visual_refresh(_PLAN_VISUAL_ALL)
     if session.providers.arm_provider_point_tool():
         return True
@@ -133,7 +133,7 @@ def start_plan_provider_point_tool(session, tool):
     session._provider_point_host_target = None
     session._provider_point_host_source = ""
     session.current_tool = "Select"
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
     return False
 
 

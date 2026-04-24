@@ -273,6 +273,7 @@ class PlanEditSession:
         self.performance = PlanPerformanceAPI(self)
         self.document_visuals = PlanDocumentVisualsAPI(self)
         self.status_text = PlanStatusTextAPI(self)
+        self.task_panels = plan_task_panel.PlanTaskPanelsAPI(self)
         plan_session_state.initialize_session_state(self)
 
     def _connect_teardown_signal(self, signal):
@@ -525,7 +526,7 @@ class PlanEditSession:
             with self.performance.plan_perf_trace_span("build_task_panel"):
                 panel = PlanEditControlsWidget(self)
             with self.performance.plan_perf_trace_span("attach_task_panel"):
-                self.attach_task_panel(panel)
+                self.task_panels.attach_task_panel(panel)
             with self.performance.plan_perf_trace_span("task_panel_initial_refresh"):
                 panel.refresh(refresh_integrations=False)
             with self.performance.plan_perf_trace_span("queue_prime_opening_handle_tracker_pool"):
@@ -1531,27 +1532,6 @@ class PlanEditSession:
 
     def slotDeletedDocument(self, doc):
         return plan_document_visuals.slot_deleted_document(self, doc)
-
-    def attach_task_panel(self, panel):
-        return plan_task_panel.attach_task_panel(self, panel)
-
-    def attach_aux_task_panel(self, panel):
-        return plan_task_panel.attach_aux_task_panel(self, panel)
-
-    def detach_aux_task_panel(self, panel):
-        return plan_task_panel.detach_aux_task_panel(self, panel)
-
-    def detach_task_panel(self):
-        return plan_task_panel.detach_task_panel(self)
-
-    def on_panel_closed(self, panel):
-        return plan_task_panel.on_panel_closed(self, panel)
-
-    def _refresh_task_panel_status(self, selection_only=False):
-        return plan_task_panel.refresh_task_panel_status(self, selection_only=selection_only)
-
-    def _refresh_provider_overlay_mode_panels(self):
-        return plan_task_panel.refresh_provider_overlay_mode_panels(self)
 
     def _is_modal_plan_interaction_active(self):
         return self.interaction.is_modal_plan_interaction_active()

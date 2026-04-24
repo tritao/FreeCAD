@@ -236,7 +236,7 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
                 guide_start=anchor,
                 guide_end=start_point,
             )
-        session._refresh_task_panel_status(selection_only=True)
+        session.task_panels.refresh_task_panel_status(selection_only=True)
         FreeCAD.activeDraftCommand = session
         with session.performance.plan_perf_trace_span("symbol_handle_focus_suppression"):
             session.lifecycle.set_draft_point_focus_suppressed(True)
@@ -353,7 +353,7 @@ def cancel_symbol_handle_point_pick(session):
     session.overlays.sync_selected_opening_handles()
     session.overlays.sync_selected_symbol_overlay()
     session.overlays.sync_selected_symbol_handles()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
 
 
 def restore_selected_symbol(session, symbol):
@@ -367,14 +367,14 @@ def restore_selected_symbol(session, symbol):
         session.overlays.sync_selected_opening_handles()
         session.overlays.sync_selected_symbol_overlay()
         session.overlays.sync_selected_symbol_handles()
-        session._refresh_task_panel_status()
+        session.task_panels.refresh_task_panel_status()
         return
     session._set_gui_selection_object(symbol)
     session.overlays.sync_selected_opening_overlay()
     session.overlays.sync_selected_opening_handles()
     session.overlays.sync_selected_symbol_overlay()
     session.overlays.sync_selected_symbol_handles()
-    session._refresh_task_panel_status()
+    session.task_panels.refresh_task_panel_status()
 
 
 def queue_restore_selected_symbol(session, symbol):

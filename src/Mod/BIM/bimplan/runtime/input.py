@@ -221,7 +221,7 @@ def on_key_pressed(session, event_callback):
     if session.current_tool == "Move Opening" and key == coin.SoKeyboardEvent.A:
         if session.openings.cycle_opening_move_anchor():
             session.openings.refresh_opening_move_preview_from_raw_point()
-            session._refresh_task_panel_status()
+            session.task_panels.refresh_task_panel_status()
         return
     if (
         session.current_tool in ("Move Symbol", "Rotate Symbol")
