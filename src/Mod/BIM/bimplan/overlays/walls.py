@@ -140,10 +140,10 @@ def schedule_wall_grip_sync(session, delay_ms=120):
 
         QtCore.QTimer.singleShot(
             delay_ms,
-            lambda generation=generation: session._run_scheduled_wall_grip_sync(generation),
+            lambda generation=generation: run_scheduled_wall_grip_sync(session, generation),
         )
     except Exception:
-        session._run_scheduled_wall_grip_sync(generation)
+        run_scheduled_wall_grip_sync(session, generation)
 
 
 def run_scheduled_wall_grip_sync(session, generation=None):
