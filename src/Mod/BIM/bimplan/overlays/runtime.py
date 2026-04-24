@@ -170,16 +170,8 @@ for _module, _method_names in _PLAN_OVERLAYS_API_MODULES:
 
 _PLAN_SESSION_OVERLAY_COMPAT_METHODS = (
     "_prime_opening_handle_tracker_pool",
-    "_schedule_wall_grip_sync",
-    "_run_scheduled_wall_grip_sync",
     "_clear_wall_grips",
     "_clear_space_region_pick_overlays",
-    "_invalidate_selected_space_overlay_cache",
-    "_sync_selected_space_overlay",
-    "_sync_selected_region_overlay",
-    "_get_selected_provider_handle_specs",
-    "_clear_selected_provider_handles",
-    "_clear_provider_point_preview",
     "_sync_hovered_opening_overlay",
     "_get_opening_overlay_segments",
     "_sync_selected_wall_opening_context_overlay",

@@ -6250,7 +6250,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         ) as get_segments:
             session.overlays.sync_selected_space_overlay()
             session.overlays.sync_selected_space_overlay()
-            session._invalidate_selected_space_overlay_cache()
+            session.overlays.invalidate_selected_space_overlay_cache()
             session.overlays.sync_selected_space_overlay()
 
         self.assertEqual(get_segments.call_count, 2)

@@ -318,7 +318,7 @@ def refresh_selected_plan_target(session):
             )
         ):
             if get_selected_plan_target_object(session, plan_target_kinds.PLAN_TARGET_WALL):
-                session._schedule_wall_grip_sync()
+                session.overlays.schedule_wall_grip_sync()
             else:
                 session.overlays.clear_wall_grips()
         session._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
@@ -813,7 +813,7 @@ def select_plan_target_for_plan_edit(
             session._set_gui_selection_object(obj)
     if kind == plan_target_kinds.PLAN_TARGET_WALL:
         if defer_wall_grips:
-            session._schedule_wall_grip_sync()
+            session.overlays.schedule_wall_grip_sync()
         else:
             session.overlays.sync_selected_wall_overlay()
             session.overlays.sync_wall_grips()

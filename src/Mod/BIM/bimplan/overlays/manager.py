@@ -38,7 +38,7 @@ def queue_plan_overlay_visual_refresh(session, visuals, visual_all, visual_selec
         return
     dirty = set(visuals) if visuals else {visual_all}
     if visual_all in dirty or visual_selected_space in dirty:
-        session._invalidate_selected_space_overlay_cache()
+        session.overlays.invalidate_selected_space_overlay_cache()
     session._dirty_plan_visuals.update(dirty)
     if session._overlay_refresh_queued:
         return

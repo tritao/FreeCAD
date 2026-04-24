@@ -2749,18 +2749,18 @@ class PlanEditSession:
         return self.spaces.cancel_space_text_position_pick()
 
     def _refresh_selected_space_visuals(self):
-        self._invalidate_selected_space_overlay_cache()
-        self._sync_selected_space_overlay()
+        self.overlays.invalidate_selected_space_overlay_cache()
+        self.overlays.sync_selected_space_overlay()
         self.viewport.request_view_redraw()
 
     def _refresh_selected_region_visuals(self):
-        self._sync_selected_region_overlay()
+        self.overlays.sync_selected_region_overlay()
         self.viewport.request_view_redraw()
 
     def _restore_selected_semantic_target(self, kind, obj, *, clear_edit_space=False):
         sync_method = {
-            plan_target_kinds.PLAN_TARGET_REGION: self._sync_selected_region_overlay,
-            plan_target_kinds.PLAN_TARGET_SPACE: self._sync_selected_space_overlay,
+            plan_target_kinds.PLAN_TARGET_REGION: self.overlays.sync_selected_region_overlay,
+            plan_target_kinds.PLAN_TARGET_SPACE: self.overlays.sync_selected_space_overlay,
         }.get(kind)
         if sync_method is None:
             return

@@ -203,12 +203,12 @@ def sync_selected_provider_handles(session):
     with session._plan_perf_trace_span("sync_selected_provider_handles"):
         provider_obj = plan_selection.get_selected_plan_target_object(session, "provider")
         if session.current_tool != "Select":
-            session._clear_selected_provider_handles()
+            clear_selected_provider_handles(session)
             return
         if not session._is_plan_provider_target_object(provider_obj):
-            session._clear_selected_provider_handles()
+            clear_selected_provider_handles(session)
             return
-        specs = tuple(session._get_selected_provider_handle_specs(provider_obj))
+        specs = tuple(get_selected_provider_handle_specs(session, provider_obj))
         render_state = (
             session._get_document_object_key(provider_obj),
             tuple(
@@ -231,9 +231,9 @@ def sync_selected_provider_handles(session):
         try:
             import draftguitools.gui_trackers as DraftTrackers
         except ImportError:
-            session._clear_selected_provider_handles()
+            clear_selected_provider_handles(session)
             return
-        session._clear_selected_provider_handles()
+        clear_selected_provider_handles(session)
         for idx, _handle, point, marker in specs:
             kwargs = dict(
                 pos=point,
@@ -265,7 +265,7 @@ def pick_selected_provider_handle(session, mouse_pos, radius_px=10):
         return None
     best_index = None
     best_distance_sq = None
-    for idx, _handle, point, _marker in session._get_selected_provider_handle_specs(provider_obj):
+    for idx, _handle, point, _marker in get_selected_provider_handle_specs(session, provider_obj):
         try:
             screen_x, screen_y = session.view.getPointOnScreen(point)
         except Exception:
