@@ -117,7 +117,7 @@ def has_direct_plan_symbols(obj):
 def is_plan_symbol_instance(session, obj):
     if not obj:
         return False
-    if session._is_hidden_library_definition_object(obj):
+    if session.document_visuals.is_hidden_library_definition_object(obj):
         return False
     if not session.visibility.is_plan_equipment_object(obj):
         return False
@@ -286,7 +286,7 @@ def register_plan_objects(session, objects):
         return
     session.visibility.apply_storey_visibility()
     for obj in registered:
-        session._refresh_plan_object_footprint_display(obj, request_redraw=False)
+        session.document_visuals.refresh_plan_object_footprint_display(obj, request_redraw=False)
     session.viewport.request_view_redraw()
 
 
@@ -335,7 +335,10 @@ def apply_context_object_selectability(session, obj, view_object):
     if not view_object or not hasattr(view_object, "Selectable"):
         return
     semantic_obj = session._get_plan_semantic_object(obj)
-    if semantic_obj is not None and session._is_symbol_visual_dependency(semantic_obj, obj):
+    if semantic_obj is not None and session.document_visuals.is_symbol_visual_dependency(
+        semantic_obj,
+        obj,
+    ):
         try:
             view_object.Selectable = True
         except Exception:

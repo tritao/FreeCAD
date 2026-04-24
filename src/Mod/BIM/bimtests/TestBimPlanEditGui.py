@@ -1600,7 +1600,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        session._refresh_plan_object_footprint_display(link)
+        session.document_visuals.refresh_plan_object_footprint_display(link)
         self.pump_gui_events()
 
         self.assertTrue(link.ViewObject.Visibility)
@@ -1637,7 +1637,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        session._refresh_plan_object_footprint_display(link)
+        session.document_visuals.refresh_plan_object_footprint_display(link)
         self.pump_gui_events()
 
         original_view = session.view
@@ -1686,7 +1686,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        session._refresh_plan_object_footprint_display(link)
+        session.document_visuals.refresh_plan_object_footprint_display(link)
         self.pump_gui_events()
 
         segments = session.overlays.get_symbol_overlay_segments(link)
@@ -1731,7 +1731,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        session._refresh_plan_object_footprint_display(equipment)
+        session.document_visuals.refresh_plan_object_footprint_display(equipment)
         self.pump_gui_events()
 
         self.assertTrue(equipment.ViewObject.Visibility)
@@ -1771,7 +1771,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        session._refresh_plan_object_footprint_display(equipment)
+        session.document_visuals.refresh_plan_object_footprint_display(equipment)
         self.pump_gui_events()
 
         self.assertIs(session._get_plan_semantic_object(plan_symbol), equipment)
@@ -1836,7 +1836,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        session._refresh_plan_object_footprint_display(link)
+        session.document_visuals.refresh_plan_object_footprint_display(link)
         self.assertTrue(session._select_symbol_for_plan_edit(link))
         self.pump_gui_events()
 
@@ -1897,7 +1897,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        session._refresh_plan_object_footprint_display(link)
+        session.document_visuals.refresh_plan_object_footprint_display(link)
         self.assertTrue(session._select_symbol_for_plan_edit(link))
         self.pump_gui_events()
 
@@ -1969,7 +1969,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        session._refresh_plan_object_footprint_display(link)
+        session.document_visuals.refresh_plan_object_footprint_display(link)
         self.assertTrue(session._select_symbol_for_plan_edit(link))
         self.pump_gui_events()
 
@@ -2024,7 +2024,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        session._refresh_plan_object_footprint_display(link)
+        session.document_visuals.refresh_plan_object_footprint_display(link)
         self.assertTrue(session._select_symbol_for_plan_edit(link))
         self.pump_gui_events()
 
@@ -5192,7 +5192,10 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         with (
             patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
-            patch.object(session, "_refresh_opening_footprint_display") as refresh_opening,
+            patch.object(
+                session.document_visuals,
+                "refresh_opening_footprint_display",
+            ) as refresh_opening,
         ):
             session._start_wall_grip_edit(2)
             new_midpoint = captured["last"].add(FreeCAD.Vector(400, 0, 0))
@@ -7774,8 +7777,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session = BimPlanSession.PlanEditSession()
         with (
             patch.object(
-                session,
-                "_invalidate_document_dependent_plan_visuals",
+                session.document_visuals,
+                "invalidate_document_dependent_plan_visuals",
             ) as invalidate_visuals,
             patch.object(
                 session,
@@ -7804,14 +7807,14 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         obj = self.document.addObject("App::FeaturePython", "DeferredPlanObject")
         with (
             patch.object(
-                session,
-                "_should_register_created_plan_object",
+                session.document_visuals,
+                "should_register_created_plan_object",
                 return_value=True,
             ),
-            patch.object(session, "_register_plan_objects") as register_objects,
+            patch.object(session.visibility, "register_plan_objects") as register_objects,
             patch.object(
-                session,
-                "_invalidate_document_dependent_plan_visuals",
+                session.document_visuals,
+                "invalidate_document_dependent_plan_visuals",
             ) as invalidate_visuals,
             patch.object(
                 session,
@@ -7828,7 +7831,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             with session.defer_document_visual_updates():
                 session.slotCreatedObject(obj)
                 self.assertIn(obj.Name, session._pending_created_plan_objects)
-                session._flush_created_plan_objects()
+                session.document_visuals.flush_created_plan_objects()
                 register_objects.assert_not_called()
 
             register_objects.assert_called_once_with([obj])
@@ -7890,8 +7893,14 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._refresh_primary_selected_plan_target()
 
         with (
-            patch.object(session, "_queue_hard_refresh_selected_opening_visuals") as hard_refresh,
-            patch.object(session, "_queue_recompute_opening_hosts") as recompute_hosts,
+            patch.object(
+                session.document_visuals,
+                "queue_hard_refresh_selected_opening_visuals",
+            ) as hard_refresh,
+            patch.object(
+                session.document_visuals,
+                "queue_recompute_opening_hosts",
+            ) as recompute_hosts,
             patch.object(session, "_queue_plan_overlay_visual_refresh") as queue_refresh,
         ):
             session.slotUndoDocument(self.document)

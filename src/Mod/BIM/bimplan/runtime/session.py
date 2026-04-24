@@ -34,6 +34,7 @@ from bimplan import selection as plan_selection
 from bimplan.selection import picking as plan_picking
 from bimplan.runtime import command_gate as plan_command_gate
 from bimplan import document_visuals as plan_document_visuals
+from bimplan.document_visuals import PlanDocumentVisualsAPI
 from bimplan.tools import hosted_openings as plan_hosted_openings
 from bimplan.selection import hover_picking as plan_hover_picking
 from bimplan.runtime import input as plan_input
@@ -268,6 +269,7 @@ class PlanEditSession:
         self.wall_edit = PlanWallEditAPI(self)
         self.visibility = PlanVisibilityAPI(self)
         self.providers = PlanProvidersAPI(self)
+        self.document_visuals = PlanDocumentVisualsAPI(self)
         self.status_text = PlanStatusTextAPI(self)
         plan_session_state.initialize_session_state(self)
 
@@ -1240,27 +1242,6 @@ class PlanEditSession:
     def _pick_plan_region_target_from_footprints(self, mouse_pos):
         return plan_picking.pick_plan_region_target_from_footprints(self, mouse_pos)
 
-    def _has_direct_true_property(self, obj, prop_name):
-        return plan_document_visuals.has_direct_true_property(obj, prop_name)
-
-    def _is_hidden_library_definition_object(self, obj):
-        return plan_document_visuals.is_hidden_library_definition_object(obj)
-
-    def _should_register_created_plan_object(self, obj):
-        return plan_document_visuals.should_register_created_plan_object(self, obj)
-
-    def _queue_created_plan_object(self, obj):
-        return plan_document_visuals.queue_created_plan_object(self, obj)
-
-    def _flush_created_plan_objects(self, force=False):
-        return plan_document_visuals.flush_created_plan_objects(self, force=force)
-
-    def _are_document_visual_updates_deferred(self):
-        return plan_document_visuals.are_document_visual_updates_deferred(self)
-
-    def _defer_document_visual_refresh(self):
-        return plan_document_visuals.defer_document_visual_refresh(self)
-
     def defer_document_visual_updates(self):
         return plan_document_visuals.defer_document_visual_updates(self)
 
@@ -2048,22 +2029,6 @@ class PlanEditSession:
     def _refresh_selected_opening_visuals(self):
         return plan_document_visuals.refresh_selected_opening_visuals(self)
 
-    def _is_symbol_visual_dependency(self, symbol, obj):
-        return plan_document_visuals.is_symbol_visual_dependency(self, symbol, obj)
-
-    def _refresh_plan_object_footprint_display(self, obj, *, request_redraw=True):
-        return plan_document_visuals.refresh_plan_object_footprint_display(
-            self,
-            obj,
-            request_redraw=request_redraw,
-        )
-
-    def _refresh_opening_footprint_display(self, opening):
-        return plan_document_visuals.refresh_opening_footprint_display(self, opening)
-
-    def _refresh_wall_footprint_display(self, wall):
-        return plan_document_visuals.refresh_wall_footprint_display(self, wall)
-
     def _invalidate_wall_hosted_openings_cache(self):
         return plan_hosted_openings.invalidate_wall_hosted_openings_cache(self)
 
@@ -2100,21 +2065,6 @@ class PlanEditSession:
     def _resolve_wall_hosted_opening_layout(self, wall):
         return self.wall_edit.resolve_wall_hosted_opening_layout(wall)
 
-    def _refresh_opening_host_footprint_displays(self, opening):
-        return plan_document_visuals.refresh_opening_host_footprint_displays(self, opening)
-
-    def _queue_recompute_opening_hosts(self, *openings):
-        return plan_document_visuals.queue_recompute_opening_hosts(self, *openings)
-
-    def _flush_recompute_opening_hosts(self, hosts):
-        return plan_document_visuals.flush_recompute_opening_hosts(self, hosts)
-
-    def _queue_hard_refresh_selected_opening_visuals(self):
-        return plan_document_visuals.queue_hard_refresh_selected_opening_visuals(self)
-
-    def _flush_hard_refresh_selected_opening_visuals(self):
-        return plan_document_visuals.flush_hard_refresh_selected_opening_visuals(self)
-
     def slotCreatedObject(self, obj):
         return plan_document_visuals.slot_created_object(self, obj)
 
@@ -2123,12 +2073,6 @@ class PlanEditSession:
 
     def slotDeletedObject(self, obj):
         return plan_document_visuals.slot_deleted_object(self, obj)
-
-    def _invalidate_document_dependent_plan_visuals(self, recompute_opening_hosts=False):
-        return plan_document_visuals.invalidate_document_dependent_plan_visuals(
-            self,
-            recompute_opening_hosts=recompute_opening_hosts,
-        )
 
     def slotUndoDocument(self, doc):
         return plan_document_visuals.slot_undo_document(self, doc)

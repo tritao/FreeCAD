@@ -148,7 +148,9 @@ class PlanProviderActionContext:
         return bool(selector(wall, sync_gui_selection=sync_gui_selection))
 
     def queue_recompute_opening_hosts(self, opening):
-        recompute_hosts = getattr(self._session, "_queue_recompute_opening_hosts", None)
+        recompute_hosts = getattr(
+            getattr(self._session, "document_visuals", None), "queue_recompute_opening_hosts", None
+        )
         if callable(recompute_hosts):
             recompute_hosts(opening)
             return True
@@ -168,10 +170,11 @@ class PlanProviderActionContext:
         invalidate_cache = getattr(self._session, "_invalidate_wall_hosted_openings_cache", None)
         if callable(invalidate_cache):
             invalidate_cache()
-        refresh_hosts = getattr(self._session, "_refresh_opening_host_footprint_displays", None)
+        document_visuals = getattr(self._session, "document_visuals", None)
+        refresh_hosts = getattr(document_visuals, "refresh_opening_host_footprint_displays", None)
         if callable(refresh_hosts):
             refresh_hosts(opening)
-        refresh_opening = getattr(self._session, "_refresh_opening_footprint_display", None)
+        refresh_opening = getattr(document_visuals, "refresh_opening_footprint_display", None)
         if callable(refresh_opening):
             refresh_opening(opening)
 

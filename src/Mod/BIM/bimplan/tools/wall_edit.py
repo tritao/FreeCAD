@@ -893,7 +893,7 @@ def clear_wall_hosted_opening_preview(session):
 
 def refresh_wall_hosted_opening_footprints(session, wall):
     for opening in session._get_wall_hosted_openings(wall):
-        session._refresh_opening_footprint_display(opening)
+        session.document_visuals.refresh_opening_footprint_display(opening)
 
 
 def compute_wall_hosted_opening_layout(session, wall, endpoints):
