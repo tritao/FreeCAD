@@ -31,6 +31,29 @@ class PlanInputAPI:
     def on_key_pressed(self, event_callback):
         return on_key_pressed(self.session, event_callback)
 
+    def set_event_handled(self, event_callback):
+        return set_event_handled(self.session, event_callback)
+
+    def claim_left_button_click(self, event_callback):
+        return claim_left_button_click(self.session, event_callback)
+
+
+def set_event_handled(session, event_callback):
+    del session
+    if event_callback and hasattr(event_callback, "setHandled"):
+        try:
+            event_callback.setHandled()
+        except Exception:
+            pass
+
+
+def claim_left_button_click(session, event_callback):
+    # Plan Edit owns overlay-driven picks, so also swallow the matching
+    # button release to prevent the base 3D view selection pass from
+    # clearing or replacing the GUI selection afterwards.
+    session._consume_left_button_release = True
+    session.input.set_event_handled(event_callback)
+
 
 def on_mouse_pressed(session, event_callback):
     if session._tearing_down:
@@ -72,7 +95,7 @@ def on_mouse_pressed(session, event_callback):
                 if event.getState() == coin.SoMouseButtonEvent.UP:
                     if session._consume_left_button_release:
                         session._consume_left_button_release = False
-                        session._set_event_handled(event_callback)
+                        session.input.set_event_handled(event_callback)
                         return
 
                 if event.getState() == coin.SoMouseButtonEvent.DOWN:
@@ -93,7 +116,7 @@ def on_mouse_pressed(session, event_callback):
                                 source_wall, target_wall
                             )
                         ):
-                            session._claim_left_button_click(event_callback)
+                            session.input.claim_left_button_click(event_callback)
                         return
                     else:
                         if session.current_tool == "Pick Space Region":
@@ -113,7 +136,7 @@ def on_mouse_pressed(session, event_callback):
                             if not session.selection.toggle_plan_target_selection_at_position(
                                 mouse_pos, event_callback
                             ):
-                                session._claim_left_button_click(event_callback)
+                                session.input.claim_left_button_click(event_callback)
                             return
                         node = session.selection.get_edit_node(mouse_pos)
                         if not node:
@@ -122,7 +145,7 @@ def on_mouse_pressed(session, event_callback):
                             ):
                                 return
                             session.selection.clear_plan_selection_state()
-                            session._claim_left_button_click(event_callback)
+                            session.input.claim_left_button_click(event_callback)
                             return
                         node_kind = node[0]
                         if node_kind == "opening_handle":
@@ -166,7 +189,7 @@ def on_mouse_pressed(session, event_callback):
                             else:
                                 session.selection.set_selected_plan_target_state("wall", obj)
                                 session.wall_edit.activate_wall_grip(index, wall=obj)
-                        session._claim_left_button_click(event_callback)
+                        session.input.claim_left_button_click(event_callback)
             finally:
                 selected_after = session.selection.get_selected_plan_target()
                 session.performance.plan_perf_set_fields(

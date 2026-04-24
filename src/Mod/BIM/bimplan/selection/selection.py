@@ -989,7 +989,7 @@ def activate_plan_target(
             session.performance.plan_perf_set_fields(activate_plan_target_result=False)
             return False
         session._clear_hovered_plan_targets(clear_hovered_kinds)
-        session._claim_left_button_click(event_callback)
+        session.input.claim_left_button_click(event_callback)
         session.performance.plan_perf_set_fields(
             activate_plan_target_result=True,
             activated_target=session.performance.plan_perf_describe_target(kind, target_obj),
@@ -1158,7 +1158,7 @@ def activate_provider_overlay_target_node(session, node, event_callback=None):
     plan_target_dispatch.clear_hovered_targets(session)
     session.selection.set_gui_selection_object(target_obj)
     session.selection.refresh_primary_selected_plan_target()
-    session._claim_left_button_click(event_callback)
+    session.input.claim_left_button_click(event_callback)
     return True
 
 
@@ -1196,7 +1196,7 @@ def toggle_raw_plan_object_selection(session, obj, event_callback=None):
     plan_target_dispatch.clear_hovered_targets(session)
     session.selection.set_gui_selection(new_selection)
     session.selection.refresh_primary_selected_plan_target()
-    session._claim_left_button_click(event_callback)
+    session.input.claim_left_button_click(event_callback)
     return True
 
 
@@ -1248,7 +1248,7 @@ def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=
     plan_target_dispatch.clear_hovered_targets(session)
     session.selection.set_gui_selection(new_selection)
     session.selection.refresh_primary_selected_plan_target()
-    session._claim_left_button_click(event_callback)
+    session.input.claim_left_button_click(event_callback)
     return True
 
 

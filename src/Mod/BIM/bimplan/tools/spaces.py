@@ -826,7 +826,7 @@ def _finish_created_space(session, space, event_callback=None, claim_click=False
     session.visibility.register_plan_object(space)
     session.spaces.restore_selected_space(space)
     if claim_click:
-        session._claim_left_button_click(event_callback)
+        session.input.claim_left_button_click(event_callback)
     return True
 
 
