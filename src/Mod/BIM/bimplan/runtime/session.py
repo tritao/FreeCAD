@@ -795,60 +795,6 @@ class PlanEditSession:
                 pass
             self._document_observer_added = False
 
-    def _get_space_reference_point(self, space):
-        return self.spaces.get_space_reference_point(space)
-
-    def _get_space_boundary_reference_point(self, selection_ex, fallback_space=None):
-        return self.spaces.get_space_boundary_reference_point(
-            selection_ex,
-            fallback_space=fallback_space,
-        )
-
-    def _get_space_boundary_entries(self, space):
-        return self.spaces.get_space_boundary_entries(space)
-
-    def _space_boundary_key(self, boundary):
-        return self.spaces.space_boundary_key(boundary)
-
-    def _get_selected_space_boundary_links(self, fallback_space=None):
-        return self.spaces.get_selected_space_boundary_links(
-            fallback_space=fallback_space,
-        )
-
-    def _get_space_region_seed_targets(self, targets=None):
-        return self.spaces.get_space_region_seed_targets(targets=targets)
-
-    def _get_selected_space_region_seed(self, targets=None):
-        return self.spaces.get_selected_space_region_seed(targets=targets)
-
-    def _copy_shape_without_element_map(self, shape):
-        return self.spaces.copy_shape_without_element_map(shape)
-
-    def _get_space_creation_request(self, targets=None):
-        return self.spaces.get_space_creation_request(targets=targets)
-
-    def _get_existing_space_region_filter_spaces(self, exclude=None):
-        return self.spaces.get_existing_space_region_filter_spaces(exclude=exclude)
-
-    def _get_xy_bound_box_iou(self, first_shape, second_shape):
-        return self.spaces.get_xy_bound_box_iou(first_shape, second_shape)
-
-    def _is_space_region_candidate_claimed(self, candidate, spaces, overlap_iou_tolerance=0.9):
-        return self.spaces.is_space_region_candidate_claimed(
-            candidate,
-            spaces,
-            overlap_iou_tolerance=overlap_iou_tolerance,
-        )
-
-    def _filter_claimed_space_region_candidates(self, candidates, exclude_space=None):
-        return self.spaces.filter_claimed_space_region_candidates(
-            candidates,
-            exclude_space=exclude_space,
-        )
-
-    def _report_space_region_candidate_failure(self, report):
-        return self.spaces.report_space_region_candidate_failure(report)
-
     def _get_screen_distance_sq_to_segment(self, mouse_pos, start, end):
         return plan_picking.get_screen_distance_sq_to_segment(self, mouse_pos, start, end)
 

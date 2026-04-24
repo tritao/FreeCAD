@@ -445,7 +445,7 @@ def get_space_boundary_reference_point(session, selection_ex, fallback_space=Non
         for point in points:
             total = total.add(point)
         return total.multiply(1.0 / float(len(points)))
-    return session._get_space_reference_point(fallback_space)
+    return session.spaces.get_space_reference_point(fallback_space)
 
 
 def get_space_boundary_entries(session, space):
@@ -479,9 +479,9 @@ def get_selected_space_boundary_links(session, fallback_space=None):
 
     selection_ex = session.selection.get_gui_selection_ex()
     reference_point = (
-        session._get_space_reference_point(fallback_space)
+        session.spaces.get_space_reference_point(fallback_space)
         if fallback_space is not None
-        else session._get_space_boundary_reference_point(selection_ex)
+        else session.spaces.get_space_boundary_reference_point(selection_ex)
     )
     entries = []
     for selection in selection_ex:
@@ -544,7 +544,7 @@ def _get_selected_space_boundary_links(session, fallback_space=None):
     spaces_api = getattr(session, "spaces", None)
     if spaces_api is not None:
         return spaces_api.get_selected_space_boundary_links(fallback_space=fallback_space)
-    return session._get_selected_space_boundary_links(fallback_space=fallback_space)
+    return session.spaces.get_selected_space_boundary_links(fallback_space=fallback_space)
 
 
 def _resolve_space_creation_request(session, targets=None):
@@ -715,7 +715,7 @@ def is_space_region_candidate_claimed(
                     continue
             except Exception:
                 continue
-            if session._get_xy_bound_box_iou(candidate_face, footprint_face) >= float(
+            if session.spaces.get_xy_bound_box_iou(candidate_face, footprint_face) >= float(
                 overlap_iou_tolerance
             ):
                 return True
@@ -727,14 +727,14 @@ def filter_claimed_space_region_candidates(session, candidates, exclude_space=No
     if not candidates:
         return candidates, 0
 
-    spaces = session._get_existing_space_region_filter_spaces(exclude=exclude_space)
+    spaces = session.spaces.get_existing_space_region_filter_spaces(exclude=exclude_space)
     if not spaces:
         return candidates, 0
 
     filtered = []
     skipped = 0
     for candidate in candidates:
-        if session._is_space_region_candidate_claimed(candidate, spaces):
+        if session.spaces.is_space_region_candidate_claimed(candidate, spaces):
             skipped += 1
             continue
         filtered.append(candidate)
@@ -753,7 +753,9 @@ def get_space_region_candidate_report(session, boundaries, label=None, seed_spac
     candidates = list(report.get("candidates", []) or [])
     skipped_claimed = 0
     if seed_space is None:
-        candidates, skipped_claimed = session._filter_claimed_space_region_candidates(candidates)
+        candidates, skipped_claimed = session.spaces.filter_claimed_space_region_candidates(
+            candidates
+        )
     report["candidates"] = candidates
     report["candidate_count"] = len(candidates)
     report["skipped_claimed_candidate_count"] = skipped_claimed
@@ -922,7 +924,7 @@ def _consume_space_region_candidate_report(
 ):
     candidates = list(report.get("candidates", []) or [])
     if not candidates:
-        session._report_space_region_candidate_failure(report)
+        session.spaces.report_space_region_candidate_failure(report)
         return False
 
     skipped_claimed = int(report.get("skipped_claimed_candidate_count", 0) or 0)
@@ -1027,7 +1029,7 @@ def create_space_region_base_object(session, candidate):
     except Exception:
         return None
     try:
-        shape_copy = session._copy_shape_without_element_map(shape)
+        shape_copy = session.spaces.copy_shape_without_element_map(shape)
         if shape_copy is None:
             return None
         base.Shape = shape_copy
@@ -1393,8 +1395,8 @@ def add_boundaries_to_selected_space(session):
     space = plan_selection.get_selected_plan_target_object(session, "space")
     if not session.selection.is_plan_space_object(space):
         return False
-    existing = session._get_space_boundary_entries(space)
-    additions = session._get_selected_space_boundary_links(fallback_space=space)
+    existing = session.spaces.get_space_boundary_entries(space)
+    additions = session.spaces.get_selected_space_boundary_links(fallback_space=space)
     if not additions:
         FreeCAD.Console.PrintWarning(
             translate(
@@ -1411,7 +1413,7 @@ def remove_selected_space_boundaries(session, row_indexes=None):
     space = plan_selection.get_selected_plan_target_object(session, "space")
     if not session.selection.is_plan_space_object(space):
         return False
-    existing = session._get_space_boundary_entries(space)
+    existing = session.spaces.get_space_boundary_entries(space)
     if not existing:
         return False
 
@@ -1423,8 +1425,8 @@ def remove_selected_space_boundaries(session, row_indexes=None):
         return session.spaces.set_space_boundaries(space, remaining)
 
     removals = {
-        session._space_boundary_key(boundary)
-        for boundary in session._get_selected_space_boundary_links(fallback_space=space)
+        session.spaces.space_boundary_key(boundary)
+        for boundary in session.spaces.get_selected_space_boundary_links(fallback_space=space)
     }
     if not removals:
         FreeCAD.Console.PrintWarning(
@@ -1435,7 +1437,9 @@ def remove_selected_space_boundaries(session, row_indexes=None):
         )
         return False
     remaining = [
-        boundary for boundary in existing if session._space_boundary_key(boundary) not in removals
+        boundary
+        for boundary in existing
+        if session.spaces.space_boundary_key(boundary) not in removals
     ]
     if len(remaining) == len(existing):
         return False
@@ -1457,7 +1461,7 @@ def start_space_text_position_pick(session):
     session.lifecycle.set_draft_point_focus_suppressed(True)
     FreeCADGui.Snapper.getPoint(
         callback=session.spaces.finish_space_text_position_pick,
-        last=session._get_space_reference_point(space),
+        last=session.spaces.get_space_reference_point(space),
         title=translate("BIM_PlanEdit", "Pick space text position"),
         noTracker=True,
     )

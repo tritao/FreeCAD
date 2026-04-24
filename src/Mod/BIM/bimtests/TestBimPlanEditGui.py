@@ -6244,9 +6244,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 wraps=panel._set_space_type_combo_options,
             ) as set_options,
             patch.object(
-                session,
-                "_get_space_boundary_entries",
-                wraps=session._get_space_boundary_entries,
+                session.spaces,
+                "get_space_boundary_entries",
+                wraps=session.spaces.get_space_boundary_entries,
             ) as get_boundary_entries,
         ):
             panel.refresh_from_session()
@@ -6927,7 +6927,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(space.IfcType, "Space")
         self.assertIn(level, space.InListRecursive)
         self.assertIs(session.selected_space, space)
-        self.assertEqual(len(session._get_space_boundary_entries(space)), 4)
+        self.assertEqual(len(session.spaces.get_space_boundary_entries(space)), 4)
         self.assertGreater(space.Area.getValueAs("m^2").Value, 0)
 
         session.shutdown(close_dialog=False)
@@ -7048,7 +7048,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
 
-        request = session._get_space_creation_request()
+        request = session.spaces.get_space_creation_request()
         self.assertIsNotNone(request)
         self.assertIn(separator, [obj for obj, _subnames in request["boundaries"]])
 
@@ -7087,7 +7087,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._refresh_primary_selected_plan_target()
 
         self.assertIs(session.selected_space, space)
-        request = session._get_space_creation_request()
+        request = session.spaces.get_space_creation_request()
         self.assertIsNotNone(request)
         self.assertIs(request["region_seed_space"], space)
         self.assertIn(separator, [obj for obj, _subnames in request["boundaries"]])
@@ -7164,7 +7164,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
 
-        boundaries = session._get_selected_space_boundary_links()
+        boundaries = session.spaces.get_selected_space_boundary_links()
         self.assertEqual(len(boundaries), 3)
         self.assertNotIn(walls[0].Name, [obj.Name for obj, _subnames in boundaries])
 
@@ -7359,7 +7359,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertEqual(session.current_tool, "Select")
         self.assertIs(session.selected_space, space)
-        self.assertEqual(len(session._get_space_boundary_entries(space)), len(boundaries))
+        self.assertEqual(len(session.spaces.get_space_boundary_entries(space)), len(boundaries))
         self.assertAlmostEqual(space.Proxy.getArea(space), candidate["area"])
 
         session.shutdown(close_dialog=False)
@@ -7419,7 +7419,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertEqual(session.current_tool, "Select")
         self.assertIs(session.selected_space, created_space)
-        self.assertEqual(session._get_space_boundary_entries(created_space), [])
+        self.assertEqual(session.spaces.get_space_boundary_entries(created_space), [])
         self.assertAlmostEqual(created_space.Proxy.getArea(created_space), candidate["area"])
 
         session.shutdown(close_dialog=False)
@@ -7650,12 +7650,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(session.selected_space, space)
 
         self.assertTrue(session.spaces.add_boundaries_to_selected_space())
-        boundaries = session._get_space_boundary_entries(space)
+        boundaries = session.spaces.get_space_boundary_entries(space)
         self.assertEqual(len(boundaries), 1)
         self.assertIs(boundaries[0][0], wall)
 
         self.assertTrue(session.spaces.remove_selected_space_boundaries())
-        self.assertEqual(session._get_space_boundary_entries(space), [])
+        self.assertEqual(session.spaces.get_space_boundary_entries(space), [])
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -7790,7 +7790,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertTrue(session.spaces.add_boundaries_to_selected_space())
         self.pump_gui_events()
-        boundaries = session._get_space_boundary_entries(space)
+        boundaries = session.spaces.get_space_boundary_entries(space)
         self.assertEqual(len(boundaries), 1)
         self.assertEqual(boundaries[0][0], wall)
 
