@@ -2,7 +2,7 @@
 
 """Selection state helpers for BIM Plan Edit."""
 
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 import FreeCADGui
@@ -222,11 +222,7 @@ def _collect_selected_targets_from_gui_selection(session, selection, previous_ki
         previous_kind if previous_kind == plan_target_kinds.PLAN_TARGET_PROVIDER else None
     )
     preserved_target = previous_obj if preserved_kind else None
-    provider_refresh_scope = (
-        session._plan_provider_refresh_cache_scope()
-        if hasattr(session, "_plan_provider_refresh_cache_scope")
-        else nullcontext()
-    )
+    provider_refresh_scope = session.providers.plan_provider_refresh_cache_scope()
     with provider_refresh_scope:
         for selected in selection:
             target_kind, target_obj = resolve_selected_target_for_gui_object(
