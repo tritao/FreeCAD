@@ -1040,22 +1040,31 @@ def normalize_plan_provider_edit_handle(provider_id, handle):
     return replace(handle, **replacements)
 
 
+def _normalize_plan_provider_actions(session, provider_id, actions):
+    return tuple(
+        normalized
+        for normalized in (
+            session.providers.normalize_plan_provider_action(provider_id, action)
+            for action in (actions or ())
+        )
+        if normalized is not None
+    )
+
+
+def _set_normalized_plan_provider_id(replacements, value, provider_id):
+    normalized_provider_id = str(provider_id or "")
+    if value != normalized_provider_id:
+        replacements["provider_id"] = normalized_provider_id
+
+
 def normalize_plan_provider_issue(session, provider_id, issue):
     if not isinstance(issue, PlanIssueSpec):
         return None
     if not isinstance(issue.severity, PlanIssueSeverity):
         return None
-    actions = tuple(
-        normalized
-        for normalized in (
-            session.providers.normalize_plan_provider_action(provider_id, action)
-            for action in (issue.actions or ())
-        )
-        if normalized is not None
-    )
+    actions = _normalize_plan_provider_actions(session, provider_id, issue.actions)
     replacements = {}
-    if issue.provider_id != provider_id:
-        replacements["provider_id"] = str(provider_id or "")
+    _set_normalized_plan_provider_id(replacements, issue.provider_id, provider_id)
     if actions != tuple(issue.actions or ()):
         replacements["actions"] = actions
     if not replacements:
@@ -1066,17 +1075,9 @@ def normalize_plan_provider_issue(session, provider_id, issue):
 def normalize_plan_provider_suggestion(session, provider_id, suggestion):
     if not isinstance(suggestion, PlanSuggestionSpec):
         return None
-    actions = tuple(
-        normalized
-        for normalized in (
-            session.providers.normalize_plan_provider_action(provider_id, action)
-            for action in (suggestion.actions or ())
-        )
-        if normalized is not None
-    )
+    actions = _normalize_plan_provider_actions(session, provider_id, suggestion.actions)
     replacements = {}
-    if suggestion.provider_id != provider_id:
-        replacements["provider_id"] = str(provider_id or "")
+    _set_normalized_plan_provider_id(replacements, suggestion.provider_id, provider_id)
     if actions != tuple(suggestion.actions or ()):
         replacements["actions"] = actions
     if not replacements:
@@ -1087,17 +1088,9 @@ def normalize_plan_provider_suggestion(session, provider_id, suggestion):
 def normalize_plan_provider_section(session, provider_id, section):
     if not isinstance(section, PlanInspectorSection):
         return None
-    actions = tuple(
-        normalized
-        for normalized in (
-            session.providers.normalize_plan_provider_action(provider_id, action)
-            for action in (section.actions or ())
-        )
-        if normalized is not None
-    )
+    actions = _normalize_plan_provider_actions(session, provider_id, section.actions)
     replacements = {}
-    if section.provider_id != provider_id:
-        replacements["provider_id"] = str(provider_id or "")
+    _set_normalized_plan_provider_id(replacements, section.provider_id, provider_id)
     if actions != tuple(section.actions or ()):
         replacements["actions"] = actions
     if not replacements:
@@ -1178,13 +1171,10 @@ def normalize_plan_provider_context_panel(session, provider_id, panel):
         )
         if primary_action is None:
             return None
-    secondary_actions = tuple(
-        normalized
-        for normalized in (
-            session.providers.normalize_plan_provider_action(provider_id, action)
-            for action in (panel.secondary_actions or ())
-        )
-        if normalized is not None
+    secondary_actions = _normalize_plan_provider_actions(
+        session,
+        provider_id,
+        panel.secondary_actions,
     )
     replacements = {}
     key = str(panel.key or "").strip()
@@ -1201,8 +1191,7 @@ def normalize_plan_provider_context_panel(session, provider_id, panel):
         replacements["subtitle"] = subtitle
     if message != panel.message:
         replacements["message"] = message
-    if panel.provider_id != provider_id:
-        replacements["provider_id"] = str(provider_id or "")
+    _set_normalized_plan_provider_id(replacements, panel.provider_id, provider_id)
     if summary_rows != tuple(panel.summary_rows or ()):
         replacements["summary_rows"] = summary_rows
     if primary_action != panel.primary_action:
