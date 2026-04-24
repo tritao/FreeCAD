@@ -92,7 +92,9 @@ def on_mouse_pressed(session, event_callback):
                             return
                         node = session.selection.get_edit_node(mouse_pos)
                         if not node:
-                            if session._activate_semantic_plan_target(mouse_pos, event_callback):
+                            if session.selection.activate_semantic_plan_target(
+                                mouse_pos, event_callback
+                            ):
                                 return
                             session._clear_plan_selection_state()
                             session._claim_left_button_click(event_callback)
@@ -100,7 +102,7 @@ def on_mouse_pressed(session, event_callback):
                         node_kind = node[0]
                         if node_kind == "opening_handle":
                             _kind, obj, index = node
-                            session._select_opening_for_plan_edit(obj)
+                            session.selection.select_opening_for_plan_edit(obj)
                             session.selection.set_gui_selection_object(obj)
                             session.openings.activate_opening_handle(obj, index)
                         elif node_kind == "provider_handle":
@@ -133,7 +135,7 @@ def on_mouse_pressed(session, event_callback):
                             except Exception:
                                 return
                             if session.openings.is_hosted_opening_object(obj):
-                                session._select_opening_for_plan_edit(obj)
+                                session.selection.select_opening_for_plan_edit(obj)
                                 session.selection.set_gui_selection_object(obj)
                                 session.openings.activate_opening_handle(obj, index)
                             else:

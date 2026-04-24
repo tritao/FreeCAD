@@ -1979,10 +1979,12 @@ class TestBimPlanCore(unittest.TestCase):
         calls = []
         session = SimpleNamespace(
             doc=doc,
-            _select_wall_for_plan_edit=lambda obj, sync_gui_selection=True: calls.append(
-                ("select", obj, sync_gui_selection)
-            )
-            or True,
+            selection=SimpleNamespace(
+                select_wall_for_plan_edit=lambda obj, sync_gui_selection=True: calls.append(
+                    ("select", obj, sync_gui_selection)
+                )
+                or True
+            ),
             openings=SimpleNamespace(
                 invalidate_wall_hosted_openings_cache=lambda: calls.append(("invalidate", None))
             ),
