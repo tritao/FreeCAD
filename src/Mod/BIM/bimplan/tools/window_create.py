@@ -53,8 +53,14 @@ class PlanWindowsAPI:
     def get_selected_window_style_preset(self):
         return get_selected_window_style_preset(self.session)
 
+    def get_selected_window_width_mm(self):
+        return get_selected_window_width_mm(self.session)
+
     def get_selected_window_width_text(self):
         return get_selected_window_width_text(self.session)
+
+    def get_selected_window_height_mm(self):
+        return get_selected_window_height_mm(self.session)
 
     def get_selected_window_height_text(self):
         return get_selected_window_height_text(self.session)
@@ -77,6 +83,38 @@ class PlanWindowsAPI:
         if window is None:
             window = self.session.selection.get_selected_plan_target_object("opening")
         return can_edit_window_height(window)
+
+    def can_apply_selected_window_style_preset(self):
+        return can_apply_selected_window_style_preset(self.session)
+
+    def can_apply_selected_window_width(self):
+        return can_apply_selected_window_width(self.session)
+
+    def can_apply_selected_window_height(self):
+        return can_apply_selected_window_height(self.session)
+
+    def can_apply_selected_window_size(self, width_value=None, height_value=None):
+        return can_apply_selected_window_size(
+            self.session,
+            width_value=width_value,
+            height_value=height_value,
+        )
+
+    def apply_selected_window_style_preset(self, preset_name):
+        return apply_selected_window_style_preset(self.session, preset_name)
+
+    def set_selected_window_width(self, value):
+        return set_selected_window_width(self.session, value)
+
+    def set_selected_window_height(self, value):
+        return set_selected_window_height(self.session, value)
+
+    def set_selected_window_size(self, width_value=None, height_value=None):
+        return set_selected_window_size(
+            self.session,
+            width_value=width_value,
+            height_value=height_value,
+        )
 
 
 def get_window_style_preset_options():

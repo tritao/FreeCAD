@@ -564,7 +564,7 @@ class TestBimPlanCore(unittest.TestCase):
                 ("Plan Edit", "Select\nWork directly in the viewport"),
                 session.status_text.get_status_chip_text(),
             )
-            self.assertEqual("Preset A", session._get_selected_window_style_preset())
+            self.assertEqual("Preset A", session.windows.get_selected_window_style_preset())
             self.assertEqual(
                 "Provider A",
                 session.providers.get_plan_provider_display_name("provider-a"),
@@ -879,13 +879,15 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             current_tool="Select",
             selection=SimpleNamespace(get_selected_plan_target=lambda: ("opening", window)),
-            _can_edit_window_width=lambda obj: obj is window,
-            _can_edit_window_height=lambda obj: False,
-            _can_apply_window_style_preset=lambda obj: obj is window,
-            _get_selected_window_style_preset=lambda: "Preset A",
-            _get_selected_window_width_text=lambda: "1200 mm",
-            _get_selected_window_height_text=lambda: "1500 mm",
-            _get_window_style_preset_options=lambda: ("Preset A", "Preset B"),
+            windows=SimpleNamespace(
+                can_edit_window_width=lambda obj: obj is window,
+                can_edit_window_height=lambda obj: False,
+                can_apply_window_style_preset=lambda obj: obj is window,
+                get_selected_window_style_preset=lambda: "Preset A",
+                get_selected_window_width_text=lambda: "1200 mm",
+                get_selected_window_height_text=lambda: "1500 mm",
+                get_window_style_preset_options=lambda: ("Preset A", "Preset B"),
+            ),
         )
 
         view_model = build_window_editor_view_model(session)
@@ -1060,13 +1062,6 @@ class TestBimPlanCore(unittest.TestCase):
             ),
             _is_plan_space_object=lambda obj: (_ for _ in ()).throw(AssertionError()),
             is_selected_wall_endpoint_editable=lambda: (_ for _ in ()).throw(AssertionError()),
-            _get_window_style_preset_options=lambda: (_ for _ in ()).throw(AssertionError()),
-            _can_edit_window_width=lambda obj: (_ for _ in ()).throw(AssertionError()),
-            _can_edit_window_height=lambda obj: (_ for _ in ()).throw(AssertionError()),
-            _can_apply_window_style_preset=lambda obj: (_ for _ in ()).throw(AssertionError()),
-            _get_selected_window_style_preset=lambda: (_ for _ in ()).throw(AssertionError()),
-            _get_selected_window_width_text=lambda: (_ for _ in ()).throw(AssertionError()),
-            _get_selected_window_height_text=lambda: (_ for _ in ()).throw(AssertionError()),
             _space_region_candidates=[],
             _hovered_space_region_candidate=None,
             _plan_region_parent_space=None,
