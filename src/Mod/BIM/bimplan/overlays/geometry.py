@@ -132,7 +132,7 @@ def get_wall_overlay_polylines(session, wall):
         faces = proxy.getFootprint(wall) or []
     except Exception:
         return []
-    return session._get_footprint_overlay_polylines(faces)
+    return session.overlays.get_footprint_overlay_polylines(faces)
 
 
 def get_space_footprint_faces(session, space):
@@ -163,8 +163,8 @@ def get_space_overlay_polylines(session, space):
         "space",
         space,
         "overlay_polylines",
-        lambda space_obj: session._get_footprint_overlay_polylines(
-            session._get_space_footprint_faces(space_obj)
+        lambda space_obj: session.overlays.get_footprint_overlay_polylines(
+            session.overlays.get_space_footprint_faces(space_obj)
         ),
     )
 
@@ -197,8 +197,8 @@ def get_region_overlay_polylines(session, region):
         "region",
         region,
         "overlay_polylines",
-        lambda region_obj: session._get_footprint_overlay_polylines(
-            session._get_region_footprint_faces(region_obj)
+        lambda region_obj: session.overlays.get_footprint_overlay_polylines(
+            session.overlays.get_region_footprint_faces(region_obj)
         ),
     )
 
@@ -294,7 +294,7 @@ def get_region_overlay_segments(session, region):
         "region",
         region,
         "overlay_segments",
-        lambda region_obj: session._build_overlay_segments_from_polylines(
+        lambda region_obj: session.overlays.build_overlay_segments_from_polylines(
             get_region_overlay_polylines(session, region_obj)
         ),
     )
@@ -307,7 +307,7 @@ def get_space_overlay_segments(session, space):
         "space",
         space,
         "overlay_segments",
-        lambda space_obj: session._build_overlay_segments_from_polylines(
+        lambda space_obj: session.overlays.build_overlay_segments_from_polylines(
             get_space_overlay_polylines(session, space_obj)
         ),
     )
@@ -320,8 +320,8 @@ def get_opening_overlay_segments(session, opening):
         "opening",
         opening,
         "symbol_overlay_segments",
-        lambda opening_obj: session._build_overlay_segments_from_polylines(
-            session._get_opening_overlay_polylines(opening_obj)
+        lambda opening_obj: session.overlays.build_overlay_segments_from_polylines(
+            session.overlays.get_opening_overlay_polylines(opening_obj)
         ),
     )
 
@@ -333,7 +333,7 @@ def get_opening_combined_overlay_polylines(session, opening):
         "opening",
         opening,
         "combined_overlay_polylines",
-        lambda opening_obj: tuple(session._get_opening_overlay_polylines(opening_obj))
+        lambda opening_obj: tuple(session.overlays.get_opening_overlay_polylines(opening_obj))
         + tuple(get_opening_guide_polylines(session, opening_obj)),
     )
 
@@ -345,7 +345,7 @@ def get_opening_combined_overlay_segments(session, opening):
         "opening",
         opening,
         "combined_overlay_segments",
-        lambda opening_obj: session._build_overlay_segments_from_polylines(
+        lambda opening_obj: session.overlays.build_overlay_segments_from_polylines(
             get_opening_combined_overlay_polylines(session, opening_obj)
         ),
     )

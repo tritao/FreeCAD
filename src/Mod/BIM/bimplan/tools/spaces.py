@@ -199,7 +199,7 @@ def create_plan_region(session, points):
             raise RuntimeError("Unable to create plan region")
         session.visibility.add_object_to_active_storey(region)
         session.doc.recompute()
-        if not session._get_region_footprint_faces(region):
+        if not session.overlays.get_region_footprint_faces(region):
             raise RuntimeError("Plan region has no valid footprint")
         session.doc.commitTransaction()
     except Exception:
@@ -701,7 +701,7 @@ def is_space_region_candidate_claimed(
         return False
 
     for space in spaces or []:
-        footprint_faces = session._get_space_footprint_faces(space)
+        footprint_faces = session.overlays.get_space_footprint_faces(space)
         if not footprint_faces:
             continue
         for footprint_face in footprint_faces:
@@ -956,7 +956,7 @@ def get_space_region_candidate_polylines(session, candidate):
     face = candidate.get("face") if isinstance(candidate, dict) else None
     if not face:
         return []
-    return session._get_footprint_overlay_polylines([face])
+    return session.overlays.get_footprint_overlay_polylines([face])
 
 
 def get_space_region_candidate_segments(session, candidate):

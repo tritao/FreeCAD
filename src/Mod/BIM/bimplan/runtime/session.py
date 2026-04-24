@@ -67,7 +67,6 @@ from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
 from bimplan.overlays import openings as opening_overlays
 from bimplan.overlays.runtime import PlanOverlaysAPI
-from bimplan.overlays import walls as wall_overlays
 from bimplan.providers import get_plan_edit_registry
 from bimplan.status_text import PlanStatusTextAPI
 from bimplan.ui.controls import PlanEditControlsWidget
@@ -964,36 +963,6 @@ class PlanEditSession:
 
     def _clear_input_hints(self):
         return self.status_text.clear_input_hints()
-
-    def _retarget_edit_tracker(self, tracker, obj, index):
-        return wall_overlays.retarget_edit_tracker(tracker, obj, index)
-
-    def _get_footprint_overlay_polylines(self, faces):
-        return overlay_geometry.get_footprint_overlay_polylines(faces)
-
-    def _build_overlay_segments_from_polylines(self, polylines):
-        return overlay_geometry.build_overlay_segments_from_polylines(polylines)
-
-    def _get_wall_overlay_polylines(self, wall):
-        return overlay_geometry.get_wall_overlay_polylines(self, wall)
-
-    def _get_space_footprint_faces(self, space):
-        return overlay_geometry.get_space_footprint_faces(self, space)
-
-    def _get_space_overlay_polylines(self, space):
-        return overlay_geometry.get_space_overlay_polylines(self, space)
-
-    def _get_region_footprint_faces(self, region):
-        return overlay_geometry.get_region_footprint_faces(self, region)
-
-    def _get_region_overlay_polylines(self, region):
-        return overlay_geometry.get_region_overlay_polylines(self, region)
-
-    def _get_opening_overlay_polylines(self, opening):
-        return overlay_geometry.get_opening_overlay_polylines(self, opening)
-
-    def _get_opening_overlay_screen_polylines(self, opening):
-        return overlay_geometry.get_opening_overlay_screen_polylines(self, opening)
 
     def _is_plan_additive_selection_active(self):
         return plan_selection.is_plan_additive_selection_active(self)

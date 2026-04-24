@@ -851,7 +851,7 @@ def get_wall_hosted_opening_preview_segments(session, wall, points):
         delta = FreeCAD.Vector(item["target_point"]).sub(item["current"])
         if delta.Length < 1e-6:
             continue
-        for polyline in session._get_opening_overlay_polylines(item["opening"]):
+        for polyline in session.overlays.get_opening_overlay_polylines(item["opening"]):
             if len(polyline) < 2:
                 continue
             translated = [FreeCAD.Vector(point).add(delta) for point in polyline]

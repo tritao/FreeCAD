@@ -31,6 +31,9 @@ _PLAN_OVERLAYS_API_MODULES = (
     (
         overlay_geometry,
         (
+            "get_footprint_overlay_polylines",
+            "build_overlay_segments_from_polylines",
+            "get_wall_overlay_polylines",
             "get_space_footprint_faces",
             "get_space_overlay_polylines",
             "get_space_overlay_segments",
@@ -65,6 +68,7 @@ _PLAN_OVERLAYS_API_MODULES = (
     (
         wall_overlays,
         (
+            "retarget_edit_tracker",
             "sync_wall_grips",
             "schedule_wall_grip_sync",
             "run_scheduled_wall_grip_sync",
