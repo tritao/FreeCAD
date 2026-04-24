@@ -355,6 +355,27 @@ class PlanEditSession:
             self.__dict__["opening_transient_state"] = state
         return state
 
+    def _ensure_overlay_tracker_state(self):
+        state = self.__dict__.get("overlay_tracker_state")
+        if state is None:
+            state = plan_session_state.PlanOverlayTrackerState()
+            self.__dict__["overlay_tracker_state"] = state
+        return state
+
+    def _ensure_overlay_cache_state(self):
+        state = self.__dict__.get("overlay_cache_state")
+        if state is None:
+            state = plan_session_state.PlanOverlayCacheState()
+            self.__dict__["overlay_cache_state"] = state
+        return state
+
+    def _ensure_overlay_transient_state(self):
+        state = self.__dict__.get("overlay_transient_state")
+        if state is None:
+            state = plan_session_state.PlanOverlayTransientState()
+            self.__dict__["overlay_transient_state"] = state
+        return state
+
     @property
     def _plan_relation_status_message(self):
         return self._ensure_task_panel_state().relation_status_message
@@ -1212,6 +1233,333 @@ class PlanEditSession:
     @_edit_opening_move_raw_point.setter
     def _edit_opening_move_raw_point(self, value):
         self._ensure_opening_transient_state().edit_opening_move_raw_point = value
+
+    @property
+    def _grip_trackers(self):
+        return self._ensure_overlay_tracker_state().grip_trackers
+
+    @_grip_trackers.setter
+    def _grip_trackers(self, value):
+        self._ensure_overlay_tracker_state().grip_trackers = list(value or [])
+
+    @property
+    def _wall_hover_trackers(self):
+        return self._ensure_overlay_tracker_state().wall_hover_trackers
+
+    @_wall_hover_trackers.setter
+    def _wall_hover_trackers(self, value):
+        self._ensure_overlay_tracker_state().wall_hover_trackers = list(value or [])
+
+    @property
+    def _wall_overlay_trackers(self):
+        return self._ensure_overlay_tracker_state().wall_overlay_trackers
+
+    @_wall_overlay_trackers.setter
+    def _wall_overlay_trackers(self, value):
+        self._ensure_overlay_tracker_state().wall_overlay_trackers = list(value or [])
+
+    @property
+    def _junction_node_trackers(self):
+        return self._ensure_overlay_tracker_state().junction_node_trackers
+
+    @_junction_node_trackers.setter
+    def _junction_node_trackers(self, value):
+        self._ensure_overlay_tracker_state().junction_node_trackers = list(value or [])
+
+    @property
+    def _hovered_wall_opening_context_trackers(self):
+        return self._ensure_overlay_tracker_state().hovered_wall_opening_context_trackers
+
+    @_hovered_wall_opening_context_trackers.setter
+    def _hovered_wall_opening_context_trackers(self, value):
+        self._ensure_overlay_tracker_state().hovered_wall_opening_context_trackers = list(
+            value or []
+        )
+
+    @property
+    def _opening_hover_trackers(self):
+        return self._ensure_overlay_tracker_state().opening_hover_trackers
+
+    @_opening_hover_trackers.setter
+    def _opening_hover_trackers(self, value):
+        self._ensure_overlay_tracker_state().opening_hover_trackers = list(value or [])
+
+    @property
+    def _symbol_hover_trackers(self):
+        return self._ensure_overlay_tracker_state().symbol_hover_trackers
+
+    @_symbol_hover_trackers.setter
+    def _symbol_hover_trackers(self, value):
+        self._ensure_overlay_tracker_state().symbol_hover_trackers = list(value or [])
+
+    @property
+    def _provider_hover_trackers(self):
+        return self._ensure_overlay_tracker_state().provider_hover_trackers
+
+    @_provider_hover_trackers.setter
+    def _provider_hover_trackers(self, value):
+        self._ensure_overlay_tracker_state().provider_hover_trackers = list(value or [])
+
+    @property
+    def _provider_selected_trackers(self):
+        return self._ensure_overlay_tracker_state().provider_selected_trackers
+
+    @_provider_selected_trackers.setter
+    def _provider_selected_trackers(self, value):
+        self._ensure_overlay_tracker_state().provider_selected_trackers = list(value or [])
+
+    @property
+    def _space_hover_trackers(self):
+        return self._ensure_overlay_tracker_state().space_hover_trackers
+
+    @_space_hover_trackers.setter
+    def _space_hover_trackers(self, value):
+        self._ensure_overlay_tracker_state().space_hover_trackers = list(value or [])
+
+    @property
+    def _region_hover_trackers(self):
+        return self._ensure_overlay_tracker_state().region_hover_trackers
+
+    @_region_hover_trackers.setter
+    def _region_hover_trackers(self, value):
+        self._ensure_overlay_tracker_state().region_hover_trackers = list(value or [])
+
+    @property
+    def _opening_overlay_trackers(self):
+        return self._ensure_overlay_tracker_state().opening_overlay_trackers
+
+    @_opening_overlay_trackers.setter
+    def _opening_overlay_trackers(self, value):
+        self._ensure_overlay_tracker_state().opening_overlay_trackers = list(value or [])
+
+    @property
+    def _symbol_overlay_trackers(self):
+        return self._ensure_overlay_tracker_state().symbol_overlay_trackers
+
+    @_symbol_overlay_trackers.setter
+    def _symbol_overlay_trackers(self, value):
+        self._ensure_overlay_tracker_state().symbol_overlay_trackers = list(value or [])
+
+    @property
+    def _space_overlay_trackers(self):
+        return self._ensure_overlay_tracker_state().space_overlay_trackers
+
+    @_space_overlay_trackers.setter
+    def _space_overlay_trackers(self, value):
+        self._ensure_overlay_tracker_state().space_overlay_trackers = list(value or [])
+
+    @property
+    def _region_overlay_trackers(self):
+        return self._ensure_overlay_tracker_state().region_overlay_trackers
+
+    @_region_overlay_trackers.setter
+    def _region_overlay_trackers(self, value):
+        self._ensure_overlay_tracker_state().region_overlay_trackers = list(value or [])
+
+    @property
+    def _provider_overlay_trackers(self):
+        return self._ensure_overlay_tracker_state().provider_overlay_trackers
+
+    @_provider_overlay_trackers.setter
+    def _provider_overlay_trackers(self, value):
+        self._ensure_overlay_tracker_state().provider_overlay_trackers = list(value or [])
+
+    @property
+    def _secondary_selection_trackers(self):
+        return self._ensure_overlay_tracker_state().secondary_selection_trackers
+
+    @_secondary_selection_trackers.setter
+    def _secondary_selection_trackers(self, value):
+        self._ensure_overlay_tracker_state().secondary_selection_trackers = list(value or [])
+
+    @property
+    def _space_region_pick_trackers(self):
+        return self._ensure_overlay_tracker_state().space_region_pick_trackers
+
+    @_space_region_pick_trackers.setter
+    def _space_region_pick_trackers(self, value):
+        self._ensure_overlay_tracker_state().space_region_pick_trackers = list(value or [])
+
+    @property
+    def _selected_wall_opening_context_trackers(self):
+        return self._ensure_overlay_tracker_state().selected_wall_opening_context_trackers
+
+    @_selected_wall_opening_context_trackers.setter
+    def _selected_wall_opening_context_trackers(self, value):
+        self._ensure_overlay_tracker_state().selected_wall_opening_context_trackers = list(
+            value or []
+        )
+
+    @property
+    def _symbol_handle_trackers(self):
+        return self._ensure_overlay_tracker_state().symbol_handle_trackers
+
+    @_symbol_handle_trackers.setter
+    def _symbol_handle_trackers(self, value):
+        self._ensure_overlay_tracker_state().symbol_handle_trackers = list(value or [])
+
+    @property
+    def _plan_overlay_geometry_cache(self):
+        return self._ensure_overlay_cache_state().plan_overlay_geometry_cache
+
+    @_plan_overlay_geometry_cache.setter
+    def _plan_overlay_geometry_cache(self, value):
+        default_cache = {"opening": {}, "space": {}, "region": {}}
+        self._ensure_overlay_cache_state().plan_overlay_geometry_cache = dict(
+            value or default_cache
+        )
+
+    @property
+    def _plan_semantic_object_cache(self):
+        return self._ensure_overlay_cache_state().plan_semantic_object_cache
+
+    @_plan_semantic_object_cache.setter
+    def _plan_semantic_object_cache(self, value):
+        self._ensure_overlay_cache_state().plan_semantic_object_cache = dict(value or {})
+
+    @property
+    def _plan_object_storeys_cache(self):
+        return self._ensure_overlay_cache_state().plan_object_storeys_cache
+
+    @_plan_object_storeys_cache.setter
+    def _plan_object_storeys_cache(self, value):
+        self._ensure_overlay_cache_state().plan_object_storeys_cache = dict(value or {})
+
+    @property
+    def _plan_symbol_instances_cache(self):
+        return self._ensure_overlay_cache_state().plan_symbol_instances_cache
+
+    @_plan_symbol_instances_cache.setter
+    def _plan_symbol_instances_cache(self, value):
+        self._ensure_overlay_cache_state().plan_symbol_instances_cache = value
+
+    @property
+    def _plan_space_instances_cache(self):
+        return self._ensure_overlay_cache_state().plan_space_instances_cache
+
+    @_plan_space_instances_cache.setter
+    def _plan_space_instances_cache(self, value):
+        self._ensure_overlay_cache_state().plan_space_instances_cache = value
+
+    @property
+    def _plan_region_instances_cache(self):
+        return self._ensure_overlay_cache_state().plan_region_instances_cache
+
+    @_plan_region_instances_cache.setter
+    def _plan_region_instances_cache(self, value):
+        self._ensure_overlay_cache_state().plan_region_instances_cache = value
+
+    @property
+    def _plan_opening_instances_cache(self):
+        return self._ensure_overlay_cache_state().plan_opening_instances_cache
+
+    @_plan_opening_instances_cache.setter
+    def _plan_opening_instances_cache(self, value):
+        self._ensure_overlay_cache_state().plan_opening_instances_cache = value
+
+    @property
+    def _wall_hosted_openings_cache(self):
+        return self._ensure_overlay_cache_state().wall_hosted_openings_cache
+
+    @_wall_hosted_openings_cache.setter
+    def _wall_hosted_openings_cache(self, value):
+        self._ensure_overlay_cache_state().wall_hosted_openings_cache = value
+
+    @property
+    def _wall_hosted_openings_cache_queued(self):
+        return self._ensure_overlay_cache_state().wall_hosted_openings_cache_queued
+
+    @_wall_hosted_openings_cache_queued.setter
+    def _wall_hosted_openings_cache_queued(self, value):
+        self._ensure_overlay_cache_state().wall_hosted_openings_cache_queued = bool(value)
+
+    @property
+    def _opening_overlay_screen_cache(self):
+        return self._ensure_overlay_cache_state().opening_overlay_screen_cache
+
+    @_opening_overlay_screen_cache.setter
+    def _opening_overlay_screen_cache(self, value):
+        self._ensure_overlay_cache_state().opening_overlay_screen_cache = dict(value or {})
+
+    @property
+    def _opening_overlay_screen_cache_projection_key(self):
+        return self._ensure_overlay_cache_state().opening_overlay_screen_cache_projection_key
+
+    @_opening_overlay_screen_cache_projection_key.setter
+    def _opening_overlay_screen_cache_projection_key(self, value):
+        self._ensure_overlay_cache_state().opening_overlay_screen_cache_projection_key = value
+
+    @property
+    def _symbol_overlay_screen_cache(self):
+        return self._ensure_overlay_cache_state().symbol_overlay_screen_cache
+
+    @_symbol_overlay_screen_cache.setter
+    def _symbol_overlay_screen_cache(self, value):
+        self._ensure_overlay_cache_state().symbol_overlay_screen_cache = dict(value or {})
+
+    @property
+    def _hovered_opening_overlay_dirty(self):
+        return self._ensure_overlay_transient_state().hovered_opening_overlay_dirty
+
+    @_hovered_opening_overlay_dirty.setter
+    def _hovered_opening_overlay_dirty(self, value):
+        self._ensure_overlay_transient_state().hovered_opening_overlay_dirty = bool(value)
+
+    @property
+    def _hovered_opening_overlay_render_state(self):
+        return self._ensure_overlay_transient_state().hovered_opening_overlay_render_state
+
+    @_hovered_opening_overlay_render_state.setter
+    def _hovered_opening_overlay_render_state(self, value):
+        self._ensure_overlay_transient_state().hovered_opening_overlay_render_state = value
+
+    @property
+    def _selected_opening_overlay_dirty(self):
+        return self._ensure_overlay_transient_state().selected_opening_overlay_dirty
+
+    @_selected_opening_overlay_dirty.setter
+    def _selected_opening_overlay_dirty(self, value):
+        self._ensure_overlay_transient_state().selected_opening_overlay_dirty = bool(value)
+
+    @property
+    def _selected_opening_overlay_render_state(self):
+        return self._ensure_overlay_transient_state().selected_opening_overlay_render_state
+
+    @_selected_opening_overlay_render_state.setter
+    def _selected_opening_overlay_render_state(self, value):
+        self._ensure_overlay_transient_state().selected_opening_overlay_render_state = value
+
+    @property
+    def _selected_space_overlay_dirty(self):
+        return self._ensure_overlay_transient_state().selected_space_overlay_dirty
+
+    @_selected_space_overlay_dirty.setter
+    def _selected_space_overlay_dirty(self, value):
+        self._ensure_overlay_transient_state().selected_space_overlay_dirty = bool(value)
+
+    @property
+    def _selected_space_overlay_geometry_key(self):
+        return self._ensure_overlay_transient_state().selected_space_overlay_geometry_key
+
+    @_selected_space_overlay_geometry_key.setter
+    def _selected_space_overlay_geometry_key(self, value):
+        self._ensure_overlay_transient_state().selected_space_overlay_geometry_key = value
+
+    @property
+    def _selected_space_overlay_segments(self):
+        return self._ensure_overlay_transient_state().selected_space_overlay_segments
+
+    @_selected_space_overlay_segments.setter
+    def _selected_space_overlay_segments(self, value):
+        self._ensure_overlay_transient_state().selected_space_overlay_segments = tuple(value or ())
+
+    @property
+    def _selected_space_overlay_render_state(self):
+        return self._ensure_overlay_transient_state().selected_space_overlay_render_state
+
+    @_selected_space_overlay_render_state.setter
+    def _selected_space_overlay_render_state(self, value):
+        self._ensure_overlay_transient_state().selected_space_overlay_render_state = value
 
     def __init__(self):
         self.selection = PlanSelectionAPI(self)
