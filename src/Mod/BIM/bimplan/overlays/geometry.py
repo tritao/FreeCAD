@@ -45,9 +45,9 @@ def invalidate_plan_overlay_geometry_cache(session, obj=None, kinds=None):
             cache = session.overlay_cache_state.plan_overlay_geometry_cache.get(kind)
             if cache is not None:
                 cache.clear()
-        session._invalidate_opening_overlay_screen_cache()
-        session._invalidate_hovered_opening_overlay_cache()
-        session._invalidate_selected_opening_overlay_cache()
+        invalidate_opening_overlay_screen_cache(session)
+        session.overlays.invalidate_hovered_opening_overlay_cache()
+        session.overlays.invalidate_selected_opening_overlay_cache()
         session._invalidate_selected_space_overlay_cache()
         return
     semantic_obj, key, _entry = session._get_plan_overlay_geometry_cache_entry(
@@ -60,11 +60,11 @@ def invalidate_plan_overlay_geometry_cache(session, obj=None, kinds=None):
         if cache is not None:
             cache.pop(key, None)
     if "opening" in target_kinds:
-        session._invalidate_opening_overlay_screen_cache()
+        invalidate_opening_overlay_screen_cache(session)
     if session.hovered_opening == semantic_obj:
-        session._invalidate_hovered_opening_overlay_cache()
+        session.overlays.invalidate_hovered_opening_overlay_cache()
     if session._is_selected_plan_target("opening", semantic_obj):
-        session._invalidate_selected_opening_overlay_cache()
+        session.overlays.invalidate_selected_opening_overlay_cache()
     if session._is_selected_plan_target("space", semantic_obj):
         session._invalidate_selected_space_overlay_cache()
 

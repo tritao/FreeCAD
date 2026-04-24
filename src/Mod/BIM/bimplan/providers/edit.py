@@ -139,8 +139,8 @@ def start_provider_handle_point_pick(session, provider_obj, handle_index, handle
     session._edit_provider = provider_obj
     session._edit_provider_handle_index = handle_index
     session._edit_provider_handle = handle
-    session._clear_selected_provider_overlay()
-    session._clear_selected_provider_handles()
+    session.overlays.clear_selected_provider_overlay()
+    session.overlays.clear_selected_provider_handles()
     session._refresh_task_panel_status()
     FreeCAD.activeDraftCommand = session
     session._set_draft_point_focus_suppressed(True)
