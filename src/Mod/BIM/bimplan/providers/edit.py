@@ -434,7 +434,7 @@ def _build_provider_handle_payload(
         snap_object_name = str(getattr(snap_object, "Name", "") or "")
     selected_target = session.selection.get_selected_plan_target()
     selected_targets = session.selection.get_selected_plan_targets()
-    hovered_target = session._get_hovered_plan_target()
+    hovered_target = session.selection.get_hovered_plan_target()
     host_kind, host_obj, host_source = _get_provider_handle_payload_host_target(
         session,
         handle,

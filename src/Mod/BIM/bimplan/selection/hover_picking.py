@@ -88,7 +88,7 @@ def clear_hovered_plan_targets(session, kinds=None):
 
 def update_hovered_plan_target(session, mouse_pos, force=False):
     if session.current_tool == "Join":
-        if session._should_skip_hover_pick(mouse_pos, force=force):
+        if session.selection.should_skip_hover_pick(mouse_pos, force=force):
             return False
         session._plan_perf_count("hover_pick_resolved")
         with session._plan_perf_trace_span("hover_pick_resolve"):
@@ -103,7 +103,7 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
         session._hover_pick_dirty = False
         clear_hovered_plan_targets(session)
         return True
-    if session._should_skip_hover_pick(mouse_pos, force=force):
+    if session.selection.should_skip_hover_pick(mouse_pos, force=force):
         return False
     session._plan_perf_count("hover_pick_resolved")
     overlay_mode = session.get_plan_provider_overlay_mode()

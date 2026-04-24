@@ -2150,12 +2150,6 @@ class PlanEditSession:
     def _get_plan_region_instances(self):
         return plan_picking.get_plan_region_instances(self)
 
-    def _should_skip_hover_pick(self, mouse_pos, force=False):
-        return plan_hover_picking.should_skip_hover_pick(self, mouse_pos, force=force)
-
-    def _update_hovered_plan_target(self, mouse_pos, force=False):
-        return plan_hover_picking.update_hovered_plan_target(self, mouse_pos, force=force)
-
     def _is_plan_additive_selection_active(self):
         return plan_selection.is_plan_additive_selection_active(self)
 
@@ -2191,9 +2185,6 @@ class PlanEditSession:
 
     def _clear_hovered_plan_targets(self, kinds=None):
         return plan_hover_picking.clear_hovered_plan_targets(self, kinds=kinds)
-
-    def _get_hovered_plan_target(self):
-        return plan_hover_picking.get_hovered_plan_target(self)
 
     def _set_event_handled(self, event_callback):
         if event_callback and hasattr(event_callback, "setHandled"):
