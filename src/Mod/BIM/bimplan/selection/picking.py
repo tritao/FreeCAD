@@ -2,6 +2,7 @@
 
 """Pointer picking helpers for BIM Plan Edit."""
 
+from contextlib import nullcontext
 import FreeCAD
 import math
 from bimplan.selection import hover_picking as plan_hover_picking
@@ -37,8 +38,12 @@ def _should_prioritize_provider_targets_for_mode(session):
 
 
 def _emit_pick_debug(session, name, **fields):
-    is_active = getattr(session, "_is_plan_pick_debug_active", None)
-    emit = getattr(session, "_plan_pick_debug_event", None)
+    perf = getattr(session, "performance", None)
+    is_active = getattr(perf, "is_plan_pick_debug_active", None)
+    emit = getattr(perf, "plan_pick_debug_event", None)
+    if not callable(is_active) or not callable(emit):
+        is_active = getattr(session, "_is_plan_pick_debug_active", None)
+        emit = getattr(session, "_plan_pick_debug_event", None)
     if not callable(is_active) or not callable(emit):
         return
     try:
@@ -59,7 +64,10 @@ def _append_pick_debug_item(items, value, limit=_MAX_PICK_DEBUG_ITEMS):
 
 
 def _describe_pick_object(session, obj):
-    describe = getattr(session, "_plan_perf_describe_object", None)
+    perf = getattr(session, "performance", None)
+    describe = getattr(perf, "plan_perf_describe_object", None)
+    if not callable(describe):
+        describe = getattr(session, "_plan_perf_describe_object", None)
     if callable(describe):
         try:
             return describe(obj)
@@ -81,7 +89,10 @@ def _describe_pick_object(session, obj):
 
 
 def _describe_pick_target(session, kind, obj):
-    describe = getattr(session, "_plan_perf_describe_target", None)
+    perf = getattr(session, "performance", None)
+    describe = getattr(perf, "plan_perf_describe_target", None)
+    if not callable(describe):
+        describe = getattr(session, "_plan_perf_describe_target", None)
     if callable(describe):
         try:
             return describe(kind, obj)
@@ -96,6 +107,39 @@ def _describe_pick_target(session, kind, obj):
     elif described is not None:
         result["value"] = described
     return result
+
+
+def _perf_count(session, name, delta=1):
+    perf = getattr(session, "performance", None)
+    count = getattr(perf, "plan_perf_count", None)
+    if callable(count):
+        return count(name, delta=delta)
+    count = getattr(session, "_plan_perf_count", None)
+    if callable(count):
+        return count(name, delta=delta)
+    return None
+
+
+def _perf_set_fields(session, **fields):
+    perf = getattr(session, "performance", None)
+    set_fields = getattr(perf, "plan_perf_set_fields", None)
+    if callable(set_fields):
+        return set_fields(**fields)
+    set_fields = getattr(session, "_plan_perf_set_fields", None)
+    if callable(set_fields):
+        return set_fields(**fields)
+    return None
+
+
+def _perf_trace_span(session, name, **fields):
+    perf = getattr(session, "performance", None)
+    trace_span = getattr(perf, "plan_perf_trace_span", None)
+    if callable(trace_span):
+        return trace_span(name, **fields)
+    trace_span = getattr(session, "_plan_perf_trace_span", None)
+    if callable(trace_span):
+        return trace_span(name, **fields)
+    return nullcontext()
 
 
 def _describe_pick_info_entry(info):
@@ -156,13 +200,13 @@ def _get_cached_plan_instances(session, cache_field, is_target, count_name, span
     doc_name = getattr(session.doc, "Name", None)
     cache_record = getattr(session.overlay_cache_state, cache_field, None)
     if cache_record is not None and cache_record[0] == doc_name:
-        session._plan_perf_count(f"{cache_field}_hits")
+        _perf_count(session, f"{cache_field}_hits")
         return cache_record[1]
 
     instances = []
-    with session._plan_perf_trace_span(span_name):
+    with _perf_trace_span(session, span_name):
         for obj in getattr(session.doc, "Objects", []) or []:
-            session._plan_perf_count(count_name)
+            _perf_count(session, count_name)
             if is_target(obj):
                 instances.append(obj)
     result = tuple(instances)
@@ -269,7 +313,8 @@ def should_skip_opening_by_plan_bounds(session, opening, plan_point, radius_px):
 
 
 def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
-    with session._plan_perf_trace_span(
+    with _perf_trace_span(
+        session,
         "pick_symbol_target_from_overlays",
         mouse_pos=mouse_pos,
         radius_px=radius_px,
@@ -281,13 +326,13 @@ def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
         best_distance_sq = None
         cursor_xy = (float(mouse_pos[0]), float(mouse_pos[1]))
         for obj in session.overlays.get_plan_symbol_instances():
-            session._plan_perf_count("symbol_overlay_pick_candidates")
+            _perf_count(session, "symbol_overlay_pick_candidates")
             view_object = getattr(obj, "ViewObject", None)
             if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
                 continue
             for projected in session.overlays.get_symbol_overlay_screen_polylines(obj):
                 for start_xy, end_xy in zip(projected, projected[1:]):
-                    session._plan_perf_count("symbol_overlay_pick_segments_scanned")
+                    _perf_count(session, "symbol_overlay_pick_segments_scanned")
                     distance_sq = session._get_screen_distance_sq_to_projected_segment(
                         cursor_xy,
                         start_xy,
@@ -298,14 +343,15 @@ def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
                     if best_distance_sq is None or distance_sq < best_distance_sq:
                         best_symbol = obj
                         best_distance_sq = distance_sq
-        session._plan_perf_set_fields(
-            symbol_overlay_pick_result=session._plan_perf_describe_object(best_symbol)
+        _perf_set_fields(
+            session, symbol_overlay_pick_result=_describe_pick_object(session, best_symbol)
         )
         return best_symbol
 
 
 def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, candidates=None):
-    with session._plan_perf_trace_span(
+    with _perf_trace_span(
+        session,
         "pick_opening_target_from_overlays",
         mouse_pos=mouse_pos,
         radius_px=radius_px,
@@ -324,7 +370,7 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
         else:
             objects = candidates
         for obj in objects or []:
-            session._plan_perf_count("opening_overlay_pick_objects_scanned")
+            _perf_count(session, "opening_overlay_pick_objects_scanned")
             if not session._is_hosted_opening_object(obj):
                 continue
             name = getattr(obj, "Name", None)
@@ -335,12 +381,12 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
             if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
                 continue
             if should_skip_opening_by_plan_bounds(session, obj, plan_point, radius_px):
-                session._plan_perf_count("opening_overlay_pick_bounds_skipped")
+                _perf_count(session, "opening_overlay_pick_bounds_skipped")
                 continue
-            session._plan_perf_count("opening_overlay_pick_candidates")
+            _perf_count(session, "opening_overlay_pick_candidates")
             for projected in session.overlays.get_opening_overlay_screen_polylines(obj):
                 for start_xy, end_xy in zip(projected, projected[1:]):
-                    session._plan_perf_count("opening_overlay_pick_segments_scanned")
+                    _perf_count(session, "opening_overlay_pick_segments_scanned")
                     distance_sq = session._get_screen_distance_sq_to_projected_segment(
                         cursor_xy, start_xy, end_xy
                     )
@@ -349,9 +395,10 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
                     if best_distance_sq is None or distance_sq < best_distance_sq:
                         best_opening = obj
                         best_distance_sq = distance_sq
-        session._plan_perf_set_fields(
+        _perf_set_fields(
+            session,
             opening_overlay_pick_mode="screen",
-            opening_overlay_pick_result=session._plan_perf_describe_object(best_opening),
+            opening_overlay_pick_result=_describe_pick_object(session, best_opening),
         )
         return best_opening
 
@@ -361,7 +408,8 @@ def pick_provider_overlay_target_from_overlays(
     mouse_pos,
     radius_px=_PROVIDER_OVERLAY_PICK_RADIUS_PX,
 ):
-    with session._plan_perf_trace_span(
+    with _perf_trace_span(
+        session,
         "pick_provider_overlay_target_from_overlays",
         mouse_pos=mouse_pos,
         radius_px=radius_px,
@@ -459,8 +507,9 @@ def pick_provider_overlay_target_from_overlays(
                         target.target_kind.value if target.target_kind is not None else ""
                     )
                     best_target_obj = target_obj
-        session._plan_perf_set_fields(
-            provider_overlay_pick_result=session._plan_perf_describe_object(best_target_obj)
+        _perf_set_fields(
+            session,
+            provider_overlay_pick_result=_describe_pick_object(session, best_target_obj),
         )
         _emit_pick_debug(
             session,
@@ -474,7 +523,8 @@ def pick_provider_overlay_target_from_overlays(
 
 
 def pick_provider_overlay_target_from_objects_info(session, mouse_pos):
-    with session._plan_perf_trace_span(
+    with _perf_trace_span(
+        session,
         "pick_provider_overlay_target_from_objects_info",
         mouse_pos=mouse_pos,
     ):
@@ -523,10 +573,11 @@ def pick_provider_overlay_target_from_objects_info(session, mouse_pos):
                     _describe_pick_target(session, target_kind, target_obj),
                 )
                 if target_obj is not None:
-                    session._plan_perf_set_fields(
-                        provider_overlay_info_pick_result=session._plan_perf_describe_object(
-                            target_obj
-                        )
+                    _perf_set_fields(
+                        session,
+                        provider_overlay_info_pick_result=_describe_pick_object(
+                            session, target_obj
+                        ),
                     )
                     _append_pick_debug_item(debug_infos, info_entry)
                     _emit_pick_debug(
@@ -671,7 +722,7 @@ def xy_point_in_polygon(point, polyline, tolerance=1e-9):
 
 
 def pick_plan_region_target_from_polylines(session, mouse_pos):
-    with session._plan_perf_trace_span("pick_region_target_from_polylines", mouse_pos=mouse_pos):
+    with _perf_trace_span(session, "pick_region_target_from_polylines", mouse_pos=mouse_pos):
         if not session.doc or not mouse_pos:
             return None
 
@@ -683,7 +734,7 @@ def pick_plan_region_target_from_polylines(session, mouse_pos):
         best_area = None
         seen = set()
         for obj in session.selection.get_plan_region_instances():
-            session._plan_perf_count("region_polyline_pick_objects_scanned")
+            _perf_count(session, "region_polyline_pick_objects_scanned")
             if not session._is_plan_region_object(obj):
                 continue
             name = getattr(obj, "Name", None)
@@ -717,7 +768,7 @@ def pick_plan_target_from_footprint_faces(
     session, mouse_pos, is_target, get_faces, target_label="target"
 ):
     span_name = f"pick_{target_label}_target_from_footprints"
-    with session._plan_perf_trace_span(span_name, mouse_pos=mouse_pos):
+    with _perf_trace_span(session, span_name, mouse_pos=mouse_pos):
         if not session.doc or not mouse_pos:
             return None
 
@@ -735,7 +786,7 @@ def pick_plan_target_from_footprint_faces(
             objects = session.selection.get_plan_region_instances()
 
         for obj in objects or []:
-            session._plan_perf_count(f"{target_label}_objects_scanned")
+            _perf_count(session, f"{target_label}_objects_scanned")
             if not is_target(obj):
                 continue
             name = getattr(obj, "Name", None)
@@ -745,13 +796,13 @@ def pick_plan_target_from_footprint_faces(
             view_object = getattr(obj, "ViewObject", None)
             if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
                 continue
-            session._plan_perf_count(f"{target_label}_visible_candidates")
+            _perf_count(session, f"{target_label}_visible_candidates")
 
             containing_area = None
             faces = list(get_faces(obj) or [])
-            session._plan_perf_count(f"{target_label}_footprint_faces_returned", len(faces))
+            _perf_count(session, f"{target_label}_footprint_faces_returned", len(faces))
             for face in faces:
-                session._plan_perf_count(f"{target_label}_footprint_faces_tested")
+                _perf_count(session, f"{target_label}_footprint_faces_tested")
                 bound_box = getattr(face, "BoundBox", None)
                 if bound_box is None:
                     continue
@@ -767,13 +818,14 @@ def pick_plan_target_from_footprint_faces(
 
             if containing_area is None:
                 continue
-            session._plan_perf_count(f"{target_label}_containing_candidates")
+            _perf_count(session, f"{target_label}_containing_candidates")
             if best_area is None or containing_area < best_area:
                 best_target = obj
                 best_area = containing_area
 
-        session._plan_perf_set_fields(
-            **{f"{target_label}_pick_result": session._plan_perf_describe_object(best_target)}
+        _perf_set_fields(
+            session,
+            **{f"{target_label}_pick_result": _describe_pick_object(session, best_target)},
         )
         return best_target
 
@@ -797,18 +849,18 @@ def pick_plan_region_target_from_footprints(session, mouse_pos):
 
 
 def get_plan_target_at_position(session, mouse_pos, *, include_space_fallback=True):
-    with session._plan_perf_trace_span("get_plan_target_at_position", mouse_pos=mouse_pos):
+    with _perf_trace_span(session, "get_plan_target_at_position", mouse_pos=mouse_pos):
         if not session.view or not mouse_pos:
             return (None, None)
         prioritize_provider_targets = _should_prioritize_provider_targets_for_mode(session)
         try:
-            with session._plan_perf_trace_span("view_get_objects_info"):
+            with _perf_trace_span(session, "view_get_objects_info"):
                 infos = session.view.getObjectsInfo((int(mouse_pos[0]), int(mouse_pos[1])))
         except (AttributeError, ReferenceError, RuntimeError):
             infos = None
         if not infos:
             infos = []
-        session._plan_perf_count("objects_info_entries", len(infos))
+        _perf_count(session, "objects_info_entries", len(infos))
 
         wall_candidate = None
         symbol_candidate = None
@@ -818,7 +870,7 @@ def get_plan_target_at_position(session, mouse_pos, *, include_space_fallback=Tr
         debug_infos = []
         result = (None, None)
         for info in infos:
-            session._plan_perf_count("objects_info_scanned")
+            _perf_count(session, "objects_info_scanned")
             if not info:
                 continue
             doc_name = info.get("Document")
@@ -915,8 +967,9 @@ def get_plan_target_at_position(session, mouse_pos, *, include_space_fallback=Tr
                         )
                     if space_candidate is not None:
                         result = ("space", space_candidate)
-        session._plan_perf_set_fields(
-            picked_target=session._plan_perf_describe_target(result[0], result[1])
+        _perf_set_fields(
+            session,
+            picked_target=_describe_pick_target(session, result[0], result[1]),
         )
         _emit_pick_debug(
             session,
@@ -976,7 +1029,8 @@ def get_edit_node(session, mouse_pos):
             plan_selection.get_selected_plan_target_object(session, "symbol"),
             symbol_handle_role,
         )
-        session._plan_pick_debug_event(
+        _emit_pick_debug(
+            session,
             "get_edit_node",
             mouse_pos=mouse_pos,
             source="selected_symbol_handle",
@@ -990,7 +1044,8 @@ def get_edit_node(session, mouse_pos):
             plan_selection.get_selected_plan_target_object(session, "opening"),
             opening_handle_index,
         )
-        session._plan_pick_debug_event(
+        _emit_pick_debug(
+            session,
             "get_edit_node",
             mouse_pos=mouse_pos,
             source="selected_opening_handle",
@@ -1004,7 +1059,8 @@ def get_edit_node(session, mouse_pos):
             plan_selection.get_selected_plan_target_object(session, "provider"),
             provider_handle_index,
         )
-        session._plan_pick_debug_event(
+        _emit_pick_debug(
+            session,
             "get_edit_node",
             mouse_pos=mouse_pos,
             source="selected_provider_handle",
@@ -1016,7 +1072,8 @@ def get_edit_node(session, mouse_pos):
     )
     if target_obj is not None:
         node = ("provider_overlay_target", target_kind, target_obj)
-        session._plan_pick_debug_event(
+        _emit_pick_debug(
+            session,
             "get_edit_node",
             mouse_pos=mouse_pos,
             source="provider_overlay_objects_info",
@@ -1028,7 +1085,8 @@ def get_edit_node(session, mouse_pos):
     )
     if target_obj is not None:
         node = ("provider_overlay_target", target_kind, target_obj)
-        session._plan_pick_debug_event(
+        _emit_pick_debug(
+            session,
             "get_edit_node",
             mouse_pos=mouse_pos,
             source="provider_overlay_overlays",
@@ -1036,7 +1094,8 @@ def get_edit_node(session, mouse_pos):
         )
         return node
     if not session._render_manager:
-        session._plan_pick_debug_event(
+        _emit_pick_debug(
+            session,
             "get_edit_node",
             mouse_pos=mouse_pos,
             source="no_render_manager",
@@ -1046,7 +1105,8 @@ def get_edit_node(session, mouse_pos):
     try:
         from pivy import coin
     except Exception:
-        session._plan_pick_debug_event(
+        _emit_pick_debug(
+            session,
             "get_edit_node",
             mouse_pos=mouse_pos,
             source="coin_import_failed",
@@ -1070,7 +1130,8 @@ def get_edit_node(session, mouse_pos):
                 continue
             if is_provider_overlay_point_subname(sub_element):
                 node = ("provider_overlay_point", point)
-                session._plan_pick_debug_event(
+                _emit_pick_debug(
+                    session,
                     "get_edit_node",
                     mouse_pos=mouse_pos,
                     source="ray_pick_provider_overlay_point",
@@ -1079,14 +1140,16 @@ def get_edit_node(session, mouse_pos):
                 return node
             if "EditNode" in sub_element:
                 node = ("edit_node", point)
-                session._plan_pick_debug_event(
+                _emit_pick_debug(
+                    session,
                     "get_edit_node",
                     mouse_pos=mouse_pos,
                     source="ray_pick_edit_node",
                     result=node,
                 )
                 return node
-    session._plan_pick_debug_event(
+    _emit_pick_debug(
+        session,
         "get_edit_node",
         mouse_pos=mouse_pos,
         source="no_edit_node",

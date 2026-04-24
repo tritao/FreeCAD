@@ -2,9 +2,55 @@
 
 """Input event routing for BIM Plan Edit."""
 
+from contextlib import nullcontext
+
 import FreeCAD
 
 from bimplan import selection as plan_selection
+
+
+def _perf_trace_event(session, *args, **kwargs):
+    perf = getattr(session, "performance", None)
+    trace_event = getattr(perf, "plan_perf_trace_event", None)
+    if callable(trace_event):
+        return trace_event(*args, **kwargs)
+    trace_event = getattr(session, "_plan_perf_trace_event", None)
+    if callable(trace_event):
+        return trace_event(*args, **kwargs)
+    return nullcontext()
+
+
+def _perf_set_fields(session, **fields):
+    perf = getattr(session, "performance", None)
+    set_fields = getattr(perf, "plan_perf_set_fields", None)
+    if callable(set_fields):
+        return set_fields(**fields)
+    set_fields = getattr(session, "_plan_perf_set_fields", None)
+    if callable(set_fields):
+        return set_fields(**fields)
+    return None
+
+
+def _perf_describe_target(session, kind, obj):
+    perf = getattr(session, "performance", None)
+    describe = getattr(perf, "plan_perf_describe_target", None)
+    if callable(describe):
+        return describe(kind, obj)
+    describe = getattr(session, "_plan_perf_describe_target", None)
+    if callable(describe):
+        return describe(kind, obj)
+    return None
+
+
+def _pick_debug_scope(session, *args, **kwargs):
+    perf = getattr(session, "performance", None)
+    scope = getattr(perf, "plan_pick_debug_scope", None)
+    if callable(scope):
+        return scope(*args, **kwargs)
+    scope = getattr(session, "_plan_pick_debug_scope", None)
+    if callable(scope):
+        return scope(*args, **kwargs)
+    return nullcontext()
 
 
 def on_mouse_pressed(session, event_callback):
@@ -23,23 +69,23 @@ def on_mouse_pressed(session, event_callback):
     except Exception:
         mouse_pos = None
     selected_before = session.selection.get_selected_plan_target()
-    with session._plan_perf_trace_event(
+    with _perf_trace_event(
+        session,
         "mouse_pressed",
         button=str(event.getButton()),
         state=str(event.getState()),
         mouse_pos=mouse_pos,
-        selected_before=session._plan_perf_describe_target(selected_before[0], selected_before[1]),
+        selected_before=_perf_describe_target(session, selected_before[0], selected_before[1]),
     ):
         if event.getButton() != coin.SoMouseButtonEvent.BUTTON1:
             return
-        with session._plan_pick_debug_scope(
+        with _pick_debug_scope(
+            session,
             "mouse_pressed_pick",
             button=str(event.getButton()),
             state=str(event.getState()),
             mouse_pos=mouse_pos,
-            selected_before=session._plan_perf_describe_target(
-                selected_before[0], selected_before[1]
-            ),
+            selected_before=_perf_describe_target(session, selected_before[0], selected_before[1]),
         ):
             try:
                 if event.getState() == coin.SoMouseButtonEvent.UP:
@@ -138,10 +184,11 @@ def on_mouse_pressed(session, event_callback):
                         session._claim_left_button_click(event_callback)
             finally:
                 selected_after = session.selection.get_selected_plan_target()
-                session._plan_perf_set_fields(
+                _perf_set_fields(
+                    session,
                     handled=bool(getattr(event_callback, "_handled", False)),
-                    selected_after=session._plan_perf_describe_target(
-                        selected_after[0], selected_after[1]
+                    selected_after=_perf_describe_target(
+                        session, selected_after[0], selected_after[1]
                     ),
                 )
 
@@ -156,10 +203,11 @@ def on_mouse_moved(session, event_callback):
     except Exception:
         mouse_pos = None
     hovered_before = session.selection.get_hovered_plan_target()
-    with session._plan_perf_trace_event(
+    with _perf_trace_event(
+        session,
         "mouse_moved",
         mouse_pos=mouse_pos,
-        hovered_before=session._plan_perf_describe_target(hovered_before[0], hovered_before[1]),
+        hovered_before=_perf_describe_target(session, hovered_before[0], hovered_before[1]),
     ):
         if session.current_tool == "Pick Space Region":
             if mouse_pos is not None:
@@ -184,8 +232,9 @@ def on_mouse_moved(session, event_callback):
             session.overlays.sync_wall_grips()
         session.viewport.request_view_redraw()
         hovered_after = session.selection.get_hovered_plan_target()
-        session._plan_perf_set_fields(
-            hovered_after=session._plan_perf_describe_target(hovered_after[0], hovered_after[1])
+        _perf_set_fields(
+            session,
+            hovered_after=_perf_describe_target(session, hovered_after[0], hovered_after[1]),
         )
 
 
@@ -199,7 +248,7 @@ def on_mouse_wheel(session, event_callback):
         event_type_name = ""
     if event_type_name != "SoMouseWheelEvent":
         return
-    with session._plan_perf_trace_event("mouse_wheel", event_type=event_type_name):
+    with _perf_trace_event(session, "mouse_wheel", event_type=event_type_name):
         session._queue_plan_overlay_view_scale_refresh()
 
 
