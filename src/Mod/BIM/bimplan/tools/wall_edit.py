@@ -165,7 +165,7 @@ def snapshot_wall_hosted_opening_clearances(session, wall, endpoints):
 
     snapshot = {}
     for opening in session._get_wall_hosted_openings(wall):
-        proxy = session._get_opening_plan_proxy(
+        proxy = session.openings.get_opening_plan_proxy(
             opening, "get_plan_move_context", "get_plan_center_point"
         )
         if not proxy:
@@ -912,7 +912,7 @@ def compute_wall_hosted_opening_layout(session, wall, endpoints):
 
     openings = []
     for opening in session._get_wall_hosted_openings(wall):
-        proxy = session._get_opening_plan_proxy(
+        proxy = session.openings.get_opening_plan_proxy(
             opening, "get_plan_move_context", "move_along_host", "get_plan_center_point"
         )
         if not proxy:

@@ -13,7 +13,7 @@ OPENING_MOVE_ANCHORS = ("center", "left", "right")
 
 
 def get_selected_opening_edit_handles(session, opening):
-    proxy = session._get_opening_view_proxy(opening, "get_plan_edit_handles")
+    proxy = session.openings.get_opening_view_proxy(opening, "get_plan_edit_handles")
     if not proxy:
         return []
     return list(proxy.get_plan_edit_handles() or [])
@@ -25,7 +25,7 @@ def get_opening_plan_proxy(session, opening, *attrs):
     proxy = getattr(opening, "Proxy", None)
     if proxy and all(hasattr(proxy, attr) for attr in attrs):
         return proxy
-    return session._get_opening_view_proxy(opening, *attrs)
+    return session.openings.get_opening_view_proxy(opening, *attrs)
 
 
 def get_opening_view_proxy(session, opening, *attrs):
@@ -44,14 +44,14 @@ def get_opening_view_proxy(session, opening, *attrs):
 def project_opening_handle_point(session, opening, handle, point):
     if point is None or not opening or getattr(handle, "role", None) != "move":
         return point
-    proxy = session._get_opening_plan_proxy(opening, "project_point_to_host_axis")
+    proxy = session.openings.get_opening_plan_proxy(opening, "project_point_to_host_axis")
     if not proxy:
         return point
     return proxy.project_point_to_host_axis(point, anchor=session._edit_opening_move_anchor)
 
 
 def get_opening_move_anchor_modes(session, opening):
-    proxy = session._get_opening_plan_proxy(opening, "get_plan_move_anchor_modes")
+    proxy = session.openings.get_opening_plan_proxy(opening, "get_plan_move_anchor_modes")
     if not proxy:
         return OPENING_MOVE_ANCHORS
     modes = tuple(proxy.get_plan_move_anchor_modes() or ())
@@ -59,7 +59,7 @@ def get_opening_move_anchor_modes(session, opening):
 
 
 def execute_opening_handle(session, opening, handle_index, point=None):
-    proxy = session._get_opening_view_proxy(opening, "execute_plan_edit_handle")
+    proxy = session.openings.get_opening_view_proxy(opening, "execute_plan_edit_handle")
     if not proxy:
         return False
     return bool(
@@ -74,14 +74,14 @@ def execute_opening_handle(session, opening, handle_index, point=None):
 def get_opening_move_preview_state(session, opening, point):
     if not opening or point is None:
         return None
-    proxy = session._get_opening_view_proxy(opening, "get_plan_move_preview_state")
+    proxy = session.openings.get_opening_view_proxy(opening, "get_plan_move_preview_state")
     if not proxy:
         return None
     return proxy.get_plan_move_preview_state(point, anchor=session._edit_opening_move_anchor)
 
 
 def sync_opening_move_preview(session, opening, point):
-    session._clear_opening_move_preview()
+    session.openings.clear_opening_move_preview()
     if session.current_tool != "Move Opening" or not opening or point is None:
         return
     try:
@@ -89,7 +89,7 @@ def sync_opening_move_preview(session, opening, point):
     except ImportError:
         return
 
-    preview_state = session._get_opening_move_preview_state(opening, point)
+    preview_state = session.openings.get_opening_move_preview_state(opening, point)
     if not preview_state:
         return
 
@@ -148,7 +148,7 @@ def clear_opening_move_preview(session):
 def cycle_opening_move_anchor(session):
     if session.current_tool != "Move Opening":
         return False
-    anchor_modes = session._get_opening_move_anchor_modes(session._edit_opening)
+    anchor_modes = session.openings.get_opening_move_anchor_modes(session._edit_opening)
     try:
         current_index = anchor_modes.index(session._edit_opening_move_anchor)
     except ValueError:
@@ -162,21 +162,21 @@ def refresh_opening_move_preview_from_raw_point(session):
     handle_index = session._edit_opening_handle_index
     if not opening or handle_index is None:
         return
-    handles = session._get_selected_opening_edit_handles(opening)
+    handles = session.openings.get_selected_opening_edit_handles(opening)
     if handle_index < 0 or handle_index >= len(handles):
         return
     handle = handles[handle_index]
     raw_point = session._edit_opening_move_raw_point
     if raw_point is None:
         raw_point = handle.point
-    point = session._project_opening_handle_point(opening, handle, raw_point)
-    session._sync_opening_move_preview(opening, point)
+    point = session.openings.project_opening_handle_point(opening, handle, raw_point)
+    session.openings.sync_opening_move_preview(opening, point)
 
 
 def queue_opening_move_initial_preview(session, opening, point):
     def run_preview():
         with session._plan_perf_trace_event("queued_opening_move_initial_preview"):
-            session._sync_opening_move_preview(opening, point)
+            session.openings.sync_opening_move_preview(opening, point)
 
     try:
         from PySide import QtCore
@@ -207,7 +207,7 @@ def activate_opening_handle_now(session, opening, handle_index):
             session._set_selected_plan_target("opening", opening)
             session.overlays.clear_wall_grips()
         with session._plan_perf_trace_span("activate_opening_handle_get_handles"):
-            handles = session._get_selected_opening_edit_handles(opening)
+            handles = session.openings.get_selected_opening_edit_handles(opening)
         if handle_index < 0 or handle_index >= len(handles):
             return
         handle = handles[handle_index]
@@ -259,16 +259,16 @@ def update_opening_handle_point_pick(session, point=None, snap_info=None):
     opening = session._edit_opening
     handle_index = session._edit_opening_handle_index
     if not opening or handle_index is None:
-        session._clear_opening_move_preview()
+        session.openings.clear_opening_move_preview()
         return
-    handles = session._get_selected_opening_edit_handles(opening)
+    handles = session.openings.get_selected_opening_edit_handles(opening)
     if handle_index < 0 or handle_index >= len(handles):
-        session._clear_opening_move_preview()
+        session.openings.clear_opening_move_preview()
         return
     handle = handles[handle_index]
     session._edit_opening_move_raw_point = FreeCAD.Vector(point) if point is not None else None
-    point = session._project_opening_handle_point(opening, handle, point)
-    session._sync_opening_move_preview(opening, point)
+    point = session.openings.project_opening_handle_point(opening, handle, point)
+    session.openings.sync_opening_move_preview(opening, point)
 
 
 def finish_opening_handle_point_pick(session, point=None, obj=None):
@@ -279,7 +279,7 @@ def finish_opening_handle_point_pick(session, point=None, obj=None):
     session._edit_opening_handle_index = None
     session._pop_opening_move_snap_profile()
     FreeCAD.activeDraftCommand = None
-    session._clear_opening_move_preview()
+    session.openings.clear_opening_move_preview()
     session._edit_opening_move_raw_point = None
 
     if point is None or not opening:
@@ -290,18 +290,18 @@ def finish_opening_handle_point_pick(session, point=None, obj=None):
         session._refresh_task_panel_status()
         return
 
-    handles = session._get_selected_opening_edit_handles(opening)
+    handles = session.openings.get_selected_opening_edit_handles(opening)
     if handle_index is None or handle_index < 0 or handle_index >= len(handles):
         session.current_tool = "Select"
         session._edit_opening_move_anchor = "center"
         session._refresh_task_panel_status()
         return
     handle = handles[handle_index]
-    point = session._project_opening_handle_point(opening, handle, point)
+    point = session.openings.project_opening_handle_point(opening, handle, point)
 
     try:
         session.doc.openTransaction(handle.transaction or translate("BIM_PlanEdit", "Edit Opening"))
-        moved = session._execute_opening_handle(opening, handle_index, point)
+        moved = session.openings.execute_opening_handle(opening, handle_index, point)
         if not moved:
             raise RuntimeError("Unable to execute opening handle")
         session.doc.commitTransaction()
@@ -328,7 +328,7 @@ def cancel_opening_handle_point_pick(session):
     session._stop_snapper()
     session._pop_opening_move_snap_profile()
     FreeCAD.activeDraftCommand = None
-    session._clear_opening_move_preview()
+    session.openings.clear_opening_move_preview()
     session._edit_opening_move_anchor = "center"
     session._edit_opening_move_raw_point = None
     session.current_tool = "Select"
@@ -368,7 +368,7 @@ def queue_restore_selected_opening(session, opening):
 def execute_selected_opening_handle(session, opening, handle_index, handle):
     try:
         session.doc.openTransaction(handle.transaction or translate("BIM_PlanEdit", "Edit Opening"))
-        executed = session._execute_opening_handle(opening, handle_index)
+        executed = session.openings.execute_opening_handle(opening, handle_index)
         if not executed:
             raise RuntimeError("Unable to execute opening handle")
         session.doc.commitTransaction()
