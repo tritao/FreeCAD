@@ -1550,17 +1550,31 @@ def run_scheduled_selection_refresh(session):
         session.selection.refresh_primary_selected_plan_target()
 
 
+def _trace_selection_observer_event(session, event_name, **fields):
+    return session.performance.plan_perf_trace_event(event_name, **fields)
+
+
+def _should_skip_selection_observer_callback(session):
+    session.performance.plan_perf_count("selection_observer_callbacks")
+    return session._tearing_down or session._ignore_selection_changes
+
+
+def _schedule_selection_refresh_from_observer(session):
+    if _should_skip_selection_observer_callback(session):
+        return False
+    session.selection.schedule_selection_refresh()
+    return True
+
+
 def selection_observer_add(session, doc, obj, sub, point):
-    with session.performance.plan_perf_trace_event(
+    with _trace_selection_observer_event(
+        session,
         "selection_observer_add",
         selection_document=doc,
         selection_object=obj,
         selection_subelement=sub,
     ):
-        session.performance.plan_perf_count("selection_observer_callbacks")
-        if session._tearing_down:
-            return
-        if session._ignore_selection_changes:
+        if _should_skip_selection_observer_callback(session):
             return
         if sub in ("EditNode0", "EditNode1", "EditNode2"):
             return
@@ -1569,37 +1583,29 @@ def selection_observer_add(session, doc, obj, sub, point):
 
 
 def selection_observer_remove(session, doc, obj, sub):
-    with session.performance.plan_perf_trace_event(
+    with _trace_selection_observer_event(
+        session,
         "selection_observer_remove",
         selection_document=doc,
         selection_object=obj,
         selection_subelement=sub,
     ):
-        session.performance.plan_perf_count("selection_observer_callbacks")
-        if session._tearing_down:
-            return
-        if session._ignore_selection_changes:
+        if not _schedule_selection_refresh_from_observer(session):
             return
         del doc, obj, sub
-        session.selection.schedule_selection_refresh()
 
 
 def selection_observer_set(session, doc):
-    with session.performance.plan_perf_trace_event(
-        "selection_observer_set", selection_document=doc
-    ):
-        session.performance.plan_perf_count("selection_observer_callbacks")
-        if session._tearing_down:
-            return
-        if session._ignore_selection_changes:
+    with _trace_selection_observer_event(session, "selection_observer_set", selection_document=doc):
+        if not _schedule_selection_refresh_from_observer(session):
             return
         del doc
-        session.selection.schedule_selection_refresh()
 
 
 def selection_observer_clear(session, doc):
     selected_kind, selected_obj = session.selection.get_selected_plan_target()
-    with session.performance.plan_perf_trace_event(
+    with _trace_selection_observer_event(
+        session,
         "selection_observer_clear",
         selection_document=doc,
         selected_before_clear=session.performance.plan_perf_describe_target(
@@ -1607,24 +1613,20 @@ def selection_observer_clear(session, doc):
         ),
         selected_before_clear_kind=selected_kind or "none",
     ):
-        session.performance.plan_perf_count("selection_observer_callbacks")
-        if session._tearing_down:
-            return
-        if session._ignore_selection_changes:
+        if not _schedule_selection_refresh_from_observer(session):
             return
         del doc
-        session.selection.schedule_selection_refresh()
 
 
 def selection_observer_set_preselection(session, doc, obj, sub):
-    with session.performance.plan_perf_trace_event(
+    with _trace_selection_observer_event(
+        session,
         "selection_observer_set_preselection",
         selection_document=doc,
         selection_object=obj,
         selection_subelement=sub,
     ):
-        session.performance.plan_perf_count("selection_observer_callbacks")
-        if session._tearing_down:
+        if _should_skip_selection_observer_callback(session):
             return
         if not _should_filter_hidden_provider_preselection(session, doc, obj):
             return
@@ -1633,7 +1635,8 @@ def selection_observer_set_preselection(session, doc, obj, sub):
 
 
 def selection_observer_remove_preselection(session, doc, obj, sub):
-    with session.performance.plan_perf_trace_event(
+    with _trace_selection_observer_event(
+        session,
         "selection_observer_remove_preselection",
         selection_document=doc,
         selection_object=obj,
