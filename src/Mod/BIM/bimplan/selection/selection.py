@@ -228,6 +228,20 @@ def _apply_selection_refresh_result(session, refresh_result):
         session.overlays.sync_wall_grips()
 
 
+def _get_selection_refresh_baseline(session):
+    previous_kind, previous_obj = get_selected_plan_target(session)
+    session.performance.plan_perf_set_fields(
+        selected_before=session.performance.plan_perf_describe_target(previous_kind, previous_obj),
+        selected_before_kind=previous_kind or "none",
+    )
+    previous_wall = session.selection.get_plan_target_object_from_state(
+        previous_kind,
+        previous_obj,
+        plan_target_kinds.PLAN_TARGET_WALL,
+    )
+    return previous_kind, previous_obj, previous_wall
+
+
 def _resolve_direct_selection_refresh_result(session, previous_wall):
     if session.wall_edit.is_wall_edit_modal_active():
         return SelectionRefreshResult(
@@ -258,6 +272,13 @@ def _resolve_direct_selection_refresh_result(session, previous_wall):
     if session.current_tool not in _GUI_SELECTION_TOOL_NAMES:
         return SelectionRefreshResult(pending_target=None)
     return None
+
+
+def _get_gui_selection():
+    try:
+        return FreeCADGui.Selection.getSelection()
+    except (ReferenceError, RuntimeError):
+        return _MISSING
 
 
 def _collect_selected_targets_from_gui_selection(session, selection, previous_kind, previous_obj):
@@ -319,6 +340,47 @@ def _resolve_gui_selection_refresh_result(session, selection, previous_kind, pre
     )
 
 
+def _resolve_selection_refresh_result(session, previous_kind, previous_obj, previous_wall):
+    refresh_result = _resolve_direct_selection_refresh_result(session, previous_wall)
+    if refresh_result is not None:
+        return refresh_result
+    selection = _get_gui_selection()
+    if selection is _MISSING:
+        session.selection.set_selected_plan_target_state()
+        return None
+    session.performance.plan_perf_count("gui_selection_size", len(selection or []))
+    return _resolve_gui_selection_refresh_result(
+        session,
+        selection,
+        previous_kind,
+        previous_obj,
+    )
+
+
+def _sync_wall_grips_after_selection_refresh(session, refresh_result, previous_kind, previous_obj):
+    if refresh_result.wall_grip_action != _WALL_GRIP_NONE:
+        return
+    if not session.selection.selected_plan_target_changed(
+        previous_kind,
+        previous_obj,
+        plan_target_kinds.PLAN_TARGET_WALL,
+    ):
+        return
+    if get_selected_plan_target_object(session, plan_target_kinds.PLAN_TARGET_WALL):
+        session.overlays.schedule_wall_grip_sync()
+    else:
+        session.overlays.clear_wall_grips()
+
+
+def _record_selection_refresh_result(session, previous_kind):
+    selected_kind, selected_obj = get_selected_plan_target(session)
+    session.performance.plan_perf_set_fields(
+        selected_after=session.performance.plan_perf_describe_target(selected_kind, selected_obj),
+        selected_after_kind=selected_kind or "none",
+        selection_refresh_cleared_target=bool(previous_kind and not selected_kind),
+    )
+
+
 def refresh_selected_plan_target(session):
     with session.performance.plan_perf_trace_span("refresh_selected_plan_target"):
         session.performance.plan_perf_count("selection_refreshes")
@@ -327,56 +389,24 @@ def refresh_selected_plan_target(session):
         if session._ignore_selection_changes:
             return
 
-        previous_kind, previous_obj = get_selected_plan_target(session)
-        session.performance.plan_perf_set_fields(
-            selected_before=session.performance.plan_perf_describe_target(
-                previous_kind, previous_obj
-            ),
-            selected_before_kind=previous_kind or "none",
-        )
-        previous_wall = session.selection.get_plan_target_object_from_state(
+        previous_kind, previous_obj, previous_wall = _get_selection_refresh_baseline(session)
+        refresh_result = _resolve_selection_refresh_result(
+            session,
             previous_kind,
             previous_obj,
-            plan_target_kinds.PLAN_TARGET_WALL,
+            previous_wall,
         )
-
-        refresh_result = _resolve_direct_selection_refresh_result(session, previous_wall)
         if refresh_result is None:
-            try:
-                selection = FreeCADGui.Selection.getSelection()
-            except (ReferenceError, RuntimeError):
-                session.selection.set_selected_plan_target_state()
-                return
-            session.performance.plan_perf_count("gui_selection_size", len(selection or []))
-            refresh_result = _resolve_gui_selection_refresh_result(
-                session,
-                selection,
-                previous_kind,
-                previous_obj,
-            )
-
+            return
         _apply_selection_refresh_result(session, refresh_result)
-        if (
-            refresh_result.wall_grip_action == _WALL_GRIP_NONE
-            and session.selection.selected_plan_target_changed(
-                previous_kind,
-                previous_obj,
-                plan_target_kinds.PLAN_TARGET_WALL,
-            )
-        ):
-            if get_selected_plan_target_object(session, plan_target_kinds.PLAN_TARGET_WALL):
-                session.overlays.schedule_wall_grip_sync()
-            else:
-                session.overlays.clear_wall_grips()
-        session.selection.sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
-        selected_kind, selected_obj = get_selected_plan_target(session)
-        session.performance.plan_perf_set_fields(
-            selected_after=session.performance.plan_perf_describe_target(
-                selected_kind, selected_obj
-            ),
-            selected_after_kind=selected_kind or "none",
-            selection_refresh_cleared_target=bool(previous_kind and not selected_kind),
+        _sync_wall_grips_after_selection_refresh(
+            session,
+            refresh_result,
+            previous_kind,
+            previous_obj,
         )
+        session.selection.sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
+        _record_selection_refresh_result(session, previous_kind)
 
 
 def get_selected_target_for_kind(session, kind):
