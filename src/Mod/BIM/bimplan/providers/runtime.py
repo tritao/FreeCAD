@@ -1102,6 +1102,21 @@ def _set_normalized_plan_provider_id(replacements, value, provider_id):
         replacements["provider_id"] = normalized_provider_id
 
 
+def _set_normalized_text_field(replacements, field_name, value):
+    normalized_value = str(value or "").strip()
+    if normalized_value != value:
+        replacements[field_name] = normalized_value
+    return normalized_value
+
+
+def _normalize_plan_provider_context_rows(rows):
+    return tuple(
+        normalized
+        for normalized in (normalize_plan_provider_context_row(row) for row in (rows or ()))
+        if normalized is not None
+    )
+
+
 def normalize_plan_provider_issue(session, provider_id, issue):
     if not isinstance(issue, PlanIssueSpec):
         return None
@@ -1147,14 +1162,10 @@ def normalize_plan_provider_context_row(row):
     if not isinstance(row, PlanContextRowSpec):
         return None
     replacements = {}
-    label = str(row.label or "").strip()
-    value = str(row.value or "").strip()
+    label = _set_normalized_text_field(replacements, "label", row.label)
+    value = _set_normalized_text_field(replacements, "value", row.value)
     if not label:
         return None
-    if label != row.label:
-        replacements["label"] = label
-    if value != row.value:
-        replacements["value"] = value
     if not replacements:
         return row
     return replace(row, **replacements)
@@ -1163,23 +1174,13 @@ def normalize_plan_provider_context_row(row):
 def normalize_plan_provider_context_detail(detail):
     if not isinstance(detail, PlanContextDetailSpec):
         return None
-    rows = tuple(
-        normalized
-        for normalized in (normalize_plan_provider_context_row(row) for row in (detail.rows or ()))
-        if normalized is not None
-    )
+    rows = _normalize_plan_provider_context_rows(detail.rows)
     replacements = {}
-    key = str(detail.key or "").strip()
-    title = str(detail.title or "").strip()
-    body = str(detail.body or "").strip()
+    key = _set_normalized_text_field(replacements, "key", detail.key)
+    title = _set_normalized_text_field(replacements, "title", detail.title)
+    body = _set_normalized_text_field(replacements, "body", detail.body)
     if not key or not title:
         return None
-    if key != detail.key:
-        replacements["key"] = key
-    if title != detail.title:
-        replacements["title"] = title
-    if body != detail.body:
-        replacements["body"] = body
     if rows != tuple(detail.rows or ()):
         replacements["rows"] = rows
     if not replacements:
@@ -1194,13 +1195,7 @@ def normalize_plan_provider_context_panel(session, provider_id, panel):
         return None
     if not isinstance(panel.subject_kind, PlanContextSubjectKind):
         return None
-    summary_rows = tuple(
-        normalized
-        for normalized in (
-            normalize_plan_provider_context_row(row) for row in (panel.summary_rows or ())
-        )
-        if normalized is not None
-    )
+    summary_rows = _normalize_plan_provider_context_rows(panel.summary_rows)
     details = tuple(
         normalized
         for normalized in (
@@ -1222,20 +1217,12 @@ def normalize_plan_provider_context_panel(session, provider_id, panel):
         panel.secondary_actions,
     )
     replacements = {}
-    key = str(panel.key or "").strip()
-    title = str(panel.title or "").strip()
-    subtitle = str(panel.subtitle or "").strip()
-    message = str(panel.message or "").strip()
+    key = _set_normalized_text_field(replacements, "key", panel.key)
+    title = _set_normalized_text_field(replacements, "title", panel.title)
+    subtitle = _set_normalized_text_field(replacements, "subtitle", panel.subtitle)
+    message = _set_normalized_text_field(replacements, "message", panel.message)
     if not key or not title:
         return None
-    if key != panel.key:
-        replacements["key"] = key
-    if title != panel.title:
-        replacements["title"] = title
-    if subtitle != panel.subtitle:
-        replacements["subtitle"] = subtitle
-    if message != panel.message:
-        replacements["message"] = message
     _set_normalized_plan_provider_id(replacements, panel.provider_id, provider_id)
     if summary_rows != tuple(panel.summary_rows or ()):
         replacements["summary_rows"] = summary_rows
@@ -1318,7 +1305,7 @@ def _normalize_plan_overlay_target(target):
     return replace(target, **replacements)
 
 
-def _coerce_plan_overlay_point(point):
+def _coerce_plan_overlay_point_from_attributes(point):
     try:
         return (
             float(point.x),
@@ -1326,12 +1313,22 @@ def _coerce_plan_overlay_point(point):
             float(getattr(point, "z", 0.0) or 0.0),
         )
     except AttributeError:
-        pass
+        return _MISSING
+
+
+def _coerce_plan_overlay_point_from_sequence(point):
     try:
         z_value = point[2] if len(point) > 2 else 0.0
         return (float(point[0]), float(point[1]), float(z_value))
     except (TypeError, ValueError, IndexError):
         return None
+
+
+def _coerce_plan_overlay_point(point):
+    coerced = _coerce_plan_overlay_point_from_attributes(point)
+    if coerced is not _MISSING:
+        return coerced
+    return _coerce_plan_overlay_point_from_sequence(point)
 
 
 def _coerce_plan_overlay_polyline(polyline):
