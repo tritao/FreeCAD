@@ -162,7 +162,7 @@ def run_scheduled_wall_grip_sync(session, generation=None):
 def clear_wall_grips(session):
     session._wall_grip_sync_queued = False
     session._wall_grip_sync_generation += 1
-    session._finalize_trackers(session._grip_trackers)
+    session.overlays.finalize_trackers(session._grip_trackers)
     session._grip_trackers = []
     session._wall_grip_state = None
 
@@ -182,7 +182,7 @@ def sync_hovered_wall_overlay(session):
 
 
 def clear_hovered_wall_overlay(session):
-    session._finalize_trackers(session._wall_hover_trackers)
+    session.overlays.finalize_trackers(session._wall_hover_trackers)
     session._wall_hover_trackers = []
 
 
@@ -222,7 +222,7 @@ def sync_selected_wall_overlay(session):
 
 
 def clear_selected_wall_overlay(session):
-    session._finalize_trackers(session._wall_overlay_trackers)
+    session.overlays.finalize_trackers(session._wall_overlay_trackers)
     session._wall_overlay_trackers = []
 
 
@@ -274,7 +274,7 @@ def create_junction_node_trackers(session, junction, color, width, tracker_store
         ),
     )
     for start_offset, end_offset in offsets:
-        tracker = session._make_plan_line_tracker(
+        tracker = session.overlays.make_plan_line_tracker(
             DraftTrackers,
             "junction-node:{}".format(getattr(junction, "Name", "unknown")),
             scolor=color,
@@ -306,7 +306,7 @@ def sync_junction_node_overlays(session):
 
 
 def clear_junction_node_overlays(session):
-    session._finalize_trackers(session._junction_node_trackers)
+    session.overlays.finalize_trackers(session._junction_node_trackers)
     session._junction_node_trackers = []
 
 
@@ -331,7 +331,7 @@ def sync_hovered_wall_opening_context_overlay(session):
 
 
 def clear_hovered_wall_opening_context_overlay(session):
-    session._finalize_trackers(session._hovered_wall_opening_context_trackers)
+    session.overlays.finalize_trackers(session._hovered_wall_opening_context_trackers)
     session._hovered_wall_opening_context_trackers = []
 
 
@@ -345,7 +345,7 @@ def create_wall_overlay_trackers(session, wall, color, width, tracker_store):
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
-            tracker = session._make_plan_line_tracker(
+            tracker = session.overlays.make_plan_line_tracker(
                 DraftTrackers,
                 "wall-overlay:{}".format(getattr(wall, "Name", "unknown")),
                 scolor=color,

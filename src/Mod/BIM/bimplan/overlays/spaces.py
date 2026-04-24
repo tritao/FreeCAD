@@ -56,7 +56,7 @@ def sync_secondary_selected_overlays(session):
 
 
 def clear_secondary_selected_overlays(session):
-    session._finalize_trackers(session._secondary_selection_trackers)
+    session.overlays.finalize_trackers(session._secondary_selection_trackers)
     session._secondary_selection_trackers = []
 
 
@@ -78,7 +78,7 @@ def sync_space_region_pick_overlays(session):
             if len(polyline) < 2:
                 continue
             for start, end in zip(polyline, polyline[1:]):
-                tracker = session._make_plan_line_tracker(
+                tracker = session.overlays.make_plan_line_tracker(
                     DraftTrackers,
                     "space-region-pick:{}".format(candidate.get("index", "unknown")),
                     dotted=dotted,
@@ -93,7 +93,7 @@ def sync_space_region_pick_overlays(session):
 
 
 def clear_space_region_pick_overlays(session):
-    session._finalize_trackers(session._space_region_pick_trackers)
+    session.overlays.finalize_trackers(session._space_region_pick_trackers)
     session._space_region_pick_trackers = []
 
 
@@ -107,7 +107,7 @@ def create_space_overlay_trackers(session, space, color, width, tracker_store):
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
-            tracker = session._make_plan_line_tracker(
+            tracker = session.overlays.make_plan_line_tracker(
                 DraftTrackers,
                 "space-overlay:{}".format(getattr(space, "Name", "unknown")),
                 scolor=color,
@@ -130,7 +130,7 @@ def create_region_overlay_trackers(session, region, color, width, tracker_store)
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
-            tracker = session._make_plan_line_tracker(
+            tracker = session.overlays.make_plan_line_tracker(
                 DraftTrackers,
                 "region-overlay:{}".format(getattr(region, "Name", "unknown")),
                 scolor=color,
@@ -160,7 +160,7 @@ def sync_hovered_space_overlay(session):
 
 
 def clear_hovered_space_overlay(session):
-    session._finalize_trackers(session._space_hover_trackers)
+    session.overlays.finalize_trackers(session._space_hover_trackers)
     session._space_hover_trackers = []
 
 
@@ -181,7 +181,7 @@ def sync_hovered_region_overlay(session):
 
 
 def clear_hovered_region_overlay(session):
-    session._finalize_trackers(session._region_hover_trackers)
+    session.overlays.finalize_trackers(session._region_hover_trackers)
     session._region_hover_trackers = []
 
 
@@ -242,7 +242,7 @@ def sync_selected_space_overlay(session):
 
 
 def clear_selected_space_overlay(session):
-    session._finalize_trackers(session._space_overlay_trackers)
+    session.overlays.finalize_trackers(session._space_overlay_trackers)
     session._space_overlay_trackers = []
     session._selected_space_overlay_dirty = False
     session._selected_space_overlay_geometry_key = None
@@ -278,5 +278,5 @@ def sync_selected_region_overlay(session):
 
 
 def clear_selected_region_overlay(session):
-    session._finalize_trackers(session._region_overlay_trackers)
+    session.overlays.finalize_trackers(session._region_overlay_trackers)
     session._region_overlay_trackers = []

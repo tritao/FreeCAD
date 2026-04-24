@@ -66,7 +66,7 @@ def has_active_plan_region_tool(session):
 
 
 def clear_plan_region_preview(session):
-    session._finalize_trackers(session._plan_region_preview_trackers)
+    session.overlays.finalize_trackers(session._plan_region_preview_trackers)
     session._plan_region_preview_trackers = []
 
 
@@ -171,7 +171,7 @@ def update_plan_region_preview(session, point, info):
     color = (0.86, 0.48, 0.12)
     width = session.viewport.scaled_line_width(2)
     for index, (start, end, dotted) in enumerate(segments):
-        tracker = session._make_plan_line_tracker(
+        tracker = session.overlays.make_plan_line_tracker(
             DraftTrackers,
             "plan_region_preview:{}".format(index),
             dotted=dotted,
@@ -273,7 +273,7 @@ def handle_plan_region_point(session, point=None, obj=None):
 
 
 def clear_space_separator_preview(session):
-    session._finalize_trackers(session._space_separator_preview_trackers)
+    session.overlays.finalize_trackers(session._space_separator_preview_trackers)
     session._space_separator_preview_trackers = []
 
 
@@ -318,7 +318,7 @@ def update_space_separator_preview(session, point, info):
         return
 
     if not session._space_separator_preview_trackers:
-        tracker = session._make_plan_line_tracker(
+        tracker = session.overlays.make_plan_line_tracker(
             DraftTrackers,
             "space_separator_preview",
             dotted=True,

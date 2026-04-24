@@ -68,7 +68,7 @@ def sync_provider_overlays(session):
 
 
 def clear_provider_overlays(session):
-    session._finalize_trackers(session._provider_overlay_trackers)
+    session.overlays.finalize_trackers(session._provider_overlay_trackers)
     session._provider_overlay_trackers = []
     session._provider_overlay_state = None
 
@@ -96,7 +96,7 @@ def sync_hovered_provider_overlay(session):
         if not specs:
             return
         for spec in specs:
-            tracker = session._make_plan_line_tracker(
+            tracker = session.overlays.make_plan_line_tracker(
                 DraftTrackers,
                 spec["label"],
                 dotted=spec["dotted"],
@@ -112,7 +112,7 @@ def sync_hovered_provider_overlay(session):
 
 
 def clear_hovered_provider_overlay(session):
-    session._finalize_trackers(session._provider_hover_trackers)
+    session.overlays.finalize_trackers(session._provider_hover_trackers)
     session._provider_hover_trackers = []
 
 
@@ -156,7 +156,7 @@ def sync_selected_provider_overlay(session):
             return
         clear_selected_provider_overlay(session)
         for spec in specs:
-            tracker = session._make_plan_line_tracker(
+            tracker = session.overlays.make_plan_line_tracker(
                 DraftTrackers,
                 spec["label"],
                 dotted=spec["dotted"],
@@ -176,7 +176,7 @@ def sync_selected_provider_overlay(session):
 
 
 def clear_selected_provider_overlay(session):
-    session._finalize_trackers(session._provider_selected_trackers)
+    session.overlays.finalize_trackers(session._provider_selected_trackers)
     session._provider_selected_trackers = []
     session._selected_provider_overlay_render_state = None
 
@@ -249,7 +249,7 @@ def sync_selected_provider_handles(session):
 
 
 def clear_selected_provider_handles(session):
-    session._finalize_trackers(session._provider_handle_trackers)
+    session.overlays.finalize_trackers(session._provider_handle_trackers)
     session._provider_handle_trackers = []
     session._selected_provider_handle_render_state = None
 
@@ -310,7 +310,7 @@ def sync_provider_point_preview(session):
         _clear_provider_point_preview_trackers(session)
         session._provider_point_preview_style_state = style_state
         for spec in specs:
-            tracker = session._make_plan_line_tracker(
+            tracker = session.overlays.make_plan_line_tracker(
                 DraftTrackers,
                 spec["label"],
                 dotted=spec["dotted"],
@@ -321,7 +321,7 @@ def sync_provider_point_preview(session):
             session._provider_point_preview_trackers.append(tracker)
 
     for tracker, spec in zip(session._provider_point_preview_trackers, specs):
-        session._set_plan_line_tracker_width(tracker, spec["width"])
+        session.overlays.set_plan_line_tracker_width(tracker, spec["width"])
         tracker.setColor(spec["color"])
         tracker.p1(spec["start"])
         tracker.p2(spec["end"])
@@ -343,7 +343,7 @@ def clear_provider_point_preview(session):
 
 
 def _clear_provider_point_preview_trackers(session):
-    session._finalize_trackers(session._provider_point_preview_trackers)
+    session.overlays.finalize_trackers(session._provider_point_preview_trackers)
     session._provider_point_preview_trackers = []
     session._provider_point_preview_render_state = None
     session._provider_point_preview_style_state = None
@@ -758,7 +758,7 @@ def _create_polyline_trackers(session, DraftTrackers, label, polyline, *, color,
     if len(points) < 2:
         return
     for start, end in zip(points, points[1:]):
-        tracker = session._make_plan_line_tracker(
+        tracker = session.overlays.make_plan_line_tracker(
             DraftTrackers,
             label,
             dotted=dotted,
@@ -797,7 +797,7 @@ def _create_point_marker_trackers(
         marker_size=marker_size,
         marker_kind=marker_kind,
     ):
-        tracker = session._make_plan_line_tracker(
+        tracker = session.overlays.make_plan_line_tracker(
             DraftTrackers,
             spec["label"],
             dotted=spec["dotted"],
@@ -853,7 +853,7 @@ def _create_target_pick_tracker(
     except Exception:
         return
     if not _retarget_pick_tracker(session, tracker, target, target_index):
-        session._finalize_trackers([tracker])
+        session.overlays.finalize_trackers([tracker])
         return
     try:
         tracker.on()

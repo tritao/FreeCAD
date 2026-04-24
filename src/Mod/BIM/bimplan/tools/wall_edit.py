@@ -699,7 +699,7 @@ def update_wall_edit_preview_geometry(session, points):
         return
 
     if session._preview_line_tracker is None:
-        session._preview_line_tracker = session._make_plan_line_tracker(
+        session._preview_line_tracker = session.overlays.make_plan_line_tracker(
             DraftTrackers,
             "wall-edit-preview-axis",
             swidth=session.viewport.scaled_line_width(2),
@@ -728,10 +728,10 @@ def update_wall_edit_preview_geometry(session, points):
     color = (0.22, 0.53, 0.98)
     width = session.viewport.scaled_line_width(2)
     if len(session._preview_footprint_trackers) != len(segments):
-        session._finalize_trackers(session._preview_footprint_trackers)
+        session.overlays.finalize_trackers(session._preview_footprint_trackers)
         session._preview_footprint_trackers = []
         for _start, _end in segments:
-            tracker = session._make_plan_line_tracker(
+            tracker = session.overlays.make_plan_line_tracker(
                 DraftTrackers,
                 "wall-edit-preview-footprint",
                 scolor=color,
@@ -812,7 +812,7 @@ def clear_wall_edit_preview(session):
             pass
     session._preview_line_tracker = None
 
-    session._finalize_trackers(session._preview_footprint_trackers)
+    session.overlays.finalize_trackers(session._preview_footprint_trackers)
     session._preview_footprint_trackers = []
 
     for tracker in session._preview_grip_trackers:
@@ -870,7 +870,7 @@ def sync_wall_hosted_opening_preview(session, points):
     if len(session._wall_edit_opening_preview_trackers) != len(segments):
         session._clear_wall_hosted_opening_preview()
         for _start, _end in segments:
-            tracker = session._make_plan_line_tracker(
+            tracker = session.overlays.make_plan_line_tracker(
                 DraftTrackers,
                 "wall-edit-opening-preview",
                 scolor=color,
@@ -887,7 +887,7 @@ def sync_wall_hosted_opening_preview(session, points):
 
 
 def clear_wall_hosted_opening_preview(session):
-    session._finalize_trackers(session._wall_edit_opening_preview_trackers)
+    session.overlays.finalize_trackers(session._wall_edit_opening_preview_trackers)
     session._wall_edit_opening_preview_trackers = []
 
 
@@ -1146,7 +1146,7 @@ def sync_wall_edit_readout(session, points):
 
 
 def clear_wall_edit_readout(session):
-    session._finalize_trackers(session._wall_edit_readout_trackers)
+    session.overlays.finalize_trackers(session._wall_edit_readout_trackers)
     session._wall_edit_readout_trackers = []
     session._wall_edit_active_readout_tracker = None
     session._wall_edit_active_readout_mode = None

@@ -610,7 +610,7 @@ class PlanEditSession:
             with self._plan_perf_trace_span("task_panel_initial_refresh"):
                 panel.refresh(refresh_integrations=False)
             with self._plan_perf_trace_span("queue_prime_opening_handle_tracker_pool"):
-                self._queue_prime_opening_handle_tracker_pool()
+                self.overlays.queue_prime_opening_handle_tracker_pool()
             with self._plan_perf_trace_span("queue_prime_wall_hosted_openings_cache"):
                 self._queue_prime_wall_hosted_openings_cache()
             with self._plan_perf_trace_span("queue_prime_hover_pick_caches"):
@@ -2386,30 +2386,6 @@ class PlanEditSession:
 
     def _get_opening_overlay_screen_polylines(self, opening):
         return overlay_geometry.get_opening_overlay_screen_polylines(self, opening)
-
-    def _finalize_trackers(self, trackers):
-        return overlay_manager.finalize_trackers(trackers)
-
-    def _make_plan_line_tracker(self, DraftTrackers, label, **kwargs):
-        return overlay_manager.make_plan_line_tracker(DraftTrackers, label, **kwargs)
-
-    def _set_plan_line_tracker_width(self, tracker, width):
-        return overlay_manager.set_plan_line_tracker_width(tracker, width)
-
-    def _get_opening_handle_markers(self, marker_size=None):
-        return opening_overlays.get_opening_handle_markers(self, marker_size=marker_size)
-
-    def _set_opening_handle_tracker_marker(self, tracker, marker):
-        return opening_overlays.set_opening_handle_tracker_marker(tracker, marker)
-
-    def _discard_opening_handle_tracker_pool(self):
-        return opening_overlays.discard_opening_handle_tracker_pool(self)
-
-    def _queue_prime_opening_handle_tracker_pool(self):
-        return opening_overlays.queue_prime_opening_handle_tracker_pool(self)
-
-    def _prime_opening_handle_tracker_pool(self):
-        return opening_overlays.prime_opening_handle_tracker_pool(self)
 
     def _get_plan_target_at_position(self, mouse_pos, include_space_fallback=True):
         return plan_picking.get_plan_target_at_position(

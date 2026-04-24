@@ -71,7 +71,7 @@ def clear_transient_visuals(
     if include_space_region_pick:
         session.overlays.clear_space_region_pick_overlays()
     if include_opening_handle_pool:
-        session._discard_opening_handle_tracker_pool()
+        session.overlays.discard_opening_handle_tracker_pool()
     if include_opening_move_preview:
         session._clear_opening_move_preview()
     if include_symbol_edit_preview:

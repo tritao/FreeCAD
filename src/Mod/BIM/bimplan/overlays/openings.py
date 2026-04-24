@@ -36,7 +36,7 @@ def set_opening_handle_tracker_marker(tracker, marker):
 
 def discard_opening_handle_tracker_pool(session):
     if session._opening_handle_tracker_pool:
-        session._finalize_trackers(session._opening_handle_tracker_pool)
+        session.overlays.finalize_trackers(session._opening_handle_tracker_pool)
     session._opening_handle_tracker_pool = []
     session._opening_handle_tracker_pool_queued = False
 
@@ -56,7 +56,7 @@ def queue_prime_opening_handle_tracker_pool(session):
     except ImportError:
         return
     session._opening_handle_tracker_pool_queued = True
-    QtCore.QTimer.singleShot(0, session._prime_opening_handle_tracker_pool)
+    QtCore.QTimer.singleShot(0, session.overlays.prime_opening_handle_tracker_pool)
 
 
 def prime_opening_handle_tracker_pool(session):
@@ -81,7 +81,7 @@ def prime_opening_handle_tracker_pool(session):
         import draftguitools.gui_trackers as DraftTrackers
     except ImportError:
         return
-    markers = session._get_opening_handle_markers()
+    markers = session.overlays.get_opening_handle_markers()
     pooled_trackers = []
     try:
         for idx, role in enumerate(("move", "flip_hinge", "flip_opening")):
@@ -94,7 +94,7 @@ def prime_opening_handle_tracker_pool(session):
             tracker.off()
             pooled_trackers.append(tracker)
     except Exception:
-        session._finalize_trackers(pooled_trackers)
+        session.overlays.finalize_trackers(pooled_trackers)
         return
     session._opening_handle_tracker_pool = pooled_trackers
     session._plan_perf_count("opening_handle_pool_primes")
@@ -142,7 +142,7 @@ def sync_hovered_opening_overlay(session):
         if len(session._opening_hover_trackers) != len(segments):
             session._clear_hovered_opening_overlay()
             for _start, _end in segments:
-                tracker = session._make_plan_line_tracker(
+                tracker = session.overlays.make_plan_line_tracker(
                     DraftTrackers,
                     "opening-overlay:{}".format(getattr(opening, "Name", "unknown")),
                     scolor=color,
@@ -151,7 +151,7 @@ def sync_hovered_opening_overlay(session):
                 )
                 session._opening_hover_trackers.append(tracker)
         for tracker, (start, end) in zip(session._opening_hover_trackers, segments):
-            session._set_plan_line_tracker_width(tracker, width)
+            session.overlays.set_plan_line_tracker_width(tracker, width)
             tracker.setColor(color)
             tracker.p1(start)
             tracker.p2(end)
@@ -167,7 +167,7 @@ def sync_hovered_opening_overlay(session):
 
 
 def clear_hovered_opening_overlay(session):
-    session._finalize_trackers(session._opening_hover_trackers)
+    session.overlays.finalize_trackers(session._opening_hover_trackers)
     session._opening_hover_trackers = []
     session._hovered_opening_overlay_dirty = False
     session._hovered_opening_overlay_render_state = None
@@ -194,7 +194,7 @@ def create_opening_overlay_trackers(
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
-            tracker = session._make_plan_line_tracker(
+            tracker = session.overlays.make_plan_line_tracker(
                 DraftTrackers,
                 "opening-overlay:{}".format(getattr(opening, "Name", "unknown")),
                 scolor=color,
@@ -256,7 +256,7 @@ def sync_selected_opening_overlay(session):
 
 
 def clear_selected_opening_overlay(session):
-    session._finalize_trackers(session._opening_overlay_trackers)
+    session.overlays.finalize_trackers(session._opening_overlay_trackers)
     session._opening_overlay_trackers = []
     session._selected_opening_overlay_dirty = False
     session._selected_opening_overlay_render_state = None
@@ -285,7 +285,7 @@ def sync_selected_wall_opening_context_overlay(session):
 
 
 def clear_selected_wall_opening_context_overlay(session):
-    session._finalize_trackers(session._selected_wall_opening_context_trackers)
+    session.overlays.finalize_trackers(session._selected_wall_opening_context_trackers)
     session._selected_wall_opening_context_trackers = []
 
 
@@ -294,7 +294,7 @@ def get_selected_opening_handle_specs(session, opening):
 
     handle_specs = []
     marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
-    markers = session._get_opening_handle_markers(marker_size)
+    markers = session.overlays.get_opening_handle_markers(marker_size)
     for idx, handle in enumerate(session._get_selected_opening_edit_handles(opening)):
         if handle.role not in markers or handle.point is None:
             continue
@@ -344,7 +344,7 @@ def sync_selected_opening_handles(session):
             for tracker, (_idx, _role, point, marker) in zip(
                 session._opening_handle_trackers, specs
             ):
-                session._set_opening_handle_tracker_marker(tracker, marker)
+                session.overlays.set_opening_handle_tracker_marker(tracker, marker)
                 tracker.set(point)
                 tracker.on()
             session._plan_perf_count("selected_opening_handle_tracker_reuses")
@@ -357,7 +357,7 @@ def sync_selected_opening_handles(session):
                 for tracker, (_idx, _role, point, marker) in zip(
                     session._opening_handle_trackers, specs
                 ):
-                    session._set_opening_handle_tracker_marker(tracker, marker)
+                    session.overlays.set_opening_handle_tracker_marker(tracker, marker)
                     tracker.set(point)
                     tracker.on()
                 session._plan_perf_count("selected_opening_handle_pool_reuses")
@@ -366,7 +366,7 @@ def sync_selected_opening_handles(session):
                 if session._opening_handle_tracker_pool and len(
                     session._opening_handle_tracker_pool
                 ) != len(specs):
-                    session._discard_opening_handle_tracker_pool()
+                    session.overlays.discard_opening_handle_tracker_pool()
                 for idx, _role, point, marker in specs:
                     tracker = DraftTrackers.editTracker(
                         pos=point,
@@ -381,7 +381,7 @@ def sync_selected_opening_handles(session):
 
 def clear_selected_opening_handles(session):
     if session._opening_handle_trackers:
-        session._discard_opening_handle_tracker_pool()
+        session.overlays.discard_opening_handle_tracker_pool()
         for tracker in session._opening_handle_trackers:
             try:
                 tracker.off()
