@@ -723,8 +723,11 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._dirty_plan_visuals.add(BimPlanSession._PLAN_VISUAL_ALL)
 
         try:
-            with patch.object(session, "_refresh_plan_overlay_visuals") as refresh_visuals:
-                session._flush_plan_overlay_visual_refresh()
+            with patch.object(
+                session.overlays,
+                "refresh_plan_overlay_visuals",
+            ) as refresh_visuals:
+                session.overlays.flush_plan_overlay_visual_refresh()
 
             refresh_visuals.assert_not_called()
             self.assertFalse(session._overlay_refresh_queued)
@@ -3843,7 +3846,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             return_value=("wall", target_wall),
         ):
             session.selection.update_hovered_plan_target((100, 100))
-            session._refresh_plan_overlay_visuals()
+            session.overlays.refresh_plan_overlay_visuals()
 
         self.assertIs(session.hovered_wall, target_wall)
         self.assertIsNone(session.hovered_opening)
@@ -5914,14 +5917,14 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         with (
             patch.object(
-                session,
-                "_queue_plan_overlay_view_scale_refresh",
-                wraps=session._queue_plan_overlay_view_scale_refresh,
+                session.overlays,
+                "queue_plan_overlay_view_scale_refresh",
+                wraps=session.overlays.queue_plan_overlay_view_scale_refresh,
             ) as queue_scale,
             patch.object(
-                session,
-                "_queue_plan_overlay_visual_refresh",
-                wraps=session._queue_plan_overlay_visual_refresh,
+                session.overlays,
+                "queue_plan_overlay_visual_refresh",
+                wraps=session.overlays.queue_plan_overlay_visual_refresh,
             ) as queue_visual,
         ):
             session._on_mouse_wheel(self._make_fake_mouse_wheel_event())
@@ -6004,7 +6007,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return_value=20000.0,
             ),
         ):
-            session._refresh_plan_overlay_visuals({BimPlanSession._PLAN_VISUAL_VIEW_SCALE})
+            session.overlays.refresh_plan_overlay_visuals({BimPlanSession._PLAN_VISUAL_VIEW_SCALE})
 
         self.assertEqual(get_segments.call_count, 0)
         self.assertFalse(session._selected_space_overlay_dirty)
@@ -7920,7 +7923,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
 
-        with patch.object(session, "_queue_plan_overlay_visual_refresh") as queue_refresh:
+        with patch.object(session.overlays, "queue_plan_overlay_visual_refresh") as queue_refresh:
             session.slotChangedObject(door.Base, "Placement")
 
         queue_refresh.assert_called_once_with(
@@ -7959,7 +7962,10 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 session.document_visuals,
                 "queue_recompute_opening_hosts",
             ) as recompute_hosts,
-            patch.object(session, "_queue_plan_overlay_visual_refresh") as queue_refresh,
+            patch.object(
+                session.overlays,
+                "queue_plan_overlay_visual_refresh",
+            ) as queue_refresh,
         ):
             session.slotUndoDocument(self.document)
 

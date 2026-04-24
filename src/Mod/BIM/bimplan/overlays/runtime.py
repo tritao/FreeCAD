@@ -2,6 +2,7 @@
 
 """Owned overlay API surface for BIM Plan Edit."""
 
+from bimplan import document_visuals as plan_document_visuals
 from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
 from bimplan.overlays import openings as opening_overlays
@@ -9,6 +10,11 @@ from bimplan.overlays import providers as provider_overlays
 from bimplan.overlays import spaces as space_overlays
 from bimplan.overlays import symbols as symbol_overlays
 from bimplan.overlays import walls as wall_overlays
+
+_PLAN_VISUAL_ALL = plan_document_visuals.PLAN_VISUAL_ALL
+_PLAN_VISUAL_SELECTED_SPACE = plan_document_visuals.PLAN_VISUAL_SELECTED_SPACE
+_PLAN_VISUAL_VIEW_SCALE = plan_document_visuals.PLAN_VISUAL_VIEW_SCALE
+_PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
 
 
 def _bind_overlay_call(func):
@@ -174,6 +180,43 @@ class PlanOverlaysAPI:
     @property
     def session(self):
         return self._session
+
+    def queue_plan_overlay_visual_refresh(self, *visuals):
+        return overlay_manager.queue_plan_overlay_visual_refresh(
+            self.session,
+            visuals,
+            _PLAN_VISUAL_ALL,
+            _PLAN_VISUAL_SELECTED_SPACE,
+        )
+
+    def queue_plan_overlay_view_scale_refresh(
+        self,
+        delay_ms=_PLAN_VIEW_SCALE_REFRESH_DELAY_MS,
+    ):
+        return overlay_manager.queue_plan_overlay_view_scale_refresh(
+            self.session,
+            _PLAN_VISUAL_VIEW_SCALE,
+            delay_ms,
+        )
+
+    def consume_dirty_plan_visuals(self, default_all=True):
+        return overlay_manager.consume_dirty_plan_visuals(
+            self.session,
+            _PLAN_VISUAL_ALL,
+            default_all=default_all,
+        )
+
+    def flush_plan_overlay_visual_refresh(self):
+        return overlay_manager.flush_plan_overlay_visual_refresh(self.session)
+
+    def flush_view_scale_overlay_refresh(self):
+        return overlay_manager.flush_view_scale_overlay_refresh(self.session)
+
+    def refresh_plan_overlay_view_scale(self):
+        return overlay_manager.refresh_plan_overlay_view_scale(self.session)
+
+    def refresh_plan_overlay_visuals(self, dirty=None):
+        return overlay_manager.refresh_plan_overlay_visuals(self.session, dirty=dirty)
 
 
 for _method_name, _method in _PLAN_OVERLAYS_API_BOUND_METHODS.items():
