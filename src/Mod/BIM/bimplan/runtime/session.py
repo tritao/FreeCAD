@@ -66,7 +66,6 @@ from bimplan.providers import PlanEditContext
 from bimplan.runtime.view import PlanViewportAPI
 from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
-from bimplan.overlays import runtime as plan_overlay_runtime
 from bimplan.overlays import openings as opening_overlays
 from bimplan.overlays.runtime import PlanOverlaysAPI
 from bimplan.overlays import symbols as symbol_overlays
@@ -2997,4 +2996,3 @@ class PlanEditSession:
 
 
 plan_session_state.bind_session_state_accessors(PlanEditSession)
-plan_overlay_runtime.bind_session_overlay_compat(PlanEditSession)

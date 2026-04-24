@@ -2,8 +2,6 @@
 
 """Owned overlay API surface for BIM Plan Edit."""
 
-from functools import wraps
-
 from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
 from bimplan.overlays import openings as opening_overlays
@@ -17,14 +15,6 @@ def _bind_overlay_call(func):
     @wraps(func)
     def method(self, *args, **kwargs):
         return func(self.session, *args, **kwargs)
-
-    return method
-
-
-def _bind_session_overlay_compat(api_method_name):
-    def method(self, *args, **kwargs):
-        overlay_method = getattr(self.overlays, api_method_name)
-        return overlay_method(*args, **kwargs)
 
     return method
 
@@ -168,15 +158,6 @@ for _module, _method_names in _PLAN_OVERLAYS_API_MODULES:
     for _method_name in _method_names:
         _PLAN_OVERLAYS_API_BOUND_METHODS[_method_name] = getattr(_module, _method_name)
 
-_PLAN_SESSION_OVERLAY_COMPAT_METHODS = (
-    "_prime_opening_handle_tracker_pool",
-    "_clear_wall_grips",
-    "_clear_space_region_pick_overlays",
-    "_sync_hovered_opening_overlay",
-    "_get_opening_overlay_segments",
-    "_sync_selected_wall_opening_context_overlay",
-)
-
 
 class PlanOverlaysAPI:
     """Owned session surface for Plan Edit overlay behavior."""
@@ -193,12 +174,3 @@ class PlanOverlaysAPI:
 
 for _method_name, _method in _PLAN_OVERLAYS_API_BOUND_METHODS.items():
     setattr(PlanOverlaysAPI, _method_name, _bind_overlay_call(_method))
-
-
-def bind_session_overlay_compat(session_class):
-    for compat_method_name in _PLAN_SESSION_OVERLAY_COMPAT_METHODS:
-        setattr(
-            session_class,
-            compat_method_name,
-            _bind_session_overlay_compat(compat_method_name.removeprefix("_")),
-        )

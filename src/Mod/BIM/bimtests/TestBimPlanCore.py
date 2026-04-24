@@ -1256,15 +1256,17 @@ class TestBimPlanCore(unittest.TestCase):
             _space_region_candidates=[],
             _hovered_space_region_candidate=None,
             _space_region_pick_seed_space=None,
-            _clear_space_region_pick_overlays=lambda: calls.append("clear-pick-overlays"),
             _create_space_from_region_candidate=lambda *args, **kwargs: (
                 calls.append(("create", args, kwargs)) or created_space
             ),
             _register_plan_object=lambda space: calls.append(("register", space)),
             _restore_selected_space=lambda space: calls.append(("restore", space)),
-            _clear_wall_grips=lambda: calls.append("clear-wall-grips"),
             _clear_hovered_plan_targets=lambda **kwargs: calls.append(("clear-hovered", kwargs)),
             _refresh_primary_selected_plan_target=lambda: calls.append("refresh-primary"),
+            overlays=SimpleNamespace(
+                clear_space_region_pick_overlays=lambda: calls.append("clear-pick-overlays"),
+                clear_wall_grips=lambda: calls.append("clear-wall-grips"),
+            ),
         )
         boundaries = [("Boundary001", ("Face1",))]
         report = {
@@ -1686,8 +1688,10 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             hovered_opening=None,
             _is_selected_plan_target=lambda kind, obj=None: False,
-            _sync_selected_wall_opening_context_overlay=lambda: calls.append("context"),
-            _sync_hovered_opening_overlay=lambda: calls.append("hover"),
+            overlays=SimpleNamespace(
+                sync_selected_wall_opening_context_overlay=lambda: calls.append("context"),
+                sync_hovered_opening_overlay=lambda: calls.append("hover"),
+            ),
         )
 
         self.assertTrue(set_hovered_target(session, "opening", target))

@@ -6282,9 +6282,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.overlays.clear_selected_opening_overlay()
 
         with patch.object(
-            session,
-            "_get_opening_overlay_segments",
-            wraps=session._get_opening_overlay_segments,
+            session.overlays,
+            "get_opening_overlay_segments",
+            wraps=session.overlays.get_opening_overlay_segments,
         ) as get_segments:
             session.overlays.sync_selected_opening_overlay()
             session.overlays.sync_selected_opening_overlay()
