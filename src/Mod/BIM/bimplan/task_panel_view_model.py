@@ -32,28 +32,16 @@ def _call_component_method(session, component_name, method_name, *args):
     return _MISSING
 
 
-def _call_session_method(session, method_name, *args):
-    method = getattr(session, method_name, None)
-    if callable(method):
-        return method(*args)
-    return _MISSING
-
-
 def _read_component_or_session(
     session,
     component_name,
     component_method_name,
     *args,
-    session_method_name=None,
     default=None,
 ):
     value = _call_component_method(session, component_name, component_method_name, *args)
     if value is not _MISSING:
         return value
-    if session_method_name:
-        value = _call_session_method(session, session_method_name, *args)
-        if value is not _MISSING:
-            return value
     return default
 
 
@@ -78,7 +66,6 @@ class PlanTaskPanelContext:
                 self.session,
                 "interaction",
                 "is_modal_plan_interaction_active",
-                session_method_name="_is_modal_plan_interaction_active",
                 default=False,
             )
         )
@@ -89,7 +76,6 @@ class PlanTaskPanelContext:
                 self.session,
                 "windows",
                 "can_place_window",
-                session_method_name="can_place_plan_window",
                 default=False,
             )
         )
@@ -100,7 +86,6 @@ class PlanTaskPanelContext:
                 self.session,
                 "wall_relations",
                 "get_plan_candidate_joint",
-                session_method_name="_get_plan_candidate_joint",
             )
             is not None
         )
@@ -110,7 +95,6 @@ class PlanTaskPanelContext:
             self.session,
             "providers",
             "get_provider_point_tool_label",
-            session_method_name="_get_provider_point_tool_label",
             default="",
         )
 
@@ -119,7 +103,6 @@ class PlanTaskPanelContext:
             self.session,
             "providers",
             "get_provider_point_tool_prompt",
-            session_method_name="_get_provider_point_tool_prompt",
             default="",
         )
 
@@ -129,7 +112,6 @@ class PlanTaskPanelContext:
             "providers",
             "get_plan_provider_display_name",
             provider_id,
-            session_method_name="get_plan_provider_display_name",
             default=str(provider_id or "").strip(),
         )
 
@@ -139,7 +121,6 @@ class PlanTaskPanelContext:
             "providers",
             "get_plan_provider_overlay_category",
             overlay,
-            session_method_name="get_plan_provider_overlay_category",
             default="architecture",
         )
 
@@ -150,7 +131,6 @@ class PlanTaskPanelContext:
                 "providers",
                 "is_plan_provider_overlay_enabled",
                 overlay,
-                session_method_name="is_plan_provider_overlay_enabled",
                 default=True,
             )
         )
@@ -161,7 +141,6 @@ class PlanTaskPanelContext:
                 self.session,
                 "providers",
                 "get_plan_provider_overlay_mode",
-                session_method_name="get_plan_provider_overlay_mode",
                 default="architecture",
             )
             or "architecture"
@@ -174,7 +153,6 @@ class PlanTaskPanelContext:
             "format_plan_target_selection_state",
             target_kind,
             target_obj,
-            session_method_name="_format_plan_target_selection_state",
             default="",
         )
 
@@ -183,7 +161,6 @@ class PlanTaskPanelContext:
             self.session,
             "status_text",
             "format_provider_selected_object_state",
-            session_method_name="_format_provider_selected_object_state",
             default="",
         )
 
@@ -192,7 +169,6 @@ class PlanTaskPanelContext:
             self.session,
             "wall_relations",
             "get_plan_join_candidate_state",
-            session_method_name="_get_plan_join_candidate_state",
             default=(None, None, ""),
         )
 
@@ -210,7 +186,6 @@ class PlanTaskPanelContext:
             self.session,
             "wall_relations",
             "get_plan_join_type_label",
-            session_method_name="get_plan_join_type_label",
             default="",
         )
 
@@ -221,7 +196,6 @@ class PlanTaskPanelContext:
             "get_plan_join_mode_action_text",
             target_wall,
             joint,
-            session_method_name="_get_plan_join_mode_action_text",
             default="",
         )
 
@@ -231,7 +205,6 @@ class PlanTaskPanelContext:
             "status_text",
             "summarize_plan_targets",
             targets,
-            session_method_name="_summarize_plan_targets",
             default="",
         )
 
@@ -260,7 +233,6 @@ class PlanTaskPanelContext:
             "spaces",
             "format_space_region_candidate_area",
             candidate,
-            session_method_name="_format_space_region_candidate_area",
             default="",
         )
 
@@ -279,7 +251,6 @@ class PlanTaskPanelContext:
                 "spaces",
                 "is_plan_space_object",
                 obj,
-                session_method_name="_is_plan_space_object",
                 default=False,
             )
         )
@@ -290,7 +261,6 @@ class PlanTaskPanelContext:
             "status_text",
             "format_opening_selection_help",
             obj,
-            session_method_name="_format_opening_selection_help",
             default="",
         )
 
@@ -300,7 +270,6 @@ class PlanTaskPanelContext:
                 self.session,
                 "symbols",
                 "symbol_rotation_snap_enabled",
-                session_method_name="_symbol_rotation_snap_enabled",
                 default=False,
             )
         )
@@ -310,7 +279,6 @@ class PlanTaskPanelContext:
             self.session,
             "symbols",
             "format_symbol_rotation_snap_label",
-            session_method_name="_format_symbol_rotation_snap_label",
             default="",
         )
 
@@ -320,7 +288,6 @@ class PlanTaskPanelContext:
             "status_text",
             "format_provider_target_help",
             obj,
-            session_method_name="_format_provider_target_help",
             default="",
         )
 
@@ -330,7 +297,6 @@ class PlanTaskPanelContext:
                 self.session,
                 "wall_edit",
                 "is_selected_wall_endpoint_editable",
-                session_method_name="is_selected_wall_endpoint_editable",
                 default=False,
             )
         )
@@ -340,7 +306,6 @@ class PlanTaskPanelContext:
             self.session,
             "status_text",
             "format_provider_selected_object_help",
-            session_method_name="_format_provider_selected_object_help",
             default="",
         )
 
@@ -349,7 +314,6 @@ class PlanTaskPanelContext:
             self.session,
             "status_text",
             "get_plan_selection_summary_text",
-            session_method_name="_get_plan_selection_summary_text",
             default="",
         )
 
@@ -727,14 +691,14 @@ def build_provider_overlay_legend_items(session_or_context, overlays):
                 provider=provider_label,
                 label=label,
             )
-        category = context.providers.get_plan_provider_overlay_category(overlay)
+        category = context.get_plan_provider_overlay_category(overlay)
         items.append(
             (
                 provider_id,
                 overlay_key,
                 label,
                 tuple(getattr(overlay, "color", ()) or ()),
-                context.providers.is_plan_provider_overlay_enabled(overlay),
+                context.is_plan_provider_overlay_enabled(overlay),
                 category,
             )
         )
@@ -782,7 +746,7 @@ def build_integration_panel_view_model(session_or_context, snapshot):
     context = as_task_panel_context(session_or_context)
     tools = sort_provider_tools(getattr(snapshot, "tools", ()))
     overlay_items = build_provider_overlay_legend_items(context, getattr(snapshot, "overlays", ()))
-    overlay_mode = context.providers.get_plan_provider_overlay_mode()
+    overlay_mode = context.get_plan_provider_overlay_mode()
     active_overlay_items = filter_provider_overlay_legend_items_for_mode(
         overlay_items,
         active_mode=overlay_mode,
