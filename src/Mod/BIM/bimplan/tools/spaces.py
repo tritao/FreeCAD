@@ -902,7 +902,9 @@ def _start_space_region_pick_mode(session, boundaries, candidates, seed_space=No
         seed_space=seed_space,
     )
     session.overlays.clear_wall_grips()
-    session._clear_hovered_plan_targets(kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS)
+    session.selection.clear_hovered_plan_targets(
+        kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS
+    )
     session.selection.refresh_primary_selected_plan_target()
     FreeCAD.Console.PrintMessage(
         translate(
@@ -1454,7 +1456,9 @@ def start_space_text_position_pick(session):
 
     session.current_tool = "Set Space Text"
     set_space_text_pick_state(session, space)
-    session._clear_hovered_plan_targets(kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS)
+    session.selection.clear_hovered_plan_targets(
+        kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS
+    )
     session.overlays.sync_secondary_selected_overlays()
     session.task_panels.refresh_task_panel_status()
     FreeCAD.activeDraftCommand = session

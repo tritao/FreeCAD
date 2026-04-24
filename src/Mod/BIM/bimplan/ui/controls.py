@@ -2431,7 +2431,9 @@ class PlanEditControlsWidget:
             self._refresh_space_editor()
             self._refresh_region_editor()
             self._refresh_window_editor()
-            self._apply_modal_interaction_state(self.session._is_modal_plan_interaction_active())
+            self._apply_modal_interaction_state(
+                self.session.interaction.is_modal_plan_interaction_active()
+            )
 
     def refresh_selection_from_session(self):
         with self.session.performance.plan_perf_trace_span("refresh_task_panel_selection_widget"):
@@ -2449,7 +2451,9 @@ class PlanEditControlsWidget:
             self._hide_space_editor()
             self._hide_region_editor()
             self._hide_window_editor()
-            self._apply_modal_interaction_state(self.session._is_modal_plan_interaction_active())
+            self._apply_modal_interaction_state(
+                self.session.interaction.is_modal_plan_interaction_active()
+            )
 
     def refresh_provider_overlay_mode_from_session(self):
         with self.session.performance.plan_perf_trace_span(
@@ -2619,7 +2623,7 @@ class PlanEditControlsWidget:
             )
         )
         if modal_active is None:
-            modal_active = self.session._is_modal_plan_interaction_active()
+            modal_active = self.session.interaction.is_modal_plan_interaction_active()
         if modal_active:
             can_apply = False
 
@@ -2651,7 +2655,7 @@ class PlanEditControlsWidget:
             window and self.session.windows.can_apply_window_style_preset(window)
         )
         if modal_active is None:
-            modal_active = self.session._is_modal_plan_interaction_active()
+            modal_active = self.session.interaction.is_modal_plan_interaction_active()
 
         current_style = (
             self.session.windows.get_selected_window_style_preset() if can_apply_style else ""

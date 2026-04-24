@@ -411,7 +411,7 @@ _ACTION_CANCEL_SPACE_TEXT_PICK = ActivationActionSpec(
 )
 _ACTION_CANCEL_JOIN_TOOL = ActivationActionSpec("_cancel_join_tool")
 _ACTION_CLEAR_VIEWPORT_STATUS_CHIP = ActivationActionSpec("viewport.clear_viewport_status_chip")
-_ACTION_CLEAR_INPUT_HINTS = ActivationActionSpec("_clear_input_hints")
+_ACTION_CLEAR_INPUT_HINTS = ActivationActionSpec("status_text.clear_input_hints")
 _ACTION_CANCEL_WALL_EDIT_NO_RESTORE_NO_REFRESH = ActivationActionSpec(
     "wall_edit.cancel_wall_edit",
     kwargs=(("restore", False), ("refresh", False)),
@@ -470,7 +470,7 @@ def _activate_tool_with_profile(session, profile):
     if profile.clear_selected_target:
         session.selection.set_selected_plan_target()
     if profile.clear_hovered_targets:
-        session._clear_hovered_plan_targets()
+        session.selection.clear_hovered_plan_targets()
     if profile.clear_selection_kinds:
         clear_selection_visuals(
             session,

@@ -553,7 +553,7 @@ class TestBimPlanCore(unittest.TestCase):
                 session.spaces.get_space_preflight_report(targets=targets),
             )
             self.assertTrue(session.windows.can_place_window())
-            self.assertTrue(session._is_modal_plan_interaction_active())
+            self.assertTrue(session.interaction.is_modal_plan_interaction_active())
             self.assertTrue(session.symbols.symbol_rotation_snap_enabled())
             self.assertEqual("15°", session.symbols.format_symbol_rotation_snap_label())
             self.assertEqual("Miter", session.wall_relations.get_plan_join_type_label())

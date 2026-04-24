@@ -29,12 +29,10 @@ import math
 
 import FreeCAD
 import FreeCADGui
-from bimplan import selection as plan_selection
 from bimplan.runtime import command_gate as plan_command_gate
 from bimplan import document_visuals as plan_document_visuals
 from bimplan.document_visuals import PlanDocumentVisualsAPI
 from bimplan.tools import hosted_openings as plan_hosted_openings
-from bimplan.selection import hover_picking as plan_hover_picking
 from bimplan.runtime import input as plan_input
 from bimplan.runtime import lifecycle as plan_lifecycle
 from bimplan.object_visibility import PlanVisibilityAPI
@@ -375,18 +373,6 @@ class PlanEditSession:
 
     def defer_document_visual_updates(self):
         return plan_document_visuals.defer_document_visual_updates(self)
-
-    def _is_modal_plan_interaction_active(self):
-        return self.interaction.is_modal_plan_interaction_active()
-
-    def _clear_input_hints(self):
-        return self.status_text.clear_input_hints()
-
-    def _is_plan_additive_selection_active(self):
-        return plan_selection.is_plan_additive_selection_active(self)
-
-    def _clear_hovered_plan_targets(self, kinds=None):
-        return plan_hover_picking.clear_hovered_plan_targets(self, kinds=kinds)
 
     addSelection = _make_selection_observer_delegate("addSelection")
 
