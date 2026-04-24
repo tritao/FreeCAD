@@ -162,7 +162,7 @@ def on_panel_closed(session, panel):
 
 
 def refresh_task_panel_status(session, selection_only=False):
-    with session._plan_perf_trace_span(
+    with session.performance.plan_perf_trace_span(
         "refresh_task_panel_status",
         selection_only=bool(selection_only),
     ):
@@ -202,7 +202,7 @@ def refresh_task_panel_status(session, selection_only=False):
 
 
 def refresh_provider_overlay_mode_panels(session):
-    with session._plan_perf_trace_span("refresh_provider_overlay_mode_panels"):
+    with session.performance.plan_perf_trace_span("refresh_provider_overlay_mode_panels"):
         if session._tearing_down or not session._document_is_alive():
             return
         panel = session.task_panel

@@ -564,7 +564,7 @@ def _measure_operation(
 
 
 def _trace_direct_operation(session, event_name, scenario_name, operation):
-    with session._plan_perf_trace_event(event_name, scenario=scenario_name):
+    with session.performance.plan_perf_trace_event(event_name, scenario=scenario_name):
         operation()
 
 
