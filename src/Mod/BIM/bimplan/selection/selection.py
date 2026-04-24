@@ -115,7 +115,7 @@ def resolve_selected_target_for_gui_object(
         selected,
     ):
         return (preserved_kind, preserved_target)
-    return session._get_plan_target_for_object(selected)
+    return session.selection.get_plan_target_for_object(selected)
 
 
 def _get_gui_preselection_object(session):
@@ -439,7 +439,7 @@ def get_selected_plan_target(session):
 
 def get_first_plan_target_from_selection(session, selection):
     for selected in selection or []:
-        target_kind, target_obj = session._get_plan_target_for_object(selected)
+        target_kind, target_obj = session.selection.get_plan_target_for_object(selected)
         if target_kind and target_obj:
             return (target_kind, target_obj)
     return (None, None)
@@ -478,7 +478,8 @@ def normalize_plan_targets_from_selection(session, selection):
         [
             (target_kind, target_obj)
             for target_kind, target_obj in (
-                session._get_plan_target_for_object(selected) for selected in (selection or [])
+                session.selection.get_plan_target_for_object(selected)
+                for selected in (selection or [])
             )
             if target_kind and target_obj
         ]
@@ -944,7 +945,7 @@ def activate_plan_target(
     defer_wall_grips=False,
 ):
     if resolved_target is None:
-        target_kind, target_obj = session._get_plan_target_at_position(mouse_pos)
+        target_kind, target_obj = session.selection.get_plan_target_at_position(mouse_pos)
     else:
         target_kind, target_obj = resolved_target
     with session._plan_perf_trace_span(
@@ -979,7 +980,7 @@ def activate_plan_target(
 def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
     target_kind, target_obj = session.selection.get_hovered_plan_target()
     if target_obj is None or session._hover_pick_dirty:
-        target_kind, target_obj = session._get_plan_target_at_position(mouse_pos)
+        target_kind, target_obj = session.selection.get_plan_target_at_position(mouse_pos)
         source = "picked_after_throttled_hover" if session._hover_pick_dirty else "picked"
         session._hover_pick_dirty = False
         session._plan_perf_count(f"semantic_target_source_{source}")
@@ -1123,7 +1124,7 @@ def is_plan_additive_selection_active(session):
 
 
 def activate_provider_overlay_target_node(session, node, event_callback=None):
-    target_kind, target_obj = session._get_provider_overlay_target_from_edit_node(node)
+    target_kind, target_obj = session.selection.get_provider_overlay_target_from_edit_node(node)
     if target_obj is None:
         return False
     if session._is_valid_plan_target(target_kind, target_obj):
@@ -1157,7 +1158,11 @@ def toggle_raw_plan_object_selection(session, obj, event_callback=None):
     session._provider_selected_objects = normalize_gui_object_selection(session, provider_selection)
     new_selection = normalize_gui_object_selection(
         session,
-        [selected for selected in selection if session._get_plan_target_for_object(selected)[0]],
+        [
+            selected
+            for selected in selection
+            if session.selection.get_plan_target_for_object(selected)[0]
+        ],
     )
 
     if primary_obj is not None and primary_obj in new_selection:
@@ -1176,16 +1181,16 @@ def toggle_raw_plan_object_selection(session, obj, event_callback=None):
 def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=None):
     node = session._get_edit_node(mouse_pos)
     if node and node[0] in ("provider_overlay_point", "provider_overlay_target"):
-        target_kind, target_obj = session._get_provider_overlay_target_from_edit_node(node)
+        target_kind, target_obj = session.selection.get_provider_overlay_target_from_edit_node(node)
         if target_obj is not None and not session._is_valid_plan_target(
             target_kind,
             target_obj,
         ):
             return session._toggle_raw_plan_object_selection(target_obj, event_callback)
     else:
-        target_kind, target_obj = session._get_plan_target_from_edit_node(node)
+        target_kind, target_obj = session.selection.get_plan_target_from_edit_node(node)
     if target_kind is None:
-        target_kind, target_obj = session._get_plan_target_at_position(mouse_pos)
+        target_kind, target_obj = session.selection.get_plan_target_at_position(mouse_pos)
     if not target_kind or not target_obj:
         return False
 
@@ -1562,6 +1567,13 @@ _PLAN_SELECTION_API_BOUND_METHODS = (
     "activate_wall_target",
     "clear_plan_selection_state",
     "normalize_gui_object_selection",
+    "get_plan_target_kind_for_object",
+    "get_plan_target_for_object",
+    "get_plan_target_at_position",
+    "get_plan_space_instances",
+    "get_plan_region_instances",
+    "get_plan_target_from_edit_node",
+    "get_provider_overlay_target_from_edit_node",
     "get_hovered_plan_target",
     "queue_prime_hover_pick_caches",
     "prime_hover_pick_caches",

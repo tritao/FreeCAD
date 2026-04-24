@@ -55,14 +55,14 @@ def get_plan_target_for_object(session, obj, parent_obj=None):
             continue
         if name:
             seen.add(name)
-        target_kind = session._get_plan_target_kind_for_object(candidate)
+        target_kind = session.selection.get_plan_target_kind_for_object(candidate)
         if target_kind:
             return (target_kind, candidate)
 
     semantic_obj = session._get_plan_semantic_object(obj)
     semantic_name = getattr(semantic_obj, "Name", None)
     if semantic_obj and semantic_name not in seen:
-        target_kind = session._get_plan_target_kind_for_object(semantic_obj)
+        target_kind = session.selection.get_plan_target_kind_for_object(semantic_obj)
         if target_kind:
             return (target_kind, semantic_obj)
 
@@ -79,7 +79,7 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
             continue
         if name:
             seen.add(name)
-        target_kind = session._get_plan_target_kind_for_object(candidate)
+        target_kind = session.selection.get_plan_target_kind_for_object(candidate)
         if (
             target_kind == plan_target_kinds.PLAN_TARGET_PROVIDER
             and not plan_provider_runtime.is_plan_provider_target_visible_for_mode(
@@ -94,7 +94,7 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
     semantic_obj = session._get_plan_semantic_object(obj)
     semantic_name = getattr(semantic_obj, "Name", None)
     if semantic_obj and semantic_name not in seen:
-        target_kind = session._get_plan_target_kind_for_object(semantic_obj)
+        target_kind = session.selection.get_plan_target_kind_for_object(semantic_obj)
         if (
             target_kind == plan_target_kinds.PLAN_TARGET_PROVIDER
             and not plan_provider_runtime.is_plan_provider_target_visible_for_mode(
@@ -295,7 +295,7 @@ def get_plan_targets(session, selected_only=False):
         )
         with provider_refresh_scope:
             for obj in getattr(session.doc, "Objects", []) or []:
-                target_kind, target_obj = session._get_plan_target_for_object(obj)
+                target_kind, target_obj = session.selection.get_plan_target_for_object(obj)
                 if not target_kind or not target_obj:
                     continue
                 state_key = session._get_plan_target_state_key(target_kind, target_obj)

@@ -557,7 +557,7 @@ def pick_plan_space_target_from_overlays(session, mouse_pos, radius_px=10):
     best_space = None
     best_distance_sq = None
     seen = set()
-    for obj in session._get_plan_space_instances():
+    for obj in session.selection.get_plan_space_instances():
         if not session._is_plan_space_object(obj):
             continue
         name = getattr(obj, "Name", None)
@@ -584,7 +584,7 @@ def pick_plan_region_target_from_overlays(session, mouse_pos, radius_px=10):
     best_region = None
     best_distance_sq = None
     seen = set()
-    for obj in session._get_plan_region_instances():
+    for obj in session.selection.get_plan_region_instances():
         if not session._is_plan_region_object(obj):
             continue
         name = getattr(obj, "Name", None)
@@ -682,7 +682,7 @@ def pick_plan_region_target_from_polylines(session, mouse_pos):
         best_region = None
         best_area = None
         seen = set()
-        for obj in session._get_plan_region_instances():
+        for obj in session.selection.get_plan_region_instances():
             session._plan_perf_count("region_polyline_pick_objects_scanned")
             if not session._is_plan_region_object(obj):
                 continue
@@ -729,10 +729,10 @@ def pick_plan_target_from_footprint_faces(
         best_area = None
         seen = set()
         objects = getattr(session.doc, "Objects", []) or []
-        if target_label == "space" and hasattr(session, "_get_plan_space_instances"):
-            objects = session._get_plan_space_instances()
-        elif target_label == "region" and hasattr(session, "_get_plan_region_instances"):
-            objects = session._get_plan_region_instances()
+        if target_label == "space" and hasattr(session.selection, "get_plan_space_instances"):
+            objects = session.selection.get_plan_space_instances()
+        elif target_label == "region" and hasattr(session.selection, "get_plan_region_instances"):
+            objects = session.selection.get_plan_region_instances()
 
         for obj in objects or []:
             session._plan_perf_count(f"{target_label}_objects_scanned")
@@ -934,7 +934,7 @@ def get_plan_target_from_edit_node(session, node):
         target_kind, obj = get_provider_overlay_target_from_edit_node(session, node)
         if session._is_valid_plan_target(target_kind, obj):
             return (target_kind, obj)
-        return session._get_plan_target_for_object(obj)
+        return session.selection.get_plan_target_for_object(obj)
     if node_kind == "opening_handle":
         opening = node[1]
         if session._is_hosted_opening_object(opening):
@@ -953,7 +953,7 @@ def get_plan_target_from_edit_node(session, node):
         return (None, None)
     if session._is_hosted_opening_object(obj):
         return ("opening", obj)
-    return session._get_plan_target_for_object(obj)
+    return session.selection.get_plan_target_for_object(obj)
 
 
 def get_edit_node(session, mouse_pos):
@@ -1130,7 +1130,7 @@ def get_provider_overlay_target_from_edit_node(session, node):
     target_kind = _parse_provider_overlay_target_kind(subname)
     if target_kind and session._is_valid_plan_target(target_kind, obj):
         return (target_kind, obj)
-    inferred_kind, inferred_obj = session._get_plan_target_for_object(obj)
+    inferred_kind, inferred_obj = session.selection.get_plan_target_for_object(obj)
     if inferred_kind and inferred_obj:
         return (inferred_kind, inferred_obj)
     return (None, obj)
