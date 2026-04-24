@@ -1406,17 +1406,21 @@ def add_gui_selection_object(obj):
                 pass
 
 
-def set_gui_selection(session, selection):
+def _reset_gui_selection_sync_state(session):
     session._gui_selection_sync_queued = False
     session._gui_selection_sync_generation += 1
     session._queued_gui_selection_object = None
+
+
+def _apply_gui_selection(session, selection):
+    normalized_selection = session.selection.normalize_gui_object_selection(selection)
     with session.performance.plan_perf_trace_span("set_gui_selection"):
         with session.selection.selection_changes_suppressed():
             try:
                 with session.performance.plan_perf_trace_span("set_gui_selection_clear"):
                     FreeCADGui.Selection.clearSelection()
                 seen = set()
-                for obj in selection or []:
+                for obj in normalized_selection:
                     if not obj:
                         continue
                     key = (
@@ -1431,7 +1435,14 @@ def set_gui_selection(session, selection):
             except Exception:
                 pass
         with session.performance.plan_perf_trace_span("set_gui_selection_secondary_targets"):
-            session.selection.sync_secondary_selected_plan_targets_from_selection(selection)
+            session.selection.sync_secondary_selected_plan_targets_from_selection(
+                normalized_selection
+            )
+
+
+def set_gui_selection(session, selection):
+    _reset_gui_selection_sync_state(session)
+    _apply_gui_selection(session, selection)
 
 
 def set_gui_selection_object(session, obj):
@@ -1474,7 +1485,7 @@ def run_scheduled_gui_selection_sync(session, generation=None):
             session._gui_selection_sync_queued = False
             session._queued_gui_selection_object = None
             return
-        set_gui_selection_object(session, obj)
+        session.selection.set_gui_selection_object(obj)
 
 
 def attach_selection_observer(session):
