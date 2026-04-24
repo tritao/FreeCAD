@@ -634,7 +634,7 @@ def set_selected_plan_target(
         primary_kind=kind,
         primary_obj=obj,
     )
-    session._clear_plan_relation_status()
+    session.wall_relations.clear_plan_relation_status()
     session.viewport.sync_active_plan_target_object()
     if pending_restore:
         session.selection.set_pending_selected_plan_target(kind, obj)

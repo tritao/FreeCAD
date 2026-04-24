@@ -553,15 +553,6 @@ class PlanEditSession:
     def defer_document_visual_updates(self):
         return plan_document_visuals.defer_document_visual_updates(self)
 
-    def _clear_plan_relation_status(self):
-        return plan_wall_relations.clear_plan_relation_status(self)
-
-    def _collect_wall_relation_warnings(self, wall):
-        return plan_wall_relations.collect_wall_relation_warnings(self, wall)
-
-    def _update_wall_relation_status(self, wall):
-        return plan_wall_relations.update_wall_relation_status(self, wall)
-
     # Selection observer interface
 
     def addSelection(self, doc, obj, sub, point):

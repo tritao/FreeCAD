@@ -101,7 +101,7 @@ def start_plan_provider_point_tool(session, tool):
         session.lifecycle.cancel_embedded_tool()
     session.wall_edit.cancel_wall_edit(refresh=False)
     session.lifecycle.cancel_pending_edit()
-    session._clear_plan_relation_status()
+    session.wall_relations.clear_plan_relation_status()
     session._set_hovered_wall(None)
     session._set_hovered_opening(None)
     session._set_hovered_symbol(None)

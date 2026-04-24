@@ -84,7 +84,7 @@ def start_wall_edit(session, mode):
                 return
 
         with session.performance.plan_perf_trace_span("start_wall_edit_state"):
-            session._clear_plan_relation_status()
+            session.wall_relations.clear_plan_relation_status()
             session.current_tool = "Move Wall" if mode == "Move" else f"Stretch {mode}"
             session._set_hovered_wall(None)
             session._set_hovered_opening(None)
@@ -322,7 +322,7 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
     session.current_tool = "Select"
     session.lifecycle.cancel_pending_edit()
     session.selection.set_selected_plan_target("wall", wall, pending_restore=True)
-    session._update_wall_relation_status(wall)
+    session.wall_relations.update_wall_relation_status(wall)
     session.overlays.sync_wall_grips()
     session.task_panels.refresh_task_panel_status()
 
@@ -725,7 +725,7 @@ def update_wall_edit_preview_geometry(session, points):
             "BIM_PlanEdit", "Preview warning: {label} ({status})"
         ).format(label=label, status=status)
     elif session.wall_edit.is_wall_edit_modal_active():
-        session._clear_plan_relation_status()
+        session.wall_relations.clear_plan_relation_status()
 
     segments = []
     for polyline in polylines:
