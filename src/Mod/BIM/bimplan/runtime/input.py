@@ -64,7 +64,9 @@ def on_mouse_pressed(session, event_callback):
                             target_kind == "wall"
                             and session.selection.is_plan_selectable_wall(target_wall)
                             and target_wall != source_wall
-                            and session._apply_plan_wall_join(source_wall, target_wall)
+                            and session.wall_relations.apply_plan_wall_join(
+                                source_wall, target_wall
+                            )
                         ):
                             session._claim_left_button_click(event_callback)
                         return
@@ -243,7 +245,7 @@ def on_key_pressed(session, event_callback):
             event_callback.setHandled()
         return
     if session.current_tool == "Join" and key == coin.SoKeyboardEvent.ESCAPE:
-        session._cancel_join_tool()
+        session.wall_relations.cancel_join_tool()
         return
     if session.current_tool == "Pick Space Region" and key == coin.SoKeyboardEvent.ESCAPE:
         session.spaces.cancel_space_region_pick()
@@ -309,8 +311,8 @@ def on_key_pressed(session, event_callback):
     if session.windows.has_active_window_tool():
         session.windows.cancel_window_tool()
         return
-    if session._has_active_rect_wall_tool():
-        session._cancel_rect_wall_tool()
+    if session.wall_create.has_active_rect_wall_tool():
+        session.wall_create.cancel_rect_wall_tool()
         return
     if session.spaces.has_active_plan_region_tool():
         session.spaces.cancel_plan_region_tool()
