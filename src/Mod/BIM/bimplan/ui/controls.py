@@ -2352,14 +2352,14 @@ class PlanEditControlsWidget:
         ):
             self.session.providers.start_plan_provider_point_tool(action)
             return
-        self.session.execute_plan_provider_action(
+        self.session.providers.execute_plan_provider_action(
             getattr(action, "provider_id", ""),
             getattr(action, "key", ""),
             transaction_label=getattr(action, "transaction_label", ""),
         )
 
     def on_provider_overlay_visibility_changed(self, provider_id, overlay_key, visible):
-        self.session.set_plan_provider_overlay_visible(provider_id, overlay_key, visible)
+        self.session.providers.set_plan_provider_overlay_visible(provider_id, overlay_key, visible)
 
     def on_provider_overlay_mode_changed(self, mode):
         getattr(self.session, "set_plan_provider_overlay_mode", lambda _mode: False)(mode)

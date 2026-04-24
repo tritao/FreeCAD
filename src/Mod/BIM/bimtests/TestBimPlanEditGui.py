@@ -685,7 +685,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             self.assertEqual(0, provider.overlay_calls)
             self.assertTrue(panel.integration_panel.isHidden())
             self.assertFalse(
-                session.execute_plan_provider_action("test-plan-provider", "apply-provider-fix")
+                session.providers.execute_plan_provider_action(
+                    "test-plan-provider", "apply-provider-fix"
+                )
             )
             self.assertEqual([], provider.executed_actions)
 
@@ -772,7 +774,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 create=True,
             ),
             patch.object(
-                session,
+                session.providers,
                 "execute_plan_provider_action",
                 side_effect=_capture_action,
             ),
@@ -854,7 +856,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         with (
             patch.object(FreeCADGui.Snapper, "getPoint"),
             patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True),
-            patch.object(session, "execute_plan_provider_action", side_effect=_capture_action),
+            patch.object(
+                session.providers, "execute_plan_provider_action", side_effect=_capture_action
+            ),
         ):
             self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
             self.assertTrue(session.providers.start_plan_provider_point_tool(tool))

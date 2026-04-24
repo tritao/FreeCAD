@@ -121,7 +121,7 @@ class PlanEditContext:
         return tuple(getattr(self.get_document(), "Objects", ()) or ())
 
     def is_selectable_wall(self, obj):
-        checker = getattr(self.session, "_is_plan_selectable_wall", None)
+        checker = getattr(getattr(self.session, "selection", None), "is_plan_selectable_wall", None)
         if callable(checker):
             try:
                 return bool(checker(obj))

@@ -106,7 +106,7 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
     if session.selection.should_skip_hover_pick(mouse_pos, force=force):
         return False
     session.performance.plan_perf_count("hover_pick_resolved")
-    overlay_mode = session.get_plan_provider_overlay_mode()
+    overlay_mode = session.providers.get_plan_provider_overlay_mode()
     include_space_fallback = not plan_provider_runtime.is_focused_provider_overlay_pick_mode(
         overlay_mode
     )
