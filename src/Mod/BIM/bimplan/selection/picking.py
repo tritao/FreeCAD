@@ -324,7 +324,7 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
         best_distance_sq = None
         seen = set()
         cursor_xy = (float(mouse_pos[0]), float(mouse_pos[1]))
-        plan_point = session._get_plan_point_from_mouse_pos(mouse_pos)
+        plan_point = session.viewport.get_plan_point_from_mouse_pos(mouse_pos)
         if candidates is None:
             objects = session.openings.get_plan_opening_instances()
         else:
@@ -686,7 +686,7 @@ def pick_plan_region_target_from_polylines(session, mouse_pos):
         if not session.doc or not mouse_pos:
             return None
 
-        point = session._get_plan_point_from_mouse_pos(mouse_pos)
+        point = session.viewport.get_plan_point_from_mouse_pos(mouse_pos)
         if point is None:
             return None
 
@@ -732,7 +732,7 @@ def pick_plan_target_from_footprint_faces(
         if not session.doc or not mouse_pos:
             return None
 
-        point = session._get_plan_point_from_mouse_pos(mouse_pos)
+        point = session.viewport.get_plan_point_from_mouse_pos(mouse_pos)
         if point is None:
             return None
 

@@ -73,7 +73,7 @@ def on_mouse_pressed(session, event_callback):
                     else:
                         if session.current_tool == "Pick Space Region":
                             pos = event.getPosition().getValue()
-                            candidate = session._pick_space_region_candidate((pos[0], pos[1]))
+                            candidate = session.spaces.pick_space_region_candidate((pos[0], pos[1]))
                             if candidate:
                                 session.spaces.activate_space_region_candidate(
                                     candidate,
@@ -171,8 +171,8 @@ def on_mouse_moved(session, event_callback):
     ):
         if session.current_tool == "Pick Space Region":
             if mouse_pos is not None:
-                session._set_hovered_space_region_candidate(
-                    session._pick_space_region_candidate(mouse_pos)
+                session.spaces.set_hovered_space_region_candidate(
+                    session.spaces.pick_space_region_candidate(mouse_pos)
                 )
                 session._refresh_plan_overlay_visuals()
             return

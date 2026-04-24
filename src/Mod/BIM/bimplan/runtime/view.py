@@ -41,6 +41,7 @@ _PLAN_VIEWPORT_API_BOUND_METHODS = (
     "scaled_marker_size",
     "get_plan_view_units_per_pixel",
     "get_plan_projection_cache_key",
+    "get_plan_point_from_mouse_pos",
     "set_active_object",
     "sync_active_plan_target_object",
     "register_edit_callbacks",
@@ -592,6 +593,24 @@ def get_plan_projection_cache_key(session):
     if height is None:
         return None
     return size_key + (round(float(height), 6),) + position_key
+
+
+def get_plan_point_from_mouse_pos(session, mouse_pos):
+    if not session.view or not mouse_pos:
+        return None
+    get_point = session._get_runtime_attr(session.view, "getPoint")
+    if get_point is None:
+        return None
+    try:
+        point = get_point(int(mouse_pos[0]), int(mouse_pos[1]))
+    except TypeError:
+        try:
+            point = get_point((int(mouse_pos[0]), int(mouse_pos[1])))
+        except Exception:
+            return None
+    except Exception:
+        return None
+    return session.viewport.project_plan_point(point)
 
 
 def set_active_object(session, obj):

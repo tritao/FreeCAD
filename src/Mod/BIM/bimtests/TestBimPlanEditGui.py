@@ -6632,8 +6632,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         try:
             session.view = FakeView(self.document.Name, level.Name)
             with patch.object(
-                session,
-                "_get_plan_point_from_mouse_pos",
+                session.viewport,
+                "get_plan_point_from_mouse_pos",
                 return_value=FreeCAD.Vector(1500, 1200, 0),
             ):
                 self.assertEqual(
@@ -6733,8 +6733,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             with (
                 patch.object(session.overlays, "get_region_footprint_faces", return_value=[]),
                 patch.object(
-                    session,
-                    "_get_plan_point_from_mouse_pos",
+                    session.viewport,
+                    "get_plan_point_from_mouse_pos",
                     return_value=FreeCAD.Vector(1500, 1200, 0),
                 ),
             ):
@@ -7376,7 +7376,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         candidate = session._space_region_candidates[0]
         screen_pos = session.view.getPointOnScreen(candidate["sample_point"])
-        self.assertIs(session._pick_space_region_candidate(screen_pos), candidate)
+        self.assertIs(session.spaces.pick_space_region_candidate(screen_pos), candidate)
 
         session._on_mouse_pressed(self._make_fake_left_mouse_press(*screen_pos))
         self.pump_gui_events()
