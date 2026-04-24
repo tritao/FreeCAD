@@ -959,7 +959,7 @@ def get_space_region_candidate_polylines(session, candidate):
 
 def get_space_region_candidate_segments(session, candidate):
     segments = []
-    for polyline in session._get_space_region_candidate_polylines(candidate):
+    for polyline in session.spaces.get_space_region_candidate_polylines(candidate):
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
@@ -991,7 +991,7 @@ def pick_space_region_candidate(session, mouse_pos, radius_px=10):
     best_candidate = None
     best_distance_sq = None
     for candidate in session._space_region_candidates:
-        for start, end in session._get_space_region_candidate_segments(candidate):
+        for start, end in session.spaces.get_space_region_candidate_segments(candidate):
             distance_sq = session._get_screen_distance_sq_to_segment(mouse_pos, start, end)
             if distance_sq is None or distance_sq > radius_sq:
                 continue
@@ -1056,7 +1056,7 @@ def create_space_region_base_object(session, candidate):
 
 def begin_space_region_pick(session, boundaries, label=None, seed_space=None, report=None):
     if report is None:
-        report = session._get_space_region_candidate_report(
+        report = session.spaces.get_space_region_candidate_report(
             boundaries,
             label=label,
             seed_space=seed_space,
@@ -1150,7 +1150,7 @@ def create_space_from_current_selection(session):
         return False
 
     if region_seed_space is not None:
-        report = session._get_space_region_candidate_report(
+        report = session.spaces.get_space_region_candidate_report(
             boundaries,
             label=request.label,
             seed_space=region_seed_space,
@@ -1165,7 +1165,7 @@ def create_space_from_current_selection(session):
 
     report = ArchSpace.analyzeBoundaryLinks(boundaries)
     if report.get("code") == "multiple_regions":
-        region_report = session._get_space_region_candidate_report(
+        region_report = session.spaces.get_space_region_candidate_report(
             boundaries,
             label=report.get("label"),
         )

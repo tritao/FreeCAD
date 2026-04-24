@@ -72,6 +72,7 @@ def _bind_provider_call(func):
 _PLAN_PROVIDERS_API_BOUND_METHODS = (
     "get_plan_provider_display_name",
     "get_plan_provider_overlay_mode",
+    "get_plan_provider_target_for_object",
     "is_plan_provider_overlay_enabled",
 )
 
