@@ -199,7 +199,7 @@ def refresh_task_panel_status(session, selection_only=False):
     ):
         if session._tearing_down or not session.document_visuals.document_is_alive():
             return
-        session._sanitize_plan_target_references()
+        session.selection.sanitize_plan_target_references()
         session.status_text.update_input_hints()
         session.viewport.refresh_viewport_status_chip()
         panel = session.task_panel

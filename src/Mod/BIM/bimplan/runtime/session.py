@@ -241,35 +241,6 @@ class PlanEditSession:
         self.task_panels = plan_task_panel.PlanTaskPanelsAPI(self)
         plan_session_state.initialize_session_state(self)
 
-    def _sanitize_plan_target_references(self):
-        changed = False
-        for kind in ("wall", "opening", "symbol", "region", "space"):
-            obj = self.selection.get_selected_target_for_kind(kind)
-            if obj is None or self.visibility.is_live_document_object(obj):
-                continue
-            self.selection.set_selected_target_for_kind(kind, None)
-            changed = True
-        for attr in (
-            "hovered_wall",
-            "hovered_opening",
-            "hovered_symbol",
-            "hovered_provider",
-            "hovered_region",
-            "hovered_space",
-        ):
-            obj = getattr(self, attr, None)
-            if obj is None or self.visibility.is_live_document_object(obj):
-                continue
-            setattr(self, attr, None)
-            changed = True
-        normalized_secondary = self.selection.normalize_plan_target_list(
-            getattr(self, "_secondary_selected_plan_targets_state", [])
-        )
-        if normalized_secondary != getattr(self, "_secondary_selected_plan_targets_state", []):
-            self._secondary_selected_plan_targets_state = normalized_secondary
-            changed = True
-        return changed
-
     def enter(self):
         with self.performance.plan_perf_trace_event("enter_plan_edit"):
             self.performance.plan_perf_count(

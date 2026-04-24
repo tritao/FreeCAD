@@ -69,7 +69,8 @@ def _make_set_hovered_target_function(kind):
 
 
 def _supports_native_selection_state(session):
-    return callable(getattr(session, "_sanitize_plan_target_references", None))
+    selection_api = _get_selection_api(session)
+    return callable(getattr(selection_api, "sanitize_plan_target_references", None))
 
 
 def _get_selection_api(session):
@@ -93,6 +94,36 @@ def clear_hidden_provider_preselection(session):
         return False
     session.performance.plan_perf_count("provider_preselection_cleared_for_mode")
     return _clear_gui_preselection()
+
+
+def sanitize_plan_target_references(session):
+    changed = False
+    for kind in ("wall", "opening", "symbol", "region", "space"):
+        obj = session.selection.get_selected_target_for_kind(kind)
+        if obj is None or session.visibility.is_live_document_object(obj):
+            continue
+        session.selection.set_selected_target_for_kind(kind, None)
+        changed = True
+    for attr in (
+        "hovered_wall",
+        "hovered_opening",
+        "hovered_symbol",
+        "hovered_provider",
+        "hovered_region",
+        "hovered_space",
+    ):
+        obj = getattr(session, attr, None)
+        if obj is None or session.visibility.is_live_document_object(obj):
+            continue
+        setattr(session, attr, None)
+        changed = True
+    normalized_secondary = session.selection.normalize_plan_target_list(
+        getattr(session, "_secondary_selected_plan_targets_state", [])
+    )
+    if normalized_secondary != getattr(session, "_secondary_selected_plan_targets_state", []):
+        session._secondary_selected_plan_targets_state = normalized_secondary
+        changed = True
+    return changed
 
 
 def resolve_selected_target_for_gui_object(
@@ -432,7 +463,7 @@ def get_selected_plan_target(session):
         if legacy_target is not _MISSING:
             return legacy_target
         return (None, None)
-    session._sanitize_plan_target_references()
+    session.selection.sanitize_plan_target_references()
     kind, obj = get_selected_plan_target_state(session, plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS)
     if session.selection.is_valid_plan_target(kind, obj):
         return (kind, obj)
@@ -533,7 +564,7 @@ def get_secondary_selected_plan_targets(session):
         if legacy_targets is not _MISSING:
             return legacy_targets
         return []
-    session._sanitize_plan_target_references()
+    session.selection.sanitize_plan_target_references()
     primary_kind, primary_obj = get_selected_plan_target(session)
     session.selection.set_secondary_selected_plan_targets(
         getattr(session, "_secondary_selected_plan_targets_state", []),
@@ -1543,6 +1574,7 @@ def _bind_session_call(func):
 
 
 _PLAN_SELECTION_API_BOUND_METHODS = (
+    "sanitize_plan_target_references",
     "get_selected_target_for_kind",
     "set_selected_target_for_kind",
     "get_selected_plan_target_object",
