@@ -33,6 +33,35 @@ def _sync_specs(*pairs):
     return tuple(SyncSpec(trace_name, method_name) for trace_name, method_name in pairs)
 
 
+def _build_target_kind_policy(
+    *,
+    validator_name,
+    hovered_attr_name,
+    hovered_setter_name,
+    overlay_label,
+    queue_restore_method_name=None,
+    selected_handle_clearers=(),
+    selected_visual_sync=(),
+    hover_set_sync=(),
+):
+    return TargetKindPolicy(
+        validator_name=validator_name,
+        queue_restore_method_name=queue_restore_method_name,
+        hovered_attr_name=hovered_attr_name,
+        hovered_setter_name=hovered_setter_name,
+        hovered_visual_clearers=(f"_clear_hovered_{overlay_label}",),
+        selected_visual_clearers=(f"_clear_selected_{overlay_label}",),
+        selected_handle_clearers=tuple(selected_handle_clearers),
+        selected_visual_label=overlay_label,
+        selected_visual_sync=_sync_specs(*selected_visual_sync),
+        hovered_visual_label=overlay_label,
+        hovered_visual_sync=_sync_specs(
+            (f"sync_hovered_{overlay_label}", f"_sync_hovered_{overlay_label}"),
+        ),
+        hover_set_sync=_sync_specs(*hover_set_sync),
+    )
+
+
 _TARGET_KIND_POLICIES = {
     plan_target_kinds.PLAN_TARGET_WALL: TargetKindPolicy(
         validator_name="_is_plan_selectable_wall",
@@ -49,24 +78,18 @@ _TARGET_KIND_POLICIES = {
             ("sync_hovered_wall_overlay", "_sync_hovered_wall_overlay"),
         ),
     ),
-    plan_target_kinds.PLAN_TARGET_OPENING: TargetKindPolicy(
+    plan_target_kinds.PLAN_TARGET_OPENING: _build_target_kind_policy(
         validator_name="_is_hosted_opening_object",
         queue_restore_method_name="_queue_restore_selected_opening",
         hovered_attr_name="hovered_opening",
         hovered_setter_name="_set_hovered_opening",
-        hovered_visual_clearers=("_clear_hovered_opening_overlay",),
-        selected_visual_clearers=("_clear_selected_opening_overlay",),
+        overlay_label="opening_overlay",
         selected_handle_clearers=("_clear_selected_opening_handles",),
-        selected_visual_label="opening_overlay",
-        selected_visual_sync=_sync_specs(
+        selected_visual_sync=(
             ("sync_selected_opening_overlay", "_sync_selected_opening_overlay"),
             ("sync_selected_opening_handles", "_sync_selected_opening_handles"),
         ),
-        hovered_visual_label="opening_overlay",
-        hovered_visual_sync=_sync_specs(
-            ("sync_hovered_opening_overlay", "_sync_hovered_opening_overlay"),
-        ),
-        hover_set_sync=_sync_specs(
+        hover_set_sync=(
             (
                 "sync_selected_wall_opening_context_overlay",
                 "_sync_selected_wall_opening_context_overlay",
@@ -74,84 +97,48 @@ _TARGET_KIND_POLICIES = {
             ("sync_hovered_opening_overlay", "_sync_hovered_opening_overlay"),
         ),
     ),
-    plan_target_kinds.PLAN_TARGET_SYMBOL: TargetKindPolicy(
+    plan_target_kinds.PLAN_TARGET_SYMBOL: _build_target_kind_policy(
         validator_name="_is_plan_symbol_instance",
         queue_restore_method_name="_queue_restore_selected_symbol",
         hovered_attr_name="hovered_symbol",
         hovered_setter_name="_set_hovered_symbol",
-        hovered_visual_clearers=("_clear_hovered_symbol_overlay",),
-        selected_visual_clearers=("_clear_selected_symbol_overlay",),
+        overlay_label="symbol_overlay",
         selected_handle_clearers=("_clear_selected_symbol_handles",),
-        selected_visual_label="symbol_overlay",
-        selected_visual_sync=_sync_specs(
+        selected_visual_sync=(
             ("sync_selected_symbol_overlay", "_sync_selected_symbol_overlay"),
             ("sync_selected_symbol_handles", "_sync_selected_symbol_handles"),
         ),
-        hovered_visual_label="symbol_overlay",
-        hovered_visual_sync=_sync_specs(
-            ("sync_hovered_symbol_overlay", "_sync_hovered_symbol_overlay"),
-        ),
-        hover_set_sync=_sync_specs(
-            ("sync_hovered_symbol_overlay", "_sync_hovered_symbol_overlay"),
-        ),
+        hover_set_sync=(("sync_hovered_symbol_overlay", "_sync_hovered_symbol_overlay"),),
     ),
-    plan_target_kinds.PLAN_TARGET_PROVIDER: TargetKindPolicy(
+    plan_target_kinds.PLAN_TARGET_PROVIDER: _build_target_kind_policy(
         validator_name="_is_plan_provider_target_object",
         hovered_attr_name="hovered_provider",
         hovered_setter_name="_set_hovered_provider",
-        hovered_visual_clearers=("_clear_hovered_provider_overlay",),
-        selected_visual_clearers=("_clear_selected_provider_overlay",),
+        overlay_label="provider_overlay",
         selected_handle_clearers=("_clear_selected_provider_handles",),
-        selected_visual_label="provider_overlay",
-        selected_visual_sync=_sync_specs(
+        selected_visual_sync=(
             ("sync_selected_provider_overlay", "_sync_selected_provider_overlay"),
             ("sync_selected_provider_handles", "_sync_selected_provider_handles"),
         ),
-        hovered_visual_label="provider_overlay",
-        hovered_visual_sync=_sync_specs(
-            ("sync_hovered_provider_overlay", "_sync_hovered_provider_overlay"),
-        ),
-        hover_set_sync=_sync_specs(
-            ("sync_hovered_provider_overlay", "_sync_hovered_provider_overlay"),
-        ),
+        hover_set_sync=(("sync_hovered_provider_overlay", "_sync_hovered_provider_overlay"),),
     ),
-    plan_target_kinds.PLAN_TARGET_SPACE: TargetKindPolicy(
+    plan_target_kinds.PLAN_TARGET_SPACE: _build_target_kind_policy(
         validator_name="_is_plan_space_object",
         queue_restore_method_name="_queue_restore_selected_space",
         hovered_attr_name="hovered_space",
         hovered_setter_name="_set_hovered_space",
-        hovered_visual_clearers=("_clear_hovered_space_overlay",),
-        selected_visual_clearers=("_clear_selected_space_overlay",),
-        selected_visual_label="space_overlay",
-        selected_visual_sync=_sync_specs(
-            ("sync_selected_space_overlay", "_sync_selected_space_overlay"),
-        ),
-        hovered_visual_label="space_overlay",
-        hovered_visual_sync=_sync_specs(
-            ("sync_hovered_space_overlay", "_sync_hovered_space_overlay"),
-        ),
-        hover_set_sync=_sync_specs(
-            ("sync_hovered_space_overlay", "_sync_hovered_space_overlay"),
-        ),
+        overlay_label="space_overlay",
+        selected_visual_sync=(("sync_selected_space_overlay", "_sync_selected_space_overlay"),),
+        hover_set_sync=(("sync_hovered_space_overlay", "_sync_hovered_space_overlay"),),
     ),
-    plan_target_kinds.PLAN_TARGET_REGION: TargetKindPolicy(
+    plan_target_kinds.PLAN_TARGET_REGION: _build_target_kind_policy(
         validator_name="_is_plan_region_object",
         queue_restore_method_name="_queue_restore_selected_region",
         hovered_attr_name="hovered_region",
         hovered_setter_name="_set_hovered_region",
-        hovered_visual_clearers=("_clear_hovered_region_overlay",),
-        selected_visual_clearers=("_clear_selected_region_overlay",),
-        selected_visual_label="region_overlay",
-        selected_visual_sync=_sync_specs(
-            ("sync_selected_region_overlay", "_sync_selected_region_overlay"),
-        ),
-        hovered_visual_label="region_overlay",
-        hovered_visual_sync=_sync_specs(
-            ("sync_hovered_region_overlay", "_sync_hovered_region_overlay"),
-        ),
-        hover_set_sync=_sync_specs(
-            ("sync_hovered_region_overlay", "_sync_hovered_region_overlay"),
-        ),
+        overlay_label="region_overlay",
+        selected_visual_sync=(("sync_selected_region_overlay", "_sync_selected_region_overlay"),),
+        hover_set_sync=(("sync_hovered_region_overlay", "_sync_hovered_region_overlay"),),
     ),
 }
 
