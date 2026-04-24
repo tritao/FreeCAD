@@ -22,7 +22,7 @@ def queue_prime_hover_pick_caches(session):
     except ImportError:
         return
     session._plan_hover_pick_cache_queued = True
-    QtCore.QTimer.singleShot(0, session._prime_hover_pick_caches)
+    QtCore.QTimer.singleShot(0, session.selection.prime_hover_pick_caches)
 
 
 def prime_hover_pick_caches(session):
