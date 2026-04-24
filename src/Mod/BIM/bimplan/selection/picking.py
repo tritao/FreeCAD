@@ -1496,6 +1496,31 @@ def _get_objects_info_candidate_objects(session, info):
 
 def _get_provider_overlay_pick_radius_px(session, overlay, point, fallback_radius_px):
     radius_px = max(1.0, float(fallback_radius_px))
+    projected_radius_px = _get_provider_overlay_projected_marker_radius_px(
+        session,
+        overlay,
+        point,
+    )
+    if projected_radius_px is not None:
+        radius_px = max(
+            radius_px,
+            projected_radius_px
+            + max(
+                _PROVIDER_OVERLAY_PICK_PADDING_PX,
+                projected_radius_px * _PROVIDER_OVERLAY_PICK_PADDING_RATIO,
+            ),
+        )
+    return radius_px
+
+
+def _get_provider_overlay_marker_screen_distance_sq(session, mouse_pos, overlay, point):
+    marker_segments = _get_provider_overlay_marker_segments(overlay, point)
+    if not marker_segments:
+        return None
+    return _get_best_provider_overlay_marker_distance_sq(session, mouse_pos, marker_segments)
+
+
+def _get_provider_overlay_projected_marker_radius_px(session, overlay, point):
     marker_size = max(1.0, float(getattr(overlay, "marker_size", 160.0) or 160.0))
     marker_half_size = marker_size / 2.0
     marker_extent_factor = _get_provider_overlay_pick_extent_factor(overlay.marker_kind)
@@ -1508,26 +1533,12 @@ def _get_provider_overlay_pick_radius_px(session, overlay, point, fallback_radiu
                 point.z,
             )
         )
-        projected_radius_px = (
-            (float(edge_x) - float(center_x)) ** 2 + (float(edge_y) - float(center_y)) ** 2
-        ) ** 0.5
-        radius_px = max(
-            radius_px,
-            projected_radius_px
-            + max(
-                _PROVIDER_OVERLAY_PICK_PADDING_PX,
-                projected_radius_px * _PROVIDER_OVERLAY_PICK_PADDING_RATIO,
-            ),
-        )
     except Exception:
-        pass
-    return radius_px
-
-
-def _get_provider_overlay_marker_screen_distance_sq(session, mouse_pos, overlay, point):
-    marker_segments = _get_provider_overlay_marker_segments(overlay, point)
-    if not marker_segments:
         return None
+    return ((float(edge_x) - float(center_x)) ** 2 + (float(edge_y) - float(center_y)) ** 2) ** 0.5
+
+
+def _get_best_provider_overlay_marker_distance_sq(session, mouse_pos, marker_segments):
     best_distance_sq = None
     for start, end in marker_segments:
         distance_sq = get_screen_distance_sq_to_segment(session, mouse_pos, start, end)
