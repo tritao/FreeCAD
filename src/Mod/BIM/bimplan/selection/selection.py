@@ -578,8 +578,7 @@ def get_plan_target_state_key(kind, obj):
     )
 
 
-def normalize_plan_target_list(session, targets):
-    normalized = []
+def _iter_normalized_plan_targets(session, targets):
     seen = set()
     for target in targets or []:
         try:
@@ -592,8 +591,18 @@ def normalize_plan_target_list(session, targets):
         if key is None or key in seen:
             continue
         seen.add(key)
-        normalized.append((target_kind, target_obj))
-    return normalized
+        yield (target_kind, target_obj)
+
+
+def _filter_secondary_selected_plan_targets(targets, primary_kind, primary_obj):
+    for target_kind, target_obj in targets:
+        if target_kind == primary_kind and target_obj == primary_obj:
+            continue
+        yield (target_kind, target_obj)
+
+
+def normalize_plan_target_list(session, targets):
+    return list(_iter_normalized_plan_targets(session, targets))
 
 
 def normalize_plan_targets_from_selection(session, selection):
@@ -612,12 +621,13 @@ def normalize_plan_targets_from_selection(session, selection):
 def set_secondary_selected_plan_targets(session, targets, primary_kind=None, primary_obj=None):
     if primary_kind is None and primary_obj is None:
         primary_kind, primary_obj = get_selected_plan_target(session)
-    normalized = []
-    for target_kind, target_obj in session.selection.normalize_plan_target_list(targets):
-        if target_kind == primary_kind and target_obj == primary_obj:
-            continue
-        normalized.append((target_kind, target_obj))
-    session._secondary_selected_plan_targets_state = normalized
+    session._secondary_selected_plan_targets_state = list(
+        _filter_secondary_selected_plan_targets(
+            _iter_normalized_plan_targets(session, targets),
+            primary_kind,
+            primary_obj,
+        )
+    )
 
 
 def sync_secondary_selected_plan_targets_from_selection(
@@ -654,17 +664,18 @@ def get_selected_plan_targets(session):
         )
     primary_kind, primary_obj = _get_native_selected_plan_target(session)
     targets = []
-    seen = set()
     if primary_kind and primary_obj:
-        key = session.selection.get_plan_target_state_key(primary_kind, primary_obj)
-        seen.add(key)
         targets.append((primary_kind, primary_obj))
-    for target_kind, target_obj in _get_current_secondary_selected_plan_targets(session):
-        key = session.selection.get_plan_target_state_key(target_kind, target_obj)
-        if key in seen:
-            continue
-        seen.add(key)
-        targets.append((target_kind, target_obj))
+    targets.extend(
+        _filter_secondary_selected_plan_targets(
+            _iter_normalized_plan_targets(
+                session,
+                _get_current_secondary_selected_plan_targets(session),
+            ),
+            primary_kind,
+            primary_obj,
+        )
+    )
     return targets
 
 
