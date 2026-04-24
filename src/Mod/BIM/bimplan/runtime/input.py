@@ -132,13 +132,13 @@ def on_mouse_pressed(session, event_callback):
                             session.openings.activate_opening_handle(obj, index)
                         elif node_kind == "provider_handle":
                             _kind, obj, index = node
-                            session._set_selected_plan_target_state("provider", obj)
+                            session.selection.set_selected_plan_target_state("provider", obj)
                             session.overlays.clear_wall_grips()
                             session.overlays.clear_selected_wall_overlay()
                             session.providers.activate_provider_handle(obj, index)
                         elif node_kind == "symbol_handle":
                             _kind, obj, role = node
-                            session._set_selected_plan_target_state("symbol", obj)
+                            session.selection.set_selected_plan_target_state("symbol", obj)
                             session.overlays.clear_wall_grips()
                             session.overlays.clear_selected_wall_overlay()
                             session.symbols.activate_symbol_handle(obj, role)
@@ -164,7 +164,7 @@ def on_mouse_pressed(session, event_callback):
                                 session.selection.set_gui_selection_object(obj)
                                 session.openings.activate_opening_handle(obj, index)
                             else:
-                                session._set_selected_plan_target_state("wall", obj)
+                                session.selection.set_selected_plan_target_state("wall", obj)
                                 session.wall_edit.activate_wall_grip(index, wall=obj)
                         session._claim_left_button_click(event_callback)
             finally:
@@ -213,7 +213,7 @@ def on_mouse_moved(session, event_callback):
             return
         if not session.selection.update_hovered_plan_target(mouse_pos):
             return
-        if session._grip_trackers or session._is_selected_plan_target("wall"):
+        if session._grip_trackers or session.selection.is_selected_plan_target("wall"):
             session.overlays.sync_wall_grips()
         session.viewport.request_view_redraw()
         hovered_after = session.selection.get_hovered_plan_target()

@@ -221,9 +221,9 @@ def get_plan_join_candidate_wall(session):
     if session.current_tool != "Join":
         return None
     wall = session.hovered_wall
-    if not session.selection.is_plan_selectable_wall(wall) or session._is_selected_plan_target(
-        "wall", wall
-    ):
+    if not session.selection.is_plan_selectable_wall(
+        wall
+    ) or session.selection.is_selected_plan_target("wall", wall):
         return None
     return wall
 

@@ -406,7 +406,7 @@ def slot_changed_object(session, obj, prop):
         return
     if (
         session.hovered_region
-        and not session._is_selected_plan_target("region", session.hovered_region)
+        and not session.selection.is_selected_plan_target("region", session.hovered_region)
         and obj == session.hovered_region
         and prop in _REGION_VISUAL_PROPERTIES
     ):
@@ -420,7 +420,7 @@ def slot_changed_object(session, obj, prop):
         return
     if (
         session.hovered_space
-        and not session._is_selected_plan_target("space", session.hovered_space)
+        and not session.selection.is_selected_plan_target("space", session.hovered_space)
         and obj == session.hovered_space
         and prop in _SPACE_VISUAL_PROPERTIES
     ):
@@ -546,21 +546,21 @@ def slot_deleted_object(session, obj):
     if obj == session.hovered_region:
         session.hovered_region = None
         session.overlays.clear_hovered_region_overlay()
-    if session._clear_selected_plan_target_if_matches("opening", obj):
+    if session.selection.clear_selected_plan_target_if_matches("opening", obj):
         session.document_visuals.refresh_selected_opening_visuals()
         return
-    if session._clear_selected_plan_target_if_matches("symbol", obj):
+    if session.selection.clear_selected_plan_target_if_matches("symbol", obj):
         session.overlays.refresh_selected_symbol_visuals()
         return
-    if session._clear_selected_plan_target_if_matches("region", obj):
+    if session.selection.clear_selected_plan_target_if_matches("region", obj):
         session.spaces.refresh_selected_region_visuals()
         session.task_panels.refresh_task_panel_status()
         return
-    if session._clear_selected_plan_target_if_matches("space", obj):
+    if session.selection.clear_selected_plan_target_if_matches("space", obj):
         session.spaces.refresh_selected_space_visuals()
         session.task_panels.refresh_task_panel_status()
         return
-    if not session._is_selected_plan_target("wall", obj):
+    if not session.selection.is_selected_plan_target("wall", obj):
         return
     session._schedule_selected_wall_reset("Deleted", obj)
 
@@ -580,19 +580,19 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
     selected_provider = plan_selection.get_selected_plan_target_object(session, "provider")
     if selected_symbol:
         session.document_visuals.refresh_plan_object_footprint_display(selected_symbol)
-    if session.hovered_symbol and not session._is_selected_plan_target(
+    if session.hovered_symbol and not session.selection.is_selected_plan_target(
         "symbol", session.hovered_symbol
     ):
         session.document_visuals.refresh_plan_object_footprint_display(session.hovered_symbol)
     if selected_region:
         session.document_visuals.refresh_plan_object_footprint_display(selected_region)
-    if session.hovered_region and not session._is_selected_plan_target(
+    if session.hovered_region and not session.selection.is_selected_plan_target(
         "region", session.hovered_region
     ):
         session.document_visuals.refresh_plan_object_footprint_display(session.hovered_region)
     if selected_space:
         session.document_visuals.refresh_plan_object_footprint_display(selected_space)
-    if session.hovered_space and not session._is_selected_plan_target(
+    if session.hovered_space and not session.selection.is_selected_plan_target(
         "space", session.hovered_space
     ):
         session.document_visuals.refresh_plan_object_footprint_display(session.hovered_space)
@@ -607,7 +607,7 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
         session.document_visuals.refresh_opening_footprint_display(selected_opening)
         session.document_visuals.refresh_opening_host_footprint_displays(selected_opening)
         session.document_visuals.queue_hard_refresh_selected_opening_visuals()
-    if session.hovered_opening and not session._is_selected_plan_target(
+    if session.hovered_opening and not session.selection.is_selected_plan_target(
         "opening", session.hovered_opening
     ):
         session.document_visuals.refresh_opening_footprint_display(session.hovered_opening)
@@ -628,13 +628,13 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
     ]
     if selected_region:
         visual_args.append(_PLAN_VISUAL_SELECTED_REGION)
-    if session.hovered_region and not session._is_selected_plan_target(
+    if session.hovered_region and not session.selection.is_selected_plan_target(
         "region", session.hovered_region
     ):
         visual_args.append(_PLAN_VISUAL_HOVERED_REGION)
     if selected_space:
         visual_args.append(_PLAN_VISUAL_SELECTED_SPACE)
-    if session.hovered_space and not session._is_selected_plan_target(
+    if session.hovered_space and not session.selection.is_selected_plan_target(
         "space", session.hovered_space
     ):
         visual_args.append(_PLAN_VISUAL_HOVERED_SPACE)

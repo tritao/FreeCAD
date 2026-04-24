@@ -183,7 +183,9 @@ def sync_hovered_wall_overlay(session):
     clear_hovered_wall_overlay(session)
     if session.current_tool not in ("Select", "Join"):
         return
-    if not session.hovered_wall or session._is_selected_plan_target("wall", session.hovered_wall):
+    if not session.hovered_wall or session.selection.is_selected_plan_target(
+        "wall", session.hovered_wall
+    ):
         return
     create_wall_overlay_trackers(
         session,
@@ -328,7 +330,9 @@ def sync_hovered_wall_opening_context_overlay(session):
     clear_hovered_wall_opening_context_overlay(session)
     if session.current_tool != "Select":
         return
-    if not session.hovered_wall or session._is_selected_plan_target("wall", session.hovered_wall):
+    if not session.hovered_wall or session.selection.is_selected_plan_target(
+        "wall", session.hovered_wall
+    ):
         return
     selected_kind, _selected_obj = session.selection.get_selected_plan_target()
     if selected_kind in ("wall", "opening", "region", "space"):

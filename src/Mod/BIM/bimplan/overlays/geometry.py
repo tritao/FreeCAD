@@ -67,9 +67,9 @@ def invalidate_plan_overlay_geometry_cache(session, obj=None, kinds=None):
         invalidate_opening_overlay_screen_cache(session)
     if session.hovered_opening == semantic_obj:
         session.overlays.invalidate_hovered_opening_overlay_cache()
-    if session._is_selected_plan_target("opening", semantic_obj):
+    if session.selection.is_selected_plan_target("opening", semantic_obj):
         session.overlays.invalidate_selected_opening_overlay_cache()
-    if session._is_selected_plan_target("space", semantic_obj):
+    if session.selection.is_selected_plan_target("space", semantic_obj):
         session.overlays.invalidate_selected_space_overlay_cache()
 
 

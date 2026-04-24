@@ -90,7 +90,7 @@ def start_wall_edit(session, mode):
             session._set_hovered_opening(None)
             session._set_hovered_symbol(None)
             session._set_hovered_provider(None)
-            if not session._is_selected_plan_target("wall", wall):
+            if not session.selection.is_selected_plan_target("wall", wall):
                 session._set_selected_plan_target("wall", wall)
             session.overlays.clear_selected_wall_overlay()
             session.overlays.clear_selected_wall_opening_context_overlay()
@@ -355,7 +355,7 @@ def activate_wall_grip_now(session, grip_index, wall=None):
         if session._tearing_down or session.current_tool != "Select" or not wall:
             return
         with session.performance.plan_perf_trace_span("activate_wall_grip_set_target"):
-            if not session._is_selected_plan_target("wall", wall):
+            if not session.selection.is_selected_plan_target("wall", wall):
                 session._set_selected_plan_target("wall", wall)
         with session.performance.plan_perf_trace_span("activate_wall_grip_start_edit"):
             session.wall_edit.start_wall_grip_edit(grip_index)

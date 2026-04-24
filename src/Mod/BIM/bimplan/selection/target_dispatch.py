@@ -315,7 +315,9 @@ def sync_selected_target_visuals(
         if (
             not force
             and session.current_tool == "Select"
-            and not session._selected_plan_target_changed(previous_kind, previous_obj, kind)
+            and not session.selection.selected_plan_target_changed(
+                previous_kind, previous_obj, kind
+            )
         ):
             continue
         _call_sync_specs(
@@ -345,7 +347,7 @@ def set_hovered_target(session, kind, obj):
     policy = _get_target_kind_policy(kind)
     if not policy.hover_set_sync or not policy.hovered_attr_name:
         return False
-    if session._is_selected_plan_target(kind, obj):
+    if session.selection.is_selected_plan_target(kind, obj):
         obj = None
     if getattr(session, policy.hovered_attr_name, None) == obj:
         return False

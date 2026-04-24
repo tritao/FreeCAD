@@ -602,7 +602,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
         def resolve():
             if not session.selection.update_hovered_plan_target(screen, force=True):
                 return
-            if session._grip_trackers or session._is_selected_plan_target("wall"):
+            if session._grip_trackers or session.selection.is_selected_plan_target("wall"):
                 session.overlays.sync_wall_grips()
             session.viewport.request_view_redraw()
 

@@ -1627,7 +1627,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertTrue(session.selection.select_symbol_for_plan_edit(link))
         self.pump_gui_events()
 
-        self.assertIs(link, session.selected_symbol)
+        self.assertIs(link, session.selection.get_selected_target_for_kind("symbol"))
         self.assertEqual(
             {"move", "rotate"},
             {
@@ -1767,7 +1767,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertTrue(session.selection.select_symbol_for_plan_edit(equipment))
         self.pump_gui_events()
 
-        self.assertIs(equipment, session.selected_symbol)
+        self.assertIs(equipment, session.selection.get_selected_target_for_kind("symbol"))
         self.assertEqual(
             {"move", "rotate"},
             {
@@ -1839,12 +1839,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(plan_symbol)
         self.pump_gui_events()
-        self.assertIs(equipment, session.selected_symbol)
+        self.assertIs(equipment, session.selection.get_selected_target_for_kind("symbol"))
 
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(base)
         self.pump_gui_events()
-        self.assertIs(equipment, session.selected_symbol)
+        self.assertIs(equipment, session.selection.get_selected_target_for_kind("symbol"))
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -1880,7 +1880,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertAlmostEqual(2400.0, link.Placement.Base.x, delta=1e-6)
         self.assertAlmostEqual(1600.0, link.Placement.Base.y, delta=1e-6)
-        self.assertIs(session.selected_symbol, link)
+        self.assertIs(session.selection.get_selected_target_for_kind("symbol"), link)
 
         handle_points = {
             role: point
@@ -1901,7 +1901,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         axis = link.Placement.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
         self.assertAlmostEqual(0.0, axis.x, delta=1e-3)
         self.assertGreater(axis.y, 0.99)
-        self.assertIs(session.selected_symbol, link)
+        self.assertIs(session.selection.get_selected_target_for_kind("symbol"), link)
         self.assertIs(equipment, link.LinkedObject)
 
         session.shutdown(close_dialog=False)
@@ -3974,8 +3974,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual({joint.WallA, joint.WallB}, {source_wall, target_wall})
 
         self.assertEqual(session.current_tool, "Select")
-        self.assertIs(session.selected_wall, source_wall)
-        self.assertIsNone(session.selected_opening)
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), source_wall)
+        self.assertIsNone(session.selection.get_selected_target_for_kind("opening"))
         self.assertEqual(len(session._grip_trackers), 3)
         self.assertEqual(len(session._wall_hover_trackers), 0)
 
@@ -4160,7 +4160,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         ]
         self.assertEqual(len(joints), 0)
         self.assertEqual(session.current_tool, "Join")
-        self.assertIs(session.selected_wall, source_wall)
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), source_wall)
         self.assertIs(session.hovered_wall, target_wall)
         self.assertFalse(session.task_panel.unjoin_button.isEnabled())
         _title, body = session._get_status_chip_text()
@@ -4274,7 +4274,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             {wall.Name for wall in junction.Walls},
             {carrier_wall.Name, branch_up.Name, branch_down.Name},
         )
-        self.assertIs(session.selected_wall, carrier_wall)
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), carrier_wall)
         self.assertGreater(len(session._junction_node_trackers), 0)
 
     def test_plan_edit_wall_resize_keeps_relation_status_clear_when_join_stays_resolvable(
@@ -5179,7 +5179,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertAlmostEqual(endpoints[0].x, original_endpoints[0].x + 500.0, delta=1e-6)
         self.assertAlmostEqual(endpoints[1].x, original_endpoints[1].x + 500.0, delta=1e-6)
         self.assertEqual(session.current_tool, "Select")
-        self.assertIs(session.selected_wall, wall)
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), wall)
 
     def test_plan_edit_wall_stretch_length_edit_commits_wall(self):
         """Accepting a typed wall stretch length should commit the resized wall."""
@@ -5213,7 +5213,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         endpoints = wall.Proxy.calc_endpoints(wall)
         self.assertAlmostEqual(endpoints[1].sub(endpoints[0]).Length, 4200.0, delta=1e-6)
         self.assertEqual(session.current_tool, "Select")
-        self.assertIs(session.selected_wall, wall)
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), wall)
 
     def test_plan_edit_wall_edit_refreshes_hosted_opening_footprints(self):
         """Wall edits should refresh footprints for openings hosted by that wall."""
@@ -5673,26 +5673,26 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session.selected_region = region
+        session.selection.set_selected_target_for_kind("region", region)
         self.assertEqual(session.selection.get_selected_plan_target(), ("region", region))
-        self.assertEqual(session._get_selected_plan_target_state(), ("region", region))
-        self.assertIs(session.selected_region, region)
-        self.assertIsNone(session.selected_space)
-        self.assertIsNone(session.selected_wall)
+        self.assertEqual(session.selection.get_selected_plan_target_state(), ("region", region))
+        self.assertIs(session.selection.get_selected_target_for_kind("region"), region)
+        self.assertIsNone(session.selection.get_selected_target_for_kind("space"))
+        self.assertIsNone(session.selection.get_selected_target_for_kind("wall"))
 
-        session.selected_space = space
+        session.selection.set_selected_target_for_kind("space", space)
         self.assertEqual(session.selection.get_selected_plan_target(), ("space", space))
-        self.assertEqual(session._get_selected_plan_target_state(), ("space", space))
-        self.assertIs(session.selected_space, space)
-        self.assertIsNone(session.selected_region)
+        self.assertEqual(session.selection.get_selected_plan_target_state(), ("space", space))
+        self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
+        self.assertIsNone(session.selection.get_selected_target_for_kind("region"))
 
-        session.selected_region = None
+        session.selection.set_selected_target_for_kind("region", None)
         self.assertEqual(session.selection.get_selected_plan_target(), ("space", space))
-        self.assertIs(session.selected_space, space)
+        self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
 
-        session.selected_space = None
+        session.selection.set_selected_target_for_kind("space", None)
         self.assertEqual(session.selection.get_selected_plan_target(), (None, None))
-        self.assertEqual(session._get_selected_plan_target_state(), (None, None))
+        self.assertEqual(session.selection.get_selected_plan_target_state(), (None, None))
 
         session.shutdown(close_dialog=False)
         self.pump_gui_events()
@@ -6312,7 +6312,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session._set_selected_plan_target_state("space", space)
+        session.selection.set_selected_plan_target_state("space", space)
         session.overlays.clear_selected_space_overlay()
 
         with patch.object(
@@ -6784,7 +6784,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
 
-        self.assertIs(session.selected_region, region)
+        self.assertIs(session.selection.get_selected_target_for_kind("region"), region)
         self.assertFalse(session.task_panel.region_editor.isHidden())
         self.assertTrue(session.task_panel.space_editor.isHidden())
 
@@ -6840,16 +6840,16 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.addSelection(self.document.Name, region.Name)
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
-        self.assertIs(session.selected_region, region)
+        self.assertIs(session.selection.get_selected_target_for_kind("region"), region)
 
         stale_region = region
         self.document.removeObject(region.Name)
         self.document.recompute()
         self.pump_gui_events()
 
-        session.selected_region = stale_region
+        session.selection.set_selected_target_for_kind("region", stale_region)
         self.assertEqual(session.selection.get_selected_plan_target(), (None, None))
-        self.assertIsNone(session.selected_region)
+        self.assertIsNone(session.selection.get_selected_target_for_kind("region"))
 
         session.slotChangedObject(level, "Placement")
         self.pump_gui_events()
@@ -6961,7 +6961,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(Draft.getType(space), "Space")
         self.assertEqual(space.IfcType, "Space")
         self.assertIn(level, space.InListRecursive)
-        self.assertIs(session.selected_space, space)
+        self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
         self.assertEqual(len(session.spaces.get_space_boundary_entries(space)), 4)
         self.assertGreater(space.Area.getValueAs("m^2").Value, 0)
 
@@ -6991,7 +6991,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.selection.set_pending_selected_plan_target("space", space)
         session.selection.set_gui_selection([space])
         session._refresh_primary_selected_plan_target()
-        self.assertIs(session.selected_space, space)
+        self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
 
         with patch.object(FreeCADGui.Snapper, "getPoint", return_value=None):
             session.lifecycle.activate_plan_region_tool()
@@ -7017,7 +7017,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(region.ParentSpace, space)
         self.assertIn(level, region.InListRecursive)
         self.assertGreater(len(region.Shape.Faces), 0)
-        self.assertIs(session.selected_region, region)
+        self.assertIs(session.selection.get_selected_target_for_kind("region"), region)
         self.assertEqual(session.current_tool, "Select")
 
         session.shutdown(close_dialog=False)
@@ -7121,7 +7121,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.selection.set_gui_selection([space, separator])
         session._refresh_primary_selected_plan_target()
 
-        self.assertIs(session.selected_space, space)
+        self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
         request = session.spaces.get_space_creation_request()
         self.assertIsNotNone(request)
         self.assertIs(request["region_seed_space"], space)
@@ -7393,7 +7393,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         space = created_spaces[0]
 
         self.assertEqual(session.current_tool, "Select")
-        self.assertIs(session.selected_space, space)
+        self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
         self.assertEqual(len(session.spaces.get_space_boundary_entries(space)), len(boundaries))
         self.assertAlmostEqual(space.Proxy.getArea(space), candidate["area"])
 
@@ -7430,8 +7430,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.selection.set_gui_selection([space, wall])
         session._refresh_primary_selected_plan_target()
 
-        self.assertIs(session.selected_space, space)
-        self.assertIsNone(session.selected_wall)
+        self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
+        self.assertIsNone(session.selection.get_selected_target_for_kind("wall"))
         self.assertIn("Boundary candidates: 1 wall", session.task_panel.status.text())
 
         self.assertTrue(session.lifecycle.activate_space_tool())
@@ -7453,7 +7453,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         created_space = created_spaces[0]
 
         self.assertEqual(session.current_tool, "Select")
-        self.assertIs(session.selected_space, created_space)
+        self.assertIs(session.selection.get_selected_target_for_kind("space"), created_space)
         self.assertEqual(session.spaces.get_space_boundary_entries(created_space), [])
         self.assertAlmostEqual(created_space.Proxy.getArea(created_space), candidate["area"])
 
@@ -7604,7 +7604,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         created_space = created_spaces[0]
 
         self.assertEqual(session.current_tool, "Select")
-        self.assertIs(session.selected_space, created_space)
+        self.assertIs(session.selection.get_selected_target_for_kind("space"), created_space)
         self.assertEqual(len(session._space_region_candidates), 0)
         self.assertAlmostEqual(created_space.Area.getValueAs("m^2").Value, 12.0, places=3)
 
@@ -7677,12 +7677,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.addSelection(self.document.Name, space.Name)
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
-        self.assertIs(session.selected_space, space)
+        self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
 
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
-        self.assertIs(session.selected_space, space)
+        self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
 
         self.assertTrue(session.spaces.add_boundaries_to_selected_space())
         boundaries = session.spaces.get_space_boundary_entries(space)
@@ -7789,7 +7789,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         ):
             session.input.on_mouse_pressed(self._make_fake_left_mouse_press())
 
-        self.assertIs(session.selected_space, space)
+        self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [space.Name])
 
         with (
@@ -7812,8 +7812,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             session.input.on_mouse_pressed(callback)
 
         self.assertTrue(callback._handled)
-        self.assertIs(session.selected_space, space)
-        self.assertIsNone(session.selected_wall)
+        self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
+        self.assertIsNone(session.selection.get_selected_target_for_kind("wall"))
         self.assertEqual(
             [obj.Name for obj in FreeCADGui.Selection.getSelection()],
             [space.Name, wall.Name],
@@ -8018,13 +8018,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(wall)
         self.pump_gui_events()
-        self.assertIs(session.selected_wall, wall)
+        self.assertIs(session.selection.get_selected_target_for_kind("wall"), wall)
         self.assertGreater(len(session._grip_trackers), 0)
 
         self._make_hosted_door(wall, name="ResetDoor")
         self.pump_gui_events()
 
-        self.assertIsNone(session.selected_wall)
+        self.assertIsNone(session.selection.get_selected_target_for_kind("wall"))
         self.assertEqual(len(session._grip_trackers), 0)
 
         session.shutdown(close_dialog=False)

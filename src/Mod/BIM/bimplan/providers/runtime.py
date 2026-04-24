@@ -779,9 +779,9 @@ def format_plan_provider_target_help(session, obj) -> str:
     providers_api = getattr(session, "providers", None)
     get_handles = getattr(providers_api, "get_selected_provider_edit_handles", None)
     has_handles = False
-    if callable(get_handles) and getattr(session, "_is_selected_plan_target", None):
+    if callable(get_handles):
         try:
-            has_handles = bool(session._is_selected_plan_target("provider", obj)) and bool(
+            has_handles = bool(session.selection.is_selected_plan_target("provider", obj)) and bool(
                 tuple(get_handles(obj) or ())
             )
         except Exception:
