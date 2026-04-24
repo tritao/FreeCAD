@@ -346,26 +346,6 @@ class PlanEditSession:
             self._discard_stale_runtime_object(obj)
             return None
 
-    def _is_live_document_object(self, obj):
-        if obj is None:
-            return False
-        try:
-            _ = obj.Name
-            return True
-        except (AttributeError, ReferenceError, RuntimeError):
-            return False
-
-    def _get_document_object_key(self, obj):
-        if obj is None:
-            return None
-        try:
-            return (
-                getattr(getattr(obj, "Document", None), "Name", None),
-                getattr(obj, "Name", None),
-            )
-        except Exception:
-            return None
-
     def _get_plan_overlay_geometry_kinds_for_object(self, obj):
         return overlay_geometry.get_plan_overlay_geometry_kinds_for_object(self, obj)
 
@@ -409,7 +389,7 @@ class PlanEditSession:
             "hovered_space",
         ):
             obj = getattr(self, attr, None)
-            if obj is None or self._is_live_document_object(obj):
+            if obj is None or self.visibility.is_live_document_object(obj):
                 continue
             setattr(self, attr, None)
             changed = True
@@ -653,24 +633,16 @@ class PlanEditSession:
     def get_plan_provider_display_name(self, provider_id):
         return self.providers.get_plan_provider_display_name(provider_id)
 
-    def _safe_plan_object_name(self, obj):
-        if obj is None:
-            return ""
-        try:
-            return str(getattr(obj, "Name", "") or "")
-        except Exception:
-            return ""
-
     def get_plan_edit_context(self):
         doc = self.doc if self._document_is_alive() else None
         active_storey = self.active_storey
-        active_storey_name = self._safe_plan_object_name(active_storey)
+        active_storey_name = self.visibility.safe_plan_object_name(active_storey)
         if active_storey is not None and not active_storey_name:
             active_storey = None
             self.active_storey = None
         return PlanEditContext(
             session=self,
-            document_name=self._safe_plan_object_name(doc),
+            document_name=self.visibility.safe_plan_object_name(doc),
             active_storey_name=active_storey_name,
             active_storey_label=str(self.get_storey_label(active_storey) or ""),
             current_tool=str(self.current_tool or ""),
@@ -681,7 +653,7 @@ class PlanEditSession:
         return PlanEditContext.make_action_context(
             self,
             payload=payload,
-            document_name=self._safe_plan_object_name(doc),
+            document_name=self.visibility.safe_plan_object_name(doc),
             current_tool=str(self.current_tool or ""),
         )
 
@@ -917,29 +889,6 @@ class PlanEditSession:
     _set_hovered_space = _make_set_hovered_target_method("set_hovered_space")
 
     _set_hovered_region = _make_set_hovered_target_method("set_hovered_region")
-
-    def _copy_placement(self, placement):
-        if placement is None:
-            return FreeCAD.Placement()
-        try:
-            return placement.copy()
-        except Exception:
-            return FreeCAD.Placement(placement)
-
-    def _get_plan_object_global_placement(self, obj):
-        if not obj:
-            return FreeCAD.Placement()
-        if hasattr(obj, "getGlobalPlacement"):
-            try:
-                placement = obj.getGlobalPlacement()
-                if placement is not None:
-                    return placement
-            except Exception:
-                pass
-        return getattr(obj, "Placement", FreeCAD.Placement())
-
-    def _clear_plan_selection_state(self):
-        return self.selection.clear_plan_selection_state()
 
 
 plan_session_state.bind_session_state_accessors(PlanEditSession)

@@ -46,8 +46,8 @@ def can_move_provider_target_by_placement(session, provider_obj):
     if placement is None:
         return False
     try:
-        local_placement = session._copy_placement(placement)
-        global_placement = session._get_plan_object_global_placement(provider_obj)
+        local_placement = session.visibility.copy_placement(placement)
+        global_placement = session.visibility.get_plan_object_global_placement(provider_obj)
     except Exception:
         return False
     try:
@@ -367,7 +367,7 @@ def _get_provider_move_point(session, provider_obj):
     if coordinate_point is not None:
         return coordinate_point
     try:
-        placement = session._get_plan_object_global_placement(provider_obj)
+        placement = session.visibility.get_plan_object_global_placement(provider_obj)
     except Exception:
         placement = getattr(provider_obj, "Placement", None)
     if placement is None:
@@ -563,7 +563,7 @@ def _apply_provider_placement_move(session, provider_obj, point):
         if hasattr(provider_obj, "Z"):
             provider_obj.Z = float(point.z)
         return True
-    placement = session._copy_placement(getattr(provider_obj, "Placement", None))
+    placement = session.visibility.copy_placement(getattr(provider_obj, "Placement", None))
     if placement is None:
         return False
     placement.Base = FreeCAD.Vector(float(point.x), float(point.y), float(placement.Base.z))

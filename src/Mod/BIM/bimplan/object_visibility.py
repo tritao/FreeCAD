@@ -24,6 +24,59 @@ def _bind_visibility_call(method):
     return _bound
 
 
+def is_live_document_object(_session, obj):
+    if obj is None:
+        return False
+    try:
+        _ = obj.Name
+        return True
+    except (AttributeError, ReferenceError, RuntimeError):
+        return False
+
+
+def get_document_object_key(_session, obj):
+    if obj is None:
+        return None
+    try:
+        return (
+            getattr(getattr(obj, "Document", None), "Name", None),
+            getattr(obj, "Name", None),
+        )
+    except Exception:
+        return None
+
+
+def safe_plan_object_name(_session, obj):
+    if obj is None:
+        return ""
+    try:
+        return str(getattr(obj, "Name", "") or "")
+    except Exception:
+        return ""
+
+
+def copy_placement(_session, placement):
+    if placement is None:
+        return FreeCAD.Placement()
+    try:
+        return placement.copy()
+    except Exception:
+        return FreeCAD.Placement(placement)
+
+
+def get_plan_object_global_placement(session, obj):
+    if not obj:
+        return FreeCAD.Placement()
+    if hasattr(obj, "getGlobalPlacement"):
+        try:
+            placement = obj.getGlobalPlacement()
+            if placement is not None:
+                return placement
+        except Exception:
+            pass
+    return getattr(obj, "Placement", FreeCAD.Placement())
+
+
 def invalidate_plan_classification_cache(session):
     cache_state = session.overlay_cache_state
     cache_state.plan_semantic_object_cache.clear()
@@ -112,7 +165,7 @@ def get_direct_plan_symbol_owner(session, obj):
 
 
 def get_plan_semantic_object(session, obj):
-    key = session._get_document_object_key(obj)
+    key = session.visibility.get_document_object_key(obj)
     semantic_cache = session.overlay_cache_state.plan_semantic_object_cache
     if key is not None and key in semantic_cache:
         session.performance.plan_perf_count("semantic_object_cache_hits")
@@ -121,7 +174,7 @@ def get_plan_semantic_object(session, obj):
     current = obj
     seen = set()
     while current:
-        if not session._is_live_document_object(current):
+        if not session.visibility.is_live_document_object(current):
             current = None
             break
         name = getattr(current, "Name", None)
@@ -286,7 +339,7 @@ def is_supported_plan_object(session, obj):
 def get_object_storeys(session, obj):
     if not obj:
         return []
-    key = session._get_document_object_key(obj)
+    key = session.visibility.get_document_object_key(obj)
     cache = session.overlay_cache_state.plan_object_storeys_cache
     if key is not None and key in cache:
         _perf_count(session, "object_storeys_cache_hits")
@@ -599,6 +652,11 @@ class PlanVisibilityAPI:
 
 for _method_name in (
     "invalidate_plan_classification_cache",
+    "is_live_document_object",
+    "get_document_object_key",
+    "safe_plan_object_name",
+    "copy_placement",
+    "get_plan_object_global_placement",
     "capture_object_view_state",
     "register_object_view_state",
     "add_object_to_active_storey",

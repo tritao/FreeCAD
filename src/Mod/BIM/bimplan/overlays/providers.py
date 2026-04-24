@@ -148,7 +148,8 @@ def sync_selected_provider_overlay(session):
         selected_keys = tuple(
             key
             for key in (
-                session._get_document_object_key(provider_obj) for provider_obj in selected_objects
+                session.visibility.get_document_object_key(provider_obj)
+                for provider_obj in selected_objects
             )
             if key is not None
         )
@@ -214,7 +215,7 @@ def sync_selected_provider_handles(session):
             return
         specs = tuple(get_selected_provider_handle_specs(session, provider_obj))
         render_state = (
-            session._get_document_object_key(provider_obj),
+            session.visibility.get_document_object_key(provider_obj),
             tuple(
                 (
                     int(idx),
@@ -622,7 +623,7 @@ def _get_selected_provider_objects(session):
     ):
         if provider_obj is None:
             continue
-        object_key = session._get_document_object_key(provider_obj)
+        object_key = session.visibility.get_document_object_key(provider_obj)
         if object_key is None or object_key in seen:
             continue
         seen.add(object_key)
@@ -634,7 +635,8 @@ def _get_selected_provider_segment_specs(session, selected_objects):
     selected_keys = {
         key
         for key in (
-            session._get_document_object_key(provider_obj) for provider_obj in selected_objects
+            session.visibility.get_document_object_key(provider_obj)
+            for provider_obj in selected_objects
         )
         if key is not None
     }
@@ -674,7 +676,7 @@ def _get_selected_provider_segment_specs(session, selected_objects):
 
 def _get_hovered_provider_segment_specs(session):
     provider_obj = getattr(session, "hovered_provider", None)
-    object_key = session._get_document_object_key(provider_obj)
+    object_key = session.visibility.get_document_object_key(provider_obj)
     if object_key is None:
         return ()
     specs = []

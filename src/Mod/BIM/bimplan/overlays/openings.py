@@ -124,7 +124,7 @@ def sync_hovered_opening_overlay(session):
         width = session.viewport.scaled_line_width(2)
         color = (0.38, 0.62, 0.96)
         render_state = (
-            session._get_document_object_key(opening),
+            session.visibility.get_document_object_key(opening),
             round(float(width), 3),
             color,
         )
@@ -227,7 +227,7 @@ def sync_selected_opening_overlay(session):
         width = session.viewport.scaled_line_width(3)
         color = (0.12, 0.38, 0.95)
         render_state = (
-            session._get_document_object_key(opening),
+            session.visibility.get_document_object_key(opening),
             round(float(width), 3),
             color,
         )
@@ -339,7 +339,7 @@ def sync_selected_opening_handles(session):
             for idx, role, point, _marker in specs
         )
         render_state = (
-            session._get_document_object_key(opening),
+            session.visibility.get_document_object_key(opening),
             handle_entries,
         )
         if session._selected_opening_handle_render_state == render_state and len(

@@ -79,13 +79,13 @@ def get_symbol_handle_placement(session, symbol, handle_role, point):
         return None
     start_placement = session._edit_symbol_start_placement
     if start_placement is None:
-        start_placement = session._copy_placement(getattr(symbol, "Placement", None))
+        start_placement = session.visibility.copy_placement(getattr(symbol, "Placement", None))
     point = session.overlays.resolve_symbol_handle_target_point(
         symbol, handle_role, point, placement=start_placement
     )
     if point is None:
         return None
-    placement = session._copy_placement(start_placement)
+    placement = session.visibility.copy_placement(start_placement)
     parent_global = session.overlays.get_symbol_parent_global_placement(
         symbol, placement=start_placement
     )
@@ -220,7 +220,7 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
             session.overlays.sync_secondary_selected_overlays()
             session._edit_symbol = symbol
             session._edit_symbol_handle_role = handle_role
-            session._edit_symbol_start_placement = session._copy_placement(
+            session._edit_symbol_start_placement = session.visibility.copy_placement(
                 getattr(symbol, "Placement", None)
             )
             session._edit_symbol_reference_point = FreeCAD.Vector(start_point)
