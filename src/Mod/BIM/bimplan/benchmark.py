@@ -653,7 +653,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 lambda: (
                     session._select_wall_for_plan_edit(wall),
                     session.overlays.sync_wall_grips(),
-                    session._activate_wall_grip_now(0, wall=wall),
+                    session.wall_edit.activate_wall_grip_now(0, wall=wall),
                 ),
             )
 

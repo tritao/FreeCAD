@@ -99,7 +99,7 @@ def start_plan_provider_point_tool(session, tool):
         session.symbols.cancel_symbol_handle_point_pick()
     if session._has_active_embedded_tool():
         session._cancel_embedded_tool()
-    session._cancel_wall_edit(refresh=False)
+    session.wall_edit.cancel_wall_edit(refresh=False)
     session._cancel_pending_edit()
     session._clear_plan_relation_status()
     session._set_hovered_wall(None)

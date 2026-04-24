@@ -44,7 +44,7 @@ def cancel_wall_edit(session, restore=True, refresh=True):
             session._refresh_task_panel_status()
         return False
 
-    session._cancel_wall_subtool()
+    session.wall_edit.cancel_wall_subtool()
 
     session.current_tool = "Select"
     session._cancel_pending_edit()
@@ -324,7 +324,7 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
 def start_wall_grip_edit(session, grip_index):
     if grip_index not in (0, 1, 2) or not session.is_selected_wall_endpoint_editable():
         return
-    session._start_wall_edit({0: "Start", 1: "End", 2: "Move"}[grip_index])
+    session.wall_edit.start_wall_edit({0: "Start", 1: "End", 2: "Move"}[grip_index])
 
 
 def activate_wall_grip(session, grip_index, wall=None):
@@ -333,12 +333,14 @@ def activate_wall_grip(session, grip_index, wall=None):
     try:
         from PySide import QtCore
     except ImportError:
-        session._activate_wall_grip_now(grip_index, wall)
+        session.wall_edit.activate_wall_grip_now(grip_index, wall)
         return
 
     QtCore.QTimer.singleShot(
         0,
-        lambda wall=wall, grip_index=grip_index: session._activate_wall_grip_now(grip_index, wall),
+        lambda wall=wall, grip_index=grip_index: session.wall_edit.activate_wall_grip_now(
+            grip_index, wall
+        ),
     )
 
 
@@ -350,7 +352,7 @@ def activate_wall_grip_now(session, grip_index, wall=None):
             if not session._is_selected_plan_target("wall", wall):
                 session._set_selected_plan_target("wall", wall)
         with session._plan_perf_trace_span("activate_wall_grip_start_edit"):
-            session._start_wall_grip_edit(grip_index)
+            session.wall_edit.start_wall_grip_edit(grip_index)
 
 
 def get_wall_edit_reference_point(session):

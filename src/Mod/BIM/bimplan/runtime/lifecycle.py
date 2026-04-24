@@ -156,7 +156,7 @@ _FINISH_TOOL_HANDLER_SPECS = {
     "Pick Space Region": "_cancel_space_region_pick",
     "Region": "_cancel_plan_region_tool",
     "Set Space Text": "_cancel_space_text_position_pick",
-    "Window": "_cancel_window_tool",
+    "Window": "windows.cancel_window_tool",
 }
 
 _BEGIN_TEARDOWN_TOOL_HANDLER_SPECS = {
@@ -199,12 +199,12 @@ _ACTION_CANCEL_RECT_WALL_TOOL_IF_ACTIVE = ActivationActionSpec(
     predicate_name="_has_active_rect_wall_tool",
 )
 _ACTION_CANCEL_WINDOW_TOOL = ActivationActionSpec(
-    "_cancel_window_tool",
+    "windows.cancel_window_tool",
     kwargs=(("refresh", False),),
 )
 _ACTION_CANCEL_WINDOW_TOOL_IF_ACTIVE = ActivationActionSpec(
-    "_cancel_window_tool",
-    predicate_name="_has_active_window_tool",
+    "windows.cancel_window_tool",
+    predicate_name="windows.has_active_window_tool",
 )
 _ACTION_CANCEL_SPACE_SEPARATOR_TOOL = ActivationActionSpec(
     "_cancel_space_separator_tool",
@@ -239,14 +239,14 @@ _ACTION_CANCEL_SYMBOL_HANDLE_PICK_AND_RETURN = ActivationActionSpec(
     stop_after=True,
 )
 _ACTION_CANCEL_PENDING_EDIT = ActivationActionSpec("_cancel_pending_edit")
-_ACTION_CANCEL_WALL_EDIT = ActivationActionSpec("_cancel_wall_edit")
+_ACTION_CANCEL_WALL_EDIT = ActivationActionSpec("wall_edit.cancel_wall_edit")
 _ACTION_CANCEL_WALL_EDIT_AND_RETURN = ActivationActionSpec(
-    "_cancel_wall_edit",
-    predicate_name="_has_active_wall_edit",
+    "wall_edit.cancel_wall_edit",
+    predicate_name="wall_edit.has_active_wall_edit",
     stop_after=True,
 )
 _ACTION_CANCEL_WALL_EDIT_NO_REFRESH = ActivationActionSpec(
-    "_cancel_wall_edit",
+    "wall_edit.cancel_wall_edit",
     kwargs=(("refresh", False),),
 )
 _ACTION_CANCEL_SPACE_TEXT_PICK = ActivationActionSpec(
@@ -257,11 +257,11 @@ _ACTION_CANCEL_JOIN_TOOL = ActivationActionSpec("_cancel_join_tool")
 _ACTION_CLEAR_VIEWPORT_STATUS_CHIP = ActivationActionSpec("viewport.clear_viewport_status_chip")
 _ACTION_CLEAR_INPUT_HINTS = ActivationActionSpec("_clear_input_hints")
 _ACTION_CANCEL_WALL_EDIT_NO_RESTORE_NO_REFRESH = ActivationActionSpec(
-    "_cancel_wall_edit",
+    "wall_edit.cancel_wall_edit",
     kwargs=(("restore", False), ("refresh", False)),
 )
 _ACTION_CANCEL_WALL_EDIT_RESTORE_NO_REFRESH = ActivationActionSpec(
-    "_cancel_wall_edit",
+    "wall_edit.cancel_wall_edit",
     kwargs=(("restore", True), ("refresh", False)),
 )
 
@@ -354,7 +354,7 @@ def _capture_selected_space(session):
 
 def _prepare_window_tool(session, context):
     del context
-    session._clear_window_preview()
+    session.windows.clear_window_preview()
 
 
 def _start_window_tool(session, context):

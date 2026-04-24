@@ -47,13 +47,13 @@ def activate_join_tool(session):
     session._cancel_space_region_pick(refresh=False)
     session._cancel_plan_region_tool(refresh=False)
     session._cancel_rect_wall_tool(refresh=False)
-    session._cancel_window_tool(refresh=False)
+    session.windows.cancel_window_tool(refresh=False)
     session._cancel_space_separator_tool(refresh=False)
     session.providers.cancel_provider_point_tool(refresh=False)
 
     if session._has_active_embedded_tool():
         session._cancel_embedded_tool()
-    session._cancel_wall_edit()
+    session.wall_edit.cancel_wall_edit()
     session._cancel_pending_edit()
     session._clear_plan_relation_status()
     session.overlays.clear_wall_grips()
