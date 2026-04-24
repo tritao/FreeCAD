@@ -204,13 +204,10 @@ def get_screen_distance_sq_to_segment(session, mouse_pos, start, end):
         end_x, end_y = session.view.getPointOnScreen(end)
     except Exception:
         return None
-    projector = getattr(session, "_get_screen_distance_sq_to_projected_segment", None)
+    selection_api = getattr(session, "selection", None)
+    projector = getattr(selection_api, "get_screen_distance_sq_to_projected_segment", None)
     if callable(projector):
-        return projector(
-            (cursor_x, cursor_y),
-            (start_x, start_y),
-            (end_x, end_y),
-        )
+        return projector((cursor_x, cursor_y), (start_x, start_y), (end_x, end_y))
     return get_screen_distance_sq_to_projected_segment(
         (cursor_x, cursor_y),
         (start_x, start_y),
@@ -293,7 +290,7 @@ def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
             for projected in session.overlays.get_symbol_overlay_screen_polylines(obj):
                 for start_xy, end_xy in zip(projected, projected[1:]):
                     _perf_count(session, "symbol_overlay_pick_segments_scanned")
-                    distance_sq = session._get_screen_distance_sq_to_projected_segment(
+                    distance_sq = session.selection.get_screen_distance_sq_to_projected_segment(
                         cursor_xy,
                         start_xy,
                         end_xy,
@@ -347,7 +344,7 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
             for projected in session.overlays.get_opening_overlay_screen_polylines(obj):
                 for start_xy, end_xy in zip(projected, projected[1:]):
                     _perf_count(session, "opening_overlay_pick_segments_scanned")
-                    distance_sq = session._get_screen_distance_sq_to_projected_segment(
+                    distance_sq = session.selection.get_screen_distance_sq_to_projected_segment(
                         cursor_xy, start_xy, end_xy
                     )
                     if distance_sq is None or distance_sq > screen_radius_sq:
@@ -579,7 +576,7 @@ def pick_plan_space_target_from_overlays(session, mouse_pos, radius_px=10):
         if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
             continue
         for start, end in session.overlays.get_space_overlay_segments(obj):
-            distance_sq = session._get_screen_distance_sq_to_segment(mouse_pos, start, end)
+            distance_sq = session.selection.get_screen_distance_sq_to_segment(mouse_pos, start, end)
             if distance_sq is None or distance_sq > radius_sq:
                 continue
             if best_distance_sq is None or distance_sq < best_distance_sq:
@@ -606,7 +603,7 @@ def pick_plan_region_target_from_overlays(session, mouse_pos, radius_px=10):
         if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
             continue
         for start, end in session.overlays.get_region_overlay_segments(obj):
-            distance_sq = session._get_screen_distance_sq_to_segment(mouse_pos, start, end)
+            distance_sq = session.selection.get_screen_distance_sq_to_segment(mouse_pos, start, end)
             if distance_sq is None or distance_sq > radius_sq:
                 continue
             if best_distance_sq is None or distance_sq < best_distance_sq:
