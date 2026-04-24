@@ -1003,6 +1003,13 @@ def _resolve_structural_overlay_priority_target(session, mouse_pos, candidates):
     if candidates["symbol"] is not None and candidates["wall"] is None:
         return ("symbol", candidates["symbol"])
 
+    result = _resolve_opening_overlay_priority_target(session, mouse_pos, candidates)
+    if result != (None, None):
+        return result
+    return _resolve_symbol_or_terminal_overlay_target(session, mouse_pos, candidates)
+
+
+def _resolve_opening_overlay_priority_target(session, mouse_pos, candidates):
     opening_candidates = None
     if candidates["wall"] is not None:
         opening_candidates = session.openings.get_wall_hosted_openings(candidates["wall"])
@@ -1012,7 +1019,10 @@ def _resolve_structural_overlay_priority_target(session, mouse_pos, candidates):
     )
     if opening_candidate is not None:
         return ("opening", opening_candidate)
+    return (None, None)
 
+
+def _resolve_symbol_or_terminal_overlay_target(session, mouse_pos, candidates):
     if candidates["symbol"] is None:
         candidates["symbol"] = session.selection.pick_plan_symbol_target_from_overlays(mouse_pos)
     if candidates["symbol"] is not None:
