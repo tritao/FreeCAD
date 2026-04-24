@@ -23,8 +23,16 @@ _PROVIDER_POINT_PREVIEW_UNHOSTED_COLOR = (0.95, 0.52, 0.10)
 _PROVIDER_POINT_PREVIEW_HOST_COLOR = (0.10, 0.58, 0.38)
 
 
+def _perf_count(session, name, delta=1):
+    return session.performance.plan_perf_count(name, delta=delta)
+
+
+def _perf_trace_span(session, name, **fields):
+    return session.performance.plan_perf_trace_span(name, **fields)
+
+
 def sync_provider_overlays(session):
-    with session._plan_perf_trace_span("sync_provider_overlays"):
+    with _perf_trace_span(session, "sync_provider_overlays"):
         document_is_alive = getattr(session, "_document_is_alive", None)
         if (
             session._tearing_down
@@ -48,7 +56,7 @@ def sync_provider_overlays(session):
             round(float(session.viewport.get_plan_overlay_scale()), 4),
         )
         if render_state == session._provider_overlay_state:
-            session._plan_perf_count("provider_overlay_cache_hits")
+            _perf_count(session, "provider_overlay_cache_hits")
             return
 
         clear_provider_overlays(session)
@@ -61,10 +69,7 @@ def sync_provider_overlays(session):
 
         for overlay in overlays:
             _create_provider_overlay_trackers(session, DraftTrackers, overlay)
-        session._plan_perf_count(
-            "provider_overlay_trackers",
-            len(session._provider_overlay_trackers),
-        )
+        _perf_count(session, "provider_overlay_trackers", len(session._provider_overlay_trackers))
 
 
 def clear_provider_overlays(session):
@@ -74,7 +79,7 @@ def clear_provider_overlays(session):
 
 
 def sync_hovered_provider_overlay(session):
-    with session._plan_perf_trace_span("sync_hovered_provider_overlay"):
+    with _perf_trace_span(session, "sync_hovered_provider_overlay"):
         clear_hovered_provider_overlay(session)
         if session.current_tool != "Select":
             return
@@ -108,7 +113,7 @@ def sync_hovered_provider_overlay(session):
             tracker.p2(spec["end"])
             tracker.on()
             session._provider_hover_trackers.append(tracker)
-        session._plan_perf_count("hovered_provider_trackers", len(session._provider_hover_trackers))
+        _perf_count(session, "hovered_provider_trackers", len(session._provider_hover_trackers))
 
 
 def clear_hovered_provider_overlay(session):
@@ -117,7 +122,7 @@ def clear_hovered_provider_overlay(session):
 
 
 def sync_selected_provider_overlay(session):
-    with session._plan_perf_trace_span("sync_selected_provider_overlay"):
+    with _perf_trace_span(session, "sync_selected_provider_overlay"):
         if session.current_tool != "Select":
             clear_selected_provider_overlay(session)
             return
@@ -152,7 +157,7 @@ def sync_selected_provider_overlay(session):
             _get_provider_segment_render_state(session, specs),
         )
         if render_state == session._selected_provider_overlay_render_state:
-            session._plan_perf_count("selected_provider_overlay_cache_hits")
+            _perf_count(session, "selected_provider_overlay_cache_hits")
             return
         clear_selected_provider_overlay(session)
         for spec in specs:
@@ -169,10 +174,7 @@ def sync_selected_provider_overlay(session):
             tracker.on()
             session._provider_selected_trackers.append(tracker)
         session._selected_provider_overlay_render_state = render_state
-        session._plan_perf_count(
-            "selected_provider_trackers",
-            len(session._provider_selected_trackers),
-        )
+        _perf_count(session, "selected_provider_trackers", len(session._provider_selected_trackers))
 
 
 def clear_selected_provider_overlay(session):
@@ -202,7 +204,7 @@ def get_selected_provider_handle_specs(session, provider_obj):
 
 
 def sync_selected_provider_handles(session):
-    with session._plan_perf_trace_span("sync_selected_provider_handles"):
+    with _perf_trace_span(session, "sync_selected_provider_handles"):
         provider_obj = plan_selection.get_selected_plan_target_object(session, "provider")
         if session.current_tool != "Select":
             clear_selected_provider_handles(session)
@@ -228,7 +230,7 @@ def sync_selected_provider_handles(session):
         if session._selected_provider_handle_render_state == render_state and len(
             session._provider_handle_trackers
         ) == len(specs):
-            session._plan_perf_count("selected_provider_handle_cache_hits")
+            _perf_count(session, "selected_provider_handle_cache_hits")
             return
         try:
             import draftguitools.gui_trackers as DraftTrackers
@@ -301,7 +303,7 @@ def sync_provider_point_preview(session):
 
     render_state = _get_provider_segment_render_state(session, specs)
     if render_state == session._provider_point_preview_render_state:
-        session._plan_perf_count("provider_point_preview_cache_hits")
+        _perf_count(session, "provider_point_preview_cache_hits")
         return
 
     style_state = tuple((spec["label"], spec["dotted"]) for spec in specs)
@@ -330,7 +332,8 @@ def sync_provider_point_preview(session):
         tracker.on()
 
     session._provider_point_preview_render_state = render_state
-    session._plan_perf_count(
+    _perf_count(
+        session,
         "provider_point_preview_trackers",
         len(session._provider_point_preview_trackers),
     )

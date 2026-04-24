@@ -9,6 +9,18 @@ from . import manager as overlay_manager
 from .. import selection as plan_selection
 
 
+def _perf_count(session, name, delta=1):
+    return session.performance.plan_perf_count(name, delta=delta)
+
+
+def _perf_trace_event(session, name, **fields):
+    return session.performance.plan_perf_trace_event(name, **fields)
+
+
+def _perf_trace_span(session, name, **fields):
+    return session.performance.plan_perf_trace_span(name, **fields)
+
+
 def retarget_edit_tracker(tracker, obj, index):
     selnode = getattr(tracker, "selnode", None)
     if selnode is None:
@@ -29,14 +41,14 @@ def retarget_edit_tracker(tracker, obj, index):
 
 
 def sync_wall_grips(session):
-    with session._plan_perf_trace_span("sync_wall_grips"):
+    with _perf_trace_span(session, "sync_wall_grips"):
         session._wall_grip_sync_queued = False
         session._wall_grip_sync_generation += 1
         if not session.is_selected_wall_endpoint_editable():
             session.overlays.clear_wall_grips()
             return
 
-        with session._plan_perf_trace_span("wall_grips_import_trackers"):
+        with _perf_trace_span(session, "wall_grips_import_trackers"):
             try:
                 import draftguitools.gui_trackers as DraftTrackers
                 from draftutils import params
@@ -50,13 +62,13 @@ def sync_wall_grips(session):
             session.overlays.clear_wall_grips()
             return
 
-        with session._plan_perf_trace_span("wall_grips_calc_endpoints"):
+        with _perf_trace_span(session, "wall_grips_calc_endpoints"):
             endpoints = proxy.calc_endpoints(wall)
         if len(endpoints) != 2:
             session.overlays.clear_wall_grips()
             return
 
-        with session._plan_perf_trace_span("wall_grips_calc_positions"):
+        with _perf_trace_span(session, "wall_grips_calc_positions"):
             if hasattr(proxy, "calc_edit_grip_positions"):
                 grip_positions = proxy.calc_edit_grip_positions(wall)
             else:
@@ -65,7 +77,7 @@ def sync_wall_grips(session):
             session.overlays.clear_wall_grips()
             return
 
-        with session._plan_perf_trace_span("wall_grips_marker_lookup"):
+        with _perf_trace_span(session, "wall_grips_marker_lookup"):
             marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
             midpoint_marker = FreeCADGui.getMarkerIndex("DIAMOND_FILLED", marker_size)
         wall_state = (
@@ -86,27 +98,27 @@ def sync_wall_grips(session):
         )
         if reuse_allowed:
             try:
-                with session._plan_perf_trace_span("wall_grips_retarget_trackers"):
+                with _perf_trace_span(session, "wall_grips_retarget_trackers"):
                     for index, tracker in enumerate(session._grip_trackers):
                         session._retarget_edit_tracker(tracker, wall, index)
-                with session._plan_perf_trace_span("wall_grips_position_trackers"):
+                with _perf_trace_span(session, "wall_grips_position_trackers"):
                     for tracker, position in zip(session._grip_trackers, grip_positions):
                         tracker.set(position)
-                with session._plan_perf_trace_span("wall_grips_show_trackers"):
+                with _perf_trace_span(session, "wall_grips_show_trackers"):
                     for tracker in session._grip_trackers:
                         if not getattr(tracker, "Visible", False):
                             tracker.on()
                 if previous_state == wall_state:
-                    session._plan_perf_count("wall_grip_cache_hits")
+                    _perf_count(session, "wall_grip_cache_hits")
                 else:
-                    session._plan_perf_count("wall_grip_tracker_reuses")
+                    _perf_count(session, "wall_grip_tracker_reuses")
                 session._wall_grip_state = wall_state
                 return
             except Exception:
                 session.overlays.clear_wall_grips()
 
         grip_start, grip_end, midpoint = grip_positions
-        with session._plan_perf_trace_span("wall_grips_create_trackers"):
+        with _perf_trace_span(session, "wall_grips_create_trackers"):
             session._grip_trackers = [
                 DraftTrackers.editTracker(pos=grip_start, name=wall.Name, idx=0),
                 DraftTrackers.editTracker(pos=grip_end, name=wall.Name, idx=1),
@@ -152,7 +164,7 @@ def run_scheduled_wall_grip_sync(session, generation=None):
     if generation is not None and generation != session._wall_grip_sync_generation:
         return
     session._wall_grip_sync_queued = False
-    with session._plan_perf_trace_event("scheduled_wall_grip_sync"):
+    with _perf_trace_event(session, "scheduled_wall_grip_sync"):
         if session._tearing_down:
             return
         sync_wall_grips(session)
@@ -188,7 +200,7 @@ def clear_hovered_wall_overlay(session):
 
 
 def sync_selected_wall_overlay(session):
-    with session._plan_perf_trace_span("sync_selected_wall_overlay"):
+    with _perf_trace_span(session, "sync_selected_wall_overlay"):
         wall = plan_selection.get_selected_plan_target_object(session, "wall")
         if session.current_tool != "Select" or not session._is_plan_selectable_wall(wall):
             clear_selected_wall_overlay(session)
@@ -198,7 +210,7 @@ def sync_selected_wall_overlay(session):
         segments = session._build_overlay_segments_from_polylines(
             session._get_wall_overlay_polylines(wall)
         )
-        session._plan_perf_count("selected_wall_overlay_segments", len(segments))
+        _perf_count(session, "selected_wall_overlay_segments", len(segments))
         try:
             import draftguitools.gui_trackers as DraftTrackers
         except ImportError:

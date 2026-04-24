@@ -9,6 +9,14 @@ import FreeCADGui
 from .. import selection as plan_selection
 
 
+def _perf_count(session, name, delta=1):
+    return session.performance.plan_perf_count(name, delta=delta)
+
+
+def _perf_trace_span(session, name, **fields):
+    return session.performance.plan_perf_trace_span(name, **fields)
+
+
 def get_symbol_global_placement(session, symbol, placement=None):
     current_global = session._get_plan_object_global_placement(symbol)
     if placement is None:
@@ -106,13 +114,13 @@ def get_plan_symbol_instances(session):
     doc_name = getattr(session.doc, "Name", None)
     cache_record = session.overlay_cache_state.plan_symbol_instances_cache
     if cache_record is not None and cache_record[0] == doc_name:
-        session._plan_perf_count("plan_symbol_instances_cache_hits")
+        _perf_count(session, "plan_symbol_instances_cache_hits")
         return cache_record[1]
 
     symbols = []
-    with session._plan_perf_trace_span("build_plan_symbol_instances_cache"):
+    with _perf_trace_span(session, "build_plan_symbol_instances_cache"):
         for obj in getattr(session.doc, "Objects", []) or []:
-            session._plan_perf_count("plan_symbol_instance_objects_scanned")
+            _perf_count(session, "plan_symbol_instance_objects_scanned")
             if session.visibility.is_plan_symbol_instance(obj):
                 symbols.append(obj)
     result = tuple(symbols)
@@ -148,7 +156,7 @@ def get_symbol_overlay_screen_polylines(session, symbol):
     cache_key = (projection_key, geometry_key)
     cached = session.overlay_cache_state.symbol_overlay_screen_cache.get(symbol_key)
     if cached is not None and cached[0] == cache_key:
-        session._plan_perf_count("symbol_overlay_screen_polylines_cache_hits")
+        _perf_count(session, "symbol_overlay_screen_polylines_cache_hits")
         return cached[1]
 
     projected_polylines = []
@@ -199,7 +207,7 @@ def create_symbol_overlay_trackers(session, symbol, color, width, tracker_store,
 
 
 def sync_hovered_symbol_overlay(session):
-    with session._plan_perf_trace_span("sync_hovered_symbol_overlay"):
+    with _perf_trace_span(session, "sync_hovered_symbol_overlay"):
         clear_hovered_symbol_overlay(session)
         if session.current_tool != "Select":
             return
@@ -222,7 +230,7 @@ def clear_hovered_symbol_overlay(session):
 
 
 def sync_selected_symbol_overlay(session):
-    with session._plan_perf_trace_span("sync_selected_symbol_overlay"):
+    with _perf_trace_span(session, "sync_selected_symbol_overlay"):
         symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
         if session.current_tool != "Select" or not session.visibility.is_plan_symbol_instance(
             symbol
@@ -236,7 +244,7 @@ def sync_selected_symbol_overlay(session):
             clear_selected_symbol_overlay(session)
             return
         segments = get_symbol_overlay_segments(session, symbol)
-        session._plan_perf_count("selected_symbol_overlay_segments", len(segments))
+        _perf_count(session, "selected_symbol_overlay_segments", len(segments))
         color = (0.12, 0.38, 0.95)
         transferred_trackers = False
         if len(session._symbol_overlay_trackers) != len(segments):
@@ -248,7 +256,7 @@ def sync_selected_symbol_overlay(session):
                 session._symbol_overlay_trackers = session._symbol_hover_trackers
                 session._symbol_hover_trackers = []
                 transferred_trackers = True
-                session._plan_perf_count("selected_symbol_overlay_tracker_transfers")
+                _perf_count(session, "selected_symbol_overlay_tracker_transfers")
             else:
                 clear_selected_symbol_overlay(session)
                 for _start, _end in segments:
@@ -464,7 +472,7 @@ def get_selected_symbol_handle_specs(session, symbol):
 
 
 def sync_selected_symbol_handles(session):
-    with session._plan_perf_trace_span("sync_selected_symbol_handles"):
+    with _perf_trace_span(session, "sync_selected_symbol_handles"):
         symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
         if session.current_tool != "Select":
             session.overlays.clear_selected_symbol_handles()
@@ -478,7 +486,7 @@ def sync_selected_symbol_handles(session):
         except ImportError:
             return
         specs = session.overlays.get_selected_symbol_handle_specs(symbol)
-        session._plan_perf_count("selected_symbol_handles", len(specs))
+        _perf_count(session, "selected_symbol_handles", len(specs))
         for idx, (_role, point, marker) in enumerate(specs):
             tracker = DraftTrackers.editTracker(
                 pos=point,

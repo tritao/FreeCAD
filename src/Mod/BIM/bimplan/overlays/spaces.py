@@ -6,6 +6,14 @@ from . import manager as overlay_manager
 from .. import selection as plan_selection
 
 
+def _perf_count(session, name, delta=1):
+    return session.performance.plan_perf_count(name, delta=delta)
+
+
+def _perf_trace_span(session, name, **fields):
+    return session.performance.plan_perf_trace_span(name, **fields)
+
+
 def sync_secondary_selected_overlays(session):
     clear_secondary_selected_overlays(session)
     if session.current_tool not in ("Select", "Pick Space Region"):
@@ -194,7 +202,7 @@ def invalidate_selected_space_overlay_cache(session):
 
 
 def sync_selected_space_overlay(session):
-    with session._plan_perf_trace_span("sync_selected_space_overlay"):
+    with _perf_trace_span(session, "sync_selected_space_overlay"):
         space = plan_selection.get_selected_plan_target_object(session, "space")
         if session.current_tool not in (
             "Select",
@@ -216,19 +224,19 @@ def sync_selected_space_overlay(session):
             not session._selected_space_overlay_dirty
             and session._selected_space_overlay_render_state == render_state
         ):
-            session._plan_perf_count("selected_space_overlay_cache_hits")
+            _perf_count(session, "selected_space_overlay_cache_hits")
             return
         if (
             not session._selected_space_overlay_dirty
             and session._selected_space_overlay_geometry_key == geometry_key
         ):
             segments = session._selected_space_overlay_segments
-            session._plan_perf_count("selected_space_overlay_segment_cache_hits")
+            _perf_count(session, "selected_space_overlay_segment_cache_hits")
         else:
             segments = tuple(session.overlays.get_space_overlay_segments(space))
             session._selected_space_overlay_geometry_key = geometry_key
             session._selected_space_overlay_segments = segments
-        session._plan_perf_count("selected_space_overlay_segments", len(segments))
+        _perf_count(session, "selected_space_overlay_segments", len(segments))
         session._space_overlay_trackers, _, _ = overlay_manager.sync_segment_overlay_trackers(
             session,
             DraftTrackers,
@@ -255,7 +263,7 @@ def clear_selected_space_overlay(session):
 
 
 def sync_selected_region_overlay(session):
-    with session._plan_perf_trace_span("sync_selected_region_overlay"):
+    with _perf_trace_span(session, "sync_selected_region_overlay"):
         region = plan_selection.get_selected_plan_target_object(session, "region")
         if session.current_tool != "Select" or not session._is_plan_region_object(region):
             clear_selected_region_overlay(session)
@@ -267,7 +275,7 @@ def sync_selected_region_overlay(session):
             clear_selected_region_overlay(session)
             return
         segments = session.overlays.get_region_overlay_segments(region)
-        session._plan_perf_count("selected_region_overlay_segments", len(segments))
+        _perf_count(session, "selected_region_overlay_segments", len(segments))
         color = (0.12, 0.38, 0.95)
         session._region_overlay_trackers, _, _ = overlay_manager.sync_segment_overlay_trackers(
             session,
