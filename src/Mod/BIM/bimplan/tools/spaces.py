@@ -1016,7 +1016,7 @@ def set_hovered_space_region_candidate(session, candidate, visual_key):
         state.hovered_space_region_candidate = candidate
     else:
         session._hovered_space_region_candidate = candidate
-    session._queue_plan_overlay_visual_refresh(visual_key)
+    session.overlays.queue_plan_overlay_visual_refresh(visual_key)
     session.task_panels.refresh_task_panel_status()
 
 

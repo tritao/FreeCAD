@@ -174,7 +174,7 @@ def on_mouse_moved(session, event_callback):
                 session.spaces.set_hovered_space_region_candidate(
                     session.spaces.pick_space_region_candidate(mouse_pos)
                 )
-                session._refresh_plan_overlay_visuals()
+                session.overlays.refresh_plan_overlay_visuals()
             return
         if session.current_tool not in ("Select", "Join"):
             session._set_hovered_wall(None)
@@ -210,7 +210,7 @@ def on_mouse_wheel(session, event_callback):
     if event_type_name != "SoMouseWheelEvent":
         return
     with session.performance.plan_perf_trace_event("mouse_wheel", event_type=event_type_name):
-        session._queue_plan_overlay_view_scale_refresh()
+        session.overlays.queue_plan_overlay_view_scale_refresh()
 
 
 def on_key_pressed(session, event_callback):

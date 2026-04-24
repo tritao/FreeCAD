@@ -602,7 +602,9 @@ def set_plan_provider_overlay_mode(session, mode):
     session._provider_overlay_mode = normalized
     session._provider_overlay_state = None
     session.selection.clear_hidden_provider_preselection()
-    session._queue_plan_overlay_visual_refresh(plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS)
+    session.overlays.queue_plan_overlay_visual_refresh(
+        plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
+    )
     session.task_panels.refresh_provider_overlay_mode_panels()
     return True
 
@@ -659,16 +661,22 @@ def set_plan_provider_overlay_visible(session, provider_id, overlay_key, visible
     else:
         session._provider_overlay_visibility[key] = False
     session._provider_overlay_state = None
-    session._queue_plan_overlay_visual_refresh(plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS)
+    session.overlays.queue_plan_overlay_visual_refresh(
+        plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
+    )
 
 
 def queue_plan_provider_overlay_refresh(session):
     session._provider_overlay_state = None
-    session._queue_plan_overlay_visual_refresh(plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS)
+    session.overlays.queue_plan_overlay_visual_refresh(
+        plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
+    )
 
 
 def queue_plan_provider_overlay_sync(session):
-    session._queue_plan_overlay_visual_refresh(plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS)
+    session.overlays.queue_plan_overlay_visual_refresh(
+        plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
+    )
 
 
 def normalize_plan_provider_target(

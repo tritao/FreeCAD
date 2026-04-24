@@ -61,7 +61,6 @@ from bimplan.tools.window_create import PlanWindowsAPI
 from bimplan.tools.spaces import PlanSpacesAPI
 from bimplan.runtime.view import PlanViewportAPI
 from bimplan.overlays import geometry as overlay_geometry
-from bimplan.overlays import manager as overlay_manager
 from bimplan.overlays import openings as opening_overlays
 from bimplan.overlays.runtime import PlanOverlaysAPI
 from bimplan.providers import get_plan_edit_registry
@@ -106,15 +105,11 @@ _PLAN_VISUAL_HOVERED_REGION = plan_document_visuals.PLAN_VISUAL_HOVERED_REGION
 _PLAN_VISUAL_SELECTED_PROVIDER = plan_document_visuals.PLAN_VISUAL_SELECTED_PROVIDER
 _PLAN_VISUAL_SELECTED_OPENING = plan_document_visuals.PLAN_VISUAL_SELECTED_OPENING
 _PLAN_VISUAL_SELECTED_SYMBOL = plan_document_visuals.PLAN_VISUAL_SELECTED_SYMBOL
-_PLAN_VISUAL_SELECTED_SPACE = plan_document_visuals.PLAN_VISUAL_SELECTED_SPACE
 _PLAN_VISUAL_SELECTED_REGION = plan_document_visuals.PLAN_VISUAL_SELECTED_REGION
 _PLAN_VISUAL_SECONDARY_SELECTION = plan_document_visuals.PLAN_VISUAL_SECONDARY_SELECTION
 _PLAN_VISUAL_WALL_GRIPS = plan_document_visuals.PLAN_VISUAL_WALL_GRIPS
 _PLAN_VISUAL_WALL_EDIT_PREVIEW = plan_document_visuals.PLAN_VISUAL_WALL_EDIT_PREVIEW
 _PLAN_VISUAL_PROVIDER_OVERLAYS = plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
-_PLAN_VISUAL_VIEW_SCALE = plan_document_visuals.PLAN_VISUAL_VIEW_SCALE
-_PLAN_VISUAL_ALL = plan_document_visuals.PLAN_VISUAL_ALL
-_PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
 _PLAN_VIEW_LOCKED_ACTIONS = (
     "Std_ViewFront",
     "Std_ViewTop",
@@ -710,40 +705,6 @@ class PlanEditSession:
 
     def _on_mouse_wheel(self, event_callback):
         return plan_input.on_mouse_wheel(self, event_callback)
-
-    def _queue_plan_overlay_visual_refresh(self, *visuals):
-        return overlay_manager.queue_plan_overlay_visual_refresh(
-            self,
-            visuals,
-            _PLAN_VISUAL_ALL,
-            _PLAN_VISUAL_SELECTED_SPACE,
-        )
-
-    def _queue_plan_overlay_view_scale_refresh(self, delay_ms=_PLAN_VIEW_SCALE_REFRESH_DELAY_MS):
-        return overlay_manager.queue_plan_overlay_view_scale_refresh(
-            self,
-            _PLAN_VISUAL_VIEW_SCALE,
-            delay_ms,
-        )
-
-    def _consume_dirty_plan_visuals(self, default_all=True):
-        return overlay_manager.consume_dirty_plan_visuals(
-            self,
-            _PLAN_VISUAL_ALL,
-            default_all=default_all,
-        )
-
-    def _flush_plan_overlay_visual_refresh(self):
-        return overlay_manager.flush_plan_overlay_visual_refresh(self)
-
-    def _flush_view_scale_overlay_refresh(self):
-        return overlay_manager.flush_view_scale_overlay_refresh(self)
-
-    def _refresh_plan_overlay_view_scale(self):
-        return overlay_manager.refresh_plan_overlay_view_scale(self)
-
-    def _refresh_plan_overlay_visuals(self, dirty=None):
-        return overlay_manager.refresh_plan_overlay_visuals(self, dirty=dirty)
 
     def _on_key_pressed(self, event_callback):
         return plan_input.on_key_pressed(self, event_callback)

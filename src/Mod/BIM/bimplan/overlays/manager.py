@@ -53,11 +53,11 @@ def queue_plan_overlay_visual_refresh(session, visuals, visual_all, visual_selec
     try:
         from PySide import QtCore
     except ImportError:
-        dirty = session._consume_dirty_plan_visuals()
-        session._refresh_plan_overlay_visuals(dirty)
+        dirty = session.overlays.consume_dirty_plan_visuals()
+        session.overlays.refresh_plan_overlay_visuals(dirty)
         return
     session._overlay_refresh_queued = True
-    QtCore.QTimer.singleShot(0, session._flush_plan_overlay_visual_refresh)
+    QtCore.QTimer.singleShot(0, session.overlays.flush_plan_overlay_visual_refresh)
 
 
 def queue_plan_overlay_view_scale_refresh(session, visual_view_scale, delay_ms):
@@ -69,12 +69,14 @@ def queue_plan_overlay_view_scale_refresh(session, visual_view_scale, delay_ms):
     try:
         from PySide import QtCore
     except ImportError:
-        dirty = session._consume_dirty_plan_visuals(default_all=False)
+        dirty = session.overlays.consume_dirty_plan_visuals(default_all=False)
         if dirty:
-            session._refresh_plan_overlay_visuals(dirty)
+            session.overlays.refresh_plan_overlay_visuals(dirty)
         return
     session._view_scale_overlay_refresh_queued = True
-    QtCore.QTimer.singleShot(max(0, int(delay_ms)), session._flush_view_scale_overlay_refresh)
+    QtCore.QTimer.singleShot(
+        max(0, int(delay_ms)), session.overlays.flush_view_scale_overlay_refresh
+    )
 
 
 def consume_dirty_plan_visuals(session, visual_all, default_all=True):
@@ -90,23 +92,23 @@ def consume_dirty_plan_visuals(session, visual_all, default_all=True):
 def flush_plan_overlay_visual_refresh(session):
     session._overlay_refresh_queued = False
     if _session_is_inactive(session):
-        session._consume_dirty_plan_visuals(default_all=False)
+        session.overlays.consume_dirty_plan_visuals(default_all=False)
         return
-    dirty = session._consume_dirty_plan_visuals()
-    session._refresh_plan_overlay_visuals(dirty)
+    dirty = session.overlays.consume_dirty_plan_visuals()
+    session.overlays.refresh_plan_overlay_visuals(dirty)
 
 
 def flush_view_scale_overlay_refresh(session):
     session._view_scale_overlay_refresh_queued = False
     if _session_is_inactive(session):
-        session._consume_dirty_plan_visuals(default_all=False)
+        session.overlays.consume_dirty_plan_visuals(default_all=False)
         return
     if session._overlay_refresh_queued:
         return
-    dirty = session._consume_dirty_plan_visuals(default_all=False)
+    dirty = session.overlays.consume_dirty_plan_visuals(default_all=False)
     if not dirty:
         return
-    session._refresh_plan_overlay_visuals(dirty)
+    session.overlays.refresh_plan_overlay_visuals(dirty)
 
 
 def refresh_plan_overlay_view_scale(session):
@@ -177,7 +179,7 @@ def refresh_plan_overlay_visuals(session, dirty=None):
     dirty = set(dirty or {_PLAN_VISUAL_ALL})
     refresh_all = _PLAN_VISUAL_ALL in dirty
     if not refresh_all and _PLAN_VISUAL_VIEW_SCALE in dirty:
-        session._refresh_plan_overlay_view_scale()
+        session.overlays.refresh_plan_overlay_view_scale()
         dirty.discard(_PLAN_VISUAL_VIEW_SCALE)
         if not dirty:
             return

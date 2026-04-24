@@ -722,7 +722,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
             session,
             "benchmark_view_scale_overlay_refresh",
             spec.name,
-            session._flush_view_scale_overlay_refresh,
+            session.overlays.flush_view_scale_overlay_refresh,
         )
 
     _measure_operation(
