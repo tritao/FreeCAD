@@ -292,6 +292,34 @@ class PlanEditSession:
             self.__dict__["wall_edit_state"] = state
         return state
 
+    def _ensure_hover_pick_state(self):
+        state = self.__dict__.get("hover_pick_state")
+        if state is None:
+            state = plan_session_state.PlanHoverPickState()
+            self.__dict__["hover_pick_state"] = state
+        return state
+
+    def _ensure_selection_sync_state(self):
+        state = self.__dict__.get("selection_sync_state")
+        if state is None:
+            state = plan_session_state.PlanSelectionSyncState()
+            self.__dict__["selection_sync_state"] = state
+        return state
+
+    def _ensure_input_event_state(self):
+        state = self.__dict__.get("input_event_state")
+        if state is None:
+            state = plan_session_state.PlanInputEventState()
+            self.__dict__["input_event_state"] = state
+        return state
+
+    def _ensure_overlay_refresh_state(self):
+        state = self.__dict__.get("overlay_refresh_state")
+        if state is None:
+            state = plan_session_state.PlanOverlayRefreshState()
+            self.__dict__["overlay_refresh_state"] = state
+        return state
+
     @property
     def _plan_relation_status_message(self):
         return self._ensure_task_panel_state().relation_status_message
@@ -659,6 +687,142 @@ class PlanEditSession:
     @_edit_space.setter
     def _edit_space(self, value):
         self._ensure_interaction_state().edit_space = value
+
+    @property
+    def _hover_pick_dirty(self):
+        return self._ensure_hover_pick_state().dirty
+
+    @_hover_pick_dirty.setter
+    def _hover_pick_dirty(self, value):
+        self._ensure_hover_pick_state().dirty = bool(value)
+
+    @property
+    def _hover_pick_last_time(self):
+        return self._ensure_hover_pick_state().last_time
+
+    @_hover_pick_last_time.setter
+    def _hover_pick_last_time(self, value):
+        self._ensure_hover_pick_state().last_time = float(value or 0.0)
+
+    @property
+    def _hover_pick_last_mouse_pos(self):
+        return self._ensure_hover_pick_state().last_mouse_pos
+
+    @_hover_pick_last_mouse_pos.setter
+    def _hover_pick_last_mouse_pos(self, value):
+        self._ensure_hover_pick_state().last_mouse_pos = value
+
+    @property
+    def _plan_hover_pick_cache_queued(self):
+        return self._ensure_hover_pick_state().cache_queued
+
+    @_plan_hover_pick_cache_queued.setter
+    def _plan_hover_pick_cache_queued(self, value):
+        self._ensure_hover_pick_state().cache_queued = bool(value)
+
+    @property
+    def _selection_refresh_queued(self):
+        return self._ensure_selection_sync_state().selection_refresh_queued
+
+    @_selection_refresh_queued.setter
+    def _selection_refresh_queued(self, value):
+        self._ensure_selection_sync_state().selection_refresh_queued = bool(value)
+
+    @property
+    def _gui_selection_sync_queued(self):
+        return self._ensure_selection_sync_state().gui_selection_sync_queued
+
+    @_gui_selection_sync_queued.setter
+    def _gui_selection_sync_queued(self, value):
+        self._ensure_selection_sync_state().gui_selection_sync_queued = bool(value)
+
+    @property
+    def _gui_selection_sync_generation(self):
+        return self._ensure_selection_sync_state().gui_selection_sync_generation
+
+    @_gui_selection_sync_generation.setter
+    def _gui_selection_sync_generation(self, value):
+        self._ensure_selection_sync_state().gui_selection_sync_generation = int(value or 0)
+
+    @property
+    def _queued_gui_selection_object(self):
+        return self._ensure_selection_sync_state().queued_gui_selection_object
+
+    @_queued_gui_selection_object.setter
+    def _queued_gui_selection_object(self, value):
+        self._ensure_selection_sync_state().queued_gui_selection_object = value
+
+    @property
+    def _mouse_moved_cb(self):
+        return self._ensure_input_event_state().mouse_moved_cb
+
+    @_mouse_moved_cb.setter
+    def _mouse_moved_cb(self, value):
+        self._ensure_input_event_state().mouse_moved_cb = value
+
+    @property
+    def _mouse_wheel_cb(self):
+        return self._ensure_input_event_state().mouse_wheel_cb
+
+    @_mouse_wheel_cb.setter
+    def _mouse_wheel_cb(self, value):
+        self._ensure_input_event_state().mouse_wheel_cb = value
+
+    @property
+    def _mouse_wheel_event_type(self):
+        return self._ensure_input_event_state().mouse_wheel_event_type
+
+    @_mouse_wheel_event_type.setter
+    def _mouse_wheel_event_type(self, value):
+        self._ensure_input_event_state().mouse_wheel_event_type = value
+
+    @property
+    def _mouse_pressed_cb(self):
+        return self._ensure_input_event_state().mouse_pressed_cb
+
+    @_mouse_pressed_cb.setter
+    def _mouse_pressed_cb(self, value):
+        self._ensure_input_event_state().mouse_pressed_cb = value
+
+    @property
+    def _key_pressed_cb(self):
+        return self._ensure_input_event_state().key_pressed_cb
+
+    @_key_pressed_cb.setter
+    def _key_pressed_cb(self, value):
+        self._ensure_input_event_state().key_pressed_cb = value
+
+    @property
+    def _consume_left_button_release(self):
+        return self._ensure_input_event_state().consume_left_button_release
+
+    @_consume_left_button_release.setter
+    def _consume_left_button_release(self, value):
+        self._ensure_input_event_state().consume_left_button_release = bool(value)
+
+    @property
+    def _overlay_refresh_queued(self):
+        return self._ensure_overlay_refresh_state().overlay_refresh_queued
+
+    @_overlay_refresh_queued.setter
+    def _overlay_refresh_queued(self, value):
+        self._ensure_overlay_refresh_state().overlay_refresh_queued = bool(value)
+
+    @property
+    def _view_scale_overlay_refresh_queued(self):
+        return self._ensure_overlay_refresh_state().view_scale_overlay_refresh_queued
+
+    @_view_scale_overlay_refresh_queued.setter
+    def _view_scale_overlay_refresh_queued(self, value):
+        self._ensure_overlay_refresh_state().view_scale_overlay_refresh_queued = bool(value)
+
+    @property
+    def _dirty_plan_visuals(self):
+        return self._ensure_overlay_refresh_state().dirty_plan_visuals
+
+    @_dirty_plan_visuals.setter
+    def _dirty_plan_visuals(self, value):
+        self._ensure_overlay_refresh_state().dirty_plan_visuals = set(value or ())
 
     def __init__(self):
         self.selection = PlanSelectionAPI(self)

@@ -120,6 +120,39 @@ class PlanWallEditState:
     edit_wall_visibility: object = None
 
 
+@dataclass
+class PlanHoverPickState:
+    dirty: bool = False
+    last_time: float = 0.0
+    last_mouse_pos: object = None
+    cache_queued: bool = False
+
+
+@dataclass
+class PlanSelectionSyncState:
+    selection_refresh_queued: bool = False
+    gui_selection_sync_queued: bool = False
+    gui_selection_sync_generation: int = 0
+    queued_gui_selection_object: object = None
+
+
+@dataclass
+class PlanInputEventState:
+    mouse_moved_cb: object = None
+    mouse_wheel_cb: object = None
+    mouse_wheel_event_type: object = None
+    mouse_pressed_cb: object = None
+    key_pressed_cb: object = None
+    consume_left_button_release: bool = False
+
+
+@dataclass
+class PlanOverlayRefreshState:
+    overlay_refresh_queued: bool = False
+    view_scale_overlay_refresh_queued: bool = False
+    dirty_plan_visuals: set = field(default_factory=set)
+
+
 def initialize_session_read_state(session):
     session.task_panel_state = PlanTaskPanelState()
     session.provider_overlay_read_state = PlanProviderOverlayReadState(
@@ -128,6 +161,10 @@ def initialize_session_read_state(session):
     session.interaction_state = PlanInteractionState()
     session.selection_state = PlanSelectionState()
     session.wall_edit_state = PlanWallEditState()
+    session.hover_pick_state = PlanHoverPickState()
+    session.selection_sync_state = PlanSelectionSyncState()
+    session.input_event_state = PlanInputEventState()
+    session.overlay_refresh_state = PlanOverlayRefreshState()
 
 
 def initialize_session_state(session):
@@ -146,9 +183,6 @@ def initialize_session_state(session):
     session._plan_join_type = "Miter"
     session.storeys = []
     session.active_storey = None
-    session._hover_pick_dirty = False
-    session._hover_pick_last_time = 0.0
-    session._hover_pick_last_mouse_pos = None
     session._space_region_pick_boundaries = []
     session._space_region_pick_seed_space = None
     session._grip_trackers = []
@@ -178,7 +212,6 @@ def initialize_session_state(session):
     session._plan_opening_instances_cache = None
     session._wall_hosted_openings_cache = None
     session._wall_hosted_openings_cache_queued = False
-    session._plan_hover_pick_cache_queued = False
     session._opening_overlay_screen_cache = {}
     session._opening_overlay_screen_cache_projection_key = None
     session._symbol_overlay_screen_cache = {}
@@ -225,10 +258,6 @@ def initialize_session_state(session):
     session._edit_opening_move_anchor = "center"
     session._edit_opening_move_raw_point = None
     session._selection_observer_added = False
-    session._selection_refresh_queued = False
-    session._gui_selection_sync_queued = False
-    session._gui_selection_sync_generation = 0
-    session._queued_gui_selection_object = None
     session._document_observer_added = False
     session._pending_created_plan_objects = {}
     session._created_plan_objects_flush_queued = False
@@ -249,15 +278,6 @@ def initialize_session_state(session):
     session._edit_symbol_start_placement = None
     session._edit_symbol_reference_point = None
     session._ignore_selection_changes = False
-    session._mouse_moved_cb = None
-    session._mouse_wheel_cb = None
-    session._mouse_wheel_event_type = None
-    session._mouse_pressed_cb = None
-    session._consume_left_button_release = False
-    session._key_pressed_cb = None
-    session._overlay_refresh_queued = False
-    session._view_scale_overlay_refresh_queued = False
-    session._dirty_plan_visuals = set()
     session._render_manager = None
     session._saved_camera = None
     session._saved_camera_type = None
