@@ -629,8 +629,8 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
         screen = _screen_point(session, point)
         if screen is None:
             return
-        session._on_mouse_pressed(_make_mouse_press_callback(screen[0], screen[1], down=True))
-        session._on_mouse_pressed(_make_mouse_press_callback(screen[0], screen[1], down=False))
+        session.input.on_mouse_pressed(_make_mouse_press_callback(screen[0], screen[1], down=True))
+        session.input.on_mouse_pressed(_make_mouse_press_callback(screen[0], screen[1], down=False))
 
     for index in range(spec.click_samples):
         point = click_points[index % len(click_points)]
@@ -717,7 +717,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
         _cancel_active_plan_tool(session)
 
     def wheel_once():
-        session._on_mouse_wheel(_make_mouse_wheel_callback())
+        session.input.on_mouse_wheel(_make_mouse_wheel_callback())
         _trace_direct_operation(
             session,
             "benchmark_view_scale_overlay_refresh",

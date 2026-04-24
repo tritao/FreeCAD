@@ -1007,7 +1007,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._set_hovered_wall(wall)
         with patch.object(session.selection, "get_edit_node", return_value=None):
             press = self._make_fake_left_mouse_press(250, 250)
-            session._on_mouse_pressed(press)
+            session.input.on_mouse_pressed(press)
 
         self.assertTrue(press._handled)
         self._assert_selected_plan_target(session, "wall", wall)
@@ -2941,7 +2941,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return_value=("wall", wall_a),
             ),
         ):
-            session._on_mouse_pressed(self._make_fake_left_mouse_press())
+            session.input.on_mouse_pressed(self._make_fake_left_mouse_press())
 
         self._assert_selected_plan_target(session, "wall", wall_a)
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [wall_a.Name])
@@ -2963,7 +2963,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ),
         ):
             callback = self._make_fake_left_mouse_press()
-            session._on_mouse_pressed(callback)
+            session.input.on_mouse_pressed(callback)
 
         self.assertTrue(callback._handled)
         self._assert_selected_plan_target(session, "wall", wall_a)
@@ -2995,7 +2995,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ),
         ):
             callback = self._make_fake_left_mouse_press()
-            session._on_mouse_pressed(callback)
+            session.input.on_mouse_pressed(callback)
 
         self.assertTrue(callback._handled)
         self._assert_selected_plan_target(session, "wall", wall_b)
@@ -3100,25 +3100,25 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         )
 
         move = self._make_fake_mouse_move_event(*mouse_pos)
-        session._on_mouse_moved(move)
+        session.input.on_mouse_moved(move)
         self.pump_gui_events()
 
         self.assertIs(session.hovered_opening, door)
         self.assertGreater(len(session._opening_hover_trackers), 0)
 
         move_again = self._make_fake_mouse_move_event(*mouse_pos)
-        session._on_mouse_moved(move_again)
+        session.input.on_mouse_moved(move_again)
         self.pump_gui_events()
 
         self.assertIs(session.hovered_opening, door)
         self.assertGreater(len(session._opening_hover_trackers), 0)
 
         press = self._make_fake_left_mouse_press(*mouse_pos)
-        session._on_mouse_pressed(press)
+        session.input.on_mouse_pressed(press)
         self.pump_gui_events()
 
         release = self._make_fake_left_mouse_release(*mouse_pos)
-        session._on_mouse_pressed(release)
+        session.input.on_mouse_pressed(release)
         self.pump_gui_events()
 
         self.assertTrue(press._handled)
@@ -3198,14 +3198,14 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         mouse_pos = (int(screen_pos[0]), int(screen_pos[1]))
 
         move = self._make_fake_mouse_move_event(*mouse_pos)
-        session._on_mouse_moved(move)
+        session.input.on_mouse_moved(move)
         self.pump_gui_events()
 
         self.assertIs(session.hovered_wall, wall)
         self.assertGreater(len(session._wall_hover_trackers), 0)
 
         move_again = self._make_fake_mouse_move_event(*mouse_pos)
-        session._on_mouse_moved(move_again)
+        session.input.on_mouse_moved(move_again)
         self.pump_gui_events()
 
         self.assertIs(session.hovered_wall, wall)
@@ -3293,7 +3293,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return_value=(None, None),
             ),
         ):
-            session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+            session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
 
         self._assert_no_selected_plan_target(session)
         self.assertIsNone(session._pending_selected_plan_target)
@@ -3358,7 +3358,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return_value=(None, None),
             ),
         ):
-            session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+            session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
 
         self._assert_no_selected_plan_target(session)
         self.assertIsNone(session._pending_selected_plan_target)
@@ -3388,7 +3388,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ),
         ):
             callback = self._make_fake_left_mouse_press()
-            session._on_mouse_pressed(callback)
+            session.input.on_mouse_pressed(callback)
 
         self.assertTrue(callback._handled)
         self.assertEqual(FreeCADGui.Selection.getSelection(), [])
@@ -3584,17 +3584,17 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
             from pivy import coin
 
-            session._on_key_pressed(
+            session.input.on_key_pressed(
                 self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.A))
             )
             self.assertEqual(session._edit_opening_move_anchor, "left")
 
-            session._on_key_pressed(
+            session.input.on_key_pressed(
                 self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.A))
             )
             self.assertEqual(session._edit_opening_move_anchor, "right")
 
-            session._on_key_pressed(
+            session.input.on_key_pressed(
                 self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.A))
             )
             self.assertEqual(session._edit_opening_move_anchor, "center")
@@ -3900,7 +3900,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         from pivy import coin
 
         event_callback = self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.TAB))
-        session._on_key_pressed(event_callback)
+        session.input.on_key_pressed(event_callback)
 
         self.assertEqual(session.wall_relations.get_plan_join_type(), "Butt")
         self.assertEqual(
@@ -3960,7 +3960,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return_value=("wall", target_wall),
             ),
         ):
-            session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+            session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
 
         joints = [
             obj
@@ -4034,7 +4034,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return_value=("wall", target_wall),
             ),
         ):
-            session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+            session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
 
         joints = [
             obj
@@ -4111,7 +4111,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return_value=("wall", target_wall),
             ),
         ):
-            session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+            session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
 
         joints = [
             obj
@@ -4254,7 +4254,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return_value=("wall", branch_down),
             ),
         ):
-            session._on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
+            session.input.on_mouse_pressed(self._FakeEventCallback(_FakeMouseEvent(250, 250)))
 
         joints = [
             obj
@@ -4503,7 +4503,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         from pivy import coin
 
-        session._on_key_pressed(
+        session.input.on_key_pressed(
             self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.ESCAPE))
         )
         self.pump_gui_events()
@@ -4999,7 +4999,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         from pivy import coin
 
         callback = self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.RETURN))
-        session._on_key_pressed(callback)
+        session.input.on_key_pressed(callback)
         self.pump_gui_events()
 
         self.assertTrue(callback._handled)
@@ -5035,7 +5035,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         from pivy import coin
 
         callback = self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.RETURN))
-        session._on_key_pressed(callback)
+        session.input.on_key_pressed(callback)
         self.pump_gui_events()
 
         self.assertTrue(callback._handled)
@@ -5073,7 +5073,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         from pivy import coin
 
         callback = self._FakeEventCallback(self._FakeKeyEvent(coin.SoKeyboardEvent.TAB))
-        session._on_key_pressed(callback)
+        session.input.on_key_pressed(callback)
         self.pump_gui_events()
 
         self.assertTrue(callback._handled)
@@ -5755,7 +5755,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ) as get_target,
         ):
             press = self._make_fake_left_mouse_press(250, 250)
-            session._on_mouse_pressed(press)
+            session.input.on_mouse_pressed(press)
 
         self.assertEqual(get_target.call_count, 1)
         self.assertTrue(press._handled)
@@ -5787,7 +5787,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ) as get_target,
         ):
             press = self._make_fake_left_mouse_press(250, 250)
-            session._on_mouse_pressed(press)
+            session.input.on_mouse_pressed(press)
 
         self.assertEqual(get_target.call_count, 0)
         self.assertTrue(press._handled)
@@ -5819,7 +5819,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ),
         ):
             press = self._make_fake_left_mouse_press(250, 250)
-            session._on_mouse_pressed(press)
+            session.input.on_mouse_pressed(press)
 
         self.assertTrue(press._handled)
         self._assert_selected_plan_target(session, "wall", wall)
@@ -5857,7 +5857,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ),
         ):
             press = self._make_fake_left_mouse_press(250, 250)
-            session._on_mouse_pressed(press)
+            session.input.on_mouse_pressed(press)
 
         self.assertTrue(press._handled)
         self._assert_selected_plan_target(session, "wall", wall)
@@ -5892,7 +5892,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ) as get_target,
         ):
             press = self._make_fake_left_mouse_press(250, 250)
-            session._on_mouse_pressed(press)
+            session.input.on_mouse_pressed(press)
 
         self.assertEqual(get_target.call_count, 1)
         self.assertTrue(press._handled)
@@ -5927,7 +5927,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 wraps=session.overlays.queue_plan_overlay_visual_refresh,
             ) as queue_visual,
         ):
-            session._on_mouse_wheel(self._make_fake_mouse_wheel_event())
+            session.input.on_mouse_wheel(self._make_fake_mouse_wheel_event())
 
         self.assertEqual(queue_scale.call_count, 1)
         self.assertEqual(queue_visual.call_count, 0)
@@ -6088,7 +6088,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         with patch.object(
             session.selection, "get_plan_target_at_position", return_value=(None, None)
         ):
-            session._on_mouse_moved(self._make_fake_mouse_move_event(10, 10))
+            session.input.on_mouse_moved(self._make_fake_mouse_move_event(10, 10))
         self.pump_gui_events()
 
         refreshed_positions = tuple(
@@ -6469,9 +6469,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ),
         ):
             press = self._make_fake_left_mouse_press(250, 250)
-            session._on_mouse_pressed(press)
+            session.input.on_mouse_pressed(press)
             release = self._make_fake_left_mouse_release(250, 250)
-            session._on_mouse_pressed(release)
+            session.input.on_mouse_pressed(release)
 
         self.assertTrue(press._handled)
         self.assertTrue(release._handled)
@@ -6544,7 +6544,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(session.openings, "activate_opening_handle") as activate_handle,
         ):
             callback = self._make_fake_left_mouse_press()
-            session._on_mouse_pressed(callback)
+            session.input.on_mouse_pressed(callback)
 
         self.assertTrue(callback._handled)
         activate_handle.assert_called_once_with(door, 0)
@@ -6596,7 +6596,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(session.openings, "activate_opening_handle") as activate_handle,
         ):
             callback = self._make_fake_left_mouse_press()
-            session._on_mouse_pressed(callback)
+            session.input.on_mouse_pressed(callback)
 
         self.assertTrue(callback._handled)
         activate_handle.assert_called_once_with(door, 0)
@@ -7381,7 +7381,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         screen_pos = session.view.getPointOnScreen(candidate["sample_point"])
         self.assertIs(session.spaces.pick_space_region_candidate(screen_pos), candidate)
 
-        session._on_mouse_pressed(self._make_fake_left_mouse_press(*screen_pos))
+        session.input.on_mouse_pressed(self._make_fake_left_mouse_press(*screen_pos))
         self.pump_gui_events()
 
         created_spaces = [
@@ -7787,7 +7787,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return_value=("space", space),
             ),
         ):
-            session._on_mouse_pressed(self._make_fake_left_mouse_press())
+            session.input.on_mouse_pressed(self._make_fake_left_mouse_press())
 
         self.assertIs(session.selected_space, space)
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [space.Name])
@@ -7809,7 +7809,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ),
         ):
             callback = self._make_fake_left_mouse_press()
-            session._on_mouse_pressed(callback)
+            session.input.on_mouse_pressed(callback)
 
         self.assertTrue(callback._handled)
         self.assertIs(session.selected_space, space)
