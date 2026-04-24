@@ -377,7 +377,7 @@ def _get_wall_from_target(session, target_kind, target_obj):
 def _get_wall_from_snap_object(session, snap_object):
     if snap_object is None:
         return None
-    target_kind, target_obj = session._get_plan_target_for_object(snap_object)
+    target_kind, target_obj = session.selection.get_plan_target_for_object(snap_object)
     wall = _get_wall_from_target(session, target_kind, target_obj)
     if wall is not None:
         return wall
@@ -397,7 +397,7 @@ def _get_wall_from_snap_object(session, snap_object):
     except Exception:
         pass
     for candidate in linked_objects:
-        target_kind, target_obj = session._get_plan_target_for_object(candidate)
+        target_kind, target_obj = session.selection.get_plan_target_for_object(candidate)
         wall = _get_wall_from_target(session, target_kind, target_obj)
         if wall is not None:
             return wall

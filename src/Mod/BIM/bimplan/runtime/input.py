@@ -52,7 +52,7 @@ def on_mouse_pressed(session, event_callback):
                     session._consume_left_button_release = False
                     if session.current_tool == "Join":
                         pos = event.getPosition().getValue()
-                        target_kind, target_wall = session._get_plan_target_at_position(
+                        target_kind, target_wall = session.selection.get_plan_target_at_position(
                             (pos[0], pos[1])
                         )
                         source_wall = plan_selection.get_selected_plan_target_object(

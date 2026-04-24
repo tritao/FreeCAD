@@ -92,7 +92,7 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
             return False
         session._plan_perf_count("hover_pick_resolved")
         with session._plan_perf_trace_span("hover_pick_resolve"):
-            target_kind, target_obj = session._get_plan_target_at_position(mouse_pos)
+            target_kind, target_obj = session.selection.get_plan_target_at_position(mouse_pos)
         session._hover_pick_dirty = False
         if target_kind == "wall" and not session._is_selected_plan_target("wall", target_obj):
             plan_target_dispatch.set_only_hovered_target(session, target_kind, target_obj)
@@ -111,7 +111,7 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
         overlay_mode
     )
     with session._plan_perf_trace_span("hover_pick_resolve"):
-        target_kind, target_obj = session._get_plan_target_at_position(
+        target_kind, target_obj = session.selection.get_plan_target_at_position(
             mouse_pos,
             include_space_fallback=include_space_fallback,
         )

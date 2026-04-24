@@ -418,7 +418,7 @@ def _build_provider_handle_payload(
         except Exception:
             pass
     snap_target = (None, None)
-    get_plan_target = getattr(session, "_get_plan_target_for_object", None)
+    get_plan_target = getattr(session.selection, "get_plan_target_for_object", None)
     if callable(get_plan_target) and snap_object is not None:
         try:
             snap_target = get_plan_target(snap_object)

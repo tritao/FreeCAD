@@ -184,7 +184,7 @@ def update_provider_point_tool_preview(session, point=None, obj=None):
     snap_object = session.providers.resolve_provider_point_snap_object(obj, snap_info)
     snap_target = (None, None)
     if snap_object is not None:
-        snap_target = session._get_plan_target_for_object(snap_object)
+        snap_target = session.selection.get_plan_target_for_object(snap_object)
     host_kind, host_obj, host_source = session.providers.get_provider_point_payload_host_target(
         snap_target=snap_target,
         selected_target=session.selection.get_selected_plan_target(),
@@ -335,7 +335,7 @@ def build_provider_point_tool_payload(
 ):
     snap_target = (None, None)
     if snap_object is not None:
-        snap_target = session._get_plan_target_for_object(snap_object)
+        snap_target = session.selection.get_plan_target_for_object(snap_object)
     snap_component = str(snap_info.get("Component", "") or "").strip()
     snap_subname = str(snap_info.get("SubName", "") or snap_component).strip()
     snap_document_name = str(snap_info.get("Document", "") or "").strip()
