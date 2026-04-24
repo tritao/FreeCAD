@@ -153,6 +153,37 @@ class PlanOverlayRefreshState:
     dirty_plan_visuals: set = field(default_factory=set)
 
 
+@dataclass
+class PlanWallGripState:
+    state: object = None
+    sync_queued: bool = False
+    sync_generation: int = 0
+
+
+@dataclass
+class PlanViewportState:
+    status_chip: object = None
+    saved_camera: object = None
+    saved_camera_type: object = None
+    saved_navigation_style: object = None
+    saved_navigation_state: dict = field(default_factory=dict)
+    saved_view_action_state: dict = field(default_factory=dict)
+    saved_preselection_state: object = None
+    plan_preselection_forced: bool = False
+    saved_object_view_state: dict = field(default_factory=dict)
+    working_plane: object = None
+    interaction_plane: object = None
+
+
+@dataclass
+class PlanDocumentVisualState:
+    pending_created_plan_objects: dict = field(default_factory=dict)
+    created_plan_objects_flush_queued: bool = False
+    created_plan_objects_flush_deferred: bool = False
+    document_visual_update_defer_depth: int = 0
+    document_visual_refresh_deferred: bool = False
+
+
 def initialize_session_read_state(session):
     session.task_panel_state = PlanTaskPanelState()
     session.provider_overlay_read_state = PlanProviderOverlayReadState(
@@ -165,6 +196,9 @@ def initialize_session_read_state(session):
     session.selection_sync_state = PlanSelectionSyncState()
     session.input_event_state = PlanInputEventState()
     session.overlay_refresh_state = PlanOverlayRefreshState()
+    session.wall_grip_state = PlanWallGripState()
+    session.viewport_state = PlanViewportState()
+    session.document_visual_state = PlanDocumentVisualState()
 
 
 def initialize_session_state(session):
@@ -178,7 +212,6 @@ def initialize_session_state(session):
     session.task_panel = None
     session._aux_task_panels = []
     initialize_session_read_state(session)
-    session._viewport_status_chip = None
     session.current_tool = "Select"
     session._plan_join_type = "Miter"
     session.storeys = []
@@ -186,9 +219,6 @@ def initialize_session_state(session):
     session._space_region_pick_boundaries = []
     session._space_region_pick_seed_space = None
     session._grip_trackers = []
-    session._wall_grip_state = None
-    session._wall_grip_sync_queued = False
-    session._wall_grip_sync_generation = 0
     session._wall_hover_trackers = []
     session._wall_overlay_trackers = []
     session._junction_node_trackers = []
@@ -259,11 +289,6 @@ def initialize_session_state(session):
     session._edit_opening_move_raw_point = None
     session._selection_observer_added = False
     session._document_observer_added = False
-    session._pending_created_plan_objects = {}
-    session._created_plan_objects_flush_queued = False
-    session._created_plan_objects_flush_deferred = False
-    session._document_visual_update_defer_depth = 0
-    session._document_visual_refresh_deferred = False
     session._pending_selected_wall_reset = False
     session._rect_wall_start = None
     session._rect_wall_params = None
@@ -279,16 +304,6 @@ def initialize_session_state(session):
     session._edit_symbol_reference_point = None
     session._ignore_selection_changes = False
     session._render_manager = None
-    session._saved_camera = None
-    session._saved_camera_type = None
-    session._saved_navigation_style = None
-    session._saved_navigation_state = {}
-    session._saved_view_action_state = {}
-    session._saved_preselection_state = None
-    session._plan_preselection_forced = False
-    session._saved_object_view_state = {}
-    session._working_plane = None
-    session._interaction_plane = None
     session._finishing = False
     session._tearing_down = False
     session._teardown_signal_sources = []
