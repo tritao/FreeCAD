@@ -1655,51 +1655,6 @@ class PlanEditSession:
     def _handle_rect_wall_point(self, point=None, obj=None):
         return plan_wall_create.handle_rect_wall_point(self, point=point, obj=obj)
 
-    def _has_active_space_separator_tool(self):
-        return self.spaces.has_active_space_separator_tool()
-
-    def _has_active_plan_region_tool(self):
-        return self.spaces.has_active_plan_region_tool()
-
-    def _clear_plan_region_preview(self):
-        return self.spaces.clear_plan_region_preview()
-
-    def _cancel_plan_region_tool(self, refresh=True):
-        return self.spaces.cancel_plan_region_tool(refresh=refresh)
-
-    def _get_plan_region_close_tolerance(self):
-        return self.spaces.get_plan_region_close_tolerance()
-
-    def _get_plan_region_preview_segments(self, point=None):
-        return self.spaces.get_plan_region_preview_segments(point=point)
-
-    def _update_plan_region_preview(self, point, info):
-        return self.spaces.update_plan_region_preview(point, info)
-
-    def _create_plan_region(self, points):
-        return self.spaces.create_plan_region(points)
-
-    def _finalize_plan_region(self):
-        return self.spaces.finalize_plan_region()
-
-    def _handle_plan_region_point(self, point=None, obj=None):
-        return self.spaces.handle_plan_region_point(point=point, obj=obj)
-
-    def _clear_space_separator_preview(self):
-        return self.spaces.clear_space_separator_preview()
-
-    def _cancel_space_separator_tool(self, refresh=True):
-        return self.spaces.cancel_space_separator_tool(refresh=refresh)
-
-    def _update_space_separator_preview(self, point, info):
-        return self.spaces.update_space_separator_preview(point, info)
-
-    def _create_space_separator(self, start, end):
-        return self.spaces.create_space_separator(start, end)
-
-    def _handle_space_separator_point(self, point=None, obj=None):
-        return self.spaces.handle_space_separator_point(point=point, obj=obj)
-
     def _has_active_embedded_tool(self):
         return self._embedded_tool is not None
 
@@ -2270,45 +2225,6 @@ class PlanEditSession:
     def _create_space_region_base_object(self, candidate):
         return self.spaces.create_space_region_base_object(candidate)
 
-    def _begin_space_region_pick(self, boundaries, label=None, seed_space=None, report=None):
-        return self.spaces.begin_space_region_pick(
-            boundaries,
-            label=label,
-            seed_space=seed_space,
-            report=report,
-        )
-
-    def _cancel_space_region_pick(self, refresh=True):
-        return self.spaces.cancel_space_region_pick(refresh=refresh)
-
-    def _create_space_from_region_candidate(self, candidate, boundaries=None, keep_boundaries=True):
-        return self.spaces.create_space_from_region_candidate(
-            candidate,
-            boundaries=boundaries,
-            keep_boundaries=keep_boundaries,
-        )
-
-    def _activate_space_region_candidate(self, candidate, event_callback=None):
-        return self.spaces.activate_space_region_candidate(
-            candidate,
-            event_callback=event_callback,
-        )
-
-    def _create_space_from_current_selection(self):
-        return self.spaces.create_space_from_current_selection()
-
-    def _space_has_valid_geometry(self, space):
-        return self.spaces.space_has_valid_geometry(space)
-
-    def _report_space_creation_failure(self, space):
-        return self.spaces.report_space_creation_failure(space)
-
-    def _set_selected_space_label(self, label):
-        return self.spaces.set_selected_space_label(label)
-
-    def _set_selected_space_type(self, space_type):
-        return self.spaces.set_selected_space_type(space_type)
-
     def _get_window_style_preset_options(self):
         return self.windows.get_window_style_preset_options()
 
@@ -2367,36 +2283,6 @@ class PlanEditSession:
             width_value=width_value,
             height_value=height_value,
         )
-
-    def _set_selected_region_label(self, label):
-        return self.spaces.set_selected_region_label(label)
-
-    def _set_selected_region_scheme(self, scheme):
-        return self.spaces.set_selected_region_scheme(scheme)
-
-    def _set_selected_region_type(self, region_type):
-        return self.spaces.set_selected_region_type(region_type)
-
-    def _set_selected_region_parent_space(self, space):
-        return self.spaces.set_selected_region_parent_space(space)
-
-    def _set_space_boundaries(self, space, boundaries):
-        return self.spaces.set_space_boundaries(space, boundaries)
-
-    def _add_boundaries_to_selected_space(self):
-        return self.spaces.add_boundaries_to_selected_space()
-
-    def _remove_selected_space_boundaries(self, row_indexes=None):
-        return self.spaces.remove_selected_space_boundaries(row_indexes=row_indexes)
-
-    def _start_space_text_position_pick(self):
-        return self.spaces.start_space_text_position_pick()
-
-    def _finish_space_text_position_pick(self, point=None, obj=None):
-        return self.spaces.finish_space_text_position_pick(point=point, obj=obj)
-
-    def _cancel_space_text_position_pick(self):
-        return self.spaces.cancel_space_text_position_pick()
 
     def _copy_placement(self, placement):
         if placement is None:

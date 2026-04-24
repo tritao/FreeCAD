@@ -6951,8 +6951,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 FreeCAD.Vector(3200, 2400, 0),
                 FreeCAD.Vector(1200, 2400, 0),
             ):
-                session._handle_plan_region_point(point)
-            self.assertTrue(session._finalize_plan_region())
+                session.spaces.handle_plan_region_point(point)
+            self.assertTrue(session.spaces.finalize_plan_region())
         self.pump_gui_events()
 
         created_regions = [
@@ -6989,8 +6989,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.activate_space_separator_tool()
         self.assertEqual(session.current_tool, "Separator")
 
-        session._handle_space_separator_point(FreeCAD.Vector(1000, 500, 0))
-        session._handle_space_separator_point(FreeCAD.Vector(1000, 3500, 0))
+        session.spaces.handle_space_separator_point(FreeCAD.Vector(1000, 500, 0))
+        session.spaces.handle_space_separator_point(FreeCAD.Vector(1000, 3500, 0))
         self.pump_gui_events()
 
         created = [
@@ -7083,7 +7083,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(len(session._space_region_candidates), 2)
 
         candidate = min(session._space_region_candidates, key=lambda item: item["area"])
-        self.assertTrue(session._activate_space_region_candidate(candidate))
+        self.assertTrue(session.spaces.activate_space_region_candidate(candidate))
         self.pump_gui_events()
 
         created_spaces = [
@@ -7319,7 +7319,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         before = {obj.Name for obj in self.document.Objects}
 
-        self.assertTrue(session._begin_space_region_pick(boundaries, label="Two Rooms"))
+        self.assertTrue(session.spaces.begin_space_region_pick(boundaries, label="Two Rooms"))
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
@@ -7390,7 +7390,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(len(session._space_region_candidates), 2)
 
         candidate = min(session._space_region_candidates, key=lambda item: item["area"])
-        self.assertTrue(session._activate_space_region_candidate(candidate))
+        self.assertTrue(session.spaces.activate_space_region_candidate(candidate))
         self.pump_gui_events()
 
         created_spaces = [
@@ -7541,7 +7541,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         before = {obj.Name for obj in self.document.Objects}
 
-        self.assertTrue(session._begin_space_region_pick(boundaries, label="Two Rooms"))
+        self.assertTrue(session.spaces.begin_space_region_pick(boundaries, label="Two Rooms"))
         self.pump_gui_events()
 
         created_spaces = [
@@ -7633,12 +7633,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._refresh_primary_selected_plan_target()
         self.assertIs(session.selected_space, space)
 
-        self.assertTrue(session._add_boundaries_to_selected_space())
+        self.assertTrue(session.spaces.add_boundaries_to_selected_space())
         boundaries = session._get_space_boundary_entries(space)
         self.assertEqual(len(boundaries), 1)
         self.assertIs(boundaries[0][0], wall)
 
-        self.assertTrue(session._remove_selected_space_boundaries())
+        self.assertTrue(session.spaces.remove_selected_space_boundaries())
         self.assertEqual(session._get_space_boundary_entries(space), [])
 
         session.shutdown(close_dialog=False)
@@ -7772,7 +7772,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertGreater(len(session._secondary_selection_trackers), 0)
         self.assertIn("Boundary candidates: 1 wall", session.task_panel.status.text())
 
-        self.assertTrue(session._add_boundaries_to_selected_space())
+        self.assertTrue(session.spaces.add_boundaries_to_selected_space())
         self.pump_gui_events()
         boundaries = session._get_space_boundary_entries(space)
         self.assertEqual(len(boundaries), 1)

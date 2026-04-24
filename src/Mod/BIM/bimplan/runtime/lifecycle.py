@@ -77,7 +77,7 @@ def clear_transient_visuals(
     if include_symbol_edit_preview:
         session.symbols.clear_symbol_edit_preview()
     if include_plan_region_preview:
-        session._clear_plan_region_preview()
+        session.spaces.clear_plan_region_preview()
 
 
 def detach_runtime_observers(session):
@@ -153,9 +153,9 @@ _FINISH_TOOL_HANDLER_SPECS = {
     "Move Opening": "openings.cancel_opening_handle_point_pick",
     "Move Symbol": "symbols.cancel_symbol_handle_point_pick",
     "Rotate Symbol": "symbols.cancel_symbol_handle_point_pick",
-    "Pick Space Region": "_cancel_space_region_pick",
-    "Region": "_cancel_plan_region_tool",
-    "Set Space Text": "_cancel_space_text_position_pick",
+    "Pick Space Region": "spaces.cancel_space_region_pick",
+    "Region": "spaces.cancel_plan_region_tool",
+    "Set Space Text": "spaces.cancel_space_text_position_pick",
     "Window": "windows.cancel_window_tool",
 }
 
@@ -174,21 +174,21 @@ _SHUTDOWN_TOOL_HANDLER_SPECS = {
 }
 
 _ACTION_CANCEL_SPACE_REGION_PICK = ActivationActionSpec(
-    "_cancel_space_region_pick",
+    "spaces.cancel_space_region_pick",
     kwargs=(("refresh", False),),
 )
 _ACTION_CANCEL_SPACE_REGION_PICK_AND_RETURN = ActivationActionSpec(
-    "_cancel_space_region_pick",
+    "spaces.cancel_space_region_pick",
     current_tools=("Pick Space Region",),
     stop_after=True,
 )
 _ACTION_CANCEL_PLAN_REGION_TOOL = ActivationActionSpec(
-    "_cancel_plan_region_tool",
+    "spaces.cancel_plan_region_tool",
     kwargs=(("refresh", False),),
 )
 _ACTION_CANCEL_PLAN_REGION_TOOL_IF_ACTIVE = ActivationActionSpec(
-    "_cancel_plan_region_tool",
-    predicate_name="_has_active_plan_region_tool",
+    "spaces.cancel_plan_region_tool",
+    predicate_name="spaces.has_active_plan_region_tool",
 )
 _ACTION_CANCEL_RECT_WALL_TOOL = ActivationActionSpec(
     "_cancel_rect_wall_tool",
@@ -207,12 +207,12 @@ _ACTION_CANCEL_WINDOW_TOOL_IF_ACTIVE = ActivationActionSpec(
     predicate_name="windows.has_active_window_tool",
 )
 _ACTION_CANCEL_SPACE_SEPARATOR_TOOL = ActivationActionSpec(
-    "_cancel_space_separator_tool",
+    "spaces.cancel_space_separator_tool",
     kwargs=(("refresh", False),),
 )
 _ACTION_CANCEL_SPACE_SEPARATOR_TOOL_IF_ACTIVE = ActivationActionSpec(
-    "_cancel_space_separator_tool",
-    predicate_name="_has_active_space_separator_tool",
+    "spaces.cancel_space_separator_tool",
+    predicate_name="spaces.has_active_space_separator_tool",
 )
 _ACTION_CANCEL_PROVIDER_POINT_TOOL = ActivationActionSpec(
     "providers.cancel_provider_point_tool",
@@ -250,7 +250,7 @@ _ACTION_CANCEL_WALL_EDIT_NO_REFRESH = ActivationActionSpec(
     kwargs=(("refresh", False),),
 )
 _ACTION_CANCEL_SPACE_TEXT_PICK = ActivationActionSpec(
-    "_cancel_space_text_position_pick",
+    "spaces.cancel_space_text_position_pick",
     current_tools=("Set Space Text",),
 )
 _ACTION_CANCEL_JOIN_TOOL = ActivationActionSpec("_cancel_join_tool")
@@ -383,9 +383,9 @@ def _start_plan_region_tool(session, context):
     return _start_snap_tool(
         session,
         "Region",
-        session._handle_plan_region_point,
+        session.spaces.handle_plan_region_point,
         translate("BIM_PlanEdit", "First region point"),
-        movecallback=session._update_plan_region_preview,
+        movecallback=session.spaces.update_plan_region_preview,
     )
 
 
@@ -402,14 +402,14 @@ def _start_space_separator_tool(session, context):
     return _start_snap_tool(
         session,
         "Separator",
-        session._handle_space_separator_point,
+        session.spaces.handle_space_separator_point,
         translate("BIM_PlanEdit", "Separator start point"),
     )
 
 
 def _start_space_tool(session, context):
     del context
-    return session._create_space_from_current_selection()
+    return session.spaces.create_space_from_current_selection()
 
 
 def _start_move_tool(session, context):

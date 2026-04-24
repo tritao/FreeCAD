@@ -15,11 +15,11 @@ _MIN_WALL_LENGTH = 10.0
 def activate_wall_tool(session):
     from bimcommands import BimWall
 
-    session._cancel_space_region_pick(refresh=False)
-    session._cancel_plan_region_tool(refresh=False)
+    session.spaces.cancel_space_region_pick(refresh=False)
+    session.spaces.cancel_plan_region_tool(refresh=False)
     session._cancel_rect_wall_tool(refresh=False)
     session.windows.cancel_window_tool(refresh=False)
-    session._cancel_space_separator_tool(refresh=False)
+    session.spaces.cancel_space_separator_tool(refresh=False)
     session.providers.cancel_provider_point_tool(refresh=False)
     session.wall_edit.cancel_wall_edit()
     session._cancel_pending_edit()
@@ -35,10 +35,10 @@ def activate_wall_tool(session):
 
 
 def activate_rect_wall_tool(session):
-    session._cancel_space_region_pick(refresh=False)
-    session._cancel_plan_region_tool(refresh=False)
+    session.spaces.cancel_space_region_pick(refresh=False)
+    session.spaces.cancel_plan_region_tool(refresh=False)
     session.windows.cancel_window_tool(refresh=False)
-    session._cancel_space_separator_tool(refresh=False)
+    session.spaces.cancel_space_separator_tool(refresh=False)
     session.providers.cancel_provider_point_tool(refresh=False)
     session._cancel_embedded_tool()
     session.wall_edit.cancel_wall_edit()
