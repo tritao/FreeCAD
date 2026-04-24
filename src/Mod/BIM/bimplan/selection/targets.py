@@ -311,7 +311,7 @@ def get_plan_targets(session, selected_only=False):
 
     records = []
     for target_kind, target_obj in source_targets:
-        target_record = session._make_plan_target_record(
+        target_record = session.selection.make_plan_target_record(
             target_kind,
             target_obj,
             selected_keys=selected_keys,
@@ -368,4 +368,6 @@ def resolve_plan_semantic_object(session, target):
                 resolved = None
             if resolved is not None:
                 return resolved
-    return session.visibility.get_plan_semantic_object(session.resolve_plan_target_object(target))
+    return session.visibility.get_plan_semantic_object(
+        session.selection.resolve_plan_target_object(target)
+    )

@@ -640,7 +640,7 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
         visual_args.append(_PLAN_VISUAL_HOVERED_SPACE)
     if selected_opening:
         visual_args.append(_PLAN_VISUAL_SELECTED_OPENING)
-    if selected_provider or session._get_provider_selected_objects():
+    if selected_provider or session.status_text.get_provider_selected_objects():
         visual_args.append(_PLAN_VISUAL_SELECTED_PROVIDER)
     if secondary_targets:
         visual_args.append(_PLAN_VISUAL_SECONDARY_SELECTION)

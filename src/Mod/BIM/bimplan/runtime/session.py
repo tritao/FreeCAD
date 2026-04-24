@@ -54,7 +54,6 @@ from bimplan.tools.symbol_edit import PlanSymbolsAPI
 from bimplan.tools import opening_edit as plan_opening_edit
 from bimplan.tools.opening_edit import PlanOpeningsAPI
 from bimplan.providers.runtime import PlanProvidersAPI
-from bimplan.selection import targets as plan_targets
 from bimplan.tools import wall_create as plan_wall_create
 from bimplan.tools import wall_relations as plan_wall_relations
 from bimplan.tools.wall_relations import PlanWallRelationsAPI
@@ -862,56 +861,6 @@ class PlanEditSession:
     def defer_document_visual_updates(self):
         return plan_document_visuals.defer_document_visual_updates(self)
 
-    def _format_plan_target_count_label(self, kind, count):
-        return self.status_text.format_plan_target_count_label(kind, count)
-
-    def _format_space_region_candidate_area(self, candidate):
-        return self.spaces.format_space_region_candidate_area(candidate)
-
-    def _summarize_plan_targets(self, targets):
-        return self.status_text.summarize_plan_targets(targets)
-
-    def _normalize_plan_requirement_tags(self, value):
-        return plan_targets.normalize_plan_requirement_tags(value)
-
-    def _get_plan_host_ref(self, obj):
-        return plan_targets.get_plan_host_ref(self, obj)
-
-    def _make_plan_target_record(self, kind, obj, selected_keys=None, primary_key=None):
-        return plan_targets.make_plan_target_record(
-            self,
-            kind,
-            obj,
-            selected_keys=selected_keys,
-            primary_key=primary_key,
-        )
-
-    def get_plan_targets(self, selected_only=False):
-        return plan_targets.get_plan_targets(self, selected_only=selected_only)
-
-    def get_selected_objects(self):
-        return tuple(
-            self.selection.normalize_gui_object_selection(
-                tuple(self.selection.get_gui_selection()) + tuple(self._provider_selected_objects)
-            )
-        )
-
-    def resolve_plan_target_object(self, target):
-        return plan_targets.resolve_plan_target_object(self, target)
-
-    def resolve_plan_semantic_object(self, target):
-        return plan_targets.resolve_plan_semantic_object(self, target)
-
-    def _build_plan_semantic_record(self, target_kind, target_obj):
-        return plan_provider_runtime.build_plan_semantic_record(
-            self,
-            target_kind,
-            target_obj,
-        )
-
-    def get_plan_semantic_records(self, targets=None):
-        return plan_provider_runtime.get_plan_semantic_records(self, targets=targets)
-
     def _is_plan_provider_target_object(self, obj):
         return plan_provider_runtime.is_plan_provider_target_object(self, obj)
 
@@ -969,12 +918,6 @@ class PlanEditSession:
             transaction_label=transaction_label,
             payload=payload,
         )
-
-    def _format_space_preflight_text(self, report):
-        return self.spaces.format_space_preflight_text(report)
-
-    def _get_plan_selection_summary_text(self):
-        return self.status_text.get_plan_selection_summary_text()
 
     def _clear_plan_relation_status(self):
         return plan_wall_relations.clear_plan_relation_status(self)
@@ -1336,33 +1279,6 @@ class PlanEditSession:
 
     def _is_modal_plan_interaction_active(self):
         return self.interaction.is_modal_plan_interaction_active()
-
-    def _format_provider_target_role_label(self, obj):
-        return self.status_text.format_provider_target_role_label(obj)
-
-    def _format_provider_target_help(self, obj):
-        return self.status_text.format_provider_target_help(obj)
-
-    def _get_opening_display_kind_key(self, opening):
-        return self.status_text.get_opening_display_kind_key(opening)
-
-    def _get_opening_display_kind(self, opening):
-        return self.status_text.get_opening_display_kind(opening)
-
-    def _format_opening_selection_help(self, opening):
-        return self.status_text.format_opening_selection_help(opening)
-
-    def _format_plan_target_selection_state(self, kind, obj):
-        return self.status_text.format_plan_target_selection_state(kind, obj)
-
-    def _get_provider_selected_objects(self):
-        return self.status_text.get_provider_selected_objects()
-
-    def _format_provider_selected_object_state(self):
-        return self.status_text.format_provider_selected_object_state()
-
-    def _format_provider_selected_object_help(self):
-        return self.status_text.format_provider_selected_object_help()
 
     def _clear_input_hints(self):
         return self.status_text.clear_input_hints()

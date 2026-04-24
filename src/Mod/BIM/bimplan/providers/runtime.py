@@ -106,6 +106,8 @@ _PLAN_PROVIDERS_API_BOUND_METHODS = (
     "get_plan_provider_targets",
     "get_plan_provider_target_for_object",
     "is_plan_provider_overlay_enabled",
+    "build_plan_semantic_record",
+    "get_plan_semantic_records",
 )
 
 
@@ -771,7 +773,7 @@ def resolve_plan_provider_target_display_fields(
 ) -> _PlanProviderTargetDisplayFields:
     semantic_resolved = None
     if provider_target is not None:
-        semantic_resolved = session.resolve_plan_semantic_object(provider_target)
+        semantic_resolved = session.selection.resolve_plan_semantic_object(provider_target)
         if semantic_resolved is not None:
             semantic_obj = semantic_resolved
 
@@ -833,7 +835,7 @@ def build_plan_semantic_record(session, target_kind, target_obj):
         semantic_obj,
         ("UsageCategory", "SpaceType"),
     )
-    requirement_tags = session._normalize_plan_requirement_tags(
+    requirement_tags = session.selection.normalize_plan_requirement_tags(
         getattr(semantic_obj, "RequirementTags", None)
     )
     return PlanSemanticRecord(
@@ -852,7 +854,7 @@ def build_plan_semantic_record(session, target_kind, target_obj):
         semantic_preset=session.visibility.get_plan_text_property(
             semantic_obj, ("SemanticPreset",)
         ),
-        host_ref=session._get_plan_host_ref(semantic_obj),
+        host_ref=session.selection.get_plan_host_ref(semantic_obj),
         mount_height_mm=session.visibility.get_plan_float_property(
             semantic_obj,
             ("MountHeight", "MEPMountHeight", "PlumbingMountHeight"),
@@ -865,20 +867,20 @@ def get_plan_semantic_records(session, targets=None):
     from bimplan.selection.targets import PlanTarget
 
     if targets is None:
-        targets = session.get_plan_targets(selected_only=True)
+        targets = session.selection.get_plan_targets(selected_only=True)
     records = []
     for target in targets or ():
         target_kind = None
         target_obj = None
         if isinstance(target, PlanTarget):
             target_kind = target.kind
-            target_obj = session.resolve_plan_target_object(target)
+            target_obj = session.selection.resolve_plan_target_object(target)
         else:
             try:
                 target_kind, target_obj = target
             except Exception:
                 continue
-        record = session._build_plan_semantic_record(target_kind, target_obj)
+        record = session.providers.build_plan_semantic_record(target_kind, target_obj)
         if record is not None:
             records.append(record)
     return tuple(records)
