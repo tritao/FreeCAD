@@ -331,7 +331,7 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
             objects = candidates
         for obj in objects or []:
             _perf_count(session, "opening_overlay_pick_objects_scanned")
-            if not session._is_hosted_opening_object(obj):
+            if not session.openings.is_hosted_opening_object(obj):
                 continue
             name = getattr(obj, "Name", None)
             if not name or name in seen:
@@ -962,7 +962,7 @@ def get_plan_target_from_edit_node(session, node):
         return session.selection.get_plan_target_for_object(obj)
     if node_kind == "opening_handle":
         opening = node[1]
-        if session._is_hosted_opening_object(opening):
+        if session.openings.is_hosted_opening_object(opening):
             return ("opening", opening)
         return (None, None)
     if node_kind == "symbol_handle":
@@ -976,7 +976,7 @@ def get_plan_target_from_edit_node(session, node):
         obj = doc.getObject(str(point.objectName.getValue()))
     except Exception:
         return (None, None)
-    if session._is_hosted_opening_object(obj):
+    if session.openings.is_hosted_opening_object(obj):
         return ("opening", obj)
     return session.selection.get_plan_target_for_object(obj)
 
@@ -1120,7 +1120,7 @@ def get_edit_node(session, mouse_pos):
 
 def pick_selected_opening_handle(session, mouse_pos, radius_px=10):
     opening = plan_selection.get_selected_plan_target_object(session, "opening")
-    if not session._is_hosted_opening_object(opening) or not session.view:
+    if not session.openings.is_hosted_opening_object(opening) or not session.view:
         return None
     try:
         cursor_x = int(mouse_pos[0])

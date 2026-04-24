@@ -376,7 +376,7 @@ def _resolve_window_snap_object(session, snap_object=None, snap_info=None):
 
 
 def _get_opening_host_wall(session, opening):
-    if not session._is_hosted_opening_object(opening):
+    if not session.openings.is_hosted_opening_object(opening):
         return None
     for host in getattr(opening, "Hosts", None) or ():
         if session._is_plan_selectable_wall(host):
@@ -645,7 +645,7 @@ def create_window(session, wall, point):
         build_window,
         translate("BIM_PlanEdit", "Create Window"),
     )
-    if not session._is_hosted_opening_object(window):
+    if not session.openings.is_hosted_opening_object(window):
         raise RuntimeError("Created window is not hosted")
     return window
 

@@ -39,7 +39,7 @@ def prime_hover_pick_caches(session):
                 session.overlays.get_symbol_overlay_screen_polylines(symbol)
 
         for obj in getattr(session.doc, "Objects", []) or []:
-            if session._is_hosted_opening_object(obj):
+            if session.openings.is_hosted_opening_object(obj):
                 session.performance.plan_perf_count("prime_hover_pick_openings")
                 with session.performance.plan_perf_trace_span("prime_hover_pick_opening_geometry"):
                     session.overlays.get_opening_overlay_polylines(obj)

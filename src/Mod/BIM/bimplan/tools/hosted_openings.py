@@ -189,7 +189,7 @@ def build_wall_hosted_openings_cache(session):
         return cache
     with session.performance.plan_perf_trace_span("build_wall_hosted_openings_cache"):
         for obj in getattr(session.doc, "Objects", []) or []:
-            if not session._is_hosted_opening_object(obj):
+            if not session.openings.is_hosted_opening_object(obj):
                 continue
             for host in getattr(obj, "Hosts", None) or []:
                 host_key = session._get_document_object_key(host)

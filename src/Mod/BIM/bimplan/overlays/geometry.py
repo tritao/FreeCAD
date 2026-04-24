@@ -11,7 +11,7 @@ def _perf_count(session, name, delta=1):
 
 def get_plan_overlay_geometry_kinds_for_object(session, obj):
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
-    if session._is_hosted_opening_object(semantic_obj):
+    if session.openings.is_hosted_opening_object(semantic_obj):
         return ("opening",)
     if session._is_plan_space_object(semantic_obj):
         return ("space",)
@@ -222,7 +222,7 @@ def _compute_opening_overlay_geometry(opening_obj):
 
 
 def get_opening_overlay_polylines(session, opening):
-    if not session._is_hosted_opening_object(opening):
+    if not session.openings.is_hosted_opening_object(opening):
         return ()
 
     geometry = session._get_cached_plan_overlay_geometry(
@@ -235,7 +235,7 @@ def get_opening_overlay_polylines(session, opening):
 
 
 def get_opening_guide_polylines(session, opening):
-    if not session._is_hosted_opening_object(opening):
+    if not session.openings.is_hosted_opening_object(opening):
         return ()
 
     return session._get_cached_plan_overlay_geometry(
@@ -252,7 +252,7 @@ def get_opening_guide_polylines(session, opening):
 
 
 def get_opening_overlay_screen_polylines(session, opening):
-    if not session._is_hosted_opening_object(opening) or not session.view:
+    if not session.openings.is_hosted_opening_object(opening) or not session.view:
         return ()
     projection_key = session.viewport.get_plan_projection_cache_key()
     if projection_key is None:
@@ -314,7 +314,7 @@ def get_space_overlay_segments(session, space):
 
 
 def get_opening_overlay_segments(session, opening):
-    if not session._is_hosted_opening_object(opening):
+    if not session.openings.is_hosted_opening_object(opening):
         return ()
     return session._get_cached_plan_overlay_geometry(
         "opening",
@@ -327,7 +327,7 @@ def get_opening_overlay_segments(session, opening):
 
 
 def get_opening_combined_overlay_polylines(session, opening):
-    if not session._is_hosted_opening_object(opening):
+    if not session.openings.is_hosted_opening_object(opening):
         return ()
     return session._get_cached_plan_overlay_geometry(
         "opening",
@@ -339,7 +339,7 @@ def get_opening_combined_overlay_polylines(session, opening):
 
 
 def get_opening_combined_overlay_segments(session, opening):
-    if not session._is_hosted_opening_object(opening):
+    if not session.openings.is_hosted_opening_object(opening):
         return ()
     return session._get_cached_plan_overlay_geometry(
         "opening",
@@ -352,7 +352,7 @@ def get_opening_combined_overlay_segments(session, opening):
 
 
 def get_opening_pick_polylines(session, opening):
-    if not session._is_hosted_opening_object(opening):
+    if not session.openings.is_hosted_opening_object(opening):
         return ()
     return session._get_cached_plan_overlay_geometry(
         "opening",

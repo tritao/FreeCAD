@@ -739,12 +739,6 @@ class PlanEditSession:
             return False
         return not getattr(wall, "Base", None) and self.is_selected_wall_endpoint_editable()
 
-    def _get_wall_defaults(self):
-        return plan_wall_create.get_wall_defaults(self)
-
-    def _invalidate_opening_overlay_screen_cache(self):
-        return overlay_geometry.invalidate_opening_overlay_screen_cache(self)
-
     def _apply_plan_snap_profile(self):
         return plan_snap.apply_plan_snap_profile(_PLAN_EDIT_SNAP_SET)
 
@@ -756,9 +750,6 @@ class PlanEditSession:
 
     def _pop_opening_move_snap_profile(self):
         return plan_snap.pop_opening_move_snap_profile(self)
-
-    def _is_hosted_opening_object(self, obj):
-        return plan_hosted_openings.is_hosted_opening_object(self, obj)
 
     def _set_active_object(self, obj):
         try:

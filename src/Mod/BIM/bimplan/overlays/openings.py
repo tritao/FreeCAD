@@ -79,7 +79,8 @@ def prime_opening_handle_tracker_pool(session):
         return
     try:
         has_hosted_opening = any(
-            session._is_hosted_opening_object(obj) for obj in getattr(session.doc, "Objects", ())
+            session.openings.is_hosted_opening_object(obj)
+            for obj in getattr(session.doc, "Objects", ())
         )
     except Exception:
         has_hosted_opening = False
@@ -114,7 +115,7 @@ def sync_hovered_opening_overlay(session):
         if session.current_tool != "Select":
             clear_hovered_opening_overlay(session)
             return
-        if not session._is_hosted_opening_object(opening):
+        if not session.openings.is_hosted_opening_object(opening):
             clear_hovered_opening_overlay(session)
             return
         if session._is_selected_plan_target("opening", opening):
@@ -218,7 +219,9 @@ def create_opening_overlay_trackers(
 def sync_selected_opening_overlay(session):
     with _perf_trace_span(session, "sync_selected_opening_overlay"):
         opening = plan_selection.get_selected_plan_target_object(session, "opening")
-        if session.current_tool != "Select" or not session._is_hosted_opening_object(opening):
+        if session.current_tool != "Select" or not session.openings.is_hosted_opening_object(
+            opening
+        ):
             clear_selected_opening_overlay(session)
             return
         width = session.viewport.scaled_line_width(3)
@@ -319,7 +322,7 @@ def sync_selected_opening_handles(session):
         if session.current_tool != "Select":
             clear_selected_opening_handles(session)
             return
-        if not session._is_hosted_opening_object(opening):
+        if not session.openings.is_hosted_opening_object(opening):
             clear_selected_opening_handles(session)
             return
         specs = tuple(get_selected_opening_handle_specs(session, opening))
