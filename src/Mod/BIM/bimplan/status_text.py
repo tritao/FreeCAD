@@ -325,9 +325,9 @@ def get_status_chip_text(session):
 
     if session.current_tool == "Provider Point":
         title = translate("BIM_PlanEdit", "Plan Edit · {tool}").format(
-            tool=session._get_provider_point_tool_label()
+            tool=session.providers.get_provider_point_tool_label()
         )
-        return title, session._get_provider_point_tool_prompt()
+        return title, session.providers.get_provider_point_tool_prompt()
 
     if session.current_tool == "Move Opening":
         context = (
@@ -598,7 +598,7 @@ def get_input_hint_specs(session):
         return (
             (
                 translate("BIM_PlanEdit", "%1 place point for {tool}").format(
-                    tool=session._get_provider_point_tool_label()
+                    tool=session.providers.get_provider_point_tool_label()
                 ),
                 ui.MouseLeft,
             ),

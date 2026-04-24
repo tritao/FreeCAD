@@ -98,6 +98,111 @@ class PlanProvidersAPI:
 
         return plan_provider_point.get_provider_point_tool_prompt(self.session)
 
+    def has_active_provider_point_tool(self):
+        from bimplan.providers import point as plan_provider_point
+
+        return plan_provider_point.has_active_provider_point_tool(self.session)
+
+    def arm_provider_point_tool(self):
+        from bimplan.providers import point as plan_provider_point
+
+        return plan_provider_point.arm_provider_point_tool(self.session)
+
+    def cancel_provider_point_tool(self, refresh=True):
+        from bimplan.providers import point as plan_provider_point
+
+        return plan_provider_point.cancel_provider_point_tool(self.session, refresh=refresh)
+
+    def start_plan_provider_point_tool(self, tool):
+        from bimplan.providers import point as plan_provider_point
+
+        return plan_provider_point.start_plan_provider_point_tool(self.session, tool)
+
+    def handle_provider_point_tool_point(self, point=None, obj=None):
+        from bimplan.providers import point as plan_provider_point
+
+        return plan_provider_point.handle_provider_point_tool_point(
+            self.session,
+            point=point,
+            obj=obj,
+        )
+
+    def update_provider_point_tool_preview(self, point=None, obj=None):
+        from bimplan.providers import point as plan_provider_point
+
+        return plan_provider_point.update_provider_point_tool_preview(
+            self.session,
+            point=point,
+            obj=obj,
+        )
+
+    def get_provider_point_snap_info(self):
+        from bimplan.providers import point as plan_provider_point
+
+        return plan_provider_point.get_provider_point_snap_info()
+
+    def resolve_provider_point_snap_object(self, snap_object, snap_info):
+        from bimplan.providers import point as plan_provider_point
+
+        return plan_provider_point.resolve_provider_point_snap_object(
+            self.session,
+            snap_object,
+            snap_info,
+        )
+
+    def normalize_provider_point_host_target(self, target):
+        from bimplan.providers import point as plan_provider_point
+
+        return plan_provider_point.normalize_provider_point_host_target(self.session, target)
+
+    def get_provider_point_context_host_state(self):
+        from bimplan.providers import point as plan_provider_point
+
+        return plan_provider_point.get_provider_point_context_host_state(self.session)
+
+    def get_provider_point_payload_host_target(
+        self,
+        *,
+        snap_target,
+        selected_target,
+        selected_targets,
+        hovered_target,
+    ):
+        from bimplan.providers import point as plan_provider_point
+
+        return plan_provider_point.get_provider_point_payload_host_target(
+            self.session,
+            snap_target=snap_target,
+            selected_target=selected_target,
+            selected_targets=selected_targets,
+            hovered_target=hovered_target,
+        )
+
+    def project_provider_point_to_host(self, point, host_wall):
+        from bimplan.providers import point as plan_provider_point
+
+        return plan_provider_point.project_provider_point_to_host(point, host_wall)
+
+    def build_provider_point_tool_payload(
+        self,
+        tool,
+        *,
+        raw_point,
+        plan_point,
+        snap_object,
+        snap_info,
+    ):
+        from bimplan.providers import point as plan_provider_point
+
+        return plan_provider_point.build_provider_point_tool_payload(
+            self.session,
+            tool,
+            raw_point=raw_point,
+            plan_point=plan_point,
+            snap_object=snap_object,
+            snap_info=snap_info,
+        )
+
     def get_selected_provider_edit_handles(self, provider_obj):
         from bimplan.providers import edit as plan_provider_edit
 

@@ -407,11 +407,11 @@ def _build_provider_handle_payload(
     session, provider_obj, handle, *, point, raw_point, snap_object=None
 ):
     provider_target = session._get_plan_provider_target_for_object(provider_obj)
-    get_snap_info = getattr(session, "_get_provider_point_snap_info", None)
+    get_snap_info = getattr(session.providers, "get_provider_point_snap_info", None)
     snap_info = get_snap_info() if callable(get_snap_info) else {}
     if not isinstance(snap_info, dict):
         snap_info = {}
-    resolve_snap_object = getattr(session, "_resolve_provider_point_snap_object", None)
+    resolve_snap_object = getattr(session.providers, "resolve_provider_point_snap_object", None)
     if callable(resolve_snap_object):
         try:
             snap_object = resolve_snap_object(snap_object, snap_info)
@@ -444,7 +444,7 @@ def _build_provider_handle_payload(
         hovered_target=hovered_target,
     )
     placement_point = (
-        session._project_provider_point_to_host(point, host_obj)
+        session.providers.project_provider_point_to_host(point, host_obj)
         if host_kind == "wall" and point is not None
         else None
     )
@@ -486,7 +486,7 @@ def _get_provider_handle_payload_host_target(
     hovered_target,
 ):
     role = _get_provider_handle_role(handle)
-    normalize_host_target = getattr(session, "_normalize_provider_point_host_target", None)
+    normalize_host_target = getattr(session.providers, "normalize_provider_point_host_target", None)
     if not callable(normalize_host_target):
         return (None, None, "")
     if role == "rehost":
@@ -507,7 +507,11 @@ def _get_provider_handle_payload_host_target(
         if selected_obj is not None:
             return selected_kind, selected_obj, "selected"
         return (None, None, "")
-    get_payload_host_target = getattr(session, "_get_provider_point_payload_host_target", None)
+    get_payload_host_target = getattr(
+        session.providers,
+        "get_provider_point_payload_host_target",
+        None,
+    )
     if not callable(get_payload_host_target):
         return (None, None, "")
     return get_payload_host_target(
