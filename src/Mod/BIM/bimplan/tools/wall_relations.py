@@ -110,16 +110,16 @@ def activate_join_tool(session):
     session._set_hovered_region(None)
 
     wall = plan_selection.get_selected_plan_target_object(session, "wall")
-    if not session._is_plan_selectable_wall(wall):
+    if not session.selection.is_plan_selectable_wall(wall):
         selection = []
         try:
             selection = FreeCADGui.Selection.getSelection()
         except (ReferenceError, RuntimeError):
             selection = []
-        if len(selection) == 1 and session._is_plan_selectable_wall(selection[0]):
+        if len(selection) == 1 and session.selection.is_plan_selectable_wall(selection[0]):
             wall = selection[0]
 
-    if not session._is_plan_selectable_wall(wall):
+    if not session.selection.is_plan_selectable_wall(wall):
         FreeCAD.Console.PrintWarning(
             translate("BIM_PlanEdit", "Select a wall before using Join.\n")
         )
@@ -221,7 +221,9 @@ def get_plan_join_candidate_wall(session):
     if session.current_tool != "Join":
         return None
     wall = session.hovered_wall
-    if not session._is_plan_selectable_wall(wall) or session._is_selected_plan_target("wall", wall):
+    if not session.selection.is_plan_selectable_wall(wall) or session._is_selected_plan_target(
+        "wall", wall
+    ):
         return None
     return wall
 
@@ -231,9 +233,9 @@ def get_plan_candidate_joint(session, target_wall=None):
 
     source_wall = plan_selection.get_selected_plan_target_object(session, "wall")
     target_wall = target_wall or session.wall_relations.get_plan_join_candidate_wall()
-    if not session._is_plan_selectable_wall(source_wall):
+    if not session.selection.is_plan_selectable_wall(source_wall):
         return None
-    if not session._is_plan_selectable_wall(target_wall):
+    if not session.selection.is_plan_selectable_wall(target_wall):
         return None
     doc = getattr(source_wall, "Document", None) or session.doc
     if doc is None:
@@ -296,9 +298,9 @@ def get_plan_join_mode_action_text(session, target_wall=None, joint=None):
 def unjoin_plan_wall_pair(session, source_wall, target_wall):
     import ArchWallJoinUtils
 
-    if not session._is_plan_selectable_wall(source_wall):
+    if not session.selection.is_plan_selectable_wall(source_wall):
         return False
-    if not session._is_plan_selectable_wall(target_wall):
+    if not session.selection.is_plan_selectable_wall(target_wall):
         return False
 
     doc = getattr(source_wall, "Document", None) or session.doc
@@ -359,9 +361,9 @@ def find_plan_junction_promotion(session, source_wall, target_wall):
     import ArchWallJoinUtils
     import ArchWallJunctionUtils
 
-    if not session._is_plan_selectable_wall(source_wall):
+    if not session.selection.is_plan_selectable_wall(source_wall):
         return None
-    if not session._is_plan_selectable_wall(target_wall):
+    if not session.selection.is_plan_selectable_wall(target_wall):
         return None
 
     candidate_walls = {
@@ -378,7 +380,7 @@ def find_plan_junction_promotion(session, source_wall, target_wall):
             seen_relations.add(relation_name)
             candidate_relations.append(relation)
             for linked_wall in ArchWallJoinUtils.get_relation_walls(relation):
-                if session._is_plan_selectable_wall(linked_wall):
+                if session.selection.is_plan_selectable_wall(linked_wall):
                     candidate_walls[getattr(linked_wall, "Name", "")] = linked_wall
 
     if len(candidate_walls) < 3:
@@ -526,9 +528,9 @@ def cancel_join_tool(session, refresh=True):
 
 
 def apply_plan_wall_join(session, source_wall, target_wall):
-    if not session._is_plan_selectable_wall(source_wall):
+    if not session.selection.is_plan_selectable_wall(source_wall):
         return False
-    if not session._is_plan_selectable_wall(target_wall):
+    if not session.selection.is_plan_selectable_wall(target_wall):
         return False
     if source_wall == target_wall:
         return False

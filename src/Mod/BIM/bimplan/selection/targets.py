@@ -36,11 +36,11 @@ def get_plan_target_kind_for_object(session, obj):
         return plan_target_kinds.PLAN_TARGET_SYMBOL
     if session._is_plan_provider_target_object(obj):
         return plan_target_kinds.PLAN_TARGET_PROVIDER
-    if session._is_plan_region_object(obj):
+    if session.selection.is_plan_region_object(obj):
         return plan_target_kinds.PLAN_TARGET_REGION
-    if session._is_plan_selectable_wall(obj):
+    if session.selection.is_plan_selectable_wall(obj):
         return plan_target_kinds.PLAN_TARGET_WALL
-    if session._is_plan_space_object(obj):
+    if session.selection.is_plan_space_object(obj):
         return plan_target_kinds.PLAN_TARGET_SPACE
     return None
 
@@ -141,8 +141,8 @@ def is_plan_custom_pick_only_object(session, obj):
     obj = session.visibility.get_plan_semantic_object(obj)
     return (
         session.openings.is_hosted_opening_object(obj)
-        or session._is_plan_space_object(obj)
-        or session._is_plan_region_object(obj)
+        or session.selection.is_plan_space_object(obj)
+        or session.selection.is_plan_region_object(obj)
     )
 
 

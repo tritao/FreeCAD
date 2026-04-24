@@ -134,7 +134,7 @@ def clear_transient_visuals(
 
 
 def detach_runtime_observers(session):
-    session._detach_selection_observer()
+    session.selection.detach_selection_observer()
     session._detach_document_observer()
     session.viewport.unregister_edit_callbacks()
 

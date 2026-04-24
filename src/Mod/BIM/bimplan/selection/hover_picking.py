@@ -45,13 +45,13 @@ def prime_hover_pick_caches(session):
                     session.overlays.get_opening_overlay_polylines(obj)
                     session.overlays.get_opening_overlay_segments(obj)
                     session.overlays.get_opening_overlay_screen_polylines(obj)
-            if session._is_plan_space_object(obj):
+            if session.selection.is_plan_space_object(obj):
                 session.performance.plan_perf_count("prime_hover_pick_spaces")
                 with session.performance.plan_perf_trace_span("prime_hover_pick_space_geometry"):
                     session.overlays.get_space_footprint_faces(obj)
                     session.overlays.get_space_overlay_polylines(obj)
                     session.overlays.get_space_overlay_segments(obj)
-            if session._is_plan_region_object(obj):
+            if session.selection.is_plan_region_object(obj):
                 session.performance.plan_perf_count("prime_hover_pick_regions")
                 with session.performance.plan_perf_trace_span("prime_hover_pick_region_geometry"):
                     session.overlays.get_region_footprint_faces(obj)

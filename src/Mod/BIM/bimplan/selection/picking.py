@@ -569,7 +569,7 @@ def pick_plan_space_target_from_overlays(session, mouse_pos, radius_px=10):
     best_distance_sq = None
     seen = set()
     for obj in session.selection.get_plan_space_instances():
-        if not session._is_plan_space_object(obj):
+        if not session.selection.is_plan_space_object(obj):
             continue
         name = getattr(obj, "Name", None)
         if not name or name in seen:
@@ -596,7 +596,7 @@ def pick_plan_region_target_from_overlays(session, mouse_pos, radius_px=10):
     best_distance_sq = None
     seen = set()
     for obj in session.selection.get_plan_region_instances():
-        if not session._is_plan_region_object(obj):
+        if not session.selection.is_plan_region_object(obj):
             continue
         name = getattr(obj, "Name", None)
         if not name or name in seen:
@@ -616,7 +616,7 @@ def pick_plan_region_target_from_overlays(session, mouse_pos, radius_px=10):
 
 
 def get_region_pick_polylines(session, region):
-    if not session._is_plan_region_object(region):
+    if not session.selection.is_plan_region_object(region):
         return []
 
     polylines = session.overlays.get_region_overlay_polylines(region)
@@ -695,7 +695,7 @@ def pick_plan_region_target_from_polylines(session, mouse_pos):
         seen = set()
         for obj in session.selection.get_plan_region_instances():
             _perf_count(session, "region_polyline_pick_objects_scanned")
-            if not session._is_plan_region_object(obj):
+            if not session.selection.is_plan_region_object(obj):
                 continue
             name = getattr(obj, "Name", None)
             if not name or name in seen:

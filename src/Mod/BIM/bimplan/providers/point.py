@@ -243,7 +243,7 @@ def normalize_provider_point_host_target(session, target):
         target_kind, target_obj = target
     except Exception:
         return (None, None)
-    if target_kind == "wall" and session._is_plan_selectable_wall(target_obj):
+    if target_kind == "wall" and session.selection.is_plan_selectable_wall(target_obj):
         return ("wall", target_obj)
     return (None, None)
 

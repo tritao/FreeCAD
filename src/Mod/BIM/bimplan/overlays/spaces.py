@@ -157,7 +157,7 @@ def sync_hovered_space_overlay(session):
     clear_hovered_space_overlay(session)
     if session.current_tool != "Select":
         return
-    if not session._is_plan_space_object(session.hovered_space):
+    if not session.selection.is_plan_space_object(session.hovered_space):
         return
     if session._is_selected_plan_target("space", session.hovered_space):
         return
@@ -179,7 +179,7 @@ def sync_hovered_region_overlay(session):
     clear_hovered_region_overlay(session)
     if session.current_tool != "Select":
         return
-    if not session._is_plan_region_object(session.hovered_region):
+    if not session.selection.is_plan_region_object(session.hovered_region):
         return
     if session._is_selected_plan_target("region", session.hovered_region):
         return
@@ -207,7 +207,7 @@ def sync_selected_space_overlay(session):
         if session.current_tool not in (
             "Select",
             "Set Space Text",
-        ) or not session._is_plan_space_object(space):
+        ) or not session.selection.is_plan_space_object(space):
             clear_selected_space_overlay(session)
             return
         width = session.viewport.scaled_line_width(3)
@@ -265,7 +265,7 @@ def clear_selected_space_overlay(session):
 def sync_selected_region_overlay(session):
     with _perf_trace_span(session, "sync_selected_region_overlay"):
         region = plan_selection.get_selected_plan_target_object(session, "region")
-        if session.current_tool != "Select" or not session._is_plan_region_object(region):
+        if session.current_tool != "Select" or not session.selection.is_plan_region_object(region):
             clear_selected_region_overlay(session)
             return
         width = session.viewport.scaled_line_width(3)

@@ -13,9 +13,9 @@ def get_plan_overlay_geometry_kinds_for_object(session, obj):
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
     if session.openings.is_hosted_opening_object(semantic_obj):
         return ("opening",)
-    if session._is_plan_space_object(semantic_obj):
+    if session.selection.is_plan_space_object(semantic_obj):
         return ("space",)
-    if session._is_plan_region_object(semantic_obj):
+    if session.selection.is_plan_region_object(semantic_obj):
         return ("region",)
     return ()
 
@@ -136,7 +136,7 @@ def get_wall_overlay_polylines(session, wall):
 
 
 def get_space_footprint_faces(session, space):
-    if not session._is_plan_space_object(space):
+    if not session.selection.is_plan_space_object(space):
         return ()
 
     def compute(space_obj):
@@ -157,7 +157,7 @@ def get_space_footprint_faces(session, space):
 
 
 def get_space_overlay_polylines(session, space):
-    if not session._is_plan_space_object(space):
+    if not session.selection.is_plan_space_object(space):
         return ()
     return session._get_cached_plan_overlay_geometry(
         "space",
@@ -170,7 +170,7 @@ def get_space_overlay_polylines(session, space):
 
 
 def get_region_footprint_faces(session, region):
-    if not session._is_plan_region_object(region):
+    if not session.selection.is_plan_region_object(region):
         return ()
 
     def compute(region_obj):
@@ -191,7 +191,7 @@ def get_region_footprint_faces(session, region):
 
 
 def get_region_overlay_polylines(session, region):
-    if not session._is_plan_region_object(region):
+    if not session.selection.is_plan_region_object(region):
         return ()
     return session._get_cached_plan_overlay_geometry(
         "region",
@@ -288,7 +288,7 @@ def get_opening_overlay_screen_polylines(session, opening):
 
 
 def get_region_overlay_segments(session, region):
-    if not session._is_plan_region_object(region):
+    if not session.selection.is_plan_region_object(region):
         return ()
     return session._get_cached_plan_overlay_geometry(
         "region",
@@ -301,7 +301,7 @@ def get_region_overlay_segments(session, region):
 
 
 def get_space_overlay_segments(session, space):
-    if not session._is_plan_space_object(space):
+    if not session.selection.is_plan_space_object(space):
         return ()
     return session._get_cached_plan_overlay_geometry(
         "space",

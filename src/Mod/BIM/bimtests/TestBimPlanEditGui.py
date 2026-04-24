@@ -1031,7 +1031,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         event = self._make_fake_left_mouse_press()
 
         self.assertTrue(
-            session._activate_provider_overlay_target_node(
+            session.selection.activate_provider_overlay_target_node(
                 ("provider_overlay_point", node),
                 event,
             )
@@ -1075,12 +1075,14 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return_value=("provider_overlay_point", node),
             ),
             patch.object(
-                session,
-                "_toggle_raw_plan_object_selection",
-                wraps=session._toggle_raw_plan_object_selection,
+                session.selection,
+                "toggle_raw_plan_object_selection",
+                wraps=session.selection.toggle_raw_plan_object_selection,
             ) as toggle_raw_selection,
         ):
-            self.assertTrue(session._toggle_plan_target_selection_at_position((250, 250), event))
+            self.assertTrue(
+                session.selection.toggle_plan_target_selection_at_position((250, 250), event)
+            )
 
         toggle_raw_selection.assert_called_once_with(marker, event)
         self.assertTrue(event._handled)
@@ -1178,7 +1180,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ),
         ):
             self.assertTrue(
-                session._activate_provider_overlay_target_node(
+                session.selection.activate_provider_overlay_target_node(
                     ("provider_overlay_point", node),
                     event,
                 )

@@ -395,7 +395,7 @@ def handle_space_separator_point(session, point=None, obj=None):
 
 
 def get_space_reference_point(session, space):
-    if not session._is_plan_space_object(space):
+    if not session.selection.is_plan_space_object(space):
         return None
     shape = getattr(space, "Shape", None)
     if shape and hasattr(shape, "CenterOfMass"):
@@ -449,7 +449,7 @@ def get_space_boundary_reference_point(session, selection_ex, fallback_space=Non
 
 
 def get_space_boundary_entries(session, space):
-    if not session._is_plan_space_object(space):
+    if not session.selection.is_plan_space_object(space):
         return []
     import ArchSpace
 
@@ -477,7 +477,7 @@ def space_boundary_key(boundary):
 def get_selected_space_boundary_links(session, fallback_space=None):
     import ArchSpace
 
-    selection_ex = session._get_gui_selection_ex()
+    selection_ex = session.selection.get_gui_selection_ex()
     reference_point = (
         session._get_space_reference_point(fallback_space)
         if fallback_space is not None
@@ -645,7 +645,7 @@ def get_existing_space_region_filter_spaces(session, exclude=None):
         if not name or name in seen:
             continue
         seen.add(name)
-        if name == exclude_name or not session._is_plan_space_object(semantic_obj):
+        if name == exclude_name or not session.selection.is_plan_space_object(semantic_obj):
             continue
         if active_storey_name is not None:
             storeys = session.visibility.get_object_storeys(semantic_obj)
@@ -1187,7 +1187,7 @@ def create_space_from_current_selection(session):
 
 
 def space_has_valid_geometry(session, space):
-    if not session._is_plan_space_object(space):
+    if not session.selection.is_plan_space_object(space):
         return False
     try:
         shape = getattr(space, "Shape", None)
@@ -1229,7 +1229,7 @@ def report_space_creation_failure(space):
 
 def set_selected_space_label(session, label):
     space = plan_selection.get_selected_plan_target_object(session, "space")
-    if not session._is_plan_space_object(space):
+    if not session.selection.is_plan_space_object(space):
         return False
     label = str(label or "").strip()
     if not label or label == space.Label:
@@ -1251,7 +1251,7 @@ def set_selected_space_label(session, label):
 
 def set_selected_space_type(session, space_type):
     space = plan_selection.get_selected_plan_target_object(session, "space")
-    if not session._is_plan_space_object(space):
+    if not session.selection.is_plan_space_object(space):
         return False
     space_type = str(space_type or "")
     if not space_type or space_type == getattr(space, "SpaceType", ""):
@@ -1273,7 +1273,7 @@ def set_selected_space_type(session, space_type):
 
 def set_selected_region_label(session, label):
     region = plan_selection.get_selected_plan_target_object(session, "region")
-    if not session._is_plan_region_object(region):
+    if not session.selection.is_plan_region_object(region):
         return False
     label = str(label or "").strip()
     if not label or label == getattr(region, "Label", ""):
@@ -1295,7 +1295,7 @@ def set_selected_region_label(session, label):
 
 def set_selected_region_scheme(session, scheme):
     region = plan_selection.get_selected_plan_target_object(session, "region")
-    if not session._is_plan_region_object(region):
+    if not session.selection.is_plan_region_object(region):
         return False
     scheme = str(scheme or "").strip()
     if scheme == str(getattr(region, "Scheme", "") or ""):
@@ -1317,7 +1317,7 @@ def set_selected_region_scheme(session, scheme):
 
 def set_selected_region_type(session, region_type):
     region = plan_selection.get_selected_plan_target_object(session, "region")
-    if not session._is_plan_region_object(region):
+    if not session.selection.is_plan_region_object(region):
         return False
     region_type = str(region_type or "").strip()
     if region_type == str(getattr(region, "RegionType", "") or ""):
@@ -1339,10 +1339,10 @@ def set_selected_region_type(session, region_type):
 
 def set_selected_region_parent_space(session, space):
     region = plan_selection.get_selected_plan_target_object(session, "region")
-    if not session._is_plan_region_object(region):
+    if not session.selection.is_plan_region_object(region):
         return False
     space = session.visibility.get_plan_semantic_object(space) if space else None
-    if space is not None and not session._is_plan_space_object(space):
+    if space is not None and not session.selection.is_plan_space_object(space):
         return False
 
     current_parent = getattr(region, "ParentSpace", None)
@@ -1368,7 +1368,7 @@ def set_selected_region_parent_space(session, space):
 
 
 def set_space_boundaries(session, space, boundaries):
-    if not session._is_plan_space_object(space):
+    if not session.selection.is_plan_space_object(space):
         return False
     import ArchSpace
 
@@ -1391,7 +1391,7 @@ def set_space_boundaries(session, space, boundaries):
 
 def add_boundaries_to_selected_space(session):
     space = plan_selection.get_selected_plan_target_object(session, "space")
-    if not session._is_plan_space_object(space):
+    if not session.selection.is_plan_space_object(space):
         return False
     existing = session._get_space_boundary_entries(space)
     additions = session._get_selected_space_boundary_links(fallback_space=space)
@@ -1409,7 +1409,7 @@ def add_boundaries_to_selected_space(session):
 
 def remove_selected_space_boundaries(session, row_indexes=None):
     space = plan_selection.get_selected_plan_target_object(session, "space")
-    if not session._is_plan_space_object(space):
+    if not session.selection.is_plan_space_object(space):
         return False
     existing = session._get_space_boundary_entries(space)
     if not existing:
@@ -1444,7 +1444,7 @@ def remove_selected_space_boundaries(session, row_indexes=None):
 
 def start_space_text_position_pick(session):
     space = plan_selection.get_selected_plan_target_object(session, "space")
-    if not session._is_plan_space_object(space):
+    if not session.selection.is_plan_space_object(space):
         return False
     import FreeCADGui
 
@@ -1472,7 +1472,7 @@ def finish_space_text_position_pick(session, point=None, obj=None):
     FreeCAD.activeDraftCommand = None
     session.lifecycle.set_draft_point_focus_suppressed(False)
 
-    if point is None or not session._is_plan_space_object(space):
+    if point is None or not session.selection.is_plan_space_object(space):
         session.current_tool = "Select"
         session.task_panels.refresh_task_panel_status()
         return

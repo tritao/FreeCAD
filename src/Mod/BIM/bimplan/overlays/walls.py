@@ -202,7 +202,7 @@ def clear_hovered_wall_overlay(session):
 def sync_selected_wall_overlay(session):
     with _perf_trace_span(session, "sync_selected_wall_overlay"):
         wall = plan_selection.get_selected_plan_target_object(session, "wall")
-        if session.current_tool != "Select" or not session._is_plan_selectable_wall(wall):
+        if session.current_tool != "Select" or not session.selection.is_plan_selectable_wall(wall):
             clear_selected_wall_overlay(session)
             return
         width = session.viewport.scaled_line_width(4)
@@ -249,7 +249,7 @@ def get_plan_context_junctions(session):
     seen = set()
     selected_wall = plan_selection.get_selected_plan_target_object(session, "wall")
     for wall in (selected_wall, session.hovered_wall):
-        if not session._is_plan_selectable_wall(wall):
+        if not session.selection.is_plan_selectable_wall(wall):
             continue
         for relation in ArchWallJoinUtils.iter_wall_relations(wall):
             if not ArchWallJoinUtils.is_wall_junction(relation):

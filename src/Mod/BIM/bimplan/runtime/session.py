@@ -513,7 +513,7 @@ class PlanEditSession:
                 self._apply_plan_snap_profile()
             self.visibility.apply_storey_visibility()
             with self.performance.plan_perf_trace_span("attach_selection_observer"):
-                self._attach_selection_observer()
+                self.selection.attach_selection_observer()
             with self.performance.plan_perf_trace_span("attach_document_observer"):
                 self._attach_document_observer()
             with self.performance.plan_perf_trace_span("register_edit_callbacks"):
@@ -783,18 +783,6 @@ class PlanEditSession:
             return
         self._set_active_object(None)
 
-    def _attach_selection_observer(self):
-        return plan_selection.attach_selection_observer(self)
-
-    def _detach_selection_observer(self):
-        return plan_selection.detach_selection_observer(self)
-
-    def _schedule_selection_refresh(self):
-        return plan_selection.schedule_selection_refresh(self)
-
-    def _run_scheduled_selection_refresh(self):
-        return plan_selection.run_scheduled_selection_refresh(self)
-
     def _attach_document_observer(self):
         if not self._document_observer_added:
             FreeCAD.addDocumentObserver(self)
@@ -807,27 +795,6 @@ class PlanEditSession:
             except Exception:
                 pass
             self._document_observer_added = False
-
-    def _is_plan_selectable_wall(self, obj):
-        return plan_targets.is_plan_selectable_wall(self, obj)
-
-    def _is_plan_space_object(self, obj):
-        return self.spaces.is_plan_space_object(obj)
-
-    def _is_plan_custom_pick_only_object(self, obj):
-        return plan_targets.is_plan_custom_pick_only_object(self, obj)
-
-    def _is_plan_space_separator_object(self, obj):
-        return plan_targets.is_plan_space_separator_object(self, obj)
-
-    def _is_plan_region_object(self, obj):
-        return plan_targets.is_plan_region_object(self, obj)
-
-    def _get_gui_selection_ex(self):
-        return plan_selection.get_gui_selection_ex()
-
-    def _get_gui_selection(self):
-        return plan_selection.get_gui_selection()
 
     def _get_space_reference_point(self, space):
         return self.spaces.get_space_reference_point(space)
@@ -987,8 +954,8 @@ class PlanEditSession:
 
     def get_selected_objects(self):
         return tuple(
-            self._normalize_gui_object_selection(
-                tuple(self._get_gui_selection()) + tuple(self._provider_selected_objects)
+            self.selection.normalize_gui_object_selection(
+                tuple(self.selection.get_gui_selection()) + tuple(self._provider_selected_objects)
             )
         )
 
@@ -1495,30 +1462,6 @@ class PlanEditSession:
 
     def _is_plan_additive_selection_active(self):
         return plan_selection.is_plan_additive_selection_active(self)
-
-    def _activate_provider_overlay_target_node(self, node, event_callback=None):
-        return plan_selection.activate_provider_overlay_target_node(
-            self,
-            node,
-            event_callback=event_callback,
-        )
-
-    def _normalize_gui_object_selection(self, selection):
-        return plan_selection.normalize_gui_object_selection(self, selection)
-
-    def _toggle_raw_plan_object_selection(self, obj, event_callback=None):
-        return plan_selection.toggle_raw_plan_object_selection(
-            self,
-            obj,
-            event_callback=event_callback,
-        )
-
-    def _toggle_plan_target_selection_at_position(self, mouse_pos, event_callback=None):
-        return plan_selection.toggle_plan_target_selection_at_position(
-            self,
-            mouse_pos,
-            event_callback=event_callback,
-        )
 
     def _clear_hovered_plan_targets(self, kinds=None):
         return plan_hover_picking.clear_hovered_plan_targets(self, kinds=kinds)
