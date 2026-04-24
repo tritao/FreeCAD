@@ -364,6 +364,13 @@ class _PlanProviderSnapshotSurfaceSpec:
 
 
 @dataclass(frozen=True)
+class _PlanProviderContributionSurfaceSpec:
+    function_name: str
+    method_name: str
+    normalizer_name: str
+
+
+@dataclass(frozen=True)
 class PlanProviderSnapshot:
     """Normalized provider read model for the task-panel integration surfaces."""
 
@@ -408,6 +415,44 @@ _PLAN_PROVIDER_SNAPSHOT_SURFACES = (
         field_name="inspector_sections",
         method_name="get_inspector_sections",
         normalizer_name="normalize_plan_provider_section",
+    ),
+)
+
+_PLAN_PROVIDER_CONTRIBUTION_SURFACES = (
+    _PlanProviderContributionSurfaceSpec(
+        function_name="get_plan_provider_edit_handles",
+        method_name="get_edit_handles",
+        normalizer_name="normalize_plan_provider_edit_handle",
+    ),
+    _PlanProviderContributionSurfaceSpec(
+        function_name="get_plan_provider_issues",
+        method_name="get_issues",
+        normalizer_name="normalize_plan_provider_issue",
+    ),
+    _PlanProviderContributionSurfaceSpec(
+        function_name="get_plan_provider_suggestions",
+        method_name="get_suggestions",
+        normalizer_name="normalize_plan_provider_suggestion",
+    ),
+    _PlanProviderContributionSurfaceSpec(
+        function_name="get_plan_provider_tools",
+        method_name="get_tools",
+        normalizer_name="normalize_plan_provider_tool",
+    ),
+    _PlanProviderContributionSurfaceSpec(
+        function_name="get_plan_provider_inspector_sections",
+        method_name="get_inspector_sections",
+        normalizer_name="normalize_plan_provider_section",
+    ),
+    _PlanProviderContributionSurfaceSpec(
+        function_name="get_plan_provider_context_panels",
+        method_name="get_context_panels",
+        normalizer_name="normalize_plan_provider_context_panel",
+    ),
+    _PlanProviderContributionSurfaceSpec(
+        function_name="get_plan_provider_overlays",
+        method_name="get_overlays",
+        normalizer_name="normalize_plan_provider_overlay",
     ),
 )
 
@@ -1251,13 +1296,6 @@ def normalize_plan_provider_overlay(provider_id, overlay):
     return replace(overlay, **replacements)
 
 
-def get_plan_provider_edit_handles(session):
-    return session.providers.collect_plan_provider_contributions(
-        "get_edit_handles",
-        session.providers.normalize_plan_provider_edit_handle,
-    )
-
-
 def _normalize_plan_overlay_target(target):
     if target is None:
         return PlanOverlayTargetSpec()
@@ -1350,25 +1388,19 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
         return contributions
 
 
-def get_plan_provider_issues(session):
-    return session.providers.collect_plan_provider_contributions(
-        "get_issues",
-        session.providers.normalize_plan_provider_issue,
-    )
+def _make_plan_provider_contribution_getter(surface_spec):
+    def _get_plan_provider_contributions(session):
+        return session.providers.collect_plan_provider_contributions(
+            surface_spec.method_name,
+            getattr(session.providers, surface_spec.normalizer_name),
+        )
+
+    _get_plan_provider_contributions.__name__ = surface_spec.function_name
+    return _get_plan_provider_contributions
 
 
-def get_plan_provider_suggestions(session):
-    return session.providers.collect_plan_provider_contributions(
-        "get_suggestions",
-        session.providers.normalize_plan_provider_suggestion,
-    )
-
-
-def get_plan_provider_tools(session):
-    return session.providers.collect_plan_provider_contributions(
-        "get_tools",
-        session.providers.normalize_plan_provider_tool,
-    )
+for _surface_spec in _PLAN_PROVIDER_CONTRIBUTION_SURFACES:
+    globals()[_surface_spec.function_name] = _make_plan_provider_contribution_getter(_surface_spec)
 
 
 def get_plan_provider_snapshot(session):
@@ -1379,27 +1411,6 @@ def get_plan_provider_snapshot(session):
         _perf_count(session, "plan_provider_integrations_disabled")
         return PlanProviderSnapshot()
     return collect_plan_provider_snapshot(session)
-
-
-def get_plan_provider_inspector_sections(session):
-    return session.providers.collect_plan_provider_contributions(
-        "get_inspector_sections",
-        session.providers.normalize_plan_provider_section,
-    )
-
-
-def get_plan_provider_context_panels(session):
-    return session.providers.collect_plan_provider_contributions(
-        "get_context_panels",
-        session.providers.normalize_plan_provider_context_panel,
-    )
-
-
-def get_plan_provider_overlays(session):
-    return session.providers.collect_plan_provider_contributions(
-        "get_overlays",
-        session.providers.normalize_plan_provider_overlay,
-    )
 
 
 def _execute_plan_provider_action_callback(
