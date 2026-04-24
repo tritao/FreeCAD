@@ -195,9 +195,9 @@ def is_opening_visual_dependency(opening, obj):
 
 
 def refresh_selected_opening_visuals(session):
-    session._sync_selected_opening_overlay()
-    session._sync_selected_opening_handles()
-    session._sync_selected_wall_opening_context_overlay()
+    session.overlays.sync_selected_opening_overlay()
+    session.overlays.sync_selected_opening_handles()
+    session.overlays.sync_selected_wall_opening_context_overlay()
     session.viewport.request_view_redraw()
 
 
@@ -338,8 +338,8 @@ def queue_hard_refresh_selected_opening_visuals(session):
     if session._tearing_down or session._selected_opening_hard_refresh_queued:
         return
     session._selected_opening_hard_refresh_queued = True
-    session._clear_selected_opening_overlay()
-    session._clear_selected_opening_handles()
+    session.overlays.clear_selected_opening_overlay()
+    session.overlays.clear_selected_opening_handles()
     session.viewport.request_view_redraw()
     try:
         from PySide import QtCore
@@ -356,8 +356,8 @@ def flush_hard_refresh_selected_opening_visuals(session):
     opening = plan_selection.get_selected_plan_target_object(session, "opening")
     if not session._is_hosted_opening_object(opening):
         return
-    session._sync_selected_opening_overlay()
-    session._sync_selected_opening_handles()
+    session.overlays.sync_selected_opening_overlay()
+    session.overlays.sync_selected_opening_handles()
     session.viewport.request_view_redraw()
 
 
@@ -520,27 +520,27 @@ def slot_deleted_object(session, obj):
         return
     if obj == session.hovered_wall:
         session.hovered_wall = None
-        session._clear_hovered_wall_overlay()
+        session.overlays.clear_hovered_wall_overlay()
     if obj == session.hovered_opening:
         session.hovered_opening = None
-        session._clear_hovered_opening_overlay()
+        session.overlays.clear_hovered_opening_overlay()
     if obj == session.hovered_symbol:
         session.hovered_symbol = None
-        session._clear_hovered_symbol_overlay()
+        session.overlays.clear_hovered_symbol_overlay()
     if obj == session.hovered_provider:
         session.hovered_provider = None
-        session._clear_hovered_provider_overlay()
+        session.overlays.clear_hovered_provider_overlay()
     if obj == session.hovered_space:
         session.hovered_space = None
-        session._clear_hovered_space_overlay()
+        session.overlays.clear_hovered_space_overlay()
     if obj == session.hovered_region:
         session.hovered_region = None
-        session._clear_hovered_region_overlay()
+        session.overlays.clear_hovered_region_overlay()
     if session._clear_selected_plan_target_if_matches("opening", obj):
         session._refresh_selected_opening_visuals()
         return
     if session._clear_selected_plan_target_if_matches("symbol", obj):
-        session._refresh_selected_symbol_visuals()
+        session.overlays.refresh_selected_symbol_visuals()
         return
     if session._clear_selected_plan_target_if_matches("region", obj):
         session._refresh_selected_region_visuals()
