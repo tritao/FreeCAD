@@ -1846,7 +1846,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._edit_symbol_handle_role = "move"
         session._edit_symbol_start_placement = link.Placement.copy()
         session._edit_symbol_reference_point = handle_points["move"]
-        session._finish_symbol_handle_point_pick(FreeCAD.Vector(2400, 1600, 0))
+        session.symbols.finish_symbol_handle_point_pick(FreeCAD.Vector(2400, 1600, 0))
         self.pump_gui_events()
 
         self.assertAlmostEqual(2400.0, link.Placement.Base.x, delta=1e-6)
@@ -1864,7 +1864,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._edit_symbol_handle_role = "rotate"
         session._edit_symbol_start_placement = link.Placement.copy()
         session._edit_symbol_reference_point = handle_points["rotate"]
-        session._finish_symbol_handle_point_pick(FreeCAD.Vector(anchor.x, anchor.y + 1000, 0))
+        session.symbols.finish_symbol_handle_point_pick(
+            FreeCAD.Vector(anchor.x, anchor.y + 1000, 0)
+        )
         self.pump_gui_events()
 
         axis = link.Placement.Rotation.multVec(FreeCAD.Vector(1, 0, 0))
@@ -1915,7 +1917,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._edit_symbol_handle_role = "move"
         session._edit_symbol_start_placement = link.Placement.copy()
         session._edit_symbol_reference_point = handle_points["move"]
-        session._finish_symbol_handle_point_pick(target_anchor)
+        session.symbols.finish_symbol_handle_point_pick(target_anchor)
         self.pump_gui_events()
 
         self.assertAlmostEqual(2500.0, link.Placement.Base.x, delta=1e-6)
@@ -1934,7 +1936,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._edit_symbol_handle_role = "rotate"
         session._edit_symbol_start_placement = link.Placement.copy()
         session._edit_symbol_reference_point = handle_points["rotate"]
-        session._finish_symbol_handle_point_pick(FreeCAD.Vector(anchor.x + 1000, anchor.y, 0))
+        session.symbols.finish_symbol_handle_point_pick(
+            FreeCAD.Vector(anchor.x + 1000, anchor.y, 0)
+        )
         self.pump_gui_events()
 
         rotated_anchor = link.Placement.multVec(equipment.PlanAnchor)
@@ -1991,7 +1995,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 session.overlays, "symbol_rotation_free_angle_override_active", return_value=False
             ),
         ):
-            session._finish_symbol_handle_point_pick(raw_point)
+            session.symbols.finish_symbol_handle_point_pick(raw_point)
         self.pump_gui_events()
 
         facing = link.Placement.Rotation.multVec(equipment.PlanFacing)
@@ -2046,7 +2050,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 session.overlays, "symbol_rotation_free_angle_override_active", return_value=True
             ),
         ):
-            session._finish_symbol_handle_point_pick(raw_point)
+            session.symbols.finish_symbol_handle_point_pick(raw_point)
         self.pump_gui_events()
 
         facing = link.Placement.Rotation.multVec(equipment.PlanFacing)

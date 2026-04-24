@@ -106,7 +106,7 @@ _TARGET_KIND_POLICIES = {
     ),
     plan_target_kinds.PLAN_TARGET_SYMBOL: _build_target_kind_policy(
         validator_name="_is_plan_symbol_instance",
-        queue_restore_method_name="_queue_restore_selected_symbol",
+        queue_restore_method_name="symbols.queue_restore_selected_symbol",
         hovered_attr_name="hovered_symbol",
         hovered_setter_name="_set_hovered_symbol",
         overlay_label="symbol_overlay",

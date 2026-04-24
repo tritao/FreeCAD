@@ -107,7 +107,7 @@ def on_mouse_pressed(session, event_callback):
                             session._set_selected_plan_target_state("symbol", obj)
                             session.overlays.clear_wall_grips()
                             session.overlays.clear_selected_wall_overlay()
-                            session._activate_symbol_handle(obj, role)
+                            session.symbols.activate_symbol_handle(obj, role)
                         elif node_kind in (
                             "provider_overlay_point",
                             "provider_overlay_target",
@@ -218,7 +218,7 @@ def on_key_pressed(session, event_callback):
         session.current_tool in ("Move Symbol", "Rotate Symbol")
         and key == coin.SoKeyboardEvent.ESCAPE
     ):
-        session._cancel_symbol_handle_point_pick()
+        session.symbols.cancel_symbol_handle_point_pick()
         return
     if session.current_tool == "Join" and key == coin.SoKeyboardEvent.TAB:
         if session._cycle_plan_join_type() and hasattr(event_callback, "setHandled"):
@@ -287,7 +287,7 @@ def on_key_pressed(session, event_callback):
         session.providers.cancel_provider_handle_point_pick()
         return
     if session.current_tool in ("Move Symbol", "Rotate Symbol"):
-        session._cancel_symbol_handle_point_pick()
+        session.symbols.cancel_symbol_handle_point_pick()
         return
     if session.current_tool == "Set Space Text":
         session._cancel_space_text_position_pick()
