@@ -247,7 +247,7 @@ def refresh_plan_overlay_visuals(session, dirty=None):
         if session._is_selected_plan_target("space") and (
             refresh_all or _PLAN_VISUAL_SELECTED_SPACE in dirty
         ):
-            session._refresh_selected_space_visuals()
+            session.spaces.refresh_selected_space_visuals()
         return
     if session.current_tool == "Pick Space Region":
         session.overlays.clear_junction_node_overlays()

@@ -133,7 +133,7 @@ _TARGET_KIND_POLICIES = {
     ),
     plan_target_kinds.PLAN_TARGET_SPACE: _build_target_kind_policy(
         validator_name="_is_plan_space_object",
-        queue_restore_method_name="_queue_restore_selected_space",
+        queue_restore_method_name="spaces.queue_restore_selected_space",
         hovered_attr_name="hovered_space",
         hovered_setter_name="_set_hovered_space",
         overlay_label="space_overlay",
@@ -144,7 +144,7 @@ _TARGET_KIND_POLICIES = {
     ),
     plan_target_kinds.PLAN_TARGET_REGION: _build_target_kind_policy(
         validator_name="_is_plan_region_object",
-        queue_restore_method_name="_queue_restore_selected_region",
+        queue_restore_method_name="spaces.queue_restore_selected_region",
         hovered_attr_name="hovered_region",
         hovered_setter_name="_set_hovered_region",
         overlay_label="region_overlay",

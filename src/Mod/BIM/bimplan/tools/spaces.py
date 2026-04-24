@@ -228,7 +228,7 @@ def finalize_plan_region(session):
 
     session._register_plan_object(region)
     session._cancel_plan_region_tool(refresh=False)
-    session._restore_selected_region(region)
+    session.spaces.restore_selected_region(region)
     return True
 
 
@@ -822,7 +822,7 @@ def reset_space_text_pick_state(session):
 
 def _finish_created_space(session, space, event_callback=None, claim_click=False):
     session._register_plan_object(space)
-    session._restore_selected_space(space)
+    session.spaces.restore_selected_space(space)
     if claim_click:
         session._claim_left_button_click(event_callback)
     return True
@@ -1382,7 +1382,7 @@ def set_space_boundaries(session, space, boundaries):
         except Exception:
             pass
         return False
-    session._refresh_selected_space_visuals()
+    session.spaces.refresh_selected_space_visuals()
     session._refresh_task_panel_status()
     return True
 
@@ -1486,11 +1486,11 @@ def finish_space_text_position_pick(session, point=None, obj=None):
             session.doc.abortTransaction()
         except Exception:
             pass
-        session._restore_selected_space(space)
+        session.spaces.restore_selected_space(space)
         return
 
     session.current_tool = "Select"
-    session._queue_restore_selected_space(space)
+    session.spaces.queue_restore_selected_space(space)
 
 
 def cancel_space_text_position_pick(session):
@@ -1504,6 +1504,88 @@ def cancel_space_text_position_pick(session):
         session._set_selected_plan_target("space", space, pending_restore=True)
     session.overlays.sync_selected_space_overlay()
     session._refresh_task_panel_status()
+
+
+def refresh_selected_space_visuals(session):
+    session.overlays.invalidate_selected_space_overlay_cache()
+    session.overlays.sync_selected_space_overlay()
+    session.viewport.request_view_redraw()
+
+
+def refresh_selected_region_visuals(session):
+    session.overlays.sync_selected_region_overlay()
+    session.viewport.request_view_redraw()
+
+
+def restore_selected_semantic_target(session, kind, obj, *, clear_edit_space=False):
+    sync_method = {
+        plan_target_kinds.PLAN_TARGET_REGION: session.overlays.sync_selected_region_overlay,
+        plan_target_kinds.PLAN_TARGET_SPACE: session.overlays.sync_selected_space_overlay,
+    }.get(kind)
+    if sync_method is None:
+        return
+    session.current_tool = "Select"
+    if clear_edit_space:
+        session._edit_space = None
+    if obj:
+        session._set_selected_plan_target(kind, obj, pending_restore=True)
+        session._set_gui_selection_object(obj)
+    else:
+        session._set_selected_plan_target()
+    sync_method()
+    session._refresh_task_panel_status()
+
+
+def queue_restore_selected_semantic_target(session, kind, obj, *, clear_edit_space=False):
+    try:
+        from PySide import QtCore
+    except ImportError:
+        restore_selected_semantic_target(
+            session,
+            kind,
+            obj,
+            clear_edit_space=clear_edit_space,
+        )
+        return
+    QtCore.QTimer.singleShot(
+        0,
+        lambda: restore_selected_semantic_target(
+            session,
+            kind,
+            obj,
+            clear_edit_space=clear_edit_space,
+        ),
+    )
+
+
+def restore_selected_region(session, region):
+    restore_selected_semantic_target(session, plan_target_kinds.PLAN_TARGET_REGION, region)
+
+
+def queue_restore_selected_region(session, region):
+    queue_restore_selected_semantic_target(
+        session,
+        plan_target_kinds.PLAN_TARGET_REGION,
+        region,
+    )
+
+
+def restore_selected_space(session, space):
+    restore_selected_semantic_target(
+        session,
+        plan_target_kinds.PLAN_TARGET_SPACE,
+        space,
+        clear_edit_space=True,
+    )
+
+
+def queue_restore_selected_space(session, space):
+    queue_restore_selected_semantic_target(
+        session,
+        plan_target_kinds.PLAN_TARGET_SPACE,
+        space,
+        clear_edit_space=True,
+    )
 
 
 def get_space_preflight_report(session, targets=None):
@@ -1652,6 +1734,16 @@ class PlanSpacesAPI(_SessionAPI):
     start_space_text_position_pick = _bind_session_call(start_space_text_position_pick)
     finish_space_text_position_pick = _bind_session_call(finish_space_text_position_pick)
     cancel_space_text_position_pick = _bind_session_call(cancel_space_text_position_pick)
+    refresh_selected_space_visuals = _bind_session_call(refresh_selected_space_visuals)
+    refresh_selected_region_visuals = _bind_session_call(refresh_selected_region_visuals)
+    restore_selected_semantic_target = _bind_session_call(restore_selected_semantic_target)
+    queue_restore_selected_semantic_target = _bind_session_call(
+        queue_restore_selected_semantic_target
+    )
+    restore_selected_region = _bind_session_call(restore_selected_region)
+    queue_restore_selected_region = _bind_session_call(queue_restore_selected_region)
+    restore_selected_space = _bind_session_call(restore_selected_space)
+    queue_restore_selected_space = _bind_session_call(queue_restore_selected_space)
 
     copy_shape_without_element_map = staticmethod(copy_shape_without_element_map)
     space_boundary_key = staticmethod(space_boundary_key)
