@@ -24,24 +24,11 @@ _TASK_PANEL_CONTEXT_METHODS = (
 )
 
 
-def _call_component_method(session, component_name, method_name, *args):
+def _read_component(session, component_name, method_name, *args, default=None):
     component = getattr(session, component_name, None)
     method = getattr(component, method_name, None)
     if callable(method):
         return method(*args)
-    return _MISSING
-
-
-def _read_component_or_session(
-    session,
-    component_name,
-    component_method_name,
-    *args,
-    default=None,
-):
-    value = _call_component_method(session, component_name, component_method_name, *args)
-    if value is not _MISSING:
-        return value
     return default
 
 
@@ -62,7 +49,7 @@ class PlanTaskPanelContext:
 
     def is_modal_plan_interaction_active(self):
         return bool(
-            _read_component_or_session(
+            _read_component(
                 self.session,
                 "interaction",
                 "is_modal_plan_interaction_active",
@@ -72,7 +59,7 @@ class PlanTaskPanelContext:
 
     def can_place_plan_window(self):
         return bool(
-            _read_component_or_session(
+            _read_component(
                 self.session,
                 "windows",
                 "can_place_window",
@@ -82,7 +69,7 @@ class PlanTaskPanelContext:
 
     def has_plan_candidate_joint(self):
         return (
-            _read_component_or_session(
+            _read_component(
                 self.session,
                 "wall_relations",
                 "get_plan_candidate_joint",
@@ -91,7 +78,7 @@ class PlanTaskPanelContext:
         )
 
     def get_provider_point_tool_label(self):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "providers",
             "get_provider_point_tool_label",
@@ -99,7 +86,7 @@ class PlanTaskPanelContext:
         )
 
     def get_provider_point_tool_prompt(self):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "providers",
             "get_provider_point_tool_prompt",
@@ -107,7 +94,7 @@ class PlanTaskPanelContext:
         )
 
     def get_plan_provider_display_name(self, provider_id):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "providers",
             "get_plan_provider_display_name",
@@ -116,7 +103,7 @@ class PlanTaskPanelContext:
         )
 
     def get_plan_provider_overlay_category(self, overlay):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "providers",
             "get_plan_provider_overlay_category",
@@ -126,7 +113,7 @@ class PlanTaskPanelContext:
 
     def is_plan_provider_overlay_enabled(self, overlay):
         return bool(
-            _read_component_or_session(
+            _read_component(
                 self.session,
                 "providers",
                 "is_plan_provider_overlay_enabled",
@@ -137,7 +124,7 @@ class PlanTaskPanelContext:
 
     def get_plan_provider_overlay_mode(self):
         return str(
-            _read_component_or_session(
+            _read_component(
                 self.session,
                 "providers",
                 "get_plan_provider_overlay_mode",
@@ -147,7 +134,7 @@ class PlanTaskPanelContext:
         )
 
     def format_plan_target_selection_state(self, target_kind, target_obj):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "status_text",
             "format_plan_target_selection_state",
@@ -157,7 +144,7 @@ class PlanTaskPanelContext:
         )
 
     def format_provider_selected_object_state(self):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "status_text",
             "format_provider_selected_object_state",
@@ -165,7 +152,7 @@ class PlanTaskPanelContext:
         )
 
     def get_plan_join_candidate_state(self):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "wall_relations",
             "get_plan_join_candidate_state",
@@ -173,7 +160,7 @@ class PlanTaskPanelContext:
         )
 
     def get_plan_target_display_label(self, obj):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "status_text",
             "get_plan_target_display_label",
@@ -182,7 +169,7 @@ class PlanTaskPanelContext:
         )
 
     def get_plan_join_type_label(self):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "wall_relations",
             "get_plan_join_type_label",
@@ -190,7 +177,7 @@ class PlanTaskPanelContext:
         )
 
     def get_plan_join_mode_action_text(self, target_wall, joint):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "wall_relations",
             "get_plan_join_mode_action_text",
@@ -200,7 +187,7 @@ class PlanTaskPanelContext:
         )
 
     def summarize_plan_targets(self, targets):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "status_text",
             "summarize_plan_targets",
@@ -209,26 +196,28 @@ class PlanTaskPanelContext:
         )
 
     def get_space_region_candidate_count(self):
-        return int(
-            _read_component_or_session(
-                self.session,
-                "spaces",
-                "get_space_region_candidate_count",
-                default=len(getattr(self.session, "_space_region_candidates", ()) or ()),
-            )
-            or 0
+        value = _read_component(
+            self.session,
+            "spaces",
+            "get_space_region_candidate_count",
+            default=_MISSING,
         )
+        if value is _MISSING:
+            value = len(getattr(self.session, "_space_region_candidates", ()) or ())
+        return int(value or 0)
 
     def get_hovered_space_region_candidate(self):
-        return _read_component_or_session(
+        value = _read_component(
             self.session,
             "spaces",
             "get_hovered_space_region_candidate",
-            default=getattr(self.session, "_hovered_space_region_candidate", None),
         )
+        if value is not None:
+            return value
+        return getattr(self.session, "_hovered_space_region_candidate", None)
 
     def format_space_region_candidate_area(self, candidate):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "spaces",
             "format_space_region_candidate_area",
@@ -237,16 +226,18 @@ class PlanTaskPanelContext:
         )
 
     def get_plan_region_parent_space(self):
-        return _read_component_or_session(
+        value = _read_component(
             self.session,
             "spaces",
             "get_plan_region_parent_space",
-            default=getattr(self.session, "_plan_region_parent_space", None),
         )
+        if value is not None:
+            return value
+        return getattr(self.session, "_plan_region_parent_space", None)
 
     def is_plan_space_object(self, obj):
         return bool(
-            _read_component_or_session(
+            _read_component(
                 self.session,
                 "spaces",
                 "is_plan_space_object",
@@ -256,7 +247,7 @@ class PlanTaskPanelContext:
         )
 
     def format_opening_selection_help(self, obj):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "status_text",
             "format_opening_selection_help",
@@ -266,7 +257,7 @@ class PlanTaskPanelContext:
 
     def symbol_rotation_snap_enabled(self):
         return bool(
-            _read_component_or_session(
+            _read_component(
                 self.session,
                 "symbols",
                 "symbol_rotation_snap_enabled",
@@ -275,7 +266,7 @@ class PlanTaskPanelContext:
         )
 
     def format_symbol_rotation_snap_label(self):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "symbols",
             "format_symbol_rotation_snap_label",
@@ -283,7 +274,7 @@ class PlanTaskPanelContext:
         )
 
     def format_provider_target_help(self, obj):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "status_text",
             "format_provider_target_help",
@@ -293,7 +284,7 @@ class PlanTaskPanelContext:
 
     def is_selected_wall_endpoint_editable(self):
         return bool(
-            _read_component_or_session(
+            _read_component(
                 self.session,
                 "wall_edit",
                 "is_selected_wall_endpoint_editable",
@@ -302,7 +293,7 @@ class PlanTaskPanelContext:
         )
 
     def format_provider_selected_object_help(self):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "status_text",
             "format_provider_selected_object_help",
@@ -310,7 +301,7 @@ class PlanTaskPanelContext:
         )
 
     def get_plan_selection_summary_text(self):
-        return _read_component_or_session(
+        return _read_component(
             self.session,
             "status_text",
             "get_plan_selection_summary_text",
@@ -318,19 +309,18 @@ class PlanTaskPanelContext:
         )
 
     def get_plan_relation_status_message(self):
-        return str(
-            _read_component_or_session(
-                self.session,
-                "wall_relations",
-                "get_plan_relation_status_message",
-                default=getattr(self.session, "_plan_relation_status_message", ""),
-            )
-            or ""
-        ).strip()
+        value = _read_component(
+            self.session,
+            "wall_relations",
+            "get_plan_relation_status_message",
+        )
+        if value is None:
+            value = getattr(self.session, "_plan_relation_status_message", "")
+        return str(value or "").strip()
 
     def get_window_style_preset_options(self):
         return tuple(
-            _read_component_or_session(
+            _read_component(
                 self.session,
                 "windows",
                 "get_window_style_preset_options",
@@ -341,7 +331,7 @@ class PlanTaskPanelContext:
 
     def can_edit_window_width(self, obj):
         return bool(
-            _read_component_or_session(
+            _read_component(
                 self.session,
                 "windows",
                 "can_edit_window_width",
@@ -352,7 +342,7 @@ class PlanTaskPanelContext:
 
     def can_edit_window_height(self, obj):
         return bool(
-            _read_component_or_session(
+            _read_component(
                 self.session,
                 "windows",
                 "can_edit_window_height",
@@ -363,7 +353,7 @@ class PlanTaskPanelContext:
 
     def can_apply_window_style_preset(self, obj):
         return bool(
-            _read_component_or_session(
+            _read_component(
                 self.session,
                 "windows",
                 "can_apply_window_style_preset",
@@ -374,7 +364,7 @@ class PlanTaskPanelContext:
 
     def get_selected_window_style_preset(self):
         return str(
-            _read_component_or_session(
+            _read_component(
                 self.session,
                 "windows",
                 "get_selected_window_style_preset",
@@ -385,7 +375,7 @@ class PlanTaskPanelContext:
 
     def get_selected_window_width_text(self):
         return str(
-            _read_component_or_session(
+            _read_component(
                 self.session,
                 "windows",
                 "get_selected_window_width_text",
@@ -396,7 +386,7 @@ class PlanTaskPanelContext:
 
     def get_selected_window_height_text(self):
         return str(
-            _read_component_or_session(
+            _read_component(
                 self.session,
                 "windows",
                 "get_selected_window_height_text",

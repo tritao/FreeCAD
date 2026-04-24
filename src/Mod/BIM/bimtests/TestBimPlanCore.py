@@ -811,13 +811,17 @@ class TestBimPlanCore(unittest.TestCase):
     def test_build_action_context_view_model_derives_tool_controls(self):
         wall = SimpleNamespace(Name="Wall001")
         selection = SimpleNamespace(get_selected_plan_target=lambda: ("wall", wall))
+        windows = SimpleNamespace(can_place_window=lambda: True)
+        wall_relations = SimpleNamespace(get_plan_candidate_joint=lambda target_wall=None: object())
+        providers = SimpleNamespace(get_provider_point_tool_label=lambda: "Provider Point")
+        interaction = SimpleNamespace(is_modal_plan_interaction_active=lambda: False)
         session = SimpleNamespace(
             current_tool="Join",
             selection=selection,
-            can_place_plan_window=lambda: True,
-            _get_plan_candidate_joint=lambda: object(),
-            _get_provider_point_tool_label=lambda: "Provider Point",
-            _is_modal_plan_interaction_active=lambda: False,
+            windows=windows,
+            wall_relations=wall_relations,
+            providers=providers,
+            interaction=interaction,
         )
 
         view_model = build_action_context_view_model(session)
@@ -955,27 +959,6 @@ class TestBimPlanCore(unittest.TestCase):
         session = SimpleNamespace(
             providers=provider,
             status_text=status_text,
-            _get_provider_point_tool_label=lambda: (_ for _ in ()).throw(AssertionError()),
-            _get_provider_point_tool_prompt=lambda: (_ for _ in ()).throw(AssertionError()),
-            get_plan_provider_display_name=lambda provider_id: (_ for _ in ()).throw(
-                AssertionError()
-            ),
-            get_plan_provider_overlay_category=lambda overlay: (_ for _ in ()).throw(
-                AssertionError()
-            ),
-            is_plan_provider_overlay_enabled=lambda overlay: (_ for _ in ()).throw(
-                AssertionError()
-            ),
-            get_plan_provider_overlay_mode=lambda: (_ for _ in ()).throw(AssertionError()),
-            _format_provider_selected_object_state=lambda: (_ for _ in ()).throw(AssertionError()),
-            _format_provider_target_help=lambda obj: (_ for _ in ()).throw(AssertionError()),
-            _format_provider_selected_object_help=lambda: (_ for _ in ()).throw(AssertionError()),
-            _format_plan_target_selection_state=lambda kind, obj: (_ for _ in ()).throw(
-                AssertionError()
-            ),
-            _summarize_plan_targets=lambda targets: (_ for _ in ()).throw(AssertionError()),
-            _format_opening_selection_help=lambda obj: (_ for _ in ()).throw(AssertionError()),
-            _get_plan_selection_summary_text=lambda: (_ for _ in ()).throw(AssertionError()),
         )
 
         context = PlanTaskPanelContext(session)
@@ -985,11 +968,9 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual("Socket", context.get_provider_point_tool_label())
         self.assertEqual("Click socket point", context.get_provider_point_tool_prompt())
         self.assertEqual("PROVIDER-A", context.get_plan_provider_display_name("provider-a"))
-        self.assertEqual(
-            "electrical", context.providers.get_plan_provider_overlay_category(overlay)
-        )
-        self.assertTrue(context.providers.is_plan_provider_overlay_enabled(overlay))
-        self.assertEqual("electrical", context.providers.get_plan_provider_overlay_mode())
+        self.assertEqual("electrical", context.get_plan_provider_overlay_category(overlay))
+        self.assertTrue(context.is_plan_provider_overlay_enabled(overlay))
+        self.assertEqual("electrical", context.get_plan_provider_overlay_mode())
         self.assertEqual("Object: Socket", context.format_provider_selected_object_state())
         self.assertEqual("Provider target help", context.format_provider_target_help(obj))
         self.assertEqual("Provider object help", context.format_provider_selected_object_help())
@@ -1046,22 +1027,7 @@ class TestBimPlanCore(unittest.TestCase):
             spaces=spaces,
             windows=windows,
             wall_edit=wall_edit,
-            _is_modal_plan_interaction_active=lambda: (_ for _ in ()).throw(AssertionError()),
-            _symbol_rotation_snap_enabled=lambda: (_ for _ in ()).throw(AssertionError()),
-            _format_symbol_rotation_snap_label=lambda: (_ for _ in ()).throw(AssertionError()),
-            can_place_plan_window=lambda: (_ for _ in ()).throw(AssertionError()),
-            _get_plan_candidate_joint=lambda: (_ for _ in ()).throw(AssertionError()),
-            _get_plan_join_candidate_state=lambda: (_ for _ in ()).throw(AssertionError()),
-            get_plan_join_type_label=lambda: (_ for _ in ()).throw(AssertionError()),
-            _get_plan_join_mode_action_text=lambda target_wall, joint: (_ for _ in ()).throw(
-                AssertionError()
-            ),
             _plan_relation_status_message="legacy relation status",
-            _format_space_region_candidate_area=lambda candidate: (_ for _ in ()).throw(
-                AssertionError()
-            ),
-            _is_plan_space_object=lambda obj: (_ for _ in ()).throw(AssertionError()),
-            is_selected_wall_endpoint_editable=lambda: (_ for _ in ()).throw(AssertionError()),
             _space_region_candidates=[],
             _hovered_space_region_candidate=None,
             _plan_region_parent_space=None,
