@@ -1277,8 +1277,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertEqual(session.current_tool, "Rect Wall")
 
-        session._handle_rect_wall_point(FreeCAD.Vector(0, 0, 0))
-        session._handle_rect_wall_point(FreeCAD.Vector(3000, 2000, 0))
+        session.wall_create.handle_rect_wall_point(FreeCAD.Vector(0, 0, 0))
+        session.wall_create.handle_rect_wall_point(FreeCAD.Vector(3000, 2000, 0))
         self.pump_gui_events()
 
         created = [obj for obj in self.document.Objects if obj.Name not in before]
@@ -1312,8 +1312,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             session.lifecycle.activate_rect_wall_tool()
             self.pump_gui_events()
 
-            session._handle_rect_wall_point(FreeCAD.Vector(0, 0, 0))
-            session._handle_rect_wall_point(FreeCAD.Vector(3000, 2000, 0))
+            session.wall_create.handle_rect_wall_point(FreeCAD.Vector(0, 0, 0))
+            session.wall_create.handle_rect_wall_point(FreeCAD.Vector(3000, 2000, 0))
             self.pump_gui_events()
 
             created = [obj for obj in self.document.Objects if obj.Name not in before]
@@ -3846,7 +3846,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(session.current_tool, "Join")
         self.assertEqual(len(session._grip_trackers), 0)
 
-        session._cancel_join_tool()
+        session.wall_relations.cancel_join_tool()
 
         self.assertEqual(session.current_tool, "Select")
         self._assert_selected_plan_target(session, "wall", source_wall)

@@ -54,7 +54,7 @@ from bimplan.tools.symbol_edit import PlanSymbolsAPI
 from bimplan.tools import opening_edit as plan_opening_edit
 from bimplan.tools.opening_edit import PlanOpeningsAPI
 from bimplan.providers.runtime import PlanProvidersAPI
-from bimplan.tools import wall_create as plan_wall_create
+from bimplan.tools.wall_create import PlanWallCreateAPI
 from bimplan.tools import wall_relations as plan_wall_relations
 from bimplan.tools.wall_relations import PlanWallRelationsAPI
 from bimplan.tools.wall_edit import PlanWallEditAPI
@@ -259,6 +259,7 @@ class PlanEditSession:
         self.spaces = PlanSpacesAPI(self)
         self.openings = PlanOpeningsAPI(self)
         self.wall_relations = PlanWallRelationsAPI(self)
+        self.wall_create = PlanWallCreateAPI(self)
         self.interaction = PlanInteractionAPI(self)
         self.lifecycle = plan_lifecycle.PlanLifecycleAPI(self)
         self.symbols = PlanSymbolsAPI(self)
@@ -912,37 +913,10 @@ class PlanEditSession:
         # Compatibility wrapper for older tests and callers.
         return self._refresh_primary_selected_plan_target()
 
-    def _cancel_join_tool(self, refresh=True):
-        return plan_wall_relations.cancel_join_tool(self, refresh=refresh)
-
     def _restore_gui_selection(self, obj):
         if not obj:
             return
         self.selection.set_gui_selection_object(obj)
-
-    def _apply_plan_wall_join(self, source_wall, target_wall):
-        return plan_wall_relations.apply_plan_wall_join(self, source_wall, target_wall)
-
-    def _has_active_rect_wall_tool(self):
-        return plan_wall_create.has_active_rect_wall_tool(self)
-
-    def _clear_rect_wall_preview(self):
-        return plan_wall_create.clear_rect_wall_preview(self)
-
-    def _cancel_rect_wall_tool(self, refresh=True):
-        return plan_wall_create.cancel_rect_wall_tool(self, refresh=refresh)
-
-    def _get_rect_wall_corners(self, point):
-        return plan_wall_create.get_rect_wall_corners(self, point)
-
-    def _update_rect_wall_preview(self, point, info):
-        return plan_wall_create.update_rect_wall_preview(self, point, info)
-
-    def _create_rect_wall_run(self, corners):
-        return plan_wall_create.create_rect_wall_run(self, corners)
-
-    def _handle_rect_wall_point(self, point=None, obj=None):
-        return plan_wall_create.handle_rect_wall_point(self, point=point, obj=obj)
 
     def _resume_wall_edit_point_pick(self):
         return self.wall_edit.resume_wall_edit_point_pick()

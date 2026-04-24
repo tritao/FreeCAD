@@ -91,7 +91,7 @@ def start_plan_provider_point_tool(session, tool):
         return False
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
-    session._cancel_rect_wall_tool(refresh=False)
+    session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
     if session.current_tool == "Set Space Text":
         session.spaces.cancel_space_text_position_pick()
@@ -158,7 +158,7 @@ def handle_provider_point_tool_point(session, point=None, obj=None):
         snap_object=snap_object,
         snap_info=snap_info,
     )
-    session.execute_plan_provider_action(
+    session.providers.execute_plan_provider_action(
         getattr(tool, "provider_id", ""),
         getattr(tool, "key", ""),
         transaction_label=getattr(tool, "transaction_label", ""),
