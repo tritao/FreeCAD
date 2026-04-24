@@ -230,14 +230,16 @@ def on_key_pressed(session, event_callback):
         session.symbols.cancel_symbol_handle_point_pick()
         return
     if session.current_tool == "Join" and key == coin.SoKeyboardEvent.TAB:
-        if session._cycle_plan_join_type() and hasattr(event_callback, "setHandled"):
+        if session.wall_relations.cycle_plan_join_type() and hasattr(event_callback, "setHandled"):
             event_callback.setHandled()
         return
     if session.current_tool == "Join" and key in (
         getattr(coin.SoKeyboardEvent, "DELETE", None),
         getattr(coin.SoKeyboardEvent, "BACKSPACE", None),
     ):
-        if session._unjoin_current_plan_wall_pair() and hasattr(event_callback, "setHandled"):
+        if session.wall_relations.unjoin_current_plan_wall_pair() and hasattr(
+            event_callback, "setHandled"
+        ):
             event_callback.setHandled()
         return
     if session.current_tool == "Join" and key == coin.SoKeyboardEvent.ESCAPE:

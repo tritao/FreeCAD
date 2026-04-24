@@ -286,9 +286,9 @@ class PlanEditControlsWidget:
         row.setSpacing(6)
         join_type_label = QtGui.QLabel(translate("BIM_PlanEdit", "Join Type"))
         self.join_type_combo = QtGui.QComboBox()
-        for join_type in self.session.get_plan_join_types():
+        for join_type in self.session.wall_relations.get_plan_join_types():
             self.join_type_combo.addItem(
-                self.session.get_plan_join_type_label(join_type), join_type
+                self.session.wall_relations.get_plan_join_type_label(join_type), join_type
             )
         self.join_type_combo.currentIndexChanged.connect(self.on_join_type_changed)
         self.unjoin_button = self._make_button(QtGui, "Unjoin", self.on_unjoin_clicked)
@@ -2305,7 +2305,9 @@ class PlanEditControlsWidget:
             return
         self.join_type_combo.blockSignals(True)
         try:
-            join_type_index = self.join_type_combo.findData(self.session.get_plan_join_type())
+            join_type_index = self.join_type_combo.findData(
+                self.session.wall_relations.get_plan_join_type()
+            )
             if join_type_index >= 0:
                 self.join_type_combo.setCurrentIndex(join_type_index)
         finally:
@@ -2752,7 +2754,7 @@ class PlanEditControlsWidget:
 
         selected_kind, _selected_obj = self.session.selection.get_selected_plan_target()
         join_candidate = (
-            self.session._get_plan_candidate_joint() is not None
+            self.session.wall_relations.get_plan_candidate_joint() is not None
             if self.session.current_tool == "Join"
             else False
         )
@@ -2927,10 +2929,10 @@ class PlanEditControlsWidget:
         if self.join_type_combo is None or index < 0:
             return
         join_type = self.join_type_combo.itemData(index) or self.join_type_combo.itemText(index)
-        self.session.set_plan_join_type(join_type)
+        self.session.wall_relations.set_plan_join_type(join_type)
 
     def on_unjoin_clicked(self):
-        self.session._unjoin_current_plan_wall_pair()
+        self.session.wall_relations.unjoin_current_plan_wall_pair()
 
     def on_reapply_clicked(self):
         self.session.viewport.apply_plan_view(fit=False)

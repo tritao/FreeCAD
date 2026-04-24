@@ -380,7 +380,7 @@ def get_status_chip_text(session):
         return title, "{}\n{}".format(context, action)
 
     if session.current_tool == "Join":
-        target_wall, joint, detail = session._get_plan_join_candidate_state()
+        target_wall, joint, detail = session.wall_relations.get_plan_join_candidate_state()
         context = (
             translate("BIM_PlanEdit", "Source wall: {label}").format(
                 label=get_plan_target_display_label(selected_obj)
@@ -388,7 +388,7 @@ def get_status_chip_text(session):
             if selected_kind == "wall" and selected_obj is not None
             else translate("BIM_PlanEdit", "Wall join")
         )
-        action = session._get_plan_join_mode_action_text(target_wall, joint)
+        action = session.wall_relations.get_plan_join_mode_action_text(target_wall, joint)
         if detail:
             return title, "{}\n{}\n{}".format(context, detail, action)
         return title, "{}\n{}".format(context, action)
@@ -558,12 +558,12 @@ def get_input_hint_specs(session):
             ),
             (
                 translate("BIM_PlanEdit", "%1 cycle join type ({joint_type})").format(
-                    joint_type=session.get_plan_join_type_label()
+                    joint_type=session.wall_relations.get_plan_join_type_label()
                 ),
                 ui.KeyTab,
             ),
         ]
-        if session._get_plan_candidate_joint() is not None:
+        if session.wall_relations.get_plan_candidate_joint() is not None:
             hints.append(
                 (
                     translate("BIM_PlanEdit", "%1 unjoin pair"),
