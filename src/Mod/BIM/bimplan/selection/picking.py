@@ -2,7 +2,6 @@
 
 """Pointer picking helpers for BIM Plan Edit."""
 
-from contextlib import nullcontext
 import FreeCAD
 import math
 from bimplan.selection import hover_picking as plan_hover_picking
@@ -38,21 +37,13 @@ def _should_prioritize_provider_targets_for_mode(session):
 
 
 def _emit_pick_debug(session, name, **fields):
-    perf = getattr(session, "performance", None)
-    is_active = getattr(perf, "is_plan_pick_debug_active", None)
-    emit = getattr(perf, "plan_pick_debug_event", None)
-    if not callable(is_active) or not callable(emit):
-        is_active = getattr(session, "_is_plan_pick_debug_active", None)
-        emit = getattr(session, "_plan_pick_debug_event", None)
-    if not callable(is_active) or not callable(emit):
-        return
     try:
-        if not is_active():
+        if not session.performance.is_plan_pick_debug_active():
             return
     except Exception:
         return
     try:
-        emit(name, **fields)
+        session.performance.plan_pick_debug_event(name, **fields)
     except Exception:
         return
 
@@ -64,15 +55,10 @@ def _append_pick_debug_item(items, value, limit=_MAX_PICK_DEBUG_ITEMS):
 
 
 def _describe_pick_object(session, obj):
-    perf = getattr(session, "performance", None)
-    describe = getattr(perf, "plan_perf_describe_object", None)
-    if not callable(describe):
-        describe = getattr(session, "_plan_perf_describe_object", None)
-    if callable(describe):
-        try:
-            return describe(obj)
-        except Exception:
-            pass
+    try:
+        return session.performance.plan_perf_describe_object(obj)
+    except Exception:
+        pass
     if obj is None:
         return None
     document_name = str(getattr(getattr(obj, "Document", None), "Name", "") or "").strip()
@@ -89,15 +75,10 @@ def _describe_pick_object(session, obj):
 
 
 def _describe_pick_target(session, kind, obj):
-    perf = getattr(session, "performance", None)
-    describe = getattr(perf, "plan_perf_describe_target", None)
-    if not callable(describe):
-        describe = getattr(session, "_plan_perf_describe_target", None)
-    if callable(describe):
-        try:
-            return describe(kind, obj)
-        except Exception:
-            pass
+    try:
+        return session.performance.plan_perf_describe_target(kind, obj)
+    except Exception:
+        pass
     if not kind or obj is None:
         return None
     result = {"kind": str(kind)}
@@ -110,36 +91,15 @@ def _describe_pick_target(session, kind, obj):
 
 
 def _perf_count(session, name, delta=1):
-    perf = getattr(session, "performance", None)
-    count = getattr(perf, "plan_perf_count", None)
-    if callable(count):
-        return count(name, delta=delta)
-    count = getattr(session, "_plan_perf_count", None)
-    if callable(count):
-        return count(name, delta=delta)
-    return None
+    return session.performance.plan_perf_count(name, delta=delta)
 
 
 def _perf_set_fields(session, **fields):
-    perf = getattr(session, "performance", None)
-    set_fields = getattr(perf, "plan_perf_set_fields", None)
-    if callable(set_fields):
-        return set_fields(**fields)
-    set_fields = getattr(session, "_plan_perf_set_fields", None)
-    if callable(set_fields):
-        return set_fields(**fields)
-    return None
+    return session.performance.plan_perf_set_fields(**fields)
 
 
 def _perf_trace_span(session, name, **fields):
-    perf = getattr(session, "performance", None)
-    trace_span = getattr(perf, "plan_perf_trace_span", None)
-    if callable(trace_span):
-        return trace_span(name, **fields)
-    trace_span = getattr(session, "_plan_perf_trace_span", None)
-    if callable(trace_span):
-        return trace_span(name, **fields)
-    return nullcontext()
+    return session.performance.plan_perf_trace_span(name, **fields)
 
 
 def _describe_pick_info_entry(info):
