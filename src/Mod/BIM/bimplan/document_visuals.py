@@ -405,7 +405,7 @@ def slot_changed_object(session, obj, prop):
         return
     if session.current_tool != "Select":
         return
-    session._sanitize_plan_target_references()
+    session.selection.sanitize_plan_target_references()
     selected_wall = plan_selection.get_selected_plan_target_object(session, "wall")
     selected_opening = plan_selection.get_selected_plan_target_object(session, "opening")
     selected_symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
@@ -588,7 +588,7 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
     session.overlays.invalidate_plan_overlay_geometry_cache()
-    session._sanitize_plan_target_references()
+    session.selection.sanitize_plan_target_references()
     selected_symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
     selected_region = plan_selection.get_selected_plan_target_object(session, "region")
     selected_space = plan_selection.get_selected_plan_target_object(session, "space")
