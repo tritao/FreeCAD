@@ -39,7 +39,7 @@ def sync_provider_overlays(session):
             or getattr(session, "_finishing", False)
             or (callable(document_is_alive) and not document_is_alive())
             or session.current_tool not in ("Select", "Provider Point")
-            or session._plan_provider_integrations_disabled()
+            or session.providers.plan_provider_integrations_disabled()
         ):
             clear_provider_overlays(session)
             return
@@ -47,7 +47,7 @@ def sync_provider_overlays(session):
         with session._plan_provider_refresh_cache_scope():
             overlays = tuple(
                 overlay
-                for overlay in session.get_plan_provider_overlays()
+                for overlay in session.providers.get_plan_provider_overlays()
                 if bool(getattr(overlay, "visible", True))
                 and session.is_plan_provider_overlay_visible(overlay)
             )
@@ -84,7 +84,7 @@ def sync_hovered_provider_overlay(session):
         if session.current_tool != "Select":
             return
         plan_provider_integrations_disabled = getattr(
-            session, "_plan_provider_integrations_disabled", None
+            session.providers, "plan_provider_integrations_disabled", None
         )
         if callable(plan_provider_integrations_disabled) and plan_provider_integrations_disabled():
             return
@@ -127,7 +127,7 @@ def sync_selected_provider_overlay(session):
             clear_selected_provider_overlay(session)
             return
         plan_provider_integrations_disabled = getattr(
-            session, "_plan_provider_integrations_disabled", None
+            session.providers, "plan_provider_integrations_disabled", None
         )
         if callable(plan_provider_integrations_disabled) and plan_provider_integrations_disabled():
             clear_selected_provider_overlay(session)
@@ -716,7 +716,7 @@ def _get_visible_provider_overlays(session):
     with refresh_scope:
         return tuple(
             overlay
-            for overlay in session.get_plan_provider_overlays()
+            for overlay in session.providers.get_plan_provider_overlays()
             if bool(getattr(overlay, "visible", True))
             and session.is_plan_provider_overlay_visible(overlay)
         )

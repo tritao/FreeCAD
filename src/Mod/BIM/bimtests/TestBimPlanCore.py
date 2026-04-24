@@ -565,7 +565,10 @@ class TestBimPlanCore(unittest.TestCase):
                 session.status_text.get_status_chip_text(),
             )
             self.assertEqual("Preset A", session._get_selected_window_style_preset())
-            self.assertEqual("Provider A", session.get_plan_provider_display_name("provider-a"))
+            self.assertEqual(
+                "Provider A",
+                session.providers.get_plan_provider_display_name("provider-a"),
+            )
             self.assertEqual(
                 ("clipped",),
                 session._clip_preview_polygon_to_plane("polygon", "plane", "ref"),
@@ -616,22 +619,25 @@ class TestBimPlanCore(unittest.TestCase):
             ),
             get_plan_edit_context=_get_plan_edit_context,
             get_plan_provider_registry=lambda: registry,
-            _get_plan_provider_id=lambda current_provider: current_provider.get_provider_id(),
-            _coerce_plan_provider_results=lambda provided: tuple(provided or ()),
-            _normalize_plan_provider_tool=lambda provider_id, tool: tool.__class__(
+        )
+        session.providers = SimpleNamespace(
+            plan_provider_integrations_disabled=lambda: False,
+            get_plan_provider_id=lambda current_provider: current_provider.get_provider_id(),
+            coerce_plan_provider_results=lambda provided: tuple(provided or ()),
+            normalize_plan_provider_tool=lambda provider_id, tool: tool.__class__(
                 **{**tool.__dict__, "provider_id": provider_id}
             ),
-            _normalize_plan_provider_overlay=lambda provider_id, overlay: normalize_plan_provider_overlay(
+            normalize_plan_provider_overlay=lambda provider_id, overlay: normalize_plan_provider_overlay(
                 provider_id,
                 overlay,
             ),
-            _normalize_plan_provider_issue=lambda provider_id, issue: issue.__class__(
+            normalize_plan_provider_issue=lambda provider_id, issue: issue.__class__(
                 **{**issue.__dict__, "provider_id": provider_id}
             ),
-            _normalize_plan_provider_context_panel=lambda provider_id, panel: panel.__class__(
+            normalize_plan_provider_context_panel=lambda provider_id, panel: panel.__class__(
                 **{**panel.__dict__, "provider_id": provider_id}
             ),
-            _normalize_plan_provider_section=lambda provider_id, section: section.__class__(
+            normalize_plan_provider_section=lambda provider_id, section: section.__class__(
                 **{**section.__dict__, "provider_id": provider_id}
             ),
         )
@@ -660,7 +666,7 @@ class TestBimPlanCore(unittest.TestCase):
             collect_plan_provider_contributions(
                 session,
                 "get_tools",
-                session._normalize_plan_provider_tool,
+                session.providers.normalize_plan_provider_tool,
             ),
         )
         self.assertEqual(1, provider.calls.count("get_tools"))

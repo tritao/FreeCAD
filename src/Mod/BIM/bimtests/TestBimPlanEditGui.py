@@ -543,7 +543,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             if "Provider Preview" in str(widget.text())
         ]
         self.assertEqual(1, len(overlay_checkboxes))
-        overlay_key = session.get_plan_provider_overlay_visibility_key(
+        overlay_key = session.providers.get_plan_provider_overlay_visibility_key(
             "test-plan-provider",
             "provider-preview",
         )
@@ -605,7 +605,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         panel.refresh_from_session()
         self.pump_gui_events()
 
-        self.assertEqual("architecture", session.get_plan_provider_overlay_mode())
+        self.assertEqual("architecture", session.providers.get_plan_provider_overlay_mode())
 
         architecture_checkboxes = [
             widget
@@ -626,7 +626,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         overlay_mode_combo.setCurrentIndex(overlay_mode_combo.findData("electrical"))
         self.pump_gui_events()
 
-        self.assertEqual("electrical", session.get_plan_provider_overlay_mode())
+        self.assertEqual("electrical", session.providers.get_plan_provider_overlay_mode())
         electrical_checkboxes = [
             widget
             for widget in panel.integration_panel.findChildren(QtGui.QCheckBox)
@@ -643,7 +643,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         overlay_mode_combo.setCurrentIndex(overlay_mode_combo.findData("all"))
         self.pump_gui_events()
 
-        self.assertEqual("all", session.get_plan_provider_overlay_mode())
+        self.assertEqual("all", session.providers.get_plan_provider_overlay_mode())
         all_mode_checkboxes = [
             widget
             for widget in panel.integration_panel.findChildren(QtGui.QCheckBox)
@@ -706,7 +706,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.doc = _DeletedDocument()
 
         try:
-            self.assertEqual((), session.get_plan_provider_tools())
+            self.assertEqual((), session.providers.get_plan_provider_tools())
             self.assertIsNone(session.doc)
             self.assertEqual(0, provider.tool_calls)
         finally:
@@ -2865,7 +2865,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         overlays = [
             overlay
-            for overlay in session.get_plan_provider_overlays()
+            for overlay in session.providers.get_plan_provider_overlays()
             if getattr(overlay, "provider_id", "") == "bim-window"
         ]
         self.assertEqual(1, len(overlays))

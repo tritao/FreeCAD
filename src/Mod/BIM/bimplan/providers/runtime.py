@@ -78,8 +78,32 @@ def _bind_provider_call(func):
 
 
 _PLAN_PROVIDERS_API_BOUND_METHODS = (
+    "plan_provider_integrations_disabled",
+    "get_plan_provider_id",
+    "coerce_plan_provider_results",
+    "normalize_plan_provider_action",
+    "normalize_plan_provider_tool",
+    "normalize_plan_provider_edit_handle",
+    "normalize_plan_provider_issue",
+    "normalize_plan_provider_suggestion",
+    "normalize_plan_provider_section",
+    "normalize_plan_provider_context_panel",
+    "normalize_plan_provider_overlay",
+    "normalize_plan_provider_target",
+    "collect_plan_provider_contributions",
     "get_plan_provider_display_name",
+    "get_plan_provider_issues",
+    "get_plan_provider_suggestions",
+    "get_plan_provider_tools",
+    "get_plan_provider_snapshot",
+    "get_plan_provider_edit_handles",
+    "get_plan_provider_inspector_sections",
+    "get_plan_provider_context_panels",
+    "get_plan_provider_overlays",
     "get_plan_provider_overlay_mode",
+    "set_plan_provider_overlay_mode",
+    "get_plan_provider_overlay_visibility_key",
+    "get_plan_provider_targets",
     "get_plan_provider_target_for_object",
     "is_plan_provider_overlay_enabled",
 )
@@ -317,29 +341,50 @@ _PLAN_PROVIDER_SNAPSHOT_SURFACES = (
     _PlanProviderSnapshotSurfaceSpec(
         field_name="tools",
         method_name="get_tools",
-        normalizer_name="_normalize_plan_provider_tool",
+        normalizer_name="normalize_plan_provider_tool",
     ),
     _PlanProviderSnapshotSurfaceSpec(
         field_name="overlays",
         method_name="get_overlays",
-        normalizer_name="_normalize_plan_provider_overlay",
+        normalizer_name="normalize_plan_provider_overlay",
     ),
     _PlanProviderSnapshotSurfaceSpec(
         field_name="issues",
         method_name="get_issues",
-        normalizer_name="_normalize_plan_provider_issue",
+        normalizer_name="normalize_plan_provider_issue",
     ),
     _PlanProviderSnapshotSurfaceSpec(
         field_name="context_panels",
         method_name="get_context_panels",
-        normalizer_name="_normalize_plan_provider_context_panel",
+        normalizer_name="normalize_plan_provider_context_panel",
     ),
     _PlanProviderSnapshotSurfaceSpec(
         field_name="inspector_sections",
         method_name="get_inspector_sections",
-        normalizer_name="_normalize_plan_provider_section",
+        normalizer_name="normalize_plan_provider_section",
     ),
 )
+
+
+def _is_active_provider_session(session):
+    document_is_alive = getattr(session, "_document_is_alive", None)
+    return not (
+        getattr(session, "_tearing_down", False)
+        or getattr(session, "_finishing", False)
+        or (callable(document_is_alive) and not document_is_alive())
+    )
+
+
+def plan_provider_integrations_disabled(session):
+    import os
+
+    env_value = str(os.environ.get("FC_BIM_PLAN_EDIT_DISABLE_INTEGRATIONS", "") or "").strip()
+    if env_value:
+        return env_value not in {"0", "false", "False", "no", "off"}
+    try:
+        return bool(session._plan_edit_params.GetBool("DisableIntegrations", False))
+    except Exception:
+        return False
 
 
 def _get_provider_refresh_cache(session):
@@ -392,7 +437,7 @@ def _collect_provider_surface_contributions(
             return ()
 
     results = []
-    for contribution in session._coerce_plan_provider_results(provided):
+    for contribution in session.providers.coerce_plan_provider_results(provided):
         normalized = normalizer(provider_id, contribution)
         if normalized is not None:
             results.append(normalized)
@@ -426,15 +471,12 @@ def collect_plan_provider_snapshot(session) -> PlanProviderSnapshot:
             surface_spec.field_name: [] for surface_spec in _PLAN_PROVIDER_SNAPSHOT_SURFACES
         }
         normalized_surfaces = tuple(
-            (
-                surface_spec,
-                getattr(session, surface_spec.normalizer_name),
-            )
+            (surface_spec, getattr(session.providers, surface_spec.normalizer_name))
             for surface_spec in _PLAN_PROVIDER_SNAPSHOT_SURFACES
         )
 
         for provider in session.get_plan_provider_registry().iter_providers():
-            provider_id = session._get_plan_provider_id(provider)
+            provider_id = session.providers.get_plan_provider_id(provider)
             if not provider_id:
                 continue
             for surface_spec, normalizer in normalized_surfaces:
@@ -640,9 +682,9 @@ def get_plan_provider_targets(session) -> tuple[PlanProviderTargetSpec, ...]:
         return ()
     session._plan_provider_target_collection_depth = depth + 1
     try:
-        return session._collect_plan_provider_contributions(
+        return session.providers.collect_plan_provider_contributions(
             "get_targets",
-            session._normalize_plan_provider_target,
+            session.providers.normalize_plan_provider_target,
         )
     finally:
         session._plan_provider_target_collection_depth = depth
@@ -940,7 +982,7 @@ def normalize_plan_provider_issue(session, provider_id, issue):
     actions = tuple(
         normalized
         for normalized in (
-            session._normalize_plan_provider_action(provider_id, action)
+            session.providers.normalize_plan_provider_action(provider_id, action)
             for action in (issue.actions or ())
         )
         if normalized is not None
@@ -961,7 +1003,7 @@ def normalize_plan_provider_suggestion(session, provider_id, suggestion):
     actions = tuple(
         normalized
         for normalized in (
-            session._normalize_plan_provider_action(provider_id, action)
+            session.providers.normalize_plan_provider_action(provider_id, action)
             for action in (suggestion.actions or ())
         )
         if normalized is not None
@@ -982,7 +1024,7 @@ def normalize_plan_provider_section(session, provider_id, section):
     actions = tuple(
         normalized
         for normalized in (
-            session._normalize_plan_provider_action(provider_id, action)
+            session.providers.normalize_plan_provider_action(provider_id, action)
             for action in (section.actions or ())
         )
         if normalized is not None
@@ -1064,7 +1106,7 @@ def normalize_plan_provider_context_panel(session, provider_id, panel):
     )
     primary_action = None
     if panel.primary_action is not None:
-        primary_action = session._normalize_plan_provider_action(
+        primary_action = session.providers.normalize_plan_provider_action(
             provider_id,
             panel.primary_action,
         )
@@ -1073,7 +1115,7 @@ def normalize_plan_provider_context_panel(session, provider_id, panel):
     secondary_actions = tuple(
         normalized
         for normalized in (
-            session._normalize_plan_provider_action(provider_id, action)
+            session.providers.normalize_plan_provider_action(provider_id, action)
             for action in (panel.secondary_actions or ())
         )
         if normalized is not None
@@ -1155,9 +1197,9 @@ def normalize_plan_provider_overlay(provider_id, overlay):
 
 
 def get_plan_provider_edit_handles(session):
-    return session._collect_plan_provider_contributions(
+    return session.providers.collect_plan_provider_contributions(
         "get_edit_handles",
-        session._normalize_plan_provider_edit_handle,
+        session.providers.normalize_plan_provider_edit_handle,
     )
 
 
@@ -1220,8 +1262,11 @@ def _coerce_plan_overlay_color(color):
 
 def collect_plan_provider_contributions(session, method_name, normalizer):
     with _perf_trace_span(session, f"collect_plan_provider_contributions_{method_name}"):
-        document_is_alive = getattr(session, "_document_is_alive", None)
-        if callable(document_is_alive) and not document_is_alive():
+        if not _is_active_provider_session(session):
+            _perf_count(session, "plan_provider_inactive_session")
+            return ()
+        if session.providers.plan_provider_integrations_disabled():
+            _perf_count(session, "plan_provider_integrations_disabled")
             return ()
         cached_contributions = _get_cached_provider_contributions(session, method_name)
         if cached_contributions is not None:
@@ -1232,7 +1277,7 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
             return ()
         results = []
         for provider in session.get_plan_provider_registry().iter_providers():
-            provider_id = session._get_plan_provider_id(provider)
+            provider_id = session.providers.get_plan_provider_id(provider)
             if not provider_id:
                 continue
             results.extend(
@@ -1248,6 +1293,58 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
         contributions = tuple(results)
         _set_cached_provider_contributions(session, method_name, contributions)
         return contributions
+
+
+def get_plan_provider_issues(session):
+    return session.providers.collect_plan_provider_contributions(
+        "get_issues",
+        session.providers.normalize_plan_provider_issue,
+    )
+
+
+def get_plan_provider_suggestions(session):
+    return session.providers.collect_plan_provider_contributions(
+        "get_suggestions",
+        session.providers.normalize_plan_provider_suggestion,
+    )
+
+
+def get_plan_provider_tools(session):
+    return session.providers.collect_plan_provider_contributions(
+        "get_tools",
+        session.providers.normalize_plan_provider_tool,
+    )
+
+
+def get_plan_provider_snapshot(session):
+    if not _is_active_provider_session(session):
+        _perf_count(session, "plan_provider_inactive_session")
+        return PlanProviderSnapshot()
+    if session.providers.plan_provider_integrations_disabled():
+        _perf_count(session, "plan_provider_integrations_disabled")
+        return PlanProviderSnapshot()
+    return collect_plan_provider_snapshot(session)
+
+
+def get_plan_provider_inspector_sections(session):
+    return session.providers.collect_plan_provider_contributions(
+        "get_inspector_sections",
+        session.providers.normalize_plan_provider_section,
+    )
+
+
+def get_plan_provider_context_panels(session):
+    return session.providers.collect_plan_provider_contributions(
+        "get_context_panels",
+        session.providers.normalize_plan_provider_context_panel,
+    )
+
+
+def get_plan_provider_overlays(session):
+    return session.providers.collect_plan_provider_contributions(
+        "get_overlays",
+        session.providers.normalize_plan_provider_overlay,
+    )
 
 
 def _execute_plan_provider_action_callback(
@@ -1357,7 +1454,7 @@ def _get_plan_provider_target_lookup(session) -> dict[tuple[str, str], PlanProvi
 
     default_document_name = _get_default_plan_provider_target_document_name(session)
     targets_by_object = {}
-    for target in tuple(session.get_plan_provider_targets() or ()):
+    for target in tuple(session.providers.get_plan_provider_targets() or ()):
         target_key = _make_plan_provider_target_object_key(
             target.document_name or default_document_name,
             target.object_name,
