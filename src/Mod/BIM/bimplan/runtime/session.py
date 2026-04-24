@@ -184,6 +184,64 @@ def _make_set_hovered_target_method(method_name):
     return _set_hovered_target
 
 
+def _coerce_identity(value):
+    return value
+
+
+def _coerce_bool(value):
+    return bool(value)
+
+
+def _coerce_int(value):
+    return int(value or 0)
+
+
+def _coerce_float(value):
+    return float(value or 0.0)
+
+
+def _coerce_list(value):
+    return list(value or [])
+
+
+def _coerce_dict(value):
+    return dict(value or {})
+
+
+def _coerce_set(value):
+    return set(value or ())
+
+
+def _coerce_tuple(value):
+    return tuple(value or ())
+
+
+def _make_str_coercer(default=""):
+    def _coerce(value):
+        return str(value or default)
+
+    return _coerce
+
+
+def _coerce_optional_nonempty_str(value):
+    return str(value or "") or None
+
+
+def _coerce_overlay_geometry_cache(value):
+    default_cache = {"opening": {}, "space": {}, "region": {}}
+    return dict(value or default_cache)
+
+
+def _make_state_backed_property(ensure_method_name, field_name, coerce=_coerce_identity):
+    def _getter(self):
+        return getattr(getattr(self, ensure_method_name)(), field_name)
+
+    def _setter(self, value):
+        setattr(getattr(self, ensure_method_name)(), field_name, coerce(value))
+
+    return property(_getter, _setter)
+
+
 def get_active_session():
     return _active_session
 
@@ -376,1190 +434,7 @@ class PlanEditSession:
             self.__dict__["overlay_transient_state"] = state
         return state
 
-    @property
-    def _plan_relation_status_message(self):
-        return self._ensure_task_panel_state().relation_status_message
-
-    @_plan_relation_status_message.setter
-    def _plan_relation_status_message(self, value):
-        self._ensure_task_panel_state().relation_status_message = value
-
-    @property
-    def _space_region_candidates(self):
-        return self._ensure_task_panel_state().space_region_candidates
-
-    @_space_region_candidates.setter
-    def _space_region_candidates(self, value):
-        self._ensure_task_panel_state().space_region_candidates = list(value or [])
-
-    @property
-    def _hovered_space_region_candidate(self):
-        return self._ensure_task_panel_state().hovered_space_region_candidate
-
-    @_hovered_space_region_candidate.setter
-    def _hovered_space_region_candidate(self, value):
-        self._ensure_task_panel_state().hovered_space_region_candidate = value
-
-    @property
-    def _plan_region_parent_space(self):
-        return self._ensure_task_panel_state().plan_region_parent_space
-
-    @_plan_region_parent_space.setter
-    def _plan_region_parent_space(self, value):
-        self._ensure_task_panel_state().plan_region_parent_space = value
-
-    @property
-    def _provider_overlay_mode(self):
-        return self._ensure_provider_overlay_read_state().mode
-
-    @_provider_overlay_mode.setter
-    def _provider_overlay_mode(self, value):
-        self._ensure_provider_overlay_read_state().mode = str(value or "architecture")
-
-    @property
-    def _provider_overlay_visibility(self):
-        return self._ensure_provider_overlay_read_state().visibility
-
-    @_provider_overlay_visibility.setter
-    def _provider_overlay_visibility(self, value):
-        self._ensure_provider_overlay_read_state().visibility = dict(value or {})
-
-    @property
-    def _provider_overlay_state(self):
-        return self._ensure_provider_overlay_read_state().render_state
-
-    @_provider_overlay_state.setter
-    def _provider_overlay_state(self, value):
-        self._ensure_provider_overlay_read_state().render_state = value
-
-    @property
-    def _selected_plan_target_kind(self):
-        return self._ensure_selection_state().selected_plan_target_kind
-
-    @_selected_plan_target_kind.setter
-    def _selected_plan_target_kind(self, value):
-        self._ensure_selection_state().selected_plan_target_kind = value
-
-    @property
-    def _selected_plan_target_obj(self):
-        return self._ensure_selection_state().selected_plan_target_obj
-
-    @_selected_plan_target_obj.setter
-    def _selected_plan_target_obj(self, value):
-        self._ensure_selection_state().selected_plan_target_obj = value
-
-    @property
-    def hovered_wall(self):
-        return self._ensure_selection_state().hovered_wall
-
-    @hovered_wall.setter
-    def hovered_wall(self, value):
-        self._ensure_selection_state().hovered_wall = value
-
-    @property
-    def hovered_opening(self):
-        return self._ensure_selection_state().hovered_opening
-
-    @hovered_opening.setter
-    def hovered_opening(self, value):
-        self._ensure_selection_state().hovered_opening = value
-
-    @property
-    def hovered_symbol(self):
-        return self._ensure_selection_state().hovered_symbol
-
-    @hovered_symbol.setter
-    def hovered_symbol(self, value):
-        self._ensure_selection_state().hovered_symbol = value
-
-    @property
-    def hovered_provider(self):
-        return self._ensure_selection_state().hovered_provider
-
-    @hovered_provider.setter
-    def hovered_provider(self, value):
-        self._ensure_selection_state().hovered_provider = value
-
-    @property
-    def hovered_space(self):
-        return self._ensure_selection_state().hovered_space
-
-    @hovered_space.setter
-    def hovered_space(self, value):
-        self._ensure_selection_state().hovered_space = value
-
-    @property
-    def hovered_region(self):
-        return self._ensure_selection_state().hovered_region
-
-    @hovered_region.setter
-    def hovered_region(self, value):
-        self._ensure_selection_state().hovered_region = value
-
-    @property
-    def _pending_selected_plan_target(self):
-        return self._ensure_selection_state().pending_selected_plan_target
-
-    @_pending_selected_plan_target.setter
-    def _pending_selected_plan_target(self, value):
-        self._ensure_selection_state().pending_selected_plan_target = value
-
-    @property
-    def _secondary_selected_plan_targets_state(self):
-        return self._ensure_selection_state().secondary_selected_plan_targets_state
-
-    @_secondary_selected_plan_targets_state.setter
-    def _secondary_selected_plan_targets_state(self, value):
-        self._ensure_selection_state().secondary_selected_plan_targets_state = list(value or [])
-
-    @property
-    def _wall_edit_modal_active(self):
-        return self._ensure_wall_edit_state().wall_edit_modal_active
-
-    @_wall_edit_modal_active.setter
-    def _wall_edit_modal_active(self, value):
-        self._ensure_wall_edit_state().wall_edit_modal_active = bool(value)
-
-    @property
-    def _edit_wall(self):
-        return self._ensure_wall_edit_state().edit_wall
-
-    @_edit_wall.setter
-    def _edit_wall(self, value):
-        self._ensure_wall_edit_state().edit_wall = value
-
-    @property
-    def _edit_endpoint(self):
-        return self._ensure_wall_edit_state().edit_endpoint
-
-    @_edit_endpoint.setter
-    def _edit_endpoint(self, value):
-        self._ensure_wall_edit_state().edit_endpoint = value
-
-    @property
-    def _edit_endpoints(self):
-        return self._ensure_wall_edit_state().edit_endpoints
-
-    @_edit_endpoints.setter
-    def _edit_endpoints(self, value):
-        self._ensure_wall_edit_state().edit_endpoints = value
-
-    @property
-    def _wall_edit_opening_clearances(self):
-        return self._ensure_wall_edit_state().wall_edit_opening_clearances
-
-    @_wall_edit_opening_clearances.setter
-    def _wall_edit_opening_clearances(self, value):
-        self._ensure_wall_edit_state().wall_edit_opening_clearances = dict(value or {})
-
-    @property
-    def _wall_edit_opening_clearances_queued(self):
-        return self._ensure_wall_edit_state().wall_edit_opening_clearances_queued
-
-    @_wall_edit_opening_clearances_queued.setter
-    def _wall_edit_opening_clearances_queued(self, value):
-        self._ensure_wall_edit_state().wall_edit_opening_clearances_queued = bool(value)
-
-    @property
-    def _wall_edit_task_panel_refresh_queued(self):
-        return self._ensure_wall_edit_state().wall_edit_task_panel_refresh_queued
-
-    @_wall_edit_task_panel_refresh_queued.setter
-    def _wall_edit_task_panel_refresh_queued(self, value):
-        self._ensure_wall_edit_state().wall_edit_task_panel_refresh_queued = bool(value)
-
-    @property
-    def _preview_points(self):
-        return self._ensure_wall_edit_state().preview_points
-
-    @_preview_points.setter
-    def _preview_points(self, value):
-        self._ensure_wall_edit_state().preview_points = value
-
-    @property
-    def _preview_line_tracker(self):
-        return self._ensure_wall_edit_state().preview_line_tracker
-
-    @_preview_line_tracker.setter
-    def _preview_line_tracker(self, value):
-        self._ensure_wall_edit_state().preview_line_tracker = value
-
-    @property
-    def _preview_footprint_trackers(self):
-        return self._ensure_wall_edit_state().preview_footprint_trackers
-
-    @_preview_footprint_trackers.setter
-    def _preview_footprint_trackers(self, value):
-        self._ensure_wall_edit_state().preview_footprint_trackers = list(value or [])
-
-    @property
-    def _preview_grip_trackers(self):
-        return self._ensure_wall_edit_state().preview_grip_trackers
-
-    @_preview_grip_trackers.setter
-    def _preview_grip_trackers(self, value):
-        self._ensure_wall_edit_state().preview_grip_trackers = list(value or [])
-
-    @property
-    def _wall_edit_readout_trackers(self):
-        return self._ensure_wall_edit_state().wall_edit_readout_trackers
-
-    @_wall_edit_readout_trackers.setter
-    def _wall_edit_readout_trackers(self, value):
-        self._ensure_wall_edit_state().wall_edit_readout_trackers = list(value or [])
-
-    @property
-    def _wall_edit_opening_preview_trackers(self):
-        return self._ensure_wall_edit_state().wall_edit_opening_preview_trackers
-
-    @_wall_edit_opening_preview_trackers.setter
-    def _wall_edit_opening_preview_trackers(self, value):
-        self._ensure_wall_edit_state().wall_edit_opening_preview_trackers = list(value or [])
-
-    @property
-    def _wall_edit_active_readout_tracker(self):
-        return self._ensure_wall_edit_state().wall_edit_active_readout_tracker
-
-    @_wall_edit_active_readout_tracker.setter
-    def _wall_edit_active_readout_tracker(self, value):
-        self._ensure_wall_edit_state().wall_edit_active_readout_tracker = value
-
-    @property
-    def _wall_edit_active_readout_mode(self):
-        return self._ensure_wall_edit_state().wall_edit_active_readout_mode
-
-    @_wall_edit_active_readout_mode.setter
-    def _wall_edit_active_readout_mode(self, value):
-        self._ensure_wall_edit_state().wall_edit_active_readout_mode = value
-
-    @property
-    def _wall_edit_length_edit_queued(self):
-        return self._ensure_wall_edit_state().wall_edit_length_edit_queued
-
-    @_wall_edit_length_edit_queued.setter
-    def _wall_edit_length_edit_queued(self, value):
-        self._ensure_wall_edit_state().wall_edit_length_edit_queued = bool(value)
-
-    @property
-    def _edit_wall_visibility(self):
-        return self._ensure_wall_edit_state().edit_wall_visibility
-
-    @_edit_wall_visibility.setter
-    def _edit_wall_visibility(self, value):
-        self._ensure_wall_edit_state().edit_wall_visibility = value
-
-    @property
-    def _embedded_host(self):
-        return self._ensure_interaction_state().embedded_host
-
-    @_embedded_host.setter
-    def _embedded_host(self, value):
-        self._ensure_interaction_state().embedded_host = value
-
-    @property
-    def _embedded_tool(self):
-        return self._ensure_interaction_state().embedded_tool
-
-    @_embedded_tool.setter
-    def _embedded_tool(self, value):
-        self._ensure_interaction_state().embedded_tool = value
-
-    @property
-    def _embedded_tool_name(self):
-        return self._ensure_interaction_state().embedded_tool_name
-
-    @_embedded_tool_name.setter
-    def _embedded_tool_name(self, value):
-        self._ensure_interaction_state().embedded_tool_name = str(value or "") or None
-
-    @property
-    def _provider_point_tool(self):
-        return self._ensure_interaction_state().provider_point_tool
-
-    @_provider_point_tool.setter
-    def _provider_point_tool(self, value):
-        self._ensure_interaction_state().provider_point_tool = value
-
-    @property
-    def _edit_opening(self):
-        return self._ensure_interaction_state().edit_opening
-
-    @_edit_opening.setter
-    def _edit_opening(self, value):
-        self._ensure_interaction_state().edit_opening = value
-
-    @property
-    def _edit_opening_handle_index(self):
-        return self._ensure_interaction_state().edit_opening_handle_index
-
-    @_edit_opening_handle_index.setter
-    def _edit_opening_handle_index(self, value):
-        self._ensure_interaction_state().edit_opening_handle_index = value
-
-    @property
-    def _edit_symbol(self):
-        return self._ensure_interaction_state().edit_symbol
-
-    @_edit_symbol.setter
-    def _edit_symbol(self, value):
-        self._ensure_interaction_state().edit_symbol = value
-
-    @property
-    def _edit_symbol_handle_role(self):
-        return self._ensure_interaction_state().edit_symbol_handle_role
-
-    @_edit_symbol_handle_role.setter
-    def _edit_symbol_handle_role(self, value):
-        self._ensure_interaction_state().edit_symbol_handle_role = value
-
-    @property
-    def _edit_provider(self):
-        return self._ensure_interaction_state().edit_provider
-
-    @_edit_provider.setter
-    def _edit_provider(self, value):
-        self._ensure_interaction_state().edit_provider = value
-
-    @property
-    def _edit_provider_handle_index(self):
-        return self._ensure_interaction_state().edit_provider_handle_index
-
-    @_edit_provider_handle_index.setter
-    def _edit_provider_handle_index(self, value):
-        self._ensure_interaction_state().edit_provider_handle_index = value
-
-    @property
-    def _edit_provider_handle(self):
-        return self._ensure_interaction_state().edit_provider_handle
-
-    @_edit_provider_handle.setter
-    def _edit_provider_handle(self, value):
-        self._ensure_interaction_state().edit_provider_handle = value
-
-    @property
-    def _edit_space(self):
-        return self._ensure_interaction_state().edit_space
-
-    @_edit_space.setter
-    def _edit_space(self, value):
-        self._ensure_interaction_state().edit_space = value
-
-    @property
-    def _hover_pick_dirty(self):
-        return self._ensure_hover_pick_state().dirty
-
-    @_hover_pick_dirty.setter
-    def _hover_pick_dirty(self, value):
-        self._ensure_hover_pick_state().dirty = bool(value)
-
-    @property
-    def _hover_pick_last_time(self):
-        return self._ensure_hover_pick_state().last_time
-
-    @_hover_pick_last_time.setter
-    def _hover_pick_last_time(self, value):
-        self._ensure_hover_pick_state().last_time = float(value or 0.0)
-
-    @property
-    def _hover_pick_last_mouse_pos(self):
-        return self._ensure_hover_pick_state().last_mouse_pos
-
-    @_hover_pick_last_mouse_pos.setter
-    def _hover_pick_last_mouse_pos(self, value):
-        self._ensure_hover_pick_state().last_mouse_pos = value
-
-    @property
-    def _plan_hover_pick_cache_queued(self):
-        return self._ensure_hover_pick_state().cache_queued
-
-    @_plan_hover_pick_cache_queued.setter
-    def _plan_hover_pick_cache_queued(self, value):
-        self._ensure_hover_pick_state().cache_queued = bool(value)
-
-    @property
-    def _selection_refresh_queued(self):
-        return self._ensure_selection_sync_state().selection_refresh_queued
-
-    @_selection_refresh_queued.setter
-    def _selection_refresh_queued(self, value):
-        self._ensure_selection_sync_state().selection_refresh_queued = bool(value)
-
-    @property
-    def _gui_selection_sync_queued(self):
-        return self._ensure_selection_sync_state().gui_selection_sync_queued
-
-    @_gui_selection_sync_queued.setter
-    def _gui_selection_sync_queued(self, value):
-        self._ensure_selection_sync_state().gui_selection_sync_queued = bool(value)
-
-    @property
-    def _gui_selection_sync_generation(self):
-        return self._ensure_selection_sync_state().gui_selection_sync_generation
-
-    @_gui_selection_sync_generation.setter
-    def _gui_selection_sync_generation(self, value):
-        self._ensure_selection_sync_state().gui_selection_sync_generation = int(value or 0)
-
-    @property
-    def _queued_gui_selection_object(self):
-        return self._ensure_selection_sync_state().queued_gui_selection_object
-
-    @_queued_gui_selection_object.setter
-    def _queued_gui_selection_object(self, value):
-        self._ensure_selection_sync_state().queued_gui_selection_object = value
-
-    @property
-    def _mouse_moved_cb(self):
-        return self._ensure_input_event_state().mouse_moved_cb
-
-    @_mouse_moved_cb.setter
-    def _mouse_moved_cb(self, value):
-        self._ensure_input_event_state().mouse_moved_cb = value
-
-    @property
-    def _mouse_wheel_cb(self):
-        return self._ensure_input_event_state().mouse_wheel_cb
-
-    @_mouse_wheel_cb.setter
-    def _mouse_wheel_cb(self, value):
-        self._ensure_input_event_state().mouse_wheel_cb = value
-
-    @property
-    def _mouse_wheel_event_type(self):
-        return self._ensure_input_event_state().mouse_wheel_event_type
-
-    @_mouse_wheel_event_type.setter
-    def _mouse_wheel_event_type(self, value):
-        self._ensure_input_event_state().mouse_wheel_event_type = value
-
-    @property
-    def _mouse_pressed_cb(self):
-        return self._ensure_input_event_state().mouse_pressed_cb
-
-    @_mouse_pressed_cb.setter
-    def _mouse_pressed_cb(self, value):
-        self._ensure_input_event_state().mouse_pressed_cb = value
-
-    @property
-    def _key_pressed_cb(self):
-        return self._ensure_input_event_state().key_pressed_cb
-
-    @_key_pressed_cb.setter
-    def _key_pressed_cb(self, value):
-        self._ensure_input_event_state().key_pressed_cb = value
-
-    @property
-    def _consume_left_button_release(self):
-        return self._ensure_input_event_state().consume_left_button_release
-
-    @_consume_left_button_release.setter
-    def _consume_left_button_release(self, value):
-        self._ensure_input_event_state().consume_left_button_release = bool(value)
-
-    @property
-    def _overlay_refresh_queued(self):
-        return self._ensure_overlay_refresh_state().overlay_refresh_queued
-
-    @_overlay_refresh_queued.setter
-    def _overlay_refresh_queued(self, value):
-        self._ensure_overlay_refresh_state().overlay_refresh_queued = bool(value)
-
-    @property
-    def _view_scale_overlay_refresh_queued(self):
-        return self._ensure_overlay_refresh_state().view_scale_overlay_refresh_queued
-
-    @_view_scale_overlay_refresh_queued.setter
-    def _view_scale_overlay_refresh_queued(self, value):
-        self._ensure_overlay_refresh_state().view_scale_overlay_refresh_queued = bool(value)
-
-    @property
-    def _dirty_plan_visuals(self):
-        return self._ensure_overlay_refresh_state().dirty_plan_visuals
-
-    @_dirty_plan_visuals.setter
-    def _dirty_plan_visuals(self, value):
-        self._ensure_overlay_refresh_state().dirty_plan_visuals = set(value or ())
-
-    @property
-    def _wall_grip_state(self):
-        return self._ensure_wall_grip_runtime_state().state
-
-    @_wall_grip_state.setter
-    def _wall_grip_state(self, value):
-        self._ensure_wall_grip_runtime_state().state = value
-
-    @property
-    def _wall_grip_sync_queued(self):
-        return self._ensure_wall_grip_runtime_state().sync_queued
-
-    @_wall_grip_sync_queued.setter
-    def _wall_grip_sync_queued(self, value):
-        self._ensure_wall_grip_runtime_state().sync_queued = bool(value)
-
-    @property
-    def _wall_grip_sync_generation(self):
-        return self._ensure_wall_grip_runtime_state().sync_generation
-
-    @_wall_grip_sync_generation.setter
-    def _wall_grip_sync_generation(self, value):
-        self._ensure_wall_grip_runtime_state().sync_generation = int(value or 0)
-
-    @property
-    def _viewport_status_chip(self):
-        return self._ensure_viewport_state().status_chip
-
-    @_viewport_status_chip.setter
-    def _viewport_status_chip(self, value):
-        self._ensure_viewport_state().status_chip = value
-
-    @property
-    def _saved_camera(self):
-        return self._ensure_viewport_state().saved_camera
-
-    @_saved_camera.setter
-    def _saved_camera(self, value):
-        self._ensure_viewport_state().saved_camera = value
-
-    @property
-    def _saved_camera_type(self):
-        return self._ensure_viewport_state().saved_camera_type
-
-    @_saved_camera_type.setter
-    def _saved_camera_type(self, value):
-        self._ensure_viewport_state().saved_camera_type = value
-
-    @property
-    def _saved_navigation_style(self):
-        return self._ensure_viewport_state().saved_navigation_style
-
-    @_saved_navigation_style.setter
-    def _saved_navigation_style(self, value):
-        self._ensure_viewport_state().saved_navigation_style = value
-
-    @property
-    def _saved_navigation_state(self):
-        return self._ensure_viewport_state().saved_navigation_state
-
-    @_saved_navigation_state.setter
-    def _saved_navigation_state(self, value):
-        self._ensure_viewport_state().saved_navigation_state = dict(value or {})
-
-    @property
-    def _saved_view_action_state(self):
-        return self._ensure_viewport_state().saved_view_action_state
-
-    @_saved_view_action_state.setter
-    def _saved_view_action_state(self, value):
-        self._ensure_viewport_state().saved_view_action_state = dict(value or {})
-
-    @property
-    def _saved_preselection_state(self):
-        return self._ensure_viewport_state().saved_preselection_state
-
-    @_saved_preselection_state.setter
-    def _saved_preselection_state(self, value):
-        self._ensure_viewport_state().saved_preselection_state = value
-
-    @property
-    def _plan_preselection_forced(self):
-        return self._ensure_viewport_state().plan_preselection_forced
-
-    @_plan_preselection_forced.setter
-    def _plan_preselection_forced(self, value):
-        self._ensure_viewport_state().plan_preselection_forced = bool(value)
-
-    @property
-    def _saved_object_view_state(self):
-        return self._ensure_viewport_state().saved_object_view_state
-
-    @_saved_object_view_state.setter
-    def _saved_object_view_state(self, value):
-        self._ensure_viewport_state().saved_object_view_state = dict(value or {})
-
-    @property
-    def _working_plane(self):
-        return self._ensure_viewport_state().working_plane
-
-    @_working_plane.setter
-    def _working_plane(self, value):
-        self._ensure_viewport_state().working_plane = value
-
-    @property
-    def _interaction_plane(self):
-        return self._ensure_viewport_state().interaction_plane
-
-    @_interaction_plane.setter
-    def _interaction_plane(self, value):
-        self._ensure_viewport_state().interaction_plane = value
-
-    @property
-    def _pending_created_plan_objects(self):
-        return self._ensure_document_visual_state().pending_created_plan_objects
-
-    @_pending_created_plan_objects.setter
-    def _pending_created_plan_objects(self, value):
-        self._ensure_document_visual_state().pending_created_plan_objects = dict(value or {})
-
-    @property
-    def _created_plan_objects_flush_queued(self):
-        return self._ensure_document_visual_state().created_plan_objects_flush_queued
-
-    @_created_plan_objects_flush_queued.setter
-    def _created_plan_objects_flush_queued(self, value):
-        self._ensure_document_visual_state().created_plan_objects_flush_queued = bool(value)
-
-    @property
-    def _created_plan_objects_flush_deferred(self):
-        return self._ensure_document_visual_state().created_plan_objects_flush_deferred
-
-    @_created_plan_objects_flush_deferred.setter
-    def _created_plan_objects_flush_deferred(self, value):
-        self._ensure_document_visual_state().created_plan_objects_flush_deferred = bool(value)
-
-    @property
-    def _document_visual_update_defer_depth(self):
-        return self._ensure_document_visual_state().document_visual_update_defer_depth
-
-    @_document_visual_update_defer_depth.setter
-    def _document_visual_update_defer_depth(self, value):
-        self._ensure_document_visual_state().document_visual_update_defer_depth = int(value or 0)
-
-    @property
-    def _document_visual_refresh_deferred(self):
-        return self._ensure_document_visual_state().document_visual_refresh_deferred
-
-    @_document_visual_refresh_deferred.setter
-    def _document_visual_refresh_deferred(self, value):
-        self._ensure_document_visual_state().document_visual_refresh_deferred = bool(value)
-
-    @property
-    def _selected_provider_overlay_render_state(self):
-        return self._ensure_provider_transient_state().selected_provider_overlay_render_state
-
-    @_selected_provider_overlay_render_state.setter
-    def _selected_provider_overlay_render_state(self, value):
-        self._ensure_provider_transient_state().selected_provider_overlay_render_state = value
-
-    @property
-    def _provider_handle_trackers(self):
-        return self._ensure_provider_transient_state().provider_handle_trackers
-
-    @_provider_handle_trackers.setter
-    def _provider_handle_trackers(self, value):
-        self._ensure_provider_transient_state().provider_handle_trackers = list(value or [])
-
-    @property
-    def _selected_provider_handle_render_state(self):
-        return self._ensure_provider_transient_state().selected_provider_handle_render_state
-
-    @_selected_provider_handle_render_state.setter
-    def _selected_provider_handle_render_state(self, value):
-        self._ensure_provider_transient_state().selected_provider_handle_render_state = value
-
-    @property
-    def _provider_selected_objects(self):
-        return self._ensure_provider_transient_state().provider_selected_objects
-
-    @_provider_selected_objects.setter
-    def _provider_selected_objects(self, value):
-        self._ensure_provider_transient_state().provider_selected_objects = list(value or [])
-
-    @property
-    def _provider_point_host_target(self):
-        return self._ensure_provider_transient_state().provider_point_host_target
-
-    @_provider_point_host_target.setter
-    def _provider_point_host_target(self, value):
-        self._ensure_provider_transient_state().provider_point_host_target = value
-
-    @property
-    def _provider_point_host_source(self):
-        return self._ensure_provider_transient_state().provider_point_host_source
-
-    @_provider_point_host_source.setter
-    def _provider_point_host_source(self, value):
-        self._ensure_provider_transient_state().provider_point_host_source = str(value or "")
-
-    @property
-    def _provider_point_preview_trackers(self):
-        return self._ensure_provider_transient_state().provider_point_preview_trackers
-
-    @_provider_point_preview_trackers.setter
-    def _provider_point_preview_trackers(self, value):
-        self._ensure_provider_transient_state().provider_point_preview_trackers = list(value or [])
-
-    @property
-    def _provider_point_preview_render_state(self):
-        return self._ensure_provider_transient_state().provider_point_preview_render_state
-
-    @_provider_point_preview_render_state.setter
-    def _provider_point_preview_render_state(self, value):
-        self._ensure_provider_transient_state().provider_point_preview_render_state = value
-
-    @property
-    def _provider_point_preview_style_state(self):
-        return self._ensure_provider_transient_state().provider_point_preview_style_state
-
-    @_provider_point_preview_style_state.setter
-    def _provider_point_preview_style_state(self, value):
-        self._ensure_provider_transient_state().provider_point_preview_style_state = value
-
-    @property
-    def _provider_point_preview_source_point(self):
-        return self._ensure_provider_transient_state().provider_point_preview_source_point
-
-    @_provider_point_preview_source_point.setter
-    def _provider_point_preview_source_point(self, value):
-        self._ensure_provider_transient_state().provider_point_preview_source_point = value
-
-    @property
-    def _provider_point_preview_point(self):
-        return self._ensure_provider_transient_state().provider_point_preview_point
-
-    @_provider_point_preview_point.setter
-    def _provider_point_preview_point(self, value):
-        self._ensure_provider_transient_state().provider_point_preview_point = value
-
-    @property
-    def _provider_point_preview_host_target(self):
-        return self._ensure_provider_transient_state().provider_point_preview_host_target
-
-    @_provider_point_preview_host_target.setter
-    def _provider_point_preview_host_target(self, value):
-        self._ensure_provider_transient_state().provider_point_preview_host_target = value
-
-    @property
-    def _provider_point_preview_host_source(self):
-        return self._ensure_provider_transient_state().provider_point_preview_host_source
-
-    @_provider_point_preview_host_source.setter
-    def _provider_point_preview_host_source(self, value):
-        self._ensure_provider_transient_state().provider_point_preview_host_source = str(
-            value or ""
-        )
-
-    @property
-    def _opening_handle_trackers(self):
-        return self._ensure_opening_transient_state().opening_handle_trackers
-
-    @_opening_handle_trackers.setter
-    def _opening_handle_trackers(self, value):
-        self._ensure_opening_transient_state().opening_handle_trackers = list(value or [])
-
-    @property
-    def _opening_handle_tracker_pool(self):
-        return self._ensure_opening_transient_state().opening_handle_tracker_pool
-
-    @_opening_handle_tracker_pool.setter
-    def _opening_handle_tracker_pool(self, value):
-        self._ensure_opening_transient_state().opening_handle_tracker_pool = list(value or [])
-
-    @property
-    def _opening_handle_tracker_pool_queued(self):
-        return self._ensure_opening_transient_state().opening_handle_tracker_pool_queued
-
-    @_opening_handle_tracker_pool_queued.setter
-    def _opening_handle_tracker_pool_queued(self, value):
-        self._ensure_opening_transient_state().opening_handle_tracker_pool_queued = bool(value)
-
-    @property
-    def _selected_opening_handle_render_state(self):
-        return self._ensure_opening_transient_state().selected_opening_handle_render_state
-
-    @_selected_opening_handle_render_state.setter
-    def _selected_opening_handle_render_state(self, value):
-        self._ensure_opening_transient_state().selected_opening_handle_render_state = value
-
-    @property
-    def _selected_opening_hard_refresh_queued(self):
-        return self._ensure_opening_transient_state().selected_opening_hard_refresh_queued
-
-    @_selected_opening_hard_refresh_queued.setter
-    def _selected_opening_hard_refresh_queued(self, value):
-        self._ensure_opening_transient_state().selected_opening_hard_refresh_queued = bool(value)
-
-    @property
-    def _opening_host_recompute_queued(self):
-        return self._ensure_opening_transient_state().opening_host_recompute_queued
-
-    @_opening_host_recompute_queued.setter
-    def _opening_host_recompute_queued(self, value):
-        self._ensure_opening_transient_state().opening_host_recompute_queued = bool(value)
-
-    @property
-    def _opening_host_recompute_running(self):
-        return self._ensure_opening_transient_state().opening_host_recompute_running
-
-    @_opening_host_recompute_running.setter
-    def _opening_host_recompute_running(self, value):
-        self._ensure_opening_transient_state().opening_host_recompute_running = bool(value)
-
-    @property
-    def _opening_move_preview_trackers(self):
-        return self._ensure_opening_transient_state().opening_move_preview_trackers
-
-    @_opening_move_preview_trackers.setter
-    def _opening_move_preview_trackers(self, value):
-        self._ensure_opening_transient_state().opening_move_preview_trackers = list(value or [])
-
-    @property
-    def _symbol_edit_preview_trackers(self):
-        return self._ensure_opening_transient_state().symbol_edit_preview_trackers
-
-    @_symbol_edit_preview_trackers.setter
-    def _symbol_edit_preview_trackers(self, value):
-        self._ensure_opening_transient_state().symbol_edit_preview_trackers = list(value or [])
-
-    @property
-    def _opening_move_snap_profile_pushed(self):
-        return self._ensure_opening_transient_state().opening_move_snap_profile_pushed
-
-    @_opening_move_snap_profile_pushed.setter
-    def _opening_move_snap_profile_pushed(self, value):
-        self._ensure_opening_transient_state().opening_move_snap_profile_pushed = bool(value)
-
-    @property
-    def _edit_opening_move_anchor(self):
-        return self._ensure_opening_transient_state().edit_opening_move_anchor
-
-    @_edit_opening_move_anchor.setter
-    def _edit_opening_move_anchor(self, value):
-        self._ensure_opening_transient_state().edit_opening_move_anchor = str(value or "center")
-
-    @property
-    def _edit_opening_move_raw_point(self):
-        return self._ensure_opening_transient_state().edit_opening_move_raw_point
-
-    @_edit_opening_move_raw_point.setter
-    def _edit_opening_move_raw_point(self, value):
-        self._ensure_opening_transient_state().edit_opening_move_raw_point = value
-
-    @property
-    def _grip_trackers(self):
-        return self._ensure_overlay_tracker_state().grip_trackers
-
-    @_grip_trackers.setter
-    def _grip_trackers(self, value):
-        self._ensure_overlay_tracker_state().grip_trackers = list(value or [])
-
-    @property
-    def _wall_hover_trackers(self):
-        return self._ensure_overlay_tracker_state().wall_hover_trackers
-
-    @_wall_hover_trackers.setter
-    def _wall_hover_trackers(self, value):
-        self._ensure_overlay_tracker_state().wall_hover_trackers = list(value or [])
-
-    @property
-    def _wall_overlay_trackers(self):
-        return self._ensure_overlay_tracker_state().wall_overlay_trackers
-
-    @_wall_overlay_trackers.setter
-    def _wall_overlay_trackers(self, value):
-        self._ensure_overlay_tracker_state().wall_overlay_trackers = list(value or [])
-
-    @property
-    def _junction_node_trackers(self):
-        return self._ensure_overlay_tracker_state().junction_node_trackers
-
-    @_junction_node_trackers.setter
-    def _junction_node_trackers(self, value):
-        self._ensure_overlay_tracker_state().junction_node_trackers = list(value or [])
-
-    @property
-    def _hovered_wall_opening_context_trackers(self):
-        return self._ensure_overlay_tracker_state().hovered_wall_opening_context_trackers
-
-    @_hovered_wall_opening_context_trackers.setter
-    def _hovered_wall_opening_context_trackers(self, value):
-        self._ensure_overlay_tracker_state().hovered_wall_opening_context_trackers = list(
-            value or []
-        )
-
-    @property
-    def _opening_hover_trackers(self):
-        return self._ensure_overlay_tracker_state().opening_hover_trackers
-
-    @_opening_hover_trackers.setter
-    def _opening_hover_trackers(self, value):
-        self._ensure_overlay_tracker_state().opening_hover_trackers = list(value or [])
-
-    @property
-    def _symbol_hover_trackers(self):
-        return self._ensure_overlay_tracker_state().symbol_hover_trackers
-
-    @_symbol_hover_trackers.setter
-    def _symbol_hover_trackers(self, value):
-        self._ensure_overlay_tracker_state().symbol_hover_trackers = list(value or [])
-
-    @property
-    def _provider_hover_trackers(self):
-        return self._ensure_overlay_tracker_state().provider_hover_trackers
-
-    @_provider_hover_trackers.setter
-    def _provider_hover_trackers(self, value):
-        self._ensure_overlay_tracker_state().provider_hover_trackers = list(value or [])
-
-    @property
-    def _provider_selected_trackers(self):
-        return self._ensure_overlay_tracker_state().provider_selected_trackers
-
-    @_provider_selected_trackers.setter
-    def _provider_selected_trackers(self, value):
-        self._ensure_overlay_tracker_state().provider_selected_trackers = list(value or [])
-
-    @property
-    def _space_hover_trackers(self):
-        return self._ensure_overlay_tracker_state().space_hover_trackers
-
-    @_space_hover_trackers.setter
-    def _space_hover_trackers(self, value):
-        self._ensure_overlay_tracker_state().space_hover_trackers = list(value or [])
-
-    @property
-    def _region_hover_trackers(self):
-        return self._ensure_overlay_tracker_state().region_hover_trackers
-
-    @_region_hover_trackers.setter
-    def _region_hover_trackers(self, value):
-        self._ensure_overlay_tracker_state().region_hover_trackers = list(value or [])
-
-    @property
-    def _opening_overlay_trackers(self):
-        return self._ensure_overlay_tracker_state().opening_overlay_trackers
-
-    @_opening_overlay_trackers.setter
-    def _opening_overlay_trackers(self, value):
-        self._ensure_overlay_tracker_state().opening_overlay_trackers = list(value or [])
-
-    @property
-    def _symbol_overlay_trackers(self):
-        return self._ensure_overlay_tracker_state().symbol_overlay_trackers
-
-    @_symbol_overlay_trackers.setter
-    def _symbol_overlay_trackers(self, value):
-        self._ensure_overlay_tracker_state().symbol_overlay_trackers = list(value or [])
-
-    @property
-    def _space_overlay_trackers(self):
-        return self._ensure_overlay_tracker_state().space_overlay_trackers
-
-    @_space_overlay_trackers.setter
-    def _space_overlay_trackers(self, value):
-        self._ensure_overlay_tracker_state().space_overlay_trackers = list(value or [])
-
-    @property
-    def _region_overlay_trackers(self):
-        return self._ensure_overlay_tracker_state().region_overlay_trackers
-
-    @_region_overlay_trackers.setter
-    def _region_overlay_trackers(self, value):
-        self._ensure_overlay_tracker_state().region_overlay_trackers = list(value or [])
-
-    @property
-    def _provider_overlay_trackers(self):
-        return self._ensure_overlay_tracker_state().provider_overlay_trackers
-
-    @_provider_overlay_trackers.setter
-    def _provider_overlay_trackers(self, value):
-        self._ensure_overlay_tracker_state().provider_overlay_trackers = list(value or [])
-
-    @property
-    def _secondary_selection_trackers(self):
-        return self._ensure_overlay_tracker_state().secondary_selection_trackers
-
-    @_secondary_selection_trackers.setter
-    def _secondary_selection_trackers(self, value):
-        self._ensure_overlay_tracker_state().secondary_selection_trackers = list(value or [])
-
-    @property
-    def _space_region_pick_trackers(self):
-        return self._ensure_overlay_tracker_state().space_region_pick_trackers
-
-    @_space_region_pick_trackers.setter
-    def _space_region_pick_trackers(self, value):
-        self._ensure_overlay_tracker_state().space_region_pick_trackers = list(value or [])
-
-    @property
-    def _selected_wall_opening_context_trackers(self):
-        return self._ensure_overlay_tracker_state().selected_wall_opening_context_trackers
-
-    @_selected_wall_opening_context_trackers.setter
-    def _selected_wall_opening_context_trackers(self, value):
-        self._ensure_overlay_tracker_state().selected_wall_opening_context_trackers = list(
-            value or []
-        )
-
-    @property
-    def _symbol_handle_trackers(self):
-        return self._ensure_overlay_tracker_state().symbol_handle_trackers
-
-    @_symbol_handle_trackers.setter
-    def _symbol_handle_trackers(self, value):
-        self._ensure_overlay_tracker_state().symbol_handle_trackers = list(value or [])
-
-    @property
-    def _plan_overlay_geometry_cache(self):
-        return self._ensure_overlay_cache_state().plan_overlay_geometry_cache
-
-    @_plan_overlay_geometry_cache.setter
-    def _plan_overlay_geometry_cache(self, value):
-        default_cache = {"opening": {}, "space": {}, "region": {}}
-        self._ensure_overlay_cache_state().plan_overlay_geometry_cache = dict(
-            value or default_cache
-        )
-
-    @property
-    def _plan_semantic_object_cache(self):
-        return self._ensure_overlay_cache_state().plan_semantic_object_cache
-
-    @_plan_semantic_object_cache.setter
-    def _plan_semantic_object_cache(self, value):
-        self._ensure_overlay_cache_state().plan_semantic_object_cache = dict(value or {})
-
-    @property
-    def _plan_object_storeys_cache(self):
-        return self._ensure_overlay_cache_state().plan_object_storeys_cache
-
-    @_plan_object_storeys_cache.setter
-    def _plan_object_storeys_cache(self, value):
-        self._ensure_overlay_cache_state().plan_object_storeys_cache = dict(value or {})
-
-    @property
-    def _plan_symbol_instances_cache(self):
-        return self._ensure_overlay_cache_state().plan_symbol_instances_cache
-
-    @_plan_symbol_instances_cache.setter
-    def _plan_symbol_instances_cache(self, value):
-        self._ensure_overlay_cache_state().plan_symbol_instances_cache = value
-
-    @property
-    def _plan_space_instances_cache(self):
-        return self._ensure_overlay_cache_state().plan_space_instances_cache
-
-    @_plan_space_instances_cache.setter
-    def _plan_space_instances_cache(self, value):
-        self._ensure_overlay_cache_state().plan_space_instances_cache = value
-
-    @property
-    def _plan_region_instances_cache(self):
-        return self._ensure_overlay_cache_state().plan_region_instances_cache
-
-    @_plan_region_instances_cache.setter
-    def _plan_region_instances_cache(self, value):
-        self._ensure_overlay_cache_state().plan_region_instances_cache = value
-
-    @property
-    def _plan_opening_instances_cache(self):
-        return self._ensure_overlay_cache_state().plan_opening_instances_cache
-
-    @_plan_opening_instances_cache.setter
-    def _plan_opening_instances_cache(self, value):
-        self._ensure_overlay_cache_state().plan_opening_instances_cache = value
-
-    @property
-    def _wall_hosted_openings_cache(self):
-        return self._ensure_overlay_cache_state().wall_hosted_openings_cache
-
-    @_wall_hosted_openings_cache.setter
-    def _wall_hosted_openings_cache(self, value):
-        self._ensure_overlay_cache_state().wall_hosted_openings_cache = value
-
-    @property
-    def _wall_hosted_openings_cache_queued(self):
-        return self._ensure_overlay_cache_state().wall_hosted_openings_cache_queued
-
-    @_wall_hosted_openings_cache_queued.setter
-    def _wall_hosted_openings_cache_queued(self, value):
-        self._ensure_overlay_cache_state().wall_hosted_openings_cache_queued = bool(value)
-
-    @property
-    def _opening_overlay_screen_cache(self):
-        return self._ensure_overlay_cache_state().opening_overlay_screen_cache
-
-    @_opening_overlay_screen_cache.setter
-    def _opening_overlay_screen_cache(self, value):
-        self._ensure_overlay_cache_state().opening_overlay_screen_cache = dict(value or {})
-
-    @property
-    def _opening_overlay_screen_cache_projection_key(self):
-        return self._ensure_overlay_cache_state().opening_overlay_screen_cache_projection_key
-
-    @_opening_overlay_screen_cache_projection_key.setter
-    def _opening_overlay_screen_cache_projection_key(self, value):
-        self._ensure_overlay_cache_state().opening_overlay_screen_cache_projection_key = value
-
-    @property
-    def _symbol_overlay_screen_cache(self):
-        return self._ensure_overlay_cache_state().symbol_overlay_screen_cache
-
-    @_symbol_overlay_screen_cache.setter
-    def _symbol_overlay_screen_cache(self, value):
-        self._ensure_overlay_cache_state().symbol_overlay_screen_cache = dict(value or {})
-
-    @property
-    def _hovered_opening_overlay_dirty(self):
-        return self._ensure_overlay_transient_state().hovered_opening_overlay_dirty
-
-    @_hovered_opening_overlay_dirty.setter
-    def _hovered_opening_overlay_dirty(self, value):
-        self._ensure_overlay_transient_state().hovered_opening_overlay_dirty = bool(value)
-
-    @property
-    def _hovered_opening_overlay_render_state(self):
-        return self._ensure_overlay_transient_state().hovered_opening_overlay_render_state
-
-    @_hovered_opening_overlay_render_state.setter
-    def _hovered_opening_overlay_render_state(self, value):
-        self._ensure_overlay_transient_state().hovered_opening_overlay_render_state = value
-
-    @property
-    def _selected_opening_overlay_dirty(self):
-        return self._ensure_overlay_transient_state().selected_opening_overlay_dirty
-
-    @_selected_opening_overlay_dirty.setter
-    def _selected_opening_overlay_dirty(self, value):
-        self._ensure_overlay_transient_state().selected_opening_overlay_dirty = bool(value)
-
-    @property
-    def _selected_opening_overlay_render_state(self):
-        return self._ensure_overlay_transient_state().selected_opening_overlay_render_state
-
-    @_selected_opening_overlay_render_state.setter
-    def _selected_opening_overlay_render_state(self, value):
-        self._ensure_overlay_transient_state().selected_opening_overlay_render_state = value
-
-    @property
-    def _selected_space_overlay_dirty(self):
-        return self._ensure_overlay_transient_state().selected_space_overlay_dirty
-
-    @_selected_space_overlay_dirty.setter
-    def _selected_space_overlay_dirty(self, value):
-        self._ensure_overlay_transient_state().selected_space_overlay_dirty = bool(value)
-
-    @property
-    def _selected_space_overlay_geometry_key(self):
-        return self._ensure_overlay_transient_state().selected_space_overlay_geometry_key
-
-    @_selected_space_overlay_geometry_key.setter
-    def _selected_space_overlay_geometry_key(self, value):
-        self._ensure_overlay_transient_state().selected_space_overlay_geometry_key = value
-
-    @property
-    def _selected_space_overlay_segments(self):
-        return self._ensure_overlay_transient_state().selected_space_overlay_segments
-
-    @_selected_space_overlay_segments.setter
-    def _selected_space_overlay_segments(self, value):
-        self._ensure_overlay_transient_state().selected_space_overlay_segments = tuple(value or ())
-
-    @property
-    def _selected_space_overlay_render_state(self):
-        return self._ensure_overlay_transient_state().selected_space_overlay_render_state
-
-    @_selected_space_overlay_render_state.setter
-    def _selected_space_overlay_render_state(self, value):
-        self._ensure_overlay_transient_state().selected_space_overlay_render_state = value
+    # State-backed compatibility properties are bound after class definition.
 
     def __init__(self):
         self.selection = PlanSelectionAPI(self)
@@ -4610,4 +3485,361 @@ class PlanEditSession:
     def _execute_selected_opening_handle(self, opening, handle_index, handle):
         return plan_opening_edit.execute_selected_opening_handle(
             self, opening, handle_index, handle
+        )
+
+
+_PLAN_EDIT_SESSION_STATE_PROPERTIES = (
+    (
+        "_ensure_task_panel_state",
+        (
+            ("_plan_relation_status_message", "relation_status_message", _coerce_identity),
+            ("_space_region_candidates", "space_region_candidates", _coerce_list),
+            ("_hovered_space_region_candidate", "hovered_space_region_candidate", _coerce_identity),
+            ("_plan_region_parent_space", "plan_region_parent_space", _coerce_identity),
+        ),
+    ),
+    (
+        "_ensure_provider_overlay_read_state",
+        (
+            ("_provider_overlay_mode", "mode", _make_str_coercer("architecture")),
+            ("_provider_overlay_visibility", "visibility", _coerce_dict),
+            ("_provider_overlay_state", "render_state", _coerce_identity),
+        ),
+    ),
+    (
+        "_ensure_selection_state",
+        (
+            ("_selected_plan_target_kind", "selected_plan_target_kind", _coerce_identity),
+            ("_selected_plan_target_obj", "selected_plan_target_obj", _coerce_identity),
+            ("hovered_wall", "hovered_wall", _coerce_identity),
+            ("hovered_opening", "hovered_opening", _coerce_identity),
+            ("hovered_symbol", "hovered_symbol", _coerce_identity),
+            ("hovered_provider", "hovered_provider", _coerce_identity),
+            ("hovered_space", "hovered_space", _coerce_identity),
+            ("hovered_region", "hovered_region", _coerce_identity),
+            ("_pending_selected_plan_target", "pending_selected_plan_target", _coerce_identity),
+            (
+                "_secondary_selected_plan_targets_state",
+                "secondary_selected_plan_targets_state",
+                _coerce_list,
+            ),
+        ),
+    ),
+    (
+        "_ensure_wall_edit_state",
+        (
+            ("_wall_edit_modal_active", "wall_edit_modal_active", _coerce_bool),
+            ("_edit_wall", "edit_wall", _coerce_identity),
+            ("_edit_endpoint", "edit_endpoint", _coerce_identity),
+            ("_edit_endpoints", "edit_endpoints", _coerce_identity),
+            ("_wall_edit_opening_clearances", "wall_edit_opening_clearances", _coerce_dict),
+            (
+                "_wall_edit_opening_clearances_queued",
+                "wall_edit_opening_clearances_queued",
+                _coerce_bool,
+            ),
+            (
+                "_wall_edit_task_panel_refresh_queued",
+                "wall_edit_task_panel_refresh_queued",
+                _coerce_bool,
+            ),
+            ("_preview_points", "preview_points", _coerce_identity),
+            ("_preview_line_tracker", "preview_line_tracker", _coerce_identity),
+            ("_preview_footprint_trackers", "preview_footprint_trackers", _coerce_list),
+            ("_preview_grip_trackers", "preview_grip_trackers", _coerce_list),
+            ("_wall_edit_readout_trackers", "wall_edit_readout_trackers", _coerce_list),
+            (
+                "_wall_edit_opening_preview_trackers",
+                "wall_edit_opening_preview_trackers",
+                _coerce_list,
+            ),
+            (
+                "_wall_edit_active_readout_tracker",
+                "wall_edit_active_readout_tracker",
+                _coerce_identity,
+            ),
+            ("_wall_edit_active_readout_mode", "wall_edit_active_readout_mode", _coerce_identity),
+            ("_wall_edit_length_edit_queued", "wall_edit_length_edit_queued", _coerce_bool),
+            ("_edit_wall_visibility", "edit_wall_visibility", _coerce_identity),
+        ),
+    ),
+    (
+        "_ensure_interaction_state",
+        (
+            ("_embedded_host", "embedded_host", _coerce_identity),
+            ("_embedded_tool", "embedded_tool", _coerce_identity),
+            ("_embedded_tool_name", "embedded_tool_name", _coerce_optional_nonempty_str),
+            ("_provider_point_tool", "provider_point_tool", _coerce_identity),
+            ("_edit_opening", "edit_opening", _coerce_identity),
+            ("_edit_opening_handle_index", "edit_opening_handle_index", _coerce_identity),
+            ("_edit_symbol", "edit_symbol", _coerce_identity),
+            ("_edit_symbol_handle_role", "edit_symbol_handle_role", _coerce_identity),
+            ("_edit_provider", "edit_provider", _coerce_identity),
+            ("_edit_provider_handle_index", "edit_provider_handle_index", _coerce_identity),
+            ("_edit_provider_handle", "edit_provider_handle", _coerce_identity),
+            ("_edit_space", "edit_space", _coerce_identity),
+        ),
+    ),
+    (
+        "_ensure_hover_pick_state",
+        (
+            ("_hover_pick_dirty", "dirty", _coerce_bool),
+            ("_hover_pick_last_time", "last_time", _coerce_float),
+            ("_hover_pick_last_mouse_pos", "last_mouse_pos", _coerce_identity),
+            ("_plan_hover_pick_cache_queued", "cache_queued", _coerce_bool),
+        ),
+    ),
+    (
+        "_ensure_selection_sync_state",
+        (
+            ("_selection_refresh_queued", "selection_refresh_queued", _coerce_bool),
+            ("_gui_selection_sync_queued", "gui_selection_sync_queued", _coerce_bool),
+            ("_gui_selection_sync_generation", "gui_selection_sync_generation", _coerce_int),
+            ("_queued_gui_selection_object", "queued_gui_selection_object", _coerce_identity),
+        ),
+    ),
+    (
+        "_ensure_input_event_state",
+        (
+            ("_mouse_moved_cb", "mouse_moved_cb", _coerce_identity),
+            ("_mouse_wheel_cb", "mouse_wheel_cb", _coerce_identity),
+            ("_mouse_wheel_event_type", "mouse_wheel_event_type", _coerce_identity),
+            ("_mouse_pressed_cb", "mouse_pressed_cb", _coerce_identity),
+            ("_key_pressed_cb", "key_pressed_cb", _coerce_identity),
+            ("_consume_left_button_release", "consume_left_button_release", _coerce_bool),
+        ),
+    ),
+    (
+        "_ensure_overlay_refresh_state",
+        (
+            ("_overlay_refresh_queued", "overlay_refresh_queued", _coerce_bool),
+            (
+                "_view_scale_overlay_refresh_queued",
+                "view_scale_overlay_refresh_queued",
+                _coerce_bool,
+            ),
+            ("_dirty_plan_visuals", "dirty_plan_visuals", _coerce_set),
+        ),
+    ),
+    (
+        "_ensure_wall_grip_runtime_state",
+        (
+            ("_wall_grip_state", "state", _coerce_identity),
+            ("_wall_grip_sync_queued", "sync_queued", _coerce_bool),
+            ("_wall_grip_sync_generation", "sync_generation", _coerce_int),
+        ),
+    ),
+    (
+        "_ensure_viewport_state",
+        (
+            ("_viewport_status_chip", "status_chip", _coerce_identity),
+            ("_saved_camera", "saved_camera", _coerce_identity),
+            ("_saved_camera_type", "saved_camera_type", _coerce_identity),
+            ("_saved_navigation_style", "saved_navigation_style", _coerce_identity),
+            ("_saved_navigation_state", "saved_navigation_state", _coerce_dict),
+            ("_saved_view_action_state", "saved_view_action_state", _coerce_dict),
+            ("_saved_preselection_state", "saved_preselection_state", _coerce_identity),
+            ("_plan_preselection_forced", "plan_preselection_forced", _coerce_bool),
+            ("_saved_object_view_state", "saved_object_view_state", _coerce_dict),
+            ("_working_plane", "working_plane", _coerce_identity),
+            ("_interaction_plane", "interaction_plane", _coerce_identity),
+        ),
+    ),
+    (
+        "_ensure_document_visual_state",
+        (
+            ("_pending_created_plan_objects", "pending_created_plan_objects", _coerce_dict),
+            (
+                "_created_plan_objects_flush_queued",
+                "created_plan_objects_flush_queued",
+                _coerce_bool,
+            ),
+            (
+                "_created_plan_objects_flush_deferred",
+                "created_plan_objects_flush_deferred",
+                _coerce_bool,
+            ),
+            (
+                "_document_visual_update_defer_depth",
+                "document_visual_update_defer_depth",
+                _coerce_int,
+            ),
+            ("_document_visual_refresh_deferred", "document_visual_refresh_deferred", _coerce_bool),
+        ),
+    ),
+    (
+        "_ensure_provider_transient_state",
+        (
+            (
+                "_selected_provider_overlay_render_state",
+                "selected_provider_overlay_render_state",
+                _coerce_identity,
+            ),
+            ("_provider_handle_trackers", "provider_handle_trackers", _coerce_list),
+            (
+                "_selected_provider_handle_render_state",
+                "selected_provider_handle_render_state",
+                _coerce_identity,
+            ),
+            ("_provider_selected_objects", "provider_selected_objects", _coerce_list),
+            ("_provider_point_host_target", "provider_point_host_target", _coerce_identity),
+            ("_provider_point_host_source", "provider_point_host_source", _make_str_coercer("")),
+            ("_provider_point_preview_trackers", "provider_point_preview_trackers", _coerce_list),
+            (
+                "_provider_point_preview_render_state",
+                "provider_point_preview_render_state",
+                _coerce_identity,
+            ),
+            (
+                "_provider_point_preview_style_state",
+                "provider_point_preview_style_state",
+                _coerce_identity,
+            ),
+            (
+                "_provider_point_preview_source_point",
+                "provider_point_preview_source_point",
+                _coerce_identity,
+            ),
+            ("_provider_point_preview_point", "provider_point_preview_point", _coerce_identity),
+            (
+                "_provider_point_preview_host_target",
+                "provider_point_preview_host_target",
+                _coerce_identity,
+            ),
+            (
+                "_provider_point_preview_host_source",
+                "provider_point_preview_host_source",
+                _make_str_coercer(""),
+            ),
+        ),
+    ),
+    (
+        "_ensure_opening_transient_state",
+        (
+            ("_opening_handle_trackers", "opening_handle_trackers", _coerce_list),
+            ("_opening_handle_tracker_pool", "opening_handle_tracker_pool", _coerce_list),
+            (
+                "_opening_handle_tracker_pool_queued",
+                "opening_handle_tracker_pool_queued",
+                _coerce_bool,
+            ),
+            (
+                "_selected_opening_handle_render_state",
+                "selected_opening_handle_render_state",
+                _coerce_identity,
+            ),
+            (
+                "_selected_opening_hard_refresh_queued",
+                "selected_opening_hard_refresh_queued",
+                _coerce_bool,
+            ),
+            ("_opening_host_recompute_queued", "opening_host_recompute_queued", _coerce_bool),
+            ("_opening_host_recompute_running", "opening_host_recompute_running", _coerce_bool),
+            ("_opening_move_preview_trackers", "opening_move_preview_trackers", _coerce_list),
+            ("_symbol_edit_preview_trackers", "symbol_edit_preview_trackers", _coerce_list),
+            ("_opening_move_snap_profile_pushed", "opening_move_snap_profile_pushed", _coerce_bool),
+            ("_edit_opening_move_anchor", "edit_opening_move_anchor", _make_str_coercer("center")),
+            ("_edit_opening_move_raw_point", "edit_opening_move_raw_point", _coerce_identity),
+        ),
+    ),
+    (
+        "_ensure_overlay_tracker_state",
+        (
+            ("_grip_trackers", "grip_trackers", _coerce_list),
+            ("_wall_hover_trackers", "wall_hover_trackers", _coerce_list),
+            ("_wall_overlay_trackers", "wall_overlay_trackers", _coerce_list),
+            ("_junction_node_trackers", "junction_node_trackers", _coerce_list),
+            (
+                "_hovered_wall_opening_context_trackers",
+                "hovered_wall_opening_context_trackers",
+                _coerce_list,
+            ),
+            ("_opening_hover_trackers", "opening_hover_trackers", _coerce_list),
+            ("_symbol_hover_trackers", "symbol_hover_trackers", _coerce_list),
+            ("_provider_hover_trackers", "provider_hover_trackers", _coerce_list),
+            ("_provider_selected_trackers", "provider_selected_trackers", _coerce_list),
+            ("_space_hover_trackers", "space_hover_trackers", _coerce_list),
+            ("_region_hover_trackers", "region_hover_trackers", _coerce_list),
+            ("_opening_overlay_trackers", "opening_overlay_trackers", _coerce_list),
+            ("_symbol_overlay_trackers", "symbol_overlay_trackers", _coerce_list),
+            ("_space_overlay_trackers", "space_overlay_trackers", _coerce_list),
+            ("_region_overlay_trackers", "region_overlay_trackers", _coerce_list),
+            ("_provider_overlay_trackers", "provider_overlay_trackers", _coerce_list),
+            ("_secondary_selection_trackers", "secondary_selection_trackers", _coerce_list),
+            ("_space_region_pick_trackers", "space_region_pick_trackers", _coerce_list),
+            (
+                "_selected_wall_opening_context_trackers",
+                "selected_wall_opening_context_trackers",
+                _coerce_list,
+            ),
+            ("_symbol_handle_trackers", "symbol_handle_trackers", _coerce_list),
+        ),
+    ),
+    (
+        "_ensure_overlay_cache_state",
+        (
+            (
+                "_plan_overlay_geometry_cache",
+                "plan_overlay_geometry_cache",
+                _coerce_overlay_geometry_cache,
+            ),
+            ("_plan_semantic_object_cache", "plan_semantic_object_cache", _coerce_dict),
+            ("_plan_object_storeys_cache", "plan_object_storeys_cache", _coerce_dict),
+            ("_plan_symbol_instances_cache", "plan_symbol_instances_cache", _coerce_identity),
+            ("_plan_space_instances_cache", "plan_space_instances_cache", _coerce_identity),
+            ("_plan_region_instances_cache", "plan_region_instances_cache", _coerce_identity),
+            ("_plan_opening_instances_cache", "plan_opening_instances_cache", _coerce_identity),
+            ("_wall_hosted_openings_cache", "wall_hosted_openings_cache", _coerce_identity),
+            (
+                "_wall_hosted_openings_cache_queued",
+                "wall_hosted_openings_cache_queued",
+                _coerce_bool,
+            ),
+            ("_opening_overlay_screen_cache", "opening_overlay_screen_cache", _coerce_dict),
+            (
+                "_opening_overlay_screen_cache_projection_key",
+                "opening_overlay_screen_cache_projection_key",
+                _coerce_identity,
+            ),
+            ("_symbol_overlay_screen_cache", "symbol_overlay_screen_cache", _coerce_dict),
+        ),
+    ),
+    (
+        "_ensure_overlay_transient_state",
+        (
+            ("_hovered_opening_overlay_dirty", "hovered_opening_overlay_dirty", _coerce_bool),
+            (
+                "_hovered_opening_overlay_render_state",
+                "hovered_opening_overlay_render_state",
+                _coerce_identity,
+            ),
+            ("_selected_opening_overlay_dirty", "selected_opening_overlay_dirty", _coerce_bool),
+            (
+                "_selected_opening_overlay_render_state",
+                "selected_opening_overlay_render_state",
+                _coerce_identity,
+            ),
+            ("_selected_space_overlay_dirty", "selected_space_overlay_dirty", _coerce_bool),
+            (
+                "_selected_space_overlay_geometry_key",
+                "selected_space_overlay_geometry_key",
+                _coerce_identity,
+            ),
+            ("_selected_space_overlay_segments", "selected_space_overlay_segments", _coerce_tuple),
+            (
+                "_selected_space_overlay_render_state",
+                "selected_space_overlay_render_state",
+                _coerce_identity,
+            ),
+        ),
+    ),
+)
+
+
+for _ensure_method_name, _property_specs in _PLAN_EDIT_SESSION_STATE_PROPERTIES:
+    for _property_name, _field_name, _coerce in _property_specs:
+        setattr(
+            PlanEditSession,
+            _property_name,
+            _make_state_backed_property(_ensure_method_name, _field_name, _coerce),
         )
