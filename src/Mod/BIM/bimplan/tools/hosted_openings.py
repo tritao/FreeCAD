@@ -18,11 +18,11 @@ class _PlanEditWallHost(gui_base.DraftInteractionHost):
 
     def activate_command(self, command=None):
         super().activate_command(command)
-        self.session._on_embedded_command_started("Wall", command or self.command)
+        self.session.lifecycle.on_embedded_command_started("Wall", command or self.command)
 
     def deactivate_command(self, command=None):
         super().deactivate_command(command)
-        self.session._on_embedded_command_finished("Wall", command or self.command)
+        self.session.lifecycle.on_embedded_command_finished("Wall", command or self.command)
 
     def get_working_plane(self):
         return self.session.viewport.get_interaction_plane()
@@ -101,11 +101,11 @@ class _PlanEditCommandHost(gui_base.DraftInteractionHost):
 
     def activate_command(self, command=None):
         super().activate_command(command)
-        self.session._on_embedded_command_started(self.tool_name, command or self.command)
+        self.session.lifecycle.on_embedded_command_started(self.tool_name, command or self.command)
 
     def deactivate_command(self, command=None):
         super().deactivate_command(command)
-        self.session._on_embedded_command_finished(self.tool_name, command or self.command)
+        self.session.lifecycle.on_embedded_command_finished(self.tool_name, command or self.command)
 
     def continue_mode_enabled(self):
         return False

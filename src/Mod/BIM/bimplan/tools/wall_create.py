@@ -22,7 +22,7 @@ def activate_wall_tool(session):
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.providers.cancel_provider_point_tool(refresh=False)
     session.wall_edit.cancel_wall_edit()
-    session._cancel_pending_edit()
+    session.lifecycle.cancel_pending_edit()
     session._clear_plan_relation_status()
     session._set_selected_plan_target()
     session.overlays.clear_wall_grips()
@@ -31,7 +31,11 @@ def activate_wall_tool(session):
     session.overlays.clear_selected_space_overlay()
     session.overlays.clear_secondary_selected_overlays()
     session._set_gui_selection([])
-    session._start_embedded_tool("Wall", BimWall.Arch_Wall(), host_class=_PlanEditWallHost)
+    session.lifecycle.start_embedded_tool(
+        "Wall",
+        BimWall.Arch_Wall(),
+        host_class=_PlanEditWallHost,
+    )
 
 
 def activate_rect_wall_tool(session):
@@ -40,9 +44,9 @@ def activate_rect_wall_tool(session):
     session.windows.cancel_window_tool(refresh=False)
     session.spaces.cancel_space_separator_tool(refresh=False)
     session.providers.cancel_provider_point_tool(refresh=False)
-    session._cancel_embedded_tool()
+    session.lifecycle.cancel_embedded_tool()
     session.wall_edit.cancel_wall_edit()
-    session._cancel_pending_edit()
+    session.lifecycle.cancel_pending_edit()
     session._clear_plan_relation_status()
     session._set_selected_plan_target()
     session.overlays.clear_wall_grips()
@@ -91,7 +95,7 @@ def clear_rect_wall_preview(session):
 def cancel_rect_wall_tool(session, refresh=True):
     if not session._has_active_rect_wall_tool():
         return False
-    session._stop_snapper()
+    session.lifecycle.stop_snapper()
     session._clear_rect_wall_preview()
     session._rect_wall_start = None
     session._rect_wall_params = None

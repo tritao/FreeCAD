@@ -243,7 +243,7 @@ def start_opening_handle_point_pick(session, opening, handle_index, handle):
         with session.performance.plan_perf_trace_span("opening_handle_push_snap_profile"):
             session._push_opening_move_snap_profile()
         with session.performance.plan_perf_trace_span("opening_handle_focus_suppression"):
-            session._set_draft_point_focus_suppressed(True)
+            session.lifecycle.set_draft_point_focus_suppressed(True)
         with session.performance.plan_perf_trace_span("opening_handle_snapper_get_point"):
             FreeCADGui.Snapper.getPoint(
                 last=handle.point,
@@ -327,7 +327,7 @@ def cancel_opening_handle_point_pick(session):
     opening = session._edit_opening
     session._edit_opening = None
     session._edit_opening_handle_index = None
-    session._stop_snapper()
+    session.lifecycle.stop_snapper()
     session._pop_opening_move_snap_profile()
     FreeCAD.activeDraftCommand = None
     session.openings.clear_opening_move_preview()

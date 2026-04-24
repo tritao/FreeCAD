@@ -1173,14 +1173,16 @@ class TestBimPlanCore(unittest.TestCase):
             current_tool="Select",
             _cancel_rect_wall_tool=lambda refresh=False: None,
             _cancel_provider_point_tool=lambda refresh=False: None,
-            _has_active_embedded_tool=lambda: False,
-            _cancel_embedded_tool=lambda: None,
-            _cancel_pending_edit=lambda: None,
             _clear_plan_relation_status=lambda: None,
             _set_selected_plan_target=lambda *args, **kwargs: None,
             _clear_hovered_plan_targets=lambda *args, **kwargs: None,
             _get_selected_plan_target_object=lambda kind: parent_space if kind == "space" else None,
             _refresh_task_panel_status=lambda: None,
+            lifecycle=SimpleNamespace(
+                has_active_embedded_tool=lambda: False,
+                cancel_embedded_tool=lambda: None,
+                cancel_pending_edit=lambda: None,
+            ),
             windows=SimpleNamespace(cancel_window_tool=lambda refresh=False: None),
             wall_edit=SimpleNamespace(cancel_wall_edit=lambda restore=True, refresh=True: None),
             spaces=SimpleNamespace(
@@ -1205,13 +1207,15 @@ class TestBimPlanCore(unittest.TestCase):
             current_tool="Select",
             _cancel_rect_wall_tool=lambda refresh=False: None,
             _cancel_provider_point_tool=lambda refresh=False: None,
-            _has_active_embedded_tool=lambda: False,
-            _cancel_embedded_tool=lambda: None,
-            _cancel_pending_edit=lambda: None,
             _clear_plan_relation_status=lambda: None,
             _set_selected_plan_target=lambda *args, **kwargs: None,
             _get_wall_defaults=lambda: {"height": 2500},
             _refresh_task_panel_status=lambda: None,
+            lifecycle=SimpleNamespace(
+                has_active_embedded_tool=lambda: False,
+                cancel_embedded_tool=lambda: None,
+                cancel_pending_edit=lambda: None,
+            ),
             windows=SimpleNamespace(cancel_window_tool=lambda refresh=False: None),
             wall_edit=SimpleNamespace(cancel_wall_edit=lambda restore=True, refresh=True: None),
             spaces=SimpleNamespace(
@@ -1462,12 +1466,14 @@ class TestBimPlanCore(unittest.TestCase):
             _edit_space="Space001",
             viewport=SimpleNamespace(clear_viewport_status_chip=lambda: calls.append("chip")),
             _clear_input_hints=lambda: calls.append("hints"),
-            _cancel_embedded_tool=lambda: calls.append("embedded"),
             _cancel_rect_wall_tool=lambda refresh=True: calls.append(("rect-wall", refresh)),
             _cancel_provider_point_tool=lambda refresh=True: calls.append(
                 ("provider-point", refresh)
             ),
-            _cancel_pending_edit=lambda: calls.append("pending"),
+            lifecycle=SimpleNamespace(
+                cancel_embedded_tool=lambda: calls.append("embedded"),
+                cancel_pending_edit=lambda: calls.append("pending"),
+            ),
             windows=SimpleNamespace(
                 cancel_window_tool=lambda refresh=True: calls.append(("window", refresh))
             ),
@@ -1539,10 +1545,12 @@ class TestBimPlanCore(unittest.TestCase):
             current_tool="Pick Space Region",
             viewport=SimpleNamespace(clear_viewport_status_chip=lambda: None),
             _clear_input_hints=lambda: None,
-            _cancel_embedded_tool=lambda: None,
             _cancel_rect_wall_tool=lambda refresh=True: None,
             _cancel_provider_point_tool=lambda refresh=True: None,
-            _cancel_pending_edit=lambda: None,
+            lifecycle=SimpleNamespace(
+                cancel_embedded_tool=lambda: None,
+                cancel_pending_edit=lambda: None,
+            ),
             windows=SimpleNamespace(cancel_window_tool=lambda refresh=True: None),
             wall_edit=SimpleNamespace(cancel_wall_edit=lambda restore=True, refresh=True: None),
             spaces=SimpleNamespace(cancel_plan_region_tool=lambda refresh=True: None),
@@ -1571,10 +1579,12 @@ class TestBimPlanCore(unittest.TestCase):
             _edit_space="Space001",
             viewport=SimpleNamespace(clear_viewport_status_chip=lambda: None),
             _clear_input_hints=lambda: None,
-            _cancel_embedded_tool=lambda: None,
             _cancel_rect_wall_tool=lambda refresh=True: None,
             _cancel_provider_point_tool=lambda refresh=True: None,
-            _cancel_pending_edit=lambda: None,
+            lifecycle=SimpleNamespace(
+                cancel_embedded_tool=lambda: None,
+                cancel_pending_edit=lambda: None,
+            ),
             windows=SimpleNamespace(cancel_window_tool=lambda refresh=True: None),
             wall_edit=SimpleNamespace(cancel_wall_edit=lambda restore=True, refresh=True: None),
             spaces=SimpleNamespace(cancel_plan_region_tool=lambda refresh=True: None),
@@ -1607,9 +1617,11 @@ class TestBimPlanCore(unittest.TestCase):
             current_tool="Move Symbol",
             viewport=SimpleNamespace(clear_viewport_status_chip=lambda: calls.append("chip")),
             _clear_input_hints=lambda: calls.append("hints"),
-            _cancel_embedded_tool=lambda: calls.append("embedded"),
             _cancel_rect_wall_tool=lambda refresh=True: calls.append(("rect-wall", refresh)),
-            _cancel_pending_edit=lambda: calls.append("pending"),
+            lifecycle=SimpleNamespace(
+                cancel_embedded_tool=lambda: calls.append("embedded"),
+                cancel_pending_edit=lambda: calls.append("pending"),
+            ),
             symbols=SimpleNamespace(
                 cancel_symbol_handle_point_pick=lambda: calls.append("symbol-handle")
             ),
@@ -1688,9 +1700,11 @@ class TestBimPlanCore(unittest.TestCase):
             current_tool="Move Symbol",
             viewport=SimpleNamespace(clear_viewport_status_chip=lambda: calls.append("chip")),
             _clear_input_hints=lambda: calls.append("hints"),
-            _cancel_embedded_tool=lambda: calls.append("embedded"),
             _cancel_rect_wall_tool=lambda refresh=True: calls.append(("rect-wall", refresh)),
-            _cancel_pending_edit=lambda: calls.append("pending"),
+            lifecycle=SimpleNamespace(
+                cancel_embedded_tool=lambda: calls.append("embedded"),
+                cancel_pending_edit=lambda: calls.append("pending"),
+            ),
             symbols=SimpleNamespace(
                 cancel_symbol_handle_point_pick=lambda: calls.append("symbol-handle")
             ),
@@ -1769,8 +1783,10 @@ class TestBimPlanCore(unittest.TestCase):
             ),
             _has_active_provider_point_tool=lambda: True,
             _cancel_provider_point_tool=lambda: calls.append("provider-point"),
-            _has_active_embedded_tool=lambda: True,
-            _cancel_embedded_tool=lambda: calls.append("embedded"),
+            lifecycle=SimpleNamespace(
+                has_active_embedded_tool=lambda: True,
+                cancel_embedded_tool=lambda: calls.append("embedded"),
+            ),
             _has_active_rect_wall_tool=lambda: True,
             _cancel_rect_wall_tool=lambda: calls.append("rect-wall"),
             wall_edit=SimpleNamespace(
@@ -1789,8 +1805,10 @@ class TestBimPlanCore(unittest.TestCase):
             current_tool="Select",
             _has_active_provider_point_tool=lambda: True,
             _cancel_provider_point_tool=lambda: calls.append("provider-point"),
-            _has_active_embedded_tool=lambda: True,
-            _cancel_embedded_tool=lambda: calls.append("embedded"),
+            lifecycle=SimpleNamespace(
+                has_active_embedded_tool=lambda: True,
+                cancel_embedded_tool=lambda: calls.append("embedded"),
+            ),
             _has_active_rect_wall_tool=lambda: True,
             _cancel_rect_wall_tool=lambda: calls.append("rect-wall"),
             wall_edit=SimpleNamespace(
@@ -1809,8 +1827,10 @@ class TestBimPlanCore(unittest.TestCase):
             current_tool="Select",
             _has_active_provider_point_tool=lambda: False,
             _cancel_provider_point_tool=lambda: calls.append("provider-point"),
-            _has_active_embedded_tool=lambda: False,
-            _cancel_embedded_tool=lambda: calls.append("embedded"),
+            lifecycle=SimpleNamespace(
+                has_active_embedded_tool=lambda: False,
+                cancel_embedded_tool=lambda: calls.append("embedded"),
+            ),
             _has_active_rect_wall_tool=lambda: False,
             _cancel_rect_wall_tool=lambda: calls.append("rect-wall"),
             wall_edit=SimpleNamespace(
@@ -1830,8 +1850,10 @@ class TestBimPlanCore(unittest.TestCase):
             symbols=SimpleNamespace(cancel_symbol_handle_point_pick=lambda: calls.append("symbol")),
             _has_active_provider_point_tool=lambda: True,
             _cancel_provider_point_tool=lambda: calls.append("provider-point"),
-            _has_active_embedded_tool=lambda: True,
-            _cancel_embedded_tool=lambda: calls.append("embedded"),
+            lifecycle=SimpleNamespace(
+                has_active_embedded_tool=lambda: True,
+                cancel_embedded_tool=lambda: calls.append("embedded"),
+            ),
             _has_active_rect_wall_tool=lambda: True,
             _cancel_rect_wall_tool=lambda: calls.append("rect-wall"),
             _cancel_join_tool=lambda: calls.append("join"),
@@ -1860,8 +1882,10 @@ class TestBimPlanCore(unittest.TestCase):
             symbols=SimpleNamespace(cancel_symbol_handle_point_pick=lambda: calls.append("symbol")),
             _has_active_provider_point_tool=lambda: False,
             _cancel_provider_point_tool=lambda: calls.append("provider-point"),
-            _has_active_embedded_tool=lambda: True,
-            _cancel_embedded_tool=lambda: calls.append("embedded"),
+            lifecycle=SimpleNamespace(
+                has_active_embedded_tool=lambda: True,
+                cancel_embedded_tool=lambda: calls.append("embedded"),
+            ),
             _has_active_rect_wall_tool=lambda: True,
             _cancel_rect_wall_tool=lambda: calls.append("rect-wall"),
             _cancel_join_tool=lambda: calls.append("join"),

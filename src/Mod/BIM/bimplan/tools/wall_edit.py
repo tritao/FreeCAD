@@ -47,7 +47,7 @@ def cancel_wall_edit(session, restore=True, refresh=True):
     session.wall_edit.cancel_wall_subtool()
 
     session.current_tool = "Select"
-    session._cancel_pending_edit()
+    session.lifecycle.cancel_pending_edit()
     session.overlays.sync_selected_wall_opening_context_overlay()
     if refresh:
         session._refresh_task_panel_status()
@@ -55,7 +55,7 @@ def cancel_wall_edit(session, restore=True, refresh=True):
 
 
 def cancel_wall_subtool(session):
-    session._cancel_embedded_tool("Wall")
+    session.lifecycle.cancel_embedded_tool("Wall")
 
 
 def start_wall_edit(session, mode):
@@ -139,7 +139,7 @@ def resume_wall_edit_point_pick(session):
             except Exception:
                 pass
         with session.performance.plan_perf_trace_span("wall_edit_focus_suppression"):
-            session._set_draft_point_focus_suppressed(True)
+            session.lifecycle.set_draft_point_focus_suppressed(True)
         with session.performance.plan_perf_trace_span("wall_edit_snapper_get_point"):
             FreeCADGui.Snapper.getPoint(
                 callback=session._finish_wall_edit,
@@ -255,7 +255,7 @@ def finish_wall_edit(session, point=None, obj=None):
 
     if point is None or not wall or not endpoint or not new_points:
         session.current_tool = "Select"
-        session._cancel_pending_edit()
+        session.lifecycle.cancel_pending_edit()
         session._refresh_task_panel_status()
         return
 
@@ -266,7 +266,7 @@ def finish_wall_edit(session, point=None, obj=None):
         or not hasattr(proxy, "set_from_endpoints")
     ):
         session.current_tool = "Select"
-        session._cancel_pending_edit()
+        session.lifecycle.cancel_pending_edit()
         session._refresh_task_panel_status()
         return
 
@@ -276,7 +276,7 @@ def finish_wall_edit(session, point=None, obj=None):
 def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
     if not wall or not endpoint or not proxy or not new_points:
         session.current_tool = "Select"
-        session._cancel_pending_edit()
+        session.lifecycle.cancel_pending_edit()
         session._refresh_task_panel_status()
         return
 
@@ -309,12 +309,12 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
                 )
             )
         session.current_tool = "Select"
-        session._cancel_pending_edit()
+        session.lifecycle.cancel_pending_edit()
         return
     session.openings.refresh_wall_hosted_opening_footprints(wall)
     session._set_gui_selection_object(wall)
     session.current_tool = "Select"
-    session._cancel_pending_edit()
+    session.lifecycle.cancel_pending_edit()
     session._set_selected_plan_target("wall", wall, pending_restore=True)
     session._update_wall_relation_status(wall)
     session.overlays.sync_wall_grips()
@@ -1212,7 +1212,7 @@ def start_wall_readout_edit(session, cycle=False):
     if session._wall_edit_length_edit_queued:
         return True
     session._wall_edit_length_edit_queued = True
-    session._stop_snapper()
+    session.lifecycle.stop_snapper()
     try:
         from PySide import QtCore
     except ImportError:
@@ -1384,7 +1384,7 @@ def update_wall_edit_point_pick(session, point=None, snap_info=None):
 
 def cancel_wall_edit_point_pick(session):
     session.current_tool = "Select"
-    session._cancel_pending_edit()
+    session.lifecycle.cancel_pending_edit()
     session._refresh_task_panel_status()
 
 

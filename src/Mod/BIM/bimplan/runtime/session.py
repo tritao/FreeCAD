@@ -262,6 +262,7 @@ class PlanEditSession:
         self.openings = PlanOpeningsAPI(self)
         self.wall_relations = PlanWallRelationsAPI(self)
         self.interaction = PlanInteractionAPI(self)
+        self.lifecycle = plan_lifecycle.PlanLifecycleAPI(self)
         self.symbols = PlanSymbolsAPI(self)
         self.windows = PlanWindowsAPI(self)
         self.viewport = PlanViewportAPI(self)
@@ -717,20 +718,6 @@ class PlanEditSession:
             payload=payload,
             document_name=self._safe_plan_object_name(doc),
             current_tool=str(self.current_tool or ""),
-        )
-
-    def _on_embedded_command_started(self, tool_name, command=None):
-        return plan_lifecycle.on_embedded_command_started(
-            self,
-            tool_name,
-            command=command,
-        )
-
-    def _on_embedded_command_finished(self, tool_name, command=None):
-        return plan_lifecycle.on_embedded_command_finished(
-            self,
-            tool_name,
-            command=command,
         )
 
     def activate_select_tool(self):
@@ -1238,17 +1225,6 @@ class PlanEditSession:
         # Compatibility wrapper for older tests and callers.
         return self._refresh_primary_selected_plan_target()
 
-    def _start_embedded_tool(self, tool_name, command, host_class=None):
-        return plan_lifecycle.start_embedded_tool(
-            self,
-            tool_name,
-            command,
-            host_class=host_class,
-        )
-
-    def _cancel_pending_edit(self):
-        return plan_lifecycle.cancel_pending_edit(self)
-
     def _cancel_join_tool(self, refresh=True):
         return plan_wall_relations.cancel_join_tool(self, refresh=refresh)
 
@@ -1259,43 +1235,6 @@ class PlanEditSession:
 
     def _apply_plan_wall_join(self, source_wall, target_wall):
         return plan_wall_relations.apply_plan_wall_join(self, source_wall, target_wall)
-
-    def _stop_snapper(self):
-        snapper = getattr(FreeCADGui, "Snapper", None)
-        if not snapper:
-            return
-        toolbar = getattr(FreeCADGui, "draftToolBar", None)
-        if toolbar and hasattr(toolbar, "setPointFocusSuppressed"):
-            try:
-                toolbar.setPointFocusSuppressed(False)
-            except Exception:
-                pass
-        elif toolbar and hasattr(toolbar, "suppress_point_focus"):
-            try:
-                toolbar.suppress_point_focus = False
-            except Exception:
-                pass
-        try:
-            snapper.getPoint()
-            snapper.off()
-        except Exception:
-            pass
-
-    def _set_draft_point_focus_suppressed(self, suppressed):
-        toolbar = getattr(FreeCADGui, "draftToolBar", None)
-        if not toolbar:
-            return
-        if hasattr(toolbar, "setPointFocusSuppressed"):
-            try:
-                toolbar.setPointFocusSuppressed(bool(suppressed))
-            except Exception:
-                pass
-            return
-        if hasattr(toolbar, "suppress_point_focus"):
-            try:
-                toolbar.suppress_point_focus = bool(suppressed)
-            except Exception:
-                pass
 
     def _has_active_rect_wall_tool(self):
         return plan_wall_create.has_active_rect_wall_tool(self)
@@ -1317,12 +1256,6 @@ class PlanEditSession:
 
     def _handle_rect_wall_point(self, point=None, obj=None):
         return plan_wall_create.handle_rect_wall_point(self, point=point, obj=obj)
-
-    def _has_active_embedded_tool(self):
-        return self._embedded_tool is not None
-
-    def _cancel_embedded_tool(self, tool_name=None):
-        return plan_lifecycle.cancel_embedded_tool(self, tool_name=tool_name)
 
     def _resume_wall_edit_point_pick(self):
         return self.wall_edit.resume_wall_edit_point_pick()
