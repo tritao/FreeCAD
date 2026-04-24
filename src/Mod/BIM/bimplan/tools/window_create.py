@@ -32,6 +32,24 @@ class PlanWindowsAPI:
     def can_place_window(self):
         return can_place_window(self.session)
 
+    def has_active_window_tool(self):
+        return has_active_window_tool(self.session)
+
+    def clear_window_preview(self):
+        return clear_window_preview(self.session)
+
+    def cancel_window_tool(self, refresh=True):
+        return cancel_window_tool(self.session, refresh=refresh)
+
+    def project_window_point_to_host(self, point, wall=None):
+        return project_window_point_to_host(self.session, point, wall=wall)
+
+    def update_window_tool_preview(self, point=None, info=None):
+        return update_window_tool_preview(self.session, point=point, info=info)
+
+    def handle_window_tool_point(self, point=None, obj=None):
+        return handle_window_tool_point(self.session, point=point, obj=obj)
+
     def get_selected_window_style_preset(self):
         return get_selected_window_style_preset(self.session)
 
@@ -246,8 +264,8 @@ def activate_window_tool(session):
         pass
     session._set_draft_point_focus_suppressed(True)
     FreeCADGui.Snapper.getPoint(
-        callback=session._handle_window_tool_point,
-        movecallback=session._update_window_tool_preview,
+        callback=session.windows.handle_window_tool_point,
+        movecallback=session.windows.update_window_tool_preview,
         title=translate("BIM_PlanEdit", "Window location"),
         noTracker=True,
     )

@@ -4398,7 +4398,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
-            session._start_wall_grip_edit(2)
+            session.wall_edit.start_wall_grip_edit(2)
 
         self.assertEqual(session.current_tool, "Move Wall")
         self._assert_selected_plan_target(session, "wall", wall)
@@ -4455,7 +4455,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
-            session._start_wall_grip_edit(2)
+            session.wall_edit.start_wall_grip_edit(2)
 
         new_midpoint = captured["last"].add(FreeCAD.Vector(1000, 0, 0))
         captured["movecallback"](new_midpoint, None)
@@ -4495,7 +4495,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             calls.append((delay, callback))
 
         with patch("PySide.QtCore.QTimer.singleShot", side_effect=fake_single_shot):
-            session._activate_wall_grip(2)
+            session.wall_edit.activate_wall_grip(2)
 
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][0], 0)
@@ -4953,7 +4953,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
-            session._start_wall_grip_edit(1)
+            session.wall_edit.start_wall_grip_edit(1)
 
         from pivy import coin
 
@@ -4989,7 +4989,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
-            session._start_wall_grip_edit(2)
+            session.wall_edit.start_wall_grip_edit(2)
 
         from pivy import coin
 
@@ -5027,7 +5027,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
-            session._start_wall_grip_edit(2)
+            session.wall_edit.start_wall_grip_edit(2)
 
         from pivy import coin
 
@@ -5164,7 +5164,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
-            session._start_wall_grip_edit(1)
+            session.wall_edit.start_wall_grip_edit(1)
 
         session._on_wall_stretch_length_finished(4200.0)
         self.pump_gui_events()
@@ -5203,7 +5203,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 "refresh_opening_footprint_display",
             ) as refresh_opening,
         ):
-            session._start_wall_grip_edit(2)
+            session.wall_edit.start_wall_grip_edit(2)
             new_midpoint = captured["last"].add(FreeCAD.Vector(400, 0, 0))
             captured["callback"](new_midpoint, None)
 
@@ -5248,7 +5248,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
-            session._start_wall_grip_edit(1)
+            session.wall_edit.start_wall_grip_edit(1)
             captured["callback"](shortened_end, None)
 
         updated_context = door_proxy.get_plan_move_context()
@@ -5380,7 +5380,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
-            session._start_wall_grip_edit(0)
+            session.wall_edit.start_wall_grip_edit(0)
             captured["callback"](new_start, None)
 
         wall_start, wall_end = wall.Proxy.calc_endpoints(wall)
@@ -5435,7 +5435,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
         ):
-            session._start_wall_grip_edit(1)
+            session.wall_edit.start_wall_grip_edit(1)
             captured["callback"](shortened_end, None)
 
         wall_start, wall_end = wall.Proxy.calc_endpoints(wall)

@@ -911,10 +911,10 @@ class PlanEditSession:
         )
 
     def stretch_selected_wall(self, endpoint):
-        self._start_wall_edit(endpoint)
+        self.wall_edit.start_wall_edit(endpoint)
 
     def move_selected_wall(self):
-        self._start_wall_edit("Move")
+        self.wall_edit.start_wall_edit("Move")
 
     def is_selected_wall_endpoint_editable(self):
         return self.wall_edit.is_selected_wall_endpoint_editable()
@@ -1655,24 +1655,6 @@ class PlanEditSession:
     def _handle_rect_wall_point(self, point=None, obj=None):
         return plan_wall_create.handle_rect_wall_point(self, point=point, obj=obj)
 
-    def _has_active_window_tool(self):
-        return plan_window_create.has_active_window_tool(self)
-
-    def _clear_window_preview(self):
-        return plan_window_create.clear_window_preview(self)
-
-    def _cancel_window_tool(self, refresh=True):
-        return plan_window_create.cancel_window_tool(self, refresh=refresh)
-
-    def _project_window_point_to_host(self, point, wall=None):
-        return plan_window_create.project_window_point_to_host(self, point, wall=wall)
-
-    def _update_window_tool_preview(self, point=None, info=None):
-        return plan_window_create.update_window_tool_preview(self, point=point, info=info)
-
-    def _handle_window_tool_point(self, point=None, obj=None):
-        return plan_window_create.handle_window_tool_point(self, point=point, obj=obj)
-
     def _has_active_space_separator_tool(self):
         return self.spaces.has_active_space_separator_tool()
 
@@ -1724,15 +1706,6 @@ class PlanEditSession:
     def _cancel_embedded_tool(self, tool_name=None):
         return plan_lifecycle.cancel_embedded_tool(self, tool_name=tool_name)
 
-    def _cancel_wall_edit(self, restore=True, refresh=True):
-        return self.wall_edit.cancel_wall_edit(restore=restore, refresh=refresh)
-
-    def _cancel_wall_subtool(self):
-        return self.wall_edit.cancel_wall_subtool()
-
-    def _start_wall_edit(self, mode):
-        return self.wall_edit.start_wall_edit(mode)
-
     def _resume_wall_edit_point_pick(self):
         return self.wall_edit.resume_wall_edit_point_pick()
 
@@ -1759,15 +1732,6 @@ class PlanEditSession:
 
     def _commit_wall_edit_points(self, wall, endpoint, proxy, new_points):
         return self.wall_edit.commit_wall_edit_points(wall, endpoint, proxy, new_points)
-
-    def _start_wall_grip_edit(self, grip_index):
-        return self.wall_edit.start_wall_grip_edit(grip_index)
-
-    def _activate_wall_grip(self, grip_index, wall=None):
-        return self.wall_edit.activate_wall_grip(grip_index, wall=wall)
-
-    def _activate_wall_grip_now(self, grip_index, wall=None):
-        return self.wall_edit.activate_wall_grip_now(grip_index, wall=wall)
 
     def _get_wall_edit_reference_point(self):
         return self.wall_edit.get_wall_edit_reference_point()

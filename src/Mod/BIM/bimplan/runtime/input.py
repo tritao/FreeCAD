@@ -131,7 +131,7 @@ def on_mouse_pressed(session, event_callback):
                                 session.openings.activate_opening_handle(obj, index)
                             else:
                                 session._set_selected_plan_target_state("wall", obj)
-                                session._activate_wall_grip(index, wall=obj)
+                                session.wall_edit.activate_wall_grip(index, wall=obj)
                         session._claim_left_button_click(event_callback)
             finally:
                 selected_after = session.selection.get_selected_plan_target()
@@ -255,7 +255,7 @@ def on_key_pressed(session, event_callback):
         session.providers.cancel_provider_handle_point_pick()
         return
     if session.current_tool == "Window" and key == coin.SoKeyboardEvent.ESCAPE:
-        session._cancel_window_tool()
+        session.windows.cancel_window_tool()
         return
     if session._is_wall_move_edit_active() and key == coin.SoKeyboardEvent.TAB:
         if session._start_wall_readout_edit(cycle=True):
@@ -295,8 +295,8 @@ def on_key_pressed(session, event_callback):
     if session.providers.has_active_provider_point_tool():
         session.providers.cancel_provider_point_tool()
         return
-    if session._has_active_window_tool():
-        session._cancel_window_tool()
+    if session.windows.has_active_window_tool():
+        session.windows.cancel_window_tool()
         return
     if session._has_active_rect_wall_tool():
         session._cancel_rect_wall_tool()
