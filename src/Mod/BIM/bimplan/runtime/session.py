@@ -604,7 +604,7 @@ class PlanEditSession:
             with self._plan_perf_trace_span("queue_prime_opening_handle_tracker_pool"):
                 self.overlays.queue_prime_opening_handle_tracker_pool()
             with self._plan_perf_trace_span("queue_prime_wall_hosted_openings_cache"):
-                self._queue_prime_wall_hosted_openings_cache()
+                self.openings.queue_prime_wall_hosted_openings_cache()
             with self._plan_perf_trace_span("queue_prime_hover_pick_caches"):
                 self._queue_prime_hover_pick_caches()
             with self._plan_perf_trace_span("install_command_gate"):
@@ -2029,41 +2029,11 @@ class PlanEditSession:
     def _refresh_selected_opening_visuals(self):
         return plan_document_visuals.refresh_selected_opening_visuals(self)
 
-    def _invalidate_wall_hosted_openings_cache(self):
-        return plan_hosted_openings.invalidate_wall_hosted_openings_cache(self)
-
-    def _queue_prime_wall_hosted_openings_cache(self):
-        return plan_hosted_openings.queue_prime_wall_hosted_openings_cache(self)
-
-    def _prime_wall_hosted_openings_cache(self):
-        return plan_hosted_openings.prime_wall_hosted_openings_cache(self)
-
     def _queue_prime_hover_pick_caches(self):
         return plan_hover_picking.queue_prime_hover_pick_caches(self)
 
     def _prime_hover_pick_caches(self):
         return plan_hover_picking.prime_hover_pick_caches(self)
-
-    def _build_wall_hosted_openings_cache(self):
-        return plan_hosted_openings.build_wall_hosted_openings_cache(self)
-
-    def _collect_opening_instances_from_host_cache(self, host_cache):
-        return plan_hosted_openings.collect_opening_instances_from_host_cache(self, host_cache)
-
-    def _get_plan_opening_instances(self):
-        return plan_hosted_openings.get_plan_opening_instances(self)
-
-    def _get_wall_hosted_openings(self, wall):
-        return plan_hosted_openings.get_wall_hosted_openings(self, wall)
-
-    def _refresh_wall_hosted_opening_footprints(self, wall):
-        return self.wall_edit.refresh_wall_hosted_opening_footprints(wall)
-
-    def _compute_wall_hosted_opening_layout(self, wall, endpoints):
-        return self.wall_edit.compute_wall_hosted_opening_layout(wall, endpoints)
-
-    def _resolve_wall_hosted_opening_layout(self, wall):
-        return self.wall_edit.resolve_wall_hosted_opening_layout(wall)
 
     def slotCreatedObject(self, obj):
         return plan_document_visuals.slot_created_object(self, obj)

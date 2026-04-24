@@ -5298,7 +5298,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             original_endpoints[0].add(axis.multiply(1600.0)),
         ]
 
-        layout = session._compute_wall_hosted_opening_layout(wall, shortened_points)
+        layout = session.openings.compute_wall_hosted_opening_layout(wall, shortened_points)
         self.assertIsNotNone(layout)
         item = next(candidate for candidate in layout if candidate["opening"] is door)
         delta = FreeCAD.Vector(item["target_point"]).sub(item["current"])

@@ -320,7 +320,7 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
         cursor_xy = (float(mouse_pos[0]), float(mouse_pos[1]))
         plan_point = session._get_plan_point_from_mouse_pos(mouse_pos)
         if candidates is None:
-            objects = session._get_plan_opening_instances()
+            objects = session.openings.get_plan_opening_instances()
         else:
             objects = candidates
         for obj in objects or []:
@@ -872,7 +872,7 @@ def get_plan_target_at_position(session, mouse_pos, *, include_space_fallback=Tr
             else:
                 opening_candidates = None
                 if wall_candidate is not None:
-                    opening_candidates = session._get_wall_hosted_openings(wall_candidate)
+                    opening_candidates = session.openings.get_wall_hosted_openings(wall_candidate)
                 opening_candidate = session._pick_plan_opening_target_from_overlays(
                     mouse_pos,
                     candidates=opening_candidates,

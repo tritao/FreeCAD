@@ -384,6 +384,66 @@ def execute_selected_opening_handle(session, opening, handle_index, handle):
     session.overlays.sync_selected_opening_handles()
 
 
+def invalidate_wall_hosted_openings_cache(session):
+    from bimplan.tools import hosted_openings as plan_hosted_openings
+
+    return plan_hosted_openings.invalidate_wall_hosted_openings_cache(session)
+
+
+def queue_prime_wall_hosted_openings_cache(session):
+    from bimplan.tools import hosted_openings as plan_hosted_openings
+
+    return plan_hosted_openings.queue_prime_wall_hosted_openings_cache(session)
+
+
+def prime_wall_hosted_openings_cache(session):
+    from bimplan.tools import hosted_openings as plan_hosted_openings
+
+    return plan_hosted_openings.prime_wall_hosted_openings_cache(session)
+
+
+def build_wall_hosted_openings_cache(session):
+    from bimplan.tools import hosted_openings as plan_hosted_openings
+
+    return plan_hosted_openings.build_wall_hosted_openings_cache(session)
+
+
+def collect_opening_instances_from_host_cache(session, host_cache):
+    from bimplan.tools import hosted_openings as plan_hosted_openings
+
+    return plan_hosted_openings.collect_opening_instances_from_host_cache(session, host_cache)
+
+
+def get_plan_opening_instances(session):
+    from bimplan.tools import hosted_openings as plan_hosted_openings
+
+    return plan_hosted_openings.get_plan_opening_instances(session)
+
+
+def get_wall_hosted_openings(session, wall):
+    from bimplan.tools import hosted_openings as plan_hosted_openings
+
+    return plan_hosted_openings.get_wall_hosted_openings(session, wall)
+
+
+def refresh_wall_hosted_opening_footprints(session, wall):
+    from bimplan.tools import wall_edit
+
+    return wall_edit.refresh_wall_hosted_opening_footprints(session, wall)
+
+
+def compute_wall_hosted_opening_layout(session, wall, endpoints):
+    from bimplan.tools import wall_edit
+
+    return wall_edit.compute_wall_hosted_opening_layout(session, wall, endpoints)
+
+
+def resolve_wall_hosted_opening_layout(session, wall):
+    from bimplan.tools import wall_edit
+
+    return wall_edit.resolve_wall_hosted_opening_layout(session, wall)
+
+
 def _bind_session_call(func):
     @wraps(func)
     def method(self, *args, **kwargs):
@@ -430,3 +490,21 @@ class PlanOpeningsAPI(_SessionAPI):
     restore_selected_opening = _bind_session_call(restore_selected_opening)
     queue_restore_selected_opening = _bind_session_call(queue_restore_selected_opening)
     execute_selected_opening_handle = _bind_session_call(execute_selected_opening_handle)
+    invalidate_wall_hosted_openings_cache = _bind_session_call(
+        invalidate_wall_hosted_openings_cache
+    )
+    queue_prime_wall_hosted_openings_cache = _bind_session_call(
+        queue_prime_wall_hosted_openings_cache
+    )
+    prime_wall_hosted_openings_cache = _bind_session_call(prime_wall_hosted_openings_cache)
+    build_wall_hosted_openings_cache = _bind_session_call(build_wall_hosted_openings_cache)
+    collect_opening_instances_from_host_cache = _bind_session_call(
+        collect_opening_instances_from_host_cache
+    )
+    get_plan_opening_instances = _bind_session_call(get_plan_opening_instances)
+    get_wall_hosted_openings = _bind_session_call(get_wall_hosted_openings)
+    refresh_wall_hosted_opening_footprints = _bind_session_call(
+        refresh_wall_hosted_opening_footprints
+    )
+    compute_wall_hosted_opening_layout = _bind_session_call(compute_wall_hosted_opening_layout)
+    resolve_wall_hosted_opening_layout = _bind_session_call(resolve_wall_hosted_opening_layout)

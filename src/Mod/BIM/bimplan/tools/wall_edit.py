@@ -164,7 +164,7 @@ def snapshot_wall_hosted_opening_clearances(session, wall, endpoints):
     wall_axis_u.normalize()
 
     snapshot = {}
-    for opening in session._get_wall_hosted_openings(wall):
+    for opening in session.openings.get_wall_hosted_openings(wall):
         proxy = session.openings.get_opening_plan_proxy(
             opening, "get_plan_move_context", "get_plan_center_point"
         )
@@ -291,7 +291,7 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
         session.doc.openTransaction(transaction_name)
         proxy.set_from_endpoints(wall, new_points)
         session.doc.recompute()
-        openings_fit = session._resolve_wall_hosted_opening_layout(wall)
+        openings_fit = session.openings.resolve_wall_hosted_opening_layout(wall)
         if not openings_fit:
             raise RuntimeError("Hosted openings no longer fit within resized wall")
         session.doc.commitTransaction()
@@ -311,7 +311,7 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
         session.current_tool = "Select"
         session._cancel_pending_edit()
         return
-    session._refresh_wall_hosted_opening_footprints(wall)
+    session.openings.refresh_wall_hosted_opening_footprints(wall)
     session._set_gui_selection_object(wall)
     session.current_tool = "Select"
     session._cancel_pending_edit()
@@ -831,7 +831,7 @@ def get_wall_hosted_opening_preview_segments(session, wall, points):
     if session._edit_endpoint not in ("Start", "End"):
         return []
 
-    layout = session._compute_wall_hosted_opening_layout(wall, points)
+    layout = session.openings.compute_wall_hosted_opening_layout(wall, points)
     if layout is None:
         return []
 
@@ -892,7 +892,7 @@ def clear_wall_hosted_opening_preview(session):
 
 
 def refresh_wall_hosted_opening_footprints(session, wall):
-    for opening in session._get_wall_hosted_openings(wall):
+    for opening in session.openings.get_wall_hosted_openings(wall):
         session.document_visuals.refresh_opening_footprint_display(opening)
 
 
@@ -911,7 +911,7 @@ def compute_wall_hosted_opening_layout(session, wall, endpoints):
     session._ensure_wall_edit_opening_clearances(wall, endpoints)
 
     openings = []
-    for opening in session._get_wall_hosted_openings(wall):
+    for opening in session.openings.get_wall_hosted_openings(wall):
         proxy = session.openings.get_opening_plan_proxy(
             opening, "get_plan_move_context", "move_along_host", "get_plan_center_point"
         )
@@ -1023,7 +1023,7 @@ def resolve_wall_hosted_opening_layout(session, wall):
         endpoints = wall_proxy.calc_endpoints(wall)
     except Exception:
         return True
-    layout = session._compute_wall_hosted_opening_layout(wall, endpoints)
+    layout = session.openings.compute_wall_hosted_opening_layout(wall, endpoints)
     if layout is None:
         return False
     for item in layout:

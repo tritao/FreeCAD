@@ -162,7 +162,7 @@ def queue_prime_wall_hosted_openings_cache(session):
     except ImportError:
         return
     cache_state.wall_hosted_openings_cache_queued = True
-    QtCore.QTimer.singleShot(0, session._prime_wall_hosted_openings_cache)
+    QtCore.QTimer.singleShot(0, session.openings.prime_wall_hosted_openings_cache)
 
 
 def prime_wall_hosted_openings_cache(session):
@@ -175,11 +175,11 @@ def prime_wall_hosted_openings_cache(session):
     ):
         return
     doc_name = getattr(session.doc, "Name", None)
-    cache = session._build_wall_hosted_openings_cache()
+    cache = session.openings.build_wall_hosted_openings_cache()
     cache_state.wall_hosted_openings_cache = (doc_name, cache)
     cache_state.plan_opening_instances_cache = (
         doc_name,
-        session._collect_opening_instances_from_host_cache(cache),
+        session.openings.collect_opening_instances_from_host_cache(cache),
     )
 
 
@@ -224,13 +224,13 @@ def get_plan_opening_instances(session):
 
     wall_cache_record = cache_state.wall_hosted_openings_cache
     if wall_cache_record is None or wall_cache_record[0] != doc_name:
-        host_cache = session._build_wall_hosted_openings_cache()
+        host_cache = session.openings.build_wall_hosted_openings_cache()
         cache_state.wall_hosted_openings_cache = (doc_name, host_cache)
     else:
         session._plan_perf_count("wall_hosted_openings_cache_hits")
         host_cache = wall_cache_record[1]
 
-    openings = session._collect_opening_instances_from_host_cache(host_cache)
+    openings = session.openings.collect_opening_instances_from_host_cache(host_cache)
     cache_state.plan_opening_instances_cache = (doc_name, openings)
     return openings
 
@@ -245,12 +245,12 @@ def get_wall_hosted_openings(session, wall):
     cache_state = session.overlay_cache_state
     cache_record = cache_state.wall_hosted_openings_cache
     if cache_record is None or cache_record[0] != doc_name:
-        host_cache = session._build_wall_hosted_openings_cache()
+        host_cache = session.openings.build_wall_hosted_openings_cache()
         cache_record = (doc_name, host_cache)
         cache_state.wall_hosted_openings_cache = cache_record
         cache_state.plan_opening_instances_cache = (
             doc_name,
-            session._collect_opening_instances_from_host_cache(host_cache),
+            session.openings.collect_opening_instances_from_host_cache(host_cache),
         )
     else:
         session._plan_perf_count("wall_hosted_openings_cache_hits")

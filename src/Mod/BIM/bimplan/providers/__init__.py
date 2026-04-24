@@ -104,7 +104,7 @@ class PlanEditContext:
         return False
 
     def get_wall_hosted_openings(self, wall):
-        getter = getattr(self.session, "_get_wall_hosted_openings", None)
+        getter = getattr(getattr(self.session, "openings", None), "get_wall_hosted_openings", None)
         if callable(getter):
             try:
                 return tuple(getter(wall) or ())
@@ -167,7 +167,8 @@ class PlanProviderActionContext:
             return False
 
     def refresh_opening_visuals(self, opening):
-        invalidate_cache = getattr(self._session, "_invalidate_wall_hosted_openings_cache", None)
+        openings_api = getattr(self._session, "openings", None)
+        invalidate_cache = getattr(openings_api, "invalidate_wall_hosted_openings_cache", None)
         if callable(invalidate_cache):
             invalidate_cache()
         document_visuals = getattr(self._session, "document_visuals", None)
