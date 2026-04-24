@@ -401,7 +401,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             ),
         ):
             self.assertTrue(session.set_plan_provider_overlay_mode("electrical"))
-            session._sync_provider_overlays()
+            session.overlays.sync_provider_overlays()
             self.assertGreater(len(session._provider_overlay_trackers), 0)
 
             session._set_gui_selection_object(marker)

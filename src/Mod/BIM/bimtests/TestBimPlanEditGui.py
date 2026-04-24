@@ -1609,7 +1609,10 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(link, session.selected_symbol)
         self.assertEqual(
             {"move", "rotate"},
-            {role for role, _point, _marker in session._get_selected_symbol_handle_specs(link)},
+            {
+                role
+                for role, _point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
+            },
         )
         self.assertEqual(2, len(session._symbol_handle_trackers))
 
@@ -1682,7 +1685,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._refresh_plan_object_footprint_display(link)
         self.pump_gui_events()
 
-        segments = session._get_symbol_overlay_segments(link)
+        segments = session.overlays.get_symbol_overlay_segments(link)
         self.assertTrue(segments, "Expected linked symbolic equipment to expose overlay segments.")
         start, end = segments[0]
         mid = FreeCAD.Vector(
@@ -1740,7 +1743,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             {"move", "rotate"},
             {
                 role
-                for role, _point, _marker in session._get_selected_symbol_handle_specs(equipment)
+                for role, _point, _marker in session.overlays.get_selected_symbol_handle_specs(
+                    equipment
+                )
             },
         )
         self.assertEqual(2, len(session._symbol_handle_trackers))
@@ -1832,7 +1837,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         handle_points = {
-            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+            role: point
+            for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
         }
 
         session.current_tool = "Move Symbol"
@@ -1848,7 +1854,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(session.selected_symbol, link)
 
         handle_points = {
-            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+            role: point
+            for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
         }
         anchor = FreeCAD.Vector(link.Placement.Base)
 
@@ -1889,7 +1896,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         handle_points = {
-            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+            role: point
+            for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
         }
         expected_anchor = link.Placement.multVec(equipment.PlanAnchor)
         self.assertAlmostEqual(expected_anchor.x, handle_points["move"].x, delta=1e-6)
@@ -1917,7 +1925,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertAlmostEqual(target_anchor.y, moved_anchor.y, delta=1e-6)
 
         handle_points = {
-            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+            role: point
+            for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
         }
         anchor = link.Placement.multVec(equipment.PlanAnchor)
         session.current_tool = "Rotate Symbol"
@@ -1957,7 +1966,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         handle_points = {
-            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+            role: point
+            for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
         }
         anchor = session._get_symbol_anchor_point(link)
         target_angle = math.radians(10.0)
@@ -1974,9 +1984,11 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._edit_symbol_reference_point = handle_points["rotate"]
         with (
             patch.object(session, "_symbol_rotation_snap_enabled", return_value=True),
-            patch.object(session, "_get_symbol_rotation_snap_increment_degrees", return_value=15.0),
             patch.object(
-                session, "_symbol_rotation_free_angle_override_active", return_value=False
+                session.overlays, "get_symbol_rotation_snap_increment_degrees", return_value=15.0
+            ),
+            patch.object(
+                session.overlays, "symbol_rotation_free_angle_override_active", return_value=False
             ),
         ):
             session._finish_symbol_handle_point_pick(raw_point)
@@ -2009,7 +2021,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         handle_points = {
-            role: point for role, point, _marker in session._get_selected_symbol_handle_specs(link)
+            role: point
+            for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
         }
         anchor = session._get_symbol_anchor_point(link)
         target_angle = math.radians(10.0)
@@ -2026,8 +2039,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._edit_symbol_reference_point = handle_points["rotate"]
         with (
             patch.object(session, "_symbol_rotation_snap_enabled", return_value=True),
-            patch.object(session, "_get_symbol_rotation_snap_increment_degrees", return_value=15.0),
-            patch.object(session, "_symbol_rotation_free_angle_override_active", return_value=True),
+            patch.object(
+                session.overlays, "get_symbol_rotation_snap_increment_degrees", return_value=15.0
+            ),
+            patch.object(
+                session.overlays, "symbol_rotation_free_angle_override_active", return_value=True
+            ),
         ):
             session._finish_symbol_handle_point_pick(raw_point)
         self.pump_gui_events()
@@ -3728,9 +3745,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(len(session._selected_wall_opening_context_trackers), 0)
 
         with patch.object(
-            session,
-            "_sync_hovered_opening_overlay",
-            wraps=session._sync_hovered_opening_overlay,
+            session.overlays,
+            "sync_hovered_opening_overlay",
+            wraps=session.overlays.sync_hovered_opening_overlay,
         ) as sync_hover:
             session._set_selected_plan_target("wall", wall)
 
@@ -5911,14 +5928,14 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             "get_plan_view_height",
             return_value=5000.0,
         ):
-            session._sync_selected_space_overlay()
+            session.overlays.sync_selected_space_overlay()
         self.assertFalse(session._selected_space_overlay_dirty)
 
         with (
             patch.object(
-                session,
-                "_get_space_overlay_segments",
-                wraps=session._get_space_overlay_segments,
+                session.overlays,
+                "get_space_overlay_segments",
+                wraps=session.overlays.get_space_overlay_segments,
             ) as get_segments,
             patch.object(
                 session.viewport,
@@ -6109,29 +6126,29 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         with (
             patch.object(
-                session,
-                "_sync_selected_opening_overlay",
-                wraps=session._sync_selected_opening_overlay,
+                session.overlays,
+                "sync_selected_opening_overlay",
+                wraps=session.overlays.sync_selected_opening_overlay,
             ) as sync_opening,
             patch.object(
-                session,
-                "_sync_selected_symbol_overlay",
-                wraps=session._sync_selected_symbol_overlay,
+                session.overlays,
+                "sync_selected_symbol_overlay",
+                wraps=session.overlays.sync_selected_symbol_overlay,
             ) as sync_symbol,
             patch.object(
-                session,
-                "_sync_selected_region_overlay",
-                wraps=session._sync_selected_region_overlay,
+                session.overlays,
+                "sync_selected_region_overlay",
+                wraps=session.overlays.sync_selected_region_overlay,
             ) as sync_region,
             patch.object(
-                session,
-                "_sync_selected_space_overlay",
-                wraps=session._sync_selected_space_overlay,
+                session.overlays,
+                "sync_selected_space_overlay",
+                wraps=session.overlays.sync_selected_space_overlay,
             ) as sync_space,
             patch.object(
-                session,
-                "_sync_secondary_selected_overlays",
-                wraps=session._sync_secondary_selected_overlays,
+                session.overlays,
+                "sync_secondary_selected_overlays",
+                wraps=session.overlays.sync_secondary_selected_overlays,
             ) as sync_secondary,
             patch.object(
                 session,
@@ -6224,17 +6241,17 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         session._set_selected_plan_target_state("space", space)
-        session._clear_selected_space_overlay()
+        session.overlays.clear_selected_space_overlay()
 
         with patch.object(
-            session,
-            "_get_space_overlay_segments",
-            wraps=session._get_space_overlay_segments,
+            session.overlays,
+            "get_space_overlay_segments",
+            wraps=session.overlays.get_space_overlay_segments,
         ) as get_segments:
-            session._sync_selected_space_overlay()
-            session._sync_selected_space_overlay()
+            session.overlays.sync_selected_space_overlay()
+            session.overlays.sync_selected_space_overlay()
             session._invalidate_selected_space_overlay_cache()
-            session._sync_selected_space_overlay()
+            session.overlays.sync_selected_space_overlay()
 
         self.assertEqual(get_segments.call_count, 2)
         self.assertGreater(len(session._space_overlay_trackers), 0)
@@ -6262,17 +6279,17 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
-        session._clear_selected_opening_overlay()
+        session.overlays.clear_selected_opening_overlay()
 
         with patch.object(
             session,
             "_get_opening_overlay_segments",
             wraps=session._get_opening_overlay_segments,
         ) as get_segments:
-            session._sync_selected_opening_overlay()
-            session._sync_selected_opening_overlay()
+            session.overlays.sync_selected_opening_overlay()
+            session.overlays.sync_selected_opening_overlay()
             session._invalidate_plan_overlay_geometry_cache(door)
-            session._sync_selected_opening_overlay()
+            session.overlays.sync_selected_opening_overlay()
 
         self.assertEqual(get_segments.call_count, 2)
         self.assertGreater(len(session._opening_overlay_trackers), 0)
@@ -6300,13 +6317,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
-        session._clear_selected_opening_handles()
+        session.overlays.clear_selected_opening_handles()
 
-        session._sync_selected_opening_handles()
+        session.overlays.sync_selected_opening_handles()
         original_trackers = tuple(session._opening_handle_trackers)
         self.assertGreater(len(original_trackers), 0)
 
-        session._sync_selected_opening_handles()
+        session.overlays.sync_selected_opening_handles()
         for current, original in zip(session._opening_handle_trackers, original_trackers):
             self.assertIs(current, original)
 
@@ -6337,10 +6354,10 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             "_get_footprint_overlay_polylines",
             wraps=session._get_footprint_overlay_polylines,
         ) as get_polylines:
-            first = tuple(session._get_space_overlay_segments(space))
-            second = tuple(session._get_space_overlay_segments(space))
+            first = tuple(session.overlays.get_space_overlay_segments(space))
+            second = tuple(session.overlays.get_space_overlay_segments(space))
             session._invalidate_plan_overlay_geometry_cache(space)
-            third = tuple(session._get_space_overlay_segments(space))
+            third = tuple(session.overlays.get_space_overlay_segments(space))
 
         self.assertEqual(get_polylines.call_count, 2)
         self.assertEqual(first, second)

@@ -809,7 +809,7 @@ def set_space_region_pick_state(
 def reset_space_region_pick_state(session, clear_overlays=True):
     set_space_region_pick_state(session)
     if clear_overlays:
-        session._clear_space_region_pick_overlays()
+        session.overlays.clear_space_region_pick_overlays()
 
 
 def set_space_text_pick_state(session, space=None):
