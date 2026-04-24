@@ -137,6 +137,9 @@ class PlanProvidersAPI:
     def get_plan_provider_action_context(self, payload=None):
         return get_plan_provider_action_context(self.session, payload=payload)
 
+    def invalidate_plan_provider_document_cache(self):
+        return invalidate_plan_provider_document_cache(self.session)
+
     def get_provider_point_tool_label(self):
         from bimplan.providers import point as plan_provider_point
 
@@ -424,6 +427,10 @@ def plan_provider_integrations_disabled(session):
         return bool(session._plan_edit_params.GetBool("DisableIntegrations", False))
     except Exception:
         return False
+
+
+def invalidate_plan_provider_document_cache(session):
+    session._plan_provider_document_cache = {}
 
 
 def _get_provider_refresh_cache(session):

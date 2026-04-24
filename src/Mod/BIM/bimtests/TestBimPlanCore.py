@@ -552,7 +552,7 @@ class TestBimPlanCore(unittest.TestCase):
                 {"ready": True},
                 session.spaces.get_space_preflight_report(targets=targets),
             )
-            self.assertTrue(session.can_place_plan_window())
+            self.assertTrue(session.windows.can_place_window())
             self.assertTrue(session._is_modal_plan_interaction_active())
             self.assertTrue(session.symbols.symbol_rotation_snap_enabled())
             self.assertEqual("15°", session.symbols.format_symbol_rotation_snap_label())

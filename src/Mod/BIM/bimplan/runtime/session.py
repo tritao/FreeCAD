@@ -411,30 +411,6 @@ class PlanEditSession:
         finally:
             self._plan_provider_refresh_cache = previous_cache
 
-    def _invalidate_plan_provider_document_cache(self):
-        self._plan_provider_document_cache = {}
-
-    def get_plan_provider_display_name(self, provider_id):
-        return self.providers.get_plan_provider_display_name(provider_id)
-
-    def can_place_plan_window(self):
-        return self.windows.can_place_window()
-
-    def stretch_selected_wall(self, endpoint):
-        self.wall_edit.start_wall_edit(endpoint)
-
-    def move_selected_wall(self):
-        self.wall_edit.start_wall_edit("Move")
-
-    def is_selected_wall_endpoint_editable(self):
-        return self.wall_edit.is_selected_wall_endpoint_editable()
-
-    def is_selected_wall_baseless(self):
-        wall = self.selection.get_selected_plan_target_object("wall")
-        if not wall:
-            return False
-        return not getattr(wall, "Base", None) and self.is_selected_wall_endpoint_editable()
-
     def _attach_document_observer(self):
         if not self._document_observer_added:
             FreeCAD.addDocumentObserver(self)

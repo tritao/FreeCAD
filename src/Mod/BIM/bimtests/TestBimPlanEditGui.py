@@ -2386,7 +2386,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             self.assertTrue(
                 session.selection.select_wall_for_plan_edit(wall, sync_gui_selection=True)
             )
-            self.assertTrue(session.can_place_plan_window())
+            self.assertTrue(session.windows.can_place_window())
 
             before = {obj.Name for obj in self.document.Objects}
             self.assertTrue(session.lifecycle.activate_window_tool())
@@ -5861,7 +5861,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertTrue(press._handled)
         self._assert_selected_plan_target(session, "wall", wall)
-        self.assertFalse(session.is_selected_wall_endpoint_editable())
+        self.assertFalse(session.wall_edit.is_selected_wall_endpoint_editable())
         self.pump_gui_events()
         self.assertEqual(len(session._grip_trackers), 0)
 
@@ -7995,7 +7995,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         session.selection.refresh_primary_selected_plan_target()
 
-        self.assertTrue(session.is_selected_wall_endpoint_editable())
+        self.assertTrue(session.wall_edit.is_selected_wall_endpoint_editable())
         self.assertEqual(len(session._grip_trackers), 3)
 
         session.shutdown(close_dialog=False)

@@ -61,7 +61,7 @@ def cancel_wall_subtool(session):
 def start_wall_edit(session, mode):
     with session.performance.plan_perf_trace_span("start_wall_edit"):
         with session.performance.plan_perf_trace_span("start_wall_edit_validate"):
-            if not session.is_selected_wall_endpoint_editable():
+            if not session.wall_edit.is_selected_wall_endpoint_editable():
                 FreeCAD.Console.PrintError(
                     translate(
                         "BIM_PlanEdit",
@@ -328,7 +328,7 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
 
 
 def start_wall_grip_edit(session, grip_index):
-    if grip_index not in (0, 1, 2) or not session.is_selected_wall_endpoint_editable():
+    if grip_index not in (0, 1, 2) or not session.wall_edit.is_selected_wall_endpoint_editable():
         return
     session.wall_edit.start_wall_edit({0: "Start", 1: "End", 2: "Move"}[grip_index])
 
