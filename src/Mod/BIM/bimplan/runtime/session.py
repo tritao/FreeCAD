@@ -47,7 +47,6 @@ from bimplan.runtime import session_state as plan_session_state
 from bimplan.runtime.session_state import PlanInteractionAPI
 from bimplan import storeys as plan_storeys
 from bimplan import task_panel as plan_task_panel
-from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.selection.selection import PlanSelectionAPI
 from bimplan.tools import symbol_edit as plan_symbol_edit
 from bimplan.tools.symbol_edit import PlanSymbolsAPI
@@ -136,39 +135,6 @@ _PLAN_VIEW_LOCKED_ACTIONS = (
 )
 
 _active_session = None
-
-
-def _make_select_plan_target_method(kind):
-    def _select_plan_target(
-        self,
-        obj,
-        queue_restore=False,
-        sync_gui_selection=False,
-        defer_gui_selection=False,
-        defer_wall_grips=False,
-    ):
-        return self._select_plan_target_for_plan_edit(
-            kind,
-            obj,
-            queue_restore=queue_restore,
-            sync_gui_selection=sync_gui_selection,
-            defer_gui_selection=defer_gui_selection,
-            defer_wall_grips=defer_wall_grips,
-        )
-
-    return _select_plan_target
-
-
-def _make_activate_plan_target_method(kind):
-    def _activate_plan_target(self, mouse_pos, event_callback=None, resolved_target=None):
-        return self._activate_plan_target_by_kind(
-            kind,
-            mouse_pos,
-            event_callback=event_callback,
-            resolved_target=resolved_target,
-        )
-
-    return _activate_plan_target
 
 
 def _make_set_hovered_target_method(method_name):
@@ -952,123 +918,6 @@ class PlanEditSession:
     _set_hovered_space = _make_set_hovered_target_method("set_hovered_space")
 
     _set_hovered_region = _make_set_hovered_target_method("set_hovered_region")
-
-    def _queue_restore_selected_plan_target(self, kind, obj):
-        return self.selection.queue_restore_selected_plan_target(kind, obj)
-
-    def _select_plan_target_for_plan_edit(
-        self,
-        kind,
-        obj,
-        queue_restore=False,
-        sync_gui_selection=False,
-        defer_gui_selection=False,
-        defer_wall_grips=False,
-    ):
-        return self.selection.select_plan_target_for_plan_edit(
-            kind,
-            obj,
-            queue_restore=queue_restore,
-            sync_gui_selection=sync_gui_selection,
-            defer_gui_selection=defer_gui_selection,
-            defer_wall_grips=defer_wall_grips,
-        )
-
-    _select_opening_for_plan_edit = _make_select_plan_target_method(
-        plan_target_kinds.PLAN_TARGET_OPENING
-    )
-
-    _select_symbol_for_plan_edit = _make_select_plan_target_method(
-        plan_target_kinds.PLAN_TARGET_SYMBOL
-    )
-
-    _select_region_for_plan_edit = _make_select_plan_target_method(
-        plan_target_kinds.PLAN_TARGET_REGION
-    )
-
-    _select_space_for_plan_edit = _make_select_plan_target_method(
-        plan_target_kinds.PLAN_TARGET_SPACE
-    )
-
-    _select_wall_for_plan_edit = _make_select_plan_target_method(plan_target_kinds.PLAN_TARGET_WALL)
-
-    def _activate_plan_target_by_kind(
-        self,
-        kind,
-        mouse_pos,
-        *,
-        event_callback=None,
-        resolved_target=None,
-        defer_gui_selection=None,
-        defer_wall_grips=None,
-    ):
-        return self.selection.activate_plan_target_for_kind(
-            kind,
-            mouse_pos,
-            event_callback=event_callback,
-            resolved_target=resolved_target,
-            defer_gui_selection=defer_gui_selection,
-            defer_wall_grips=defer_wall_grips,
-        )
-
-    def _activate_plan_target(
-        self,
-        kind,
-        mouse_pos,
-        event_callback=None,
-        sync_gui_selection=False,
-        clear_hovered_kinds=None,
-        resolved_target=None,
-        defer_gui_selection=False,
-        defer_wall_grips=False,
-    ):
-        return self.selection.activate_plan_target(
-            kind,
-            mouse_pos,
-            event_callback=event_callback,
-            sync_gui_selection=sync_gui_selection,
-            clear_hovered_kinds=clear_hovered_kinds,
-            resolved_target=resolved_target,
-            defer_gui_selection=defer_gui_selection,
-            defer_wall_grips=defer_wall_grips,
-        )
-
-    def _activate_semantic_plan_target(self, mouse_pos, event_callback=None):
-        return self.selection.activate_semantic_plan_target(
-            mouse_pos,
-            event_callback=event_callback,
-        )
-
-    _activate_opening_target = _make_activate_plan_target_method(
-        plan_target_kinds.PLAN_TARGET_OPENING
-    )
-
-    _activate_symbol_target = _make_activate_plan_target_method(
-        plan_target_kinds.PLAN_TARGET_SYMBOL
-    )
-
-    _activate_region_target = _make_activate_plan_target_method(
-        plan_target_kinds.PLAN_TARGET_REGION
-    )
-
-    _activate_space_target = _make_activate_plan_target_method(plan_target_kinds.PLAN_TARGET_SPACE)
-
-    def _activate_wall_target(
-        self,
-        mouse_pos,
-        event_callback=None,
-        resolved_target=None,
-        defer_gui_selection=False,
-        defer_wall_grips=False,
-    ):
-        return self._activate_plan_target_by_kind(
-            plan_target_kinds.PLAN_TARGET_WALL,
-            mouse_pos,
-            event_callback=event_callback,
-            resolved_target=resolved_target,
-            defer_gui_selection=defer_gui_selection,
-            defer_wall_grips=defer_wall_grips,
-        )
 
     def _get_plan_point_from_mouse_pos(self, mouse_pos):
         if not self.view or not mouse_pos:

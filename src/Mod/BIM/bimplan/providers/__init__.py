@@ -168,7 +168,9 @@ class PlanProviderActionContext:
         return self.payload
 
     def select_wall_for_plan_edit(self, wall, sync_gui_selection=True):
-        selector = getattr(self._session, "_select_wall_for_plan_edit", None)
+        selector = getattr(
+            getattr(self._session, "selection", None), "select_wall_for_plan_edit", None
+        )
         if not callable(selector):
             return False
         return bool(selector(wall, sync_gui_selection=sync_gui_selection))

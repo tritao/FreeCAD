@@ -860,7 +860,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 session.providers, "execute_plan_provider_action", side_effect=_capture_action
             ),
         ):
-            self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+            self.assertTrue(
+                session.selection.select_wall_for_plan_edit(wall, sync_gui_selection=True)
+            )
             self.assertTrue(session.providers.start_plan_provider_point_tool(tool))
             raw_point = FreeCAD.Vector(120.0, 340.0, 999.0)
             session.providers.handle_provider_point_tool_point(raw_point, None)
@@ -905,7 +907,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
             patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True),
         ):
-            self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+            self.assertTrue(
+                session.selection.select_wall_for_plan_edit(wall, sync_gui_selection=True)
+            )
             self.assertTrue(session.providers.start_plan_provider_point_tool(tool))
             self.assertIn("movecallback", captured)
 
@@ -1060,7 +1064,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+        self.assertTrue(session.selection.select_wall_for_plan_edit(wall, sync_gui_selection=True))
         self.pump_gui_events()
         self._assert_selected_plan_target(session, "wall", wall)
         self.assertEqual([wall], FreeCADGui.Selection.getSelection())
@@ -1617,7 +1621,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertTrue(link.ViewObject.Selectable)
         self.assertTrue(session.visibility.is_plan_symbol_instance(link))
 
-        self.assertTrue(session._select_symbol_for_plan_edit(link))
+        self.assertTrue(session.selection.select_symbol_for_plan_edit(link))
         self.pump_gui_events()
 
         self.assertIs(link, session.selected_symbol)
@@ -1757,7 +1761,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertTrue(session.visibility.is_plan_symbol_instance(equipment))
         self.assertEqual("symbol", session.selection.get_plan_target_kind_for_object(equipment))
 
-        self.assertTrue(session._select_symbol_for_plan_edit(equipment))
+        self.assertTrue(session.selection.select_symbol_for_plan_edit(equipment))
         self.pump_gui_events()
 
         self.assertIs(equipment, session.selected_symbol)
@@ -1855,7 +1859,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         session.document_visuals.refresh_plan_object_footprint_display(link)
-        self.assertTrue(session._select_symbol_for_plan_edit(link))
+        self.assertTrue(session.selection.select_symbol_for_plan_edit(link))
         self.pump_gui_events()
 
         handle_points = {
@@ -1916,7 +1920,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         session.document_visuals.refresh_plan_object_footprint_display(link)
-        self.assertTrue(session._select_symbol_for_plan_edit(link))
+        self.assertTrue(session.selection.select_symbol_for_plan_edit(link))
         self.pump_gui_events()
 
         handle_points = {
@@ -1988,7 +1992,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         session.document_visuals.refresh_plan_object_footprint_display(link)
-        self.assertTrue(session._select_symbol_for_plan_edit(link))
+        self.assertTrue(session.selection.select_symbol_for_plan_edit(link))
         self.pump_gui_events()
 
         handle_points = {
@@ -2043,7 +2047,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         session.document_visuals.refresh_plan_object_footprint_display(link)
-        self.assertTrue(session._select_symbol_for_plan_edit(link))
+        self.assertTrue(session.selection.select_symbol_for_plan_edit(link))
         self.pump_gui_events()
 
         handle_points = {
@@ -2376,7 +2380,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
             patch.object(Arch, "addComponents", side_effect=record_add_components),
         ):
-            self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+            self.assertTrue(
+                session.selection.select_wall_for_plan_edit(wall, sync_gui_selection=True)
+            )
             self.assertTrue(session.can_place_plan_window())
 
             before = {obj.Name for obj in self.document.Objects}
@@ -2450,7 +2456,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
             patch.object(FreeCADGui.Snapper, "snapInfo", snap_info, create=True),
         ):
-            self.assertTrue(session._select_wall_for_plan_edit(wall_a, sync_gui_selection=True))
+            self.assertTrue(
+                session.selection.select_wall_for_plan_edit(wall_a, sync_gui_selection=True)
+            )
             self.assertTrue(session.lifecycle.activate_window_tool())
             self.assertIs(session._window_host_wall, wall_a)
 
@@ -2522,7 +2530,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session._select_opening_for_plan_edit(window, sync_gui_selection=True))
+        self.assertTrue(
+            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+        )
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
 
@@ -2580,7 +2590,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session._select_opening_for_plan_edit(window, sync_gui_selection=True))
+        self.assertTrue(
+            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+        )
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
 
@@ -2634,7 +2646,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session._select_opening_for_plan_edit(window, sync_gui_selection=True))
+        self.assertTrue(
+            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+        )
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
 
@@ -2690,7 +2704,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session._select_opening_for_plan_edit(window, sync_gui_selection=True))
+        self.assertTrue(
+            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+        )
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
 
@@ -2762,7 +2778,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session._select_opening_for_plan_edit(window, sync_gui_selection=True))
+        self.assertTrue(
+            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+        )
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
 
@@ -2833,7 +2851,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session._select_opening_for_plan_edit(window, sync_gui_selection=True))
+        self.assertTrue(
+            session.selection.select_opening_for_plan_edit(window, sync_gui_selection=True)
+        )
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
 
@@ -2869,7 +2889,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+        self.assertTrue(session.selection.select_wall_for_plan_edit(wall, sync_gui_selection=True))
         session.task_panel.refresh_from_session()
         self.pump_gui_events(timeout_ms=500)
 
@@ -3036,7 +3056,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             "get_plan_target_at_position",
             return_value=("opening", door),
         ):
-            activated = session._activate_opening_target((100, 100))
+            activated = session.selection.activate_opening_target((100, 100))
 
         self.assertTrue(activated)
         self._assert_selected_plan_target(session, "opening", door)
@@ -3221,7 +3241,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return_value=("opening", door),
             ),
         ):
-            activated = session._activate_opening_target((100, 100))
+            activated = session.selection.activate_opening_target((100, 100))
 
         self.assertTrue(activated)
         self._assert_selected_plan_target(session, "opening", door)
@@ -3292,7 +3312,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             "get_plan_target_at_position",
             return_value=("wall", wall),
         ):
-            activated = session._activate_wall_target((100, 100))
+            activated = session.selection.activate_wall_target((100, 100))
 
         self.assertTrue(activated)
         self._assert_selected_plan_target(session, "wall", wall)
@@ -3715,7 +3735,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             "get_plan_target_at_position",
             return_value=("wall", wall),
         ):
-            activated = session._activate_wall_target((100, 100))
+            activated = session.selection.activate_wall_target((100, 100))
 
         self.assertTrue(activated)
         self._assert_selected_plan_target(session, "wall", wall)
@@ -3739,7 +3759,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             "get_plan_target_at_position",
             return_value=("wall", wall),
         ):
-            activated = session._activate_wall_target((100, 100))
+            activated = session.selection.activate_wall_target((100, 100))
 
         self.assertTrue(activated)
         self._assert_selected_plan_target(session, "wall", wall)
@@ -3749,7 +3769,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(len(session._opening_overlay_trackers), 0)
         self.assertEqual(len(session._opening_handle_trackers), 0)
 
-        session._select_opening_for_plan_edit(door)
+        session.selection.select_opening_for_plan_edit(door)
 
         self._assert_selected_plan_target(session, "opening", door)
         self.assertEqual(len(session._wall_overlay_trackers), 0)
@@ -3768,7 +3788,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session._select_wall_for_plan_edit(wall))
+        self.assertTrue(session.selection.select_wall_for_plan_edit(wall))
         self.assertGreater(len(session._selected_wall_opening_context_trackers), 0)
         self.assertEqual(len(session._opening_hover_trackers), 0)
 
@@ -3810,7 +3830,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session._select_wall_for_plan_edit(source_wall)
+        session.selection.select_wall_for_plan_edit(source_wall)
         session.lifecycle.activate_join_tool()
 
         self.assertEqual(session.current_tool, "Join")
@@ -3841,7 +3861,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session._select_wall_for_plan_edit(source_wall)
+        session.selection.select_wall_for_plan_edit(source_wall)
         self.assertEqual(len(session._grip_trackers), 3)
 
         session.lifecycle.activate_join_tool()
@@ -3865,7 +3885,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session._select_wall_for_plan_edit(source_wall)
+        session.selection.select_wall_for_plan_edit(source_wall)
         session.lifecycle.activate_join_tool()
 
         self.assertEqual(session.wall_relations.get_plan_join_type(), "Miter")
@@ -3904,7 +3924,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session._select_wall_for_plan_edit(source_wall)
+        session.selection.select_wall_for_plan_edit(source_wall)
         session.lifecycle.activate_join_tool()
 
         from pivy import coin
@@ -3978,7 +3998,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertEqual(session.wall_relations.get_plan_join_type(), "Butt")
 
-        session._select_wall_for_plan_edit(source_wall)
+        session.selection.select_wall_for_plan_edit(source_wall)
         session.lifecycle.activate_join_tool()
 
         from pivy import coin
@@ -4047,7 +4067,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session._select_wall_for_plan_edit(source_wall)
+        session.selection.select_wall_for_plan_edit(source_wall)
         session.wall_relations.set_plan_join_type("Butt")
         session.lifecycle.activate_join_tool()
         session._set_hovered_wall(target_wall)
@@ -4122,7 +4142,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session._select_wall_for_plan_edit(source_wall)
+        session.selection.select_wall_for_plan_edit(source_wall)
         session.lifecycle.activate_join_tool()
         session._set_hovered_wall(target_wall)
 
@@ -4167,7 +4187,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session._select_wall_for_plan_edit(carrier_wall)
+        session.selection.select_wall_for_plan_edit(carrier_wall)
 
         self.assertGreater(len(session._junction_node_trackers), 0)
 
@@ -4198,7 +4218,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session._select_wall_for_plan_edit(carrier_wall)
+        session.selection.select_wall_for_plan_edit(carrier_wall)
         session.lifecycle.activate_join_tool()
 
         from pivy import coin
@@ -4279,7 +4299,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session._select_wall_for_plan_edit(source_wall)
+        session.selection.select_wall_for_plan_edit(source_wall)
         original_endpoints = source_wall.Proxy.calc_endpoints(source_wall)
         new_points = [
             original_endpoints[0],
@@ -4361,7 +4381,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session._select_wall_for_plan_edit(source_wall)
+        session.selection.select_wall_for_plan_edit(source_wall)
         original_endpoints = source_wall.Proxy.calc_endpoints(source_wall)
         session._wall_edit_modal_active = True
         session._edit_wall = source_wall
@@ -5692,7 +5712,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             "get_plan_target_at_position",
             return_value=("region", region),
         ):
-            activated = session._activate_region_target((100, 100))
+            activated = session.selection.activate_region_target((100, 100))
 
         self.assertTrue(activated)
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [region.Name])
@@ -5934,7 +5954,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 wraps=session.task_panel.refresh_selection_from_session,
             ) as refresh_selection,
         ):
-            self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+            self.assertTrue(
+                session.selection.select_wall_for_plan_edit(wall, sync_gui_selection=True)
+            )
 
         self.assertEqual(refresh_full.call_count, 0)
         self.assertEqual(refresh_selection.call_count, 1)
@@ -5959,7 +5981,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session._select_space_for_plan_edit(space, sync_gui_selection=True))
+        self.assertTrue(
+            session.selection.select_space_for_plan_edit(space, sync_gui_selection=True)
+        )
         with patch.object(
             session.viewport,
             "get_plan_view_height",
@@ -5999,11 +6023,15 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session._select_wall_for_plan_edit(wall_a, sync_gui_selection=True))
+        self.assertTrue(
+            session.selection.select_wall_for_plan_edit(wall_a, sync_gui_selection=True)
+        )
         original_trackers = tuple(session._grip_trackers)
         self.assertEqual(len(original_trackers), 3)
 
-        self.assertTrue(session._select_wall_for_plan_edit(wall_b, sync_gui_selection=True))
+        self.assertTrue(
+            session.selection.select_wall_for_plan_edit(wall_b, sync_gui_selection=True)
+        )
         self.assertEqual(len(session._grip_trackers), 3)
         for current, original in zip(session._grip_trackers, original_trackers):
             self.assertIs(current, original)
@@ -6024,7 +6052,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+        self.assertTrue(session.selection.select_wall_for_plan_edit(wall, sync_gui_selection=True))
         self.assertEqual(len(session._grip_trackers), 3)
 
         expected_positions = tuple(
@@ -6085,7 +6113,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         baseline = self._count_scenegraph_named_switches(session, "editTracker")
 
-        self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+        self.assertTrue(session.selection.select_wall_for_plan_edit(wall, sync_gui_selection=True))
         self.pump_gui_events()
 
         self.assertGreater(len(session._wall_overlay_trackers), 0)
@@ -6161,7 +6189,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        self.assertTrue(session._select_wall_for_plan_edit(wall, sync_gui_selection=True))
+        self.assertTrue(session.selection.select_wall_for_plan_edit(wall, sync_gui_selection=True))
 
         with (
             patch.object(
@@ -6195,7 +6223,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 wraps=session.task_panels.refresh_task_panel_status,
             ) as refresh_panel,
         ):
-            self.assertTrue(session._select_space_for_plan_edit(space, sync_gui_selection=True))
+            self.assertTrue(
+                session.selection.select_space_for_plan_edit(space, sync_gui_selection=True)
+            )
 
         self.assertEqual(sync_opening.call_count, 0)
         self.assertEqual(sync_symbol.call_count, 0)
@@ -6474,7 +6504,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             "get_plan_target_at_position",
             return_value=("opening", door),
         ):
-            activated = session._activate_opening_target((100, 100))
+            activated = session.selection.activate_opening_target((100, 100))
 
         self.assertTrue(activated)
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [door.Name])

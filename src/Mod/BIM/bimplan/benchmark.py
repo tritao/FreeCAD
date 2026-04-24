@@ -651,7 +651,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 "benchmark_wall_handle_activation",
                 spec.name,
                 lambda: (
-                    session._select_wall_for_plan_edit(wall),
+                    session.selection.select_wall_for_plan_edit(wall),
                     session.overlays.sync_wall_grips(),
                     session.wall_edit.activate_wall_grip_now(0, wall=wall),
                 ),
@@ -675,7 +675,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 "benchmark_opening_handle_activation",
                 spec.name,
                 lambda: (
-                    session._select_opening_for_plan_edit(opening),
+                    session.selection.select_opening_for_plan_edit(opening),
                     session.overlays.sync_selected_opening_handles(),
                     session.openings.activate_opening_handle_now(opening, 0),
                 ),
@@ -701,7 +701,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 "benchmark_symbol_handle_activation",
                 spec.name,
                 lambda: (
-                    session._select_symbol_for_plan_edit(symbol),
+                    session.selection.select_symbol_for_plan_edit(symbol),
                     session.overlays.sync_selected_symbol_handles(),
                     session.symbols.activate_symbol_handle_now(symbol, role),
                 ),

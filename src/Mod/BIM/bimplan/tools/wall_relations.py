@@ -520,7 +520,7 @@ def cancel_join_tool(session, refresh=True):
     session._set_hovered_symbol(None)
     session._set_hovered_provider(None)
     if selected_wall:
-        session._select_wall_for_plan_edit(selected_wall)
+        session.selection.select_wall_for_plan_edit(selected_wall)
         return True
     if refresh:
         session.task_panels.refresh_task_panel_status()
@@ -581,6 +581,6 @@ def apply_plan_wall_join(session, source_wall, target_wall):
     session._set_hovered_opening(None)
     session._set_hovered_symbol(None)
     session._set_hovered_provider(None)
-    session._select_wall_for_plan_edit(source_wall)
+    session.selection.select_wall_for_plan_edit(source_wall)
     session._restore_gui_selection(source_wall)
     return True

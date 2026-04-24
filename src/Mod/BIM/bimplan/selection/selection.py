@@ -49,7 +49,7 @@ def _make_select_plan_target_function(kind):
         defer_gui_selection=False,
         defer_wall_grips=False,
     ):
-        return session._select_plan_target_for_plan_edit(
+        return session.selection.select_plan_target_for_plan_edit(
             kind,
             obj,
             queue_restore=queue_restore,
@@ -848,7 +848,7 @@ def select_plan_target_for_plan_edit(
     session.overlays.sync_secondary_selected_overlays()
     session.task_panels.refresh_task_panel_status(selection_only=session.current_tool == "Select")
     if queue_restore:
-        session._queue_restore_selected_plan_target(kind, obj)
+        session.selection.queue_restore_selected_plan_target(kind, obj)
     return True
 
 
@@ -875,23 +875,23 @@ select_wall_for_plan_edit = _make_select_plan_target_function(plan_target_kinds.
 
 _TARGET_ACTIVATION_BEHAVIORS = {
     plan_target_kinds.PLAN_TARGET_OPENING: TargetActivationBehavior(
-        select_method_name="_select_opening_for_plan_edit",
+        select_method_name="select_opening_for_plan_edit",
         clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
     ),
     plan_target_kinds.PLAN_TARGET_SYMBOL: TargetActivationBehavior(
-        select_method_name="_select_symbol_for_plan_edit",
+        select_method_name="select_symbol_for_plan_edit",
         clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
     ),
     plan_target_kinds.PLAN_TARGET_REGION: TargetActivationBehavior(
-        select_method_name="_select_region_for_plan_edit",
+        select_method_name="select_region_for_plan_edit",
         clear_hovered_kinds=plan_target_kinds.SEMANTIC_TARGET_CLEAR_HOVERED_KINDS,
     ),
     plan_target_kinds.PLAN_TARGET_SPACE: TargetActivationBehavior(
-        select_method_name="_select_space_for_plan_edit",
+        select_method_name="select_space_for_plan_edit",
         clear_hovered_kinds=plan_target_kinds.SPACE_TARGET_CLEAR_HOVERED_KINDS,
     ),
     plan_target_kinds.PLAN_TARGET_WALL: TargetActivationBehavior(
-        select_method_name="_select_wall_for_plan_edit",
+        select_method_name="select_wall_for_plan_edit",
         clear_hovered_kinds=plan_target_kinds.WALL_TARGET_CLEAR_HOVERED_KINDS,
     ),
 }
@@ -918,7 +918,7 @@ def _activate_configured_plan_target(
         defer_gui_selection = behavior.defer_gui_selection
     if defer_wall_grips is None:
         defer_wall_grips = behavior.defer_wall_grips
-    return session._activate_plan_target(
+    return session.selection.activate_plan_target(
         kind,
         mouse_pos,
         event_callback=event_callback,
@@ -976,7 +976,9 @@ def activate_plan_target(
         if target_kind != kind:
             target_obj = None
         behavior = _get_target_activation_behavior(kind)
-        select_target = getattr(session, behavior.select_method_name, None) if behavior else None
+        select_target = (
+            getattr(session.selection, behavior.select_method_name, None) if behavior else None
+        )
         if select_target is None or not select_target(
             target_obj,
             queue_restore=True,
@@ -1584,6 +1586,7 @@ _PLAN_SELECTION_API_BOUND_METHODS = (
     "select_region_for_plan_edit",
     "select_space_for_plan_edit",
     "select_wall_for_plan_edit",
+    "activate_plan_target_for_kind",
     "activate_plan_target",
     "activate_semantic_plan_target",
     "activate_opening_target",
