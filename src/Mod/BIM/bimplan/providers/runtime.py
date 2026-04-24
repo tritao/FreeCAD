@@ -29,6 +29,7 @@ from . import (
     PlanSuggestionSpec,
     PlanToolSpec,
     PlanToolInteraction,
+    PlanEditContext,
 )
 from bimplan.semantics import PlanSemanticRecord
 from bimplan.transactions import PlanEditTransaction
@@ -129,6 +130,12 @@ class PlanProvidersAPI:
     @property
     def session(self):
         return self._session
+
+    def get_plan_edit_context(self):
+        return get_plan_edit_context(self.session)
+
+    def get_plan_provider_action_context(self, payload=None):
+        return get_plan_provider_action_context(self.session, payload=payload)
 
     def get_provider_point_tool_label(self):
         from bimplan.providers import point as plan_provider_point
@@ -492,7 +499,7 @@ def collect_plan_provider_snapshot(session) -> PlanProviderSnapshot:
                 return cached_snapshot
 
         try:
-            context = session.get_plan_edit_context()
+            context = session.providers.get_plan_edit_context()
         except (ReferenceError, RuntimeError):
             return PlanProviderSnapshot()
 
@@ -1301,7 +1308,7 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
         if cached_contributions is not None:
             return cached_contributions
         try:
-            context = session.get_plan_edit_context()
+            context = session.providers.get_plan_edit_context()
         except (ReferenceError, RuntimeError):
             return ()
         results = []
@@ -1405,8 +1412,8 @@ def execute_plan_provider_action(
     if not callable(execute_action):
         return False
 
-    context = session.get_plan_edit_context()
-    action_context = session.get_plan_provider_action_context(payload=payload)
+    context = session.providers.get_plan_edit_context()
+    action_context = session.providers.get_plan_provider_action_context(payload=payload)
     transaction_label = str(transaction_label or "").strip()
     defer_updates = getattr(session, "defer_document_visual_updates", None)
     visual_update_context = defer_updates() if callable(defer_updates) else nullcontext()
@@ -1452,6 +1459,34 @@ def execute_plan_provider_action(
     session.task_panels.refresh_task_panel_status()
     session.viewport.focus_plan_view()
     return True
+
+
+def get_plan_edit_context(session):
+    document_is_alive = getattr(session, "_document_is_alive", None)
+    doc = session.doc if not callable(document_is_alive) or document_is_alive() else None
+    active_storey = session.active_storey
+    active_storey_name = session.visibility.safe_plan_object_name(active_storey)
+    if active_storey is not None and not active_storey_name:
+        active_storey = None
+        session.active_storey = None
+    return PlanEditContext(
+        session=session,
+        document_name=session.visibility.safe_plan_object_name(doc),
+        active_storey_name=active_storey_name,
+        active_storey_label=str(session.get_storey_label(active_storey) or ""),
+        current_tool=str(session.current_tool or ""),
+    )
+
+
+def get_plan_provider_action_context(session, payload=None):
+    document_is_alive = getattr(session, "_document_is_alive", None)
+    doc = session.doc if not callable(document_is_alive) or document_is_alive() else None
+    return PlanEditContext.make_action_context(
+        session,
+        payload=payload,
+        document_name=session.visibility.safe_plan_object_name(doc),
+        current_tool=str(session.current_tool or ""),
+    )
 
 
 def _normalize_plan_provider_target_text(value: object) -> str:
