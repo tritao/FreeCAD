@@ -828,6 +828,35 @@ def set_space_region_pick_state(
     session._space_region_pick_seed_space = seed_space
 
 
+def _get_space_region_pick_candidates(session):
+    state = getattr(session, "task_panel_state", None)
+    if state is not None:
+        return list(getattr(state, "space_region_candidates", ()) or ())
+    return list(getattr(session, "_space_region_candidates", ()) or ())
+
+
+def _get_hovered_space_region_candidate(session):
+    state = getattr(session, "task_panel_state", None)
+    if state is not None:
+        return getattr(state, "hovered_space_region_candidate", None)
+    return getattr(session, "_hovered_space_region_candidate", None)
+
+
+def _set_hovered_space_region_candidate_state(session, candidate):
+    state = getattr(session, "task_panel_state", None)
+    if state is not None:
+        state.hovered_space_region_candidate = candidate
+    else:
+        session._hovered_space_region_candidate = candidate
+
+
+def _get_space_region_pick_context(session):
+    return {
+        "boundaries": list(getattr(session, "_space_region_pick_boundaries", ()) or ()),
+        "seed_space": getattr(session, "_space_region_pick_seed_space", None),
+    }
+
+
 def reset_space_region_pick_state(session, clear_overlays=True):
     set_space_region_pick_state(session)
     if clear_overlays:
@@ -1019,12 +1048,13 @@ def get_space_region_candidate_segments(session, candidate):
 
 
 def pick_space_region_candidate(session, mouse_pos, radius_px=10):
-    if session.current_tool != "Pick Space Region" or not session._space_region_candidates:
+    candidates = _get_space_region_pick_candidates(session)
+    if session.current_tool != "Pick Space Region" or not candidates:
         return None
 
     point = session.viewport.get_plan_point_from_mouse_pos(mouse_pos)
     if point is not None:
-        for candidate in session._space_region_candidates:
+        for candidate in candidates:
             face = candidate.get("face")
             if not face:
                 continue
@@ -1041,7 +1071,7 @@ def pick_space_region_candidate(session, mouse_pos, radius_px=10):
     radius_sq = float(radius_px) * float(radius_px)
     best_candidate = None
     best_distance_sq = None
-    for candidate in session._space_region_candidates:
+    for candidate in candidates:
         for start, end in session.spaces.get_space_region_candidate_segments(candidate):
             distance_sq = session.selection.get_screen_distance_sq_to_segment(mouse_pos, start, end)
             if distance_sq is None or distance_sq > radius_sq:
@@ -1053,18 +1083,10 @@ def pick_space_region_candidate(session, mouse_pos, radius_px=10):
 
 
 def set_hovered_space_region_candidate(session, candidate, visual_key):
-    state = getattr(session, "task_panel_state", None)
-    current_candidate = (
-        getattr(state, "hovered_space_region_candidate", None)
-        if state is not None
-        else session._hovered_space_region_candidate
-    )
+    current_candidate = _get_hovered_space_region_candidate(session)
     if current_candidate is candidate:
         return
-    if state is not None:
-        state.hovered_space_region_candidate = candidate
-    else:
-        session._hovered_space_region_candidate = candidate
+    _set_hovered_space_region_candidate_state(session, candidate)
     session.overlays.queue_plan_overlay_visual_refresh(visual_key)
     session.task_panels.refresh_task_panel_status()
 
@@ -1160,15 +1182,17 @@ def activate_space_region_candidate(session, candidate, event_callback=None):
     if session.current_tool != "Pick Space Region" or not isinstance(candidate, dict):
         return False
 
-    boundaries = list(session._space_region_pick_boundaries or [])
-    if not boundaries and session._space_region_pick_seed_space is None:
+    pick_context = _get_space_region_pick_context(session)
+    boundaries = pick_context["boundaries"]
+    seed_space = pick_context["seed_space"]
+    if not boundaries and seed_space is None:
         return False
 
     return _create_and_finish_space_region_candidate(
         session,
         candidate,
         boundaries=boundaries,
-        keep_boundaries=session._space_region_pick_seed_space is None,
+        keep_boundaries=seed_space is None,
         event_callback=event_callback,
         claim_click=True,
         clear_region_pick_state=True,
