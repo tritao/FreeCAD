@@ -994,7 +994,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         provider.overlay_calls = 0
 
         session._set_hovered_wall(wall)
-        with patch.object(session, "_get_edit_node", return_value=None):
+        with patch.object(session.selection, "get_edit_node", return_value=None):
             press = self._make_fake_left_mouse_press(250, 250)
             session._on_mouse_pressed(press)
 
@@ -1069,7 +1069,11 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         event = self._make_fake_left_mouse_press()
 
         with (
-            patch.object(session, "_get_edit_node", return_value=("provider_overlay_point", node)),
+            patch.object(
+                session.selection,
+                "get_edit_node",
+                return_value=("provider_overlay_point", node),
+            ),
             patch.object(
                 session,
                 "_toggle_raw_plan_object_selection",
@@ -1132,7 +1136,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ):
                 self.assertEqual(
                     ("provider_overlay_target", "object", marker),
-                    session._get_edit_node((100, 100)),
+                    session.selection.get_edit_node((100, 100)),
                 )
         finally:
             session.view = original_view
@@ -1641,7 +1645,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         original_view = session.view
-        original_pick_opening = session._pick_plan_opening_target_from_overlays
+        original_pick_opening = session.selection.pick_plan_opening_target_from_overlays
         opening_pick_calls = []
 
         class FakeView:
@@ -1656,7 +1660,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             return None
 
         try:
-            session._pick_plan_opening_target_from_overlays = fail_if_opening_overlay_pick_runs
+            session.selection.pick_plan_opening_target_from_overlays = (
+                fail_if_opening_overlay_pick_runs
+            )
             session.view = FakeView(
                 [{"Document": self.document.Name, "Object": plan_symbol.Name, "ParentObject": link}]
             )
@@ -1672,7 +1678,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             )
             self.assertEqual([], opening_pick_calls)
         finally:
-            session._pick_plan_opening_target_from_overlays = original_pick_opening
+            session.selection.pick_plan_opening_target_from_overlays = original_pick_opening
             session.view = original_view
 
         session.shutdown(close_dialog=False)
@@ -2895,7 +2901,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         with (
-            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(session.selection, "get_edit_node", return_value=None),
             patch.object(
                 session.selection,
                 "get_plan_target_at_position",
@@ -2914,7 +2920,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ),
             patch.object(
                 session,
-                "_get_edit_node",
+                "get_edit_node",
                 return_value=None,
             ),
             patch.object(
@@ -2946,7 +2952,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ),
             patch.object(
                 session,
-                "_get_edit_node",
+                "get_edit_node",
                 return_value=None,
             ),
             patch.object(
@@ -3245,7 +3251,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return self._position
 
         with (
-            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(session.selection, "get_edit_node", return_value=None),
             patch.object(
                 session.selection,
                 "get_plan_target_at_position",
@@ -3310,7 +3316,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return self._position
 
         with (
-            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(session.selection, "get_edit_node", return_value=None),
             patch.object(
                 session.selection,
                 "get_plan_target_at_position",
@@ -3339,7 +3345,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual([obj.Name for obj in FreeCADGui.Selection.getSelection()], [level.Name])
 
         with (
-            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(session.selection, "get_edit_node", return_value=None),
             patch.object(
                 session.selection,
                 "get_plan_target_at_position",
@@ -3912,7 +3918,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return self._position
 
         with (
-            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(session.selection, "get_edit_node", return_value=None),
             patch.object(
                 session.selection,
                 "get_plan_target_at_position",
@@ -3986,7 +3992,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return self._position
 
         with (
-            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(session.selection, "get_edit_node", return_value=None),
             patch.object(
                 session.selection,
                 "get_plan_target_at_position",
@@ -4063,7 +4069,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return self._position
 
         with (
-            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(session.selection, "get_edit_node", return_value=None),
             patch.object(
                 session.selection,
                 "get_plan_target_at_position",
@@ -4206,7 +4212,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return self._position
 
         with (
-            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(session.selection, "get_edit_node", return_value=None),
             patch.object(
                 session.selection,
                 "get_plan_target_at_position",
@@ -5706,7 +5712,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         with (
-            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(session.selection, "get_edit_node", return_value=None),
             patch.object(
                 session.selection,
                 "get_plan_target_at_position",
@@ -5739,7 +5745,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(session.hovered_wall, wall)
 
         with (
-            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(session.selection, "get_edit_node", return_value=None),
             patch.object(
                 session.selection,
                 "get_plan_target_at_position",
@@ -5770,7 +5776,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         with (
-            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(session.selection, "get_edit_node", return_value=None),
             patch.object(
                 session.selection,
                 "get_plan_target_at_position",
@@ -5808,7 +5814,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         with (
-            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(session.selection, "get_edit_node", return_value=None),
             patch.object(
                 session.selection,
                 "get_plan_target_at_position",
@@ -5843,7 +5849,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._hover_pick_dirty = True
 
         with (
-            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(session.selection, "get_edit_node", return_value=None),
             patch.object(
                 session.selection,
                 "get_plan_target_at_position",
@@ -6410,7 +6416,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertFalse(region.ViewObject.Selectable)
 
         with (
-            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(session.selection, "get_edit_node", return_value=None),
             patch.object(
                 session.selection,
                 "get_plan_target_at_position",
@@ -6487,7 +6493,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         with (
             patch.object(
                 session,
-                "_get_edit_node",
+                "get_edit_node",
                 return_value=("opening_handle", door, 0),
             ),
             patch.object(session.openings, "activate_opening_handle") as activate_handle,
@@ -6539,7 +6545,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         with (
             patch.object(
                 session,
-                "_get_edit_node",
+                "get_edit_node",
                 return_value=("edit_node", picked_point),
             ),
             patch.object(session.openings, "activate_opening_handle") as activate_handle,
@@ -7729,7 +7735,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         with (
-            patch.object(session, "_get_edit_node", return_value=None),
+            patch.object(session.selection, "get_edit_node", return_value=None),
             patch.object(
                 session.selection,
                 "get_plan_target_at_position",
@@ -7748,7 +7754,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             ),
             patch.object(
                 session,
-                "_get_edit_node",
+                "get_edit_node",
                 return_value=None,
             ),
             patch.object(

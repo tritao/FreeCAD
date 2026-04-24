@@ -695,10 +695,10 @@ def pick_plan_region_target_from_polylines(session, mouse_pos):
                 continue
 
             containing_area = None
-            for polyline in session._get_region_pick_polylines(obj):
-                if not session._xy_point_in_polygon(point, polyline):
+            for polyline in session.selection.get_region_pick_polylines(obj):
+                if not session.selection.xy_point_in_polygon(point, polyline):
                     continue
-                area = session._xy_polygon_area(polyline)
+                area = session.selection.xy_polygon_area(polyline)
                 if area <= 0.0:
                     continue
                 if containing_area is None or area < containing_area:
@@ -779,7 +779,7 @@ def pick_plan_target_from_footprint_faces(
 
 
 def pick_plan_space_target_from_footprints(session, mouse_pos):
-    return session._pick_plan_target_from_footprint_faces(
+    return session.selection.pick_plan_target_from_footprint_faces(
         mouse_pos,
         session._is_plan_space_object,
         session._get_space_footprint_faces,
@@ -788,7 +788,7 @@ def pick_plan_space_target_from_footprints(session, mouse_pos):
 
 
 def pick_plan_region_target_from_footprints(session, mouse_pos):
-    return session._pick_plan_target_from_footprint_faces(
+    return session.selection.pick_plan_target_from_footprint_faces(
         mouse_pos,
         session._is_plan_region_object,
         session._get_region_footprint_faces,
@@ -858,7 +858,7 @@ def get_plan_target_at_position(session, mouse_pos, *, include_space_fallback=Tr
         if result == (None, None):
             if provider_candidate is None:
                 provider_overlay_kind, provider_overlay_obj = (
-                    session._pick_provider_overlay_target_from_overlays(
+                    session.selection.pick_provider_overlay_target_from_overlays(
                         mouse_pos,
                         radius_px=_PROVIDER_OVERLAY_PICK_RADIUS_PX,
                     )
@@ -873,14 +873,16 @@ def get_plan_target_at_position(session, mouse_pos, *, include_space_fallback=Tr
                 opening_candidates = None
                 if wall_candidate is not None:
                     opening_candidates = session.openings.get_wall_hosted_openings(wall_candidate)
-                opening_candidate = session._pick_plan_opening_target_from_overlays(
+                opening_candidate = session.selection.pick_plan_opening_target_from_overlays(
                     mouse_pos,
                     candidates=opening_candidates,
                 )
                 if opening_candidate is not None:
                     result = ("opening", opening_candidate)
                 elif symbol_candidate is None:
-                    symbol_candidate = session._pick_plan_symbol_target_from_overlays(mouse_pos)
+                    symbol_candidate = session.selection.pick_plan_symbol_target_from_overlays(
+                        mouse_pos
+                    )
             if result == (None, None) and symbol_candidate is not None:
                 result = ("symbol", symbol_candidate)
             elif result == (None, None) and wall_candidate is not None:
@@ -889,18 +891,28 @@ def get_plan_target_at_position(session, mouse_pos, *, include_space_fallback=Tr
                 result = ("provider", provider_candidate)
             elif result == (None, None):
                 if region_candidate is None:
-                    region_candidate = session._pick_plan_region_target_from_polylines(mouse_pos)
+                    region_candidate = session.selection.pick_plan_region_target_from_polylines(
+                        mouse_pos
+                    )
                 if region_candidate is None:
-                    region_candidate = session._pick_plan_region_target_from_footprints(mouse_pos)
+                    region_candidate = session.selection.pick_plan_region_target_from_footprints(
+                        mouse_pos
+                    )
                 if region_candidate is None:
-                    region_candidate = session._pick_plan_region_target_from_overlays(mouse_pos)
+                    region_candidate = session.selection.pick_plan_region_target_from_overlays(
+                        mouse_pos
+                    )
                 if region_candidate is not None:
                     result = ("region", region_candidate)
                 elif include_space_fallback:
                     if space_candidate is None:
-                        space_candidate = session._pick_plan_space_target_from_footprints(mouse_pos)
+                        space_candidate = session.selection.pick_plan_space_target_from_footprints(
+                            mouse_pos
+                        )
                     if space_candidate is None:
-                        space_candidate = session._pick_plan_space_target_from_overlays(mouse_pos)
+                        space_candidate = session.selection.pick_plan_space_target_from_overlays(
+                            mouse_pos
+                        )
                     if space_candidate is not None:
                         result = ("space", space_candidate)
         session._plan_perf_set_fields(
@@ -971,7 +983,7 @@ def get_edit_node(session, mouse_pos):
             result=node,
         )
         return node
-    opening_handle_index = session._pick_selected_opening_handle(mouse_pos)
+    opening_handle_index = session.selection.pick_selected_opening_handle(mouse_pos)
     if opening_handle_index is not None:
         node = (
             "opening_handle",
@@ -999,7 +1011,9 @@ def get_edit_node(session, mouse_pos):
             result=node,
         )
         return node
-    target_kind, target_obj = session._pick_provider_overlay_target_from_objects_info(mouse_pos)
+    target_kind, target_obj = session.selection.pick_provider_overlay_target_from_objects_info(
+        mouse_pos
+    )
     if target_obj is not None:
         node = ("provider_overlay_target", target_kind, target_obj)
         session._plan_pick_debug_event(
@@ -1009,7 +1023,9 @@ def get_edit_node(session, mouse_pos):
             result=node,
         )
         return node
-    target_kind, target_obj = session._pick_provider_overlay_target_from_overlays(mouse_pos)
+    target_kind, target_obj = session.selection.pick_provider_overlay_target_from_overlays(
+        mouse_pos
+    )
     if target_obj is not None:
         node = ("provider_overlay_target", target_kind, target_obj)
         session._plan_pick_debug_event(
