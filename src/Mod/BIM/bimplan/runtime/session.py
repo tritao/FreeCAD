@@ -299,7 +299,7 @@ class PlanEditSession:
             with self.performance.plan_perf_trace_span("attach_selection_observer"):
                 self.selection.attach_selection_observer()
             with self.performance.plan_perf_trace_span("attach_document_observer"):
-                self._attach_document_observer()
+                self.document_visuals.attach_document_observer()
             with self.performance.plan_perf_trace_span("register_edit_callbacks"):
                 self.viewport.register_edit_callbacks()
             with self.performance.plan_perf_trace_span(
@@ -372,19 +372,6 @@ class PlanEditSession:
 
     def get_plan_provider_registry(self):
         return get_plan_edit_registry()
-
-    def _attach_document_observer(self):
-        if not self._document_observer_added:
-            FreeCAD.addDocumentObserver(self)
-            self._document_observer_added = True
-
-    def _detach_document_observer(self):
-        if self._document_observer_added:
-            try:
-                FreeCAD.removeDocumentObserver(self)
-            except Exception:
-                pass
-            self._document_observer_added = False
 
     def defer_document_visual_updates(self):
         return plan_document_visuals.defer_document_visual_updates(self)

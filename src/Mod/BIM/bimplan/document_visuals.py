@@ -173,6 +173,30 @@ def document_is_alive(session):
         return False
 
 
+def attach_document_observer(session):
+    if session._document_observer_added:
+        return
+    try:
+        import FreeCAD
+
+        FreeCAD.addDocumentObserver(session)
+        session._document_observer_added = True
+    except Exception:
+        pass
+
+
+def detach_document_observer(session):
+    if not session._document_observer_added:
+        return
+    try:
+        import FreeCAD
+
+        FreeCAD.removeDocumentObserver(session)
+    except Exception:
+        pass
+    session._document_observer_added = False
+
+
 @contextmanager
 def defer_document_visual_updates(session):
     """Batch document observer visual work while an external command mutates the model."""
@@ -714,6 +738,8 @@ for _method_name in (
     "are_document_visual_updates_deferred",
     "defer_document_visual_refresh",
     "document_is_alive",
+    "attach_document_observer",
+    "detach_document_observer",
     "is_opening_visual_dependency",
     "refresh_selected_opening_visuals",
     "is_symbol_visual_dependency",
