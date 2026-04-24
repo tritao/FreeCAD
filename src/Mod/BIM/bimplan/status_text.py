@@ -362,10 +362,10 @@ def get_status_chip_text(session):
             if selected_kind == "symbol" and selected_obj is not None
             else translate("BIM_PlanEdit", "Symbol rotation")
         )
-        if session._symbol_rotation_snap_enabled():
+        if session.symbols.symbol_rotation_snap_enabled():
             action = translate(
                 "BIM_PlanEdit", "Click target angle ({snap} snap, Shift = free)"
-            ).format(snap=session._format_symbol_rotation_snap_label())
+            ).format(snap=session.symbols.format_symbol_rotation_snap_label())
         else:
             action = translate("BIM_PlanEdit", "Click target angle")
         return title, "{}\n{}".format(context, action)

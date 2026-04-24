@@ -75,7 +75,7 @@ def clear_transient_visuals(
     if include_opening_move_preview:
         session.openings.clear_opening_move_preview()
     if include_symbol_edit_preview:
-        session._clear_symbol_edit_preview()
+        session.symbols.clear_symbol_edit_preview()
     if include_plan_region_preview:
         session._clear_plan_region_preview()
 

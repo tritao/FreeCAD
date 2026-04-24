@@ -1973,7 +1973,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             role: point
             for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
         }
-        anchor = session._get_symbol_anchor_point(link)
+        anchor = session.symbols.get_symbol_anchor_point(link)
         target_angle = math.radians(10.0)
         raw_point = FreeCAD.Vector(
             anchor.x + 1000.0 * math.cos(target_angle),
@@ -1987,7 +1987,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._edit_symbol_start_placement = link.Placement.copy()
         session._edit_symbol_reference_point = handle_points["rotate"]
         with (
-            patch.object(session, "_symbol_rotation_snap_enabled", return_value=True),
+            patch.object(session.symbols, "symbol_rotation_snap_enabled", return_value=True),
             patch.object(
                 session.overlays, "get_symbol_rotation_snap_increment_degrees", return_value=15.0
             ),
@@ -2001,7 +2001,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         facing = link.Placement.Rotation.multVec(equipment.PlanFacing)
         angle = math.degrees(math.atan2(facing.y, facing.x))
         self.assertAlmostEqual(15.0, angle, delta=1e-3)
-        rotated_anchor = session._get_symbol_anchor_point(link)
+        rotated_anchor = session.symbols.get_symbol_anchor_point(link)
         self.assertAlmostEqual(anchor.x, rotated_anchor.x, delta=1e-6)
         self.assertAlmostEqual(anchor.y, rotated_anchor.y, delta=1e-6)
 
@@ -2028,7 +2028,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             role: point
             for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(link)
         }
-        anchor = session._get_symbol_anchor_point(link)
+        anchor = session.symbols.get_symbol_anchor_point(link)
         target_angle = math.radians(10.0)
         raw_point = FreeCAD.Vector(
             anchor.x + 1000.0 * math.cos(target_angle),
@@ -2042,7 +2042,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._edit_symbol_start_placement = link.Placement.copy()
         session._edit_symbol_reference_point = handle_points["rotate"]
         with (
-            patch.object(session, "_symbol_rotation_snap_enabled", return_value=True),
+            patch.object(session.symbols, "symbol_rotation_snap_enabled", return_value=True),
             patch.object(
                 session.overlays, "get_symbol_rotation_snap_increment_degrees", return_value=15.0
             ),
@@ -2056,7 +2056,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         facing = link.Placement.Rotation.multVec(equipment.PlanFacing)
         angle = math.degrees(math.atan2(facing.y, facing.x))
         self.assertAlmostEqual(10.0, angle, delta=1e-3)
-        rotated_anchor = session._get_symbol_anchor_point(link)
+        rotated_anchor = session.symbols.get_symbol_anchor_point(link)
         self.assertAlmostEqual(anchor.x, rotated_anchor.x, delta=1e-6)
         self.assertAlmostEqual(anchor.y, rotated_anchor.y, delta=1e-6)
 
