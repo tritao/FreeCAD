@@ -635,7 +635,7 @@ def set_selected_plan_target(
         primary_obj=obj,
     )
     session._clear_plan_relation_status()
-    session._sync_active_plan_target_object()
+    session.viewport.sync_active_plan_target_object()
     if pending_restore:
         session.selection.set_pending_selected_plan_target(kind, obj)
     else:
@@ -755,7 +755,7 @@ def sync_primary_selected_plan_target_visuals(session, previous_kind=None, previ
         with session.performance.plan_perf_trace_span("sync_secondary_selected_overlays"):
             session.overlays.sync_secondary_selected_overlays()
         with session.performance.plan_perf_trace_span("sync_active_plan_target_object"):
-            session._sync_active_plan_target_object()
+            session.viewport.sync_active_plan_target_object()
         session.task_panels.refresh_task_panel_status(
             selection_only=session.current_tool == "Select"
         )

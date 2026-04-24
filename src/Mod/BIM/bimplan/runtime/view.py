@@ -41,6 +41,8 @@ _PLAN_VIEWPORT_API_BOUND_METHODS = (
     "scaled_marker_size",
     "get_plan_view_units_per_pixel",
     "get_plan_projection_cache_key",
+    "set_active_object",
+    "sync_active_plan_target_object",
     "register_edit_callbacks",
     "unregister_edit_callbacks",
     "focus_plan_view",
@@ -417,7 +419,7 @@ def apply_plan_view(session, fit=True):
 
     if session.active_storey:
         with session.performance.plan_perf_trace_span("apply_plan_view_set_active_object"):
-            session._set_active_object(session.active_storey)
+            session.viewport.set_active_object(session.active_storey)
 
     with session.performance.plan_perf_trace_span("apply_plan_view_navigation_profile"):
         apply_plan_navigation_profile(session, session._plan_view_locked_actions)
@@ -435,7 +437,7 @@ def restore_state(session):
 
     restore_preselection_state(session)
     session.visibility.restore_object_view_state()
-    session._restore_snap_profile()
+    session.snap.restore_snap_profile()
     session._interaction_plane = None
 
     if session.viewer:
@@ -590,6 +592,40 @@ def get_plan_projection_cache_key(session):
     if height is None:
         return None
     return size_key + (round(float(height), 6),) + position_key
+
+
+def set_active_object(session, obj):
+    try:
+        session.view.setActiveObject("Arch", None)
+    except Exception:
+        pass
+    try:
+        session.view.setActiveObject("NativeIFC", None)
+    except Exception:
+        pass
+    if obj is None:
+        return
+    context = "Arch"
+    if getattr(obj, "IfcType", "") == "Building Storey":
+        context = "NativeIFC"
+    try:
+        session.view.setActiveObject(context, obj)
+    except Exception:
+        pass
+
+
+def sync_active_plan_target_object(session):
+    if not session.view:
+        return
+    target_kind, target_obj = session.selection.get_selected_plan_target()
+    del target_kind
+    if target_obj is not None:
+        session.viewport.set_active_object(target_obj)
+        return
+    if session.active_storey is not None:
+        session.viewport.set_active_object(session.active_storey)
+        return
+    session.viewport.set_active_object(None)
 
 
 def register_edit_callbacks(session):
