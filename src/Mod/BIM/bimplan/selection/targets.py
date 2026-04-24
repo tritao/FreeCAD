@@ -59,7 +59,7 @@ def get_plan_target_for_object(session, obj, parent_obj=None):
         if target_kind:
             return (target_kind, candidate)
 
-    semantic_obj = session._get_plan_semantic_object(obj)
+    semantic_obj = session.visibility.get_plan_semantic_object(obj)
     semantic_name = getattr(semantic_obj, "Name", None)
     if semantic_obj and semantic_name not in seen:
         target_kind = session.selection.get_plan_target_kind_for_object(semantic_obj)
@@ -91,7 +91,7 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
         if target_kind:
             return (target_kind, candidate)
 
-    semantic_obj = session._get_plan_semantic_object(obj)
+    semantic_obj = session.visibility.get_plan_semantic_object(obj)
     semantic_name = getattr(semantic_obj, "Name", None)
     if semantic_obj and semantic_name not in seen:
         target_kind = session.selection.get_plan_target_kind_for_object(semantic_obj)
@@ -112,7 +112,7 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
 def is_plan_selectable_wall(session, obj):
     if not obj:
         return False
-    obj = session._get_plan_semantic_object(obj)
+    obj = session.visibility.get_plan_semantic_object(obj)
     try:
         import Draft
 
@@ -124,7 +124,7 @@ def is_plan_selectable_wall(session, obj):
 def is_plan_space_object(session, obj):
     if not obj:
         return False
-    obj = session._get_plan_semantic_object(obj)
+    obj = session.visibility.get_plan_semantic_object(obj)
     try:
         import Draft
 
@@ -138,7 +138,7 @@ def is_plan_space_object(session, obj):
 def is_plan_custom_pick_only_object(session, obj):
     if not obj:
         return False
-    obj = session._get_plan_semantic_object(obj)
+    obj = session.visibility.get_plan_semantic_object(obj)
     return (
         session._is_hosted_opening_object(obj)
         or session._is_plan_space_object(obj)
@@ -149,7 +149,7 @@ def is_plan_custom_pick_only_object(session, obj):
 def is_plan_space_separator_object(session, obj):
     if not obj:
         return False
-    obj = session._get_plan_semantic_object(obj)
+    obj = session.visibility.get_plan_semantic_object(obj)
     try:
         import Draft
 
@@ -161,7 +161,7 @@ def is_plan_space_separator_object(session, obj):
 def is_plan_region_object(session, obj):
     if not obj:
         return False
-    obj = session._get_plan_semantic_object(obj)
+    obj = session.visibility.get_plan_semantic_object(obj)
     try:
         import Draft
 
@@ -225,7 +225,7 @@ def normalize_plan_requirement_tags(value):
 def get_plan_host_ref(session, obj):
     if obj is None:
         return ""
-    host_ref = session._get_plan_text_property(obj, ("HostRef",))
+    host_ref = session.visibility.get_plan_text_property(obj, ("HostRef",))
     if host_ref:
         return host_ref
     hosts = getattr(obj, "Hosts", None) or ()
@@ -244,7 +244,7 @@ def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=
         if kind == plan_target_kinds.PLAN_TARGET_PROVIDER
         else None
     )
-    semantic_obj = session._get_plan_semantic_object(obj)
+    semantic_obj = session.visibility.get_plan_semantic_object(obj)
     doc = getattr(obj, "Document", None)
     state_key = session.selection.get_plan_target_state_key(kind, obj)
     fields = resolve_plan_provider_target_display_fields(
@@ -301,7 +301,7 @@ def get_plan_targets(session, selected_only=False):
                 state_key = session.selection.get_plan_target_state_key(target_kind, target_obj)
                 if state_key is None or state_key in seen:
                     continue
-                semantic_obj = session._get_plan_semantic_object(target_obj)
+                semantic_obj = session.visibility.get_plan_semantic_object(target_obj)
                 if active_storey_name is not None:
                     storeys = session.visibility.get_object_storeys(semantic_obj or target_obj)
                     if storeys and not any(parent.Name == active_storey_name for parent in storeys):
@@ -368,4 +368,4 @@ def resolve_plan_semantic_object(session, target):
                 resolved = None
             if resolved is not None:
                 return resolved
-    return session._get_plan_semantic_object(session.resolve_plan_target_object(target))
+    return session.visibility.get_plan_semantic_object(session.resolve_plan_target_object(target))

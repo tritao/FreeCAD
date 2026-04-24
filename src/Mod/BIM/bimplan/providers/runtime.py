@@ -772,22 +772,22 @@ def resolve_plan_provider_target_display_fields(
 def build_plan_semantic_record(session, target_kind, target_obj):
     if not target_kind or target_obj is None:
         return None
-    semantic_obj = session._get_plan_semantic_object(target_obj)
+    semantic_obj = session.visibility.get_plan_semantic_object(target_obj)
     if semantic_obj is None:
         return None
     doc = getattr(target_obj, "Document", None)
     semantic_doc = getattr(semantic_obj, "Document", None)
-    space_label = session._get_plan_text_property(
+    space_label = session.visibility.get_plan_text_property(
         semantic_obj,
         ("SpaceLabel", "RoomLabel", "Label"),
     )
-    source_space_name = session._get_plan_text_property(
+    source_space_name = session.visibility.get_plan_text_property(
         semantic_obj,
         ("SourceSpaceName",),
     )
     if target_kind == "space" and not source_space_name:
         source_space_name = str(getattr(semantic_obj, "Name", "") or "")
-    usage_category = session._get_plan_text_property(
+    usage_category = session.visibility.get_plan_text_property(
         semantic_obj,
         ("UsageCategory", "SpaceType"),
     )
@@ -802,14 +802,16 @@ def build_plan_semantic_record(session, target_kind, target_obj):
         semantic_document_name=str(getattr(semantic_doc, "Name", "") or ""),
         semantic_object_name=str(getattr(semantic_obj, "Name", "") or ""),
         semantic_label=str(getattr(semantic_obj, "Label", getattr(semantic_obj, "Name", "")) or ""),
-        space_key=session._get_plan_text_property(semantic_obj, ("SpaceKey",)),
+        space_key=session.visibility.get_plan_text_property(semantic_obj, ("SpaceKey",)),
         space_label=str(space_label or ""),
         source_space_name=str(source_space_name or ""),
         usage_category=str(usage_category or ""),
-        object_role=session._get_plan_text_property(semantic_obj, ("ObjectRole",)),
-        semantic_preset=session._get_plan_text_property(semantic_obj, ("SemanticPreset",)),
+        object_role=session.visibility.get_plan_text_property(semantic_obj, ("ObjectRole",)),
+        semantic_preset=session.visibility.get_plan_text_property(
+            semantic_obj, ("SemanticPreset",)
+        ),
         host_ref=session._get_plan_host_ref(semantic_obj),
-        mount_height_mm=session._get_plan_float_property(
+        mount_height_mm=session.visibility.get_plan_float_property(
             semantic_obj,
             ("MountHeight", "MEPMountHeight", "PlumbingMountHeight"),
         ),

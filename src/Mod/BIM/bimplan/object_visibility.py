@@ -73,7 +73,7 @@ def is_plan_container_object(obj):
 def is_plan_background_object(session, obj):
     if not obj:
         return False
-    obj = session._get_plan_semantic_object(obj)
+    obj = session.visibility.get_plan_semantic_object(obj)
     if getattr(obj, "IfcType", "") == "Slab":
         return True
     try:
@@ -84,10 +84,92 @@ def is_plan_background_object(session, obj):
         return False
 
 
+def is_direct_plan_equipment_object(_session, obj):
+    if not obj:
+        return False
+    try:
+        import Draft
+
+        if Draft.getType(obj) == "Equipment":
+            return True
+    except Exception:
+        pass
+    proxy = getattr(obj, "Proxy", None)
+    return getattr(proxy, "Type", None) == "Equipment"
+
+
+def get_direct_plan_symbol_owner(session, obj):
+    if not obj:
+        return None
+    for parent in getattr(obj, "InListRecursive", []) or getattr(obj, "InList", []):
+        if not session.visibility.is_direct_plan_equipment_object(parent):
+            continue
+        if obj == getattr(parent, "Base", None):
+            return parent
+        if obj in (getattr(parent, "PlanSymbols", None) or []):
+            return parent
+    return None
+
+
+def get_plan_semantic_object(session, obj):
+    key = session._get_document_object_key(obj)
+    semantic_cache = session.overlay_cache_state.plan_semantic_object_cache
+    if key is not None and key in semantic_cache:
+        session.performance.plan_perf_count("semantic_object_cache_hits")
+        return semantic_cache[key]
+
+    current = obj
+    seen = set()
+    while current:
+        if not session._is_live_document_object(current):
+            current = None
+            break
+        name = getattr(current, "Name", None)
+        if name in seen:
+            break
+        if name:
+            seen.add(name)
+        if getattr(current, "TypeId", "") != "App::Link":
+            break
+        linked = getattr(current, "LinkedObject", None)
+        if linked is None and hasattr(current, "getLinkedObject"):
+            try:
+                linked = current.getLinkedObject(True)
+            except TypeError:
+                try:
+                    linked = current.getLinkedObject()
+                except Exception:
+                    linked = None
+            except Exception:
+                linked = None
+        if not linked or linked == current:
+            break
+        current = linked
+    owner = session.visibility.get_direct_plan_symbol_owner(current)
+    result = owner or current or obj
+    if key is not None:
+        semantic_cache[key] = result
+    return result
+
+
+def get_plan_text_property(_session, obj, property_names, default=""):
+    from bimplan.selection import targets as plan_targets
+
+    return plan_targets.get_plan_text_property(obj, property_names, default=default)
+
+
+def get_plan_float_property(_session, obj, property_names):
+    from bimplan.selection import targets as plan_targets
+
+    return plan_targets.get_plan_float_property(obj, property_names)
+
+
 def is_plan_equipment_object(session, obj):
     if not obj:
         return False
-    return session._is_direct_plan_equipment_object(session._get_plan_semantic_object(obj))
+    return session.visibility.is_direct_plan_equipment_object(
+        session.visibility.get_plan_semantic_object(obj)
+    )
 
 
 def is_cabinetry_plan_context_object(obj):
@@ -135,7 +217,7 @@ def is_plan_symbol_instance(session, obj):
         return False
     if getattr(obj, "TypeId", "") == "App::Link":
         return True
-    semantic_obj = session._get_plan_semantic_object(obj)
+    semantic_obj = session.visibility.get_plan_semantic_object(obj)
     return obj == semantic_obj and session.visibility.has_direct_plan_symbols(semantic_obj)
 
 
@@ -175,7 +257,7 @@ def is_supported_plan_object(session, obj):
         return True
     if session.visibility.is_plan_context_only_object(obj):
         return True
-    semantic_obj = session._get_plan_semantic_object(obj)
+    semantic_obj = session.visibility.get_plan_semantic_object(obj)
     try:
         import Draft
 
@@ -346,7 +428,7 @@ def get_supported_plan_visibility(session, obj, state):
 def apply_context_object_selectability(session, obj, view_object):
     if not view_object or not hasattr(view_object, "Selectable"):
         return
-    semantic_obj = session._get_plan_semantic_object(obj)
+    semantic_obj = session.visibility.get_plan_semantic_object(obj)
     if semantic_obj is not None and session.document_visuals.is_symbol_visual_dependency(
         semantic_obj,
         obj,
@@ -526,6 +608,11 @@ for _method_name in (
     "is_storey_object",
     "is_plan_container_object",
     "is_plan_background_object",
+    "is_direct_plan_equipment_object",
+    "get_direct_plan_symbol_owner",
+    "get_plan_semantic_object",
+    "get_plan_text_property",
+    "get_plan_float_property",
     "is_plan_equipment_object",
     "is_cabinetry_plan_context_object",
     "has_direct_plan_symbols",

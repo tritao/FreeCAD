@@ -43,7 +43,7 @@ def get_symbol_parent_global_placement(session, symbol, placement=None):
 
 
 def get_symbol_plan_proxy(session, symbol, *attrs):
-    semantic_obj = session._get_plan_semantic_object(symbol)
+    semantic_obj = session.visibility.get_plan_semantic_object(symbol)
     view_object = getattr(semantic_obj, "ViewObject", None)
     proxy = getattr(view_object, "Proxy", None) if view_object else None
     if not proxy:
@@ -55,7 +55,7 @@ def get_symbol_plan_proxy(session, symbol, *attrs):
 
 
 def get_symbol_semantic_proxy(session, symbol, *attrs):
-    semantic_obj = session._get_plan_semantic_object(symbol)
+    semantic_obj = session.visibility.get_plan_semantic_object(symbol)
     proxy = getattr(semantic_obj, "Proxy", None)
     if not proxy:
         return None
@@ -283,7 +283,7 @@ def clear_selected_symbol_overlay(session):
 
 
 def get_symbol_local_anchor(session, symbol):
-    semantic_obj = session._get_plan_semantic_object(symbol)
+    semantic_obj = session.visibility.get_plan_semantic_object(symbol)
     proxy = get_symbol_semantic_proxy(session, symbol, "get_plan_anchor")
     if proxy:
         try:
@@ -299,7 +299,7 @@ def get_symbol_local_anchor(session, symbol):
 
 
 def get_symbol_local_facing(session, symbol):
-    semantic_obj = session._get_plan_semantic_object(symbol)
+    semantic_obj = session.visibility.get_plan_semantic_object(symbol)
     proxy = get_symbol_semantic_proxy(session, symbol, "get_plan_facing")
     if proxy:
         try:

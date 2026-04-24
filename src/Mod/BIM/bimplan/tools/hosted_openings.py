@@ -126,7 +126,7 @@ def has_built_opening_shape(opening):
 def is_hosted_opening_object(session, obj):
     if not obj:
         return False
-    semantic_obj = session._get_plan_semantic_object(obj)
+    semantic_obj = session.visibility.get_plan_semantic_object(obj)
     if not getattr(semantic_obj, "Hosts", None):
         return False
 

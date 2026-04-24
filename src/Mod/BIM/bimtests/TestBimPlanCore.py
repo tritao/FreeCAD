@@ -177,6 +177,7 @@ class _DummySession:
         self.all_targets = tuple(all_targets or self.selected_targets)
         self.semantic_records = tuple(semantic_records or ())
         self.selected_objects = tuple(selected_objects or ())
+        self.visibility = SimpleNamespace(get_plan_semantic_object=lambda obj: f"semantic:{obj}")
 
     def get_plan_targets(self, selected_only=False):
         if selected_only:
@@ -195,9 +196,6 @@ class _DummySession:
 
     def resolve_plan_semantic_object(self, target):
         return f"semantic:{target.semantic_object_name}"
-
-    def _get_plan_semantic_object(self, obj):
-        return f"semantic:{obj}"
 
 
 class _DummyDoc:
@@ -2823,12 +2821,12 @@ class TestBimPlanCore(unittest.TestCase):
                 get_plan_target_kind_for_object=lambda obj: "provider" if obj is marker else None,
                 get_plan_target_state_key=lambda kind, obj: (kind, getattr(obj, "Name", "")),
             ),
+            visibility=SimpleNamespace(get_plan_semantic_object=lambda obj: obj),
             providers=SimpleNamespace(
                 get_plan_provider_target_for_object=lambda obj: (
                     provider_target if obj is marker else None
                 )
             ),
-            _get_plan_semantic_object=lambda obj: obj,
             resolve_plan_semantic_object=lambda target: (
                 marker if target == provider_target else None
             ),

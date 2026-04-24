@@ -187,7 +187,7 @@ class TestBimLibraryGui(TestArchBaseGui):
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        self.assertIs(session._get_plan_semantic_object(stale_link), equipment)
+        self.assertIs(session.visibility.get_plan_semantic_object(stale_link), equipment)
         self.assertTrue(session.visibility.is_plan_equipment_object(stale_link))
         self.assertTrue(session.visibility.is_supported_plan_object(stale_link))
 

@@ -78,7 +78,9 @@ class PlanEditContext:
         return None
 
     def get_semantic_object(self, obj):
-        getter = getattr(self.session, "_get_plan_semantic_object", None)
+        getter = getattr(
+            getattr(self.session, "visibility", None), "get_plan_semantic_object", None
+        )
         if callable(getter):
             try:
                 semantic_obj = getter(obj)
