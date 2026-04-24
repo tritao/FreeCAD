@@ -86,10 +86,10 @@ def start_wall_edit(session, mode):
         with session.performance.plan_perf_trace_span("start_wall_edit_state"):
             session.wall_relations.clear_plan_relation_status()
             session.current_tool = "Move Wall" if mode == "Move" else f"Stretch {mode}"
-            session._set_hovered_wall(None)
-            session._set_hovered_opening(None)
-            session._set_hovered_symbol(None)
-            session._set_hovered_provider(None)
+            session.selection.set_hovered_wall(None)
+            session.selection.set_hovered_opening(None)
+            session.selection.set_hovered_symbol(None)
+            session.selection.set_hovered_provider(None)
             if not session.selection.is_selected_plan_target("wall", wall):
                 session.selection.set_selected_plan_target("wall", wall)
             session.overlays.clear_selected_wall_overlay()

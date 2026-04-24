@@ -1004,7 +1004,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         provider.tool_calls = 0
         provider.overlay_calls = 0
 
-        session._set_hovered_wall(wall)
+        session.selection.set_hovered_wall(wall)
         with patch.object(session.selection, "get_edit_node", return_value=None):
             press = self._make_fake_left_mouse_press(250, 250)
             session.input.on_mouse_pressed(press)
@@ -3165,7 +3165,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         )
         self.assertEqual(combined_segments, symbol_segments + 1)
 
-        session._set_hovered_opening(door)
+        session.selection.set_hovered_opening(door)
         self.pump_gui_events()
         self.assertEqual(len(session._opening_hover_trackers), symbol_segments)
 
@@ -3795,7 +3795,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertGreater(len(session._selected_wall_opening_context_trackers), 0)
         self.assertEqual(len(session._opening_hover_trackers), 0)
 
-        session._set_hovered_opening(door)
+        session.selection.set_hovered_opening(door)
 
         self.assertIs(session.hovered_opening, door)
         self.assertGreater(len(session._opening_hover_trackers), 0)
@@ -3812,7 +3812,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertGreater(len(session._opening_hover_trackers), 0)
         self.assertEqual(len(session._selected_wall_opening_context_trackers), 0)
 
-        session._set_hovered_opening(None)
+        session.selection.set_hovered_opening(None)
 
         self.assertIsNone(session.hovered_opening)
         self.assertEqual(len(session._opening_hover_trackers), 0)
@@ -4073,7 +4073,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session.selection.select_wall_for_plan_edit(source_wall)
         session.wall_relations.set_plan_join_type("Butt")
         session.lifecycle.activate_join_tool()
-        session._set_hovered_wall(target_wall)
+        session.selection.set_hovered_wall(target_wall)
 
         self.assertTrue(session.task_panel.unjoin_button.isEnabled())
         _title, body = session._get_status_chip_text()
@@ -4147,7 +4147,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         session.selection.select_wall_for_plan_edit(source_wall)
         session.lifecycle.activate_join_tool()
-        session._set_hovered_wall(target_wall)
+        session.selection.set_hovered_wall(target_wall)
 
         self.assertTrue(session.task_panel.unjoin_button.isEnabled())
         self.assertTrue(session.wall_relations.unjoin_current_plan_wall_pair())
@@ -5776,7 +5776,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session._set_hovered_wall(wall)
+        session.selection.set_hovered_wall(wall)
         self.assertIs(session.hovered_wall, wall)
 
         with (
@@ -5880,7 +5880,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session._set_hovered_wall(stale_wall)
+        session.selection.set_hovered_wall(stale_wall)
         session._hover_pick_dirty = True
 
         with (

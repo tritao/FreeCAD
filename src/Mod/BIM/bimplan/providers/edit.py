@@ -129,12 +129,12 @@ def start_provider_handle_point_pick(session, provider_obj, handle_index, handle
     if start_point is None:
         return
     session.current_tool = "Move Provider"
-    session._set_hovered_wall(None)
-    session._set_hovered_opening(None)
-    session._set_hovered_symbol(None)
-    session._set_hovered_provider(None)
-    session._set_hovered_space(None)
-    session._set_hovered_region(None)
+    session.selection.set_hovered_wall(None)
+    session.selection.set_hovered_opening(None)
+    session.selection.set_hovered_symbol(None)
+    session.selection.set_hovered_provider(None)
+    session.selection.set_hovered_space(None)
+    session.selection.set_hovered_region(None)
     session.overlays.sync_secondary_selected_overlays()
     session._edit_provider = provider_obj
     session._edit_provider_handle_index = handle_index

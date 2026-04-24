@@ -227,8 +227,8 @@ def start_opening_handle_point_pick(session, opening, handle_index, handle):
             return
         with session.performance.plan_perf_trace_span("start_opening_handle_state"):
             session.current_tool = "Move Opening"
-            session._set_hovered_wall(None)
-            session._set_hovered_opening(None)
+            session.selection.set_hovered_wall(None)
+            session.selection.set_hovered_opening(None)
             session.overlays.sync_secondary_selected_overlays()
             session._edit_opening = opening
             session._edit_opening_handle_index = handle_index
