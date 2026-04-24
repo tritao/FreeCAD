@@ -676,7 +676,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 spec.name,
                 lambda: (
                     session._select_opening_for_plan_edit(opening),
-                    session._sync_selected_opening_handles(),
+                    session.overlays.sync_selected_opening_handles(),
                     session._activate_opening_handle_now(opening, 0),
                 ),
             )

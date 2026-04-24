@@ -26,10 +26,10 @@ def activate_wall_tool(session):
     session._clear_plan_relation_status()
     session._set_selected_plan_target()
     session.overlays.clear_wall_grips()
-    session._clear_selected_wall_overlay()
-    session._clear_selected_wall_opening_context_overlay()
-    session._clear_selected_space_overlay()
-    session._clear_secondary_selected_overlays()
+    session.overlays.clear_selected_wall_overlay()
+    session.overlays.clear_selected_wall_opening_context_overlay()
+    session.overlays.clear_selected_space_overlay()
+    session.overlays.clear_secondary_selected_overlays()
     session._set_gui_selection([])
     session._start_embedded_tool("Wall", BimWall.Arch_Wall(), host_class=_PlanEditWallHost)
 
@@ -46,10 +46,10 @@ def activate_rect_wall_tool(session):
     session._clear_plan_relation_status()
     session._set_selected_plan_target()
     session.overlays.clear_wall_grips()
-    session._clear_selected_wall_overlay()
-    session._clear_selected_wall_opening_context_overlay()
-    session._clear_selected_space_overlay()
-    session._clear_secondary_selected_overlays()
+    session.overlays.clear_selected_wall_overlay()
+    session.overlays.clear_selected_wall_opening_context_overlay()
+    session.overlays.clear_selected_space_overlay()
+    session.overlays.clear_secondary_selected_overlays()
     session._clear_rect_wall_preview()
     session._rect_wall_start = None
     session._rect_wall_params = session._get_wall_defaults()
@@ -99,11 +99,11 @@ def cancel_rect_wall_tool(session, refresh=True):
     session.current_tool = "Select"
     if refresh:
         session._refresh_task_panel_status()
-    session._sync_selected_opening_overlay()
-    session._sync_selected_opening_handles()
-    session._sync_selected_space_overlay()
-    session._sync_selected_provider_overlay()
-    session._sync_selected_provider_handles()
+    session.overlays.sync_selected_opening_overlay()
+    session.overlays.sync_selected_opening_handles()
+    session.overlays.sync_selected_space_overlay()
+    session.overlays.sync_selected_provider_overlay()
+    session.overlays.sync_selected_provider_handles()
     return True
 
 

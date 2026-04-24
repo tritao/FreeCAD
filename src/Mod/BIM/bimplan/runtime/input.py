@@ -100,13 +100,13 @@ def on_mouse_pressed(session, event_callback):
                             _kind, obj, index = node
                             session._set_selected_plan_target_state("provider", obj)
                             session.overlays.clear_wall_grips()
-                            session._clear_selected_wall_overlay()
+                            session.overlays.clear_selected_wall_overlay()
                             session._activate_provider_handle(obj, index)
                         elif node_kind == "symbol_handle":
                             _kind, obj, role = node
                             session._set_selected_plan_target_state("symbol", obj)
                             session.overlays.clear_wall_grips()
-                            session._clear_selected_wall_overlay()
+                            session.overlays.clear_selected_wall_overlay()
                             session._activate_symbol_handle(obj, role)
                         elif node_kind in (
                             "provider_overlay_point",

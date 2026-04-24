@@ -92,8 +92,8 @@ def start_wall_edit(session, mode):
             session._set_hovered_provider(None)
             if not session._is_selected_plan_target("wall", wall):
                 session._set_selected_plan_target("wall", wall)
-            session._clear_selected_wall_overlay()
-            session._clear_selected_wall_opening_context_overlay()
+            session.overlays.clear_selected_wall_overlay()
+            session.overlays.clear_selected_wall_opening_context_overlay()
             session._wall_edit_modal_active = True
             session._edit_wall = wall
             session._edit_endpoint = mode
@@ -112,7 +112,7 @@ def start_wall_edit(session, mode):
             except Exception:
                 session._edit_wall_visibility = None
             session.overlays.clear_wall_grips()
-            session._clear_selected_wall_overlay()
+            session.overlays.clear_selected_wall_overlay()
             session._sync_wall_edit_preview(session._preview_points, include_opening_preview=False)
 
         session._queue_wall_edit_task_panel_refresh()
