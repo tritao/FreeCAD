@@ -113,7 +113,8 @@ class PlanEditContext:
         return ()
 
     def get_opening_plan_proxy(self, opening, *attrs):
-        getter = getattr(self.session, "_get_opening_plan_proxy", None)
+        openings_api = getattr(self.session, "openings", None)
+        getter = getattr(openings_api, "get_opening_plan_proxy", None)
         if callable(getter):
             try:
                 return getter(opening, *attrs)

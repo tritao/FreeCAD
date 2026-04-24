@@ -2861,45 +2861,6 @@ class PlanEditSession:
     def _queue_restore_selected_symbol(self, symbol):
         return plan_symbol_edit.queue_restore_selected_symbol(self, symbol)
 
-    def _get_selected_opening_edit_handles(self, opening):
-        return plan_opening_edit.get_selected_opening_edit_handles(self, opening)
-
-    def _get_opening_plan_proxy(self, opening, *attrs):
-        return plan_opening_edit.get_opening_plan_proxy(self, opening, *attrs)
-
-    def _get_opening_view_proxy(self, opening, *attrs):
-        return plan_opening_edit.get_opening_view_proxy(self, opening, *attrs)
-
-    def _project_opening_handle_point(self, opening, handle, point):
-        return plan_opening_edit.project_opening_handle_point(self, opening, handle, point)
-
-    def _get_opening_move_anchor_modes(self, opening):
-        return plan_opening_edit.get_opening_move_anchor_modes(self, opening)
-
-    def _execute_opening_handle(self, opening, handle_index, point=None):
-        return plan_opening_edit.execute_opening_handle(self, opening, handle_index, point=point)
-
-    def _get_opening_move_preview_state(self, opening, point):
-        return plan_opening_edit.get_opening_move_preview_state(self, opening, point)
-
-    def _sync_opening_move_preview(self, opening, point):
-        return plan_opening_edit.sync_opening_move_preview(self, opening, point)
-
-    def _clear_opening_move_preview(self):
-        return plan_opening_edit.clear_opening_move_preview(self)
-
-    def _cycle_opening_move_anchor(self):
-        return plan_opening_edit.cycle_opening_move_anchor(self)
-
-    def _refresh_opening_move_preview_from_raw_point(self):
-        return plan_opening_edit.refresh_opening_move_preview_from_raw_point(self)
-
-    def _activate_opening_handle(self, opening, handle_index):
-        return plan_opening_edit.activate_opening_handle(self, opening, handle_index)
-
-    def _activate_opening_handle_now(self, opening, handle_index):
-        return plan_opening_edit.activate_opening_handle_now(self, opening, handle_index)
-
     def _clear_plan_selection_state(self):
         return self.selection.clear_plan_selection_state()
 

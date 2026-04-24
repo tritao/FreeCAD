@@ -73,7 +73,7 @@ def clear_transient_visuals(
     if include_opening_handle_pool:
         session.overlays.discard_opening_handle_tracker_pool()
     if include_opening_move_preview:
-        session._clear_opening_move_preview()
+        session.openings.clear_opening_move_preview()
     if include_symbol_edit_preview:
         session._clear_symbol_edit_preview()
     if include_plan_region_preview:

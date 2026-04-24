@@ -3364,7 +3364,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
 
-        handle = session._get_selected_opening_edit_handles(door)[0]
+        handle = session.openings.get_selected_opening_edit_handles(door)[0]
         captured = {}
         pushed_modes = []
         popped = []
@@ -3514,13 +3514,15 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
 
-        handle = session._get_selected_opening_edit_handles(door)[0]
+        handle = session.openings.get_selected_opening_edit_handles(door)[0]
 
         with (
             patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
             patch.object(
-                session, "_refresh_opening_move_preview_from_raw_point", return_value=None
+                session.openings,
+                "refresh_opening_move_preview_from_raw_point",
+                return_value=None,
             ) as refresh_preview,
         ):
             session.openings.start_opening_handle_point_pick(door, 0, handle)
@@ -3568,7 +3570,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
 
-        handle = session._get_selected_opening_edit_handles(door)[0]
+        handle = session.openings.get_selected_opening_edit_handles(door)[0]
 
         with (
             patch.object(FreeCADGui.Snapper, "getPoint", return_value=None),
@@ -3609,7 +3611,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         session.current_tool = "Move Opening"
         session._edit_opening_move_anchor = "center"
-        session._sync_opening_move_preview(door, preview_point)
+        session.openings.sync_opening_move_preview(door, preview_point)
 
         dim_trackers = [
             tracker
@@ -4524,14 +4526,14 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
 
-        handle = session._get_selected_opening_edit_handles(door)[0]
+        handle = session.openings.get_selected_opening_edit_handles(door)[0]
         calls = []
 
         def fake_single_shot(delay, callback):
             calls.append((delay, callback))
 
         with patch("PySide.QtCore.QTimer.singleShot", side_effect=fake_single_shot):
-            session._activate_opening_handle(door, 0)
+            session.openings.activate_opening_handle(door, 0)
 
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][0], 0)
@@ -5495,7 +5497,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
 
-        session._activate_opening_handle(door, 1)
+        session.openings.activate_opening_handle(door, 1)
         self.pump_gui_events()
 
         self.assertNotEqual(original_parts, list(door.WindowParts))
@@ -6469,7 +6471,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 "_get_edit_node",
                 return_value=("opening_handle", door, 0),
             ),
-            patch.object(session, "_activate_opening_handle") as activate_handle,
+            patch.object(session.openings, "activate_opening_handle") as activate_handle,
         ):
             callback = self._make_fake_left_mouse_press()
             session._on_mouse_pressed(callback)
@@ -6521,7 +6523,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 "_get_edit_node",
                 return_value=("edit_node", picked_point),
             ),
-            patch.object(session, "_activate_opening_handle") as activate_handle,
+            patch.object(session.openings, "activate_opening_handle") as activate_handle,
         ):
             callback = self._make_fake_left_mouse_press()
             session._on_mouse_pressed(callback)

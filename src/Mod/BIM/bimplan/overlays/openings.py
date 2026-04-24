@@ -296,7 +296,7 @@ def get_selected_opening_handle_specs(session, opening):
     handle_specs = []
     marker_size = session.viewport.scaled_marker_size(params.get_param_view("MarkerSize"))
     markers = session.overlays.get_opening_handle_markers(marker_size)
-    for idx, handle in enumerate(session._get_selected_opening_edit_handles(opening)):
+    for idx, handle in enumerate(session.openings.get_selected_opening_edit_handles(opening)):
         if handle.role not in markers or handle.point is None:
             continue
         handle_specs.append((idx, handle.role, handle.point, markers[handle.role]))

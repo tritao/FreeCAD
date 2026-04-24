@@ -95,7 +95,7 @@ def on_mouse_pressed(session, event_callback):
                             _kind, obj, index = node
                             session._select_opening_for_plan_edit(obj)
                             session._set_gui_selection_object(obj)
-                            session._activate_opening_handle(obj, index)
+                            session.openings.activate_opening_handle(obj, index)
                         elif node_kind == "provider_handle":
                             _kind, obj, index = node
                             session._set_selected_plan_target_state("provider", obj)
@@ -128,7 +128,7 @@ def on_mouse_pressed(session, event_callback):
                             if session._is_hosted_opening_object(obj):
                                 session._select_opening_for_plan_edit(obj)
                                 session._set_gui_selection_object(obj)
-                                session._activate_opening_handle(obj, index)
+                                session.openings.activate_opening_handle(obj, index)
                             else:
                                 session._set_selected_plan_target_state("wall", obj)
                                 session._activate_wall_grip(index, wall=obj)
@@ -210,8 +210,8 @@ def on_key_pressed(session, event_callback):
     event = event_callback.getEvent()
     key = event.getKey()
     if session.current_tool == "Move Opening" and key == coin.SoKeyboardEvent.A:
-        if session._cycle_opening_move_anchor():
-            session._refresh_opening_move_preview_from_raw_point()
+        if session.openings.cycle_opening_move_anchor():
+            session.openings.refresh_opening_move_preview_from_raw_point()
             session._refresh_task_panel_status()
         return
     if (
