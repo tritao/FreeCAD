@@ -1187,7 +1187,7 @@ def toggle_raw_plan_object_selection(session, obj, event_callback=None):
 
 
 def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=None):
-    node = session._get_edit_node(mouse_pos)
+    node = session.selection.get_edit_node(mouse_pos)
     if node and node[0] in ("provider_overlay_point", "provider_overlay_target"):
         target_kind, target_obj = session.selection.get_provider_overlay_target_from_edit_node(node)
         if target_obj is not None and not session._is_valid_plan_target(
@@ -1625,6 +1625,120 @@ class PlanSelectionAPI(_SessionAPI):
             plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS,
             kind=kind,
             obj=obj,
+        )
+
+    def xy_polygon_area(self, polyline):
+        from . import picking as plan_picking
+
+        del self
+        return plan_picking.xy_polygon_area(polyline)
+
+    def xy_point_in_polygon(self, point, polyline, tolerance=1e-9):
+        from . import picking as plan_picking
+
+        del self
+        return plan_picking.xy_point_in_polygon(point, polyline, tolerance=tolerance)
+
+    def pick_plan_symbol_target_from_overlays(self, mouse_pos, radius_px=10):
+        from . import picking as plan_picking
+
+        return plan_picking.pick_plan_symbol_target_from_overlays(
+            self.session,
+            mouse_pos,
+            radius_px=radius_px,
+        )
+
+    def pick_plan_opening_target_from_overlays(self, mouse_pos, radius_px=10, candidates=None):
+        from . import picking as plan_picking
+
+        return plan_picking.pick_plan_opening_target_from_overlays(
+            self.session,
+            mouse_pos,
+            radius_px=radius_px,
+            candidates=candidates,
+        )
+
+    def pick_provider_overlay_target_from_overlays(self, mouse_pos, radius_px=12):
+        from . import picking as plan_picking
+
+        return plan_picking.pick_provider_overlay_target_from_overlays(
+            self.session,
+            mouse_pos,
+            radius_px=radius_px,
+        )
+
+    def pick_provider_overlay_target_from_objects_info(self, mouse_pos):
+        from . import picking as plan_picking
+
+        return plan_picking.pick_provider_overlay_target_from_objects_info(self.session, mouse_pos)
+
+    def pick_plan_space_target_from_overlays(self, mouse_pos, radius_px=10):
+        from . import picking as plan_picking
+
+        return plan_picking.pick_plan_space_target_from_overlays(
+            self.session,
+            mouse_pos,
+            radius_px=radius_px,
+        )
+
+    def pick_plan_region_target_from_overlays(self, mouse_pos, radius_px=10):
+        from . import picking as plan_picking
+
+        return plan_picking.pick_plan_region_target_from_overlays(
+            self.session,
+            mouse_pos,
+            radius_px=radius_px,
+        )
+
+    def get_region_pick_polylines(self, region):
+        from . import picking as plan_picking
+
+        return plan_picking.get_region_pick_polylines(self.session, region)
+
+    def pick_plan_region_target_from_polylines(self, mouse_pos):
+        from . import picking as plan_picking
+
+        return plan_picking.pick_plan_region_target_from_polylines(self.session, mouse_pos)
+
+    def pick_plan_target_from_footprint_faces(
+        self,
+        mouse_pos,
+        is_target,
+        get_faces,
+        target_label="target",
+    ):
+        from . import picking as plan_picking
+
+        return plan_picking.pick_plan_target_from_footprint_faces(
+            self.session,
+            mouse_pos,
+            is_target,
+            get_faces,
+            target_label=target_label,
+        )
+
+    def pick_plan_space_target_from_footprints(self, mouse_pos):
+        from . import picking as plan_picking
+
+        return plan_picking.pick_plan_space_target_from_footprints(self.session, mouse_pos)
+
+    def pick_plan_region_target_from_footprints(self, mouse_pos):
+        from . import picking as plan_picking
+
+        return plan_picking.pick_plan_region_target_from_footprints(self.session, mouse_pos)
+
+    def get_edit_node(self, mouse_pos):
+        from . import picking as plan_picking
+
+        return plan_picking.get_edit_node(self.session, mouse_pos)
+
+    def pick_selected_opening_handle(self, mouse_pos, radius_px=10):
+        from . import picking as plan_picking
+
+        return plan_picking.pick_selected_opening_handle(
+            self.session,
+            mouse_pos,
+            radius_px=radius_px,
         )
 
 

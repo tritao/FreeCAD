@@ -86,7 +86,7 @@ def on_mouse_pressed(session, event_callback):
                             ):
                                 session._claim_left_button_click(event_callback)
                             return
-                        node = session._get_edit_node(mouse_pos)
+                        node = session.selection.get_edit_node(mouse_pos)
                         if not node:
                             if session._activate_semantic_plan_target(mouse_pos, event_callback):
                                 return

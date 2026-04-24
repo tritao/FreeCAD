@@ -1153,74 +1153,6 @@ class PlanEditSession:
             end_xy,
         )
 
-    def _pick_plan_symbol_target_from_overlays(self, mouse_pos, radius_px=10):
-        return plan_picking.pick_plan_symbol_target_from_overlays(
-            self,
-            mouse_pos,
-            radius_px=radius_px,
-        )
-
-    def _pick_plan_opening_target_from_overlays(self, mouse_pos, radius_px=10, candidates=None):
-        return plan_picking.pick_plan_opening_target_from_overlays(
-            self,
-            mouse_pos,
-            radius_px=radius_px,
-            candidates=candidates,
-        )
-
-    def _pick_provider_overlay_target_from_overlays(self, mouse_pos, radius_px=12):
-        return plan_picking.pick_provider_overlay_target_from_overlays(
-            self,
-            mouse_pos,
-            radius_px=radius_px,
-        )
-
-    def _pick_provider_overlay_target_from_objects_info(self, mouse_pos):
-        return plan_picking.pick_provider_overlay_target_from_objects_info(self, mouse_pos)
-
-    def _pick_plan_space_target_from_overlays(self, mouse_pos, radius_px=10):
-        return plan_picking.pick_plan_space_target_from_overlays(
-            self,
-            mouse_pos,
-            radius_px=radius_px,
-        )
-
-    def _pick_plan_region_target_from_overlays(self, mouse_pos, radius_px=10):
-        return plan_picking.pick_plan_region_target_from_overlays(
-            self,
-            mouse_pos,
-            radius_px=radius_px,
-        )
-
-    def _get_region_pick_polylines(self, region):
-        return plan_picking.get_region_pick_polylines(self, region)
-
-    def _xy_polygon_area(self, polyline):
-        return plan_picking.xy_polygon_area(polyline)
-
-    def _xy_point_in_polygon(self, point, polyline, tolerance=1e-9):
-        return plan_picking.xy_point_in_polygon(point, polyline, tolerance=tolerance)
-
-    def _pick_plan_region_target_from_polylines(self, mouse_pos):
-        return plan_picking.pick_plan_region_target_from_polylines(self, mouse_pos)
-
-    def _pick_plan_target_from_footprint_faces(
-        self, mouse_pos, is_target, get_faces, target_label="target"
-    ):
-        return plan_picking.pick_plan_target_from_footprint_faces(
-            self,
-            mouse_pos,
-            is_target,
-            get_faces,
-            target_label=target_label,
-        )
-
-    def _pick_plan_space_target_from_footprints(self, mouse_pos):
-        return plan_picking.pick_plan_space_target_from_footprints(self, mouse_pos)
-
-    def _pick_plan_region_target_from_footprints(self, mouse_pos):
-        return plan_picking.pick_plan_region_target_from_footprints(self, mouse_pos)
-
     def defer_document_visual_updates(self):
         return plan_document_visuals.defer_document_visual_updates(self)
 
@@ -1840,12 +1772,6 @@ class PlanEditSession:
 
     def _cancel_wall_edit_point_pick(self):
         return self.wall_edit.cancel_wall_edit_point_pick()
-
-    def _get_edit_node(self, mouse_pos):
-        return plan_picking.get_edit_node(self, mouse_pos)
-
-    def _pick_selected_opening_handle(self, mouse_pos, radius_px=10):
-        return plan_picking.pick_selected_opening_handle(self, mouse_pos, radius_px=radius_px)
 
     def _on_mouse_pressed(self, event_callback):
         return plan_input.on_mouse_pressed(self, event_callback)
