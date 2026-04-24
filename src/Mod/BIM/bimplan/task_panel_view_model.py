@@ -31,20 +31,9 @@ def _read_component(session, component_name, method_name, *args, default=None):
     return default
 
 
-class PlanTaskPanelContext:
-    """Thin read-only adapter around the live Plan Edit session."""
-
+class _TaskPanelInteractionReads:
     def __init__(self, session):
         self.session = session
-
-    def get_current_tool(self):
-        return str(self.session.current_tool or "")
-
-    def get_selected_plan_target(self):
-        return plan_selection.get_selected_plan_target(self.session)
-
-    def get_selected_plan_targets(self):
-        return plan_selection.get_selected_plan_targets(self.session)
 
     def is_modal_plan_interaction_active(self):
         return bool(
@@ -56,25 +45,10 @@ class PlanTaskPanelContext:
             )
         )
 
-    def can_place_plan_window(self):
-        return bool(
-            _read_component(
-                self.session,
-                "windows",
-                "can_place_window",
-                default=False,
-            )
-        )
 
-    def has_plan_candidate_joint(self):
-        return (
-            _read_component(
-                self.session,
-                "wall_relations",
-                "get_plan_candidate_joint",
-            )
-            is not None
-        )
+class _TaskPanelProviderReads:
+    def __init__(self, session):
+        self.session = session
 
     def get_provider_point_tool_label(self):
         return _read_component(
@@ -132,6 +106,11 @@ class PlanTaskPanelContext:
             or "architecture"
         )
 
+
+class _TaskPanelStatusReads:
+    def __init__(self, session):
+        self.session = session
+
     def format_plan_target_selection_state(self, target_kind, target_obj):
         return _read_component(
             self.session,
@@ -150,14 +129,6 @@ class PlanTaskPanelContext:
             default="",
         )
 
-    def get_plan_join_candidate_state(self):
-        return _read_component(
-            self.session,
-            "wall_relations",
-            "get_plan_join_candidate_state",
-            default=(None, None, ""),
-        )
-
     def get_plan_target_display_label(self, obj):
         return _read_component(
             self.session,
@@ -165,6 +136,72 @@ class PlanTaskPanelContext:
             "get_plan_target_display_label",
             obj,
             default=str(getattr(obj, "Label", "") or getattr(obj, "Name", "") or "").strip(),
+        )
+
+    def summarize_plan_targets(self, targets):
+        return _read_component(
+            self.session,
+            "status_text",
+            "summarize_plan_targets",
+            targets,
+            default="",
+        )
+
+    def format_opening_selection_help(self, obj):
+        return _read_component(
+            self.session,
+            "status_text",
+            "format_opening_selection_help",
+            obj,
+            default="",
+        )
+
+    def format_provider_target_help(self, obj):
+        return _read_component(
+            self.session,
+            "status_text",
+            "format_provider_target_help",
+            obj,
+            default="",
+        )
+
+    def format_provider_selected_object_help(self):
+        return _read_component(
+            self.session,
+            "status_text",
+            "format_provider_selected_object_help",
+            default="",
+        )
+
+    def get_plan_selection_summary_text(self):
+        return _read_component(
+            self.session,
+            "status_text",
+            "get_plan_selection_summary_text",
+            default="",
+        )
+
+
+class _TaskPanelRelationReads:
+    def __init__(self, session):
+        self.session = session
+
+    def has_plan_candidate_joint(self):
+        return (
+            _read_component(
+                self.session,
+                "wall_relations",
+                "get_plan_candidate_joint",
+            )
+            is not None
+        )
+
+    def get_plan_join_candidate_state(self):
+        return _read_component(
+            self.session,
+            "wall_relations",
+            "get_plan_join_candidate_state",
+            default=(None, None, ""),
         )
 
     def get_plan_join_type_label(self):
@@ -185,14 +222,19 @@ class PlanTaskPanelContext:
             default="",
         )
 
-    def summarize_plan_targets(self, targets):
-        return _read_component(
+    def get_plan_relation_status_message(self):
+        value = _read_component(
             self.session,
-            "status_text",
-            "summarize_plan_targets",
-            targets,
+            "wall_relations",
+            "get_plan_relation_status_message",
             default="",
         )
+        return str(value or "").strip()
+
+
+class _TaskPanelSpaceReads:
+    def __init__(self, session):
+        self.session = session
 
     def get_space_region_candidate_count(self):
         return int(
@@ -241,14 +283,10 @@ class PlanTaskPanelContext:
             )
         )
 
-    def format_opening_selection_help(self, obj):
-        return _read_component(
-            self.session,
-            "status_text",
-            "format_opening_selection_help",
-            obj,
-            default="",
-        )
+
+class _TaskPanelSymbolReads:
+    def __init__(self, session):
+        self.session = session
 
     def symbol_rotation_snap_enabled(self):
         return bool(
@@ -268,14 +306,10 @@ class PlanTaskPanelContext:
             default="",
         )
 
-    def format_provider_target_help(self, obj):
-        return _read_component(
-            self.session,
-            "status_text",
-            "format_provider_target_help",
-            obj,
-            default="",
-        )
+
+class _TaskPanelWallEditReads:
+    def __init__(self, session):
+        self.session = session
 
     def is_selected_wall_endpoint_editable(self):
         return bool(
@@ -287,30 +321,20 @@ class PlanTaskPanelContext:
             )
         )
 
-    def format_provider_selected_object_help(self):
-        return _read_component(
-            self.session,
-            "status_text",
-            "format_provider_selected_object_help",
-            default="",
-        )
 
-    def get_plan_selection_summary_text(self):
-        return _read_component(
-            self.session,
-            "status_text",
-            "get_plan_selection_summary_text",
-            default="",
-        )
+class _TaskPanelWindowReads:
+    def __init__(self, session):
+        self.session = session
 
-    def get_plan_relation_status_message(self):
-        value = _read_component(
-            self.session,
-            "wall_relations",
-            "get_plan_relation_status_message",
-            default="",
+    def can_place_plan_window(self):
+        return bool(
+            _read_component(
+                self.session,
+                "windows",
+                "can_place_window",
+                default=False,
+            )
         )
-        return str(value or "").strip()
 
     def get_window_style_preset_options(self):
         return tuple(
@@ -388,6 +412,138 @@ class PlanTaskPanelContext:
             )
             or ""
         )
+
+
+class PlanTaskPanelContext:
+    """Thin read-only adapter around the live Plan Edit session."""
+
+    def __init__(self, session):
+        self.session = session
+        self.interaction = _TaskPanelInteractionReads(session)
+        self.providers = _TaskPanelProviderReads(session)
+        self.status_text = _TaskPanelStatusReads(session)
+        self.wall_relations = _TaskPanelRelationReads(session)
+        self.spaces = _TaskPanelSpaceReads(session)
+        self.symbols = _TaskPanelSymbolReads(session)
+        self.wall_edit = _TaskPanelWallEditReads(session)
+        self.windows = _TaskPanelWindowReads(session)
+
+    def get_current_tool(self):
+        return str(self.session.current_tool or "")
+
+    def get_selected_plan_target(self):
+        return plan_selection.get_selected_plan_target(self.session)
+
+    def get_selected_plan_targets(self):
+        return plan_selection.get_selected_plan_targets(self.session)
+
+    def is_modal_plan_interaction_active(self):
+        return self.interaction.is_modal_plan_interaction_active()
+
+    def can_place_plan_window(self):
+        return self.windows.can_place_plan_window()
+
+    def has_plan_candidate_joint(self):
+        return self.wall_relations.has_plan_candidate_joint()
+
+    def get_provider_point_tool_label(self):
+        return self.providers.get_provider_point_tool_label()
+
+    def get_provider_point_tool_prompt(self):
+        return self.providers.get_provider_point_tool_prompt()
+
+    def get_plan_provider_display_name(self, provider_id):
+        return self.providers.get_plan_provider_display_name(provider_id)
+
+    def get_plan_provider_overlay_category(self, overlay):
+        return self.providers.get_plan_provider_overlay_category(overlay)
+
+    def is_plan_provider_overlay_enabled(self, overlay):
+        return self.providers.is_plan_provider_overlay_enabled(overlay)
+
+    def get_plan_provider_overlay_mode(self):
+        return self.providers.get_plan_provider_overlay_mode()
+
+    def format_plan_target_selection_state(self, target_kind, target_obj):
+        return self.status_text.format_plan_target_selection_state(target_kind, target_obj)
+
+    def format_provider_selected_object_state(self):
+        return self.status_text.format_provider_selected_object_state()
+
+    def get_plan_join_candidate_state(self):
+        return self.wall_relations.get_plan_join_candidate_state()
+
+    def get_plan_target_display_label(self, obj):
+        return self.status_text.get_plan_target_display_label(obj)
+
+    def get_plan_join_type_label(self):
+        return self.wall_relations.get_plan_join_type_label()
+
+    def get_plan_join_mode_action_text(self, target_wall, joint):
+        return self.wall_relations.get_plan_join_mode_action_text(target_wall, joint)
+
+    def summarize_plan_targets(self, targets):
+        return self.status_text.summarize_plan_targets(targets)
+
+    def get_space_region_candidate_count(self):
+        return self.spaces.get_space_region_candidate_count()
+
+    def get_hovered_space_region_candidate(self):
+        return self.spaces.get_hovered_space_region_candidate()
+
+    def format_space_region_candidate_area(self, candidate):
+        return self.spaces.format_space_region_candidate_area(candidate)
+
+    def get_plan_region_parent_space(self):
+        return self.spaces.get_plan_region_parent_space()
+
+    def is_plan_space_object(self, obj):
+        return self.spaces.is_plan_space_object(obj)
+
+    def format_opening_selection_help(self, obj):
+        return self.status_text.format_opening_selection_help(obj)
+
+    def symbol_rotation_snap_enabled(self):
+        return self.symbols.symbol_rotation_snap_enabled()
+
+    def format_symbol_rotation_snap_label(self):
+        return self.symbols.format_symbol_rotation_snap_label()
+
+    def format_provider_target_help(self, obj):
+        return self.status_text.format_provider_target_help(obj)
+
+    def is_selected_wall_endpoint_editable(self):
+        return self.wall_edit.is_selected_wall_endpoint_editable()
+
+    def format_provider_selected_object_help(self):
+        return self.status_text.format_provider_selected_object_help()
+
+    def get_plan_selection_summary_text(self):
+        return self.status_text.get_plan_selection_summary_text()
+
+    def get_plan_relation_status_message(self):
+        return self.wall_relations.get_plan_relation_status_message()
+
+    def get_window_style_preset_options(self):
+        return self.windows.get_window_style_preset_options()
+
+    def can_edit_window_width(self, obj):
+        return self.windows.can_edit_window_width(obj)
+
+    def can_edit_window_height(self, obj):
+        return self.windows.can_edit_window_height(obj)
+
+    def can_apply_window_style_preset(self, obj):
+        return self.windows.can_apply_window_style_preset(obj)
+
+    def get_selected_window_style_preset(self):
+        return self.windows.get_selected_window_style_preset()
+
+    def get_selected_window_width_text(self):
+        return self.windows.get_selected_window_width_text()
+
+    def get_selected_window_height_text(self):
+        return self.windows.get_selected_window_height_text()
 
 
 def as_task_panel_context(session_or_context):
