@@ -101,7 +101,7 @@ def on_mouse_pressed(session, event_callback):
                             session._set_selected_plan_target_state("provider", obj)
                             session.overlays.clear_wall_grips()
                             session.overlays.clear_selected_wall_overlay()
-                            session._activate_provider_handle(obj, index)
+                            session.providers.activate_provider_handle(obj, index)
                         elif node_kind == "symbol_handle":
                             _kind, obj, role = node
                             session._set_selected_plan_target_state("symbol", obj)
@@ -252,7 +252,7 @@ def on_key_pressed(session, event_callback):
         session._cancel_provider_point_tool()
         return
     if session.current_tool == "Move Provider" and key == coin.SoKeyboardEvent.ESCAPE:
-        session._cancel_provider_handle_point_pick()
+        session.providers.cancel_provider_handle_point_pick()
         return
     if session.current_tool == "Window" and key == coin.SoKeyboardEvent.ESCAPE:
         session._cancel_window_tool()
@@ -284,7 +284,7 @@ def on_key_pressed(session, event_callback):
         session.openings.cancel_opening_handle_point_pick()
         return
     if session.current_tool == "Move Provider":
-        session._cancel_provider_handle_point_pick()
+        session.providers.cancel_provider_handle_point_pick()
         return
     if session.current_tool in ("Move Symbol", "Rotate Symbol"):
         session._cancel_symbol_handle_point_pick()

@@ -53,7 +53,6 @@ from bimplan.tools import symbol_edit as plan_symbol_edit
 from bimplan.tools.symbol_edit import PlanSymbolsAPI
 from bimplan.tools import opening_edit as plan_opening_edit
 from bimplan.tools.opening_edit import PlanOpeningsAPI
-from bimplan.providers import edit as plan_provider_edit
 from bimplan.providers.runtime import PlanProvidersAPI
 from bimplan.selection import targets as plan_targets
 from bimplan.tools import wall_create as plan_wall_create
@@ -2792,45 +2791,6 @@ class PlanEditSession:
 
     def _clear_symbol_edit_preview(self):
         return symbol_overlays.clear_symbol_edit_preview(self)
-
-    def _get_selected_provider_edit_handles(self, provider_obj):
-        return plan_provider_edit.get_selected_provider_edit_handles(self, provider_obj)
-
-    def _can_move_provider_target_by_placement(self, provider_obj):
-        return plan_provider_edit.can_move_provider_target_by_placement(self, provider_obj)
-
-    def _activate_provider_handle(self, provider_obj, handle_index):
-        return plan_provider_edit.activate_provider_handle(self, provider_obj, handle_index)
-
-    def _activate_provider_handle_now(self, provider_obj, handle_index):
-        return plan_provider_edit.activate_provider_handle_now(self, provider_obj, handle_index)
-
-    def _start_provider_handle_point_pick(self, provider_obj, handle_index, handle):
-        return plan_provider_edit.start_provider_handle_point_pick(
-            self,
-            provider_obj,
-            handle_index,
-            handle,
-        )
-
-    def _update_provider_handle_point_pick(self, point=None, snap_info=None):
-        return plan_provider_edit.update_provider_handle_point_pick(
-            self,
-            point=point,
-            snap_info=snap_info,
-        )
-
-    def _finish_provider_handle_point_pick(self, point=None, obj=None):
-        return plan_provider_edit.finish_provider_handle_point_pick(self, point=point, obj=obj)
-
-    def _cancel_provider_handle_point_pick(self):
-        return plan_provider_edit.cancel_provider_handle_point_pick(self)
-
-    def _restore_selected_provider(self, provider_obj):
-        return plan_provider_edit.restore_selected_provider(self, provider_obj)
-
-    def _queue_restore_selected_provider(self, provider_obj):
-        return plan_provider_edit.queue_restore_selected_provider(self, provider_obj)
 
     def _get_symbol_handle_placement(self, symbol, handle_role, point):
         return plan_symbol_edit.get_symbol_handle_placement(self, symbol, handle_role, point)

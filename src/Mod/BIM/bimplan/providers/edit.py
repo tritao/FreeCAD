@@ -79,19 +79,19 @@ def activate_provider_handle(session, provider_obj, handle_index):
     try:
         from PySide import QtCore
     except ImportError:
-        session._activate_provider_handle_now(provider_obj, handle_index)
+        session.providers.activate_provider_handle_now(provider_obj, handle_index)
         return
 
     QtCore.QTimer.singleShot(
         0,
-        lambda: session._activate_provider_handle_now(provider_obj, handle_index),
+        lambda: session.providers.activate_provider_handle_now(provider_obj, handle_index),
     )
 
 
 def activate_provider_handle_now(session, provider_obj, handle_index):
     if session._tearing_down or provider_obj is None:
         return
-    handles = session._get_selected_provider_edit_handles(provider_obj)
+    handles = session.providers.get_selected_provider_edit_handles(provider_obj)
     if handle_index < 0 or handle_index >= len(handles):
         return
     handle = handles[handle_index]
@@ -99,7 +99,7 @@ def activate_provider_handle_now(session, provider_obj, handle_index):
     session._set_gui_selection_object(provider_obj)
     session.overlays.clear_wall_grips()
     if handle.interaction == PlanToolInteraction.POINT:
-        session._start_provider_handle_point_pick(provider_obj, handle_index, handle)
+        session.providers.start_provider_handle_point_pick(provider_obj, handle_index, handle)
         return
     payload = _build_provider_handle_payload(
         session,
@@ -117,9 +117,9 @@ def activate_provider_handle_now(session, provider_obj, handle_index):
             payload=payload,
         )
     if handled:
-        session._queue_restore_selected_provider(provider_obj)
+        session.providers.queue_restore_selected_provider(provider_obj)
         return
-    session._restore_selected_provider(provider_obj)
+    session.providers.restore_selected_provider(provider_obj)
 
 
 def start_provider_handle_point_pick(session, provider_obj, handle_index, handle):
@@ -146,8 +146,8 @@ def start_provider_handle_point_pick(session, provider_obj, handle_index, handle
     session._set_draft_point_focus_suppressed(True)
     FreeCADGui.Snapper.getPoint(
         last=start_point,
-        callback=session._finish_provider_handle_point_pick,
-        movecallback=session._update_provider_handle_point_pick,
+        callback=session.providers.finish_provider_handle_point_pick,
+        movecallback=session.providers.update_provider_handle_point_pick,
         title=_get_provider_handle_prompt(handle),
         noTracker=True,
     )
@@ -168,17 +168,17 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
 
     if point is None or provider_obj is None:
         session.current_tool = "Select"
-        session._restore_selected_provider(provider_obj)
+        session.providers.restore_selected_provider(provider_obj)
         return
 
     if handle is None:
         session.current_tool = "Select"
-        session._restore_selected_provider(provider_obj)
+        session.providers.restore_selected_provider(provider_obj)
         return
     target_point = _resolve_provider_handle_target_point(session, provider_obj, point)
     if target_point is None:
         session.current_tool = "Select"
-        session._restore_selected_provider(provider_obj)
+        session.providers.restore_selected_provider(provider_obj)
         return
 
     action_key = str(getattr(handle, "action_key", "") or "").strip()
@@ -199,7 +199,7 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
             transaction_label=str(getattr(handle, "transaction_label", "") or ""),
             payload=payload,
         ):
-            session._queue_restore_selected_provider(provider_obj)
+            session.providers.queue_restore_selected_provider(provider_obj)
             return
         FreeCAD.Console.PrintWarning(
             translate(
@@ -207,7 +207,7 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
                 "Plan Edit provider handle '{handle}' was not handled.\n",
             ).format(handle=str(getattr(handle, "key", "") or ""))
         )
-        session._restore_selected_provider(provider_obj)
+        session.providers.restore_selected_provider(provider_obj)
         return
 
     defer_updates = getattr(session, "defer_document_visual_updates", None)
@@ -235,10 +235,10 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
                 "Plan Edit could not move the selected integration target: {error}\n",
             ).format(error=exc)
         )
-        session._restore_selected_provider(provider_obj)
+        session.providers.restore_selected_provider(provider_obj)
         return
 
-    session._queue_restore_selected_provider(provider_obj)
+    session.providers.queue_restore_selected_provider(provider_obj)
 
 
 def cancel_provider_handle_point_pick(session):
@@ -250,7 +250,7 @@ def cancel_provider_handle_point_pick(session):
     FreeCAD.activeDraftCommand = None
     session.current_tool = "Select"
     if provider_obj is not None:
-        session._restore_selected_provider(provider_obj)
+        session.providers.restore_selected_provider(provider_obj)
         return
     session._set_gui_selection([])
     session._refresh_primary_selected_plan_target()
@@ -269,9 +269,9 @@ def queue_restore_selected_provider(session, provider_obj):
     try:
         from PySide import QtCore
     except ImportError:
-        session._restore_selected_provider(provider_obj)
+        session.providers.restore_selected_provider(provider_obj)
         return
-    QtCore.QTimer.singleShot(0, lambda: session._restore_selected_provider(provider_obj))
+    QtCore.QTimer.singleShot(0, lambda: session.providers.restore_selected_provider(provider_obj))
 
 
 def _get_builtin_provider_edit_handles(session, provider_obj, provider_target):
