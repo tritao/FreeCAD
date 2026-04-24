@@ -591,7 +591,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
             session,
             "mouse_moved_fast_path",
             spec.name,
-            lambda: session._update_hovered_plan_target(screen, force=False),
+            lambda: session.selection.update_hovered_plan_target(screen, force=False),
         )
 
     def hover_pick_resolve_once(point):
@@ -600,7 +600,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
             return
 
         def resolve():
-            if not session._update_hovered_plan_target(screen, force=True):
+            if not session.selection.update_hovered_plan_target(screen, force=True):
                 return
             if session._grip_trackers or session._is_selected_plan_target("wall"):
                 session.overlays.sync_wall_grips()

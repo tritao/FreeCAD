@@ -189,7 +189,7 @@ def update_provider_point_tool_preview(session, point=None, obj=None):
         snap_target=snap_target,
         selected_target=session.selection.get_selected_plan_target(),
         selected_targets=session.selection.get_selected_plan_targets(),
-        hovered_target=session._get_hovered_plan_target(),
+        hovered_target=session.selection.get_hovered_plan_target(),
     )
     placement_point = (
         session.providers.project_provider_point_to_host(plan_point, host_obj)
@@ -255,7 +255,7 @@ def get_provider_point_context_host_state(session):
     if selected_obj is not None:
         return selected_kind, selected_obj, "selected"
     hovered_kind, hovered_obj = session.providers.normalize_provider_point_host_target(
-        session._get_hovered_plan_target()
+        session.selection.get_hovered_plan_target()
     )
     if hovered_obj is not None:
         return hovered_kind, hovered_obj, "hovered"
@@ -346,7 +346,7 @@ def build_provider_point_tool_payload(
         snap_object_name = str(getattr(snap_object, "Name", "") or "")
     selected_target = session.selection.get_selected_plan_target()
     selected_targets = session.selection.get_selected_plan_targets()
-    hovered_target = session._get_hovered_plan_target()
+    hovered_target = session.selection.get_hovered_plan_target()
     host_kind, host_obj, host_source = session.providers.get_provider_point_payload_host_target(
         snap_target=snap_target,
         selected_target=selected_target,

@@ -787,8 +787,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return_value=selected_targets,
             ),
             patch.object(
-                session,
-                "_get_hovered_plan_target",
+                session.selection,
+                "get_hovered_plan_target",
                 return_value=hovered_target,
             ),
         ):
@@ -947,7 +947,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True),
             patch.object(session, "_get_selected_plan_target", return_value=(None, None)),
             patch.object(session, "_get_selected_plan_targets", return_value=()),
-            patch.object(session, "_get_hovered_plan_target", return_value=(None, None)),
+            patch.object(session.selection, "get_hovered_plan_target", return_value=(None, None)),
         ):
             self.assertTrue(session.providers.start_plan_provider_point_tool(tool))
             self.assertIn("movecallback", captured)
@@ -2986,7 +2986,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             "_get_plan_target_at_position",
             return_value=("opening", door),
         ):
-            session._update_hovered_plan_target((100, 100))
+            session.selection.update_hovered_plan_target((100, 100))
 
         self.assertIs(session.hovered_opening, door)
         self.assertGreater(len(session._opening_hover_trackers), 0)
@@ -3644,7 +3644,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             "_get_plan_target_at_position",
             return_value=("wall", wall),
         ):
-            session._update_hovered_plan_target((100, 100))
+            session.selection.update_hovered_plan_target((100, 100))
 
         self.assertIs(session.hovered_wall, wall)
         self.assertIsNone(session.hovered_opening)
@@ -3667,7 +3667,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             "_get_plan_target_at_position",
             return_value=("wall", wall),
         ):
-            session._update_hovered_plan_target((100, 100))
+            session.selection.update_hovered_plan_target((100, 100))
 
         self.assertIs(session.hovered_wall, wall)
         self._assert_no_selected_plan_target(session)
@@ -3798,7 +3798,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             "_get_plan_target_at_position",
             return_value=("wall", target_wall),
         ):
-            session._update_hovered_plan_target((100, 100))
+            session.selection.update_hovered_plan_target((100, 100))
             session._refresh_plan_overlay_visuals()
 
         self.assertIs(session.hovered_wall, target_wall)

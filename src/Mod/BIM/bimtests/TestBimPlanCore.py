@@ -1394,7 +1394,7 @@ class TestBimPlanCore(unittest.TestCase):
         calls = []
         target = SimpleNamespace(Name="Wall001")
         session = SimpleNamespace(
-            _get_hovered_plan_target=lambda: ("wall", target),
+            selection=SimpleNamespace(get_hovered_plan_target=lambda: ("wall", target)),
             _hover_pick_dirty=False,
             _plan_perf_count=lambda *_args, **_kwargs: None,
             _plan_perf_set_fields=lambda **_kwargs: None,

@@ -977,7 +977,7 @@ def activate_plan_target(
 
 
 def activate_semantic_plan_target(session, mouse_pos, event_callback=None):
-    target_kind, target_obj = session._get_hovered_plan_target()
+    target_kind, target_obj = session.selection.get_hovered_plan_target()
     if target_obj is None or session._hover_pick_dirty:
         target_kind, target_obj = session._get_plan_target_at_position(mouse_pos)
         source = "picked_after_throttled_hover" if session._hover_pick_dirty else "picked"
@@ -1562,8 +1562,11 @@ _PLAN_SELECTION_API_BOUND_METHODS = (
     "activate_wall_target",
     "clear_plan_selection_state",
     "normalize_gui_object_selection",
+    "get_hovered_plan_target",
     "queue_prime_hover_pick_caches",
     "prime_hover_pick_caches",
+    "should_skip_hover_pick",
+    "update_hovered_plan_target",
 )
 
 

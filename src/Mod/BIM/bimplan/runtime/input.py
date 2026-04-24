@@ -152,7 +152,7 @@ def on_mouse_moved(session, event_callback):
         mouse_pos = (pos[0], pos[1])
     except Exception:
         mouse_pos = None
-    hovered_before = session._get_hovered_plan_target()
+    hovered_before = session.selection.get_hovered_plan_target()
     with session._plan_perf_trace_event(
         "mouse_moved",
         mouse_pos=mouse_pos,
@@ -175,12 +175,12 @@ def on_mouse_moved(session, event_callback):
             return
         if mouse_pos is None:
             return
-        if not session._update_hovered_plan_target(mouse_pos):
+        if not session.selection.update_hovered_plan_target(mouse_pos):
             return
         if session._grip_trackers or session._is_selected_plan_target("wall"):
             session.overlays.sync_wall_grips()
         session.viewport.request_view_redraw()
-        hovered_after = session._get_hovered_plan_target()
+        hovered_after = session.selection.get_hovered_plan_target()
         session._plan_perf_set_fields(
             hovered_after=session._plan_perf_describe_target(hovered_after[0], hovered_after[1])
         )
