@@ -176,9 +176,10 @@ def get_object_storeys(session, obj):
     if not obj:
         return []
     key = session._get_document_object_key(obj)
-    if key is not None and key in session._plan_object_storeys_cache:
+    cache = session.overlay_cache_state.plan_object_storeys_cache
+    if key is not None and key in cache:
         session._plan_perf_count("object_storeys_cache_hits")
-        return list(session._plan_object_storeys_cache[key])
+        return list(cache[key])
 
     storeys = []
     seen = set()
@@ -192,7 +193,7 @@ def get_object_storeys(session, obj):
         if session._is_storey_object(parent):
             storeys.append(parent)
     if key is not None:
-        session._plan_object_storeys_cache[key] = tuple(storeys)
+        cache[key] = tuple(storeys)
     return storeys
 
 

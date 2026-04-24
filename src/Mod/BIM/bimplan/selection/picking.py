@@ -150,13 +150,13 @@ def _describe_pick_overlay(overlay):
     }
 
 
-def _get_cached_plan_instances(session, cache_attr, is_target, count_name, span_name):
+def _get_cached_plan_instances(session, cache_field, is_target, count_name, span_name):
     if not session.doc:
         return ()
     doc_name = getattr(session.doc, "Name", None)
-    cache_record = getattr(session, cache_attr, None)
+    cache_record = getattr(session.overlay_cache_state, cache_field, None)
     if cache_record is not None and cache_record[0] == doc_name:
-        session._plan_perf_count(f"{cache_attr[1:]}_hits")
+        session._plan_perf_count(f"{cache_field}_hits")
         return cache_record[1]
 
     instances = []
@@ -166,14 +166,14 @@ def _get_cached_plan_instances(session, cache_attr, is_target, count_name, span_
             if is_target(obj):
                 instances.append(obj)
     result = tuple(instances)
-    setattr(session, cache_attr, (doc_name, result))
+    setattr(session.overlay_cache_state, cache_field, (doc_name, result))
     return result
 
 
 def get_plan_space_instances(session):
     return _get_cached_plan_instances(
         session,
-        "_plan_space_instances_cache",
+        "plan_space_instances_cache",
         session._is_plan_space_object,
         "plan_space_instance_objects_scanned",
         "build_plan_space_instances_cache",
@@ -183,7 +183,7 @@ def get_plan_space_instances(session):
 def get_plan_region_instances(session):
     return _get_cached_plan_instances(
         session,
-        "_plan_region_instances_cache",
+        "plan_region_instances_cache",
         session._is_plan_region_object,
         "plan_region_instance_objects_scanned",
         "build_plan_region_instances_cache",
@@ -280,12 +280,12 @@ def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
         best_symbol = None
         best_distance_sq = None
         cursor_xy = (float(mouse_pos[0]), float(mouse_pos[1]))
-        for obj in session._get_plan_symbol_instances():
+        for obj in session.overlays.get_plan_symbol_instances():
             session._plan_perf_count("symbol_overlay_pick_candidates")
             view_object = getattr(obj, "ViewObject", None)
             if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
                 continue
-            for projected in session._get_symbol_overlay_screen_polylines(obj):
+            for projected in session.overlays.get_symbol_overlay_screen_polylines(obj):
                 for start_xy, end_xy in zip(projected, projected[1:]):
                     session._plan_perf_count("symbol_overlay_pick_segments_scanned")
                     distance_sq = session._get_screen_distance_sq_to_projected_segment(

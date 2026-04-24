@@ -104,7 +104,7 @@ def get_plan_symbol_instances(session):
     if not session.doc:
         return ()
     doc_name = getattr(session.doc, "Name", None)
-    cache_record = getattr(session, "_plan_symbol_instances_cache", None)
+    cache_record = session.overlay_cache_state.plan_symbol_instances_cache
     if cache_record is not None and cache_record[0] == doc_name:
         session._plan_perf_count("plan_symbol_instances_cache_hits")
         return cache_record[1]
@@ -116,7 +116,7 @@ def get_plan_symbol_instances(session):
             if session._is_plan_symbol_instance(obj):
                 symbols.append(obj)
     result = tuple(symbols)
-    session._plan_symbol_instances_cache = (doc_name, result)
+    session.overlay_cache_state.plan_symbol_instances_cache = (doc_name, result)
     return result
 
 
@@ -146,7 +146,7 @@ def get_symbol_overlay_screen_polylines(session, symbol):
         return ()
     geometry_key = _get_symbol_screen_geometry_key(session, symbol)
     cache_key = (projection_key, geometry_key)
-    cached = session._symbol_overlay_screen_cache.get(symbol_key)
+    cached = session.overlay_cache_state.symbol_overlay_screen_cache.get(symbol_key)
     if cached is not None and cached[0] == cache_key:
         session._plan_perf_count("symbol_overlay_screen_polylines_cache_hits")
         return cached[1]
@@ -165,7 +165,7 @@ def get_symbol_overlay_screen_polylines(session, symbol):
         if len(projected) >= 2:
             projected_polylines.append(tuple(projected))
     result = tuple(projected_polylines)
-    session._symbol_overlay_screen_cache[symbol_key] = (cache_key, result)
+    session.overlay_cache_state.symbol_overlay_screen_cache[symbol_key] = (cache_key, result)
     return result
 
 

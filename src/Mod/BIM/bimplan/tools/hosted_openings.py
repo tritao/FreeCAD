@@ -142,16 +142,18 @@ def is_hosted_opening_object(session, obj):
 
 
 def invalidate_wall_hosted_openings_cache(session):
-    session._wall_hosted_openings_cache = None
-    session._plan_opening_instances_cache = None
-    session._wall_hosted_openings_cache_queued = False
+    cache_state = session.overlay_cache_state
+    cache_state.wall_hosted_openings_cache = None
+    cache_state.plan_opening_instances_cache = None
+    cache_state.wall_hosted_openings_cache_queued = False
 
 
 def queue_prime_wall_hosted_openings_cache(session):
+    cache_state = session.overlay_cache_state
     if (
         session._tearing_down
-        or session._wall_hosted_openings_cache is not None
-        or session._wall_hosted_openings_cache_queued
+        or cache_state.wall_hosted_openings_cache is not None
+        or cache_state.wall_hosted_openings_cache_queued
         or not session.doc
     ):
         return
@@ -159,18 +161,23 @@ def queue_prime_wall_hosted_openings_cache(session):
         from PySide import QtCore
     except ImportError:
         return
-    session._wall_hosted_openings_cache_queued = True
+    cache_state.wall_hosted_openings_cache_queued = True
     QtCore.QTimer.singleShot(0, session._prime_wall_hosted_openings_cache)
 
 
 def prime_wall_hosted_openings_cache(session):
-    session._wall_hosted_openings_cache_queued = False
-    if session._tearing_down or session._wall_hosted_openings_cache is not None or not session.doc:
+    cache_state = session.overlay_cache_state
+    cache_state.wall_hosted_openings_cache_queued = False
+    if (
+        session._tearing_down
+        or cache_state.wall_hosted_openings_cache is not None
+        or not session.doc
+    ):
         return
     doc_name = getattr(session.doc, "Name", None)
     cache = session._build_wall_hosted_openings_cache()
-    session._wall_hosted_openings_cache = (doc_name, cache)
-    session._plan_opening_instances_cache = (
+    cache_state.wall_hosted_openings_cache = (doc_name, cache)
+    cache_state.plan_opening_instances_cache = (
         doc_name,
         session._collect_opening_instances_from_host_cache(cache),
     )
@@ -209,21 +216,22 @@ def get_plan_opening_instances(session):
     if not session.doc:
         return ()
     doc_name = getattr(session.doc, "Name", None)
-    cache_record = session._plan_opening_instances_cache
+    cache_state = session.overlay_cache_state
+    cache_record = cache_state.plan_opening_instances_cache
     if cache_record is not None and cache_record[0] == doc_name:
         session._plan_perf_count("plan_opening_instances_cache_hits")
         return cache_record[1]
 
-    wall_cache_record = session._wall_hosted_openings_cache
+    wall_cache_record = cache_state.wall_hosted_openings_cache
     if wall_cache_record is None or wall_cache_record[0] != doc_name:
         host_cache = session._build_wall_hosted_openings_cache()
-        session._wall_hosted_openings_cache = (doc_name, host_cache)
+        cache_state.wall_hosted_openings_cache = (doc_name, host_cache)
     else:
         session._plan_perf_count("wall_hosted_openings_cache_hits")
         host_cache = wall_cache_record[1]
 
     openings = session._collect_opening_instances_from_host_cache(host_cache)
-    session._plan_opening_instances_cache = (doc_name, openings)
+    cache_state.plan_opening_instances_cache = (doc_name, openings)
     return openings
 
 
@@ -234,12 +242,13 @@ def get_wall_hosted_openings(session, wall):
     if wall_key is None:
         return []
     doc_name = getattr(session.doc, "Name", None)
-    cache_record = session._wall_hosted_openings_cache
+    cache_state = session.overlay_cache_state
+    cache_record = cache_state.wall_hosted_openings_cache
     if cache_record is None or cache_record[0] != doc_name:
         host_cache = session._build_wall_hosted_openings_cache()
         cache_record = (doc_name, host_cache)
-        session._wall_hosted_openings_cache = cache_record
-        session._plan_opening_instances_cache = (
+        cache_state.wall_hosted_openings_cache = cache_record
+        cache_state.plan_opening_instances_cache = (
             doc_name,
             session._collect_opening_instances_from_host_cache(host_cache),
         )
