@@ -4,6 +4,7 @@
 
 from contextlib import nullcontext
 from dataclasses import dataclass, replace
+from functools import wraps
 from typing import TypedDict
 
 import FreeCAD
@@ -60,6 +61,21 @@ class _PlanProviderTargetDisplayFields(TypedDict):
 _PLAN_PROVIDER_SNAPSHOT_CACHE_KEY = ("provider_snapshot", "panel")
 
 
+def _bind_provider_call(func):
+    @wraps(func)
+    def method(self, *args, **kwargs):
+        return func(self.session, *args, **kwargs)
+
+    return method
+
+
+_PLAN_PROVIDERS_API_BOUND_METHODS = (
+    "get_plan_provider_display_name",
+    "get_plan_provider_overlay_mode",
+    "is_plan_provider_overlay_enabled",
+)
+
+
 class PlanProvidersAPI:
     """Owned session surface for Plan Edit provider read helpers."""
 
@@ -71,15 +87,6 @@ class PlanProvidersAPI:
     @property
     def session(self):
         return self._session
-
-    def get_plan_provider_display_name(self, provider_id):
-        return get_plan_provider_display_name(self.session, provider_id)
-
-    def get_plan_provider_overlay_mode(self):
-        return get_plan_provider_overlay_mode(self.session)
-
-    def is_plan_provider_overlay_enabled(self, category):
-        return is_plan_provider_overlay_enabled(self.session, category)
 
     def get_provider_point_tool_label(self):
         from bimplan.providers import point as plan_provider_point
@@ -94,6 +101,10 @@ class PlanProvidersAPI:
     def get_plan_provider_overlay_category(self, provider_id):
         del self
         return get_plan_provider_overlay_category(provider_id)
+
+
+for _method_name in _PLAN_PROVIDERS_API_BOUND_METHODS:
+    setattr(PlanProvidersAPI, _method_name, _bind_provider_call(globals()[_method_name]))
 
 
 @dataclass(frozen=True)
