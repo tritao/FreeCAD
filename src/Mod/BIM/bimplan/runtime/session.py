@@ -68,6 +68,7 @@ from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import manager as overlay_manager
 from bimplan.overlays import openings as opening_overlays
 from bimplan.overlays import providers as provider_overlays
+from bimplan.overlays.runtime import PlanOverlaysAPI
 from bimplan.overlays import spaces as space_overlays
 from bimplan.overlays import symbols as symbol_overlays
 from bimplan.overlays import walls as wall_overlays
@@ -267,6 +268,7 @@ class PlanEditSession:
         self.symbols = PlanSymbolsAPI(self)
         self.windows = PlanWindowsAPI(self)
         self.viewport = PlanViewportAPI(self)
+        self.overlays = PlanOverlaysAPI(self)
         self.wall_edit = PlanWallEditAPI(self)
         self.providers = PlanProvidersAPI(self)
         self.status_text = PlanStatusTextAPI(self)
@@ -420,12 +422,13 @@ class PlanEditSession:
         )
 
     def _invalidate_plan_classification_cache(self):
-        self._plan_semantic_object_cache.clear()
-        self._plan_object_storeys_cache.clear()
-        self._plan_symbol_instances_cache = None
-        self._plan_space_instances_cache = None
-        self._plan_region_instances_cache = None
-        self._symbol_overlay_screen_cache.clear()
+        cache_state = self.overlay_cache_state
+        cache_state.plan_semantic_object_cache.clear()
+        cache_state.plan_object_storeys_cache.clear()
+        cache_state.plan_symbol_instances_cache = None
+        cache_state.plan_space_instances_cache = None
+        cache_state.plan_region_instances_cache = None
+        cache_state.symbol_overlay_screen_cache.clear()
 
     def _get_cached_plan_overlay_geometry(self, kind, obj, field_name, compute):
         return overlay_geometry.get_cached_plan_overlay_geometry(
@@ -995,9 +998,10 @@ class PlanEditSession:
 
     def _get_plan_semantic_object(self, obj):
         key = self._get_document_object_key(obj)
-        if key is not None and key in self._plan_semantic_object_cache:
+        semantic_cache = self.overlay_cache_state.plan_semantic_object_cache
+        if key is not None and key in semantic_cache:
             self._plan_perf_count("semantic_object_cache_hits")
-            return self._plan_semantic_object_cache[key]
+            return semantic_cache[key]
 
         current = obj
         seen = set()
@@ -1029,7 +1033,7 @@ class PlanEditSession:
         owner = self._get_direct_plan_symbol_owner(current)
         result = owner or current or obj
         if key is not None:
-            self._plan_semantic_object_cache[key] = result
+            semantic_cache[key] = result
         return result
 
     def _restore_object_view_state(self):

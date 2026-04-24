@@ -17,7 +17,7 @@ def get_plan_overlay_geometry_kinds_for_object(session, obj):
 
 
 def get_plan_overlay_geometry_cache_entry(session, kind, obj, create=False):
-    cache = session._plan_overlay_geometry_cache.get(str(kind or ""))
+    cache = session.overlay_cache_state.plan_overlay_geometry_cache.get(str(kind or ""))
     semantic_obj = session._get_plan_semantic_object(obj)
     if cache is None or semantic_obj is None:
         return (None, None, None)
@@ -35,14 +35,14 @@ def invalidate_plan_overlay_geometry_cache(session, obj=None, kinds=None):
     target_kinds = tuple(kinds or ())
     if not target_kinds:
         if obj is None:
-            target_kinds = tuple(session._plan_overlay_geometry_cache.keys())
+            target_kinds = tuple(session.overlay_cache_state.plan_overlay_geometry_cache.keys())
         else:
             target_kinds = session._get_plan_overlay_geometry_kinds_for_object(obj)
     if not target_kinds:
         return
     if obj is None:
         for kind in target_kinds:
-            cache = session._plan_overlay_geometry_cache.get(kind)
+            cache = session.overlay_cache_state.plan_overlay_geometry_cache.get(kind)
             if cache is not None:
                 cache.clear()
         session._invalidate_opening_overlay_screen_cache()
@@ -56,7 +56,7 @@ def invalidate_plan_overlay_geometry_cache(session, obj=None, kinds=None):
     if key is None:
         return
     for kind in target_kinds:
-        cache = session._plan_overlay_geometry_cache.get(kind)
+        cache = session.overlay_cache_state.plan_overlay_geometry_cache.get(kind)
         if cache is not None:
             cache.pop(key, None)
     if "opening" in target_kinds:
@@ -99,8 +99,9 @@ def get_cached_plan_overlay_geometry(session, kind, obj, field_name, compute):
 
 
 def invalidate_opening_overlay_screen_cache(session):
-    session._opening_overlay_screen_cache = {}
-    session._opening_overlay_screen_cache_projection_key = None
+    state = session.overlay_cache_state
+    state.opening_overlay_screen_cache = {}
+    state.opening_overlay_screen_cache_projection_key = None
 
 
 def get_footprint_overlay_polylines(faces):
@@ -252,13 +253,14 @@ def get_opening_overlay_screen_polylines(session, opening):
     projection_key = session.viewport.get_plan_projection_cache_key()
     if projection_key is None:
         return ()
-    if projection_key != session._opening_overlay_screen_cache_projection_key:
-        session._opening_overlay_screen_cache = {}
-        session._opening_overlay_screen_cache_projection_key = projection_key
+    cache_state = session.overlay_cache_state
+    if projection_key != cache_state.opening_overlay_screen_cache_projection_key:
+        cache_state.opening_overlay_screen_cache = {}
+        cache_state.opening_overlay_screen_cache_projection_key = projection_key
     opening_key = session._get_document_object_key(opening)
     if opening_key is None:
         return ()
-    cached = session._opening_overlay_screen_cache.get(opening_key)
+    cached = cache_state.opening_overlay_screen_cache.get(opening_key)
     if cached is not None:
         session._plan_perf_count("opening_overlay_screen_polylines_cache_hits")
         return cached
@@ -277,7 +279,7 @@ def get_opening_overlay_screen_polylines(session, opening):
         if len(projected) >= 2:
             projected_polylines.append(tuple(projected))
     result = tuple(projected_polylines)
-    session._opening_overlay_screen_cache[opening_key] = result
+    cache_state.opening_overlay_screen_cache[opening_key] = result
     return result
 
 

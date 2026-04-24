@@ -275,6 +275,20 @@ class PlanOverlayTransientState:
     selected_space_overlay_render_state: object = None
 
 
+@dataclass
+class PlanCreationPreviewState:
+    rect_wall_start: object = None
+    rect_wall_params: object = None
+    rect_wall_preview_trackers: list = field(default_factory=list)
+    space_separator_start: object = None
+    space_separator_height: object = None
+    space_separator_preview_trackers: list = field(default_factory=list)
+    window_host_wall: object = None
+    window_preview_trackers: list = field(default_factory=list)
+    plan_region_points: list = field(default_factory=list)
+    plan_region_preview_trackers: list = field(default_factory=list)
+
+
 def _coerce_identity(value):
     return value
 
@@ -366,6 +380,7 @@ _PLAN_EDIT_SESSION_STATE_ENSURERS = (
     ("_ensure_overlay_tracker_state", "overlay_tracker_state", PlanOverlayTrackerState),
     ("_ensure_overlay_cache_state", "overlay_cache_state", PlanOverlayCacheState),
     ("_ensure_overlay_transient_state", "overlay_transient_state", PlanOverlayTransientState),
+    ("_ensure_creation_preview_state", "creation_preview_state", PlanCreationPreviewState),
 )
 
 
@@ -658,32 +673,7 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
     ),
     (
         "_ensure_overlay_cache_state",
-        (
-            (
-                "_plan_overlay_geometry_cache",
-                "plan_overlay_geometry_cache",
-                _coerce_overlay_geometry_cache,
-            ),
-            ("_plan_semantic_object_cache", "plan_semantic_object_cache", _coerce_dict),
-            ("_plan_object_storeys_cache", "plan_object_storeys_cache", _coerce_dict),
-            ("_plan_symbol_instances_cache", "plan_symbol_instances_cache", _coerce_identity),
-            ("_plan_space_instances_cache", "plan_space_instances_cache", _coerce_identity),
-            ("_plan_region_instances_cache", "plan_region_instances_cache", _coerce_identity),
-            ("_plan_opening_instances_cache", "plan_opening_instances_cache", _coerce_identity),
-            ("_wall_hosted_openings_cache", "wall_hosted_openings_cache", _coerce_identity),
-            (
-                "_wall_hosted_openings_cache_queued",
-                "wall_hosted_openings_cache_queued",
-                _coerce_bool,
-            ),
-            ("_opening_overlay_screen_cache", "opening_overlay_screen_cache", _coerce_dict),
-            (
-                "_opening_overlay_screen_cache_projection_key",
-                "opening_overlay_screen_cache_projection_key",
-                _coerce_identity,
-            ),
-            ("_symbol_overlay_screen_cache", "symbol_overlay_screen_cache", _coerce_dict),
-        ),
+        (),
     ),
     (
         "_ensure_overlay_transient_state",
@@ -712,6 +702,25 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
                 "selected_space_overlay_render_state",
                 _coerce_identity,
             ),
+        ),
+    ),
+    (
+        "_ensure_creation_preview_state",
+        (
+            ("_rect_wall_start", "rect_wall_start", _coerce_identity),
+            ("_rect_wall_params", "rect_wall_params", _coerce_identity),
+            ("_rect_wall_preview_trackers", "rect_wall_preview_trackers", _coerce_list),
+            ("_space_separator_start", "space_separator_start", _coerce_identity),
+            ("_space_separator_height", "space_separator_height", _coerce_identity),
+            (
+                "_space_separator_preview_trackers",
+                "space_separator_preview_trackers",
+                _coerce_list,
+            ),
+            ("_window_host_wall", "window_host_wall", _coerce_identity),
+            ("_window_preview_trackers", "window_preview_trackers", _coerce_list),
+            ("_plan_region_points", "plan_region_points", _coerce_list),
+            ("_plan_region_preview_trackers", "plan_region_preview_trackers", _coerce_list),
         ),
     ),
 )
@@ -758,16 +767,6 @@ def initialize_session_state(session):
     session._selection_observer_added = False
     session._document_observer_added = False
     session._pending_selected_wall_reset = False
-    session._rect_wall_start = None
-    session._rect_wall_params = None
-    session._rect_wall_preview_trackers = []
-    session._space_separator_start = None
-    session._space_separator_height = None
-    session._space_separator_preview_trackers = []
-    session._window_host_wall = None
-    session._window_preview_trackers = []
-    session._plan_region_points = []
-    session._plan_region_preview_trackers = []
     session._edit_symbol_start_placement = None
     session._edit_symbol_reference_point = None
     session._ignore_selection_changes = False
