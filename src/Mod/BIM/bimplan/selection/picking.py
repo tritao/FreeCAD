@@ -1031,6 +1031,18 @@ def _resolve_region_or_space_fallback_target(
     *,
     include_space_fallback,
 ):
+    result = _resolve_region_fallback_target(session, mouse_pos, candidates)
+    if result != (None, None):
+        return result
+    return _resolve_space_fallback_target(
+        session,
+        mouse_pos,
+        candidates,
+        include_space_fallback=include_space_fallback,
+    )
+
+
+def _resolve_region_fallback_target(session, mouse_pos, candidates):
     if candidates["region"] is None:
         candidates["region"] = session.selection.pick_plan_region_target_from_polylines(mouse_pos)
     if candidates["region"] is None:
@@ -1039,7 +1051,16 @@ def _resolve_region_or_space_fallback_target(
         candidates["region"] = session.selection.pick_plan_region_target_from_overlays(mouse_pos)
     if candidates["region"] is not None:
         return ("region", candidates["region"])
+    return (None, None)
 
+
+def _resolve_space_fallback_target(
+    session,
+    mouse_pos,
+    candidates,
+    *,
+    include_space_fallback,
+):
     if not include_space_fallback:
         return (None, None)
     if candidates["space"] is None:
