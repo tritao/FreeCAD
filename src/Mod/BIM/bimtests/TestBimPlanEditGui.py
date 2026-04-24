@@ -2543,10 +2543,10 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(panel.window_width_edit)
         self.assertIsNotNone(panel.window_height_edit)
         self.assertEqual(
-            session._get_selected_window_width_text(), str(panel.window_width_edit.text())
+            session.windows.get_selected_window_width_text(), str(panel.window_width_edit.text())
         )
         self.assertEqual(
-            session._get_selected_window_height_text(), str(panel.window_height_edit.text())
+            session.windows.get_selected_window_height_text(), str(panel.window_height_edit.text())
         )
         self.assertIsNotNone(panel.window_size_apply_button)
         self.assertFalse(panel.window_size_apply_button.isEnabled())
@@ -2555,7 +2555,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual("Custom / Current", str(combo.itemText(0)))
         self.assertEqual("", str(combo.itemData(0) or ""))
         self.assertEqual(
-            ["Custom / Current"] + list(session._get_window_style_preset_options()),
+            ["Custom / Current"] + list(session.windows.get_window_style_preset_options()),
             [str(combo.itemText(index)) for index in range(combo.count())],
         )
         self.assertFalse(panel.window_preset_apply_button.isEnabled())
@@ -2619,7 +2619,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             float(getattr(window.Width, "Value", window.Width)), 950.0, delta=1e-6
         )
         self.assertEqual(
-            session._get_selected_window_width_text(), str(panel.window_width_edit.text())
+            session.windows.get_selected_window_width_text(), str(panel.window_width_edit.text())
         )
         self.assertFalse(panel.window_size_apply_button.isEnabled())
 
@@ -2677,7 +2677,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             float(getattr(window.Height, "Value", window.Height)), 1400.0, delta=1e-6
         )
         self.assertEqual(
-            session._get_selected_window_height_text(), str(panel.window_height_edit.text())
+            session.windows.get_selected_window_height_text(), str(panel.window_height_edit.text())
         )
         self.assertFalse(panel.window_size_apply_button.isEnabled())
 
@@ -2739,10 +2739,10 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             float(getattr(window.Height, "Value", window.Height)), 1400.0, delta=1e-6
         )
         self.assertEqual(
-            session._get_selected_window_width_text(), str(panel.window_width_edit.text())
+            session.windows.get_selected_window_width_text(), str(panel.window_width_edit.text())
         )
         self.assertEqual(
-            session._get_selected_window_height_text(), str(panel.window_height_edit.text())
+            session.windows.get_selected_window_height_text(), str(panel.window_height_edit.text())
         )
         self.assertFalse(panel.window_size_apply_button.isEnabled())
 
@@ -2803,7 +2803,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(
             WindowPresets.index(target_style) + 1, int(getattr(window, "Preset", 0) or 0)
         )
-        self.assertEqual(target_style, session._get_selected_window_style_preset())
+        self.assertEqual(target_style, session.windows.get_selected_window_style_preset())
         self.assertNotEqual(original_parts, list(window.WindowParts))
         updated_center = get_shape_center(window.Base)
         self.assertAlmostEqual(original_center.x, updated_center.x, delta=1e-6)

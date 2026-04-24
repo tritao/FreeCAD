@@ -213,9 +213,9 @@ def format_opening_selection_help(session, opening):
             "BIM_PlanEdit",
             "Use the in-view handle to move the selected window along its host wall.",
         )
-        can_edit_width = session._can_edit_window_width(opening)
-        can_edit_height = session._can_edit_window_height(opening)
-        can_apply_style = session._can_apply_window_style_preset(opening)
+        can_edit_width = session.windows.can_edit_window_width(opening)
+        can_edit_height = session.windows.can_edit_window_height(opening)
+        can_apply_style = session.windows.can_apply_window_style_preset(opening)
         if (can_edit_width or can_edit_height) and can_apply_style:
             help_text = "{} {}".format(
                 help_text,

@@ -2616,7 +2616,7 @@ class PlanEditControlsWidget:
             return
 
         can_apply = bool(
-            self.session._can_apply_selected_window_size(
+            self.session.windows.can_apply_selected_window_size(
                 width_value=self.window_width_edit.text(),
                 height_value=self.window_height_edit.text(),
             )
@@ -2650,11 +2650,15 @@ class PlanEditControlsWidget:
             return
 
         window = plan_task_panel_view_model.get_window_editor_target(self.session)
-        can_apply_style = bool(window and self.session._can_apply_window_style_preset(window))
+        can_apply_style = bool(
+            window and self.session.windows.can_apply_window_style_preset(window)
+        )
         if modal_active is None:
             modal_active = self.session._is_modal_plan_interaction_active()
 
-        current_style = self.session._get_selected_window_style_preset() if can_apply_style else ""
+        current_style = (
+            self.session.windows.get_selected_window_style_preset() if can_apply_style else ""
+        )
         selected_style = ""
         index = self.window_preset_combo.currentIndex()
         if index >= 0:
@@ -2858,17 +2862,17 @@ class PlanEditControlsWidget:
         can_edit_window_width = (
             selected_kind == "opening"
             and _selected_obj is not None
-            and self.session._can_edit_window_width(_selected_obj)
+            and self.session.windows.can_edit_window_width(_selected_obj)
         )
         can_edit_window_height = (
             selected_kind == "opening"
             and _selected_obj is not None
-            and self.session._can_edit_window_height(_selected_obj)
+            and self.session.windows.can_edit_window_height(_selected_obj)
         )
         can_apply_window_style = (
             selected_kind == "opening"
             and _selected_obj is not None
-            and self.session._can_apply_window_style_preset(_selected_obj)
+            and self.session.windows.can_apply_window_style_preset(_selected_obj)
         )
         for widget in (self.window_width_edit,):
             if widget is None:
@@ -3019,7 +3023,7 @@ class PlanEditControlsWidget:
             or self.window_height_edit is None
         ):
             return
-        if self.session._set_selected_window_size(
+        if self.session.windows.set_selected_window_size(
             width_value=self.window_width_edit.text(),
             height_value=self.window_height_edit.text(),
         ):
@@ -3037,7 +3041,7 @@ class PlanEditControlsWidget:
         preset_name = str(preset_name or "").strip()
         if not preset_name:
             return
-        if self.session._apply_selected_window_style_preset(preset_name):
+        if self.session.windows.apply_selected_window_style_preset(preset_name):
             self.refresh_from_session(defer_integrations=True)
 
     def on_exit_clicked(self):

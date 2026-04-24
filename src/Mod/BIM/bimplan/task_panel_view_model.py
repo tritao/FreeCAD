@@ -370,7 +370,6 @@ class PlanTaskPanelContext:
                 self.session,
                 "windows",
                 "get_window_style_preset_options",
-                session_method_name="_get_window_style_preset_options",
                 default=(),
             )
             or ()
@@ -383,7 +382,6 @@ class PlanTaskPanelContext:
                 "windows",
                 "can_edit_window_width",
                 obj,
-                session_method_name="_can_edit_window_width",
                 default=False,
             )
         )
@@ -395,7 +393,6 @@ class PlanTaskPanelContext:
                 "windows",
                 "can_edit_window_height",
                 obj,
-                session_method_name="_can_edit_window_height",
                 default=False,
             )
         )
@@ -407,7 +404,6 @@ class PlanTaskPanelContext:
                 "windows",
                 "can_apply_window_style_preset",
                 obj,
-                session_method_name="_can_apply_window_style_preset",
                 default=False,
             )
         )
@@ -418,7 +414,6 @@ class PlanTaskPanelContext:
                 self.session,
                 "windows",
                 "get_selected_window_style_preset",
-                session_method_name="_get_selected_window_style_preset",
                 default="",
             )
             or ""
@@ -430,7 +425,6 @@ class PlanTaskPanelContext:
                 self.session,
                 "windows",
                 "get_selected_window_width_text",
-                session_method_name="_get_selected_window_width_text",
                 default="",
             )
             or ""
@@ -442,7 +436,6 @@ class PlanTaskPanelContext:
                 self.session,
                 "windows",
                 "get_selected_window_height_text",
-                session_method_name="_get_selected_window_height_text",
                 default="",
             )
             or ""
@@ -734,14 +727,14 @@ def build_provider_overlay_legend_items(session_or_context, overlays):
                 provider=provider_label,
                 label=label,
             )
-        category = context.get_plan_provider_overlay_category(overlay)
+        category = context.providers.get_plan_provider_overlay_category(overlay)
         items.append(
             (
                 provider_id,
                 overlay_key,
                 label,
                 tuple(getattr(overlay, "color", ()) or ()),
-                context.is_plan_provider_overlay_enabled(overlay),
+                context.providers.is_plan_provider_overlay_enabled(overlay),
                 category,
             )
         )
@@ -789,7 +782,7 @@ def build_integration_panel_view_model(session_or_context, snapshot):
     context = as_task_panel_context(session_or_context)
     tools = sort_provider_tools(getattr(snapshot, "tools", ()))
     overlay_items = build_provider_overlay_legend_items(context, getattr(snapshot, "overlays", ()))
-    overlay_mode = context.get_plan_provider_overlay_mode()
+    overlay_mode = context.providers.get_plan_provider_overlay_mode()
     active_overlay_items = filter_provider_overlay_legend_items_for_mode(
         overlay_items,
         active_mode=overlay_mode,

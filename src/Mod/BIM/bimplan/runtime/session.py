@@ -57,7 +57,6 @@ from bimplan.tools.wall_create import PlanWallCreateAPI
 from bimplan.tools import wall_relations as plan_wall_relations
 from bimplan.tools.wall_relations import PlanWallRelationsAPI
 from bimplan.tools.wall_edit import PlanWallEditAPI
-from bimplan.tools import window_create as plan_window_create
 from bimplan.tools.window_create import PlanWindowsAPI
 from bimplan.tools.spaces import PlanSpacesAPI
 from bimplan.providers import PlanEditContext
@@ -944,65 +943,6 @@ class PlanEditSession:
 
     def _create_space_region_base_object(self, candidate):
         return self.spaces.create_space_region_base_object(candidate)
-
-    def _get_window_style_preset_options(self):
-        return self.windows.get_window_style_preset_options()
-
-    def _get_selected_window_style_preset(self):
-        return self.windows.get_selected_window_style_preset()
-
-    def _get_selected_window_width_mm(self):
-        return plan_window_create.get_selected_window_width_mm(self)
-
-    def _get_selected_window_width_text(self):
-        return self.windows.get_selected_window_width_text()
-
-    def _get_selected_window_height_mm(self):
-        return plan_window_create.get_selected_window_height_mm(self)
-
-    def _get_selected_window_height_text(self):
-        return self.windows.get_selected_window_height_text()
-
-    def _can_apply_window_style_preset(self, window=None):
-        return self.windows.can_apply_window_style_preset(window)
-
-    def _can_edit_window_width(self, window=None):
-        return self.windows.can_edit_window_width(window)
-
-    def _can_edit_window_height(self, window=None):
-        return self.windows.can_edit_window_height(window)
-
-    def _can_apply_selected_window_style_preset(self):
-        return plan_window_create.can_apply_selected_window_style_preset(self)
-
-    def _can_apply_selected_window_width(self):
-        return plan_window_create.can_apply_selected_window_width(self)
-
-    def _can_apply_selected_window_height(self):
-        return plan_window_create.can_apply_selected_window_height(self)
-
-    def _can_apply_selected_window_size(self, width_value=None, height_value=None):
-        return plan_window_create.can_apply_selected_window_size(
-            self,
-            width_value=width_value,
-            height_value=height_value,
-        )
-
-    def _apply_selected_window_style_preset(self, preset_name):
-        return plan_window_create.apply_selected_window_style_preset(self, preset_name)
-
-    def _set_selected_window_width(self, value):
-        return plan_window_create.set_selected_window_width(self, value)
-
-    def _set_selected_window_height(self, value):
-        return plan_window_create.set_selected_window_height(self, value)
-
-    def _set_selected_window_size(self, width_value=None, height_value=None):
-        return plan_window_create.set_selected_window_size(
-            self,
-            width_value=width_value,
-            height_value=height_value,
-        )
 
     def _copy_placement(self, placement):
         if placement is None:
