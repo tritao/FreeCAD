@@ -316,9 +316,6 @@ class PlanEditSession:
     def _clear_selected_plan_target_if_matches(self, kind, obj):
         return self.selection.clear_selected_plan_target_if_matches(kind, obj)
 
-    def _get_plan_target_object_from_state(self, state_kind, state_obj, kind):
-        return self.selection.get_plan_target_object_from_state(state_kind, state_obj, kind)
-
     def _selected_plan_target_changed(self, previous_kind, previous_obj, kind=None):
         return self.selection.selected_plan_target_changed(
             previous_kind,
@@ -1239,9 +1236,6 @@ class PlanEditSession:
     def _is_valid_plan_target(self, kind, obj):
         return self.selection.is_valid_plan_target(kind, obj)
 
-    def _get_plan_target_state_key(self, kind, obj):
-        return self.selection.get_plan_target_state_key(kind, obj)
-
     def _normalize_plan_target_list(self, targets):
         return self.selection.normalize_plan_target_list(targets)
 
@@ -2052,9 +2046,6 @@ class PlanEditSession:
 
     def _is_modal_plan_interaction_active(self):
         return self.interaction.is_modal_plan_interaction_active()
-
-    def _get_plan_target_display_label(self, obj):
-        return self.status_text.get_plan_target_display_label(obj)
 
     def _format_provider_target_role_label(self, obj):
         return self.status_text.format_provider_target_role_label(obj)

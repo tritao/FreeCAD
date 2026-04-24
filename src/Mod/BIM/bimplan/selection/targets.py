@@ -246,7 +246,7 @@ def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=
     )
     semantic_obj = session._get_plan_semantic_object(obj)
     doc = getattr(obj, "Document", None)
-    state_key = session._get_plan_target_state_key(kind, obj)
+    state_key = session.selection.get_plan_target_state_key(kind, obj)
     fields = resolve_plan_provider_target_display_fields(
         session,
         semantic_obj,
@@ -273,14 +273,14 @@ def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=
 def get_plan_targets(session, selected_only=False):
     selected_targets = session.selection.get_selected_plan_targets()
     selected_keys = {
-        session._get_plan_target_state_key(target_kind, target_obj)
+        session.selection.get_plan_target_state_key(target_kind, target_obj)
         for target_kind, target_obj in selected_targets
     }
     selected_keys.discard(None)
     primary_key = None
     primary_kind, primary_obj = session.selection.get_selected_plan_target()
     if primary_kind and primary_obj:
-        primary_key = session._get_plan_target_state_key(primary_kind, primary_obj)
+        primary_key = session.selection.get_plan_target_state_key(primary_kind, primary_obj)
 
     if selected_only:
         source_targets = selected_targets
@@ -298,7 +298,7 @@ def get_plan_targets(session, selected_only=False):
                 target_kind, target_obj = session.selection.get_plan_target_for_object(obj)
                 if not target_kind or not target_obj:
                     continue
-                state_key = session._get_plan_target_state_key(target_kind, target_obj)
+                state_key = session.selection.get_plan_target_state_key(target_kind, target_obj)
                 if state_key is None or state_key in seen:
                     continue
                 semantic_obj = session._get_plan_semantic_object(target_obj)

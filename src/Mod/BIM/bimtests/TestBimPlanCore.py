@@ -940,7 +940,6 @@ class TestBimPlanCore(unittest.TestCase):
             _format_plan_target_selection_state=lambda kind, obj: (_ for _ in ()).throw(
                 AssertionError()
             ),
-            _get_plan_target_display_label=lambda obj: (_ for _ in ()).throw(AssertionError()),
             _summarize_plan_targets=lambda targets: (_ for _ in ()).throw(AssertionError()),
             _format_opening_selection_help=lambda obj: (_ for _ in ()).throw(AssertionError()),
             _get_plan_selection_summary_text=lambda: (_ for _ in ()).throw(AssertionError()),
@@ -2778,7 +2777,8 @@ class TestBimPlanCore(unittest.TestCase):
         )
         session = SimpleNamespace(
             selection=SimpleNamespace(
-                get_plan_target_kind_for_object=lambda obj: "provider" if obj is marker else None
+                get_plan_target_kind_for_object=lambda obj: "provider" if obj is marker else None,
+                get_plan_target_state_key=lambda kind, obj: (kind, getattr(obj, "Name", "")),
             ),
             providers=SimpleNamespace(
                 get_plan_provider_target_for_object=lambda obj: (
@@ -2789,7 +2789,6 @@ class TestBimPlanCore(unittest.TestCase):
             resolve_plan_semantic_object=lambda target: (
                 marker if target == provider_target else None
             ),
-            _get_plan_target_state_key=lambda kind, obj: (kind, getattr(obj, "Name", "")),
         )
 
         self.assertEqual(("provider", marker), get_plan_target_for_object(session, marker))

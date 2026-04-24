@@ -202,7 +202,6 @@ class PlanTaskPanelContext:
             "status_text",
             "get_plan_target_display_label",
             obj,
-            session_method_name="_get_plan_target_display_label",
             default=str(getattr(obj, "Label", "") or getattr(obj, "Name", "") or "").strip(),
         )
 
