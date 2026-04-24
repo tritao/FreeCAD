@@ -41,6 +41,7 @@ from bimplan.runtime import input as plan_input
 from bimplan.runtime import lifecycle as plan_lifecycle
 from bimplan.object_visibility import PlanVisibilityAPI
 from bimplan import performance as plan_performance
+from bimplan.performance import PlanPerformanceAPI
 from bimplan.providers import runtime as plan_provider_runtime
 from bimplan import snap as plan_snap
 from bimplan.runtime import session_state as plan_session_state
@@ -269,6 +270,7 @@ class PlanEditSession:
         self.wall_edit = PlanWallEditAPI(self)
         self.visibility = PlanVisibilityAPI(self)
         self.providers = PlanProvidersAPI(self)
+        self.performance = PlanPerformanceAPI(self)
         self.document_visuals = PlanDocumentVisualsAPI(self)
         self.status_text = PlanStatusTextAPI(self)
         plan_session_state.initialize_session_state(self)
@@ -453,82 +455,6 @@ class PlanEditSession:
             self._secondary_selected_plan_targets_state = normalized_secondary
             changed = True
         return changed
-
-    def _resolve_plan_perf_log_path(self):
-        return plan_performance.resolve_plan_perf_log_path(self)
-
-    def _resolve_plan_pick_debug_log_path(self):
-        return plan_performance.resolve_plan_pick_debug_log_path(self)
-
-    def _is_plan_perf_trace_enabled(self):
-        return plan_performance.is_plan_perf_trace_enabled(self)
-
-    def _is_plan_pick_debug_enabled(self):
-        return plan_performance.is_plan_pick_debug_enabled(self)
-
-    def _is_plan_pick_debug_active(self):
-        return bool(getattr(self, "_plan_pick_debug_scope_depth", 0))
-
-    def _plan_perf_describe_object(self, obj):
-        return plan_performance.plan_perf_describe_object(self, obj)
-
-    def _plan_perf_describe_target(self, kind, obj):
-        return plan_performance.plan_perf_describe_target(self, kind, obj)
-
-    def _plan_perf_coerce_value(self, value):
-        return plan_performance.plan_perf_coerce_value(self, value)
-
-    def _plan_perf_set_fields(self, **fields):
-        return plan_performance.plan_perf_set_fields(self, **fields)
-
-    def _plan_perf_count(self, name, delta=1):
-        return plan_performance.plan_perf_count(self, name, delta=delta)
-
-    def _plan_perf_note_error(self, scope, exc):
-        return plan_performance.plan_perf_note_error(self, scope, exc)
-
-    def _plan_perf_finalize_event(self, event, total_ms):
-        return plan_performance.plan_perf_finalize_event(self, event, total_ms)
-
-    def _plan_perf_write_event(self, event, total_ms):
-        return plan_performance.plan_perf_write_event(self, event, total_ms)
-
-    def _plan_perf_trace_event(self, name, **fields):
-        return plan_performance.plan_perf_trace_event(self, name, **fields)
-
-    def _plan_perf_trace_span(self, name, **fields):
-        return plan_performance.plan_perf_trace_span(self, name, **fields)
-
-    def _plan_pick_debug_event(self, name, **fields):
-        return plan_performance.plan_pick_debug_event(self, name, **fields)
-
-    @contextmanager
-    def _plan_pick_debug_scope(self, name, **fields):
-        if not self._is_plan_pick_debug_enabled():
-            yield None
-            return
-        previous_name = str(getattr(self, "_plan_pick_debug_scope_name", "") or "")
-        previous_depth = int(getattr(self, "_plan_pick_debug_scope_depth", 0) or 0)
-        self._plan_pick_debug_scope_name = str(name or "").strip()
-        self._plan_pick_debug_scope_depth = previous_depth + 1
-        self._plan_pick_debug_event(f"{name}_start", **fields)
-        try:
-            yield None
-        finally:
-            selected_after = self.selection.get_selected_plan_target()
-            self._plan_pick_debug_event(
-                f"{name}_end",
-                selected_after=self._plan_perf_describe_target(
-                    selected_after[0],
-                    selected_after[1],
-                ),
-                provider_selected_objects=[
-                    self._plan_perf_describe_object(obj)
-                    for obj in tuple(getattr(self, "_provider_selected_objects", ()) or ())
-                ],
-            )
-            self._plan_pick_debug_scope_depth = previous_depth
-            self._plan_pick_debug_scope_name = previous_name
 
     def enter(self):
         with self._plan_perf_trace_event("enter_plan_edit"):
@@ -2235,3 +2161,4 @@ class PlanEditSession:
 
 
 plan_session_state.bind_session_state_accessors(PlanEditSession)
+plan_performance.bind_session_perf_compat(PlanEditSession)
