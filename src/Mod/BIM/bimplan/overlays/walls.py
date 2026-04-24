@@ -44,7 +44,7 @@ def sync_wall_grips(session):
     with _perf_trace_span(session, "sync_wall_grips"):
         session._wall_grip_sync_queued = False
         session._wall_grip_sync_generation += 1
-        if not session.is_selected_wall_endpoint_editable():
+        if not session.wall_edit.is_selected_wall_endpoint_editable():
             session.overlays.clear_wall_grips()
             return
 

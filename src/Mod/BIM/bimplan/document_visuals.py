@@ -386,7 +386,7 @@ def flush_hard_refresh_selected_opening_visuals(session):
 def slot_created_object(session, obj):
     if session._tearing_down:
         return
-    session._invalidate_plan_provider_document_cache()
+    session.providers.invalidate_plan_provider_document_cache()
     session._provider_overlay_state = None
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
@@ -396,7 +396,7 @@ def slot_created_object(session, obj):
 def slot_changed_object(session, obj, prop):
     if session._tearing_down:
         return
-    session._invalidate_plan_provider_document_cache()
+    session.providers.invalidate_plan_provider_document_cache()
     session._provider_overlay_state = None
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
@@ -532,7 +532,7 @@ def slot_changed_object(session, obj, prop):
 def slot_deleted_object(session, obj):
     if session._tearing_down:
         return
-    session._invalidate_plan_provider_document_cache()
+    session.providers.invalidate_plan_provider_document_cache()
     session._provider_overlay_state = None
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
@@ -584,7 +584,7 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
         or not session.document_visuals.document_is_alive()
     ):
         return
-    session._invalidate_plan_provider_document_cache()
+    session.providers.invalidate_plan_provider_document_cache()
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
     session.overlays.invalidate_plan_overlay_geometry_cache()
