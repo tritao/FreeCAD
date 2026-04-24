@@ -787,4 +787,4 @@ def initialize_session_state(session):
     session._plan_provider_refresh_cache = None
     session._plan_provider_document_cache = {}
     session._plan_provider_target_collection_depth = 0
-    session._connect_teardown_signals(QtGui)
+    session.lifecycle.connect_teardown_signals(QtGui)

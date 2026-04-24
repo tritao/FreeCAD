@@ -1713,11 +1713,11 @@ class TestBimPlanCore(unittest.TestCase):
             lifecycle=SimpleNamespace(
                 cancel_embedded_tool=lambda: calls.append("embedded"),
                 cancel_pending_edit=lambda: calls.append("pending"),
+                discard_runtime_references=lambda: calls.append("discard-runtime"),
             ),
             symbols=SimpleNamespace(
                 cancel_symbol_handle_point_pick=lambda: calls.append("symbol-handle")
             ),
-            _discard_runtime_references=lambda: calls.append("discard-runtime"),
             wall_edit=SimpleNamespace(
                 cancel_wall_edit=lambda restore=True, refresh=True: calls.append(
                     ("wall-edit", restore, refresh)

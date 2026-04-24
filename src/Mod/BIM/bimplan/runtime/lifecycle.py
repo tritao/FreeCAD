@@ -69,6 +69,109 @@ class PlanLifecycleAPI:
 
         return plan_wall_relations.activate_join_tool(self.session)
 
+    def connect_teardown_signal(self, signal):
+        return connect_teardown_signal(self.session, signal)
+
+    def connect_teardown_signals(self, QtGui):
+        return connect_teardown_signals(self.session, QtGui)
+
+    def disconnect_teardown_signals(self):
+        return disconnect_teardown_signals(self.session)
+
+    def discard_runtime_references(self):
+        return discard_runtime_references(self.session)
+
+
+def connect_teardown_signal(session, signal):
+    try:
+        signal.connect(session.begin_teardown)
+    except Exception:
+        return
+    session._teardown_signal_sources.append(signal)
+
+
+def connect_teardown_signals(session, QtGui):
+    app = QtGui.QApplication.instance()
+    if app:
+        session.lifecycle.connect_teardown_signal(app.aboutToQuit)
+    main_window = session.viewport.get_main_window()
+    if main_window:
+        try:
+            signal = main_window.mainWindowClosed
+        except AttributeError:
+            signal = None
+        if signal is not None:
+            session.lifecycle.connect_teardown_signal(signal)
+
+
+def disconnect_teardown_signals(session):
+    for signal in session._teardown_signal_sources:
+        try:
+            signal.disconnect(session.begin_teardown)
+        except Exception:
+            pass
+    session._teardown_signal_sources = []
+
+
+def discard_runtime_references(session):
+    session.viewport.clear_viewport_status_chip()
+    session.viewport.restore_preselection_state()
+    session.doc = None
+    session.gui_doc = None
+    session.view = None
+    session.viewer = None
+    session._saved_navigation_style = None
+    session._saved_navigation_state = {}
+    session._saved_view_action_state = {}
+    session._saved_preselection_state = None
+    session._plan_preselection_forced = False
+    session.selection.set_selected_plan_target_state()
+    session._provider_selected_objects = []
+    session._provider_point_host_target = None
+    session._provider_point_host_source = ""
+    session._provider_point_preview_render_state = None
+    session._provider_point_preview_style_state = None
+    session._provider_point_preview_source_point = None
+    session._provider_point_preview_point = None
+    session._provider_point_preview_host_target = None
+    session._provider_point_preview_host_source = ""
+    session._secondary_selected_plan_targets_state = []
+    session.hovered_wall = None
+    session.hovered_opening = None
+    session.hovered_symbol = None
+    session.hovered_provider = None
+    session.hovered_space = None
+    session.hovered_region = None
+    session._space_region_pick_boundaries = []
+    session._space_region_candidates = []
+    session._hovered_space_region_candidate = None
+    session._space_region_pick_seed_space = None
+    session._pending_selected_plan_target = None
+    session._plan_provider_target_collection_depth = 0
+    session._edit_wall = None
+    session._edit_opening = None
+    session._edit_opening_handle_index = None
+    session._edit_symbol = None
+    session._edit_symbol_handle_role = None
+    session._edit_symbol_start_placement = None
+    session._edit_symbol_reference_point = None
+    session._plan_region_points = []
+    session._plan_region_parent_space = None
+    session._edit_space = None
+    session._edit_endpoint = None
+    session._edit_endpoints = None
+    session._preview_points = None
+    session._junction_node_trackers = []
+    session._preview_footprint_trackers = []
+    session._rect_wall_start = None
+    session._rect_wall_params = None
+    session._rect_wall_preview_trackers = []
+    session._space_region_pick_trackers = []
+    session._edit_wall_visibility = None
+    session._embedded_host = None
+    session._embedded_tool = None
+    session._embedded_tool_name = None
+
 
 def clear_hover_visuals(
     session,
@@ -728,7 +831,7 @@ def shutdown(session, close_dialog=True, teardown=False):
             except Exception:
                 pass
     if teardown:
-        session._discard_runtime_references()
+        session.lifecycle.discard_runtime_references()
     else:
         session.viewport.restore_state()
         if session.doc:
