@@ -422,7 +422,7 @@ def get_status_chip_text(session):
         context = provider_context
     else:
         context = translate("BIM_PlanEdit", "Storey: {label}").format(
-            label=session.get_storey_label(session.active_storey)
+            label=session.storey.get_storey_label(session.active_storey)
         )
 
     selection_summary = get_plan_selection_summary_text(session)

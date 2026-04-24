@@ -433,7 +433,9 @@ def apply_plan_view(session, fit=True):
     with session.performance.plan_perf_trace_span("apply_plan_view_working_plane"):
         wp = WorkingPlane.get_working_plane(update=False)
         offset = (
-            session.get_storey_elevation(session.active_storey) if session.active_storey else 0.0
+            session.storey.get_storey_elevation(session.active_storey)
+            if session.active_storey
+            else 0.0
         )
         wp.set_to_top(offset=offset)
         if hasattr(wp, "_update_all"):

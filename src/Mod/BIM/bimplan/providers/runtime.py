@@ -1473,7 +1473,7 @@ def get_plan_edit_context(session):
         session=session,
         document_name=session.visibility.safe_plan_object_name(doc),
         active_storey_name=active_storey_name,
-        active_storey_label=str(session.get_storey_label(active_storey) or ""),
+        active_storey_label=str(session.storey.get_storey_label(active_storey) or ""),
         current_tool=str(session.current_tool or ""),
     )
 

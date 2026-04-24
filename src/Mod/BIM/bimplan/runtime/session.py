@@ -45,7 +45,7 @@ from bimplan.providers import runtime as plan_provider_runtime
 from bimplan import snap as plan_snap
 from bimplan.runtime import session_state as plan_session_state
 from bimplan.runtime.session_state import PlanInteractionAPI
-from bimplan import storeys as plan_storeys
+from bimplan.storeys import PlanStoreysAPI
 from bimplan import task_panel as plan_task_panel
 from bimplan.selection.selection import PlanSelectionAPI
 from bimplan.tools import symbol_edit as plan_symbol_edit
@@ -232,6 +232,7 @@ class PlanEditSession:
         self.wall_edit = PlanWallEditAPI(self)
         self.visibility = PlanVisibilityAPI(self)
         self.providers = PlanProvidersAPI(self)
+        self.storey = PlanStoreysAPI(self)
         self.snap = plan_snap.PlanSnapAPI(self, _PLAN_EDIT_SNAP_SET, _OPENING_MOVE_SNAP_SET)
         self.performance = PlanPerformanceAPI(self)
         self.document_visuals = PlanDocumentVisualsAPI(self)
@@ -425,10 +426,10 @@ class PlanEditSession:
                 self.viewport.force_plan_preselection()
 
             with self.performance.plan_perf_trace_span("collect_storeys"):
-                self.storeys = self.collect_storeys()
+                self.storeys = self.storey.collect_storeys()
                 self.performance.plan_perf_count("storeys_found", len(self.storeys))
             with self.performance.plan_perf_trace_span("find_initial_storey"):
-                self.active_storey = self.find_initial_storey()
+                self.active_storey = self.storey.find_initial_storey()
                 self.performance.plan_perf_set_fields(
                     active_storey=self.performance.plan_perf_describe_object(self.active_storey)
                 )
@@ -582,21 +583,6 @@ class PlanEditSession:
             self._finishing = False
             _refresh_contextual_task_watchers()
         return True
-
-    def collect_storeys(self):
-        return plan_storeys.collect_storeys(self)
-
-    def find_initial_storey(self):
-        return plan_storeys.find_initial_storey(self)
-
-    def get_storey_elevation(self, obj):
-        return plan_storeys.get_storey_elevation(obj)
-
-    def get_storey_label(self, obj):
-        return plan_storeys.get_storey_label(obj)
-
-    def set_active_storey(self, storey):
-        return plan_storeys.set_active_storey(self, storey)
 
     def get_plan_provider_registry(self):
         return get_plan_edit_registry()

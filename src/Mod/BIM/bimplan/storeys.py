@@ -10,6 +10,34 @@ import FreeCADGui
 translate = FreeCAD.Qt.translate
 
 
+class PlanStoreysAPI:
+    """Owned session surface for storey-related behavior."""
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session):
+        self._session = session
+
+    @property
+    def session(self):
+        return self._session
+
+    def collect_storeys(self):
+        return collect_storeys(self.session)
+
+    def find_initial_storey(self):
+        return find_initial_storey(self.session)
+
+    def get_storey_elevation(self, obj):
+        return get_storey_elevation(obj)
+
+    def get_storey_label(self, obj):
+        return get_storey_label(obj)
+
+    def set_active_storey(self, storey):
+        return set_active_storey(self.session, storey)
+
+
 def collect_storeys(session):
     import Draft
 
