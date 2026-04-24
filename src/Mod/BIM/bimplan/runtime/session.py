@@ -60,7 +60,6 @@ from bimplan.tools.wall_edit import PlanWallEditAPI
 from bimplan.tools.window_create import PlanWindowsAPI
 from bimplan.tools.spaces import PlanSpacesAPI
 from bimplan.runtime.view import PlanViewportAPI
-from bimplan.overlays import geometry as overlay_geometry
 from bimplan.overlays import openings as opening_overlays
 from bimplan.overlays.runtime import PlanOverlaysAPI
 from bimplan.providers import get_plan_edit_registry
@@ -263,33 +262,6 @@ class PlanEditSession:
             except Exception:
                 pass
         self._teardown_signal_sources = []
-
-    def _get_plan_overlay_geometry_kinds_for_object(self, obj):
-        return overlay_geometry.get_plan_overlay_geometry_kinds_for_object(self, obj)
-
-    def _get_plan_overlay_geometry_cache_entry(self, kind, obj, create=False):
-        return overlay_geometry.get_plan_overlay_geometry_cache_entry(
-            self,
-            kind,
-            obj,
-            create=create,
-        )
-
-    def _invalidate_plan_overlay_geometry_cache(self, obj=None, kinds=None):
-        return overlay_geometry.invalidate_plan_overlay_geometry_cache(
-            self,
-            obj=obj,
-            kinds=kinds,
-        )
-
-    def _get_cached_plan_overlay_geometry(self, kind, obj, field_name, compute):
-        return overlay_geometry.get_cached_plan_overlay_geometry(
-            self,
-            kind,
-            obj,
-            field_name,
-            compute,
-        )
 
     def _sanitize_plan_target_references(self):
         changed = False

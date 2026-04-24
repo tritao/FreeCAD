@@ -224,7 +224,7 @@ def is_symbol_visual_dependency(session, symbol, obj):
 def refresh_plan_object_footprint_display(session, obj, *, request_redraw=True):
     if not session.visibility.is_supported_plan_object(obj):
         return
-    session._invalidate_plan_overlay_geometry_cache(obj)
+    session.overlays.invalidate_plan_overlay_geometry_cache(obj)
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
     refresh_targets = []
     for candidate in (semantic_obj, obj):
@@ -524,7 +524,7 @@ def slot_deleted_object(session, obj):
     session._provider_overlay_state = None
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
-    session._invalidate_plan_overlay_geometry_cache(obj)
+    session.overlays.invalidate_plan_overlay_geometry_cache(obj)
     if session.document_visuals.are_document_visual_updates_deferred():
         session.document_visuals.defer_document_visual_refresh()
         return
@@ -571,7 +571,7 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
     session._invalidate_plan_provider_document_cache()
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
-    session._invalidate_plan_overlay_geometry_cache()
+    session.overlays.invalidate_plan_overlay_geometry_cache()
     session._sanitize_plan_target_references()
     selected_symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
     selected_region = plan_selection.get_selected_plan_target_object(session, "region")

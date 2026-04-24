@@ -6360,7 +6360,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         ) as get_segments:
             session.overlays.sync_selected_opening_overlay()
             session.overlays.sync_selected_opening_overlay()
-            session._invalidate_plan_overlay_geometry_cache(door)
+            session.overlays.invalidate_plan_overlay_geometry_cache(door)
             session.overlays.sync_selected_opening_overlay()
 
         self.assertEqual(get_segments.call_count, 2)
@@ -6428,7 +6428,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         ) as get_polylines:
             first = tuple(session.overlays.get_space_overlay_segments(space))
             second = tuple(session.overlays.get_space_overlay_segments(space))
-            session._invalidate_plan_overlay_geometry_cache(space)
+            session.overlays.invalidate_plan_overlay_geometry_cache(space)
             third = tuple(session.overlays.get_space_overlay_segments(space))
 
         self.assertEqual(get_polylines.call_count, 2)

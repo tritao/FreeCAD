@@ -39,6 +39,10 @@ _PLAN_OVERLAYS_API_MODULES = (
         (
             "get_footprint_overlay_polylines",
             "build_overlay_segments_from_polylines",
+            "get_plan_overlay_geometry_kinds_for_object",
+            "get_plan_overlay_geometry_cache_entry",
+            "invalidate_plan_overlay_geometry_cache",
+            "get_cached_plan_overlay_geometry",
             "get_wall_overlay_polylines",
             "get_space_footprint_faces",
             "get_space_overlay_polylines",
