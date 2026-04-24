@@ -248,34 +248,6 @@ class PlanEditSession:
         self.task_panels = plan_task_panel.PlanTaskPanelsAPI(self)
         plan_session_state.initialize_session_state(self)
 
-    def _connect_teardown_signal(self, signal):
-        try:
-            signal.connect(self.begin_teardown)
-        except Exception:
-            return
-        self._teardown_signal_sources.append(signal)
-
-    def _connect_teardown_signals(self, QtGui):
-        app = QtGui.QApplication.instance()
-        if app:
-            self._connect_teardown_signal(app.aboutToQuit)
-        main_window = self.viewport.get_main_window()
-        if main_window:
-            try:
-                signal = main_window.mainWindowClosed
-            except AttributeError:
-                signal = None
-            if signal is not None:
-                self._connect_teardown_signal(signal)
-
-    def _disconnect_teardown_signals(self):
-        for signal in self._teardown_signal_sources:
-            try:
-                signal.disconnect(self.begin_teardown)
-            except Exception:
-                pass
-        self._teardown_signal_sources = []
-
     def _sanitize_plan_target_references(self):
         changed = False
         for kind in ("wall", "opening", "symbol", "region", "space"):
@@ -426,65 +398,6 @@ class PlanEditSession:
             self.doc = None
             return False
 
-    def _discard_runtime_references(self):
-        self.viewport.clear_viewport_status_chip()
-        self.viewport.restore_preselection_state()
-        self.doc = None
-        self.gui_doc = None
-        self.view = None
-        self.viewer = None
-        self._saved_navigation_style = None
-        self._saved_navigation_state = {}
-        self._saved_view_action_state = {}
-        self._saved_preselection_state = None
-        self._plan_preselection_forced = False
-        self.selection.set_selected_plan_target_state()
-        self._provider_selected_objects = []
-        self._provider_point_host_target = None
-        self._provider_point_host_source = ""
-        self._provider_point_preview_render_state = None
-        self._provider_point_preview_style_state = None
-        self._provider_point_preview_source_point = None
-        self._provider_point_preview_point = None
-        self._provider_point_preview_host_target = None
-        self._provider_point_preview_host_source = ""
-        self._secondary_selected_plan_targets_state = []
-        self.hovered_wall = None
-        self.hovered_opening = None
-        self.hovered_symbol = None
-        self.hovered_provider = None
-        self.hovered_space = None
-        self.hovered_region = None
-        self._space_region_pick_boundaries = []
-        self._space_region_candidates = []
-        self._hovered_space_region_candidate = None
-        self._space_region_pick_seed_space = None
-        self._pending_selected_plan_target = None
-        self._plan_provider_target_collection_depth = 0
-        self._edit_wall = None
-        self._edit_opening = None
-        self._edit_opening_handle_index = None
-        self._edit_symbol = None
-        self._edit_symbol_handle_role = None
-        self._edit_symbol_start_placement = None
-        self._edit_symbol_reference_point = None
-        self._plan_region_points = []
-        self._plan_region_parent_space = None
-        self._edit_space = None
-        self._edit_endpoint = None
-        self._edit_endpoints = None
-        self._preview_points = None
-        self._junction_node_trackers = []
-        self._preview_footprint_trackers = []
-        self._rect_wall_start = None
-        self._rect_wall_params = None
-        self._rect_wall_preview_trackers = []
-        self._space_region_pick_trackers = []
-        self._edit_wall_visibility = None
-        self._embedded_host = None
-        self._embedded_tool = None
-        self._embedded_tool_name = None
-
     def shutdown(self, close_dialog=True, teardown=False):
         global _active_session
 
@@ -495,9 +408,9 @@ class PlanEditSession:
         try:
             plan_lifecycle.shutdown(self, close_dialog=close_dialog, teardown=teardown)
         finally:
-            self._disconnect_teardown_signals()
+            self.lifecycle.disconnect_teardown_signals()
             self._tearing_down = True
-            self._discard_runtime_references()
+            self.lifecycle.discard_runtime_references()
             self._aux_task_panels = []
             _active_session = None
             self._finishing = False
