@@ -1200,7 +1200,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        session.activate_wall_tool()
+        session.lifecycle.activate_wall_tool()
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Wall")
@@ -1222,7 +1222,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session, "Plan Edit session should start in GUI tests.")
         self.pump_gui_events()
 
-        session.activate_wall_tool()
+        session.lifecycle.activate_wall_tool()
         self.pump_gui_events()
 
         cmd = session._embedded_tool
@@ -1266,7 +1266,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         before = {obj.Name for obj in self.document.Objects}
-        session.activate_rect_wall_tool()
+        session.lifecycle.activate_rect_wall_tool()
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Rect Wall")
@@ -1303,7 +1303,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             self.pump_gui_events()
 
             before = {obj.Name for obj in self.document.Objects}
-            session.activate_rect_wall_tool()
+            session.lifecycle.activate_rect_wall_tool()
             self.pump_gui_events()
 
             session._handle_rect_wall_point(FreeCAD.Vector(0, 0, 0))
@@ -2374,7 +2374,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             self.assertTrue(session.can_place_plan_window())
 
             before = {obj.Name for obj in self.document.Objects}
-            self.assertTrue(session.activate_window_tool())
+            self.assertTrue(session.lifecycle.activate_window_tool())
             self.assertEqual(session.current_tool, "Window")
             self.assertIs(session._window_host_wall, wall)
             self.assertIn("callback", captured)
@@ -2444,7 +2444,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "snapInfo", snap_info, create=True),
         ):
             self.assertTrue(session._select_wall_for_plan_edit(wall_a, sync_gui_selection=True))
-            self.assertTrue(session.activate_window_tool())
+            self.assertTrue(session.lifecycle.activate_window_tool())
             self.assertIs(session._window_host_wall, wall_a)
 
             before = {obj.Name for obj in self.document.Objects}
@@ -3799,7 +3799,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         session._select_wall_for_plan_edit(source_wall)
-        session.activate_join_tool()
+        session.lifecycle.activate_join_tool()
 
         self.assertEqual(session.current_tool, "Join")
         self._assert_selected_plan_target(session, "wall", source_wall)
@@ -3832,7 +3832,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._select_wall_for_plan_edit(source_wall)
         self.assertEqual(len(session._grip_trackers), 3)
 
-        session.activate_join_tool()
+        session.lifecycle.activate_join_tool()
         self.assertEqual(session.current_tool, "Join")
         self.assertEqual(len(session._grip_trackers), 0)
 
@@ -3854,7 +3854,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         session._select_wall_for_plan_edit(source_wall)
-        session.activate_join_tool()
+        session.lifecycle.activate_join_tool()
 
         self.assertEqual(session.get_plan_join_type(), "Miter")
         self.assertEqual(
@@ -3893,7 +3893,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         session._select_wall_for_plan_edit(source_wall)
-        session.activate_join_tool()
+        session.lifecycle.activate_join_tool()
 
         from pivy import coin
 
@@ -3967,7 +3967,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(session.get_plan_join_type(), "Butt")
 
         session._select_wall_for_plan_edit(source_wall)
-        session.activate_join_tool()
+        session.lifecycle.activate_join_tool()
 
         from pivy import coin
 
@@ -4037,7 +4037,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         session._select_wall_for_plan_edit(source_wall)
         session.set_plan_join_type("Butt")
-        session.activate_join_tool()
+        session.lifecycle.activate_join_tool()
         session._set_hovered_wall(target_wall)
 
         self.assertTrue(session.task_panel.unjoin_button.isEnabled())
@@ -4111,7 +4111,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         session._select_wall_for_plan_edit(source_wall)
-        session.activate_join_tool()
+        session.lifecycle.activate_join_tool()
         session._set_hovered_wall(target_wall)
 
         self.assertTrue(session.task_panel.unjoin_button.isEnabled())
@@ -4187,7 +4187,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         session._select_wall_for_plan_edit(carrier_wall)
-        session.activate_join_tool()
+        session.lifecycle.activate_join_tool()
 
         from pivy import coin
 
@@ -6902,7 +6902,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
         session._refresh_primary_selected_plan_target()
 
-        self.assertTrue(session.activate_space_tool())
+        self.assertTrue(session.lifecycle.activate_space_tool())
         self.pump_gui_events()
 
         created_spaces = [
@@ -6949,7 +6949,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(session.selected_space, space)
 
         with patch.object(FreeCADGui.Snapper, "getPoint", return_value=None):
-            session.activate_plan_region_tool()
+            session.lifecycle.activate_plan_region_tool()
             self.assertEqual(session.current_tool, "Region")
             for point in (
                 FreeCAD.Vector(1200, 1200, 0),
@@ -6992,7 +6992,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         before = {obj.Name for obj in self.document.Objects}
 
-        session.activate_space_separator_tool()
+        session.lifecycle.activate_space_separator_tool()
         self.assertEqual(session.current_tool, "Separator")
 
         session.spaces.handle_space_separator_point(FreeCAD.Vector(1000, 500, 0))
@@ -7042,7 +7042,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(request)
         self.assertIn(separator, [obj for obj, _subnames in request["boundaries"]])
 
-        self.assertTrue(session.activate_space_tool())
+        self.assertTrue(session.lifecycle.activate_space_tool())
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
@@ -7082,7 +7082,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIs(request["region_seed_space"], space)
         self.assertIn(separator, [obj for obj, _subnames in request["boundaries"]])
 
-        self.assertTrue(session.activate_space_tool())
+        self.assertTrue(session.lifecycle.activate_space_tool())
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
@@ -7389,7 +7389,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNone(session.selected_wall)
         self.assertIn("Boundary candidates: 1 wall", session.task_panel.status.text())
 
-        self.assertTrue(session.activate_space_tool())
+        self.assertTrue(session.lifecycle.activate_space_tool())
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
@@ -7444,7 +7444,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session._refresh_primary_selected_plan_target()
 
         self.assertIn("Boundary candidates: 1 wall", session.task_panel.status.text())
-        self.assertTrue(session.activate_space_tool())
+        self.assertTrue(session.lifecycle.activate_space_tool())
         self.pump_gui_events()
 
         self.assertEqual(session.current_tool, "Pick Space Region")
@@ -7589,7 +7589,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch("FreeCAD.Console.PrintError") as print_error,
             patch("FreeCAD.Console.PrintWarning") as print_warning,
         ):
-            self.assertFalse(session.activate_space_tool())
+            self.assertFalse(session.lifecycle.activate_space_tool())
             self.pump_gui_events()
 
         created_spaces = [
