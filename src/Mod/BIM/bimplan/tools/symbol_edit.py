@@ -149,14 +149,14 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
             session._set_hovered_wall(None)
             session._set_hovered_opening(None)
             session._set_hovered_symbol(None)
-            session._sync_secondary_selected_overlays()
+            session.overlays.sync_secondary_selected_overlays()
             session._edit_symbol = symbol
             session._edit_symbol_handle_role = handle_role
             session._edit_symbol_start_placement = session._copy_placement(
                 getattr(symbol, "Placement", None)
             )
             session._edit_symbol_reference_point = FreeCAD.Vector(start_point)
-            session._clear_selected_symbol_overlay()
+            session.overlays.clear_selected_symbol_overlay()
             session.overlays.clear_selected_symbol_handles()
         with session._plan_perf_trace_span("start_symbol_handle_preview"):
             anchor = session._get_symbol_anchor_point(
@@ -281,9 +281,9 @@ def cancel_symbol_handle_point_pick(session):
     session.current_tool = "Select"
     if symbol:
         session._set_selected_plan_target("symbol", symbol, pending_restore=True)
-    session._sync_selected_opening_overlay()
-    session._sync_selected_opening_handles()
-    session._sync_selected_symbol_overlay()
+    session.overlays.sync_selected_opening_overlay()
+    session.overlays.sync_selected_opening_handles()
+    session.overlays.sync_selected_symbol_overlay()
     session.overlays.sync_selected_symbol_handles()
     session._refresh_task_panel_status()
 
@@ -295,16 +295,16 @@ def restore_selected_symbol(session, symbol):
     else:
         session._set_selected_plan_target()
     if not symbol:
-        session._sync_selected_opening_overlay()
-        session._sync_selected_opening_handles()
-        session._sync_selected_symbol_overlay()
+        session.overlays.sync_selected_opening_overlay()
+        session.overlays.sync_selected_opening_handles()
+        session.overlays.sync_selected_symbol_overlay()
         session.overlays.sync_selected_symbol_handles()
         session._refresh_task_panel_status()
         return
     session._set_gui_selection_object(symbol)
-    session._sync_selected_opening_overlay()
-    session._sync_selected_opening_handles()
-    session._sync_selected_symbol_overlay()
+    session.overlays.sync_selected_opening_overlay()
+    session.overlays.sync_selected_opening_handles()
+    session.overlays.sync_selected_symbol_overlay()
     session.overlays.sync_selected_symbol_handles()
     session._refresh_task_panel_status()
 

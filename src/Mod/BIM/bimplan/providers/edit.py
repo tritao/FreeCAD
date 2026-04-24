@@ -135,7 +135,7 @@ def start_provider_handle_point_pick(session, provider_obj, handle_index, handle
     session._set_hovered_provider(None)
     session._set_hovered_space(None)
     session._set_hovered_region(None)
-    session._sync_secondary_selected_overlays()
+    session.overlays.sync_secondary_selected_overlays()
     session._edit_provider = provider_obj
     session._edit_provider_handle_index = handle_index
     session._edit_provider_handle = handle

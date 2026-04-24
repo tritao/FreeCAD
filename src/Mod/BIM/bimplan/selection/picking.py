@@ -338,7 +338,7 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
                 session._plan_perf_count("opening_overlay_pick_bounds_skipped")
                 continue
             session._plan_perf_count("opening_overlay_pick_candidates")
-            for projected in session._get_opening_overlay_screen_polylines(obj):
+            for projected in session.overlays.get_opening_overlay_screen_polylines(obj):
                 for start_xy, end_xy in zip(projected, projected[1:]):
                     session._plan_perf_count("opening_overlay_pick_segments_scanned")
                     distance_sq = session._get_screen_distance_sq_to_projected_segment(
@@ -567,7 +567,7 @@ def pick_plan_space_target_from_overlays(session, mouse_pos, radius_px=10):
         view_object = getattr(obj, "ViewObject", None)
         if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
             continue
-        for start, end in session._get_space_overlay_segments(obj):
+        for start, end in session.overlays.get_space_overlay_segments(obj):
             distance_sq = session._get_screen_distance_sq_to_segment(mouse_pos, start, end)
             if distance_sq is None or distance_sq > radius_sq:
                 continue
@@ -594,7 +594,7 @@ def pick_plan_region_target_from_overlays(session, mouse_pos, radius_px=10):
         view_object = getattr(obj, "ViewObject", None)
         if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
             continue
-        for start, end in session._get_region_overlay_segments(obj):
+        for start, end in session.overlays.get_region_overlay_segments(obj):
             distance_sq = session._get_screen_distance_sq_to_segment(mouse_pos, start, end)
             if distance_sq is None or distance_sq > radius_sq:
                 continue
@@ -608,7 +608,7 @@ def get_region_pick_polylines(session, region):
     if not session._is_plan_region_object(region):
         return []
 
-    polylines = session._get_region_overlay_polylines(region)
+    polylines = session.overlays.get_region_overlay_polylines(region)
     if polylines:
         return polylines
 
@@ -985,7 +985,7 @@ def get_edit_node(session, mouse_pos):
             result=node,
         )
         return node
-    provider_handle_index = session._pick_selected_provider_handle(mouse_pos)
+    provider_handle_index = session.overlays.pick_selected_provider_handle(mouse_pos)
     if provider_handle_index is not None:
         node = (
             "provider_handle",
@@ -1090,7 +1090,7 @@ def pick_selected_opening_handle(session, mouse_pos, radius_px=10):
         return None
     best_index = None
     best_distance_sq = None
-    for idx, _role, point, _marker in session._get_selected_opening_handle_specs(opening):
+    for idx, _role, point, _marker in session.overlays.get_selected_opening_handle_specs(opening):
         try:
             screen_x, screen_y = session.view.getPointOnScreen(point)
         except Exception:

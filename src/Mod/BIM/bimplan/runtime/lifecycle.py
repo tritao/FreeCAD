@@ -25,9 +25,9 @@ def clear_hover_visuals(
     include_hovered_wall_opening_context=False,
 ):
     if include_junction_nodes:
-        session._clear_junction_node_overlays()
+        session.overlays.clear_junction_node_overlays()
     if include_hovered_wall_opening_context:
-        session._clear_hovered_wall_opening_context_overlay()
+        session.overlays.clear_hovered_wall_opening_context_overlay()
     plan_target_dispatch.clear_hovered_target_visuals(session, kinds=kinds)
 
 
@@ -687,7 +687,7 @@ def on_embedded_command_started(session, tool_name, command=None):
     if command is not None:
         session._embedded_tool = command
     session.current_tool = tool_name
-    session._sync_selected_wall_opening_context_overlay()
+    session.overlays.sync_selected_wall_opening_context_overlay()
     session._refresh_task_panel_status()
 
 
@@ -700,7 +700,7 @@ def on_embedded_command_finished(session, tool_name, command=None):
         session._embedded_tool_name = None
     if session.current_tool == tool_name:
         session.current_tool = "Select"
-        session._sync_selected_wall_opening_context_overlay()
+        session.overlays.sync_selected_wall_opening_context_overlay()
         session._refresh_task_panel_status()
 
 
@@ -748,7 +748,7 @@ def start_embedded_tool(session, tool_name, command, host_class=None):
         session,
         kinds=plan_target_kinds.EMBEDDED_TOOL_CLEAR_HOVERED_KINDS,
     )
-    session._sync_secondary_selected_overlays()
+    session.overlays.sync_secondary_selected_overlays()
     session._refresh_task_panel_status()
     session._embedded_tool = command
     session._embedded_tool_name = tool_name

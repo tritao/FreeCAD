@@ -1449,7 +1449,7 @@ def start_space_text_position_pick(session):
     session.current_tool = "Set Space Text"
     set_space_text_pick_state(session, space)
     session._clear_hovered_plan_targets(kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS)
-    session._sync_secondary_selected_overlays()
+    session.overlays.sync_secondary_selected_overlays()
     session._refresh_task_panel_status()
     FreeCAD.activeDraftCommand = session
     session._set_draft_point_focus_suppressed(True)
