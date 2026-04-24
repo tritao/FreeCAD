@@ -133,7 +133,7 @@ def sync_opening_move_preview(session, opening, point):
     except Exception:
         return
     dim.dimnode.textColor.setValue(preview_color)
-    dim.offset = session._get_opening_move_readout_offset(opening)
+    dim.offset = session.wall_edit.get_opening_move_readout_offset(opening)
     dim.p1(guide_start)
     dim.p2(guide_end)
     dim.on()

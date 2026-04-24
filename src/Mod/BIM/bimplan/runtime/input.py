@@ -270,28 +270,28 @@ def on_key_pressed(session, event_callback):
     if session.current_tool == "Window" and key == coin.SoKeyboardEvent.ESCAPE:
         session.windows.cancel_window_tool()
         return
-    if session._is_wall_move_edit_active() and key == coin.SoKeyboardEvent.TAB:
-        if session._start_wall_readout_edit(cycle=True):
+    if session.wall_edit.is_wall_move_edit_active() and key == coin.SoKeyboardEvent.TAB:
+        if session.wall_edit.start_wall_readout_edit(cycle=True):
             if hasattr(event_callback, "setHandled"):
                 event_callback.setHandled()
         return
-    if session._is_wall_readout_edit_active() and key in (
+    if session.wall_edit.is_wall_readout_edit_active() and key in (
         coin.SoKeyboardEvent.RETURN,
         coin.SoKeyboardEvent.ENTER,
     ):
-        if session._start_wall_readout_edit():
+        if session.wall_edit.start_wall_readout_edit():
             if hasattr(event_callback, "setHandled"):
                 event_callback.setHandled()
         return
-    if session._is_wall_stretch_edit_active() and key == coin.SoKeyboardEvent.TAB:
-        if session._start_wall_readout_edit():
+    if session.wall_edit.is_wall_stretch_edit_active() and key == coin.SoKeyboardEvent.TAB:
+        if session.wall_edit.start_wall_readout_edit():
             if hasattr(event_callback, "setHandled"):
                 event_callback.setHandled()
         return
     if key != coin.SoKeyboardEvent.ESCAPE:
         return
     if session._edit_wall and session.current_tool != "Select":
-        session._cancel_wall_edit_point_pick()
+        session.wall_edit.cancel_wall_edit_point_pick()
         return
     if session.current_tool == "Move Opening":
         session.openings.cancel_opening_handle_point_pick()

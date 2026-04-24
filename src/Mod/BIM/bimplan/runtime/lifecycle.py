@@ -824,8 +824,8 @@ def start_embedded_tool(session, tool_name, command, host_class=None):
 
 def _reset_pending_edit_state(session, *, clear_opening_edit=False):
     session._wall_edit_modal_active = False
-    session._restore_edit_wall_visibility()
-    session._clear_wall_edit_preview()
+    session.wall_edit.restore_edit_wall_visibility()
+    session.wall_edit.clear_wall_edit_preview()
     session._edit_wall = None
     session._edit_endpoint = None
     session._edit_endpoints = None
