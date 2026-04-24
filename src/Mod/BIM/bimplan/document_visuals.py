@@ -543,11 +543,11 @@ def slot_deleted_object(session, obj):
         session.overlays.refresh_selected_symbol_visuals()
         return
     if session._clear_selected_plan_target_if_matches("region", obj):
-        session._refresh_selected_region_visuals()
+        session.spaces.refresh_selected_region_visuals()
         session._refresh_task_panel_status()
         return
     if session._clear_selected_plan_target_if_matches("space", obj):
-        session._refresh_selected_space_visuals()
+        session.spaces.refresh_selected_space_visuals()
         session._refresh_task_panel_status()
         return
     if not session._is_selected_plan_target("wall", obj):

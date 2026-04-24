@@ -1220,7 +1220,9 @@ class TestBimPlanCore(unittest.TestCase):
             _report_space_creation_failure=lambda space: events.append(("report-failure", space))
             or False,
             _register_plan_object=lambda space: events.append(("register", space)),
-            _restore_selected_space=lambda space: events.append(("restore", space)),
+            spaces=SimpleNamespace(
+                restore_selected_space=lambda space: events.append(("restore", space))
+            ),
         )
         arch_module = SimpleNamespace(
             makeSpace=lambda value: events.append(("make-space", value)) or created_space
@@ -1260,9 +1262,11 @@ class TestBimPlanCore(unittest.TestCase):
                 calls.append(("create", args, kwargs)) or created_space
             ),
             _register_plan_object=lambda space: calls.append(("register", space)),
-            _restore_selected_space=lambda space: calls.append(("restore", space)),
             _clear_hovered_plan_targets=lambda **kwargs: calls.append(("clear-hovered", kwargs)),
             _refresh_primary_selected_plan_target=lambda: calls.append("refresh-primary"),
+            spaces=SimpleNamespace(
+                restore_selected_space=lambda space: calls.append(("restore", space))
+            ),
             overlays=SimpleNamespace(
                 clear_space_region_pick_overlays=lambda: calls.append("clear-pick-overlays"),
                 clear_wall_grips=lambda: calls.append("clear-wall-grips"),
@@ -1675,7 +1679,7 @@ class TestBimPlanCore(unittest.TestCase):
         target = SimpleNamespace(Name="Space001")
         session = SimpleNamespace(
             _is_plan_space_object=lambda obj: obj is target,
-            _queue_restore_selected_space=lambda obj: restored.append(obj),
+            spaces=SimpleNamespace(queue_restore_selected_space=lambda obj: restored.append(obj)),
         )
 
         self.assertTrue(validate_plan_target(session, "space", target))
