@@ -142,7 +142,7 @@ def format_space_region_candidate_area(candidate):
 
 
 def get_plan_region_preview_segments(session, point=None):
-    points = [FreeCAD.Vector(item) for item in (session._plan_region_points or [])]
+    points = _get_plan_region_points(session)
     if point is not None:
         point = session.viewport.project_plan_point(point)
         if point is not None and (not points or point.distanceToPoint(points[-1]) > 0.000001):
@@ -155,6 +155,47 @@ def get_plan_region_preview_segments(session, point=None):
     if len(points) >= 3 and points[-1].distanceToPoint(points[0]) > 0.000001:
         segments.append((points[-1], points[0], True))
     return segments
+
+
+def _get_plan_region_points(session):
+    return [FreeCAD.Vector(item) for item in (session._plan_region_points or [])]
+
+
+def _request_next_plan_region_point(session, last_point, *, title):
+    FreeCADGui.Snapper.getPoint(
+        callback=session.spaces.handle_plan_region_point,
+        movecallback=session.spaces.update_plan_region_preview,
+        last=last_point,
+        title=title,
+        mode="line",
+    )
+
+
+def _coerce_next_plan_region_point(session, point):
+    if point is None:
+        return None
+    return session.viewport.project_plan_point(point)
+
+
+def _should_finalize_plan_region(session, point, points):
+    return (
+        len(points) >= 3
+        and point.distanceToPoint(points[0]) <= session.spaces.get_plan_region_close_tolerance()
+    )
+
+
+def _should_ignore_duplicate_plan_region_point(point, points):
+    return bool(points) and point.distanceToPoint(points[-1]) <= 0.000001
+
+
+def _append_plan_region_point(session, point):
+    session._plan_region_points.append(point)
+    session.spaces.update_plan_region_preview(None, None)
+    _request_next_plan_region_point(
+        session,
+        point,
+        title=translate("BIM_PlanEdit", "Next region point"),
+    )
 
 
 def update_plan_region_preview(session, point, info):
@@ -212,7 +253,8 @@ def create_plan_region(session, points):
 
 
 def finalize_plan_region(session):
-    if len(session._plan_region_points) < 3:
+    points = _get_plan_region_points(session)
+    if len(points) < 3:
         FreeCAD.Console.PrintWarning(
             translate(
                 "BIM_PlanEdit",
@@ -221,7 +263,7 @@ def finalize_plan_region(session):
         )
         return False
     try:
-        region = session.spaces.create_plan_region(session._plan_region_points)
+        region = session.spaces.create_plan_region(points)
     except Exception:
         FreeCAD.Console.PrintError(translate("BIM_PlanEdit", "Failed to create the plan region.\n"))
         return False
@@ -238,38 +280,25 @@ def handle_plan_region_point(session, point=None, obj=None):
         session.spaces.cancel_plan_region_tool()
         return
 
-    point = session.viewport.project_plan_point(point)
+    point = _coerce_next_plan_region_point(session, point)
     if point is None:
         session.spaces.cancel_plan_region_tool()
         return
 
-    if session._plan_region_points:
-        if point.distanceToPoint(session._plan_region_points[-1]) <= 0.000001:
-            FreeCADGui.Snapper.getPoint(
-                callback=session.spaces.handle_plan_region_point,
-                movecallback=session.spaces.update_plan_region_preview,
-                last=session._plan_region_points[-1],
+    points = _get_plan_region_points(session)
+    if points:
+        if _should_ignore_duplicate_plan_region_point(point, points):
+            _request_next_plan_region_point(
+                session,
+                points[-1],
                 title=translate("BIM_PlanEdit", "Next region point"),
-                mode="line",
             )
             return
-        if (
-            len(session._plan_region_points) >= 3
-            and point.distanceToPoint(session._plan_region_points[0])
-            <= session.spaces.get_plan_region_close_tolerance()
-        ):
+        if _should_finalize_plan_region(session, point, points):
             session.spaces.finalize_plan_region()
             return
 
-    session._plan_region_points.append(point)
-    session.spaces.update_plan_region_preview(None, None)
-    FreeCADGui.Snapper.getPoint(
-        callback=session.spaces.handle_plan_region_point,
-        movecallback=session.spaces.update_plan_region_preview,
-        last=point,
-        title=translate("BIM_PlanEdit", "Next region point"),
-        mode="line",
-    )
+    _append_plan_region_point(session, point)
 
 
 def clear_space_separator_preview(session):
