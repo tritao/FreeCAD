@@ -6947,8 +6947,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.pump_gui_events()
 
         before = {obj.Name for obj in self.document.Objects}
-        session._set_pending_selected_plan_target("space", space)
-        session._set_gui_selection([space])
+        session.selection.set_pending_selected_plan_target("space", space)
+        session.selection.set_gui_selection([space])
         session._refresh_primary_selected_plan_target()
         self.assertIs(session.selected_space, space)
 
@@ -7076,8 +7076,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         before = {obj.Name for obj in self.document.Objects}
 
-        session._set_pending_selected_plan_target("space", space)
-        session._set_gui_selection([space, separator])
+        session.selection.set_pending_selected_plan_target("space", space)
+        session.selection.set_gui_selection([space, separator])
         session._refresh_primary_selected_plan_target()
 
         self.assertIs(session.selected_space, space)
@@ -7385,8 +7385,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         before = {obj.Name for obj in self.document.Objects}
 
-        session._set_pending_selected_plan_target("space", space)
-        session._set_gui_selection([space, wall])
+        session.selection.set_pending_selected_plan_target("space", space)
+        session.selection.set_gui_selection([space, wall])
         session._refresh_primary_selected_plan_target()
 
         self.assertIs(session.selected_space, space)
@@ -7443,8 +7443,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertIsNotNone(session)
         self.pump_gui_events()
 
-        session._set_pending_selected_plan_target("wall", wall)
-        session._set_gui_selection([wall, space])
+        session.selection.set_pending_selected_plan_target("wall", wall)
+        session.selection.set_gui_selection([wall, space])
         session._refresh_primary_selected_plan_target()
 
         self.assertIn("Boundary candidates: 1 wall", session.task_panel.status.text())

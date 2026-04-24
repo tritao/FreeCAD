@@ -369,7 +369,7 @@ def restore_selected_symbol(session, symbol):
         session.overlays.sync_selected_symbol_handles()
         session.task_panels.refresh_task_panel_status()
         return
-    session._set_gui_selection_object(symbol)
+    session.selection.set_gui_selection_object(symbol)
     session.overlays.sync_selected_opening_overlay()
     session.overlays.sync_selected_opening_handles()
     session.overlays.sync_selected_symbol_overlay()

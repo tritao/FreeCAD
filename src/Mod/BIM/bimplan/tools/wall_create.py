@@ -30,7 +30,7 @@ def activate_wall_tool(session):
     session.overlays.clear_selected_wall_opening_context_overlay()
     session.overlays.clear_selected_space_overlay()
     session.overlays.clear_secondary_selected_overlays()
-    session._set_gui_selection([])
+    session.selection.set_gui_selection([])
     session.lifecycle.start_embedded_tool(
         "Wall",
         BimWall.Arch_Wall(),
@@ -226,7 +226,7 @@ def handle_rect_wall_point(session, point=None, obj=None):
         return
 
     try:
-        session._set_gui_selection(walls)
+        session.selection.set_gui_selection(walls)
     except Exception:
         pass
 

@@ -312,7 +312,7 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
         session.lifecycle.cancel_pending_edit()
         return
     session.openings.refresh_wall_hosted_opening_footprints(wall)
-    session._set_gui_selection_object(wall)
+    session.selection.set_gui_selection_object(wall)
     session.current_tool = "Select"
     session.lifecycle.cancel_pending_edit()
     session._set_selected_plan_target("wall", wall, pending_restore=True)

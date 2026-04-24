@@ -352,7 +352,7 @@ def restore_selected_opening(session, opening):
         session.overlays.sync_selected_opening_handles()
         session.task_panels.refresh_task_panel_status()
         return
-    session._set_gui_selection_object(opening)
+    session.selection.set_gui_selection_object(opening)
     session.overlays.sync_selected_opening_overlay()
     session.overlays.sync_selected_opening_handles()
     session.task_panels.refresh_task_panel_status()
