@@ -25,7 +25,7 @@ def get_plan_overlay_geometry_cache_entry(session, kind, obj, create=False):
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
     if cache is None or semantic_obj is None:
         return (None, None, None)
-    key = session._get_document_object_key(semantic_obj)
+    key = session.visibility.get_document_object_key(semantic_obj)
     if key is None:
         return (semantic_obj, None, None)
     entry = cache.get(key)
@@ -261,7 +261,7 @@ def get_opening_overlay_screen_polylines(session, opening):
     if projection_key != cache_state.opening_overlay_screen_cache_projection_key:
         cache_state.opening_overlay_screen_cache = {}
         cache_state.opening_overlay_screen_cache_projection_key = projection_key
-    opening_key = session._get_document_object_key(opening)
+    opening_key = session.visibility.get_document_object_key(opening)
     if opening_key is None:
         return ()
     cached = cache_state.opening_overlay_screen_cache.get(opening_key)

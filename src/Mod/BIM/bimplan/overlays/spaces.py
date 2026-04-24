@@ -217,7 +217,7 @@ def sync_selected_space_overlay(session):
             clear_selected_space_overlay(session)
             return
         color = (0.12, 0.38, 0.95)
-        space_key = session._get_document_object_key(space)
+        space_key = session.visibility.get_document_object_key(space)
         geometry_key = space_key
         render_state = (space_key, round(float(width), 3), color)
         if (

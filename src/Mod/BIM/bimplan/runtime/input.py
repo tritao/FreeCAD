@@ -96,7 +96,7 @@ def on_mouse_pressed(session, event_callback):
                                 mouse_pos, event_callback
                             ):
                                 return
-                            session._clear_plan_selection_state()
+                            session.selection.clear_plan_selection_state()
                             session._claim_left_button_click(event_callback)
                             return
                         node_kind = node[0]

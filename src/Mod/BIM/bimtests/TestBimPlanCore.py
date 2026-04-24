@@ -2152,9 +2152,11 @@ class TestBimPlanCore(unittest.TestCase):
                 ),
             ),
             is_plan_provider_overlay_visible=lambda _overlay: True,
-            _get_document_object_key=lambda obj: (
-                getattr(getattr(obj, "Document", None), "Name", None),
-                getattr(obj, "Name", None),
+            visibility=SimpleNamespace(
+                get_document_object_key=lambda obj: (
+                    getattr(getattr(obj, "Document", None), "Name", None),
+                    getattr(obj, "Name", None),
+                )
             ),
         )
 

@@ -18,7 +18,7 @@ def _perf_trace_span(session, name, **fields):
 
 
 def get_symbol_global_placement(session, symbol, placement=None):
-    current_global = session._get_plan_object_global_placement(symbol)
+    current_global = session.visibility.get_plan_object_global_placement(symbol)
     if placement is None:
         return current_global
     current_local = getattr(symbol, "Placement", None)
@@ -33,7 +33,7 @@ def get_symbol_global_placement(session, symbol, placement=None):
 
 def get_symbol_parent_global_placement(session, symbol, placement=None):
     placement = placement or getattr(symbol, "Placement", None)
-    current_global = session._get_plan_object_global_placement(symbol)
+    current_global = session.visibility.get_plan_object_global_placement(symbol)
     if placement is None:
         return current_global
     try:
@@ -129,7 +129,7 @@ def get_plan_symbol_instances(session):
 
 
 def _get_symbol_screen_geometry_key(session, symbol):
-    placement = session._get_plan_object_global_placement(symbol)
+    placement = session.visibility.get_plan_object_global_placement(symbol)
     try:
         base = placement.Base
         rotation = tuple(float(value) for value in placement.Rotation.Q)
@@ -149,7 +149,7 @@ def get_symbol_overlay_screen_polylines(session, symbol):
     projection_key = session.viewport.get_plan_projection_cache_key()
     if projection_key is None:
         return ()
-    symbol_key = session._get_document_object_key(symbol)
+    symbol_key = session.visibility.get_document_object_key(symbol)
     if symbol_key is None:
         return ()
     geometry_key = _get_symbol_screen_geometry_key(session, symbol)
@@ -430,7 +430,7 @@ def resolve_symbol_handle_target_point(session, symbol, handle_role, point, plac
 
 
 def get_symbol_handle_radius(session, symbol, placement=None):
-    placement = placement or session._get_plan_object_global_placement(symbol)
+    placement = placement or session.visibility.get_plan_object_global_placement(symbol)
     anchor = session.symbols.get_symbol_anchor_point(symbol, placement=placement)
     radius = 0.0
     for polyline in get_symbol_overlay_polylines(session, symbol, placement=placement):
@@ -449,7 +449,7 @@ def get_selected_symbol_handle_specs(session, symbol):
     if not session.visibility.is_plan_symbol_instance(symbol):
         return []
 
-    placement = session._get_plan_object_global_placement(symbol)
+    placement = session.visibility.get_plan_object_global_placement(symbol)
     anchor = session.symbols.get_symbol_anchor_point(symbol, placement=placement)
     radius = session.overlays.get_symbol_handle_radius(symbol, placement=placement)
     rotate_direction = session.symbols.get_symbol_facing_vector(symbol, placement=placement)

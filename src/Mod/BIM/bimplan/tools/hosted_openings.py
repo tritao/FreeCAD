@@ -192,7 +192,7 @@ def build_wall_hosted_openings_cache(session):
             if not session.openings.is_hosted_opening_object(obj):
                 continue
             for host in getattr(obj, "Hosts", None) or []:
-                host_key = session._get_document_object_key(host)
+                host_key = session.visibility.get_document_object_key(host)
                 if host_key is None:
                     continue
                 cache.setdefault(host_key, []).append(obj)
@@ -204,7 +204,7 @@ def collect_opening_instances_from_host_cache(session, host_cache):
     seen = set()
     for hosted_openings in (host_cache or {}).values():
         for opening in hosted_openings:
-            opening_key = session._get_document_object_key(opening)
+            opening_key = session.visibility.get_document_object_key(opening)
             if opening_key is None or opening_key in seen:
                 continue
             seen.add(opening_key)
@@ -238,7 +238,7 @@ def get_plan_opening_instances(session):
 def get_wall_hosted_openings(session, wall):
     if not wall or not session.doc:
         return []
-    wall_key = session._get_document_object_key(wall)
+    wall_key = session.visibility.get_document_object_key(wall)
     if wall_key is None:
         return []
     doc_name = getattr(session.doc, "Name", None)
