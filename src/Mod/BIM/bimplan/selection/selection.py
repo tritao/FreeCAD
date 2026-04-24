@@ -465,6 +465,44 @@ def set_selected_plan_target_state(session, primary_kinds, kind=None, obj=None):
     session._selected_plan_target_obj = obj
 
 
+def _get_native_selected_plan_target(session):
+    session.selection.sanitize_plan_target_references()
+    kind, obj = get_selected_plan_target_state(session, plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS)
+    if session.selection.is_valid_plan_target(kind, obj):
+        return (kind, obj)
+    if kind is not None or obj is not None:
+        session.selection.set_selected_plan_target_state()
+    return (None, None)
+
+
+def _get_current_selected_plan_target(session):
+    if _supports_native_selection_state(session):
+        return _get_native_selected_plan_target(session)
+    return _get_compat_selection_result(
+        session,
+        "get_selected_plan_target",
+        legacy_method_name="_get_selected_plan_target",
+        default=(None, None),
+    )
+
+
+def _get_current_secondary_selected_plan_targets(session):
+    if not _supports_native_selection_state(session):
+        return _get_compat_selection_result(
+            session,
+            "get_secondary_selected_plan_targets",
+            legacy_method_name="_get_secondary_selected_plan_targets",
+            default=[],
+        )
+    primary_kind, primary_obj = _get_native_selected_plan_target(session)
+    session.selection.set_secondary_selected_plan_targets(
+        getattr(session, "_secondary_selected_plan_targets_state", []),
+        primary_kind=primary_kind,
+        primary_obj=primary_obj,
+    )
+    return list(getattr(session, "_secondary_selected_plan_targets_state", []))
+
+
 def get_selected_plan_target_object(session, kind=None):
     if not _supports_native_selection_state(session):
         return _get_compat_selection_result(
@@ -474,7 +512,7 @@ def get_selected_plan_target_object(session, kind=None):
             legacy_method_name="_get_selected_plan_target_object",
             default=None,
         )
-    selected_kind, selected_obj = get_selected_plan_target(session)
+    selected_kind, selected_obj = _get_native_selected_plan_target(session)
     if kind is not None and selected_kind != kind:
         return None
     return selected_obj
@@ -519,20 +557,7 @@ def consume_pending_selected_plan_target(session):
 
 
 def get_selected_plan_target(session):
-    if not _supports_native_selection_state(session):
-        return _get_compat_selection_result(
-            session,
-            "get_selected_plan_target",
-            legacy_method_name="_get_selected_plan_target",
-            default=(None, None),
-        )
-    session.selection.sanitize_plan_target_references()
-    kind, obj = get_selected_plan_target_state(session, plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS)
-    if session.selection.is_valid_plan_target(kind, obj):
-        return (kind, obj)
-    if kind is not None or obj is not None:
-        session.selection.set_selected_plan_target_state()
-    return (None, None)
+    return _get_current_selected_plan_target(session)
 
 
 def get_first_plan_target_from_selection(session, selection):
@@ -616,21 +641,7 @@ def sync_secondary_selected_plan_targets_from_gui_selection(
 
 
 def get_secondary_selected_plan_targets(session):
-    if not _supports_native_selection_state(session):
-        return _get_compat_selection_result(
-            session,
-            "get_secondary_selected_plan_targets",
-            legacy_method_name="_get_secondary_selected_plan_targets",
-            default=[],
-        )
-    session.selection.sanitize_plan_target_references()
-    primary_kind, primary_obj = get_selected_plan_target(session)
-    session.selection.set_secondary_selected_plan_targets(
-        getattr(session, "_secondary_selected_plan_targets_state", []),
-        primary_kind=primary_kind,
-        primary_obj=primary_obj,
-    )
-    return list(getattr(session, "_secondary_selected_plan_targets_state", []))
+    return _get_current_secondary_selected_plan_targets(session)
 
 
 def get_selected_plan_targets(session):
@@ -641,14 +652,14 @@ def get_selected_plan_targets(session):
             legacy_method_name="_get_selected_plan_targets",
             default=[],
         )
-    primary_kind, primary_obj = get_selected_plan_target(session)
+    primary_kind, primary_obj = _get_native_selected_plan_target(session)
     targets = []
     seen = set()
     if primary_kind and primary_obj:
         key = session.selection.get_plan_target_state_key(primary_kind, primary_obj)
         seen.add(key)
         targets.append((primary_kind, primary_obj))
-    for target_kind, target_obj in get_secondary_selected_plan_targets(session):
+    for target_kind, target_obj in _get_current_secondary_selected_plan_targets(session):
         key = session.selection.get_plan_target_state_key(target_kind, target_obj)
         if key in seen:
             continue
