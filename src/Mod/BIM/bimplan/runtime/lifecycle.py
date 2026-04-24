@@ -365,7 +365,7 @@ def _activate_tool_with_profile(session, profile):
     if profile.clear_plan_relation_status:
         session._clear_plan_relation_status()
     if profile.clear_selected_target:
-        session._set_selected_plan_target()
+        session.selection.set_selected_plan_target()
     if profile.clear_hovered_targets:
         session._clear_hovered_plan_targets()
     if profile.clear_selection_kinds:

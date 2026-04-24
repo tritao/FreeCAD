@@ -327,7 +327,7 @@ def refresh_selected_plan_target(session):
                 session.overlays.schedule_wall_grip_sync()
             else:
                 session.overlays.clear_wall_grips()
-        session._sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
+        session.selection.sync_primary_selected_plan_target_visuals(previous_kind, previous_obj)
         selected_kind, selected_obj = get_selected_plan_target(session)
         session.performance.plan_perf_set_fields(
             selected_after=session.performance.plan_perf_describe_target(
@@ -670,9 +670,9 @@ def schedule_selected_wall_reset(session, reason, obj):
     try:
         from PySide import QtCore
 
-        QtCore.QTimer.singleShot(0, session._reset_selected_wall_after_change)
+        QtCore.QTimer.singleShot(0, session.selection.reset_selected_wall_after_change)
     except Exception:
-        session._reset_selected_wall_after_change()
+        session.selection.reset_selected_wall_after_change()
 
 
 def reset_selected_wall_after_change(session):
@@ -762,7 +762,7 @@ def sync_primary_selected_plan_target_visuals(session, previous_kind=None, previ
 
 
 def refresh_primary_selected_plan_target(session):
-    session._refresh_selected_plan_target()
+    session.selection.refresh_selected_plan_target()
 
 
 def set_hovered_wall(session, wall):
@@ -819,7 +819,7 @@ def select_plan_target_for_plan_edit(
         and session.hovered_symbol == obj
         and bool(session._symbol_hover_trackers)
     )
-    session._set_selected_plan_target(
+    session.selection.set_selected_plan_target(
         kind,
         obj,
         pending_restore=queue_restore,
@@ -1103,7 +1103,7 @@ def clear_plan_selection_state(session):
         with session.performance.plan_perf_trace_span("clear_plan_selection_gui_selection"):
             session.selection.set_gui_selection([])
         with session.performance.plan_perf_trace_span("clear_plan_selection_target_state"):
-            session._set_selected_plan_target()
+            session.selection.set_selected_plan_target()
             session._provider_selected_objects = []
         with session.performance.plan_perf_trace_span("clear_plan_selection_hover_state"):
             plan_target_dispatch.clear_hovered_targets(session)
@@ -1157,7 +1157,7 @@ def activate_provider_overlay_target_node(session, node, event_callback=None):
         session.selection.set_pending_selected_plan_target()
     plan_target_dispatch.clear_hovered_targets(session)
     session.selection.set_gui_selection_object(target_obj)
-    session._refresh_primary_selected_plan_target()
+    session.selection.refresh_primary_selected_plan_target()
     session._claim_left_button_click(event_callback)
     return True
 
@@ -1195,7 +1195,7 @@ def toggle_raw_plan_object_selection(session, obj, event_callback=None):
     session.selection.set_pending_selected_plan_target(next_kind, next_obj)
     plan_target_dispatch.clear_hovered_targets(session)
     session.selection.set_gui_selection(new_selection)
-    session._refresh_primary_selected_plan_target()
+    session.selection.refresh_primary_selected_plan_target()
     session._claim_left_button_click(event_callback)
     return True
 
@@ -1247,7 +1247,7 @@ def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=
     session.selection.set_pending_selected_plan_target(next_kind, next_obj)
     plan_target_dispatch.clear_hovered_targets(session)
     session.selection.set_gui_selection(new_selection)
-    session._refresh_primary_selected_plan_target()
+    session.selection.refresh_primary_selected_plan_target()
     session._claim_left_button_click(event_callback)
     return True
 
@@ -1398,7 +1398,7 @@ def run_scheduled_selection_refresh(session):
     with session.performance.plan_perf_trace_event("selection_observer_refresh"):
         if session._tearing_down or session._ignore_selection_changes:
             return
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
 
 def selection_observer_add(session, doc, obj, sub, point):

@@ -291,8 +291,8 @@ def activate_window_tool(session):
         )
         return False
 
-    session._set_selected_plan_target("wall", wall)
-    session._restore_gui_selection(wall)
+    session.selection.set_selected_plan_target("wall", wall)
+    session.selection.set_gui_selection_object(wall)
     session._window_host_wall = wall
     session.current_tool = "Window"
     FreeCAD.activeDraftCommand = session

@@ -2336,7 +2336,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         self._assert_selected_plan_target(session, "opening", door)
         self.assertEqual(len(session._grip_trackers), 0)
@@ -2510,7 +2510,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, window.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         self._assert_selected_plan_target(session, "opening", window)
         self.assertTrue(
@@ -3172,7 +3172,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
         self.assertEqual(len(session._opening_overlay_trackers), combined_segments)
 
         session.shutdown(close_dialog=False)
@@ -3417,7 +3417,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         handle = session.openings.get_selected_opening_edit_handles(door)[0]
         captured = {}
@@ -3567,7 +3567,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         handle = session.openings.get_selected_opening_edit_handles(door)[0]
 
@@ -3623,7 +3623,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         handle = session.openings.get_selected_opening_edit_handles(door)[0]
 
@@ -3806,7 +3806,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             "sync_hovered_opening_overlay",
             wraps=session.overlays.sync_hovered_opening_overlay,
         ) as sync_hover:
-            session._set_selected_plan_target("wall", wall)
+            session.selection.set_selected_plan_target("wall", wall)
 
         self.assertGreater(sync_hover.call_count, 0)
         self.assertGreater(len(session._opening_hover_trackers), 0)
@@ -4427,7 +4427,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         captured = {}
 
@@ -4484,7 +4484,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         captured = {}
 
@@ -4528,7 +4528,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         calls = []
 
@@ -4543,7 +4543,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         self.assertEqual(session.current_tool, "Select")
 
         # Late selection clears from the click should not break the deferred grip activation.
-        session._set_selected_plan_target()
+        session.selection.set_selected_plan_target()
 
         captured = {}
 
@@ -4579,7 +4579,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         handle = session.openings.get_selected_opening_edit_handles(door)[0]
         calls = []
@@ -4592,7 +4592,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][0], 0)
-        session._set_selected_plan_target()
+        session.selection.set_selected_plan_target()
 
         if handle.interaction == "point_pick":
             captured = {}
@@ -4629,7 +4629,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         original_endpoints = wall.Proxy.calc_endpoints(wall)
         session._edit_wall = wall
@@ -4678,7 +4678,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         original_endpoints = wall.Proxy.calc_endpoints(wall)
         session._edit_wall = wall
@@ -4983,7 +4983,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         captured = {}
 
@@ -5019,7 +5019,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         captured = {}
 
@@ -5057,7 +5057,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         captured = {}
 
@@ -5094,7 +5094,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         original_endpoints = wall.Proxy.calc_endpoints(wall)
         session._edit_wall = wall
@@ -5127,7 +5127,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         original_endpoints = wall.Proxy.calc_endpoints(wall)
         session._edit_wall = wall
@@ -5163,7 +5163,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         original_endpoints = wall.Proxy.calc_endpoints(wall)
         session._edit_wall = wall
@@ -5194,7 +5194,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         captured = {}
 
@@ -5229,7 +5229,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         captured = {}
 
@@ -5274,7 +5274,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         captured = {}
 
@@ -5328,7 +5328,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         original_endpoints = wall.Proxy.calc_endpoints(wall)
         session._edit_wall = wall
@@ -5407,7 +5407,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         captured = {}
 
@@ -5461,7 +5461,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         captured = {}
 
@@ -5553,7 +5553,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         session.openings.activate_opening_handle(door, 1)
         self.pump_gui_events()
@@ -5582,7 +5582,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, space.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         self._assert_selected_plan_target(session, "space", space)
         self.assertGreater(len(session._space_overlay_trackers), 0)
@@ -5607,7 +5607,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, region.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         self._assert_selected_plan_target(session, "region", region)
         self.assertGreater(len(session._region_overlay_trackers), 0)
@@ -6128,7 +6128,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         FreeCADGui.Selection.clearSelection()
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
         self.pump_gui_events(timeout_ms=400)
 
         self.assertEqual(len(session._grip_trackers), 0)
@@ -6264,7 +6264,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, space.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         panel = session.task_panel
         self.assertIsNotNone(panel)
@@ -6350,7 +6350,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
         session.overlays.clear_selected_opening_overlay()
 
         with patch.object(
@@ -6388,7 +6388,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
         session.overlays.clear_selected_opening_handles()
 
         session.overlays.sync_selected_opening_handles()
@@ -6782,7 +6782,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, region.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         self.assertIs(session.selection.get_selected_target_for_kind("region"), region)
         self.assertFalse(session.task_panel.region_editor.isHidden())
@@ -6839,7 +6839,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, region.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
         self.assertIs(session.selection.get_selected_target_for_kind("region"), region)
 
         stale_region = region
@@ -6945,7 +6945,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         for wall in walls:
             FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         self.assertTrue(session.lifecycle.activate_space_tool())
         self.pump_gui_events()
@@ -6990,7 +6990,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         before = {obj.Name for obj in self.document.Objects}
         session.selection.set_pending_selected_plan_target("space", space)
         session.selection.set_gui_selection([space])
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
         self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
 
         with patch.object(FreeCADGui.Snapper, "getPoint", return_value=None):
@@ -7081,7 +7081,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         for obj in list(walls) + [separator]:
             FreeCADGui.Selection.addSelection(self.document.Name, obj.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         request = session.spaces.get_space_creation_request()
         self.assertIsNotNone(request)
@@ -7119,7 +7119,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         session.selection.set_pending_selected_plan_target("space", space)
         session.selection.set_gui_selection([space, separator])
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
         request = session.spaces.get_space_creation_request()
@@ -7197,7 +7197,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         for wall in walls:
             FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         boundaries = session.spaces.get_selected_space_boundary_links()
         self.assertEqual(len(boundaries), 3)
@@ -7222,7 +7222,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         for wall in walls:
             FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         status_text = session.task_panel.status.text()
         self.assertIn("Selection set: 4 walls", status_text)
@@ -7250,7 +7250,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             FreeCADGui.Selection.clearSelection()
             FreeCADGui.Selection.addSelection(self.document.Name, walls[0].Name)
             self.pump_gui_events()
-            session._refresh_primary_selected_plan_target()
+            session.selection.refresh_primary_selected_plan_target()
 
             status_text = session.task_panel.status.text()
             self.assertNotIn("Space preflight:", status_text)
@@ -7275,7 +7275,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         for wall in walls[:3]:
             FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         status_text = session.task_panel.status.text()
         self.assertIn("Selection set: 3 walls", status_text)
@@ -7428,7 +7428,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         session.selection.set_pending_selected_plan_target("space", space)
         session.selection.set_gui_selection([space, wall])
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
         self.assertIsNone(session.selection.get_selected_target_for_kind("wall"))
@@ -7486,7 +7486,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
 
         session.selection.set_pending_selected_plan_target("wall", wall)
         session.selection.set_gui_selection([wall, space])
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         self.assertIn("Boundary candidates: 1 wall", session.task_panel.status.text())
         self.assertTrue(session.lifecycle.activate_space_tool())
@@ -7628,7 +7628,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         for wall in walls[:3]:
             FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         with (
             patch("FreeCAD.Console.PrintError") as print_error,
@@ -7676,12 +7676,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, space.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
         self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
 
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
         self.assertIs(session.selection.get_selected_target_for_kind("space"), space)
 
         self.assertTrue(session.spaces.add_boundaries_to_selected_space())
@@ -7719,7 +7719,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, space.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         combo = session.task_panel.space_type_combo
         self.assertIsNotNone(combo)
@@ -7921,7 +7921,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         with patch.object(session.overlays, "queue_plan_overlay_visual_refresh") as queue_refresh:
             session.slotChangedObject(door.Base, "Placement")
@@ -7951,7 +7951,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, door.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         with (
             patch.object(
@@ -7993,7 +7993,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         FreeCADGui.Selection.clearSelection()
         FreeCADGui.Selection.addSelection(self.document.Name, wall.Name)
         self.pump_gui_events()
-        session._refresh_primary_selected_plan_target()
+        session.selection.refresh_primary_selected_plan_target()
 
         self.assertTrue(session.is_selected_wall_endpoint_editable())
         self.assertEqual(len(session._grip_trackers), 3)

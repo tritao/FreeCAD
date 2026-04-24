@@ -91,7 +91,7 @@ def start_wall_edit(session, mode):
             session._set_hovered_symbol(None)
             session._set_hovered_provider(None)
             if not session.selection.is_selected_plan_target("wall", wall):
-                session._set_selected_plan_target("wall", wall)
+                session.selection.set_selected_plan_target("wall", wall)
             session.overlays.clear_selected_wall_overlay()
             session.overlays.clear_selected_wall_opening_context_overlay()
             session._wall_edit_modal_active = True
@@ -321,7 +321,7 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
     session.selection.set_gui_selection_object(wall)
     session.current_tool = "Select"
     session.lifecycle.cancel_pending_edit()
-    session._set_selected_plan_target("wall", wall, pending_restore=True)
+    session.selection.set_selected_plan_target("wall", wall, pending_restore=True)
     session._update_wall_relation_status(wall)
     session.overlays.sync_wall_grips()
     session.task_panels.refresh_task_panel_status()
@@ -356,7 +356,7 @@ def activate_wall_grip_now(session, grip_index, wall=None):
             return
         with session.performance.plan_perf_trace_span("activate_wall_grip_set_target"):
             if not session.selection.is_selected_plan_target("wall", wall):
-                session._set_selected_plan_target("wall", wall)
+                session.selection.set_selected_plan_target("wall", wall)
         with session.performance.plan_perf_trace_span("activate_wall_grip_start_edit"):
             session.wall_edit.start_wall_grip_edit(grip_index)
 

@@ -64,7 +64,7 @@ def activate_wall_tool(session):
     session.wall_edit.cancel_wall_edit()
     session.lifecycle.cancel_pending_edit()
     session._clear_plan_relation_status()
-    session._set_selected_plan_target()
+    session.selection.set_selected_plan_target()
     session.overlays.clear_wall_grips()
     session.overlays.clear_selected_wall_overlay()
     session.overlays.clear_selected_wall_opening_context_overlay()
@@ -88,7 +88,7 @@ def activate_rect_wall_tool(session):
     session.wall_edit.cancel_wall_edit()
     session.lifecycle.cancel_pending_edit()
     session._clear_plan_relation_status()
-    session._set_selected_plan_target()
+    session.selection.set_selected_plan_target()
     session.overlays.clear_wall_grips()
     session.overlays.clear_selected_wall_overlay()
     session.overlays.clear_selected_wall_opening_context_overlay()
@@ -272,5 +272,5 @@ def handle_rect_wall_point(session, point=None, obj=None):
 
     session.wall_create.cancel_rect_wall_tool(refresh=False)
     session.current_tool = "Select"
-    session._refresh_primary_selected_plan_target()
+    session.selection.refresh_primary_selected_plan_target()
     session.task_panels.refresh_task_panel_status()
