@@ -510,3 +510,8 @@ class PlanOpeningsAPI(_SessionAPI):
     )
     compute_wall_hosted_opening_layout = _bind_session_call(compute_wall_hosted_opening_layout)
     resolve_wall_hosted_opening_layout = _bind_session_call(resolve_wall_hosted_opening_layout)
+
+    def is_hosted_opening_object(self, obj):
+        from bimplan.tools import hosted_openings as plan_hosted_openings
+
+        return plan_hosted_openings.is_hosted_opening_object(self.session, obj)

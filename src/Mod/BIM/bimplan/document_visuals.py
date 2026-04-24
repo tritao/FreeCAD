@@ -288,7 +288,7 @@ def refresh_plan_object_footprint_display(session, obj, *, request_redraw=True):
 
 
 def refresh_opening_footprint_display(session, opening):
-    if not session._is_hosted_opening_object(opening):
+    if not session.openings.is_hosted_opening_object(opening):
         return
     session.document_visuals.refresh_plan_object_footprint_display(opening)
 
@@ -300,7 +300,7 @@ def refresh_wall_footprint_display(session, wall):
 
 
 def refresh_opening_host_footprint_displays(session, opening):
-    if not session._is_hosted_opening_object(opening):
+    if not session.openings.is_hosted_opening_object(opening):
         return
     for host in getattr(opening, "Hosts", None) or []:
         session.document_visuals.refresh_wall_footprint_display(host)
@@ -315,7 +315,7 @@ def queue_recompute_opening_hosts(session, *openings):
         return
     hosts = []
     for opening in openings:
-        if not session._is_hosted_opening_object(opening):
+        if not session.openings.is_hosted_opening_object(opening):
             continue
         hosts.extend(getattr(opening, "Hosts", None) or [])
     hosts = [host for host in dict.fromkeys(hosts) if host]
@@ -364,7 +364,7 @@ def flush_hard_refresh_selected_opening_visuals(session):
     if session._tearing_down or session.current_tool != "Select":
         return
     opening = plan_selection.get_selected_plan_target_object(session, "opening")
-    if not session._is_hosted_opening_object(opening):
+    if not session.openings.is_hosted_opening_object(opening):
         return
     session.overlays.sync_selected_opening_overlay()
     session.overlays.sync_selected_opening_handles()

@@ -444,9 +444,11 @@ def _start_plan_region_tool(session, context):
 
 def _prepare_space_separator_tool(session, context):
     del context
+    from bimplan.tools import wall_create as plan_wall_create
+
     plan_spaces.prepare_space_separator_tool_state(
         session,
-        height=session._get_wall_defaults()["height"],
+        height=plan_wall_create.get_wall_defaults(session)["height"],
     )
 
 

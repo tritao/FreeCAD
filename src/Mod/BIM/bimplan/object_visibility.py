@@ -420,7 +420,7 @@ def get_supported_plan_visibility(session, obj, state):
     # their wall cuts carry the main visual meaning. In Plan Edit we want
     # their committed footprint symbols to be visible whenever they are a
     # supported plan object.
-    if session._is_hosted_opening_object(obj):
+    if session.openings.is_hosted_opening_object(obj):
         return True
     return visibility
 

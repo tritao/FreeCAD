@@ -56,7 +56,7 @@ def activate_rect_wall_tool(session):
     session.overlays.clear_secondary_selected_overlays()
     session._clear_rect_wall_preview()
     session._rect_wall_start = None
-    session._rect_wall_params = session._get_wall_defaults()
+    session._rect_wall_params = get_wall_defaults(session)
     session.current_tool = "Rect Wall"
     FreeCAD.activeDraftCommand = session
     FreeCADGui.Snapper.getPoint(

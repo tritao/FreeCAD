@@ -2392,7 +2392,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         windows = [
             obj
             for obj in created
-            if getattr(obj, "IfcType", "") == "Window" and session._is_hosted_opening_object(obj)
+            if getattr(obj, "IfcType", "") == "Window"
+            and session.openings.is_hosted_opening_object(obj)
         ]
         self.assertEqual(1, len(windows))
 
@@ -2460,7 +2461,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         windows = [
             obj
             for obj in created
-            if getattr(obj, "IfcType", "") == "Window" and session._is_hosted_opening_object(obj)
+            if getattr(obj, "IfcType", "") == "Window"
+            and session.openings.is_hosted_opening_object(obj)
         ]
         self.assertEqual(1, len(windows))
 

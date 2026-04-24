@@ -130,7 +130,7 @@ def on_mouse_pressed(session, event_callback):
                                 index = int(str(point.subElementName.getValue())[8:])
                             except Exception:
                                 return
-                            if session._is_hosted_opening_object(obj):
+                            if session.openings.is_hosted_opening_object(obj):
                                 session._select_opening_for_plan_edit(obj)
                                 session._set_gui_selection_object(obj)
                                 session.openings.activate_opening_handle(obj, index)

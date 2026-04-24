@@ -30,7 +30,7 @@ class PlanTarget:
 
 
 def get_plan_target_kind_for_object(session, obj):
-    if session._is_hosted_opening_object(obj):
+    if session.openings.is_hosted_opening_object(obj):
         return plan_target_kinds.PLAN_TARGET_OPENING
     if session.visibility.is_plan_symbol_instance(obj):
         return plan_target_kinds.PLAN_TARGET_SYMBOL
@@ -140,7 +140,7 @@ def is_plan_custom_pick_only_object(session, obj):
         return False
     obj = session.visibility.get_plan_semantic_object(obj)
     return (
-        session._is_hosted_opening_object(obj)
+        session.openings.is_hosted_opening_object(obj)
         or session._is_plan_space_object(obj)
         or session._is_plan_region_object(obj)
     )
