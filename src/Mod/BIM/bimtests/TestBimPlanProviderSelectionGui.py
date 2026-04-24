@@ -564,7 +564,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             )
 
             pick_point = FreeCAD.Vector(1200, 1500, 0)
-            expected_point = session._project_provider_point_to_host(pick_point, wall_b)
+            expected_point = session.providers.project_provider_point_to_host(pick_point, wall_b)
 
             session.current_tool = "Move Provider"
             session._edit_provider = marker
@@ -663,7 +663,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             self.assertEqual("rehost-fixture", handles[0].action_key)
 
             pick_point = FreeCAD.Vector(1200, 1500, 0)
-            expected_point = session._project_provider_point_to_host(pick_point, wall_b)
+            expected_point = session.providers.project_provider_point_to_host(pick_point, wall_b)
 
             session.current_tool = "Move Provider"
             session._edit_provider = marker

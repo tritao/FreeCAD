@@ -40,7 +40,6 @@ from bimplan.runtime import input as plan_input
 from bimplan.runtime import lifecycle as plan_lifecycle
 from bimplan import object_visibility as plan_object_visibility
 from bimplan import performance as plan_performance
-from bimplan.providers import point as plan_provider_point
 from bimplan.providers import runtime as plan_provider_runtime
 from bimplan import snap as plan_snap
 from bimplan.runtime import session_state as plan_session_state
@@ -1638,87 +1637,6 @@ class PlanEditSession:
             action_key,
             transaction_label=transaction_label,
             payload=payload,
-        )
-
-    def _has_active_provider_point_tool(self):
-        return plan_provider_point.has_active_provider_point_tool(self)
-
-    def _get_provider_point_tool_label(self):
-        return self.providers.get_provider_point_tool_label()
-
-    def _get_provider_point_tool_prompt(self):
-        return self.providers.get_provider_point_tool_prompt()
-
-    def _arm_provider_point_tool(self):
-        return plan_provider_point.arm_provider_point_tool(self)
-
-    def _cancel_provider_point_tool(self, refresh=True):
-        return plan_provider_point.cancel_provider_point_tool(self, refresh=refresh)
-
-    def start_plan_provider_point_tool(self, tool):
-        return plan_provider_point.start_plan_provider_point_tool(self, tool)
-
-    def _handle_provider_point_tool_point(self, point=None, obj=None):
-        return plan_provider_point.handle_provider_point_tool_point(self, point=point, obj=obj)
-
-    def _update_provider_point_tool_preview(self, point=None, obj=None):
-        return plan_provider_point.update_provider_point_tool_preview(
-            self,
-            point=point,
-            obj=obj,
-        )
-
-    def _get_provider_point_snap_info(self):
-        return plan_provider_point.get_provider_point_snap_info()
-
-    def _resolve_provider_point_snap_object(self, snap_object, snap_info):
-        return plan_provider_point.resolve_provider_point_snap_object(
-            self,
-            snap_object,
-            snap_info,
-        )
-
-    def _normalize_provider_point_host_target(self, target):
-        return plan_provider_point.normalize_provider_point_host_target(self, target)
-
-    def _get_provider_point_context_host_state(self):
-        return plan_provider_point.get_provider_point_context_host_state(self)
-
-    def _get_provider_point_payload_host_target(
-        self,
-        *,
-        snap_target,
-        selected_target,
-        selected_targets,
-        hovered_target,
-    ):
-        return plan_provider_point.get_provider_point_payload_host_target(
-            self,
-            snap_target=snap_target,
-            selected_target=selected_target,
-            selected_targets=selected_targets,
-            hovered_target=hovered_target,
-        )
-
-    def _project_provider_point_to_host(self, point, host_wall):
-        return plan_provider_point.project_provider_point_to_host(point, host_wall)
-
-    def _build_provider_point_tool_payload(
-        self,
-        tool,
-        *,
-        raw_point,
-        plan_point,
-        snap_object,
-        snap_info,
-    ):
-        return plan_provider_point.build_provider_point_tool_payload(
-            self,
-            tool,
-            raw_point=raw_point,
-            plan_point=plan_point,
-            snap_object=snap_object,
-            snap_info=snap_info,
         )
 
     def _format_space_preflight_text(self, report):

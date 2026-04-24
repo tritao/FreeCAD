@@ -2343,7 +2343,7 @@ class PlanEditControlsWidget:
             getattr(action, "interaction", PlanToolInteraction.IMMEDIATE)
             == PlanToolInteraction.POINT
         ):
-            self.session.start_plan_provider_point_tool(action)
+            self.session.providers.start_plan_provider_point_tool(action)
             return
         self.session.execute_plan_provider_action(
             getattr(action, "provider_id", ""),

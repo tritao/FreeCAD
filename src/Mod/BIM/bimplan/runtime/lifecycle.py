@@ -99,7 +99,7 @@ def _dispatch_current_tool(session, handler_specs):
     if handler_spec is None:
         return False
     if isinstance(handler_spec, str):
-        getattr(session, handler_spec)()
+        _resolve_action_callable(session, handler_spec)()
     else:
         handler_spec(session)
     return True
@@ -215,12 +215,12 @@ _ACTION_CANCEL_SPACE_SEPARATOR_TOOL_IF_ACTIVE = ActivationActionSpec(
     predicate_name="_has_active_space_separator_tool",
 )
 _ACTION_CANCEL_PROVIDER_POINT_TOOL = ActivationActionSpec(
-    "_cancel_provider_point_tool",
+    "providers.cancel_provider_point_tool",
     kwargs=(("refresh", False),),
 )
 _ACTION_CANCEL_PROVIDER_POINT_TOOL_AND_RETURN = ActivationActionSpec(
-    "_cancel_provider_point_tool",
-    predicate_name="_has_active_provider_point_tool",
+    "providers.cancel_provider_point_tool",
+    predicate_name="providers.has_active_provider_point_tool",
     stop_after=True,
 )
 _ACTION_CANCEL_EMBEDDED_TOOL_ALWAYS = ActivationActionSpec("_cancel_embedded_tool")
@@ -291,7 +291,13 @@ def _run_activation_action_specs(session, action_specs):
     for action_spec in action_specs:
         if action_spec.current_tools and session.current_tool not in action_spec.current_tools:
             continue
-        if action_spec.predicate_name and not getattr(session, action_spec.predicate_name)():
+        if (
+            action_spec.predicate_name
+            and not _resolve_action_callable(
+                session,
+                action_spec.predicate_name,
+            )()
+        ):
             continue
         kwargs = dict(action_spec.kwargs)
         _resolve_action_callable(session, action_spec.method_name)(**kwargs)

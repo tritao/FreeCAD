@@ -249,7 +249,7 @@ def on_key_pressed(session, event_callback):
         session._cancel_plan_region_tool()
         return
     if session.current_tool == "Provider Point" and key == coin.SoKeyboardEvent.ESCAPE:
-        session._cancel_provider_point_tool()
+        session.providers.cancel_provider_point_tool()
         return
     if session.current_tool == "Move Provider" and key == coin.SoKeyboardEvent.ESCAPE:
         session.providers.cancel_provider_handle_point_pick()
@@ -292,8 +292,8 @@ def on_key_pressed(session, event_callback):
     if session.current_tool == "Set Space Text":
         session._cancel_space_text_position_pick()
         return
-    if session._has_active_provider_point_tool():
-        session._cancel_provider_point_tool()
+    if session.providers.has_active_provider_point_tool():
+        session.providers.cancel_provider_point_tool()
         return
     if session._has_active_window_tool():
         session._cancel_window_tool()
