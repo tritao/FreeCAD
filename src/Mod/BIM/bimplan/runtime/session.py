@@ -26,7 +26,6 @@
 
 from contextlib import contextmanager
 import math
-import os
 
 import FreeCAD
 import FreeCADGui
@@ -685,15 +684,6 @@ class PlanEditSession:
     def _invalidate_plan_provider_document_cache(self):
         self._plan_provider_document_cache = {}
 
-    def _plan_provider_integrations_disabled(self):
-        env_value = str(os.environ.get("FC_BIM_PLAN_EDIT_DISABLE_INTEGRATIONS", "") or "").strip()
-        if env_value:
-            return env_value not in {"0", "false", "False", "no", "off"}
-        try:
-            return bool(self._plan_edit_params.GetBool("DisableIntegrations", False))
-        except Exception:
-            return False
-
     def get_plan_provider_display_name(self, provider_id):
         return self.providers.get_plan_provider_display_name(provider_id)
 
@@ -1133,126 +1123,8 @@ class PlanEditSession:
     def get_plan_semantic_records(self, targets=None):
         return plan_provider_runtime.get_plan_semantic_records(self, targets=targets)
 
-    def _get_plan_provider_id(self, provider):
-        return plan_provider_runtime.get_plan_provider_id(provider)
-
-    def _coerce_plan_provider_results(self, result):
-        return plan_provider_runtime.coerce_plan_provider_results(result)
-
-    def _normalize_plan_provider_action(self, provider_id, action):
-        return plan_provider_runtime.normalize_plan_provider_action(provider_id, action)
-
-    def _normalize_plan_provider_tool(self, provider_id, tool):
-        return plan_provider_runtime.normalize_plan_provider_tool(provider_id, tool)
-
-    def _normalize_plan_provider_edit_handle(self, provider_id, handle):
-        return plan_provider_runtime.normalize_plan_provider_edit_handle(provider_id, handle)
-
-    def _normalize_plan_provider_issue(self, provider_id, issue):
-        return plan_provider_runtime.normalize_plan_provider_issue(self, provider_id, issue)
-
-    def _normalize_plan_provider_suggestion(self, provider_id, suggestion):
-        return plan_provider_runtime.normalize_plan_provider_suggestion(
-            self,
-            provider_id,
-            suggestion,
-        )
-
-    def _normalize_plan_provider_section(self, provider_id, section):
-        return plan_provider_runtime.normalize_plan_provider_section(
-            self,
-            provider_id,
-            section,
-        )
-
-    def _normalize_plan_provider_context_panel(self, provider_id, panel):
-        return plan_provider_runtime.normalize_plan_provider_context_panel(
-            self,
-            provider_id,
-            panel,
-        )
-
-    def _normalize_plan_provider_overlay(self, provider_id, overlay):
-        return plan_provider_runtime.normalize_plan_provider_overlay(provider_id, overlay)
-
-    def _normalize_plan_provider_target(self, provider_id, target):
-        return plan_provider_runtime.normalize_plan_provider_target(provider_id, target)
-
-    def _collect_plan_provider_contributions(self, method_name, normalizer):
-        if self._tearing_down or self._finishing or not self._document_is_alive():
-            self.performance.plan_perf_count("plan_provider_inactive_session")
-            return ()
-        if self._plan_provider_integrations_disabled():
-            self.performance.plan_perf_count("plan_provider_integrations_disabled")
-            return ()
-        return plan_provider_runtime.collect_plan_provider_contributions(
-            self,
-            method_name,
-            normalizer,
-        )
-
-    def get_plan_provider_issues(self):
-        return self._collect_plan_provider_contributions(
-            "get_issues",
-            self._normalize_plan_provider_issue,
-        )
-
-    def get_plan_provider_suggestions(self):
-        return self._collect_plan_provider_contributions(
-            "get_suggestions",
-            self._normalize_plan_provider_suggestion,
-        )
-
-    def get_plan_provider_tools(self):
-        return self._collect_plan_provider_contributions(
-            "get_tools",
-            self._normalize_plan_provider_tool,
-        )
-
-    def get_plan_provider_snapshot(self):
-        if self._tearing_down or self._finishing or not self._document_is_alive():
-            self.performance.plan_perf_count("plan_provider_inactive_session")
-            return plan_provider_runtime.PlanProviderSnapshot()
-        if self._plan_provider_integrations_disabled():
-            self.performance.plan_perf_count("plan_provider_integrations_disabled")
-            return plan_provider_runtime.PlanProviderSnapshot()
-        return plan_provider_runtime.collect_plan_provider_snapshot(self)
-
-    def get_plan_provider_edit_handles(self):
-        return plan_provider_runtime.get_plan_provider_edit_handles(self)
-
-    def get_plan_provider_inspector_sections(self):
-        return self._collect_plan_provider_contributions(
-            "get_inspector_sections",
-            self._normalize_plan_provider_section,
-        )
-
-    def get_plan_provider_context_panels(self):
-        return self._collect_plan_provider_contributions(
-            "get_context_panels",
-            self._normalize_plan_provider_context_panel,
-        )
-
-    def get_plan_provider_overlays(self):
-        return self._collect_plan_provider_contributions(
-            "get_overlays",
-            self._normalize_plan_provider_overlay,
-        )
-
-    def get_plan_provider_targets(self):
-        return plan_provider_runtime.get_plan_provider_targets(self)
-
     def _is_plan_provider_target_object(self, obj):
         return plan_provider_runtime.is_plan_provider_target_object(self, obj)
-
-    def get_plan_provider_overlay_visibility_key(self, provider_id, overlay_key):
-        return plan_provider_runtime.get_plan_provider_overlay_visibility_key(
-            provider_id,
-            overlay_key,
-        )
-
-    def _normalize_plan_provider_overlay_mode(self, mode):
-        return plan_provider_runtime.normalize_plan_provider_overlay_mode(mode)
 
     def get_plan_provider_overlay_mode(self):
         return self.providers.get_plan_provider_overlay_mode()
@@ -1299,7 +1171,7 @@ class PlanEditSession:
     ):
         if self._tearing_down or self._finishing or not self._document_is_alive():
             return False
-        if self._plan_provider_integrations_disabled():
+        if self.providers.plan_provider_integrations_disabled():
             return False
         return plan_provider_runtime.execute_plan_provider_action(
             self,

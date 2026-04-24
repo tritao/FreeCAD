@@ -323,7 +323,9 @@ class PlanEditControlsWidget:
         self._integration_overlay_mode_combo = QtGui.QComboBox(overlay_mode_row)
         for mode_key, mode_text in self._get_provider_overlay_mode_options():
             self._integration_overlay_mode_combo.addItem(mode_text, mode_key)
-        self._set_provider_overlay_mode_combo_value(self.session.get_plan_provider_overlay_mode())
+        self._set_provider_overlay_mode_combo_value(
+            self.session.providers.get_plan_provider_overlay_mode()
+        )
         self._integration_overlay_mode_combo.currentIndexChanged.connect(
             lambda index, current_combo=self._integration_overlay_mode_combo: (
                 self.on_provider_overlay_mode_changed(current_combo.itemData(index))
@@ -852,7 +854,7 @@ class PlanEditControlsWidget:
         return block
 
     def _make_summary_section_block(self, QtGui, section):
-        provider_label = self.session.get_plan_provider_display_name(section.provider_id)
+        provider_label = self.session.providers.get_plan_provider_display_name(section.provider_id)
         parsed = self._parse_workflow_summary_body(getattr(section, "body", ""))
         if parsed is None:
             return self._make_integration_block(
@@ -960,7 +962,7 @@ class PlanEditControlsWidget:
             issue_title = str(getattr(issue, "title", "") or "").strip()
             if issue_title:
                 return issue_title
-        provider_label = self.session.get_plan_provider_display_name(issue.provider_id)
+        provider_label = self.session.providers.get_plan_provider_display_name(issue.provider_id)
         return self._format_provider_issue_heading(
             provider_label,
             getattr(issue, "severity", ""),
@@ -1015,7 +1017,10 @@ class PlanEditControlsWidget:
         seen = set()
         for issue in tuple(issues or ()):
             label = str(
-                self.session.get_plan_provider_display_name(getattr(issue, "provider_id", "")) or ""
+                self.session.providers.get_plan_provider_display_name(
+                    getattr(issue, "provider_id", "")
+                )
+                or ""
             ).strip()
             if label and label not in seen:
                 labels.append(label)
@@ -1130,7 +1135,7 @@ class PlanEditControlsWidget:
         )
 
     def _format_provider_section_title(self, section):
-        provider_label = self.session.get_plan_provider_display_name(section.provider_id)
+        provider_label = self.session.providers.get_plan_provider_display_name(section.provider_id)
         title = str(getattr(section, "title", "") or "").strip()
         if not title:
             return provider_label
@@ -1576,7 +1581,7 @@ class PlanEditControlsWidget:
                 self._integration_refresh_queued = False
                 self._hide_integration_panel()
                 return
-            if self.session._plan_provider_integrations_disabled():
+            if self.session.providers.plan_provider_integrations_disabled():
                 self.session.performance.plan_perf_count("integration_panel_disabled")
                 self._integration_refresh_queued = False
                 self._hide_integration_panel()
@@ -1588,7 +1593,7 @@ class PlanEditControlsWidget:
             self._integration_refresh_queued = False
             self._integration_refresh_generation += 1
             with self.session._plan_provider_refresh_cache_scope():
-                snapshot = self.session.get_plan_provider_snapshot()
+                snapshot = self.session.providers.get_plan_provider_snapshot()
                 integration_vm = plan_task_panel_view_model.build_integration_panel_view_model(
                     self.session,
                     snapshot,

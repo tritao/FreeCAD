@@ -25,7 +25,7 @@ def get_selected_provider_edit_handles(session, provider_obj):
     provider_id = str(getattr(provider_target, "provider_id", "") or "").strip()
     target_key = str(getattr(provider_target, "key", "") or "").strip()
     handles = []
-    for handle in tuple(session.get_plan_provider_edit_handles() or ()):
+    for handle in tuple(session.providers.get_plan_provider_edit_handles() or ()):
         if str(getattr(handle, "provider_id", "") or "").strip() != provider_id:
             continue
         handle_target_key = str(getattr(handle, "target_key", "") or "").strip()

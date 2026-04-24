@@ -60,8 +60,8 @@ def prime_hover_pick_caches(session):
 
         with session.performance.plan_perf_trace_span("prime_hover_pick_provider_contributions"):
             with session._plan_provider_refresh_cache_scope():
-                tuple(session.get_plan_provider_overlays())
-                tuple(session.get_plan_provider_targets())
+                tuple(session.providers.get_plan_provider_overlays())
+                tuple(session.providers.get_plan_provider_targets())
 
 
 def should_skip_hover_pick(session, mouse_pos, force=False):

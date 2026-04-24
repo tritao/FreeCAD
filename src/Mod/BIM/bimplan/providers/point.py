@@ -87,7 +87,7 @@ def cancel_provider_point_tool(session, refresh=True):
 def start_plan_provider_point_tool(session, tool):
     if tool is None:
         return False
-    if session._plan_provider_integrations_disabled():
+    if session.providers.plan_provider_integrations_disabled():
         return False
     session.spaces.cancel_space_region_pick(refresh=False)
     session.spaces.cancel_plan_region_tool(refresh=False)
