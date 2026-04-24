@@ -11,7 +11,7 @@ translate = FreeCAD.Qt.translate
 
 
 class PlanSymbolsAPI:
-    """Owned session surface for Plan Edit symbol read helpers."""
+    """Owned session surface for Plan Edit symbol behavior."""
 
     __slots__ = ("_session",)
 
@@ -27,6 +27,33 @@ class PlanSymbolsAPI:
 
     def format_symbol_rotation_snap_label(self):
         return format_symbol_rotation_snap_label(self.session)
+
+    def get_symbol_handle_placement(self, symbol, handle_role, point):
+        return get_symbol_handle_placement(self.session, symbol, handle_role, point)
+
+    def activate_symbol_handle(self, symbol, handle_role):
+        return activate_symbol_handle(self.session, symbol, handle_role)
+
+    def activate_symbol_handle_now(self, symbol, handle_role):
+        return activate_symbol_handle_now(self.session, symbol, handle_role)
+
+    def start_symbol_handle_point_pick(self, symbol, handle_role):
+        return start_symbol_handle_point_pick(self.session, symbol, handle_role)
+
+    def update_symbol_handle_point_pick(self, point=None, snap_info=None):
+        return update_symbol_handle_point_pick(self.session, point=point, snap_info=snap_info)
+
+    def finish_symbol_handle_point_pick(self, point=None, obj=None):
+        return finish_symbol_handle_point_pick(self.session, point=point, obj=obj)
+
+    def cancel_symbol_handle_point_pick(self):
+        return cancel_symbol_handle_point_pick(self.session)
+
+    def restore_selected_symbol(self, symbol):
+        return restore_selected_symbol(self.session, symbol)
+
+    def queue_restore_selected_symbol(self, symbol):
+        return queue_restore_selected_symbol(self.session, symbol)
 
 
 def get_symbol_handle_placement(session, symbol, handle_role, point):
@@ -110,12 +137,12 @@ def activate_symbol_handle(session, symbol, handle_role):
     try:
         from PySide import QtCore
     except ImportError:
-        session._activate_symbol_handle_now(symbol, handle_role)
+        session.symbols.activate_symbol_handle_now(symbol, handle_role)
         return
 
     QtCore.QTimer.singleShot(
         0,
-        lambda: session._activate_symbol_handle_now(symbol, handle_role),
+        lambda: session.symbols.activate_symbol_handle_now(symbol, handle_role),
     )
 
 
@@ -129,7 +156,7 @@ def activate_symbol_handle_now(session, symbol, handle_role):
             session._set_selected_plan_target("symbol", symbol)
             session.overlays.clear_wall_grips()
         with session._plan_perf_trace_span("activate_symbol_handle_start_point_pick"):
-            session._start_symbol_handle_point_pick(symbol, handle_role)
+            session.symbols.start_symbol_handle_point_pick(symbol, handle_role)
 
 
 def start_symbol_handle_point_pick(session, symbol, handle_role):
@@ -177,8 +204,8 @@ def start_symbol_handle_point_pick(session, symbol, handle_role):
         with session._plan_perf_trace_span("symbol_handle_snapper_get_point"):
             FreeCADGui.Snapper.getPoint(
                 last=start_point,
-                callback=session._finish_symbol_handle_point_pick,
-                movecallback=session._update_symbol_handle_point_pick,
+                callback=session.symbols.finish_symbol_handle_point_pick,
+                movecallback=session.symbols.update_symbol_handle_point_pick,
                 title=(
                     translate("BIM_PlanEdit", "Pick new symbol position")
                     if handle_role == "move"
@@ -203,7 +230,7 @@ def update_symbol_handle_point_pick(session, point=None, snap_info=None):
     if target_point is None:
         session._clear_symbol_edit_preview()
         return
-    placement = session._get_symbol_handle_placement(symbol, handle_role, point)
+    placement = session.symbols.get_symbol_handle_placement(symbol, handle_role, point)
     if placement is None:
         session._clear_symbol_edit_preview()
         return
@@ -235,17 +262,17 @@ def finish_symbol_handle_point_pick(session, point=None, obj=None):
 
     if point is None or not symbol or not handle_role:
         session.current_tool = "Select"
-        session._restore_selected_symbol(symbol)
+        session.symbols.restore_selected_symbol(symbol)
         return
 
     session._edit_symbol_start_placement = start_placement
     session._edit_symbol_reference_point = reference_point
-    placement = session._get_symbol_handle_placement(symbol, handle_role, point)
+    placement = session.symbols.get_symbol_handle_placement(symbol, handle_role, point)
     session._edit_symbol_start_placement = None
     session._edit_symbol_reference_point = None
     if placement is None:
         session.current_tool = "Select"
-        session._restore_selected_symbol(symbol)
+        session.symbols.restore_selected_symbol(symbol)
         return
 
     try:
@@ -264,11 +291,11 @@ def finish_symbol_handle_point_pick(session, point=None, obj=None):
         except Exception:
             pass
         session.current_tool = "Select"
-        session._restore_selected_symbol(symbol)
+        session.symbols.restore_selected_symbol(symbol)
         return
 
     session.current_tool = "Select"
-    session._queue_restore_selected_symbol(symbol)
+    session.symbols.queue_restore_selected_symbol(symbol)
 
 
 def cancel_symbol_handle_point_pick(session):
@@ -315,6 +342,6 @@ def queue_restore_selected_symbol(session, symbol):
     try:
         from PySide import QtCore
     except ImportError:
-        session._restore_selected_symbol(symbol)
+        session.symbols.restore_selected_symbol(symbol)
         return
-    QtCore.QTimer.singleShot(0, lambda: session._restore_selected_symbol(symbol))
+    QtCore.QTimer.singleShot(0, lambda: session.symbols.restore_selected_symbol(symbol))

@@ -96,7 +96,7 @@ def start_plan_provider_point_tool(session, tool):
     if session.current_tool == "Set Space Text":
         session._cancel_space_text_position_pick()
     if session.current_tool in ("Move Symbol", "Rotate Symbol"):
-        session._cancel_symbol_handle_point_pick()
+        session.symbols.cancel_symbol_handle_point_pick()
     if session._has_active_embedded_tool():
         session._cancel_embedded_tool()
     session._cancel_wall_edit(refresh=False)

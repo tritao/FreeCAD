@@ -151,8 +151,8 @@ class CleanupProfile:
 _FINISH_TOOL_HANDLER_SPECS = {
     "Move Provider": "providers.cancel_provider_handle_point_pick",
     "Move Opening": "openings.cancel_opening_handle_point_pick",
-    "Move Symbol": "_cancel_symbol_handle_point_pick",
-    "Rotate Symbol": "_cancel_symbol_handle_point_pick",
+    "Move Symbol": "symbols.cancel_symbol_handle_point_pick",
+    "Rotate Symbol": "symbols.cancel_symbol_handle_point_pick",
     "Pick Space Region": "_cancel_space_region_pick",
     "Region": "_cancel_plan_region_tool",
     "Set Space Text": "_cancel_space_text_position_pick",
@@ -162,15 +162,15 @@ _FINISH_TOOL_HANDLER_SPECS = {
 _BEGIN_TEARDOWN_TOOL_HANDLER_SPECS = {
     "Move Provider": "providers.cancel_provider_handle_point_pick",
     "Move Opening": "openings.cancel_opening_handle_point_pick",
-    "Move Symbol": "_cancel_symbol_handle_point_pick",
-    "Rotate Symbol": "_cancel_symbol_handle_point_pick",
+    "Move Symbol": "symbols.cancel_symbol_handle_point_pick",
+    "Rotate Symbol": "symbols.cancel_symbol_handle_point_pick",
     "Set Space Text": _clear_space_text_pick_state,
     "Pick Space Region": _clear_space_region_pick_state,
 }
 
 _SHUTDOWN_TOOL_HANDLER_SPECS = {
-    "Move Symbol": "_cancel_symbol_handle_point_pick",
-    "Rotate Symbol": "_cancel_symbol_handle_point_pick",
+    "Move Symbol": "symbols.cancel_symbol_handle_point_pick",
+    "Rotate Symbol": "symbols.cancel_symbol_handle_point_pick",
 }
 
 _ACTION_CANCEL_SPACE_REGION_PICK = ActivationActionSpec(
@@ -234,7 +234,7 @@ _ACTION_CANCEL_EMBEDDED_TOOL = ActivationActionSpec(
     predicate_name="_has_active_embedded_tool",
 )
 _ACTION_CANCEL_SYMBOL_HANDLE_PICK_AND_RETURN = ActivationActionSpec(
-    "_cancel_symbol_handle_point_pick",
+    "symbols.cancel_symbol_handle_point_pick",
     current_tools=("Move Symbol", "Rotate Symbol"),
     stop_after=True,
 )

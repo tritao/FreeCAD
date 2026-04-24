@@ -2792,35 +2792,6 @@ class PlanEditSession:
     def _clear_symbol_edit_preview(self):
         return symbol_overlays.clear_symbol_edit_preview(self)
 
-    def _get_symbol_handle_placement(self, symbol, handle_role, point):
-        return plan_symbol_edit.get_symbol_handle_placement(self, symbol, handle_role, point)
-
-    def _activate_symbol_handle(self, symbol, handle_role):
-        return plan_symbol_edit.activate_symbol_handle(self, symbol, handle_role)
-
-    def _activate_symbol_handle_now(self, symbol, handle_role):
-        return plan_symbol_edit.activate_symbol_handle_now(self, symbol, handle_role)
-
-    def _start_symbol_handle_point_pick(self, symbol, handle_role):
-        return plan_symbol_edit.start_symbol_handle_point_pick(self, symbol, handle_role)
-
-    def _update_symbol_handle_point_pick(self, point=None, snap_info=None):
-        return plan_symbol_edit.update_symbol_handle_point_pick(
-            self, point=point, snap_info=snap_info
-        )
-
-    def _finish_symbol_handle_point_pick(self, point=None, obj=None):
-        return plan_symbol_edit.finish_symbol_handle_point_pick(self, point=point, obj=obj)
-
-    def _cancel_symbol_handle_point_pick(self):
-        return plan_symbol_edit.cancel_symbol_handle_point_pick(self)
-
-    def _restore_selected_symbol(self, symbol):
-        return plan_symbol_edit.restore_selected_symbol(self, symbol)
-
-    def _queue_restore_selected_symbol(self, symbol):
-        return plan_symbol_edit.queue_restore_selected_symbol(self, symbol)
-
     def _clear_plan_selection_state(self):
         return self.selection.clear_plan_selection_state()
 

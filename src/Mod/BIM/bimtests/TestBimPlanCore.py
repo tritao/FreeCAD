@@ -1654,7 +1654,9 @@ class TestBimPlanCore(unittest.TestCase):
                 ("wall-edit", restore, refresh)
             ),
             _cancel_pending_edit=lambda: calls.append("pending"),
-            _cancel_symbol_handle_point_pick=lambda: calls.append("symbol-handle"),
+            symbols=SimpleNamespace(
+                cancel_symbol_handle_point_pick=lambda: calls.append("symbol-handle")
+            ),
             restore_state=lambda: calls.append("restore-state"),
             doc=SimpleNamespace(recompute=lambda: calls.append("recompute")),
         )
@@ -1727,7 +1729,9 @@ class TestBimPlanCore(unittest.TestCase):
                 ("wall-edit", restore, refresh)
             ),
             _cancel_pending_edit=lambda: calls.append("pending"),
-            _cancel_symbol_handle_point_pick=lambda: calls.append("symbol-handle"),
+            symbols=SimpleNamespace(
+                cancel_symbol_handle_point_pick=lambda: calls.append("symbol-handle")
+            ),
             _discard_runtime_references=lambda: calls.append("discard-runtime"),
         )
 
@@ -1845,7 +1849,7 @@ class TestBimPlanCore(unittest.TestCase):
         calls = []
         session = SimpleNamespace(
             current_tool="Move Symbol",
-            _cancel_symbol_handle_point_pick=lambda: calls.append("symbol"),
+            symbols=SimpleNamespace(cancel_symbol_handle_point_pick=lambda: calls.append("symbol")),
             _cancel_space_region_pick=lambda: calls.append("space-region"),
             _has_active_provider_point_tool=lambda: True,
             _cancel_provider_point_tool=lambda: calls.append("provider-point"),
@@ -1871,7 +1875,7 @@ class TestBimPlanCore(unittest.TestCase):
         calls = []
         session = SimpleNamespace(
             current_tool="Select",
-            _cancel_symbol_handle_point_pick=lambda: calls.append("symbol"),
+            symbols=SimpleNamespace(cancel_symbol_handle_point_pick=lambda: calls.append("symbol")),
             _cancel_space_region_pick=lambda: calls.append("space-region"),
             _has_active_provider_point_tool=lambda: False,
             _cancel_provider_point_tool=lambda: calls.append("provider-point"),

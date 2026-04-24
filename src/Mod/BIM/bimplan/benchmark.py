@@ -703,7 +703,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 lambda: (
                     session._select_symbol_for_plan_edit(symbol),
                     session.overlays.sync_selected_symbol_handles(),
-                    session._activate_symbol_handle_now(symbol, role),
+                    session.symbols.activate_symbol_handle_now(symbol, role),
                 ),
             )
 
