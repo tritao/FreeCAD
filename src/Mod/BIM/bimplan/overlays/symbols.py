@@ -60,7 +60,7 @@ def get_symbol_semantic_proxy(session, symbol, *attrs):
 def get_symbol_overlay_polylines(session, symbol, placement=None):
     if not session._is_plan_symbol_instance(symbol):
         return []
-    proxy = session._get_symbol_plan_proxy(symbol, "_collect_local_footprint_polylines")
+    proxy = get_symbol_plan_proxy(session, symbol, "_collect_local_footprint_polylines")
     if not proxy:
         return []
     try:
@@ -68,7 +68,7 @@ def get_symbol_overlay_polylines(session, symbol, placement=None):
     except Exception:
         return []
 
-    placement = session._get_symbol_global_placement(symbol, placement=placement)
+    placement = get_symbol_global_placement(session, symbol, placement=placement)
     polylines = []
     for polyline in local_polylines:
         points = []
@@ -92,7 +92,7 @@ def get_symbol_overlay_polylines(session, symbol, placement=None):
 
 def get_symbol_overlay_segments(session, symbol, placement=None):
     segments = []
-    for polyline in session._get_symbol_overlay_polylines(symbol, placement=placement):
+    for polyline in get_symbol_overlay_polylines(session, symbol, placement=placement):
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
@@ -152,7 +152,7 @@ def get_symbol_overlay_screen_polylines(session, symbol):
         return cached[1]
 
     projected_polylines = []
-    for polyline in session._get_symbol_overlay_polylines(symbol):
+    for polyline in get_symbol_overlay_polylines(session, symbol):
         if len(polyline) < 2:
             continue
         projected = []
@@ -170,7 +170,7 @@ def get_symbol_overlay_screen_polylines(session, symbol):
 
 
 def refresh_selected_symbol_visuals(session):
-    session._sync_selected_symbol_overlay()
+    sync_selected_symbol_overlay(session)
     session.overlays.sync_selected_symbol_handles()
     session.viewport.request_view_redraw()
 
@@ -181,7 +181,7 @@ def create_symbol_overlay_trackers(session, symbol, color, width, tracker_store,
     except ImportError:
         return
 
-    for polyline in session._get_symbol_overlay_polylines(symbol, placement=placement):
+    for polyline in get_symbol_overlay_polylines(session, symbol, placement=placement):
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
@@ -200,7 +200,7 @@ def create_symbol_overlay_trackers(session, symbol, color, width, tracker_store,
 
 def sync_hovered_symbol_overlay(session):
     with session._plan_perf_trace_span("sync_hovered_symbol_overlay"):
-        session._clear_hovered_symbol_overlay()
+        clear_hovered_symbol_overlay(session)
         if session.current_tool != "Select":
             return
         if not session._is_plan_symbol_instance(session.hovered_symbol):
@@ -225,15 +225,15 @@ def sync_selected_symbol_overlay(session):
     with session._plan_perf_trace_span("sync_selected_symbol_overlay"):
         symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
         if session.current_tool != "Select" or not session._is_plan_symbol_instance(symbol):
-            session._clear_selected_symbol_overlay()
+            clear_selected_symbol_overlay(session)
             return
         width = session.viewport.scaled_line_width(3)
         try:
             import draftguitools.gui_trackers as DraftTrackers
         except ImportError:
-            session._clear_selected_symbol_overlay()
+            clear_selected_symbol_overlay(session)
             return
-        segments = session._get_symbol_overlay_segments(symbol)
+        segments = get_symbol_overlay_segments(session, symbol)
         session._plan_perf_count("selected_symbol_overlay_segments", len(segments))
         color = (0.12, 0.38, 0.95)
         transferred_trackers = False
@@ -248,7 +248,7 @@ def sync_selected_symbol_overlay(session):
                 transferred_trackers = True
                 session._plan_perf_count("selected_symbol_overlay_tracker_transfers")
             else:
-                session._clear_selected_symbol_overlay()
+                clear_selected_symbol_overlay(session)
                 for _start, _end in segments:
                     tracker = session.overlays.make_plan_line_tracker(
                         DraftTrackers,
@@ -274,7 +274,7 @@ def clear_selected_symbol_overlay(session):
 
 def get_symbol_local_anchor(session, symbol):
     semantic_obj = session._get_plan_semantic_object(symbol)
-    proxy = session._get_symbol_semantic_proxy(symbol, "get_plan_anchor")
+    proxy = get_symbol_semantic_proxy(session, symbol, "get_plan_anchor")
     if proxy:
         try:
             return FreeCAD.Vector(proxy.get_plan_anchor(semantic_obj))
@@ -290,7 +290,7 @@ def get_symbol_local_anchor(session, symbol):
 
 def get_symbol_local_facing(session, symbol):
     semantic_obj = session._get_plan_semantic_object(symbol)
-    proxy = session._get_symbol_semantic_proxy(symbol, "get_plan_facing")
+    proxy = get_symbol_semantic_proxy(session, symbol, "get_plan_facing")
     if proxy:
         try:
             facing = FreeCAD.Vector(proxy.get_plan_facing(semantic_obj))
@@ -313,8 +313,8 @@ def get_symbol_local_facing(session, symbol):
 
 
 def get_symbol_anchor_point(session, symbol, placement=None):
-    placement = session._get_symbol_global_placement(symbol, placement=placement)
-    anchor = session._get_symbol_local_anchor(symbol)
+    placement = get_symbol_global_placement(session, symbol, placement=placement)
+    anchor = get_symbol_local_anchor(session, symbol)
     try:
         return placement.multVec(anchor)
     except Exception:
@@ -325,8 +325,8 @@ def get_symbol_anchor_point(session, symbol, placement=None):
 
 
 def get_symbol_facing_vector(session, symbol, placement=None):
-    placement = session._get_symbol_global_placement(symbol, placement=placement)
-    facing = session._get_symbol_local_facing(symbol)
+    placement = get_symbol_global_placement(session, symbol, placement=placement)
+    facing = get_symbol_local_facing(session, symbol)
     try:
         facing = placement.Rotation.multVec(facing)
     except Exception:
@@ -423,7 +423,7 @@ def get_symbol_handle_radius(session, symbol, placement=None):
     placement = placement or session._get_plan_object_global_placement(symbol)
     anchor = session._get_symbol_anchor_point(symbol, placement=placement)
     radius = 0.0
-    for polyline in session._get_symbol_overlay_polylines(symbol, placement=placement):
+    for polyline in get_symbol_overlay_polylines(session, symbol, placement=placement):
         for point in polyline:
             radius = max(
                 radius,

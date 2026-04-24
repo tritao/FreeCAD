@@ -48,7 +48,7 @@ def cancel_wall_edit(session, restore=True, refresh=True):
 
     session.current_tool = "Select"
     session._cancel_pending_edit()
-    session._sync_selected_wall_opening_context_overlay()
+    session.overlays.sync_selected_wall_opening_context_overlay()
     if refresh:
         session._refresh_task_panel_status()
     return True

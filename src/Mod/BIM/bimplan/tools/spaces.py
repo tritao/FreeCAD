@@ -1502,7 +1502,7 @@ def cancel_space_text_position_pick(session):
     session.current_tool = "Select"
     if space:
         session._set_selected_plan_target("space", space, pending_restore=True)
-    session._sync_selected_space_overlay()
+    session.overlays.sync_selected_space_overlay()
     session._refresh_task_panel_status()
 
 

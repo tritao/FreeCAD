@@ -41,9 +41,11 @@ def get_symbol_handle_placement(session, symbol, handle_role, point):
     if point is None:
         return None
     placement = session._copy_placement(start_placement)
-    parent_global = session._get_symbol_parent_global_placement(symbol, placement=start_placement)
+    parent_global = session.overlays.get_symbol_parent_global_placement(
+        symbol, placement=start_placement
+    )
     anchor_global = session._get_symbol_anchor_point(symbol, placement=start_placement)
-    local_anchor = session._get_symbol_local_anchor(symbol)
+    local_anchor = session.overlays.get_symbol_local_anchor(symbol)
     if handle_role == "move":
         point_global = FreeCAD.Vector(point.x, point.y, anchor_global.z)
         try:
@@ -86,7 +88,7 @@ def get_symbol_handle_placement(session, symbol, handle_role, point):
     delta_rotation = FreeCAD.Rotation(
         FreeCAD.Vector(0, 0, 1), math.degrees(target_angle - reference_angle)
     )
-    current_global = session._get_symbol_global_placement(symbol, placement=start_placement)
+    current_global = session.overlays.get_symbol_global_placement(symbol, placement=start_placement)
     try:
         global_rotation = delta_rotation.multiply(current_global.Rotation)
         placement.Rotation = parent_global.Rotation.inverse().multiply(global_rotation)
