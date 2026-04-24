@@ -2519,10 +2519,7 @@ void ToolBarManager::retranslate() const
     }
 }
 
-void ToolBarManager::setToolbarLayoutContextOverride(
-    const QString& workbench,
-    const QString& context
-) QString ToolBarManager::currentToolbarLayoutResetLabel() const
+QString ToolBarManager::currentToolbarLayoutResetLabel() const
 {
     if (!rememberToolbarLayoutByWorkbench()) {
         return {};
