@@ -99,13 +99,13 @@ def on_mouse_pressed(session, event_callback):
                         elif node_kind == "provider_handle":
                             _kind, obj, index = node
                             session._set_selected_plan_target_state("provider", obj)
-                            session._clear_wall_grips()
+                            session.overlays.clear_wall_grips()
                             session._clear_selected_wall_overlay()
                             session._activate_provider_handle(obj, index)
                         elif node_kind == "symbol_handle":
                             _kind, obj, role = node
                             session._set_selected_plan_target_state("symbol", obj)
-                            session._clear_wall_grips()
+                            session.overlays.clear_wall_grips()
                             session._clear_selected_wall_overlay()
                             session._activate_symbol_handle(obj, role)
                         elif node_kind in (
@@ -178,7 +178,7 @@ def on_mouse_moved(session, event_callback):
         if not session._update_hovered_plan_target(mouse_pos):
             return
         if session._grip_trackers or session._is_selected_plan_target("wall"):
-            session._sync_wall_grips()
+            session.overlays.sync_wall_grips()
         session.viewport.request_view_redraw()
         hovered_after = session._get_hovered_plan_target()
         session._plan_perf_set_fields(

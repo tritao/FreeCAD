@@ -110,10 +110,10 @@ _TARGET_KIND_POLICIES = {
         hovered_attr_name="hovered_symbol",
         hovered_setter_name="_set_hovered_symbol",
         overlay_label="symbol_overlay",
-        selected_handle_clearers=("_clear_selected_symbol_handles",),
+        selected_handle_clearers=("overlays.clear_selected_symbol_handles",),
         selected_visual_sync=(
             ("sync_selected_symbol_overlay", "overlays.sync_selected_symbol_overlay"),
-            ("sync_selected_symbol_handles", "_sync_selected_symbol_handles"),
+            ("sync_selected_symbol_handles", "overlays.sync_selected_symbol_handles"),
         ),
         hover_set_sync=(("sync_hovered_symbol_overlay", "overlays.sync_hovered_symbol_overlay"),),
     ),

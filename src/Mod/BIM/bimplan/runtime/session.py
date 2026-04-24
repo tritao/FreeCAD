@@ -122,7 +122,6 @@ _PLAN_VISUAL_PROVIDER_OVERLAYS = plan_document_visuals.PLAN_VISUAL_PROVIDER_OVER
 _PLAN_VISUAL_VIEW_SCALE = plan_document_visuals.PLAN_VISUAL_VIEW_SCALE
 _PLAN_VISUAL_ALL = plan_document_visuals.PLAN_VISUAL_ALL
 _PLAN_GUI_SELECTION_SYNC_DELAY_MS = 80
-_PLAN_WALL_GRIP_REFRESH_DELAY_MS = 120
 _PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
 _PLAN_VIEW_LOCKED_ACTIONS = (
     "Std_ViewFront",
@@ -2361,18 +2360,6 @@ class PlanEditSession:
     def _retarget_edit_tracker(self, tracker, obj, index):
         return wall_overlays.retarget_edit_tracker(tracker, obj, index)
 
-    def _sync_wall_grips(self):
-        return wall_overlays.sync_wall_grips(self)
-
-    def _schedule_wall_grip_sync(self, delay_ms=_PLAN_WALL_GRIP_REFRESH_DELAY_MS):
-        return wall_overlays.schedule_wall_grip_sync(self, delay_ms=delay_ms)
-
-    def _run_scheduled_wall_grip_sync(self, generation=None):
-        return wall_overlays.run_scheduled_wall_grip_sync(self, generation=generation)
-
-    def _clear_wall_grips(self):
-        return wall_overlays.clear_wall_grips(self)
-
     def _get_footprint_overlay_polylines(self, faces):
         return overlay_geometry.get_footprint_overlay_polylines(faces)
 
@@ -2880,41 +2867,8 @@ class PlanEditSession:
     def _symbol_rotation_snap_enabled(self):
         return self.symbols.symbol_rotation_snap_enabled()
 
-    def _get_symbol_rotation_snap_increment_degrees(self):
-        return symbol_overlays.get_symbol_rotation_snap_increment_degrees(self)
-
-    def _get_symbol_rotation_snap_step_radians(self):
-        return symbol_overlays.get_symbol_rotation_snap_step_radians(self)
-
     def _format_symbol_rotation_snap_label(self):
         return self.symbols.format_symbol_rotation_snap_label()
-
-    def _symbol_rotation_free_angle_override_active(self):
-        return symbol_overlays.symbol_rotation_free_angle_override_active(self)
-
-    def _resolve_symbol_handle_target_point(self, symbol, handle_role, point, placement=None):
-        return symbol_overlays.resolve_symbol_handle_target_point(
-            self,
-            symbol,
-            handle_role,
-            point,
-            placement=placement,
-        )
-
-    def _get_symbol_handle_radius(self, symbol, placement=None):
-        return symbol_overlays.get_symbol_handle_radius(self, symbol, placement=placement)
-
-    def _get_selected_symbol_handle_specs(self, symbol):
-        return symbol_overlays.get_selected_symbol_handle_specs(self, symbol)
-
-    def _sync_selected_symbol_handles(self):
-        return symbol_overlays.sync_selected_symbol_handles(self)
-
-    def _clear_selected_symbol_handles(self):
-        return symbol_overlays.clear_selected_symbol_handles(self)
-
-    def _pick_selected_symbol_handle(self, mouse_pos, radius_px=10):
-        return symbol_overlays.pick_selected_symbol_handle(self, mouse_pos, radius_px=radius_px)
 
     def _sync_symbol_edit_preview(self, symbol, placement, guide_start=None, guide_end=None):
         return symbol_overlays.sync_symbol_edit_preview(

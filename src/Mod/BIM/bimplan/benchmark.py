@@ -603,7 +603,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
             if not session._update_hovered_plan_target(screen, force=True):
                 return
             if session._grip_trackers or session._is_selected_plan_target("wall"):
-                session._sync_wall_grips()
+                session.overlays.sync_wall_grips()
             session.viewport.request_view_redraw()
 
         _trace_direct_operation(session, "hover_pick_resolve", spec.name, resolve)
@@ -652,7 +652,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 spec.name,
                 lambda: (
                     session._select_wall_for_plan_edit(wall),
-                    session._sync_wall_grips(),
+                    session.overlays.sync_wall_grips(),
                     session._activate_wall_grip_now(0, wall=wall),
                 ),
             )
@@ -694,7 +694,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
         symbol = scene.symbols[0]
 
         def activate_symbol_handle():
-            specs = tuple(session._get_selected_symbol_handle_specs(symbol))
+            specs = tuple(session.overlays.get_selected_symbol_handle_specs(symbol))
             role = specs[0][0] if specs else "move"
             _trace_direct_operation(
                 session,
@@ -702,7 +702,7 @@ def _run_interactions(session, scene, spec, operations_handle, settle_ms, timer_
                 spec.name,
                 lambda: (
                     session._select_symbol_for_plan_edit(symbol),
-                    session._sync_selected_symbol_handles(),
+                    session.overlays.sync_selected_symbol_handles(),
                     session._activate_symbol_handle_now(symbol, role),
                 ),
             )

@@ -111,7 +111,7 @@ def start_wall_edit(session, mode):
                 wall.ViewObject.Visibility = False
             except Exception:
                 session._edit_wall_visibility = None
-            session._clear_wall_grips()
+            session.overlays.clear_wall_grips()
             session._clear_selected_wall_overlay()
             session._sync_wall_edit_preview(session._preview_points, include_opening_preview=False)
 
@@ -317,7 +317,7 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
     session._cancel_pending_edit()
     session._set_selected_plan_target("wall", wall, pending_restore=True)
     session._update_wall_relation_status(wall)
-    session._sync_wall_grips()
+    session.overlays.sync_wall_grips()
     session._refresh_task_panel_status()
 
 

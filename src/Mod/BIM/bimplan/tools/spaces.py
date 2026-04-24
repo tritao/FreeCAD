@@ -899,7 +899,7 @@ def _start_space_region_pick_mode(session, boundaries, candidates, seed_space=No
         candidates=candidates,
         seed_space=seed_space,
     )
-    session._clear_wall_grips()
+    session.overlays.clear_wall_grips()
     session._clear_hovered_plan_targets(kinds=plan_target_kinds.SPACE_EDIT_CLEAR_HOVERED_KINDS)
     session._refresh_primary_selected_plan_target()
     FreeCAD.Console.PrintMessage(

@@ -957,7 +957,7 @@ def get_plan_target_from_edit_node(session, node):
 
 
 def get_edit_node(session, mouse_pos):
-    symbol_handle_role = session._pick_selected_symbol_handle(mouse_pos)
+    symbol_handle_role = session.overlays.pick_selected_symbol_handle(mouse_pos)
     if symbol_handle_role is not None:
         node = (
             "symbol_handle",
