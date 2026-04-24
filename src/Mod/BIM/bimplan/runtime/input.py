@@ -132,7 +132,7 @@ def on_mouse_pressed(session, event_callback):
                             return
                         pos = event.getPosition().getValue()
                         mouse_pos = (pos[0], pos[1])
-                        if session._is_plan_additive_selection_active():
+                        if session.selection.is_plan_additive_selection_active():
                             if not session.selection.toggle_plan_target_selection_at_position(
                                 mouse_pos, event_callback
                             ):

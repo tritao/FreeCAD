@@ -1015,7 +1015,7 @@ def activate_plan_target(
         ):
             session.performance.plan_perf_set_fields(activate_plan_target_result=False)
             return False
-        session._clear_hovered_plan_targets(clear_hovered_kinds)
+        session.selection.clear_hovered_plan_targets(clear_hovered_kinds)
         session.input.claim_left_button_click(event_callback)
         session.performance.plan_perf_set_fields(
             activate_plan_target_result=True,
