@@ -363,7 +363,7 @@ def _activate_tool_with_profile(session, profile):
     context = profile.capture_state(session) if callable(profile.capture_state) else None
     _run_activation_action_specs(session, profile.preflight_actions)
     if profile.clear_plan_relation_status:
-        session._clear_plan_relation_status()
+        session.wall_relations.clear_plan_relation_status()
     if profile.clear_selected_target:
         session.selection.set_selected_plan_target()
     if profile.clear_hovered_targets:
@@ -848,13 +848,13 @@ def _reset_pending_edit_state(session, *, clear_opening_edit=False):
 def cancel_pending_edit(session):
     if session._tearing_down:
         _reset_pending_edit_state(session)
-        session._clear_plan_relation_status()
+        session.wall_relations.clear_plan_relation_status()
         return
     stop_snapper(session)
     session.snap.pop_opening_move_snap_profile()
     FreeCAD.activeDraftCommand = None
     _reset_pending_edit_state(session, clear_opening_edit=True)
-    session._clear_plan_relation_status()
+    session.wall_relations.clear_plan_relation_status()
     session.overlays.sync_wall_grips()
     plan_target_dispatch.sync_selected_target_visuals(
         session,

@@ -86,6 +86,15 @@ class PlanWallRelationsAPI:
     def get_plan_relation_status_message(self):
         return get_plan_relation_status_message(self.session)
 
+    def clear_plan_relation_status(self):
+        return clear_plan_relation_status(self.session)
+
+    def collect_wall_relation_warnings(self, wall):
+        return collect_wall_relation_warnings(self.session, wall)
+
+    def update_wall_relation_status(self, wall):
+        return update_wall_relation_status(self.session, wall)
+
 
 def activate_join_tool(session):
     session.spaces.cancel_space_region_pick(refresh=False)
@@ -99,7 +108,7 @@ def activate_join_tool(session):
         session.lifecycle.cancel_embedded_tool()
     session.wall_edit.cancel_wall_edit()
     session.lifecycle.cancel_pending_edit()
-    session._clear_plan_relation_status()
+    session.wall_relations.clear_plan_relation_status()
     session.overlays.clear_wall_grips()
     session.overlays.clear_selected_wall_overlay()
     session._set_hovered_opening(None)
@@ -322,7 +331,7 @@ def unjoin_plan_wall_pair(session, source_wall, target_wall):
             pass
         return False
 
-    session._clear_plan_relation_status()
+    session.wall_relations.clear_plan_relation_status()
     session.task_panels.refresh_task_panel_status()
     return True
 
