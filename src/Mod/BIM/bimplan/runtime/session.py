@@ -341,6 +341,20 @@ class PlanEditSession:
             self.__dict__["document_visual_state"] = state
         return state
 
+    def _ensure_provider_transient_state(self):
+        state = self.__dict__.get("provider_transient_state")
+        if state is None:
+            state = plan_session_state.PlanProviderTransientState()
+            self.__dict__["provider_transient_state"] = state
+        return state
+
+    def _ensure_opening_transient_state(self):
+        state = self.__dict__.get("opening_transient_state")
+        if state is None:
+            state = plan_session_state.PlanOpeningTransientState()
+            self.__dict__["opening_transient_state"] = state
+        return state
+
     @property
     def _plan_relation_status_message(self):
         return self._ensure_task_panel_state().relation_status_message
@@ -996,6 +1010,208 @@ class PlanEditSession:
     @_document_visual_refresh_deferred.setter
     def _document_visual_refresh_deferred(self, value):
         self._ensure_document_visual_state().document_visual_refresh_deferred = bool(value)
+
+    @property
+    def _selected_provider_overlay_render_state(self):
+        return self._ensure_provider_transient_state().selected_provider_overlay_render_state
+
+    @_selected_provider_overlay_render_state.setter
+    def _selected_provider_overlay_render_state(self, value):
+        self._ensure_provider_transient_state().selected_provider_overlay_render_state = value
+
+    @property
+    def _provider_handle_trackers(self):
+        return self._ensure_provider_transient_state().provider_handle_trackers
+
+    @_provider_handle_trackers.setter
+    def _provider_handle_trackers(self, value):
+        self._ensure_provider_transient_state().provider_handle_trackers = list(value or [])
+
+    @property
+    def _selected_provider_handle_render_state(self):
+        return self._ensure_provider_transient_state().selected_provider_handle_render_state
+
+    @_selected_provider_handle_render_state.setter
+    def _selected_provider_handle_render_state(self, value):
+        self._ensure_provider_transient_state().selected_provider_handle_render_state = value
+
+    @property
+    def _provider_selected_objects(self):
+        return self._ensure_provider_transient_state().provider_selected_objects
+
+    @_provider_selected_objects.setter
+    def _provider_selected_objects(self, value):
+        self._ensure_provider_transient_state().provider_selected_objects = list(value or [])
+
+    @property
+    def _provider_point_host_target(self):
+        return self._ensure_provider_transient_state().provider_point_host_target
+
+    @_provider_point_host_target.setter
+    def _provider_point_host_target(self, value):
+        self._ensure_provider_transient_state().provider_point_host_target = value
+
+    @property
+    def _provider_point_host_source(self):
+        return self._ensure_provider_transient_state().provider_point_host_source
+
+    @_provider_point_host_source.setter
+    def _provider_point_host_source(self, value):
+        self._ensure_provider_transient_state().provider_point_host_source = str(value or "")
+
+    @property
+    def _provider_point_preview_trackers(self):
+        return self._ensure_provider_transient_state().provider_point_preview_trackers
+
+    @_provider_point_preview_trackers.setter
+    def _provider_point_preview_trackers(self, value):
+        self._ensure_provider_transient_state().provider_point_preview_trackers = list(value or [])
+
+    @property
+    def _provider_point_preview_render_state(self):
+        return self._ensure_provider_transient_state().provider_point_preview_render_state
+
+    @_provider_point_preview_render_state.setter
+    def _provider_point_preview_render_state(self, value):
+        self._ensure_provider_transient_state().provider_point_preview_render_state = value
+
+    @property
+    def _provider_point_preview_style_state(self):
+        return self._ensure_provider_transient_state().provider_point_preview_style_state
+
+    @_provider_point_preview_style_state.setter
+    def _provider_point_preview_style_state(self, value):
+        self._ensure_provider_transient_state().provider_point_preview_style_state = value
+
+    @property
+    def _provider_point_preview_source_point(self):
+        return self._ensure_provider_transient_state().provider_point_preview_source_point
+
+    @_provider_point_preview_source_point.setter
+    def _provider_point_preview_source_point(self, value):
+        self._ensure_provider_transient_state().provider_point_preview_source_point = value
+
+    @property
+    def _provider_point_preview_point(self):
+        return self._ensure_provider_transient_state().provider_point_preview_point
+
+    @_provider_point_preview_point.setter
+    def _provider_point_preview_point(self, value):
+        self._ensure_provider_transient_state().provider_point_preview_point = value
+
+    @property
+    def _provider_point_preview_host_target(self):
+        return self._ensure_provider_transient_state().provider_point_preview_host_target
+
+    @_provider_point_preview_host_target.setter
+    def _provider_point_preview_host_target(self, value):
+        self._ensure_provider_transient_state().provider_point_preview_host_target = value
+
+    @property
+    def _provider_point_preview_host_source(self):
+        return self._ensure_provider_transient_state().provider_point_preview_host_source
+
+    @_provider_point_preview_host_source.setter
+    def _provider_point_preview_host_source(self, value):
+        self._ensure_provider_transient_state().provider_point_preview_host_source = str(
+            value or ""
+        )
+
+    @property
+    def _opening_handle_trackers(self):
+        return self._ensure_opening_transient_state().opening_handle_trackers
+
+    @_opening_handle_trackers.setter
+    def _opening_handle_trackers(self, value):
+        self._ensure_opening_transient_state().opening_handle_trackers = list(value or [])
+
+    @property
+    def _opening_handle_tracker_pool(self):
+        return self._ensure_opening_transient_state().opening_handle_tracker_pool
+
+    @_opening_handle_tracker_pool.setter
+    def _opening_handle_tracker_pool(self, value):
+        self._ensure_opening_transient_state().opening_handle_tracker_pool = list(value or [])
+
+    @property
+    def _opening_handle_tracker_pool_queued(self):
+        return self._ensure_opening_transient_state().opening_handle_tracker_pool_queued
+
+    @_opening_handle_tracker_pool_queued.setter
+    def _opening_handle_tracker_pool_queued(self, value):
+        self._ensure_opening_transient_state().opening_handle_tracker_pool_queued = bool(value)
+
+    @property
+    def _selected_opening_handle_render_state(self):
+        return self._ensure_opening_transient_state().selected_opening_handle_render_state
+
+    @_selected_opening_handle_render_state.setter
+    def _selected_opening_handle_render_state(self, value):
+        self._ensure_opening_transient_state().selected_opening_handle_render_state = value
+
+    @property
+    def _selected_opening_hard_refresh_queued(self):
+        return self._ensure_opening_transient_state().selected_opening_hard_refresh_queued
+
+    @_selected_opening_hard_refresh_queued.setter
+    def _selected_opening_hard_refresh_queued(self, value):
+        self._ensure_opening_transient_state().selected_opening_hard_refresh_queued = bool(value)
+
+    @property
+    def _opening_host_recompute_queued(self):
+        return self._ensure_opening_transient_state().opening_host_recompute_queued
+
+    @_opening_host_recompute_queued.setter
+    def _opening_host_recompute_queued(self, value):
+        self._ensure_opening_transient_state().opening_host_recompute_queued = bool(value)
+
+    @property
+    def _opening_host_recompute_running(self):
+        return self._ensure_opening_transient_state().opening_host_recompute_running
+
+    @_opening_host_recompute_running.setter
+    def _opening_host_recompute_running(self, value):
+        self._ensure_opening_transient_state().opening_host_recompute_running = bool(value)
+
+    @property
+    def _opening_move_preview_trackers(self):
+        return self._ensure_opening_transient_state().opening_move_preview_trackers
+
+    @_opening_move_preview_trackers.setter
+    def _opening_move_preview_trackers(self, value):
+        self._ensure_opening_transient_state().opening_move_preview_trackers = list(value or [])
+
+    @property
+    def _symbol_edit_preview_trackers(self):
+        return self._ensure_opening_transient_state().symbol_edit_preview_trackers
+
+    @_symbol_edit_preview_trackers.setter
+    def _symbol_edit_preview_trackers(self, value):
+        self._ensure_opening_transient_state().symbol_edit_preview_trackers = list(value or [])
+
+    @property
+    def _opening_move_snap_profile_pushed(self):
+        return self._ensure_opening_transient_state().opening_move_snap_profile_pushed
+
+    @_opening_move_snap_profile_pushed.setter
+    def _opening_move_snap_profile_pushed(self, value):
+        self._ensure_opening_transient_state().opening_move_snap_profile_pushed = bool(value)
+
+    @property
+    def _edit_opening_move_anchor(self):
+        return self._ensure_opening_transient_state().edit_opening_move_anchor
+
+    @_edit_opening_move_anchor.setter
+    def _edit_opening_move_anchor(self, value):
+        self._ensure_opening_transient_state().edit_opening_move_anchor = str(value or "center")
+
+    @property
+    def _edit_opening_move_raw_point(self):
+        return self._ensure_opening_transient_state().edit_opening_move_raw_point
+
+    @_edit_opening_move_raw_point.setter
+    def _edit_opening_move_raw_point(self, value):
+        self._ensure_opening_transient_state().edit_opening_move_raw_point = value
 
     def __init__(self):
         self.selection = PlanSelectionAPI(self)

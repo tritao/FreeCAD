@@ -184,6 +184,39 @@ class PlanDocumentVisualState:
     document_visual_refresh_deferred: bool = False
 
 
+@dataclass
+class PlanProviderTransientState:
+    selected_provider_overlay_render_state: object = None
+    provider_handle_trackers: list = field(default_factory=list)
+    selected_provider_handle_render_state: object = None
+    provider_selected_objects: list = field(default_factory=list)
+    provider_point_host_target: object = None
+    provider_point_host_source: str = ""
+    provider_point_preview_trackers: list = field(default_factory=list)
+    provider_point_preview_render_state: object = None
+    provider_point_preview_style_state: object = None
+    provider_point_preview_source_point: object = None
+    provider_point_preview_point: object = None
+    provider_point_preview_host_target: object = None
+    provider_point_preview_host_source: str = ""
+
+
+@dataclass
+class PlanOpeningTransientState:
+    opening_handle_trackers: list = field(default_factory=list)
+    opening_handle_tracker_pool: list = field(default_factory=list)
+    opening_handle_tracker_pool_queued: bool = False
+    selected_opening_handle_render_state: object = None
+    selected_opening_hard_refresh_queued: bool = False
+    opening_host_recompute_queued: bool = False
+    opening_host_recompute_running: bool = False
+    opening_move_preview_trackers: list = field(default_factory=list)
+    symbol_edit_preview_trackers: list = field(default_factory=list)
+    opening_move_snap_profile_pushed: bool = False
+    edit_opening_move_anchor: str = "center"
+    edit_opening_move_raw_point: object = None
+
+
 def initialize_session_read_state(session):
     session.task_panel_state = PlanTaskPanelState()
     session.provider_overlay_read_state = PlanProviderOverlayReadState(
@@ -199,6 +232,8 @@ def initialize_session_read_state(session):
     session.wall_grip_state = PlanWallGripState()
     session.viewport_state = PlanViewportState()
     session.document_visual_state = PlanDocumentVisualState()
+    session.provider_transient_state = PlanProviderTransientState()
+    session.opening_transient_state = PlanOpeningTransientState()
 
 
 def initialize_session_state(session):
@@ -258,35 +293,10 @@ def initialize_session_state(session):
     session._selected_space_overlay_render_state = None
     session._region_overlay_trackers = []
     session._provider_overlay_trackers = []
-    session._selected_provider_overlay_render_state = None
-    session._provider_handle_trackers = []
-    session._selected_provider_handle_render_state = None
-    session._provider_selected_objects = []
-    session._provider_point_host_target = None
-    session._provider_point_host_source = ""
-    session._provider_point_preview_trackers = []
-    session._provider_point_preview_render_state = None
-    session._provider_point_preview_style_state = None
-    session._provider_point_preview_source_point = None
-    session._provider_point_preview_point = None
-    session._provider_point_preview_host_target = None
-    session._provider_point_preview_host_source = ""
     session._secondary_selection_trackers = []
     session._space_region_pick_trackers = []
     session._selected_wall_opening_context_trackers = []
-    session._opening_handle_trackers = []
-    session._opening_handle_tracker_pool = []
-    session._opening_handle_tracker_pool_queued = False
-    session._selected_opening_handle_render_state = None
     session._symbol_handle_trackers = []
-    session._selected_opening_hard_refresh_queued = False
-    session._opening_host_recompute_queued = False
-    session._opening_host_recompute_running = False
-    session._opening_move_preview_trackers = []
-    session._symbol_edit_preview_trackers = []
-    session._opening_move_snap_profile_pushed = False
-    session._edit_opening_move_anchor = "center"
-    session._edit_opening_move_raw_point = None
     session._selection_observer_added = False
     session._document_observer_added = False
     session._pending_selected_wall_reset = False
