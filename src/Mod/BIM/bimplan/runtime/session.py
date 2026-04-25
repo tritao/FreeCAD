@@ -293,13 +293,13 @@ class PlanEditSession:
             if self.performance.is_plan_perf_trace_enabled():
                 FreeCAD.Console.PrintMessage(
                     translate("BIM_PlanEdit", "BIM Plan Edit perf trace: {path}\n").format(
-                        path=self._plan_perf_log_path
+                        path=self.performance_state.plan_perf_log_path
                     )
                 )
             if self.performance.is_plan_pick_debug_enabled():
                 FreeCAD.Console.PrintMessage(
                     translate("BIM_PlanEdit", "BIM Plan Edit pick debug: {path}\n").format(
-                        path=self._plan_pick_debug_log_path
+                        path=self.performance_state.plan_pick_debug_log_path
                     )
                 )
             FreeCAD.Console.PrintMessage(translate("BIM_PlanEdit", "Entered BIM Plan Edit mode.\n"))

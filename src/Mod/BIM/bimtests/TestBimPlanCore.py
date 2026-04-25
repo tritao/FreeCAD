@@ -284,6 +284,7 @@ class TestBimPlanCore(unittest.TestCase):
         from bimplan.runtime.session_state import (
             PlanRegionToolState,
             PlanInteractionState,
+            PlanPerformanceState,
             PlanProviderOverlayReadState,
             ProviderPointState,
             PlanSelectionState,
@@ -299,6 +300,7 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIsInstance(session.task_panel_state, PlanTaskPanelState)
         self.assertIsInstance(session.provider_overlay_read_state, PlanProviderOverlayReadState)
         self.assertIsInstance(session.interaction_state, PlanInteractionState)
+        self.assertIsInstance(session.performance_state, PlanPerformanceState)
         self.assertIsInstance(session.selection_state, PlanSelectionState)
         self.assertIsInstance(session.provider_point_state, ProviderPointState)
         self.assertIsInstance(session.space_region_pick_state, SpaceRegionPickState)
@@ -307,6 +309,8 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual("architecture", session.provider_overlay_read_state.mode)
         self.assertEqual({}, session.provider_overlay_read_state.visibility)
         self.assertIsNone(session.interaction_state.embedded_tool)
+        self.assertIsNone(session.performance_state.plan_perf_log_path)
+        self.assertEqual(0, session.performance_state.plan_perf_sequence)
         self.assertIsNone(session.provider_point_state.provider_point_tool)
         self.assertEqual([], session.space_region_pick_state.candidates)
         self.assertIsNone(session.plan_region_tool_state.parent_space)

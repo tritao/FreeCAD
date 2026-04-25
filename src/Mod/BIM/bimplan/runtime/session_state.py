@@ -212,6 +212,18 @@ class PlanDocumentVisualState:
 
 
 @dataclass
+class PlanPerformanceState:
+    plan_edit_params: object = None
+    plan_perf_log_path: object = None
+    plan_pick_debug_log_path: object = None
+    plan_perf_current_event: object = None
+    plan_perf_sequence: int = 0
+    plan_pick_debug_sequence: int = 0
+    plan_pick_debug_scope_depth: int = 0
+    plan_pick_debug_scope_name: str = ""
+
+
+@dataclass
 class PlanProviderTransientState:
     selected_provider_overlay_render_state: object = None
     provider_handle_trackers: list = field(default_factory=list)
@@ -413,6 +425,7 @@ _PLAN_EDIT_SESSION_STATE_ENSURERS = (
     ("_ensure_wall_grip_runtime_state", "wall_grip_state", PlanWallGripState),
     ("_ensure_viewport_state", "viewport_state", PlanViewportState),
     ("_ensure_document_visual_state", "document_visual_state", PlanDocumentVisualState),
+    ("_ensure_performance_state", "performance_state", PlanPerformanceState),
     ("_ensure_provider_transient_state", "provider_transient_state", PlanProviderTransientState),
     ("_ensure_opening_transient_state", "opening_transient_state", PlanOpeningTransientState),
     ("_ensure_overlay_tracker_state", "overlay_tracker_state", PlanOverlayTrackerState),
@@ -653,6 +666,19 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
                 _coerce_int,
             ),
             ("_document_visual_refresh_deferred", "document_visual_refresh_deferred", _coerce_bool),
+        ),
+    ),
+    (
+        "_ensure_performance_state",
+        (
+            ("_plan_edit_params", "plan_edit_params", _coerce_identity),
+            ("_plan_perf_log_path", "plan_perf_log_path", _coerce_identity),
+            ("_plan_pick_debug_log_path", "plan_pick_debug_log_path", _coerce_identity),
+            ("_plan_perf_current_event", "plan_perf_current_event", _coerce_identity),
+            ("_plan_perf_sequence", "plan_perf_sequence", _coerce_int),
+            ("_plan_pick_debug_sequence", "plan_pick_debug_sequence", _coerce_int),
+            ("_plan_pick_debug_scope_depth", "plan_pick_debug_scope_depth", _coerce_int),
+            ("_plan_pick_debug_scope_name", "plan_pick_debug_scope_name", _make_str_coercer("")),
         ),
     ),
     (
