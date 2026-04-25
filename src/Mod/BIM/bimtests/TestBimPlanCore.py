@@ -920,8 +920,10 @@ class TestBimPlanCore(unittest.TestCase):
 
         wall = SimpleNamespace(Name="Wall001")
         session = SimpleNamespace(
-            _get_selected_plan_target=lambda: ("wall", wall),
-            _get_selected_plan_targets=lambda: (("wall", wall),),
+            selection=SimpleNamespace(
+                get_selected_plan_target=lambda: ("wall", wall),
+                get_selected_plan_targets=lambda: (("wall", wall),),
+            )
         )
 
         context = PlanTaskPanelContext(session)
@@ -1163,7 +1165,6 @@ class TestBimPlanCore(unittest.TestCase):
             _clear_plan_relation_status=lambda: None,
             _set_selected_plan_target=lambda *args, **kwargs: None,
             _clear_hovered_plan_targets=lambda *args, **kwargs: None,
-            _get_selected_plan_target_object=lambda kind: parent_space if kind == "space" else None,
             task_panels=SimpleNamespace(
                 refresh_task_panel_status=lambda selection_only=False: None
             ),
@@ -1179,6 +1180,11 @@ class TestBimPlanCore(unittest.TestCase):
                 cancel_space_separator_tool=lambda refresh=False: None,
                 handle_plan_region_point=lambda *args, **kwargs: None,
                 update_plan_region_preview=lambda *args, **kwargs: None,
+            ),
+            selection=SimpleNamespace(
+                get_selected_plan_target_object=lambda kind: (
+                    parent_space if kind == "space" else None
+                )
             ),
         )
 
@@ -1240,7 +1246,6 @@ class TestBimPlanCore(unittest.TestCase):
         )
         session = SimpleNamespace(
             doc=doc,
-            _get_selected_plan_targets=lambda: [("wall", wall_a), ("wall", wall_b)],
             visibility=SimpleNamespace(
                 add_object_to_active_storey=lambda space: events.append(("add-storey", space)),
                 register_plan_object=lambda space: events.append(("register", space)),
@@ -1254,6 +1259,9 @@ class TestBimPlanCore(unittest.TestCase):
                 report_space_creation_failure=lambda space: (
                     events.append(("report-failure", space)) or False
                 ),
+            ),
+            selection=SimpleNamespace(
+                get_selected_plan_targets=lambda: [("wall", wall_a), ("wall", wall_b)]
             ),
         )
         arch_module = SimpleNamespace(
@@ -1335,11 +1343,13 @@ class TestBimPlanCore(unittest.TestCase):
         wall_b = SimpleNamespace(Name="WallB")
         boundaries = ((wall_a, ("Face1",)), (wall_b, ("Face2",)))
         session = SimpleNamespace(
-            _get_selected_plan_targets=lambda: [("wall", wall_a), ("wall", wall_b)],
             spaces=SimpleNamespace(
                 get_selected_space_boundary_links=lambda fallback_space=None: (
                     boundaries if fallback_space is None else ()
                 )
+            ),
+            selection=SimpleNamespace(
+                get_selected_plan_targets=lambda: [("wall", wall_a), ("wall", wall_b)]
             ),
         )
 
@@ -1356,21 +1366,21 @@ class TestBimPlanCore(unittest.TestCase):
         boundary = (SimpleNamespace(Name="Divider"), ("Face1",))
 
         empty_session = SimpleNamespace(
-            _get_selected_plan_targets=lambda: [("space", space)],
             spaces=SimpleNamespace(
                 get_selected_space_boundary_links=lambda fallback_space=None: []
             ),
+            selection=SimpleNamespace(get_selected_plan_targets=lambda: [("space", space)]),
         )
         self.assertEqual((None, []), get_space_region_seed_targets(empty_session))
         self.assertIsNone(get_space_creation_request(empty_session))
 
         seeded_session = SimpleNamespace(
-            _get_selected_plan_targets=lambda: [("space", space)],
             spaces=SimpleNamespace(
                 get_selected_space_boundary_links=lambda fallback_space=None: (
                     [boundary] if fallback_space is space else []
                 )
             ),
+            selection=SimpleNamespace(get_selected_plan_targets=lambda: [("space", space)]),
         )
         self.assertEqual((space, []), get_space_region_seed_targets(seeded_session))
         request = get_space_creation_request(seeded_session)
@@ -1385,12 +1395,12 @@ class TestBimPlanCore(unittest.TestCase):
         boundary = (wall, ("Face1",))
         targets = [("space", space), ("wall", wall)]
         session = SimpleNamespace(
-            _get_selected_plan_targets=lambda: targets,
             spaces=SimpleNamespace(
                 get_selected_space_boundary_links=lambda fallback_space=None: (
                     [boundary] if fallback_space is space else []
                 )
             ),
+            selection=SimpleNamespace(get_selected_plan_targets=lambda: targets),
         )
 
         self.assertTrue(should_run_space_preflight_for_targets(targets))
