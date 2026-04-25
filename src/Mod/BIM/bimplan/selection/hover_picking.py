@@ -5,7 +5,10 @@
 import time
 
 from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.selection import selection as plan_selection_runtime
+from bimplan.selection import picking as plan_selection_picking
 from bimplan.selection import target_dispatch as plan_target_dispatch
+from bimplan.selection import targets as plan_selection_targets
 
 _HOVER_PICK_INTERVAL_MS = 80
 
@@ -22,7 +25,7 @@ def queue_prime_hover_pick_caches(session):
     except ImportError:
         return
     session._plan_hover_pick_cache_queued = True
-    QtCore.QTimer.singleShot(0, session.selection.prime_hover_pick_caches)
+    QtCore.QTimer.singleShot(0, lambda: prime_hover_pick_caches(session))
 
 
 def prime_hover_pick_caches(session):
@@ -45,13 +48,13 @@ def prime_hover_pick_caches(session):
                     session.overlays.get_opening_overlay_polylines(obj)
                     session.overlays.get_opening_overlay_segments(obj)
                     session.overlays.get_opening_overlay_screen_polylines(obj)
-            if session.selection.is_plan_space_object(obj):
+            if plan_selection_targets.is_plan_space_object(session, obj):
                 session.performance.plan_perf_count("prime_hover_pick_spaces")
                 with session.performance.plan_perf_trace_span("prime_hover_pick_space_geometry"):
                     session.overlays.get_space_footprint_faces(obj)
                     session.overlays.get_space_overlay_polylines(obj)
                     session.overlays.get_space_overlay_segments(obj)
-            if session.selection.is_plan_region_object(obj):
+            if plan_selection_targets.is_plan_region_object(session, obj):
                 session.performance.plan_perf_count("prime_hover_pick_regions")
                 with session.performance.plan_perf_trace_span("prime_hover_pick_region_geometry"):
                     session.overlays.get_region_footprint_faces(obj)
@@ -88,14 +91,18 @@ def clear_hovered_plan_targets(session, kinds=None):
 
 def update_hovered_plan_target(session, mouse_pos, force=False):
     if session.current_tool == "Join":
-        if session.selection.should_skip_hover_pick(mouse_pos, force=force):
+        if should_skip_hover_pick(session, mouse_pos, force=force):
             return False
         session.performance.plan_perf_count("hover_pick_resolved")
         with session.performance.plan_perf_trace_span("hover_pick_resolve"):
-            target_kind, target_obj = session.selection.get_plan_target_at_position(mouse_pos)
+            target_ref = plan_selection_picking.get_plan_target_at_position(session, mouse_pos)
         session._hover_pick_dirty = False
-        if target_kind == "wall" and not session.selection.is_selected_plan_target(
-            "wall", target_obj
+        target_kind = getattr(target_ref, "kind", None)
+        target_obj = getattr(target_ref, "obj", None)
+        if target_kind == "wall" and not plan_selection_runtime.is_selected_plan_target(
+            session,
+            "wall",
+            target_obj,
         ):
             plan_target_dispatch.set_only_hovered_target(session, target_kind, target_obj)
         else:
@@ -105,7 +112,7 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
         session._hover_pick_dirty = False
         clear_hovered_plan_targets(session)
         return True
-    if session.selection.should_skip_hover_pick(mouse_pos, force=force):
+    if should_skip_hover_pick(session, mouse_pos, force=force):
         return False
     session.performance.plan_perf_count("hover_pick_resolved")
     overlay_mode = session.providers.get_plan_provider_overlay_mode()
@@ -113,10 +120,13 @@ def update_hovered_plan_target(session, mouse_pos, force=False):
         overlay_mode
     )
     with session.performance.plan_perf_trace_span("hover_pick_resolve"):
-        target_kind, target_obj = session.selection.get_plan_target_at_position(
+        target_ref = plan_selection_picking.get_plan_target_at_position(
+            session,
             mouse_pos,
             include_space_fallback=include_space_fallback,
         )
     session._hover_pick_dirty = False
+    target_kind = getattr(target_ref, "kind", None)
+    target_obj = getattr(target_ref, "obj", None)
     plan_target_dispatch.set_only_hovered_target(session, target_kind, target_obj)
     return True
