@@ -67,6 +67,7 @@ class _PlanProviderTargetDisplayFields:
 
 
 _PLAN_PROVIDER_SNAPSHOT_CACHE_KEY = ("provider_snapshot", "panel")
+_MISSING = object()
 
 
 class PlanProvidersAPI:
