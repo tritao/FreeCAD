@@ -111,11 +111,8 @@ def _replace_provider_overlay_debug_candidate(debug_candidate, **changes):
 
 
 def _get_plan_provider_overlay_pick_mode(session):
-    get_mode = getattr(session, "get_plan_provider_overlay_mode", None)
-    if not callable(get_mode):
-        return "all"
     try:
-        mode = str(get_mode() or "").strip().lower()
+        mode = str(session.providers.get_plan_provider_overlay_mode() or "").strip().lower()
     except Exception:
         return "all"
     return mode or "all"
