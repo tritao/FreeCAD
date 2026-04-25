@@ -85,7 +85,7 @@ def get_space_boundary_reference_point(session, selection_ex, fallback_space=Non
     points = _collect_space_boundary_selection_points(selection_ex, fallback_space=fallback_space)
     if points:
         return _average_freecad_vectors(points)
-    return session.spaces.get_space_reference_point(fallback_space)
+    return get_space_reference_point(session, fallback_space)
 
 
 def _collect_space_boundary_selection_points(selection_ex, *, fallback_space=None):
@@ -195,8 +195,8 @@ def get_selected_space_boundary_links(session, fallback_space=None):
 
 def _get_selected_space_boundary_reference_point(session, selection_ex, *, fallback_space=None):
     if fallback_space is not None:
-        return session.spaces.get_space_reference_point(fallback_space)
-    return session.spaces.get_space_boundary_reference_point(selection_ex)
+        return get_space_reference_point(session, fallback_space)
+    return get_space_boundary_reference_point(session, selection_ex)
 
 
 def _get_selected_space_boundary_link_entries(session, selection_ex):
@@ -210,10 +210,7 @@ def _get_selected_space_boundary_link_entries(session, selection_ex):
 
 
 def _get_selected_space_boundary_links(session, fallback_space=None):
-    spaces_api = getattr(session, "spaces", None)
-    if spaces_api is not None:
-        return spaces_api.get_selected_space_boundary_links(fallback_space=fallback_space)
-    return session.spaces.get_selected_space_boundary_links(fallback_space=fallback_space)
+    return get_selected_space_boundary_links(session, fallback_space=fallback_space)
 
 
 def _get_space_selection_targets(session, targets=None):
