@@ -131,63 +131,85 @@ def disconnect_teardown_signals(session):
 
 
 def discard_runtime_references(session):
+    viewport_state = session.viewport_state
+    provider_point_state = session.provider_point_state
+    provider_transient_state = session.provider_transient_state
+    selection_state = session.selection_state
+    space_region_pick_state = session.space_region_pick_state
+    wall_edit_state = session.wall_edit_state
+    plan_region_tool_state = session.plan_region_tool_state
+    interaction_state = session.interaction_state
+    overlay_tracker_state = session.overlay_tracker_state
+    creation_preview_state = session.creation_preview_state
     session.viewport.clear_viewport_status_chip()
     session.viewport.restore_preselection_state()
     session.doc = None
     session.gui_doc = None
     session.view = None
     session.viewer = None
-    session._saved_navigation_style = None
-    session._saved_navigation_state = {}
-    session._saved_view_action_state = {}
-    session._saved_preselection_state = None
-    session._plan_preselection_forced = False
+    viewport_state.saved_navigation_style = None
+    viewport_state.saved_navigation_state = {}
+    viewport_state.saved_view_action_state = {}
+    viewport_state.saved_preselection_state = None
+    viewport_state.plan_preselection_forced = False
+    viewport_state.saved_camera = None
+    viewport_state.saved_camera_type = None
+    viewport_state.working_plane = None
+    viewport_state.interaction_plane = None
     session.selection.set_selected_plan_target_state()
-    session._provider_selected_objects = []
-    session._provider_point_host_target = None
-    session._provider_point_host_source = ""
-    session._provider_point_preview_render_state = None
-    session._provider_point_preview_style_state = None
-    session._provider_point_preview_source_point = None
-    session._provider_point_preview_point = None
-    session._provider_point_preview_host_target = None
-    session._provider_point_preview_host_source = ""
-    session._secondary_selected_plan_targets_state = []
+    provider_transient_state.provider_selected_objects = []
+    provider_point_state.provider_point_host_target = None
+    provider_point_state.provider_point_host_source = ""
+    provider_point_state.provider_point_preview_trackers = []
+    provider_point_state.provider_point_preview_render_state = None
+    provider_point_state.provider_point_preview_style_state = None
+    provider_point_state.provider_point_preview_source_point = None
+    provider_point_state.provider_point_preview_point = None
+    provider_point_state.provider_point_preview_host_target = None
+    provider_point_state.provider_point_preview_host_source = ""
+    selection_state.secondary_selected_plan_targets_state = []
     session.hovered_wall = None
     session.hovered_opening = None
     session.hovered_symbol = None
     session.hovered_provider = None
     session.hovered_space = None
     session.hovered_region = None
-    session._space_region_pick_boundaries = []
-    session._space_region_candidates = []
-    session._hovered_space_region_candidate = None
-    session._space_region_pick_seed_space = None
-    session._pending_selected_plan_target = None
+    space_region_pick_state.boundaries = []
+    space_region_pick_state.candidates = []
+    space_region_pick_state.hovered_candidate = None
+    space_region_pick_state.seed_space = None
+    selection_state.pending_selected_plan_target = None
     session._plan_provider_target_collection_depth = 0
-    session._edit_wall = None
-    session._edit_opening = None
-    session._edit_opening_handle_index = None
-    session._edit_symbol = None
-    session._edit_symbol_handle_role = None
+    wall_edit_state.edit_wall = None
+    interaction_state.edit_opening = None
+    interaction_state.edit_opening_handle_index = None
+    interaction_state.edit_symbol = None
+    interaction_state.edit_symbol_handle_role = None
     session._edit_symbol_start_placement = None
     session._edit_symbol_reference_point = None
-    session._plan_region_points = []
-    session._plan_region_parent_space = None
-    session._edit_space = None
-    session._edit_endpoint = None
-    session._edit_endpoints = None
-    session._preview_points = None
-    session._junction_node_trackers = []
-    session._preview_footprint_trackers = []
-    session._rect_wall_start = None
-    session._rect_wall_params = None
-    session._rect_wall_preview_trackers = []
-    session._space_region_pick_trackers = []
-    session._edit_wall_visibility = None
-    session._embedded_host = None
-    session._embedded_tool = None
-    session._embedded_tool_name = None
+    plan_region_tool_state.points = []
+    plan_region_tool_state.preview_trackers = []
+    plan_region_tool_state.parent_space = None
+    interaction_state.edit_space = None
+    wall_edit_state.edit_endpoint = None
+    wall_edit_state.edit_endpoints = None
+    wall_edit_state.preview_points = None
+    wall_edit_state.preview_line_tracker = None
+    wall_edit_state.preview_footprint_trackers = []
+    wall_edit_state.preview_grip_trackers = []
+    wall_edit_state.wall_edit_readout_trackers = []
+    wall_edit_state.wall_edit_opening_preview_trackers = []
+    wall_edit_state.wall_edit_active_readout_tracker = None
+    wall_edit_state.wall_edit_active_readout_mode = None
+    wall_edit_state.edit_wall_visibility = None
+    overlay_tracker_state.junction_node_trackers = []
+    overlay_tracker_state.space_region_pick_trackers = []
+    creation_preview_state.rect_wall_start = None
+    creation_preview_state.rect_wall_params = None
+    creation_preview_state.rect_wall_preview_trackers = []
+    interaction_state.embedded_host = None
+    interaction_state.embedded_tool = None
+    interaction_state.embedded_tool_name = None
 
 
 def clear_hover_visuals(
@@ -865,9 +887,9 @@ def shutdown(session, close_dialog=True, teardown=False):
 def on_embedded_command_started(session, tool_name, command=None):
     if session._tearing_down:
         return
-    session._embedded_tool_name = tool_name
+    session.interaction_state.embedded_tool_name = tool_name
     if command is not None:
-        session._embedded_tool = command
+        session.interaction_state.embedded_tool = command
     session.current_tool = tool_name
     session.overlays.sync_selected_wall_opening_context_overlay()
     session.task_panels.refresh_task_panel_status()
@@ -876,10 +898,11 @@ def on_embedded_command_started(session, tool_name, command=None):
 def on_embedded_command_finished(session, tool_name, command=None):
     if session._tearing_down:
         return
-    if command is None or session._embedded_tool is command:
-        session._embedded_host = None
-        session._embedded_tool = None
-        session._embedded_tool_name = None
+    interaction_state = session.interaction_state
+    if command is None or interaction_state.embedded_tool is command:
+        interaction_state.embedded_host = None
+        interaction_state.embedded_tool = None
+        interaction_state.embedded_tool_name = None
     if session.current_tool == tool_name:
         session.current_tool = "Select"
         session.overlays.sync_selected_wall_opening_context_overlay()
@@ -925,6 +948,7 @@ def activate_move_tool(session):
 
 
 def start_embedded_tool(session, tool_name, command, host_class=None):
+    interaction_state = session.interaction_state
     session.current_tool = tool_name
     plan_target_dispatch.clear_hovered_targets(
         session,
@@ -932,37 +956,40 @@ def start_embedded_tool(session, tool_name, command, host_class=None):
     )
     session.overlays.sync_secondary_selected_overlays()
     session.task_panels.refresh_task_panel_status()
-    session._embedded_tool = command
-    session._embedded_tool_name = tool_name
+    interaction_state.embedded_tool = command
+    interaction_state.embedded_tool_name = tool_name
     host_class = _PlanEditCommandHost if host_class is None else host_class
     if host_class is _PlanEditWallHost:
-        session._embedded_host = host_class(session, command)
+        interaction_state.embedded_host = host_class(session, command)
     else:
-        session._embedded_host = host_class(session, tool_name, command)
-    command.Activated(host=session._embedded_host)
+        interaction_state.embedded_host = host_class(session, tool_name, command)
+    command.Activated(host=interaction_state.embedded_host)
 
 
 def _reset_pending_edit_state(session, *, clear_opening_edit=False):
-    session._wall_edit_modal_active = False
+    wall_edit_state = session.wall_edit_state
+    interaction_state = session.interaction_state
+    opening_transient_state = session.opening_transient_state
+    wall_edit_state.wall_edit_modal_active = False
     session.wall_edit.restore_edit_wall_visibility()
     session.wall_edit.clear_wall_edit_preview()
-    session._edit_wall = None
-    session._edit_endpoint = None
-    session._edit_endpoints = None
-    session._wall_edit_opening_clearances = {}
-    session._wall_edit_opening_clearances_queued = False
-    session._wall_edit_task_panel_refresh_queued = False
-    session._preview_points = None
-    session._wall_edit_length_edit_queued = False
+    wall_edit_state.edit_wall = None
+    wall_edit_state.edit_endpoint = None
+    wall_edit_state.edit_endpoints = None
+    wall_edit_state.wall_edit_opening_clearances = {}
+    wall_edit_state.wall_edit_opening_clearances_queued = False
+    wall_edit_state.wall_edit_task_panel_refresh_queued = False
+    wall_edit_state.preview_points = None
+    wall_edit_state.wall_edit_length_edit_queued = False
     session._ignore_selection_changes = False
-    session._embedded_host = None
-    session._embedded_tool = None
-    session._embedded_tool_name = None
-    session._edit_opening_move_anchor = "center"
-    session._edit_opening_move_raw_point = None
+    interaction_state.embedded_host = None
+    interaction_state.embedded_tool = None
+    interaction_state.embedded_tool_name = None
+    opening_transient_state.edit_opening_move_anchor = "center"
+    opening_transient_state.edit_opening_move_raw_point = None
     if clear_opening_edit:
-        session._edit_opening = None
-        session._edit_opening_handle_index = None
+        interaction_state.edit_opening = None
+        interaction_state.edit_opening_handle_index = None
 
 
 def cancel_pending_edit(session):
@@ -984,11 +1011,12 @@ def cancel_pending_edit(session):
 
 
 def cancel_embedded_tool(session, tool_name=None):
-    if session._tearing_down or session._embedded_tool is None:
+    interaction_state = session.interaction_state
+    if session._tearing_down or interaction_state.embedded_tool is None:
         return
-    if tool_name is not None and session._embedded_tool_name != tool_name:
+    if tool_name is not None and interaction_state.embedded_tool_name != tool_name:
         return
-    tool = session._embedded_tool
+    tool = interaction_state.embedded_tool
     cancel_interactive = getattr(tool, "cancel_interactive", None)
     if callable(cancel_interactive):
         try:
@@ -1044,4 +1072,4 @@ def _set_toolbar_point_focus_suppressed(toolbar, suppressed):
 
 
 def has_active_embedded_tool(session):
-    return session._embedded_tool is not None
+    return session.interaction_state.embedded_tool is not None
