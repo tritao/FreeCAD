@@ -6,6 +6,7 @@ import FreeCAD
 
 from bimplan import selection as plan_selection
 from bimplan.selection import target_kinds as plan_target_kinds
+from bimplan.tools import space_boundaries as plan_space_boundaries
 
 translate = FreeCAD.Qt.translate
 
@@ -135,7 +136,7 @@ def set_space_boundaries(session, space, boundaries):
         except Exception:
             pass
         return False
-    session.spaces.refresh_selected_space_visuals()
+    refresh_selected_space_visuals(session)
     session.task_panels.refresh_task_panel_status()
     return True
 
@@ -144,8 +145,11 @@ def add_boundaries_to_selected_space(session):
     space = plan_selection.get_selected_plan_target_object(session, "space")
     if not session.selection.is_plan_space_object(space):
         return False
-    existing = session.spaces.get_space_boundary_entries(space)
-    additions = session.spaces.get_selected_space_boundary_links(fallback_space=space)
+    existing = plan_space_boundaries.get_space_boundary_entries(session, space)
+    additions = plan_space_boundaries.get_selected_space_boundary_links(
+        session,
+        fallback_space=space,
+    )
     if not additions:
         FreeCAD.Console.PrintWarning(
             translate(
@@ -155,14 +159,14 @@ def add_boundaries_to_selected_space(session):
         )
         return False
     merged = existing + additions
-    return session.spaces.set_space_boundaries(space, merged)
+    return set_space_boundaries(session, space, merged)
 
 
 def remove_selected_space_boundaries(session, row_indexes=None):
     space = plan_selection.get_selected_plan_target_object(session, "space")
     if not session.selection.is_plan_space_object(space):
         return False
-    existing = session.spaces.get_space_boundary_entries(space)
+    existing = plan_space_boundaries.get_space_boundary_entries(session, space)
     if not existing:
         return False
 
@@ -171,11 +175,14 @@ def remove_selected_space_boundaries(session, row_indexes=None):
         remaining = [boundary for idx, boundary in enumerate(existing) if idx not in row_indexes]
         if len(remaining) == len(existing):
             return False
-        return session.spaces.set_space_boundaries(space, remaining)
+        return set_space_boundaries(session, space, remaining)
 
     removals = {
-        session.spaces.space_boundary_key(boundary)
-        for boundary in session.spaces.get_selected_space_boundary_links(fallback_space=space)
+        plan_space_boundaries.space_boundary_key(boundary)
+        for boundary in plan_space_boundaries.get_selected_space_boundary_links(
+            session,
+            fallback_space=space,
+        )
     }
     if not removals:
         FreeCAD.Console.PrintWarning(
@@ -188,11 +195,11 @@ def remove_selected_space_boundaries(session, row_indexes=None):
     remaining = [
         boundary
         for boundary in existing
-        if session.spaces.space_boundary_key(boundary) not in removals
+        if plan_space_boundaries.space_boundary_key(boundary) not in removals
     ]
     if len(remaining) == len(existing):
         return False
-    return session.spaces.set_space_boundaries(space, remaining)
+    return set_space_boundaries(session, space, remaining)
 
 
 def refresh_selected_space_visuals(session):
