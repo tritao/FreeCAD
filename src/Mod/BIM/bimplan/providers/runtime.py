@@ -518,14 +518,14 @@ def _set_cached_provider_snapshot(session, snapshot):
 
 def _get_plan_edit_context_or_none(session):
     try:
-        return session.providers.get_plan_edit_context()
+        return get_plan_edit_context(session)
     except (ReferenceError, RuntimeError):
         return None
 
 
 def _iter_named_plan_providers(session):
     for provider in session.get_plan_provider_registry().iter_providers():
-        provider_id = session.providers.get_plan_provider_id(provider)
+        provider_id = get_plan_provider_id(provider)
         if provider_id:
             yield provider, provider_id
 
@@ -559,7 +559,7 @@ def _collect_provider_surface_contributions(
             return ()
 
     results = []
-    for contribution in session.providers.coerce_plan_provider_results(provided):
+    for contribution in coerce_plan_provider_results(provided):
         normalized = normalizer(provider_id, contribution)
         if normalized is not None:
             results.append(normalized)
@@ -825,9 +825,10 @@ def get_plan_provider_targets(session) -> tuple[PlanProviderTargetSpec, ...]:
         return ()
     session._plan_provider_target_collection_depth = depth + 1
     try:
-        return session.providers.collect_plan_provider_contributions(
+        return collect_plan_provider_contributions(
+            session,
             "get_targets",
-            session.providers.normalize_plan_provider_target,
+            normalize_plan_provider_target,
         )
     finally:
         session._plan_provider_target_collection_depth = depth
@@ -854,7 +855,7 @@ def is_plan_provider_target_visible_for_mode(session, obj, mode=None) -> bool:
     target = get_plan_provider_target_for_object(session, obj)
     if target is None:
         return False
-    return bool(session.providers.is_plan_provider_overlay_visible_for_mode(target, mode=mode))
+    return bool(is_plan_provider_overlay_visible_for_mode(session, target, mode=mode))
 
 
 def get_plan_provider_target_role_key(session, obj) -> str:
@@ -1044,7 +1045,7 @@ def get_plan_semantic_records(session, targets=None):
                 target_kind, target_obj = target
             except Exception:
                 continue
-        record = session.providers.build_plan_semantic_record(target_kind, target_obj)
+        record = build_plan_semantic_record(session, target_kind, target_obj)
         if record is not None:
             records.append(record)
     return tuple(records)
@@ -1160,8 +1161,7 @@ def _normalize_plan_provider_actions(session, provider_id, actions):
     return tuple(
         normalized
         for normalized in (
-            session.providers.normalize_plan_provider_action(provider_id, action)
-            for action in (actions or ())
+            normalize_plan_provider_action(provider_id, action) for action in (actions or ())
         )
         if normalized is not None
     )
@@ -1276,7 +1276,7 @@ def normalize_plan_provider_context_panel(session, provider_id, panel):
     )
     primary_action = None
     if panel.primary_action is not None:
-        primary_action = session.providers.normalize_plan_provider_action(
+        primary_action = normalize_plan_provider_action(
             provider_id,
             panel.primary_action,
         )
@@ -1523,7 +1523,7 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
         if not _is_active_provider_session(session):
             _perf_count(session, "plan_provider_inactive_session")
             return ()
-        if session.providers.plan_provider_integrations_disabled():
+        if plan_provider_integrations_disabled(session):
             _perf_count(session, "plan_provider_integrations_disabled")
             return ()
         cached_contributions = _get_cached_provider_contributions(session, method_name)
@@ -1544,7 +1544,8 @@ def collect_plan_provider_contributions(session, method_name, normalizer):
 
 def _make_plan_provider_contribution_getter(surface_spec):
     def _get_plan_provider_contributions(session):
-        return session.providers.collect_plan_provider_contributions(
+        return collect_plan_provider_contributions(
+            session,
             surface_spec.method_name,
             surface_spec.normalizer,
         )
@@ -1561,7 +1562,7 @@ def get_plan_provider_snapshot(session):
     if not _is_active_provider_session(session):
         _perf_count(session, "plan_provider_inactive_session")
         return PlanProviderSnapshot()
-    if session.providers.plan_provider_integrations_disabled():
+    if plan_provider_integrations_disabled(session):
         _perf_count(session, "plan_provider_integrations_disabled")
         return PlanProviderSnapshot()
     return collect_plan_provider_snapshot(session)
@@ -1596,8 +1597,8 @@ def _run_plan_provider_action(
     transaction_label="",
     payload=None,
 ):
-    context = session.providers.get_plan_edit_context()
-    action_context = session.providers.get_plan_provider_action_context(payload=payload)
+    context = get_plan_edit_context(session)
+    action_context = get_plan_provider_action_context(session, payload=payload)
     transaction_label = str(transaction_label or "").strip()
     defer_updates = getattr(session, "defer_document_visual_updates", None)
     visual_update_context = defer_updates() if callable(defer_updates) else nullcontext()
@@ -1727,7 +1728,7 @@ def _get_plan_provider_target_lookup(session) -> dict[tuple[str, str], PlanProvi
 
     default_document_name = _get_default_plan_provider_target_document_name(session)
     targets_by_object = {}
-    for target in tuple(session.providers.get_plan_provider_targets() or ()):
+    for target in tuple(get_plan_provider_targets(session) or ()):
         target_key = _make_plan_provider_target_object_key(
             target.document_name or default_document_name,
             target.object_name,
