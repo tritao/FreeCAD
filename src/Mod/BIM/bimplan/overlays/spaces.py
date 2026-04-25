@@ -17,6 +17,10 @@ def _perf_trace_span(session, name, **fields):
 
 
 def sync_secondary_selected_overlays(session):
+    from . import openings as overlay_openings
+    from . import symbols as overlay_symbols
+    from . import walls as overlay_walls
+
     clear_secondary_selected_overlays(session)
     if session.current_tool not in ("Select", "Pick Space Region"):
         return
@@ -27,40 +31,43 @@ def sync_secondary_selected_overlays(session):
         if session.current_tool == "Pick Space Region"
         else session.selection.get_secondary_selected_plan_targets()
     )
-    for target_kind, target_obj in selected_targets:
-        if target_kind == "wall":
-            session.overlays.create_wall_overlay_trackers(
-                target_obj,
+    for target_ref in selected_targets:
+        if target_ref.kind == "wall":
+            overlay_walls.create_wall_overlay_trackers(
+                session,
+                target_ref.obj,
                 color=color,
                 width=width,
                 tracker_store=session._secondary_selection_trackers,
             )
-        elif target_kind == "opening":
-            session.overlays.create_opening_overlay_trackers(
-                target_obj,
+        elif target_ref.kind == "opening":
+            overlay_openings.create_opening_overlay_trackers(
+                session,
+                target_ref.obj,
                 color=color,
                 width=width,
                 tracker_store=session._secondary_selection_trackers,
             )
-        elif target_kind == "symbol":
-            session.overlays.create_symbol_overlay_trackers(
-                target_obj,
+        elif target_ref.kind == "symbol":
+            overlay_symbols.create_symbol_overlay_trackers(
+                session,
+                target_ref.obj,
                 color=color,
                 width=width,
                 tracker_store=session._secondary_selection_trackers,
             )
-        elif target_kind == "region":
+        elif target_ref.kind == "region":
             create_region_overlay_trackers(
                 session,
-                target_obj,
+                target_ref.obj,
                 color=color,
                 width=width,
                 tracker_store=session._secondary_selection_trackers,
             )
-        elif target_kind == "space":
+        elif target_ref.kind == "space":
             create_space_overlay_trackers(
                 session,
-                target_obj,
+                target_ref.obj,
                 color=color,
                 width=width,
                 tracker_store=session._secondary_selection_trackers,
@@ -68,7 +75,7 @@ def sync_secondary_selected_overlays(session):
 
 
 def clear_secondary_selected_overlays(session):
-    session.overlays.finalize_trackers(session._secondary_selection_trackers)
+    overlay_manager.finalize_trackers(session._secondary_selection_trackers)
     session._secondary_selection_trackers = []
 
 
@@ -94,7 +101,7 @@ def sync_space_region_pick_overlays(session):
             if len(polyline) < 2:
                 continue
             for start, end in zip(polyline, polyline[1:]):
-                tracker = session.overlays.make_plan_line_tracker(
+                tracker = overlay_manager.make_plan_line_tracker(
                     DraftTrackers,
                     "space-region-pick:{}".format(candidate.get("index", "unknown")),
                     dotted=dotted,
@@ -109,7 +116,7 @@ def sync_space_region_pick_overlays(session):
 
 
 def clear_space_region_pick_overlays(session):
-    session.overlays.finalize_trackers(session._space_region_pick_trackers)
+    overlay_manager.finalize_trackers(session._space_region_pick_trackers)
     session._space_region_pick_trackers = []
 
 
@@ -119,11 +126,11 @@ def create_space_overlay_trackers(session, space, color, width, tracker_store):
     except ImportError:
         return
 
-    for polyline in session.overlays.get_space_overlay_polylines(space):
+    for polyline in get_space_overlay_polylines(session, space):
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
-            tracker = session.overlays.make_plan_line_tracker(
+            tracker = overlay_manager.make_plan_line_tracker(
                 DraftTrackers,
                 "space-overlay:{}".format(getattr(space, "Name", "unknown")),
                 scolor=color,
@@ -142,11 +149,11 @@ def create_region_overlay_trackers(session, region, color, width, tracker_store)
     except ImportError:
         return
 
-    for polyline in session.overlays.get_region_overlay_polylines(region):
+    for polyline in get_region_overlay_polylines(session, region):
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
-            tracker = session.overlays.make_plan_line_tracker(
+            tracker = overlay_manager.make_plan_line_tracker(
                 DraftTrackers,
                 "region-overlay:{}".format(getattr(region, "Name", "unknown")),
                 scolor=color,
@@ -177,7 +184,7 @@ def sync_hovered_space_overlay(session):
 
 
 def clear_hovered_space_overlay(session):
-    session.overlays.finalize_trackers(session._space_hover_trackers)
+    overlay_manager.finalize_trackers(session._space_hover_trackers)
     session._space_hover_trackers = []
 
 
@@ -199,7 +206,7 @@ def sync_hovered_region_overlay(session):
 
 
 def clear_hovered_region_overlay(session):
-    session.overlays.finalize_trackers(session._region_hover_trackers)
+    overlay_manager.finalize_trackers(session._region_hover_trackers)
     session._region_hover_trackers = []
 
 
@@ -239,7 +246,7 @@ def sync_selected_space_overlay(session):
             segments = session._selected_space_overlay_segments
             _perf_count(session, "selected_space_overlay_segment_cache_hits")
         else:
-            segments = tuple(session.overlays.get_space_overlay_segments(space))
+            segments = tuple(get_space_overlay_segments(session, space))
             session._selected_space_overlay_geometry_key = geometry_key
             session._selected_space_overlay_segments = segments
         _perf_count(session, "selected_space_overlay_segments", len(segments))
@@ -260,7 +267,7 @@ def sync_selected_space_overlay(session):
 
 
 def clear_selected_space_overlay(session):
-    session.overlays.finalize_trackers(session._space_overlay_trackers)
+    overlay_manager.finalize_trackers(session._space_overlay_trackers)
     session._space_overlay_trackers = []
     session._selected_space_overlay_dirty = False
     session._selected_space_overlay_geometry_key = None
@@ -280,7 +287,7 @@ def sync_selected_region_overlay(session):
         except ImportError:
             clear_selected_region_overlay(session)
             return
-        segments = session.overlays.get_region_overlay_segments(region)
+        segments = get_region_overlay_segments(session, region)
         _perf_count(session, "selected_region_overlay_segments", len(segments))
         color = (0.12, 0.38, 0.95)
         session._region_overlay_trackers, _, _ = overlay_manager.sync_segment_overlay_trackers(
@@ -296,5 +303,5 @@ def sync_selected_region_overlay(session):
 
 
 def clear_selected_region_overlay(session):
-    session.overlays.finalize_trackers(session._region_overlay_trackers)
+    overlay_manager.finalize_trackers(session._region_overlay_trackers)
     session._region_overlay_trackers = []

@@ -6,6 +6,7 @@ import math
 
 import FreeCAD
 import FreeCADGui
+from . import manager as overlay_manager
 from .. import selection as plan_selection
 
 
@@ -179,7 +180,7 @@ def get_symbol_overlay_screen_polylines(session, symbol):
 
 def refresh_selected_symbol_visuals(session):
     sync_selected_symbol_overlay(session)
-    session.overlays.sync_selected_symbol_handles()
+    sync_selected_symbol_handles(session)
     session.viewport.request_view_redraw()
 
 
@@ -193,7 +194,7 @@ def create_symbol_overlay_trackers(session, symbol, color, width, tracker_store,
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
-            tracker = session.overlays.make_plan_line_tracker(
+            tracker = overlay_manager.make_plan_line_tracker(
                 DraftTrackers,
                 "symbol-overlay:{}".format(getattr(symbol, "Name", "unknown")),
                 scolor=color,
@@ -225,7 +226,7 @@ def sync_hovered_symbol_overlay(session):
 
 
 def clear_hovered_symbol_overlay(session):
-    session.overlays.finalize_trackers(session._symbol_hover_trackers)
+    overlay_manager.finalize_trackers(session._symbol_hover_trackers)
     session._symbol_hover_trackers = []
 
 
@@ -260,7 +261,7 @@ def sync_selected_symbol_overlay(session):
             else:
                 clear_selected_symbol_overlay(session)
                 for _start, _end in segments:
-                    tracker = session.overlays.make_plan_line_tracker(
+                    tracker = overlay_manager.make_plan_line_tracker(
                         DraftTrackers,
                         "selected-symbol-overlay:{}".format(getattr(symbol, "Name", "unknown")),
                         scolor=color,
@@ -269,7 +270,7 @@ def sync_selected_symbol_overlay(session):
                     )
                     session._symbol_overlay_trackers.append(tracker)
         for tracker, (start, end) in zip(session._symbol_overlay_trackers, segments):
-            session.overlays.set_plan_line_tracker_width(tracker, width)
+            overlay_manager.set_plan_line_tracker_width(tracker, width)
             tracker.setColor(color)
             if not transferred_trackers:
                 tracker.p1(start)
@@ -278,7 +279,7 @@ def sync_selected_symbol_overlay(session):
 
 
 def clear_selected_symbol_overlay(session):
-    session.overlays.finalize_trackers(session._symbol_overlay_trackers)
+    overlay_manager.finalize_trackers(session._symbol_overlay_trackers)
     session._symbol_overlay_trackers = []
 
 
@@ -372,11 +373,11 @@ def get_symbol_rotation_snap_increment_degrees(session):
 
 
 def get_symbol_rotation_snap_step_radians(session):
-    return math.radians(session.overlays.get_symbol_rotation_snap_increment_degrees())
+    return math.radians(get_symbol_rotation_snap_increment_degrees(session))
 
 
 def format_symbol_rotation_snap_label(session):
-    increment = session.overlays.get_symbol_rotation_snap_increment_degrees()
+    increment = get_symbol_rotation_snap_increment_degrees(session)
     rounded = round(increment)
     if abs(increment - rounded) < 1e-9:
         return "{}°".format(int(rounded))
@@ -408,10 +409,10 @@ def resolve_symbol_handle_target_point(session, symbol, handle_role, point, plac
         return target_point
     if not session.symbols.symbol_rotation_snap_enabled():
         return target_point
-    if session.overlays.symbol_rotation_free_angle_override_active():
+    if symbol_rotation_free_angle_override_active(session):
         return target_point
 
-    snap_step = session.overlays.get_symbol_rotation_snap_step_radians()
+    snap_step = get_symbol_rotation_snap_step_radians(session)
     if snap_step <= 1e-9:
         return target_point
 
@@ -451,7 +452,7 @@ def get_selected_symbol_handle_specs(session, symbol):
 
     placement = session.visibility.get_plan_object_global_placement(symbol)
     anchor = session.symbols.get_symbol_anchor_point(symbol, placement=placement)
-    radius = session.overlays.get_symbol_handle_radius(symbol, placement=placement)
+    radius = get_symbol_handle_radius(session, symbol, placement=placement)
     rotate_direction = session.symbols.get_symbol_facing_vector(symbol, placement=placement)
     if rotate_direction.Length < 0.001:
         rotate_direction = FreeCAD.Vector(1, 0, 0)
@@ -475,17 +476,17 @@ def sync_selected_symbol_handles(session):
     with _perf_trace_span(session, "sync_selected_symbol_handles"):
         symbol = plan_selection.get_selected_plan_target_object(session, "symbol")
         if session.current_tool != "Select":
-            session.overlays.clear_selected_symbol_handles()
+            clear_selected_symbol_handles(session)
             return
         if not session.visibility.is_plan_symbol_instance(symbol):
-            session.overlays.clear_selected_symbol_handles()
+            clear_selected_symbol_handles(session)
             return
-        session.overlays.clear_selected_symbol_handles()
+        clear_selected_symbol_handles(session)
         try:
             import draftguitools.gui_trackers as DraftTrackers
         except ImportError:
             return
-        specs = session.overlays.get_selected_symbol_handle_specs(symbol)
+        specs = get_selected_symbol_handle_specs(session, symbol)
         _perf_count(session, "selected_symbol_handles", len(specs))
         for idx, (_role, point, marker) in enumerate(specs):
             tracker = DraftTrackers.editTracker(
@@ -499,7 +500,7 @@ def sync_selected_symbol_handles(session):
 
 
 def clear_selected_symbol_handles(session):
-    session.overlays.finalize_trackers(session._symbol_handle_trackers)
+    overlay_manager.finalize_trackers(session._symbol_handle_trackers)
     session._symbol_handle_trackers = []
 
 
@@ -514,7 +515,7 @@ def pick_selected_symbol_handle(session, mouse_pos, radius_px=10):
         return None
     best_role = None
     best_distance_sq = None
-    for role, point, _marker in session.overlays.get_selected_symbol_handle_specs(symbol):
+    for role, point, _marker in get_selected_symbol_handle_specs(session, symbol):
         try:
             screen_x, screen_y = session.view.getPointOnScreen(point)
         except Exception:
@@ -552,7 +553,7 @@ def sync_symbol_edit_preview(session, symbol, placement, guide_start=None, guide
     )
     if guide_start is None or guide_end is None:
         return
-    guide = session.overlays.make_plan_line_tracker(
+    guide = overlay_manager.make_plan_line_tracker(
         DraftTrackers,
         "symbol-edit-guide:{}".format(getattr(symbol, "Name", "unknown")),
         dotted=True,
@@ -567,5 +568,5 @@ def sync_symbol_edit_preview(session, symbol, placement, guide_start=None, guide
 
 
 def clear_symbol_edit_preview(session):
-    session.overlays.finalize_trackers(session._symbol_edit_preview_trackers)
+    overlay_manager.finalize_trackers(session._symbol_edit_preview_trackers)
     session._symbol_edit_preview_trackers = []
