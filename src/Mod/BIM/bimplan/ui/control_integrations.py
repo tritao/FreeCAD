@@ -820,6 +820,28 @@ class PlanEditIntegrationPanelMixin:
     def _is_provider_section_collapsed(self, section):
         return bool(getattr(section, "collapsed", False))
 
+    def _populate_provider_context_detail_content(self, QtGui, content_layout, content, detail):
+        for row in tuple(getattr(detail, "rows", ()) or ()):
+            content_layout.addWidget(
+                self._make_summary_meta_row(
+                    QtGui, content, getattr(row, "label", ""), getattr(row, "value", "")
+                )
+            )
+        body_text = str(getattr(detail, "body", "") or "").strip()
+        if body_text:
+            content_layout.addWidget(self._make_wrapped_plain_label(QtGui, body_text, content))
+
+    def _connect_provider_context_detail_toggle(self, detail_button, content, detail_title):
+        def toggle_details(checked):
+            is_expanded = bool(checked)
+            content.setVisible(is_expanded)
+            detail_button.setText(self._build_detail_toggle_text(is_expanded, detail_title))
+
+        try:
+            detail_button.toggled.connect(toggle_details)
+        except Exception:
+            pass
+
     def _make_provider_context_panel_detail(self, QtGui, parent, layout, detail):
         detail_title = str(getattr(detail, "title", "") or "").strip()
         if not detail_title:
@@ -846,34 +868,12 @@ class PlanEditIntegrationPanelMixin:
         content_layout = QtGui.QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(4)
-        for row in tuple(getattr(detail, "rows", ()) or ()):
-            content_layout.addWidget(
-                self._make_summary_meta_row(
-                    QtGui, content, getattr(row, "label", ""), getattr(row, "value", "")
-                )
-            )
-        body_text = str(getattr(detail, "body", "") or "").strip()
-        if body_text:
-            content_layout.addWidget(self._make_wrapped_plain_label(QtGui, body_text, content))
+        self._populate_provider_context_detail_content(QtGui, content_layout, content, detail)
         layout.addWidget(content)
         content.setVisible(expanded)
+        self._connect_provider_context_detail_toggle(detail_button, content, detail_title)
 
-        def toggle_details(checked):
-            is_expanded = bool(checked)
-            content.setVisible(is_expanded)
-            detail_button.setText(self._build_detail_toggle_text(is_expanded, detail_title))
-
-        try:
-            detail_button.toggled.connect(toggle_details)
-        except Exception:
-            pass
-
-    def _make_provider_context_panel_block(self, QtGui, panel):
-        block, layout = self._create_integration_card(QtGui, "detail")
-        title = str(getattr(panel, "title", "") or "").strip() or translate(
-            "BIM_PlanEdit", "Context"
-        )
-        self._add_integration_card_header(QtGui, layout, block, title)
+    def _add_provider_context_panel_summary(self, QtGui, block, layout, panel):
         subtitle = str(getattr(panel, "subtitle", "") or "").strip()
         if subtitle:
             subtitle_label = self._make_wrapped_plain_label(QtGui, subtitle, block)
@@ -888,14 +888,28 @@ class PlanEditIntegrationPanelMixin:
         message = str(getattr(panel, "message", "") or "").strip()
         if message:
             layout.addWidget(self._make_wrapped_plain_label(QtGui, message, block))
+
+    def _add_provider_context_panel_actions(self, QtGui, block, layout, panel):
         actions, has_primary = plan_task_panel_view_model.collect_provider_context_panel_actions(
             panel
         )
         self._add_integration_action_row(
             QtGui, block, layout, actions=actions, primary_first=has_primary
         )
+
+    def _add_provider_context_panel_details(self, QtGui, block, layout, panel):
         for detail in tuple(getattr(panel, "details", ()) or ()):
             self._make_provider_context_panel_detail(QtGui, block, layout, detail)
+
+    def _make_provider_context_panel_block(self, QtGui, panel):
+        block, layout = self._create_integration_card(QtGui, "detail")
+        title = str(getattr(panel, "title", "") or "").strip() or translate(
+            "BIM_PlanEdit", "Context"
+        )
+        self._add_integration_card_header(QtGui, layout, block, title)
+        self._add_provider_context_panel_summary(QtGui, block, layout, panel)
+        self._add_provider_context_panel_actions(QtGui, block, layout, panel)
+        self._add_provider_context_panel_details(QtGui, block, layout, panel)
         return block
 
     def _make_integration_details_group(self, QtGui, sections):
