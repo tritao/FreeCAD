@@ -308,6 +308,8 @@ def sync_selected_target_visuals(
     trace_style=None,
     trace_prefix=None,
 ):
+    from . import selection as plan_selection_runtime
+
     for kind in kinds or plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS:
         policy = _get_target_kind_policy(kind)
         if not policy.selected_visual_sync:
@@ -315,8 +317,8 @@ def sync_selected_target_visuals(
         if (
             not force
             and session.current_tool == "Select"
-            and not session.selection.selected_plan_target_changed(
-                previous_kind, previous_obj, kind
+            and not plan_selection_runtime.selected_plan_target_changed(
+                session, previous_kind, previous_obj, kind
             )
         ):
             continue
@@ -344,10 +346,12 @@ def sync_hovered_target_visuals(session, kinds=None, *, trace_style=None, trace_
 
 
 def set_hovered_target(session, kind, obj):
+    from . import selection as plan_selection_runtime
+
     policy = _get_target_kind_policy(kind)
     if not policy.hover_set_sync or not policy.hovered_attr_name:
         return False
-    if session.selection.is_selected_plan_target(kind, obj):
+    if plan_selection_runtime.is_selected_plan_target(session, kind, obj):
         obj = None
     if getattr(session, policy.hovered_attr_name, None) == obj:
         return False

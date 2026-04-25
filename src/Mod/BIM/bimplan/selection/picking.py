@@ -1242,7 +1242,7 @@ def get_plan_target_from_edit_node(session, node):
     node_kind = plan_edit_nodes.get_edit_node_kind(node)
     if node_kind in ("provider_overlay_point", "provider_overlay_target"):
         target_ref = get_provider_overlay_target_from_edit_node(session, node)
-        if session.selection.is_valid_plan_target(target_ref.kind, target_ref.obj):
+        if plan_selection.is_valid_plan_target(session, target_ref.kind, target_ref.obj):
             return plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
         fallback_target_ref = plan_targets.get_plan_target_for_object(session, target_ref.obj)
         return plan_target_kinds.make_plan_target_ref(
@@ -1303,7 +1303,7 @@ def _get_selected_handle_edit_node(session, mouse_pos):
                 symbol_handle_role,
             ),
         )
-    opening_handle_index = session.selection.pick_selected_opening_handle(mouse_pos)
+    opening_handle_index = pick_selected_opening_handle(session, mouse_pos)
     if opening_handle_index is not None:
         return _emit_get_edit_node_result(
             session,
@@ -1441,7 +1441,7 @@ def get_provider_overlay_target_from_edit_node(session, node):
     if obj is None:
         return (None, None)
     target_kind = _parse_provider_overlay_target_kind(subname)
-    if target_kind and session.selection.is_valid_plan_target(target_kind, obj):
+    if target_kind and plan_selection.is_valid_plan_target(session, target_kind, obj):
         return (target_kind, obj)
     inferred_kind, inferred_obj = plan_targets.get_plan_target_for_object(session, obj)
     if inferred_kind and inferred_obj:
