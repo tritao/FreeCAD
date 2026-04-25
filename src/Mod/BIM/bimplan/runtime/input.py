@@ -7,6 +7,7 @@ import FreeCAD
 from bimplan import document_visuals as plan_document_visuals
 from bimplan import selection as plan_selection
 from bimplan.selection import edit_nodes as plan_edit_nodes
+from bimplan.selection import target_kinds as plan_target_kinds
 from bimplan.tools import space_regions as plan_space_regions
 
 
@@ -174,13 +175,16 @@ def on_mouse_pressed(session, event_callback):
     event = event_callback.getEvent()
     mouse_pos = _get_mouse_event_position(event)
     selected_before = session.selection.get_selected_plan_target()
+    selected_before_kind, selected_before_obj = plan_target_kinds.unpack_plan_target_ref(
+        selected_before
+    )
     with session.performance.plan_perf_trace_event(
         "mouse_pressed",
         button=str(event.getButton()),
         state=str(event.getState()),
         mouse_pos=mouse_pos,
         selected_before=session.performance.plan_perf_describe_target(
-            selected_before[0], selected_before[1]
+            selected_before_kind, selected_before_obj
         ),
     ):
         if event.getButton() != coin.SoMouseButtonEvent.BUTTON1:
@@ -191,7 +195,7 @@ def on_mouse_pressed(session, event_callback):
             state=str(event.getState()),
             mouse_pos=mouse_pos,
             selected_before=session.performance.plan_perf_describe_target(
-                selected_before[0], selected_before[1]
+                selected_before_kind, selected_before_obj
             ),
         ):
             try:
@@ -205,10 +209,13 @@ def on_mouse_pressed(session, event_callback):
                     _handle_left_mouse_button_down(session, mouse_pos, event_callback)
             finally:
                 selected_after = session.selection.get_selected_plan_target()
+                selected_after_kind, selected_after_obj = plan_target_kinds.unpack_plan_target_ref(
+                    selected_after
+                )
                 session.performance.plan_perf_set_fields(
                     handled=bool(getattr(event_callback, "_handled", False)),
                     selected_after=session.performance.plan_perf_describe_target(
-                        selected_after[0], selected_after[1]
+                        selected_after_kind, selected_after_obj
                     ),
                 )
 
@@ -223,11 +230,14 @@ def on_mouse_moved(session, event_callback):
     except Exception:
         mouse_pos = None
     hovered_before = session.selection.get_hovered_plan_target()
+    hovered_before_kind, hovered_before_obj = plan_target_kinds.unpack_plan_target_ref(
+        hovered_before
+    )
     with session.performance.plan_perf_trace_event(
         "mouse_moved",
         mouse_pos=mouse_pos,
         hovered_before=session.performance.plan_perf_describe_target(
-            hovered_before[0], hovered_before[1]
+            hovered_before_kind, hovered_before_obj
         ),
     ):
         if session.current_tool == "Pick Space Region":
@@ -255,9 +265,12 @@ def on_mouse_moved(session, event_callback):
             session.overlays.sync_wall_grips()
         session.viewport.request_view_redraw()
         hovered_after = session.selection.get_hovered_plan_target()
+        hovered_after_kind, hovered_after_obj = plan_target_kinds.unpack_plan_target_ref(
+            hovered_after
+        )
         session.performance.plan_perf_set_fields(
             hovered_after=session.performance.plan_perf_describe_target(
-                hovered_after[0], hovered_after[1]
+                hovered_after_kind, hovered_after_obj
             ),
         )
 

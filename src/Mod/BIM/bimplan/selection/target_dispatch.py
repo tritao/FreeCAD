@@ -221,8 +221,8 @@ def get_hovered_target(session):
             continue
         obj = getattr(session, attr_name, None)
         if obj is not None:
-            return (kind, obj)
-    return (None, None)
+            return plan_target_kinds.make_plan_target_ref(kind, obj)
+    return plan_target_kinds.make_plan_target_ref()
 
 
 def clear_hovered_targets(session, kinds=None):

@@ -424,8 +424,8 @@ def get_selected_plan_target_state(session, primary_kinds):
     kind = getattr(session, "_selected_plan_target_kind", None)
     obj = getattr(session, "_selected_plan_target_obj", None)
     if kind not in primary_kinds or obj is None:
-        return (None, None)
-    return (kind, obj)
+        return plan_target_kinds.make_plan_target_ref()
+    return plan_target_kinds.make_plan_target_ref(kind, obj)
 
 
 def set_selected_plan_target_state(session, primary_kinds, kind=None, obj=None):
@@ -440,10 +440,10 @@ def _get_native_selected_plan_target(session):
     session.selection.sanitize_plan_target_references()
     kind, obj = get_selected_plan_target_state(session, plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS)
     if session.selection.is_valid_plan_target(kind, obj):
-        return (kind, obj)
+        return plan_target_kinds.make_plan_target_ref(kind, obj)
     if kind is not None or obj is not None:
         session.selection.set_selected_plan_target_state()
-    return (None, None)
+    return plan_target_kinds.make_plan_target_ref()
 
 
 def _get_current_selected_plan_target(session):
@@ -498,11 +498,11 @@ def consume_pending_selected_plan_target(session):
     pending_target = session._pending_selected_plan_target
     session._pending_selected_plan_target = None
     if not pending_target:
-        return (None, None)
+        return plan_target_kinds.make_plan_target_ref()
     kind, obj = pending_target
     if is_valid_plan_target(session, kind, obj):
-        return (kind, obj)
-    return (None, None)
+        return plan_target_kinds.make_plan_target_ref(kind, obj)
+    return plan_target_kinds.make_plan_target_ref()
 
 
 def get_selected_plan_target(session):
@@ -513,8 +513,8 @@ def get_first_plan_target_from_selection(session, selection):
     for selected in selection or []:
         target_kind, target_obj = session.selection.get_plan_target_for_object(selected)
         if target_kind and target_obj:
-            return (target_kind, target_obj)
-    return (None, None)
+            return plan_target_kinds.make_plan_target_ref(target_kind, target_obj)
+    return plan_target_kinds.make_plan_target_ref()
 
 
 def get_plan_target_state_key(kind, obj):
