@@ -1184,22 +1184,141 @@ class PlanEditIntegrationPanelMixin:
             self._set_widget_updates_enabled(parent, True)
             self._refresh_widget_geometry(parent)
 
+    def _should_skip_integration_panel_refresh(self):
+        if (
+            self.integration_panel is None
+            or self.integration_summary is None
+            or self.integration_content_layout is None
+        ):
+            return True
+        if self._session_is_inactive():
+            self._integration_refresh_queued = False
+            self._hide_integration_panel()
+            return True
+        if self.session.providers.plan_provider_integrations_disabled():
+            self.session.performance.plan_perf_count("integration_panel_disabled")
+            self._integration_refresh_queued = False
+            self._hide_integration_panel()
+            return True
+        return False
+
+    def _build_integration_panel_refresh_state(self):
+        with self.session.providers.plan_provider_refresh_cache_scope():
+            snapshot = self.session.providers.get_plan_provider_snapshot()
+            integration_vm = plan_task_panel_view_model.build_integration_panel_view_model(
+                self.session,
+                snapshot,
+            )
+        return snapshot, integration_vm
+
+    def _queue_provider_overlay_refresh(self):
+        queue_overlay_refresh = getattr(self.session, "queue_plan_provider_overlay_sync", None)
+        if not callable(queue_overlay_refresh):
+            queue_overlay_refresh = getattr(
+                self.session,
+                "queue_plan_provider_overlay_refresh",
+                None,
+            )
+        if callable(queue_overlay_refresh):
+            queue_overlay_refresh()
+
+    def _rebuild_integration_panel_content(self, snapshot, integration_vm):
+        from PySide import QtGui
+
+        self._integration_action_buttons = []
+        self._integration_overlay_checkboxes = []
+        self._reset_integration_panel_dynamic_refs()
+        self._clear_layout(self.integration_content_layout)
+
+        for section in integration_vm.summary_sections:
+            block = self._make_summary_section_block(QtGui, section)
+            self.integration_content_layout.addWidget(block)
+        if integration_vm.context_panel is not None:
+            self.integration_content_layout.addWidget(
+                self._make_integration_group_heading(QtGui, integration_vm.context_panel_heading)
+            )
+            self.integration_content_layout.addWidget(
+                self._make_provider_context_panel_block(QtGui, integration_vm.context_panel)
+            )
+        if snapshot.issues:
+            self.integration_content_layout.addWidget(
+                self._make_integration_group_heading(
+                    QtGui, translate("BIM_PlanEdit", "Action Needed")
+                )
+            )
+        for issue_group in integration_vm.grouped_issue_sets:
+            block = self._make_provider_issue_block(
+                QtGui,
+                issue_group,
+                hidden_action_ids=integration_vm.promoted_action_ids,
+            )
+            if block is not None:
+                self.integration_content_layout.addWidget(block)
+        if integration_vm.tools or integration_vm.overlay_items:
+            self.integration_content_layout.addWidget(
+                self._make_integration_group_heading(QtGui, translate("BIM_PlanEdit", "Utilities"))
+            )
+        if integration_vm.tools:
+            block = self._make_integration_block(
+                QtGui,
+                translate("BIM_PlanEdit", "Tools"),
+                actions=integration_vm.tools,
+                card_role="utility",
+                hidden_action_ids=integration_vm.promoted_action_ids,
+                hidden_action_labels=integration_vm.hidden_tool_action_labels,
+                action_columns=3,
+                default_action_role="utility",
+            )
+            self.integration_content_layout.addWidget(block)
+        if integration_vm.overlay_items:
+            block = self._make_provider_overlay_legend_block(
+                QtGui,
+                integration_vm.overlay_items,
+                active_mode=integration_vm.overlay_mode,
+            )
+            if block is not None:
+                self.integration_content_layout.addWidget(block)
+        if integration_vm.regular_sections or integration_vm.detail_sections:
+            self.integration_content_layout.addWidget(
+                self._make_integration_group_heading(
+                    QtGui, translate("BIM_PlanEdit", "More Context")
+                )
+            )
+        for section in integration_vm.regular_sections:
+            block = self._make_integration_block(
+                QtGui,
+                self._format_provider_section_title(section),
+                body=getattr(section, "body", ""),
+                actions=section.actions,
+                card_role="detail",
+                hidden_action_ids=integration_vm.promoted_action_ids,
+            )
+            self.integration_content_layout.addWidget(block)
+        if integration_vm.detail_sections:
+            group = self._make_integration_details_group(QtGui, integration_vm.detail_sections)
+            self.integration_content_layout.addWidget(group)
+        self.integration_content_layout.addStretch(1)
+
+    def _apply_integration_panel_view_model(self, snapshot, integration_vm):
+        self._set_provider_overlay_mode_combo_value(integration_vm.overlay_mode)
+        state = integration_vm.state_key
+        if not integration_vm.has_content:
+            self._hide_integration_panel()
+            return
+        self._set_integration_summary_text(integration_vm.summary_text)
+        if state != self._integration_panel_state:
+            self._integration_panel_state = state
+            self._rebuild_integration_panel_content(snapshot, integration_vm)
+        elif integration_vm.overlay_items:
+            self._refresh_provider_overlay_legend_block(
+                integration_vm.overlay_items,
+                active_mode=integration_vm.overlay_mode,
+            )
+        self._set_integration_panel_visible(True)
+
     def _refresh_integration_panel(self, defer=False):
         with self.session.performance.plan_perf_trace_span("refresh_integration_panel"):
-            if (
-                self.integration_panel is None
-                or self.integration_summary is None
-                or self.integration_content_layout is None
-            ):
-                return
-            if self._session_is_inactive():
-                self._integration_refresh_queued = False
-                self._hide_integration_panel()
-                return
-            if self.session.providers.plan_provider_integrations_disabled():
-                self.session.performance.plan_perf_count("integration_panel_disabled")
-                self._integration_refresh_queued = False
-                self._hide_integration_panel()
+            if self._should_skip_integration_panel_refresh():
                 return
             if defer:
                 self.session.performance.plan_perf_count("integration_panel_deferred_refreshes")
@@ -1207,115 +1326,9 @@ class PlanEditIntegrationPanelMixin:
                 return
             self._integration_refresh_queued = False
             self._integration_refresh_generation += 1
-            with self.session.providers.plan_provider_refresh_cache_scope():
-                snapshot = self.session.providers.get_plan_provider_snapshot()
-                integration_vm = plan_task_panel_view_model.build_integration_panel_view_model(
-                    self.session,
-                    snapshot,
-                )
-            queue_overlay_refresh = getattr(self.session, "queue_plan_provider_overlay_sync", None)
-            if not callable(queue_overlay_refresh):
-                queue_overlay_refresh = getattr(
-                    self.session,
-                    "queue_plan_provider_overlay_refresh",
-                    None,
-                )
-            if callable(queue_overlay_refresh):
-                queue_overlay_refresh()
-            self._set_provider_overlay_mode_combo_value(integration_vm.overlay_mode)
-            state = integration_vm.state_key
-            if not integration_vm.has_content:
-                self._hide_integration_panel()
-                return
-            self._set_integration_summary_text(integration_vm.summary_text)
-            if state != self._integration_panel_state:
-                self._integration_panel_state = state
-                self._integration_action_buttons = []
-                self._integration_overlay_checkboxes = []
-                self._reset_integration_panel_dynamic_refs()
-                self._clear_layout(self.integration_content_layout)
-                from PySide import QtGui
-
-                for section in integration_vm.summary_sections:
-                    block = self._make_summary_section_block(QtGui, section)
-                    self.integration_content_layout.addWidget(block)
-                if integration_vm.context_panel is not None:
-                    self.integration_content_layout.addWidget(
-                        self._make_integration_group_heading(
-                            QtGui, integration_vm.context_panel_heading
-                        )
-                    )
-                    self.integration_content_layout.addWidget(
-                        self._make_provider_context_panel_block(QtGui, integration_vm.context_panel)
-                    )
-                if snapshot.issues:
-                    self.integration_content_layout.addWidget(
-                        self._make_integration_group_heading(
-                            QtGui, translate("BIM_PlanEdit", "Action Needed")
-                        )
-                    )
-                for issue_group in integration_vm.grouped_issue_sets:
-                    block = self._make_provider_issue_block(
-                        QtGui,
-                        issue_group,
-                        hidden_action_ids=integration_vm.promoted_action_ids,
-                    )
-                    if block is not None:
-                        self.integration_content_layout.addWidget(block)
-                if integration_vm.tools or integration_vm.overlay_items:
-                    self.integration_content_layout.addWidget(
-                        self._make_integration_group_heading(
-                            QtGui, translate("BIM_PlanEdit", "Utilities")
-                        )
-                    )
-                if integration_vm.tools:
-                    block = self._make_integration_block(
-                        QtGui,
-                        translate("BIM_PlanEdit", "Tools"),
-                        actions=integration_vm.tools,
-                        card_role="utility",
-                        hidden_action_ids=integration_vm.promoted_action_ids,
-                        hidden_action_labels=integration_vm.hidden_tool_action_labels,
-                        action_columns=3,
-                        default_action_role="utility",
-                    )
-                    self.integration_content_layout.addWidget(block)
-                if integration_vm.overlay_items:
-                    block = self._make_provider_overlay_legend_block(
-                        QtGui,
-                        integration_vm.overlay_items,
-                        active_mode=integration_vm.overlay_mode,
-                    )
-                    if block is not None:
-                        self.integration_content_layout.addWidget(block)
-                if integration_vm.regular_sections or integration_vm.detail_sections:
-                    self.integration_content_layout.addWidget(
-                        self._make_integration_group_heading(
-                            QtGui, translate("BIM_PlanEdit", "More Context")
-                        )
-                    )
-                for section in integration_vm.regular_sections:
-                    block = self._make_integration_block(
-                        QtGui,
-                        self._format_provider_section_title(section),
-                        body=getattr(section, "body", ""),
-                        actions=section.actions,
-                        card_role="detail",
-                        hidden_action_ids=integration_vm.promoted_action_ids,
-                    )
-                    self.integration_content_layout.addWidget(block)
-                if integration_vm.detail_sections:
-                    group = self._make_integration_details_group(
-                        QtGui, integration_vm.detail_sections
-                    )
-                    self.integration_content_layout.addWidget(group)
-                self.integration_content_layout.addStretch(1)
-            elif integration_vm.overlay_items:
-                self._refresh_provider_overlay_legend_block(
-                    integration_vm.overlay_items,
-                    active_mode=integration_vm.overlay_mode,
-                )
-            self._set_integration_panel_visible(True)
+            snapshot, integration_vm = self._build_integration_panel_refresh_state()
+            self._queue_provider_overlay_refresh()
+            self._apply_integration_panel_view_model(snapshot, integration_vm)
 
     def on_provider_action_clicked(self, action):
         if action is None:
