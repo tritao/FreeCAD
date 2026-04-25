@@ -409,10 +409,10 @@ def resolve_symbol_handle_target_point(session, symbol, handle_role, point, plac
         return target_point
     if not session.symbols.symbol_rotation_snap_enabled():
         return target_point
-    if symbol_rotation_free_angle_override_active(session):
+    if session.overlays.symbol_rotation_free_angle_override_active():
         return target_point
 
-    snap_step = get_symbol_rotation_snap_step_radians(session)
+    snap_step = math.radians(session.overlays.get_symbol_rotation_snap_increment_degrees())
     if snap_step <= 1e-9:
         return target_point
 

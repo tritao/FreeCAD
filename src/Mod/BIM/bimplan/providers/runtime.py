@@ -194,7 +194,7 @@ class PlanProvidersAPI:
         return set_plan_provider_overlay_mode(self.session, *args, **kwargs)
 
     def get_plan_provider_overlay_visibility_key(self, *args, **kwargs):
-        return get_plan_provider_overlay_visibility_key(self.session, *args, **kwargs)
+        return get_plan_provider_overlay_visibility_key(*args, **kwargs)
 
     def get_plan_provider_targets(self, *args, **kwargs):
         return get_plan_provider_targets(self.session, *args, **kwargs)

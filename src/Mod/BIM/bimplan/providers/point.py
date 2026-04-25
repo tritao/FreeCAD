@@ -65,8 +65,12 @@ def arm_provider_point_tool(session):
     session.lifecycle.set_draft_point_focus_suppressed(True)
     try:
         snapper.getPoint(
-            callback=handle_provider_point_tool_point,
-            movecallback=update_provider_point_tool_preview,
+            callback=lambda point=None, obj=None: handle_provider_point_tool_point(
+                session, point, obj
+            ),
+            movecallback=lambda point=None, obj=None: update_provider_point_tool_preview(
+                session, point, obj
+            ),
             title=get_provider_point_tool_prompt(session),
             noTracker=True,
         )
@@ -176,8 +180,7 @@ def handle_provider_point_tool_point(session, point=None, obj=None):
         snap_object=snap_object,
         snap_info=snap_info,
     )
-    plan_provider_runtime.execute_plan_provider_action(
-        session,
+    session.providers.execute_plan_provider_action(
         getattr(tool, "provider_id", ""),
         getattr(tool, "key", ""),
         transaction_label=getattr(tool, "transaction_label", ""),

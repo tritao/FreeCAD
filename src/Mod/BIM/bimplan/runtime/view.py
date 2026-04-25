@@ -191,7 +191,9 @@ def get_runtime_attr(session, obj, attr_name):
         return None
     try:
         return getattr(obj, attr_name)
-    except (AttributeError, ReferenceError, RuntimeError):
+    except AttributeError:
+        return None
+    except (ReferenceError, RuntimeError):
         session.viewport.discard_stale_runtime_object(obj)
         return None
 

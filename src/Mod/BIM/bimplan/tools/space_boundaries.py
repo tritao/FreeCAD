@@ -375,39 +375,43 @@ def _resolve_space_selection_shape(targets):
     if not targets:
         return SpaceSelectionShape()
 
-    wall_targets = tuple(
-        (target_kind, target_obj)
-        for target_kind, target_obj in targets
-        if target_kind == plan_target_kinds.PLAN_TARGET_WALL
+    normalized_targets = tuple(
+        plan_target_kinds.coerce_plan_target_ref(target) for target in targets
     )
-    if len(wall_targets) == len(targets):
+
+    wall_targets = tuple(
+        target_ref
+        for target_ref in normalized_targets
+        if target_ref.kind == plan_target_kinds.PLAN_TARGET_WALL
+    )
+    if len(wall_targets) == len(normalized_targets):
         return SpaceSelectionShape(
-            targets=targets,
+            targets=normalized_targets,
             mode=_SPACE_SELECTION_WALL_BOUNDARIES,
             wall_targets=wall_targets,
         )
 
     space_targets = [
-        target_obj
-        for target_kind, target_obj in targets
-        if target_kind == plan_target_kinds.PLAN_TARGET_SPACE
+        target_ref.obj
+        for target_ref in normalized_targets
+        if target_ref.kind == plan_target_kinds.PLAN_TARGET_SPACE
     ]
     if len(space_targets) != 1:
-        return SpaceSelectionShape(targets=targets)
+        return SpaceSelectionShape(targets=normalized_targets)
 
     region_seed_space = space_targets[0]
-    if len(targets) == 1:
+    if len(normalized_targets) == 1:
         return SpaceSelectionShape(
-            targets=targets,
+            targets=normalized_targets,
             mode=_SPACE_SELECTION_SINGLE_SPACE,
             region_seed_space=region_seed_space,
         )
 
-    if len(wall_targets) != len(targets) - 1:
-        return SpaceSelectionShape(targets=targets)
+    if len(wall_targets) != len(normalized_targets) - 1:
+        return SpaceSelectionShape(targets=normalized_targets)
 
     return SpaceSelectionShape(
-        targets=targets,
+        targets=normalized_targets,
         mode=_SPACE_SELECTION_SEEDED_REGION,
         region_seed_space=region_seed_space,
         wall_targets=wall_targets,

@@ -73,10 +73,10 @@ class PlanOverlaysAPI:
         return overlay_manager.set_plan_line_tracker_width(*args, **kwargs)
 
     def get_footprint_overlay_polylines(self, *args, **kwargs):
-        return overlay_geometry.get_footprint_overlay_polylines(self.session, *args, **kwargs)
+        return overlay_geometry.get_footprint_overlay_polylines(*args, **kwargs)
 
     def build_overlay_segments_from_polylines(self, *args, **kwargs):
-        return overlay_geometry.build_overlay_segments_from_polylines(self.session, *args, **kwargs)
+        return overlay_geometry.build_overlay_segments_from_polylines(*args, **kwargs)
 
     def get_plan_overlay_geometry_kinds_for_object(self, *args, **kwargs):
         return overlay_geometry.get_plan_overlay_geometry_kinds_for_object(

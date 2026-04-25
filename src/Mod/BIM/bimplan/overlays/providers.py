@@ -614,10 +614,10 @@ def _get_polyline_marker_segment_specs(points, *, label, color, width, dotted, c
 
 
 def _get_provider_point_host_segment_specs(session, host_wall, *, color, width):
-    from . import walls as overlay_walls
+    from . import geometry as overlay_geometry
 
     specs = []
-    for polyline in overlay_walls.get_wall_overlay_polylines(session, host_wall):
+    for polyline in overlay_geometry.get_wall_overlay_polylines(session, host_wall):
         points = tuple(_to_vector(point) for point in tuple(polyline or ()))
         points = tuple(point for point in points if point is not None)
         if len(points) < 2:

@@ -764,7 +764,7 @@ def slot_deleted_document(session, doc):
 class PlanDocumentVisualsAPI:
     """Owned session surface for Plan Edit document-driven visual refresh."""
 
-    __slots__ = ("_session",)
+    __slots__ = ("_session", "__dict__")
 
     def __init__(self, session):
         self._session = session

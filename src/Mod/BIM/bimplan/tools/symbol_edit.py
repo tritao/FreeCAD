@@ -6,6 +6,7 @@ import math
 
 import FreeCAD
 import FreeCADGui
+from bimplan.overlays import symbols as symbol_overlays
 
 translate = FreeCAD.Qt.translate
 
@@ -23,10 +24,10 @@ class PlanSymbolsAPI:
         return self._session
 
     def symbol_rotation_snap_enabled(self):
-        return symbol_rotation_snap_enabled(self.session)
+        return symbol_overlays.symbol_rotation_snap_enabled(self.session)
 
     def format_symbol_rotation_snap_label(self):
-        return format_symbol_rotation_snap_label(self.session)
+        return symbol_overlays.format_symbol_rotation_snap_label(self.session)
 
     def get_symbol_anchor_point(self, symbol, placement=None):
         return get_symbol_anchor_point(self.session, symbol, placement=placement)

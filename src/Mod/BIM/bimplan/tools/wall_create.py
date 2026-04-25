@@ -219,7 +219,7 @@ def create_rect_wall_run(session, corners):
             align=session._rect_wall_params["align"],
             offset=session._rect_wall_params["offset"],
             closed=True,
-            on_created=session._register_plan_object,
+            on_created=session.visibility.register_plan_object,
         )
         BimWall.autojoin_wall_run(walls, closed=True)
         session.doc.commitTransaction()

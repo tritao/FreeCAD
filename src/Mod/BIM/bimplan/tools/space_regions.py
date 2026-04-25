@@ -368,6 +368,29 @@ def pick_space_region_candidate(session, mouse_pos, radius_px=10):
     if session.current_tool != "Pick Space Region" or not candidates:
         return None
 
+    radius_sq = float(radius_px) * float(radius_px)
+    if session.view:
+        best_candidate = None
+        best_distance_sq = None
+        for candidate in candidates:
+            sample_point = candidate.get("sample_point") if isinstance(candidate, dict) else None
+            if sample_point is None:
+                continue
+            try:
+                screen_point = session.view.getPointOnScreen(sample_point)
+            except Exception:
+                continue
+            dx = float(screen_point[0]) - float(mouse_pos[0])
+            dy = float(screen_point[1]) - float(mouse_pos[1])
+            distance_sq = dx * dx + dy * dy
+            if distance_sq > radius_sq:
+                continue
+            if best_distance_sq is None or distance_sq < best_distance_sq:
+                best_candidate = candidate
+                best_distance_sq = distance_sq
+        if best_candidate is not None:
+            return best_candidate
+
     point = session.viewport.get_plan_point_from_mouse_pos(mouse_pos)
     if point is not None:
         for candidate in candidates:
@@ -384,7 +407,6 @@ def pick_space_region_candidate(session, mouse_pos, radius_px=10):
             except Exception:
                 continue
 
-    radius_sq = float(radius_px) * float(radius_px)
     best_candidate = None
     best_distance_sq = None
     for candidate in candidates:
