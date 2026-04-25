@@ -890,11 +890,13 @@ class PlanEditIntegrationPanelMixin:
             layout.addWidget(self._make_wrapped_plain_label(QtGui, message, block))
 
     def _add_provider_context_panel_actions(self, QtGui, block, layout, panel):
-        actions, has_primary = plan_task_panel_view_model.collect_provider_context_panel_actions(
-            panel
-        )
+        action_set = plan_task_panel_view_model.collect_provider_context_panel_actions(panel)
         self._add_integration_action_row(
-            QtGui, block, layout, actions=actions, primary_first=has_primary
+            QtGui,
+            block,
+            layout,
+            actions=action_set.actions,
+            primary_first=action_set.has_primary,
         )
 
     def _add_provider_context_panel_details(self, QtGui, block, layout, panel):

@@ -39,6 +39,27 @@ class ProviderSectionGroups:
     detail: tuple = ()
 
 
+@dataclass(frozen=True)
+class ProviderIssueGroup:
+    issues: tuple = ()
+    actions: tuple = ()
+
+    def __iter__(self):
+        return iter(self.issues)
+
+    def __len__(self):
+        return len(self.issues)
+
+    def __getitem__(self, index):
+        return self.issues[index]
+
+
+@dataclass(frozen=True)
+class ProviderContextPanelActions:
+    actions: tuple = ()
+    has_primary: bool = False
+
+
 class _TaskPanelInteractionReads(_TaskPanelReadsBase):
     __slots__ = ()
 
@@ -581,6 +602,9 @@ def filter_integration_actions(actions, hidden_action_ids=(), hidden_action_labe
 
 
 def collect_provider_issue_group_actions(issues):
+    precomputed_actions = getattr(issues, "actions", None)
+    if precomputed_actions is not None:
+        return tuple(precomputed_actions)
     actions = []
     seen = set()
     for issue in tuple(issues or ()):
@@ -607,7 +631,14 @@ def group_provider_issues(issues):
             groups_by_key[group_key] = group
             grouped.append(group)
         group.append(issue)
-    return tuple(tuple(group) for group in grouped if group)
+    return tuple(
+        ProviderIssueGroup(
+            issues=tuple(group),
+            actions=collect_provider_issue_group_actions(group),
+        )
+        for group in grouped
+        if group
+    )
 
 
 def partition_provider_sections(sections):
@@ -693,7 +724,7 @@ def collect_provider_context_panel_actions(panel):
             continue
         seen.add(identity)
         actions.append(action)
-    return tuple(actions), has_primary
+    return ProviderContextPanelActions(actions=tuple(actions), has_primary=has_primary)
 
 
 def sort_provider_tools(tools):
@@ -797,11 +828,13 @@ def build_integration_panel_view_model(session_or_context, snapshot):
     regular_sections = section_groups.regular
     detail_sections = section_groups.detail
     context_panel = resolve_provider_context_panel(getattr(snapshot, "context_panels", ()))
-    context_panel_actions, has_context_primary = (
+    context_panel_action_set = (
         collect_provider_context_panel_actions(context_panel)
         if context_panel is not None
-        else ((), False)
+        else ProviderContextPanelActions()
     )
+    context_panel_actions = context_panel_action_set.actions
+    has_context_primary = context_panel_action_set.has_primary
     grouped_issue_sets = group_provider_issues(getattr(snapshot, "issues", ()))
     promoted_action_ids = collect_action_identities(
         action
@@ -818,7 +851,7 @@ def build_integration_panel_view_model(session_or_context, snapshot):
             action
             for issue_group in grouped_issue_sets
             for action in filter_integration_actions(
-                collect_provider_issue_group_actions(issue_group),
+                issue_group.actions,
                 hidden_action_ids=promoted_action_ids,
             )
         )
