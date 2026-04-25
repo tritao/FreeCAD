@@ -6,6 +6,7 @@ from contextlib import nullcontext
 
 import FreeCAD
 import FreeCADGui
+from bimplan.providers import host_targets as plan_host_targets
 from bimplan.providers import PlanEditHandleSpec, PlanOverlayMarkerKind, PlanToolInteraction
 from bimplan import selection as plan_selection
 from bimplan.selection import target_kinds as plan_target_kinds
@@ -432,7 +433,7 @@ def _build_provider_handle_payload(
     selected_target = session.selection.get_selected_plan_target()
     selected_targets = session.selection.get_selected_plan_targets()
     hovered_target = session.selection.get_hovered_plan_target()
-    host_kind, host_obj, host_source = _get_provider_handle_payload_host_target(
+    host_target, host_source = _get_provider_handle_payload_host_target(
         session,
         handle,
         snap_target=snap_target,
@@ -440,6 +441,7 @@ def _build_provider_handle_payload(
         selected_targets=selected_targets,
         hovered_target=hovered_target,
     )
+    host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(host_target)
     placement_point = (
         session.providers.project_provider_point_to_host(point, host_obj)
         if host_kind == "wall" and point is not None
@@ -468,7 +470,7 @@ def _build_provider_handle_payload(
         "selected_target": selected_target,
         "selected_targets": selected_targets,
         "hovered_target": hovered_target,
-        "host_target": (host_kind, host_obj),
+        "host_target": host_target,
         "host_source": host_source,
     }
 
@@ -484,27 +486,28 @@ def _get_provider_handle_payload_host_target(
 ):
     role = _get_provider_handle_role(handle)
     if role == "rehost":
-        snap_kind, snap_obj = session.providers.normalize_provider_point_host_target(snap_target)
-        if snap_obj is not None:
-            return snap_kind, snap_obj, "snap"
-        hovered_kind, hovered_obj = session.providers.normalize_provider_point_host_target(
-            hovered_target
-        )
-        if hovered_obj is not None:
-            return hovered_kind, hovered_obj, "hovered"
+        snap_target_ref = session.providers.normalize_provider_point_host_target(snap_target)
+        if snap_target_ref.obj is not None:
+            return snap_target_ref, "snap"
+        hovered_target_ref = session.providers.normalize_provider_point_host_target(hovered_target)
+        if hovered_target_ref.obj is not None:
+            return hovered_target_ref, "hovered"
         selected_walls = []
         for target in selected_targets or ():
             target_kind, target_obj = session.providers.normalize_provider_point_host_target(target)
             if target_obj is not None and target_obj not in selected_walls:
                 selected_walls.append(target_obj)
         if len(selected_walls) == 1:
-            return "wall", selected_walls[0], "selected"
-        selected_kind, selected_obj = session.providers.normalize_provider_point_host_target(
+            return (
+                plan_host_targets.make_provider_host_target_ref("wall", selected_walls[0]),
+                "selected",
+            )
+        selected_target_ref = session.providers.normalize_provider_point_host_target(
             selected_target
         )
-        if selected_obj is not None:
-            return selected_kind, selected_obj, "selected"
-        return (None, None, "")
+        if selected_target_ref.obj is not None:
+            return selected_target_ref, "selected"
+        return plan_host_targets.make_provider_host_target_ref(), ""
     return session.providers.get_provider_point_payload_host_target(
         snap_target=snap_target,
         selected_target=selected_target,
@@ -521,7 +524,9 @@ def _apply_builtin_provider_handle_action(session, provider_obj, handle, payload
 
 
 def _apply_provider_rehost(session, provider_obj, payload):
-    host_kind, host_obj = payload.get("host_target") or (None, None)
+    host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(
+        payload.get("host_target")
+    )
     if host_kind != "wall" or host_obj is None:
         return False
     try:
