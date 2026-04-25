@@ -296,20 +296,22 @@ def finish_wall_edit(session, point=None, obj=None):
     session.wall_edit.commit_wall_edit_points(wall, endpoint, proxy, new_points)
 
 
-def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
-    if not wall or not endpoint or not proxy or not new_points:
-        session.current_tool = "Select"
-        session.lifecycle.cancel_pending_edit()
+def _abort_wall_edit_commit(session, openings_fit=True, refresh=True):
+    if not openings_fit:
+        FreeCAD.Console.PrintError(
+            translate(
+                "BIM_PlanEdit",
+                "The resized wall cannot contain its hosted openings.\n",
+            )
+        )
+    session.current_tool = "Select"
+    session.lifecycle.cancel_pending_edit()
+    if refresh:
         session.task_panels.refresh_task_panel_status()
-        return
 
-    transaction_name = (
-        translate("BIM_PlanEdit", "Move Wall")
-        if endpoint == "Move"
-        else translate("BIM_PlanEdit", "Stretch Wall Endpoint")
-    )
+
+def _apply_wall_edit_transaction(session, wall, proxy, new_points, transaction_name):
     openings_fit = True
-
     try:
         session.doc.openTransaction(transaction_name)
         proxy.set_from_endpoints(wall, new_points)
@@ -319,21 +321,17 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
             raise RuntimeError("Hosted openings no longer fit within resized wall")
         session.doc.commitTransaction()
         session.doc.recompute()
+        return True
     except Exception:
         try:
             session.doc.abortTransaction()
         except Exception:
             pass
-        if not openings_fit:
-            FreeCAD.Console.PrintError(
-                translate(
-                    "BIM_PlanEdit",
-                    "The resized wall cannot contain its hosted openings.\n",
-                )
-            )
-        session.current_tool = "Select"
-        session.lifecycle.cancel_pending_edit()
-        return
+        _abort_wall_edit_commit(session, openings_fit=openings_fit, refresh=False)
+        return False
+
+
+def _finalize_wall_edit_commit(session, wall):
     session.openings.refresh_wall_hosted_opening_footprints(wall)
     session.selection.set_gui_selection_object(wall)
     session.current_tool = "Select"
@@ -342,6 +340,21 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
     session.wall_relations.update_wall_relation_status(wall)
     session.overlays.sync_wall_grips()
     session.task_panels.refresh_task_panel_status()
+
+
+def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
+    if not wall or not endpoint or not proxy or not new_points:
+        _abort_wall_edit_commit(session, openings_fit=True, refresh=True)
+        return
+
+    transaction_name = (
+        translate("BIM_PlanEdit", "Move Wall")
+        if endpoint == "Move"
+        else translate("BIM_PlanEdit", "Stretch Wall Endpoint")
+    )
+    if not _apply_wall_edit_transaction(session, wall, proxy, new_points, transaction_name):
+        return
+    _finalize_wall_edit_commit(session, wall)
 
 
 def start_wall_grip_edit(session, grip_index):
