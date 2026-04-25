@@ -4,6 +4,7 @@
 
 import FreeCAD
 import math
+from bimplan.selection import edit_nodes as plan_edit_nodes
 from bimplan.selection import hover_picking as plan_hover_picking
 from bimplan.providers import runtime as plan_provider_runtime
 from bimplan import selection as plan_selection
@@ -1142,24 +1143,24 @@ def _resolve_pick_target_from_overlay_stages(
 def get_plan_target_from_edit_node(session, node):
     if not node:
         return (None, None)
-    node_kind = node[0]
+    node_kind = plan_edit_nodes.get_edit_node_kind(node)
     if node_kind in ("provider_overlay_point", "provider_overlay_target"):
         target_kind, obj = get_provider_overlay_target_from_edit_node(session, node)
         if session.selection.is_valid_plan_target(target_kind, obj):
             return (target_kind, obj)
         return session.selection.get_plan_target_for_object(obj)
     if node_kind == "opening_handle":
-        opening = node[1]
+        opening, _index = plan_edit_nodes.get_edit_node_payload(node)
         if session.openings.is_hosted_opening_object(opening):
             return ("opening", opening)
         return (None, None)
     if node_kind == "symbol_handle":
-        symbol = node[1]
+        symbol, _role = plan_edit_nodes.get_edit_node_payload(node)
         if session.visibility.is_plan_symbol_instance(symbol):
             return ("symbol", symbol)
         return (None, None)
     try:
-        point = node[1]
+        (point,) = plan_edit_nodes.get_edit_node_payload(node)
         doc = FreeCAD.getDocument(str(point.documentName.getValue()))
         obj = doc.getObject(str(point.objectName.getValue()))
     except Exception:
@@ -1197,8 +1198,7 @@ def _get_selected_handle_edit_node(session, mouse_pos):
             session,
             mouse_pos,
             "selected_symbol_handle",
-            (
-                "symbol_handle",
+            plan_edit_nodes.SymbolHandleEditNode(
                 plan_selection.get_selected_plan_target_object(session, "symbol"),
                 symbol_handle_role,
             ),
@@ -1209,8 +1209,7 @@ def _get_selected_handle_edit_node(session, mouse_pos):
             session,
             mouse_pos,
             "selected_opening_handle",
-            (
-                "opening_handle",
+            plan_edit_nodes.OpeningHandleEditNode(
                 plan_selection.get_selected_plan_target_object(session, "opening"),
                 opening_handle_index,
             ),
@@ -1221,8 +1220,7 @@ def _get_selected_handle_edit_node(session, mouse_pos):
             session,
             mouse_pos,
             "selected_provider_handle",
-            (
-                "provider_handle",
+            plan_edit_nodes.ProviderHandleEditNode(
                 plan_selection.get_selected_plan_target_object(session, "provider"),
                 provider_handle_index,
             ),
@@ -1239,7 +1237,7 @@ def _get_provider_overlay_edit_node(session, mouse_pos):
             session,
             mouse_pos,
             "provider_overlay_objects_info",
-            ("provider_overlay_target", target_kind, target_obj),
+            plan_edit_nodes.ProviderOverlayTargetEditNode(target_kind, target_obj),
         )
     target_kind, target_obj = session.selection.pick_provider_overlay_target_from_overlays(
         mouse_pos
@@ -1249,7 +1247,7 @@ def _get_provider_overlay_edit_node(session, mouse_pos):
             session,
             mouse_pos,
             "provider_overlay_overlays",
-            ("provider_overlay_target", target_kind, target_obj),
+            plan_edit_nodes.ProviderOverlayTargetEditNode(target_kind, target_obj),
         )
     return None
 
@@ -1286,14 +1284,14 @@ def _get_edit_node_from_picked_points(session, mouse_pos, picked_points):
                 session,
                 mouse_pos,
                 "ray_pick_provider_overlay_point",
-                ("provider_overlay_point", point),
+                plan_edit_nodes.ProviderOverlayPointEditNode(point),
             )
         if "EditNode" in sub_element:
             return _emit_get_edit_node_result(
                 session,
                 mouse_pos,
                 "ray_pick_edit_node",
-                ("edit_node", point),
+                plan_edit_nodes.RayEditNode(point),
             )
     return _emit_get_edit_node_result(session, mouse_pos, "no_edit_node", None)
 
@@ -1328,16 +1326,16 @@ def pick_selected_opening_handle(session, mouse_pos, radius_px=10):
 def get_provider_overlay_target_from_edit_node(session, node):
     if not node:
         return (None, None)
-    node_kind = node[0]
+    node_kind = plan_edit_nodes.get_edit_node_kind(node)
     if node_kind == "provider_overlay_target":
         try:
-            return (node[1], node[2])
+            return plan_edit_nodes.get_edit_node_payload(node)
         except Exception:
             return (None, None)
     if node_kind != "provider_overlay_point":
         return (None, None)
     try:
-        point = node[1]
+        (point,) = plan_edit_nodes.get_edit_node_payload(node)
         document_name = str(point.documentName.getValue())
         object_name = str(point.objectName.getValue())
         subname = str(point.subElementName.getValue())

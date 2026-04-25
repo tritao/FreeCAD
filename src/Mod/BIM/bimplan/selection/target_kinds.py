@@ -2,12 +2,24 @@
 
 """Shared target-kind strings for BIM Plan Edit."""
 
-PLAN_TARGET_WALL = "wall"
-PLAN_TARGET_OPENING = "opening"
-PLAN_TARGET_SYMBOL = "symbol"
-PLAN_TARGET_PROVIDER = "provider"
-PLAN_TARGET_REGION = "region"
-PLAN_TARGET_SPACE = "space"
+from enum import Enum
+
+
+class PlanTargetKind(str, Enum):
+    WALL = "wall"
+    OPENING = "opening"
+    SYMBOL = "symbol"
+    PROVIDER = "provider"
+    REGION = "region"
+    SPACE = "space"
+
+
+PLAN_TARGET_WALL = PlanTargetKind.WALL.value
+PLAN_TARGET_OPENING = PlanTargetKind.OPENING.value
+PLAN_TARGET_SYMBOL = PlanTargetKind.SYMBOL.value
+PLAN_TARGET_PROVIDER = PlanTargetKind.PROVIDER.value
+PLAN_TARGET_REGION = PlanTargetKind.REGION.value
+PLAN_TARGET_SPACE = PlanTargetKind.SPACE.value
 
 PRIMARY_PLAN_TARGET_KINDS = (
     PLAN_TARGET_WALL,

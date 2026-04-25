@@ -6,6 +6,7 @@ import FreeCAD
 
 from bimplan import document_visuals as plan_document_visuals
 from bimplan import selection as plan_selection
+from bimplan.selection import edit_nodes as plan_edit_nodes
 from bimplan.tools import space_regions as plan_space_regions
 
 
@@ -84,20 +85,20 @@ def _handle_pick_space_region_mouse_down(session, mouse_pos, event_callback):
 
 
 def _handle_edit_node_activation(session, node, event_callback):
-    node_kind = node[0]
+    node_kind = plan_edit_nodes.get_edit_node_kind(node)
     if node_kind == "opening_handle":
-        _kind, obj, index = node
+        obj, index = plan_edit_nodes.get_edit_node_payload(node)
         session.selection.select_opening_for_plan_edit(obj)
         session.selection.set_gui_selection_object(obj)
         session.openings.activate_opening_handle(obj, index)
     elif node_kind == "provider_handle":
-        _kind, obj, index = node
+        obj, index = plan_edit_nodes.get_edit_node_payload(node)
         session.selection.set_selected_plan_target_state("provider", obj)
         session.overlays.clear_wall_grips()
         session.overlays.clear_selected_wall_overlay()
         session.providers.activate_provider_handle(obj, index)
     elif node_kind == "symbol_handle":
-        _kind, obj, role = node
+        obj, role = plan_edit_nodes.get_edit_node_payload(node)
         session.selection.set_selected_plan_target_state("symbol", obj)
         session.overlays.clear_wall_grips()
         session.overlays.clear_selected_wall_overlay()
@@ -106,7 +107,7 @@ def _handle_edit_node_activation(session, node, event_callback):
         if not session.selection.activate_provider_overlay_target_node(node, event_callback):
             return False
     else:
-        point = node[1]
+        (point,) = plan_edit_nodes.get_edit_node_payload(node)
         try:
             doc = FreeCAD.getDocument(str(point.documentName.getValue()))
             obj = doc.getObject(str(point.objectName.getValue()))
