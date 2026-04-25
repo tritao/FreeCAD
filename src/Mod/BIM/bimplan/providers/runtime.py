@@ -4,7 +4,6 @@
 
 from contextlib import nullcontext
 from dataclasses import dataclass, replace
-from functools import wraps
 from typing import TypedDict
 
 import FreeCAD
@@ -70,55 +69,6 @@ class _PlanProviderTargetDisplayFields(TypedDict):
 _PLAN_PROVIDER_SNAPSHOT_CACHE_KEY = ("provider_snapshot", "panel")
 
 
-def _bind_provider_call(func):
-    @wraps(func)
-    def method(self, *args, **kwargs):
-        return func(self.session, *args, **kwargs)
-
-    return method
-
-
-_PLAN_PROVIDERS_API_BOUND_METHODS = (
-    "plan_provider_integrations_disabled",
-    "get_plan_provider_id",
-    "coerce_plan_provider_results",
-    "normalize_plan_provider_action",
-    "normalize_plan_provider_tool",
-    "normalize_plan_provider_edit_handle",
-    "normalize_plan_provider_issue",
-    "normalize_plan_provider_suggestion",
-    "normalize_plan_provider_section",
-    "normalize_plan_provider_context_panel",
-    "normalize_plan_provider_overlay",
-    "normalize_plan_provider_target",
-    "collect_plan_provider_contributions",
-    "get_plan_provider_display_name",
-    "get_plan_provider_issues",
-    "get_plan_provider_suggestions",
-    "get_plan_provider_tools",
-    "get_plan_provider_snapshot",
-    "get_plan_provider_edit_handles",
-    "get_plan_provider_inspector_sections",
-    "get_plan_provider_context_panels",
-    "get_plan_provider_overlays",
-    "get_plan_provider_overlay_mode",
-    "set_plan_provider_overlay_mode",
-    "get_plan_provider_overlay_visibility_key",
-    "get_plan_provider_targets",
-    "get_plan_provider_target_for_object",
-    "is_plan_provider_target_object",
-    "is_plan_provider_overlay_enabled",
-    "set_plan_provider_overlay_mode",
-    "is_plan_provider_overlay_visible_for_mode",
-    "is_plan_provider_overlay_visible",
-    "set_plan_provider_overlay_visible",
-    "queue_plan_provider_overlay_refresh",
-    "queue_plan_provider_overlay_sync",
-    "build_plan_semantic_record",
-    "get_plan_semantic_records",
-)
-
-
 class PlanProvidersAPI:
     """Owned session surface for Plan Edit provider behavior."""
 
@@ -130,6 +80,114 @@ class PlanProvidersAPI:
     @property
     def session(self):
         return self._session
+
+    def plan_provider_integrations_disabled(self, *args, **kwargs):
+        return plan_provider_integrations_disabled(self.session, *args, **kwargs)
+
+    def get_plan_provider_id(self, *args, **kwargs):
+        return get_plan_provider_id(self.session, *args, **kwargs)
+
+    def coerce_plan_provider_results(self, *args, **kwargs):
+        return coerce_plan_provider_results(self.session, *args, **kwargs)
+
+    def normalize_plan_provider_action(self, *args, **kwargs):
+        return normalize_plan_provider_action(self.session, *args, **kwargs)
+
+    def normalize_plan_provider_tool(self, *args, **kwargs):
+        return normalize_plan_provider_tool(self.session, *args, **kwargs)
+
+    def normalize_plan_provider_edit_handle(self, *args, **kwargs):
+        return normalize_plan_provider_edit_handle(self.session, *args, **kwargs)
+
+    def normalize_plan_provider_issue(self, *args, **kwargs):
+        return normalize_plan_provider_issue(self.session, *args, **kwargs)
+
+    def normalize_plan_provider_suggestion(self, *args, **kwargs):
+        return normalize_plan_provider_suggestion(self.session, *args, **kwargs)
+
+    def normalize_plan_provider_section(self, *args, **kwargs):
+        return normalize_plan_provider_section(self.session, *args, **kwargs)
+
+    def normalize_plan_provider_context_panel(self, *args, **kwargs):
+        return normalize_plan_provider_context_panel(self.session, *args, **kwargs)
+
+    def normalize_plan_provider_overlay(self, *args, **kwargs):
+        return normalize_plan_provider_overlay(self.session, *args, **kwargs)
+
+    def normalize_plan_provider_target(self, *args, **kwargs):
+        return normalize_plan_provider_target(self.session, *args, **kwargs)
+
+    def collect_plan_provider_contributions(self, *args, **kwargs):
+        return collect_plan_provider_contributions(self.session, *args, **kwargs)
+
+    def get_plan_provider_display_name(self, *args, **kwargs):
+        return get_plan_provider_display_name(self.session, *args, **kwargs)
+
+    def get_plan_provider_issues(self, *args, **kwargs):
+        return get_plan_provider_issues(self.session, *args, **kwargs)
+
+    def get_plan_provider_suggestions(self, *args, **kwargs):
+        return get_plan_provider_suggestions(self.session, *args, **kwargs)
+
+    def get_plan_provider_tools(self, *args, **kwargs):
+        return get_plan_provider_tools(self.session, *args, **kwargs)
+
+    def get_plan_provider_snapshot(self, *args, **kwargs):
+        return get_plan_provider_snapshot(self.session, *args, **kwargs)
+
+    def get_plan_provider_edit_handles(self, *args, **kwargs):
+        return get_plan_provider_edit_handles(self.session, *args, **kwargs)
+
+    def get_plan_provider_inspector_sections(self, *args, **kwargs):
+        return get_plan_provider_inspector_sections(self.session, *args, **kwargs)
+
+    def get_plan_provider_context_panels(self, *args, **kwargs):
+        return get_plan_provider_context_panels(self.session, *args, **kwargs)
+
+    def get_plan_provider_overlays(self, *args, **kwargs):
+        return get_plan_provider_overlays(self.session, *args, **kwargs)
+
+    def get_plan_provider_overlay_mode(self, *args, **kwargs):
+        return get_plan_provider_overlay_mode(self.session, *args, **kwargs)
+
+    def set_plan_provider_overlay_mode(self, *args, **kwargs):
+        return set_plan_provider_overlay_mode(self.session, *args, **kwargs)
+
+    def get_plan_provider_overlay_visibility_key(self, *args, **kwargs):
+        return get_plan_provider_overlay_visibility_key(self.session, *args, **kwargs)
+
+    def get_plan_provider_targets(self, *args, **kwargs):
+        return get_plan_provider_targets(self.session, *args, **kwargs)
+
+    def get_plan_provider_target_for_object(self, *args, **kwargs):
+        return get_plan_provider_target_for_object(self.session, *args, **kwargs)
+
+    def is_plan_provider_target_object(self, *args, **kwargs):
+        return is_plan_provider_target_object(self.session, *args, **kwargs)
+
+    def is_plan_provider_overlay_enabled(self, *args, **kwargs):
+        return is_plan_provider_overlay_enabled(self.session, *args, **kwargs)
+
+    def is_plan_provider_overlay_visible_for_mode(self, *args, **kwargs):
+        return is_plan_provider_overlay_visible_for_mode(self.session, *args, **kwargs)
+
+    def is_plan_provider_overlay_visible(self, *args, **kwargs):
+        return is_plan_provider_overlay_visible(self.session, *args, **kwargs)
+
+    def set_plan_provider_overlay_visible(self, *args, **kwargs):
+        return set_plan_provider_overlay_visible(self.session, *args, **kwargs)
+
+    def queue_plan_provider_overlay_refresh(self, *args, **kwargs):
+        return queue_plan_provider_overlay_refresh(self.session, *args, **kwargs)
+
+    def queue_plan_provider_overlay_sync(self, *args, **kwargs):
+        return queue_plan_provider_overlay_sync(self.session, *args, **kwargs)
+
+    def build_plan_semantic_record(self, *args, **kwargs):
+        return build_plan_semantic_record(self.session, *args, **kwargs)
+
+    def get_plan_semantic_records(self, *args, **kwargs):
+        return get_plan_semantic_records(self.session, *args, **kwargs)
 
     def get_plan_edit_context(self):
         return get_plan_edit_context(self.session)
@@ -350,10 +408,6 @@ class PlanProvidersAPI:
             transaction_label=transaction_label,
             payload=payload,
         )
-
-
-for _method_name in _PLAN_PROVIDERS_API_BOUND_METHODS:
-    setattr(PlanProvidersAPI, _method_name, _bind_provider_call(globals()[_method_name]))
 
 
 @dataclass(frozen=True)
