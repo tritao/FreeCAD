@@ -127,6 +127,33 @@ _TARGET_KIND_POLICIES = {
                 lambda session: session.overlays.sync_hovered_wall_overlay(),
             ),
         ),
+        hover_set_sync=_sync_specs(
+            (
+                "sync_junction_node_overlays",
+                lambda session: session.overlays.sync_junction_node_overlays(),
+            ),
+            (
+                "sync_hovered_wall_overlay",
+                lambda session: session.overlays.sync_hovered_wall_overlay(),
+            ),
+            (
+                "sync_hovered_wall_opening_context_overlay",
+                lambda session: session.overlays.sync_hovered_wall_opening_context_overlay(),
+            ),
+            (
+                "refresh_task_panel_status",
+                lambda session: (
+                    session.task_panels.refresh_task_panel_status(
+                        selection_only=(
+                            session.current_tool == "Select"
+                            and session.selection.is_selected_plan_target("wall")
+                        )
+                    )
+                    if session.current_tool == "Join"
+                    else None
+                ),
+            ),
+        ),
     ),
     plan_target_kinds.PLAN_TARGET_OPENING: TargetKindPolicy(
         validate=lambda session, obj: session.openings.is_hosted_opening_object(obj),
@@ -369,10 +396,10 @@ def get_hovered_target(session):
 
 def clear_hovered_targets(session, kinds=None):
     for kind in kinds or plan_target_kinds.HOVERED_PLAN_TARGET_KINDS:
-        setter = _get_target_kind_policy(kind).set_hovered
-        if not setter:
+        policy = _get_target_kind_policy(kind)
+        if not policy.set_hovered:
             continue
-        setter(session, None)
+        set_hovered_target(session, kind, None)
 
 
 def set_only_hovered_target(session, target_kind, target_obj):
@@ -386,7 +413,7 @@ def set_only_hovered_target(session, target_kind, target_obj):
             kind for kind in plan_target_kinds.HOVERED_PLAN_TARGET_KINDS if kind != target_kind
         ),
     )
-    policy.set_hovered(session, target_obj)
+    set_hovered_target(session, target_kind, target_obj)
 
 
 def clear_hovered_target_visuals(session, kinds=None):

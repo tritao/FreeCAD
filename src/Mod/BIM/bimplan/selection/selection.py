@@ -1338,7 +1338,9 @@ def is_plan_additive_selection_active(session):
 
 
 def activate_provider_overlay_target_node(session, node, event_callback=None):
-    target_ref = get_provider_overlay_target_from_edit_node(session, node)
+    target_ref = plan_target_kinds.coerce_plan_target_ref(
+        session.selection.get_provider_overlay_target_from_edit_node(node)
+    )
     if target_ref.obj is None:
         return False
     if is_valid_plan_target(session, target_ref.kind, target_ref.obj):
@@ -1426,12 +1428,14 @@ def toggle_raw_plan_object_selection(session, obj, event_callback=None):
 
 
 def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=None):
-    node = get_edit_node(session, mouse_pos)
+    node = session.selection.get_edit_node(mouse_pos)
     if plan_edit_nodes.get_edit_node_kind(node) in (
         "provider_overlay_point",
         "provider_overlay_target",
     ):
-        target_ref = get_provider_overlay_target_from_edit_node(session, node)
+        target_ref = plan_target_kinds.coerce_plan_target_ref(
+            session.selection.get_provider_overlay_target_from_edit_node(node)
+        )
         if target_ref.obj is not None and not is_valid_plan_target(
             session,
             target_ref.kind,
@@ -1439,7 +1443,9 @@ def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=
         ):
             return toggle_raw_plan_object_selection(session, target_ref.obj, event_callback)
     else:
-        target_ref = get_plan_target_from_edit_node(session, node)
+        target_ref = plan_target_kinds.coerce_plan_target_ref(
+            session.selection.get_plan_target_from_edit_node(node)
+        )
     if target_ref.kind is None:
         target_ref = plan_target_kinds.coerce_plan_target_ref(
             session.selection.get_plan_target_at_position(mouse_pos)
@@ -2029,6 +2035,9 @@ class PlanSelectionAPI(_SessionAPI):
 
     def get_hovered_plan_target(self, *args, **kwargs):
         return plan_selection_picking.get_hovered_plan_target(self.session, *args, **kwargs)
+
+    def clear_hovered_plan_targets(self, *args, **kwargs):
+        return plan_selection_picking.clear_hovered_plan_targets(self.session, *args, **kwargs)
 
     def queue_prime_hover_pick_caches(self, *args, **kwargs):
         return plan_selection_picking.queue_prime_hover_pick_caches(self.session, *args, **kwargs)

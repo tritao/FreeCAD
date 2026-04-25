@@ -121,6 +121,10 @@ class _PlanEditViewportStatusChip:
                         pass
                 self.host_widget = None
                 self.hide()
+                try:
+                    self.setParent(None)
+                except Exception:
+                    pass
                 self.deleteLater()
 
         return _Chip(session, host_widget)

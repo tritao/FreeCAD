@@ -47,6 +47,9 @@ class PlanWallRelationsAPI:
     def cycle_plan_join_type(self):
         return cycle_plan_join_type(self.session)
 
+    def cancel_join_tool(self, refresh=True):
+        return cancel_join_tool(self.session, refresh=refresh)
+
     def get_plan_join_command(self):
         return get_plan_join_command(self.session)
 
@@ -71,6 +74,9 @@ class PlanWallRelationsAPI:
 
     def unjoin_current_plan_wall_pair(self):
         return unjoin_current_plan_wall_pair(self.session)
+
+    def apply_plan_wall_join(self, source_wall, target_wall):
+        return apply_plan_wall_join(self.session, source_wall, target_wall)
 
     def find_plan_junction_promotion(self, source_wall, target_wall):
         return find_plan_junction_promotion(self.session, source_wall, target_wall)
@@ -539,7 +545,7 @@ def apply_plan_wall_join(session, source_wall, target_wall):
     import Arch
     import ArchWallJoinUtils
 
-    join_command = session._get_plan_join_command()
+    join_command = session.wall_relations.get_plan_join_command()
     created = False
     doc = getattr(source_wall, "Document", None) or session.doc
     if doc is None:

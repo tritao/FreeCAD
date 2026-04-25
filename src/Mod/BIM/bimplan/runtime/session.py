@@ -358,6 +358,9 @@ class PlanEditSession:
     def get_plan_provider_overlays(self, *args, **kwargs):
         return self.providers.get_plan_provider_overlays(*args, **kwargs)
 
+    def _get_status_chip_text(self):
+        return self.status_text.get_status_chip_text()
+
     def defer_document_visual_updates(self):
         return plan_document_visuals.defer_document_visual_updates(self)
 

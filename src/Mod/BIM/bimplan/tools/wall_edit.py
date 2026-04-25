@@ -90,12 +90,18 @@ def is_selected_wall_endpoint_editable(session):
         return False
     if _get_wall_endpoint_proxy(wall) is None:
         return False
-    if not getattr(wall, "Base", None):
+    base = getattr(wall, "Base", None)
+    if not base:
         return True
     try:
+        shape = getattr(base, "Shape", None)
+        edges = tuple(getattr(shape, "Edges", ()) or ())
+        if len(edges) == 1 and not bool(getattr(edges[0], "Closed", False)):
+            return True
+
         import Draft
 
-        return Draft.getType(getattr(wall, "Base", None)) == "BezCurve"
+        return Draft.getType(base) in {"Line", "BezCurve"}
     except Exception:
         return False
 
@@ -160,9 +166,17 @@ def _set_wall_edit_start_state(session, wall, endpoints, mode):
     session._edit_endpoints = endpoints
 
 
-def _queue_wall_edit_start_opening_clearances(session):
+def _queue_wall_edit_start_opening_clearances(session, wall, endpoints):
     session._wall_edit_opening_clearances = {}
-    queue_wall_edit_opening_clearances(session)
+    session._wall_edit_opening_clearances_queued = False
+    if session._edit_endpoint not in ("Start", "End"):
+        return
+    with session.performance.plan_perf_trace_span("snapshot_wall_edit_opening_clearances"):
+        session._wall_edit_opening_clearances = snapshot_wall_hosted_opening_clearances(
+            session,
+            wall,
+            endpoints,
+        )
 
 
 def _prepare_wall_edit_preview(session, wall, endpoints):
@@ -189,7 +203,7 @@ def start_wall_edit(session, mode):
             _set_wall_edit_start_state(session, wall, endpoints, mode)
 
         with session.performance.plan_perf_trace_span("start_wall_edit_queue_opening_clearances"):
-            _queue_wall_edit_start_opening_clearances(session)
+            _queue_wall_edit_start_opening_clearances(session, wall, endpoints)
 
         with session.performance.plan_perf_trace_span("start_wall_edit_preview"):
             _prepare_wall_edit_preview(session, wall, endpoints)
@@ -227,7 +241,7 @@ def resume_wall_edit_point_pick(session):
                 movecallback=lambda point=None, obj=None: update_wall_edit_point_pick(
                     session,
                     point=point,
-                    obj=obj,
+                    snap_info=obj,
                 ),
                 last=last,
                 title=title,

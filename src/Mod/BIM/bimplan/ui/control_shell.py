@@ -308,6 +308,10 @@ class PlanEditControlsShellMixin:
                 form.setParent(None)
             except Exception:
                 pass
+            try:
+                form.deleteLater()
+            except Exception:
+                pass
         self.form = None
         self.session = None
         self.status = None

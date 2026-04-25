@@ -331,15 +331,45 @@ def get_screen_distance_sq_to_segment(session, mouse_pos, start, end):
     try:
         cursor_x = float(mouse_pos[0])
         cursor_y = float(mouse_pos[1])
-        start_x, start_y = session.view.getPointOnScreen(start)
-        end_x, end_y = session.view.getPointOnScreen(end)
     except Exception:
         return None
-    return get_screen_distance_sq_to_projected_segment(
-        (cursor_x, cursor_y),
-        (start_x, start_y),
-        (end_x, end_y),
-    )
+    try:
+        start_x = float(start.x)
+        start_y = float(start.y)
+        start_z = float(start.z)
+        end_x = float(end.x)
+        end_y = float(end.y)
+        end_z = float(end.z)
+    except Exception:
+        return None
+
+    projected_points = []
+    for step in range(5):
+        factor = float(step) / 4.0
+        point = FreeCAD.Vector(
+            start_x + ((end_x - start_x) * factor),
+            start_y + ((end_y - start_y) * factor),
+            start_z + ((end_z - start_z) * factor),
+        )
+        try:
+            screen_x, screen_y = session.view.getPointOnScreen(point)
+        except Exception:
+            return None
+        projected_points.append((float(screen_x), float(screen_y)))
+
+    best_distance_sq = None
+    cursor_xy = (cursor_x, cursor_y)
+    for start_xy, end_xy in zip(projected_points, projected_points[1:]):
+        distance_sq = get_screen_distance_sq_to_projected_segment(
+            cursor_xy,
+            start_xy,
+            end_xy,
+        )
+        if distance_sq is None:
+            continue
+        if best_distance_sq is None or distance_sq < best_distance_sq:
+            best_distance_sq = distance_sq
+    return best_distance_sq
 
 
 def get_screen_distance_sq_to_projected_segment(cursor_xy, start_xy, end_xy):
@@ -470,15 +500,24 @@ def pick_plan_symbol_target_from_overlays(session, mouse_pos, radius_px=10):
     ):
         if not session.doc or not session.view or not mouse_pos:
             return None
+        symbol_instances = tuple(session.overlays.get_plan_symbol_instances() or ())
         best_symbol = _pick_best_target_from_projected_polylines(
             session,
-            _iter_pick_objects(session.overlays.get_plan_symbol_instances()),
+            symbol_instances,
             session.overlays.get_symbol_overlay_screen_polylines,
             mouse_pos,
             radius_px,
             candidate_count_name="symbol_overlay_pick_candidates",
             segment_count_name="symbol_overlay_pick_segments_scanned",
         )
+        if best_symbol is None:
+            best_symbol = _pick_best_target_from_overlay_segments(
+                session,
+                symbol_instances,
+                session.overlays.get_symbol_overlay_segments,
+                mouse_pos,
+                radius_px,
+            )
         _perf_set_fields(
             session, symbol_overlay_pick_result=_describe_pick_object(session, best_symbol)
         )
@@ -501,10 +540,15 @@ def pick_plan_opening_target_from_overlays(session, mouse_pos, radius_px=10, can
         else:
             objects = candidates
         filtered_objects = []
-        for obj in _iter_pick_objects(objects, unique_names=True):
+        seen_names = set()
+        for obj in objects or ():
             _perf_count(session, "opening_overlay_pick_objects_scanned")
             if not session.openings.is_hosted_opening_object(obj):
                 continue
+            name = getattr(obj, "Name", None)
+            if not name or name in seen_names:
+                continue
+            seen_names.add(name)
             if should_skip_opening_by_plan_bounds(session, obj, plan_point, radius_px):
                 _perf_count(session, "opening_overlay_pick_bounds_skipped")
                 continue
