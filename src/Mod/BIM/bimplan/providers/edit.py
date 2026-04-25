@@ -9,6 +9,8 @@ import FreeCADGui
 from bimplan.providers import host_targets as plan_host_targets
 from bimplan.providers import payloads as plan_provider_payloads
 from bimplan.providers import PlanEditHandleSpec, PlanOverlayMarkerKind, PlanToolInteraction
+from bimplan.providers import point as plan_provider_point
+from bimplan.providers import runtime as plan_provider_runtime
 from bimplan import selection as plan_selection
 from bimplan.selection import target_kinds as plan_target_kinds
 
@@ -22,13 +24,15 @@ def get_selected_provider_edit_handles(session, provider_obj):
     editing_provider = getattr(session, "_edit_provider", None)
     if provider_obj != selected_provider and provider_obj != editing_provider:
         return []
-    provider_target = session.providers.get_plan_provider_target_for_object(provider_obj)
+    provider_target = plan_provider_runtime.get_plan_provider_target_for_object(
+        session, provider_obj
+    )
     if provider_target is None:
         return []
     provider_id = str(getattr(provider_target, "provider_id", "") or "").strip()
     target_key = str(getattr(provider_target, "key", "") or "").strip()
     handles = []
-    for handle in tuple(session.providers.get_plan_provider_edit_handles() or ()):
+    for handle in tuple(plan_provider_runtime.get_plan_provider_edit_handles(session) or ()):
         if str(getattr(handle, "provider_id", "") or "").strip() != provider_id:
             continue
         handle_target_key = str(getattr(handle, "target_key", "") or "").strip()
@@ -41,7 +45,9 @@ def get_selected_provider_edit_handles(session, provider_obj):
 
 
 def can_move_provider_target_by_placement(session, provider_obj):
-    if provider_obj is None or not session.providers.is_plan_provider_target_object(provider_obj):
+    if provider_obj is None or not plan_provider_runtime.is_plan_provider_target_object(
+        session, provider_obj
+    ):
         return False
     if _has_provider_coordinate_properties(provider_obj):
         return True
@@ -66,7 +72,9 @@ def can_move_provider_target_by_placement(session, provider_obj):
 
 
 def can_rehost_provider_target(session, provider_obj, host_obj=None):
-    if provider_obj is None or not session.providers.is_plan_provider_target_object(provider_obj):
+    if provider_obj is None or not plan_provider_runtime.is_plan_provider_target_object(
+        session, provider_obj
+    ):
         return False
     try:
         import Arch
@@ -82,19 +90,19 @@ def activate_provider_handle(session, provider_obj, handle_index):
     try:
         from PySide import QtCore
     except ImportError:
-        session.providers.activate_provider_handle_now(provider_obj, handle_index)
+        activate_provider_handle_now(session, provider_obj, handle_index)
         return
 
     QtCore.QTimer.singleShot(
         0,
-        lambda: session.providers.activate_provider_handle_now(provider_obj, handle_index),
+        lambda: activate_provider_handle_now(session, provider_obj, handle_index),
     )
 
 
 def activate_provider_handle_now(session, provider_obj, handle_index):
     if session._tearing_down or provider_obj is None:
         return
-    handles = session.providers.get_selected_provider_edit_handles(provider_obj)
+    handles = get_selected_provider_edit_handles(session, provider_obj)
     if handle_index < 0 or handle_index >= len(handles):
         return
     handle = handles[handle_index]
@@ -102,7 +110,7 @@ def activate_provider_handle_now(session, provider_obj, handle_index):
     session.selection.set_gui_selection_object(provider_obj)
     session.overlays.clear_wall_grips()
     if handle.interaction == PlanToolInteraction.POINT:
-        session.providers.start_provider_handle_point_pick(provider_obj, handle_index, handle)
+        start_provider_handle_point_pick(session, provider_obj, handle_index, handle)
         return
     payload = _build_provider_handle_payload(
         session,
@@ -113,16 +121,17 @@ def activate_provider_handle_now(session, provider_obj, handle_index):
     )
     handled = False
     if str(getattr(handle, "action_key", "") or "").strip():
-        handled = session.providers.execute_plan_provider_action(
+        handled = plan_provider_runtime.execute_plan_provider_action(
+            session,
             str(getattr(handle, "provider_id", "") or ""),
             str(getattr(handle, "action_key", "") or ""),
             transaction_label=str(getattr(handle, "transaction_label", "") or ""),
             payload=payload,
         )
     if handled:
-        session.providers.queue_restore_selected_provider(provider_obj)
+        queue_restore_selected_provider(session, provider_obj)
         return
-    session.providers.restore_selected_provider(provider_obj)
+    restore_selected_provider(session, provider_obj)
 
 
 def start_provider_handle_point_pick(session, provider_obj, handle_index, handle):
@@ -149,8 +158,8 @@ def start_provider_handle_point_pick(session, provider_obj, handle_index, handle
     session.lifecycle.set_draft_point_focus_suppressed(True)
     FreeCADGui.Snapper.getPoint(
         last=start_point,
-        callback=session.providers.finish_provider_handle_point_pick,
-        movecallback=session.providers.update_provider_handle_point_pick,
+        callback=finish_provider_handle_point_pick,
+        movecallback=update_provider_handle_point_pick,
         title=_get_provider_handle_prompt(handle),
         noTracker=True,
     )
@@ -171,17 +180,17 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
 
     if point is None or provider_obj is None:
         session.current_tool = "Select"
-        session.providers.restore_selected_provider(provider_obj)
+        restore_selected_provider(session, provider_obj)
         return
 
     if handle is None:
         session.current_tool = "Select"
-        session.providers.restore_selected_provider(provider_obj)
+        restore_selected_provider(session, provider_obj)
         return
     target_point = _resolve_provider_handle_target_point(session, provider_obj, point)
     if target_point is None:
         session.current_tool = "Select"
-        session.providers.restore_selected_provider(provider_obj)
+        restore_selected_provider(session, provider_obj)
         return
 
     action_key = str(getattr(handle, "action_key", "") or "").strip()
@@ -196,13 +205,14 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
         snap_object=obj,
     )
     if action_key and provider_id:
-        if session.providers.execute_plan_provider_action(
+        if plan_provider_runtime.execute_plan_provider_action(
+            session,
             provider_id,
             action_key,
             transaction_label=str(getattr(handle, "transaction_label", "") or ""),
             payload=payload,
         ):
-            session.providers.queue_restore_selected_provider(provider_obj)
+            queue_restore_selected_provider(session, provider_obj)
             return
         FreeCAD.Console.PrintWarning(
             translate(
@@ -210,7 +220,7 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
                 "Plan Edit provider handle '{handle}' was not handled.\n",
             ).format(handle=str(getattr(handle, "key", "") or ""))
         )
-        session.providers.restore_selected_provider(provider_obj)
+        restore_selected_provider(session, provider_obj)
         return
 
     defer_updates = getattr(session, "defer_document_visual_updates", None)
@@ -238,10 +248,10 @@ def finish_provider_handle_point_pick(session, point=None, obj=None):
                 "Plan Edit could not move the selected integration target: {error}\n",
             ).format(error=exc)
         )
-        session.providers.restore_selected_provider(provider_obj)
+        restore_selected_provider(session, provider_obj)
         return
 
-    session.providers.queue_restore_selected_provider(provider_obj)
+    queue_restore_selected_provider(session, provider_obj)
 
 
 def cancel_provider_handle_point_pick(session):
@@ -253,7 +263,7 @@ def cancel_provider_handle_point_pick(session):
     FreeCAD.activeDraftCommand = None
     session.current_tool = "Select"
     if provider_obj is not None:
-        session.providers.restore_selected_provider(provider_obj)
+        restore_selected_provider(session, provider_obj)
         return
     session.selection.set_gui_selection([])
     session.selection.refresh_primary_selected_plan_target()
@@ -261,7 +271,9 @@ def cancel_provider_handle_point_pick(session):
 
 def restore_selected_provider(session, provider_obj):
     session.current_tool = "Select"
-    if provider_obj is not None and session.providers.is_plan_provider_target_object(provider_obj):
+    if provider_obj is not None and plan_provider_runtime.is_plan_provider_target_object(
+        session, provider_obj
+    ):
         session.selection.set_gui_selection_object(provider_obj)
     else:
         session.selection.set_gui_selection([])
@@ -272,9 +284,9 @@ def queue_restore_selected_provider(session, provider_obj):
     try:
         from PySide import QtCore
     except ImportError:
-        session.providers.restore_selected_provider(provider_obj)
+        restore_selected_provider(session, provider_obj)
         return
-    QtCore.QTimer.singleShot(0, lambda: session.providers.restore_selected_provider(provider_obj))
+    QtCore.QTimer.singleShot(0, lambda: restore_selected_provider(session, provider_obj))
 
 
 def _get_builtin_provider_edit_handles(session, provider_obj, provider_target):
@@ -409,12 +421,16 @@ def _resolve_provider_handle_target_point(session, provider_obj, point):
 def _build_provider_handle_payload(
     session, provider_obj, handle, *, point, raw_point, snap_object=None
 ):
-    provider_target = session.providers.get_plan_provider_target_for_object(provider_obj)
-    snap_info = session.providers.get_provider_point_snap_info()
+    provider_target = plan_provider_runtime.get_plan_provider_target_for_object(
+        session, provider_obj
+    )
+    snap_info = plan_provider_point.get_provider_point_snap_info()
     if not isinstance(snap_info, dict):
         snap_info = {}
     try:
-        snap_object = session.providers.resolve_provider_point_snap_object(snap_object, snap_info)
+        snap_object = plan_provider_point.resolve_provider_point_snap_object(
+            session, snap_object, snap_info
+        )
     except Exception:
         pass
     snap_target = plan_target_kinds.make_plan_target_ref()
@@ -444,7 +460,7 @@ def _build_provider_handle_payload(
     )
     host_kind, host_obj = plan_host_targets.unpack_provider_host_target_ref(host_target)
     placement_point = (
-        session.providers.project_provider_point_to_host(point, host_obj)
+        plan_provider_point.project_provider_point_to_host(point, host_obj)
         if host_kind == "wall" and point is not None
         else None
     )
@@ -487,15 +503,19 @@ def _get_provider_handle_payload_host_target(
 ):
     role = _get_provider_handle_role(handle)
     if role == "rehost":
-        snap_target_ref = session.providers.normalize_provider_point_host_target(snap_target)
+        snap_target_ref = plan_provider_point.normalize_provider_point_host_target(
+            session, snap_target
+        )
         if snap_target_ref.obj is not None:
             return snap_target_ref, "snap"
-        hovered_target_ref = session.providers.normalize_provider_point_host_target(hovered_target)
+        hovered_target_ref = plan_provider_point.normalize_provider_point_host_target(
+            session, hovered_target
+        )
         if hovered_target_ref.obj is not None:
             return hovered_target_ref, "hovered"
         selected_walls = []
         for target in selected_targets or ():
-            target_ref = session.providers.normalize_provider_point_host_target(target)
+            target_ref = plan_provider_point.normalize_provider_point_host_target(session, target)
             if target_ref.obj is not None and target_ref.obj not in selected_walls:
                 selected_walls.append(target_ref.obj)
         if len(selected_walls) == 1:
@@ -503,13 +523,15 @@ def _get_provider_handle_payload_host_target(
                 plan_host_targets.make_provider_host_target_ref("wall", selected_walls[0]),
                 "selected",
             )
-        selected_target_ref = session.providers.normalize_provider_point_host_target(
-            selected_target
+        selected_target_ref = plan_provider_point.normalize_provider_point_host_target(
+            session,
+            selected_target,
         )
         if selected_target_ref.obj is not None:
             return selected_target_ref, "selected"
         return plan_host_targets.make_provider_host_target_ref(), ""
-    return session.providers.get_provider_point_payload_host_target(
+    return plan_provider_point.get_provider_point_payload_host_target(
+        session,
         snap_target=snap_target,
         selected_target=selected_target,
         selected_targets=selected_targets,
