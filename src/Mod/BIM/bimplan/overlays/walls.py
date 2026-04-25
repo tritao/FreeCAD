@@ -5,7 +5,9 @@
 import FreeCAD
 import FreeCADGui
 
+from . import geometry as overlay_geometry
 from . import manager as overlay_manager
+from . import openings as overlay_openings
 from .. import selection as plan_selection
 
 
@@ -45,7 +47,7 @@ def sync_wall_grips(session):
         session._wall_grip_sync_queued = False
         session._wall_grip_sync_generation += 1
         if not session.wall_edit.is_selected_wall_endpoint_editable():
-            session.overlays.clear_wall_grips()
+            clear_wall_grips(session)
             return
 
         with _perf_trace_span(session, "wall_grips_import_trackers"):
@@ -53,19 +55,19 @@ def sync_wall_grips(session):
                 import draftguitools.gui_trackers as DraftTrackers
                 from draftutils import params
             except Exception:
-                session.overlays.clear_wall_grips()
+                clear_wall_grips(session)
                 return
 
         wall = plan_selection.get_selected_plan_target_object(session, "wall")
         proxy = getattr(wall, "Proxy", None)
         if not proxy or not hasattr(proxy, "calc_endpoints"):
-            session.overlays.clear_wall_grips()
+            clear_wall_grips(session)
             return
 
         with _perf_trace_span(session, "wall_grips_calc_endpoints"):
             endpoints = proxy.calc_endpoints(wall)
         if len(endpoints) != 2:
-            session.overlays.clear_wall_grips()
+            clear_wall_grips(session)
             return
 
         with _perf_trace_span(session, "wall_grips_calc_positions"):
@@ -74,7 +76,7 @@ def sync_wall_grips(session):
             else:
                 grip_positions = endpoints + [(endpoints[0] + endpoints[1]) * 0.5]
         if len(grip_positions) != 3:
-            session.overlays.clear_wall_grips()
+            clear_wall_grips(session)
             return
 
         with _perf_trace_span(session, "wall_grips_marker_lookup"):
@@ -100,7 +102,7 @@ def sync_wall_grips(session):
             try:
                 with _perf_trace_span(session, "wall_grips_retarget_trackers"):
                     for index, tracker in enumerate(session._grip_trackers):
-                        session.overlays.retarget_edit_tracker(tracker, wall, index)
+                        retarget_edit_tracker(tracker, wall, index)
                 with _perf_trace_span(session, "wall_grips_position_trackers"):
                     for tracker, position in zip(session._grip_trackers, grip_positions):
                         tracker.set(position)
@@ -115,7 +117,7 @@ def sync_wall_grips(session):
                 session._wall_grip_state = wall_state
                 return
             except Exception:
-                session.overlays.clear_wall_grips()
+                clear_wall_grips(session)
 
         grip_start, grip_end, midpoint = grip_positions
         with _perf_trace_span(session, "wall_grips_create_trackers"):
@@ -174,7 +176,7 @@ def run_scheduled_wall_grip_sync(session, generation=None):
 def clear_wall_grips(session):
     session._wall_grip_sync_queued = False
     session._wall_grip_sync_generation += 1
-    session.overlays.finalize_trackers(session._grip_trackers)
+    overlay_manager.finalize_trackers(session._grip_trackers)
     session._grip_trackers = []
     session._wall_grip_state = None
 
@@ -197,7 +199,7 @@ def sync_hovered_wall_overlay(session):
 
 
 def clear_hovered_wall_overlay(session):
-    session.overlays.finalize_trackers(session._wall_hover_trackers)
+    overlay_manager.finalize_trackers(session._wall_hover_trackers)
     session._wall_hover_trackers = []
 
 
@@ -209,8 +211,8 @@ def sync_selected_wall_overlay(session):
             return
         width = session.viewport.scaled_line_width(4)
         color = (0.12, 0.38, 0.95)
-        segments = session.overlays.build_overlay_segments_from_polylines(
-            session.overlays.get_wall_overlay_polylines(wall)
+        segments = overlay_geometry.build_overlay_segments_from_polylines(
+            overlay_geometry.get_wall_overlay_polylines(session, wall)
         )
         _perf_count(session, "selected_wall_overlay_segments", len(segments))
         try:
@@ -237,7 +239,7 @@ def sync_selected_wall_overlay(session):
 
 
 def clear_selected_wall_overlay(session):
-    session.overlays.finalize_trackers(session._wall_overlay_trackers)
+    overlay_manager.finalize_trackers(session._wall_overlay_trackers)
     session._wall_overlay_trackers = []
 
 
@@ -289,7 +291,7 @@ def create_junction_node_trackers(session, junction, color, width, tracker_store
         ),
     )
     for start_offset, end_offset in offsets:
-        tracker = session.overlays.make_plan_line_tracker(
+        tracker = overlay_manager.make_plan_line_tracker(
             DraftTrackers,
             "junction-node:{}".format(getattr(junction, "Name", "unknown")),
             scolor=color,
@@ -322,7 +324,7 @@ def sync_junction_node_overlays(session):
 
 
 def clear_junction_node_overlays(session):
-    session.overlays.finalize_trackers(session._junction_node_trackers)
+    overlay_manager.finalize_trackers(session._junction_node_trackers)
     session._junction_node_trackers = []
 
 
@@ -340,7 +342,8 @@ def sync_hovered_wall_opening_context_overlay(session):
     color = (0.64, 0.70, 0.84)
     width = session.viewport.scaled_line_width(1)
     for opening in session.openings.get_wall_hosted_openings(session.hovered_wall):
-        session.overlays.create_opening_overlay_trackers(
+        overlay_openings.create_opening_overlay_trackers(
+            session,
             opening,
             color=color,
             width=width,
@@ -349,7 +352,7 @@ def sync_hovered_wall_opening_context_overlay(session):
 
 
 def clear_hovered_wall_opening_context_overlay(session):
-    session.overlays.finalize_trackers(session._hovered_wall_opening_context_trackers)
+    overlay_manager.finalize_trackers(session._hovered_wall_opening_context_trackers)
     session._hovered_wall_opening_context_trackers = []
 
 
@@ -359,11 +362,11 @@ def create_wall_overlay_trackers(session, wall, color, width, tracker_store):
     except ImportError:
         return
 
-    for polyline in session.overlays.get_wall_overlay_polylines(wall):
+    for polyline in overlay_geometry.get_wall_overlay_polylines(session, wall):
         if len(polyline) < 2:
             continue
         for start, end in zip(polyline, polyline[1:]):
-            tracker = session.overlays.make_plan_line_tracker(
+            tracker = overlay_manager.make_plan_line_tracker(
                 DraftTrackers,
                 "wall-overlay:{}".format(getattr(wall, "Name", "unknown")),
                 scolor=color,
