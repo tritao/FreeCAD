@@ -183,12 +183,12 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
                 ),
             )
 
-        def execute_action(self, action_key, context, session, payload=None):
-            del context, session
+        def execute_action(self, action_key, context, commands, payload=None):
+            del context
             self.calls.append((action_key, payload))
             if action_key != "rehost-fixture" or payload is None:
                 return False
-            host_kind, host_obj = payload.get("host_target") or (None, None)
+            host_kind, host_obj = commands.get_host_target()
             if host_kind != "wall" or host_obj is None:
                 return False
             placement_point = payload.get("placement_point")
