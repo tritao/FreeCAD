@@ -14,7 +14,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from enum import Enum
 from typing import Sequence, Tuple
-from bimplan.providers import host_targets as plan_host_targets
+from . import host_targets as plan_host_targets
 from bimplan.runtime import capabilities as runtime_capabilities
 from bimplan.selection import target_kinds as plan_target_kinds
 
