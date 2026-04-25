@@ -335,6 +335,10 @@ def _coerce_optional_provider_host_target_ref(value):
     return plan_host_targets.coerce_provider_host_target_ref(value)
 
 
+def _coerce_plan_target_ref_list(value):
+    return [plan_target_kinds.coerce_plan_target_ref(target_ref) for target_ref in (value or ())]
+
+
 def _make_str_coercer(default=""):
     def _coerce(value):
         return str(value or default)
@@ -435,7 +439,7 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
             (
                 "_secondary_selected_plan_targets_state",
                 "secondary_selected_plan_targets_state",
-                _coerce_list,
+                _coerce_plan_target_ref_list,
             ),
         ),
     ),
