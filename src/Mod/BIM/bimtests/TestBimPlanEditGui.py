@@ -34,6 +34,7 @@ import math
 import Part
 import Sketcher
 from bimcommands import BimPlanSession
+from bimplan import document_visuals as plan_document_visuals
 from bimplan.providers import (
     PlanActionSpec,
     PlanContextPanelSpec,
@@ -720,7 +721,7 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         session = BimPlanSession.PlanEditSession()
         session.doc = _DeletedDocument()
         session._overlay_refresh_queued = True
-        session._dirty_plan_visuals.add(BimPlanSession._PLAN_VISUAL_ALL)
+        session._dirty_plan_visuals.add(plan_document_visuals.PLAN_VISUAL_ALL)
 
         try:
             with patch.object(
@@ -6007,7 +6008,9 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 return_value=20000.0,
             ),
         ):
-            session.overlays.refresh_plan_overlay_visuals({BimPlanSession._PLAN_VISUAL_VIEW_SCALE})
+            session.overlays.refresh_plan_overlay_visuals(
+                {plan_document_visuals.PLAN_VISUAL_VIEW_SCALE}
+            )
 
         self.assertEqual(get_segments.call_count, 0)
         self.assertFalse(session._selected_space_overlay_dirty)
@@ -7927,8 +7930,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             session.slotChangedObject(door.Base, "Placement")
 
         queue_refresh.assert_called_once_with(
-            BimPlanSession._PLAN_VISUAL_SELECTED_OPENING,
-            BimPlanSession._PLAN_VISUAL_HOVERED_OPENING,
+            plan_document_visuals.PLAN_VISUAL_SELECTED_OPENING,
+            plan_document_visuals.PLAN_VISUAL_HOVERED_OPENING,
         )
 
     def test_plan_edit_invalidates_selected_opening_overlay_on_undo_document(self):
@@ -7972,12 +7975,12 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
         hard_refresh.assert_called_once_with()
         recompute_hosts.assert_called_once_with(door, None)
         queue_refresh.assert_called_once_with(
-            BimPlanSession._PLAN_VISUAL_SELECTED_SYMBOL,
-            BimPlanSession._PLAN_VISUAL_HOVERED_SYMBOL,
-            BimPlanSession._PLAN_VISUAL_HOVERED_OPENING,
-            BimPlanSession._PLAN_VISUAL_HOVERED_WALL,
-            BimPlanSession._PLAN_VISUAL_WALL_GRIPS,
-            BimPlanSession._PLAN_VISUAL_SELECTED_OPENING,
+            plan_document_visuals.PLAN_VISUAL_SELECTED_SYMBOL,
+            plan_document_visuals.PLAN_VISUAL_HOVERED_SYMBOL,
+            plan_document_visuals.PLAN_VISUAL_HOVERED_OPENING,
+            plan_document_visuals.PLAN_VISUAL_HOVERED_WALL,
+            plan_document_visuals.PLAN_VISUAL_WALL_GRIPS,
+            plan_document_visuals.PLAN_VISUAL_SELECTED_OPENING,
         )
 
     def test_plan_edit_shows_grips_for_straight_base_wall(self):
