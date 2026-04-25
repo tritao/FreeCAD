@@ -410,6 +410,10 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(
             ("space", parent_space), session.selection_state.pending_selected_plan_target
         )
+        self.assertEqual(1, len(session.selection_state.secondary_selected_plan_targets_state))
+        self.assertIsInstance(
+            session.selection_state.secondary_selected_plan_targets_state[0], PlanTargetRef
+        )
         self.assertEqual(
             secondary_targets, session.selection_state.secondary_selected_plan_targets_state
         )
