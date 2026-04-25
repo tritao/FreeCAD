@@ -912,6 +912,27 @@ class PlanEditIntegrationPanelMixin:
         self._add_provider_context_panel_details(QtGui, block, layout, panel)
         return block
 
+    def _populate_integration_details_content(self, QtGui, content_layout, sections):
+        for section in sections:
+            block = self._make_integration_block(
+                QtGui,
+                self._format_provider_section_title(section),
+                body=getattr(section, "body", ""),
+                actions=section.actions,
+            )
+            content_layout.addWidget(block)
+
+    def _connect_integration_details_toggle(self, detail_button, content, detail_title):
+        def toggle_details(checked):
+            is_expanded = bool(checked)
+            content.setVisible(is_expanded)
+            detail_button.setText(self._build_detail_toggle_text(is_expanded, detail_title))
+
+        try:
+            detail_button.toggled.connect(toggle_details)
+        except Exception:
+            pass
+
     def _make_integration_details_group(self, QtGui, sections):
         group, layout = self._create_integration_card(QtGui, "detail")
         self._add_integration_card_header(
@@ -940,26 +961,10 @@ class PlanEditIntegrationPanelMixin:
         content_layout = QtGui.QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(6)
-        for section in sections:
-            block = self._make_integration_block(
-                QtGui,
-                self._format_provider_section_title(section),
-                body=getattr(section, "body", ""),
-                actions=section.actions,
-            )
-            content_layout.addWidget(block)
+        self._populate_integration_details_content(QtGui, content_layout, sections)
         layout.addWidget(content)
         content.setVisible(expanded)
-
-        def toggle_details(checked):
-            is_expanded = bool(checked)
-            content.setVisible(is_expanded)
-            detail_button.setText(self._build_detail_toggle_text(is_expanded, detail_title))
-
-        try:
-            detail_button.toggled.connect(toggle_details)
-        except Exception:
-            pass
+        self._connect_integration_details_toggle(detail_button, content, detail_title)
         return group
 
     def _get_provider_overlay_mode_options(self):
