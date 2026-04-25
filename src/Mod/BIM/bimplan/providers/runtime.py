@@ -561,7 +561,12 @@ def _collect_provider_surface_contributions(
 
     results = []
     for contribution in coerce_plan_provider_results(provided):
-        normalized = normalizer(provider_id, contribution)
+        normalized = _normalize_provider_surface_contribution(
+            session,
+            normalizer,
+            provider_id,
+            contribution,
+        )
         if normalized is not None:
             results.append(normalized)
 
@@ -587,6 +592,20 @@ def _collect_plan_provider_contributions_for_method(session, context, method_nam
             )
         )
     return tuple(results)
+
+
+_SESSION_AWARE_PROVIDER_NORMALIZERS = {
+    normalize_plan_provider_issue,
+    normalize_plan_provider_suggestion,
+    normalize_plan_provider_section,
+    normalize_plan_provider_context_panel,
+}
+
+
+def _normalize_provider_surface_contribution(session, normalizer, provider_id, contribution):
+    if normalizer in _SESSION_AWARE_PROVIDER_NORMALIZERS:
+        return normalizer(session, provider_id, contribution)
+    return normalizer(provider_id, contribution)
 
 
 def _collect_plan_provider_snapshot_surfaces(session, context, normalized_surfaces):
