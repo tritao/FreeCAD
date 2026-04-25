@@ -515,6 +515,82 @@ def apply_hidden_object_state(view_object):
             pass
 
 
+def _restore_view_object_state(view_object, state):
+    for prop, value in state.items():
+        if hasattr(view_object, prop):
+            try:
+                setattr(view_object, prop, value)
+            except Exception:
+                pass
+
+
+def _apply_supported_object_view_state(session, obj, view_object, state):
+    _perf_count(session, "storey_visibility_supported")
+    _restore_view_object_state(view_object, state)
+    if hasattr(view_object, "Visibility"):
+        try:
+            view_object.Visibility = get_supported_plan_visibility(session, obj, state)
+        except Exception:
+            pass
+    apply_context_object_selectability(session, obj, view_object)
+
+
+def _apply_global_plan_visibility(session):
+    with _perf_trace_span(session, "restore_object_view_state_for_global_plan"):
+        restore_object_view_state(session)
+    for obj in session.doc.Objects:
+        _perf_count(session, "storey_visibility_objects_scanned")
+        view_object = getattr(obj, "ViewObject", None)
+        state = session._saved_object_view_state.get(obj.Name, {})
+        if not is_supported_plan_object(session, obj):
+            _perf_count(session, "storey_visibility_hidden_unsupported")
+            apply_hidden_object_state(view_object)
+            continue
+        if view_object and hasattr(view_object, "Visibility"):
+            try:
+                view_object.Visibility = get_supported_plan_visibility(session, obj, state)
+            except Exception:
+                pass
+        apply_context_object_selectability(session, obj, view_object)
+
+
+def _apply_storey_visibility_for_global_object(session, obj, view_object, state):
+    _perf_count(session, "storey_visibility_global_objects")
+    if not is_supported_plan_object(session, obj):
+        _perf_count(session, "storey_visibility_hidden_unsupported")
+        apply_hidden_object_state(view_object)
+        return
+    _apply_supported_object_view_state(session, obj, view_object, state)
+
+
+def _apply_storey_visibility_for_active_storey_object(session, obj, view_object, state):
+    _perf_count(session, "storey_visibility_active_storey_objects")
+    if not is_supported_plan_object(session, obj):
+        _perf_count(session, "storey_visibility_hidden_unsupported")
+        apply_hidden_object_state(view_object)
+        return
+    _apply_supported_object_view_state(session, obj, view_object, state)
+
+
+def _apply_storey_visibility_for_other_storey_object(session, obj, view_object, state):
+    _perf_count(session, "storey_visibility_other_storey_objects")
+    if hasattr(view_object, "Visibility"):
+        try:
+            view_object.Visibility = get_supported_plan_visibility(session, obj, state)
+        except Exception:
+            pass
+    if hasattr(view_object, "Transparency"):
+        try:
+            view_object.Transparency = max(int(state.get("Transparency", 0)), 85)
+        except Exception:
+            pass
+    if hasattr(view_object, "Selectable"):
+        try:
+            view_object.Selectable = False
+        except Exception:
+            pass
+
+
 def apply_storey_visibility(session):
     with _perf_trace_span(
         session,
@@ -527,27 +603,7 @@ def apply_storey_visibility(session):
         active_storey_name = getattr(session.active_storey, "Name", None)
 
         if active_storey_name is None:
-            with _perf_trace_span(session, "restore_object_view_state_for_global_plan"):
-                restore_object_view_state(session)
-            for obj in session.doc.Objects:
-                _perf_count(session, "storey_visibility_objects_scanned")
-                view_object = getattr(obj, "ViewObject", None)
-                state = session._saved_object_view_state.get(obj.Name, {})
-                if not is_supported_plan_object(session, obj):
-                    _perf_count(session, "storey_visibility_hidden_unsupported")
-                    apply_hidden_object_state(view_object)
-                    continue
-                _perf_count(session, "storey_visibility_supported")
-                if view_object and hasattr(view_object, "Visibility"):
-                    try:
-                        view_object.Visibility = get_supported_plan_visibility(
-                            session,
-                            obj,
-                            state,
-                        )
-                    except Exception:
-                        pass
-                apply_context_object_selectability(session, obj, view_object)
+            _apply_global_plan_visibility(session)
             return
 
         for obj in session.doc.Objects:
@@ -560,76 +616,15 @@ def apply_storey_visibility(session):
 
             storeys = get_object_storeys(session, obj)
             if not storeys:
-                _perf_count(session, "storey_visibility_global_objects")
-                if not is_supported_plan_object(session, obj):
-                    _perf_count(session, "storey_visibility_hidden_unsupported")
-                    apply_hidden_object_state(view_object)
-                    continue
-                _perf_count(session, "storey_visibility_supported")
-                for prop, value in state.items():
-                    if hasattr(view_object, prop):
-                        try:
-                            setattr(view_object, prop, value)
-                        except Exception:
-                            pass
-                if hasattr(view_object, "Visibility"):
-                    try:
-                        view_object.Visibility = get_supported_plan_visibility(
-                            session,
-                            obj,
-                            state,
-                        )
-                    except Exception:
-                        pass
-                apply_context_object_selectability(session, obj, view_object)
+                _apply_storey_visibility_for_global_object(session, obj, view_object, state)
                 continue
 
             belongs_to_active = any(parent.Name == active_storey_name for parent in storeys)
             if belongs_to_active:
-                _perf_count(session, "storey_visibility_active_storey_objects")
-                for prop, value in state.items():
-                    if hasattr(view_object, prop):
-                        try:
-                            setattr(view_object, prop, value)
-                        except Exception:
-                            pass
-                if not is_supported_plan_object(session, obj):
-                    _perf_count(session, "storey_visibility_hidden_unsupported")
-                    apply_hidden_object_state(view_object)
-                    continue
-                _perf_count(session, "storey_visibility_supported")
-                if hasattr(view_object, "Visibility"):
-                    try:
-                        view_object.Visibility = get_supported_plan_visibility(
-                            session,
-                            obj,
-                            state,
-                        )
-                    except Exception:
-                        pass
-                apply_context_object_selectability(session, obj, view_object)
+                _apply_storey_visibility_for_active_storey_object(session, obj, view_object, state)
                 continue
 
-            _perf_count(session, "storey_visibility_other_storey_objects")
-            if hasattr(view_object, "Visibility"):
-                try:
-                    view_object.Visibility = get_supported_plan_visibility(
-                        session,
-                        obj,
-                        state,
-                    )
-                except Exception:
-                    pass
-            if hasattr(view_object, "Transparency"):
-                try:
-                    view_object.Transparency = max(int(state.get("Transparency", 0)), 85)
-                except Exception:
-                    pass
-            if hasattr(view_object, "Selectable"):
-                try:
-                    view_object.Selectable = False
-                except Exception:
-                    pass
+            _apply_storey_visibility_for_other_storey_object(session, obj, view_object, state)
 
 
 class PlanVisibilityAPI:
