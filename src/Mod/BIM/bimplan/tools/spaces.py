@@ -93,17 +93,6 @@ is_space_region_candidate_claimed = plan_space_geometry.is_space_region_candidat
 filter_claimed_space_region_candidates = plan_space_geometry.filter_claimed_space_region_candidates
 
 
-from functools import wraps
-
-
-def _bind_session_call(func):
-    @wraps(func)
-    def method(self, *args, **kwargs):
-        return func(self.session, *args, **kwargs)
-
-    return method
-
-
 class _SessionAPI:
     __slots__ = ("_session",)
 
@@ -120,70 +109,6 @@ class PlanSpacesAPI(_SessionAPI):
 
     __slots__ = ()
 
-    get_space_reference_point = _bind_session_call(get_space_reference_point)
-    get_space_boundary_reference_point = _bind_session_call(get_space_boundary_reference_point)
-    get_space_boundary_entries = _bind_session_call(get_space_boundary_entries)
-    get_selected_space_boundary_links = _bind_session_call(get_selected_space_boundary_links)
-    get_space_region_seed_targets = _bind_session_call(get_space_region_seed_targets)
-    get_selected_space_region_seed = _bind_session_call(get_selected_space_region_seed)
-    get_space_creation_request = _bind_session_call(get_space_creation_request)
-    get_existing_space_region_filter_spaces = _bind_session_call(
-        get_existing_space_region_filter_spaces
-    )
-    is_space_region_candidate_claimed = _bind_session_call(is_space_region_candidate_claimed)
-    filter_claimed_space_region_candidates = _bind_session_call(
-        filter_claimed_space_region_candidates
-    )
-    get_space_region_candidate_report = _bind_session_call(get_space_region_candidate_report)
-    get_space_preflight_report = _bind_session_call(get_space_preflight_report)
-    has_active_space_separator_tool = _bind_session_call(has_active_space_separator_tool)
-    has_active_plan_region_tool = _bind_session_call(has_active_plan_region_tool)
-    clear_plan_region_preview = _bind_session_call(clear_plan_region_preview)
-    cancel_plan_region_tool = _bind_session_call(cancel_plan_region_tool)
-    get_plan_region_close_tolerance = _bind_session_call(get_plan_region_close_tolerance)
-    get_plan_region_preview_segments = _bind_session_call(get_plan_region_preview_segments)
-    update_plan_region_preview = _bind_session_call(update_plan_region_preview)
-    create_plan_region = _bind_session_call(create_plan_region)
-    finalize_plan_region = _bind_session_call(finalize_plan_region)
-    handle_plan_region_point = _bind_session_call(handle_plan_region_point)
-    clear_space_separator_preview = _bind_session_call(clear_space_separator_preview)
-    cancel_space_separator_tool = _bind_session_call(cancel_space_separator_tool)
-    update_space_separator_preview = _bind_session_call(update_space_separator_preview)
-    create_space_separator = _bind_session_call(create_space_separator)
-    handle_space_separator_point = _bind_session_call(handle_space_separator_point)
-    get_space_region_candidate_polylines = _bind_session_call(get_space_region_candidate_polylines)
-    get_space_region_candidate_segments = _bind_session_call(get_space_region_candidate_segments)
-    pick_space_region_candidate = _bind_session_call(pick_space_region_candidate)
-    create_space_region_base_object = _bind_session_call(create_space_region_base_object)
-    begin_space_region_pick = _bind_session_call(begin_space_region_pick)
-    cancel_space_region_pick = _bind_session_call(cancel_space_region_pick)
-    create_space_from_region_candidate = _bind_session_call(create_space_from_region_candidate)
-    activate_space_region_candidate = _bind_session_call(activate_space_region_candidate)
-    create_space_from_current_selection = _bind_session_call(create_space_from_current_selection)
-    space_has_valid_geometry = _bind_session_call(space_has_valid_geometry)
-    set_selected_space_label = _bind_session_call(set_selected_space_label)
-    set_selected_space_type = _bind_session_call(set_selected_space_type)
-    set_selected_region_label = _bind_session_call(set_selected_region_label)
-    set_selected_region_scheme = _bind_session_call(set_selected_region_scheme)
-    set_selected_region_type = _bind_session_call(set_selected_region_type)
-    set_selected_region_parent_space = _bind_session_call(set_selected_region_parent_space)
-    set_space_boundaries = _bind_session_call(set_space_boundaries)
-    add_boundaries_to_selected_space = _bind_session_call(add_boundaries_to_selected_space)
-    remove_selected_space_boundaries = _bind_session_call(remove_selected_space_boundaries)
-    start_space_text_position_pick = _bind_session_call(start_space_text_position_pick)
-    finish_space_text_position_pick = _bind_session_call(finish_space_text_position_pick)
-    cancel_space_text_position_pick = _bind_session_call(cancel_space_text_position_pick)
-    refresh_selected_space_visuals = _bind_session_call(refresh_selected_space_visuals)
-    refresh_selected_region_visuals = _bind_session_call(refresh_selected_region_visuals)
-    restore_selected_semantic_target = _bind_session_call(restore_selected_semantic_target)
-    queue_restore_selected_semantic_target = _bind_session_call(
-        queue_restore_selected_semantic_target
-    )
-    restore_selected_region = _bind_session_call(restore_selected_region)
-    queue_restore_selected_region = _bind_session_call(queue_restore_selected_region)
-    restore_selected_space = _bind_session_call(restore_selected_space)
-    queue_restore_selected_space = _bind_session_call(queue_restore_selected_space)
-
     copy_shape_without_element_map = staticmethod(copy_shape_without_element_map)
     space_boundary_key = staticmethod(space_boundary_key)
     get_xy_bound_box_iou = staticmethod(get_xy_bound_box_iou)
@@ -191,7 +116,180 @@ class PlanSpacesAPI(_SessionAPI):
     format_space_region_candidate_area = staticmethod(format_space_region_candidate_area)
     format_space_preflight_text = staticmethod(format_space_preflight_text)
     report_space_creation_failure = staticmethod(report_space_creation_failure)
-    is_plan_space_object = _bind_session_call(plan_targets.is_plan_space_object)
+
+    def get_space_reference_point(self, *args, **kwargs):
+        return get_space_reference_point(self.session, *args, **kwargs)
+
+    def get_space_boundary_reference_point(self, *args, **kwargs):
+        return get_space_boundary_reference_point(self.session, *args, **kwargs)
+
+    def get_space_boundary_entries(self, *args, **kwargs):
+        return get_space_boundary_entries(self.session, *args, **kwargs)
+
+    def get_selected_space_boundary_links(self, *args, **kwargs):
+        return get_selected_space_boundary_links(self.session, *args, **kwargs)
+
+    def get_space_region_seed_targets(self, *args, **kwargs):
+        return get_space_region_seed_targets(self.session, *args, **kwargs)
+
+    def get_selected_space_region_seed(self, *args, **kwargs):
+        return get_selected_space_region_seed(self.session, *args, **kwargs)
+
+    def get_space_creation_request(self, *args, **kwargs):
+        return get_space_creation_request(self.session, *args, **kwargs)
+
+    def get_existing_space_region_filter_spaces(self, *args, **kwargs):
+        return get_existing_space_region_filter_spaces(self.session, *args, **kwargs)
+
+    def is_space_region_candidate_claimed(self, *args, **kwargs):
+        return is_space_region_candidate_claimed(self.session, *args, **kwargs)
+
+    def filter_claimed_space_region_candidates(self, *args, **kwargs):
+        return filter_claimed_space_region_candidates(self.session, *args, **kwargs)
+
+    def get_space_region_candidate_report(self, *args, **kwargs):
+        return get_space_region_candidate_report(self.session, *args, **kwargs)
+
+    def get_space_preflight_report(self, *args, **kwargs):
+        return get_space_preflight_report(self.session, *args, **kwargs)
+
+    def has_active_space_separator_tool(self, *args, **kwargs):
+        return has_active_space_separator_tool(self.session, *args, **kwargs)
+
+    def has_active_plan_region_tool(self, *args, **kwargs):
+        return has_active_plan_region_tool(self.session, *args, **kwargs)
+
+    def clear_plan_region_preview(self, *args, **kwargs):
+        return clear_plan_region_preview(self.session, *args, **kwargs)
+
+    def cancel_plan_region_tool(self, *args, **kwargs):
+        return cancel_plan_region_tool(self.session, *args, **kwargs)
+
+    def get_plan_region_close_tolerance(self, *args, **kwargs):
+        return get_plan_region_close_tolerance(self.session, *args, **kwargs)
+
+    def get_plan_region_preview_segments(self, *args, **kwargs):
+        return get_plan_region_preview_segments(self.session, *args, **kwargs)
+
+    def update_plan_region_preview(self, *args, **kwargs):
+        return update_plan_region_preview(self.session, *args, **kwargs)
+
+    def create_plan_region(self, *args, **kwargs):
+        return create_plan_region(self.session, *args, **kwargs)
+
+    def finalize_plan_region(self, *args, **kwargs):
+        return finalize_plan_region(self.session, *args, **kwargs)
+
+    def handle_plan_region_point(self, *args, **kwargs):
+        return handle_plan_region_point(self.session, *args, **kwargs)
+
+    def clear_space_separator_preview(self, *args, **kwargs):
+        return clear_space_separator_preview(self.session, *args, **kwargs)
+
+    def cancel_space_separator_tool(self, *args, **kwargs):
+        return cancel_space_separator_tool(self.session, *args, **kwargs)
+
+    def update_space_separator_preview(self, *args, **kwargs):
+        return update_space_separator_preview(self.session, *args, **kwargs)
+
+    def create_space_separator(self, *args, **kwargs):
+        return create_space_separator(self.session, *args, **kwargs)
+
+    def handle_space_separator_point(self, *args, **kwargs):
+        return handle_space_separator_point(self.session, *args, **kwargs)
+
+    def get_space_region_candidate_polylines(self, *args, **kwargs):
+        return get_space_region_candidate_polylines(self.session, *args, **kwargs)
+
+    def get_space_region_candidate_segments(self, *args, **kwargs):
+        return get_space_region_candidate_segments(self.session, *args, **kwargs)
+
+    def pick_space_region_candidate(self, *args, **kwargs):
+        return pick_space_region_candidate(self.session, *args, **kwargs)
+
+    def create_space_region_base_object(self, *args, **kwargs):
+        return create_space_region_base_object(self.session, *args, **kwargs)
+
+    def begin_space_region_pick(self, *args, **kwargs):
+        return begin_space_region_pick(self.session, *args, **kwargs)
+
+    def cancel_space_region_pick(self, *args, **kwargs):
+        return cancel_space_region_pick(self.session, *args, **kwargs)
+
+    def create_space_from_region_candidate(self, *args, **kwargs):
+        return create_space_from_region_candidate(self.session, *args, **kwargs)
+
+    def activate_space_region_candidate(self, *args, **kwargs):
+        return activate_space_region_candidate(self.session, *args, **kwargs)
+
+    def create_space_from_current_selection(self, *args, **kwargs):
+        return create_space_from_current_selection(self.session, *args, **kwargs)
+
+    def space_has_valid_geometry(self, *args, **kwargs):
+        return space_has_valid_geometry(self.session, *args, **kwargs)
+
+    def set_selected_space_label(self, *args, **kwargs):
+        return set_selected_space_label(self.session, *args, **kwargs)
+
+    def set_selected_space_type(self, *args, **kwargs):
+        return set_selected_space_type(self.session, *args, **kwargs)
+
+    def set_selected_region_label(self, *args, **kwargs):
+        return set_selected_region_label(self.session, *args, **kwargs)
+
+    def set_selected_region_scheme(self, *args, **kwargs):
+        return set_selected_region_scheme(self.session, *args, **kwargs)
+
+    def set_selected_region_type(self, *args, **kwargs):
+        return set_selected_region_type(self.session, *args, **kwargs)
+
+    def set_selected_region_parent_space(self, *args, **kwargs):
+        return set_selected_region_parent_space(self.session, *args, **kwargs)
+
+    def set_space_boundaries(self, *args, **kwargs):
+        return set_space_boundaries(self.session, *args, **kwargs)
+
+    def add_boundaries_to_selected_space(self, *args, **kwargs):
+        return add_boundaries_to_selected_space(self.session, *args, **kwargs)
+
+    def remove_selected_space_boundaries(self, *args, **kwargs):
+        return remove_selected_space_boundaries(self.session, *args, **kwargs)
+
+    def start_space_text_position_pick(self, *args, **kwargs):
+        return start_space_text_position_pick(self.session, *args, **kwargs)
+
+    def finish_space_text_position_pick(self, *args, **kwargs):
+        return finish_space_text_position_pick(self.session, *args, **kwargs)
+
+    def cancel_space_text_position_pick(self, *args, **kwargs):
+        return cancel_space_text_position_pick(self.session, *args, **kwargs)
+
+    def refresh_selected_space_visuals(self, *args, **kwargs):
+        return refresh_selected_space_visuals(self.session, *args, **kwargs)
+
+    def refresh_selected_region_visuals(self, *args, **kwargs):
+        return refresh_selected_region_visuals(self.session, *args, **kwargs)
+
+    def restore_selected_semantic_target(self, *args, **kwargs):
+        return restore_selected_semantic_target(self.session, *args, **kwargs)
+
+    def queue_restore_selected_semantic_target(self, *args, **kwargs):
+        return queue_restore_selected_semantic_target(self.session, *args, **kwargs)
+
+    def restore_selected_region(self, *args, **kwargs):
+        return restore_selected_region(self.session, *args, **kwargs)
+
+    def queue_restore_selected_region(self, *args, **kwargs):
+        return queue_restore_selected_region(self.session, *args, **kwargs)
+
+    def restore_selected_space(self, *args, **kwargs):
+        return restore_selected_space(self.session, *args, **kwargs)
+
+    def queue_restore_selected_space(self, *args, **kwargs):
+        return queue_restore_selected_space(self.session, *args, **kwargs)
+
+    def is_plan_space_object(self, *args, **kwargs):
+        return plan_targets.is_plan_space_object(self.session, *args, **kwargs)
 
     def get_space_region_candidate_count(self):
         state = getattr(self.session, "task_panel_state", None)
