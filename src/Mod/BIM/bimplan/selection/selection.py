@@ -1917,7 +1917,7 @@ class PlanSelectionAPI(_SessionAPI):
         return get_provider_overlay_target_from_edit_node(self.session, *args, **kwargs)
 
     def get_hovered_plan_target(self, *args, **kwargs):
-        return get_hovered_plan_target(self.session, *args, **kwargs)
+        return plan_selection_picking.get_hovered_plan_target(self.session, *args, **kwargs)
 
     def queue_prime_hover_pick_caches(self, *args, **kwargs):
         return plan_selection_picking.queue_prime_hover_pick_caches(self.session, *args, **kwargs)
