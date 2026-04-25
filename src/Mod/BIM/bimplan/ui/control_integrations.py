@@ -1231,15 +1231,7 @@ class PlanEditIntegrationPanelMixin:
         return snapshot, integration_vm
 
     def _queue_provider_overlay_refresh(self):
-        queue_overlay_refresh = getattr(self.session, "queue_plan_provider_overlay_sync", None)
-        if not callable(queue_overlay_refresh):
-            queue_overlay_refresh = getattr(
-                self.session,
-                "queue_plan_provider_overlay_refresh",
-                None,
-            )
-        if callable(queue_overlay_refresh):
-            queue_overlay_refresh()
+        self.session.providers.queue_plan_provider_overlay_sync()
 
     def _rebuild_integration_panel_content(self, snapshot, integration_vm):
         from PySide import QtGui

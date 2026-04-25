@@ -2,7 +2,6 @@
 
 """Provider-owned overlay rendering for BIM Plan Edit."""
 
-from contextlib import nullcontext
 import math
 
 import FreeCAD
@@ -712,9 +711,7 @@ def _get_hovered_provider_segment_specs(session):
 
 
 def _get_visible_provider_overlays(session):
-    refresh_scope_factory = getattr(session, "_plan_provider_refresh_cache_scope", None)
-    refresh_scope = refresh_scope_factory() if callable(refresh_scope_factory) else nullcontext()
-    with refresh_scope:
+    with session.providers.plan_provider_refresh_cache_scope():
         return tuple(
             overlay
             for overlay in session.providers.get_plan_provider_overlays()
