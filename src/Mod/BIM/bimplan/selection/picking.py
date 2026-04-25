@@ -740,18 +740,18 @@ def _describe_visible_provider_overlay_targets(visible_targets):
 
 def _resolve_provider_overlay_target_from_info(session, info, visible_targets):
     info_candidates = []
-    for target_kind, target_obj in _iter_provider_overlay_targets_from_info(
+    for target_ref in _iter_provider_overlay_targets_from_info(
         session,
         info,
         visible_targets,
     ):
         _append_pick_debug_item(
             info_candidates,
-            _describe_pick_target(session, target_kind, target_obj),
+            _describe_pick_target(session, target_ref.kind, target_ref.obj),
         )
-        if target_obj is not None:
+        if target_ref.obj is not None:
             return (
-                plan_target_kinds.make_plan_target_ref(target_kind, target_obj),
+                plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj),
                 _ProviderOverlayInfoDebugEntry(
                     info=_describe_pick_info_entry(info),
                     candidates=tuple(info_candidates),
@@ -1246,11 +1246,13 @@ def get_plan_target_from_edit_node(session, node):
         return plan_target_kinds.make_plan_target_ref()
     node_kind = plan_edit_nodes.get_edit_node_kind(node)
     if node_kind in ("provider_overlay_point", "provider_overlay_target"):
-        target_kind, obj = get_provider_overlay_target_from_edit_node(session, node)
-        if session.selection.is_valid_plan_target(target_kind, obj):
-            return plan_target_kinds.make_plan_target_ref(target_kind, obj)
-        fallback_kind, fallback_obj = session.selection.get_plan_target_for_object(obj)
-        return plan_target_kinds.make_plan_target_ref(fallback_kind, fallback_obj)
+        target_ref = get_provider_overlay_target_from_edit_node(session, node)
+        if session.selection.is_valid_plan_target(target_ref.kind, target_ref.obj):
+            return plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
+        fallback_target_ref = session.selection.get_plan_target_for_object(target_ref.obj)
+        return plan_target_kinds.make_plan_target_ref(
+            fallback_target_ref.kind, fallback_target_ref.obj
+        )
     if node_kind == "opening_handle":
         opening, _index = plan_edit_nodes.get_edit_node_payload(node)
         if session.openings.is_hosted_opening_object(opening):
@@ -1269,8 +1271,8 @@ def get_plan_target_from_edit_node(session, node):
         return plan_target_kinds.make_plan_target_ref()
     if session.openings.is_hosted_opening_object(obj):
         return plan_target_kinds.make_plan_target_ref("opening", obj)
-    target_kind, target_obj = session.selection.get_plan_target_for_object(obj)
-    return plan_target_kinds.make_plan_target_ref(target_kind, target_obj)
+    target_ref = session.selection.get_plan_target_for_object(obj)
+    return plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
 
 
 def get_edit_node(session, mouse_pos):
@@ -1332,25 +1334,21 @@ def _get_selected_handle_edit_node(session, mouse_pos):
 
 
 def _get_provider_overlay_edit_node(session, mouse_pos):
-    target_kind, target_obj = session.selection.pick_provider_overlay_target_from_objects_info(
-        mouse_pos
-    )
-    if target_obj is not None:
+    target_ref = session.selection.pick_provider_overlay_target_from_objects_info(mouse_pos)
+    if target_ref.obj is not None:
         return _emit_get_edit_node_result(
             session,
             mouse_pos,
             "provider_overlay_objects_info",
-            plan_edit_nodes.ProviderOverlayTargetEditNode(target_kind, target_obj),
+            plan_edit_nodes.ProviderOverlayTargetEditNode(target_ref.kind, target_ref.obj),
         )
-    target_kind, target_obj = session.selection.pick_provider_overlay_target_from_overlays(
-        mouse_pos
-    )
-    if target_obj is not None:
+    target_ref = session.selection.pick_provider_overlay_target_from_overlays(mouse_pos)
+    if target_ref.obj is not None:
         return _emit_get_edit_node_result(
             session,
             mouse_pos,
             "provider_overlay_overlays",
-            plan_edit_nodes.ProviderOverlayTargetEditNode(target_kind, target_obj),
+            plan_edit_nodes.ProviderOverlayTargetEditNode(target_ref.kind, target_ref.obj),
         )
     return None
 

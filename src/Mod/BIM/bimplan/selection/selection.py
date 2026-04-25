@@ -133,21 +133,23 @@ def resolve_selected_target_for_gui_object(
 ):
     if selected is None:
         return plan_target_kinds.make_plan_target_ref()
-    pending_kind, pending_target = plan_target_kinds.unpack_plan_target_ref(pending_target_ref)
-    if selected == pending_target and session.selection.is_valid_plan_target(
-        pending_kind, pending_target
+    pending_target_ref = plan_target_kinds.coerce_plan_target_ref(pending_target_ref)
+    if selected == pending_target_ref.obj and session.selection.is_valid_plan_target(
+        pending_target_ref.kind, pending_target_ref.obj
     ):
-        return plan_target_kinds.make_plan_target_ref(pending_kind, pending_target)
-    preserved_kind, preserved_target = plan_target_kinds.unpack_plan_target_ref(
-        preserved_target_ref
-    )
+        return plan_target_kinds.make_plan_target_ref(
+            pending_target_ref.kind, pending_target_ref.obj
+        )
+    preserved_target_ref = plan_target_kinds.coerce_plan_target_ref(preserved_target_ref)
     if _should_preserve_provider_selected_target(
         session,
-        preserved_kind,
-        preserved_target,
+        preserved_target_ref.kind,
+        preserved_target_ref.obj,
         selected,
     ):
-        return plan_target_kinds.make_plan_target_ref(preserved_kind, preserved_target)
+        return plan_target_kinds.make_plan_target_ref(
+            preserved_target_ref.kind, preserved_target_ref.obj
+        )
     return session.selection.get_plan_target_for_object(selected)
 
 
@@ -242,17 +244,19 @@ def _apply_selection_refresh_result(session, refresh_result):
 
 
 def _get_selection_refresh_baseline(session):
-    previous_kind, previous_obj = get_selected_plan_target(session)
+    previous_target_ref = get_selected_plan_target(session)
     session.performance.plan_perf_set_fields(
-        selected_before=session.performance.plan_perf_describe_target(previous_kind, previous_obj),
-        selected_before_kind=previous_kind or "none",
+        selected_before=session.performance.plan_perf_describe_target(
+            previous_target_ref.kind, previous_target_ref.obj
+        ),
+        selected_before_kind=previous_target_ref.kind or "none",
     )
     previous_wall = session.selection.get_plan_target_object_from_state(
-        previous_kind,
-        previous_obj,
+        previous_target_ref.kind,
+        previous_target_ref.obj,
         plan_target_kinds.PLAN_TARGET_WALL,
     )
-    return previous_kind, previous_obj, previous_wall
+    return previous_target_ref.kind, previous_target_ref.obj, previous_wall
 
 
 def _resolve_direct_selection_refresh_result(session, previous_wall):
@@ -306,11 +310,9 @@ def _collect_selected_targets_from_gui_selection(session, selection, previous_ki
     provider_refresh_scope = session.providers.plan_provider_refresh_cache_scope()
     with provider_refresh_scope:
         for selected in selection:
-            target_kind, target_obj = _resolve_gui_selection_target(
-                session, selected, resolution_state
-            )
-            if target_kind:
-                selected_targets.append((target_kind, target_obj))
+            target_ref = _resolve_gui_selection_target(session, selected, resolution_state)
+            if target_ref.kind:
+                selected_targets.append(target_ref)
     session.performance.plan_perf_count("selected_targets_considered", len(selected_targets))
     return selected_targets, resolution_state.pending_target_ref
 
@@ -463,29 +465,29 @@ def _get_current_selected_plan_target(session):
 
 
 def _get_current_secondary_selected_plan_targets(session):
-    primary_kind, primary_obj = _get_native_selected_plan_target(session)
+    primary_target_ref = _get_native_selected_plan_target(session)
     session.selection.set_secondary_selected_plan_targets(
         getattr(session, "_secondary_selected_plan_targets_state", []),
-        primary_kind=primary_kind,
-        primary_obj=primary_obj,
+        primary_kind=primary_target_ref.kind,
+        primary_obj=primary_target_ref.obj,
     )
     return list(getattr(session, "_secondary_selected_plan_targets_state", []))
 
 
 def get_selected_plan_target_object(session, kind=None):
-    selected_kind, selected_obj = _get_native_selected_plan_target(session)
-    if kind is not None and selected_kind != kind:
+    selected_target_ref = _get_native_selected_plan_target(session)
+    if kind is not None and selected_target_ref.kind != kind:
         return None
-    return selected_obj
+    return selected_target_ref.obj
 
 
 def is_selected_plan_target(session, kind, obj=None):
-    selected_kind, selected_obj = get_selected_plan_target(session)
-    if selected_kind != kind:
+    selected_target_ref = get_selected_plan_target(session)
+    if selected_target_ref.kind != kind:
         return False
     if obj is None:
-        return selected_obj is not None
-    return selected_obj == obj
+        return selected_target_ref.obj is not None
+    return selected_target_ref.obj == obj
 
 
 def clear_selected_plan_target_if_matches(session, kind, obj):
@@ -501,7 +503,9 @@ def is_valid_plan_target(session, kind, obj):
 
 def set_pending_selected_plan_target(session, kind=None, obj=None):
     if obj is None and kind is not None:
-        kind, obj = plan_target_kinds.unpack_plan_target_ref(kind)
+        target_ref = plan_target_kinds.coerce_plan_target_ref(kind)
+        kind = target_ref.kind
+        obj = target_ref.obj
     if is_valid_plan_target(session, kind, obj):
         session._pending_selected_plan_target = plan_target_kinds.make_plan_target_ref(kind, obj)
         return
@@ -577,7 +581,9 @@ def normalize_plan_targets_from_selection(session, selection):
 
 def set_secondary_selected_plan_targets(session, targets, primary_kind=None, primary_obj=None):
     if primary_kind is None and primary_obj is None:
-        primary_kind, primary_obj = get_selected_plan_target(session)
+        primary_target_ref = get_selected_plan_target(session)
+        primary_kind = primary_target_ref.kind
+        primary_obj = primary_target_ref.obj
     session._secondary_selected_plan_targets_state = list(
         _filter_secondary_selected_plan_targets(
             _iter_normalized_plan_targets(session, targets),
@@ -612,18 +618,20 @@ def get_secondary_selected_plan_targets(session):
 
 
 def get_selected_plan_targets(session):
-    primary_kind, primary_obj = _get_native_selected_plan_target(session)
+    primary_target_ref = _get_native_selected_plan_target(session)
     targets = []
-    if primary_kind and primary_obj:
-        targets.append(plan_target_kinds.make_plan_target_ref(primary_kind, primary_obj))
+    if primary_target_ref.kind and primary_target_ref.obj:
+        targets.append(
+            plan_target_kinds.make_plan_target_ref(primary_target_ref.kind, primary_target_ref.obj)
+        )
     targets.extend(
         _filter_secondary_selected_plan_targets(
             _iter_normalized_plan_targets(
                 session,
                 _get_current_secondary_selected_plan_targets(session),
             ),
-            primary_kind,
-            primary_obj,
+            primary_target_ref.kind,
+            primary_target_ref.obj,
         )
     )
     return targets
@@ -1234,9 +1242,13 @@ def _resolve_next_selected_target(
     if primary_obj is not None and primary_obj in selection:
         return (primary_kind, primary_obj)
     if fallback_target is not None:
-        fallback_kind, fallback_obj = fallback_target
-        if fallback_kind and fallback_obj and fallback_obj in selection:
-            return fallback_target
+        fallback_target_ref = plan_target_kinds.coerce_plan_target_ref(fallback_target)
+        if (
+            fallback_target_ref.kind
+            and fallback_target_ref.obj
+            and fallback_target_ref.obj in selection
+        ):
+            return (fallback_target_ref.kind, fallback_target_ref.obj)
     return session.selection.get_first_plan_target_from_selection(selection)
 
 
