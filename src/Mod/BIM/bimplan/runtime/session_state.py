@@ -28,7 +28,9 @@ from dataclasses import dataclass, field
 
 import FreeCAD
 import FreeCADGui
+from bimplan.providers import host_targets as plan_host_targets
 from bimplan.providers import runtime as plan_provider_runtime
+from bimplan.selection import target_kinds as plan_target_kinds
 
 
 class PlanInteractionAPI:
@@ -321,6 +323,18 @@ def _coerce_tuple(value):
     return tuple(value or ())
 
 
+def _coerce_optional_plan_target_ref(value):
+    if value is None:
+        return None
+    return plan_target_kinds.coerce_plan_target_ref(value)
+
+
+def _coerce_optional_provider_host_target_ref(value):
+    if value is None:
+        return None
+    return plan_host_targets.coerce_provider_host_target_ref(value)
+
+
 def _make_str_coercer(default=""):
     def _coerce(value):
         return str(value or default)
@@ -413,7 +427,11 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
             ("hovered_provider", "hovered_provider", _coerce_identity),
             ("hovered_space", "hovered_space", _coerce_identity),
             ("hovered_region", "hovered_region", _coerce_identity),
-            ("_pending_selected_plan_target", "pending_selected_plan_target", _coerce_identity),
+            (
+                "_pending_selected_plan_target",
+                "pending_selected_plan_target",
+                _coerce_optional_plan_target_ref,
+            ),
             (
                 "_secondary_selected_plan_targets_state",
                 "secondary_selected_plan_targets_state",
@@ -578,7 +596,11 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
                 _coerce_identity,
             ),
             ("_provider_selected_objects", "provider_selected_objects", _coerce_list),
-            ("_provider_point_host_target", "provider_point_host_target", _coerce_identity),
+            (
+                "_provider_point_host_target",
+                "provider_point_host_target",
+                _coerce_optional_provider_host_target_ref,
+            ),
             ("_provider_point_host_source", "provider_point_host_source", _make_str_coercer("")),
             ("_provider_point_preview_trackers", "provider_point_preview_trackers", _coerce_list),
             (
@@ -600,7 +622,7 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
             (
                 "_provider_point_preview_host_target",
                 "provider_point_preview_host_target",
-                _coerce_identity,
+                _coerce_optional_provider_host_target_ref,
             ),
             (
                 "_provider_point_preview_host_source",

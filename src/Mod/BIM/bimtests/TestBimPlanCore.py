@@ -307,24 +307,29 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual({}, session.wall_edit_state.wall_edit_opening_clearances)
 
     def test_plan_edit_session_read_state_properties_bridge_typed_buckets(self):
+        from bimplan.providers.host_targets import ProviderHostTargetRef
         from bimplan.runtime.session import PlanEditSession
         from bimplan.runtime.session_state import (
             PlanInteractionState,
             PlanProviderOverlayReadState,
+            PlanProviderTransientState,
             PlanSelectionState,
             PlanTaskPanelState,
             PlanWallEditState,
         )
+        from bimplan.selection.target_kinds import PlanTargetRef
 
         session = object.__new__(PlanEditSession)
         session.task_panel_state = PlanTaskPanelState()
         session.provider_overlay_read_state = PlanProviderOverlayReadState()
         session.interaction_state = PlanInteractionState()
+        session.provider_transient_state = PlanProviderTransientState()
         session.selection_state = PlanSelectionState()
         session.wall_edit_state = PlanWallEditState()
 
         candidate = {"area": 12.0}
         parent_space = SimpleNamespace(Name="Space001")
+        host_wall = SimpleNamespace(Name="WallHost001")
         render_state = object()
         embedded_tool = object()
         provider_point_tool = object()
@@ -344,6 +349,8 @@ class TestBimPlanCore(unittest.TestCase):
         session._embedded_tool = embedded_tool
         session._provider_point_tool = provider_point_tool
         session._edit_space = parent_space
+        session._provider_point_host_target = ("wall", host_wall)
+        session._provider_point_preview_host_target = ("space", parent_space)
         session._selected_plan_target_kind = "wall"
         session._selected_plan_target_obj = hovered_wall
         session.hovered_wall = hovered_wall
@@ -381,9 +388,25 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIs(embedded_tool, session.interaction_state.embedded_tool)
         self.assertIs(provider_point_tool, session.interaction_state.provider_point_tool)
         self.assertIs(parent_space, session.interaction_state.edit_space)
+        self.assertIsInstance(
+            session.provider_transient_state.provider_point_host_target,
+            ProviderHostTargetRef,
+        )
+        self.assertEqual(
+            ("wall", host_wall), session.provider_transient_state.provider_point_host_target
+        )
+        self.assertIsInstance(
+            session.provider_transient_state.provider_point_preview_host_target,
+            ProviderHostTargetRef,
+        )
+        self.assertEqual(
+            ("space", parent_space),
+            session.provider_transient_state.provider_point_preview_host_target,
+        )
         self.assertEqual("wall", session.selection_state.selected_plan_target_kind)
         self.assertIs(hovered_wall, session.selection_state.selected_plan_target_obj)
         self.assertIs(hovered_wall, session.selection_state.hovered_wall)
+        self.assertIsInstance(session.selection_state.pending_selected_plan_target, PlanTargetRef)
         self.assertEqual(
             ("space", parent_space), session.selection_state.pending_selected_plan_target
         )
