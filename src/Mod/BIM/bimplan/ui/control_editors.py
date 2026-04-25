@@ -22,6 +22,17 @@ class PlanEditEditorPanelsMixin:
         "Electrical / Mechanical",
     )
 
+    def _get_callable_attr(self, obj, attr_name):
+        value = getattr(obj, attr_name, None)
+        return value if callable(value) else None
+
+    def _invoke_if_supported(self, obj, method_name, *args, **kwargs):
+        method = self._get_callable_attr(obj, method_name)
+        if method is None:
+            return False
+        method(*args, **kwargs)
+        return True
+
     def _get_space_type_display_options(self, options):
         normalized = []
         seen = set()
@@ -88,7 +99,7 @@ class PlanEditEditorPanelsMixin:
     def _commit_space_type_combo_text(self, value):
         if self.space_type_combo is None:
             return False
-        if hasattr(value, "data"):
+        if self._get_callable_attr(value, "data") is not None:
             try:
                 value = value.data()
             except Exception:
@@ -238,18 +249,15 @@ class PlanEditEditorPanelsMixin:
         self.space_type_combo.setEditable(True)
         self.space_type_combo.setInsertPolicy(QtGui.QComboBox.NoInsert)
         self.space_type_combo.setMaxVisibleItems(12)
-        if hasattr(QtGui.QComboBox, "AdjustToMinimumContentsLengthWithIcon"):
+        if getattr(QtGui.QComboBox, "AdjustToMinimumContentsLengthWithIcon", None) is not None:
             self.space_type_combo.setSizeAdjustPolicy(
                 QtGui.QComboBox.AdjustToMinimumContentsLengthWithIcon
             )
-        if hasattr(self.space_type_combo, "setMinimumContentsLength"):
-            self.space_type_combo.setMinimumContentsLength(18)
+        self._invoke_if_supported(self.space_type_combo, "setMinimumContentsLength", 18)
         view = self.space_type_combo.view()
         if view is not None:
-            if hasattr(view, "setTextElideMode"):
-                view.setTextElideMode(QtCore.Qt.ElideRight)
-            if hasattr(view, "setUniformItemSizes"):
-                view.setUniformItemSizes(True)
+            self._invoke_if_supported(view, "setTextElideMode", QtCore.Qt.ElideRight)
+            self._invoke_if_supported(view, "setUniformItemSizes", True)
         self._space_type_option_model = QtCore.QStringListModel([], self.space_type_combo)
         self._space_type_completer = QtGui.QCompleter(
             self._space_type_option_model,
@@ -257,8 +265,9 @@ class PlanEditEditorPanelsMixin:
         )
         self._space_type_completer.setCompletionMode(QtGui.QCompleter.PopupCompletion)
         self._space_type_completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
-        if hasattr(self._space_type_completer, "setFilterMode"):
-            self._space_type_completer.setFilterMode(QtCore.Qt.MatchContains)
+        self._invoke_if_supported(
+            self._space_type_completer, "setFilterMode", QtCore.Qt.MatchContains
+        )
         self.space_type_combo.setCompleter(self._space_type_completer)
         try:
             self._space_type_completer.activated[str].connect(
@@ -268,10 +277,12 @@ class PlanEditEditorPanelsMixin:
             self._space_type_completer.activated.connect(self.on_space_type_completion_activated)
         line_edit = self.space_type_combo.lineEdit()
         if line_edit is not None:
-            if hasattr(line_edit, "setPlaceholderText"):
-                line_edit.setPlaceholderText(translate("BIM_PlanEdit", "Search space types"))
-            if hasattr(line_edit, "setClearButtonEnabled"):
-                line_edit.setClearButtonEnabled(True)
+            self._invoke_if_supported(
+                line_edit,
+                "setPlaceholderText",
+                translate("BIM_PlanEdit", "Search space types"),
+            )
+            self._invoke_if_supported(line_edit, "setClearButtonEnabled", True)
             line_edit.editingFinished.connect(self.on_space_type_editing_finished)
         self.space_type_combo.currentIndexChanged.connect(self.on_space_type_changed)
         form.addRow(translate("BIM_PlanEdit", "Type"), self.space_type_combo)
@@ -308,24 +319,23 @@ class PlanEditEditorPanelsMixin:
         form.setSpacing(6)
 
         self.region_label_edit = QtGui.QLineEdit(editor)
-        if hasattr(self.region_label_edit, "setClearButtonEnabled"):
-            self.region_label_edit.setClearButtonEnabled(True)
+        self._invoke_if_supported(self.region_label_edit, "setClearButtonEnabled", True)
         self.region_label_edit.editingFinished.connect(self.on_region_label_edited)
         form.addRow(translate("BIM_PlanEdit", "Label"), self.region_label_edit)
 
         self.region_scheme_edit = QtGui.QLineEdit(editor)
-        if hasattr(self.region_scheme_edit, "setPlaceholderText"):
-            self.region_scheme_edit.setPlaceholderText(translate("BIM_PlanEdit", "Program"))
-        if hasattr(self.region_scheme_edit, "setClearButtonEnabled"):
-            self.region_scheme_edit.setClearButtonEnabled(True)
+        self._invoke_if_supported(
+            self.region_scheme_edit, "setPlaceholderText", translate("BIM_PlanEdit", "Program")
+        )
+        self._invoke_if_supported(self.region_scheme_edit, "setClearButtonEnabled", True)
         self.region_scheme_edit.editingFinished.connect(self.on_region_scheme_edited)
         form.addRow(translate("BIM_PlanEdit", "Scheme"), self.region_scheme_edit)
 
         self.region_type_edit = QtGui.QLineEdit(editor)
-        if hasattr(self.region_type_edit, "setPlaceholderText"):
-            self.region_type_edit.setPlaceholderText(translate("BIM_PlanEdit", "Zone"))
-        if hasattr(self.region_type_edit, "setClearButtonEnabled"):
-            self.region_type_edit.setClearButtonEnabled(True)
+        self._invoke_if_supported(
+            self.region_type_edit, "setPlaceholderText", translate("BIM_PlanEdit", "Zone")
+        )
+        self._invoke_if_supported(self.region_type_edit, "setClearButtonEnabled", True)
         self.region_type_edit.editingFinished.connect(self.on_region_type_edited)
         form.addRow(translate("BIM_PlanEdit", "Type"), self.region_type_edit)
 
@@ -357,30 +367,29 @@ class PlanEditEditorPanelsMixin:
         form.setSpacing(6)
 
         self.window_width_edit = QtGui.QLineEdit(editor)
-        if hasattr(self.window_width_edit, "setClearButtonEnabled"):
-            self.window_width_edit.setClearButtonEnabled(True)
-        if hasattr(self.window_width_edit, "setPlaceholderText"):
-            self.window_width_edit.setPlaceholderText(translate("BIM_PlanEdit", "950 mm"))
+        self._invoke_if_supported(self.window_width_edit, "setClearButtonEnabled", True)
+        self._invoke_if_supported(
+            self.window_width_edit, "setPlaceholderText", translate("BIM_PlanEdit", "950 mm")
+        )
         self.window_width_edit.textChanged.connect(self.on_window_width_text_changed)
         self.window_width_edit.returnPressed.connect(self.on_window_size_apply_clicked)
         form.addRow(translate("BIM_PlanEdit", "Width"), self.window_width_edit)
 
         self.window_height_edit = QtGui.QLineEdit(editor)
-        if hasattr(self.window_height_edit, "setClearButtonEnabled"):
-            self.window_height_edit.setClearButtonEnabled(True)
-        if hasattr(self.window_height_edit, "setPlaceholderText"):
-            self.window_height_edit.setPlaceholderText(translate("BIM_PlanEdit", "1200 mm"))
+        self._invoke_if_supported(self.window_height_edit, "setClearButtonEnabled", True)
+        self._invoke_if_supported(
+            self.window_height_edit, "setPlaceholderText", translate("BIM_PlanEdit", "1200 mm")
+        )
         self.window_height_edit.textChanged.connect(self.on_window_height_text_changed)
         self.window_height_edit.returnPressed.connect(self.on_window_size_apply_clicked)
         form.addRow(translate("BIM_PlanEdit", "Height"), self.window_height_edit)
 
         self.window_preset_combo = QtGui.QComboBox(editor)
-        if hasattr(QtGui.QComboBox, "AdjustToMinimumContentsLengthWithIcon"):
+        if getattr(QtGui.QComboBox, "AdjustToMinimumContentsLengthWithIcon", None) is not None:
             self.window_preset_combo.setSizeAdjustPolicy(
                 QtGui.QComboBox.AdjustToMinimumContentsLengthWithIcon
             )
-        if hasattr(self.window_preset_combo, "setMinimumContentsLength"):
-            self.window_preset_combo.setMinimumContentsLength(18)
+        self._invoke_if_supported(self.window_preset_combo, "setMinimumContentsLength", 18)
         self.window_preset_combo.currentIndexChanged.connect(
             self.on_window_preset_selection_changed
         )

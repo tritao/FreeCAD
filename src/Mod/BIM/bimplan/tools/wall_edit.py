@@ -11,6 +11,71 @@ translate = FreeCAD.Qt.translate
 _MIN_WALL_LENGTH = 10.0
 
 
+def _get_callable_attr(obj, attr_name):
+    value = getattr(obj, attr_name, None)
+    return value if callable(value) else None
+
+
+def _get_wall_endpoint_proxy(wall):
+    proxy = getattr(wall, "Proxy", None)
+    calc_endpoints = _get_callable_attr(proxy, "calc_endpoints")
+    set_from_endpoints = _get_callable_attr(proxy, "set_from_endpoints")
+    if calc_endpoints is None or set_from_endpoints is None:
+        return None
+    return proxy
+
+
+def _tracker_supports_edit(tracker):
+    return _get_callable_attr(tracker, "startEdit") is not None
+
+
+def _tracker_is_in_edit(tracker):
+    is_in_edit = _get_callable_attr(tracker, "isInEdit")
+    return bool(is_in_edit and is_in_edit())
+
+
+def _focus_tracker_spinbox(tracker):
+    label = getattr(tracker, "label", None)
+    focus_to_spinbox = _get_callable_attr(label, "setFocusToSpinbox")
+    if focus_to_spinbox is not None:
+        focus_to_spinbox()
+
+
+def _stop_tracker_edit(tracker):
+    stop_edit = _get_callable_attr(tracker, "stopEdit")
+    if stop_edit is not None:
+        stop_edit()
+
+
+def _tracker_update_points(tracker, start, end, *, sync_spinbox):
+    update_points = _get_callable_attr(tracker, "updatePoints")
+    if update_points is not None:
+        update_points(start, end, sync_spinbox=sync_spinbox)
+        return
+    tracker.p1(start)
+    tracker.p2(end)
+
+
+def _bind_editing_canceled_callback(dim, callback):
+    set_callback = _get_callable_attr(dim, "setEditingCanceledCallback")
+    if set_callback is not None:
+        set_callback(callback)
+
+
+def _supports_value_changed_callback(dim):
+    return _get_callable_attr(dim, "setValueChangedCallback") is not None
+
+
+def _set_dim_color(dim, readout_color):
+    dimnode = getattr(dim, "dimnode", None)
+    text_color = getattr(dimnode, "textColor", None) if dimnode is not None else None
+    set_value = _get_callable_attr(text_color, "setValue")
+    if set_value is not None:
+        set_value(readout_color)
+        return
+    dim.setColor(readout_color)
+
+
 def has_active_wall_edit(session):
     return is_wall_edit_modal_active(session) or session._embedded_tool_name == "Wall"
 
@@ -23,8 +88,7 @@ def is_selected_wall_endpoint_editable(session):
     wall = plan_selection.get_selected_plan_target_object(session, "wall")
     if not wall:
         return False
-    proxy = getattr(wall, "Proxy", None)
-    if not (hasattr(proxy, "calc_endpoints") and hasattr(proxy, "set_from_endpoints")):
+    if _get_wall_endpoint_proxy(wall) is None:
         return False
     if not getattr(wall, "Base", None):
         return True
@@ -69,12 +133,8 @@ def _validate_wall_edit_start(session):
         return None, None
 
     wall = plan_selection.get_selected_plan_target_object(session, "wall")
-    proxy = getattr(wall, "Proxy", None)
-    if (
-        not proxy
-        or not hasattr(proxy, "calc_endpoints")
-        or not hasattr(proxy, "set_from_endpoints")
-    ):
+    proxy = _get_wall_endpoint_proxy(wall)
+    if proxy is None:
         return None, None
 
     endpoints = proxy.calc_endpoints(wall)
@@ -286,12 +346,8 @@ def finish_wall_edit(session, point=None, obj=None):
         session.task_panels.refresh_task_panel_status()
         return
 
-    proxy = getattr(wall, "Proxy", None)
-    if (
-        not proxy
-        or not hasattr(proxy, "calc_endpoints")
-        or not hasattr(proxy, "set_from_endpoints")
-    ):
+    proxy = _get_wall_endpoint_proxy(wall)
+    if proxy is None:
         session.current_tool = "Select"
         session.lifecycle.cancel_pending_edit()
         session.task_panels.refresh_task_panel_status()
@@ -503,14 +559,16 @@ def make_preview_wall_adapter(session, wall, endpoints):
             return [FreeCAD.Vector(point) for point in preview_points]
 
         def get_width(self, _obj, widths=False):
-            if self._wrapped_proxy and hasattr(self._wrapped_proxy, "get_width"):
-                return self._wrapped_proxy.get_width(wall, widths=widths)
+            get_width = _get_callable_attr(self._wrapped_proxy, "get_width")
+            if get_width is not None:
+                return get_width(wall, widths=widths)
             width = getattr(getattr(wall, "Width", None), "Value", getattr(wall, "Width", None))
             return width
 
         def get_layers(self, _obj):
-            if self._wrapped_proxy and hasattr(self._wrapped_proxy, "get_layers"):
-                return self._wrapped_proxy.get_layers(wall)
+            get_layers = _get_callable_attr(self._wrapped_proxy, "get_layers")
+            if get_layers is not None:
+                return get_layers(wall)
             return None
 
     class _PreviewWall:
@@ -1135,8 +1193,8 @@ def compute_wall_hosted_opening_layout(session, wall, endpoints):
 
 
 def resolve_wall_hosted_opening_layout(session, wall):
-    wall_proxy = getattr(wall, "Proxy", None)
-    if not wall_proxy or not hasattr(wall_proxy, "calc_endpoints"):
+    wall_proxy = _get_wall_endpoint_proxy(wall)
+    if wall_proxy is None:
         return True
     try:
         endpoints = wall_proxy.calc_endpoints(wall)
@@ -1188,10 +1246,9 @@ def bind_wall_edit_readout_callbacks(session, dim, mode):
         dim.setEditingFinishedCallback(
             lambda value: on_wall_stretch_length_finished(session, value)
         )
-        if hasattr(dim, "setEditingCanceledCallback"):
-            dim.setEditingCanceledCallback(
-                lambda value: on_wall_stretch_length_canceled(session, value)
-            )
+        _bind_editing_canceled_callback(
+            dim, lambda value: on_wall_stretch_length_canceled(session, value)
+        )
         return
 
     dim.setValueChangedCallback(
@@ -1200,10 +1257,9 @@ def bind_wall_edit_readout_callbacks(session, dim, mode):
     dim.setEditingFinishedCallback(
         lambda value, delta_mode=mode: on_wall_move_delta_finished(session, delta_mode, value)
     )
-    if hasattr(dim, "setEditingCanceledCallback"):
-        dim.setEditingCanceledCallback(
-            lambda value, delta_mode=mode: on_wall_move_delta_canceled(session, delta_mode, value)
-        )
+    _bind_editing_canceled_callback(
+        dim, lambda value, delta_mode=mode: on_wall_move_delta_canceled(session, delta_mode, value)
+    )
 
 
 def update_wall_edit_readouts_in_place(session, points, active_mode=None):
@@ -1215,11 +1271,7 @@ def update_wall_edit_readouts_in_place(session, points, active_mode=None):
         if mode not in specs:
             continue
         start, end = specs[mode]
-        if hasattr(tracker, "updatePoints"):
-            tracker.updatePoints(start, end, sync_spinbox=(mode != active_mode))
-        else:
-            tracker.p1(start)
-            tracker.p2(end)
+        _tracker_update_points(tracker, start, end, sync_spinbox=(mode != active_mode))
         tracker.on()
 
 
@@ -1234,10 +1286,7 @@ def _make_wall_edit_readout_tracker(session, DraftTrackers, mode):
 
 def _configure_wall_edit_readout_tracker(session, dim, mode, start, end, readout_color):
     try:
-        if hasattr(dim, "dimnode"):
-            dim.dimnode.textColor.setValue(readout_color)
-        else:
-            dim.setColor(readout_color)
+        _set_dim_color(dim, readout_color)
     except Exception:
         pass
     offset = get_wall_edit_readout_offset(session, mode)
@@ -1246,14 +1295,14 @@ def _configure_wall_edit_readout_tracker(session, dim, mode, start, end, readout
     dim.p1(start)
     dim.p2(end)
     dim.on()
-    if is_wall_readout_edit_active(session) and hasattr(dim, "setValueChangedCallback"):
+    if is_wall_readout_edit_active(session) and _supports_value_changed_callback(dim):
         bind_wall_edit_readout_callbacks(session, dim, mode)
 
 
 def _track_active_wall_edit_readout(session, dim, mode, active_mode):
     if (
         is_wall_readout_edit_active(session)
-        and hasattr(dim, "setValueChangedCallback")
+        and _supports_value_changed_callback(dim)
         and mode == active_mode
     ):
         session._wall_edit_active_readout_mode = mode
@@ -1338,23 +1387,17 @@ def start_wall_readout_edit(session, cycle=False):
     if not is_wall_readout_edit_active(session):
         return False
     if cycle and is_wall_move_edit_active(session):
-        if (
-            tracker is not None
-            and hasattr(tracker, "isInEdit")
-            and tracker.isInEdit()
-            and hasattr(tracker, "stopEdit")
-        ):
-            tracker.stopEdit()
+        if tracker is not None and _tracker_is_in_edit(tracker):
+            _stop_tracker_edit(tracker)
         if not cycle_wall_move_readout_mode(session):
             return False
         tracker = session._wall_edit_active_readout_tracker
     if tracker is None:
         return False
-    if not hasattr(tracker, "startEdit"):
+    if not _tracker_supports_edit(tracker):
         return False
-    if hasattr(tracker, "isInEdit") and tracker.isInEdit():
-        if hasattr(tracker, "label"):
-            tracker.label.setFocusToSpinbox()
+    if _tracker_is_in_edit(tracker):
+        _focus_tracker_spinbox(tracker)
         return True
     if session._wall_edit_length_edit_queued:
         return True
@@ -1382,11 +1425,10 @@ def start_wall_readout_edit_now(session, tracker, value):
         return
     if tracker is None or tracker is not session._wall_edit_active_readout_tracker:
         return
-    if not hasattr(tracker, "startEdit"):
+    if not _tracker_supports_edit(tracker):
         return
-    if hasattr(tracker, "isInEdit") and tracker.isInEdit():
-        if hasattr(tracker, "label"):
-            tracker.label.setFocusToSpinbox()
+    if _tracker_is_in_edit(tracker):
+        _focus_tracker_spinbox(tracker)
         return
     try:
         tracker.startEdit(value)
@@ -1521,11 +1563,10 @@ def update_wall_edit_preview(session, point):
 
 def update_wall_edit_point_pick(session, point=None, snap_info=None):
     del snap_info
-    if session._wall_edit_active_readout_tracker and hasattr(
-        session._wall_edit_active_readout_tracker, "isInEdit"
+    if session._wall_edit_active_readout_tracker and _tracker_is_in_edit(
+        session._wall_edit_active_readout_tracker
     ):
-        if session._wall_edit_active_readout_tracker.isInEdit():
-            return
+        return
     update_wall_edit_preview(session, point)
 
 
