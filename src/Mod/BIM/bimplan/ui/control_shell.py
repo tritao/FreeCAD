@@ -289,8 +289,9 @@ class PlanEditControlsShellMixin:
             self._disconnect_widget_signals(form)
             try:
                 parent = form.parentWidget()
-                if parent is not None and hasattr(parent, "layout"):
-                    layout = parent.layout()
+                layout_getter = getattr(parent, "layout", None) if parent is not None else None
+                if callable(layout_getter):
+                    layout = layout_getter()
                     if layout is not None:
                         layout.removeWidget(form)
             except Exception:

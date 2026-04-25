@@ -374,23 +374,34 @@ def create_space_region_base_object(session, candidate):
         return None
 
     view_object = getattr(base, "ViewObject", None)
-    if view_object:
-        if hasattr(view_object, "Visibility"):
-            try:
-                view_object.Visibility = False
-            except Exception:
-                pass
-        if hasattr(view_object, "ShowInTree"):
-            try:
-                view_object.ShowInTree = False
-            except Exception:
-                pass
-        if hasattr(view_object, "Selectable"):
-            try:
-                view_object.Selectable = False
-            except Exception:
-                pass
+    _set_view_object_region_base_state(view_object)
     return base
+
+
+def _set_view_object_region_base_state(view_object):
+    if view_object is None:
+        return
+    for property_name, value in (
+        ("Visibility", False),
+        ("ShowInTree", False),
+        ("Selectable", False),
+    ):
+        if getattr(view_object, property_name, None) is None:
+            continue
+        try:
+            setattr(view_object, property_name, value)
+        except Exception:
+            pass
+
+
+def _get_proxy_last_boundary_error(proxy, space):
+    getter = getattr(proxy, "getLastBoundaryError", None)
+    if not callable(getter):
+        return ""
+    try:
+        return str(getter(space) or "").strip()
+    except Exception:
+        return ""
 
 
 def start_space_region_pick(session, boundaries, label=None, seed_space=None, report=None):
@@ -552,12 +563,7 @@ def report_space_creation_failure(space):
     if not proxy:
         return False
 
-    message = ""
-    if hasattr(proxy, "getLastBoundaryError"):
-        try:
-            message = str(proxy.getLastBoundaryError(space) or "").strip()
-        except Exception:
-            message = ""
+    message = _get_proxy_last_boundary_error(proxy, space)
 
     if not message:
         return False

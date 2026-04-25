@@ -63,7 +63,7 @@ def get_space_reference_point(session, space):
 
 def _get_projected_space_shape_center(session, space):
     shape = getattr(space, "Shape", None)
-    if not (shape and hasattr(shape, "CenterOfMass")):
+    if shape is None or getattr(shape, "CenterOfMass", None) is None:
         return None
     try:
         return session.viewport.project_plan_point(shape.CenterOfMass)

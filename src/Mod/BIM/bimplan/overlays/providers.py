@@ -910,7 +910,7 @@ def _retarget_pick_tracker(session, tracker, target, target_index):
     target_kind = target_kind.replace(":", "_")
     subname = "{}:{}:{}".format(_PROVIDER_OVERLAY_POINT_PREFIX, target_kind, int(target_index))
     try:
-        if hasattr(selnode, "useNewSelection"):
+        if getattr(selnode, "useNewSelection", None) is not None:
             selnode.useNewSelection = False
         selnode.documentName.setValue(document_name)
         selnode.objectName.setValue(object_name)

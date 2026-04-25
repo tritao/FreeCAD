@@ -177,7 +177,7 @@ def get_plan_text_property(obj, property_names, default=""):
     if obj is None:
         return str(default or "")
     for property_name in property_names or ():
-        if not property_name or not hasattr(obj, property_name):
+        if not property_name:
             continue
         try:
             value = getattr(obj, property_name)
@@ -193,7 +193,7 @@ def get_plan_float_property(obj, property_names):
     if obj is None:
         return None
     for property_name in property_names or ():
-        if not property_name or not hasattr(obj, property_name):
+        if not property_name:
             continue
         try:
             value = getattr(obj, property_name)

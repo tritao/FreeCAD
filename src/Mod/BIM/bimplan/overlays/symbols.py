@@ -50,7 +50,7 @@ def get_symbol_plan_proxy(session, symbol, *attrs):
     if not proxy:
         return None
     for attr in attrs:
-        if not hasattr(proxy, attr):
+        if getattr(proxy, attr, None) is None:
             return None
     return proxy
 
@@ -61,7 +61,7 @@ def get_symbol_semantic_proxy(session, symbol, *attrs):
     if not proxy:
         return None
     for attr in attrs:
-        if not hasattr(proxy, attr):
+        if getattr(proxy, attr, None) is None:
             return None
     return proxy
 
