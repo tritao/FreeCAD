@@ -782,13 +782,13 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
                 side_effect=_capture_action,
             ),
             patch.object(
-                session,
-                "_get_selected_plan_target",
+                session.selection,
+                "get_selected_plan_target",
                 return_value=selected_target,
             ),
             patch.object(
-                session,
-                "_get_selected_plan_targets",
+                session.selection,
+                "get_selected_plan_targets",
                 return_value=selected_targets,
             ),
             patch.object(
@@ -956,8 +956,8 @@ class TestBimPlanEditGui(ArchWallGuiTestCase):
             patch.object(FreeCADGui.Snapper, "getPoint", side_effect=fake_get_point),
             patch.object(FreeCADGui.Snapper, "setSelectMode", return_value=None),
             patch.object(FreeCADGui.Snapper, "snapInfo", {}, create=True),
-            patch.object(session, "_get_selected_plan_target", return_value=(None, None)),
-            patch.object(session, "_get_selected_plan_targets", return_value=()),
+            patch.object(session.selection, "get_selected_plan_target", return_value=(None, None)),
+            patch.object(session.selection, "get_selected_plan_targets", return_value=()),
             patch.object(session.selection, "get_hovered_plan_target", return_value=(None, None)),
         ):
             self.assertTrue(session.providers.start_plan_provider_point_tool(tool))
