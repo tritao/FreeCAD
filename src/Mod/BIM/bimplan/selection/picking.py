@@ -116,6 +116,12 @@ class _ProviderOverlayInfoDebugEntry:
         }
 
 
+@dataclass(frozen=True)
+class _ProviderOverlayObjectsInfoPickResult:
+    target_ref: object
+    debug_infos: tuple
+
+
 def _replace_provider_overlay_debug_candidate(debug_candidate, **changes):
     return _ProviderOverlayDebugCandidate(
         overlay=changes.get("overlay", debug_candidate.overlay),
@@ -727,29 +733,33 @@ def pick_provider_overlay_target_from_objects_info(session, mouse_pos):
             )
             return plan_target_kinds.make_plan_target_ref()
 
-        target_ref, debug_infos = _pick_provider_overlay_target_from_infos(
-            session, infos, visible_targets
-        )
+        pick_result = _pick_provider_overlay_target_from_infos(session, infos, visible_targets)
         debug_visible_targets = _describe_visible_provider_overlay_targets(visible_targets)
-        if target_ref.obj is not None:
+        if pick_result.target_ref.obj is not None:
             _perf_set_fields(
                 session,
-                provider_overlay_info_pick_result=_describe_pick_object(session, target_ref.obj),
+                provider_overlay_info_pick_result=_describe_pick_object(
+                    session, pick_result.target_ref.obj
+                ),
             )
             _emit_pick_debug(
                 session,
                 "pick_provider_overlay_target_from_objects_info",
                 mouse_pos=mouse_pos,
-                objects_info=debug_infos,
+                objects_info=list(pick_result.debug_infos),
                 visible_targets=debug_visible_targets,
-                result=_describe_pick_target(session, target_ref.kind, target_ref.obj),
+                result=_describe_pick_target(
+                    session,
+                    pick_result.target_ref.kind,
+                    pick_result.target_ref.obj,
+                ),
             )
-            return target_ref
+            return pick_result.target_ref
         _emit_pick_debug(
             session,
             "pick_provider_overlay_target_from_objects_info",
             mouse_pos=mouse_pos,
-            objects_info=debug_infos,
+            objects_info=list(pick_result.debug_infos),
             visible_targets=debug_visible_targets,
             result=None,
         )
@@ -757,15 +767,13 @@ def pick_provider_overlay_target_from_objects_info(session, mouse_pos):
 
 
 def _describe_visible_provider_overlay_targets(visible_targets):
-    debug_visible_targets = []
-    for identity, target in tuple(visible_targets.items())[:_MAX_PICK_DEBUG_ITEMS]:
-        debug_visible_targets.append(
-            _ProviderOverlayVisibleTargetDebugEntry(
-                identity=identity,
-                target=_describe_pick_overlay_target(target),
-            ).as_debug_dict()
-        )
-    return debug_visible_targets
+    return [
+        _ProviderOverlayVisibleTargetDebugEntry(
+            identity=identity,
+            target=_describe_pick_overlay_target(target),
+        ).as_debug_dict()
+        for identity, target in tuple(visible_targets.items())[:_MAX_PICK_DEBUG_ITEMS]
+    ]
 
 
 def _resolve_provider_overlay_target_from_info(session, info, visible_targets):
@@ -804,8 +812,14 @@ def _pick_provider_overlay_target_from_infos(session, infos, visible_targets):
         )
         _append_pick_debug_item(debug_infos, info_entry)
         if target_ref.obj is not None:
-            return (target_ref, debug_infos)
-    return (plan_target_kinds.make_plan_target_ref(), debug_infos)
+            return _ProviderOverlayObjectsInfoPickResult(
+                target_ref=target_ref,
+                debug_infos=tuple(debug_infos),
+            )
+    return _ProviderOverlayObjectsInfoPickResult(
+        target_ref=plan_target_kinds.make_plan_target_ref(),
+        debug_infos=tuple(debug_infos),
+    )
 
 
 def pick_plan_space_target_from_overlays(session, mouse_pos, radius_px=10):
