@@ -491,17 +491,31 @@ def get_status_chip_text(session):
 
 
 def clear_input_hints():
-    hint_manager = getattr(FreeCADGui, "HintManager", None)
-    if not hint_manager or not hasattr(hint_manager, "hide"):
+    hide_hints = _get_hint_manager_method("hide")
+    if hide_hints is None:
         return
     try:
-        hint_manager.hide()
+        hide_hints()
     except Exception:
         pass
 
 
+def _get_hint_manager_method(method_name):
+    hint_manager = getattr(FreeCADGui, "HintManager", None)
+    if not hint_manager:
+        return None
+    method = getattr(hint_manager, method_name, None)
+    return method if callable(method) else None
+
+
+def _get_input_hint_type():
+    hint_type = getattr(FreeCADGui, "InputHint", None)
+    return hint_type if callable(hint_type) else None
+
+
 def make_input_hint(message, *sequences):
-    if not hasattr(FreeCADGui, "InputHint"):
+    input_hint = _get_input_hint_type()
+    if input_hint is None:
         return None
     if message is None:
         return None
@@ -509,7 +523,7 @@ def make_input_hint(message, *sequences):
     if not raw_message.strip():
         return None
     try:
-        return FreeCADGui.InputHint(raw_message, *sequences)
+        return input_hint(raw_message, *sequences)
     except Exception:
         return None
 
@@ -753,14 +767,14 @@ def get_input_hints(session):
 
 
 def update_input_hints(session):
-    hint_manager = getattr(FreeCADGui, "HintManager", None)
-    if not hint_manager or not hasattr(hint_manager, "show"):
+    show_hints = _get_hint_manager_method("show")
+    if show_hints is None:
         return
     hints = [hint for hint in get_input_hints(session) if hint is not None]
     if not hints:
         clear_input_hints()
         return
     try:
-        hint_manager.show(*hints)
+        show_hints(*hints)
     except Exception:
         pass
