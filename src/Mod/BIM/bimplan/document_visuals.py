@@ -105,7 +105,7 @@ def should_register_created_plan_object(session, obj):
     try:
         if getattr(obj, "Document", None) != session.doc:
             return False
-        if session.document_visuals.is_hidden_library_definition_object(obj):
+        if is_hidden_library_definition_object(obj):
             return False
         return session.visibility.is_supported_plan_object(obj)
     except ReferenceError:
@@ -116,7 +116,7 @@ def queue_created_plan_object(session, obj):
     if not obj or not getattr(obj, "Name", None):
         return
     session._pending_created_plan_objects[obj.Name] = obj
-    if session.document_visuals.are_document_visual_updates_deferred():
+    if are_document_visual_updates_deferred(session):
         session._created_plan_objects_flush_deferred = True
         return
     if session._created_plan_objects_flush_queued:
@@ -125,14 +125,14 @@ def queue_created_plan_object(session, obj):
     try:
         from PySide import QtCore
 
-        QtCore.QTimer.singleShot(0, session.document_visuals.flush_created_plan_objects)
+        QtCore.QTimer.singleShot(0, lambda: flush_created_plan_objects(session))
     except Exception:
-        session.document_visuals.flush_created_plan_objects()
+        flush_created_plan_objects(session)
 
 
 def flush_created_plan_objects(session, force=False):
     session._created_plan_objects_flush_queued = False
-    if session.document_visuals.are_document_visual_updates_deferred() and not force:
+    if are_document_visual_updates_deferred(session) and not force:
         session._created_plan_objects_flush_deferred = True
         return
     session._created_plan_objects_flush_deferred = False
@@ -140,7 +140,7 @@ def flush_created_plan_objects(session, force=False):
     session._pending_created_plan_objects.clear()
     eligible = []
     for obj in pending:
-        if not session.document_visuals.should_register_created_plan_object(obj):
+        if not should_register_created_plan_object(session, obj):
             continue
         eligible.append(obj)
     session.visibility.register_plan_objects(eligible)
@@ -208,14 +208,14 @@ def defer_document_visual_updates(session):
             session._created_plan_objects_flush_deferred = False
             session._document_visual_update_defer_depth = 1
             try:
-                session.document_visuals.flush_created_plan_objects(force=True)
+                flush_created_plan_objects(session, force=True)
             finally:
                 session._document_visual_update_defer_depth = 0
         if session._document_visual_refresh_deferred:
             session._document_visual_refresh_deferred = False
-            if not session.document_visuals.document_is_alive():
+            if not document_is_alive(session):
                 return
-            session.document_visuals.invalidate_document_dependent_plan_visuals()
+            invalidate_document_dependent_plan_visuals(session)
             session.selection.refresh_primary_selected_plan_target()
             session.task_panels.refresh_task_panel_status(selection_only=True)
 
@@ -319,20 +319,20 @@ def refresh_plan_object_footprint_display(session, obj, *, request_redraw=True):
 def refresh_opening_footprint_display(session, opening):
     if not session.openings.is_hosted_opening_object(opening):
         return
-    session.document_visuals.refresh_plan_object_footprint_display(opening)
+    refresh_plan_object_footprint_display(session, opening)
 
 
 def refresh_wall_footprint_display(session, wall):
     if not wall:
         return
-    session.document_visuals.refresh_plan_object_footprint_display(wall)
+    refresh_plan_object_footprint_display(session, wall)
 
 
 def refresh_opening_host_footprint_displays(session, opening):
     if not session.openings.is_hosted_opening_object(opening):
         return
     for host in getattr(opening, "Hosts", None) or []:
-        session.document_visuals.refresh_wall_footprint_display(host)
+        refresh_wall_footprint_display(session, host)
 
 
 def queue_recompute_opening_hosts(session, *openings):
@@ -351,7 +351,7 @@ def queue_recompute_opening_hosts(session, *openings):
     if not hosts:
         return
     session._opening_host_recompute_queued = True
-    session.document_visuals.flush_recompute_opening_hosts(hosts)
+    flush_recompute_opening_hosts(session, hosts)
 
 
 def flush_recompute_opening_hosts(session, hosts):
@@ -382,10 +382,10 @@ def queue_hard_refresh_selected_opening_visuals(session):
 
         QtCore.QTimer.singleShot(
             0,
-            session.document_visuals.flush_hard_refresh_selected_opening_visuals,
+            lambda: flush_hard_refresh_selected_opening_visuals(session),
         )
     except Exception:
-        session.document_visuals.flush_hard_refresh_selected_opening_visuals()
+        flush_hard_refresh_selected_opening_visuals(session)
 
 
 def flush_hard_refresh_selected_opening_visuals(session):
@@ -407,7 +407,7 @@ def slot_created_object(session, obj):
     session._provider_overlay_state = None
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
-    session.document_visuals.queue_created_plan_object(obj)
+    queue_created_plan_object(session, obj)
 
 
 def slot_changed_object(session, obj, prop):
@@ -417,8 +417,8 @@ def slot_changed_object(session, obj, prop):
     session._provider_overlay_state = None
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
-    if session.document_visuals.are_document_visual_updates_deferred():
-        session.document_visuals.defer_document_visual_refresh()
+    if are_document_visual_updates_deferred(session):
+        defer_document_visual_refresh(session)
         return
     if session.current_tool != "Select":
         return
@@ -429,7 +429,7 @@ def slot_changed_object(session, obj, prop):
     selected_region = plan_selection.get_selected_plan_target_object(session, "region")
     selected_space = plan_selection.get_selected_plan_target_object(session, "space")
     if selected_region and obj == selected_region and prop in _REGION_VISUAL_PROPERTIES:
-        session.document_visuals.refresh_plan_object_footprint_display(selected_region)
+        refresh_plan_object_footprint_display(session, selected_region)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_REGION)
         session.task_panels.refresh_task_panel_status()
         return
@@ -439,11 +439,11 @@ def slot_changed_object(session, obj, prop):
         and obj == session.hovered_region
         and prop in _REGION_VISUAL_PROPERTIES
     ):
-        session.document_visuals.refresh_plan_object_footprint_display(session.hovered_region)
+        refresh_plan_object_footprint_display(session, session.hovered_region)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_REGION)
         return
     if selected_space and obj == selected_space and prop in _SPACE_VISUAL_PROPERTIES:
-        session.document_visuals.refresh_plan_object_footprint_display(selected_space)
+        refresh_plan_object_footprint_display(session, selected_space)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_SPACE)
         session.task_panels.refresh_task_panel_status()
         return
@@ -453,31 +453,31 @@ def slot_changed_object(session, obj, prop):
         and obj == session.hovered_space
         and prop in _SPACE_VISUAL_PROPERTIES
     ):
-        session.document_visuals.refresh_plan_object_footprint_display(session.hovered_space)
+        refresh_plan_object_footprint_display(session, session.hovered_space)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_SPACE)
         return
     secondary_overlay_refresh = False
     for target_kind, target_obj in plan_selection.get_secondary_selected_plan_targets(session):
         if target_kind == "region" and obj == target_obj and prop in _REGION_VISUAL_PROPERTIES:
-            session.document_visuals.refresh_plan_object_footprint_display(target_obj)
+            refresh_plan_object_footprint_display(session, target_obj)
             secondary_overlay_refresh = True
         elif target_kind == "space" and obj == target_obj and prop in _SPACE_VISUAL_PROPERTIES:
-            session.document_visuals.refresh_plan_object_footprint_display(target_obj)
+            refresh_plan_object_footprint_display(session, target_obj)
             secondary_overlay_refresh = True
         elif (
             target_kind == "symbol"
-            and session.document_visuals.is_symbol_visual_dependency(target_obj, obj)
+            and is_symbol_visual_dependency(session, target_obj, obj)
             and prop in _SYMBOL_VISUAL_PROPERTIES
         ):
-            session.document_visuals.refresh_plan_object_footprint_display(target_obj)
+            refresh_plan_object_footprint_display(session, target_obj)
             secondary_overlay_refresh = True
         elif (
             target_kind == "opening"
-            and session._is_opening_visual_dependency(target_obj, obj)
+            and is_opening_visual_dependency(target_obj, obj)
             and prop in _OPENING_VISUAL_PROPERTIES
         ):
-            session.document_visuals.refresh_opening_footprint_display(target_obj)
-            session.document_visuals.refresh_opening_host_footprint_displays(target_obj)
+            refresh_opening_footprint_display(session, target_obj)
+            refresh_opening_host_footprint_displays(session, target_obj)
             secondary_overlay_refresh = True
         elif target_kind == "wall" and obj == target_obj and prop in _WALL_VISUAL_PROPERTIES:
             secondary_overlay_refresh = True
@@ -485,36 +485,33 @@ def slot_changed_object(session, obj, prop):
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SECONDARY_SELECTION)
         return
     if (
-        session.document_visuals.is_symbol_visual_dependency(selected_symbol, obj)
+        is_symbol_visual_dependency(session, selected_symbol, obj)
         and prop in _SYMBOL_VISUAL_PROPERTIES
     ):
-        session.document_visuals.refresh_plan_object_footprint_display(selected_symbol)
+        refresh_plan_object_footprint_display(session, selected_symbol)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_SELECTED_SYMBOL)
         return
     if (
-        session.document_visuals.is_symbol_visual_dependency(session.hovered_symbol, obj)
+        is_symbol_visual_dependency(session, session.hovered_symbol, obj)
         and prop in _SYMBOL_VISUAL_PROPERTIES
     ):
-        session.document_visuals.refresh_plan_object_footprint_display(session.hovered_symbol)
+        refresh_plan_object_footprint_display(session, session.hovered_symbol)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_SYMBOL)
         return
-    if (
-        session._is_opening_visual_dependency(selected_opening, obj)
-        and prop in _OPENING_VISUAL_PROPERTIES
-    ):
-        session.document_visuals.refresh_opening_footprint_display(selected_opening)
-        session.document_visuals.refresh_opening_host_footprint_displays(selected_opening)
+    if is_opening_visual_dependency(selected_opening, obj) and prop in _OPENING_VISUAL_PROPERTIES:
+        refresh_opening_footprint_display(session, selected_opening)
+        refresh_opening_host_footprint_displays(session, selected_opening)
         session.overlays.queue_plan_overlay_visual_refresh(
             _PLAN_VISUAL_SELECTED_OPENING,
             _PLAN_VISUAL_HOVERED_OPENING,
         )
         return
     if (
-        session._is_opening_visual_dependency(session.hovered_opening, obj)
+        is_opening_visual_dependency(session.hovered_opening, obj)
         and prop in _OPENING_VISUAL_PROPERTIES
     ):
-        session.document_visuals.refresh_opening_footprint_display(session.hovered_opening)
-        session.document_visuals.refresh_opening_host_footprint_displays(session.hovered_opening)
+        refresh_opening_footprint_display(session, session.hovered_opening)
+        refresh_opening_host_footprint_displays(session, session.hovered_opening)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_OPENING)
         return
     if (
@@ -522,8 +519,8 @@ def slot_changed_object(session, obj, prop):
         and obj in session.openings.get_wall_hosted_openings(session.hovered_wall)
         and prop in _OPENING_VISUAL_PROPERTIES
     ):
-        session.document_visuals.refresh_opening_footprint_display(obj)
-        session.document_visuals.refresh_opening_host_footprint_displays(obj)
+        refresh_opening_footprint_display(session, obj)
+        refresh_opening_host_footprint_displays(session, obj)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_HOVERED_WALL)
         return
     if (
@@ -531,8 +528,8 @@ def slot_changed_object(session, obj, prop):
         and obj in session.openings.get_wall_hosted_openings(selected_wall)
         and prop in _OPENING_VISUAL_PROPERTIES
     ):
-        session.document_visuals.refresh_opening_footprint_display(obj)
-        session.document_visuals.refresh_opening_host_footprint_displays(obj)
+        refresh_opening_footprint_display(session, obj)
+        refresh_opening_host_footprint_displays(session, obj)
         session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_WALL_GRIPS)
         return
     if obj == session.hovered_wall and prop in _WALL_VISUAL_PROPERTIES:
@@ -554,8 +551,8 @@ def slot_deleted_object(session, obj):
     session.visibility.invalidate_plan_classification_cache()
     session.openings.invalidate_wall_hosted_openings_cache()
     session.overlays.invalidate_plan_overlay_geometry_cache(obj)
-    if session.document_visuals.are_document_visual_updates_deferred():
-        session.document_visuals.defer_document_visual_refresh()
+    if are_document_visual_updates_deferred(session):
+        defer_document_visual_refresh(session)
         return
     if obj == session.hovered_wall:
         session.hovered_wall = None
@@ -576,7 +573,7 @@ def slot_deleted_object(session, obj):
         session.hovered_region = None
         session.overlays.clear_hovered_region_overlay()
     if session.selection.clear_selected_plan_target_if_matches("opening", obj):
-        session.document_visuals.refresh_selected_opening_visuals()
+        refresh_selected_opening_visuals(session)
         return
     if session.selection.clear_selected_plan_target_if_matches("symbol", obj):
         session.overlays.refresh_selected_symbol_visuals()
@@ -595,11 +592,7 @@ def slot_deleted_object(session, obj):
 
 
 def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=False):
-    if (
-        session._tearing_down
-        or session._finishing
-        or not session.document_visuals.document_is_alive()
-    ):
+    if session._tearing_down or session._finishing or not document_is_alive(session):
         return
     session.providers.invalidate_plan_provider_document_cache()
     session.visibility.invalidate_plan_classification_cache()
@@ -612,41 +605,42 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
     selected_opening = plan_selection.get_selected_plan_target_object(session, "opening")
     selected_provider = plan_selection.get_selected_plan_target_object(session, "provider")
     if selected_symbol:
-        session.document_visuals.refresh_plan_object_footprint_display(selected_symbol)
+        refresh_plan_object_footprint_display(session, selected_symbol)
     if session.hovered_symbol and not session.selection.is_selected_plan_target(
         "symbol", session.hovered_symbol
     ):
-        session.document_visuals.refresh_plan_object_footprint_display(session.hovered_symbol)
+        refresh_plan_object_footprint_display(session, session.hovered_symbol)
     if selected_region:
-        session.document_visuals.refresh_plan_object_footprint_display(selected_region)
+        refresh_plan_object_footprint_display(session, selected_region)
     if session.hovered_region and not session.selection.is_selected_plan_target(
         "region", session.hovered_region
     ):
-        session.document_visuals.refresh_plan_object_footprint_display(session.hovered_region)
+        refresh_plan_object_footprint_display(session, session.hovered_region)
     if selected_space:
-        session.document_visuals.refresh_plan_object_footprint_display(selected_space)
+        refresh_plan_object_footprint_display(session, selected_space)
     if session.hovered_space and not session.selection.is_selected_plan_target(
         "space", session.hovered_space
     ):
-        session.document_visuals.refresh_plan_object_footprint_display(session.hovered_space)
+        refresh_plan_object_footprint_display(session, session.hovered_space)
     secondary_targets = plan_selection.get_secondary_selected_plan_targets(session)
     for target_kind, target_obj in secondary_targets:
         if target_kind in plan_target_kinds.FOOTPRINT_PLAN_TARGET_KINDS:
-            session.document_visuals.refresh_plan_object_footprint_display(target_obj)
+            refresh_plan_object_footprint_display(session, target_obj)
         elif target_kind == plan_target_kinds.PLAN_TARGET_OPENING:
-            session.document_visuals.refresh_opening_footprint_display(target_obj)
-            session.document_visuals.refresh_opening_host_footprint_displays(target_obj)
+            refresh_opening_footprint_display(session, target_obj)
+            refresh_opening_host_footprint_displays(session, target_obj)
     if selected_opening:
-        session.document_visuals.refresh_opening_footprint_display(selected_opening)
-        session.document_visuals.refresh_opening_host_footprint_displays(selected_opening)
-        session.document_visuals.queue_hard_refresh_selected_opening_visuals()
+        refresh_opening_footprint_display(session, selected_opening)
+        refresh_opening_host_footprint_displays(session, selected_opening)
+        queue_hard_refresh_selected_opening_visuals(session)
     if session.hovered_opening and not session.selection.is_selected_plan_target(
         "opening", session.hovered_opening
     ):
-        session.document_visuals.refresh_opening_footprint_display(session.hovered_opening)
-        session.document_visuals.refresh_opening_host_footprint_displays(session.hovered_opening)
+        refresh_opening_footprint_display(session, session.hovered_opening)
+        refresh_opening_host_footprint_displays(session, session.hovered_opening)
     if recompute_opening_hosts:
-        session.document_visuals.queue_recompute_opening_hosts(
+        queue_recompute_opening_hosts(
+            session,
             selected_opening,
             session.hovered_opening,
         )
@@ -682,24 +676,20 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
 
 def slot_undo_document(session, doc):
     del doc
-    session.document_visuals.invalidate_document_dependent_plan_visuals(
-        recompute_opening_hosts=True
-    )
+    invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=True)
 
 
 def slot_redo_document(session, doc):
     del doc
-    session.document_visuals.invalidate_document_dependent_plan_visuals(
-        recompute_opening_hosts=True
-    )
+    invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=True)
 
 
 def slot_recomputed_document(session, doc):
     del doc
-    if session.document_visuals.are_document_visual_updates_deferred():
-        session.document_visuals.defer_document_visual_refresh()
+    if are_document_visual_updates_deferred(session):
+        defer_document_visual_refresh(session)
         return
-    session.document_visuals.invalidate_document_dependent_plan_visuals()
+    invalidate_document_dependent_plan_visuals(session)
 
 
 def slot_deleted_document(session, doc):

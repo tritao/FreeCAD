@@ -9,8 +9,6 @@ from bimplan import document_visuals as plan_document_visuals
 
 translate = FreeCAD.Qt.translate
 
-_PLAN_VISUAL_ALL = plan_document_visuals.PLAN_VISUAL_ALL
-
 
 def has_active_provider_point_tool(session):
     return session.current_tool == "Provider Point" and session._provider_point_tool is not None
@@ -80,7 +78,7 @@ def cancel_provider_point_tool(session, refresh=True):
     session.current_tool = "Select"
     if refresh:
         session.task_panels.refresh_task_panel_status()
-    session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_ALL)
+    session.overlays.queue_plan_overlay_visual_refresh(plan_document_visuals.PLAN_VISUAL_ALL)
     return True
 
 
@@ -126,7 +124,7 @@ def start_plan_provider_point_tool(session, tool):
     session._provider_point_tool = tool
     session.current_tool = "Provider Point"
     session.task_panels.refresh_task_panel_status()
-    session.overlays.queue_plan_overlay_visual_refresh(_PLAN_VISUAL_ALL)
+    session.overlays.queue_plan_overlay_visual_refresh(plan_document_visuals.PLAN_VISUAL_ALL)
     if session.providers.arm_provider_point_tool():
         return True
     session._provider_point_tool = None
