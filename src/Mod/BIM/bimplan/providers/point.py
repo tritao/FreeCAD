@@ -304,10 +304,11 @@ def project_provider_point_to_host(point, host_wall):
     if point is None or host_wall is None:
         return None
     proxy = getattr(host_wall, "Proxy", None)
-    if proxy is None or not hasattr(proxy, "calc_endpoints"):
+    calc_endpoints = getattr(proxy, "calc_endpoints", None)
+    if not callable(calc_endpoints):
         return None
     try:
-        endpoints = proxy.calc_endpoints(host_wall)
+        endpoints = calc_endpoints(host_wall)
         start = FreeCAD.Vector(endpoints[0])
         end = FreeCAD.Vector(endpoints[1])
         source = FreeCAD.Vector(point)

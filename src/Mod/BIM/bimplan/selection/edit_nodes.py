@@ -57,6 +57,10 @@ def _get_node_attr(node, attr_name):
     return getattr(node, attr_name, None)
 
 
+def _has_dataclass_payload(node, attr_name):
+    return _get_node_attr(node, attr_name) is not None
+
+
 def get_edit_node_kind(node):
     if node is None:
         return None
@@ -72,41 +76,36 @@ def get_edit_node_kind(node):
 def get_edit_node_payload(node):
     kind = get_edit_node_kind(node)
     if kind == "symbol_handle":
-        symbol = _get_node_attr(node, "symbol")
-        if symbol is not None:
-            return (symbol, _get_node_attr(node, "role"))
+        if _has_dataclass_payload(node, "symbol"):
+            return (_get_node_attr(node, "symbol"), _get_node_attr(node, "role"))
         try:
             return (node[1], node[2])
         except Exception:
             return ()
     if kind == "opening_handle":
-        opening = _get_node_attr(node, "opening")
-        if opening is not None:
-            return (opening, _get_node_attr(node, "index"))
+        if _has_dataclass_payload(node, "opening"):
+            return (_get_node_attr(node, "opening"), _get_node_attr(node, "index"))
         try:
             return (node[1], node[2])
         except Exception:
             return ()
     if kind == "provider_handle":
-        provider = _get_node_attr(node, "provider")
-        if provider is not None:
-            return (provider, _get_node_attr(node, "index"))
+        if _has_dataclass_payload(node, "provider"):
+            return (_get_node_attr(node, "provider"), _get_node_attr(node, "index"))
         try:
             return (node[1], node[2])
         except Exception:
             return ()
     if kind == "provider_overlay_target":
-        target_kind = _get_node_attr(node, "target_kind")
-        if target_kind is not None:
-            return (target_kind, _get_node_attr(node, "target_obj"))
+        if _has_dataclass_payload(node, "target_kind"):
+            return (_get_node_attr(node, "target_kind"), _get_node_attr(node, "target_obj"))
         try:
             return (node[1], node[2])
         except Exception:
             return ()
     if kind in ("provider_overlay_point", "edit_node"):
-        point = _get_node_attr(node, "point")
-        if point is not None:
-            return (point,)
+        if _has_dataclass_payload(node, "point"):
+            return (_get_node_attr(node, "point"),)
         try:
             return (node[1],)
         except Exception:

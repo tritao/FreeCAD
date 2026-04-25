@@ -169,6 +169,24 @@ def _describe_pick_target(session, kind, obj):
     return result
 
 
+def _is_pick_visible_view_object(view_object):
+    return not (view_object and getattr(view_object, "Visibility", True) is False)
+
+
+def _get_region_local_points(region):
+    proxy = getattr(region, "Proxy", None)
+    get_local_points = getattr(proxy, "_get_local_points", None)
+    if callable(get_local_points):
+        try:
+            return list(get_local_points(region) or [])
+        except Exception:
+            return []
+    points = getattr(region, "Points", None)
+    if points is None:
+        return []
+    return [FreeCAD.Vector(point) for point in (points or [])]
+
+
 def _perf_count(session, name, delta=1):
     return session.performance.plan_perf_count(name, delta=delta)
 
@@ -346,7 +364,7 @@ def should_skip_opening_by_plan_bounds(session, opening, plan_point, radius_px):
 
 def _is_pick_visible_object(obj):
     view_object = getattr(obj, "ViewObject", None)
-    return not (view_object and hasattr(view_object, "Visibility") and not view_object.Visibility)
+    return _is_pick_visible_view_object(view_object)
 
 
 def _iter_pick_objects(objects, *, unique_names=False):
@@ -815,15 +833,7 @@ def get_region_pick_polylines(session, region):
     if polylines:
         return polylines
 
-    proxy = getattr(region, "Proxy", None)
-    points = []
-    if proxy and hasattr(proxy, "_get_local_points"):
-        try:
-            points = list(proxy._get_local_points(region) or [])
-        except Exception:
-            points = []
-    elif hasattr(region, "Points"):
-        points = [FreeCAD.Vector(point) for point in (getattr(region, "Points", []) or [])]
+    points = _get_region_local_points(region)
 
     if len(points) < 3:
         return []
@@ -894,7 +904,7 @@ def pick_plan_region_target_from_polylines(session, mouse_pos):
                 continue
             seen.add(name)
             view_object = getattr(obj, "ViewObject", None)
-            if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
+            if not _is_pick_visible_view_object(view_object):
                 continue
 
             containing_area = None
@@ -946,7 +956,7 @@ def pick_plan_target_from_footprint_faces(
                 continue
             seen.add(name)
             view_object = getattr(obj, "ViewObject", None)
-            if view_object and hasattr(view_object, "Visibility") and not view_object.Visibility:
+            if not _is_pick_visible_view_object(view_object):
                 continue
             _perf_count(session, f"{target_label}_visible_candidates")
 

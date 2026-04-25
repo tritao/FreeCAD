@@ -135,10 +135,12 @@ def _refresh_contextual_task_watchers():
         workbench = None
     if not workbench or workbench.name() != "BIMWorkbench":
         return
+    set_task_watchers = getattr(workbench, "setTaskWatchers", None)
+    if not callable(set_task_watchers):
+        return
     try:
-        if hasattr(workbench, "setTaskWatchers"):
-            FreeCADGui.Control.clearTaskWatcher()
-            workbench.setTaskWatchers()
+        FreeCADGui.Control.clearTaskWatcher()
+        set_task_watchers()
     except Exception:
         pass
 
