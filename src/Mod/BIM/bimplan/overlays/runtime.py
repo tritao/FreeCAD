@@ -11,9 +11,6 @@ from bimplan.overlays import spaces as space_overlays
 from bimplan.overlays import symbols as symbol_overlays
 from bimplan.overlays import walls as wall_overlays
 
-_PLAN_VISUAL_ALL = plan_document_visuals.PLAN_VISUAL_ALL
-_PLAN_VISUAL_SELECTED_SPACE = plan_document_visuals.PLAN_VISUAL_SELECTED_SPACE
-_PLAN_VISUAL_VIEW_SCALE = plan_document_visuals.PLAN_VISUAL_VIEW_SCALE
 _PLAN_VIEW_SCALE_REFRESH_DELAY_MS = 40
 
 
@@ -33,8 +30,8 @@ class PlanOverlaysAPI:
         return overlay_manager.queue_plan_overlay_visual_refresh(
             self.session,
             visuals,
-            _PLAN_VISUAL_ALL,
-            _PLAN_VISUAL_SELECTED_SPACE,
+            plan_document_visuals.PLAN_VISUAL_ALL,
+            plan_document_visuals.PLAN_VISUAL_SELECTED_SPACE,
         )
 
     def queue_plan_overlay_view_scale_refresh(
@@ -43,14 +40,14 @@ class PlanOverlaysAPI:
     ):
         return overlay_manager.queue_plan_overlay_view_scale_refresh(
             self.session,
-            _PLAN_VISUAL_VIEW_SCALE,
+            plan_document_visuals.PLAN_VISUAL_VIEW_SCALE,
             delay_ms,
         )
 
     def consume_dirty_plan_visuals(self, default_all=True):
         return overlay_manager.consume_dirty_plan_visuals(
             self.session,
-            _PLAN_VISUAL_ALL,
+            plan_document_visuals.PLAN_VISUAL_ALL,
             default_all=default_all,
         )
 

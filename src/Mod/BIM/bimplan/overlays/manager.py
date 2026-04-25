@@ -4,25 +4,6 @@
 
 from bimplan import document_visuals as plan_document_visuals
 
-_PLAN_VISUAL_HOVERED_WALL = plan_document_visuals.PLAN_VISUAL_HOVERED_WALL
-_PLAN_VISUAL_HOVERED_OPENING = plan_document_visuals.PLAN_VISUAL_HOVERED_OPENING
-_PLAN_VISUAL_HOVERED_SYMBOL = plan_document_visuals.PLAN_VISUAL_HOVERED_SYMBOL
-_PLAN_VISUAL_HOVERED_PROVIDER = plan_document_visuals.PLAN_VISUAL_HOVERED_PROVIDER
-_PLAN_VISUAL_HOVERED_SPACE = plan_document_visuals.PLAN_VISUAL_HOVERED_SPACE
-_PLAN_VISUAL_HOVERED_REGION = plan_document_visuals.PLAN_VISUAL_HOVERED_REGION
-_PLAN_VISUAL_SELECTED_PROVIDER = plan_document_visuals.PLAN_VISUAL_SELECTED_PROVIDER
-_PLAN_VISUAL_SELECTED_OPENING = plan_document_visuals.PLAN_VISUAL_SELECTED_OPENING
-_PLAN_VISUAL_SELECTED_SYMBOL = plan_document_visuals.PLAN_VISUAL_SELECTED_SYMBOL
-_PLAN_VISUAL_SELECTED_SPACE = plan_document_visuals.PLAN_VISUAL_SELECTED_SPACE
-_PLAN_VISUAL_SELECTED_REGION = plan_document_visuals.PLAN_VISUAL_SELECTED_REGION
-_PLAN_VISUAL_SECONDARY_SELECTION = plan_document_visuals.PLAN_VISUAL_SECONDARY_SELECTION
-_PLAN_VISUAL_SPACE_REGION_PICK = plan_document_visuals.PLAN_VISUAL_SPACE_REGION_PICK
-_PLAN_VISUAL_WALL_GRIPS = plan_document_visuals.PLAN_VISUAL_WALL_GRIPS
-_PLAN_VISUAL_WALL_EDIT_PREVIEW = plan_document_visuals.PLAN_VISUAL_WALL_EDIT_PREVIEW
-_PLAN_VISUAL_PROVIDER_OVERLAYS = plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS
-_PLAN_VISUAL_VIEW_SCALE = plan_document_visuals.PLAN_VISUAL_VIEW_SCALE
-_PLAN_VISUAL_ALL = plan_document_visuals.PLAN_VISUAL_ALL
-
 
 def _perf_count(session, name, delta=1):
     return session.performance.plan_perf_count(name, delta=delta)
@@ -177,15 +158,15 @@ def refresh_plan_overlay_visuals(session, dirty=None):
         or not session.document_visuals.document_is_alive()
     ):
         return
-    dirty = set(dirty or {_PLAN_VISUAL_ALL})
-    refresh_all = _PLAN_VISUAL_ALL in dirty
-    if not refresh_all and _PLAN_VISUAL_VIEW_SCALE in dirty:
+    dirty = set(dirty or {plan_document_visuals.PLAN_VISUAL_ALL})
+    refresh_all = plan_document_visuals.PLAN_VISUAL_ALL in dirty
+    if not refresh_all and plan_document_visuals.PLAN_VISUAL_VIEW_SCALE in dirty:
         session.overlays.refresh_plan_overlay_view_scale()
-        dirty.discard(_PLAN_VISUAL_VIEW_SCALE)
+        dirty.discard(plan_document_visuals.PLAN_VISUAL_VIEW_SCALE)
         if not dirty:
             return
     if session.current_tool == "Join":
-        if refresh_all or _PLAN_VISUAL_HOVERED_WALL in dirty:
+        if refresh_all or plan_document_visuals.PLAN_VISUAL_HOVERED_WALL in dirty:
             session.overlays.sync_hovered_wall_overlay()
         session.overlays.sync_junction_node_overlays()
         session.overlays.clear_hovered_wall_opening_context_overlay()
@@ -259,7 +240,7 @@ def refresh_plan_overlay_visuals(session, dirty=None):
         session.overlays.clear_wall_grips()
         session.overlays.clear_selected_wall_overlay()
         if session.selection.is_selected_plan_target("space") and (
-            refresh_all or _PLAN_VISUAL_SELECTED_SPACE in dirty
+            refresh_all or plan_document_visuals.PLAN_VISUAL_SELECTED_SPACE in dirty
         ):
             session.spaces.refresh_selected_space_visuals()
         return
@@ -287,8 +268,8 @@ def refresh_plan_overlay_visuals(session, dirty=None):
         session.overlays.clear_selected_wall_overlay()
         if (
             refresh_all
-            or _PLAN_VISUAL_SECONDARY_SELECTION in dirty
-            or _PLAN_VISUAL_SPACE_REGION_PICK in dirty
+            or plan_document_visuals.PLAN_VISUAL_SECONDARY_SELECTION in dirty
+            or plan_document_visuals.PLAN_VISUAL_SPACE_REGION_PICK in dirty
         ):
             session.overlays.sync_secondary_selected_overlays()
             session.overlays.sync_space_region_pick_overlays()
@@ -315,7 +296,7 @@ def refresh_plan_overlay_visuals(session, dirty=None):
         session.overlays.clear_selected_wall_opening_context_overlay()
         session.overlays.clear_wall_grips()
         session.overlays.clear_selected_wall_overlay()
-        if refresh_all or _PLAN_VISUAL_PROVIDER_OVERLAYS in dirty:
+        if refresh_all or plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS in dirty:
             session.overlays.sync_provider_overlays()
         session.overlays.sync_provider_point_preview()
         return
@@ -346,41 +327,47 @@ def refresh_plan_overlay_visuals(session, dirty=None):
     if session.current_tool == "Select":
         session.overlays.clear_space_region_pick_overlays()
         session.overlays.sync_junction_node_overlays()
-        if refresh_all or _PLAN_VISUAL_HOVERED_WALL in dirty:
+        if refresh_all or plan_document_visuals.PLAN_VISUAL_HOVERED_WALL in dirty:
             session.overlays.sync_hovered_wall_overlay()
         session.overlays.sync_selected_wall_opening_context_overlay()
         session.overlays.sync_hovered_wall_opening_context_overlay()
-        if refresh_all or _PLAN_VISUAL_HOVERED_OPENING in dirty:
+        if refresh_all or plan_document_visuals.PLAN_VISUAL_HOVERED_OPENING in dirty:
             session.overlays.sync_hovered_opening_overlay()
-        if refresh_all or _PLAN_VISUAL_HOVERED_SYMBOL in dirty:
+        if refresh_all or plan_document_visuals.PLAN_VISUAL_HOVERED_SYMBOL in dirty:
             session.overlays.sync_hovered_symbol_overlay()
-        if refresh_all or _PLAN_VISUAL_HOVERED_PROVIDER in dirty:
+        if refresh_all or plan_document_visuals.PLAN_VISUAL_HOVERED_PROVIDER in dirty:
             session.overlays.sync_hovered_provider_overlay()
-        if refresh_all or _PLAN_VISUAL_HOVERED_SPACE in dirty:
+        if refresh_all or plan_document_visuals.PLAN_VISUAL_HOVERED_SPACE in dirty:
             session.overlays.sync_hovered_space_overlay()
-        if refresh_all or _PLAN_VISUAL_HOVERED_REGION in dirty:
+        if refresh_all or plan_document_visuals.PLAN_VISUAL_HOVERED_REGION in dirty:
             session.overlays.sync_hovered_region_overlay()
-        if refresh_all or _PLAN_VISUAL_SELECTED_OPENING in dirty:
+        if refresh_all or plan_document_visuals.PLAN_VISUAL_SELECTED_OPENING in dirty:
             session.overlays.sync_selected_opening_overlay()
             session.overlays.sync_selected_opening_handles()
-        if refresh_all or _PLAN_VISUAL_SELECTED_SYMBOL in dirty:
+        if refresh_all or plan_document_visuals.PLAN_VISUAL_SELECTED_SYMBOL in dirty:
             session.overlays.sync_selected_symbol_overlay()
             session.overlays.sync_selected_symbol_handles()
-        if refresh_all or _PLAN_VISUAL_SELECTED_REGION in dirty:
+        if refresh_all or plan_document_visuals.PLAN_VISUAL_SELECTED_REGION in dirty:
             session.overlays.sync_selected_region_overlay()
-        if refresh_all or _PLAN_VISUAL_SELECTED_SPACE in dirty:
+        if refresh_all or plan_document_visuals.PLAN_VISUAL_SELECTED_SPACE in dirty:
             session.overlays.sync_selected_space_overlay()
-        if refresh_all or _PLAN_VISUAL_SECONDARY_SELECTION in dirty:
+        if refresh_all or plan_document_visuals.PLAN_VISUAL_SECONDARY_SELECTION in dirty:
             session.overlays.sync_secondary_selected_overlays()
-        if refresh_all or _PLAN_VISUAL_SPACE_REGION_PICK in dirty:
+        if refresh_all or plan_document_visuals.PLAN_VISUAL_SPACE_REGION_PICK in dirty:
             session.overlays.clear_space_region_pick_overlays()
-        if refresh_all or _PLAN_VISUAL_WALL_GRIPS in dirty:
+        if refresh_all or plan_document_visuals.PLAN_VISUAL_WALL_GRIPS in dirty:
             session.overlays.sync_selected_wall_overlay()
             session.overlays.sync_wall_grips()
-        provider_overlays_dirty = refresh_all or _PLAN_VISUAL_PROVIDER_OVERLAYS in dirty
+        provider_overlays_dirty = (
+            refresh_all or plan_document_visuals.PLAN_VISUAL_PROVIDER_OVERLAYS in dirty
+        )
         if provider_overlays_dirty:
             session.overlays.sync_provider_overlays()
-        if provider_overlays_dirty or refresh_all or _PLAN_VISUAL_SELECTED_PROVIDER in dirty:
+        if (
+            provider_overlays_dirty
+            or refresh_all
+            or plan_document_visuals.PLAN_VISUAL_SELECTED_PROVIDER in dirty
+        ):
             session.overlays.sync_selected_provider_overlay()
             session.overlays.sync_selected_provider_handles()
         session.overlays.clear_provider_point_preview()
