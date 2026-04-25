@@ -468,15 +468,11 @@ def pick_provider_overlay_target_from_overlays(
 
 
 def _get_visible_provider_overlays(session):
-    get_overlays = getattr(session, "get_plan_provider_overlays", None)
-    if not callable(get_overlays):
-        return None
-    is_visible = getattr(session, "is_plan_provider_overlay_visible", None)
     return tuple(
         overlay
-        for overlay in tuple(get_overlays() or ())
+        for overlay in tuple(session.providers.get_plan_provider_overlays() or ())
         if bool(getattr(overlay, "visible", True))
-        and (not callable(is_visible) or is_visible(overlay))
+        and session.providers.is_plan_provider_overlay_visible(overlay)
     )
 
 
@@ -1446,15 +1442,11 @@ def _iter_provider_overlay_targets_from_info(session, info, visible_targets):
 
 
 def _iter_visible_provider_overlay_targets(session):
-    get_overlays = getattr(session, "get_plan_provider_overlays", None)
-    if not callable(get_overlays):
-        return ()
-    is_visible = getattr(session, "is_plan_provider_overlay_visible", None)
     yielded = []
-    for overlay in tuple(get_overlays() or ()):
+    for overlay in tuple(session.providers.get_plan_provider_overlays() or ()):
         if not bool(getattr(overlay, "visible", True)):
             continue
-        if callable(is_visible) and not is_visible(overlay):
+        if not session.providers.is_plan_provider_overlay_visible(overlay):
             continue
         for target in tuple(getattr(overlay, "point_targets", ()) or ()):
             if not _has_provider_overlay_target_identity(target):
