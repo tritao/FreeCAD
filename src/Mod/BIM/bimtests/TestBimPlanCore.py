@@ -282,9 +282,12 @@ class TestBimPlanCore(unittest.TestCase):
     def test_initialize_session_read_state_creates_typed_buckets(self):
         from bimplan.runtime import session_state as plan_session_state
         from bimplan.runtime.session_state import (
+            PlanRegionToolState,
             PlanInteractionState,
             PlanProviderOverlayReadState,
+            ProviderPointState,
             PlanSelectionState,
+            SpaceRegionPickState,
             PlanTaskPanelState,
             PlanWallEditState,
         )
@@ -297,11 +300,16 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIsInstance(session.provider_overlay_read_state, PlanProviderOverlayReadState)
         self.assertIsInstance(session.interaction_state, PlanInteractionState)
         self.assertIsInstance(session.selection_state, PlanSelectionState)
+        self.assertIsInstance(session.provider_point_state, ProviderPointState)
+        self.assertIsInstance(session.space_region_pick_state, SpaceRegionPickState)
+        self.assertIsInstance(session.plan_region_tool_state, PlanRegionToolState)
         self.assertIsInstance(session.wall_edit_state, PlanWallEditState)
-        self.assertEqual([], session.task_panel_state.space_region_candidates)
         self.assertEqual("architecture", session.provider_overlay_read_state.mode)
         self.assertEqual({}, session.provider_overlay_read_state.visibility)
         self.assertIsNone(session.interaction_state.embedded_tool)
+        self.assertIsNone(session.provider_point_state.provider_point_tool)
+        self.assertEqual([], session.space_region_pick_state.candidates)
+        self.assertIsNone(session.plan_region_tool_state.parent_space)
         self.assertIsNone(session.selection_state.selected_plan_target_kind)
         self.assertEqual([], session.selection_state.secondary_selected_plan_targets_state)
         self.assertFalse(session.wall_edit_state.wall_edit_modal_active)
@@ -311,10 +319,12 @@ class TestBimPlanCore(unittest.TestCase):
         from bimplan.providers.host_targets import ProviderHostTargetRef
         from bimplan.runtime.session import PlanEditSession
         from bimplan.runtime.session_state import (
+            PlanRegionToolState,
             PlanInteractionState,
             PlanProviderOverlayReadState,
-            PlanProviderTransientState,
+            ProviderPointState,
             PlanSelectionState,
+            SpaceRegionPickState,
             PlanTaskPanelState,
             PlanWallEditState,
         )
@@ -324,7 +334,9 @@ class TestBimPlanCore(unittest.TestCase):
         session.task_panel_state = PlanTaskPanelState()
         session.provider_overlay_read_state = PlanProviderOverlayReadState()
         session.interaction_state = PlanInteractionState()
-        session.provider_transient_state = PlanProviderTransientState()
+        session.provider_point_state = ProviderPointState()
+        session.space_region_pick_state = SpaceRegionPickState()
+        session.plan_region_tool_state = PlanRegionToolState()
         session.selection_state = PlanSelectionState()
         session.wall_edit_state = PlanWallEditState()
 
@@ -376,9 +388,9 @@ class TestBimPlanCore(unittest.TestCase):
         session._edit_wall_visibility = False
 
         self.assertEqual("Relation status", session.task_panel_state.relation_status_message)
-        self.assertEqual([candidate], session.task_panel_state.space_region_candidates)
-        self.assertIs(candidate, session.task_panel_state.hovered_space_region_candidate)
-        self.assertIs(parent_space, session.task_panel_state.plan_region_parent_space)
+        self.assertEqual([candidate], session.space_region_pick_state.candidates)
+        self.assertIs(candidate, session.space_region_pick_state.hovered_candidate)
+        self.assertIs(parent_space, session.plan_region_tool_state.parent_space)
         self.assertEqual("electrical", session.provider_overlay_read_state.mode)
         self.assertEqual(
             {("provider", "overlay"): False},
@@ -387,22 +399,22 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertIs(render_state, session.provider_overlay_read_state.render_state)
         self.assertEqual("Move", session.interaction_state.embedded_tool_name)
         self.assertIs(embedded_tool, session.interaction_state.embedded_tool)
-        self.assertIs(provider_point_tool, session.interaction_state.provider_point_tool)
+        self.assertIs(provider_point_tool, session.provider_point_state.provider_point_tool)
         self.assertIs(parent_space, session.interaction_state.edit_space)
         self.assertIsInstance(
-            session.provider_transient_state.provider_point_host_target,
+            session.provider_point_state.provider_point_host_target,
             ProviderHostTargetRef,
         )
         self.assertEqual(
-            ("wall", host_wall), session.provider_transient_state.provider_point_host_target
+            ("wall", host_wall), session.provider_point_state.provider_point_host_target
         )
         self.assertIsInstance(
-            session.provider_transient_state.provider_point_preview_host_target,
+            session.provider_point_state.provider_point_preview_host_target,
             ProviderHostTargetRef,
         )
         self.assertEqual(
             ("space", parent_space),
-            session.provider_transient_state.provider_point_preview_host_target,
+            session.provider_point_state.provider_point_preview_host_target,
         )
         self.assertEqual("wall", session.selection_state.selected_plan_target_kind)
         self.assertIs(hovered_wall, session.selection_state.selected_plan_target_obj)

@@ -4,6 +4,7 @@
 
 import FreeCAD
 from bimplan import task_panel_view_model as plan_task_panel_view_model
+from bimplan.runtime import capabilities as runtime_capabilities
 
 translate = FreeCAD.Qt.translate
 
@@ -23,8 +24,7 @@ class PlanEditEditorPanelsMixin:
     )
 
     def _get_callable_attr(self, obj, attr_name):
-        value = getattr(obj, attr_name, None)
-        return value if callable(value) else None
+        return runtime_capabilities.get_callable(obj, attr_name)
 
     def _invoke_if_supported(self, obj, method_name, *args, **kwargs):
         method = self._get_callable_attr(obj, method_name)

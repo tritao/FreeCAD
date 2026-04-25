@@ -5,6 +5,7 @@
 import FreeCAD
 import FreeCADGui
 from bimplan import selection as plan_selection
+from bimplan.runtime import capabilities as runtime_capabilities
 
 translate = FreeCAD.Qt.translate
 
@@ -12,8 +13,7 @@ _MIN_WALL_LENGTH = 10.0
 
 
 def _get_callable_attr(obj, attr_name):
-    value = getattr(obj, attr_name, None)
-    return value if callable(value) else None
+    return runtime_capabilities.get_callable(obj, attr_name)
 
 
 def _get_wall_endpoint_proxy(wall):

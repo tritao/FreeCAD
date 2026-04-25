@@ -224,12 +224,14 @@ SET(bimplan_SRCS
     bimplan/providers/point.py
     bimplan/providers/runtime.py
     bimplan/runtime/__init__.py
+    bimplan/runtime/capabilities.py
     bimplan/runtime/command_gate.py
     bimplan/runtime/input.py
     bimplan/runtime/lifecycle.py
     bimplan/runtime/session.py
     bimplan/runtime/session_state.py
     bimplan/runtime/view.py
+    bimplan/runtime/view_properties.py
     bimplan/selection/__init__.py
     bimplan/selection/hover_picking.py
     bimplan/selection/picking.py

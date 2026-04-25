@@ -4,6 +4,7 @@
 
 import FreeCAD
 import FreeCADGui
+from bimplan.runtime import capabilities as runtime_capabilities
 
 translate = FreeCAD.Qt.translate
 
@@ -11,8 +12,7 @@ OPENING_MOVE_ANCHORS = ("center", "left", "right")
 
 
 def _get_callable_attr(obj, attr_name):
-    value = getattr(obj, attr_name, None)
-    return value if callable(value) else None
+    return runtime_capabilities.get_callable(obj, attr_name)
 
 
 def _proxy_supports(proxy, attrs):
