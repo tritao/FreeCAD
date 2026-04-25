@@ -296,7 +296,7 @@ def create_hosted_opening(
                 raise RuntimeError("Opening did not build before hosting")
 
             _host_opening(opening, host)
-            if add_to_active_storey and hasattr(session, "visibility"):
+            if add_to_active_storey:
                 session.visibility.add_object_to_active_storey(opening)
             doc.recompute()
 

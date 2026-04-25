@@ -3,6 +3,7 @@
 """Target-kind dispatch helpers for BIM Plan Edit."""
 
 from dataclasses import dataclass
+from typing import Any, Callable
 
 from bimplan.selection import target_kinds as plan_target_kinds
 
@@ -10,18 +11,18 @@ from bimplan.selection import target_kinds as plan_target_kinds
 @dataclass(frozen=True)
 class SyncSpec:
     trace_name: str
-    method_name: str
+    sync: Callable[[Any], None]
 
 
 @dataclass(frozen=True)
 class TargetKindPolicy:
-    validator_name: str | None = None
-    queue_restore_method_name: str | None = None
-    hovered_attr_name: str | None = None
-    hovered_setter_name: str | None = None
-    hovered_visual_clearers: tuple[str, ...] = ()
-    selected_visual_clearers: tuple[str, ...] = ()
-    selected_handle_clearers: tuple[str, ...] = ()
+    validate: Callable[[Any, Any], bool] | None = None
+    queue_restore: Callable[[Any, Any], None] | None = None
+    get_hovered: Callable[[Any], Any] | None = None
+    set_hovered: Callable[[Any, Any], None] | None = None
+    hovered_visual_clearers: tuple[Callable[[Any], None], ...] = ()
+    selected_visual_clearers: tuple[Callable[[Any], None], ...] = ()
+    selected_handle_clearers: tuple[Callable[[Any], None], ...] = ()
     selected_visual_label: str | None = None
     selected_visual_sync: tuple[SyncSpec, ...] = ()
     hovered_visual_label: str | None = None
@@ -30,128 +31,276 @@ class TargetKindPolicy:
 
 
 def _sync_specs(*pairs):
-    return tuple(SyncSpec(trace_name, method_name) for trace_name, method_name in pairs)
+    return tuple(SyncSpec(trace_name, sync) for trace_name, sync in pairs)
 
 
-def _overlay_method_name(method_name):
-    return "overlays.{}".format(method_name.removeprefix("_"))
+def _get_hovered_wall(session):
+    return session.hovered_wall
 
 
-def _build_target_kind_policy(
-    *,
-    validator_name,
-    hovered_attr_name,
-    hovered_setter_name,
-    overlay_label,
-    queue_restore_method_name=None,
-    selected_handle_clearers=(),
-    selected_visual_sync=(),
-    hover_set_sync=(),
-):
-    return TargetKindPolicy(
-        validator_name=validator_name,
-        queue_restore_method_name=queue_restore_method_name,
-        hovered_attr_name=hovered_attr_name,
-        hovered_setter_name=hovered_setter_name,
-        hovered_visual_clearers=(_overlay_method_name(f"_clear_hovered_{overlay_label}"),),
-        selected_visual_clearers=(_overlay_method_name(f"_clear_selected_{overlay_label}"),),
-        selected_handle_clearers=tuple(selected_handle_clearers),
-        selected_visual_label=overlay_label,
-        selected_visual_sync=_sync_specs(*selected_visual_sync),
-        hovered_visual_label=overlay_label,
-        hovered_visual_sync=_sync_specs(
-            (
-                f"sync_hovered_{overlay_label}",
-                _overlay_method_name(f"_sync_hovered_{overlay_label}"),
-            ),
-        ),
-        hover_set_sync=_sync_specs(*hover_set_sync),
-    )
+def _set_hovered_wall_state(session, obj):
+    session.hovered_wall = obj
+
+
+def _get_hovered_opening(session):
+    return session.hovered_opening
+
+
+def _set_hovered_opening_state(session, obj):
+    session.hovered_opening = obj
+
+
+def _get_hovered_symbol(session):
+    return session.hovered_symbol
+
+
+def _set_hovered_symbol_state(session, obj):
+    session.hovered_symbol = obj
+
+
+def _get_hovered_provider(session):
+    return session.hovered_provider
+
+
+def _set_hovered_provider_state(session, obj):
+    session.hovered_provider = obj
+
+
+def _get_hovered_space(session):
+    return session.hovered_space
+
+
+def _set_hovered_space_state(session, obj):
+    session.hovered_space = obj
+
+
+def _get_hovered_region(session):
+    return session.hovered_region
+
+
+def _set_hovered_region_state(session, obj):
+    session.hovered_region = obj
+
+
+def _validate_plan_selectable_wall(session, obj):
+    from . import targets as plan_targets
+
+    return plan_targets.is_plan_selectable_wall(session, obj)
+
+
+def _validate_plan_provider_target_object(session, obj):
+    from bimplan.providers import runtime as plan_provider_runtime
+
+    return plan_provider_runtime.is_plan_provider_target_object(session, obj)
+
+
+def _validate_plan_space_object(session, obj):
+    from . import targets as plan_targets
+
+    return plan_targets.is_plan_space_object(session, obj)
+
+
+def _validate_plan_region_object(session, obj):
+    from . import targets as plan_targets
+
+    return plan_targets.is_plan_region_object(session, obj)
 
 
 _TARGET_KIND_POLICIES = {
     plan_target_kinds.PLAN_TARGET_WALL: TargetKindPolicy(
-        validator_name="_is_plan_selectable_wall",
-        hovered_attr_name="hovered_wall",
-        hovered_setter_name="selection.set_hovered_wall",
-        hovered_visual_clearers=("overlays.clear_hovered_wall_overlay",),
-        selected_visual_clearers=("overlays.clear_selected_wall_overlay",),
+        validate=_validate_plan_selectable_wall,
+        get_hovered=_get_hovered_wall,
+        set_hovered=_set_hovered_wall_state,
+        hovered_visual_clearers=(lambda session: session.overlays.clear_hovered_wall_overlay(),),
+        selected_visual_clearers=(lambda session: session.overlays.clear_selected_wall_overlay(),),
         selected_visual_label="wall_overlay",
         selected_visual_sync=_sync_specs(
-            ("sync_selected_wall_overlay", "overlays.sync_selected_wall_overlay"),
+            (
+                "sync_selected_wall_overlay",
+                lambda session: session.overlays.sync_selected_wall_overlay(),
+            ),
         ),
         hovered_visual_label="wall_overlay",
         hovered_visual_sync=_sync_specs(
-            ("sync_hovered_wall_overlay", "overlays.sync_hovered_wall_overlay"),
+            (
+                "sync_hovered_wall_overlay",
+                lambda session: session.overlays.sync_hovered_wall_overlay(),
+            ),
         ),
     ),
-    plan_target_kinds.PLAN_TARGET_OPENING: _build_target_kind_policy(
-        validator_name="openings.is_hosted_opening_object",
-        queue_restore_method_name="openings.queue_restore_selected_opening",
-        hovered_attr_name="hovered_opening",
-        hovered_setter_name="selection.set_hovered_opening",
-        overlay_label="opening_overlay",
-        selected_handle_clearers=("overlays.clear_selected_opening_handles",),
-        selected_visual_sync=(
-            ("sync_selected_opening_overlay", "overlays.sync_selected_opening_overlay"),
-            ("sync_selected_opening_handles", "overlays.sync_selected_opening_handles"),
+    plan_target_kinds.PLAN_TARGET_OPENING: TargetKindPolicy(
+        validate=lambda session, obj: session.openings.is_hosted_opening_object(obj),
+        queue_restore=lambda session, obj: session.openings.queue_restore_selected_opening(obj),
+        get_hovered=_get_hovered_opening,
+        set_hovered=_set_hovered_opening_state,
+        hovered_visual_clearers=(lambda session: session.overlays.clear_hovered_opening_overlay(),),
+        selected_visual_clearers=(
+            lambda session: session.overlays.clear_selected_opening_overlay(),
         ),
-        hover_set_sync=(
+        selected_handle_clearers=(
+            lambda session: session.overlays.clear_selected_opening_handles(),
+        ),
+        selected_visual_label="opening_overlay",
+        selected_visual_sync=(
+            SyncSpec(
+                "sync_selected_opening_overlay",
+                lambda session: session.overlays.sync_selected_opening_overlay(),
+            ),
+            SyncSpec(
+                "sync_selected_opening_handles",
+                lambda session: session.overlays.sync_selected_opening_handles(),
+            ),
+        ),
+        hovered_visual_label="opening_overlay",
+        hovered_visual_sync=_sync_specs(
+            (
+                "sync_hovered_opening_overlay",
+                lambda session: session.overlays.sync_hovered_opening_overlay(),
+            ),
+        ),
+        hover_set_sync=_sync_specs(
             (
                 "sync_selected_wall_opening_context_overlay",
-                "overlays.sync_selected_wall_opening_context_overlay",
+                lambda session: session.overlays.sync_selected_wall_opening_context_overlay(),
             ),
-            ("sync_hovered_opening_overlay", "overlays.sync_hovered_opening_overlay"),
+            (
+                "sync_hovered_opening_overlay",
+                lambda session: session.overlays.sync_hovered_opening_overlay(),
+            ),
         ),
     ),
-    plan_target_kinds.PLAN_TARGET_SYMBOL: _build_target_kind_policy(
-        validator_name="visibility.is_plan_symbol_instance",
-        queue_restore_method_name="symbols.queue_restore_selected_symbol",
-        hovered_attr_name="hovered_symbol",
-        hovered_setter_name="selection.set_hovered_symbol",
-        overlay_label="symbol_overlay",
-        selected_handle_clearers=("overlays.clear_selected_symbol_handles",),
-        selected_visual_sync=(
-            ("sync_selected_symbol_overlay", "overlays.sync_selected_symbol_overlay"),
-            ("sync_selected_symbol_handles", "overlays.sync_selected_symbol_handles"),
+    plan_target_kinds.PLAN_TARGET_SYMBOL: TargetKindPolicy(
+        validate=lambda session, obj: session.visibility.is_plan_symbol_instance(obj),
+        queue_restore=lambda session, obj: session.symbols.queue_restore_selected_symbol(obj),
+        get_hovered=_get_hovered_symbol,
+        set_hovered=_set_hovered_symbol_state,
+        hovered_visual_clearers=(lambda session: session.overlays.clear_hovered_symbol_overlay(),),
+        selected_visual_clearers=(
+            lambda session: session.overlays.clear_selected_symbol_overlay(),
         ),
-        hover_set_sync=(("sync_hovered_symbol_overlay", "overlays.sync_hovered_symbol_overlay"),),
+        selected_handle_clearers=(
+            lambda session: session.overlays.clear_selected_symbol_handles(),
+        ),
+        selected_visual_label="symbol_overlay",
+        selected_visual_sync=_sync_specs(
+            (
+                "sync_selected_symbol_overlay",
+                lambda session: session.overlays.sync_selected_symbol_overlay(),
+            ),
+            (
+                "sync_selected_symbol_handles",
+                lambda session: session.overlays.sync_selected_symbol_handles(),
+            ),
+        ),
+        hovered_visual_label="symbol_overlay",
+        hovered_visual_sync=_sync_specs(
+            (
+                "sync_hovered_symbol_overlay",
+                lambda session: session.overlays.sync_hovered_symbol_overlay(),
+            ),
+        ),
+        hover_set_sync=_sync_specs(
+            (
+                "sync_hovered_symbol_overlay",
+                lambda session: session.overlays.sync_hovered_symbol_overlay(),
+            ),
+        ),
     ),
-    plan_target_kinds.PLAN_TARGET_PROVIDER: _build_target_kind_policy(
-        validator_name="_is_plan_provider_target_object",
-        hovered_attr_name="hovered_provider",
-        hovered_setter_name="selection.set_hovered_provider",
-        overlay_label="provider_overlay",
-        selected_handle_clearers=("overlays.clear_selected_provider_handles",),
-        selected_visual_sync=(
-            ("sync_selected_provider_overlay", "overlays.sync_selected_provider_overlay"),
-            ("sync_selected_provider_handles", "overlays.sync_selected_provider_handles"),
+    plan_target_kinds.PLAN_TARGET_PROVIDER: TargetKindPolicy(
+        validate=_validate_plan_provider_target_object,
+        get_hovered=_get_hovered_provider,
+        set_hovered=_set_hovered_provider_state,
+        hovered_visual_clearers=(
+            lambda session: session.overlays.clear_hovered_provider_overlay(),
         ),
-        hover_set_sync=(
-            ("sync_hovered_provider_overlay", "overlays.sync_hovered_provider_overlay"),
+        selected_visual_clearers=(
+            lambda session: session.overlays.clear_selected_provider_overlay(),
+        ),
+        selected_handle_clearers=(
+            lambda session: session.overlays.clear_selected_provider_handles(),
+        ),
+        selected_visual_label="provider_overlay",
+        selected_visual_sync=_sync_specs(
+            (
+                "sync_selected_provider_overlay",
+                lambda session: session.overlays.sync_selected_provider_overlay(),
+            ),
+            (
+                "sync_selected_provider_handles",
+                lambda session: session.overlays.sync_selected_provider_handles(),
+            ),
+        ),
+        hovered_visual_label="provider_overlay",
+        hovered_visual_sync=_sync_specs(
+            (
+                "sync_hovered_provider_overlay",
+                lambda session: session.overlays.sync_hovered_provider_overlay(),
+            ),
+        ),
+        hover_set_sync=_sync_specs(
+            (
+                "sync_hovered_provider_overlay",
+                lambda session: session.overlays.sync_hovered_provider_overlay(),
+            ),
         ),
     ),
-    plan_target_kinds.PLAN_TARGET_SPACE: _build_target_kind_policy(
-        validator_name="_is_plan_space_object",
-        queue_restore_method_name="spaces.queue_restore_selected_space",
-        hovered_attr_name="hovered_space",
-        hovered_setter_name="selection.set_hovered_space",
-        overlay_label="space_overlay",
-        selected_visual_sync=(
-            ("sync_selected_space_overlay", "overlays.sync_selected_space_overlay"),
+    plan_target_kinds.PLAN_TARGET_SPACE: TargetKindPolicy(
+        validate=_validate_plan_space_object,
+        queue_restore=lambda session, obj: session.spaces.queue_restore_selected_space(obj),
+        get_hovered=_get_hovered_space,
+        set_hovered=_set_hovered_space_state,
+        hovered_visual_clearers=(lambda session: session.overlays.clear_hovered_space_overlay(),),
+        selected_visual_clearers=(lambda session: session.overlays.clear_selected_space_overlay(),),
+        selected_visual_label="space_overlay",
+        selected_visual_sync=_sync_specs(
+            (
+                "sync_selected_space_overlay",
+                lambda session: session.overlays.sync_selected_space_overlay(),
+            ),
         ),
-        hover_set_sync=(("sync_hovered_space_overlay", "overlays.sync_hovered_space_overlay"),),
+        hovered_visual_label="space_overlay",
+        hovered_visual_sync=_sync_specs(
+            (
+                "sync_hovered_space_overlay",
+                lambda session: session.overlays.sync_hovered_space_overlay(),
+            ),
+        ),
+        hover_set_sync=_sync_specs(
+            (
+                "sync_hovered_space_overlay",
+                lambda session: session.overlays.sync_hovered_space_overlay(),
+            ),
+        ),
     ),
-    plan_target_kinds.PLAN_TARGET_REGION: _build_target_kind_policy(
-        validator_name="_is_plan_region_object",
-        queue_restore_method_name="spaces.queue_restore_selected_region",
-        hovered_attr_name="hovered_region",
-        hovered_setter_name="selection.set_hovered_region",
-        overlay_label="region_overlay",
-        selected_visual_sync=(
-            ("sync_selected_region_overlay", "overlays.sync_selected_region_overlay"),
+    plan_target_kinds.PLAN_TARGET_REGION: TargetKindPolicy(
+        validate=_validate_plan_region_object,
+        queue_restore=lambda session, obj: session.spaces.queue_restore_selected_region(obj),
+        get_hovered=_get_hovered_region,
+        set_hovered=_set_hovered_region_state,
+        hovered_visual_clearers=(lambda session: session.overlays.clear_hovered_region_overlay(),),
+        selected_visual_clearers=(
+            lambda session: session.overlays.clear_selected_region_overlay(),
         ),
-        hover_set_sync=(("sync_hovered_region_overlay", "overlays.sync_hovered_region_overlay"),),
+        selected_visual_label="region_overlay",
+        selected_visual_sync=_sync_specs(
+            (
+                "sync_selected_region_overlay",
+                lambda session: session.overlays.sync_selected_region_overlay(),
+            ),
+        ),
+        hovered_visual_label="region_overlay",
+        hovered_visual_sync=_sync_specs(
+            (
+                "sync_hovered_region_overlay",
+                lambda session: session.overlays.sync_hovered_region_overlay(),
+            ),
+        ),
+        hover_set_sync=_sync_specs(
+            (
+                "sync_hovered_region_overlay",
+                lambda session: session.overlays.sync_hovered_region_overlay(),
+            ),
+        ),
     ),
 }
 
@@ -171,27 +320,20 @@ def _get_target_kind_policy(kind):
     return _TARGET_KIND_POLICIES.get(kind, _EMPTY_TARGET_KIND_POLICY)
 
 
-def _call_named_method(session, method_name, trace_name=None):
-    method = session
-    for attr_name in str(method_name or "").split("."):
-        if not attr_name:
-            method = None
-            break
-        method = getattr(method, attr_name, None)
-        if method is None:
-            break
-    if not callable(method):
+def _call_sync(session, sync, trace_name=None):
+    if not callable(sync):
         return
     if trace_name:
         with session.performance.plan_perf_trace_span(trace_name):
-            method()
+            sync(session)
         return
-    method()
+    sync(session)
 
 
-def _call_named_methods(session, method_names):
-    for method_name in method_names or ():
-        _call_named_method(session, method_name)
+def _call_methods(session, methods):
+    for method in methods or ():
+        if callable(method):
+            method(session)
 
 
 def _call_sync_specs(session, sync_specs, trace_style=None, trace_prefix=None, trace_label=None):
@@ -204,22 +346,22 @@ def _call_sync_specs(session, sync_specs, trace_style=None, trace_prefix=None, t
         if trace_name:
             with session.performance.plan_perf_trace_span(trace_name):
                 for sync_spec in sync_specs:
-                    _call_named_method(session, sync_spec.method_name)
+                    _call_sync(session, sync_spec.sync)
             return
     for sync_spec in sync_specs:
-        _call_named_method(
+        _call_sync(
             session,
-            sync_spec.method_name,
+            sync_spec.sync,
             trace_name=sync_spec.trace_name if trace_style == "by_method" else None,
         )
 
 
 def get_hovered_target(session):
     for kind in _GET_HOVERED_TARGET_ORDER:
-        attr_name = _get_target_kind_policy(kind).hovered_attr_name
-        if not attr_name:
+        get_hovered = _get_target_kind_policy(kind).get_hovered
+        if not get_hovered:
             continue
-        obj = getattr(session, attr_name, None)
+        obj = get_hovered(session)
         if obj is not None:
             return plan_target_kinds.make_plan_target_ref(kind, obj)
     return plan_target_kinds.make_plan_target_ref()
@@ -227,17 +369,15 @@ def get_hovered_target(session):
 
 def clear_hovered_targets(session, kinds=None):
     for kind in kinds or plan_target_kinds.HOVERED_PLAN_TARGET_KINDS:
-        setter_name = _get_target_kind_policy(kind).hovered_setter_name
-        if not setter_name:
+        setter = _get_target_kind_policy(kind).set_hovered
+        if not setter:
             continue
-        setter = getattr(session, setter_name, None)
-        if callable(setter):
-            setter(None)
+        setter(session, None)
 
 
 def set_only_hovered_target(session, target_kind, target_obj):
     policy = _get_target_kind_policy(target_kind)
-    if not policy.hovered_setter_name:
+    if not policy.set_hovered:
         clear_hovered_targets(session)
         return
     clear_hovered_targets(
@@ -246,55 +386,37 @@ def set_only_hovered_target(session, target_kind, target_obj):
             kind for kind in plan_target_kinds.HOVERED_PLAN_TARGET_KINDS if kind != target_kind
         ),
     )
-    setter = getattr(session, policy.hovered_setter_name, None)
-    if callable(setter):
-        setter(target_obj)
+    policy.set_hovered(session, target_obj)
 
 
 def clear_hovered_target_visuals(session, kinds=None):
     for kind in kinds or plan_target_kinds.HOVERED_PLAN_TARGET_KINDS:
-        _call_named_methods(session, _get_target_kind_policy(kind).hovered_visual_clearers)
+        _call_methods(session, _get_target_kind_policy(kind).hovered_visual_clearers)
 
 
 def clear_selected_target_visuals(session, kinds=None, clear_handle_kinds=None):
     handle_kind_set = set(clear_handle_kinds or ())
     for kind in kinds or plan_target_kinds.PRIMARY_PLAN_TARGET_KINDS:
         policy = _get_target_kind_policy(kind)
-        _call_named_methods(session, policy.selected_visual_clearers)
+        _call_methods(session, policy.selected_visual_clearers)
         if kind in handle_kind_set:
-            _call_named_methods(session, policy.selected_handle_clearers)
+            _call_methods(session, policy.selected_handle_clearers)
 
 
 def validate_plan_target(session, kind, obj):
-    validator_name = _get_target_kind_policy(kind).validator_name
-    if not validator_name:
+    validate = _get_target_kind_policy(kind).validate
+    if not validate:
         return False
-    validator = session
-    for attr_name in str(validator_name or "").split("."):
-        if not attr_name:
-            return False
-        validator = getattr(validator, attr_name, None)
-        if validator is None:
-            return False
-    return bool(callable(validator) and validator(obj))
+    return bool(validate(session, obj))
 
 
 def queue_restore_selected_target(session, kind, obj):
     if not obj:
         return False
-    method_name = _get_target_kind_policy(kind).queue_restore_method_name
-    if not method_name:
+    queue_restore = _get_target_kind_policy(kind).queue_restore
+    if not queue_restore:
         return False
-    method = session
-    for attr_name in str(method_name or "").split("."):
-        if not attr_name:
-            return False
-        method = getattr(method, attr_name, None)
-        if method is None:
-            return False
-    if not callable(method):
-        return False
-    method(obj)
+    queue_restore(session, obj)
     return True
 
 
@@ -349,12 +471,12 @@ def set_hovered_target(session, kind, obj):
     from . import selection as plan_selection_runtime
 
     policy = _get_target_kind_policy(kind)
-    if not policy.hover_set_sync or not policy.hovered_attr_name:
+    if not policy.hover_set_sync or not policy.get_hovered or not policy.set_hovered:
         return False
     if plan_selection_runtime.is_selected_plan_target(session, kind, obj):
         obj = None
-    if getattr(session, policy.hovered_attr_name, None) == obj:
+    if policy.get_hovered(session) == obj:
         return False
-    setattr(session, policy.hovered_attr_name, obj)
+    policy.set_hovered(session, obj)
     _call_sync_specs(session, policy.hover_set_sync)
     return True

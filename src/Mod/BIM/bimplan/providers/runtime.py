@@ -873,19 +873,18 @@ def get_plan_provider_target_role_label(session, obj) -> str:
 
 
 def format_plan_provider_target_help(session, obj) -> str:
+    from bimplan.providers import edit as plan_provider_edit
+
     if not is_plan_provider_target_object(session, obj):
         return ""
     role = get_plan_provider_target_role_key(session, obj).replace("_", " ").lower()
-    providers_api = getattr(session, "providers", None)
-    get_handles = getattr(providers_api, "get_selected_provider_edit_handles", None)
     has_handles = False
-    if callable(get_handles):
-        try:
-            has_handles = bool(session.selection.is_selected_plan_target("provider", obj)) and bool(
-                tuple(get_handles(obj) or ())
-            )
-        except Exception:
-            has_handles = False
+    try:
+        has_handles = bool(session.selection.is_selected_plan_target("provider", obj)) and bool(
+            tuple(plan_provider_edit.get_selected_provider_edit_handles(session, obj) or ())
+        )
+    except Exception:
+        has_handles = False
     if role:
         if has_handles:
             return translate(
