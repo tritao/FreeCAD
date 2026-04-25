@@ -486,8 +486,7 @@ def apply_plan_view(session, fit=True):
             else 0.0
         )
         wp.set_to_top(offset=offset)
-        if hasattr(wp, "_update_all"):
-            wp._update_all(_hist_add=False)
+        _update_working_plane(wp)
 
         session._interaction_plane = WorkingPlane.PlaneBase()
         session._interaction_plane.set_to_top(offset=offset)
@@ -534,10 +533,11 @@ def restore_state(session):
             session.view = None
 
     wp = session._working_plane or WorkingPlane.get_working_plane(update=False)
-    if hasattr(wp, "restore"):
+    restore = getattr(wp, "restore", None)
+    if callable(restore):
         try:
-            wp.restore()
-            wp._update_all(_hist_add=False)
+            restore()
+            _update_working_plane(wp)
         except RuntimeError:
             pass
 
@@ -561,8 +561,9 @@ def capture_state(session):
             session.viewport.discard_stale_runtime_object(session.view)
 
     session._working_plane = WorkingPlane.get_working_plane(update=False)
-    if hasattr(session._working_plane, "save"):
-        session._working_plane.save()
+    save = getattr(session._working_plane, "save", None)
+    if callable(save):
+        save()
 
 
 def get_interaction_plane(session):
@@ -575,9 +576,10 @@ def get_interaction_plane(session):
 
 def project_plan_point(session, point):
     plane = get_interaction_plane(session)
-    if plane and hasattr(plane, "project_point"):
+    project_point = getattr(plane, "project_point", None) if plane else None
+    if callable(project_point):
         try:
-            return plane.project_point(point)
+            return project_point(point)
         except Exception:
             pass
     return point
@@ -614,6 +616,13 @@ def get_plan_overlay_scale(session):
         return 0.35
     scale = 5000.0 / height
     return max(0.35, min(1.0, scale * 2.0))
+
+
+def _update_working_plane(wp):
+    update_all = getattr(wp, "_update_all", None)
+    if not callable(update_all):
+        return
+    update_all(_hist_add=False)
 
 
 def scaled_line_width(session, base_width):

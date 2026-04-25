@@ -108,6 +108,21 @@ def invalidate_opening_overlay_screen_cache(session):
     state.opening_overlay_screen_cache_projection_key = None
 
 
+def _get_proxy_method(proxy, method_name):
+    method = getattr(proxy, method_name, None)
+    return method if callable(method) else None
+
+
+def _get_proxy_footprint(proxy, obj):
+    get_footprint = _get_proxy_method(proxy, "getFootprint")
+    if get_footprint is None:
+        return ()
+    try:
+        return get_footprint(obj) or ()
+    except Exception:
+        return ()
+
+
 def get_footprint_overlay_polylines(faces):
     return ArchPlanGeometry.get_face_wire_polylines(faces)
 
@@ -126,11 +141,8 @@ def get_wall_overlay_polylines(session, wall):
     if not wall:
         return []
     proxy = getattr(wall, "Proxy", None)
-    if not proxy or not hasattr(proxy, "getFootprint"):
-        return []
-    try:
-        faces = proxy.getFootprint(wall) or []
-    except Exception:
+    faces = _get_proxy_footprint(proxy, wall)
+    if not faces:
         return []
     return get_footprint_overlay_polylines(faces)
 
@@ -141,12 +153,7 @@ def get_space_footprint_faces(session, space):
 
     def compute(space_obj):
         proxy = getattr(space_obj, "Proxy", None)
-        if not proxy or not hasattr(proxy, "getFootprint"):
-            return ()
-        try:
-            return proxy.getFootprint(space_obj) or ()
-        except Exception:
-            return ()
+        return _get_proxy_footprint(proxy, space_obj)
 
     return get_cached_plan_overlay_geometry(
         session,
@@ -177,12 +184,7 @@ def get_region_footprint_faces(session, region):
 
     def compute(region_obj):
         proxy = getattr(region_obj, "Proxy", None)
-        if not proxy or not hasattr(proxy, "getFootprint"):
-            return ()
-        try:
-            return proxy.getFootprint(region_obj) or ()
-        except Exception:
-            return ()
+        return _get_proxy_footprint(proxy, region_obj)
 
     return get_cached_plan_overlay_geometry(
         session,
@@ -213,11 +215,13 @@ def _compute_opening_overlay_geometry(opening_obj):
     if not proxy:
         return {"symbol_polylines": (), "guide_polylines": ()}
     try:
-        if hasattr(proxy, "get_plan_overlay_geometry"):
-            return proxy.get_plan_overlay_geometry() or {}
-        if hasattr(proxy, "get_plan_overlay_polylines"):
+        get_plan_overlay_geometry = _get_proxy_method(proxy, "get_plan_overlay_geometry")
+        if get_plan_overlay_geometry is not None:
+            return get_plan_overlay_geometry() or {}
+        get_plan_overlay_polylines = _get_proxy_method(proxy, "get_plan_overlay_polylines")
+        if get_plan_overlay_polylines is not None:
             return {
-                "symbol_polylines": proxy.get_plan_overlay_polylines() or (),
+                "symbol_polylines": get_plan_overlay_polylines() or (),
                 "guide_polylines": (),
             }
     except Exception:
