@@ -46,6 +46,7 @@ PLAN_VISUAL_HOVERED_SYMBOL = "hovered_symbol"
 PLAN_VISUAL_HOVERED_PROVIDER = "hovered_provider"
 PLAN_VISUAL_HOVERED_SPACE = "hovered_space"
 PLAN_VISUAL_HOVERED_REGION = "hovered_region"
+PLAN_VISUAL_SELECTED_WALL = "selected_wall"
 PLAN_VISUAL_SELECTED_PROVIDER = "selected_provider"
 PLAN_VISUAL_SELECTED_OPENING = "selected_opening"
 PLAN_VISUAL_SELECTED_SYMBOL = "selected_symbol"
@@ -64,6 +65,7 @@ _PLAN_VISUAL_HOVERED_SYMBOL = PLAN_VISUAL_HOVERED_SYMBOL
 _PLAN_VISUAL_HOVERED_PROVIDER = PLAN_VISUAL_HOVERED_PROVIDER
 _PLAN_VISUAL_HOVERED_SPACE = PLAN_VISUAL_HOVERED_SPACE
 _PLAN_VISUAL_HOVERED_REGION = PLAN_VISUAL_HOVERED_REGION
+_PLAN_VISUAL_SELECTED_WALL = PLAN_VISUAL_SELECTED_WALL
 _PLAN_VISUAL_SELECTED_PROVIDER = PLAN_VISUAL_SELECTED_PROVIDER
 _PLAN_VISUAL_SELECTED_OPENING = PLAN_VISUAL_SELECTED_OPENING
 _PLAN_VISUAL_SELECTED_SYMBOL = PLAN_VISUAL_SELECTED_SYMBOL
@@ -711,9 +713,11 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
         _PLAN_VISUAL_HOVERED_PROVIDER,
         _PLAN_VISUAL_HOVERED_OPENING,
         _PLAN_VISUAL_HOVERED_WALL,
-        _PLAN_VISUAL_WALL_GRIPS,
         _PLAN_VISUAL_PROVIDER_OVERLAYS,
     ]
+    if session.selection.is_selected_plan_target("wall"):
+        visual_args.append(_PLAN_VISUAL_SELECTED_WALL)
+        visual_args.append(_PLAN_VISUAL_WALL_GRIPS)
     if selected_region:
         visual_args.append(_PLAN_VISUAL_SELECTED_REGION)
     if session.hovered_region and not session.selection.is_selected_plan_target(
@@ -738,11 +742,17 @@ def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=
 def slot_undo_document(session, doc):
     del doc
     invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=True)
+    session.selection.sanitize_plan_target_references()
+    session.selection.refresh_primary_selected_plan_target()
+    session.task_panels.refresh_task_panel_status(selection_only=True)
 
 
 def slot_redo_document(session, doc):
     del doc
     invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=True)
+    session.selection.sanitize_plan_target_references()
+    session.selection.refresh_primary_selected_plan_target()
+    session.task_panels.refresh_task_panel_status(selection_only=True)
 
 
 def slot_recomputed_document(session, doc):
