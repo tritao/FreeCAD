@@ -7,7 +7,6 @@ import json
 import os
 import tempfile
 import time
-from functools import wraps
 
 
 def resolve_plan_perf_log_path(session):
@@ -313,14 +312,6 @@ def plan_perf_trace_span(session, name, **fields):
         span["count"] += 1
 
 
-def _bind_performance_call(func):
-    @wraps(func)
-    def method(self, *args, **kwargs):
-        return func(self.session, *args, **kwargs)
-
-    return method
-
-
 class PlanPerformanceAPI:
     """Owned session surface for Plan Edit perf tracing and pick debug."""
 
@@ -333,26 +324,53 @@ class PlanPerformanceAPI:
     def session(self):
         return self._session
 
+    def resolve_plan_perf_log_path(self, *args, **kwargs):
+        return resolve_plan_perf_log_path(self.session, *args, **kwargs)
+
+    def resolve_plan_pick_debug_log_path(self, *args, **kwargs):
+        return resolve_plan_pick_debug_log_path(self.session, *args, **kwargs)
+
+    def is_plan_perf_trace_enabled(self, *args, **kwargs):
+        return is_plan_perf_trace_enabled(self.session, *args, **kwargs)
+
+    def is_plan_pick_debug_enabled(self, *args, **kwargs):
+        return is_plan_pick_debug_enabled(self.session, *args, **kwargs)
+
+    def is_plan_pick_debug_active(self, *args, **kwargs):
+        return is_plan_pick_debug_active(self.session, *args, **kwargs)
+
+    def plan_perf_describe_object(self, *args, **kwargs):
+        return plan_perf_describe_object(self.session, *args, **kwargs)
+
+    def plan_perf_describe_target(self, *args, **kwargs):
+        return plan_perf_describe_target(self.session, *args, **kwargs)
+
+    def plan_perf_coerce_value(self, *args, **kwargs):
+        return plan_perf_coerce_value(self.session, *args, **kwargs)
+
+    def plan_perf_set_fields(self, *args, **kwargs):
+        return plan_perf_set_fields(self.session, *args, **kwargs)
+
+    def plan_perf_count(self, *args, **kwargs):
+        return plan_perf_count(self.session, *args, **kwargs)
+
+    def plan_perf_note_error(self, *args, **kwargs):
+        return plan_perf_note_error(self.session, *args, **kwargs)
+
+    def plan_perf_finalize_event(self, *args, **kwargs):
+        return plan_perf_finalize_event(self.session, *args, **kwargs)
+
+    def plan_perf_write_event(self, *args, **kwargs):
+        return plan_perf_write_event(self.session, *args, **kwargs)
+
+    def plan_perf_trace_event(self, *args, **kwargs):
+        return plan_perf_trace_event(self.session, *args, **kwargs)
+
+    def plan_perf_trace_span(self, *args, **kwargs):
+        return plan_perf_trace_span(self.session, *args, **kwargs)
+
+    def plan_pick_debug_event(self, *args, **kwargs):
+        return plan_pick_debug_event(self.session, *args, **kwargs)
+
     def plan_pick_debug_scope(self, name, **fields):
         return plan_pick_debug_scope(self.session, name, **fields)
-
-
-for _method_name in (
-    "resolve_plan_perf_log_path",
-    "resolve_plan_pick_debug_log_path",
-    "is_plan_perf_trace_enabled",
-    "is_plan_pick_debug_enabled",
-    "is_plan_pick_debug_active",
-    "plan_perf_describe_object",
-    "plan_perf_describe_target",
-    "plan_perf_coerce_value",
-    "plan_perf_set_fields",
-    "plan_perf_count",
-    "plan_perf_note_error",
-    "plan_perf_finalize_event",
-    "plan_perf_write_event",
-    "plan_perf_trace_event",
-    "plan_perf_trace_span",
-    "plan_pick_debug_event",
-):
-    setattr(PlanPerformanceAPI, _method_name, _bind_performance_call(globals()[_method_name]))

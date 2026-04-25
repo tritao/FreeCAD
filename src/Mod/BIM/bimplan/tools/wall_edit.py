@@ -1539,17 +1539,6 @@ def cancel_wall_edit_point_pick(session):
     session.task_panels.refresh_task_panel_status()
 
 
-from functools import wraps
-
-
-def _bind_session_call(func):
-    @wraps(func)
-    def method(self, *args, **kwargs):
-        return func(self.session, *args, **kwargs)
-
-    return method
-
-
 class _SessionAPI:
     __slots__ = ("_session",)
 
@@ -1566,79 +1555,202 @@ class PlanWallEditAPI(_SessionAPI):
 
     __slots__ = ()
 
-    has_active_wall_edit = _bind_session_call(has_active_wall_edit)
-    is_wall_edit_modal_active = _bind_session_call(is_wall_edit_modal_active)
-    is_selected_wall_endpoint_editable = _bind_session_call(is_selected_wall_endpoint_editable)
-    cancel_wall_edit = _bind_session_call(cancel_wall_edit)
-    cancel_wall_subtool = _bind_session_call(cancel_wall_subtool)
-    start_wall_edit = _bind_session_call(start_wall_edit)
-    resume_wall_edit_point_pick = _bind_session_call(resume_wall_edit_point_pick)
-    snapshot_wall_hosted_opening_clearances = _bind_session_call(
-        snapshot_wall_hosted_opening_clearances
-    )
-    queue_wall_edit_opening_clearances = _bind_session_call(queue_wall_edit_opening_clearances)
-    prime_wall_edit_opening_clearances = _bind_session_call(prime_wall_edit_opening_clearances)
-    ensure_wall_edit_opening_clearances = _bind_session_call(ensure_wall_edit_opening_clearances)
-    queue_wall_edit_task_panel_refresh = _bind_session_call(queue_wall_edit_task_panel_refresh)
-    flush_wall_edit_task_panel_refresh = _bind_session_call(flush_wall_edit_task_panel_refresh)
-    finish_wall_edit = _bind_session_call(finish_wall_edit)
-    commit_wall_edit_points = _bind_session_call(commit_wall_edit_points)
-    start_wall_grip_edit = _bind_session_call(start_wall_grip_edit)
-    activate_wall_grip = _bind_session_call(activate_wall_grip)
-    activate_wall_grip_now = _bind_session_call(activate_wall_grip_now)
-    get_wall_edit_reference_point = _bind_session_call(get_wall_edit_reference_point)
-    compute_wall_edit_points = _bind_session_call(compute_wall_edit_points)
-    compute_wall_edit_points_from_length = _bind_session_call(compute_wall_edit_points_from_length)
-    get_preview_footprint = _bind_session_call(get_preview_footprint)
-    make_preview_wall_adapter = _bind_session_call(make_preview_wall_adapter)
-    solve_preview_wall_relation = _bind_session_call(solve_preview_wall_relation)
-    collect_preview_wall_relation_data = _bind_session_call(collect_preview_wall_relation_data)
-    get_preview_footprint_polylines = _bind_session_call(get_preview_footprint_polylines)
-    get_readout_base_gap = _bind_session_call(get_readout_base_gap)
-    get_aligned_readout_offset_for_wall = _bind_session_call(get_aligned_readout_offset_for_wall)
-    get_wall_edit_readout_offset = _bind_session_call(get_wall_edit_readout_offset)
-    get_opening_move_readout_offset = _bind_session_call(get_opening_move_readout_offset)
-    update_wall_edit_preview_geometry = _bind_session_call(update_wall_edit_preview_geometry)
-    sync_wall_edit_preview = _bind_session_call(sync_wall_edit_preview)
-    is_wall_move_edit_active = _bind_session_call(is_wall_move_edit_active)
-    is_wall_stretch_edit_active = _bind_session_call(is_wall_stretch_edit_active)
-    is_wall_readout_edit_active = _bind_session_call(is_wall_readout_edit_active)
-    clear_wall_edit_preview = _bind_session_call(clear_wall_edit_preview)
-    get_wall_hosted_opening_preview_segments = _bind_session_call(
-        get_wall_hosted_opening_preview_segments
-    )
-    sync_wall_hosted_opening_preview = _bind_session_call(sync_wall_hosted_opening_preview)
-    clear_wall_hosted_opening_preview = _bind_session_call(clear_wall_hosted_opening_preview)
-    get_wall_edit_readout_specs = _bind_session_call(get_wall_edit_readout_specs)
-    get_default_wall_edit_readout_mode = _bind_session_call(get_default_wall_edit_readout_mode)
-    bind_wall_edit_readout_callbacks = _bind_session_call(bind_wall_edit_readout_callbacks)
-    update_wall_edit_readouts_in_place = _bind_session_call(update_wall_edit_readouts_in_place)
-    sync_wall_edit_readout = _bind_session_call(sync_wall_edit_readout)
-    clear_wall_edit_readout = _bind_session_call(clear_wall_edit_readout)
-    get_wall_edit_readout_tracker = _bind_session_call(get_wall_edit_readout_tracker)
-    cycle_wall_move_readout_mode = _bind_session_call(cycle_wall_move_readout_mode)
-    start_wall_readout_edit = _bind_session_call(start_wall_readout_edit)
-    start_wall_stretch_length_edit = _bind_session_call(start_wall_stretch_length_edit)
-    start_wall_readout_edit_now = _bind_session_call(start_wall_readout_edit_now)
-    on_wall_stretch_length_changed = _bind_session_call(on_wall_stretch_length_changed)
-    on_wall_stretch_length_finished = _bind_session_call(on_wall_stretch_length_finished)
-    on_wall_stretch_length_canceled = _bind_session_call(on_wall_stretch_length_canceled)
-    compute_wall_edit_points_from_move_delta = _bind_session_call(
-        compute_wall_edit_points_from_move_delta
-    )
-    on_wall_move_delta_changed = _bind_session_call(on_wall_move_delta_changed)
-    on_wall_move_delta_finished = _bind_session_call(on_wall_move_delta_finished)
-    on_wall_move_delta_canceled = _bind_session_call(on_wall_move_delta_canceled)
-    schedule_wall_edit_readout_cancel = _bind_session_call(schedule_wall_edit_readout_cancel)
-    finish_wall_edit_readout_canceled = _bind_session_call(finish_wall_edit_readout_canceled)
-    restore_edit_wall_visibility = _bind_session_call(restore_edit_wall_visibility)
-    update_wall_edit_preview = _bind_session_call(update_wall_edit_preview)
-    update_wall_edit_point_pick = _bind_session_call(update_wall_edit_point_pick)
-    cancel_wall_edit_point_pick = _bind_session_call(cancel_wall_edit_point_pick)
-    refresh_wall_hosted_opening_footprints = _bind_session_call(
-        refresh_wall_hosted_opening_footprints
-    )
-    compute_wall_hosted_opening_layout = _bind_session_call(compute_wall_hosted_opening_layout)
-    resolve_wall_hosted_opening_layout = _bind_session_call(resolve_wall_hosted_opening_layout)
+    def has_active_wall_edit(self, *args, **kwargs):
+        return has_active_wall_edit(self.session, *args, **kwargs)
+
+    def is_wall_edit_modal_active(self, *args, **kwargs):
+        return is_wall_edit_modal_active(self.session, *args, **kwargs)
+
+    def is_selected_wall_endpoint_editable(self, *args, **kwargs):
+        return is_selected_wall_endpoint_editable(self.session, *args, **kwargs)
+
+    def cancel_wall_edit(self, *args, **kwargs):
+        return cancel_wall_edit(self.session, *args, **kwargs)
+
+    def cancel_wall_subtool(self, *args, **kwargs):
+        return cancel_wall_subtool(self.session, *args, **kwargs)
+
+    def start_wall_edit(self, *args, **kwargs):
+        return start_wall_edit(self.session, *args, **kwargs)
+
+    def resume_wall_edit_point_pick(self, *args, **kwargs):
+        return resume_wall_edit_point_pick(self.session, *args, **kwargs)
+
+    def snapshot_wall_hosted_opening_clearances(self, *args, **kwargs):
+        return snapshot_wall_hosted_opening_clearances(self.session, *args, **kwargs)
+
+    def queue_wall_edit_opening_clearances(self, *args, **kwargs):
+        return queue_wall_edit_opening_clearances(self.session, *args, **kwargs)
+
+    def prime_wall_edit_opening_clearances(self, *args, **kwargs):
+        return prime_wall_edit_opening_clearances(self.session, *args, **kwargs)
+
+    def ensure_wall_edit_opening_clearances(self, *args, **kwargs):
+        return ensure_wall_edit_opening_clearances(self.session, *args, **kwargs)
+
+    def queue_wall_edit_task_panel_refresh(self, *args, **kwargs):
+        return queue_wall_edit_task_panel_refresh(self.session, *args, **kwargs)
+
+    def flush_wall_edit_task_panel_refresh(self, *args, **kwargs):
+        return flush_wall_edit_task_panel_refresh(self.session, *args, **kwargs)
+
+    def finish_wall_edit(self, *args, **kwargs):
+        return finish_wall_edit(self.session, *args, **kwargs)
+
+    def commit_wall_edit_points(self, *args, **kwargs):
+        return commit_wall_edit_points(self.session, *args, **kwargs)
+
+    def start_wall_grip_edit(self, *args, **kwargs):
+        return start_wall_grip_edit(self.session, *args, **kwargs)
+
+    def activate_wall_grip(self, *args, **kwargs):
+        return activate_wall_grip(self.session, *args, **kwargs)
+
+    def activate_wall_grip_now(self, *args, **kwargs):
+        return activate_wall_grip_now(self.session, *args, **kwargs)
+
+    def get_wall_edit_reference_point(self, *args, **kwargs):
+        return get_wall_edit_reference_point(self.session, *args, **kwargs)
+
+    def compute_wall_edit_points(self, *args, **kwargs):
+        return compute_wall_edit_points(self.session, *args, **kwargs)
+
+    def compute_wall_edit_points_from_length(self, *args, **kwargs):
+        return compute_wall_edit_points_from_length(self.session, *args, **kwargs)
+
+    def get_preview_footprint(self, *args, **kwargs):
+        return get_preview_footprint(self.session, *args, **kwargs)
+
+    def make_preview_wall_adapter(self, *args, **kwargs):
+        return make_preview_wall_adapter(self.session, *args, **kwargs)
+
+    def solve_preview_wall_relation(self, *args, **kwargs):
+        return solve_preview_wall_relation(self.session, *args, **kwargs)
+
+    def collect_preview_wall_relation_data(self, *args, **kwargs):
+        return collect_preview_wall_relation_data(self.session, *args, **kwargs)
+
+    def get_preview_footprint_polylines(self, *args, **kwargs):
+        return get_preview_footprint_polylines(self.session, *args, **kwargs)
+
+    def get_readout_base_gap(self, *args, **kwargs):
+        return get_readout_base_gap(self.session, *args, **kwargs)
+
+    def get_aligned_readout_offset_for_wall(self, *args, **kwargs):
+        return get_aligned_readout_offset_for_wall(self.session, *args, **kwargs)
+
+    def get_wall_edit_readout_offset(self, *args, **kwargs):
+        return get_wall_edit_readout_offset(self.session, *args, **kwargs)
+
+    def get_opening_move_readout_offset(self, *args, **kwargs):
+        return get_opening_move_readout_offset(self.session, *args, **kwargs)
+
+    def update_wall_edit_preview_geometry(self, *args, **kwargs):
+        return update_wall_edit_preview_geometry(self.session, *args, **kwargs)
+
+    def sync_wall_edit_preview(self, *args, **kwargs):
+        return sync_wall_edit_preview(self.session, *args, **kwargs)
+
+    def is_wall_move_edit_active(self, *args, **kwargs):
+        return is_wall_move_edit_active(self.session, *args, **kwargs)
+
+    def is_wall_stretch_edit_active(self, *args, **kwargs):
+        return is_wall_stretch_edit_active(self.session, *args, **kwargs)
+
+    def is_wall_readout_edit_active(self, *args, **kwargs):
+        return is_wall_readout_edit_active(self.session, *args, **kwargs)
+
+    def clear_wall_edit_preview(self, *args, **kwargs):
+        return clear_wall_edit_preview(self.session, *args, **kwargs)
+
+    def get_wall_hosted_opening_preview_segments(self, *args, **kwargs):
+        return get_wall_hosted_opening_preview_segments(self.session, *args, **kwargs)
+
+    def sync_wall_hosted_opening_preview(self, *args, **kwargs):
+        return sync_wall_hosted_opening_preview(self.session, *args, **kwargs)
+
+    def clear_wall_hosted_opening_preview(self, *args, **kwargs):
+        return clear_wall_hosted_opening_preview(self.session, *args, **kwargs)
+
+    def get_wall_edit_readout_specs(self, *args, **kwargs):
+        return get_wall_edit_readout_specs(self.session, *args, **kwargs)
+
+    def get_default_wall_edit_readout_mode(self, *args, **kwargs):
+        return get_default_wall_edit_readout_mode(self.session, *args, **kwargs)
+
+    def bind_wall_edit_readout_callbacks(self, *args, **kwargs):
+        return bind_wall_edit_readout_callbacks(self.session, *args, **kwargs)
+
+    def update_wall_edit_readouts_in_place(self, *args, **kwargs):
+        return update_wall_edit_readouts_in_place(self.session, *args, **kwargs)
+
+    def sync_wall_edit_readout(self, *args, **kwargs):
+        return sync_wall_edit_readout(self.session, *args, **kwargs)
+
+    def clear_wall_edit_readout(self, *args, **kwargs):
+        return clear_wall_edit_readout(self.session, *args, **kwargs)
+
+    def get_wall_edit_readout_tracker(self, *args, **kwargs):
+        return get_wall_edit_readout_tracker(self.session, *args, **kwargs)
+
+    def cycle_wall_move_readout_mode(self, *args, **kwargs):
+        return cycle_wall_move_readout_mode(self.session, *args, **kwargs)
+
+    def start_wall_readout_edit(self, *args, **kwargs):
+        return start_wall_readout_edit(self.session, *args, **kwargs)
+
+    def start_wall_stretch_length_edit(self, *args, **kwargs):
+        return start_wall_stretch_length_edit(self.session, *args, **kwargs)
+
+    def start_wall_readout_edit_now(self, *args, **kwargs):
+        return start_wall_readout_edit_now(self.session, *args, **kwargs)
+
+    def on_wall_stretch_length_changed(self, *args, **kwargs):
+        return on_wall_stretch_length_changed(self.session, *args, **kwargs)
+
+    def on_wall_stretch_length_finished(self, *args, **kwargs):
+        return on_wall_stretch_length_finished(self.session, *args, **kwargs)
+
+    def on_wall_stretch_length_canceled(self, *args, **kwargs):
+        return on_wall_stretch_length_canceled(self.session, *args, **kwargs)
+
+    def compute_wall_edit_points_from_move_delta(self, *args, **kwargs):
+        return compute_wall_edit_points_from_move_delta(self.session, *args, **kwargs)
+
+    def on_wall_move_delta_changed(self, *args, **kwargs):
+        return on_wall_move_delta_changed(self.session, *args, **kwargs)
+
+    def on_wall_move_delta_finished(self, *args, **kwargs):
+        return on_wall_move_delta_finished(self.session, *args, **kwargs)
+
+    def on_wall_move_delta_canceled(self, *args, **kwargs):
+        return on_wall_move_delta_canceled(self.session, *args, **kwargs)
+
+    def schedule_wall_edit_readout_cancel(self, *args, **kwargs):
+        return schedule_wall_edit_readout_cancel(self.session, *args, **kwargs)
+
+    def finish_wall_edit_readout_canceled(self, *args, **kwargs):
+        return finish_wall_edit_readout_canceled(self.session, *args, **kwargs)
+
+    def restore_edit_wall_visibility(self, *args, **kwargs):
+        return restore_edit_wall_visibility(self.session, *args, **kwargs)
+
+    def update_wall_edit_preview(self, *args, **kwargs):
+        return update_wall_edit_preview(self.session, *args, **kwargs)
+
+    def update_wall_edit_point_pick(self, *args, **kwargs):
+        return update_wall_edit_point_pick(self.session, *args, **kwargs)
+
+    def cancel_wall_edit_point_pick(self, *args, **kwargs):
+        return cancel_wall_edit_point_pick(self.session, *args, **kwargs)
+
+    def refresh_wall_hosted_opening_footprints(self, *args, **kwargs):
+        return refresh_wall_hosted_opening_footprints(self.session, *args, **kwargs)
+
+    def compute_wall_hosted_opening_layout(self, *args, **kwargs):
+        return compute_wall_hosted_opening_layout(self.session, *args, **kwargs)
+
+    def resolve_wall_hosted_opening_layout(self, *args, **kwargs):
+        return resolve_wall_hosted_opening_layout(self.session, *args, **kwargs)
 
     clip_preview_polygon_to_plane = staticmethod(clip_preview_polygon_to_plane)

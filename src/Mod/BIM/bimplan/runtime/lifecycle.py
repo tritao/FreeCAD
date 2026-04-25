@@ -17,31 +17,6 @@ from bimplan.tools.hosted_openings import _PlanEditCommandHost, _PlanEditWallHos
 translate = FreeCAD.Qt.translate
 
 
-def _bind_lifecycle_call(func):
-    def method(self, *args, **kwargs):
-        return func(self.session, *args, **kwargs)
-
-    return method
-
-
-_PLAN_LIFECYCLE_API_BOUND_METHODS = (
-    "activate_select_tool",
-    "activate_window_tool",
-    "activate_plan_region_tool",
-    "activate_space_separator_tool",
-    "activate_space_tool",
-    "activate_move_tool",
-    "on_embedded_command_started",
-    "on_embedded_command_finished",
-    "start_embedded_tool",
-    "cancel_pending_edit",
-    "stop_snapper",
-    "set_draft_point_focus_suppressed",
-    "has_active_embedded_tool",
-    "cancel_embedded_tool",
-)
-
-
 class PlanLifecycleAPI:
     """Owned session surface for Plan Edit lifecycle helpers."""
 
@@ -53,6 +28,48 @@ class PlanLifecycleAPI:
     @property
     def session(self):
         return self._session
+
+    def activate_select_tool(self, *args, **kwargs):
+        return activate_select_tool(self.session, *args, **kwargs)
+
+    def activate_window_tool(self, *args, **kwargs):
+        return activate_window_tool(self.session, *args, **kwargs)
+
+    def activate_plan_region_tool(self, *args, **kwargs):
+        return activate_plan_region_tool(self.session, *args, **kwargs)
+
+    def activate_space_separator_tool(self, *args, **kwargs):
+        return activate_space_separator_tool(self.session, *args, **kwargs)
+
+    def activate_space_tool(self, *args, **kwargs):
+        return activate_space_tool(self.session, *args, **kwargs)
+
+    def activate_move_tool(self, *args, **kwargs):
+        return activate_move_tool(self.session, *args, **kwargs)
+
+    def on_embedded_command_started(self, *args, **kwargs):
+        return on_embedded_command_started(self.session, *args, **kwargs)
+
+    def on_embedded_command_finished(self, *args, **kwargs):
+        return on_embedded_command_finished(self.session, *args, **kwargs)
+
+    def start_embedded_tool(self, *args, **kwargs):
+        return start_embedded_tool(self.session, *args, **kwargs)
+
+    def cancel_pending_edit(self, *args, **kwargs):
+        return cancel_pending_edit(self.session, *args, **kwargs)
+
+    def stop_snapper(self, *args, **kwargs):
+        return stop_snapper(self.session, *args, **kwargs)
+
+    def set_draft_point_focus_suppressed(self, *args, **kwargs):
+        return set_draft_point_focus_suppressed(self.session, *args, **kwargs)
+
+    def has_active_embedded_tool(self, *args, **kwargs):
+        return has_active_embedded_tool(self.session, *args, **kwargs)
+
+    def cancel_embedded_tool(self, *args, **kwargs):
+        return cancel_embedded_tool(self.session, *args, **kwargs)
 
     def activate_wall_tool(self):
         from bimplan.tools import wall_create as plan_wall_create
@@ -1028,7 +1045,3 @@ def set_draft_point_focus_suppressed(session, suppressed):
 
 def has_active_embedded_tool(session):
     return session._embedded_tool is not None
-
-
-for _method_name in _PLAN_LIFECYCLE_API_BOUND_METHODS:
-    setattr(PlanLifecycleAPI, _method_name, _bind_lifecycle_call(globals()[_method_name]))

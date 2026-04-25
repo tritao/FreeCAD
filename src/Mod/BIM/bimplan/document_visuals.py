@@ -77,13 +77,6 @@ _PLAN_VISUAL_WALL_GRIPS = PLAN_VISUAL_WALL_GRIPS
 _PLAN_VISUAL_PROVIDER_OVERLAYS = PLAN_VISUAL_PROVIDER_OVERLAYS
 
 
-def _bind_document_visuals_call(method):
-    def _bound(self, *args, **kwargs):
-        return method(self.session, *args, **kwargs)
-
-    return _bound
-
-
 def has_direct_true_property(obj, prop_name):
     if not obj:
         return False
@@ -729,37 +722,86 @@ class PlanDocumentVisualsAPI:
     def session(self):
         return self._session
 
+    def is_hidden_library_definition_object(self, *args, **kwargs):
+        return is_hidden_library_definition_object(self.session, *args, **kwargs)
 
-for _method_name in (
-    "is_hidden_library_definition_object",
-    "should_register_created_plan_object",
-    "queue_created_plan_object",
-    "flush_created_plan_objects",
-    "are_document_visual_updates_deferred",
-    "defer_document_visual_refresh",
-    "document_is_alive",
-    "attach_document_observer",
-    "detach_document_observer",
-    "is_opening_visual_dependency",
-    "refresh_selected_opening_visuals",
-    "is_symbol_visual_dependency",
-    "refresh_plan_object_footprint_display",
-    "refresh_opening_footprint_display",
-    "refresh_wall_footprint_display",
-    "refresh_opening_host_footprint_displays",
-    "queue_recompute_opening_hosts",
-    "flush_recompute_opening_hosts",
-    "queue_hard_refresh_selected_opening_visuals",
-    "flush_hard_refresh_selected_opening_visuals",
-    "invalidate_document_dependent_plan_visuals",
-    "slot_created_object",
-    "slot_changed_object",
-    "slot_deleted_object",
-    "slot_undo_document",
-    "slot_redo_document",
-    "slot_recomputed_document",
-    "slot_deleted_document",
-):
-    setattr(
-        PlanDocumentVisualsAPI, _method_name, _bind_document_visuals_call(globals()[_method_name])
-    )
+    def should_register_created_plan_object(self, *args, **kwargs):
+        return should_register_created_plan_object(self.session, *args, **kwargs)
+
+    def queue_created_plan_object(self, *args, **kwargs):
+        return queue_created_plan_object(self.session, *args, **kwargs)
+
+    def flush_created_plan_objects(self, *args, **kwargs):
+        return flush_created_plan_objects(self.session, *args, **kwargs)
+
+    def are_document_visual_updates_deferred(self, *args, **kwargs):
+        return are_document_visual_updates_deferred(self.session, *args, **kwargs)
+
+    def defer_document_visual_refresh(self, *args, **kwargs):
+        return defer_document_visual_refresh(self.session, *args, **kwargs)
+
+    def document_is_alive(self, *args, **kwargs):
+        return document_is_alive(self.session, *args, **kwargs)
+
+    def attach_document_observer(self, *args, **kwargs):
+        return attach_document_observer(self.session, *args, **kwargs)
+
+    def detach_document_observer(self, *args, **kwargs):
+        return detach_document_observer(self.session, *args, **kwargs)
+
+    def is_opening_visual_dependency(self, *args, **kwargs):
+        return is_opening_visual_dependency(self.session, *args, **kwargs)
+
+    def refresh_selected_opening_visuals(self, *args, **kwargs):
+        return refresh_selected_opening_visuals(self.session, *args, **kwargs)
+
+    def is_symbol_visual_dependency(self, *args, **kwargs):
+        return is_symbol_visual_dependency(self.session, *args, **kwargs)
+
+    def refresh_plan_object_footprint_display(self, *args, **kwargs):
+        return refresh_plan_object_footprint_display(self.session, *args, **kwargs)
+
+    def refresh_opening_footprint_display(self, *args, **kwargs):
+        return refresh_opening_footprint_display(self.session, *args, **kwargs)
+
+    def refresh_wall_footprint_display(self, *args, **kwargs):
+        return refresh_wall_footprint_display(self.session, *args, **kwargs)
+
+    def refresh_opening_host_footprint_displays(self, *args, **kwargs):
+        return refresh_opening_host_footprint_displays(self.session, *args, **kwargs)
+
+    def queue_recompute_opening_hosts(self, *args, **kwargs):
+        return queue_recompute_opening_hosts(self.session, *args, **kwargs)
+
+    def flush_recompute_opening_hosts(self, *args, **kwargs):
+        return flush_recompute_opening_hosts(self.session, *args, **kwargs)
+
+    def queue_hard_refresh_selected_opening_visuals(self, *args, **kwargs):
+        return queue_hard_refresh_selected_opening_visuals(self.session, *args, **kwargs)
+
+    def flush_hard_refresh_selected_opening_visuals(self, *args, **kwargs):
+        return flush_hard_refresh_selected_opening_visuals(self.session, *args, **kwargs)
+
+    def invalidate_document_dependent_plan_visuals(self, *args, **kwargs):
+        return invalidate_document_dependent_plan_visuals(self.session, *args, **kwargs)
+
+    def slot_created_object(self, *args, **kwargs):
+        return slot_created_object(self.session, *args, **kwargs)
+
+    def slot_changed_object(self, *args, **kwargs):
+        return slot_changed_object(self.session, *args, **kwargs)
+
+    def slot_deleted_object(self, *args, **kwargs):
+        return slot_deleted_object(self.session, *args, **kwargs)
+
+    def slot_undo_document(self, *args, **kwargs):
+        return slot_undo_document(self.session, *args, **kwargs)
+
+    def slot_redo_document(self, *args, **kwargs):
+        return slot_redo_document(self.session, *args, **kwargs)
+
+    def slot_recomputed_document(self, *args, **kwargs):
+        return slot_recomputed_document(self.session, *args, **kwargs)
+
+    def slot_deleted_document(self, *args, **kwargs):
+        return slot_deleted_document(self.session, *args, **kwargs)

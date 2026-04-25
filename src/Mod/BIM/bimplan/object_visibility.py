@@ -17,13 +17,6 @@ def _perf_describe_object(session, obj):
     return session.performance.plan_perf_describe_object(obj)
 
 
-def _bind_visibility_call(method):
-    def _bound(self, *args, **kwargs):
-        return method(self.session, *args, **kwargs)
-
-    return _bound
-
-
 def is_live_document_object(_session, obj):
     if obj is None:
         return False
@@ -649,39 +642,98 @@ class PlanVisibilityAPI:
     def session(self):
         return self._session
 
+    def invalidate_plan_classification_cache(self, *args, **kwargs):
+        return invalidate_plan_classification_cache(self.session, *args, **kwargs)
 
-for _method_name in (
-    "invalidate_plan_classification_cache",
-    "is_live_document_object",
-    "get_document_object_key",
-    "safe_plan_object_name",
-    "copy_placement",
-    "get_plan_object_global_placement",
-    "capture_object_view_state",
-    "register_object_view_state",
-    "add_object_to_active_storey",
-    "register_plan_object",
-    "register_plan_objects",
-    "restore_object_view_state",
-    "is_storey_object",
-    "is_plan_container_object",
-    "is_plan_background_object",
-    "is_direct_plan_equipment_object",
-    "get_direct_plan_symbol_owner",
-    "get_plan_semantic_object",
-    "get_plan_text_property",
-    "get_plan_float_property",
-    "is_plan_equipment_object",
-    "is_cabinetry_plan_context_object",
-    "has_direct_plan_symbols",
-    "is_plan_symbol_instance",
-    "is_plan_context_only_object",
-    "is_component_addition_object",
-    "is_supported_plan_object",
-    "get_supported_plan_visibility",
-    "apply_context_object_selectability",
-    "apply_hidden_object_state",
-    "get_object_storeys",
-    "apply_storey_visibility",
-):
-    setattr(PlanVisibilityAPI, _method_name, _bind_visibility_call(globals()[_method_name]))
+    def is_live_document_object(self, *args, **kwargs):
+        return is_live_document_object(self.session, *args, **kwargs)
+
+    def get_document_object_key(self, *args, **kwargs):
+        return get_document_object_key(self.session, *args, **kwargs)
+
+    def safe_plan_object_name(self, *args, **kwargs):
+        return safe_plan_object_name(self.session, *args, **kwargs)
+
+    def copy_placement(self, *args, **kwargs):
+        return copy_placement(self.session, *args, **kwargs)
+
+    def get_plan_object_global_placement(self, *args, **kwargs):
+        return get_plan_object_global_placement(self.session, *args, **kwargs)
+
+    def capture_object_view_state(self, *args, **kwargs):
+        return capture_object_view_state(self.session, *args, **kwargs)
+
+    def register_object_view_state(self, *args, **kwargs):
+        return register_object_view_state(self.session, *args, **kwargs)
+
+    def add_object_to_active_storey(self, *args, **kwargs):
+        return add_object_to_active_storey(self.session, *args, **kwargs)
+
+    def register_plan_object(self, *args, **kwargs):
+        return register_plan_object(self.session, *args, **kwargs)
+
+    def register_plan_objects(self, *args, **kwargs):
+        return register_plan_objects(self.session, *args, **kwargs)
+
+    def restore_object_view_state(self, *args, **kwargs):
+        return restore_object_view_state(self.session, *args, **kwargs)
+
+    def is_storey_object(self, *args, **kwargs):
+        return is_storey_object(self.session, *args, **kwargs)
+
+    def is_plan_container_object(self, *args, **kwargs):
+        return is_plan_container_object(self.session, *args, **kwargs)
+
+    def is_plan_background_object(self, *args, **kwargs):
+        return is_plan_background_object(self.session, *args, **kwargs)
+
+    def is_direct_plan_equipment_object(self, *args, **kwargs):
+        return is_direct_plan_equipment_object(self.session, *args, **kwargs)
+
+    def get_direct_plan_symbol_owner(self, *args, **kwargs):
+        return get_direct_plan_symbol_owner(self.session, *args, **kwargs)
+
+    def get_plan_semantic_object(self, *args, **kwargs):
+        return get_plan_semantic_object(self.session, *args, **kwargs)
+
+    def get_plan_text_property(self, *args, **kwargs):
+        return get_plan_text_property(self.session, *args, **kwargs)
+
+    def get_plan_float_property(self, *args, **kwargs):
+        return get_plan_float_property(self.session, *args, **kwargs)
+
+    def is_plan_equipment_object(self, *args, **kwargs):
+        return is_plan_equipment_object(self.session, *args, **kwargs)
+
+    def is_cabinetry_plan_context_object(self, *args, **kwargs):
+        return is_cabinetry_plan_context_object(self.session, *args, **kwargs)
+
+    def has_direct_plan_symbols(self, *args, **kwargs):
+        return has_direct_plan_symbols(self.session, *args, **kwargs)
+
+    def is_plan_symbol_instance(self, *args, **kwargs):
+        return is_plan_symbol_instance(self.session, *args, **kwargs)
+
+    def is_plan_context_only_object(self, *args, **kwargs):
+        return is_plan_context_only_object(self.session, *args, **kwargs)
+
+    def is_component_addition_object(self, *args, **kwargs):
+        return is_component_addition_object(self.session, *args, **kwargs)
+
+    def is_supported_plan_object(self, *args, **kwargs):
+        return is_supported_plan_object(self.session, *args, **kwargs)
+
+    def get_supported_plan_visibility(self, *args, **kwargs):
+        return get_supported_plan_visibility(self.session, *args, **kwargs)
+
+    def apply_context_object_selectability(self, *args, **kwargs):
+        return apply_context_object_selectability(self.session, *args, **kwargs)
+
+    def apply_hidden_object_state(self, *args, **kwargs):
+        return apply_hidden_object_state(self.session, *args, **kwargs)
+
+    def get_object_storeys(self, *args, **kwargs):
+        return get_object_storeys(self.session, *args, **kwargs)
+
+    def apply_storey_visibility(self, *args, **kwargs):
+        return apply_storey_visibility(self.session, *args, **kwargs)
