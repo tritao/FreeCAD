@@ -81,8 +81,9 @@ def sync_space_region_pick_overlays(session):
     except ImportError:
         return
 
-    for candidate in session._space_region_candidates:
-        hovered = candidate is session._hovered_space_region_candidate
+    hovered_candidate = plan_space_regions.get_hovered_space_region_candidate(session)
+    for candidate in plan_space_regions.get_space_region_pick_candidates(session):
+        hovered = candidate is hovered_candidate
         color = (0.90, 0.52, 0.10) if hovered else (0.22, 0.44, 0.88)
         width = session.viewport.scaled_line_width(3 if hovered else 2)
         dotted = not hovered

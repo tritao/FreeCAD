@@ -18,6 +18,7 @@ set_plan_region_tool_state = plan_space_interaction.set_plan_region_tool_state
 reset_plan_region_tool_state = plan_space_interaction.reset_plan_region_tool_state
 prepare_plan_region_tool_state = plan_space_interaction.prepare_plan_region_tool_state
 cancel_plan_region_tool = plan_space_interaction.cancel_plan_region_tool
+get_plan_region_parent_space = plan_space_interaction.get_plan_region_parent_space
 get_plan_region_close_tolerance = plan_space_interaction.get_plan_region_close_tolerance
 get_plan_region_preview_segments = plan_space_interaction.get_plan_region_preview_segments
 update_plan_region_preview = plan_space_interaction.update_plan_region_preview
@@ -41,6 +42,9 @@ get_space_region_candidate_report = plan_space_regions.get_space_region_candidat
 report_space_region_candidate_failure = plan_space_regions.report_space_region_candidate_failure
 set_space_region_pick_state = plan_space_regions.set_space_region_pick_state
 reset_space_region_pick_state = plan_space_regions.reset_space_region_pick_state
+get_space_region_pick_candidates = plan_space_regions.get_space_region_pick_candidates
+has_space_region_pick_candidates = plan_space_regions.has_space_region_pick_candidates
+get_hovered_space_region_candidate = plan_space_regions.get_hovered_space_region_candidate
 get_space_region_candidate_polylines = plan_space_regions.get_space_region_candidate_polylines
 get_space_region_candidate_segments = plan_space_regions.get_space_region_candidate_segments
 pick_space_region_candidate = plan_space_regions.pick_space_region_candidate
@@ -137,6 +141,15 @@ class PlanSpacesAPI(_SessionAPI):
     def get_space_region_candidate_report(self, *args, **kwargs):
         return get_space_region_candidate_report(self.session, *args, **kwargs)
 
+    def get_space_region_pick_candidates(self, *args, **kwargs):
+        return get_space_region_pick_candidates(self.session, *args, **kwargs)
+
+    def has_space_region_pick_candidates(self, *args, **kwargs):
+        return has_space_region_pick_candidates(self.session, *args, **kwargs)
+
+    def get_hovered_space_region_candidate(self, *args, **kwargs):
+        return get_hovered_space_region_candidate(self.session, *args, **kwargs)
+
     def get_space_preflight_report(self, *args, **kwargs):
         return get_space_preflight_report(self.session, *args, **kwargs)
 
@@ -154,6 +167,9 @@ class PlanSpacesAPI(_SessionAPI):
 
     def get_plan_region_close_tolerance(self, *args, **kwargs):
         return get_plan_region_close_tolerance(self.session, *args, **kwargs)
+
+    def get_plan_region_parent_space(self, *args, **kwargs):
+        return get_plan_region_parent_space(self.session, *args, **kwargs)
 
     def get_plan_region_preview_segments(self, *args, **kwargs):
         return get_plan_region_preview_segments(self.session, *args, **kwargs)

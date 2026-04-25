@@ -120,7 +120,7 @@ def refresh_plan_overlay_view_scale(session):
                 session.overlays.sync_selected_space_overlay()
             return
         if session.current_tool == "Pick Space Region":
-            if session._space_region_candidates:
+            if session.spaces.has_space_region_pick_candidates():
                 session.overlays.sync_space_region_pick_overlays()
             if session.selection.get_selected_plan_targets():
                 session.overlays.sync_secondary_selected_overlays()

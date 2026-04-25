@@ -29,6 +29,17 @@ def clear_plan_region_preview(session):
 
 def set_plan_region_tool_state(session, points=None, parent_space=None):
     session._plan_region_points = list(points or [])
+    set_plan_region_parent_space(session, parent_space)
+
+
+def get_plan_region_parent_space(session):
+    state = getattr(session, "task_panel_state", None)
+    if state is not None:
+        return getattr(state, "plan_region_parent_space", None)
+    return getattr(session, "_plan_region_parent_space", None)
+
+
+def set_plan_region_parent_space(session, parent_space):
     state = getattr(session, "task_panel_state", None)
     if state is not None:
         state.plan_region_parent_space = parent_space
@@ -44,11 +55,7 @@ def reset_plan_region_tool_state(session, clear_preview=True):
 
 def prepare_plan_region_tool_state(session, parent_space=None):
     reset_plan_region_tool_state(session)
-    state = getattr(session, "task_panel_state", None)
-    if state is not None:
-        state.plan_region_parent_space = parent_space
-    else:
-        session._plan_region_parent_space = parent_space
+    set_plan_region_parent_space(session, parent_space)
 
 
 def _cancel_snap_tool(session, *, is_active, clear_preview, reset_state, sync_kinds, refresh=True):
@@ -180,7 +187,7 @@ def create_plan_region(session, points):
     try:
         region = Arch.makePlanRegion(
             points=points,
-            parent_space=session._plan_region_parent_space,
+            parent_space=get_plan_region_parent_space(session),
         )
         if not region:
             raise RuntimeError("Unable to create plan region")
