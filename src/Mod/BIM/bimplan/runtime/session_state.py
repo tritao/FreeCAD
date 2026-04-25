@@ -77,6 +77,8 @@ class PlanInteractionState:
     edit_opening_handle_index: object = None
     edit_symbol: object = None
     edit_symbol_handle_role: object = None
+    edit_symbol_start_placement: object = None
+    edit_symbol_reference_point: object = None
     edit_provider: object = None
     edit_provider_handle_index: object = None
     edit_provider_handle: object = None
@@ -594,6 +596,8 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
             ("_edit_opening_handle_index", "edit_opening_handle_index", _coerce_identity),
             ("_edit_symbol", "edit_symbol", _coerce_identity),
             ("_edit_symbol_handle_role", "edit_symbol_handle_role", _coerce_identity),
+            ("_edit_symbol_start_placement", "edit_symbol_start_placement", _coerce_identity),
+            ("_edit_symbol_reference_point", "edit_symbol_reference_point", _coerce_identity),
             ("_edit_provider", "edit_provider", _coerce_identity),
             ("_edit_provider_handle_index", "edit_provider_handle_index", _coerce_identity),
             ("_edit_provider_handle", "edit_provider_handle", _coerce_identity),
@@ -872,8 +876,6 @@ def initialize_session_state(session):
     session._selection_observer_added = False
     session._document_observer_added = False
     session._pending_selected_wall_reset = False
-    session._edit_symbol_start_placement = None
-    session._edit_symbol_reference_point = None
     session._plan_edit_params = FreeCAD.ParamGet(
         "User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit"
     )

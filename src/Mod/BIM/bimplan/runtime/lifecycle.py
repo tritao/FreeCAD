@@ -186,8 +186,8 @@ def discard_runtime_references(session):
     interaction_state.edit_opening_handle_index = None
     interaction_state.edit_symbol = None
     interaction_state.edit_symbol_handle_role = None
-    session._edit_symbol_start_placement = None
-    session._edit_symbol_reference_point = None
+    interaction_state.edit_symbol_start_placement = None
+    interaction_state.edit_symbol_reference_point = None
     plan_region_tool_state.points = []
     plan_region_tool_state.preview_trackers = []
     plan_region_tool_state.parent_space = None

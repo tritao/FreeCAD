@@ -38,20 +38,20 @@ def restore_snap_profile():
 
 
 def push_opening_move_snap_profile(session, snap_modes):
-    if session._opening_move_snap_profile_pushed:
+    if session.opening_transient_state.opening_move_snap_profile_pushed:
         return
     push_snap_modes = _get_snapper_method("push_snap_modes")
     if push_snap_modes is None:
         return
     try:
         push_snap_modes(snap_modes)
-        session._opening_move_snap_profile_pushed = True
+        session.opening_transient_state.opening_move_snap_profile_pushed = True
     except Exception:
         pass
 
 
 def pop_opening_move_snap_profile(session):
-    if not session._opening_move_snap_profile_pushed:
+    if not session.opening_transient_state.opening_move_snap_profile_pushed:
         return
     pop_snap_modes = _get_snapper_method("pop_snap_modes")
     if pop_snap_modes is None:
@@ -60,7 +60,7 @@ def pop_opening_move_snap_profile(session):
         pop_snap_modes()
     except Exception:
         pass
-    session._opening_move_snap_profile_pushed = False
+    session.opening_transient_state.opening_move_snap_profile_pushed = False
 
 
 class PlanSnapAPI:
