@@ -1083,6 +1083,45 @@ def normalize_plan_provider_tool(provider_id, tool):
     return replace(tool, provider_id=str(provider_id or ""))
 
 
+def _normalize_plan_provider_edit_handle_scalars(handle):
+    return {
+        "key": str(handle.key or "").strip(),
+        "label": str(handle.label or "").strip(),
+        "tooltip": str(handle.tooltip or "").strip(),
+        "target_key": str(handle.target_key or "").strip(),
+        "action_key": str(handle.action_key or "").strip(),
+        "transaction_label": str(handle.transaction_label or "").strip(),
+        "prompt": str(handle.prompt or "").strip(),
+        "role": str(handle.role or "").strip(),
+    }
+
+
+def _collect_plan_provider_edit_handle_replacements(provider_id, handle, key, point, fields):
+    replacements = {}
+    normalized_provider_id = str(provider_id or "")
+    if handle.provider_id != normalized_provider_id:
+        replacements["provider_id"] = normalized_provider_id
+    if key != handle.key:
+        replacements["key"] = key
+    if point != handle.point:
+        replacements["point"] = point
+    for field_name in (
+        "label",
+        "tooltip",
+        "target_key",
+        "transaction_label",
+        "prompt",
+        "role",
+    ):
+        field_value = fields[field_name]
+        if field_value != getattr(handle, field_name):
+            replacements[field_name] = field_value
+    action_key = fields["action_key"] or key
+    if action_key != handle.action_key:
+        replacements["action_key"] = action_key
+    return replacements
+
+
 def normalize_plan_provider_edit_handle(provider_id, handle):
     if not isinstance(handle, PlanEditHandleSpec):
         return None
@@ -1094,37 +1133,14 @@ def normalize_plan_provider_edit_handle(provider_id, handle):
     point = _coerce_plan_overlay_point(handle.point)
     if not key or point is None:
         return None
-    replacements = {}
-    normalized_provider_id = str(provider_id or "")
-    if handle.provider_id != normalized_provider_id:
-        replacements["provider_id"] = normalized_provider_id
-    label = str(handle.label or "").strip()
-    tooltip = str(handle.tooltip or "").strip()
-    target_key = str(handle.target_key or "").strip()
-    action_key = str(handle.action_key or "").strip()
-    transaction_label = str(handle.transaction_label or "").strip()
-    prompt = str(handle.prompt or "").strip()
-    role = str(handle.role or "").strip()
-    if key != handle.key:
-        replacements["key"] = key
-    if point != handle.point:
-        replacements["point"] = point
-    if label != handle.label:
-        replacements["label"] = label
-    if tooltip != handle.tooltip:
-        replacements["tooltip"] = tooltip
-    if target_key != handle.target_key:
-        replacements["target_key"] = target_key
-    if not action_key:
-        action_key = key
-    if action_key != handle.action_key:
-        replacements["action_key"] = action_key
-    if transaction_label != handle.transaction_label:
-        replacements["transaction_label"] = transaction_label
-    if prompt != handle.prompt:
-        replacements["prompt"] = prompt
-    if role != handle.role:
-        replacements["role"] = role
+    fields = _normalize_plan_provider_edit_handle_scalars(handle)
+    replacements = _collect_plan_provider_edit_handle_replacements(
+        provider_id,
+        handle,
+        key,
+        point,
+        fields,
+    )
     if not replacements:
         return handle
     return replace(handle, **replacements)
