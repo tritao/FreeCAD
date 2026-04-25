@@ -755,7 +755,9 @@ def register_edit_callbacks(session):
             viewer = get_viewer()
             session.viewer = viewer
         get_render_manager = session.viewport.get_runtime_attr(viewer, "getSoRenderManager")
-        session._render_manager = get_render_manager() if get_render_manager is not None else None
+        session.viewport_state.render_manager = (
+            get_render_manager() if get_render_manager is not None else None
+        )
         input_event_state = session.input_event_state
         if input_event_state.key_pressed_cb is None:
             input_event_state.key_pressed_cb = add_event_callback(
@@ -780,7 +782,7 @@ def register_edit_callbacks(session):
             )
     except (AttributeError, ReferenceError, RuntimeError):
         session.viewport.discard_stale_runtime_object(session.view)
-        session._render_manager = None
+        session.viewport_state.render_manager = None
 
 
 def _clear_edit_callbacks(session):
@@ -790,7 +792,7 @@ def _clear_edit_callbacks(session):
     input_event_state.mouse_wheel_cb = None
     input_event_state.mouse_wheel_event_type = None
     input_event_state.mouse_pressed_cb = None
-    session._render_manager = None
+    session.viewport_state.render_manager = None
 
 
 def unregister_edit_callbacks(session):

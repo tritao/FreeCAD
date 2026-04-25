@@ -1431,18 +1431,19 @@ def _get_provider_overlay_edit_node(session, mouse_pos):
 
 
 def _get_ray_picked_edit_node(session, mouse_pos):
-    if not session._render_manager:
+    render_manager = session.viewport_state.render_manager
+    if not render_manager:
         return _emit_get_edit_node_result(session, mouse_pos, "no_render_manager", None)
     try:
         from pivy import coin
     except Exception:
         return _emit_get_edit_node_result(session, mouse_pos, "coin_import_failed", None)
 
-    ray_pick = coin.SoRayPickAction(session._render_manager.getViewportRegion())
+    ray_pick = coin.SoRayPickAction(render_manager.getViewportRegion())
     ray_pick.setPoint(coin.SbVec2s(*mouse_pos))
     ray_pick.setRadius(8)
     ray_pick.setPickAll(True)
-    ray_pick.apply(session._render_manager.getSceneGraph())
+    ray_pick.apply(render_manager.getSceneGraph())
     picked_points = ray_pick.getPickedPointList()
     if not picked_points:
         return _emit_get_edit_node_result(session, mouse_pos, "no_edit_node", None)
