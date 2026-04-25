@@ -32,6 +32,13 @@ class _TaskPanelReadsBase:
         self.session = session
 
 
+@dataclass(frozen=True)
+class ProviderSectionGroups:
+    summary: tuple = ()
+    regular: tuple = ()
+    detail: tuple = ()
+
+
 class _TaskPanelInteractionReads(_TaskPanelReadsBase):
     __slots__ = ()
 
@@ -615,10 +622,10 @@ def partition_provider_sections(sections):
             detail_sections.append(section)
         else:
             regular_sections.append(section)
-    return (
-        tuple(summary_sections),
-        tuple(regular_sections),
-        tuple(detail_sections),
+    return ProviderSectionGroups(
+        summary=tuple(summary_sections),
+        regular=tuple(regular_sections),
+        detail=tuple(detail_sections),
     )
 
 
@@ -785,9 +792,10 @@ def build_integration_panel_view_model(session_or_context, snapshot):
         overlay_items,
         active_mode=overlay_mode,
     )
-    summary_sections, regular_sections, detail_sections = partition_provider_sections(
-        getattr(snapshot, "inspector_sections", ())
-    )
+    section_groups = partition_provider_sections(getattr(snapshot, "inspector_sections", ()))
+    summary_sections = section_groups.summary
+    regular_sections = section_groups.regular
+    detail_sections = section_groups.detail
     context_panel = resolve_provider_context_panel(getattr(snapshot, "context_panels", ()))
     context_panel_actions, has_context_primary = (
         collect_provider_context_panel_actions(context_panel)
