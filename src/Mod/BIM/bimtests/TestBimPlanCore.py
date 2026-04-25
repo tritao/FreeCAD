@@ -793,14 +793,16 @@ class TestBimPlanCore(unittest.TestCase):
             ),
         )
         session = SimpleNamespace(
-            get_plan_provider_overlay_mode=lambda: "electrical",
-            get_plan_provider_display_name=lambda provider_id: (
-                "Provider A" if provider_id == "provider-a" else provider_id
+            providers=SimpleNamespace(
+                get_plan_provider_overlay_mode=lambda: "electrical",
+                get_plan_provider_display_name=lambda provider_id: (
+                    "Provider A" if provider_id == "provider-a" else provider_id
+                ),
+                get_plan_provider_overlay_category=lambda overlay: str(
+                    getattr(overlay, "category", "") or "architecture"
+                ),
+                is_plan_provider_overlay_enabled=lambda overlay: overlay.key != "arch-overlay",
             ),
-            get_plan_provider_overlay_category=lambda overlay: str(
-                getattr(overlay, "category", "") or "architecture"
-            ),
-            is_plan_provider_overlay_enabled=lambda overlay: overlay.key != "arch-overlay",
         )
 
         view_model = build_integration_panel_view_model(session, snapshot)
@@ -1048,13 +1050,11 @@ class TestBimPlanCore(unittest.TestCase):
             format_symbol_rotation_snap_label=lambda: "15°",
         )
         spaces = SimpleNamespace(
+            get_space_region_pick_candidates=lambda: (object(), object()),
+            get_hovered_space_region_candidate=lambda: hovered_candidate,
             format_space_region_candidate_area=lambda candidate: "2.500 m^2",
+            get_plan_region_parent_space=lambda: parent_space,
             is_plan_space_object=lambda obj: obj is parent_space,
-        )
-        task_panel_state = SimpleNamespace(
-            space_region_candidates=[object(), object()],
-            hovered_space_region_candidate=hovered_candidate,
-            plan_region_parent_space=parent_space,
         )
         windows = SimpleNamespace(
             can_place_window=lambda: True,
@@ -1074,7 +1074,6 @@ class TestBimPlanCore(unittest.TestCase):
             spaces=spaces,
             windows=windows,
             wall_edit=wall_edit,
-            task_panel_state=task_panel_state,
         )
 
         context = PlanTaskPanelContext(session)
