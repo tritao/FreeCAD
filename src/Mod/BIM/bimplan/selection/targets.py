@@ -39,11 +39,11 @@ def get_plan_target_kind_for_object(session, obj):
         return plan_target_kinds.PLAN_TARGET_SYMBOL
     if session.providers.is_plan_provider_target_object(obj):
         return plan_target_kinds.PLAN_TARGET_PROVIDER
-    if session.selection.is_plan_region_object(obj):
+    if is_plan_region_object(session, obj):
         return plan_target_kinds.PLAN_TARGET_REGION
-    if session.selection.is_plan_selectable_wall(obj):
+    if is_plan_selectable_wall(session, obj):
         return plan_target_kinds.PLAN_TARGET_WALL
-    if session.selection.is_plan_space_object(obj):
+    if is_plan_space_object(session, obj):
         return plan_target_kinds.PLAN_TARGET_SPACE
     return None
 
@@ -58,14 +58,14 @@ def get_plan_target_for_object(session, obj, parent_obj=None):
             continue
         if name:
             seen.add(name)
-        target_kind = session.selection.get_plan_target_kind_for_object(candidate)
+        target_kind = get_plan_target_kind_for_object(session, candidate)
         if target_kind:
             return plan_target_kinds.make_plan_target_ref(target_kind, candidate)
 
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
     semantic_name = getattr(semantic_obj, "Name", None)
     if semantic_obj and semantic_name not in seen:
-        target_kind = session.selection.get_plan_target_kind_for_object(semantic_obj)
+        target_kind = get_plan_target_kind_for_object(session, semantic_obj)
         if target_kind:
             return plan_target_kinds.make_plan_target_ref(target_kind, semantic_obj)
 
@@ -82,7 +82,7 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
             continue
         if name:
             seen.add(name)
-        target_kind = session.selection.get_plan_target_kind_for_object(candidate)
+        target_kind = get_plan_target_kind_for_object(session, candidate)
         if (
             target_kind == plan_target_kinds.PLAN_TARGET_PROVIDER
             and not plan_provider_runtime.is_plan_provider_target_visible_for_mode(
@@ -97,7 +97,7 @@ def get_plan_pick_target_for_object(session, obj, parent_obj=None):
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
     semantic_name = getattr(semantic_obj, "Name", None)
     if semantic_obj and semantic_name not in seen:
-        target_kind = session.selection.get_plan_target_kind_for_object(semantic_obj)
+        target_kind = get_plan_target_kind_for_object(session, semantic_obj)
         if (
             target_kind == plan_target_kinds.PLAN_TARGET_PROVIDER
             and not plan_provider_runtime.is_plan_provider_target_visible_for_mode(
@@ -144,8 +144,8 @@ def is_plan_custom_pick_only_object(session, obj):
     obj = session.visibility.get_plan_semantic_object(obj)
     return (
         session.openings.is_hosted_opening_object(obj)
-        or session.selection.is_plan_space_object(obj)
-        or session.selection.is_plan_region_object(obj)
+        or is_plan_space_object(session, obj)
+        or is_plan_region_object(session, obj)
     )
 
 
@@ -240,6 +240,8 @@ def get_plan_host_ref(session, obj):
 
 
 def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=None):
+    from . import selection as plan_selection_runtime
+
     if not kind or obj is None:
         return None
     provider_target = (
@@ -249,7 +251,7 @@ def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=
     )
     semantic_obj = session.visibility.get_plan_semantic_object(obj)
     doc = getattr(obj, "Document", None)
-    state_key = session.selection.get_plan_target_state_key(kind, obj)
+    state_key = plan_selection_runtime.get_plan_target_state_key(kind, obj)
     fields = resolve_plan_provider_target_display_fields(
         session,
         semantic_obj,
@@ -274,18 +276,23 @@ def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=
 
 
 def get_plan_targets(session, selected_only=False):
+    from . import selection as plan_selection_runtime
+
     selected_targets = tuple(
-        _coerce_plan_target_ref(target) for target in session.selection.get_selected_plan_targets()
+        _coerce_plan_target_ref(target)
+        for target in plan_selection_runtime.get_selected_plan_targets(session)
     )
     selected_keys = {
-        session.selection.get_plan_target_state_key(target.kind, target.obj)
+        plan_selection_runtime.get_plan_target_state_key(target.kind, target.obj)
         for target in selected_targets
     }
     selected_keys.discard(None)
     primary_key = None
-    primary_target = _coerce_plan_target_ref(session.selection.get_selected_plan_target())
+    primary_target = _coerce_plan_target_ref(
+        plan_selection_runtime.get_selected_plan_target(session)
+    )
     if primary_target.kind and primary_target.obj:
-        primary_key = session.selection.get_plan_target_state_key(
+        primary_key = plan_selection_runtime.get_plan_target_state_key(
             primary_target.kind,
             primary_target.obj,
         )
@@ -299,12 +306,15 @@ def get_plan_targets(session, selected_only=False):
         provider_refresh_scope = session.providers.plan_provider_refresh_cache_scope()
         with provider_refresh_scope:
             for obj in getattr(session.doc, "Objects", []) or []:
-                target = _coerce_plan_target_ref(session.selection.get_plan_target_for_object(obj))
+                target = _coerce_plan_target_ref(get_plan_target_for_object(session, obj))
                 target_kind = target.kind
                 target_obj = target.obj
                 if not target_kind or not target_obj:
                     continue
-                state_key = session.selection.get_plan_target_state_key(target_kind, target_obj)
+                state_key = plan_selection_runtime.get_plan_target_state_key(
+                    target_kind,
+                    target_obj,
+                )
                 if state_key is None or state_key in seen:
                     continue
                 semantic_obj = session.visibility.get_plan_semantic_object(target_obj)
@@ -317,7 +327,8 @@ def get_plan_targets(session, selected_only=False):
 
     records = []
     for target in source_targets:
-        target_record = session.selection.make_plan_target_record(
+        target_record = make_plan_target_record(
+            session,
             target.kind,
             target.obj,
             selected_keys=selected_keys,
@@ -374,6 +385,4 @@ def resolve_plan_semantic_object(session, target):
                 resolved = None
             if resolved is not None:
                 return resolved
-    return session.visibility.get_plan_semantic_object(
-        session.selection.resolve_plan_target_object(target)
-    )
+    return session.visibility.get_plan_semantic_object(resolve_plan_target_object(session, target))
