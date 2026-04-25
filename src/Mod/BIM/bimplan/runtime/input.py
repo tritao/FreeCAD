@@ -57,6 +57,111 @@ def claim_left_button_click(session, event_callback):
     session.input.set_event_handled(event_callback)
 
 
+def _get_mouse_event_position(event):
+    try:
+        pos = event.getPosition().getValue()
+        return (pos[0], pos[1])
+    except Exception:
+        return None
+
+
+def _handle_join_tool_mouse_down(session, mouse_pos, event_callback):
+    target_kind, target_wall = session.selection.get_plan_target_at_position(mouse_pos)
+    source_wall = plan_selection.get_selected_plan_target_object(session, "wall")
+    if (
+        target_kind == "wall"
+        and session.selection.is_plan_selectable_wall(target_wall)
+        and target_wall != source_wall
+        and session.wall_relations.apply_plan_wall_join(source_wall, target_wall)
+    ):
+        session.input.claim_left_button_click(event_callback)
+
+
+def _handle_pick_space_region_mouse_down(session, mouse_pos, event_callback):
+    candidate = session.spaces.pick_space_region_candidate(mouse_pos)
+    if candidate:
+        session.spaces.activate_space_region_candidate(candidate, event_callback)
+
+
+def _handle_edit_node_activation(session, node, event_callback):
+    node_kind = node[0]
+    if node_kind == "opening_handle":
+        _kind, obj, index = node
+        session.selection.select_opening_for_plan_edit(obj)
+        session.selection.set_gui_selection_object(obj)
+        session.openings.activate_opening_handle(obj, index)
+    elif node_kind == "provider_handle":
+        _kind, obj, index = node
+        session.selection.set_selected_plan_target_state("provider", obj)
+        session.overlays.clear_wall_grips()
+        session.overlays.clear_selected_wall_overlay()
+        session.providers.activate_provider_handle(obj, index)
+    elif node_kind == "symbol_handle":
+        _kind, obj, role = node
+        session.selection.set_selected_plan_target_state("symbol", obj)
+        session.overlays.clear_wall_grips()
+        session.overlays.clear_selected_wall_overlay()
+        session.symbols.activate_symbol_handle(obj, role)
+    elif node_kind in ("provider_overlay_point", "provider_overlay_target"):
+        if not session.selection.activate_provider_overlay_target_node(node, event_callback):
+            return False
+    else:
+        point = node[1]
+        try:
+            doc = FreeCAD.getDocument(str(point.documentName.getValue()))
+            obj = doc.getObject(str(point.objectName.getValue()))
+            index = int(str(point.subElementName.getValue())[8:])
+        except Exception:
+            return False
+        if session.openings.is_hosted_opening_object(obj):
+            session.selection.select_opening_for_plan_edit(obj)
+            session.selection.set_gui_selection_object(obj)
+            session.openings.activate_opening_handle(obj, index)
+        else:
+            session.selection.set_selected_plan_target_state("wall", obj)
+            session.wall_edit.activate_wall_grip(index, wall=obj)
+    session.input.claim_left_button_click(event_callback)
+    return True
+
+
+def _handle_select_tool_mouse_down(session, mouse_pos, event_callback):
+    if session.selection.is_plan_additive_selection_active():
+        if not session.selection.toggle_plan_target_selection_at_position(
+            mouse_pos, event_callback
+        ):
+            session.input.claim_left_button_click(event_callback)
+        return
+    node = session.selection.get_edit_node(mouse_pos)
+    if not node:
+        if session.selection.activate_semantic_plan_target(mouse_pos, event_callback):
+            return
+        session.selection.clear_plan_selection_state()
+        session.input.claim_left_button_click(event_callback)
+        return
+    _handle_edit_node_activation(session, node, event_callback)
+
+
+def _handle_left_mouse_button_release(session, event_callback):
+    if not session._consume_left_button_release:
+        return False
+    session._consume_left_button_release = False
+    session.input.set_event_handled(event_callback)
+    return True
+
+
+def _handle_left_mouse_button_down(session, mouse_pos, event_callback):
+    session._consume_left_button_release = False
+    if session.current_tool == "Join":
+        _handle_join_tool_mouse_down(session, mouse_pos, event_callback)
+        return
+    if session.current_tool == "Pick Space Region":
+        _handle_pick_space_region_mouse_down(session, mouse_pos, event_callback)
+        return
+    if session.current_tool != "Select":
+        return
+    _handle_select_tool_mouse_down(session, mouse_pos, event_callback)
+
+
 def on_mouse_pressed(session, event_callback):
     if session._tearing_down:
         return
@@ -66,12 +171,7 @@ def on_mouse_pressed(session, event_callback):
         return
 
     event = event_callback.getEvent()
-    mouse_pos = None
-    try:
-        pos = event.getPosition().getValue()
-        mouse_pos = (pos[0], pos[1])
-    except Exception:
-        mouse_pos = None
+    mouse_pos = _get_mouse_event_position(event)
     selected_before = session.selection.get_selected_plan_target()
     with session.performance.plan_perf_trace_event(
         "mouse_pressed",
@@ -95,103 +195,13 @@ def on_mouse_pressed(session, event_callback):
         ):
             try:
                 if event.getState() == coin.SoMouseButtonEvent.UP:
-                    if session._consume_left_button_release:
-                        session._consume_left_button_release = False
-                        session.input.set_event_handled(event_callback)
+                    if _handle_left_mouse_button_release(session, event_callback):
                         return
 
                 if event.getState() == coin.SoMouseButtonEvent.DOWN:
-                    session._consume_left_button_release = False
-                    if session.current_tool == "Join":
-                        pos = event.getPosition().getValue()
-                        target_kind, target_wall = session.selection.get_plan_target_at_position(
-                            (pos[0], pos[1])
-                        )
-                        source_wall = plan_selection.get_selected_plan_target_object(
-                            session, "wall"
-                        )
-                        if (
-                            target_kind == "wall"
-                            and session.selection.is_plan_selectable_wall(target_wall)
-                            and target_wall != source_wall
-                            and session.wall_relations.apply_plan_wall_join(
-                                source_wall, target_wall
-                            )
-                        ):
-                            session.input.claim_left_button_click(event_callback)
+                    if mouse_pos is None:
                         return
-                    else:
-                        if session.current_tool == "Pick Space Region":
-                            pos = event.getPosition().getValue()
-                            candidate = session.spaces.pick_space_region_candidate((pos[0], pos[1]))
-                            if candidate:
-                                session.spaces.activate_space_region_candidate(
-                                    candidate,
-                                    event_callback,
-                                )
-                            return
-                        if session.current_tool != "Select":
-                            return
-                        pos = event.getPosition().getValue()
-                        mouse_pos = (pos[0], pos[1])
-                        if session.selection.is_plan_additive_selection_active():
-                            if not session.selection.toggle_plan_target_selection_at_position(
-                                mouse_pos, event_callback
-                            ):
-                                session.input.claim_left_button_click(event_callback)
-                            return
-                        node = session.selection.get_edit_node(mouse_pos)
-                        if not node:
-                            if session.selection.activate_semantic_plan_target(
-                                mouse_pos, event_callback
-                            ):
-                                return
-                            session.selection.clear_plan_selection_state()
-                            session.input.claim_left_button_click(event_callback)
-                            return
-                        node_kind = node[0]
-                        if node_kind == "opening_handle":
-                            _kind, obj, index = node
-                            session.selection.select_opening_for_plan_edit(obj)
-                            session.selection.set_gui_selection_object(obj)
-                            session.openings.activate_opening_handle(obj, index)
-                        elif node_kind == "provider_handle":
-                            _kind, obj, index = node
-                            session.selection.set_selected_plan_target_state("provider", obj)
-                            session.overlays.clear_wall_grips()
-                            session.overlays.clear_selected_wall_overlay()
-                            session.providers.activate_provider_handle(obj, index)
-                        elif node_kind == "symbol_handle":
-                            _kind, obj, role = node
-                            session.selection.set_selected_plan_target_state("symbol", obj)
-                            session.overlays.clear_wall_grips()
-                            session.overlays.clear_selected_wall_overlay()
-                            session.symbols.activate_symbol_handle(obj, role)
-                        elif node_kind in (
-                            "provider_overlay_point",
-                            "provider_overlay_target",
-                        ):
-                            if not session.selection.activate_provider_overlay_target_node(
-                                node,
-                                event_callback,
-                            ):
-                                return
-                        else:
-                            point = node[1]
-                            try:
-                                doc = FreeCAD.getDocument(str(point.documentName.getValue()))
-                                obj = doc.getObject(str(point.objectName.getValue()))
-                                index = int(str(point.subElementName.getValue())[8:])
-                            except Exception:
-                                return
-                            if session.openings.is_hosted_opening_object(obj):
-                                session.selection.select_opening_for_plan_edit(obj)
-                                session.selection.set_gui_selection_object(obj)
-                                session.openings.activate_opening_handle(obj, index)
-                            else:
-                                session.selection.set_selected_plan_target_state("wall", obj)
-                                session.wall_edit.activate_wall_grip(index, wall=obj)
-                        session.input.claim_left_button_click(event_callback)
+                    _handle_left_mouse_button_down(session, mouse_pos, event_callback)
             finally:
                 selected_after = session.selection.get_selected_plan_target()
                 session.performance.plan_perf_set_fields(
