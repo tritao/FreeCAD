@@ -119,7 +119,7 @@ def is_plan_container_object(obj):
 def is_plan_background_object(session, obj):
     if not obj:
         return False
-    obj = session.visibility.get_plan_semantic_object(obj)
+    obj = get_plan_semantic_object(session, obj)
     if getattr(obj, "IfcType", "") == "Slab":
         return True
     try:
@@ -148,7 +148,7 @@ def get_direct_plan_symbol_owner(session, obj):
     if not obj:
         return None
     for parent in getattr(obj, "InListRecursive", []) or getattr(obj, "InList", []):
-        if not session.visibility.is_direct_plan_equipment_object(parent):
+        if not is_direct_plan_equipment_object(session, parent):
             continue
         if obj == getattr(parent, "Base", None):
             return parent
@@ -158,7 +158,7 @@ def get_direct_plan_symbol_owner(session, obj):
 
 
 def get_plan_semantic_object(session, obj):
-    key = session.visibility.get_document_object_key(obj)
+    key = get_document_object_key(session, obj)
     semantic_cache = session.overlay_cache_state.plan_semantic_object_cache
     if key is not None and key in semantic_cache:
         session.performance.plan_perf_count("semantic_object_cache_hits")
@@ -167,7 +167,7 @@ def get_plan_semantic_object(session, obj):
     current = obj
     seen = set()
     while current:
-        if not session.visibility.is_live_document_object(current):
+        if not is_live_document_object(session, current):
             current = None
             break
         name = getattr(current, "Name", None)
@@ -191,7 +191,7 @@ def get_plan_semantic_object(session, obj):
         if not linked or linked == current:
             break
         current = linked
-    owner = session.visibility.get_direct_plan_symbol_owner(current)
+    owner = get_direct_plan_symbol_owner(session, current)
     result = owner or current or obj
     if key is not None:
         semantic_cache[key] = result
@@ -213,9 +213,7 @@ def get_plan_float_property(_session, obj, property_names):
 def is_plan_equipment_object(session, obj):
     if not obj:
         return False
-    return session.visibility.is_direct_plan_equipment_object(
-        session.visibility.get_plan_semantic_object(obj)
-    )
+    return is_direct_plan_equipment_object(session, get_plan_semantic_object(session, obj))
 
 
 def is_cabinetry_plan_context_object(obj):
@@ -259,24 +257,24 @@ def is_plan_symbol_instance(session, obj):
         return False
     if session.document_visuals.is_hidden_library_definition_object(obj):
         return False
-    if not session.visibility.is_plan_equipment_object(obj):
+    if not is_plan_equipment_object(session, obj):
         return False
     if getattr(obj, "TypeId", "") == "App::Link":
         return True
-    semantic_obj = session.visibility.get_plan_semantic_object(obj)
-    return obj == semantic_obj and session.visibility.has_direct_plan_symbols(semantic_obj)
+    semantic_obj = get_plan_semantic_object(session, obj)
+    return obj == semantic_obj and has_direct_plan_symbols(semantic_obj)
 
 
 def is_plan_context_only_object(session, obj):
     if not obj:
         return False
-    if session.visibility.is_plan_symbol_instance(obj):
+    if is_plan_symbol_instance(session, obj):
         return False
     return (
-        session.visibility.is_plan_container_object(obj)
-        or session.visibility.is_plan_background_object(obj)
-        or session.visibility.is_plan_equipment_object(obj)
-        or session.visibility.is_cabinetry_plan_context_object(obj)
+        is_plan_container_object(obj)
+        or is_plan_background_object(session, obj)
+        or is_plan_equipment_object(session, obj)
+        or is_cabinetry_plan_context_object(obj)
     )
 
 
@@ -295,15 +293,15 @@ def is_component_addition_object(obj):
 def is_supported_plan_object(session, obj):
     if not obj:
         return False
-    if session.visibility.is_plan_symbol_instance(obj):
+    if is_plan_symbol_instance(session, obj):
         return True
     if session.selection.is_plan_region_object(obj):
         return True
     if session.selection.is_plan_space_separator_object(obj):
         return True
-    if session.visibility.is_plan_context_only_object(obj):
+    if is_plan_context_only_object(session, obj):
         return True
-    semantic_obj = session.visibility.get_plan_semantic_object(obj)
+    semantic_obj = get_plan_semantic_object(session, obj)
     try:
         import Draft
 
@@ -332,7 +330,7 @@ def is_supported_plan_object(session, obj):
 def get_object_storeys(session, obj):
     if not obj:
         return []
-    key = session.visibility.get_document_object_key(obj)
+    key = get_document_object_key(session, obj)
     cache = session.overlay_cache_state.plan_object_storeys_cache
     if key is not None and key in cache:
         _perf_count(session, "object_storeys_cache_hits")
@@ -341,13 +339,13 @@ def get_object_storeys(session, obj):
     storeys = []
     seen = set()
     parents = list(getattr(obj, "InListRecursive", []) or getattr(obj, "InList", []))
-    if session.visibility.is_storey_object(obj):
+    if is_storey_object(obj):
         parents.insert(0, obj)
     for parent in parents:
         if not parent or parent.Name in seen:
             continue
         seen.add(parent.Name)
-        if session.visibility.is_storey_object(parent):
+        if is_storey_object(parent):
             storeys.append(parent)
     if key is not None:
         cache[key] = tuple(storeys)
@@ -361,7 +359,7 @@ def capture_object_view_state(session):
     with _perf_trace_span(session, "capture_object_view_state_objects"):
         for obj in session.doc.Objects:
             _perf_count(session, "capture_view_state_objects_scanned")
-            session.visibility.register_object_view_state(obj)
+            register_object_view_state(session, obj)
 
 
 def register_object_view_state(session, obj):
@@ -405,7 +403,7 @@ def add_object_to_active_storey(session, obj):
 
 
 def register_plan_object(session, obj):
-    session.visibility.register_plan_objects((obj,))
+    register_plan_objects(session, (obj,))
 
 
 def register_plan_objects(session, objects):
@@ -419,12 +417,12 @@ def register_plan_objects(session, objects):
             continue
         if name:
             seen_names.add(name)
-        session.visibility.add_object_to_active_storey(obj)
-        session.visibility.register_object_view_state(obj)
+        add_object_to_active_storey(session, obj)
+        register_object_view_state(session, obj)
         registered.append(obj)
     if not registered:
         return
-    session.visibility.apply_storey_visibility()
+    apply_storey_visibility(session)
     for obj in registered:
         session.document_visuals.refresh_plan_object_footprint_display(obj, request_redraw=False)
     session.viewport.request_view_redraw()
@@ -459,7 +457,7 @@ def restore_object_view_state(session):
 
 
 def get_supported_plan_visibility(session, obj, state):
-    if session.visibility.is_component_addition_object(obj):
+    if is_component_addition_object(obj):
         return False
     visibility = state.get("Visibility", True)
     # Hosted openings are commonly hidden in the regular 3D workflow while
@@ -474,7 +472,7 @@ def get_supported_plan_visibility(session, obj, state):
 def apply_context_object_selectability(session, obj, view_object):
     if not view_object or not hasattr(view_object, "Selectable"):
         return
-    semantic_obj = session.visibility.get_plan_semantic_object(obj)
+    semantic_obj = get_plan_semantic_object(session, obj)
     if semantic_obj is not None and session.document_visuals.is_symbol_visual_dependency(
         semantic_obj,
         obj,
@@ -494,7 +492,7 @@ def apply_context_object_selectability(session, obj, view_object):
         except Exception:
             pass
         return
-    if not session.visibility.is_plan_context_only_object(obj):
+    if not is_plan_context_only_object(session, obj):
         return
     try:
         view_object.Selectable = False
@@ -530,25 +528,26 @@ def apply_storey_visibility(session):
 
         if active_storey_name is None:
             with _perf_trace_span(session, "restore_object_view_state_for_global_plan"):
-                session.visibility.restore_object_view_state()
+                restore_object_view_state(session)
             for obj in session.doc.Objects:
                 _perf_count(session, "storey_visibility_objects_scanned")
                 view_object = getattr(obj, "ViewObject", None)
                 state = session._saved_object_view_state.get(obj.Name, {})
-                if not session.visibility.is_supported_plan_object(obj):
+                if not is_supported_plan_object(session, obj):
                     _perf_count(session, "storey_visibility_hidden_unsupported")
-                    session.visibility.apply_hidden_object_state(view_object)
+                    apply_hidden_object_state(view_object)
                     continue
                 _perf_count(session, "storey_visibility_supported")
                 if view_object and hasattr(view_object, "Visibility"):
                     try:
-                        view_object.Visibility = session.visibility.get_supported_plan_visibility(
+                        view_object.Visibility = get_supported_plan_visibility(
+                            session,
                             obj,
                             state,
                         )
                     except Exception:
                         pass
-                session.visibility.apply_context_object_selectability(obj, view_object)
+                apply_context_object_selectability(session, obj, view_object)
             return
 
         for obj in session.doc.Objects:
@@ -559,12 +558,12 @@ def apply_storey_visibility(session):
                 _perf_count(session, "storey_visibility_objects_skipped_no_view_state")
                 continue
 
-            storeys = session.visibility.get_object_storeys(obj)
+            storeys = get_object_storeys(session, obj)
             if not storeys:
                 _perf_count(session, "storey_visibility_global_objects")
-                if not session.visibility.is_supported_plan_object(obj):
+                if not is_supported_plan_object(session, obj):
                     _perf_count(session, "storey_visibility_hidden_unsupported")
-                    session.visibility.apply_hidden_object_state(view_object)
+                    apply_hidden_object_state(view_object)
                     continue
                 _perf_count(session, "storey_visibility_supported")
                 for prop, value in state.items():
@@ -575,13 +574,14 @@ def apply_storey_visibility(session):
                             pass
                 if hasattr(view_object, "Visibility"):
                     try:
-                        view_object.Visibility = session.visibility.get_supported_plan_visibility(
+                        view_object.Visibility = get_supported_plan_visibility(
+                            session,
                             obj,
                             state,
                         )
                     except Exception:
                         pass
-                session.visibility.apply_context_object_selectability(obj, view_object)
+                apply_context_object_selectability(session, obj, view_object)
                 continue
 
             belongs_to_active = any(parent.Name == active_storey_name for parent in storeys)
@@ -593,26 +593,28 @@ def apply_storey_visibility(session):
                             setattr(view_object, prop, value)
                         except Exception:
                             pass
-                if not session.visibility.is_supported_plan_object(obj):
+                if not is_supported_plan_object(session, obj):
                     _perf_count(session, "storey_visibility_hidden_unsupported")
-                    session.visibility.apply_hidden_object_state(view_object)
+                    apply_hidden_object_state(view_object)
                     continue
                 _perf_count(session, "storey_visibility_supported")
                 if hasattr(view_object, "Visibility"):
                     try:
-                        view_object.Visibility = session.visibility.get_supported_plan_visibility(
+                        view_object.Visibility = get_supported_plan_visibility(
+                            session,
                             obj,
                             state,
                         )
                     except Exception:
                         pass
-                session.visibility.apply_context_object_selectability(obj, view_object)
+                apply_context_object_selectability(session, obj, view_object)
                 continue
 
             _perf_count(session, "storey_visibility_other_storey_objects")
             if hasattr(view_object, "Visibility"):
                 try:
-                    view_object.Visibility = session.visibility.get_supported_plan_visibility(
+                    view_object.Visibility = get_supported_plan_visibility(
+                        session,
                         obj,
                         state,
                     )
