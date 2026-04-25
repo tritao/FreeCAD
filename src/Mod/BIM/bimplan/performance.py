@@ -9,10 +9,16 @@ import tempfile
 import time
 
 
+def _performance_state(session):
+    return session.performance_state
+
+
 def resolve_plan_perf_log_path(session):
     pref_enabled = False
     try:
-        pref_enabled = bool(session._plan_edit_params.GetBool("PerfTrace", False))
+        pref_enabled = bool(
+            _performance_state(session).plan_edit_params.GetBool("PerfTrace", False)
+        )
     except Exception:
         pref_enabled = False
 
@@ -60,15 +66,15 @@ def resolve_plan_pick_debug_log_path(session):
 
 
 def is_plan_perf_trace_enabled(session):
-    return bool(session._plan_perf_log_path)
+    return bool(_performance_state(session).plan_perf_log_path)
 
 
 def is_plan_pick_debug_enabled(session):
-    return bool(getattr(session, "_plan_pick_debug_log_path", None))
+    return bool(_performance_state(session).plan_pick_debug_log_path)
 
 
 def is_plan_pick_debug_active(session):
-    return bool(getattr(session, "_plan_pick_debug_scope_depth", 0))
+    return bool(_performance_state(session).plan_pick_debug_scope_depth)
 
 
 def plan_perf_describe_object(_session, obj):
@@ -116,7 +122,7 @@ def plan_perf_coerce_value(session, value):
 
 
 def plan_perf_set_fields(session, **fields):
-    event = session._plan_perf_current_event
+    event = _performance_state(session).plan_perf_current_event
     if not event:
         return
     event_fields = event.setdefault("fields", {})
@@ -127,7 +133,7 @@ def plan_perf_set_fields(session, **fields):
 
 
 def plan_perf_count(session, name, delta=1):
-    event = session._plan_perf_current_event
+    event = _performance_state(session).plan_perf_current_event
     if not event:
         return
     counts = event.setdefault("counts", {})
@@ -135,7 +141,7 @@ def plan_perf_count(session, name, delta=1):
 
 
 def plan_perf_note_error(session, scope, exc):
-    event = session._plan_perf_current_event
+    event = _performance_state(session).plan_perf_current_event
     if not event:
         return
     errors = event.setdefault("errors", [])
@@ -169,10 +175,11 @@ def plan_perf_write_event(session, event, total_ms):
     if not is_plan_perf_trace_enabled(session):
         return
     try:
-        directory = os.path.dirname(session._plan_perf_log_path)
+        log_path = _performance_state(session).plan_perf_log_path
+        directory = os.path.dirname(log_path)
         if directory:
             os.makedirs(directory, exist_ok=True)
-        with open(session._plan_perf_log_path, "a", encoding="utf-8") as handle:
+        with open(log_path, "a", encoding="utf-8") as handle:
             handle.write(
                 json.dumps(plan_perf_finalize_event(session, event, total_ms), sort_keys=True)
             )
@@ -184,22 +191,21 @@ def plan_perf_write_event(session, event, total_ms):
 def plan_pick_debug_event(session, name, **fields):
     if not is_plan_pick_debug_enabled(session):
         return
+    state = _performance_state(session)
     try:
-        session._plan_pick_debug_sequence = (
-            int(getattr(session, "_plan_pick_debug_sequence", 0)) + 1
-        )
+        state.plan_pick_debug_sequence = int(state.plan_pick_debug_sequence or 0) + 1
     except Exception:
-        session._plan_pick_debug_sequence = 1
+        state.plan_pick_debug_sequence = 1
 
     output = {
         "event": str(name),
-        "seq": session._plan_pick_debug_sequence,
+        "seq": state.plan_pick_debug_sequence,
         "pid": os.getpid(),
         "ts_unix": round(time.time(), 6),
         "tool": getattr(session, "current_tool", ""),
         "fields": {},
     }
-    scope = str(getattr(session, "_plan_pick_debug_scope_name", "") or "").strip()
+    scope = str(state.plan_pick_debug_scope_name or "").strip()
     if scope:
         output["scope"] = scope
     try:
@@ -212,10 +218,11 @@ def plan_pick_debug_event(session, name, **fields):
         output["fields"][str(key)] = plan_perf_coerce_value(session, value)
 
     try:
-        directory = os.path.dirname(session._plan_pick_debug_log_path)
+        log_path = state.plan_pick_debug_log_path
+        directory = os.path.dirname(log_path)
         if directory:
             os.makedirs(directory, exist_ok=True)
-        with open(session._plan_pick_debug_log_path, "a", encoding="utf-8") as handle:
+        with open(log_path, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(output, sort_keys=True))
             handle.write("\n")
     except Exception:
@@ -227,10 +234,11 @@ def plan_pick_debug_scope(session, name, **fields):
     if not is_plan_pick_debug_enabled(session):
         yield None
         return
-    previous_name = str(getattr(session, "_plan_pick_debug_scope_name", "") or "")
-    previous_depth = int(getattr(session, "_plan_pick_debug_scope_depth", 0) or 0)
-    session._plan_pick_debug_scope_name = str(name or "").strip()
-    session._plan_pick_debug_scope_depth = previous_depth + 1
+    state = _performance_state(session)
+    previous_name = str(state.plan_pick_debug_scope_name or "")
+    previous_depth = int(state.plan_pick_debug_scope_depth or 0)
+    state.plan_pick_debug_scope_name = str(name or "").strip()
+    state.plan_pick_debug_scope_depth = previous_depth + 1
     plan_pick_debug_event(session, f"{name}_start", **fields)
     try:
         yield None
@@ -246,11 +254,11 @@ def plan_pick_debug_scope(session, name, **fields):
             ),
             provider_selected_objects=[
                 plan_perf_describe_object(session, obj)
-                for obj in tuple(getattr(session, "_provider_selected_objects", ()) or ())
+                for obj in tuple(session.provider_transient_state.provider_selected_objects or ())
             ],
         )
-        session._plan_pick_debug_scope_depth = previous_depth
-        session._plan_pick_debug_scope_name = previous_name
+        state.plan_pick_debug_scope_depth = previous_depth
+        state.plan_pick_debug_scope_name = previous_name
 
 
 @contextmanager
@@ -258,14 +266,15 @@ def plan_perf_trace_event(session, name, **fields):
     if not is_plan_perf_trace_enabled(session):
         yield None
         return
-    if session._plan_perf_current_event is not None:
+    state = _performance_state(session)
+    if state.plan_perf_current_event is not None:
         with plan_perf_trace_span(session, name, **fields):
-            yield session._plan_perf_current_event
+            yield state.plan_perf_current_event
         return
-    session._plan_perf_sequence += 1
+    state.plan_perf_sequence += 1
     event = {
         "event": str(name),
-        "seq": session._plan_perf_sequence,
+        "seq": state.plan_perf_sequence,
         "pid": os.getpid(),
         "ts_unix": time.time(),
         "tool": session.current_tool,
@@ -273,8 +282,8 @@ def plan_perf_trace_event(session, name, **fields):
         "counts": {},
         "spans": {},
     }
-    previous_event = session._plan_perf_current_event
-    session._plan_perf_current_event = event
+    previous_event = state.plan_perf_current_event
+    state.plan_perf_current_event = event
     plan_perf_set_fields(session, **fields)
     start_time = time.perf_counter()
     try:
@@ -286,12 +295,12 @@ def plan_perf_trace_event(session, name, **fields):
         total_ms = (time.perf_counter() - start_time) * 1000.0
         event["tool"] = session.current_tool
         plan_perf_write_event(session, event, total_ms)
-        session._plan_perf_current_event = previous_event
+        state.plan_perf_current_event = previous_event
 
 
 @contextmanager
 def plan_perf_trace_span(session, name, **fields):
-    event = session._plan_perf_current_event
+    event = _performance_state(session).plan_perf_current_event
     if event is None:
         yield None
         return
