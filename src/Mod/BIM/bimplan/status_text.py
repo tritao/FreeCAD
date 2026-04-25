@@ -3,6 +3,7 @@
 """Status text and input hint helpers for BIM Plan Edit."""
 
 import FreeCAD
+from bimplan.runtime import tools as plan_runtime_tools
 import FreeCADGui
 from bimplan.providers import runtime as plan_provider_runtime
 from bimplan.selection import target_kinds as plan_target_kinds
@@ -90,7 +91,7 @@ class PlanStatusTextAPI:
 
 
 def get_plan_selection_summary_text(session):
-    if session.current_tool != "Select":
+    if session.current_tool != plan_runtime_tools.PlanTool.SELECT:
         return ""
     targets = session.selection.get_selected_plan_targets()
     preflight_text = session.spaces.format_space_preflight_text(
@@ -328,13 +329,13 @@ def _get_move_status_chip_text(title, context, label):
 def _get_direct_tool_status_chip_text(
     session, title, selected_kind, selected_obj, selected_context
 ):
-    if session.current_tool == "Provider Point":
+    if session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT:
         return (
             _format_status_chip_title(session.providers.get_provider_point_tool_label()),
             session.providers.get_provider_point_tool_prompt(),
         )
 
-    if session.current_tool == "Move Opening":
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_OPENING:
         context = (
             selected_context
             if selected_kind == "opening" and selected_obj is not None
@@ -342,7 +343,7 @@ def _get_direct_tool_status_chip_text(
         )
         return _get_move_status_chip_text(title, context, translate("BIM_PlanEdit", "Opening move"))
 
-    if session.current_tool == "Move Symbol":
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_SYMBOL:
         context = (
             selected_context
             if selected_kind == "symbol" and selected_obj is not None
@@ -350,7 +351,7 @@ def _get_direct_tool_status_chip_text(
         )
         return _get_move_status_chip_text(title, context, translate("BIM_PlanEdit", "Symbol move"))
 
-    if session.current_tool == "Move Provider":
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER:
         context = (
             selected_context
             if selected_kind == "provider" and selected_obj is not None
@@ -362,7 +363,7 @@ def _get_direct_tool_status_chip_text(
             translate("BIM_PlanEdit", "Integration move"),
         )
 
-    if session.current_tool == "Rotate Symbol":
+    if session.current_tool == plan_runtime_tools.PlanTool.ROTATE_SYMBOL:
         context = (
             selected_context
             if selected_kind == "symbol" and selected_obj is not None
@@ -376,7 +377,7 @@ def _get_direct_tool_status_chip_text(
             action = translate("BIM_PlanEdit", "Click target angle")
         return title, "{}\n{}".format(context, action)
 
-    if session.current_tool == "Move Wall":
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_WALL:
         context = (
             selected_context
             if selected_kind == "wall" and selected_obj is not None
@@ -384,7 +385,7 @@ def _get_direct_tool_status_chip_text(
         )
         return _get_move_status_chip_text(title, context, translate("BIM_PlanEdit", "Wall move"))
 
-    if session.current_tool == "Join":
+    if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
         target_wall, joint, detail = session.wall_relations.get_plan_join_candidate_state()
         context = (
             translate("BIM_PlanEdit", "Source wall: {label}").format(
@@ -407,7 +408,7 @@ def _get_direct_tool_status_chip_text(
         action = translate("BIM_PlanEdit", "Click endpoint or press Enter to type a value")
         return title, "{}\n{}".format(context, action)
 
-    if session.current_tool == "Region":
+    if session.current_tool == plan_runtime_tools.PlanTool.REGION:
         parent_space = session.spaces.get_plan_region_parent_space()
         context = (
             translate("BIM_PlanEdit", "Parent space: {label}").format(label=parent_space.Label)
@@ -447,12 +448,14 @@ def _get_default_status_chip_action(
 ):
     hints = get_input_hint_specs(session)
     action = format_status_chip_action(hints[0][0]) if hints else ""
-    if selected_kind == "region" and session.current_tool == "Select":
+    if selected_kind == "region" and session.current_tool == plan_runtime_tools.PlanTool.SELECT:
         action = translate(
             "BIM_PlanEdit",
             "Edit label, scheme, type, and parent space in the task panel",
         )
-    if (selected_kind == "provider" or provider_context) and session.current_tool == "Select":
+    if (
+        selected_kind == "provider" or provider_context
+    ) and session.current_tool == plan_runtime_tools.PlanTool.SELECT:
         if selected_kind == "provider":
             action = format_provider_target_help(session, selected_obj)
         else:
@@ -741,19 +744,19 @@ def _get_default_tool_input_hint_specs(ui):
 
 def get_input_hint_specs(session):
     ui = FreeCADGui.UserInput
-    if session.current_tool == "Select":
+    if session.current_tool == plan_runtime_tools.PlanTool.SELECT:
         return _get_select_input_hint_specs(session, ui)
 
-    if session.current_tool == "Join":
+    if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
         return _get_join_input_hint_specs(session, ui)
 
     if session.current_tool.startswith("Stretch "):
         return _get_stretch_input_hint_specs(ui)
 
-    if session.current_tool == "Provider Point":
+    if session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT:
         return _get_provider_point_input_hint_specs(session, ui)
 
-    if session.current_tool == "Move Provider":
+    if session.current_tool == plan_runtime_tools.PlanTool.MOVE_PROVIDER:
         return _get_move_provider_input_hint_specs(ui)
 
     return _get_default_tool_input_hint_specs(ui).get(session.current_tool, ())

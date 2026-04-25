@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import FreeCAD
 import FreeCADGui
 from bimplan.runtime import command_gate as plan_command_gate
+from bimplan.runtime import tools as plan_runtime_tools
 from bimplan import selection as plan_selection
 from bimplan.tools import spaces as plan_spaces
 from bimplan.tools import window_create as plan_window_create
@@ -905,7 +906,7 @@ def on_embedded_command_finished(session, tool_name, command=None):
         interaction_state.embedded_tool = None
         interaction_state.embedded_tool_name = None
     if session.current_tool == tool_name:
-        session.current_tool = "Select"
+        session.current_tool = plan_runtime_tools.PlanTool.SELECT
         session.overlays.sync_selected_wall_opening_context_overlay()
         session.task_panels.refresh_task_panel_status()
 

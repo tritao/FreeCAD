@@ -31,6 +31,7 @@ from bimplan import document_visuals as plan_document_visuals
 from bimplan.document_visuals import PlanDocumentVisualsAPI
 from bimplan.runtime import input as plan_input
 from bimplan.runtime import lifecycle as plan_lifecycle
+from bimplan.runtime import tools as plan_runtime_tools
 from bimplan.object_visibility import PlanVisibilityAPI
 from bimplan.performance import PlanPerformanceAPI
 from bimplan import snap as plan_snap
@@ -209,6 +210,14 @@ class PlanEditSession:
         self.status_text = PlanStatusTextAPI(self)
         self.task_panels = plan_task_panel.PlanTaskPanelsAPI(self)
         plan_session_state.initialize_session_state(self)
+
+    @property
+    def current_tool(self):
+        return self._current_tool
+
+    @current_tool.setter
+    def current_tool(self, value):
+        self._current_tool = plan_runtime_tools.coerce_plan_tool(value)
 
     def enter(self):
         with self.performance.plan_perf_trace_event("enter_plan_edit"):
