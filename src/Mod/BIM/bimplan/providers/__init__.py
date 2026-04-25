@@ -14,6 +14,8 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from enum import Enum
 from typing import Sequence, Tuple
+from bimplan.providers import host_targets as plan_host_targets
+from bimplan.selection import target_kinds as plan_target_kinds
 
 
 @dataclass(frozen=True)
@@ -113,6 +115,41 @@ class PlanProviderActionContext:
 
     def get_action_payload(self):
         return self.payload
+
+    def get_action_payload_value(self, key, default=None):
+        payload = self.payload
+        if payload is None:
+            return default
+        getter = getattr(payload, "get", None)
+        if callable(getter):
+            return getter(key, default)
+        return getattr(payload, key, default)
+
+    def get_selected_target(self):
+        return plan_target_kinds.coerce_plan_target_ref(
+            self.get_action_payload_value("selected_target")
+        )
+
+    def get_selected_targets(self):
+        return tuple(
+            plan_target_kinds.coerce_plan_target_ref(target)
+            for target in (self.get_action_payload_value("selected_targets", ()) or ())
+        )
+
+    def get_hovered_target(self):
+        return plan_target_kinds.coerce_plan_target_ref(
+            self.get_action_payload_value("hovered_target")
+        )
+
+    def get_snap_target(self):
+        return plan_target_kinds.coerce_plan_target_ref(
+            self.get_action_payload_value("snap_target")
+        )
+
+    def get_host_target(self):
+        return plan_host_targets.coerce_provider_host_target_ref(
+            self.get_action_payload_value("host_target")
+        )
 
     def select_wall_for_plan_edit(self, wall, sync_gui_selection=True):
         return bool(

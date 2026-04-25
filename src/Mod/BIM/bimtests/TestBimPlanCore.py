@@ -1998,6 +1998,43 @@ class TestBimPlanCore(unittest.TestCase):
         )
         self.assertIn(("recompute", None), doc.events)
 
+    def test_plan_provider_action_context_exposes_typed_target_payloads(self):
+        from bimplan.providers.host_targets import ProviderHostTargetRef
+        from bimplan.providers.payloads import ProviderPointActionPayload
+        from bimplan.selection.target_kinds import PlanTargetRef
+
+        wall = object()
+        opening = object()
+        context = PlanProviderActionContext(
+            _session=SimpleNamespace(doc=None),
+            payload=ProviderPointActionPayload(
+                tool=object(),
+                point=(1.0, 2.0, 0.0),
+                placement_point=(1.0, 2.0, 0.0),
+                raw_point=(1.0, 2.0, 0.0),
+                snap_info={},
+                snap_object=wall,
+                snap_target=PlanTargetRef("wall", wall),
+                snap_document_name="PlanDoc",
+                snap_object_name="Wall001",
+                snap_component="Edge1",
+                snap_subname="Edge1",
+                selected_target=PlanTargetRef("opening", opening),
+                selected_targets=(PlanTargetRef("opening", opening),),
+                hovered_target=PlanTargetRef("wall", wall),
+                host_target=ProviderHostTargetRef("wall", wall),
+                host_source="selected",
+            ),
+            document_name="PlanDoc",
+            current_tool="Provider Point",
+        )
+
+        self.assertEqual(PlanTargetRef("opening", opening), context.get_selected_target())
+        self.assertEqual((PlanTargetRef("opening", opening),), context.get_selected_targets())
+        self.assertEqual(PlanTargetRef("wall", wall), context.get_hovered_target())
+        self.assertEqual(PlanTargetRef("wall", wall), context.get_snap_target())
+        self.assertEqual(ProviderHostTargetRef("wall", wall), context.get_host_target())
+
     def test_execute_plan_provider_action_passes_action_context_proxy(self):
         from bimplan.providers.runtime import execute_plan_provider_action
         from bimplan.providers import PlanEditRegistry
