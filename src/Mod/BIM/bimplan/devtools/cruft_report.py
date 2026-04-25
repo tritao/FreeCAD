@@ -42,6 +42,32 @@ OWNER_FILE_HINTS = {
 
 SESSION_PRIVATE_PATTERN = re.compile(r"\bsession\._[A-Za-z0-9_]+\b")
 GENERATED_BINDER_PATTERN = re.compile(r"_PLAN_.*_BOUND_METHODS|def _bind_.*call|setattr\(Plan.*API")
+OWNED_API_NAMES = (
+    "selection",
+    "providers",
+    "spaces",
+    "overlays",
+    "visibility",
+    "document_visuals",
+    "wall_edit",
+    "wall_relations",
+    "windows",
+    "openings",
+    "symbols",
+    "viewport",
+    "performance",
+    "task_panels",
+    "lifecycle",
+    "input",
+    "snap",
+    "storey",
+)
+OWNED_API_PROBE_PATTERNS = tuple(
+    re.compile(rf"\b(?:getattr|hasattr)\(\s*session\.{name}\b") for name in OWNED_API_NAMES
+) + tuple(
+    re.compile(rf"\b(?:getattr|hasattr)\(\s*session\s*,\s*['\"]{name}['\"]")
+    for name in OWNED_API_NAMES
+)
 
 
 @dataclass(frozen=True)
@@ -131,6 +157,16 @@ def session_private_reads() -> list[Match]:
     return matches
 
 
+def owned_api_probes() -> list[Match]:
+    matches: list[Match] = []
+    for path in PY_FILES:
+        text = file_text(path)
+        for pattern in OWNED_API_PROBE_PATTERNS:
+            matches.extend(line_matches(pattern, text, path))
+    matches.sort(key=lambda item: (item.path, item.lineno, item.text))
+    return matches
+
+
 def largest_files(limit: int = 12) -> list[tuple[str, int]]:
     rows = []
     for path in PY_FILES:
@@ -183,6 +219,7 @@ def main() -> int:
     print_section(
         "Internal session.<same_api> Bounce Calls", format_match_rows(same_api_bounce_calls())
     )
+    print_section("Owned API getattr/hasattr Probes", format_match_rows(owned_api_probes()))
     print_section("session._* Reads Outside Owners", format_match_rows(session_private_reads()))
     return 0
 
