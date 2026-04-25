@@ -908,6 +908,15 @@ def _has_valid_shape(obj):
         return True
 
 
+def _get_callable_attr(obj, attr_name):
+    value = getattr(obj, attr_name, None)
+    return value if callable(value) else None
+
+
+def _proxy_has_callables(proxy, attrs):
+    return proxy is not None and all(_get_callable_attr(proxy, attr) is not None for attr in attrs)
+
+
 def _get_opening_plan_proxy(context, window, *attrs):
     getter = getattr(context, "get_opening_plan_proxy", None)
     if callable(getter):
@@ -915,7 +924,7 @@ def _get_opening_plan_proxy(context, window, *attrs):
         if proxy is not None:
             return proxy
     proxy = getattr(window, "Proxy", None)
-    if proxy and all(hasattr(proxy, attr) for attr in attrs):
+    if _proxy_has_callables(proxy, attrs):
         return proxy
     return None
 
@@ -956,10 +965,11 @@ def _get_window_center(context, window):
 
 def _get_wall_axis_context(wall):
     proxy = getattr(wall, "Proxy", None)
-    if proxy is None or not hasattr(proxy, "calc_endpoints"):
+    calc_endpoints = _get_callable_attr(proxy, "calc_endpoints")
+    if calc_endpoints is None:
         return None
     try:
-        start, end = proxy.calc_endpoints(wall)
+        start, end = calc_endpoints(wall)
         start = FreeCAD.Vector(start)
         end = FreeCAD.Vector(end)
     except Exception:
@@ -1001,7 +1011,7 @@ def _coerce_length_mm(value):
 
 
 def _get_property_length_mm(obj, name):
-    if obj is None or not hasattr(obj, name):
+    if obj is None:
         return None
     try:
         return _coerce_length_mm(getattr(obj, name))
