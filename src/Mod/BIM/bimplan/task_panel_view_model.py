@@ -245,24 +245,20 @@ class _TaskPanelRelationReads(_TaskPanelReadsBase):
 class _TaskPanelSpaceReads(_TaskPanelReadsBase):
     __slots__ = ()
 
+    def _get_space_task_panel_state(self):
+        return getattr(self.session, "task_panel_state", None)
+
     def get_space_region_candidate_count(self):
-        return int(
-            _read_component(
-                self.session,
-                "spaces",
-                "get_space_region_candidate_count",
-                default=0,
-            )
-            or 0
-        )
+        state = self._get_space_task_panel_state()
+        if state is not None:
+            return int(len(getattr(state, "space_region_candidates", ()) or ()))
+        return int(len(getattr(self.session, "_space_region_candidates", ()) or ()))
 
     def get_hovered_space_region_candidate(self):
-        return _read_component(
-            self.session,
-            "spaces",
-            "get_hovered_space_region_candidate",
-            default=None,
-        )
+        state = self._get_space_task_panel_state()
+        if state is not None:
+            return getattr(state, "hovered_space_region_candidate", None)
+        return getattr(self.session, "_hovered_space_region_candidate", None)
 
     def format_space_region_candidate_area(self, candidate):
         return _read_component(
@@ -274,12 +270,10 @@ class _TaskPanelSpaceReads(_TaskPanelReadsBase):
         )
 
     def get_plan_region_parent_space(self):
-        return _read_component(
-            self.session,
-            "spaces",
-            "get_plan_region_parent_space",
-            default=None,
-        )
+        state = self._get_space_task_panel_state()
+        if state is not None:
+            return getattr(state, "plan_region_parent_space", None)
+        return getattr(self.session, "_plan_region_parent_space", None)
 
     def is_plan_space_object(self, obj):
         return bool(
