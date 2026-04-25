@@ -472,154 +472,117 @@ def make_input_hint(message, *sequences):
         return None
 
 
-def get_input_hint_specs(session):
-    ui = FreeCADGui.UserInput
-    selected_kind, _selected_obj = session.selection.get_selected_plan_target()
-
-    if session.current_tool == "Select":
-        additive_hint = (
-            translate("BIM_PlanEdit", "%1 add or remove from selection"),
-            (ui.KeyControl, ui.MouseLeft),
+def _get_select_input_hint_specs(session, ui):
+    selected_kind, selected_obj = session.selection.get_selected_plan_target()
+    additive_hint = (
+        translate("BIM_PlanEdit", "%1 add or remove from selection"),
+        (ui.KeyControl, ui.MouseLeft),
+    )
+    if selected_kind == "opening":
+        primary_hint = translate("BIM_PlanEdit", "%1 pick opening handle")
+    elif selected_kind == "symbol":
+        primary_hint = translate("BIM_PlanEdit", "%1 pick symbol handle")
+    elif selected_kind == "wall":
+        primary_hint = translate("BIM_PlanEdit", "%1 pick wall grip")
+    elif selected_kind == "region":
+        primary_hint = translate("BIM_PlanEdit", "%1 select another target")
+    elif selected_kind == "space":
+        primary_hint = translate("BIM_PlanEdit", "%1 select space boundary target")
+    elif selected_kind == "provider":
+        provider_handles = tuple(
+            session.providers.get_selected_provider_edit_handles(selected_obj) or ()
         )
-        if selected_kind == "opening":
-            return (
-                (
-                    translate("BIM_PlanEdit", "%1 pick opening handle"),
-                    ui.MouseLeft,
-                ),
-                additive_hint,
-            )
-        if selected_kind == "symbol":
-            return (
-                (
-                    translate("BIM_PlanEdit", "%1 pick symbol handle"),
-                    ui.MouseLeft,
-                ),
-                additive_hint,
-            )
-        if selected_kind == "wall":
-            return (
-                (
-                    translate("BIM_PlanEdit", "%1 pick wall grip"),
-                    ui.MouseLeft,
-                ),
-                additive_hint,
-            )
-        if selected_kind == "region":
-            return (
-                (
-                    translate("BIM_PlanEdit", "%1 select another target"),
-                    ui.MouseLeft,
-                ),
-                additive_hint,
-            )
-        if selected_kind == "space":
-            return (
-                (
-                    translate("BIM_PlanEdit", "%1 select space boundary target"),
-                    ui.MouseLeft,
-                ),
-                additive_hint,
-            )
-        if selected_kind == "provider":
-            provider_handles = tuple(
-                session.providers.get_selected_provider_edit_handles(_selected_obj) or ()
-            )
-            return (
-                (
-                    translate(
-                        "BIM_PlanEdit",
-                        (
-                            "%1 pick integration handle"
-                            if provider_handles
-                            else "%1 select another integration target"
-                        ),
-                    ),
-                    ui.MouseLeft,
-                ),
-                additive_hint,
-            )
-        return (
+        primary_hint = translate(
+            "BIM_PlanEdit",
             (
-                translate(
-                    "BIM_PlanEdit",
-                    "%1 select wall, opening, symbol, integration target, region, or space",
-                ),
-                ui.MouseLeft,
+                "%1 pick integration handle"
+                if provider_handles
+                else "%1 select another integration target"
             ),
-            additive_hint,
         )
+    else:
+        primary_hint = translate(
+            "BIM_PlanEdit",
+            "%1 select wall, opening, symbol, integration target, region, or space",
+        )
+    return ((primary_hint, ui.MouseLeft), additive_hint)
 
-    if session.current_tool == "Join":
-        hints = [
-            (
-                translate("BIM_PlanEdit", "%1 pick wall to join"),
-                ui.MouseLeft,
+
+def _get_join_input_hint_specs(session, ui):
+    hints = [
+        (
+            translate("BIM_PlanEdit", "%1 pick wall to join"),
+            ui.MouseLeft,
+        ),
+        (
+            translate("BIM_PlanEdit", "%1 cycle join type ({joint_type})").format(
+                joint_type=session.wall_relations.get_plan_join_type_label()
             ),
-            (
-                translate("BIM_PlanEdit", "%1 cycle join type ({joint_type})").format(
-                    joint_type=session.wall_relations.get_plan_join_type_label()
-                ),
-                ui.KeyTab,
-            ),
-        ]
-        if session.wall_relations.get_plan_candidate_joint() is not None:
-            hints.append(
-                (
-                    translate("BIM_PlanEdit", "%1 unjoin pair"),
-                    ui.KeyDelete,
-                )
-            )
+            ui.KeyTab,
+        ),
+    ]
+    if session.wall_relations.get_plan_candidate_joint() is not None:
         hints.append(
             (
-                translate("BIM_PlanEdit", "%1 cancel"),
-                ui.KeyEscape,
+                translate("BIM_PlanEdit", "%1 unjoin pair"),
+                ui.KeyDelete,
             )
         )
-        return tuple(hints)
-
-    if session.current_tool.startswith("Stretch "):
-        return (
-            (
-                translate("BIM_PlanEdit", "%1 place endpoint"),
-                ui.MouseLeft,
-            ),
-            (
-                translate("BIM_PlanEdit", "%1 edit length"),
-                ui.KeyReturn,
-            ),
-            (
-                translate("BIM_PlanEdit", "%1 cancel"),
-                ui.KeyEscape,
-            ),
+    hints.append(
+        (
+            translate("BIM_PlanEdit", "%1 cancel"),
+            ui.KeyEscape,
         )
+    )
+    return tuple(hints)
 
-    if session.current_tool == "Provider Point":
-        return (
-            (
-                translate("BIM_PlanEdit", "%1 place point for {tool}").format(
-                    tool=session.providers.get_provider_point_tool_label()
-                ),
-                ui.MouseLeft,
-            ),
-            (
-                translate("BIM_PlanEdit", "%1 cancel"),
-                ui.KeyEscape,
-            ),
-        )
 
-    if session.current_tool == "Move Provider":
-        return (
-            (
-                translate("BIM_PlanEdit", "%1 place target"),
-                ui.MouseLeft,
-            ),
-            (
-                translate("BIM_PlanEdit", "%1 cancel"),
-                ui.KeyEscape,
-            ),
-        )
+def _get_stretch_input_hint_specs(ui):
+    return (
+        (
+            translate("BIM_PlanEdit", "%1 place endpoint"),
+            ui.MouseLeft,
+        ),
+        (
+            translate("BIM_PlanEdit", "%1 edit length"),
+            ui.KeyReturn,
+        ),
+        (
+            translate("BIM_PlanEdit", "%1 cancel"),
+            ui.KeyEscape,
+        ),
+    )
 
+
+def _get_provider_point_input_hint_specs(session, ui):
+    return (
+        (
+            translate("BIM_PlanEdit", "%1 place point for {tool}").format(
+                tool=session.providers.get_provider_point_tool_label()
+            ),
+            ui.MouseLeft,
+        ),
+        (
+            translate("BIM_PlanEdit", "%1 cancel"),
+            ui.KeyEscape,
+        ),
+    )
+
+
+def _get_move_provider_input_hint_specs(ui):
+    return (
+        (
+            translate("BIM_PlanEdit", "%1 place target"),
+            ui.MouseLeft,
+        ),
+        (
+            translate("BIM_PlanEdit", "%1 cancel"),
+            ui.KeyEscape,
+        ),
+    )
+
+
+def _get_default_tool_input_hint_specs(ui):
     return {
         "Window": (
             (
@@ -717,7 +680,27 @@ def get_input_hint_specs(session):
                 ui.KeyEscape,
             ),
         ),
-    }.get(session.current_tool, ())
+    }
+
+
+def get_input_hint_specs(session):
+    ui = FreeCADGui.UserInput
+    if session.current_tool == "Select":
+        return _get_select_input_hint_specs(session, ui)
+
+    if session.current_tool == "Join":
+        return _get_join_input_hint_specs(session, ui)
+
+    if session.current_tool.startswith("Stretch "):
+        return _get_stretch_input_hint_specs(ui)
+
+    if session.current_tool == "Provider Point":
+        return _get_provider_point_input_hint_specs(session, ui)
+
+    if session.current_tool == "Move Provider":
+        return _get_move_provider_input_hint_specs(ui)
+
+    return _get_default_tool_input_hint_specs(ui).get(session.current_tool, ())
 
 
 def get_input_hints(session):
