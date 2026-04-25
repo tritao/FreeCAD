@@ -12,7 +12,7 @@ _MIN_WALL_LENGTH = 10.0
 
 
 def has_active_wall_edit(session):
-    return session.wall_edit.is_wall_edit_modal_active() or session._embedded_tool_name == "Wall"
+    return is_wall_edit_modal_active(session) or session._embedded_tool_name == "Wall"
 
 
 def is_wall_edit_modal_active(session):
@@ -38,13 +38,13 @@ def is_selected_wall_endpoint_editable(session):
 
 def cancel_wall_edit(session, restore=True, refresh=True):
     del restore
-    if not session.wall_edit.has_active_wall_edit():
+    if not has_active_wall_edit(session):
         if refresh:
             session.current_tool = "Select"
             session.task_panels.refresh_task_panel_status()
         return False
 
-    session.wall_edit.cancel_wall_subtool()
+    cancel_wall_subtool(session)
 
     session.current_tool = "Select"
     session.lifecycle.cancel_pending_edit()
@@ -59,7 +59,7 @@ def cancel_wall_subtool(session):
 
 
 def _validate_wall_edit_start(session):
-    if not session.wall_edit.is_selected_wall_endpoint_editable():
+    if not is_selected_wall_endpoint_editable(session):
         FreeCAD.Console.PrintError(
             translate(
                 "BIM_PlanEdit",
@@ -102,7 +102,7 @@ def _set_wall_edit_start_state(session, wall, endpoints, mode):
 
 def _queue_wall_edit_start_opening_clearances(session):
     session._wall_edit_opening_clearances = {}
-    session.wall_edit.queue_wall_edit_opening_clearances()
+    queue_wall_edit_opening_clearances(session)
 
 
 def _prepare_wall_edit_preview(session, wall, endpoints):
@@ -115,7 +115,7 @@ def _prepare_wall_edit_preview(session, wall, endpoints):
         session._edit_wall_visibility = None
     session.overlays.clear_wall_grips()
     session.overlays.clear_selected_wall_overlay()
-    session.wall_edit.sync_wall_edit_preview(session._preview_points, include_opening_preview=False)
+    sync_wall_edit_preview(session, session._preview_points, include_opening_preview=False)
 
 
 def start_wall_edit(session, mode):
@@ -134,13 +134,13 @@ def start_wall_edit(session, mode):
         with session.performance.plan_perf_trace_span("start_wall_edit_preview"):
             _prepare_wall_edit_preview(session, wall, endpoints)
 
-        session.wall_edit.queue_wall_edit_task_panel_refresh()
-        session.wall_edit.resume_wall_edit_point_pick()
+        queue_wall_edit_task_panel_refresh(session)
+        resume_wall_edit_point_pick(session)
 
 
 def resume_wall_edit_point_pick(session):
     with session.performance.plan_perf_trace_span("resume_wall_edit_point_pick"):
-        if not session.wall_edit.is_wall_edit_modal_active():
+        if not is_wall_edit_modal_active(session):
             return
         mode = session._edit_endpoint
         title = {
@@ -148,7 +148,7 @@ def resume_wall_edit_point_pick(session):
             "End": translate("BIM_PlanEdit", "Pick new end point"),
             "Move": translate("BIM_PlanEdit", "Pick new wall midpoint"),
         }.get(mode, translate("BIM_PlanEdit", "Pick wall point"))
-        last = session.wall_edit.get_wall_edit_reference_point()
+        last = get_wall_edit_reference_point(session)
 
         FreeCAD.activeDraftCommand = session
         if getattr(FreeCADGui, "Snapper", None):
@@ -161,8 +161,14 @@ def resume_wall_edit_point_pick(session):
             session.lifecycle.set_draft_point_focus_suppressed(True)
         with session.performance.plan_perf_trace_span("wall_edit_snapper_get_point"):
             FreeCADGui.Snapper.getPoint(
-                callback=session.wall_edit.finish_wall_edit,
-                movecallback=session.wall_edit.update_wall_edit_point_pick,
+                callback=lambda point=None, obj=None: finish_wall_edit(
+                    session, point=point, obj=obj
+                ),
+                movecallback=lambda point=None, obj=None: update_wall_edit_point_pick(
+                    session,
+                    point=point,
+                    obj=obj,
+                ),
                 last=last,
                 title=title,
                 noTracker=True,
@@ -216,23 +222,22 @@ def queue_wall_edit_opening_clearances(session):
     except ImportError:
         return
     session._wall_edit_opening_clearances_queued = True
-    QtCore.QTimer.singleShot(0, session.wall_edit.prime_wall_edit_opening_clearances)
+    QtCore.QTimer.singleShot(0, lambda: prime_wall_edit_opening_clearances(session))
 
 
 def prime_wall_edit_opening_clearances(session):
     session._wall_edit_opening_clearances_queued = False
     if (
         session._tearing_down
-        or not session.wall_edit.is_wall_stretch_edit_active()
+        or not is_wall_stretch_edit_active(session)
         or session._wall_edit_opening_clearances
     ):
         return
     with session.performance.plan_perf_trace_event("queued_wall_edit_opening_clearances"):
-        session._wall_edit_opening_clearances = (
-            session.wall_edit.snapshot_wall_hosted_opening_clearances(
-                session._edit_wall,
-                session._edit_endpoints,
-            )
+        session._wall_edit_opening_clearances = snapshot_wall_hosted_opening_clearances(
+            session,
+            session._edit_wall,
+            session._edit_endpoints,
         )
 
 
@@ -241,11 +246,10 @@ def ensure_wall_edit_opening_clearances(session, wall, endpoints):
         return
     session._wall_edit_opening_clearances_queued = False
     with session.performance.plan_perf_trace_span("ensure_wall_edit_opening_clearances"):
-        session._wall_edit_opening_clearances = (
-            session.wall_edit.snapshot_wall_hosted_opening_clearances(
-                wall,
-                endpoints,
-            )
+        session._wall_edit_opening_clearances = snapshot_wall_hosted_opening_clearances(
+            session,
+            wall,
+            endpoints,
         )
 
 
@@ -258,12 +262,12 @@ def queue_wall_edit_task_panel_refresh(session):
         session.task_panels.refresh_task_panel_status(selection_only=True)
         return
     session._wall_edit_task_panel_refresh_queued = True
-    QtCore.QTimer.singleShot(0, session.wall_edit.flush_wall_edit_task_panel_refresh)
+    QtCore.QTimer.singleShot(0, lambda: flush_wall_edit_task_panel_refresh(session))
 
 
 def flush_wall_edit_task_panel_refresh(session):
     session._wall_edit_task_panel_refresh_queued = False
-    if session._tearing_down or not session.wall_edit.is_wall_edit_modal_active():
+    if session._tearing_down or not is_wall_edit_modal_active(session):
         return
     with session.performance.plan_perf_trace_event("queued_wall_edit_task_panel_refresh"):
         session.task_panels.refresh_task_panel_status(selection_only=True)
@@ -274,7 +278,7 @@ def finish_wall_edit(session, point=None, obj=None):
 
     wall = session._edit_wall
     endpoint = session._edit_endpoint
-    new_points = session.wall_edit.compute_wall_edit_points(point)
+    new_points = compute_wall_edit_points(session, point)
 
     if point is None or not wall or not endpoint or not new_points:
         session.current_tool = "Select"
@@ -293,7 +297,7 @@ def finish_wall_edit(session, point=None, obj=None):
         session.task_panels.refresh_task_panel_status()
         return
 
-    session.wall_edit.commit_wall_edit_points(wall, endpoint, proxy, new_points)
+    commit_wall_edit_points(session, wall, endpoint, proxy, new_points)
 
 
 def _abort_wall_edit_commit(session, openings_fit=True, refresh=True):
@@ -358,9 +362,9 @@ def commit_wall_edit_points(session, wall, endpoint, proxy, new_points):
 
 
 def start_wall_grip_edit(session, grip_index):
-    if grip_index not in (0, 1, 2) or not session.wall_edit.is_selected_wall_endpoint_editable():
+    if grip_index not in (0, 1, 2) or not is_selected_wall_endpoint_editable(session):
         return
-    session.wall_edit.start_wall_edit({0: "Start", 1: "End", 2: "Move"}[grip_index])
+    start_wall_edit(session, {0: "Start", 1: "End", 2: "Move"}[grip_index])
 
 
 def activate_wall_grip(session, grip_index, wall=None):
@@ -369,14 +373,12 @@ def activate_wall_grip(session, grip_index, wall=None):
     try:
         from PySide import QtCore
     except ImportError:
-        session.wall_edit.activate_wall_grip_now(grip_index, wall)
+        activate_wall_grip_now(session, grip_index, wall)
         return
 
     QtCore.QTimer.singleShot(
         0,
-        lambda wall=wall, grip_index=grip_index: session.wall_edit.activate_wall_grip_now(
-            grip_index, wall
-        ),
+        lambda wall=wall, grip_index=grip_index: activate_wall_grip_now(session, grip_index, wall),
     )
 
 
@@ -388,7 +390,7 @@ def activate_wall_grip_now(session, grip_index, wall=None):
             if not session.selection.is_selected_plan_target("wall", wall):
                 session.selection.set_selected_plan_target("wall", wall)
         with session.performance.plan_perf_trace_span("activate_wall_grip_start_edit"):
-            session.wall_edit.start_wall_grip_edit(grip_index)
+            start_wall_grip_edit(session, grip_index)
 
 
 def get_wall_edit_reference_point(session):
@@ -573,7 +575,7 @@ def collect_preview_wall_relation_data(session, wall, points):
     if not wall or not points or len(points) != 2:
         return {"Start": None, "End": None, "Conflicts": set()}, []
 
-    preview_wall = session.wall_edit.make_preview_wall_adapter(wall, points)
+    preview_wall = make_preview_wall_adapter(session, wall, points)
     if not preview_wall:
         return {"Start": None, "End": None, "Conflicts": set()}, []
 
@@ -582,7 +584,7 @@ def collect_preview_wall_relation_data(session, wall, points):
     claims = {"Start": [], "End": []}
     warnings = []
     for relation in ArchWallJoinUtils.iter_wall_relations(wall):
-        solution = session.wall_edit.solve_preview_wall_relation(relation, wall, preview_wall)
+        solution = solve_preview_wall_relation(session, relation, wall, preview_wall)
         if not solution:
             continue
         if not solution.is_ok():
@@ -666,12 +668,12 @@ def clip_preview_polygon_to_plane(polygon, plane_placement, ref_point, tol=1e-7)
 
 
 def get_preview_footprint_polylines(session, points):
-    footprint = session.wall_edit.get_preview_footprint(points)
+    footprint = get_preview_footprint(session, points)
     if not footprint or len(footprint) < 3:
         return [], []
 
-    relation_endings, warnings = session.wall_edit.collect_preview_wall_relation_data(
-        session._edit_wall, points
+    relation_endings, warnings = collect_preview_wall_relation_data(
+        session, session._edit_wall, points
     )
     polygon = [FreeCAD.Vector(point) for point in footprint]
     for end_name in ("Start", "End"):
@@ -702,7 +704,7 @@ def get_readout_base_gap(session):
 def get_aligned_readout_offset_for_wall(session, wall):
     width = getattr(getattr(wall, "Width", None), "Value", 0.0) if wall else 0.0
     width = float(width or 0.0)
-    base_gap = max(width * 0.25, session.wall_edit.get_readout_base_gap())
+    base_gap = max(width * 0.25, get_readout_base_gap(session))
     if width <= 0:
         return base_gap
     align = getattr(wall, "Align", "Center") if wall else "Center"
@@ -715,15 +717,15 @@ def get_aligned_readout_offset_for_wall(session, wall):
 
 def get_wall_edit_readout_offset(session, mode):
     if mode in (2, 3):
-        return session.wall_edit.get_readout_base_gap()
+        return get_readout_base_gap(session)
     if mode != 1:
         return None
-    return session.wall_edit.get_aligned_readout_offset_for_wall(session._edit_wall)
+    return get_aligned_readout_offset_for_wall(session, session._edit_wall)
 
 
 def get_opening_move_readout_offset(session, opening):
     host = next(iter(getattr(opening, "Hosts", None) or []), None) if opening else None
-    return session.wall_edit.get_aligned_readout_offset_for_wall(host)
+    return get_aligned_readout_offset_for_wall(session, host)
 
 
 def _ensure_wall_edit_preview_axis_tracker(session, DraftTrackers):
@@ -745,7 +747,7 @@ def _update_wall_edit_preview_relation_status(session, relation_warnings):
         session._plan_relation_status_message = translate(
             "BIM_PlanEdit", "Preview warning: {label} ({status})"
         ).format(label=label, status=status)
-    elif session.wall_edit.is_wall_edit_modal_active():
+    elif is_wall_edit_modal_active(session):
         session.wall_relations.clear_plan_relation_status()
     return previous_relation_status
 
@@ -833,7 +835,7 @@ def update_wall_edit_preview_geometry(session, points):
     axis_tracker.p1(points[0])
     axis_tracker.p2(points[1])
 
-    polylines, relation_warnings = session.wall_edit.get_preview_footprint_polylines(points)
+    polylines, relation_warnings = get_preview_footprint_polylines(session, points)
     previous_relation_status = _update_wall_edit_preview_relation_status(
         session,
         relation_warnings,
@@ -850,12 +852,12 @@ def update_wall_edit_preview_geometry(session, points):
 
 
 def sync_wall_edit_preview(session, points, include_opening_preview=True):
-    session.wall_edit.update_wall_edit_preview_geometry(points)
-    session.wall_edit.sync_wall_edit_readout(points)
+    update_wall_edit_preview_geometry(session, points)
+    sync_wall_edit_readout(session, points)
     if include_opening_preview:
-        session.wall_edit.sync_wall_hosted_opening_preview(points)
+        sync_wall_hosted_opening_preview(session, points)
     else:
-        session.wall_edit.clear_wall_hosted_opening_preview()
+        clear_wall_hosted_opening_preview(session)
 
 
 def is_wall_move_edit_active(session):
@@ -875,10 +877,7 @@ def is_wall_stretch_edit_active(session):
 
 
 def is_wall_readout_edit_active(session):
-    return bool(
-        session.wall_edit.is_wall_move_edit_active()
-        or session.wall_edit.is_wall_stretch_edit_active()
-    )
+    return bool(is_wall_move_edit_active(session) or is_wall_stretch_edit_active(session))
 
 
 def clear_wall_edit_preview(session):
@@ -898,8 +897,8 @@ def clear_wall_edit_preview(session):
         except Exception:
             pass
     session._preview_grip_trackers = []
-    session.wall_edit.clear_wall_edit_readout()
-    session.wall_edit.clear_wall_hosted_opening_preview()
+    clear_wall_edit_readout(session)
+    clear_wall_hosted_opening_preview(session)
 
 
 def get_wall_hosted_opening_preview_segments(session, wall, points):
@@ -928,24 +927,24 @@ def get_wall_hosted_opening_preview_segments(session, wall, points):
 def sync_wall_hosted_opening_preview(session, points):
     wall = session._edit_wall
     if session.current_tool not in ("Stretch Start", "Stretch End") or not wall:
-        session.wall_edit.clear_wall_hosted_opening_preview()
+        clear_wall_hosted_opening_preview(session)
         return
 
-    segments = session.wall_edit.get_wall_hosted_opening_preview_segments(wall, points)
+    segments = get_wall_hosted_opening_preview_segments(session, wall, points)
     if not segments:
-        session.wall_edit.clear_wall_hosted_opening_preview()
+        clear_wall_hosted_opening_preview(session)
         return
 
     try:
         import draftguitools.gui_trackers as DraftTrackers
     except ImportError:
-        session.wall_edit.clear_wall_hosted_opening_preview()
+        clear_wall_hosted_opening_preview(session)
         return
 
     color = (0.12, 0.38, 0.95)
     width = session.viewport.scaled_line_width(2)
     if len(session._wall_edit_opening_preview_trackers) != len(segments):
-        session.wall_edit.clear_wall_hosted_opening_preview()
+        clear_wall_hosted_opening_preview(session)
         for _start, _end in segments:
             tracker = session.overlays.make_plan_line_tracker(
                 DraftTrackers,
@@ -1114,7 +1113,7 @@ def compute_wall_hosted_opening_layout(session, wall, endpoints):
         return []
     if wall_axis_u is None or wall_length is None:
         return None
-    session.wall_edit.ensure_wall_edit_opening_clearances(wall, endpoints)
+    ensure_wall_edit_opening_clearances(session, wall, endpoints)
 
     openings = _collect_wall_hosted_opening_layout_items(
         session,
@@ -1173,7 +1172,7 @@ def get_default_wall_edit_readout_mode(session, specs):
     modes = [mode for mode, _start, _end in specs]
     if not modes:
         return None
-    if session.wall_edit.is_wall_move_edit_active():
+    if is_wall_move_edit_active(session):
         if session._wall_edit_active_readout_mode in modes:
             return session._wall_edit_active_readout_mode
         if 2 in modes:
@@ -1185,34 +1184,31 @@ def get_default_wall_edit_readout_mode(session, specs):
 
 def bind_wall_edit_readout_callbacks(session, dim, mode):
     if mode == 1:
-        dim.setValueChangedCallback(session.wall_edit.on_wall_stretch_length_changed)
-        dim.setEditingFinishedCallback(session.wall_edit.on_wall_stretch_length_finished)
+        dim.setValueChangedCallback(lambda value: on_wall_stretch_length_changed(session, value))
+        dim.setEditingFinishedCallback(
+            lambda value: on_wall_stretch_length_finished(session, value)
+        )
         if hasattr(dim, "setEditingCanceledCallback"):
-            dim.setEditingCanceledCallback(session.wall_edit.on_wall_stretch_length_canceled)
+            dim.setEditingCanceledCallback(
+                lambda value: on_wall_stretch_length_canceled(session, value)
+            )
         return
 
     dim.setValueChangedCallback(
-        lambda value, delta_mode=mode: session.wall_edit.on_wall_move_delta_changed(
-            delta_mode, value
-        )
+        lambda value, delta_mode=mode: on_wall_move_delta_changed(session, delta_mode, value)
     )
     dim.setEditingFinishedCallback(
-        lambda value, delta_mode=mode: session.wall_edit.on_wall_move_delta_finished(
-            delta_mode, value
-        )
+        lambda value, delta_mode=mode: on_wall_move_delta_finished(session, delta_mode, value)
     )
     if hasattr(dim, "setEditingCanceledCallback"):
         dim.setEditingCanceledCallback(
-            lambda value, delta_mode=mode: session.wall_edit.on_wall_move_delta_canceled(
-                delta_mode, value
-            )
+            lambda value, delta_mode=mode: on_wall_move_delta_canceled(session, delta_mode, value)
         )
 
 
 def update_wall_edit_readouts_in_place(session, points, active_mode=None):
     specs = {
-        mode: (start, end)
-        for mode, start, end in session.wall_edit.get_wall_edit_readout_specs(points)
+        mode: (start, end) for mode, start, end in get_wall_edit_readout_specs(session, points)
     }
     for tracker in session._wall_edit_readout_trackers:
         mode = getattr(tracker, "mode", None)
@@ -1229,7 +1225,7 @@ def update_wall_edit_readouts_in_place(session, points, active_mode=None):
 
 def _make_wall_edit_readout_tracker(session, DraftTrackers, mode):
     try:
-        if session.wall_edit.is_wall_readout_edit_active():
+        if is_wall_readout_edit_active(session):
             return DraftTrackers.editableArchDimTracker(mode=mode)
         return DraftTrackers.archDimTracker(mode=mode)
     except Exception:
@@ -1244,19 +1240,19 @@ def _configure_wall_edit_readout_tracker(session, dim, mode, start, end, readout
             dim.setColor(readout_color)
     except Exception:
         pass
-    offset = session.wall_edit.get_wall_edit_readout_offset(mode)
+    offset = get_wall_edit_readout_offset(session, mode)
     if offset is not None:
         dim.offset = offset
     dim.p1(start)
     dim.p2(end)
     dim.on()
-    if session.wall_edit.is_wall_readout_edit_active() and hasattr(dim, "setValueChangedCallback"):
-        session.wall_edit.bind_wall_edit_readout_callbacks(dim, mode)
+    if is_wall_readout_edit_active(session) and hasattr(dim, "setValueChangedCallback"):
+        bind_wall_edit_readout_callbacks(session, dim, mode)
 
 
 def _track_active_wall_edit_readout(session, dim, mode, active_mode):
     if (
-        session.wall_edit.is_wall_readout_edit_active()
+        is_wall_readout_edit_active(session)
         and hasattr(dim, "setValueChangedCallback")
         and mode == active_mode
     ):
@@ -1277,7 +1273,7 @@ def _sync_wall_edit_readout_trackers(session, DraftTrackers, dims, active_mode, 
 
 
 def sync_wall_edit_readout(session, points):
-    session.wall_edit.clear_wall_edit_readout()
+    clear_wall_edit_readout(session)
     if not points or len(points) != 2 or not session._edit_endpoints:
         return
     try:
@@ -1286,8 +1282,8 @@ def sync_wall_edit_readout(session, points):
         return
 
     readout_color = (0.12, 0.38, 0.95)
-    dims = session.wall_edit.get_wall_edit_readout_specs(points)
-    active_mode = session.wall_edit.get_default_wall_edit_readout_mode(dims)
+    dims = get_wall_edit_readout_specs(session, points)
+    active_mode = get_default_wall_edit_readout_mode(session, dims)
     session._wall_edit_active_readout_mode = active_mode
     _sync_wall_edit_readout_trackers(
         session,
@@ -1314,7 +1310,7 @@ def get_wall_edit_readout_tracker(session, mode):
 
 
 def cycle_wall_move_readout_mode(session):
-    if not session.wall_edit.is_wall_move_edit_active():
+    if not is_wall_move_edit_active(session):
         return False
     modes = [
         getattr(tracker, "mode", None)
@@ -1331,7 +1327,7 @@ def cycle_wall_move_readout_mode(session):
     )
     next_mode = modes[(modes.index(current_mode) + 1) % len(modes)]
     session._wall_edit_active_readout_mode = next_mode
-    tracker = session.wall_edit.get_wall_edit_readout_tracker(next_mode)
+    tracker = get_wall_edit_readout_tracker(session, next_mode)
     if tracker is not None:
         session._wall_edit_active_readout_tracker = tracker
     return True
@@ -1339,9 +1335,9 @@ def cycle_wall_move_readout_mode(session):
 
 def start_wall_readout_edit(session, cycle=False):
     tracker = session._wall_edit_active_readout_tracker
-    if not session.wall_edit.is_wall_readout_edit_active():
+    if not is_wall_readout_edit_active(session):
         return False
-    if cycle and session.wall_edit.is_wall_move_edit_active():
+    if cycle and is_wall_move_edit_active(session):
         if (
             tracker is not None
             and hasattr(tracker, "isInEdit")
@@ -1349,7 +1345,7 @@ def start_wall_readout_edit(session, cycle=False):
             and hasattr(tracker, "stopEdit")
         ):
             tracker.stopEdit()
-        if not session.wall_edit.cycle_wall_move_readout_mode():
+        if not cycle_wall_move_readout_mode(session):
             return False
         tracker = session._wall_edit_active_readout_tracker
     if tracker is None:
@@ -1371,18 +1367,18 @@ def start_wall_readout_edit(session, cycle=False):
         tracker.startEdit(tracker.Distance)
         return True
     QtCore.QTimer.singleShot(
-        0, lambda: session.wall_edit.start_wall_readout_edit_now(tracker, tracker.Distance)
+        0, lambda: start_wall_readout_edit_now(session, tracker, tracker.Distance)
     )
     return True
 
 
 def start_wall_stretch_length_edit(session):
-    return session.wall_edit.start_wall_readout_edit(cycle=False)
+    return start_wall_readout_edit(session, cycle=False)
 
 
 def start_wall_readout_edit_now(session, tracker, value):
     session._wall_edit_length_edit_queued = False
-    if not session.wall_edit.is_wall_readout_edit_active():
+    if not is_wall_readout_edit_active(session):
         return
     if tracker is None or tracker is not session._wall_edit_active_readout_tracker:
         return
@@ -1399,40 +1395,40 @@ def start_wall_readout_edit_now(session, tracker, value):
 
 
 def on_wall_stretch_length_changed(session, value):
-    if not session.wall_edit.is_wall_stretch_edit_active():
+    if not is_wall_stretch_edit_active(session):
         return
-    new_points = session.wall_edit.compute_wall_edit_points_from_length(value)
+    new_points = compute_wall_edit_points_from_length(session, value)
     tracker = session._wall_edit_active_readout_tracker
     if not new_points or tracker is None:
         return
     session._preview_points = new_points
-    session.wall_edit.update_wall_edit_preview_geometry(new_points)
-    session.wall_edit.update_wall_edit_readouts_in_place(new_points, active_mode=1)
-    session.wall_edit.sync_wall_hosted_opening_preview(new_points)
+    update_wall_edit_preview_geometry(session, new_points)
+    update_wall_edit_readouts_in_place(session, new_points, active_mode=1)
+    sync_wall_hosted_opening_preview(session, new_points)
 
 
 def on_wall_stretch_length_finished(session, value):
-    if not session.wall_edit.is_wall_stretch_edit_active():
+    if not is_wall_stretch_edit_active(session):
         return
     wall = session._edit_wall
     endpoint = session._edit_endpoint
     proxy = getattr(wall, "Proxy", None)
-    new_points = session.wall_edit.compute_wall_edit_points_from_length(value)
+    new_points = compute_wall_edit_points_from_length(session, value)
     if not new_points or not proxy:
         return
     session._preview_points = new_points
-    session.wall_edit.commit_wall_edit_points(wall, endpoint, proxy, new_points)
+    commit_wall_edit_points(session, wall, endpoint, proxy, new_points)
 
 
 def on_wall_stretch_length_canceled(session, value):
     del value
-    if not session.wall_edit.is_wall_stretch_edit_active():
+    if not is_wall_stretch_edit_active(session):
         return
-    session.wall_edit.schedule_wall_edit_readout_cancel()
+    schedule_wall_edit_readout_cancel(session)
 
 
 def compute_wall_edit_points_from_move_delta(session, mode, value):
-    if not session.wall_edit.is_wall_move_edit_active() or not session._edit_endpoints:
+    if not is_wall_move_edit_active(session) or not session._edit_endpoints:
         return None
     original_endpoints = session._edit_endpoints
     original_midpoint = (original_endpoints[0] + original_endpoints[1]) * 0.5
@@ -1450,35 +1446,35 @@ def compute_wall_edit_points_from_move_delta(session, mode, value):
 
 
 def on_wall_move_delta_changed(session, mode, value):
-    if not session.wall_edit.is_wall_move_edit_active():
+    if not is_wall_move_edit_active(session):
         return
-    new_points = session.wall_edit.compute_wall_edit_points_from_move_delta(mode, value)
+    new_points = compute_wall_edit_points_from_move_delta(session, mode, value)
     if not new_points:
         return
     session._preview_points = new_points
-    session.wall_edit.update_wall_edit_preview_geometry(new_points)
-    session.wall_edit.update_wall_edit_readouts_in_place(new_points, active_mode=mode)
-    session.wall_edit.sync_wall_hosted_opening_preview(new_points)
+    update_wall_edit_preview_geometry(session, new_points)
+    update_wall_edit_readouts_in_place(session, new_points, active_mode=mode)
+    sync_wall_hosted_opening_preview(session, new_points)
 
 
 def on_wall_move_delta_finished(session, mode, value):
-    if not session.wall_edit.is_wall_move_edit_active():
+    if not is_wall_move_edit_active(session):
         return
     wall = session._edit_wall
     endpoint = session._edit_endpoint
     proxy = getattr(wall, "Proxy", None)
-    new_points = session.wall_edit.compute_wall_edit_points_from_move_delta(mode, value)
+    new_points = compute_wall_edit_points_from_move_delta(session, mode, value)
     if not new_points or not proxy:
         return
     session._preview_points = new_points
-    session.wall_edit.commit_wall_edit_points(wall, endpoint, proxy, new_points)
+    commit_wall_edit_points(session, wall, endpoint, proxy, new_points)
 
 
 def on_wall_move_delta_canceled(session, mode, value):
     del mode, value
-    if not session.wall_edit.is_wall_move_edit_active():
+    if not is_wall_move_edit_active(session):
         return
-    session.wall_edit.schedule_wall_edit_readout_cancel()
+    schedule_wall_edit_readout_cancel(session)
 
 
 def schedule_wall_edit_readout_cancel(session):
@@ -1490,19 +1486,19 @@ def schedule_wall_edit_readout_cancel(session):
     try:
         from PySide import QtCore
     except ImportError:
-        session.wall_edit.finish_wall_edit_readout_canceled(preview_points)
+        finish_wall_edit_readout_canceled(session, preview_points)
         return
     QtCore.QTimer.singleShot(
-        0, lambda pts=preview_points: session.wall_edit.finish_wall_edit_readout_canceled(pts)
+        0, lambda pts=preview_points: finish_wall_edit_readout_canceled(session, pts)
     )
 
 
 def finish_wall_edit_readout_canceled(session, preview_points):
-    if not session.wall_edit.is_wall_readout_edit_active():
+    if not is_wall_readout_edit_active(session):
         return
     if preview_points:
-        session.wall_edit.sync_wall_edit_preview(preview_points)
-    session.wall_edit.resume_wall_edit_point_pick()
+        sync_wall_edit_preview(session, preview_points)
+    resume_wall_edit_point_pick(session)
 
 
 def restore_edit_wall_visibility(session):
@@ -1516,11 +1512,11 @@ def restore_edit_wall_visibility(session):
 
 
 def update_wall_edit_preview(session, point):
-    new_points = session.wall_edit.compute_wall_edit_points(point)
+    new_points = compute_wall_edit_points(session, point)
     if not new_points:
         return
     session._preview_points = new_points
-    session.wall_edit.sync_wall_edit_preview(new_points)
+    sync_wall_edit_preview(session, new_points)
 
 
 def update_wall_edit_point_pick(session, point=None, snap_info=None):
@@ -1530,7 +1526,7 @@ def update_wall_edit_point_pick(session, point=None, snap_info=None):
     ):
         if session._wall_edit_active_readout_tracker.isInEdit():
             return
-    session.wall_edit.update_wall_edit_preview(point)
+    update_wall_edit_preview(session, point)
 
 
 def cancel_wall_edit_point_pick(session):
