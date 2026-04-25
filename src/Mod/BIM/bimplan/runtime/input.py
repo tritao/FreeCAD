@@ -42,13 +42,20 @@ class PlanInputAPI:
         return claim_left_button_click(self.session, event_callback)
 
 
+def _get_event_handled_setter(event_callback):
+    setter = getattr(event_callback, "setHandled", None)
+    return setter if callable(setter) else None
+
+
 def set_event_handled(session, event_callback):
     del session
-    if event_callback and hasattr(event_callback, "setHandled"):
-        try:
-            event_callback.setHandled()
-        except Exception:
-            pass
+    setter = _get_event_handled_setter(event_callback)
+    if setter is None:
+        return
+    try:
+        setter()
+    except Exception:
+        pass
 
 
 def claim_left_button_click(session, event_callback):
@@ -278,8 +285,9 @@ def on_mouse_wheel(session, event_callback):
 
 
 def _set_key_event_handled(event_callback):
-    if hasattr(event_callback, "setHandled"):
-        event_callback.setHandled()
+    setter = _get_event_handled_setter(event_callback)
+    if setter is not None:
+        setter()
 
 
 def _handle_direct_tool_key_press(session, key, event_callback, coin):

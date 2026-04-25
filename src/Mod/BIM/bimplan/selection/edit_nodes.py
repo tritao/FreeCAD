@@ -53,6 +53,10 @@ class RayEditNode:
     kind = "edit_node"
 
 
+def _get_node_attr(node, attr_name):
+    return getattr(node, attr_name, None)
+
+
 def get_edit_node_kind(node):
     if node is None:
         return None
@@ -68,36 +72,41 @@ def get_edit_node_kind(node):
 def get_edit_node_payload(node):
     kind = get_edit_node_kind(node)
     if kind == "symbol_handle":
-        if hasattr(node, "symbol"):
-            return (getattr(node, "symbol", None), getattr(node, "role", None))
+        symbol = _get_node_attr(node, "symbol")
+        if symbol is not None:
+            return (symbol, _get_node_attr(node, "role"))
         try:
             return (node[1], node[2])
         except Exception:
             return ()
     if kind == "opening_handle":
-        if hasattr(node, "opening"):
-            return (getattr(node, "opening", None), getattr(node, "index", None))
+        opening = _get_node_attr(node, "opening")
+        if opening is not None:
+            return (opening, _get_node_attr(node, "index"))
         try:
             return (node[1], node[2])
         except Exception:
             return ()
     if kind == "provider_handle":
-        if hasattr(node, "provider"):
-            return (getattr(node, "provider", None), getattr(node, "index", None))
+        provider = _get_node_attr(node, "provider")
+        if provider is not None:
+            return (provider, _get_node_attr(node, "index"))
         try:
             return (node[1], node[2])
         except Exception:
             return ()
     if kind == "provider_overlay_target":
-        if hasattr(node, "target_kind"):
-            return (getattr(node, "target_kind", None), getattr(node, "target_obj", None))
+        target_kind = _get_node_attr(node, "target_kind")
+        if target_kind is not None:
+            return (target_kind, _get_node_attr(node, "target_obj"))
         try:
             return (node[1], node[2])
         except Exception:
             return ()
     if kind in ("provider_overlay_point", "edit_node"):
-        if hasattr(node, "point"):
-            return (getattr(node, "point", None),)
+        point = _get_node_attr(node, "point")
+        if point is not None:
+            return (point,)
         try:
             return (node[1],)
         except Exception:
