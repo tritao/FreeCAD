@@ -202,12 +202,10 @@ def plan_pick_debug_event(session, name, **fields):
     scope = str(getattr(session, "_plan_pick_debug_scope_name", "") or "").strip()
     if scope:
         output["scope"] = scope
-    get_mode = getattr(session, "get_plan_provider_overlay_mode", None)
-    if callable(get_mode):
-        try:
-            output["overlay_mode"] = str(get_mode() or "")
-        except Exception:
-            pass
+    try:
+        output["overlay_mode"] = str(session.providers.get_plan_provider_overlay_mode() or "")
+    except Exception:
+        pass
     for key, value in fields.items():
         if value is None:
             continue

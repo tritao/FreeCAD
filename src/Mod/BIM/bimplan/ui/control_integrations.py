@@ -990,7 +990,7 @@ class PlanEditIntegrationPanelMixin:
         for item in plan_task_panel_view_model.filter_provider_overlay_legend_items_for_mode(
             items, active_mode=active_mode
         ):
-            category = str(item[5] or "").strip().lower() if len(item) > 5 else "architecture"
+            category = str(getattr(item, "category", "") or "").strip().lower() or "architecture"
             if category not in groups_by_key:
                 groups_by_key[category] = []
                 grouped.append(category)
@@ -1168,28 +1168,21 @@ class PlanEditIntegrationPanelMixin:
                 heading = self._make_wrapped_plain_label(QtGui, category_label, parent, bold=True)
                 self._set_integration_style_property(heading, "planSubsectionTitle", "true")
                 self._integration_overlay_content_layout.addWidget(heading)
-                for (
-                    provider_id,
-                    overlay_key,
-                    label,
-                    color,
-                    checked,
-                    _item_category,
-                ) in category_items:
+                for item in category_items:
                     row = QtGui.QHBoxLayout()
                     row.setSpacing(6)
                     swatch = QtGui.QLabel(parent)
                     swatch.setFixedSize(12, 12)
                     swatch.setStyleSheet(
                         "background-color: {}; border: 1px solid #555;".format(
-                            self._format_provider_overlay_color(color)
+                            self._format_provider_overlay_color(item.color)
                         )
                     )
                     row.addWidget(swatch)
-                    checkbox = QtGui.QCheckBox(label, parent)
-                    checkbox.setChecked(bool(checked))
+                    checkbox = QtGui.QCheckBox(item.label, parent)
+                    checkbox.setChecked(bool(item.enabled))
                     checkbox.toggled.connect(
-                        lambda checked, current_provider_id=provider_id, current_overlay_key=overlay_key: (
+                        lambda checked, current_provider_id=item.provider_id, current_overlay_key=item.overlay_key: (
                             self.on_provider_overlay_visibility_changed(
                                 current_provider_id,
                                 current_overlay_key,
@@ -1362,4 +1355,4 @@ class PlanEditIntegrationPanelMixin:
         self.session.providers.set_plan_provider_overlay_visible(provider_id, overlay_key, visible)
 
     def on_provider_overlay_mode_changed(self, mode):
-        getattr(self.session, "set_plan_provider_overlay_mode", lambda _mode: False)(mode)
+        self.session.providers.set_plan_provider_overlay_mode(mode)

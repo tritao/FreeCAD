@@ -130,6 +130,7 @@ from bimplan.selection.targets import (
 from bimplan.transactions import PlanEditTransaction
 from bimplan.ui.controls import PlanEditControlsWidget
 from bimplan.task_panel_view_model import (
+    ProviderOverlayLegendItem,
     build_action_context_view_model,
     build_integration_panel_view_model,
     build_region_editor_view_model,
@@ -811,7 +812,7 @@ class TestBimPlanCore(unittest.TestCase):
         self.assertEqual(("tool-a", "tool-b"), tuple(tool.key for tool in view_model.tools))
         self.assertEqual("electrical", view_model.overlay_mode)
         self.assertEqual(
-            ("elec-overlay",), tuple(item[1] for item in view_model.active_overlay_items)
+            ("elec-overlay",), tuple(item.overlay_key for item in view_model.active_overlay_items)
         )
         self.assertEqual(1, len(view_model.grouped_issue_sets))
         self.assertEqual(
@@ -2716,21 +2717,21 @@ class TestBimPlanCore(unittest.TestCase):
 
     def test_provider_overlay_legend_items_filter_by_mode(self):
         items = (
-            (
-                "test-provider",
-                "provider-preview",
-                "Provider Preview",
-                (0.1, 0.2, 0.3),
-                True,
-                "architecture",
+            ProviderOverlayLegendItem(
+                provider_id="test-provider",
+                overlay_key="provider-preview",
+                label="Provider Preview",
+                color=(0.1, 0.2, 0.3),
+                enabled=True,
+                category="architecture",
             ),
-            (
-                "test-provider",
-                "electrical-preview",
-                "Electrical Preview",
-                (0.9, 0.6, 0.1),
-                True,
-                "electrical",
+            ProviderOverlayLegendItem(
+                provider_id="test-provider",
+                overlay_key="electrical-preview",
+                label="Electrical Preview",
+                color=(0.9, 0.6, 0.1),
+                enabled=True,
+                category="electrical",
             ),
         )
 

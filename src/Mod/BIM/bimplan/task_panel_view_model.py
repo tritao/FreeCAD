@@ -52,6 +52,16 @@ class ProviderContextPanelActions:
     has_primary: bool = False
 
 
+@dataclass(frozen=True)
+class ProviderOverlayLegendItem:
+    provider_id: str = ""
+    overlay_key: str = ""
+    label: str = ""
+    color: tuple = ()
+    enabled: bool = True
+    category: str = "architecture"
+
+
 class _TaskPanelInteractionReads(_TaskPanelReadsBase):
     __slots__ = ()
 
@@ -558,13 +568,13 @@ def build_provider_overlay_legend_items(session_or_context, overlays):
             )
         category = context.providers.get_plan_provider_overlay_category(overlay)
         items.append(
-            (
-                provider_id,
-                overlay_key,
-                label,
-                tuple(getattr(overlay, "color", ()) or ()),
-                context.providers.is_plan_provider_overlay_enabled(overlay),
-                category,
+            ProviderOverlayLegendItem(
+                provider_id=provider_id,
+                overlay_key=overlay_key,
+                label=label,
+                color=tuple(getattr(overlay, "color", ()) or ()),
+                enabled=context.providers.is_plan_provider_overlay_enabled(overlay),
+                category=category,
             )
         )
     return tuple(items)
@@ -575,7 +585,7 @@ def filter_provider_overlay_legend_items_for_mode(items, active_mode="architectu
     if mode_key == "all":
         return tuple(items or ())
     return tuple(
-        item for item in tuple(items or ()) if len(item) > 5 and str(item[5] or "") == mode_key
+        item for item in tuple(items or ()) if str(getattr(item, "category", "") or "") == mode_key
     )
 
 
