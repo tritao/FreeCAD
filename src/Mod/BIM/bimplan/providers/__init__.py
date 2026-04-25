@@ -125,6 +125,24 @@ class PlanProviderActionContext:
             return getter(key, default)
         return getattr(payload, key, default)
 
+    def get_point(self):
+        return self.get_action_payload_value("point")
+
+    def get_placement_point(self):
+        return self.get_action_payload_value("placement_point")
+
+    def get_raw_point(self):
+        return self.get_action_payload_value("raw_point")
+
+    def get_snap_info(self):
+        return self.get_action_payload_value("snap_info", {})
+
+    def get_snap_object(self):
+        return self.get_action_payload_value("snap_object")
+
+    def get_host_source(self):
+        return str(self.get_action_payload_value("host_source", "") or "")
+
     def get_selected_target(self):
         return plan_target_kinds.coerce_plan_target_ref(
             self.get_action_payload_value("selected_target")

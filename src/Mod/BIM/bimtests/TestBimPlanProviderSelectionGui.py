@@ -119,12 +119,10 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
                 ),
             )
 
-        def execute_action(self, action_key, context, session, payload=None):
-            del context, session
+        def execute_action(self, action_key, context, commands, payload=None):
+            del context
             self.calls.append((action_key, payload))
-            if payload is None:
-                return False
-            point = payload.get("point")
+            point = commands.get_point()
             if point is None:
                 return False
             self.last_point = FreeCAD.Vector(point)
@@ -191,7 +189,7 @@ class TestBimPlanProviderSelectionGui(ArchWallGuiTestCase):
             host_kind, host_obj = commands.get_host_target()
             if host_kind != "wall" or host_obj is None:
                 return False
-            placement_point = payload.get("placement_point")
+            placement_point = commands.get_placement_point()
             if not Arch.rehostObject(self.obj, host_obj, preserve_world_position=True):
                 return False
             if placement_point is None:
