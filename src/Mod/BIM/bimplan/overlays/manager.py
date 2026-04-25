@@ -414,9 +414,10 @@ def refresh_plan_overlay_visuals(session, dirty=None):
 
 def finalize_trackers(trackers):
     for tracker in trackers:
+        off = getattr(tracker, "off", None)
         try:
-            if hasattr(tracker, "off"):
-                tracker.off()
+            if callable(off):
+                off()
         except Exception:
             pass
         try:
@@ -427,8 +428,9 @@ def finalize_trackers(trackers):
 
 def make_plan_line_tracker(DraftTrackers, label, **kwargs):
     tracker = DraftTrackers.lineTracker(**kwargs)
-    if hasattr(tracker, "setDebugLabel"):
-        tracker.setDebugLabel("BimPlanSession:{}".format(label))
+    set_debug_label = getattr(tracker, "setDebugLabel", None)
+    if callable(set_debug_label):
+        set_debug_label("BimPlanSession:{}".format(label))
     return tracker
 
 

@@ -17,6 +17,92 @@ def _perf_describe_object(session, obj):
     return session.performance.plan_perf_describe_object(obj)
 
 
+def _get_callable(obj, method_name):
+    method = getattr(obj, method_name, None)
+    return method if callable(method) else None
+
+
+def _has_view_object_property(view_object, property_name):
+    return view_object is not None and hasattr(view_object, property_name)
+
+
+def _set_view_object_property(view_object, property_name, value):
+    if not _has_view_object_property(view_object, property_name):
+        return False
+    try:
+        setattr(view_object, property_name, value)
+        return True
+    except Exception:
+        return False
+
+
+def _get_view_object_property(view_object, property_name):
+    if not _has_view_object_property(view_object, property_name):
+        return None
+    try:
+        return getattr(view_object, property_name)
+    except Exception:
+        return None
+
+
+def _capture_view_object_state(view_object, property_names):
+    state = {}
+    for property_name in property_names:
+        value = _get_view_object_property(view_object, property_name)
+        if value is not None:
+            state[property_name] = value
+    return state
+
+
+def _get_global_placement_if_available(obj):
+    get_global_placement = _get_callable(obj, "getGlobalPlacement")
+    if get_global_placement is None:
+        return None
+    try:
+        return get_global_placement()
+    except Exception:
+        return None
+
+
+def _is_document_object_group(obj):
+    is_derived_from = _get_callable(obj, "isDerivedFrom")
+    return bool(is_derived_from and is_derived_from("App::DocumentObjectGroup"))
+
+
+def _has_group_extension(obj):
+    has_extension = _get_callable(obj, "hasExtension")
+    return bool(has_extension and has_extension("App::GroupExtension"))
+
+
+def _get_linked_object(current):
+    linked = getattr(current, "LinkedObject", None)
+    if linked is not None:
+        return linked
+    get_linked_object = _get_callable(current, "getLinkedObject")
+    if get_linked_object is None:
+        return None
+    try:
+        return get_linked_object(True)
+    except TypeError:
+        try:
+            return get_linked_object()
+        except Exception:
+            return None
+    except Exception:
+        return None
+
+
+def _add_object_to_storey(storey, obj):
+    add_object = _get_callable(storey, "addObject")
+    if add_object is None:
+        return False
+    try:
+        add_object(obj)
+        return True
+    except Exception:
+        return False
+
+
 def is_live_document_object(_session, obj):
     if obj is None:
         return False
@@ -60,13 +146,9 @@ def copy_placement(_session, placement):
 def get_plan_object_global_placement(session, obj):
     if not obj:
         return FreeCAD.Placement()
-    if hasattr(obj, "getGlobalPlacement"):
-        try:
-            placement = obj.getGlobalPlacement()
-            if placement is not None:
-                return placement
-        except Exception:
-            pass
+    placement = _get_global_placement_if_available(obj)
+    if placement is not None:
+        return placement
     return getattr(obj, "Placement", FreeCAD.Placement())
 
 
@@ -98,9 +180,9 @@ def is_plan_container_object(obj):
         return False
     if getattr(obj, "IfcType", "") in {"Site", "Building", "Building Storey"}:
         return True
-    if hasattr(obj, "isDerivedFrom") and obj.isDerivedFrom("App::DocumentObjectGroup"):
+    if _is_document_object_group(obj):
         return True
-    if hasattr(obj, "hasExtension") and obj.hasExtension("App::GroupExtension"):
+    if _has_group_extension(obj):
         return True
     try:
         import Draft
@@ -177,17 +259,7 @@ def get_plan_semantic_object(session, obj):
             seen.add(name)
         if getattr(current, "TypeId", "") != "App::Link":
             break
-        linked = getattr(current, "LinkedObject", None)
-        if linked is None and hasattr(current, "getLinkedObject"):
-            try:
-                linked = current.getLinkedObject(True)
-            except TypeError:
-                try:
-                    linked = current.getLinkedObject()
-                except Exception:
-                    linked = None
-            except Exception:
-                linked = None
+        linked = _get_linked_object(current)
         if not linked or linked == current:
             break
         current = linked
@@ -368,13 +440,7 @@ def register_object_view_state(session, obj):
     view_object = getattr(obj, "ViewObject", None)
     if not view_object:
         return
-    state = {}
-    for prop in ("Visibility", "Transparency", "Selectable"):
-        if hasattr(view_object, prop):
-            try:
-                state[prop] = getattr(view_object, prop)
-            except Exception:
-                pass
+    state = _capture_view_object_state(view_object, ("Visibility", "Transparency", "Selectable"))
     if state:
         session._saved_object_view_state[obj.Name] = state
 
@@ -385,12 +451,8 @@ def add_object_to_active_storey(session, obj):
         return False
     if obj is storey or obj in getattr(storey, "InListRecursive", []):
         return True
-    try:
-        if hasattr(storey, "addObject"):
-            storey.addObject(obj)
-            return True
-    except Exception:
-        pass
+    if _add_object_to_storey(storey, obj):
+        return True
     group = getattr(storey, "Group", None)
     if group is None:
         return False
@@ -449,11 +511,7 @@ def restore_object_view_state(session):
         if not view_object:
             continue
         for prop, value in state.items():
-            if hasattr(view_object, prop):
-                try:
-                    setattr(view_object, prop, value)
-                except Exception:
-                    pass
+            _set_view_object_property(view_object, prop, value)
 
 
 def get_supported_plan_visibility(session, obj, state):
@@ -470,68 +528,47 @@ def get_supported_plan_visibility(session, obj, state):
 
 
 def apply_context_object_selectability(session, obj, view_object):
-    if not view_object or not hasattr(view_object, "Selectable"):
+    if not _has_view_object_property(view_object, "Selectable"):
         return
     semantic_obj = get_plan_semantic_object(session, obj)
     if semantic_obj is not None and session.document_visuals.is_symbol_visual_dependency(
         semantic_obj,
         obj,
     ):
-        try:
-            view_object.Selectable = True
-        except Exception:
-            pass
+        _set_view_object_property(view_object, "Selectable", True)
         return
     # Openings, spaces, and plan regions are selected through Plan Edit's
     # semantic picking paths. Leaving their native 3D view objects
     # selectable lets the viewer replace the intended target with
     # overlapping native hits on button release.
     if session.selection.is_plan_custom_pick_only_object(semantic_obj or obj):
-        try:
-            view_object.Selectable = False
-        except Exception:
-            pass
+        _set_view_object_property(view_object, "Selectable", False)
         return
     if not is_plan_context_only_object(session, obj):
         return
-    try:
-        view_object.Selectable = False
-    except Exception:
-        pass
+    _set_view_object_property(view_object, "Selectable", False)
 
 
 def apply_hidden_object_state(view_object):
     if not view_object:
         return
-    if hasattr(view_object, "Visibility"):
-        try:
-            view_object.Visibility = False
-        except Exception:
-            pass
-    if hasattr(view_object, "Selectable"):
-        try:
-            view_object.Selectable = False
-        except Exception:
-            pass
+    _set_view_object_property(view_object, "Visibility", False)
+    _set_view_object_property(view_object, "Selectable", False)
 
 
 def _restore_view_object_state(view_object, state):
     for prop, value in state.items():
-        if hasattr(view_object, prop):
-            try:
-                setattr(view_object, prop, value)
-            except Exception:
-                pass
+        _set_view_object_property(view_object, prop, value)
 
 
 def _apply_supported_object_view_state(session, obj, view_object, state):
     _perf_count(session, "storey_visibility_supported")
     _restore_view_object_state(view_object, state)
-    if hasattr(view_object, "Visibility"):
-        try:
-            view_object.Visibility = get_supported_plan_visibility(session, obj, state)
-        except Exception:
-            pass
+    _set_view_object_property(
+        view_object,
+        "Visibility",
+        get_supported_plan_visibility(session, obj, state),
+    )
     apply_context_object_selectability(session, obj, view_object)
 
 
@@ -546,11 +583,11 @@ def _apply_global_plan_visibility(session):
             _perf_count(session, "storey_visibility_hidden_unsupported")
             apply_hidden_object_state(view_object)
             continue
-        if view_object and hasattr(view_object, "Visibility"):
-            try:
-                view_object.Visibility = get_supported_plan_visibility(session, obj, state)
-            except Exception:
-                pass
+        _set_view_object_property(
+            view_object,
+            "Visibility",
+            get_supported_plan_visibility(session, obj, state),
+        )
         apply_context_object_selectability(session, obj, view_object)
 
 
@@ -574,21 +611,17 @@ def _apply_storey_visibility_for_active_storey_object(session, obj, view_object,
 
 def _apply_storey_visibility_for_other_storey_object(session, obj, view_object, state):
     _perf_count(session, "storey_visibility_other_storey_objects")
-    if hasattr(view_object, "Visibility"):
-        try:
-            view_object.Visibility = get_supported_plan_visibility(session, obj, state)
-        except Exception:
-            pass
-    if hasattr(view_object, "Transparency"):
-        try:
-            view_object.Transparency = max(int(state.get("Transparency", 0)), 85)
-        except Exception:
-            pass
-    if hasattr(view_object, "Selectable"):
-        try:
-            view_object.Selectable = False
-        except Exception:
-            pass
+    _set_view_object_property(
+        view_object,
+        "Visibility",
+        get_supported_plan_visibility(session, obj, state),
+    )
+    _set_view_object_property(
+        view_object,
+        "Transparency",
+        max(int(state.get("Transparency", 0)), 85),
+    )
+    _set_view_object_property(view_object, "Selectable", False)
 
 
 def apply_storey_visibility(session):

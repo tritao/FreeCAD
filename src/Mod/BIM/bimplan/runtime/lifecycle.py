@@ -989,15 +989,17 @@ def cancel_embedded_tool(session, tool_name=None):
     if tool_name is not None and session._embedded_tool_name != tool_name:
         return
     tool = session._embedded_tool
-    if hasattr(tool, "cancel_interactive"):
+    cancel_interactive = getattr(tool, "cancel_interactive", None)
+    if callable(cancel_interactive):
         try:
-            tool.cancel_interactive()
+            cancel_interactive()
             return
         except Exception:
             pass
-    if hasattr(tool, "finish"):
+    finish = getattr(tool, "finish", None)
+    if callable(finish):
         try:
-            tool.finish(cont=False)
+            finish(cont=False)
         except Exception:
             pass
 
@@ -1008,16 +1010,7 @@ def stop_snapper(session):
     if not snapper:
         return
     toolbar = getattr(FreeCADGui, "draftToolBar", None)
-    if toolbar and hasattr(toolbar, "setPointFocusSuppressed"):
-        try:
-            toolbar.setPointFocusSuppressed(False)
-        except Exception:
-            pass
-    elif toolbar and hasattr(toolbar, "suppress_point_focus"):
-        try:
-            toolbar.suppress_point_focus = False
-        except Exception:
-            pass
+    _set_toolbar_point_focus_suppressed(toolbar, False)
     try:
         snapper.getPoint()
         snapper.off()
@@ -1030,9 +1023,16 @@ def set_draft_point_focus_suppressed(session, suppressed):
     toolbar = getattr(FreeCADGui, "draftToolBar", None)
     if not toolbar:
         return
-    if hasattr(toolbar, "setPointFocusSuppressed"):
+    _set_toolbar_point_focus_suppressed(toolbar, bool(suppressed))
+
+
+def _set_toolbar_point_focus_suppressed(toolbar, suppressed):
+    if toolbar is None:
+        return
+    set_focus_suppressed = getattr(toolbar, "setPointFocusSuppressed", None)
+    if callable(set_focus_suppressed):
         try:
-            toolbar.setPointFocusSuppressed(bool(suppressed))
+            set_focus_suppressed(bool(suppressed))
         except Exception:
             pass
         return
