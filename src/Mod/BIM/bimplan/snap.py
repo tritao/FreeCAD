@@ -9,51 +9,55 @@ def _get_snapper():
     return getattr(FreeCADGui, "Snapper", None)
 
 
-def apply_plan_snap_profile(snap_modes):
+def _get_snapper_method(method_name):
     snapper = _get_snapper()
-    if not snapper or not hasattr(snapper, "push_snap_modes"):
+    if not snapper:
+        return None
+    method = getattr(snapper, method_name, None)
+    return method if callable(method) else None
+
+
+def apply_plan_snap_profile(snap_modes):
+    push_snap_modes = _get_snapper_method("push_snap_modes")
+    if push_snap_modes is None:
         return
     try:
-        snapper.push_snap_modes(snap_modes)
+        push_snap_modes(snap_modes)
     except Exception:
         pass
 
 
 def restore_snap_profile():
-    snapper = _get_snapper()
-    if not snapper or not hasattr(snapper, "pop_snap_modes"):
+    pop_snap_modes = _get_snapper_method("pop_snap_modes")
+    if pop_snap_modes is None:
         return
     try:
-        snapper.pop_snap_modes()
+        pop_snap_modes()
     except Exception:
         pass
 
 
 def push_opening_move_snap_profile(session, snap_modes):
-    snapper = _get_snapper()
-    if (
-        session._opening_move_snap_profile_pushed
-        or not snapper
-        or not hasattr(snapper, "push_snap_modes")
-    ):
+    if session._opening_move_snap_profile_pushed:
+        return
+    push_snap_modes = _get_snapper_method("push_snap_modes")
+    if push_snap_modes is None:
         return
     try:
-        snapper.push_snap_modes(snap_modes)
+        push_snap_modes(snap_modes)
         session._opening_move_snap_profile_pushed = True
     except Exception:
         pass
 
 
 def pop_opening_move_snap_profile(session):
-    snapper = _get_snapper()
-    if (
-        not session._opening_move_snap_profile_pushed
-        or not snapper
-        or not hasattr(snapper, "pop_snap_modes")
-    ):
+    if not session._opening_move_snap_profile_pushed:
+        return
+    pop_snap_modes = _get_snapper_method("pop_snap_modes")
+    if pop_snap_modes is None:
         return
     try:
-        snapper.pop_snap_modes()
+        pop_snap_modes()
     except Exception:
         pass
     session._opening_move_snap_profile_pushed = False

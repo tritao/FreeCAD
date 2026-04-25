@@ -267,37 +267,17 @@ def refresh_plan_object_footprint_display(session, obj, *, request_redraw=True):
     refreshed = False
     for candidate in refresh_targets:
         view_object = getattr(candidate, "ViewObject", None)
-        proxy = getattr(view_object, "Proxy", None) if view_object else None
-        if not proxy:
-            continue
-        if (
-            not hasattr(proxy, "ensureFootprintGroup")
-            and not hasattr(proxy, "updateFootprint")
-            and not hasattr(proxy, "refreshFootprint")
-        ):
+        refresh_proxy = _get_footprint_refresh_proxy(view_object)
+        if refresh_proxy is None:
             continue
         try:
-            if hasattr(proxy, "refreshFootprint"):
-                proxy.refreshFootprint()
-            else:
-                if hasattr(proxy, "ensureFootprintGroup"):
-                    proxy.ensureFootprintGroup(view_object)
-                if hasattr(proxy, "updateFootprint"):
-                    proxy.updateFootprint()
-            if hasattr(view_object, "update"):
-                view_object.update()
+            _refresh_footprint_proxy(refresh_proxy, view_object)
+            _update_view_object(view_object)
             refreshed = True
         except TypeError:
             try:
-                if hasattr(proxy, "refreshFootprint"):
-                    proxy.refreshFootprint(view_object)
-                else:
-                    if hasattr(proxy, "ensureFootprintGroup"):
-                        proxy.ensureFootprintGroup(view_object)
-                    if hasattr(proxy, "updateFootprint"):
-                        proxy.updateFootprint()
-                if hasattr(view_object, "update"):
-                    view_object.update()
+                _refresh_footprint_proxy(refresh_proxy, view_object, pass_view_object=True)
+                _update_view_object(view_object)
                 refreshed = True
             except Exception:
                 continue
@@ -305,11 +285,7 @@ def refresh_plan_object_footprint_display(session, obj, *, request_redraw=True):
             continue
 
     view_object = getattr(obj, "ViewObject", None)
-    if view_object and hasattr(view_object, "update"):
-        try:
-            view_object.update()
-        except Exception:
-            pass
+    _update_view_object(view_object)
     if not refreshed:
         return
     if request_redraw:
@@ -326,6 +302,48 @@ def refresh_wall_footprint_display(session, wall):
     if not wall:
         return
     refresh_plan_object_footprint_display(session, wall)
+
+
+def _get_footprint_refresh_proxy(view_object):
+    if not view_object:
+        return None
+    proxy = getattr(view_object, "Proxy", None)
+    if proxy is None:
+        return None
+    if any(
+        callable(getattr(proxy, method_name, None))
+        for method_name in ("ensureFootprintGroup", "updateFootprint", "refreshFootprint")
+    ):
+        return proxy
+    return None
+
+
+def _refresh_footprint_proxy(proxy, view_object, *, pass_view_object=False):
+    refresh_footprint = getattr(proxy, "refreshFootprint", None)
+    if callable(refresh_footprint):
+        if pass_view_object:
+            refresh_footprint(view_object)
+        else:
+            refresh_footprint()
+        return
+    ensure_group = getattr(proxy, "ensureFootprintGroup", None)
+    if callable(ensure_group):
+        ensure_group(view_object)
+    update_footprint = getattr(proxy, "updateFootprint", None)
+    if callable(update_footprint):
+        update_footprint()
+
+
+def _update_view_object(view_object):
+    if view_object is None:
+        return
+    update = getattr(view_object, "update", None)
+    if not callable(update):
+        return
+    try:
+        update()
+    except Exception:
+        pass
 
 
 def refresh_opening_host_footprint_displays(session, opening):
