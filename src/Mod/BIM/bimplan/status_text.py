@@ -408,11 +408,10 @@ def _get_direct_tool_status_chip_text(
         return title, "{}\n{}".format(context, action)
 
     if session.current_tool == "Region":
+        parent_space = session.spaces.get_plan_region_parent_space()
         context = (
-            translate("BIM_PlanEdit", "Parent space: {label}").format(
-                label=session._plan_region_parent_space.Label
-            )
-            if session.selection.is_plan_space_object(session._plan_region_parent_space)
+            translate("BIM_PlanEdit", "Parent space: {label}").format(label=parent_space.Label)
+            if session.selection.is_plan_space_object(parent_space)
             else translate("BIM_PlanEdit", "Plan region")
         )
         action = translate(

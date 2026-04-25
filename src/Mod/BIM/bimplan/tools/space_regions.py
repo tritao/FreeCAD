@@ -94,11 +94,23 @@ def _get_space_region_pick_candidates(session):
     return list(getattr(session, "_space_region_candidates", ()) or ())
 
 
+def get_space_region_pick_candidates(session):
+    return _get_space_region_pick_candidates(session)
+
+
+def has_space_region_pick_candidates(session):
+    return bool(_get_space_region_pick_candidates(session))
+
+
 def _get_hovered_space_region_candidate(session):
     state = getattr(session, "task_panel_state", None)
     if state is not None:
         return getattr(state, "hovered_space_region_candidate", None)
     return getattr(session, "_hovered_space_region_candidate", None)
+
+
+def get_hovered_space_region_candidate(session):
+    return _get_hovered_space_region_candidate(session)
 
 
 def _set_hovered_space_region_candidate_state(session, candidate):
