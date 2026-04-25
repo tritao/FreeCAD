@@ -8,7 +8,7 @@ from dataclasses import dataclass, replace
 import FreeCAD
 
 from bimplan import document_visuals as plan_document_visuals
-from . import (
+from .contracts import (
     PlanActionSpec,
     PlanContextDetailSpec,
     PlanContextPanelSpec,
