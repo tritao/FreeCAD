@@ -271,7 +271,7 @@ def snapshot_wall_hosted_opening_clearances(session, wall, endpoints):
 
 def queue_wall_edit_opening_clearances(session):
     if (
-        session._tearing_down
+        session.lifecycle_state.tearing_down
         or session._wall_edit_opening_clearances
         or session._wall_edit_opening_clearances_queued
         or session._edit_endpoint not in ("Start", "End")
@@ -288,7 +288,7 @@ def queue_wall_edit_opening_clearances(session):
 def prime_wall_edit_opening_clearances(session):
     session._wall_edit_opening_clearances_queued = False
     if (
-        session._tearing_down
+        session.lifecycle_state.tearing_down
         or not is_wall_stretch_edit_active(session)
         or session._wall_edit_opening_clearances
     ):
@@ -314,7 +314,7 @@ def ensure_wall_edit_opening_clearances(session, wall, endpoints):
 
 
 def queue_wall_edit_task_panel_refresh(session):
-    if session._tearing_down or session._wall_edit_task_panel_refresh_queued:
+    if session.lifecycle_state.tearing_down or session._wall_edit_task_panel_refresh_queued:
         return
     try:
         from PySide import QtCore
@@ -327,7 +327,7 @@ def queue_wall_edit_task_panel_refresh(session):
 
 def flush_wall_edit_task_panel_refresh(session):
     session._wall_edit_task_panel_refresh_queued = False
-    if session._tearing_down or not is_wall_edit_modal_active(session):
+    if session.lifecycle_state.tearing_down or not is_wall_edit_modal_active(session):
         return
     with session.performance.plan_perf_trace_event("queued_wall_edit_task_panel_refresh"):
         session.task_panels.refresh_task_panel_status(selection_only=True)
@@ -440,7 +440,7 @@ def activate_wall_grip(session, grip_index, wall=None):
 
 def activate_wall_grip_now(session, grip_index, wall=None):
     with session.performance.plan_perf_trace_span("activate_wall_grip_now"):
-        if session._tearing_down or session.current_tool != "Select" or not wall:
+        if session.lifecycle_state.tearing_down or session.current_tool != "Select" or not wall:
             return
         with session.performance.plan_perf_trace_span("activate_wall_grip_set_target"):
             if not session.selection.is_selected_plan_target("wall", wall):

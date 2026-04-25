@@ -600,7 +600,11 @@ def project_plan_point(session, point):
 
 
 def get_plan_view_height(session):
-    if session._tearing_down or getattr(session, "_finishing", False) or not session.view:
+    if (
+        session.lifecycle_state.tearing_down
+        or session.lifecycle_state.finishing
+        or not session.view
+    ):
         return None
     get_camera_node = session.viewport.get_runtime_attr(session.view, "getCameraNode")
     if get_camera_node is None:
@@ -662,7 +666,11 @@ def get_plan_view_units_per_pixel(session):
 
 
 def get_plan_projection_cache_key(session):
-    if session._tearing_down or getattr(session, "_finishing", False) or not session.view:
+    if (
+        session.lifecycle_state.tearing_down
+        or session.lifecycle_state.finishing
+        or not session.view
+    ):
         return None
     get_camera_node = session.viewport.get_runtime_attr(session.view, "getCameraNode")
     get_size = session.viewport.get_runtime_attr(session.view, "getSize")
@@ -839,7 +847,7 @@ def unregister_edit_callbacks(session):
 
 
 def focus_plan_view(session):
-    if session._tearing_down or not session.view:
+    if session.lifecycle_state.tearing_down or not session.view:
         return
     try:
         widget = session.view.graphicsView()
@@ -871,7 +879,7 @@ def queue_focus_plan_view(session):
 
 
 def get_plan_view_widget(session):
-    if session._tearing_down or not session.view:
+    if session.lifecycle_state.tearing_down or not session.view:
         return None
     try:
         return session.view.graphicsView()
@@ -898,7 +906,7 @@ def ensure_viewport_status_chip(session, chip_factory):
 
 
 def refresh_viewport_status_chip(session, chip_factory):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return
     chip = ensure_viewport_status_chip(session, chip_factory)
     if chip is None:
@@ -923,7 +931,7 @@ def clear_viewport_status_chip(session):
 
 
 def request_view_redraw(session):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return
     redraw = session.viewport.get_runtime_attr(session.view, "redraw")
     if redraw is not None:

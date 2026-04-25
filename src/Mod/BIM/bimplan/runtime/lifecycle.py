@@ -104,7 +104,7 @@ def connect_teardown_signal(session, signal):
         signal.connect(session.begin_teardown)
     except Exception:
         return
-    session._teardown_signal_sources.append(signal)
+    session.lifecycle_state.teardown_signal_sources.append(signal)
 
 
 def connect_teardown_signals(session, QtGui):
@@ -122,12 +122,13 @@ def connect_teardown_signals(session, QtGui):
 
 
 def disconnect_teardown_signals(session):
-    for signal in session._teardown_signal_sources:
+    lifecycle_state = session.lifecycle_state
+    for signal in lifecycle_state.teardown_signal_sources:
         try:
             signal.disconnect(session.begin_teardown)
         except Exception:
             pass
-    session._teardown_signal_sources = []
+    lifecycle_state.teardown_signal_sources = []
 
 
 def discard_runtime_references(session):
@@ -832,9 +833,9 @@ def finish(session, close_dialog=True):
 
 
 def begin_teardown(session):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return
-    session._tearing_down = True
+    session.lifecycle_state.tearing_down = True
     plan_command_gate.uninstall(session)
     _apply_cleanup_profile(session, _BEGIN_TEARDOWN_CLEANUP_PROFILE)
 
@@ -843,7 +844,7 @@ def shutdown(session, close_dialog=True, teardown=False):
     plan_command_gate.uninstall(session)
     if not session.document_visuals.document_is_alive():
         session.begin_teardown()
-    teardown = teardown or session._tearing_down
+    teardown = teardown or session.lifecycle_state.tearing_down
     panel = session.task_panel
     session.task_panel = None
     profile = _TEARDOWN_SHUTDOWN_CLEANUP_PROFILE if teardown else _SHUTDOWN_CLEANUP_PROFILE
@@ -885,7 +886,7 @@ def shutdown(session, close_dialog=True, teardown=False):
 
 
 def on_embedded_command_started(session, tool_name, command=None):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return
     session.interaction_state.embedded_tool_name = tool_name
     if command is not None:
@@ -896,7 +897,7 @@ def on_embedded_command_started(session, tool_name, command=None):
 
 
 def on_embedded_command_finished(session, tool_name, command=None):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return
     interaction_state = session.interaction_state
     if command is None or interaction_state.embedded_tool is command:
@@ -981,7 +982,7 @@ def _reset_pending_edit_state(session, *, clear_opening_edit=False):
     wall_edit_state.wall_edit_task_panel_refresh_queued = False
     wall_edit_state.preview_points = None
     wall_edit_state.wall_edit_length_edit_queued = False
-    session._ignore_selection_changes = False
+    session.lifecycle_state.ignore_selection_changes = False
     interaction_state.embedded_host = None
     interaction_state.embedded_tool = None
     interaction_state.embedded_tool_name = None
@@ -993,7 +994,7 @@ def _reset_pending_edit_state(session, *, clear_opening_edit=False):
 
 
 def cancel_pending_edit(session):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         _reset_pending_edit_state(session)
         session.wall_relations.clear_plan_relation_status()
         return
@@ -1012,7 +1013,7 @@ def cancel_pending_edit(session):
 
 def cancel_embedded_tool(session, tool_name=None):
     interaction_state = session.interaction_state
-    if session._tearing_down or interaction_state.embedded_tool is None:
+    if session.lifecycle_state.tearing_down or interaction_state.embedded_tool is None:
         return
     if tool_name is not None and interaction_state.embedded_tool_name != tool_name:
         return

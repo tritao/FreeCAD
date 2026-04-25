@@ -203,7 +203,7 @@ def activate_opening_handle(session, opening, handle_index):
 
 def activate_opening_handle_now(session, opening, handle_index):
     with session.performance.plan_perf_trace_span("activate_opening_handle_now"):
-        if session._tearing_down or not opening:
+        if session.lifecycle_state.tearing_down or not opening:
             return
         with session.performance.plan_perf_trace_span("activate_opening_handle_set_target"):
             session.selection.set_selected_plan_target("opening", opening)

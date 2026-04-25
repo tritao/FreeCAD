@@ -100,7 +100,7 @@ def activate_provider_handle(session, provider_obj, handle_index):
 
 
 def activate_provider_handle_now(session, provider_obj, handle_index):
-    if session._tearing_down or provider_obj is None:
+    if session.lifecycle_state.tearing_down or provider_obj is None:
         return
     handles = get_selected_provider_edit_handles(session, provider_obj)
     if handle_index < 0 or handle_index >= len(handles):

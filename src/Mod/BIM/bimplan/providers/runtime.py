@@ -394,8 +394,8 @@ class PlanProvidersAPI:
     ):
         session = self.session
         if (
-            session._tearing_down
-            or session._finishing
+            session.lifecycle_state.tearing_down
+            or session.lifecycle_state.finishing
             or not session.document_visuals.document_is_alive()
         ):
             return False

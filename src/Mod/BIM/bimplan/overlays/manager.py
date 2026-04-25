@@ -14,7 +14,7 @@ def _perf_trace_span(session, name, **fields):
 
 
 def _session_is_inactive(session):
-    if session._tearing_down or getattr(session, "_finishing", False):
+    if session.lifecycle_state.tearing_down or session.lifecycle_state.finishing:
         return True
     return not session.document_visuals.document_is_alive()
 
@@ -377,8 +377,8 @@ def _refresh_select_tool_overlays(session, dirty, refresh_all):
 
 def refresh_plan_overlay_visuals(session, dirty=None):
     if (
-        session._tearing_down
-        or session._finishing
+        session.lifecycle_state.tearing_down
+        or session.lifecycle_state.finishing
         or not session.document_visuals.document_is_alive()
     ):
         return

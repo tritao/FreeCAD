@@ -172,7 +172,7 @@ def _handle_left_mouse_button_down(session, mouse_pos, event_callback):
 
 
 def on_mouse_pressed(session, event_callback):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return
     try:
         from pivy import coin
@@ -222,7 +222,7 @@ def on_mouse_pressed(session, event_callback):
 
 
 def on_mouse_moved(session, event_callback):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return
     event = event_callback.getEvent()
     try:
@@ -274,7 +274,7 @@ def on_mouse_moved(session, event_callback):
 
 
 def on_mouse_wheel(session, event_callback):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return
     event = event_callback.getEvent()
     try:
@@ -404,7 +404,7 @@ def _handle_escape_cancels(session):
 
 
 def on_key_pressed(session, event_callback):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return
     try:
         from pivy import coin
