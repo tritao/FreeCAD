@@ -28,6 +28,10 @@ class PlanTarget:
     is_primary: bool = False
 
 
+def _coerce_plan_target_ref(target):
+    return plan_target_kinds.coerce_plan_target_ref(target)
+
+
 def get_plan_target_kind_for_object(session, obj):
     if session.openings.is_hosted_opening_object(obj):
         return plan_target_kinds.PLAN_TARGET_OPENING
@@ -270,16 +274,21 @@ def make_plan_target_record(session, kind, obj, selected_keys=None, primary_key=
 
 
 def get_plan_targets(session, selected_only=False):
-    selected_targets = session.selection.get_selected_plan_targets()
+    selected_targets = tuple(
+        _coerce_plan_target_ref(target) for target in session.selection.get_selected_plan_targets()
+    )
     selected_keys = {
-        session.selection.get_plan_target_state_key(target_kind, target_obj)
-        for target_kind, target_obj in selected_targets
+        session.selection.get_plan_target_state_key(target.kind, target.obj)
+        for target in selected_targets
     }
     selected_keys.discard(None)
     primary_key = None
-    primary_kind, primary_obj = session.selection.get_selected_plan_target()
-    if primary_kind and primary_obj:
-        primary_key = session.selection.get_plan_target_state_key(primary_kind, primary_obj)
+    primary_target = _coerce_plan_target_ref(session.selection.get_selected_plan_target())
+    if primary_target.kind and primary_target.obj:
+        primary_key = session.selection.get_plan_target_state_key(
+            primary_target.kind,
+            primary_target.obj,
+        )
 
     if selected_only:
         source_targets = selected_targets
@@ -290,7 +299,9 @@ def get_plan_targets(session, selected_only=False):
         provider_refresh_scope = session.providers.plan_provider_refresh_cache_scope()
         with provider_refresh_scope:
             for obj in getattr(session.doc, "Objects", []) or []:
-                target_kind, target_obj = session.selection.get_plan_target_for_object(obj)
+                target = _coerce_plan_target_ref(session.selection.get_plan_target_for_object(obj))
+                target_kind = target.kind
+                target_obj = target.obj
                 if not target_kind or not target_obj:
                     continue
                 state_key = session.selection.get_plan_target_state_key(target_kind, target_obj)
@@ -302,13 +313,13 @@ def get_plan_targets(session, selected_only=False):
                     if storeys and not any(parent.Name == active_storey_name for parent in storeys):
                         continue
                 seen.add(state_key)
-                source_targets.append((target_kind, target_obj))
+                source_targets.append(target)
 
     records = []
-    for target_kind, target_obj in source_targets:
+    for target in source_targets:
         target_record = session.selection.make_plan_target_record(
-            target_kind,
-            target_obj,
+            target.kind,
+            target.obj,
             selected_keys=selected_keys,
             primary_key=primary_key,
         )
