@@ -18,7 +18,11 @@ def get_hovered_plan_target(session):
 
 
 def queue_prime_hover_pick_caches(session):
-    if session._tearing_down or session._plan_hover_pick_cache_queued or not session.doc:
+    if (
+        session.lifecycle_state.tearing_down
+        or session._plan_hover_pick_cache_queued
+        or not session.doc
+    ):
         return
     try:
         from PySide import QtCore
@@ -30,7 +34,7 @@ def queue_prime_hover_pick_caches(session):
 
 def prime_hover_pick_caches(session):
     session._plan_hover_pick_cache_queued = False
-    if session._tearing_down or not session.doc:
+    if session.lifecycle_state.tearing_down or not session.doc:
         return
     with session.performance.plan_perf_trace_event("prime_hover_pick_caches"):
         with session.performance.plan_perf_trace_span("prime_hover_pick_symbol_instances"):

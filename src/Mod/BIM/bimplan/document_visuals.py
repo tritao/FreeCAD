@@ -100,7 +100,7 @@ def is_hidden_library_definition_object(obj):
 
 
 def should_register_created_plan_object(session, obj):
-    if session._tearing_down or not obj or not session.doc:
+    if session.lifecycle_state.tearing_down or not obj or not session.doc:
         return False
     try:
         if getattr(obj, "Document", None) != session.doc:
@@ -202,7 +202,7 @@ def defer_document_visual_updates(session):
             0,
             session._document_visual_update_defer_depth - 1,
         )
-        if session._document_visual_update_defer_depth or session._tearing_down:
+        if session._document_visual_update_defer_depth or session.lifecycle_state.tearing_down:
             return
         if session._created_plan_objects_flush_deferred or session._pending_created_plan_objects:
             session._created_plan_objects_flush_deferred = False
@@ -355,7 +355,7 @@ def refresh_opening_host_footprint_displays(session, opening):
 
 def queue_recompute_opening_hosts(session, *openings):
     if (
-        session._tearing_down
+        session.lifecycle_state.tearing_down
         or session._opening_host_recompute_queued
         or session._opening_host_recompute_running
     ):
@@ -374,7 +374,11 @@ def queue_recompute_opening_hosts(session, *openings):
 
 def flush_recompute_opening_hosts(session, hosts):
     session._opening_host_recompute_queued = False
-    if session._tearing_down or session._opening_host_recompute_running or not session.doc:
+    if (
+        session.lifecycle_state.tearing_down
+        or session._opening_host_recompute_running
+        or not session.doc
+    ):
         return
     session._opening_host_recompute_running = True
     try:
@@ -389,7 +393,7 @@ def flush_recompute_opening_hosts(session, hosts):
 
 
 def queue_hard_refresh_selected_opening_visuals(session):
-    if session._tearing_down or session._selected_opening_hard_refresh_queued:
+    if session.lifecycle_state.tearing_down or session._selected_opening_hard_refresh_queued:
         return
     session._selected_opening_hard_refresh_queued = True
     session.overlays.clear_selected_opening_overlay()
@@ -408,7 +412,7 @@ def queue_hard_refresh_selected_opening_visuals(session):
 
 def flush_hard_refresh_selected_opening_visuals(session):
     session._selected_opening_hard_refresh_queued = False
-    if session._tearing_down or session.current_tool != "Select":
+    if session.lifecycle_state.tearing_down or session.current_tool != "Select":
         return
     opening = plan_selection.get_selected_plan_target_object(session, "opening")
     if not session.openings.is_hosted_opening_object(opening):
@@ -419,7 +423,7 @@ def flush_hard_refresh_selected_opening_visuals(session):
 
 
 def slot_created_object(session, obj):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return
     session.providers.invalidate_plan_provider_document_cache()
     session._provider_overlay_state = None
@@ -568,7 +572,7 @@ def _refresh_wall_related_visuals(session, obj, prop, selected_wall):
 
 
 def slot_changed_object(session, obj, prop):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return
     session.providers.invalidate_plan_provider_document_cache()
     session._provider_overlay_state = None
@@ -598,7 +602,7 @@ def slot_changed_object(session, obj, prop):
 
 
 def slot_deleted_object(session, obj):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return
     session.providers.invalidate_plan_provider_document_cache()
     session._provider_overlay_state = None
@@ -646,7 +650,11 @@ def slot_deleted_object(session, obj):
 
 
 def invalidate_document_dependent_plan_visuals(session, recompute_opening_hosts=False):
-    if session._tearing_down or session._finishing or not document_is_alive(session):
+    if (
+        session.lifecycle_state.tearing_down
+        or session.lifecycle_state.finishing
+        or not document_is_alive(session)
+    ):
         return
     session.providers.invalidate_plan_provider_document_cache()
     session.visibility.invalidate_plan_classification_cache()
@@ -748,7 +756,7 @@ def slot_recomputed_document(session, doc):
 
 def slot_deleted_document(session, doc):
     del doc
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return
     session.begin_teardown()
     session.shutdown(close_dialog=False, teardown=True)

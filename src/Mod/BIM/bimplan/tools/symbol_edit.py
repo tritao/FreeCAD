@@ -166,7 +166,9 @@ def activate_symbol_handle(session, symbol, handle_role):
 
 def activate_symbol_handle_now(session, symbol, handle_role):
     with session.performance.plan_perf_trace_span("activate_symbol_handle_now"):
-        if session._tearing_down or not session.visibility.is_plan_symbol_instance(symbol):
+        if session.lifecycle_state.tearing_down or not session.visibility.is_plan_symbol_instance(
+            symbol
+        ):
             return
         if handle_role not in {"move", "rotate"}:
             return

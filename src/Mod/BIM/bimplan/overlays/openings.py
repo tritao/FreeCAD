@@ -51,7 +51,7 @@ def discard_opening_handle_tracker_pool(session):
 
 def queue_prime_opening_handle_tracker_pool(session):
     if (
-        session._tearing_down
+        session.lifecycle_state.tearing_down
         or session.current_tool != "Select"
         or session._opening_handle_tracker_pool
         or session._opening_handle_trackers
@@ -70,7 +70,7 @@ def queue_prime_opening_handle_tracker_pool(session):
 def prime_opening_handle_tracker_pool(session):
     session._opening_handle_tracker_pool_queued = False
     if (
-        session._tearing_down
+        session.lifecycle_state.tearing_down
         or session.current_tool != "Select"
         or session._opening_handle_tracker_pool
         or session._opening_handle_trackers

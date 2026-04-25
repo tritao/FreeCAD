@@ -36,7 +36,7 @@ def _perf_trace_span(session, name, **fields):
 def sync_provider_overlays(session):
     with _perf_trace_span(session, "sync_provider_overlays"):
         if (
-            session._tearing_down
+            session.lifecycle_state.tearing_down
             or getattr(session, "_finishing", False)
             or not session.document_visuals.document_is_alive()
             or session.current_tool not in ("Select", "Provider Point")

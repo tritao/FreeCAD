@@ -174,8 +174,11 @@ def detach_task_panel(session):
 def on_panel_closed(session, panel):
     if session.task_panel is panel:
         session.task_panel = None
-        if not session._finishing:
-            session.shutdown(close_dialog=False, teardown=session._tearing_down)
+        if not session.lifecycle_state.finishing:
+            session.shutdown(
+                close_dialog=False,
+                teardown=session.lifecycle_state.tearing_down,
+            )
         return
     try:
         mark_closed = getattr(panel, "mark_closed", None)
@@ -200,7 +203,7 @@ def refresh_task_panel_status(session, selection_only=False):
         "refresh_task_panel_status",
         selection_only=bool(selection_only),
     ):
-        if session._tearing_down or not session.document_visuals.document_is_alive():
+        if session.lifecycle_state.tearing_down or not session.document_visuals.document_is_alive():
             return
         session.selection.sanitize_plan_target_references()
         session.status_text.update_input_hints()
@@ -237,7 +240,7 @@ def refresh_task_panel_status(session, selection_only=False):
 
 def refresh_provider_overlay_mode_panels(session):
     with session.performance.plan_perf_trace_span("refresh_provider_overlay_mode_panels"):
-        if session._tearing_down or not session.document_visuals.document_is_alive():
+        if session.lifecycle_state.tearing_down or not session.document_visuals.document_is_alive():
             return
         panel = session.task_panel
         if panel:

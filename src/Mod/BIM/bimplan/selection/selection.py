@@ -86,7 +86,7 @@ def _make_set_hovered_target_function(kind):
 
 
 def clear_hidden_provider_preselection(session):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return False
     preselected_obj = _get_gui_preselection_object(session)
     if preselected_obj is None:
@@ -400,9 +400,9 @@ def _record_selection_refresh_result(session, previous_kind):
 def refresh_selected_plan_target(session):
     with session.performance.plan_perf_trace_span("refresh_selected_plan_target"):
         session.performance.plan_perf_count("selection_refreshes")
-        if session._tearing_down:
+        if session.lifecycle_state.tearing_down:
             return
-        if session._ignore_selection_changes:
+        if session.lifecycle_state.ignore_selection_changes:
             return
 
         previous_kind, previous_obj, previous_wall = _get_selection_refresh_baseline(session)
@@ -718,7 +718,7 @@ def set_selected_plan_target(
         set_pending_selected_plan_target(session, kind, obj)
     else:
         set_pending_selected_plan_target(session)
-    if not session._tearing_down:
+    if not session.lifecycle_state.tearing_down:
         session.overlays.sync_junction_node_overlays()
         session.overlays.sync_selected_wall_opening_context_overlay()
         session.overlays.sync_hovered_wall_opening_context_overlay()
@@ -742,7 +742,7 @@ def set_selected_plan_target(
 
 def schedule_selected_wall_reset(session, reason, obj):
     del reason, obj
-    if session._pending_selected_wall_reset or session._tearing_down:
+    if session._pending_selected_wall_reset or session.lifecycle_state.tearing_down:
         return
     session._pending_selected_wall_reset = True
     try:
@@ -755,7 +755,7 @@ def schedule_selected_wall_reset(session, reason, obj):
 
 def reset_selected_wall_after_change(session):
     session._pending_selected_wall_reset = False
-    if session._tearing_down or session.current_tool != "Select":
+    if session.lifecycle_state.tearing_down or session.current_tool != "Select":
         return
     wall = get_selected_plan_target_object(session, "wall")
     if not wall:
@@ -768,7 +768,7 @@ def reset_selected_wall_after_change(session):
 
 
 def suspend_selected_wall_state(session, wall=None, clear_gui_selection=True):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return
     if wall is None:
         wall = get_selected_plan_target_object(session, "wall")
@@ -1370,12 +1370,12 @@ def toggle_plan_target_selection_at_position(session, mouse_pos, event_callback=
 
 @contextmanager
 def selection_changes_suppressed(session):
-    previous_ignore = session._ignore_selection_changes
-    session._ignore_selection_changes = True
+    previous_ignore = session.lifecycle_state.ignore_selection_changes
+    session.lifecycle_state.ignore_selection_changes = True
     try:
         yield
     finally:
-        session._ignore_selection_changes = previous_ignore
+        session.lifecycle_state.ignore_selection_changes = previous_ignore
 
 
 def get_gui_selection_ex():
@@ -1454,7 +1454,7 @@ def set_gui_selection_object(session, obj):
 
 
 def schedule_gui_selection_object(session, obj, delay_ms=80):
-    if session._tearing_down or not obj:
+    if session.lifecycle_state.tearing_down or not obj:
         return
     session._gui_selection_sync_queued = True
     session._gui_selection_sync_generation += 1
@@ -1481,7 +1481,7 @@ def run_scheduled_gui_selection_sync(session, generation=None):
         session._gui_selection_sync_queued = False
         return
     with session.performance.plan_perf_trace_event("scheduled_gui_selection_sync"):
-        if session._tearing_down:
+        if session.lifecycle_state.tearing_down:
             session._gui_selection_sync_queued = False
             session._queued_gui_selection_object = None
             return
@@ -1501,7 +1501,7 @@ def detach_selection_observer(session):
 
 
 def schedule_selection_refresh(session):
-    if session._tearing_down or session._ignore_selection_changes:
+    if session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes:
         return
     if session._selection_refresh_queued:
         return
@@ -1519,7 +1519,7 @@ def run_scheduled_selection_refresh(session):
         return
     session._selection_refresh_queued = False
     with session.performance.plan_perf_trace_event("selection_observer_refresh"):
-        if session._tearing_down or session._ignore_selection_changes:
+        if session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes:
             return
         refresh_primary_selected_plan_target(session)
 
@@ -1530,7 +1530,7 @@ def _trace_selection_observer_event(session, event_name, **fields):
 
 def _should_skip_selection_observer_callback(session):
     session.performance.plan_perf_count("selection_observer_callbacks")
-    return session._tearing_down or session._ignore_selection_changes
+    return session.lifecycle_state.tearing_down or session.lifecycle_state.ignore_selection_changes
 
 
 def _schedule_selection_refresh_from_observer(session):

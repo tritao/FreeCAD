@@ -151,7 +151,7 @@ def invalidate_wall_hosted_openings_cache(session):
 def queue_prime_wall_hosted_openings_cache(session):
     cache_state = session.overlay_cache_state
     if (
-        session._tearing_down
+        session.lifecycle_state.tearing_down
         or cache_state.wall_hosted_openings_cache is not None
         or cache_state.wall_hosted_openings_cache_queued
         or not session.doc
@@ -169,7 +169,7 @@ def prime_wall_hosted_openings_cache(session):
     cache_state = session.overlay_cache_state
     cache_state.wall_hosted_openings_cache_queued = False
     if (
-        session._tearing_down
+        session.lifecycle_state.tearing_down
         or cache_state.wall_hosted_openings_cache is not None
         or not session.doc
     ):

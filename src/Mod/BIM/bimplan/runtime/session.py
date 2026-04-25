@@ -323,19 +323,20 @@ class PlanEditSession:
     def shutdown(self, close_dialog=True, teardown=False):
         global _active_session
 
-        if self._finishing:
+        lifecycle_state = self.lifecycle_state
+        if lifecycle_state.finishing:
             return True
-        self._finishing = True
+        lifecycle_state.finishing = True
 
         try:
             plan_lifecycle.shutdown(self, close_dialog=close_dialog, teardown=teardown)
         finally:
             self.lifecycle.disconnect_teardown_signals()
-            self._tearing_down = True
+            lifecycle_state.tearing_down = True
             self.lifecycle.discard_runtime_references()
             self._aux_task_panels = []
             _active_session = None
-            self._finishing = False
+            lifecycle_state.finishing = False
             _refresh_contextual_task_watchers()
         return True
 

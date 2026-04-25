@@ -157,7 +157,7 @@ def hide_wall_grips(session):
 
 
 def schedule_wall_grip_sync(session, delay_ms=120):
-    if session._tearing_down:
+    if session.lifecycle_state.tearing_down:
         return
     hide_wall_grips(session)
     session._wall_grip_sync_queued = True
@@ -181,7 +181,7 @@ def run_scheduled_wall_grip_sync(session, generation=None):
         return
     session._wall_grip_sync_queued = False
     with _perf_trace_event(session, "scheduled_wall_grip_sync"):
-        if session._tearing_down:
+        if session.lifecycle_state.tearing_down:
             return
         sync_wall_grips(session)
         session.viewport.request_view_redraw()

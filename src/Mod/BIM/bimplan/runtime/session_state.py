@@ -84,6 +84,14 @@ class PlanInteractionState:
 
 
 @dataclass
+class PlanLifecycleState:
+    ignore_selection_changes: bool = False
+    finishing: bool = False
+    tearing_down: bool = False
+    teardown_signal_sources: list = field(default_factory=list)
+
+
+@dataclass
 class PlanSelectionState:
     selected_plan_target_kind: str | None = None
     selected_plan_target_obj: object = None
@@ -414,6 +422,7 @@ _PLAN_EDIT_SESSION_STATE_ENSURERS = (
         PlanProviderOverlayReadState,
     ),
     ("_ensure_interaction_state", "interaction_state", PlanInteractionState),
+    ("_ensure_lifecycle_state", "lifecycle_state", PlanLifecycleState),
     ("_ensure_selection_state", "selection_state", PlanSelectionState),
     ("_ensure_wall_edit_state", "wall_edit_state", WallEditState),
     ("_ensure_provider_point_state", "provider_point_state", ProviderPointState),
@@ -470,6 +479,15 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
                 "secondary_selected_plan_targets_state",
                 _coerce_plan_target_ref_list,
             ),
+        ),
+    ),
+    (
+        "_ensure_lifecycle_state",
+        (
+            ("_ignore_selection_changes", "ignore_selection_changes", _coerce_bool),
+            ("_finishing", "finishing", _coerce_bool),
+            ("_tearing_down", "tearing_down", _coerce_bool),
+            ("_teardown_signal_sources", "teardown_signal_sources", _coerce_list),
         ),
     ),
     (
@@ -856,10 +874,6 @@ def initialize_session_state(session):
     session._pending_selected_wall_reset = False
     session._edit_symbol_start_placement = None
     session._edit_symbol_reference_point = None
-    session._ignore_selection_changes = False
-    session._finishing = False
-    session._tearing_down = False
-    session._teardown_signal_sources = []
     session._plan_edit_params = FreeCAD.ParamGet(
         "User parameter:BaseApp/Preferences/Mod/BIM/PlanEdit"
     )
