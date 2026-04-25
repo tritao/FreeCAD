@@ -10,6 +10,15 @@ translate = FreeCAD.Qt.translate
 OPENING_MOVE_ANCHORS = ("center", "left", "right")
 
 
+def _get_callable_attr(obj, attr_name):
+    value = getattr(obj, attr_name, None)
+    return value if callable(value) else None
+
+
+def _proxy_supports(proxy, attrs):
+    return proxy is not None and all(_get_callable_attr(proxy, attr) is not None for attr in attrs)
+
+
 def get_selected_opening_edit_handles(session, opening):
     proxy = session.openings.get_opening_view_proxy(opening, "get_plan_edit_handles")
     if not proxy:
@@ -21,7 +30,7 @@ def get_opening_plan_proxy(session, opening, *attrs):
     if not opening:
         return None
     proxy = getattr(opening, "Proxy", None)
-    if proxy and all(hasattr(proxy, attr) for attr in attrs):
+    if _proxy_supports(proxy, attrs):
         return proxy
     return session.openings.get_opening_view_proxy(opening, *attrs)
 
@@ -31,12 +40,7 @@ def get_opening_view_proxy(session, opening, *attrs):
         return None
     view_object = getattr(opening, "ViewObject", None)
     proxy = getattr(view_object, "Proxy", None)
-    if not proxy:
-        return None
-    for attr in attrs:
-        if not hasattr(proxy, attr):
-            return None
-    return proxy
+    return proxy if _proxy_supports(proxy, attrs) else None
 
 
 def project_opening_handle_point(session, opening, handle, point):
