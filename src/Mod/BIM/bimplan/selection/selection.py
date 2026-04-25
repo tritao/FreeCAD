@@ -200,34 +200,35 @@ def _clear_gui_preselection():
 
 
 def _choose_primary_selected_target(selected_targets, pending_target_ref=None):
-    pending_kind, pending_target = plan_target_kinds.unpack_plan_target_ref(pending_target_ref)
-    if pending_kind is not None and pending_target is not None:
-        for target_kind, target_obj in selected_targets:
-            if target_kind == pending_kind and target_obj == pending_target:
-                return plan_target_kinds.make_plan_target_ref(target_kind, target_obj)
+    pending_target_ref = plan_target_kinds.coerce_plan_target_ref(pending_target_ref)
+    if pending_target_ref.kind is not None and pending_target_ref.obj is not None:
+        for target_ref in selected_targets:
+            if (
+                target_ref.kind == pending_target_ref.kind
+                and target_ref.obj == pending_target_ref.obj
+            ):
+                return plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
     if not selected_targets:
         return plan_target_kinds.make_plan_target_ref()
-    target_kind, target_obj = min(
+    primary_target_ref = min(
         selected_targets,
-        key=lambda item: _PRIMARY_SELECTED_TARGET_PRIORITY.get(
-            item[0], len(_PRIMARY_SELECTED_TARGET_PRIORITY)
+        key=lambda target_ref: _PRIMARY_SELECTED_TARGET_PRIORITY.get(
+            target_ref.kind, len(_PRIMARY_SELECTED_TARGET_PRIORITY)
         ),
     )
-    return plan_target_kinds.make_plan_target_ref(target_kind, target_obj)
+    return plan_target_kinds.make_plan_target_ref(primary_target_ref.kind, primary_target_ref.obj)
 
 
 def _apply_selection_refresh_result(session, refresh_result):
-    primary_kind, primary_obj = plan_target_kinds.unpack_plan_target_ref(
-        refresh_result.primary_target_ref
-    )
+    primary_target_ref = plan_target_kinds.coerce_plan_target_ref(refresh_result.primary_target_ref)
     session.selection.set_selected_plan_target_state(
-        primary_kind,
-        primary_obj,
+        primary_target_ref.kind,
+        primary_target_ref.obj,
     )
     session.selection.set_secondary_selected_plan_targets(
         refresh_result.secondary_targets,
-        primary_kind=primary_kind,
-        primary_obj=primary_obj,
+        primary_kind=primary_target_ref.kind,
+        primary_obj=primary_target_ref.obj,
     )
     if refresh_result.pending_target is not _PENDING_TARGET_UNCHANGED:
         if refresh_result.pending_target is None:
@@ -510,8 +511,7 @@ def set_pending_selected_plan_target(session, kind=None, obj=None):
 def consume_pending_selected_plan_target(session):
     pending_target = plan_target_kinds.coerce_plan_target_ref(session._pending_selected_plan_target)
     session._pending_selected_plan_target = None
-    kind, obj = pending_target
-    if is_valid_plan_target(session, kind, obj):
+    if is_valid_plan_target(session, pending_target.kind, pending_target.obj):
         return pending_target
     return plan_target_kinds.make_plan_target_ref()
 
@@ -522,9 +522,9 @@ def get_selected_plan_target(session):
 
 def get_first_plan_target_from_selection(session, selection):
     for selected in selection or []:
-        target_kind, target_obj = session.selection.get_plan_target_for_object(selected)
-        if target_kind and target_obj:
-            return plan_target_kinds.make_plan_target_ref(target_kind, target_obj)
+        target_ref = session.selection.get_plan_target_for_object(selected)
+        if target_ref.kind and target_ref.obj:
+            return plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
     return plan_target_kinds.make_plan_target_ref()
 
 
@@ -541,21 +541,21 @@ def get_plan_target_state_key(kind, obj):
 def _iter_normalized_plan_targets(session, targets):
     seen = set()
     for target in targets or []:
-        target_kind, target_obj = plan_target_kinds.unpack_plan_target_ref(target)
-        if not session.selection.is_valid_plan_target(target_kind, target_obj):
+        target_ref = plan_target_kinds.coerce_plan_target_ref(target)
+        if not session.selection.is_valid_plan_target(target_ref.kind, target_ref.obj):
             continue
-        key = session.selection.get_plan_target_state_key(target_kind, target_obj)
+        key = session.selection.get_plan_target_state_key(target_ref.kind, target_ref.obj)
         if key is None or key in seen:
             continue
         seen.add(key)
-        yield plan_target_kinds.make_plan_target_ref(target_kind, target_obj)
+        yield plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
 
 
 def _filter_secondary_selected_plan_targets(targets, primary_kind, primary_obj):
-    for target_kind, target_obj in targets:
-        if target_kind == primary_kind and target_obj == primary_obj:
+    for target_ref in targets:
+        if target_ref.kind == primary_kind and target_ref.obj == primary_obj:
             continue
-        yield plan_target_kinds.make_plan_target_ref(target_kind, target_obj)
+        yield plan_target_kinds.make_plan_target_ref(target_ref.kind, target_ref.obj)
 
 
 def normalize_plan_target_list(session, targets):

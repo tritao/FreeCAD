@@ -444,29 +444,39 @@ def _refresh_region_or_space_visuals(session, obj, prop, selected_region, select
 
 def _refresh_secondary_selection_visuals(session, obj, prop):
     secondary_overlay_refresh = False
-    for target_kind, target_obj in plan_selection.get_secondary_selected_plan_targets(session):
-        if target_kind == "region" and obj == target_obj and prop in _REGION_VISUAL_PROPERTIES:
-            refresh_plan_object_footprint_display(session, target_obj)
-            secondary_overlay_refresh = True
-        elif target_kind == "space" and obj == target_obj and prop in _SPACE_VISUAL_PROPERTIES:
-            refresh_plan_object_footprint_display(session, target_obj)
+    for target_ref in plan_selection.get_secondary_selected_plan_targets(session):
+        if (
+            target_ref.kind == "region"
+            and obj == target_ref.obj
+            and prop in _REGION_VISUAL_PROPERTIES
+        ):
+            refresh_plan_object_footprint_display(session, target_ref.obj)
             secondary_overlay_refresh = True
         elif (
-            target_kind == "symbol"
-            and is_symbol_visual_dependency(session, target_obj, obj)
+            target_ref.kind == "space"
+            and obj == target_ref.obj
+            and prop in _SPACE_VISUAL_PROPERTIES
+        ):
+            refresh_plan_object_footprint_display(session, target_ref.obj)
+            secondary_overlay_refresh = True
+        elif (
+            target_ref.kind == "symbol"
+            and is_symbol_visual_dependency(session, target_ref.obj, obj)
             and prop in _SYMBOL_VISUAL_PROPERTIES
         ):
-            refresh_plan_object_footprint_display(session, target_obj)
+            refresh_plan_object_footprint_display(session, target_ref.obj)
             secondary_overlay_refresh = True
         elif (
-            target_kind == "opening"
-            and is_opening_visual_dependency(target_obj, obj)
+            target_ref.kind == "opening"
+            and is_opening_visual_dependency(target_ref.obj, obj)
             and prop in _OPENING_VISUAL_PROPERTIES
         ):
-            refresh_opening_footprint_display(session, target_obj)
-            refresh_opening_host_footprint_displays(session, target_obj)
+            refresh_opening_footprint_display(session, target_ref.obj)
+            refresh_opening_host_footprint_displays(session, target_ref.obj)
             secondary_overlay_refresh = True
-        elif target_kind == "wall" and obj == target_obj and prop in _WALL_VISUAL_PROPERTIES:
+        elif (
+            target_ref.kind == "wall" and obj == target_ref.obj and prop in _WALL_VISUAL_PROPERTIES
+        ):
             secondary_overlay_refresh = True
     if not secondary_overlay_refresh:
         return False
