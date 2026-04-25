@@ -41,7 +41,7 @@ def invalidate_plan_overlay_geometry_cache(session, obj=None, kinds=None):
         if obj is None:
             target_kinds = tuple(session.overlay_cache_state.plan_overlay_geometry_cache.keys())
         else:
-            target_kinds = session.overlays.get_plan_overlay_geometry_kinds_for_object(obj)
+            target_kinds = get_plan_overlay_geometry_kinds_for_object(session, obj)
     if not target_kinds:
         return
     if obj is None:
@@ -50,12 +50,12 @@ def invalidate_plan_overlay_geometry_cache(session, obj=None, kinds=None):
             if cache is not None:
                 cache.clear()
         invalidate_opening_overlay_screen_cache(session)
-        session.overlays.invalidate_hovered_opening_overlay_cache()
-        session.overlays.invalidate_selected_opening_overlay_cache()
-        session.overlays.invalidate_selected_space_overlay_cache()
+        invalidate_hovered_opening_overlay_cache(session)
+        invalidate_selected_opening_overlay_cache(session)
+        invalidate_selected_space_overlay_cache(session)
         return
-    semantic_obj, key, _entry = session.overlays.get_plan_overlay_geometry_cache_entry(
-        target_kinds[0], obj, create=False
+    semantic_obj, key, _entry = get_plan_overlay_geometry_cache_entry(
+        session, target_kinds[0], obj, create=False
     )
     if key is None:
         return
@@ -66,16 +66,16 @@ def invalidate_plan_overlay_geometry_cache(session, obj=None, kinds=None):
     if "opening" in target_kinds:
         invalidate_opening_overlay_screen_cache(session)
     if session.hovered_opening == semantic_obj:
-        session.overlays.invalidate_hovered_opening_overlay_cache()
+        invalidate_hovered_opening_overlay_cache(session)
     if session.selection.is_selected_plan_target("opening", semantic_obj):
-        session.overlays.invalidate_selected_opening_overlay_cache()
+        invalidate_selected_opening_overlay_cache(session)
     if session.selection.is_selected_plan_target("space", semantic_obj):
-        session.overlays.invalidate_selected_space_overlay_cache()
+        invalidate_selected_space_overlay_cache(session)
 
 
 def get_cached_plan_overlay_geometry(session, kind, obj, field_name, compute):
-    semantic_obj, _key, entry = session.overlays.get_plan_overlay_geometry_cache_entry(
-        kind, obj, create=True
+    semantic_obj, _key, entry = get_plan_overlay_geometry_cache_entry(
+        session, kind, obj, create=True
     )
     if semantic_obj is None or entry is None:
         return ()
@@ -132,7 +132,7 @@ def get_wall_overlay_polylines(session, wall):
         faces = proxy.getFootprint(wall) or []
     except Exception:
         return []
-    return session.overlays.get_footprint_overlay_polylines(faces)
+    return get_footprint_overlay_polylines(faces)
 
 
 def get_space_footprint_faces(session, space):
@@ -148,7 +148,8 @@ def get_space_footprint_faces(session, space):
         except Exception:
             return ()
 
-    return session.overlays.get_cached_plan_overlay_geometry(
+    return get_cached_plan_overlay_geometry(
+        session,
         "space",
         space,
         "footprint_faces",
@@ -159,12 +160,13 @@ def get_space_footprint_faces(session, space):
 def get_space_overlay_polylines(session, space):
     if not session.selection.is_plan_space_object(space):
         return ()
-    return session.overlays.get_cached_plan_overlay_geometry(
+    return get_cached_plan_overlay_geometry(
+        session,
         "space",
         space,
         "overlay_polylines",
-        lambda space_obj: session.overlays.get_footprint_overlay_polylines(
-            session.overlays.get_space_footprint_faces(space_obj)
+        lambda space_obj: get_footprint_overlay_polylines(
+            get_space_footprint_faces(session, space_obj)
         ),
     )
 
@@ -182,7 +184,8 @@ def get_region_footprint_faces(session, region):
         except Exception:
             return ()
 
-    return session.overlays.get_cached_plan_overlay_geometry(
+    return get_cached_plan_overlay_geometry(
+        session,
         "region",
         region,
         "footprint_faces",
@@ -193,12 +196,13 @@ def get_region_footprint_faces(session, region):
 def get_region_overlay_polylines(session, region):
     if not session.selection.is_plan_region_object(region):
         return ()
-    return session.overlays.get_cached_plan_overlay_geometry(
+    return get_cached_plan_overlay_geometry(
+        session,
         "region",
         region,
         "overlay_polylines",
-        lambda region_obj: session.overlays.get_footprint_overlay_polylines(
-            session.overlays.get_region_footprint_faces(region_obj)
+        lambda region_obj: get_footprint_overlay_polylines(
+            get_region_footprint_faces(session, region_obj)
         ),
     )
 
@@ -225,7 +229,8 @@ def get_opening_overlay_polylines(session, opening):
     if not session.openings.is_hosted_opening_object(opening):
         return ()
 
-    geometry = session.overlays.get_cached_plan_overlay_geometry(
+    geometry = get_cached_plan_overlay_geometry(
+        session,
         "opening",
         opening,
         "overlay_geometry",
@@ -238,11 +243,13 @@ def get_opening_guide_polylines(session, opening):
     if not session.openings.is_hosted_opening_object(opening):
         return ()
 
-    return session.overlays.get_cached_plan_overlay_geometry(
+    return get_cached_plan_overlay_geometry(
+        session,
         "opening",
         opening,
         "guide_overlay_polylines",
-        lambda opening_obj: session.overlays.get_cached_plan_overlay_geometry(
+        lambda opening_obj: get_cached_plan_overlay_geometry(
+            session,
             "opening",
             opening_obj,
             "overlay_geometry",
@@ -290,11 +297,12 @@ def get_opening_overlay_screen_polylines(session, opening):
 def get_region_overlay_segments(session, region):
     if not session.selection.is_plan_region_object(region):
         return ()
-    return session.overlays.get_cached_plan_overlay_geometry(
+    return get_cached_plan_overlay_geometry(
+        session,
         "region",
         region,
         "overlay_segments",
-        lambda region_obj: session.overlays.build_overlay_segments_from_polylines(
+        lambda region_obj: build_overlay_segments_from_polylines(
             get_region_overlay_polylines(session, region_obj)
         ),
     )
@@ -303,11 +311,12 @@ def get_region_overlay_segments(session, region):
 def get_space_overlay_segments(session, space):
     if not session.selection.is_plan_space_object(space):
         return ()
-    return session.overlays.get_cached_plan_overlay_geometry(
+    return get_cached_plan_overlay_geometry(
+        session,
         "space",
         space,
         "overlay_segments",
-        lambda space_obj: session.overlays.build_overlay_segments_from_polylines(
+        lambda space_obj: build_overlay_segments_from_polylines(
             get_space_overlay_polylines(session, space_obj)
         ),
     )
@@ -316,12 +325,13 @@ def get_space_overlay_segments(session, space):
 def get_opening_overlay_segments(session, opening):
     if not session.openings.is_hosted_opening_object(opening):
         return ()
-    return session.overlays.get_cached_plan_overlay_geometry(
+    return get_cached_plan_overlay_geometry(
+        session,
         "opening",
         opening,
         "symbol_overlay_segments",
-        lambda opening_obj: session.overlays.build_overlay_segments_from_polylines(
-            session.overlays.get_opening_overlay_polylines(opening_obj)
+        lambda opening_obj: build_overlay_segments_from_polylines(
+            get_opening_overlay_polylines(session, opening_obj)
         ),
     )
 
@@ -329,11 +339,12 @@ def get_opening_overlay_segments(session, opening):
 def get_opening_combined_overlay_polylines(session, opening):
     if not session.openings.is_hosted_opening_object(opening):
         return ()
-    return session.overlays.get_cached_plan_overlay_geometry(
+    return get_cached_plan_overlay_geometry(
+        session,
         "opening",
         opening,
         "combined_overlay_polylines",
-        lambda opening_obj: tuple(session.overlays.get_opening_overlay_polylines(opening_obj))
+        lambda opening_obj: tuple(get_opening_overlay_polylines(session, opening_obj))
         + tuple(get_opening_guide_polylines(session, opening_obj)),
     )
 
@@ -341,11 +352,12 @@ def get_opening_combined_overlay_polylines(session, opening):
 def get_opening_combined_overlay_segments(session, opening):
     if not session.openings.is_hosted_opening_object(opening):
         return ()
-    return session.overlays.get_cached_plan_overlay_geometry(
+    return get_cached_plan_overlay_geometry(
+        session,
         "opening",
         opening,
         "combined_overlay_segments",
-        lambda opening_obj: session.overlays.build_overlay_segments_from_polylines(
+        lambda opening_obj: build_overlay_segments_from_polylines(
             get_opening_combined_overlay_polylines(session, opening_obj)
         ),
     )
@@ -354,7 +366,8 @@ def get_opening_combined_overlay_segments(session, opening):
 def get_opening_pick_polylines(session, opening):
     if not session.openings.is_hosted_opening_object(opening):
         return ()
-    return session.overlays.get_cached_plan_overlay_geometry(
+    return get_cached_plan_overlay_geometry(
+        session,
         "opening",
         opening,
         "pick_overlay_polylines",
