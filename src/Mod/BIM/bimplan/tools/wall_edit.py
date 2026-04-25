@@ -907,72 +907,81 @@ def refresh_wall_hosted_opening_footprints(session, wall):
         session.document_visuals.refresh_opening_footprint_display(opening)
 
 
-def compute_wall_hosted_opening_layout(session, wall, endpoints):
-    if not wall:
-        return []
+def _get_wall_hosted_opening_layout_axis(endpoints):
     if not endpoints or len(endpoints) != 2:
-        return []
+        return None, None, None
     wall_origin = FreeCAD.Vector(endpoints[0])
     wall_end = FreeCAD.Vector(endpoints[1])
     wall_axis_u = wall_end.sub(wall_origin)
     wall_length = wall_axis_u.Length
     if wall_length < 1e-9:
-        return None
+        return wall_origin, None, None
     wall_axis_u.normalize()
-    session.wall_edit.ensure_wall_edit_opening_clearances(wall, endpoints)
+    return wall_origin, wall_axis_u, wall_length
 
+
+def _get_wall_hosted_opening_layout_item(session, opening, wall_origin, wall_axis_u, wall_length):
+    proxy = session.openings.get_opening_plan_proxy(
+        opening, "get_plan_move_context", "move_along_host", "get_plan_center_point"
+    )
+    if not proxy:
+        return None
+    context = proxy.get_plan_move_context()
+    if not context:
+        return None
+    current_center = proxy.get_plan_center_point()
+    if current_center is None:
+        return None
+    current = FreeCAD.Vector(current_center)
+    desired_u = current.sub(wall_origin).dot(wall_axis_u)
+    half_width = float(context.get("opening_half_width_u") or 0.0)
+    clearance_seed = session._wall_edit_opening_clearances.get(getattr(opening, "Name", ""))
+    if clearance_seed:
+        if session._edit_endpoint == "Start":
+            desired_u = max(
+                desired_u,
+                half_width + float(clearance_seed.get("left_clearance") or 0.0),
+            )
+        elif session._edit_endpoint == "End":
+            desired_u = min(
+                desired_u,
+                wall_length - half_width - float(clearance_seed.get("right_clearance") or 0.0),
+            )
+    low = half_width
+    high = wall_length - half_width
+    if low > high:
+        midpoint = wall_length * 0.5
+        low = midpoint
+        high = midpoint
+    return {
+        "opening": opening,
+        "proxy": proxy,
+        "current": current,
+        "desired_u": desired_u,
+        "low": low,
+        "high": high,
+        "half_width": half_width,
+        "clearance_seed": clearance_seed,
+    }
+
+
+def _collect_wall_hosted_opening_layout_items(session, wall, wall_origin, wall_axis_u, wall_length):
     openings = []
     for opening in session.openings.get_wall_hosted_openings(wall):
-        proxy = session.openings.get_opening_plan_proxy(
-            opening, "get_plan_move_context", "move_along_host", "get_plan_center_point"
+        item = _get_wall_hosted_opening_layout_item(
+            session,
+            opening,
+            wall_origin,
+            wall_axis_u,
+            wall_length,
         )
-        if not proxy:
-            continue
-        context = proxy.get_plan_move_context()
-        if not context:
-            continue
-        current_center = proxy.get_plan_center_point()
-        if current_center is None:
-            continue
-        current = FreeCAD.Vector(current_center)
-        delta = current.sub(wall_origin)
-        half_width = float(context.get("opening_half_width_u") or 0.0)
-        desired_u = delta.dot(wall_axis_u)
-        clearance_seed = session._wall_edit_opening_clearances.get(getattr(opening, "Name", ""))
-        if clearance_seed:
-            if session._edit_endpoint == "Start":
-                desired_u = max(
-                    desired_u,
-                    half_width + float(clearance_seed.get("left_clearance") or 0.0),
-                )
-            elif session._edit_endpoint == "End":
-                desired_u = min(
-                    desired_u,
-                    wall_length - half_width - float(clearance_seed.get("right_clearance") or 0.0),
-                )
-        low = half_width
-        high = wall_length - half_width
-        if low > high:
-            midpoint = wall_length * 0.5
-            low = midpoint
-            high = midpoint
-        item = {
-            "opening": opening,
-            "proxy": proxy,
-            "current": current,
-            "desired_u": desired_u,
-            "low": low,
-            "high": high,
-            "half_width": half_width,
-            "clearance_seed": clearance_seed,
-        }
-        openings.append(item)
-
-    if not openings:
-        return []
-
+        if item is not None:
+            openings.append(item)
     openings.sort(key=lambda item: (item["desired_u"], getattr(item["opening"], "Name", "")))
+    return openings
 
+
+def _resolve_wall_hosted_opening_layout_bounds(openings):
     left = []
     for index, item in enumerate(openings):
         minimum = item["low"]
@@ -982,7 +991,7 @@ def compute_wall_hosted_opening_layout(session, wall, endpoints):
                 left[index - 1] + openings[index - 1]["half_width"] + item["half_width"],
             )
         if minimum > item["high"] + 1e-6:
-            return None
+            return None, None
         left.append(minimum)
 
     right = [0.0] * len(openings)
@@ -996,9 +1005,12 @@ def compute_wall_hosted_opening_layout(session, wall, endpoints):
                 - openings[index + 1]["half_width"],
             )
         if maximum < openings[index]["low"] - 1e-6:
-            return None
+            return None, None
         right[index] = maximum
+    return left, right
 
+
+def _resolve_wall_hosted_opening_layout_centers(openings, left, right):
     resolved = []
     for index, item in enumerate(openings):
         center_u = min(max(item["desired_u"], left[index]), right[index])
@@ -1010,7 +1022,10 @@ def compute_wall_hosted_opening_layout(session, wall, endpoints):
         if center_u > right[index] + 1e-6:
             return None
         resolved.append(center_u)
+    return resolved
 
+
+def _build_wall_hosted_opening_layout(openings, resolved, wall_origin, wall_axis_u):
     layout = []
     for item, center_u in zip(openings, resolved):
         target_point = wall_origin.add(FreeCAD.Vector(wall_axis_u).multiply(center_u))
@@ -1022,8 +1037,36 @@ def compute_wall_hosted_opening_layout(session, wall, endpoints):
                 "target_point": target_point,
             }
         )
-
     return layout
+
+
+def compute_wall_hosted_opening_layout(session, wall, endpoints):
+    if not wall:
+        return []
+    wall_origin, wall_axis_u, wall_length = _get_wall_hosted_opening_layout_axis(endpoints)
+    if wall_origin is None:
+        return []
+    if wall_axis_u is None or wall_length is None:
+        return None
+    session.wall_edit.ensure_wall_edit_opening_clearances(wall, endpoints)
+
+    openings = _collect_wall_hosted_opening_layout_items(
+        session,
+        wall,
+        wall_origin,
+        wall_axis_u,
+        wall_length,
+    )
+    if not openings:
+        return []
+
+    left, right = _resolve_wall_hosted_opening_layout_bounds(openings)
+    if left is None or right is None:
+        return None
+    resolved = _resolve_wall_hosted_opening_layout_centers(openings, left, right)
+    if resolved is None:
+        return None
+    return _build_wall_hosted_opening_layout(openings, resolved, wall_origin, wall_axis_u)
 
 
 def resolve_wall_hosted_opening_layout(session, wall):
