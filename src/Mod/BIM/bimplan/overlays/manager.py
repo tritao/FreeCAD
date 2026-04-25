@@ -3,6 +3,7 @@
 """Shared overlay management helpers for BIM Plan Edit."""
 
 from bimplan import document_visuals as plan_document_visuals
+from bimplan.runtime import tools as plan_runtime_tools
 
 
 def _perf_count(session, name, delta=1):
@@ -115,26 +116,26 @@ def refresh_plan_overlay_view_scale(session):
     from . import walls as overlay_walls
 
     with _perf_trace_span(session, "refresh_plan_overlay_view_scale"):
-        if session.current_tool == "Join":
+        if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
             overlay_walls.sync_junction_node_overlays(session)
             if session.hovered_wall:
                 overlay_walls.sync_hovered_wall_overlay(session)
             return
-        if session.current_tool == "Set Space Text":
+        if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
             if session.selection.is_selected_plan_target("space"):
                 overlay_spaces.sync_selected_space_overlay(session)
             return
-        if session.current_tool == "Pick Space Region":
+        if session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
             if session.spaces.has_space_region_pick_candidates():
                 overlay_spaces.sync_space_region_pick_overlays(session)
             if session.selection.get_selected_plan_targets():
                 overlay_spaces.sync_secondary_selected_overlays(session)
             return
-        if session.current_tool == "Provider Point":
+        if session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT:
             overlay_providers.sync_provider_overlays(session)
             overlay_providers.sync_provider_point_preview(session)
             return
-        if session.current_tool != "Select":
+        if session.current_tool != plan_runtime_tools.PlanTool.SELECT:
             return
         if session.hovered_wall or session.selection.is_selected_plan_target("wall"):
             overlay_walls.sync_junction_node_overlays(session)
@@ -389,25 +390,25 @@ def refresh_plan_overlay_visuals(session, dirty=None):
         dirty.discard(plan_document_visuals.PLAN_VISUAL_VIEW_SCALE)
         if not dirty:
             return
-    if session.current_tool == "Join":
+    if session.current_tool == plan_runtime_tools.PlanTool.JOIN:
         _refresh_join_tool_overlays(session, dirty, refresh_all)
         return
-    if session.current_tool == "Region":
+    if session.current_tool == plan_runtime_tools.PlanTool.REGION:
         _refresh_region_tool_overlays(session)
         return
-    if session.current_tool == "Set Space Text":
+    if session.current_tool == plan_runtime_tools.PlanTool.SET_SPACE_TEXT:
         _refresh_set_space_text_overlays(session, dirty, refresh_all)
         return
-    if session.current_tool == "Pick Space Region":
+    if session.current_tool == plan_runtime_tools.PlanTool.PICK_SPACE_REGION:
         _refresh_pick_space_region_overlays(session, dirty, refresh_all)
         return
-    if session.current_tool == "Provider Point":
+    if session.current_tool == plan_runtime_tools.PlanTool.PROVIDER_POINT:
         _refresh_provider_point_overlays(session, dirty, refresh_all)
         return
-    if session.current_tool == "Window":
+    if session.current_tool == plan_runtime_tools.PlanTool.WINDOW:
         _refresh_window_tool_overlays(session)
         return
-    if session.current_tool == "Select":
+    if session.current_tool == plan_runtime_tools.PlanTool.SELECT:
         _refresh_select_tool_overlays(session, dirty, refresh_all)
         return
 
