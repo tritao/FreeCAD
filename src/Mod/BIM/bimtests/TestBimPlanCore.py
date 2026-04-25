@@ -418,18 +418,16 @@ class TestBimPlanCore(unittest.TestCase):
         self,
     ):
         from bimplan.runtime.session import PlanEditSession
-        from bimplan.runtime.session_components import (
-            PlanInteractionAPI,
-            PlanProvidersAPI,
-            PlanWallRelationsAPI,
-            PlanSelectionAPI,
-            PlanSpacesAPI,
-            PlanStatusTextAPI,
-            PlanSymbolsAPI,
-            PlanViewportAPI,
-            PlanWallEditAPI,
-            PlanWindowsAPI,
-        )
+        from bimplan.runtime.session_state import PlanInteractionAPI
+        from bimplan.providers.runtime import PlanProvidersAPI
+        from bimplan.tools.wall_relations import PlanWallRelationsAPI
+        from bimplan.selection.selection import PlanSelectionAPI
+        from bimplan.tools.spaces import PlanSpacesAPI
+        from bimplan.status_text import PlanStatusTextAPI
+        from bimplan.tools.symbol_edit import PlanSymbolsAPI
+        from bimplan.runtime.view import PlanViewportAPI
+        from bimplan.tools.wall_edit import PlanWallEditAPI
+        from bimplan.tools.window_create import PlanWindowsAPI
 
         with patch("bimplan.session.plan_session_state.initialize_session_state"):
             session = PlanEditSession()
@@ -457,18 +455,16 @@ class TestBimPlanCore(unittest.TestCase):
 
     def test_plan_edit_session_wrappers_delegate_to_owned_components(self):
         from bimplan.runtime.session import PlanEditSession
-        from bimplan.runtime.session_components import (
-            PlanInteractionAPI,
-            PlanProvidersAPI,
-            PlanWallRelationsAPI,
-            PlanSelectionAPI,
-            PlanSpacesAPI,
-            PlanStatusTextAPI,
-            PlanSymbolsAPI,
-            PlanViewportAPI,
-            PlanWallEditAPI,
-            PlanWindowsAPI,
-        )
+        from bimplan.runtime.session_state import PlanInteractionAPI
+        from bimplan.providers.runtime import PlanProvidersAPI
+        from bimplan.tools.wall_relations import PlanWallRelationsAPI
+        from bimplan.selection.selection import PlanSelectionAPI
+        from bimplan.tools.spaces import PlanSpacesAPI
+        from bimplan.status_text import PlanStatusTextAPI
+        from bimplan.tools.symbol_edit import PlanSymbolsAPI
+        from bimplan.runtime.view import PlanViewportAPI
+        from bimplan.tools.wall_edit import PlanWallEditAPI
+        from bimplan.tools.window_create import PlanWindowsAPI
 
         wall = SimpleNamespace(Name="Wall001")
         targets = [("wall", wall)]
@@ -1092,13 +1088,13 @@ class TestBimPlanCore(unittest.TestCase):
 
     def test_plan_selection_api_uses_primary_target_kind_policy(self):
         from bimplan.selection import target_kinds as plan_target_kinds
-        from bimplan.runtime.session_components import PlanSelectionAPI
+        from bimplan.selection.selection import PlanSelectionAPI
 
         session = object()
         selection = PlanSelectionAPI(session)
 
         with patch(
-            "bimplan.session_components.plan_selection.get_selected_plan_target_state",
+            "bimplan.selection.selection.get_selected_plan_target_state",
             return_value=("wall", "Wall001"),
         ) as get_selected_plan_target_state:
             self.assertEqual(("wall", "Wall001"), selection.get_selected_plan_target_state())
@@ -1110,14 +1106,14 @@ class TestBimPlanCore(unittest.TestCase):
 
     def test_plan_spaces_api_uses_space_region_pick_visual_key(self):
         from bimplan import document_visuals as plan_document_visuals
-        from bimplan.runtime.session_components import PlanSpacesAPI
+        from bimplan.tools.spaces import PlanSpacesAPI
 
         session = object()
         candidate = {"area": 12.0}
         spaces = PlanSpacesAPI(session)
 
         with patch(
-            "bimplan.session_components.plan_spaces.set_hovered_space_region_candidate",
+            "bimplan.tools.space_regions.set_hovered_space_region_candidate",
             return_value=True,
         ) as set_hovered_space_region_candidate:
             self.assertTrue(spaces.set_hovered_space_region_candidate(candidate))
@@ -1129,7 +1125,7 @@ class TestBimPlanCore(unittest.TestCase):
         )
 
     def test_plan_viewport_api_uses_view_policies(self):
-        from bimplan.runtime.session_components import PlanViewportAPI
+        from bimplan.runtime.view import PlanViewportAPI
 
         session = SimpleNamespace(
             _plan_view_locked_actions=("Std_ViewTop", "Std_ViewFront"),
@@ -1138,10 +1134,10 @@ class TestBimPlanCore(unittest.TestCase):
         viewport = PlanViewportAPI(session)
 
         with patch(
-            "bimplan.session_components.plan_view.capture_view_action_state",
+            "bimplan.runtime.view.capture_view_action_state",
             return_value=True,
         ) as capture_view_action_state, patch(
-            "bimplan.session_components.plan_view.apply_plan_background_override",
+            "bimplan.runtime.view.apply_plan_background_override",
             return_value=True,
         ) as apply_plan_background_override:
             self.assertTrue(viewport.capture_view_action_state())

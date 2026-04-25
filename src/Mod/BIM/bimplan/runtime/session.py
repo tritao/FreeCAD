@@ -24,40 +24,30 @@
 
 """Session controller for BIM plan editing."""
 
-from contextlib import contextmanager
-import math
-
 import FreeCAD
 import FreeCADGui
 from bimplan.runtime import command_gate as plan_command_gate
 from bimplan import document_visuals as plan_document_visuals
 from bimplan.document_visuals import PlanDocumentVisualsAPI
-from bimplan.tools import hosted_openings as plan_hosted_openings
 from bimplan.runtime import input as plan_input
 from bimplan.runtime import lifecycle as plan_lifecycle
 from bimplan.object_visibility import PlanVisibilityAPI
-from bimplan import performance as plan_performance
 from bimplan.performance import PlanPerformanceAPI
-from bimplan.providers import runtime as plan_provider_runtime
 from bimplan import snap as plan_snap
 from bimplan.runtime import session_state as plan_session_state
 from bimplan.runtime.session_state import PlanInteractionAPI
 from bimplan.storeys import PlanStoreysAPI
 from bimplan import task_panel as plan_task_panel
 from bimplan.selection.selection import PlanSelectionAPI
-from bimplan.tools import symbol_edit as plan_symbol_edit
 from bimplan.tools.symbol_edit import PlanSymbolsAPI
-from bimplan.tools import opening_edit as plan_opening_edit
 from bimplan.tools.opening_edit import PlanOpeningsAPI
 from bimplan.providers.runtime import PlanProvidersAPI
 from bimplan.tools.wall_create import PlanWallCreateAPI
-from bimplan.tools import wall_relations as plan_wall_relations
 from bimplan.tools.wall_relations import PlanWallRelationsAPI
 from bimplan.tools.wall_edit import PlanWallEditAPI
 from bimplan.tools.window_create import PlanWindowsAPI
 from bimplan.tools.spaces import PlanSpacesAPI
 from bimplan.runtime.view import PlanViewportAPI
-from bimplan.overlays import openings as opening_overlays
 from bimplan.overlays.runtime import PlanOverlaysAPI
 from bimplan.providers import get_plan_edit_registry
 from bimplan.status_text import PlanStatusTextAPI
