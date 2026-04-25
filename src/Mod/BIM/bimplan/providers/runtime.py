@@ -594,14 +594,6 @@ def _collect_plan_provider_contributions_for_method(session, context, method_nam
     return tuple(results)
 
 
-_SESSION_AWARE_PROVIDER_NORMALIZERS = {
-    normalize_plan_provider_issue,
-    normalize_plan_provider_suggestion,
-    normalize_plan_provider_section,
-    normalize_plan_provider_context_panel,
-}
-
-
 def _normalize_provider_surface_contribution(session, normalizer, provider_id, contribution):
     if normalizer in _SESSION_AWARE_PROVIDER_NORMALIZERS:
         return normalizer(session, provider_id, contribution)
@@ -1325,6 +1317,14 @@ def normalize_plan_provider_context_panel(session, provider_id, panel):
     if not replacements:
         return panel
     return replace(panel, **replacements)
+
+
+_SESSION_AWARE_PROVIDER_NORMALIZERS = {
+    normalize_plan_provider_issue,
+    normalize_plan_provider_suggestion,
+    normalize_plan_provider_section,
+    normalize_plan_provider_context_panel,
+}
 
 
 def _normalize_plan_overlay_target_keys(target_keys):
