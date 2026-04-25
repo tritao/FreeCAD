@@ -111,10 +111,7 @@ def _replace_provider_overlay_debug_candidate(debug_candidate, **changes):
 
 
 def _get_plan_provider_overlay_pick_mode(session):
-    try:
-        mode = str(session.providers.get_plan_provider_overlay_mode() or "").strip().lower()
-    except Exception:
-        return "all"
+    mode = str(session.providers.get_plan_provider_overlay_mode() or "").strip().lower()
     return mode or "all"
 
 
@@ -125,15 +122,9 @@ def _should_prioritize_provider_targets_for_mode(session):
 
 
 def _emit_pick_debug(session, name, **fields):
-    try:
-        if not session.performance.is_plan_pick_debug_active():
-            return
-    except Exception:
+    if not session.performance.is_plan_pick_debug_active():
         return
-    try:
-        session.performance.plan_pick_debug_event(name, **fields)
-    except Exception:
-        return
+    session.performance.plan_pick_debug_event(name, **fields)
 
 
 def _append_pick_debug_item(items, value, limit=_MAX_PICK_DEBUG_ITEMS):
