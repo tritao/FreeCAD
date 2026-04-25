@@ -8,6 +8,7 @@ import FreeCAD
 from bimplan.providers import host_targets as plan_host_targets
 from bimplan.providers import PlanOverlayMarkerKind
 from . import manager as overlay_manager
+from . import tracker_pool as overlay_tracker_pool
 from .. import selection as plan_selection
 
 _PROVIDER_OVERLAY_POINT_PREFIX = "ProviderOverlayPoint"
@@ -121,6 +122,34 @@ def clear_hovered_provider_overlay(session):
     session._provider_hover_trackers = []
 
 
+def _get_selected_provider_overlay_pool(session):
+    return overlay_tracker_pool.TrackerPool(
+        trackers=list(session._provider_selected_trackers),
+        render_state=session._selected_provider_overlay_render_state,
+    )
+
+
+def _store_selected_provider_overlay_pool(session, pool):
+    session._provider_selected_trackers = list(pool.trackers)
+    session._selected_provider_overlay_render_state = pool.render_state
+
+
+def _get_provider_point_preview_pool(session):
+    state = session.provider_point_state
+    return overlay_tracker_pool.TrackerPool(
+        trackers=list(state.provider_point_preview_trackers),
+        render_state=state.provider_point_preview_render_state,
+        style_state=state.provider_point_preview_style_state,
+    )
+
+
+def _store_provider_point_preview_pool(session, pool):
+    state = session.provider_point_state
+    state.provider_point_preview_trackers = list(pool.trackers)
+    state.provider_point_preview_render_state = pool.render_state
+    state.provider_point_preview_style_state = pool.style_state
+
+
 def sync_selected_provider_overlay(session):
     with _perf_trace_span(session, "sync_selected_provider_overlay"):
         if session.current_tool != "Select":
@@ -157,31 +186,38 @@ def sync_selected_provider_overlay(session):
             selected_keys,
             _get_provider_segment_render_state(session, specs),
         )
-        if render_state == session._selected_provider_overlay_render_state:
+        pool = _get_selected_provider_overlay_pool(session)
+        if render_state == pool.render_state:
             _perf_count(session, "selected_provider_overlay_cache_hits")
             return
-        clear_selected_provider_overlay(session)
-        for spec in specs:
-            tracker = overlay_manager.make_plan_line_tracker(
+        overlay_tracker_pool.finalize_tracker_pool(pool)
+        overlay_tracker_pool.ensure_line_tracker_specs(
+            DraftTrackers,
+            pool,
+            specs,
+            create_tracker=lambda spec: overlay_manager.make_plan_line_tracker(
                 DraftTrackers,
                 spec["label"],
                 dotted=spec["dotted"],
                 scolor=spec["color"],
                 swidth=spec["width"],
                 ontop=True,
-            )
-            tracker.p1(spec["start"])
-            tracker.p2(spec["end"])
-            tracker.on()
-            session._provider_selected_trackers.append(tracker)
-        session._selected_provider_overlay_render_state = render_state
-        _perf_count(session, "selected_provider_trackers", len(session._provider_selected_trackers))
+            ),
+            apply_tracker=lambda tracker, spec: (
+                tracker.p1(spec["start"]),
+                tracker.p2(spec["end"]),
+                tracker.on(),
+            ),
+        )
+        pool.render_state = render_state
+        _store_selected_provider_overlay_pool(session, pool)
+        _perf_count(session, "selected_provider_trackers", len(pool.trackers))
 
 
 def clear_selected_provider_overlay(session):
-    overlay_manager.finalize_trackers(session._provider_selected_trackers)
-    session._provider_selected_trackers = []
-    session._selected_provider_overlay_render_state = None
+    pool = _get_selected_provider_overlay_pool(session)
+    overlay_tracker_pool.finalize_tracker_pool(pool)
+    _store_selected_provider_overlay_pool(session, pool)
 
 
 def get_selected_provider_handle_specs(session, provider_obj):
@@ -304,40 +340,38 @@ def sync_provider_point_preview(session):
         return
 
     render_state = _get_provider_segment_render_state(session, specs)
-    if render_state == state.provider_point_preview_render_state:
+    pool = _get_provider_point_preview_pool(session)
+    if render_state == pool.render_state:
         _perf_count(session, "provider_point_preview_cache_hits")
         return
 
-    style_state = tuple((spec["label"], spec["dotted"]) for spec in specs)
-    if (
-        len(state.provider_point_preview_trackers) != len(specs)
-        or style_state != state.provider_point_preview_style_state
-    ):
-        _clear_provider_point_preview_trackers(session)
-        state.provider_point_preview_style_state = style_state
-        for spec in specs:
-            tracker = overlay_manager.make_plan_line_tracker(
-                DraftTrackers,
-                spec["label"],
-                dotted=spec["dotted"],
-                scolor=spec["color"],
-                swidth=spec["width"],
-                ontop=True,
-            )
-            state.provider_point_preview_trackers.append(tracker)
+    overlay_tracker_pool.ensure_line_tracker_specs(
+        DraftTrackers,
+        pool,
+        specs,
+        create_tracker=lambda spec: overlay_manager.make_plan_line_tracker(
+            DraftTrackers,
+            spec["label"],
+            dotted=spec["dotted"],
+            scolor=spec["color"],
+            swidth=spec["width"],
+            ontop=True,
+        ),
+        apply_tracker=lambda tracker, spec: (
+            overlay_manager.set_plan_line_tracker_width(tracker, spec["width"]),
+            tracker.setColor(spec["color"]),
+            tracker.p1(spec["start"]),
+            tracker.p2(spec["end"]),
+            tracker.on(),
+        ),
+    )
+    pool.render_state = render_state
+    _store_provider_point_preview_pool(session, pool)
 
-    for tracker, spec in zip(state.provider_point_preview_trackers, specs):
-        overlay_manager.set_plan_line_tracker_width(tracker, spec["width"])
-        tracker.setColor(spec["color"])
-        tracker.p1(spec["start"])
-        tracker.p2(spec["end"])
-        tracker.on()
-
-    state.provider_point_preview_render_state = render_state
     _perf_count(
         session,
         "provider_point_preview_trackers",
-        len(state.provider_point_preview_trackers),
+        len(pool.trackers),
     )
 
 
@@ -351,11 +385,9 @@ def clear_provider_point_preview(session):
 
 
 def _clear_provider_point_preview_trackers(session):
-    state = session.provider_point_state
-    overlay_manager.finalize_trackers(state.provider_point_preview_trackers)
-    state.provider_point_preview_trackers = []
-    state.provider_point_preview_render_state = None
-    state.provider_point_preview_style_state = None
+    pool = _get_provider_point_preview_pool(session)
+    overlay_tracker_pool.finalize_tracker_pool(pool)
+    _store_provider_point_preview_pool(session, pool)
 
 
 def _get_provider_point_preview_segment_specs(session):
