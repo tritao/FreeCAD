@@ -190,6 +190,7 @@ class PlanWallGripState:
 @dataclass
 class PlanViewportState:
     status_chip: object = None
+    render_manager: object = None
     saved_camera: object = None
     saved_camera_type: object = None
     saved_navigation_style: object = None
@@ -634,6 +635,7 @@ _PLAN_EDIT_SESSION_STATE_PROPERTIES = (
         "_ensure_viewport_state",
         (
             ("_viewport_status_chip", "status_chip", _coerce_identity),
+            ("_render_manager", "render_manager", _coerce_identity),
             ("_saved_camera", "saved_camera", _coerce_identity),
             ("_saved_camera_type", "saved_camera_type", _coerce_identity),
             ("_saved_navigation_style", "saved_navigation_style", _coerce_identity),
@@ -855,7 +857,6 @@ def initialize_session_state(session):
     session._edit_symbol_start_placement = None
     session._edit_symbol_reference_point = None
     session._ignore_selection_changes = False
-    session._render_manager = None
     session._finishing = False
     session._tearing_down = False
     session._teardown_signal_sources = []
