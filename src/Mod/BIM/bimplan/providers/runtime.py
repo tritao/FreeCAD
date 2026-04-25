@@ -4,7 +4,6 @@
 
 from contextlib import nullcontext
 from dataclasses import dataclass, replace
-from typing import TypedDict
 
 import FreeCAD
 
@@ -55,15 +54,16 @@ def _perf_count(session, name, delta=1):
     return session.performance.plan_perf_count(name, delta=delta)
 
 
-class _PlanProviderTargetDisplayFields(TypedDict):
-    label: str
-    provider_id: str
-    target_key: str
-    category: str
-    role: str
-    semantic_document_name: str
-    semantic_object_name: str
-    semantic_label: str
+@dataclass
+class _PlanProviderTargetDisplayFields:
+    label: str = ""
+    provider_id: str = ""
+    target_key: str = ""
+    category: str = ""
+    role: str = ""
+    semantic_document_name: str = ""
+    semantic_object_name: str = ""
+    semantic_label: str = ""
 
 
 _PLAN_PROVIDER_SNAPSHOT_CACHE_KEY = ("provider_snapshot", "panel")
@@ -984,36 +984,30 @@ def _get_provider_target_semantic_resolution(session, semantic_obj, provider_tar
 
 def _build_provider_target_display_fields(semantic_obj, fallback_label):
     semantic_doc = getattr(semantic_obj, "Document", None)
-    return {
-        "label": str(fallback_label or ""),
-        "provider_id": "",
-        "target_key": "",
-        "category": "",
-        "role": "",
-        "semantic_document_name": str(getattr(semantic_doc, "Name", "") or ""),
-        "semantic_object_name": str(getattr(semantic_obj, "Name", "") or ""),
-        "semantic_label": str(
-            getattr(semantic_obj, "Label", getattr(semantic_obj, "Name", "")) or ""
-        ),
-    }
+    return _PlanProviderTargetDisplayFields(
+        label=str(fallback_label or ""),
+        semantic_document_name=str(getattr(semantic_doc, "Name", "") or ""),
+        semantic_object_name=str(getattr(semantic_obj, "Name", "") or ""),
+        semantic_label=str(getattr(semantic_obj, "Label", getattr(semantic_obj, "Name", "")) or ""),
+    )
 
 
 def _apply_provider_target_display_overrides(fields, provider_target, semantic_resolved):
     provider_label = str(provider_target.label or "").strip()
     if provider_label:
-        fields["label"] = provider_label
-    fields["provider_id"] = str(provider_target.provider_id or "").strip()
-    fields["target_key"] = str(provider_target.key or "").strip()
-    fields["category"] = str(provider_target.category or "").strip()
-    fields["role"] = str(provider_target.role or "").strip()
-    fields["semantic_document_name"] = str(
-        provider_target.semantic_document_name or fields["semantic_document_name"]
+        fields.label = provider_label
+    fields.provider_id = str(provider_target.provider_id or "").strip()
+    fields.target_key = str(provider_target.key or "").strip()
+    fields.category = str(provider_target.category or "").strip()
+    fields.role = str(provider_target.role or "").strip()
+    fields.semantic_document_name = str(
+        provider_target.semantic_document_name or fields.semantic_document_name
     ).strip()
-    fields["semantic_object_name"] = str(
-        provider_target.semantic_object_name or fields["semantic_object_name"]
+    fields.semantic_object_name = str(
+        provider_target.semantic_object_name or fields.semantic_object_name
     ).strip()
     if semantic_resolved is not None:
-        fields["semantic_label"] = str(
+        fields.semantic_label = str(
             getattr(semantic_resolved, "Label", getattr(semantic_resolved, "Name", "")) or ""
         )
 
