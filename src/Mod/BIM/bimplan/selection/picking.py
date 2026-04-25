@@ -1170,97 +1170,97 @@ def get_plan_target_from_edit_node(session, node):
 
 
 def get_edit_node(session, mouse_pos):
+    node = _get_selected_handle_edit_node(session, mouse_pos)
+    if node is not None:
+        return node
+    node = _get_provider_overlay_edit_node(session, mouse_pos)
+    if node is not None:
+        return node
+    return _get_ray_picked_edit_node(session, mouse_pos)
+
+
+def _emit_get_edit_node_result(session, mouse_pos, source, result):
+    _emit_pick_debug(
+        session,
+        "get_edit_node",
+        mouse_pos=mouse_pos,
+        source=source,
+        result=result,
+    )
+    return result
+
+
+def _get_selected_handle_edit_node(session, mouse_pos):
     symbol_handle_role = session.overlays.pick_selected_symbol_handle(mouse_pos)
     if symbol_handle_role is not None:
-        node = (
-            "symbol_handle",
-            plan_selection.get_selected_plan_target_object(session, "symbol"),
-            symbol_handle_role,
-        )
-        _emit_pick_debug(
+        return _emit_get_edit_node_result(
             session,
-            "get_edit_node",
-            mouse_pos=mouse_pos,
-            source="selected_symbol_handle",
-            result=node,
+            mouse_pos,
+            "selected_symbol_handle",
+            (
+                "symbol_handle",
+                plan_selection.get_selected_plan_target_object(session, "symbol"),
+                symbol_handle_role,
+            ),
         )
-        return node
     opening_handle_index = session.selection.pick_selected_opening_handle(mouse_pos)
     if opening_handle_index is not None:
-        node = (
-            "opening_handle",
-            plan_selection.get_selected_plan_target_object(session, "opening"),
-            opening_handle_index,
-        )
-        _emit_pick_debug(
+        return _emit_get_edit_node_result(
             session,
-            "get_edit_node",
-            mouse_pos=mouse_pos,
-            source="selected_opening_handle",
-            result=node,
+            mouse_pos,
+            "selected_opening_handle",
+            (
+                "opening_handle",
+                plan_selection.get_selected_plan_target_object(session, "opening"),
+                opening_handle_index,
+            ),
         )
-        return node
     provider_handle_index = session.overlays.pick_selected_provider_handle(mouse_pos)
     if provider_handle_index is not None:
-        node = (
-            "provider_handle",
-            plan_selection.get_selected_plan_target_object(session, "provider"),
-            provider_handle_index,
-        )
-        _emit_pick_debug(
+        return _emit_get_edit_node_result(
             session,
-            "get_edit_node",
-            mouse_pos=mouse_pos,
-            source="selected_provider_handle",
-            result=node,
+            mouse_pos,
+            "selected_provider_handle",
+            (
+                "provider_handle",
+                plan_selection.get_selected_plan_target_object(session, "provider"),
+                provider_handle_index,
+            ),
         )
-        return node
+    return None
+
+
+def _get_provider_overlay_edit_node(session, mouse_pos):
     target_kind, target_obj = session.selection.pick_provider_overlay_target_from_objects_info(
         mouse_pos
     )
     if target_obj is not None:
-        node = ("provider_overlay_target", target_kind, target_obj)
-        _emit_pick_debug(
+        return _emit_get_edit_node_result(
             session,
-            "get_edit_node",
-            mouse_pos=mouse_pos,
-            source="provider_overlay_objects_info",
-            result=node,
+            mouse_pos,
+            "provider_overlay_objects_info",
+            ("provider_overlay_target", target_kind, target_obj),
         )
-        return node
     target_kind, target_obj = session.selection.pick_provider_overlay_target_from_overlays(
         mouse_pos
     )
     if target_obj is not None:
-        node = ("provider_overlay_target", target_kind, target_obj)
-        _emit_pick_debug(
+        return _emit_get_edit_node_result(
             session,
-            "get_edit_node",
-            mouse_pos=mouse_pos,
-            source="provider_overlay_overlays",
-            result=node,
+            mouse_pos,
+            "provider_overlay_overlays",
+            ("provider_overlay_target", target_kind, target_obj),
         )
-        return node
+    return None
+
+
+def _get_ray_picked_edit_node(session, mouse_pos):
     if not session._render_manager:
-        _emit_pick_debug(
-            session,
-            "get_edit_node",
-            mouse_pos=mouse_pos,
-            source="no_render_manager",
-            result=None,
-        )
-        return None
+        return _emit_get_edit_node_result(session, mouse_pos, "no_render_manager", None)
     try:
         from pivy import coin
     except Exception:
-        _emit_pick_debug(
-            session,
-            "get_edit_node",
-            mouse_pos=mouse_pos,
-            source="coin_import_failed",
-            result=None,
-        )
-        return None
+        return _emit_get_edit_node_result(session, mouse_pos, "coin_import_failed", None)
 
     ray_pick = coin.SoRayPickAction(session._render_manager.getViewportRegion())
     ray_pick.setPoint(coin.SbVec2s(*mouse_pos))
@@ -1268,42 +1268,34 @@ def get_edit_node(session, mouse_pos):
     ray_pick.setPickAll(True)
     ray_pick.apply(session._render_manager.getSceneGraph())
     picked_points = ray_pick.getPickedPointList()
-    if picked_points:
-        for picked_point in picked_points:
-            path = picked_point.getPath()
-            point = path.getNode(path.getLength() - 2)
-            try:
-                sub_element = str(point.subElementName.getValue())
-            except Exception:
-                continue
-            if is_provider_overlay_point_subname(sub_element):
-                node = ("provider_overlay_point", point)
-                _emit_pick_debug(
-                    session,
-                    "get_edit_node",
-                    mouse_pos=mouse_pos,
-                    source="ray_pick_provider_overlay_point",
-                    result=node,
-                )
-                return node
-            if "EditNode" in sub_element:
-                node = ("edit_node", point)
-                _emit_pick_debug(
-                    session,
-                    "get_edit_node",
-                    mouse_pos=mouse_pos,
-                    source="ray_pick_edit_node",
-                    result=node,
-                )
-                return node
-    _emit_pick_debug(
-        session,
-        "get_edit_node",
-        mouse_pos=mouse_pos,
-        source="no_edit_node",
-        result=None,
-    )
-    return None
+    if not picked_points:
+        return _emit_get_edit_node_result(session, mouse_pos, "no_edit_node", None)
+    return _get_edit_node_from_picked_points(session, mouse_pos, picked_points)
+
+
+def _get_edit_node_from_picked_points(session, mouse_pos, picked_points):
+    for picked_point in picked_points:
+        path = picked_point.getPath()
+        point = path.getNode(path.getLength() - 2)
+        try:
+            sub_element = str(point.subElementName.getValue())
+        except Exception:
+            continue
+        if is_provider_overlay_point_subname(sub_element):
+            return _emit_get_edit_node_result(
+                session,
+                mouse_pos,
+                "ray_pick_provider_overlay_point",
+                ("provider_overlay_point", point),
+            )
+        if "EditNode" in sub_element:
+            return _emit_get_edit_node_result(
+                session,
+                mouse_pos,
+                "ray_pick_edit_node",
+                ("edit_node", point),
+            )
+    return _emit_get_edit_node_result(session, mouse_pos, "no_edit_node", None)
 
 
 def pick_selected_opening_handle(session, mouse_pos, radius_px=10):
