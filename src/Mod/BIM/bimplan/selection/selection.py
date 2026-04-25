@@ -732,7 +732,7 @@ def schedule_selected_wall_reset(session, reason, obj):
         from PySide import QtCore
 
         QtCore.QTimer.singleShot(0, session.selection.reset_selected_wall_after_change)
-    except Exception:
+    except ImportError:
         session.selection.reset_selected_wall_after_change()
 
 
